@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Scan-Copy-SecurPharm</title>
+<style>
+:root{
+  --bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef2f7;--text:#1b2430;--muted:#5d6b7c;
+  --border:#d6dde6;--accent:#0b5cad;--accent-text:#ffffff;--ok:#1d7a3a;--warn:#a35a00;--err:#b3261e;
+  --ok-bg:#e3f4e8;--warn-bg:#fdf1de;--err-bg:#fbe5e3;--shadow:0 1px 3px rgba(0,0,0,.08);
+  --radius:10px;--mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#11161d;--surface:#1a212b;--surface-2:#232c38;--text:#e6ebf1;--muted:#9aa8b8;
+    --border:#2f3a48;--accent:#5aa2ef;--accent-text:#0b1520;--ok:#6fd38c;--warn:#f0b35a;--err:#ff8a80;
+    --ok-bg:#163222;--warn-bg:#3a2a12;--err-bg:#3b1a18;--shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+header{background:var(--surface);border-block-end:1px solid var(--border);padding-block:12px;padding-inline:20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:20px;margin:0}
+header .sub{color:var(--muted);font-size:13px}
+header .spacer{flex:1}
+main{max-width:1280px;margin-inline:auto;padding:16px;display:grid;grid-template-columns:minmax(320px,1fr) minmax(360px,1.2fr);gap:16px}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+.card h2{font-size:16px;margin-block:0 12px;margin-inline:0;display:flex;align-items:center;gap:8px}
+.full{grid-column:1/-1}
+.tabs{display:flex;gap:6px;margin-block-end:12px;flex-wrap:wrap}
+.tab{border:1px solid var(--border);background:var(--surface-2);color:var(--text);padding-block:7px;padding-inline:12px;border-radius:999px;cursor:pointer;font:inherit}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.panel[hidden]{display:none}
+button.btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);padding-block:7px;padding-inline:12px;border-radius:8px;cursor:pointer;font:inherit}
+button.btn:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+button.danger{color:var(--err)}
+button.small{padding-block:3px;padding-inline:8px;font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+textarea,input[type=text],input[type=search],select{width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font:inherit}
+textarea{font-family:var(--mono);min-height:80px;resize:vertical}
+.videowrap{position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:4/3}
+.videowrap video{width:100%;height:100%;object-fit:cover;display:block}
+.videowrap .frame{position:absolute;inset:22%;border:3px solid rgba(255,255,255,.85);border-radius:12px;box-shadow:0 0 0 2000px rgba(0,0,0,.25);pointer-events:none}
+.videowrap.hit .frame{border-color:#4cd964}
+.videowrap .hint{position:absolute;inset-inline:0;inset-block-end:8px;text-align:center;color:#fff;font-size:13px;text-shadow:0 1px 2px #000}
+.drop{border:2px dashed var(--border);border-radius:var(--radius);padding:28px;text-align:center;color:var(--muted);cursor:pointer;transition:.15s}
+.drop.over{border-color:var(--accent);background:var(--surface-2);color:var(--text)}
+.drop img{max-width:100%;max-height:220px;margin-block-start:10px;border-radius:6px}
+.status{margin-block-start:10px;padding-block:8px;padding-inline:10px;border-radius:8px;font-size:14px;display:none}
+.status.show{display:block}
+.status.ok{background:var(--ok-bg);color:var(--ok)}
+.status.warn{background:var(--warn-bg);color:var(--warn)}
+.status.err{background:var(--err-bg);color:var(--err)}
+.muted{color:var(--muted);font-size:13px}
+.fields{display:grid;grid-template-columns:150px 1fr auto;gap:6px 10px;align-items:center}
+.fields .lbl{color:var(--muted);font-size:13px}
+.val{font-family:var(--mono);font-size:16px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding-block:6px;padding-inline:10px;cursor:pointer;word-break:break-all;min-height:34px}
+.val:hover{border-color:var(--accent)}
+.val.empty{color:var(--muted);cursor:default;font-family:inherit;font-size:14px}
+.val.copied{border-color:var(--ok);background:var(--ok-bg)}
+.badge{display:inline-block;font-size:12px;padding-block:1px;padding-inline:7px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted);margin-inline-start:6px;font-family:inherit;vertical-align:middle}
+.badge.ok{color:var(--ok);border-color:var(--ok)}
+.badge.warn{color:var(--warn);border-color:var(--warn)}
+.badge.err{color:var(--err);border-color:var(--err)}
+.raw{font-family:var(--mono);font-size:12px;color:var(--muted);word-break:break-all;margin-block-start:10px}
+.raw .gs{color:var(--accent);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:start;padding-block:6px;padding-inline:8px;border-block-end:1px solid var(--border);vertical-align:middle}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em;position:sticky;inset-block-start:0;background:var(--surface)}
+td .chip{font-family:var(--mono);cursor:pointer;padding-block:2px;padding-inline:6px;border-radius:6px;border:1px solid transparent}
+td .chip:hover{border-color:var(--accent);background:var(--surface-2)}
+td .chip.copied{background:var(--ok-bg);border-color:var(--ok)}
+.histwrap{max-height:460px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+.toast{position:fixed;inset-block-end:20px;inset-inline-start:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding-block:8px;padding-inline:16px;border-radius:999px;opacity:0;transition:opacity .2s;pointer-events:none;font-size:14px;z-index:10}
+.toast.show{opacity:1}
+.kbd{font-family:var(--mono);background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding-inline:4px;font-size:12px}
+details summary{cursor:pointer;color:var(--muted);font-size:13px}
+.wedge{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--ok)}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Scan-Copy-SecurPharm</h1>
+    <div class="sub">securPharm-DataMatrix (GS1 &amp; IFA/PPN) scannen, Werte einzeln kopieren, Verlauf lokal speichern</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="wedge" title="Hand-Scanner (Tastatur-Emulation) werden überall auf der Seite erkannt"><span class="dot"></span>Hand-Scanner bereit</span>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-input">
+    <h2 id="h-input">1 · Code erfassen</h2>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-tab="scanner">Barcode-Scanner</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="camera">Webcam</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="image">Bild (Drag &amp; Drop)</button>
+    </div>
+
+    <div class="panel" data-panel="scanner">
+      <label class="muted" for="manual">Hand-Scanner-Eingabe oder Code einfügen – <span class="kbd">Enter</span> wertet aus</label>
+      <textarea id="manual" spellcheck="false" autocomplete="off" placeholder="Hier scannen oder Rohdaten einfügen …"></textarea>
+      <div class="row" style="margin-block-start:8px">
+        <button class="btn primary" id="btnParse">Auswerten</button>
+        <button class="btn" id="btnClearInput">Leeren</button>
+        <button class="btn" id="btnDemo">Beispiel laden</button>
+      </div>
+      <details style="margin-block-start:10px">
+        <summary>Scanner-Einstellungen</summary>
+        <div style="margin-block-start:8px" class="muted">
+          Trennzeichen (GS / FNC1) werden von vielen Scannern nicht oder ersetzt gesendet. Erkannt werden automatisch:
+          ASCII 29, <span class="kbd">&lt;GS&gt;</span>, <span class="kbd">{GS}</span>, <span class="kbd">[GS]</span>, <span class="kbd">^]</span>, <span class="kbd">Strg+]</span>.
+          Fehlen die Trennzeichen ganz, wird heuristisch zerlegt (mit Hinweis).
+        </div>
+        <label class="muted" for="gsCustom" style="display:block;margin-block-start:8px">Zusätzliches GS-Ersatzzeichen/-Text Ihres Scanners (optional)</label>
+        <input type="text" id="gsCustom" placeholder="z. B. ~ oder @@" autocomplete="off">
+        <label class="muted" style="display:flex;gap:6px;align-items:center;margin-block-start:8px"><input type="checkbox" id="optWedge" checked> Scanner-Eingaben auch ohne Fokus im Feld erkennen</label>
+      </details>
+    </div>
+
+    <div class="panel" data-panel="camera" hidden>
+      <div class="videowrap" id="videowrap">
+        <video id="video" playsinline muted></video>
+        <div class="frame"></div>
+        <div class="hint" id="camHint">Kamera ist aus</div>
+      </div>
+      <div class="row" style="margin-block-start:8px">
+        <button class="btn primary" id="btnCam">Kamera starten</button>
+        <select id="camSelect" style="flex:1;min-width:160px" aria-label="Kamera auswählen"></select>
+      </div>
+      <div class="row" style="margin-block-start:8px">
+        <button class="btn" id="btnSnap">Standbild gründlich analysieren</button>
+        <button class="btn" id="btnTorch" hidden>Licht an/aus</button>
+        <label class="muted" id="zoomWrap" style="display:none;align-items:center;gap:6px;flex:1;min-width:160px">Zoom <input type="range" id="zoom" style="flex:1"></label>
+      </div>
+      <label class="muted" style="display:flex;gap:6px;align-items:center;margin-block-start:8px"><input type="checkbox" id="optStopAfter"> Nach erfolgreichem Scan Kamera stoppen</label>
+      <div class="muted" id="camDiag" style="margin-block-start:6px;font-family:var(--mono);font-size:12px"></div>
+      <div class="muted" style="margin-block-start:6px">Tipp: Code im Rahmen halten, 10–20 cm Abstand, Reflexionen vermeiden.</div>
+    </div>
+
+    <div class="panel" data-panel="image" hidden>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Bild hier ablegen oder klicken">
+        <strong>Bild hierher ziehen</strong><br>oder klicken zum Auswählen · oder <span class="kbd">Strg+V</span> zum Einfügen
+        <div id="preview"></div>
+      </div>
+      <input type="file" id="file" accept="image/*" hidden>
+    </div>
+
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-result">
+    <h2 id="h-result">2 · Werte kopieren <span class="badge" id="fmtBadge">–</span></h2>
+    <div class="muted" style="margin-block-end:10px">Klick auf einen Wert kopiert ihn in die Zwischenablage. Tastenkürzel: <span class="kbd">Alt+1</span> … <span class="kbd">Alt+6</span></div>
+    <div class="fields" id="fields"></div>
+    <div class="row" style="margin-block-start:12px">
+      <button class="btn" id="btnCopyTab">Alle (Tab-getrennt) kopieren</button>
+      <button class="btn" id="btnCopyJson">Als JSON kopieren</button>
+    </div>
+    <div class="raw" id="raw"></div>
+  </section>
+
+  <section class="card full" aria-labelledby="h-hist">
+    <h2 id="h-hist">3 · Verlauf <span class="badge" id="histCount">0</span></h2>
+    <div class="row" style="margin-block-end:10px">
+      <input type="search" id="histSearch" placeholder="Verlauf durchsuchen (PZN, Charge, Seriennr. …)" style="flex:1;min-width:200px">
+      <button class="btn" id="btnExportCsv">CSV exportieren</button>
+      <button class="btn" id="btnExportJson">JSON exportieren</button>
+      <button class="btn danger" id="btnClearHist">Verlauf löschen</button>
+    </div>
+    <div class="histwrap">
+      <table>
+        <thead><tr><th>Zeit</th><th>Quelle</th><th>PZN</th><th>GTIN / PPN</th><th>Charge</th><th>Verfall</th><th>Seriennr.</th><th></th></tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+    <div class="muted" style="margin-block-start:8px">Der Verlauf wird ausschließlich lokal im Browser (localStorage) gespeichert – es werden keine Daten übertragen. Max. 1000 Einträge.</div>
+  </section>
+</main>
+<footer>Scan-Copy-SecurPharm · Verarbeitung vollständig im Browser · Keine Verifikation gegen das securPharm-System</footer>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js" crossorigin="anonymous"></script>
+<script>
+(function(){
+'use strict';
+const GS='\x1d', RS='\x1e', EOT='\x04';
+const LS_HIST='scanCopySecurPharm.history.v1', LS_SET='scanCopySecurPharm.settings.v1', MAX_HIST=1000;
+const $=id=>document.getElementById(id);
+
+/* ---------- Helpers ---------- */
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),1400);}
+function setStatus(msg,kind){const s=$('status');s.textContent=msg;s.className='status show '+(kind||'ok');}
+async function copyText(txt){
+  try{await navigator.clipboard.writeText(txt);return true;}catch(e){
+    const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    let ok=false;try{ok=document.execCommand('copy');}catch(_){}ta.remove();return ok;}
+}
+function flash(el){el.classList.add('copied');setTimeout(()=>el.classList.remove('copied'),700);}
+async function copyFrom(el,txt,label){if(!txt)return;if(await copyText(txt)){flash(el);toast((label?label+' ':'')+'kopiert: '+txt);}else toast('Kopieren nicht möglich');}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function beep(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const ac=beep.ac||(beep.ac=new C());const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=1250;g.gain.value=.08;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+.09);}catch(_){} if(navigator.vibrate)navigator.vibrate(60);}
+
+/* ---------- Check digits ---------- */
+function gtinValid(g){if(!/^\d{8,14}$/.test(g))return false;const d=g.split('').map(Number),c=d.pop();let s=0;for(let i=d.length-1,w=3;i>=0;i--,w=4-w)s+=d[i]*w;return (10-s%10)%10===c;}
+function pznValid(p){if(!/^\d{8}$/.test(p))return false;let s=0;for(let i=0;i<7;i++)s+=Number(p[i])*(i+1);const c=s%11;return c!==10&&c===Number(p[7]);}
+function ppnValid(p){if(!/^[0-9A-Z]{3,22}$/.test(p))return false;const b=p.slice(0,-2);let s=0;for(let i=0;i<b.length;i++)s+=b.charCodeAt(i)*(i+2);return ('0'+(s%97)).slice(-2)===p.slice(-2);}
+function parseDate6(v){
+  if(!/^\d{6}$/.test(v))return null;const y=2000+Number(v.slice(0,2)),m=Number(v.slice(2,4)),d=Number(v.slice(4,6));
+  if(m<1||m>12)return null;const last=new Date(y,m,0).getDate();if(d>last)return null;
+  const day=d===0?last:d;const dt=new Date(y,m-1,day,23,59,59);
+  return {date:dt,text:d===0?(('0'+m).slice(-2)+'/'+y):(('0'+d).slice(-2)+'.'+('0'+m).slice(-2)+'.'+y),iso:y+'-'+('0'+m).slice(-2)+'-'+('0'+day).slice(-2),dayZero:d===0};
+}
+
+/* ---------- Generic element parser (with / without separators) ---------- */
+// defs: {id, fixed?, min, max, re, check?}
+function parseElements(s,defs,hasSep){
+  const ids=defs.slice().sort((a,b)=>b.id.length-a.id.length);
+  const sols=[];let steps=0;
+  function dfs(i,acc,seen){
+    if(++steps>200000||sols.length>=300)return;
+    while(s[i]===GS)i++;
+    if(i>=s.length){sols.push(acc.slice());return;}
+    for(const d of ids){
+      if(!s.startsWith(d.id,i)||seen.has(d.id))continue;
+      const j=i+d.id.length;let ends=[];
+      if(d.fixed){ends=[j+d.fixed];}
+      else if(hasSep){let e=s.indexOf(GS,j);if(e<0)e=s.length;ends=[e];}
+      else{for(let e=Math.min(s.length,j+d.max);e>=j+d.min;e--)ends.push(e);}
+      for(const e of ends){
+        if(e>s.length)continue;const v=s.slice(j,e);
+        if(v.length<d.min||v.length>d.max||v.indexOf(GS)>=0)continue;
+        if(d.re&&!d.re.test(v))continue;
+        if(d.check&&!d.check(v))continue;
+        if(!hasSep&&!d.fixed&&e<s.length&&!ids.some(x=>s.startsWith(x.id,e)))continue;
+        acc.push({id:d.id,v});seen.add(d.id);dfs(e,acc,seen);acc.pop();seen.delete(d.id);
+        if(sols.length>=300)return;
+      }
+    }
+  }
+  dfs(0,[],new Set());return sols;
+}
+const GS1_DEFS=[
+  {id:'01',fixed:14,min:14,max:14,re:/^\d{14}$/},
+  {id:'21',min:1,max:20,re:/^[\x21-\x7e]+$/},
+  {id:'10',min:1,max:20,re:/^[\x21-\x7e]+$/},
+  {id:'17',fixed:6,min:6,max:6,re:/^\d{6}$/,check:v=>!!parseDate6(v)},
+  {id:'11',fixed:6,min:6,max:6,re:/^\d{6}$/},
+  {id:'710',min:1,max:20,re:/^[\x21-\x7e]+$/},{id:'711',min:1,max:20},{id:'712',min:1,max:20},{id:'713',min:1,max:20},{id:'714',min:1,max:20},
+  {id:'240',min:1,max:30},{id:'30',min:1,max:8,re:/^\d+$/}
+];
+const IFA_DEFS=[
+  {id:'9N',min:4,max:22,re:/^[0-9A-Z]+$/},
+  {id:'8P',fixed:14,min:14,max:14,re:/^\d{14}$/},
+  {id:'1T',min:1,max:20,re:/^[\x21-\x7e]+$/},
+  {id:'D',fixed:6,min:6,max:6,re:/^\d{6}$/,check:v=>!!parseDate6(v)},
+  {id:'S',min:1,max:20,re:/^[\x21-\x7e]+$/},
+  {id:'16D',fixed:8,min:8,max:8,re:/^\d{8}$/}
+];
+function scoreSol(sol,core,validators){let sc=0;for(const el of sol){if(core.includes(el.id))sc+=10;else sc+=1;if(validators[el.id]&&validators[el.id](el.v))sc+=3;}return sc;}
+function pickBest(sols,core,validators){
+  if(!sols.length)return {best:null,ambiguous:false};
+  let best=null,bs=-1,cnt=0;for(const s of sols){const sc=scoreSol(s,core,validators);if(sc>bs){bs=sc;best=s;cnt=1;}else if(sc===bs)cnt++;}
+  return {best,ambiguous:cnt>1};
+}
+
+/* ---------- Normalisation of raw input ---------- */
+function normalize(raw){
+  let s=String(raw||'');
+  const custom=($('gsCustom').value||'').trim();
+  if(custom)s=s.split(custom).join(GS);
+  s=s.replace(/<GS>|\{GS\}|\[GS\]|\\x1d|\\u001d|\^\]|␝/gi,GS).replace(/<RS>|\{RS\}|\\x1e|␞/gi,RS).replace(/<EOT>|\{EOT\}|\\x04|␄/gi,EOT);
+  s=s.replace(/[\r\n]+$/,'').replace(/^[\r\n\s]+/,'');
+  s=s.replace(/^\]d2|^\]Q3|^\]C1|^\]e0/,'');
+  return s;
+}
+
+function parseCode(raw){
+  let s=normalize(raw);const res={raw:s,format:null,fields:{},warnings:[],other:[]};
+  if(!s){res.error='Keine Daten';return res;}
+  // Human-readable GS1 with brackets: (01)...(21)...
+  if(/^\(\d{2,4}\)/.test(s)){s=s.replace(/\((\d{2,4})\)/g,(m,a,o)=>(o>0?GS:'')+a);}
+  const isIFA=/^\[\)>/.test(s);
+  if(isIFA){
+    res.format='IFA (PPN)';
+    let body=s.replace(/^\[\)>/,'').replace(new RegExp('^'+RS+'?'),'');
+    body=body.replace(new RegExp('^06'+GS+'?'),'');
+    body=body.replace(new RegExp('['+RS+EOT+']+','g'),GS).replace(new RegExp(GS+'+$'),'');
+    const hasSep=body.indexOf(GS)>=0;
+    const sols=parseElements(body,IFA_DEFS,hasSep);
+    const {best,ambiguous}=pickBest(sols,['9N','1T','D','S'],{'9N':ppnValid,'8P':gtinValid});
+    if(!best){res.error='IFA-Code konnte nicht zerlegt werden';return res;}
+    if(!hasSep)res.warnings.push('Ohne Trennzeichen gelesen'+(ambiguous?' – Zerlegung nicht eindeutig, bitte prüfen':''));
+    for(const el of best){
+      if(el.id==='9N')res.fields.ppn=el.v;else if(el.id==='8P')res.fields.gtin=el.v;else if(el.id==='1T')res.fields.batch=el.v;
+      else if(el.id==='D')res.fields.expiry=el.v;else if(el.id==='S')res.fields.serial=el.v;else res.other.push(el);
+    }
+  } else {
+    s=s.replace(new RegExp('^'+GS+'+'),'');
+    if(!/^\d{2}/.test(s)){res.error='Kein securPharm-Format erkannt (weder GS1 noch IFA)';return res;}
+    res.format='GS1';
+    const hasSep=s.indexOf(GS)>=0;
+    const sols=parseElements(s,GS1_DEFS,hasSep);
+    const {best,ambiguous}=pickBest(sols,['01','21','10','17'],{'01':gtinValid});
+    if(!best){res.error='GS1-Code konnte nicht zerlegt werden';return res;}
+    if(!hasSep&&sols.length>1)res.warnings.push('Ohne Trennzeichen gelesen'+(ambiguous?' – Zerlegung nicht eindeutig, bitte prüfen':''));
+    for(const el of best){
+      if(el.id==='01')res.fields.gtin=el.v;else if(el.id==='21')res.fields.serial=el.v;else if(el.id==='10')res.fields.batch=el.v;
+      else if(el.id==='17')res.fields.expiry=el.v;else if(el.id==='710')res.fields.nhrn=el.v;else res.other.push(el);
+    }
+  }
+  const f=res.fields;
+  if(f.gtin&&/^0?4150\d{9}$/.test(f.gtin)&&f.gtin.length===14&&f.gtin.startsWith('04150'))f.pzn=f.gtin.slice(5,13);
+  if(!f.pzn&&f.ppn&&/^11\d{8}[0-9A-Z]{2}$/.test(f.ppn))f.pzn=f.ppn.slice(2,10);
+  if(!f.pzn&&f.nhrn&&/^\d{8}$/.test(f.nhrn))f.pzn=f.nhrn;
+  if(f.expiry){const d=parseDate6(f.expiry);if(d){f.expiryText=d.text;f.expiryIso=d.iso;res.expired=d.date<new Date();}}
+  if(!f.serial)res.warnings.push('Keine Seriennummer gefunden');
+  return res;
+}
+
+/* ---------- Result view ---------- */
+const FIELD_DEFS=[
+  {k:'pzn',l:'PZN',badge:r=>r.fields.pzn?(pznValid(r.fields.pzn)?['ok','Prüfziffer ok']:['err','Prüfziffer falsch']):null},
+  {k:'gtin',l:'GTIN / NTIN',badge:r=>r.fields.gtin?(gtinValid(r.fields.gtin)?['ok','Prüfziffer ok']:['err','Prüfziffer falsch']):null},
+  {k:'ppn',l:'PPN',badge:r=>r.fields.ppn?(ppnValid(r.fields.ppn)?['ok','Prüfziffer ok']:['err','Prüfziffer falsch']):null},
+  {k:'batch',l:'Charge (Lot)'},
+  {k:'expiryText',l:'Verfalldatum',badge:r=>r.fields.expiryText?(r.expired?['err','abgelaufen']:['ok','gültig']):null},
+  {k:'serial',l:'Seriennummer'},
+  {k:'expiry',l:'Verfall (roh JJMMTT)'},
+  {k:'nhrn',l:'NHRN (AI 710)'}
+];
+let current=null;
+function renderResult(r){
+  current=r;const box=$('fields');box.innerHTML='';
+  $('fmtBadge').textContent=r?(r.format||'?'):'–';
+  let hot=0;
+  FIELD_DEFS.forEach(fd=>{
+    const v=r&&r.fields[fd.k];
+    if(!v&&(fd.k==='nhrn'||fd.k==='ppn'&&r&&r.format==='GS1'||fd.k==='gtin'&&r&&r.format!=='GS1'&&!v))return;
+    const lbl=document.createElement('div');lbl.className='lbl';lbl.textContent=fd.l;
+    const val=document.createElement('div');val.className='val'+(v?'':' empty');val.textContent=v||'—';val.tabIndex=v?0:-1;
+    if(v){hot++;val.title='Klicken zum Kopieren'+(hot<=9?' (Alt+'+hot+')':'');val.dataset.hot=String(hot);
+      val.addEventListener('click',()=>copyFrom(val,v,fd.l));
+      val.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();copyFrom(val,v,fd.l);}});}
+    const b=document.createElement('div');const bd=fd.badge&&r?fd.badge(r):null;
+    if(bd){b.innerHTML='<span class="badge '+bd[0]+'">'+esc(bd[1])+'</span>';}
+    box.append(lbl,val,b);
+  });
+  if(r&&r.other.length){r.other.forEach(o=>{const lbl=document.createElement('div');lbl.className='lbl';lbl.textContent='AI/DI '+o.id;const val=document.createElement('div');val.className='val';val.textContent=o.v;val.addEventListener('click',()=>copyFrom(val,o.v,o.id));box.append(lbl,val,document.createElement('div'));});}
+  $('raw').innerHTML=r?'Rohdaten: '+esc(r.raw).replace(/\x1d/g,'<span class="gs">&lt;GS&gt;</span>').replace(/\x1e/g,'<span class="gs">&lt;RS&gt;</span>').replace(/\x04/g,'<span class="gs">&lt;EOT&gt;</span>'):'';
+}
+function tsvOf(r){const f=r.fields;return [f.pzn||'',f.gtin||f.ppn||'',f.batch||'',f.expiryText||'',f.serial||''].join('\t');}
+function jsonOf(r){const f=r.fields;return JSON.stringify({format:r.format,pzn:f.pzn||null,gtin:f.gtin||null,ppn:f.ppn||null,charge:f.batch||null,verfall:f.expiryIso||null,verfallRoh:f.expiry||null,seriennummer:f.serial||null},null,2);}
+$('btnCopyTab').addEventListener('click',e=>{if(current)copyFrom(e.currentTarget,tsvOf(current),'Zeile');});
+$('btnCopyJson').addEventListener('click',e=>{if(current)copyFrom(e.currentTarget,jsonOf(current),'JSON');});
+document.addEventListener('keydown',e=>{
+  if(e.altKey&&/^[1-9]$/.test(e.key)){const el=document.querySelector('.val[data-hot="'+e.key+'"]');if(el){e.preventDefault();el.click();}}
+});
+
+/* ---------- History ---------- */
+function loadHist(){try{return JSON.parse(localStorage.getItem(LS_HIST)||'[]');}catch(_){return [];}}
+function saveHist(h){try{localStorage.setItem(LS_HIST,JSON.stringify(h.slice(0,MAX_HIST)));}catch(e){toast('Verlauf konnte nicht gespeichert werden');}}
+function keyOf(f){return (f.gtin||f.ppn||'')+'|'+(f.serial||'');}
+function addHist(r,source){
+  const h=loadHist();const k=keyOf(r.fields);const dup=h.filter(x=>keyOf(x.fields)===k&&r.fields.serial).length;
+  h.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts:new Date().toISOString(),source,format:r.format,raw:r.raw,fields:r.fields,expired:!!r.expired});
+  saveHist(h);renderHist();return dup;
+}
+function fmtTs(iso){const d=new Date(iso);return d.toLocaleDateString('de-DE')+' '+d.toLocaleTimeString('de-DE');}
+function renderHist(){
+  const h=loadHist(),q=($('histSearch').value||'').toLowerCase().trim();
+  $('histCount').textContent=String(h.length);const tb=$('histBody');tb.innerHTML='';
+  const counts={};h.forEach(x=>{const k=keyOf(x.fields);counts[k]=(counts[k]||0)+1;});
+  h.filter(x=>!q||JSON.stringify(x.fields).toLowerCase().includes(q)||(x.source||'').toLowerCase().includes(q)).forEach(x=>{
+    const f=x.fields,tr=document.createElement('tr');
+    const cell=(v,label)=>{const td=document.createElement('td');if(v){const sp=document.createElement('span');sp.className='chip';sp.textContent=v;sp.title='Klicken zum Kopieren';sp.addEventListener('click',()=>copyFrom(sp,v,label));td.append(sp);}else td.textContent='—';return td;};
+    const t1=document.createElement('td');t1.textContent=fmtTs(x.ts);t1.className='muted';
+    const t2=document.createElement('td');t2.textContent=x.source||'';t2.className='muted';
+    const tExp=cell(f.expiryText,'Verfall');if(x.expired)tExp.insertAdjacentHTML('beforeend','<span class="badge err">abgel.</span>');
+    const tSer=cell(f.serial,'Seriennr.');if(f.serial&&counts[keyOf(f)]>1)tSer.insertAdjacentHTML('beforeend','<span class="badge warn">'+counts[keyOf(f)]+'× gescannt</span>');
+    const act=document.createElement('td');act.style.whiteSpace='nowrap';
+    const bl=document.createElement('button');bl.className='btn small';bl.textContent='Anzeigen';bl.addEventListener('click',()=>{renderResult(parseCode(x.raw));window.scrollTo({top:0,behavior:'smooth'});});
+    const bd=document.createElement('button');bd.className='btn small danger';bd.textContent='✕';bd.title='Eintrag löschen';bd.addEventListener('click',()=>{saveHist(loadHist().filter(y=>y.id!==x.id));renderHist();});
+    act.append(bl,' ',bd);
+    tr.append(t1,t2,cell(f.pzn,'PZN'),cell(f.gtin||f.ppn,f.gtin?'GTIN':'PPN'),cell(f.batch,'Charge'),tExp,tSer,act);tb.append(tr);
+  });
+  if(!tb.children.length){const tr=document.createElement('tr');tr.innerHTML='<td colspan="8" class="muted" style="text-align:center;padding:18px">'+(h.length?'Keine Treffer':'Noch keine Scans')+'</td>';tb.append(tr);}
+}
+function download(name,content,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
+function stamp(){return new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');}
+$('btnExportCsv').addEventListener('click',()=>{
+  const h=loadHist();const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const lines=[['Zeitpunkt','Quelle','Format','PZN','GTIN','PPN','Charge','Verfall','Seriennummer','Rohdaten'].map(q).join(';')];
+  h.forEach(x=>{const f=x.fields;lines.push([fmtTs(x.ts),x.source,x.format,f.pzn,f.gtin,f.ppn,f.batch,f.expiryText,f.serial,(x.raw||'').replace(/\x1d/g,'<GS>').replace(/\x1e/g,'<RS>').replace(/\x04/g,'<EOT>')].map(q).join(';'));});
+  download('Scan-Copy-SecurPharm_'+stamp()+'.csv','\ufeff'+lines.join('\r\n'),'text/csv;charset=utf-8');
+});
+$('btnExportJson').addEventListener('click',()=>download('Scan-Copy-SecurPharm_'+stamp()+'.json',JSON.stringify(loadHist(),null,2),'application/json'));
+$('btnClearHist').addEventListener('click',()=>{if(confirm('Gesamten Verlauf unwiderruflich löschen?')){localStorage.removeItem(LS_HIST);renderHist();toast('Verlauf gelöscht');}});
+$('histSearch').addEventListener('input',renderHist);
+
+/* ---------- Central handler ---------- */
+let lastRaw='',lastAt=0;
+function handleRaw(raw,source){
+  const r=parseCode(raw);
+  if(r.error){setStatus(r.error+'. Rohdaten: '+r.raw.replace(/\x1d/g,'<GS>'),'err');return false;}
+  const now=Date.now();if(r.raw===lastRaw&&now-lastAt<3000&&source==='Webcam')return true;lastRaw=r.raw;lastAt=now;
+  renderResult(r);beep();
+  const dup=addHist(r,source);
+  const msgs=[];if(dup)msgs.push('Achtung: Diese Packung (Seriennr.) wurde bereits '+dup+'× gescannt');
+  if(r.expired)msgs.push('Verfalldatum überschritten');
+  msgs.push(...r.warnings);
+  if(msgs.length)setStatus(msgs.join(' · '),dup||r.expired?'err':'warn');else setStatus('Erfolgreich gelesen ('+r.format+', Quelle: '+source+')','ok');
+  return true;
+}
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected',String(x===t)));
+  document.querySelectorAll('.panel').forEach(p=>p.hidden=p.dataset.panel!==t.dataset.tab);
+  if(t.dataset.tab!=='camera')stopCam();
+  if(t.dataset.tab==='scanner')$('manual').focus();
+}));
+
+/* ---------- Scanner / manual input ---------- */
+const manual=$('manual');
+manual.addEventListener('keydown',e=>{
+  if(e.ctrlKey&&(e.key===']'||e.code==='BracketRight'||e.key==='+'||e.code==='Digit9'&&e.altKey)){e.preventDefault();insertAtCursor(manual,GS);return;}
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(manual.value.trim()){if(handleRaw(manual.value,'Scanner'))manual.value='';}}
+});
+function insertAtCursor(el,txt){const s=el.selectionStart,e=el.selectionEnd;el.value=el.value.slice(0,s)+txt+el.value.slice(e);el.selectionStart=el.selectionEnd=s+txt.length;}
+$('btnParse').addEventListener('click',()=>{if(manual.value.trim()&&handleRaw(manual.value,'Manuell'))manual.value='';});
+$('btnClearInput').addEventListener('click',()=>{manual.value='';manual.focus();});
+$('btnDemo').addEventListener('click',()=>{manual.value='0104150123456782'+'21ABC123XYZ9'+'<GS>10CH4711'+'<GS>17281231';});
+
+// Keyboard-wedge capture outside of input fields
+let wb='',wt=0,wStart=0;
+document.addEventListener('keydown',e=>{
+  if(!$('optWedge').checked)return;
+  const a=document.activeElement;if(a&&(a.tagName==='TEXTAREA'||a.tagName==='INPUT'||a.tagName==='SELECT'))return;
+  if(e.altKey||e.metaKey)return;
+  const now=performance.now();if(now-wt>80){wb='';wStart=now;}wt=now;
+  if(e.ctrlKey&&(e.key===']'||e.code==='BracketRight')){wb+=GS;e.preventDefault();return;}
+  if(e.ctrlKey)return;
+  if(e.key==='Enter'||e.key==='Tab'){
+    if(wb.length>=10&&(now-wStart)/wb.length<40){e.preventDefault();const v=wb;wb='';handleRaw(v,'Scanner');}
+    return;
+  }
+  if(e.key.length===1)wb+=e.key;else if(e.key==='Unidentified'||e.keyCode===29)wb+=GS;
+});
+
+/* ---------- Settings ---------- */
+function loadSet(){try{const s=JSON.parse(localStorage.getItem(LS_SET)||'{}');if(s.gs)$('gsCustom').value=s.gs;if(s.wedge===false)$('optWedge').checked=false;if(s.stopAfter)$('optStopAfter').checked=true;}catch(_){}}
+function saveSet(){localStorage.setItem(LS_SET,JSON.stringify({gs:$('gsCustom').value,wedge:$('optWedge').checked,stopAfter:$('optStopAfter').checked}));}
+['gsCustom','optWedge','optStopAfter'].forEach(id=>$(id).addEventListener('change',saveSet));
+
+/* ---------- Decoding (BarcodeDetector → zxing-cpp/WASM → ZXing-JS) ---------- */
+let detector=null,engineName='–',wasmOk=null;
+(async()=>{try{if('BarcodeDetector' in window){const f=await window.BarcodeDetector.getSupportedFormats();if(f.includes('data_matrix'))detector=new window.BarcodeDetector({formats:['data_matrix','qr_code']});}}catch(_){}})();
+// warm up the WASM decoder so the first frame is not lost on download
+(function(){if(!window.ZXingWASM)return;try{const r=window.ZXingWASM.prepareZXingModule&&window.ZXingWASM.prepareZXingModule({fireImmediately:true});if(r&&r.then)r.then(()=>{wasmOk=true;},e=>{wasmOk=false;console.warn('zxing-wasm',e);});}catch(e){console.warn(e);}})();
+const WASM_OPTS={formats:['DataMatrix','QRCode'],tryHarder:true,tryRotate:true,tryInvert:true,tryDownscale:true,maxNumberOfSymbols:1};
+async function wasmDecode(imageData){
+  if(!window.ZXingWASM||wasmOk===false)return null;
+  try{const res=await window.ZXingWASM.readBarcodes(imageData,WASM_OPTS);wasmOk=true;
+    const hit=res&&res.find(r=>r.isValid!==false&&r.text);return hit?hit.text:null;}
+  catch(e){console.warn('zxing-wasm Fehler',e);wasmOk=false;return null;}
+}
+let zxReader=null;
+function getZx(){
+  if(zxReader)return zxReader;if(!window.ZXing)return null;
+  const Z=window.ZXing,hints=new Map();
+  hints.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.DATA_MATRIX,Z.BarcodeFormat.QR_CODE]);
+  hints.set(Z.DecodeHintType.TRY_HARDER,true);
+  zxReader=new Z.MultiFormatReader();zxReader.setHints(hints);return zxReader;
+}
+function zxDecodeCanvas(c){
+  const r=getZx();if(!r)return null;const Z=window.ZXing;
+  for(const Bin of [Z.HybridBinarizer,Z.GlobalHistogramBinarizer]){
+    try{const src=new Z.HTMLCanvasElementLuminanceSource(c);const res=r.decode(new Z.BinaryBitmap(new Bin(src)));if(res)return res.getText();}catch(_){}
+    finally{try{r.reset();}catch(_){}}
+  }
+  return null;
+}
+async function decodeCanvas(c){
+  if(detector){try{const b=await detector.detect(c);if(b&&b.length){engineName='BarcodeDetector (Browser)';return b[0].rawValue;}}catch(_){}}
+  if(window.ZXingWASM&&wasmOk!==false){
+    engineName='zxing-cpp (WASM)';
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    return await wasmDecode(ctx.getImageData(0,0,c.width,c.height));
+  }
+  engineName='ZXing-JS (Fallback)';
+  return zxDecodeCanvas(c);
+}
+/* ---------- Pre-processing for dot-peen / inkjet DataMatrix (single dots instead of solid modules) ---------- */
+function toGray(id){const d=id.data,n=id.width*id.height,g=new Uint8ClampedArray(n);for(let i=0,j=0;i<n;i++,j+=4)g[i]=(d[j]*77+d[j+1]*150+d[j+2]*29)>>8;return g;}
+// separable max (isMax) / min filter, window 2r+1 – merges single dots into solid modules
+function morph(g,w,h,r,isMax){
+  const t=new Uint8ClampedArray(g.length),o=new Uint8ClampedArray(g.length);
+  for(let y=0;y<h;y++){const row=y*w;for(let x=0;x<w;x++){let m=isMax?0:255;const x0=Math.max(0,x-r),x1=Math.min(w-1,x+r);
+    for(let k=x0;k<=x1;k++){const v=g[row+k];if(isMax?v>m:v<m)m=v;}t[row+x]=m;}}
+  for(let x=0;x<w;x++){for(let y=0;y<h;y++){let m=isMax?0:255;const y0=Math.max(0,y-r),y1=Math.min(h-1,y+r);
+    for(let k=y0;k<=y1;k++){const v=t[k*w+x];if(isMax?v>m:v<m)m=v;}o[y*w+x]=m;}}
+  return o;
+}
+function grayToImageData(g,w,h){const id=new ImageData(w,h),d=id.data;for(let i=0,j=0;i<g.length;i++,j+=4){d[j]=d[j+1]=d[j+2]=g[i];d[j+3]=255;}return id;}
+function imageDataToCanvas(id){const c=document.createElement('canvas');c.width=id.width;c.height=id.height;c.getContext('2d').putImageData(id,0,0);return c;}
+async function tryDecodeImageData(id){
+  if(window.ZXingWASM&&wasmOk!==false){const v=await wasmDecode(id);if(v){engineName='zxing-cpp (WASM)';return v;}return null;}
+  const v=zxDecodeCanvas(imageDataToCanvas(id));if(v)engineName='ZXing-JS (Fallback)';return v;
+}
+// variants: plain → dilate bright dots (white on dark) → dilate dark dots (dark on white)
+async function decodeWithVariants(id,radii){
+  let v=await tryDecodeImageData(id);if(v)return v;
+  const g=toGray(id),w=id.width,h=id.height;
+  for(const r of radii){
+    for(const isMax of [true,false]){
+      v=await tryDecodeImageData(grayToImageData(morph(g,w,h,r,isMax),w,h));if(v)return v;
+    }
+  }
+  return null;
+}
+const yieldUI=()=>new Promise(r=>setTimeout(r,0));
+async function decodeImage(img,onProgress){
+  const W=img.naturalWidth||img.videoWidth||img.width,H=img.naturalHeight||img.videoHeight||img.height;
+  if(detector){try{const b=await detector.detect(img);if(b&&b.length){engineName='BarcodeDetector (Browser)';return b[0].rawValue;}}catch(_){}}
+  const c=document.createElement('canvas'),ctx=c.getContext('2d',{willReadFrequently:true});
+  // full image at several scales, then centre crops (small code on large photo)
+  const tries=[];
+  for(const max of [1600,1100,700])tries.push({sx:0,sy:0,sw:W,sh:H,max});
+  for(const f of [.6,.4])tries.push({sx:W*(1-f)/2,sy:H*(1-f)/2,sw:W*f,sh:H*f,max:1000});
+  let n=0;
+  for(const t of tries){
+    const sc=Math.min(t.max/Math.max(t.sw,t.sh),1.5);
+    c.width=Math.max(1,Math.round(t.sw*sc));c.height=Math.max(1,Math.round(t.sh*sc));
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,t.sx,t.sy,t.sw,t.sh,0,0,c.width,c.height);
+    if(onProgress)onProgress(++n,tries.length);await yieldUI();
+    const v=await decodeWithVariants(ctx.getImageData(0,0,c.width,c.height),[2,3,1,5]);if(v)return v;
+  }
+  return null;
+}
+function engineAvailable(){return !!detector||!!window.ZXingWASM||!!window.ZXing;}
+
+/* ---------- Image: drag & drop / file / paste ---------- */
+const drop=$('drop'),fileIn=$('file');
+drop.addEventListener('click',()=>fileIn.click());
+drop.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fileIn.click();}});
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',e=>{const f=e.dataTransfer.files&&e.dataTransfer.files[0];if(f)handleFile(f);});
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f&&f.type.startsWith('image/')){selectTab('image');handleFile(f);}});
+fileIn.addEventListener('change',()=>{if(fileIn.files[0])handleFile(fileIn.files[0]);fileIn.value='';});
+document.addEventListener('paste',e=>{
+  const items=e.clipboardData&&e.clipboardData.items;if(!items)return;
+  for(const it of items){if(it.type.startsWith('image/')){e.preventDefault();selectTab('image');handleFile(it.getAsFile());return;}}
+});
+function selectTab(name){const t=document.querySelector('.tab[data-tab="'+name+'"]');if(t&&t.getAttribute('aria-selected')!=='true')t.click();}
+function handleFile(file){
+  if(!file||!file.type.startsWith('image/')){setStatus('Bitte eine Bilddatei verwenden','err');return;}
+  const url=URL.createObjectURL(file);const img=new Image();
+  img.onload=async()=>{
+    $('preview').innerHTML='';$('preview').append(img);
+    if(!engineAvailable()){setStatus('Decoder nicht geladen (Internet/Browser prüfen)','err');return;}
+    setStatus('Bild wird analysiert …','warn');
+    const v=await decodeImage(img,(i,n)=>setStatus('Bild wird analysiert … (Durchgang '+i+'/'+n+')','warn'));
+    if(v)handleRaw(v,'Bild');else setStatus('Kein DataMatrix-Code im Bild gefunden. Tipp: Bild auf den Code zuschneiden (Code ca. 1/3 der Bildbreite), scharf und ohne Spiegelung fotografieren.','err');
+  };
+  img.onerror=()=>setStatus('Bild konnte nicht geladen werden','err');
+  img.src=url;
+}
+
+/* ---------- Webcam ---------- */
+const video=$('video');let stream=null,camTimer=null,busy=false;const camCanvas=document.createElement('canvas');
+async function listCams(){
+  try{const devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');const sel=$('camSelect'),cur=sel.value;sel.innerHTML='';
+    devs.forEach((d,i)=>{const o=document.createElement('option');o.value=d.deviceId;o.textContent=d.label||('Kamera '+(i+1));sel.append(o);});
+    if(cur)sel.value=cur;else{const back=devs.find(d=>/back|rück|environment/i.test(d.label));if(back)sel.value=back.deviceId;}
+  }catch(_){}
+}
+async function startCam(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus('Kamera-Zugriff wird nicht unterstützt (HTTPS erforderlich)','err');return;}
+  if(!engineAvailable()){setStatus('Decoder nicht geladen (Internet/Browser prüfen)','err');return;}
+  stopCam();const id=$('camSelect').value;
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:id?{deviceId:{exact:id},width:{ideal:1920},height:{ideal:1080}}:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
+    video.srcObject=stream;await video.play();$('btnCam').textContent='Kamera stoppen';$('camHint').textContent='Code in den Rahmen halten …';
+    await listCams();
+    setupTrack();frames=0;camTimer=setTimeout(scanFrame,300);
+  }catch(e){setStatus('Kamera konnte nicht gestartet werden: '+(e.name==='NotAllowedError'?'Zugriff verweigert':e.message),'err');}
+}
+function stopCam(){if(camTimer){clearTimeout(camTimer);camTimer=null;}if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;$('btnCam').textContent='Kamera starten';$('camHint').textContent='Kamera ist aus';}
+let frames=0,lastDiag=0;const detectorHit=false;
+function diag(){const now=performance.now();if(now-lastDiag<400)return;lastDiag=now;
+  $('camDiag').textContent='Decoder: '+engineName+' · analysierte Bilder: '+frames+' · Kamera: '+video.videoWidth+'×'+video.videoHeight;}
+async function scanFrame(){
+  if(busy||!stream||!video.videoWidth){if(stream)camTimer=setTimeout(scanFrame,150);return;}
+  busy=true;
+  try{
+    const W=video.videoWidth,H=video.videoHeight;
+    // alternate: centre crop in native resolution (small codes) / full frame
+    frames++;const full=frames%3===0;
+    const f=full?1:.55,sw=Math.round(W*f),sh=Math.round(H*f),sx=Math.round((W-sw)/2),sy=Math.round((H-sh)/2);
+    const sc=full?Math.min(1,1280/Math.max(sw,sh)):1;
+    camCanvas.width=Math.round(sw*sc);camCanvas.height=Math.round(sh*sc);
+    camCanvas.getContext('2d',{willReadFrequently:true}).drawImage(video,sx,sy,sw,sh,0,0,camCanvas.width,camCanvas.height);
+    let v=await decodeCanvas(camCanvas);
+    if(!v&&!detectorHit&&frames%2===0){const ctx=camCanvas.getContext('2d',{willReadFrequently:true});const id=ctx.getImageData(0,0,camCanvas.width,camCanvas.height);
+      const r=Math.max(1,Math.round(Math.max(camCanvas.width,camCanvas.height)/600));
+      const g=toGray(id);for(const isMax of [true,false]){v=await tryDecodeImageData(grayToImageData(morph(g,id.width,id.height,r,isMax),id.width,id.height));if(v)break;}}
+    diag();
+    if(v){const ok=handleRaw(v,'Webcam');if(ok){const w=$('videowrap');w.classList.add('hit');setTimeout(()=>w.classList.remove('hit'),500);if($('optStopAfter').checked){stopCam();return;}}}
+  }catch(e){console.warn('Scan-Fehler',e);}
+  finally{busy=false;if(stream)camTimer=setTimeout(scanFrame,engineName.startsWith('ZXing-JS')?250:60);}
+}
+function setupTrack(){
+  const track=stream&&stream.getVideoTracks()[0];if(!track||!track.getCapabilities)return;
+  const cap=track.getCapabilities();const adv={};
+  if(cap.focusMode&&cap.focusMode.includes('continuous'))adv.focusMode='continuous';
+  if(Object.keys(adv).length)track.applyConstraints({advanced:[adv]}).catch(()=>{});
+  if(cap.zoom){const z=$('zoom');z.min=cap.zoom.min;z.max=cap.zoom.max;z.step=cap.zoom.step||0.1;z.value=track.getSettings().zoom||cap.zoom.min;$('zoomWrap').style.display='flex';
+    z.oninput=null;z.addEventListener('input',()=>track.applyConstraints({advanced:[{zoom:Number(z.value)}]}).catch(()=>{}));}
+  else $('zoomWrap').style.display='none';
+  const tb=$('btnTorch');tb.hidden=!cap.torch;
+}
+$('btnTorch').addEventListener('click',()=>{const t=stream&&stream.getVideoTracks()[0];if(!t)return;t._torch=!t._torch;t.applyConstraints({advanced:[{torch:t._torch}]}).catch(()=>{});});
+$('btnSnap').addEventListener('click',async()=>{
+  if(!stream||!video.videoWidth){setStatus('Bitte zuerst die Kamera starten','warn');return;}
+  const c=document.createElement('canvas');c.width=video.videoWidth;c.height=video.videoHeight;c.getContext('2d').drawImage(video,0,0);
+  setStatus('Standbild wird gründlich analysiert …','warn');
+  const img=new Image();img.onload=async()=>{const v=await decodeImage(img);if(v)handleRaw(v,'Webcam');else setStatus('Kein Code im Standbild gefunden. Näher heran / schärfer / weniger Spiegelung – oder Zoom nutzen.','err');};
+  img.src=c.toDataURL('image/png');
+});
+$('btnCam').addEventListener('click',()=>{stream?stopCam():startCam();});
+$('camSelect').addEventListener('change',()=>{if(stream)startCam();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCam();});
+
+/* ---------- Init ---------- */
+loadSet();renderResult(null);renderHist();listCams();manual.focus();
+window.addEventListener('load',()=>{if(!window.ZXing&&!window.ZXingWASM&&!detector)setStatus('Hinweis: Bild-Decoder konnte nicht geladen werden – Webcam/Bild-Scan nicht verfügbar. Hand-Scanner funktioniert weiterhin.','warn');});
+window.__scp={parseCode};
+})();
+</script>
+</body>
+</html>
