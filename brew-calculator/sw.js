@@ -2,19 +2,19 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "brew-calculator";
-const VERSION = '83fcc66faa77';
+const VERSION = '550f59e60097';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
   "index.html",
-  "manifest.webmanifest",
-  "../assets/base.css",
-  "../assets/common.js",
-  "icon.svg",
   "icon-180.png",
   "icon-192.png",
   "icon-512.png",
   "icon-maskable-512.png",
+  "icon.svg",
+  "manifest.webmanifest",
+  "../assets/base.css",
+  "../assets/common.js",
   "../assets/vendor/katex/fonts/KaTeX_AMS-Regular.woff2",
   "../assets/vendor/katex/fonts/KaTeX_Caligraphic-Bold.woff2",
   "../assets/vendor/katex/fonts/KaTeX_Caligraphic-Regular.woff2",
@@ -38,6 +38,9 @@ const FILES = [
   "../assets/vendor/katex/katex.min.css",
   "../assets/vendor/katex/katex.min.js"
 ];
+// Large libraries: folder -> cache name (contains the library version, survives app updates)
+const RUNTIME = {};
+const RUNTIME_URLS = Object.entries(RUNTIME).map(([dir, cache]) => [new URL(dir, self.location).href, cache]);
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -50,8 +53,12 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     // All apps share the domain's cache storage – only delete this app's old versions
+    const keep = new Set(Object.values(RUNTIME));
+    const runtimeLibs = Object.values(RUNTIME).map(c => c.slice(0, c.lastIndexOf('@') + 1));
     for (const key of await caches.keys()) {
       if (key.startsWith(`pwa:${APP}:`) && key !== CACHE) await caches.delete(key);
+      // Older versions of the large libraries this app uses
+      if (runtimeLibs.some(prefix => key.startsWith(prefix)) && !keep.has(key)) await caches.delete(key);
     }
     await self.clients.claim();
   })());
@@ -60,6 +67,17 @@ self.addEventListener('activate', event => {
 // Cache first: instant start and offline use. Anything not cached goes to the network.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  const runtime = RUNTIME_URLS.find(([prefix]) => event.request.url.startsWith(prefix));
+  if (runtime) {
+    event.respondWith(caches.open(runtime[1]).then(async cache => {
+      const hit = await cache.match(event.request, { ignoreSearch: true });
+      if (hit) return hit;
+      const res = await fetch(event.request);
+      if (res.ok) await cache.put(event.request, res.clone());
+      return res;
+    }));
+    return;
+  }
   event.respondWith(
     caches.open(CACHE)
       .then(cache => cache.match(event.request, { ignoreSearch: true }))

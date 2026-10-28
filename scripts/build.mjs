@@ -30,7 +30,8 @@ import { ROOT, decode, meta, allPages } from './lib.mjs';
 
 const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules', 'tests']);
 const SITE = 'https://phanlipo.github.io/';
-const SW_FORMAT = 1; // bump when the generated sw.js logic changes
+const SW_FORMAT = 2; // bump when the generated sw.js logic changes
+const VENDOR = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'));
 
 const escHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const escMd = s => s.replace(/\|/g, '\\|');
@@ -111,7 +112,7 @@ function csp(p) {
   const html = read(p.file);
   const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
     .map(m => `'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`);
-  const wasm = html.includes('assets/vendor/zxing-wasm/') ? " 'wasm-unsafe-eval'" : '';
+  const wasm = isApp(p) && vendorsOf(p).some(v => VENDOR[v]?.wasm) ? " 'wasm-unsafe-eval'" : '';
   return [
     "default-src 'self'",
     `script-src 'self'${wasm}${hashes.length ? ' ' + hashes.join(' ') : ''}`,
@@ -179,17 +180,32 @@ function filesIn(dir) {
   return out;
 }
 
+// Vendor packages an app uses: referenced from its page or any script in its folder (e.g. a worker)
+function vendorsOf(p) {
+  const texts = [read(p.file), ...filesIn(p.folder).filter(f => /\.m?js$/.test(f) && !f.endsWith('/sw.js')).map(read)];
+  const names = new Set();
+  for (const t of texts) for (const m of t.matchAll(/\.\.\/assets\/vendor\/([^/"'`]+)\//g)) names.add(m[1]);
+  return [...names].sort();
+}
+
 // Everything the app needs offline, as repo-relative paths
 function precacheList(p) {
-  const html = read(p.file);
-  const files = [p.file, `${p.folder}/manifest.webmanifest`, 'assets/base.css', 'assets/common.js'];
-  for (const f of ['icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png']) {
-    if (existsSync(join(ROOT, p.folder, f))) files.push(`${p.folder}/${f}`);
-  }
-  // Whole vendor package if the page uses any file of it (fonts, .wasm are loaded indirectly)
-  const vendors = new Set([...html.matchAll(/\.\.\/assets\/vendor\/([^/"']+)\//g)].map(m => m[1]));
-  for (const v of [...vendors].sort()) files.push(...filesIn(`assets/vendor/${v}`).sort());
+  // Every file of the app folder (page, manifest, icons, helper scripts) except the service worker itself
+  // (the manifest is listed explicitly: on the very first build it does not exist on disk yet)
+  const own = new Set(filesIn(p.folder).filter(f => f !== p.file && !f.endsWith('/sw.js')));
+  own.add(`${p.folder}/manifest.webmanifest`);
+  const files = [p.file, ...[...own].sort()];
+  files.push('assets/base.css', 'assets/common.js');
+  // Whole vendor package if the app uses any file of it (fonts, .wasm are loaded indirectly) –
+  // except large ones marked "precache": false, which are cached on first use (see runtimeVendors)
+  for (const v of vendorsOf(p)) if (VENDOR[v]?.precache !== false) files.push(...filesIn(`assets/vendor/${v}`).sort());
   return files;
+}
+
+// Large vendor packages: cached on first use in a cache named after their version, kept across app updates
+function runtimeVendors(p) {
+  return Object.fromEntries(vendorsOf(p).filter(v => VENDOR[v]?.precache === false)
+    .map(v => [posix.relative(p.folder, `assets/vendor/${v}`) + '/', `vendor:${v}@${VENDOR[v].version}`]));
 }
 
 // The footer shows the version, so the footer block is left out of the page's hash (no circularity);
@@ -210,6 +226,9 @@ const APP = ${JSON.stringify(p.folder)};
 const VERSION = '${version}';
 const CACHE = \`pwa:\${APP}:\${VERSION}\`;
 const FILES = ${JSON.stringify(urls, null, 2)};
+// Large libraries: folder -> cache name (contains the library version, survives app updates)
+const RUNTIME = ${JSON.stringify(runtimeVendors(p), null, 2)};
+const RUNTIME_URLS = Object.entries(RUNTIME).map(([dir, cache]) => [new URL(dir, self.location).href, cache]);
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -222,8 +241,12 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     // All apps share the domain's cache storage – only delete this app's old versions
+    const keep = new Set(Object.values(RUNTIME));
+    const runtimeLibs = Object.values(RUNTIME).map(c => c.slice(0, c.lastIndexOf('@') + 1));
     for (const key of await caches.keys()) {
       if (key.startsWith(\`pwa:\${APP}:\`) && key !== CACHE) await caches.delete(key);
+      // Older versions of the large libraries this app uses
+      if (runtimeLibs.some(prefix => key.startsWith(prefix)) && !keep.has(key)) await caches.delete(key);
     }
     await self.clients.claim();
   })());
@@ -232,6 +255,17 @@ self.addEventListener('activate', event => {
 // Cache first: instant start and offline use. Anything not cached goes to the network.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  const runtime = RUNTIME_URLS.find(([prefix]) => event.request.url.startsWith(prefix));
+  if (runtime) {
+    event.respondWith(caches.open(runtime[1]).then(async cache => {
+      const hit = await cache.match(event.request, { ignoreSearch: true });
+      if (hit) return hit;
+      const res = await fetch(event.request);
+      if (res.ok) await cache.put(event.request, res.clone());
+      return res;
+    }));
+    return;
+  }
   event.respondWith(
     caches.open(CACHE)
       .then(cache => cache.match(event.request, { ignoreSearch: true }))
