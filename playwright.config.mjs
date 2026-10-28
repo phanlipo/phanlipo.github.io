@@ -20,5 +20,13 @@ export default defineConfig({
     url: `http://localhost:${PORT}/`,
     reuseExistingServer: !process.env.CI,
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  projects: [{
+    name: 'chromium',
+    use: {
+      browserName: 'chromium',
+      // Optional: use an already installed Chromium (e.g. when the Playwright version and the
+      // installed browser differ). CI installs the matching browser and does not set this.
+      ...(process.env.PW_CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH } } : {}),
+    },
+  }],
 });

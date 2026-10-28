@@ -106,7 +106,8 @@ Jede App bietet am Seitenende den einklappbaren Bereich **„Daten sichern & üb
 
 ## Git
 
-- Änderungen über einen Pull Request auf `main`, Squash-Merge. `main` ist geschützt: Merge nur mit grünem Check **test**; direkte Pushes sind gesperrt.
+- Änderungen über einen Pull Request auf `main`, Squash-Merge.
+- **Mergen ohne Rückfrage:** Ist der Check **test** auf dem aktuellen Stand des PRs grün und gibt es keine Konflikte, wird der PR direkt gemergt – das gilt auch für Dependabot-PRs (vorher auf den aktuellen `main` bringen). Bei roten Tests: Ursache beheben, nie Tests abschwächen. `main` ist geschützt: Merge nur mit grünem Check **test**; direkte Pushes sind gesperrt.
 - PR-Branches werden nach dem Merge automatisch gelöscht.
 - Dependabot öffnet wöchentlich Update-PRs (Actions, Test-Werkzeuge); mergen, wenn die Tests grün sind.
 - GitHub Pages veröffentlicht `main` direkt; ein Merge ist nach 1–2 Minuten live.

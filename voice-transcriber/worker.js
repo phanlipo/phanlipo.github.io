@@ -1,5 +1,5 @@
 // Speech-to-text worker: runs Whisper (transformers.js) off the main thread.
-// Messages in:  { type: 'transcribe', id, audio: Float32Array (16 kHz mono), model, language, timestamps }
+// Messages in:  { type: 'transcribe', id, audio: Float32Array (16 kHz mono), model, language, allowGPU }
 // Messages out: { type: 'progress', id, loaded, total }   model download
 //               { type: 'status', id, status: 'loading' | 'transcribing', device }
 //               { type: 'result', id, text, chunks, device, seconds }
@@ -23,8 +23,9 @@ async function hasWebGPU() {
   try { return !!(self.navigator.gpu && await self.navigator.gpu.requestAdapter()); } catch { return false; }
 }
 
-async function getPipeline(model, id) {
-  const preferGPU = await hasWebGPU();
+async function getPipeline(model, allowGPU, id) {
+  // The WebGPU variant is larger (fp32 encoder + q4 decoder), so the page only allows it where worth it
+  const preferGPU = allowGPU && await hasWebGPU();
   const key = `${model}|${preferGPU}`;
   if (loaded.key === key) return loaded;
 
@@ -61,7 +62,7 @@ self.onmessage = async ({ data }) => {
   const { id } = data;
   let stage = 'load';
   try {
-    const { pipe, device } = await getPipeline(data.model, id);
+    const { pipe, device } = await getPipeline(data.model, data.allowGPU !== false, id);
     stage = 'transcribe';
     self.postMessage({ type: 'status', id, status: 'transcribing', device });
     const started = performance.now();
