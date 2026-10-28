@@ -134,15 +134,20 @@ test('formulas render with KaTeX when opened', async ({ page }) => {
   await expect(page.locator('.f.fallback')).toHaveCount(0);
 });
 
-test('formulas use named constants and show the entered values', async ({ page }) => {
+test('formulas explain the calculation with symbols only, values stay in the results', async ({ page }) => {
   await set(page, 'z.T', 13);
+  await set(page, 'z.V', 23);
   await set(page, 's.T', 27);
   await openDetails(page.locator('#zucker'), 'Formeln');
   await openDetails(page.locator('#stammwuerze'), 'Formeln');
   const z = page.locator('#zMath'), s = page.locator('#sMath');
-  await expect(z).toContainText('13,0+273,15');        // entered temperature substituted
-  await expect(z).toContainText(de(co2(13, 1.013), 2)); // result of the substitution
-  await expect(s).toContainText(de(rhoW(27), 2));      // water density at the sample temperature
+  await expect(z.locator('.katex').first()).toBeVisible();
+  await expect(result(page, 'zRes', 'Rest-CO')).toContainText(de(co2(13, 1.013), 2));
+  // no entered values or intermediate results inside the formulas
+  for (const v of ['13,0', '23,0', de(co2(13, 1.013), 2)]) await expect(z).not.toContainText(v);
+  await expect(s).not.toContainText('27,0');
+  await expect(s).not.toContainText(de(rhoW(27), 2));
+  // no unexplained magic numbers
   for (const magic of ['10,73797', '1,00130346', '616,868']) {
     await expect(z).not.toContainText(magic);
     await expect(s).not.toContainText(magic);
