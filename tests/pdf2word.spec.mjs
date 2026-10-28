@@ -243,15 +243,22 @@ const SCAN_LINES = ['Zwischen dem Vermieter und dem Mieter wird folgender Vertra
 const SCAN_LAST = 'Die Kündigungsfrist beträgt drei Monate.';
 
 // A "scan": the page is one picture (150 dpi) with text drawn by the browser – title 20 pt bold,
-// body 12 pt with 18 pt line pitch
+// body 12 pt with 18 pt line pitch. The font is loaded from the repository (Liberation Sans, as
+// shipped with pdf.js), so the picture is the same on every machine – "Arial" would be a
+// different fallback font depending on the system.
 async function scanPdf(page) {
   const dpi = 150, px = pt => pt * dpi / 72;
-  const rgb = await page.evaluate(({ title, lines, last, sizes }) => {
+  const rgb = await page.evaluate(async ({ title, lines, last, sizes }) => {
+    const dir = '/assets/vendor/pdfjs/standard_fonts/';
+    for (const [file, weight] of [['LiberationSans-Regular.ttf', 'normal'], ['LiberationSans-Bold.ttf', 'bold']]) {
+      const face = new FontFace('ScanFont', `url(${dir}${file})`, { weight });
+      document.fonts.add(await face.load());
+    }
     const c = document.createElement('canvas'); c.width = 1240; c.height = 1754;
     const g = c.getContext('2d');
     g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#000';
-    g.font = `bold ${sizes.title}px Arial`; g.fillText(title, sizes.left, sizes.top);
-    g.font = `${sizes.body}px Arial`;
+    g.font = `bold ${sizes.title}px ScanFont`; g.fillText(title, sizes.left, sizes.top);
+    g.font = `${sizes.body}px ScanFont`;
     [...lines, '', last].forEach((l, i) => g.fillText(l, sizes.left, sizes.top + sizes.gap + i * sizes.pitch));
     // RGB bytes as base64 (much faster to hand over than a plain array)
     const d = g.getImageData(0, 0, c.width, c.height).data, rgb = new Uint8Array(d.length / 4 * 3);
