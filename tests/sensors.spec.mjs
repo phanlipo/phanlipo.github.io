@@ -35,19 +35,19 @@ test('tabs switch panels, support arrow keys and are remembered', async ({ page 
   await expect(page.locator('#p-compass')).toBeHidden();
   await running(page, 'vibro');
   await expect(page.locator('[data-start="compass"]')).toHaveText('Starten');
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Metalldetektor' })).toBeFocused();
-  await expect(page.locator('#p-mag')).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('tab', { name: 'Beschleunigung' })).toBeFocused();
+  await expect(page.locator('#p-accel')).toBeVisible();
   await page.reload();
-  await expect(page.locator('#p-mag')).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Metalldetektor' })).toHaveAttribute('aria-selected', 'true');
-  await running(page, 'mag');
+  await expect(page.locator('#p-accel')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Beschleunigung' })).toHaveAttribute('aria-selected', 'true');
+  await running(page, 'accel');
 });
 
 for (const scheme of ['light', 'dark']) {
   test(`every tab has no accessibility violations (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
-    for (const name of ['Kompass', 'Wasserwaage', 'Beschleunigung', 'Vibrometer', 'Metalldetektor', 'Schall']) {
+    for (const name of ['Kompass', 'Wasserwaage', 'Beschleunigung', 'Vibrometer', 'Schall']) {
       await tab(page, name);
       const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
       expect(violations.map(v => `${name}: ${v.id} → ${v.nodes.map(n => n.target.join(' ')).join(' | ')}`)).toEqual([]);
@@ -203,45 +203,6 @@ test('vibrometer: RMS, peak and frequency of a 5 Hz vibration', async ({ page })
   await expect(page.locator('#vLevel')).toHaveText('deutlich');
   await page.click('#vReset');
   await expect(page.locator('#vPeak')).toHaveText('0,00');
-});
-
-test('magnetometer: field strength and change against the zero point', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.Magnetometer = class extends EventTarget {
-      constructor() { super(); this.x = null; this.y = null; this.z = null; }
-      start() { window.__mag = this; }
-      stop() { window.__magStopped = true; }
-    };
-    window.__read = (x, y, z) => { Object.assign(window.__mag, { x, y, z }); window.__mag.dispatchEvent(new Event('reading')); };
-  });
-  await page.reload();
-  await tab(page, 'Metalldetektor');
-  await running(page, 'mag');
-  await page.evaluate(() => window.__read(30, 0, 40));
-  await expect(page.locator('#mVal')).toHaveText('50,0');
-  await expect(page.locator('#mDelta')).toHaveText('0,0 µT');
-  await page.evaluate(() => window.__read(30, 40, 40));
-  const tot = Math.hypot(30, 40, 40);
-  await expect(page.locator('#mVal')).toHaveText(tot.toFixed(1).replace('.', ','));
-  await expect(page.locator('#mDelta')).toHaveText('+' + (tot - 50).toFixed(1).replace('.', ',') + ' µT');
-  await page.click('#mZero');
-  await page.evaluate(() => window.__read(30, 40, 40));
-  await expect(page.locator('#mDelta')).toHaveText('0,0 µT');
-  // Switching the tab stops the sensor
-  await tab(page, 'Kompass');
-  expect(await page.evaluate(() => window.__magStopped)).toBe(true);
-  await expect(page.locator('[data-start="mag"]')).toHaveText('Starten');
-});
-
-test('magnetometer: compass fallback without the sensor API', async ({ page }) => {
-  await page.addInitScript(() => { delete window.Magnetometer; });
-  await page.reload();
-  await tab(page, 'Metalldetektor');
-  await running(page, 'mag');
-  await expect(page.locator('#mMode')).toHaveText(/Kompass ablenk/);
-  await orientation(page, { alpha: 0, beta: 0, gamma: 0, absolute: true }, 'deviceorientationabsolute', 1);
-  await orientation(page, { alpha: 330, beta: 0, gamma: 0, absolute: true }, 'deviceorientationabsolute', 1);
-  await expect(page.locator('#mVal')).toHaveText('30°');
 });
 
 test.describe('sound level', () => {
