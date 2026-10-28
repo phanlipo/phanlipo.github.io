@@ -6,9 +6,9 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Handy-Sensoren</title>
-<meta name="description" content="Kompass, Wasserwaage, Beschleunigung, Vibrometer und Schallpegel – mit den Sensoren des Handys messen.">
+<meta name="description" content="Kompass, Wasserwaage, Beschleunigung, Vibrometer, Schallpegel, Stimmgerät, Tacho, Schrittzähler, Tongenerator, Taschenlampe mit Morse, Puls und Klatsch-Stoppuhr – mit den Sensoren des Handys.">
 <meta name="tool:tags" content="Alltag, Messen, Werkzeug">
-<meta name="tool:features" content="Bewegungssensor, Mikrofon">
+<meta name="tool:features" content="Bewegungssensor, Mikrofon, Kamera, Standort">
 <meta name="tool:order" content="70">
 <meta name="tool:icon" content="gauge">
 <meta name="tool:color" content="#be123c">
@@ -16,7 +16,7 @@
 <meta name="tool:storage" content="sensors.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-L0t4m2mnOPJf0yJ5+CdBSWVxzjmgYIdFR6js9Z0nh7M='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-4D9e8xzg4Q06ZDmN6RIq78cdloNUajZc4bMeGpbEczQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -35,25 +35,39 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
 .tab[aria-selected="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
 .panel{display:grid;gap:12px}
 .panel h2{margin:0}
+.panel h3{font-size:15px;margin:6px 0 0}
 .readout{font-size:52px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;line-height:1.1;margin:0}
 .readout small{font-size:20px;font-weight:600;color:var(--muted)}
 .under{text-align:center;color:var(--muted);margin:0;font-size:15px}
+.info{text-align:center;margin:0;font-size:15px}
 .status{min-height:1.4em;font-size:14px;color:var(--muted);text-align:center;margin:0}
 .status.err{color:var(--err)}
 .status.warn{color:var(--warn)}
 .status.ok{color:var(--ok)}
 .btn{min-height:44px}
 .btn.start{flex:1 1 160px;font-size:18px}
+.btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.btn:disabled{opacity:.55;cursor:default}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;text-align:center}
 .stat{background:var(--surface-2);border-radius:8px;padding:8px 4px;min-width:0}
 .stat b{display:block;font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .stat span{font-size:12px;color:var(--muted)}
 .graph{width:100%;height:150px;display:block;background:var(--surface-2);border-radius:8px}
+.graph.small{height:110px}
 .legend{display:flex;gap:14px;justify-content:center;font-size:13px;color:var(--muted);margin:0}
 .legend i{display:inline-block;width:12px;height:4px;border-radius:2px;vertical-align:middle;margin-inline-end:4px}
 .seg{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
 .seg button{flex:1;border:0;background:var(--surface-2);color:var(--text);min-height:44px;font:inherit;font-size:14px;cursor:pointer;padding-inline:6px}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.field{display:grid;gap:4px;font-size:14px;color:var(--muted);font-weight:600;min-width:0}
+.field input[type=text],.field select{min-height:44px;padding-inline:10px;font-size:16px;width:100%}
+input[type=range]{width:100%;min-height:44px;accent-color:var(--accent);margin:0}
+label.check{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+label.check input{width:22px;height:22px;accent-color:var(--accent)}
+.meter{position:relative;height:22px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden}
+.meter>.fill{height:100%;width:0;background:var(--accent)}
+.meter>.mark{position:absolute;top:0;bottom:0;width:3px;background:var(--text)}
 .dial{width:min(260px,72vw);aspect-ratio:1;margin-inline:auto;position:relative}
 .dial svg{width:100%;height:100%;display:block}
 /* Compass */
@@ -63,6 +77,7 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
 .rose .tick.major{stroke:var(--text);stroke-width:2}
 .rose text{fill:var(--text);font:600 15px var(--font);text-anchor:middle;dominant-baseline:central}
 .rose text.n{fill:var(--c1);font-size:19px}
+.rose .mark{fill:var(--c3)}
 .pointer{fill:var(--c1)}
 /* Level */
 .lv-ring{fill:var(--surface-2);stroke:var(--border);stroke-width:2}
@@ -84,12 +99,25 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
 .cal{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
 .cal label{display:grid;gap:4px;font-size:14px;color:var(--muted);font-weight:600}
 .cal input{min-height:44px;width:110px;padding-inline:10px;font-size:16px}
+/* Tuner */
+.cents{position:relative;height:40px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border)}
+.cents::before{content:"";position:absolute;inset-inline-start:50%;top:4px;bottom:4px;width:2px;background:var(--muted)}
+.cents .needle{position:absolute;top:3px;bottom:3px;width:8px;margin-inline-start:-4px;border-radius:4px;background:var(--accent);inset-inline-start:50%}
+.cents.ok .needle{background:var(--ok)}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:-8px}
+/* Camera / lamp */
+video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:var(--surface-2);margin-inline:auto;display:block}
+.code{font-family:var(--mono);font-size:18px;letter-spacing:1px;text-align:center;overflow-wrap:anywhere;margin:0;min-height:1.4em}
+.screen-light{position:fixed;inset:0;z-index:50;border:0;border-radius:0;background:#fff;color:#444;font:inherit;font-size:14px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:40px;cursor:pointer}
+.screen-light.off{background:#000;color:#bbb}
+.laps{list-style:none;padding:0;margin:0;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;font-variant-numeric:tabular-nums}
+.laps li{background:var(--surface-2);border-radius:6px;padding:2px 8px;font-size:14px}
 </style>
 </head>
 <body>
 <header>
   <h1>Handy-Sensoren</h1>
-  <p class="sub">Kompass, Wasserwaage, Bewegung und Schall</p>
+  <p class="sub">Messen mit Lage- und Bewegungssensor, Mikrofon, Kamera und GPS</p>
 </header>
 
 <main>
@@ -99,6 +127,13 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
     <button type="button" role="tab" class="tab" id="tab-accel" aria-controls="p-accel" data-tab="accel">Beschleunigung</button>
     <button type="button" role="tab" class="tab" id="tab-vibro" aria-controls="p-vibro" data-tab="vibro">Vibrometer</button>
     <button type="button" role="tab" class="tab" id="tab-sound" aria-controls="p-sound" data-tab="sound">Schall</button>
+    <button type="button" role="tab" class="tab" id="tab-tuner" aria-controls="p-tuner" data-tab="tuner">Stimmgerät</button>
+    <button type="button" role="tab" class="tab" id="tab-speed" aria-controls="p-speed" data-tab="speed">Tacho</button>
+    <button type="button" role="tab" class="tab" id="tab-steps" aria-controls="p-steps" data-tab="steps">Schritte</button>
+    <button type="button" role="tab" class="tab" id="tab-tone" aria-controls="p-tone" data-tab="tone">Tongenerator</button>
+    <button type="button" role="tab" class="tab" id="tab-torch" aria-controls="p-torch" data-tab="torch">Lampe &amp; Morse</button>
+    <button type="button" role="tab" class="tab" id="tab-pulse" aria-controls="p-pulse" data-tab="pulse">Puls</button>
+    <button type="button" role="tab" class="tab" id="tab-clap" aria-controls="p-clap" data-tab="clap">Klatsch-Stoppuhr</button>
   </div>
 
   <!-- Compass -->
@@ -113,14 +148,24 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
           <text x="170" y="100">O</text>
           <text x="100" y="170">S</text>
           <text x="30" y="100">W</text>
+          <path class="mark" id="cMark" d="M100 40 L108 56 L92 56 Z" hidden></path>
         </g>
         <path class="pointer" d="M100 2 L108 18 L92 18 Z"></path>
       </svg>
     </div>
     <p class="readout" aria-live="off"><span id="cDeg">–</span></p>
-    <p class="under">Richtung: <b id="cDir">–</b></p>
+    <p class="under">Richtung: <b id="cDir">–</b> · <span id="cNorthInfo">magnetisch Nord</span></p>
+    <p class="info" id="cBearInfo"></p>
     <p class="status" id="st-compass" role="status"></p>
-    <div class="row"><button type="button" class="btn primary start" data-start="compass">Starten</button></div>
+    <div class="row">
+      <button type="button" class="btn primary start" data-start="compass">Starten</button>
+      <button type="button" class="btn" id="cBear">Peilung merken</button>
+    </div>
+    <div class="seg" role="group" aria-label="Nordrichtung">
+      <button type="button" data-north="mag" aria-pressed="true">Magnetisch Nord</button>
+      <button type="button" data-north="geo" aria-pressed="false">Geografisch Nord</button>
+    </div>
+    <label class="field" for="cDecl" id="cDeclWrap" hidden>Missweisung (° Ost, Deutschland ca. 3–5)<input type="text" inputmode="decimal" id="cDecl" autocomplete="off"></label>
   </section>
 
   <!-- Level -->
@@ -164,13 +209,19 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
     <div class="stats">
       <div class="stat"><b id="lvValH">–</b><span>links/rechts</span></div>
       <div class="stat"><b id="lvValV">–</b><span id="lvLblV">oben/unten</span></div>
+      <div class="stat"><b id="lvRef">–</b><span>Winkel zum Bezug</span></div>
     </div>
     <p class="status" id="st-level" role="status"></p>
     <div class="row">
       <button type="button" class="btn primary start" data-start="level">Starten</button>
+      <button type="button" class="btn" id="lvHold" aria-pressed="false">Wert halten</button>
+      <button type="button" class="btn" id="lvRefBtn">Bezug setzen</button>
+    </div>
+    <div class="row">
       <button type="button" class="btn" id="lvZero">Nullpunkt setzen</button>
       <button type="button" class="btn" id="lvReset">Nullpunkt zurücksetzen</button>
     </div>
+    <label class="check"><input type="checkbox" id="lvBeep"> Ton, wenn waagerecht bzw. im Lot</label>
   </section>
 
   <!-- Acceleration -->
@@ -189,6 +240,12 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
     </div>
     <canvas class="graph" id="aGraph" role="img" aria-label="Verlauf der Beschleunigung der letzten 10 Sekunden"></canvas>
     <p class="legend" aria-hidden="true"><span><i style="background:var(--c1)"></i>X</span><span><i style="background:var(--c2)"></i>Y</span><span><i style="background:var(--c3)"></i>Z</span></p>
+    <h3>Drehrate (Gyroskop)</h3>
+    <div class="stats">
+      <div class="stat"><b id="rA">–</b><span>um Z (°/s)</span></div>
+      <div class="stat"><b id="rB">–</b><span>um X (°/s)</span></div>
+      <div class="stat"><b id="rG">–</b><span>um Y (°/s)</span></div>
+    </div>
     <p class="status" id="st-accel" role="status"></p>
     <div class="row">
       <button type="button" class="btn primary start" data-start="accel">Starten</button>
@@ -212,19 +269,31 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
       <button type="button" class="btn primary start" data-start="vibro">Starten</button>
       <button type="button" class="btn" id="vReset">Spitze zurücksetzen</button>
     </div>
+    <h3>Aufzeichnung</h3>
+    <p class="info" id="vRecInfo">Zeichnet alle Messwerte auf (bis 20 Minuten) – zum Vergleichen oder Auswerten in einer Tabelle.</p>
+    <div class="row">
+      <button type="button" class="btn" id="vRec">Aufnahme starten</button>
+      <button type="button" class="btn" id="vCsv" disabled>CSV speichern</button>
+    </div>
   </section>
 
   <!-- Sound level -->
   <section class="card panel" id="p-sound" role="tabpanel" aria-labelledby="tab-sound" hidden>
     <h2>Schallmessung</h2>
-    <p class="readout"><span id="sNow">–</span> <small>dB</small></p>
+    <div class="seg" role="group" aria-label="Frequenzbewertung">
+      <button type="button" data-weight="Z" aria-pressed="true">dB (unbewertet)</button>
+      <button type="button" data-weight="A" aria-pressed="false">dB(A)</button>
+    </div>
+    <p class="readout"><span id="sNow">–</span> <small id="sUnit">dB</small></p>
     <p class="under" id="sDesc">–</p>
     <div class="stats">
-      <div class="stat"><b id="sMin">–</b><span>Minimum (dB)</span></div>
-      <div class="stat"><b id="sAvg">–</b><span>Mittel (dB)</span></div>
-      <div class="stat"><b id="sMax">–</b><span>Maximum (dB)</span></div>
+      <div class="stat"><b id="sMin">–</b><span>Minimum</span></div>
+      <div class="stat"><b id="sAvg">–</b><span>Mittel</span></div>
+      <div class="stat"><b id="sMax">–</b><span>Maximum</span></div>
     </div>
     <canvas class="graph" id="sGraph" role="img" aria-label="Verlauf des Schallpegels der letzten 30 Sekunden"></canvas>
+    <p class="under">Hauptfrequenz: <b id="sPeak">–</b></p>
+    <canvas class="graph small" id="sSpec" role="img" aria-label="Frequenzspektrum von 20 Hz bis 20 kHz"></canvas>
     <p class="status" id="st-sound" role="status"></p>
     <div class="row">
       <button type="button" class="btn primary start" data-start="sound">Starten</button>
@@ -234,8 +303,151 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
       <label for="sCal">Kalibrierung (dB)<input type="text" inputmode="decimal" id="sCal" autocomplete="off"></label>
       <p class="muted" style="margin:0">Messwert = Mikrofonpegel <span id="sDbfs">–</span> dBFS + Kalibrierung</p>
     </div>
+    <h3>Lärmprotokoll</h3>
+    <p class="info" id="sLogInfo">Speichert jede Sekunde einen Mittelwert (bis 12 Stunden). Bildschirm bleibt dabei an – Handy ans Ladegerät.</p>
+    <canvas class="graph small" id="sLogGraph" role="img" aria-label="Verlauf des Lärmprotokolls"></canvas>
+    <div class="row">
+      <button type="button" class="btn" id="sLog">Protokoll starten</button>
+      <button type="button" class="btn" id="sLogCsv" disabled>CSV speichern</button>
+    </div>
+  </section>
+
+  <!-- Tuner -->
+  <section class="card panel" id="p-tuner" role="tabpanel" aria-labelledby="tab-tuner" hidden>
+    <h2>Stimmgerät</h2>
+    <div class="seg" role="group" aria-label="Modus">
+      <button type="button" data-tmode="chrom" aria-pressed="true">Chromatisch</button>
+      <button type="button" data-tmode="guitar" aria-pressed="false">Gitarre</button>
+    </div>
+    <p class="readout"><span id="tNote">–</span><small id="tOct"></small></p>
+    <p class="under"><b id="tState">Ton spielen …</b></p>
+    <div class="cents" id="tCentsBar" aria-hidden="true"><div class="needle" id="tNeedle"></div></div>
+    <div class="scale" aria-hidden="true"><span>−50</span><span>0</span><span>+50</span></div>
+    <div class="stats">
+      <div class="stat"><b id="tCents">–</b><span>Cent</span></div>
+      <div class="stat"><b id="tFreq">–</b><span>gemessen (Hz)</span></div>
+      <div class="stat"><b id="tTarget">–</b><span>Soll (Hz)</span></div>
+    </div>
+    <p class="status" id="st-tuner" role="status"></p>
+    <div class="row"><button type="button" class="btn primary start" data-start="tuner">Starten</button></div>
+    <div class="cal"><label for="tRef">Kammerton a′ (Hz)<input type="text" inputmode="decimal" id="tRef" autocomplete="off"></label></div>
+  </section>
+
+  <!-- Speed (GPS) -->
+  <section class="card panel" id="p-speed" role="tabpanel" aria-labelledby="tab-speed" hidden>
+    <h2>Tacho</h2>
+    <p class="readout"><span id="gSpeed">–</span> <small>km/h</small></p>
+    <p class="under">Richtung: <b id="gDir">–</b> · Genauigkeit <b id="gAcc">–</b></p>
+    <div class="stats">
+      <div class="stat"><b id="gDist">–</b><span>Strecke</span></div>
+      <div class="stat"><b id="gMax">–</b><span>Höchst (km/h)</span></div>
+      <div class="stat"><b id="gAvg">–</b><span>Schnitt (km/h)</span></div>
+      <div class="stat"><b id="gAlt">–</b><span>Höhe (m)</span></div>
+      <div class="stat"><b id="gTime">–</b><span>Fahrzeit</span></div>
+    </div>
+    <p class="status" id="st-speed" role="status"></p>
+    <div class="row">
+      <button type="button" class="btn primary start" data-start="speed">Starten</button>
+      <button type="button" class="btn" id="gReset">Strecke zurücksetzen</button>
+    </div>
+  </section>
+
+  <!-- Pedometer -->
+  <section class="card panel" id="p-steps" role="tabpanel" aria-labelledby="tab-steps" hidden>
+    <h2>Schrittzähler</h2>
+    <p class="readout"><span id="stCount">0</span> <small>Schritte heute</small></p>
+    <div class="stats">
+      <div class="stat"><b id="stDist">–</b><span>Strecke</span></div>
+      <div class="stat"><b id="stRate">–</b><span>Schritte/min</span></div>
+    </div>
+    <p class="status" id="st-steps" role="status"></p>
+    <div class="row">
+      <button type="button" class="btn primary start" data-start="steps">Starten</button>
+      <button type="button" class="btn" id="stReset">Zurücksetzen</button>
+    </div>
+    <div class="seg" role="group" aria-label="Empfindlichkeit">
+      <button type="button" data-sens="low" aria-pressed="false">wenig empfindlich</button>
+      <button type="button" data-sens="mid" aria-pressed="true">normal</button>
+      <button type="button" data-sens="high" aria-pressed="false">sehr empfindlich</button>
+    </div>
+    <div class="cal"><label for="stLen">Schrittlänge (m)<input type="text" inputmode="decimal" id="stLen" autocomplete="off"></label></div>
+  </section>
+
+  <!-- Tone generator -->
+  <section class="card panel" id="p-tone" role="tabpanel" aria-labelledby="tab-tone" hidden>
+    <h2>Tongenerator</h2>
+    <p class="note">Vorsicht mit der Lautstärke – mit leise anfangen, besonders mit Kopfhörern.</p>
+    <div class="fields">
+      <label class="field" for="toType">Signal
+        <select id="toType">
+          <option value="sine">Sinus</option>
+          <option value="square">Rechteck</option>
+          <option value="triangle">Dreieck</option>
+          <option value="sawtooth">Sägezahn</option>
+          <option value="white">Weißes Rauschen</option>
+          <option value="pink">Rosa Rauschen</option>
+        </select>
+      </label>
+      <label class="field" for="toFreq">Frequenz (Hz)<input type="text" inputmode="decimal" id="toFreq" autocomplete="off"></label>
+    </div>
+    <label class="field" for="toFreqR">Frequenz einstellen (20 Hz – 20 kHz)<input type="range" id="toFreqR" min="0" max="1000" step="1"></label>
+    <label class="field" for="toVol"><span>Lautstärke <span id="toVolVal"></span></span><input type="range" id="toVol" min="0" max="100" step="1"></label>
+    <label class="check"><input type="checkbox" id="toSweep"> Frequenz-Sweep</label>
+    <div class="fields" id="toSweepFields" hidden>
+      <label class="field" for="toF2">bis Frequenz (Hz)<input type="text" inputmode="decimal" id="toF2" autocomplete="off"></label>
+      <label class="field" for="toDur">Dauer (s)<input type="text" inputmode="decimal" id="toDur" autocomplete="off"></label>
+    </div>
+    <p class="status" id="st-tone" role="status"></p>
+    <div class="row"><button type="button" class="btn primary start" data-start="tone">Abspielen</button></div>
+  </section>
+
+  <!-- Flashlight & Morse -->
+  <section class="card panel" id="p-torch" role="tabpanel" aria-labelledby="tab-torch" hidden>
+    <h2>Taschenlampe &amp; Morse</h2>
+    <div class="row">
+      <button type="button" class="btn primary start" data-start="torch">Lampe an</button>
+      <button type="button" class="btn" id="lScreen">Bildschirm als Lampe</button>
+    </div>
+    <p class="status" id="st-torch" role="status"></p>
+    <h3>Morsen</h3>
+    <label class="field" for="mText">Text<input type="text" id="mText" autocomplete="off"></label>
+    <p class="code" id="mCode" aria-label="Morsecode"></p>
+    <label class="field" for="mWpm"><span>Tempo: <span id="mWpmVal"></span> Wörter/min</span><input type="range" id="mWpm" min="5" max="30" step="1"></label>
+    <div class="row">
+      <button type="button" class="btn" id="mSend">Morse senden</button>
+      <button type="button" class="btn" id="mSos">SOS</button>
+    </div>
+  </section>
+
+  <!-- Pulse -->
+  <section class="card panel" id="p-pulse" role="tabpanel" aria-labelledby="tab-pulse" hidden>
+    <h2>Pulsmesser</h2>
+    <p class="note">Spielerei, kein Medizinprodukt. Fingerkuppe ganz auf die Rückkamera legen (der Blitz geht an) und still halten.</p>
+    <video class="cam" id="pVideo" muted playsinline aria-hidden="true"></video>
+    <p class="readout"><span id="pBpm">–</span> <small>Schläge/min</small></p>
+    <p class="under" id="pInfo">–</p>
+    <canvas class="graph small" id="pGraph" role="img" aria-label="Pulskurve"></canvas>
+    <p class="status" id="st-pulse" role="status"></p>
+    <div class="row"><button type="button" class="btn primary start" data-start="pulse">Messen</button></div>
+  </section>
+
+  <!-- Clap stopwatch -->
+  <section class="card panel" id="p-clap" role="tabpanel" aria-labelledby="tab-clap" hidden>
+    <h2>Klatsch-Stoppuhr</h2>
+    <p class="readout"><span id="kTime">0,00</span> <small>s</small></p>
+    <p class="under" id="kState">Klatschen startet die Zeit</p>
+    <div class="meter" aria-hidden="true"><div class="fill" id="kFill"></div><div class="mark" id="kMark"></div></div>
+    <label class="field" for="kThr"><span>Auslöseschwelle: <span id="kThrVal"></span> dBFS</span><input type="range" id="kThr" min="-50" max="-3" step="1"></label>
+    <ul class="laps" id="kList" aria-label="Letzte Zeiten"></ul>
+    <p class="status" id="st-clap" role="status"></p>
+    <div class="row">
+      <button type="button" class="btn primary start" data-start="clap">Starten</button>
+      <button type="button" class="btn" id="kReset">Zurücksetzen</button>
+    </div>
   </section>
 </main>
+
+<button type="button" class="screen-light" id="screenLight" hidden>Bildschirmlicht – tippen zum Ausschalten</button>
 
 <!-- data:start -->
 <details class="data card">
@@ -252,42 +464,49 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
 <!-- data:end -->
 <details class="help card">
   <summary>Anleitung &amp; Hinweise</summary>
-  <p>Die App liest die Sensoren des Handys direkt im Browser aus. Oben den Bereich wählen – die Messung startet sofort. Es läuft immer nur eine Messung; mit <b>Stoppen</b> lässt sie sich anhalten. Wird die App in den Hintergrund gelegt, pausiert sie und läuft beim Zurückkehren weiter. Während einer Messung bleibt der Bildschirm an (falls das Gerät es erlaubt).</p>
+  <p>Die App liest die Sensoren des Handys direkt im Browser aus. Oben den Bereich wählen – die Messung startet sofort (Tongenerator, Lampe und Puls erst auf Knopfdruck). Es läuft immer nur eine Messung; mit <b>Stoppen</b> lässt sie sich anhalten. Wird die App in den Hintergrund gelegt, pausiert sie und läuft beim Zurückkehren weiter. Während einer Messung bleibt der Bildschirm an (falls das Gerät es erlaubt).</p>
   <h3>Berechtigungen</h3>
   <ul>
     <li><b>iPhone/iPad:</b> Safari gibt die Sensoren erst nach einer Freigabe frei. Erscheint <b>Zugriff erlauben</b>, darauf tippen und „Erlauben“ wählen. Wurde abgelehnt, die Seite schließen und neu öffnen.</li>
     <li><b>Android:</b> Kommen keine Werte, in den Website-Einstellungen des Browsers „Bewegungssensoren“ erlauben.</li>
-    <li><b>Schallmessung:</b> braucht den Zugriff auf das Mikrofon. Der Ton wird nur ausgewertet, nicht aufgenommen oder gespeichert.</li>
+    <li><b>Mikrofon</b> (Schall, Stimmgerät, Klatsch-Stoppuhr), <b>Kamera</b> (Lampe, Puls) und <b>Standort</b> (Tacho) fragt der Browser beim ersten Gebrauch ab. Ton und Bild werden nur ausgewertet, nicht aufgenommen oder gespeichert; nichts verlässt das Gerät.</li>
     <li>Am Computer gibt es meist keine Bewegungssensoren – dann erscheint ein Hinweis.</li>
   </ul>
   <h3>Kompass</h3>
   <ul>
-    <li>Handy flach halten; die Spitze oben zeigt die Blickrichtung. Angezeigt wird die Richtung zum <b>magnetischen</b> Nordpol (in Deutschland ca. 3–5° östlich von geografisch Nord).</li>
+    <li>Handy flach halten; die Spitze oben zeigt die Blickrichtung. Standard ist <b>magnetisch Nord</b>. <b>Geografisch Nord</b> (Landkarten) addiert die Missweisung – in Deutschland 2026 etwa 3° (Westen) bis 5° (Osten).</li>
+    <li><b>Peilung merken</b> speichert die aktuelle Richtung; ein blaues Dreieck auf der Rose und der Text darunter zeigen, wie weit man nach links oder rechts drehen muss.</li>
     <li>Zeigt der Kompass falsch: Handy in Form einer 8 schwenken (kalibrieren) und Abstand zu Metall, Magneten und Hüllen mit Magnetverschluss halten.</li>
   </ul>
-  <h3>Wasserwaage</h3>
+  <h3>Wasserwaage &amp; Winkelmesser</h3>
   <ul>
     <li><b>Liegend:</b> Handy auf die Fläche legen – die Blase wandert zur höheren Seite, die Zahl ist die Neigung.</li>
     <li><b>Stehend:</b> Handy mit einer Kante an die Fläche halten – die blaue Linie zeigt die echte Waagerechte, die Zahl die Abweichung von waagerecht bzw. senkrecht.</li>
-    <li>Die beiden <b>Röhrenlibellen</b> zeigen die Achsen einzeln (bis ±5°): unten links/rechts, rechts daneben oben/unten – steht das Handy auf der Kante, die Neigung nach vorne/hinten.</li>
-    <li>Ein grüner Rand bedeutet: weniger als 0,3° Abweichung.</li>
+    <li>Die beiden <b>Röhrenlibellen</b> zeigen die Achsen einzeln (bis ±5°): unten links/rechts, rechts daneben oben/unten – steht das Handy auf der Kante, die Neigung nach vorne/hinten. Ein grüner Rand bedeutet: weniger als 0,3° Abweichung.</li>
+    <li><b>Winkelmesser:</b> Handy an die erste Fläche legen, <b>Bezug setzen</b> tippen, dann an die zweite Fläche legen – „Winkel zum Bezug“ ist der Winkel zwischen beiden (z. B. Dachschräge, Stuhllehne).</li>
+    <li><b>Wert halten</b> friert die Anzeige ein – praktisch, wenn man das Display beim Messen nicht sieht. Der <b>Ton</b> piept, sobald waagerecht bzw. im Lot erreicht ist.</li>
     <li><b>Nullpunkt setzen</b> gleicht einen schiefen Sensor oder eine Kamera-Wölbung aus: Handy auf eine sicher ebene Fläche legen, tippen. Wird gespeichert.</li>
   </ul>
   <h3>Beschleunigung</h3>
   <ul>
     <li><b>mit Schwerkraft:</b> Ruhend misst das Handy etwa 9,81 m/s² (= 1 g) nach oben. Die Achsen: X nach rechts, Y nach oben (Richtung Oberkante), Z aus dem Bildschirm heraus. Manche Geräte (v. a. ältere iPhones) zeigen umgekehrte Vorzeichen.</li>
     <li><b>ohne Schwerkraft:</b> nur die Bewegung selbst, z. B. beim Anfahren im Auto oder Aufzug.</li>
+    <li><b>Drehrate:</b> wie schnell sich das Handy dreht (Gyroskop), in Grad pro Sekunde um die drei Achsen.</li>
   </ul>
   <h3>Vibrometer</h3>
   <ul>
     <li>Handy auf die schwingende Fläche legen (Waschmaschine, Boden, Tisch). Gemessen wird die Beschleunigung ohne Schwerkraft.</li>
     <li><b>Effektivwert</b> = mittlere Stärke der letzten Sekunde, <b>Spitze</b> = größter Einzelwert. Die <b>Frequenz</b> ist eine Schätzung der Hauptschwingung; sie reicht höchstens bis zur halben Messrate (meist 30–50 Hz). Schnelle Vibrationen (Motoren) werden daher nicht richtig erfasst.</li>
+    <li><b>Aufzeichnung:</b> speichert alle Einzelwerte; <b>CSV speichern</b> ergibt eine Datei für Excel, LibreOffice oder Numbers (Semikolon-getrennt, deutsches Komma).</li>
     <li>Kein geeichtes Messgerät, gut zum Vergleichen (vorher – nachher).</li>
   </ul>
   <h3>Schallmessung</h3>
   <ul>
-    <li>Handy-Mikrofone sind nicht kalibriert; die Werte sind <b>Schätzungen</b> (ohne A-Bewertung, ±5–10 dB). Für Vergleiche (lauter/leiser) taugen sie gut.</li>
+    <li>Handy-Mikrofone sind nicht kalibriert; die Werte sind <b>Schätzungen</b> (±5–10 dB). Für Vergleiche (lauter/leiser) taugen sie gut.</li>
+    <li><b>dB(A)</b> gewichtet wie das menschliche Ohr: tiefe und sehr hohe Töne zählen weniger. So messen auch Behörden und Arbeitsschutz.</li>
+    <li><b>Hauptfrequenz</b> und <b>Spektrum</b> zeigen, wie hoch ein Ton ist (z. B. Brummen bei 50 oder 100 Hz).</li>
     <li><b>Kalibrierung:</b> Neben ein Schallpegelmessgerät halten und den Wert so ändern, dass beide gleich anzeigen. Der Wert wird gespeichert. Voreinstellung: 100 dB.</li>
+    <li><b>Lärmprotokoll:</b> speichert jede Sekunde den Mittelwert, zeigt Verlauf, Mittelungspegel (Leq) und Höchstwert und lässt sich als CSV speichern. Die App muss dafür im Vordergrund bleiben; im Hintergrund pausiert die Messung.</li>
     <li>Sehr laute Geräusche (über ca. 100 dB) übersteuern das Mikrofon – dann zeigt die App zu wenig an.</li>
   </ul>
   <table>
@@ -303,13 +522,50 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
       <tr><td>120 dB</td><td>Flugzeugstart in der Nähe – Schmerzgrenze</td></tr>
     </tbody>
   </table>
+  <h3>Stimmgerät</h3>
+  <ul>
+    <li>Einen einzelnen Ton spielen oder singen. <b>Chromatisch</b> zeigt den nächsten Halbton (deutsche Namen: B = B♭, H = B), <b>Gitarre</b> die nächste Saite der Standardstimmung E-A-D-G-H-e.</li>
+    <li>Die Abweichung steht in <b>Cent</b> (100 Cent = ein Halbton); bis ±5 Cent gilt der Ton als gestimmt (grüner Zeiger).</li>
+    <li>Der Kammerton a′ lässt sich ändern (Standard 440 Hz, manche Orchester 442 Hz).</li>
+  </ul>
+  <h3>Tacho</h3>
+  <ul>
+    <li>Nutzt das GPS: Geschwindigkeit, Höchst- und Durchschnittsgeschwindigkeit, Strecke, Höhe und Fahrzeit (nur Zeit in Bewegung). Im Freien dauert das erste Signal manchmal bis zu einer Minute; in Gebäuden ist es ungenau.</li>
+    <li>Ungenaue Positionen (über ±50 m) werden ignoriert, kleine Sprünge im Stand nicht als Strecke gezählt. Die Strecke bleibt bis <b>Strecke zurücksetzen</b> erhalten, solange die App offen ist.</li>
+    <li>Nur als Orientierung – kein Ersatz für den Tacho im Fahrzeug.</li>
+  </ul>
+  <h3>Schrittzähler</h3>
+  <ul>
+    <li>Zählt nur, solange die App offen und im Vordergrund ist (Browser dürfen im Hintergrund keine Sensoren lesen). Handy in der Hand oder Hosentasche tragen.</li>
+    <li>Zählt er zu viel (z. B. im Auto) oder zu wenig, die <b>Empfindlichkeit</b> ändern. Die Schritte des Tages werden gespeichert und beginnen am nächsten Tag bei 0.</li>
+  </ul>
+  <h3>Tongenerator</h3>
+  <ul>
+    <li>Erzeugt Sinus, Rechteck, Dreieck, Sägezahn sowie weißes und rosa Rauschen – z. B. zum Testen von Lautsprechern und Kopfhörern oder zum Finden von Resonanzen. Der <b>Sweep</b> fährt die Frequenz in der eingestellten Zeit gleichmäßig (logarithmisch) durch.</li>
+    <li>Handy-Lautsprecher geben tiefe Töne unter ca. 200 Hz kaum wieder.</li>
+  </ul>
+  <h3>Taschenlampe &amp; Morse</h3>
+  <ul>
+    <li><b>Lampe an</b> schaltet den Kamerablitz ein (Android; iPhone ab iOS 17.5 meist auch). Gibt es keinen Blitz, leuchtet der Bildschirm weiß. <b>Bildschirm als Lampe</b> geht immer – tippen schaltet ihn wieder aus.</li>
+    <li><b>Morse:</b> Text eingeben (Buchstaben, Ziffern, Ä, Ö, Ü und einige Satzzeichen) und senden; das Tempo ist in Wörtern pro Minute (Punkt = 1200 ÷ Tempo Millisekunden). <b>SOS</b> sendet ··· −−− ···.</li>
+  </ul>
+  <h3>Puls</h3>
+  <ul>
+    <li>Die Kamera sieht, wie sich die Rötung der Fingerkuppe mit jedem Herzschlag ändert. Nach etwa 5–10 Sekunden ruhiger Messung erscheint der Puls.</li>
+    <li>Nur eine Spielerei: Licht, Druck und Bewegung verfälschen das Ergebnis. Für gesundheitliche Fragen ein Messgerät oder einen Arzt fragen.</li>
+  </ul>
+  <h3>Klatsch-Stoppuhr</h3>
+  <ul>
+    <li>Ein Klatschen (oder anderer lauter Knall) startet die Zeit, das nächste stoppt sie. Danach startet ein neues Klatschen eine neue Messung; die letzten Zeiten stehen darunter.</li>
+    <li>Die <b>Auslöseschwelle</b> so einstellen, dass Sprechen und Hintergrund unter der Markierung bleiben. Genauigkeit etwa ±0,05 s.</li>
+  </ul>
 </details>
 
 <footer>
   <p>Läuft vollständig im Browser · Messwerte verlassen das Gerät nicht</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
-  <p class="footer-version">Version 6c53eefd9a43</p>
+  <p class="footer-version">Version 68c9d24b82bb</p>
   <!-- footer:end -->
 </footer>
 
@@ -319,12 +575,26 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
 'use strict';
 const {$, load, save, toast, fmt, parseNum} = Tools;
 const LS = 'sensors.settings.v1';
-const S = Object.assign({tab:'compass', level:{x:0, y:0, e:0}, grav:true, soundCal:100}, load(LS, {}) || {});
-S.level = Object.assign({x:0, y:0, e:0, l:0}, S.level);
+const DEF = {
+  tab: 'compass', level: {x:0, y:0, e:0, l:0}, levelBeep: false, grav: true, soundCal: 100, soundW: 'Z',
+  compass: {north: 'mag', decl: 4, bearing: null},
+  tuner: {mode: 'chrom', ref: 440},
+  steps: {day: '', count: 0, len: 0.7, sens: 'mid'},
+  tone: {type: 'sine', freq: 1000, vol: 30, sweep: false, f2: 10000, dur: 10},
+  morse: {text: 'SOS', wpm: 12},
+  clapThr: -20,
+};
+const S = Object.assign({}, DEF, load(LS, {}) || {});
+for (const k of ['level', 'compass', 'tuner', 'steps', 'tone', 'morse']) S[k] = Object.assign({}, DEF[k], S[k]);
 const store = () => save(LS, S);
 const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const TABS = ['compass', 'level', 'accel', 'vibro', 'sound'];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const TABS = ['compass', 'level', 'accel', 'vibro', 'sound', 'tuner', 'speed', 'steps', 'tone', 'torch', 'pulse', 'clap'];
+const AC = window.AudioContext || window.webkitAudioContext;
+// German number without thousands separator for input fields
+const inputNum = (v, d) => fmt(v, d).replace(/\./g, '');
+const signed = (v, d) => { const r = Number(v.toFixed(d)) || 0; return (r > 0 ? '+' : '') + fmt(r, d); };
 
 // Rotation of the screen content relative to the device (0, 90, 180, 270)
 function screenAngle(){
@@ -366,7 +636,7 @@ function stopRunning(byUser){
   cleanup();
   releaseWake();
   const b = startBtn(n);
-  b.textContent = 'Starten'; delete b.dataset.permit;
+  b.textContent = P[n].label || 'Starten'; delete b.dataset.permit;
   if (byUser) userStopped = true;
 }
 // gesture = started by a tap (needed for permission prompts on iOS); otherwise started automatically
@@ -380,7 +650,7 @@ async function startPanel(n, gesture){
   try { await p.start(gesture); }
   catch (e) { cleanup(); setStatus(n, e && e.message ? e.message : String(e), 'err'); b.textContent = 'Erneut versuchen'; return; }
   running = n;
-  b.textContent = 'Stoppen';
+  b.textContent = p.stopLabel || 'Stoppen';
   requestWake();
   watchdog = setTimeout(() => {
     if (running !== n || p.seen || (p.waiting && p.waiting())) return;
@@ -397,12 +667,12 @@ function seen(n){
   P[n].seen = true;
   if ($('st-' + n).classList.contains('warn')) setStatus(n, '');
   const b = startBtn(n);
-  if (b.dataset.permit) { delete b.dataset.permit; b.textContent = 'Stoppen'; }
+  if (b.dataset.permit) { delete b.dataset.permit; b.textContent = P[n].stopLabel || 'Stoppen'; }
 }
-// Pause in the background (battery, microphone), continue when the app is visible again
+// Pause in the background (battery, microphone, camera), continue when the app is visible again
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { if (running) { resumeTab = running; stopRunning(); } }
-  else if (resumeTab) { const n = resumeTab; resumeTab = null; if (!userStopped && n === S.tab) startPanel(n, false); }
+  else if (resumeTab) { const n = resumeTab; resumeTab = null; if (!userStopped && n === S.tab && !P[n].manual) startPanel(n, false); }
 });
 
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -415,6 +685,80 @@ async function askPermission(Ev, gesture){
   try { r = await Ev.requestPermission(); }
   catch (e) { throw new Error('Zugriff auf die Bewegungssensoren nicht möglich: ' + e.message); }
   if (r === 'denied') throw new Error('Zugriff auf Bewegung und Ausrichtung wurde abgelehnt. ' + (isIOS ? 'Seite schließen, neu öffnen und erlauben.' : 'In den Website-Einstellungen des Browsers „Bewegungssensoren“ erlauben.'));
+}
+// devicemotion interval in ms (very old iOS reported seconds)
+const motionInterval = e => e.interval > 1 ? e.interval : e.interval > 0 ? e.interval * 1000 : 16.7;
+
+// Microphone into a fresh audio context; analysers are attached with tap()
+async function openMic(name){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Mikrofon-Zugriff wird von diesem Browser nicht unterstützt.');
+  const ctx = new AC(); // created during the tap (iOS)
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}, video: false});
+  } catch (e) {
+    ctx.close().catch(() => {});
+    throw new Error(e.name === 'NotAllowedError' ? 'Zugriff auf das Mikrofon wurde abgelehnt.' : e.name === 'NotFoundError' ? 'Kein Mikrofon gefunden.' : 'Mikrofon nicht verfügbar: ' + e.message);
+  }
+  offs.push(() => { stream.getTracks().forEach(t => t.stop()); ctx.close().catch(() => {}); });
+  if (ctx.state !== 'running') {
+    // Started without a tap: audio may only run after one (autoplay rules)
+    ctx.resume().catch(() => {});
+    on(document, 'pointerdown', () => ctx.resume().catch(() => {}));
+    setStatus(name, 'Zum Messen einmal auf den Bildschirm tippen.', 'warn');
+  }
+  const src = ctx.createMediaStreamSource(stream), mute = ctx.createGain();
+  mute.gain.value = 0; mute.connect(ctx.destination); // keeps the graph running everywhere
+  return {ctx, tap: an => { src.connect(an); an.connect(mute); return an; }};
+}
+async function openCamera(constraints){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Kamera-Zugriff wird von diesem Browser nicht unterstützt.');
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({video: constraints, audio: false}); }
+  catch (e) { throw new Error(e.name === 'NotAllowedError' ? 'Zugriff auf die Kamera wurde abgelehnt.' : e.name === 'NotFoundError' ? 'Keine Kamera gefunden.' : 'Kamera nicht verfügbar: ' + e.message); }
+  offs.push(() => stream.getTracks().forEach(t => t.stop()));
+  return stream;
+}
+async function setTorch(track, onOff){
+  await track.applyConstraints({advanced: [{torch: onOff}]});
+}
+
+// Short beeps (level), independent of a running measurement
+let fx = null;
+function fxCtx(){
+  if (!fx) {
+    try { fx = new AC(); } catch (_) { return null; }
+    document.addEventListener('pointerdown', () => fx.resume().catch(() => {}));
+  }
+  if (fx.state === 'suspended') fx.resume().catch(() => {});
+  return fx;
+}
+function beep(freq, ms){
+  const c = fxCtx();
+  if (!c) return;
+  const o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0.2, t); g.gain.setTargetAtTime(0, t + ms / 1000, 0.01);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t + ms / 1000 + 0.1);
+}
+
+// CSV download (semicolon, German decimal comma, BOM for Excel)
+function downloadCsv(name, rows){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + rows.join('\r\n') + '\r\n'], {type: 'text/csv;charset=utf-8'}));
+  a.download = name;
+  document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+const csvNum = (v, d) => v.toFixed(d).replace('.', ',');
+function stamp(){
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+function duration(s){
+  s = Math.floor(s);
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, p = n => String(n).padStart(2, '0');
+  return (h ? h + ':' + p(m) : m) + ':' + p(s % 60);
 }
 
 // Compass heading in degrees (0 = magnetic north, clockwise)
@@ -431,15 +775,23 @@ function listenHeading(cb){
   });
 }
 const angleDiff = (a, b) => ((a - b + 540) % 360) - 180;
+const DIRS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+const dirName = h => DIRS[Math.round(((h % 360) + 360) % 360 / 22.5) % 16];
 
-/* ---------- Canvas graph ---------- */
-function drawGraph(cv, series, colors, lo, hi, zero){
+/* ---------- Canvas graphs ---------- */
+function canvas2d(cv){
   const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
-  if (!w || !h) return;
+  if (!w || !h) return null;
   if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-  const c = cv.getContext('2d'), css = getComputedStyle(document.documentElement);
+  const c = cv.getContext('2d');
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, w, h);
+  return {c, w, h, css: getComputedStyle(document.documentElement)};
+}
+function drawGraph(cv, series, colors, lo, hi, zero){
+  const g = canvas2d(cv);
+  if (!g) return;
+  const {c, w, h, css} = g;
   const y = v => h - 6 - (clamp(v, lo, hi) - lo) / (hi - lo) * (h - 12);
   if (zero != null) {
     c.strokeStyle = css.getPropertyValue('--border'); c.lineWidth = 1;
@@ -457,7 +809,6 @@ function drawGraph(cv, series, colors, lo, hi, zero){
 function history(cap){ const a = []; a.cap = cap; a.add = v => { a.push(v); if (a.length > cap) a.shift(); }; return a; }
 
 /* ---------- Compass ---------- */
-const DIRS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 (function ticks(){
   let s = '';
   for (let d = 0; d < 360; d += 10) {
@@ -466,9 +817,11 @@ const DIRS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW'
   }
   $('cTicks').innerHTML = s;
 })();
+const northOffset = () => S.compass.north === 'geo' ? S.compass.decl : 0;
 const compass = {
   perm: () => window.DeviceOrientationEvent,
   noData: 'Keine Kompassdaten – das Gerät hat keinen Magnetsensor oder der Browser stellt ihn nicht bereit.',
+  mag: null,
   async start(gesture){
     await askPermission(window.DeviceOrientationEvent, gesture);
     this.vx = null; this.rot = 0;
@@ -480,23 +833,53 @@ const compass = {
     const x = Math.cos(rad(h)), y = Math.sin(rad(h));
     if (this.vx == null) { this.vx = x; this.vy = y; }
     else { this.vx += 0.3 * (x - this.vx); this.vy += 0.3 * (y - this.vy); }
-    const head = (deg(Math.atan2(this.vy, this.vx)) + 360) % 360;
-    this.rot += angleDiff(-head, this.rot);
-    $('cRose').style.transform = `rotate(${this.rot}deg)`;
-    $('cDeg').textContent = Math.round(head) % 360 + '°';
-    $('cDir').textContent = DIRS[Math.round(head / 22.5) % 16];
+    this.mag = (deg(Math.atan2(this.vy, this.vx)) + 360) % 360;
+    this.render();
     if (e && e.beta != null && (Math.abs(e.beta) > 35 || Math.abs(e.gamma) > 35)) setStatus('compass', 'Handy möglichst flach halten', 'warn');
     else if ($('st-compass').classList.contains('warn')) setStatus('compass', '');
   },
+  render(){
+    const b = S.compass.bearing, off = northOffset();
+    $('cNorthInfo').textContent = S.compass.north === 'geo' ? `geografisch Nord (${signed(S.compass.decl, 1)}°)` : 'magnetisch Nord';
+    $('cBear').textContent = b == null ? 'Peilung merken' : 'Peilung löschen';
+    $('cMark').toggleAttribute('hidden', b == null);
+    if (b != null) $('cMark').setAttribute('transform', `rotate(${(b + off + 360) % 360} 100 100)`);
+    if (this.mag == null) { $('cBearInfo').textContent = b == null ? '' : `Peilung ${Math.round((b + off + 360) % 360) % 360}°`; return; }
+    const shown = (this.mag + off + 360) % 360;
+    this.rot += angleDiff(-shown, this.rot);
+    $('cRose').style.transform = `rotate(${this.rot}deg)`;
+    $('cDeg').textContent = Math.round(shown) % 360 + '°';
+    $('cDir').textContent = dirName(shown);
+    if (b == null) { $('cBearInfo').textContent = ''; return; }
+    const d = angleDiff(b, this.mag), r = Math.round(Math.abs(d));
+    $('cBearInfo').textContent = `Peilung ${Math.round((b + off + 360) % 360) % 360}° · ` + (r <= 2 ? 'auf Kurs' : `${r}° nach ${d > 0 ? 'rechts' : 'links'} drehen`);
+  },
 };
+$('cBear').addEventListener('click', () => {
+  if (S.compass.bearing != null) { S.compass.bearing = null; toast('Peilung gelöscht'); }
+  else if (compass.mag == null) { toast('Noch keine Kompassdaten'); return; }
+  else { S.compass.bearing = Math.round(compass.mag * 10) / 10; toast('Peilung gespeichert'); }
+  store(); compass.render();
+});
+function showNorth(){
+  document.querySelectorAll('[data-north]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.north === S.compass.north)));
+  $('cDeclWrap').hidden = S.compass.north !== 'geo';
+  compass.render();
+}
+document.querySelectorAll('[data-north]').forEach(b => b.addEventListener('click', () => { S.compass.north = b.dataset.north; store(); showNorth(); }));
+$('cDecl').value = inputNum(S.compass.decl, 1);
+$('cDecl').addEventListener('input', () => {
+  const v = parseNum($('cDecl').value);
+  if (Number.isFinite(v) && Math.abs(v) <= 30) { S.compass.decl = v; store(); compass.render(); }
+});
 
-/* ---------- Level ---------- */
+/* ---------- Level & inclinometer ---------- */
 // SVG elements have no .hidden property – toggle the attribute
 const showMode = flat => { $('lvFlat').toggleAttribute('hidden', !flat); $('lvEdge').toggleAttribute('hidden', flat); };
 const level = {
   perm: () => window.DeviceOrientationEvent,
   noData: 'Keine Lagedaten – das Gerät hat keinen Lagesensor oder der Browser stellt ihn nicht bereit.',
-  raw: null,
+  raw: null, ref: null, hold: false, wasOk: false,
   async start(gesture){
     await askPermission(window.DeviceOrientationEvent, gesture);
     this.u = null;
@@ -507,7 +890,13 @@ const level = {
     let ux = -Math.sin(rad(g)) * Math.cos(rad(b)), uy = Math.sin(rad(b)), uz = Math.cos(rad(g)) * Math.cos(rad(b));
     if (!this.u) this.u = [ux, uy, uz];
     else { const k = 0.35; this.u = this.u.map((v, i) => v + k * ([ux, uy, uz][i] - v)); }
+    if (this.hold) return;
     [ux, uy, uz] = this.u;
+    if (this.ref) {
+      // Angle between the current and the stored "up" direction = angle between the two surfaces
+      const r = this.ref, dot = (ux * r[0] + uy * r[1] + uz * r[2]) / (Math.hypot(ux, uy, uz) * Math.hypot(...r) || 1);
+      $('lvRef').textContent = fmt(deg(Math.acos(clamp(dot, -1, 1))), 1) + '°';
+    }
     // Into screen coordinates (screen content may be rotated)
     const A = rad(screenAngle());
     const sx = ux * Math.cos(A) - uy * Math.sin(A), sy = ux * Math.sin(A) + uy * Math.cos(A);
@@ -549,9 +938,12 @@ const level = {
     $('lvLblV').textContent = labelV;
   },
   show(v, info){
+    const ok = v < 0.3;
     $('lvDeg').textContent = fmt(v, 1) + '°';
     $('lvInfo').textContent = info;
-    $('lvDial').classList.toggle('level-ok', v < 0.3);
+    $('lvDial').classList.toggle('level-ok', ok);
+    if (ok && !this.wasOk && S.levelBeep) beep(1320, 150);
+    this.wasOk = ok;
   },
 };
 $('lvZero').addEventListener('click', () => {
@@ -561,6 +953,21 @@ $('lvZero').addEventListener('click', () => {
   store(); toast('Nullpunkt gespeichert');
 });
 $('lvReset').addEventListener('click', () => { S.level = {x:0, y:0, e:0, l:0}; store(); toast('Nullpunkt zurückgesetzt'); });
+$('lvHold').addEventListener('click', () => {
+  level.hold = !level.hold;
+  $('lvHold').setAttribute('aria-pressed', String(level.hold));
+  $('lvHold').textContent = level.hold ? 'Gehalten – weiter' : 'Wert halten';
+});
+$('lvRefBtn').addEventListener('click', () => {
+  if (level.ref) { level.ref = null; $('lvRef').textContent = '–'; $('lvRefBtn').textContent = 'Bezug setzen'; return; }
+  if (!level.u) { toast('Noch keine Messwerte'); return; }
+  level.ref = level.u.slice();
+  $('lvRef').textContent = fmt(0, 1) + '°';
+  $('lvRefBtn').textContent = 'Bezug löschen';
+  toast('Bezug gesetzt – jetzt an die zweite Fläche legen');
+});
+$('lvBeep').checked = !!S.levelBeep;
+$('lvBeep').addEventListener('change', () => { S.levelBeep = $('lvBeep').checked; store(); if (S.levelBeep) fxCtx(); });
 
 /* ---------- Acceleration ---------- */
 const G = 9.80665;
@@ -570,8 +977,10 @@ const accel = {
   async start(gesture){
     await askPermission(window.DeviceMotionEvent, gesture);
     this.reset();
-    this.cur = null;
+    this.cur = null; this.rot = null;
     on(window, 'devicemotion', e => {
+      const r = e.rotationRate;
+      if (r && r.alpha != null) this.rot = [r.alpha, r.beta, r.gamma];
       const a = S.grav ? e.accelerationIncludingGravity : e.acceleration;
       if (!a || a.x == null) {
         if (!S.grav && e.accelerationIncludingGravity && e.accelerationIncludingGravity.x != null) setStatus('accel', 'Das Gerät liefert keine Werte ohne Schwerkraft.', 'warn');
@@ -587,6 +996,7 @@ const accel = {
   },
   reset(){ this.max = 0; this.hist = [history(600), history(600), history(600)]; },
   render(){
+    if (this.rot) ['rA', 'rB', 'rG'].forEach((id, i) => { $(id).textContent = fmt(this.rot[i], 1); });
     const c = this.cur;
     if (!c) return;
     ['aX', 'aY', 'aZ'].forEach((id, i) => { $(id).textContent = fmt(c.v[i], 2); });
@@ -611,15 +1021,18 @@ $('aReset').addEventListener('click', () => { accel.max = accel.cur ? accel.cur.
 function vibLabel(rms){
   return rms < 0.02 ? 'ruhig' : rms < 0.1 ? 'kaum spürbar' : rms < 0.5 ? 'leicht' : rms < 2 ? 'deutlich' : rms < 5 ? 'stark' : 'sehr stark';
 }
+const REC_MAX = 72000; // 20 min at 60 Hz
 const vibro = {
   perm: () => window.DeviceMotionEvent,
   noData: 'Keine Bewegungsdaten – das Gerät hat keinen Beschleunigungssensor oder der Browser stellt ihn nicht bereit.',
+  rec: null,
   async start(gesture){
     await askPermission(window.DeviceMotionEvent, gesture);
     this.samples = []; this.t = 0; this.peak = 0; this.g = null; this.graph = history(600); this.dirty = false;
     on(window, 'devicemotion', e => this.sample(e));
     loop(() => this.render());
   },
+  stop(){ if (this.rec && this.rec.on) this.recStop(); },
   sample(e){
     let x, y, z;
     const a = e.acceleration, ag = e.accelerationIncludingGravity;
@@ -631,14 +1044,19 @@ const vibro = {
       x = ag.x - this.g[0]; y = ag.y - this.g[1]; z = ag.z - this.g[2];
     } else return;
     seen('vibro');
-    // interval: ms per spec; very old iOS reported seconds
-    const iv = e.interval > 1 ? e.interval : e.interval > 0 ? e.interval * 1000 : 16.7;
+    const iv = motionInterval(e);
     this.t += iv;
     const m = Math.hypot(x, y, z);
     this.samples.push({t: this.t, iv, x, y, z, m});
     while (this.samples.length && this.samples[0].t < this.t - 2000) this.samples.shift();
     this.peak = Math.max(this.peak, m);
     this.graph.add(m);
+    const r = this.rec;
+    if (r && r.on) {
+      r.rows.push([(this.t - r.t0) / 1000, x, y, z, m]);
+      r.peak = Math.max(r.peak, m);
+      if (r.rows.length >= REC_MAX) this.recStop();
+    }
     this.dirty = true;
   },
   stats(){
@@ -679,43 +1097,79 @@ const vibro = {
     let m = 0.5;
     this.graph.forEach(v => { m = Math.max(m, v); });
     drawGraph($('vGraph'), [this.graph], ['--c1'], 0, m * 1.1, 0);
+    if (this.rec && this.rec.on) this.recInfo();
   },
+  recInfo(){
+    const r = this.rec, last = r.rows.length ? r.rows[r.rows.length - 1][0] : 0;
+    $('vRecInfo').textContent = `${r.on ? 'Aufnahme läuft' : 'Aufgenommen'}: ${fmt(last, 1)} s · ${fmt(r.rows.length, 0)} Werte · Spitze ${fmt(r.peak, 2)} m/s²`;
+    $('vRec').textContent = r.on ? 'Aufnahme beenden' : 'Aufnahme starten';
+    $('vCsv').disabled = r.on || !r.rows.length;
+  },
+  recStop(){ this.rec.on = false; this.recInfo(); },
 };
 $('vReset').addEventListener('click', () => { vibro.peak = 0; $('vPeak').textContent = fmt(0, 2); });
+$('vRec').addEventListener('click', async () => {
+  if (vibro.rec && vibro.rec.on) { vibro.recStop(); return; }
+  if (running !== 'vibro') await startPanel('vibro', true);
+  if (running !== 'vibro') return;
+  vibro.rec = {on: true, rows: [], t0: vibro.t, peak: 0};
+  vibro.recInfo();
+});
+$('vCsv').addEventListener('click', () => {
+  const r = vibro.rec;
+  if (!r || !r.rows.length) return;
+  downloadCsv(`vibration-${stamp()}.csv`, ['Zeit (s);X (m/s²);Y (m/s²);Z (m/s²);Betrag (m/s²)',
+    ...r.rows.map(row => [csvNum(row[0], 3), ...row.slice(1).map(v => csvNum(v, 4))].join(';'))]);
+});
 
-/* ---------- Sound level ---------- */
+/* ---------- Sound level, spectrum, noise log ---------- */
 function soundLabel(db){
   return db < 35 ? 'sehr leise' : db < 50 ? 'leise' : db < 65 ? 'Gespräch' : db < 80 ? 'laut' : db < 95 ? 'sehr laut – Gehör schonen' : 'extrem laut – Gehörschaden möglich';
 }
+// A-weighting in dB (IEC 61672)
+function aWeight(f){
+  const f2 = f * f;
+  const ra = 12194 ** 2 * f2 * f2 / ((f2 + 20.6 ** 2) * Math.sqrt((f2 + 107.7 ** 2) * (f2 + 737.9 ** 2)) * (f2 + 12194 ** 2));
+  return 20 * Math.log10(ra) + 2.0;
+}
+function drawSpectrum(cv, spec, binHz){
+  const g = canvas2d(cv);
+  if (!g) return;
+  const {c, w, h, css} = g, fMin = 20, fMax = Math.min(20000, binHz * spec.length), lo = -110, hi = -10;
+  c.strokeStyle = css.getPropertyValue('--border'); c.lineWidth = 1;
+  c.fillStyle = css.getPropertyValue('--muted'); c.font = '11px ' + css.getPropertyValue('--font');
+  for (const f of [100, 1000, 10000]) {
+    const x = Math.log(f / fMin) / Math.log(fMax / fMin) * w;
+    c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke();
+    c.fillText(f >= 1000 ? f / 1000 + ' kHz' : f + ' Hz', x + 3, 12);
+  }
+  c.strokeStyle = css.getPropertyValue('--c1'); c.lineWidth = 1.5;
+  c.beginPath();
+  for (let x = 0; x < w; x++) {
+    const i0 = Math.floor(fMin * Math.pow(fMax / fMin, x / w) / binHz), i1 = Math.max(i0 + 1, Math.floor(fMin * Math.pow(fMax / fMin, (x + 1) / w) / binHz));
+    let m = -Infinity;
+    for (let i = i0; i < i1 && i < spec.length; i++) m = Math.max(m, spec[i]);
+    const y = h - (clamp(m, lo, hi) - lo) / (hi - lo) * h;
+    x ? c.lineTo(x, y) : c.moveTo(x, y);
+  }
+  c.stroke();
+}
+const LOG_MAX = 43200; // 12 h of 1-s values
 const sound = {
   noData: 'Keine Daten vom Mikrofon.',
+  log: {on: false, rows: [], q: 0, t: 0},
   waiting(){ return this.ctx && this.ctx.state !== 'running'; },
   async start(){
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Mikrofon-Zugriff wird von diesem Browser nicht unterstützt.');
-    // Create the audio context during the tap (iOS)
-    const AC = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AC();
+    const mic = await openMic('sound'), ctx = mic.ctx;
     this.ctx = ctx;
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}, video: false});
-    } catch (e) {
-      ctx.close().catch(() => {});
-      throw new Error(e.name === 'NotAllowedError' ? 'Zugriff auf das Mikrofon wurde abgelehnt.' : e.name === 'NotFoundError' ? 'Kein Mikrofon gefunden.' : 'Mikrofon nicht verfügbar: ' + e.message);
-    }
-    offs.push(() => { stream.getTracks().forEach(t => t.stop()); ctx.close().catch(() => {}); });
-    if (ctx.state !== 'running') {
-      // Started without a tap: audio may only run after one (autoplay rules)
-      ctx.resume().catch(() => {});
-      on(document, 'pointerdown', () => ctx.resume().catch(() => {}));
-      setStatus('sound', 'Zum Messen einmal auf den Bildschirm tippen.', 'warn');
-    }
-    const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(), mute = ctx.createGain();
-    an.fftSize = 2048; mute.gain.value = 0;
-    src.connect(an); an.connect(mute).connect(ctx.destination); // keeps the graph running everywhere
-    const buf = new Float32Array(an.fftSize);
+    const an = mic.tap(ctx.createAnalyser()), fa = mic.tap(ctx.createAnalyser());
+    an.fftSize = 2048; fa.fftSize = 8192; fa.smoothingTimeConstant = 0.5;
+    const buf = new Float32Array(an.fftSize), spec = new Float32Array(fa.frequencyBinCount);
+    const binHz = ctx.sampleRate / fa.fftSize;
+    const aw = new Float32Array(spec.length).map((_, i) => i ? Math.pow(10, aWeight(i * binHz) / 10) : 0);
     this.reset();
-    let last = 0, lastGraph = 0;
+    this.ratio = 1;
+    let last = 0, lastGraph = 0, lastSpec = 0, lastLog = 0;
     loop(t => {
       an.getFloatTimeDomainData(buf);
       let q = 0;
@@ -723,11 +1177,33 @@ const sound = {
       q /= buf.length;
       if (q === 0 && this.e == null) return; // stream not started yet
       seen('sound');
+      if (t - lastSpec >= 100) {
+        // Spectrum: A-weighting as the ratio of weighted to unweighted power, main frequency
+        lastSpec = t;
+        fa.getFloatFrequencyData(spec);
+        let pz = 0, pa = 0, best = -Infinity, bi = 0;
+        for (let i = 1; i < spec.length; i++) {
+          const f = i * binHz;
+          if (f > 20000) break;
+          const p = Math.pow(10, spec[i] / 10);
+          pz += p; pa += p * aw[i];
+          if (f >= 20 && spec[i] > best) { best = spec[i]; bi = i; }
+        }
+        this.ratio = pz > 0 ? pa / pz : 1;
+        let peak = null;
+        if (best > -100 && bi > 1 && bi < spec.length - 1) {
+          const a = spec[bi - 1], b = spec[bi], c = spec[bi + 1], den = a - 2 * b + c;
+          peak = (bi + (den ? 0.5 * (a - c) / den : 0)) * binHz;
+        }
+        $('sPeak').textContent = peak ? fmt(peak, peak < 100 ? 1 : 0) + ' Hz' : '–';
+        drawSpectrum($('sSpec'), spec, binHz);
+      }
+      const qw = S.soundW === 'A' ? q * this.ratio : q;
       const dt = last ? Math.min(0.5, (t - last) / 1000) : 0;
       last = t;
       // "Fast" time weighting (125 ms) on the energy
-      this.e = this.e == null ? q : this.e + (1 - Math.exp(-dt / 0.125)) * (q - this.e);
-      this.sum += q * dt; this.time += dt;
+      this.e = this.e == null ? qw : this.e + (1 - Math.exp(-dt / 0.125)) * (qw - this.e);
+      this.sum += qw * dt; this.time += dt;
       const dbfs = 10 * Math.log10(Math.max(this.e, 1e-12));
       const db = dbfs + S.soundCal;
       this.min = Math.min(this.min, db); this.max = Math.max(this.max, db);
@@ -741,23 +1217,591 @@ const sound = {
       let lo = 30, hi = 100;
       this.graph.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); });
       drawGraph($('sGraph'), [this.graph], ['--c1'], lo - 5, hi + 5);
+      const L = this.log;
+      if (L.on) {
+        L.q += qw * dt; L.t += dt;
+        if (L.t >= 1) {
+          L.rows.push([Date.now(), 10 * Math.log10(Math.max(L.q / L.t, 1e-12)) + S.soundCal]);
+          if (L.rows.length > LOG_MAX) L.rows.shift();
+          L.q = 0; L.t = 0;
+        }
+        if (t - lastLog >= 1000) { lastLog = t; this.logInfo(); }
+      }
     });
   },
+  stop(){ if (this.log.on) { this.log.on = false; this.logInfo(); } },
   reset(){ this.e = null; this.sum = 0; this.time = 0; this.min = Infinity; this.max = -Infinity; this.graph = history(300); },
+  logInfo(){
+    const L = this.log, n = L.rows.length, unit = S.soundW === 'A' ? 'dB(A)' : 'dB';
+    $('sLog').textContent = L.on ? 'Protokoll beenden' : 'Protokoll starten';
+    $('sLogCsv').disabled = L.on || !n;
+    if (!n) { $('sLogInfo').textContent = L.on ? 'Protokoll läuft …' : $('sLogInfo').textContent; return; }
+    let e = 0, mx = -Infinity;
+    L.rows.forEach(r => { e += Math.pow(10, r[1] / 10); mx = Math.max(mx, r[1]); });
+    $('sLogInfo').textContent = `${L.on ? 'Läuft' : 'Beendet'}: ${duration(n)} · Mittel (Leq) ${fmt(10 * Math.log10(e / n), 1)} ${unit} · lautester Wert ${fmt(mx, 1)} ${unit}`;
+    // Graph: at most 300 points, each the loudest second of its bucket
+    const k = Math.ceil(n / 300), pts = history(Math.max(2, Math.ceil(n / k)));
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < n; i += k) {
+      let m = -Infinity;
+      for (let j = i; j < Math.min(n, i + k); j++) m = Math.max(m, L.rows[j][1]);
+      pts.add(m); lo = Math.min(lo, m); hi = Math.max(hi, m);
+    }
+    drawGraph($('sLogGraph'), [pts], ['--c1'], lo - 5, hi + 5);
+  },
 };
 sound.reset();
+function showWeight(){
+  document.querySelectorAll('[data-weight]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.weight === S.soundW)));
+  $('sUnit').textContent = S.soundW === 'A' ? 'dB(A)' : 'dB';
+}
+document.querySelectorAll('[data-weight]').forEach(b => b.addEventListener('click', () => {
+  S.soundW = b.dataset.weight; store(); showWeight();
+  const e = sound.e; sound.reset(); sound.e = e == null ? null : e;
+  ['sMin', 'sAvg', 'sMax'].forEach(id => { $(id).textContent = '–'; });
+}));
 $('sReset').addEventListener('click', () => {
   const e = sound.e; sound.reset(); sound.e = e;
   ['sMin', 'sAvg', 'sMax'].forEach(id => { $(id).textContent = '–'; });
 });
-$('sCal').value = fmt(S.soundCal, 1).replace(/\./g, '');
+$('sCal').value = inputNum(S.soundCal, 1);
 $('sCal').addEventListener('input', () => {
   const v = parseNum($('sCal').value);
   if (Number.isFinite(v) && v >= 0 && v <= 200) { S.soundCal = v; store(); sound.min = Infinity; sound.max = -Infinity; }
 });
+$('sLog').addEventListener('click', async () => {
+  const L = sound.log;
+  if (L.on) { L.on = false; sound.logInfo(); return; }
+  if (running !== 'sound') await startPanel('sound', true);
+  if (running !== 'sound') return;
+  Object.assign(L, {on: true, rows: [], q: 0, t: 0, unit: S.soundW});
+  sound.logInfo();
+});
+$('sLogCsv').addEventListener('click', () => {
+  const L = sound.log;
+  if (!L.rows.length) return;
+  downloadCsv(`laermprotokoll-${stamp()}.csv`, [`Uhrzeit;Pegel (${L.unit === 'A' ? 'dB(A)' : 'dB'})`,
+    ...L.rows.map(r => new Date(r[0]).toLocaleTimeString('de-DE') + ';' + csvNum(r[1], 1))]);
+});
+
+/* ---------- Tuner ---------- */
+const NOTE_NAMES = ['C', 'Cis', 'D', 'Dis', 'E', 'F', 'Fis', 'G', 'Gis', 'A', 'B', 'H'];
+const GUITAR = [{n: 'E', m: 40}, {n: 'A', m: 45}, {n: 'D', m: 50}, {n: 'G', m: 55}, {n: 'H', m: 59}, {n: 'e', m: 64}];
+// Fundamental frequency with the YIN method (de Cheveigné & Kawahara 2002), 50–1500 Hz
+function yin(buf, sr){
+  const maxLag = Math.min(Math.floor(sr / 50), buf.length >> 1), minLag = Math.max(2, Math.floor(sr / 1500));
+  const W = buf.length - maxLag - 2, d = new Float32Array(maxLag + 2);
+  for (let tau = 1; tau <= maxLag + 1; tau++) {
+    let s = 0;
+    for (let j = 0; j < W; j++) { const v = buf[j] - buf[j + tau]; s += v * v; }
+    d[tau] = s;
+  }
+  // Cumulative mean normalised difference
+  let run = 0;
+  const c = new Float32Array(maxLag + 2); c[0] = 1;
+  for (let tau = 1; tau <= maxLag + 1; tau++) { run += d[tau]; c[tau] = run ? d[tau] * tau / run : 1; }
+  let tau = -1;
+  for (let t = minLag; t <= maxLag; t++) {
+    if (c[t] < 0.15) { while (t + 1 <= maxLag && c[t + 1] < c[t]) t++; tau = t; break; }
+  }
+  if (tau < 0) return null;
+  const a = c[tau - 1], b = c[tau], e = c[tau + 1], den = a - 2 * b + e;
+  return sr / (tau + (den ? 0.5 * (a - e) / den : 0));
+}
+const tuner = {
+  noData: 'Keine Daten vom Mikrofon.',
+  waiting(){ return this.ctx && this.ctx.state !== 'running'; },
+  async start(){
+    const mic = await openMic('tuner'), ctx = mic.ctx;
+    this.ctx = ctx;
+    const an = mic.tap(ctx.createAnalyser());
+    an.fftSize = 4096;
+    const buf = new Float32Array(an.fftSize);
+    this.hist = []; this.live = false;
+    let last = 0;
+    loop(t => {
+      if (t - last < 60) return;
+      last = t;
+      an.getFloatTimeDomainData(buf);
+      let q = 0;
+      for (let i = 0; i < buf.length; i++) q += buf[i] * buf[i];
+      const rms = Math.sqrt(q / buf.length);
+      if (rms === 0 && !this.live) return;
+      this.live = true;
+      seen('tuner');
+      const f = rms > 0.005 ? yin(buf, ctx.sampleRate) : null;
+      if (!f) { this.hist = []; this.show(null); return; }
+      this.hist.push(f);
+      if (this.hist.length > 5) this.hist.shift();
+      this.show(this.hist.slice().sort((a, b) => a - b)[this.hist.length >> 1]);
+    });
+  },
+  show(f){
+    if (f == null) {
+      $('tState').textContent = 'Ton spielen …';
+      $('tCentsBar').classList.remove('ok');
+      return;
+    }
+    const ref = S.tuner.ref, mf = 69 + 12 * Math.log2(f / ref);
+    let target, name, oct;
+    if (S.tuner.mode === 'guitar') {
+      const s = GUITAR.reduce((a, b) => Math.abs(b.m - mf) < Math.abs(a.m - mf) ? b : a);
+      target = s.m; name = s.n; oct = 'Saite';
+    } else {
+      target = Math.round(mf); name = NOTE_NAMES[((target % 12) + 12) % 12]; oct = String(Math.floor(target / 12) - 1);
+    }
+    const cents = (mf - target) * 100, r = Math.round(cents) || 0;
+    $('tNote').textContent = name;
+    $('tOct').textContent = oct === 'Saite' ? ' Saite' : oct;
+    $('tCents').textContent = (r > 0 ? '+' : '') + r;
+    $('tFreq').textContent = fmt(f, 1);
+    $('tTarget').textContent = fmt(ref * Math.pow(2, (target - 69) / 12), 1);
+    $('tNeedle').style.insetInlineStart = (50 + clamp(cents, -50, 50)) + '%';
+    const ok = Math.abs(cents) <= 5;
+    $('tCentsBar').classList.toggle('ok', ok);
+    $('tState').textContent = ok ? 'stimmt' : cents < 0 ? 'zu tief – höher stimmen' : 'zu hoch – tiefer stimmen';
+  },
+};
+function showTunerMode(){ document.querySelectorAll('[data-tmode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tmode === S.tuner.mode))); }
+document.querySelectorAll('[data-tmode]').forEach(b => b.addEventListener('click', () => { S.tuner.mode = b.dataset.tmode; store(); showTunerMode(); }));
+$('tRef').value = inputNum(S.tuner.ref, 1);
+$('tRef').addEventListener('input', () => {
+  const v = parseNum($('tRef').value);
+  if (v >= 400 && v <= 480) { S.tuner.ref = v; store(); }
+});
+
+/* ---------- Speed (GPS) ---------- */
+// Great-circle distance in metres
+function haversine(a, b){
+  const R = 6371008.8, p1 = rad(a.lat), p2 = rad(b.lat), dp = p2 - p1, dl = rad(b.lon - a.lon);
+  const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+const distText = m => m < 1000 ? fmt(m, 0) + ' m' : fmt(m / 1000, 2) + ' km';
+const speed = {
+  noData: 'Noch kein GPS-Signal – im Freien kann das bis zu einer Minute dauern.',
+  trip: null,
+  async start(){
+    if (!navigator.geolocation) throw new Error('Standortbestimmung wird von diesem Browser nicht unterstützt.');
+    if (!this.trip) this.resetTrip();
+    this.trip.last = null; // do not count the way while the measurement was off
+    const id = navigator.geolocation.watchPosition(p => this.fix(p), err => {
+      setStatus('speed', err.code === 1 ? 'Zugriff auf den Standort wurde abgelehnt. In den Website-Einstellungen erlauben.' : err.code === 3 ? 'Kein GPS-Signal (Zeitüberschreitung).' : 'Standort nicht verfügbar.', 'err');
+    }, {enableHighAccuracy: true, maximumAge: 0, timeout: 30000});
+    offs.push(() => navigator.geolocation.clearWatch(id));
+    this.render();
+  },
+  resetTrip(){ this.trip = {dist: 0, max: 0, moving: 0, last: null}; this.cur = null; },
+  fix(p){
+    seen('speed');
+    const c = p.coords, t = p.timestamp, acc = c.accuracy;
+    if (acc > 50) {
+      setStatus('speed', `Ungenaues Signal (± ${fmt(acc, 0)} m) – wird nicht gezählt`, 'warn');
+      this.cur = Object.assign({}, this.cur, {acc});
+      this.render();
+      return;
+    }
+    if ($('st-speed').classList.contains('warn')) setStatus('speed', '');
+    const T = this.trip, pos = {lat: c.latitude, lon: c.longitude, t};
+    let v = c.speed != null && c.speed >= 0 ? c.speed : null;
+    if (!T.last) T.last = pos;
+    else {
+      const d = haversine(T.last, pos), dt = (t - T.last.t) / 1000;
+      // Ignore jitter while standing: count only moves clearly larger than the accuracy
+      if (dt > 0 && d >= Math.max(3, acc / 2)) {
+        T.dist += d;
+        if (v == null) v = d / dt;
+        if (d / dt > 0.5) T.moving += dt;
+        T.last = pos;
+      } else if (v == null && dt > 0) v = 0;
+    }
+    if (v == null) v = 0;
+    T.max = Math.max(T.max, v);
+    this.cur = {v, acc, alt: c.altitude, altAcc: c.altitudeAccuracy, heading: c.heading};
+    this.render();
+  },
+  render(){
+    const T = this.trip, c = this.cur;
+    $('gDist').textContent = T ? distText(T.dist) : '–';
+    $('gMax').textContent = T && T.max ? fmt(T.max * 3.6, 1) : '–';
+    $('gAvg').textContent = T && T.moving > 0 ? fmt(T.dist / T.moving * 3.6, 1) : '–';
+    $('gTime').textContent = T ? duration(T.moving) : '–';
+    if (!c) return;
+    $('gSpeed').textContent = c.v != null ? fmt(c.v * 3.6, 1) : '–';
+    $('gAcc').textContent = c.acc != null ? '± ' + fmt(c.acc, 0) + ' m' : '–';
+    $('gAlt').textContent = c.alt != null ? fmt(c.alt, 0) + (c.altAcc ? ' ± ' + fmt(c.altAcc, 0) : '') : '–';
+    $('gDir').textContent = c.heading != null && !isNaN(c.heading) && c.v > 0.5 ? dirName(c.heading) : '–';
+  },
+};
+$('gReset').addEventListener('click', () => { speed.resetTrip(); speed.render(); toast('Strecke zurückgesetzt'); });
+
+/* ---------- Pedometer ---------- */
+const SENS = {low: 1.6, mid: 1.0, high: 0.6};
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+function rollDay(){ if (S.steps.day !== today()) { S.steps.day = today(); S.steps.count = 0; store(); } }
+const steps = {
+  perm: () => window.DeviceMotionEvent,
+  noData: 'Keine Bewegungsdaten – das Gerät hat keinen Beschleunigungssensor oder der Browser stellt ihn nicht bereit.',
+  async start(gesture){
+    await askPermission(window.DeviceMotionEvent, gesture);
+    this.t = 0; this.last = -1e9; this.lp = null; this.high = false; this.times = []; this.saved = 0;
+    rollDay();
+    on(window, 'devicemotion', e => this.sample(e));
+    loop(t => this.render(t));
+  },
+  stop(){ store(); },
+  sample(e){
+    const a = e.accelerationIncludingGravity;
+    if (!a || a.x == null) return;
+    seen('steps');
+    this.t += motionInterval(e);
+    // Peak detection on the smoothed magnitude above a slowly following baseline
+    const m = Math.hypot(a.x, a.y, a.z);
+    if (this.lp == null) { this.lp = m; this.base = m; }
+    this.lp += 0.35 * (m - this.lp);
+    this.base += 0.02 * (m - this.base);
+    const d = this.lp - this.base;
+    if (!this.high && d > SENS[S.steps.sens] && this.t - this.last >= 250) {
+      this.high = true; this.last = this.t;
+      rollDay();
+      S.steps.count++;
+      this.times.push(this.t);
+      while (this.times.length && this.times[0] < this.t - 10000) this.times.shift();
+    } else if (this.high && d < 0) this.high = false;
+  },
+  render(t){
+    $('stCount').textContent = fmt(S.steps.count, 0);
+    $('stDist').textContent = distText(S.steps.count * S.steps.len);
+    const recent = this.times ? this.times.filter(x => x > this.t - 10000).length : 0;
+    $('stRate').textContent = this.times ? fmt(recent * 6, 0) : '–';
+    if (t != null && t - this.saved > 2000) { this.saved = t; store(); }
+  },
+};
+function showSens(){ document.querySelectorAll('[data-sens]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sens === S.steps.sens))); }
+document.querySelectorAll('[data-sens]').forEach(b => b.addEventListener('click', () => { S.steps.sens = b.dataset.sens; store(); showSens(); }));
+$('stLen').value = inputNum(S.steps.len, 2);
+$('stLen').addEventListener('input', () => {
+  const v = parseNum($('stLen').value);
+  if (v >= 0.2 && v <= 2) { S.steps.len = v; store(); steps.render(); }
+});
+$('stReset').addEventListener('click', () => { S.steps.count = 0; S.steps.day = today(); store(); steps.times = []; steps.render(); });
+
+/* ---------- Tone generator ---------- */
+const FMIN = 20, FMAX = 20000;
+const sliderToFreq = v => FMIN * Math.pow(FMAX / FMIN, v / 1000);
+const freqToSlider = f => Math.round(Math.log(f / FMIN) / Math.log(FMAX / FMIN) * 1000);
+const volGain = () => Math.pow(S.tone.vol / 100, 2) * 0.5;
+function noiseBuffer(ctx, type){
+  const len = ctx.sampleRate * 4, b = ctx.createBuffer(1, len, ctx.sampleRate), d = b.getChannelData(0);
+  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+  for (let i = 0; i < len; i++) {
+    const w = Math.random() * 2 - 1;
+    if (type === 'white') { d[i] = w * 0.5; continue; }
+    // Pink noise (Paul Kellet's filter)
+    b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852;
+    b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+    d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11;
+    b6 = w * 0.115926;
+  }
+  return b;
+}
+const tone = {
+  manual: true, label: 'Abspielen', stopLabel: 'Stopp',
+  async start(){
+    const ctx = new AC(), T = S.tone;
+    this.ctx = ctx;
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    const g = ctx.createGain();
+    g.gain.value = volGain(); g.connect(ctx.destination);
+    this.gain = g;
+    let src;
+    if (T.type === 'white' || T.type === 'pink') {
+      src = ctx.createBufferSource(); src.buffer = noiseBuffer(ctx, T.type); src.loop = true;
+    } else {
+      src = ctx.createOscillator(); src.type = T.type; src.frequency.value = T.freq;
+      if (T.sweep) {
+        const t0 = ctx.currentTime;
+        src.frequency.setValueAtTime(T.freq, t0);
+        src.frequency.exponentialRampToValueAtTime(T.f2, t0 + T.dur);
+        const timer = setTimeout(() => { if (running === 'tone') stopRunning(true); }, T.dur * 1000 + 100);
+        offs.push(() => clearTimeout(timer));
+        setStatus('tone', `Sweep ${fmt(T.freq, 0)} → ${fmt(T.f2, 0)} Hz in ${fmt(T.dur, 0)} s`);
+      }
+    }
+    src.connect(g); src.start();
+    this.src = src;
+    offs.push(() => { try { src.stop(); } catch (_) {} ctx.close().catch(() => {}); this.src = null; this.gain = null; });
+    this.seen = true;
+  },
+  stop(){ setStatus('tone', ''); },
+};
+function toneUi(){
+  const T = S.tone, noise = T.type === 'white' || T.type === 'pink';
+  $('toType').value = T.type;
+  $('toFreqR').value = freqToSlider(T.freq);
+  $('toVol').value = T.vol;
+  $('toVolVal').textContent = T.vol + ' %';
+  $('toSweep').checked = T.sweep;
+  $('toSweepFields').hidden = !T.sweep;
+  ['toFreq', 'toFreqR', 'toSweep', 'toF2', 'toDur'].forEach(id => { $(id).disabled = noise; });
+}
+function setToneFreq(f, fromSlider){
+  S.tone.freq = Math.round(clamp(f, FMIN, FMAX) * 10) / 10; store();
+  if (fromSlider) $('toFreq').value = inputNum(S.tone.freq, S.tone.freq < 100 ? 1 : 0);
+  else $('toFreqR').value = freqToSlider(S.tone.freq);
+  if (running === 'tone' && tone.src && tone.src.frequency && !S.tone.sweep) tone.src.frequency.value = S.tone.freq;
+}
+$('toFreq').value = inputNum(S.tone.freq, S.tone.freq < 100 ? 1 : 0);
+$('toF2').value = inputNum(S.tone.f2, 0);
+$('toDur').value = inputNum(S.tone.dur, 0);
+$('toType').addEventListener('change', () => { S.tone.type = $('toType').value; store(); toneUi(); if (running === 'tone') startPanel('tone', true); });
+$('toFreq').addEventListener('input', () => { const v = parseNum($('toFreq').value); if (v >= FMIN && v <= FMAX) setToneFreq(v, false); });
+$('toFreqR').addEventListener('input', () => setToneFreq(sliderToFreq(Number($('toFreqR').value)), true));
+$('toVol').addEventListener('input', () => {
+  S.tone.vol = Number($('toVol').value); store(); toneUi();
+  if (tone.gain) tone.gain.gain.value = volGain();
+});
+$('toSweep').addEventListener('change', () => { S.tone.sweep = $('toSweep').checked; store(); toneUi(); if (running === 'tone') startPanel('tone', true); });
+$('toF2').addEventListener('input', () => { const v = parseNum($('toF2').value); if (v >= FMIN && v <= FMAX) { S.tone.f2 = v; store(); } });
+$('toDur').addEventListener('input', () => { const v = parseNum($('toDur').value); if (v >= 1 && v <= 600) { S.tone.dur = v; store(); } });
+
+/* ---------- Flashlight & Morse ---------- */
+const MORSE = {
+  A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....', I: '..', J: '.---', K: '-.-', L: '.-..', M: '--',
+  N: '-.', O: '---', P: '.--.', Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-', Y: '-.--', Z: '--..',
+  0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-', 5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.',
+  'Ä': '.-.-', 'Ö': '---.', 'Ü': '..--', 'ß': '...--..', '.': '.-.-.-', ',': '--..--', '?': '..--..', '!': '-.-.--', '/': '-..-.',
+  '-': '-....-', '=': '-...-', '+': '.-.-.', '@': '.--.-.', ':': '---...', '(': '-.--.', ')': '-.--.-', '"': '.-..-.', "'": '.----.',
+};
+// toUpperCase turns ß into SS – keep it as its own sign
+const morseWords = text => text.replace(/ß/g, '\u0000').toUpperCase().split(/\s+/).map(w => [...w].map(ch => MORSE[ch === '\u0000' ? 'ß' : ch]).filter(Boolean)).filter(w => w.length);
+const morseCode = text => morseWords(text).map(w => w.join(' ')).join(' / ').replace(/\./g, '·').replace(/-/g, '−');
+// [light on?, length in units]: dot 1, dash 3, gap in a letter 1, between letters 3, between words 7
+function morseSchedule(text){
+  const out = [];
+  morseWords(text).forEach((w, wi) => {
+    if (wi) out.push([false, 7]);
+    w.forEach((code, ci) => {
+      if (ci) out.push([false, 3]);
+      [...code].forEach((s, si) => { if (si) out.push([false, 1]); out.push([true, s === '.' ? 1 : 3]); });
+    });
+  });
+  return out;
+}
+const screenLight = (onOff, dark) => {
+  const el = $('screenLight');
+  el.hidden = !onOff;
+  el.classList.toggle('off', !!dark);
+};
+const torch = {
+  manual: true, label: 'Lampe an', stopLabel: 'Lampe aus', morse: false,
+  async start(){
+    const stream = await openCamera({facingMode: {ideal: 'environment'}});
+    const track = stream.getVideoTracks()[0];
+    this.track = track;
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    // iOS often does not report torch, but supports it (iOS 17.5+)
+    this.hasTorch = caps.torch === true || (isIOS && !('torch' in caps));
+    if (!this.hasTorch) setStatus('torch', 'Kein Blitz verfügbar – der Bildschirm leuchtet stattdessen.', 'warn');
+    this.seen = true;
+    if (!this.morse) await this.set(true);
+  },
+  async set(onOff){
+    if (this.hasTorch && this.track) {
+      try { await setTorch(this.track, onOff); return; }
+      catch (_) { this.hasTorch = false; setStatus('torch', 'Der Blitz lässt sich nicht schalten – der Bildschirm leuchtet stattdessen.', 'warn'); }
+    }
+    screenLight(onOff || this.morse, this.morse && !onOff);
+  },
+  stop(){
+    this.abort = true;
+    if (this.hasTorch && this.track) setTorch(this.track, false).catch(() => {});
+    screenLight(false);
+    this.track = null;
+  },
+};
+async function sendMorse(text){
+  if (torch.morse) { torch.abort = true; return; }
+  const plan = morseSchedule(text);
+  if (!plan.length) { toast('Keine morsbaren Zeichen'); return; }
+  torch.morse = true; torch.abort = false;
+  $('mSend').textContent = 'Abbrechen';
+  try {
+    await startPanel('torch', true);
+    if (running !== 'torch') return;
+    const unit = 1200 / S.morse.wpm;
+    await torch.set(false);
+    for (const [light, units] of plan) {
+      if (torch.abort || running !== 'torch') break;
+      await torch.set(light);
+      await sleep(units * unit);
+    }
+    if (running === 'torch') { await torch.set(false); stopRunning(true); }
+  } finally {
+    torch.morse = false;
+    $('mSend').textContent = 'Morse senden';
+    screenLight(false);
+  }
+}
+$('mText').value = S.morse.text;
+$('mCode').textContent = morseCode(S.morse.text);
+$('mText').addEventListener('input', () => { S.morse.text = $('mText').value; store(); $('mCode').textContent = morseCode(S.morse.text); });
+$('mWpm').value = S.morse.wpm;
+$('mWpmVal').textContent = S.morse.wpm;
+$('mWpm').addEventListener('input', () => { S.morse.wpm = Number($('mWpm').value); store(); $('mWpmVal').textContent = S.morse.wpm; });
+$('mSend').addEventListener('click', () => sendMorse(S.morse.text));
+$('mSos').addEventListener('click', () => sendMorse('SOS'));
+$('lScreen').addEventListener('click', () => { if (running === 'torch') stopRunning(true); screenLight(true); });
+$('screenLight').addEventListener('click', () => {
+  if (torch.morse) torch.abort = true;
+  if (running === 'torch') stopRunning(true);
+  screenLight(false);
+});
+
+/* ---------- Pulse ---------- */
+const pulse = {
+  manual: true, label: 'Messen', noData: 'Kein Kamerabild.',
+  async start(){
+    const stream = await openCamera({facingMode: {ideal: 'environment'}, width: {ideal: 320}, height: {ideal: 240}});
+    const track = stream.getVideoTracks()[0], video = $('pVideo');
+    video.srcObject = stream;
+    offs.push(() => { video.srcObject = null; });
+    try { await video.play(); } catch (_) {}
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.torch === true || (isIOS && !('torch' in caps))) {
+      setTorch(track, true).catch(() => {});
+      offs.push(() => setTorch(track, false).catch(() => {}));
+    }
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 24;
+    const c = cv.getContext('2d', {willReadFrequently: true});
+    this.samples = []; this.graph = history(180); this.lastCalc = 0; this.bpm = null;
+    $('pBpm').textContent = '–';
+    loop(t => this.frame(t, video, c));
+  },
+  frame(t, video, c){
+    if (video.readyState < 2 || !video.videoWidth) return;
+    seen('pulse');
+    c.drawImage(video, 0, 0, 24, 24);
+    const d = c.getImageData(0, 0, 24, 24).data;
+    let r = 0, g = 0;
+    for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; }
+    r /= d.length / 4; g /= d.length / 4;
+    // Finger on the lens with light behind it: bright and clearly red
+    if (r < 60 || r < g * 1.6) {
+      this.samples = []; this.bpm = null;
+      $('pInfo').textContent = 'Finger auf die Kamera legen';
+      $('pBpm').textContent = '–';
+      return;
+    }
+    const s = this.samples;
+    s.push({t, v: r});
+    while (s.length && s[0].t < t - 12000) s.shift();
+    if (s.length > 2) {
+      const prev = s.slice(-30), mean = prev.reduce((a, p) => a + p.v, 0) / prev.length;
+      this.graph.add(mean - r); // inverted: more blood = darker
+    }
+    let lo = 0, hi = 0;
+    this.graph.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); });
+    drawGraph($('pGraph'), [this.graph], ['--c1'], lo - 0.1, hi + 0.1);
+    if (t - this.lastCalc >= 500) { this.lastCalc = t; this.calc(); }
+  },
+  // Heart rate from the autocorrelation of the last 10 s (resampled to 30 Hz, trend removed)
+  calc(){
+    const s = this.samples, span = s.length > 1 ? (s[s.length - 1].t - s[0].t) / 1000 : 0;
+    if (span < 5) { $('pInfo').textContent = `Messung läuft … noch ${Math.ceil(5 - span)} s`; return; }
+    const fs = 30, t1 = s[s.length - 1].t, t0 = Math.max(s[0].t, t1 - 10000), n = Math.floor((t1 - t0) / 1000 * fs);
+    const x = new Float32Array(n);
+    for (let i = 0, j = 0; i < n; i++) {
+      const tt = t0 + i * 1000 / fs;
+      while (j < s.length - 2 && s[j + 1].t < tt) j++;
+      const a = s[j], b = s[j + 1];
+      x[i] = a.v + (b.v - a.v) * clamp((tt - a.t) / ((b.t - a.t) || 1), 0, 1);
+    }
+    const y = new Float32Array(n), half = fs >> 1;
+    for (let i = 0; i < n; i++) {
+      let a = 0, k = 0;
+      for (let j = Math.max(0, i - half); j <= Math.min(n - 1, i + half); j++) { a += x[j]; k++; }
+      y[i] = x[i] - a / k;
+    }
+    let r0 = 0;
+    for (let i = 0; i < n; i++) r0 += y[i] * y[i];
+    if (!r0) return;
+    const minL = Math.round(fs * 60 / 200), maxL = Math.round(fs * 60 / 40), ac = [];
+    for (let L = minL - 1; L <= maxL + 1; L++) {
+      let v = 0;
+      for (let i = 0; i < n - L; i++) v += y[i] * y[i + L];
+      ac[L] = v / r0 * n / (n - L);
+    }
+    let best = -1;
+    for (let L = minL; L <= maxL; L++) best = Math.max(best, ac[L]);
+    if (best < 0.3) { $('pInfo').textContent = 'Signal unruhig – Finger ruhig halten'; return; }
+    // Shortest lag with a local maximum close to the best (avoids counting every second beat)
+    let lag = 0;
+    for (let L = minL; L <= maxL; L++) if (ac[L] >= 0.85 * best && ac[L] >= ac[L - 1] && ac[L] >= ac[L + 1]) { lag = L; break; }
+    if (!lag) return;
+    const a = ac[lag - 1], b = ac[lag], c = ac[lag + 1], den = a - 2 * b + c;
+    const bpm = 60 * fs / (lag + (den ? 0.5 * (a - c) / den : 0));
+    this.bpm = this.bpm == null ? bpm : this.bpm + 0.5 * (bpm - this.bpm);
+    $('pBpm').textContent = fmt(this.bpm, 0);
+    $('pInfo').textContent = 'Finger ruhig halten';
+  },
+};
+
+/* ---------- Clap stopwatch ---------- */
+const clap = {
+  noData: 'Keine Daten vom Mikrofon.',
+  state: 'armed', list: [],
+  waiting(){ return this.ctx && this.ctx.state !== 'running'; },
+  async start(){
+    const mic = await openMic('clap'), ctx = mic.ctx;
+    this.ctx = ctx;
+    const an = mic.tap(ctx.createAnalyser());
+    an.fftSize = 1024;
+    const buf = new Float32Array(an.fftSize);
+    this.live = false; this.over = false;
+    if (this.state === 'run') this.state = 'armed';
+    loop(t => {
+      an.getFloatTimeDomainData(buf);
+      let pk = 0;
+      for (let i = 0; i < buf.length; i++) pk = Math.max(pk, Math.abs(buf[i]));
+      if (pk === 0 && !this.live) return;
+      this.live = true;
+      seen('clap');
+      const db = 20 * Math.log10(Math.max(pk, 1e-6));
+      $('kFill').style.width = clamp((db + 60) / 60 * 100, 0, 100) + '%';
+      this.detect(t, db);
+      this.render(t);
+    });
+  },
+  detect(t, db){
+    const over = db >= S.clapThr;
+    if (over && !this.over) {
+      if (this.state === 'armed' || (this.state === 'done' && t - this.tStop > 1000)) { this.state = 'run'; this.t0 = t; }
+      else if (this.state === 'run' && t - this.t0 > 300) {
+        this.state = 'done'; this.tStop = t;
+        this.result = (t - this.t0) / 1000;
+        this.list.unshift(this.result); this.list.length = Math.min(this.list.length, 5);
+        $('kList').innerHTML = this.list.map(v => `<li>${fmt(v, 2)} s</li>`).join('');
+      }
+    }
+    this.over = over;
+  },
+  render(t){
+    if (this.state === 'run') { $('kTime').textContent = fmt((t - this.t0) / 1000, 2); $('kState').textContent = 'läuft – Klatschen stoppt'; }
+    else if (this.state === 'done') { $('kTime').textContent = fmt(this.result, 2); $('kState').textContent = 'gestoppt – Klatschen startet neu'; }
+    else { $('kTime').textContent = fmt(0, 2); $('kState').textContent = 'Klatschen startet die Zeit'; }
+  },
+};
+function showThr(){
+  $('kThr').value = S.clapThr; $('kThrVal').textContent = S.clapThr;
+  $('kMark').style.insetInlineStart = clamp((S.clapThr + 60) / 60 * 100, 0, 100) + '%';
+}
+$('kThr').addEventListener('input', () => { S.clapThr = Number($('kThr').value); store(); showThr(); });
+$('kReset').addEventListener('click', () => { clap.state = 'armed'; clap.list = []; $('kList').innerHTML = ''; clap.render(0); });
 
 /* ---------- Tabs ---------- */
-const P = {compass, level, accel, vibro, sound};
+const P = {compass, level, accel, vibro, sound, tuner, speed, steps, tone, torch, pulse, clap};
 function selectTab(name, focus, gesture){
   if (!TABS.includes(name)) name = 'compass';
   TABS.forEach(t => {
@@ -768,9 +1812,10 @@ function selectTab(name, focus, gesture){
   });
   if (focus) $('tab-' + name).focus();
   S.tab = name; store();
-  startPanel(name, !!gesture);
+  if (P[name].manual) { stopRunning(); setStatus(name, ''); }
+  else startPanel(name, !!gesture);
 }
-$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b && (b.dataset.tab !== S.tab || !running)) selectTab(b.dataset.tab, false, true); });
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b && (b.dataset.tab !== S.tab || (!running && !P[b.dataset.tab].manual))) selectTab(b.dataset.tab, false, true); });
 $('tabs').addEventListener('keydown', e => {
   const i = TABS.indexOf(S.tab);
   const k = {ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1}[e.key];
@@ -782,7 +1827,8 @@ document.querySelectorAll('[data-start]').forEach(b => b.addEventListener('click
   if (running === n && !b.dataset.permit) stopRunning(true); else startPanel(n, true);
 }));
 window.addEventListener('pagehide', () => stopRunning());
-showGrav();
+showGrav(); showNorth(); showWeight(); showTunerMode(); showSens(); toneUi(); showThr();
+rollDay(); steps.render();
 selectTab(S.tab, false, false);
 })();
 </script>
