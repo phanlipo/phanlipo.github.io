@@ -1,7 +1,18 @@
 // Generic checks that run automatically for every page – a new tool is covered without extra work.
 import { test, expect, tools, apps, VIEWPORTS, expectNoHorizontalScroll } from './helpers.mjs';
 
+test('robots.txt allows crawling so search engines can see the noindex tag', async ({ request }) => {
+  const txt = await (await request.get('/robots.txt')).text();
+  expect(txt).not.toMatch(/^Disallow:\s*\/\s*$/m);
+});
+
 test.describe('start page', () => {
+  test('is not indexed and has a strict Content Security Policy', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+    await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute('content', /default-src 'self'/);
+  });
+
   for (const [name, viewport] of Object.entries(VIEWPORTS)) {
     test(`loads cleanly (${name})`, async ({ page }) => {
       await page.setViewportSize(viewport);
@@ -36,6 +47,18 @@ for (const app of apps()) {
         await expectNoHorizontalScroll(page);
       });
     }
+
+    test('not indexed, strict CSP, footer shows the offline cache version', async ({ page, request }) => {
+      await page.goto(url);
+      await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+      const policy = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
+      expect(policy).toContain("default-src 'self'");
+      expect(policy).toContain("object-src 'none'");
+      expect(policy).not.toMatch(/script-src[^;]*'unsafe-inline'/);
+      const sw = await (await request.get(`${url}sw.js`)).text();
+      const version = sw.match(/const VERSION = '([0-9a-f]+)'/)[1];
+      await expect(page.locator('footer .footer-version')).toHaveText(`Version ${version}`);
+    });
 
     test('dark mode has a dark background', async ({ page }) => {
       await page.emulateMedia({ colorScheme: 'dark' });
