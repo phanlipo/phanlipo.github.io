@@ -6,9 +6,10 @@ const rhoW = T => (999.83952 + 16.945176 * T - 7.9870401e-3 * T ** 2 - 46.170461
   + 105.56302e-9 * T ** 4 - 280.54253e-12 * T ** 5) / (1 + 16.879850e-3 * T);
 const co2 = (T, p) => 10 * p * Math.exp(-10.73797 + 2617.25 / (T + 273.15));
 const sgFromP = P => 1 + P / (258.6 - (P / 258.2) * 227.1);
-const pFromSg = G => -616.868 + 1111.14 * G - 630.272 * G ** 2 + 135.997 * G ** 3;
-const hyd = F => 1.00130346 - 0.000134722124 * F + 0.00000204052596 * F ** 2 - 0.00000000232820948 * F ** 3;
-const corrected = (P, T, Tc) => pFromSg(sgFromP(P) * hyd(1.8 * T + 32) / hyd(1.8 * Tc + 32));
+// inverse of sgFromP, solved numerically (bisection) instead of the closed form used on the page
+const pFromSg = G => { let lo = -10, hi = 50; for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; if (sgFromP(m) < G) lo = m; else hi = m; } return lo; };
+// hydrometer: a warmer sample is less dense by the ratio of the water densities
+const corrected = (P, T, Tc) => pFromSg(sgFromP(P) * rhoW(Tc) / rhoW(T));
 const de = (x, d) => x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 const set = (page, key, value) => page.fill(`[data-key="${key}"]`, String(value));
@@ -72,8 +73,8 @@ test.describe('2 · gravity correction', () => {
     await set(page, 's.x', 12);
     await set(page, 's.T', 30);
     await set(page, 's.Tc', 20);
-    await expect(main(page, 'sRes')).toContainText('12,62');
-    await expect(result(page, 'sRes', 'Korrektur')).toContainText('+0,62');
+    await expect(main(page, 'sRes')).toContainText('12,64');
+    await expect(result(page, 'sRes', 'Korrektur')).toContainText('+0,64');
   });
 
   test('same temperature means no correction', async ({ page }) => {
@@ -87,7 +88,7 @@ test.describe('2 · gravity correction', () => {
     await page.click('[data-key="s.unit"] [data-v="SG"]');
     await set(page, 's.x', '1,0484');
     await set(page, 's.T', 30);
-    await expect(main(page, 'sRes')).toContainText('12,62');
+    await expect(main(page, 'sRes')).toContainText(de(pFromSg(1.0484 * rhoW(20) / rhoW(30)), 2)); // 12,64
   });
 });
 
@@ -131,6 +132,21 @@ test('formulas render with KaTeX when opened', async ({ page }) => {
   await expect(page.locator('#zMath .katex').first()).toBeVisible();
   await expect(page.locator('.katex-error')).toHaveCount(0);
   await expect(page.locator('.f.fallback')).toHaveCount(0);
+});
+
+test('formulas use named constants and show the entered values', async ({ page }) => {
+  await set(page, 'z.T', 13);
+  await set(page, 's.T', 27);
+  await openDetails(page.locator('#zucker'), 'Formeln');
+  await openDetails(page.locator('#stammwuerze'), 'Formeln');
+  const z = page.locator('#zMath'), s = page.locator('#sMath');
+  await expect(z).toContainText('13,0+273,15');        // entered temperature substituted
+  await expect(z).toContainText(de(co2(13, 1.013), 2)); // result of the substitution
+  await expect(s).toContainText(de(rhoW(27), 2));      // water density at the sample temperature
+  for (const magic of ['10,73797', '1,00130346', '616,868']) {
+    await expect(z).not.toContainText(magic);
+    await expect(s).not.toContainText(magic);
+  }
 });
 
 test('inputs survive a reload', async ({ page }) => {

@@ -14,7 +14,7 @@
 <meta name="tool:storage" content="brauRechner.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-TOvoWpxMPd7sOVQ42jBtRQBAFwHzMePPfR43zbR3Mxs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-29bvSUWbxehslf3VebCH6au96JCtjpsP1HH3zUfzUkA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -175,23 +175,25 @@ details.math summary{cursor:pointer;font-weight:600;min-height:36px;display:flex
 <!-- data:end -->
 <details class="help card">
   <summary>Anleitung &amp; Hinweise</summary>
-  <p>Drei Rechner fürs Hobbybrauen. Zu jedem Ergebnis werden die Formeln und der Rechenweg mit den eingesetzten Werten angezeigt. Eingaben bleiben im Browser gespeichert; Dezimalkomma und -punkt funktionieren beide.</p>
+  <p>Drei Rechner fürs Hobbybrauen. Zu jedem Ergebnis werden die Formeln mit Variablen und benannten Konstanten erklärt und anschließend mit den eingegebenen Werten durchgerechnet. Eingaben bleiben im Browser gespeichert; Dezimalkomma und -punkt funktionieren beide.</p>
   <h3>1 · Volumen im zylindrischen Topf</h3>
   <ul>
     <li>Volumen aus Innendurchmesser und Füllhöhe – oder aus Topfhöhe und Abstand vom Rand zur Flüssigkeit.</li>
     <li>Umgekehrt: Füllhöhe für ein Zielvolumen. Zusätzlich „Liter je cm“.</li>
-    <li>Optional Temperatur: rechnet heiße Würze auf das Volumen bei 20 °C um (Wasserdichte nach Kell).</li>
+    <li>Optional Temperatur: rechnet heiße Würze auf das Volumen bei 20 °C um. Die Masse bleibt gleich, das Volumen ändert sich mit der Dichte von Wasser (Kell-Gleichung).</li>
   </ul>
   <h3>2 · Stammwürze-Korrektur nach Temperatur</h3>
   <ul>
     <li>Für Spindel/Saccharometer: Messwert in °Plato oder SG, Probentemperatur und Eichtemperatur (meist 20 °C).</li>
     <li>Ergebnis: korrigierte Stammwürze in °P und SG. Nicht für Refraktometer.</li>
+    <li>Herleitung: Würze dehnt sich wie Wasser aus, der Messwert wird mit dem Verhältnis der Wasserdichten bei Eich- und Messtemperatur korrigiert. °P ↔ SG über eine an die Plato-Tabelle angepasste Formel, die sich exakt umstellen lässt.</li>
   </ul>
   <h3>3 · Zucker für die Nachgärung</h3>
   <ul>
     <li>Biermenge, höchste Temperatur seit Gärende und Ziel-CO₂ (g/L, Richtwerte je Bierstil antippbar).</li>
     <li>Zuckerart: Haushaltszucker, Traubenzucker wasserfrei oder Monohydrat.</li>
     <li>Ergebnis: Zucker gesamt, je Liter und je Flasche, dazu der zu erwartende Flaschendruck.</li>
+    <li>Herleitung: gelöstes CO₂ nach dem Henry-Gesetz (proportional zum Druck), die Temperaturabhängigkeit nach van ’t Hoff; die CO₂-Ausbeute je Gramm Zucker aus der Gärungsgleichung.</li>
   </ul>
   <p class="note">Richtwerte für den Hausgebrauch – Angaben ohne Gewähr. Bei hoher Karbonisierung druckfeste Flaschen verwenden.</p>
 </details>
@@ -199,7 +201,7 @@ details.math summary{cursor:pointer;font-weight:600;min-height:36px;display:flex
   <p>Alle Berechnungen laufen im Browser · Eingaben werden lokal gespeichert</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
-  <p class="footer-version">Version 3a451e38ea7a</p>
+  <p class="footer-version">Version 94388ae23405</p>
   <!-- footer:end -->
 </footer>
 
@@ -223,7 +225,9 @@ const save=()=>Tools.save(LS,S);
 const num=k=>Tools.parseNum(S[k]);
 const fmt=Tools.fmt;
 // LaTeX number with German decimal comma
-const t=(x,d=2)=>Number.isFinite(x)?x.toFixed(d).replace('-','-').replace('.','{,}'):'?';
+const t=(x,d=2)=>Number.isFinite(x)?x.toFixed(d).replace('.','{,}'):'?';
+// same, in parentheses when negative (for powers and products)
+const tp=(x,d=2)=>x<0?'('+t(x,d)+')':t(x,d);
 
 /* ---------- Math rendering ---------- */
 function math(el,tex,display=true){
@@ -248,55 +252,82 @@ function msg(host,kind,text){host.innerHTML=text?'<div class="msg '+kind+'">'+te
 
 /* ---------- Physics ---------- */
 // Density of air-free water in kg/m³ (Kell 1975), T in °C, valid 0–150 °C
-function rhoW(T){return (999.83952+16.945176*T-7.9870401e-3*T*T-46.170461e-6*T**3+105.56302e-9*T**4-280.54253e-12*T**5)/(1+16.879850e-3*T);}
-const RHO_TEX='\\begin{aligned}\\rho_W(T)&=\\frac{Z(T)}{1+16{,}879850\\cdot10^{-3}\\,T}\\\\[4pt]Z(T)&=999{,}83952+16{,}945176\\,T\\\\&\\quad-7{,}9870401\\cdot10^{-3}\\,T^2\\\\&\\quad-46{,}170461\\cdot10^{-6}\\,T^3\\\\&\\quad+105{,}56302\\cdot10^{-9}\\,T^4\\\\&\\quad-280{,}54253\\cdot10^{-12}\\,T^5\\end{aligned}';
-// °Plato <-> specific gravity (20/20)
-const sgFromP=P=>1+P/(258.6-(P/258.2)*227.1);
-const pFromSg=G=>-616.868+1111.14*G-630.272*G*G+135.997*G**3;
-// Hydrometer correction polynomial (T in °F)
-const hyd=F=>1.00130346-0.000134722124*F+0.00000204052596*F*F-0.00000000232820948*F**3;
-// Dissolved CO2 in g/L at absolute pressure p (bar), T in °C
-const co2Sat=(T,pAbs)=>10*pAbs*Math.exp(-10.73797+2617.25/(T+273.15));
+const KELL_A=[999.83952,16.945176,-7.9870401e-3,-46.170461e-6,105.56302e-9,-280.54253e-12],KELL_B=16.879850e-3;
+const kellNum=T=>KELL_A.reduce((s,a,i)=>s+a*T**i,0),kellDen=T=>1+KELL_B*T;
+const rhoW=T=>kellNum(T)/kellDen(T);
+const RHO_TEX='\\rho_W(T)=\\frac{a_0+a_1T+a_2T^2+a_3T^3+a_4T^4+a_5T^5}{1+b\\,T}';
+const KELL_LEGEND=['<i>ρ<sub>W</sub></i> Dichte von luftfreiem Wasser in kg/m³, <i>T</i> in °C',
+  '<i>a</i><sub>0</sub> = 999,83952 (Dichte bei 0 °C), <i>a</i><sub>1</sub> = 16,945176, <i>a</i><sub>2</sub> = −7,9870401·10⁻³, <i>a</i><sub>3</sub> = −46,170461·10⁻⁶, <i>a</i><sub>4</sub> = 105,56302·10⁻⁹, <i>a</i><sub>5</sub> = −280,54253·10⁻¹² – Messwerte-Ausgleich nach Kell (1975)',
+  '<i>b</i> = 16,879850·10⁻³ 1/°C'];
+// Kell substituted for one temperature
+const rhoStep=(T,lbl)=>'\\rho_W('+lbl+')&=\\frac{\\sum_{i=0}^{5}a_i\\cdot '+tp(T,1)+'^{\\,i}}{1+b\\cdot '+tp(T,1)+'}=\\frac{'+t(kellNum(T),2)+'}{'+t(kellDen(T),5)+'}='+t(rhoW(T),2)+'\\,\\tfrac{\\text{kg}}{\\text{m}^3}';
+// °Plato <-> specific gravity (20/20): SG = 1 + P/(a − b·P), inverse exact
+const PA=258.6,PB=227.1/258.2;
+const sgFromP=P=>1+P/(PA-PB*P);
+const pFromSg=G=>PA*(G-1)/(1+PB*(G-1));
+const PLATO_LEGEND=['<i>P</i> Stammwürze in °Plato (g Extrakt je 100 g Würze)','<i>SG</i> spezifisches Gewicht (Dichte relativ zu Wasser, 20/20 °C)',
+  '<i>a</i> = 258,6 – bei dünner Würze entspricht 1 °P etwa 1/258,6 ≈ 0,0039 SG','<i>b</i> = 227,1/258,2 ≈ 0,8796 – Krümmung bei höherer Stammwürze; <i>a</i> und <i>b</i> sind an die Plato-Tabelle (Zucker in Wasser) angepasst'];
+// Dissolved CO2 (Henry + van 't Hoff): c = p·H(T), H(T) = H20·exp(B·(1/TK − 1/T20))
+const CO2_B=2617.25,T0K=273.15,T20K=293.15,P0=1.013,RHO_CO2=1.977;
+const CO2_H20=10*Math.exp(-10.73797+CO2_B/T20K); // ≈ 1,6366 g/(L·bar)
+const henry=T=>CO2_H20*Math.exp(CO2_B*(1/(T+T0K)-1/T20K));
+const co2Sat=(T,pAbs)=>pAbs*henry(T);
+const HENRY_TEX='H(T)=H_{20}\\cdot e^{\\,B\\cdot\\left(\\frac{1}{T+T_0}-\\frac{1}{T_{20}}\\right)}';
+const henryStep=(T,lbl)=>'H('+lbl+')&='+t(CO2_H20,4)+'\\cdot e^{\\,'+t(CO2_B)+'\\cdot\\left(\\frac{1}{'+t(T,1)+'+273{,}15}-\\frac{1}{293{,}15}\\right)}\\\\&='+t(henry(T),4)+'\\,\\tfrac{\\text{g}}{\\text{L}\\cdot\\text{bar}}';
+const HENRY_LEGEND=['<i>c</i> gelöstes CO₂ in g/L, <i>p</i> absoluter CO₂-Druck in bar, <i>T</i> Temperatur in °C',
+  '<i>H</i> Löslichkeit von CO₂ in Bier (Henry-Koeffizient); <i>H</i><sub>20</sub> = '+'1,6366 g/(L·bar) bei 20 °C',
+  '<i>B</i> = 2617,25 K – Temperaturabhängigkeit (Lösungswärme von CO₂ ÷ Gaskonstante, van-’t-Hoff-Gleichung): kaltes Bier löst mehr CO₂',
+  '<i>T</i><sub>0</sub> = 273,15 K (0 °C in Kelvin), <i>T</i><sub>20</sub> = 293,15 K (20 °C)','<i>p</i><sub>0</sub> = 1,013 bar Normaldruck'];
 
 /* ---------- 1. Pot volume ---------- */
+const V_LEGEND=['<i>V</i> Volumen in Liter','<i>d</i> Innendurchmesser in cm','<i>h</i> Füllhöhe in cm (Abstand Boden → Flüssigkeitsoberfläche)','1000 cm³ = 1 L'];
 function calcVolume(){
   const mode=S['v.mode'],d=num('v.d'),T=num('v.T'),hasT=Number.isFinite(T);
   const r=d/2,A=Math.PI*r*r;const parts=[];let res=[],warn='';
-  parts.push({h:'Grundformel',m:'V=\\pi\\cdot\\left(\\frac{d}{2}\\right)^{2}\\cdot h\\cdot\\frac{1\\,\\text{L}}{1000\\,\\text{cm}^3}',
-    legend:['<i>V</i> Volumen in Liter','<i>d</i> Innendurchmesser in cm','<i>h</i> Füllhöhe in cm (Abstand Boden → Flüssigkeitsoberfläche)']});
-  if(!(d>0)){msg($('vMsg'),'err','Bitte einen Innendurchmesser größer 0 eingeben.');results($('vRes'),[]);block($('vMath'),parts);return;}
+  const fail=text=>{msg($('vMsg'),'err',text);results($('vRes'),[]);block($('vMath'),parts);};
+  if(mode==='target'){
+    parts.push({h:'Grundformel, umgestellt nach der Füllhöhe',m:'V=\\frac{\\pi\\cdot\\left(\\frac{d}{2}\\right)^{2}\\cdot h}{1000\\,\\frac{\\text{cm}^3}{\\text{L}}}\\quad\\Rightarrow\\quad h=\\frac{1000\\,\\frac{\\text{cm}^3}{\\text{L}}\\cdot V'+(hasT?'_T':'')+'}{\\pi\\cdot\\left(\\frac{d}{2}\\right)^{2}}',
+      legend:V_LEGEND.concat(hasT?['<i>V<sub>T</sub></i> Volumen bei der Temperatur <i>T</i> (heiß nimmt die Würze mehr Platz ein)']:[])});
+  }else{
+    parts.push({h:'Grundformel (Zylinder: Grundfläche × Höhe)',m:'V=\\frac{\\pi\\cdot\\left(\\frac{d}{2}\\right)^{2}\\cdot h}{1000\\,\\frac{\\text{cm}^3}{\\text{L}}}',legend:V_LEGEND});
+  }
+  if(!(d>0))return fail('Bitte einen Innendurchmesser größer 0 eingeben.');
   let V,h;
   if(mode==='target'){
-    V=num('v.V');if(!(V>0)){msg($('vMsg'),'err','Bitte ein Zielvolumen größer 0 eingeben.');results($('vRes'),[]);block($('vMath'),parts);return;}
+    V=num('v.V');if(!(V>0))return fail('Bitte ein Zielvolumen größer 0 eingeben.');
     let Vcalc=V;
-    if(hasT){Vcalc=V*rhoW(20)/rhoW(T);}
+    if(hasT){
+      Vcalc=V*rhoW(20)/rhoW(T);
+      parts.push({h:'Volumen bei '+fmt(T,1)+' °C (Ausdehnung)',p:'Die Masse bleibt gleich, also gilt V·ρ = konstant:',
+        m:'\\begin{aligned}V_T&=V_{20}\\cdot\\frac{\\rho_W(20\\,°\\text{C})}{\\rho_W(T)}\\\\&='+t(V)+'\\,\\text{L}\\cdot\\frac{'+t(rhoW(20))+'}{'+t(rhoW(T))+'}='+t(Vcalc)+'\\,\\text{L}\\end{aligned}'});
+    }
     h=1000*Vcalc/A;
-    parts.push({h:'Umgestellt nach der Füllhöhe',m:'h=\\frac{1000\\cdot V}{\\pi\\cdot\\left(\\frac{d}{2}\\right)^{2}}'});
-    if(hasT)parts.push({h:'Volumen bei '+fmt(T,1)+' °C (Ausdehnung)',m:'\\begin{aligned}V_T&=V_{20}\\cdot\\frac{\\rho_W(20\\,°\\text{C})}{\\rho_W(T)}\\\\&='+t(V)+'\\cdot\\frac{'+t(rhoW(20),2)+'}{'+t(rhoW(T),2)+'}\\\\&='+t(Vcalc)+'\\,\\text{L}\\end{aligned}'});
-    parts.push({h:'Eingesetzt',m:'\\begin{aligned}h&=\\frac{1000\\cdot '+t(Vcalc)+'}{\\pi\\cdot\\left(\\frac{'+t(d,1)+'}{2}\\right)^{2}}\\\\&='+t(h,1)+'\\,\\text{cm}\\end{aligned}'});
+    parts.push({h:'Eingesetzt',m:'\\begin{aligned}h&=\\frac{1000\\cdot '+t(Vcalc)+'}{\\pi\\cdot\\left(\\frac{'+t(d,1)+'}{2}\\right)^{2}}=\\frac{'+t(1000*Vcalc,0)+'}{'+t(A,1)+'}\\\\&='+t(h,1)+'\\,\\text{cm}\\end{aligned}'});
     res=[{k:'Füllhöhe',v:fmt(h,1),u:'cm',main:true},{k:'Liter je cm',v:fmt(A/1000,3),u:'L/cm'}];
     if(hasT)res.push({k:'Volumen bei '+fmt(T,0)+' °C',v:fmt(Vcalc,2),u:'L'});
   }else{
     if(mode==='gap'){
       const H=num('v.H'),a=num('v.a');h=H-a;
-      parts.push({h:'Füllhöhe aus Abstand zum Rand',m:'h=H-a='+t(H,1)+'-'+t(a,1)+'='+t(h,1)+'\\,\\text{cm}',legend:['<i>H</i> Innenhöhe des Topfs','<i>a</i> Abstand Oberkante → Flüssigkeitsoberfläche']});
-      if(!(H>0)||!(a>=0)){msg($('vMsg'),'err','Bitte Topfhöhe und Abstand eingeben.');results($('vRes'),[]);block($('vMath'),parts);return;}
-      if(h<0){msg($('vMsg'),'err','Der Abstand ist größer als die Topfhöhe.');results($('vRes'),[]);block($('vMath'),parts);return;}
+      parts.push({h:'Füllhöhe aus Abstand zum Rand',m:'h=H-a='+t(H,1)+'-'+t(a,1)+'='+t(h,1)+'\\,\\text{cm}',legend:['<i>H</i> Innenhöhe des Topfs in cm','<i>a</i> Abstand Oberkante → Flüssigkeitsoberfläche in cm']});
+      if(!(H>0)||!(a>=0))return fail('Bitte Topfhöhe und Abstand eingeben.');
+      if(h<0)return fail('Der Abstand ist größer als die Topfhöhe.');
     }else h=num('v.h');
-    if(!(h>=0)){msg($('vMsg'),'err','Bitte eine Füllhöhe eingeben.');results($('vRes'),[]);block($('vMath'),parts);return;}
+    if(!(h>=0))return fail('Bitte eine Füllhöhe eingeben.');
     V=A*h/1000;
-    parts.push({h:'Eingesetzt',m:'\\begin{aligned}V&=\\pi\\cdot\\left(\\frac{'+t(d,1)+'}{2}\\right)^{2}\\cdot '+t(h,1)+'\\cdot\\frac{1}{1000}\\\\&='+t(V)+'\\,\\text{L}\\end{aligned}'});
+    parts.push({h:'Eingesetzt',m:'\\begin{aligned}V&=\\frac{\\pi\\cdot\\left(\\frac{'+t(d,1)+'}{2}\\right)^{2}\\cdot '+t(h,1)+'}{1000}=\\frac{'+t(A,1)+'\\cdot '+t(h,1)+'}{1000}\\\\&='+t(V)+'\\,\\text{L}\\end{aligned}'});
     res=[{k:'Volumen',v:fmt(V,2),u:'L',main:true},{k:'Liter je cm',v:fmt(A/1000,3),u:'L/cm'}];
     if(hasT){
       const V20=V*rhoW(T)/rhoW(20);
-      parts.push({h:'Umgerechnet auf 20 °C (heiße Würze dehnt sich aus)',m:'\\begin{aligned}V_{20}&=V_T\\cdot\\frac{\\rho_W(T)}{\\rho_W(20\\,°\\text{C})}\\\\&='+t(V)+'\\cdot\\frac{'+t(rhoW(T),2)+'}{'+t(rhoW(20),2)+'}\\\\&='+t(V20)+'\\,\\text{L}\\end{aligned}'});
+      parts.push({h:'Umgerechnet auf 20 °C (heiße Würze dehnt sich aus)',p:'Die Masse bleibt gleich, also gilt V·ρ = konstant:',
+        m:'\\begin{aligned}V_{20}&=V_T\\cdot\\frac{\\rho_W(T)}{\\rho_W(20\\,°\\text{C})}\\\\&='+t(V)+'\\,\\text{L}\\cdot\\frac{'+t(rhoW(T))+'}{'+t(rhoW(20))+'}='+t(V20)+'\\,\\text{L}\\end{aligned}'});
       res.push({k:'Volumen bei 20 °C',v:fmt(V20,2),u:'L'});
       res.push({k:'Ausdehnung',v:fmt((V/V20-1)*100,1),u:'%'});
     }
     if(mode==='gap'){const Hn=num('v.H');res.push({k:'Topf voll',v:fmt(A*Hn/1000,1),u:'L'});}
   }
   if(hasT){
-    parts.push({h:'Dichte von Wasser (Kell-Gleichung, T in °C, ρ in kg/m³)',m:RHO_TEX,p:'Die Ausdehnung von Würze entspricht in guter Näherung der von Wasser.'});
+    parts.push({h:'Dichte von Wasser (Kell-Gleichung)',p:'Die Ausdehnung von Würze entspricht in guter Näherung der von Wasser.',m:RHO_TEX,legend:KELL_LEGEND});
+    parts.push({h:'Eingesetzt',m:'\\begin{aligned}'+rhoStep(T,tp(T,1)+'\\,°\\text{C}')+'\\\\'+rhoStep(20,'20\\,°\\text{C}')+'\\end{aligned}'});
     if(T<0||T>100)warn='Temperatur außerhalb 0–100 °C – Ergebnis nur eingeschränkt gültig.';
   }
   msg($('vMsg'),'warn',warn||'');
@@ -312,17 +343,20 @@ function calcGravity(){
   if(!Number.isFinite(x)||!Number.isFinite(T)||!Number.isFinite(Tc)){msg($('sMsg'),'err','Bitte Messwert und beide Temperaturen eingeben.');results($('sRes'),[]);block($('sMath'),parts);return;}
   let SGm,Pm;
   if(unit==='P'){Pm=x;SGm=sgFromP(x);}else{SGm=x;Pm=pFromSg(x);}
-  if(SGm<0.98||SGm>1.2){msg($('sMsg'),'err','Messwert unplausibel (erwartet etwa 0–40 °P bzw. 1,000–1,170).');results($('sRes'),[]);block($('sMath'),parts);return;}
-  const F=1.8*T+32,Fc=1.8*Tc+32,fm=hyd(F),fc=hyd(Fc);
-  const SGk=SGm*fm/fc,Pk=pFromSg(SGk);
+  if(!(SGm>=0.98&&SGm<=1.2)||!(Pm>-5&&Pm<45)){msg($('sMsg'),'err','Messwert unplausibel (erwartet etwa 0–40 °P bzw. 1,000–1,170).');results($('sRes'),[]);block($('sMath'),parts);return;}
+  const rm=rhoW(T),rc=rhoW(Tc);
+  const SGk=SGm*rc/rm,Pk=pFromSg(SGk);
+  let n=0;const no=()=>'①②③④⑤'[n++]+' ';
   if(unit==='P'){
-    parts.push({h:'① °Plato → spezifisches Gewicht',m:'\\begin{aligned}SG&=1+\\frac{P}{258{,}6-\\frac{P}{258{,}2}\\cdot 227{,}1}\\\\&=1+\\frac{'+t(Pm)+'}{258{,}6-\\frac{'+t(Pm)+'}{258{,}2}\\cdot 227{,}1}\\\\&='+t(SGm,4)+'\\end{aligned}'});
+    parts.push({h:no()+'°Plato → spezifisches Gewicht',m:'\\begin{aligned}SG&=1+\\frac{P}{a-b\\cdot P}\\\\&=1+\\frac{'+t(Pm)+'}{258{,}6-0{,}8796\\cdot '+t(Pm)+'}='+t(SGm,4)+'\\end{aligned}',legend:PLATO_LEGEND});
   }
-  parts.push({h:(unit==='P'?'② ':'① ')+'Temperatur in °F umrechnen',m:'\\begin{aligned}T_F&=1{,}8\\cdot T+32\\\\T_{m,F}&='+t(F,1)+'\\,°\\text{F}\\\\T_{e,F}&='+t(Fc,1)+'\\,°\\text{F}\\end{aligned}'});
-  parts.push({h:(unit==='P'?'③ ':'② ')+'Korrekturfunktion (aus der Dichtekurve von Wasser)',m:'\\begin{aligned}f(T_F)&=1{,}00130346\\\\&\\quad-1{,}34722124\\cdot10^{-4}\\,T_F\\\\&\\quad+2{,}04052596\\cdot10^{-6}\\,T_F^{2}\\\\&\\quad-2{,}32820948\\cdot10^{-9}\\,T_F^{3}\\end{aligned}'});
-  parts.push({m:'\\begin{aligned}f(T_{m,F})&='+t(fm,6)+'\\\\f(T_{e,F})&='+t(fc,6)+'\\end{aligned}'});
-  parts.push({h:(unit==='P'?'④ ':'③ ')+'Korrigiertes spezifisches Gewicht',m:'\\begin{aligned}SG_{korr}&=SG_{gem}\\cdot\\frac{f(T_{m,F})}{f(T_{e,F})}\\\\&='+t(SGm,4)+'\\cdot\\frac{'+t(fm,6)+'}{'+t(fc,6)+'}\\\\&='+t(SGk,4)+'\\end{aligned}'});
-  parts.push({h:(unit==='P'?'⑤ ':'④ ')+'Spezifisches Gewicht → °Plato',m:'\\begin{aligned}P&=-616{,}868+1111{,}14\\cdot SG\\\\&\\quad-630{,}272\\cdot SG^{2}+135{,}997\\cdot SG^{3}\\\\&='+t(Pk)+'\\,°\\text{P}\\end{aligned}'});
+  parts.push({h:no()+'Dichte von Wasser bei Mess- und Eichtemperatur',p:'Kell-Gleichung (Wasserdichte in kg/m³, <i>T</i> in °C):',m:RHO_TEX,legend:KELL_LEGEND});
+  parts.push({m:'\\begin{aligned}'+rhoStep(T,'T_m')+'\\\\'+rhoStep(Tc,'T_e')+'\\end{aligned}'});
+  parts.push({h:no()+'Korrigiertes spezifisches Gewicht',p:'Würze dehnt sich beim Erwärmen etwa wie Wasser aus. Ist die Probe wärmer als die Eichtemperatur, ist sie weniger dicht und die Spindel zeigt zu wenig an. Die Ausdehnung des Spindelglases ist vernachlässigt.',
+    m:'\\begin{aligned}SG_{korr}&=SG_{gem}\\cdot\\frac{\\rho_W(T_e)}{\\rho_W(T_m)}\\\\&='+t(SGm,4)+'\\cdot\\frac{'+t(rc)+'}{'+t(rm)+'}='+t(SGk,4)+'\\end{aligned}',
+    legend:['<i>SG<sub>gem</sub></i> abgelesener Wert, <i>SG<sub>korr</sub></i> Wert bei Eichtemperatur','<i>T<sub>m</sub></i> Temperatur der Probe, <i>T<sub>e</sub></i> Eichtemperatur der Spindel']});
+  parts.push({h:no()+'Spezifisches Gewicht → °Plato',p:'Die Formel aus ① nach <i>P</i> umgestellt:',m:'\\begin{aligned}P&=\\frac{a\\cdot(SG-1)}{1+b\\cdot(SG-1)}\\\\&=\\frac{258{,}6\\cdot('+t(SGk,4)+'-1)}{1+0{,}8796\\cdot('+t(SGk,4)+'-1)}='+t(Pk)+'\\,°\\text{P}\\end{aligned}',
+    legend:unit==='P'?null:PLATO_LEGEND});
   const d=Pk-Pm;
   results($('sRes'),[
     {k:'Korrigierte Stammwürze',v:fmt(Pk,2),u:'°P',main:true},
@@ -338,37 +372,40 @@ function calcGravity(){
 }
 
 /* ---------- 3. Priming sugar ---------- */
+const M_CO2=44.0095;
 const SUGARS={
-  sucrose:{name:'Saccharose',k:4*44.0095/342.2965,eq:'C_{12}H_{22}O_{11}+H_2O\\rightarrow 4\\,C_2H_5OH+4\\,CO_2',m:'342{,}30',co2:'4\\cdot 44{,}01'},
-  glucose:{name:'Glucose',k:2*44.0095/180.156,eq:'C_6H_{12}O_6\\rightarrow 2\\,C_2H_5OH+2\\,CO_2',m:'180{,}16',co2:'2\\cdot 44{,}01'},
-  dextrose:{name:'Glucose-Monohydrat',k:2*44.0095/198.171,eq:'C_6H_{12}O_6\\cdot H_2O\\rightarrow 2\\,C_2H_5OH+2\\,CO_2+H_2O',m:'198{,}17',co2:'2\\cdot 44{,}01'}
+  sucrose:{name:'Saccharose',n:4,M:342.2965,eq:'C_{12}H_{22}O_{11}+H_2O\\rightarrow 4\\,C_2H_5OH+4\\,CO_2'},
+  glucose:{name:'Glucose',n:2,M:180.156,eq:'C_6H_{12}O_6\\rightarrow 2\\,C_2H_5OH+2\\,CO_2'},
+  dextrose:{name:'Glucose-Monohydrat',n:2,M:198.171,eq:'C_6H_{12}O_6\\cdot H_2O\\rightarrow 2\\,C_2H_5OH+2\\,CO_2+H_2O'}
 };
+for(const s of Object.values(SUGARS))s.k=s.n*M_CO2/s.M;
 const STYLES=[['Stout / Porter',4],['Ale',4.5],['Lager / Märzen',5],['Pils',5.5],['Kölsch / Alt',5],['Weizen',7],['Belgisches Ale',7.5]];
 function calcSugar(){
   const V=num('z.V'),T=num('z.T'),C=num('z.C'),sg=SUGARS[S['z.sugar']]||SUGARS.sucrose,bottle=num('z.bottle'),Ts=num('z.Ts');
   const parts=[];
   if(!(V>0)||!Number.isFinite(T)||!(C>0)){msg($('zMsg'),'err','Bitte Biermenge, Temperatur und Ziel-CO₂ eingeben.');results($('zRes'),[]);block($('zMath'),parts);return;}
-  const rest=co2Sat(T,1.013),dC=C-rest,m=Math.max(0,dC)*V/sg.k;
-  parts.push({h:'① Bereits gelöstes CO₂ im Jungbier',p:'Nach der Gärung ist das Jungbier bei Normaldruck mit CO₂ gesättigt. Maßgeblich ist die <b>höchste</b> Temperatur seit Gärende – wärmeres Bier hat CO₂ abgegeben.',
-    m:'\\begin{aligned}c_{rest}&=10\\cdot p\\cdot e^{\\,-10{,}73797+\\frac{2617{,}25}{T+273{,}15}}\\\\&=10\\cdot 1{,}013\\cdot e^{\\,-10{,}73797+\\frac{2617{,}25}{'+t(T,1)+'+273{,}15}}\\\\&='+t(rest)+'\\,\\tfrac{\\text{g}}{\\text{L}}\\end{aligned}',
-    legend:['<i>c</i> CO₂-Gehalt in g/L','<i>p</i> absoluter Druck in bar (1,013 bar = Normaldruck)','<i>T</i> Temperatur in °C']});
+  const rest=co2Sat(T,P0),dC=C-rest,m=Math.max(0,dC)*V/sg.k;
+  parts.push({h:'① Bereits gelöstes CO₂ im Jungbier',p:'Nach der Gärung ist das Jungbier bei Normaldruck mit CO₂ gesättigt (Henry-Gesetz: gelöste Menge ∝ Druck). Maßgeblich ist die <b>höchste</b> Temperatur seit Gärende – wärmeres Bier hat CO₂ abgegeben.',
+    m:'c=p\\cdot H(T),\\qquad '+HENRY_TEX,legend:HENRY_LEGEND});
+  parts.push({h:'Eingesetzt',m:'\\begin{aligned}'+henryStep(T,'T')+'\\\\c_{rest}&=p_0\\cdot H(T)=1{,}013\\cdot '+t(henry(T),4)+'='+t(rest)+'\\,\\tfrac{\\text{g}}{\\text{L}}\\end{aligned}'});
   parts.push({h:'② Fehlendes CO₂',m:'\\begin{aligned}\\Delta c&=c_{ziel}-c_{rest}\\\\&='+t(C)+'-'+t(rest)+'='+t(dC)+'\\,\\tfrac{\\text{g}}{\\text{L}}\\end{aligned}'});
   parts.push({h:'③ CO₂-Ausbeute von '+sg.name,p:'Aus der Gärungsgleichung (Hefe vergärt den Zucker vollständig):',m:'\\mathrm{'+sg.eq+'}'});
-  parts.push({m:'k=\\frac{'+sg.co2+'}{'+sg.m+'}='+t(sg.k,4)+'\\;\\frac{\\text{g CO}_2}{\\text{g Zucker}}'});
-  parts.push({h:'④ Zuckermenge',m:'\\begin{aligned}m_{Zucker}&=\\frac{\\Delta c\\cdot V}{k}=\\frac{'+t(Math.max(0,dC))+'\\cdot '+t(V,1)+'}{'+t(sg.k,4)+'}\\\\&='+t(m,1)+'\\,\\text{g}\\end{aligned}'});
+  parts.push({m:'\\begin{aligned}k&=\\frac{n\\cdot M_{CO_2}}{M_{Zucker}}\\\\&=\\frac{'+sg.n+'\\cdot '+t(M_CO2)+'}{'+t(sg.M)+'}='+t(sg.k,4)+'\\;\\tfrac{\\text{g CO}_2}{\\text{g Zucker}}\\end{aligned}',
+    legend:['<i>n</i> Mol CO₂ je Mol Zucker (aus der Gleichung)','<i>M</i> molare Masse in g/mol: CO₂ 44,01, Saccharose 342,30, Glucose 180,16, Glucose-Monohydrat 198,17']});
+  parts.push({h:'④ Zuckermenge',m:'\\begin{aligned}m_{Zucker}&=\\frac{\\Delta c\\cdot V}{k}\\\\&=\\frac{'+t(Math.max(0,dC))+'\\cdot '+t(V,1)+'}{'+t(sg.k,4)+'}='+t(m,1)+'\\,\\text{g}\\end{aligned}',legend:['<i>V</i> Biermenge in L']});
   const res=[{k:'Zucker gesamt',v:fmt(m,0),u:'g',main:true},{k:'je Liter',v:fmt(m/V,2),u:'g/L'}];
   if(bottle>0)res.push({k:'je Flasche ('+fmt(bottle,2).replace(/,?0+$/,'')+' L)',v:fmt(m/V*bottle,2),u:'g'});
   res.push({k:'Rest-CO₂',v:fmt(rest,2),u:'g/L'});
-  res.push({k:'Ziel in Vol.',v:fmt(C/1.977,2),u:'vol'});
+  res.push({k:'Ziel in Vol.',v:fmt(C/RHO_CO2,2),u:'vol'});
   if(Number.isFinite(Ts)){
-    const pAbs=C/(10*Math.exp(-10.73797+2617.25/(Ts+273.15))),pOver=pAbs-1.013;
-    parts.push({h:'⑤ Flaschendruck nach der Nachgärung',p:'Gleiche Sättigungsformel, nach dem Druck umgestellt (Überdruck = absoluter Druck − 1,013 bar):',
-      m:'\\begin{aligned}p_{\\ddot u}&=\\frac{c_{ziel}}{10\\cdot e^{\\,-10{,}73797+\\frac{2617{,}25}{T_L+273{,}15}}}-1{,}013\\\\&=\\frac{'+t(C)+'}{10\\cdot e^{\\,-10{,}73797+\\frac{2617{,}25}{'+t(Ts,1)+'+273{,}15}}}-1{,}013\\\\&='+t(pOver)+'\\,\\text{bar}\\end{aligned}'});
+    const pAbs=C/henry(Ts),pOver=pAbs-P0;
+    parts.push({h:'⑤ Flaschendruck nach der Nachgärung',p:'Gleiche Formel wie in ①, nach dem Druck umgestellt (Überdruck = absoluter Druck − Normaldruck):',
+      m:'p_{\\ddot u}=\\frac{c_{ziel}}{H(T_L)}-p_0',legend:['<i>T<sub>L</sub></i> Lagertemperatur der Flaschen in °C']});
+    parts.push({m:'\\begin{aligned}'+henryStep(Ts,'T_L')+'\\\\p_{\\ddot u}&=\\frac{'+t(C)+'}{'+t(henry(Ts),4)+'}-1{,}013='+t(pOver)+'\\,\\text{bar}\\end{aligned}'});
     res.push({k:'Überdruck bei '+fmt(Ts,0)+' °C',v:fmt(pOver,2),u:'bar'});
-    const p20=C/(10*Math.exp(-10.73797+2617.25/293.15))-1.013;
-    res.push({k:'Überdruck bei 20 °C',v:fmt(p20,2),u:'bar'});
+    res.push({k:'Überdruck bei 20 °C',v:fmt(C/henry(20)-P0,2),u:'bar'});
   }
-  parts.push({h:'Umrechnung g/L ↔ Volumen',m:'1\\,\\text{vol}\\approx 1{,}977\\,\\tfrac{\\text{g}}{\\text{L}}',p:'Dichte von CO₂ bei 0 °C und 1,013 bar.'});
+  parts.push({h:'Umrechnung g/L → Volumen',m:'\\begin{aligned}c_{vol}&=\\frac{c_{ziel}}{\\rho_{CO_2}}\\\\&=\\frac{'+t(C)+'}{1{,}977}='+t(C/RHO_CO2)+'\\,\\text{vol}\\end{aligned}',legend:['<i>ρ</i><sub>CO₂</sub> = 1,977 g/L: Dichte von CO₂-Gas bei 0 °C und 1,013 bar','1 vol = 1 Liter CO₂-Gas je Liter Bier']});
   results($('zRes'),res);
   if(dC<=0)msg($('zMsg'),'ok','Das Jungbier enthält bereits genug CO₂ – kein Zucker nötig.');
   else if(C>7.5)msg($('zMsg'),'warn','Hoher CO₂-Gehalt: nur druckfeste Flaschen verwenden (z. B. Bügelflaschen, belgische Flaschen). Normale Flaschen sind meist bis ca. 3–4 bar ausgelegt.');
