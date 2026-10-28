@@ -9,7 +9,7 @@ Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/). Kein Server;
 ```
 index.html            Startseite – die Kartenliste ist generiert
 assets/base.css       Design-Tokens, Dark Mode, Karten, Buttons, Toast, Hilfe-Bereich
-assets/common.js      window.Tools: $, load, save, remove, toast, esc, copyText, fmt, parseNum; registriert den Service Worker
+assets/common.js      window.Tools: $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedText; registriert den Service Worker
 assets/vendor/        Fremdbibliotheken mit LICENSE + SOURCE.md je Ordner (generiert, nicht von Hand ändern)
 template/             Vorlage für neue Seiten (wird nicht gelistet)
 scripts/build.mjs     erzeugt Seitenliste, Fußzeile (inkl. Version), <head>-Block (noindex, CSP, Icons, Manifest), manifest.webmanifest + sw.js je App
@@ -62,6 +62,7 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
   - Den Worker einer Bibliothek nie direkt aus `assets/vendor/` starten (`workerSrc`, `workerPath`, `new Worker`). Ein Worker außerhalb des App-Ordners wird nicht vom Service Worker der App bedient und scheitert offline. Stattdessen eine kleine Datei im App-Ordner, die ihn lädt (Beispiel: `pdf2word/pdf-worker.mjs` mit `import`, `pdf2word/ocr-worker.js` mit `importScripts`).
 - **Offline-Test für Nachgeladenes:** Lädt eine Funktion erst bei Gebrauch Bibliotheken, Worker oder Daten, braucht sie einen eigenen Offline-Test in `tests/<tool-name>.spec.mjs` (einmal online benutzen, Netz trennen, neu laden, nochmal benutzen). Der allgemeine Offline-Test lädt nur die Seite und merkt davon nichts.
 - **Teilen an die App (Android):** `<meta name="tool:share-target" content="audio/*, .opus">` erzeugt einen `share_target` im Manifest und den Empfang im `sw.js`; die Seite holt die Datei mit `Tools.takeSharedFile()`. Nur Android/Chromium und nur bei installierter App; iPhone unterstützt das nicht.
+- **Links/Text an die App teilen (Android):** `<meta name="tool:share-text" content="true">` erzeugt einen `share_target` (GET) im Manifest – die Seite öffnet sich als `./?title=…&text=…&url=…`; `Tools.takeSharedText()` liefert `{ title, text, url }` und entfernt die Parameter aus der Adresse. Viele Apps schicken den Link in `text`, nicht in `url`. Zusammen mit `tool:share-target` (Dateien) noch nicht unterstützt.
 - **iPhone:** Eine zum Home-Bildschirm hinzugefügte App hat **eigenen Speicher**, getrennt von Safari.
 - **Nicht auffindbar:** Jede Seite trägt `<meta name="robots" content="noindex, nofollow">` (generiert). `robots.txt` darf **kein** `Disallow: /` enthalten, sonst sehen Suchmaschinen das noindex nicht. Das ist Unauffindbarkeit, kein Zugriffsschutz – wer den Link hat, kann die Seite öffnen.
 - **Content Security Policy:** Der `<head>`-Block enthält eine strenge CSP: nur eigene Dateien, Inline-Skripte nur per SHA-256-Prüfsumme (berechnet `build.mjs`), WebAssembly nur wo nötig. Nach jeder Änderung an einem `<script>` deshalb `node scripts/build.mjs` (macht der Git-Hook). Keine Inline-Event-Handler (`onclick="…"`), kein `eval`. Ein CSP-Verstoß erscheint als Konsolenfehler und lässt die Tests scheitern.
