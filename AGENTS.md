@@ -20,6 +20,7 @@ scripts/partials/data.html    Bereich „Daten sichern & übertragen“ (in jede
 tests/                Playwright-Tests (siehe tests/README.md)
 <tool-name>/          index.html + generiert: manifest.webmanifest, sw.js, icon-*
 .githooks/pre-commit  ruft build.mjs vor jedem Commit auf
+.claude/hooks/session-start.sh  richtet Cloud-Sessions von Claude Code ein (Git-Hook, npm install, Browser für Playwright)
 .github/workflows/build.yml         dasselbe bei jedem Push auf GitHub
 .github/workflows/vendor-check.yml  prüft monatlich auf Bibliotheks-Updates und öffnet ein Issue
 .github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus
@@ -111,4 +112,4 @@ Jede App bietet am Seitenende den einklappbaren Bereich **„Daten sichern & üb
 - PR-Branches werden nach dem Merge automatisch gelöscht.
 - Dependabot öffnet wöchentlich Update-PRs (Actions, Test-Werkzeuge); mergen, wenn die Tests grün sind.
 - GitHub Pages veröffentlicht `main` direkt; ein Merge ist nach 1–2 Minuten live.
-- Hook einmalig aktivieren: `git config core.hooksPath .githooks`
+- Hook einmalig aktivieren: `git config core.hooksPath .githooks` (in Cloud-Sessions von Claude Code erledigt das `.claude/hooks/session-start.sh` automatisch)
