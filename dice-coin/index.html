@@ -13,6 +13,8 @@
 <meta name="tool:short-name" content="Würfel">
 <meta name="tool:storage" content="wuerfelMuenze.">
 <!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-yjg4fvjpVHfp/89BxkXMJafhCq1FWS42MDOyafgWqoo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -46,10 +48,11 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template
 .die:active{transform:scale(.95)}
 .die .num{font-size:calc(var(--s)*.42);font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
 .die .num.long{font-size:calc(var(--s)*.3)}
-.die .type{position:absolute;inset-block-end:3px;inset-inline:0;text-align:center;font-size:11px;color:#6b7686;font-weight:600}
+.die .type{position:absolute;inset-block-end:3px;inset-inline:0;text-align:center;font-size:11px;color:#4b5563;font-weight:600}
 .die.empty .num{color:#9aa5b3}
 .die.held{background:var(--held);border-color:var(--held-border);color:var(--text)}
 .die.held .pip{background:var(--text)}
+.die.held .type{color:var(--text)}
 .die.held::after{content:"gehalten";position:absolute;inset-block-start:-9px;inset-inline:0;margin-inline:auto;width:max-content;font-size:10px;font-weight:700;padding-inline:5px;border-radius:999px;background:var(--held-border);color:var(--surface)}
 .die.max{border-color:var(--ok)}
 .die.min{border-color:var(--err)}
@@ -274,6 +277,7 @@ details summary{cursor:pointer;font-weight:600;min-height:32px;display:flex;alig
   <p>Zufall per <code>crypto.getRandomValues</code> · Einstellungen &amp; Verlauf nur lokal im Browser gespeichert</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
+  <p class="footer-version">Version 1bcbb6a88062</p>
   <!-- footer:end -->
 </footer>
 
@@ -333,11 +337,16 @@ function clearDice(){st.dice=st.dice.map(()=>null);st.held=st.held.map(()=>false
 
 /* ---------- Rendering ---------- */
 const PIPS={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
-function dieFace(el,v,s){
+// Accessible name comes from the content (visible number + "W6"), plus screen-reader-only text
+function dieFace(el,v,s,i){
   el.textContent='';
-  if(v!=null&&s===6&&cfg.dice.pips){const g=document.createElement('span');g.className='pips';for(let i=0;i<9;i++){const p=document.createElement('span');if(PIPS[v].includes(i))p.className='pip';g.append(p);}el.append(g);}
-  else{const n=document.createElement('span');n.className='num'+(String(v==null?'?':v).length>2?' long':'');n.textContent=v==null?'?':v;el.append(n);}
+  const sr=t=>{const x=document.createElement('span');x.className='sr-only';x.textContent=t;el.append(x);};
+  sr('Würfel '+(i+1)+': ');
+  if(v!=null&&s===6&&cfg.dice.pips){const g=document.createElement('span');g.className='pips';g.setAttribute('aria-hidden','true');for(let k=0;k<9;k++){const p=document.createElement('span');if(PIPS[v].includes(k))p.className='pip';g.append(p);}el.append(g);sr(String(v));}
+  else{const n=document.createElement('span');n.className='num'+(String(v==null?'?':v).length>2?' long':'');n.textContent=v==null?'?':v;if(v==null){n.setAttribute('aria-hidden','true');sr('noch nicht gewürfelt, ');}el.append(n);}
   if(!(s===6&&cfg.dice.pips&&v!=null)||cfg.dice.mixed){const t=document.createElement('span');t.className='type';t.textContent='W'+s;el.append(t);}
+  else sr(' W'+s);
+  el.dataset.v=v==null?'':v;el.dataset.s=s;
 }
 function order(arr){const idx=arr.map((_,i)=>i);if(cfg.dice.sort&&cfg.tab==='dice')idx.sort((a,b)=>(arr[a]??Infinity)-(arr[b]??Infinity));return idx;}
 function render(){
@@ -352,8 +361,8 @@ function render(){
       const s=sidesOf(i),v=vals[i],b=document.createElement('button');
       b.type='button';b.className='die'+(v==null?' empty':'')+(st.held[i]?' held':'');
       if(cfg.dice.highlight&&rolled.length>1&&mx!==mn&&v!=null){if(v===mx)b.classList.add('max');else if(v===mn)b.classList.add('min');}
-      b.dataset.i=i;dieFace(b,v,s);
-      b.setAttribute('aria-label','Würfel '+(i+1)+' (W'+s+'): '+(v==null?'noch nicht gewürfelt':v)+(st.held[i]?', gehalten':''));
+      b.dataset.i=i;dieFace(b,v,s,i);
+      if(st.held[i]){const x=document.createElement('span');x.className='sr-only';x.textContent=', gehalten';b.append(x);}
       board.append(b);
     });
     const sum=rolled.reduce((a,b)=>a+b,0),mod=cfg.dice.mod;
@@ -442,7 +451,7 @@ function animate(targets,done){
   const els=targets.map(i=>document.querySelector('#board [data-i="'+i+'"]')).filter(Boolean);
   els.forEach(e=>{e.classList.remove('rolling');void e.offsetWidth;e.classList.add('rolling');});
   const dice=cfg.tab==='dice';let n=0;
-  const iv=setInterval(()=>{els.forEach(e=>{const i=+e.dataset.i;if(dice){const n2=e.querySelector('.num');if(n2)n2.textContent=rnd(sidesOf(i));else dieFace(e,rnd(sidesOf(i)),sidesOf(i));}else{e.textContent=rnd(2)===1?cfg.coin.heads:cfg.coin.tails;}});if(++n>=6){clearInterval(iv);busy=false;done();}},70);
+  const iv=setInterval(()=>{els.forEach(e=>{const i=+e.dataset.i;if(dice){const n2=e.querySelector('.num');if(n2)n2.textContent=rnd(sidesOf(i));else dieFace(e,rnd(sidesOf(i)),sidesOf(i),i);}else{e.textContent=rnd(2)===1?cfg.coin.heads:cfg.coin.tails;}});if(++n>=6){clearInterval(iv);busy=false;done();}},70);
 }
 function roll(target){
   if(busy)return;

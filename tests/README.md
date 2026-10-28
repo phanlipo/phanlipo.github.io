@@ -6,7 +6,7 @@ und jedem Push auf `main` (`.github/workflows/test.yml`).
 ## Lokal ausführen
 
 ```sh
-npm install                          # einmalig: Playwright + bwip-js
+npm install                          # einmalig: Playwright, axe-core, bwip-js
 npx playwright install chromium      # einmalig: Browser
 npm test                             # alle Tests
 npx playwright test tests/dice-coin.spec.mjs   # nur eine Datei
@@ -19,7 +19,8 @@ Ein kleiner Webserver (`tests/server.mjs`) startet automatisch und liefert das R
 
 | Datei | Prüft |
 |---|---|
-| `site.spec.mjs` | **jede Seite automatisch**: lädt ohne Fehler, kein seitliches Scrollen (375 px / 1280 px), Dark Mode, Hilfe eingeklappt, Fußzeile, PWA installierbar und offline nutzbar, Daten-Sicherung (Export, Import, Ablehnung falscher Dateien, Löschen nur eigener Daten); Startseite listet alle Tools |
+| `site.spec.mjs` | **jede Seite automatisch**: noindex, strenge CSP, Versionsanzeige = Cache-Version, lädt ohne Fehler, kein seitliches Scrollen (375 px / 1280 px), Dark Mode, Hilfe eingeklappt, Fußzeile, PWA installierbar und offline nutzbar, Daten-Sicherung (Export, Import, Ablehnung falscher Dateien, Löschen nur eigener Daten); Startseite listet alle Tools |
+| `a11y.spec.mjs` | **Barrierefreiheit** jeder Seite (WCAG 2.1 A/AA, axe-core), hell und dunkel, mit geöffneten Klapp-Bereichen |
 | `securpharm-scanner.spec.mjs` | GS1- und IFA-Codes, Trennzeichen-Varianten, Prüfziffern, abgelaufene Packungen, Verlauf; Bild-Erkennung mit beiden Decodern (Test-DataMatrix wird mit `bwip-js` erzeugt) |
 | `brew-calculator.spec.mjs` | alle drei Rechner gegen eine unabhängige Nachrechnung der Formeln, Formelsatz, Speichern der Eingaben |
 | `dice-coin.spec.mjs` | Wertebereiche, Bonus, Halten, Einzelmodus, gemischte Würfel, Münzen, Vorlagen, Speichern, grobe Gleichverteilung |

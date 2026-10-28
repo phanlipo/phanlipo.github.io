@@ -12,7 +12,7 @@ assets/base.css       Design-Tokens, Dark Mode, Karten, Buttons, Toast, Hilfe-Be
 assets/common.js      window.Tools: $, load, save, remove, toast, esc, copyText, fmt, parseNum; registriert den Service Worker
 assets/vendor/        Fremdbibliotheken mit LICENSE + SOURCE.md je Ordner (generiert, nicht von Hand ändern)
 template/             Vorlage für neue Seiten (wird nicht gelistet)
-scripts/build.mjs     erzeugt Seitenliste, Fußzeile, <head>-Links, manifest.webmanifest + sw.js je App
+scripts/build.mjs     erzeugt Seitenliste, Fußzeile (inkl. Version), <head>-Block (noindex, CSP, Icons, Manifest), manifest.webmanifest + sw.js je App
 scripts/build-icons.mjs  erzeugt icon.svg und PNG-Icons (180/192/512/maskable) je Seite (Tabler Icons)
 scripts/vendor.mjs    lädt Bibliotheken aus scripts/vendor.json nach assets/vendor/, prüft auf Updates
 scripts/partials/footer.html  Text der gemeinsamen Fußzeile
@@ -23,7 +23,8 @@ tests/                Playwright-Tests (siehe tests/README.md)
 .github/workflows/build.yml         dasselbe bei jedem Push auf GitHub
 .github/workflows/vendor-check.yml  prüft monatlich auf Bibliotheks-Updates und öffnet ein Issue
 .github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus
-robots.txt            sperrt alle Crawler
+.github/dependabot.yml              wöchentliche Update-PRs für GitHub Actions und Test-Werkzeuge
+robots.txt            erlaubt Crawlen – damit Suchmaschinen das noindex jeder Seite sehen
 ```
 
 ## Neue Seite
@@ -53,6 +54,10 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 - **Bibliotheks-Updates:** Die Action „Vendor-Updates prüfen“ öffnet monatlich ein Issue. Aktualisieren mit `node scripts/vendor.mjs --update <name>`, bei Tabler danach `node scripts/build-icons.mjs`, dann `npm test`. Bei 0.x- oder Major-Sprüngen das Changelog lesen.
 - **PWA / Offline:** `sw.js` cacht die Seite, `assets/base.css`, `assets/common.js`, Icons und jede genutzte Vendor-Bibliothek komplett. Die Cache-Version ist ein Hash dieser Dateien – Updates kommen automatisch. Lädt eine Seite zur Laufzeit weitere eigene Dateien, müssen sie unter `assets/vendor/` liegen oder in `build.mjs` (`precacheList`) ergänzt werden. Nie Daten an fremde Server senden – offline gibt es keine.
 - **iPhone:** Eine zum Home-Bildschirm hinzugefügte App hat **eigenen Speicher**, getrennt von Safari.
+- **Nicht auffindbar:** Jede Seite trägt `<meta name="robots" content="noindex, nofollow">` (generiert). `robots.txt` darf **kein** `Disallow: /` enthalten, sonst sehen Suchmaschinen das noindex nicht. Das ist Unauffindbarkeit, kein Zugriffsschutz – wer den Link hat, kann die Seite öffnen.
+- **Content Security Policy:** Der `<head>`-Block enthält eine strenge CSP: nur eigene Dateien, Inline-Skripte nur per SHA-256-Prüfsumme (berechnet `build.mjs`), WebAssembly nur wo nötig. Nach jeder Änderung an einem `<script>` deshalb `node scripts/build.mjs` (macht der Git-Hook). Keine Inline-Event-Handler (`onclick="…"`), kein `eval`. Ein CSP-Verstoß erscheint als Konsolenfehler und lässt die Tests scheitern.
+- **Version:** Die Fußzeile jeder App zeigt „Version …“ = Cache-Version aus `sw.js`. So lässt sich auf dem Handy prüfen, ob eine installierte App aktuell ist.
+- **Barrierefreiheit:** `tests/a11y.spec.mjs` prüft jede Seite hell und dunkel mit axe-core (WCAG 2.1 A/AA). Bedienelemente brauchen einen zugänglichen Namen, der den sichtbaren Text enthält; reine Vorlese-Texte mit `.sr-only`.
 - **Datenschutz:** keine Tracker, keine Analytics, keine Daten an Server senden (die Tests schlagen bei jeder Anfrage an eine fremde Domain fehl).
 - **Tests:** Fehler nie durch Abschwächen, Überspringen oder Löschen eines Tests „beheben“. Erwartete Werte unabhängig nachrechnen.
 - **Zahlen:** deutsch formatieren (`Tools.fmt`), Eingaben mit Komma und Punkt akzeptieren (`Tools.parseNum`).
@@ -97,6 +102,8 @@ Jede App bietet am Seitenende den einklappbaren Bereich **„Daten sichern & üb
 
 ## Git
 
-- Änderungen über einen Pull Request auf `main`, Squash-Merge.
+- Änderungen über einen Pull Request auf `main`, Squash-Merge. `main` ist geschützt: Merge nur mit grünem Check **test**; direkte Pushes sind gesperrt.
+- PR-Branches werden nach dem Merge automatisch gelöscht.
+- Dependabot öffnet wöchentlich Update-PRs (Actions, Test-Werkzeuge); mergen, wenn die Tests grün sind.
 - GitHub Pages veröffentlicht `main` direkt; ein Merge ist nach 1–2 Minuten live.
 - Hook einmalig aktivieren: `git config core.hooksPath .githooks`

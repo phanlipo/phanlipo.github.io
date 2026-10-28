@@ -3,8 +3,8 @@ import { test, expect, openDetails } from './helpers.mjs';
 
 /** Values of all dice in board order (null = not rolled yet) */
 async function dice(page) {
-  const labels = await page.locator('#board .die').evaluateAll(els => els.map(e => e.getAttribute('aria-label')));
-  return labels.map(l => { const m = l.match(/: (\d+)/); return m ? Number(m[1]) : null; });
+  const values = await page.locator('#board .die').evaluateAll(els => els.map(e => e.dataset.v));
+  return values.map(v => (v === '' ? null : Number(v)));
 }
 
 async function setStepper(page, key, value) {
@@ -73,8 +73,9 @@ test('dice with different sides', async ({ page }) => {
   await page.check('#optMixed');
   await page.fill('#perDie input[data-i="0"]', '100');
   await page.locator('#perDie input[data-i="0"]').press('Tab');
-  await expect(page.locator('#board .die').nth(0)).toHaveAttribute('aria-label', /W100/);
-  await expect(page.locator('#board .die').nth(1)).toHaveAttribute('aria-label', /W6/);
+  await expect(page.locator('#board .die').nth(0)).toHaveAttribute('data-s', '100');
+  await expect(page.locator('#board .die').nth(1)).toHaveAttribute('data-s', '6');
+  await expect(page.locator('#board .die').nth(0)).toHaveAccessibleName(/^Würfel 1: /);
 });
 
 test('keyboard: space rolls', async ({ page }) => {
@@ -119,8 +120,7 @@ test('W6 is roughly uniform (600 rolls)', async ({ page }) => {
     const c = [0, 0, 0, 0, 0, 0, 0], btn = document.getElementById('btnRoll');
     for (let i = 0; i < 600; i++) {
       btn.click();
-      const m = document.querySelector('#board .die').getAttribute('aria-label').match(/: (\d+)/);
-      c[Number(m[1])]++;
+      c[Number(document.querySelector('#board .die').dataset.v)]++;
     }
     return c.slice(1);
   });

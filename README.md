@@ -56,8 +56,15 @@ Die Seite ist dann unter `https://phanlipo.github.io/<ordner>/` erreichbar.
 - **Vor jedem Commit:** einmalig `git config core.hooksPath .githooks` ausführen – dann läuft `build.mjs` automatisch.
 - **Bei jedem Push:** die Action `.github/workflows/build.yml` führt `build.mjs` aus und committet Änderungen.
 - **Bei jedem PR und Push auf main:** die Action `.github/workflows/test.yml` führt alle Tests aus (lokal: `npm install`, `npx playwright install chromium`, `npm test`).
+- **Wöchentlich:** Dependabot öffnet Update-PRs für GitHub Actions und die Test-Werkzeuge.
 - **Monatlich:** die Action `.github/workflows/vendor-check.yml` prüft, ob es neuere Versionen der Bibliotheken gibt, und öffnet dann ein Issue.
 - **Prüfen ohne zu schreiben:** `node scripts/build.mjs --check`
+
+## Sichtbarkeit und Sicherheit
+
+- Die Seiten sind **nicht für Suchmaschinen gedacht**: Jede Seite trägt `noindex`; `robots.txt` erlaubt das Crawlen bewusst, damit Suchmaschinen diesen Hinweis sehen. Wer den Link hat, kann die Seiten trotzdem öffnen.
+- Eine strenge **Content Security Policy** erlaubt nur eigene Dateien – keine fremden Skripte, Tracker oder CDNs.
+- Die Fußzeile jeder App zeigt die **Version** (= Offline-Cache-Version), um Updates auf installierten Apps prüfen zu können.
 
 ## Fremdbibliotheken und Lizenzen
 
