@@ -6,8 +6,8 @@ const rhoW = T => (999.83952 + 16.945176 * T - 7.9870401e-3 * T ** 2 - 46.170461
   + 105.56302e-9 * T ** 4 - 280.54253e-12 * T ** 5) / (1 + 16.879850e-3 * T);
 const co2 = (T, p) => 10 * p * Math.exp(-10.73797 + 2617.25 / (T + 273.15));
 const sgFromP = P => 1 + P / (258.6 - (P / 258.2) * 227.1);
-// inverse of sgFromP, solved numerically (bisection) instead of the closed form used on the page
-const pFromSg = G => { let lo = -10, hi = 50; for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; if (sgFromP(m) < G) lo = m; else hi = m; } return lo; };
+// ASBC polynomial (fitted to Plato's tables)
+const pFromSg = G => -616.868 + 1111.14 * G - 630.272 * G ** 2 + 135.997 * G ** 3;
 // hydrometer: a warmer sample is less dense by the ratio of the water densities
 const corrected = (P, T, Tc) => pFromSg(sgFromP(P) * rhoW(Tc) / rhoW(T));
 const de = (x, d) => x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -147,11 +147,12 @@ test('formulas explain the calculation with symbols only, values stay in the res
   for (const v of ['13,0', '23,0', de(co2(13, 1.013), 2)]) await expect(z).not.toContainText(v);
   await expect(s).not.toContainText('27,0');
   await expect(s).not.toContainText(de(rhoW(27), 2));
-  // no unexplained magic numbers
-  for (const magic of ['10,73797', '1,00130346', '616,868']) {
-    await expect(z).not.toContainText(magic);
-    await expect(s).not.toContainText(magic);
+  // formulas use symbols; numeric constants are named and listed in the legend
+  const formulas = await page.locator('#sMath .f, #zMath .f').allTextContents();
+  for (const magic of ['10,73797', '1,00130346', '616,868', '999,83952', '258,6']) {
+    expect(formulas.join(' ')).not.toContain(magic);
   }
+  await expect(s.locator('.legend', { hasText: 'ASBC' })).toContainText('−616,868');
 });
 
 test('inputs survive a reload', async ({ page }) => {

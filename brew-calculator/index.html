@@ -14,7 +14,7 @@
 <meta name="tool:storage" content="brauRechner.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-sND89blNkg7oXyFel7g9JpTWtEYxxXB4b1Wj8GfwPkk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-kpj4mTtKzcjO1W9BLlbdXejPzxjBJFcUwHo3I1c+/44='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -186,7 +186,7 @@ details.math summary{cursor:pointer;font-weight:600;min-height:36px;display:flex
   <ul>
     <li>Für Spindel/Saccharometer: Messwert in °Plato oder SG, Probentemperatur und Eichtemperatur (meist 20 °C).</li>
     <li>Ergebnis: korrigierte Stammwürze in °P und SG. Nicht für Refraktometer.</li>
-    <li>Herleitung: Würze dehnt sich wie Wasser aus, der Messwert wird mit dem Verhältnis der Wasserdichten bei Eich- und Messtemperatur korrigiert. °P ↔ SG über eine an die Plato-Tabelle angepasste Formel, die sich exakt umstellen lässt.</li>
+    <li>Herleitung: Würze dehnt sich wie Wasser aus, der Messwert wird mit dem Verhältnis der Wasserdichten bei Eich- und Messtemperatur korrigiert. SG → °P mit dem Polynom der ASBC (an die Plato-Tabelle angepasst), °P → SG mit einer Näherungsformel.</li>
   </ul>
   <h3>3 · Zucker für die Nachgärung</h3>
   <ul>
@@ -201,7 +201,7 @@ details.math summary{cursor:pointer;font-weight:600;min-height:36px;display:flex
   <p>Alle Berechnungen laufen im Browser · Eingaben werden lokal gespeichert</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
-  <p class="footer-version">Version e6cc2348509d</p>
+  <p class="footer-version">Version 23f1bb9aed75</p>
   <!-- footer:end -->
 </footer>
 
@@ -250,10 +250,12 @@ function msg(host,kind,text){host.innerHTML=text?'<div class="msg '+kind+'">'+te
 // Density of air-free water in kg/m³ (Kell 1975), T in °C, valid 0–150 °C
 const KELL_A=[999.83952,16.945176,-7.9870401e-3,-46.170461e-6,105.56302e-9,-280.54253e-12],KELL_B=16.879850e-3;
 const rhoW=T=>KELL_A.reduce((s,a,i)=>s+a*T**i,0)/(1+KELL_B*T);
-// °Plato <-> specific gravity (20/20): SG = 1 + P/(a − b·P), inverse exact
+// °Plato <-> specific gravity (20/20)
+// SG -> °P: ASBC polynomial fitted to Plato's tables; °P -> SG: approximation SG = 1 + P/(a − b·P)
+const ASBC=[-616.868,1111.14,-630.272,135.997];
+const pFromSg=G=>ASBC.reduce((s,c,i)=>s+c*G**i,0);
 const PA=258.6,PB=227.1/258.2;
 const sgFromP=P=>1+P/(PA-PB*P);
-const pFromSg=G=>PA*(G-1)/(1+PB*(G-1));
 // Dissolved CO2 (Henry + van 't Hoff): c = p·H(T), H(T) = H20·exp(B·(1/TK − 1/T20))
 const CO2_B=2617.25,T0K=273.15,T20K=293.15,P0=1.013,RHO_CO2=1.977;
 const CO2_H20=10*Math.exp(-10.73797+CO2_B/T20K); // ≈ 1,6366 g/(L·bar)
@@ -266,7 +268,10 @@ const KELL={h:'Dichte von Wasser (Kell-Gleichung)',m:'\\rho_W(T)=\\frac{\\sum_{i
   '<i>a</i><sub>0</sub> = 999,83952 (Dichte bei 0 °C), <i>a</i><sub>1</sub> = 16,945176, <i>a</i><sub>2</sub> = −7,9870401·10⁻³, <i>a</i><sub>3</sub> = −46,170461·10⁻⁶, <i>a</i><sub>4</sub> = 105,56302·10⁻⁹, <i>a</i><sub>5</sub> = −280,54253·10⁻¹² – Ausgleich von Messwerten nach Kell (1975)',
   '<i>b</i> = 16,879850·10⁻³ 1/°C']};
 const PLATO_LEGEND=['<i>P</i> Stammwürze in °Plato (g Extrakt je 100 g Würze)','<i>SG</i> spezifisches Gewicht (Dichte relativ zu Wasser, 20/20 °C)',
-  '<i>a</i> = 258,6 – bei dünner Würze entspricht 1 °P etwa 1/258,6 ≈ 0,0039 SG','<i>b</i> = 227,1/258,2 ≈ 0,8796 – Krümmung bei höherer Stammwürze; <i>a</i> und <i>b</i> sind an die Plato-Tabelle (Zucker in Wasser) angepasst'];
+  '<i>a</i> = 258,6 – bei dünner Würze entspricht 1 °P etwa 1/258,6 ≈ 0,0039 SG','<i>b</i> = 227,1/258,2 ≈ 0,8796 – Krümmung bei höherer Stammwürze',
+  'Näherung der Plato-Tabelle (Zuckerlösungen) für die Richtung °P → SG'];
+const ASBC_LEGEND=['Polynom der ASBC (American Society of Brewing Chemists), angepasst an die Plato-Tabelle (Zuckerlösungen, 20/20 °C)',
+  '<i>c</i><sub>0</sub> = −616,868, <i>c</i><sub>1</sub> = 1111,14, <i>c</i><sub>2</sub> = −630,272, <i>c</i><sub>3</sub> = 135,997 (Ergebnis in °P)'];
 const HENRY_LEGEND=['<i>c</i> gelöstes CO₂ in g/L, <i>p</i> absoluter CO₂-Druck in bar, <i>T</i> Temperatur in °C',
   '<i>H</i> Löslichkeit von CO₂ in Bier (Henry-Koeffizient); <i>H</i><sub>20</sub> = 1,6366 g/(L·bar) bei 20 °C',
   '<i>B</i> = 2617,25 K – Temperaturabhängigkeit (Lösungswärme von CO₂ ÷ Gaskonstante, van-’t-Hoff-Gleichung): kaltes Bier löst mehr CO₂',
@@ -298,8 +303,8 @@ function gravityMath(unit){
   parts.push({h:no()+'Korrigiertes spezifisches Gewicht',p:'Die Spindel misst die Dichte relativ zu Wasser bei ihrer Eichtemperatur. Würze dehnt sich beim Erwärmen etwa wie Wasser aus: Ist die Probe wärmer, ist sie weniger dicht und die Spindel zeigt zu wenig an. Die Ausdehnung des Spindelglases ist vernachlässigt.',
     m:'SG_{korr}=SG_{gem}\\cdot\\frac{\\rho_W(T_e)}{\\rho_W(T_m)}',
     legend:['<i>SG<sub>gem</sub></i> abgelesener Wert, <i>SG<sub>korr</sub></i> Wert bei Eichtemperatur','<i>T<sub>m</sub></i> Temperatur der Probe, <i>T<sub>e</sub></i> Eichtemperatur der Spindel','<i>ρ<sub>W</sub></i> Dichte von Wasser (siehe unten)']});
-  parts.push({h:no()+'Spezifisches Gewicht → °Plato',p:unit==='P'?'Die Formel aus ① nach <i>P</i> umgestellt:':'Aus <i>SG</i> = 1 + <i>P</i>/(<i>a</i> − <i>b</i>·<i>P</i>) nach <i>P</i> umgestellt:',
-    m:'P_{korr}=\\frac{a\\cdot(SG_{korr}-1)}{1+b\\cdot(SG_{korr}-1)}',legend:unit==='P'?null:PLATO_LEGEND});
+  parts.push({h:no()+'Spezifisches Gewicht → °Plato',
+    m:'P_{korr}=c_0+c_1\\cdot SG_{korr}+c_2\\cdot SG_{korr}^{2}+c_3\\cdot SG_{korr}^{3}',legend:ASBC_LEGEND});
   parts.push(KELL);
   return parts;
 }
