@@ -9,6 +9,7 @@ Die Startseite (`index.html`) ist eine Übersicht aller Seiten mit kurzer Doku.
 | Seite | Ordner | Beschreibung |
 |---|---|---|
 | [Scan-Copy-SecurPharm](https://phanlipo.github.io/Scan-Copy-SecurPharm/) | `Scan-Copy-SecurPharm/` | securPharm-DataMatrix scannen, Werte kopieren, Verlauf |
+| [Würfel & Münze](https://phanlipo.github.io/Wuerfel-Muenze/) | `Wuerfel-Muenze/` | Würfel und Münzwurf für Spiele, konfigurierbar, Einstellungen im localStorage |
 
 ## Neue Seite hinzufügen
 
