@@ -97,10 +97,28 @@ test('history shows, opens and deletes transcripts', async ({ page }) => {
   await expect(page.locator('#histCount')).toHaveText('0');
 });
 
-test('model list shows the download size for this device', async ({ page }) => {
+test('model list shows the download size for the chosen device', async ({ page }) => {
   await page.goto(URL_);
-  const gpu = await page.evaluate(async () => !!(navigator.gpu && await navigator.gpu.requestAdapter()));
+  // Use the page's own WebGPU detection (adapter availability can differ between calls)
+  await expect(page.locator('#device')).toHaveAttribute('data-gpu', /yes|no/);
+  const gpu = (await page.locator('#device').getAttribute('data-gpu')) === 'yes';
   const base = page.locator('#model option[value="onnx-community/whisper-base"]');
+  const small = page.locator('#model option[value="onnx-community/whisper-small"]');
+  // Automatisch: base on the graphics card if available, small on the processor
   await expect(base).toHaveText(gpu ? 'Standard – base (ca. 200 MB)' : 'Standard – base (ca. 75 MB)');
-  await expect(page.locator('#model option[value="onnx-community/whisper-small"]')).toHaveText('Genauer – small (ca. 240 MB, langsamer)');
+  await expect(small).toHaveText('Genauer – small (ca. 240 MB, langsamer)');
+  // Prozessor: smallest downloads, and the choice is remembered
+  await page.selectOption('#device', 'cpu');
+  await expect(base).toHaveText('Standard – base (ca. 75 MB)');
+  await page.reload();
+  await expect(page.locator('#device')).toHaveAttribute('data-gpu', gpu ? 'yes' : 'no');
+  await expect(page.locator('#device')).toHaveValue('cpu');
+  // Grafikkarte: only offered when WebGPU exists
+  const gpuOption = page.locator('#device option[value="gpu"]');
+  if (gpu) {
+    await page.selectOption('#device', 'gpu');
+    await expect(small).toHaveText('Genauer – small (ca. 560 MB, langsamer)');
+  } else {
+    expect(await gpuOption.evaluate(o => o.disabled && o.hidden)).toBe(true);
+  }
 });

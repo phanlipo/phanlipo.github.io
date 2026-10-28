@@ -16,7 +16,7 @@
 <meta name="tool:share-target" content="audio/*, audio/ogg, audio/opus, .opus, .ogg, .oga, .m4a, .mp3, .wav, .webm">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-JWwG9I3lWHbN/VzM5nhUNWUiMrtkwJY4Nzwb+Mb5OtU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-NyM/JbO/s+R/DI/36sgdM7SfOl+qcIs3uU+mEBPEW/g='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -93,6 +93,13 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
         <option value="">Automatisch erkennen</option>
       </select>
     </label>
+    <label class="field"><span>Rechnen mit</span>
+      <select id="device">
+        <option value="auto" selected>Automatisch (empfohlen)</option>
+        <option value="gpu">Grafikkarte – schneller, größerer Download</option>
+        <option value="cpu">Prozessor – kleinerer Download</option>
+      </select>
+    </label>
     <button type="button" class="btn primary big" id="btnRun" disabled>Transkribieren</button>
     <div class="progress" id="progressBox" hidden>
       <progress id="progress" max="100"></progress>
@@ -157,7 +164,7 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
   <ul>
     <li>Beim ersten Transkribieren lädt der Browser das gewählte Modell einmalig von <strong>Hugging Face</strong> (dabei wird kein Audio übertragen). Danach liegt es im Browser und funktioniert auch offline.</li>
     <li><strong>base</strong> ist schnell und für deutsche Sprachnachrichten meist gut; <strong>small</strong> ist genauer, aber groß und auf dem Handy deutlich langsamer.</li>
-    <li>Mit Grafikkarten-Unterstützung (WebGPU) geht es deutlich schneller; dafür ist der einmalige Download von <strong>base</strong> größer (ca. 200 statt 75 MB). Die Auswahl zeigt die Größe für dieses Gerät. <strong>small</strong> rechnet immer mit dem Prozessor, damit der Download nicht über 500 MB wächst.</li>
+    <li>Mit Grafikkarten-Unterstützung (WebGPU) geht es deutlich schneller; dafür ist der einmalige Download von <strong>base</strong> größer (ca. 200 statt 75 MB). Die Auswahl zeigt die Größe für dieses Gerät. Bei „Rechnen mit: Automatisch“ nutzt <strong>small</strong> den Prozessor, damit der Download nicht auf über 500 MB wächst; mit „Grafikkarte“ lässt sich das erzwingen.</li>
     <li>„Heruntergeladene Modelle“ zeigt den belegten Speicher und löscht die Modelle bei Bedarf.</li>
   </ul>
   <h3>Tipps</h3>
@@ -173,7 +180,7 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
   <p>Spracherkennung im Browser mit Whisper · Audio bleibt auf dem Gerät</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
-  <p class="footer-version">Version 4fed29fcd602</p>
+  <p class="footer-version">Version 88f74229a8d0</p>
   <!-- footer:end -->
 </footer>
 
@@ -187,10 +194,11 @@ const LS_SET = 'voice-transcriber.settings.v1', LS_HIST = 'voice-transcriber.his
 const MODEL_CACHE = 'transformers-cache';
 // Download size per model and device (sum of the ONNX files transformers.js loads):
 // WebGPU: fp32 encoder + q4 decoder; processor (WASM): q8 encoder + q8 decoder.
-// small on WebGPU would be ~560 MB – too much for phones, so it always uses the processor variant.
+// "Automatisch": base uses the graphics card if available; small uses the processor, because its
+// WebGPU variant is ~560 MB – too much for phones unless chosen explicitly.
 const MODELS = {
-  'onnx-community/whisper-base': { label: 'Standard – base', gpu: true, mbGPU: 200, mbCPU: 75 },
-  'onnx-community/whisper-small': { label: 'Genauer – small', gpu: false, mbCPU: 240, note: 'langsamer' },
+  'onnx-community/whisper-base': { label: 'Standard – base', autoGPU: true, mbGPU: 200, mbCPU: 75 },
+  'onnx-community/whisper-small': { label: 'Genauer – small', autoGPU: false, mbGPU: 560, mbCPU: 240, note: 'langsamer' },
 };
 let hasGPU = false;
 
@@ -198,10 +206,11 @@ let audio = null;        // { name, samples: Float32Array (16 kHz mono), duratio
 let worker = null, runId = 0, busy = false, timer = null, wakeLock = null;
 
 /* ---------- Settings ---------- */
-const settings = Object.assign({ model: 'onnx-community/whisper-base', language: 'german' }, load(LS_SET, {}));
+const settings = Object.assign({ model: 'onnx-community/whisper-base', language: 'german', device: 'auto' }, load(LS_SET, {}));
 if ([...$('model').options].some(o => o.value === settings.model)) $('model').value = settings.model;
 if ([...$('language').options].some(o => o.value === settings.language)) $('language').value = settings.language;
-for (const id of ['model', 'language']) $(id).addEventListener('change', () => { settings[id] = $(id).value; save(LS_SET, settings); });
+if ([...$('device').options].some(o => o.value === settings.device)) $('device').value = settings.device;
+for (const id of ['model', 'language', 'device']) $(id).addEventListener('change', () => { settings[id] = $(id).value; save(LS_SET, settings); if (id === 'device') labelModels(false); });
 
 const status = (text, kind) => { const s = $('status'); s.textContent = text; s.className = 'status' + (kind ? ' ' + kind : ''); };
 const mmss = s => { s = Math.round(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
@@ -340,7 +349,7 @@ $('btnRun').addEventListener('click', async () => {
   runId++;
   // Copy: the worker gets its own buffer, the page keeps the audio for another run
   const samples = audio.samples.slice();
-  getWorker().postMessage({ type: 'transcribe', id: runId, audio: samples, model: $('model').value, language: $('language').value, allowGPU: MODELS[$('model').value].gpu }, [samples.buffer]);
+  getWorker().postMessage({ type: 'transcribe', id: runId, audio: samples, model: $('model').value, language: $('language').value, allowGPU: useGPU($('model').value) }, [samples.buffer]);
 });
 
 const modelLabel = () => $('model').selectedOptions[0].textContent.split(' (')[0];
@@ -413,11 +422,23 @@ $('btnClearHist').addEventListener('click', () => { if (hist.length && confirm('
 renderHist();
 
 // Show the real download size for this device
-async function labelModels() {
-  try { hasGPU = !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch (_) { hasGPU = false; }
+// Graphics card (WebGPU) or processor for a model, according to the "Rechnen mit" choice
+function useGPU(model) {
+  const d = $('device').value;
+  return hasGPU && (d === 'gpu' || (d === 'auto' && MODELS[model].autoGPU));
+}
+async function labelModels(detect = true) {
+  if (detect) {
+    try { hasGPU = !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch (_) { hasGPU = false; }
+    // Without WebGPU only the processor is available
+    const gpuOpt = $('device').querySelector('option[value="gpu"]');
+    gpuOpt.hidden = gpuOpt.disabled = !hasGPU;
+    if (!hasGPU && $('device').value === 'gpu') $('device').value = 'auto';
+    $('device').dataset.gpu = hasGPU ? 'yes' : 'no';
+  }
   for (const o of $('model').options) {
     const m = MODELS[o.value];
-    const mb = m.gpu && hasGPU ? m.mbGPU : m.mbCPU;
+    const mb = useGPU(o.value) ? m.mbGPU : m.mbCPU;
     o.textContent = `${m.label} (ca. ${mb} MB${m.note ? ', ' + m.note : ''})`;
     o.dataset.mb = mb;
   }

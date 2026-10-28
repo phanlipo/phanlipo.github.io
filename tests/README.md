@@ -15,6 +15,8 @@ npx playwright test -g "offline"     # nur Tests, deren Name passt
 
 Ein kleiner Webserver (`tests/server.mjs`) startet automatisch und liefert das Repository wie GitHub Pages aus.
 
+Passt der installierte Browser nicht zur Playwright-Version (z. B. in vorkonfigurierten Umgebungen), lässt sich ein vorhandener Chromium angeben: `PW_CHROMIUM_PATH=/pfad/zu/chrome-headless-shell npm test`. Die GitHub Action braucht das nicht.
+
 ## Aufbau
 
 | Datei | Prüft |
