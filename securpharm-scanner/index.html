@@ -10,8 +10,14 @@
 <meta name="tool:order" content="10">
 <meta name="tool:icon" content="scan">
 <meta name="tool:color" content="#0b5cad">
+<meta name="tool:short-name" content="SecurPharm">
+<!-- head:start -->
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="SecurPharm">
+<meta name="theme-color" content="#0b5cad">
+<!-- head:end -->
 <link rel="stylesheet" href="../assets/base.css">
 <style>
 body{font-size:15px;line-height:1.45}
@@ -234,7 +240,7 @@ td .chip.copied{background:var(--ok-bg);border-color:var(--ok)}
     <li>Hand-Scanner auf deutsches Tastaturlayout einstellen; das Trennzeichen (GS) wird automatisch erkannt, ein eigenes Ersatzzeichen lässt sich in den Scanner-Einstellungen eintragen.</li>
     <li>Laptop-Webcams stellen oft nicht scharf auf kurze Distanz – dann Abstand vergrößern, Zoom nutzen oder ein Handyfoto per Drag &amp; Drop verwenden.</li>
     <li>Bei Problemen hilft der Bereich „Technik-Diagnose“ in der App.</li>
-    <li>Die Decoder-Bibliotheken werden von <code>cdn.jsdelivr.net</code> geladen; der Hand-Scanner funktioniert auch ohne.</li>
+    <li>Die Decoder-Bibliotheken liegen lokal bei der Seite – Kamera- und Bild-Scan funktionieren auch offline, wenn die App installiert ist. Der Hand-Scanner braucht sie gar nicht.</li>
   </ul>
   <p class="note">Die App liest den Code nur aus. Sie verifiziert oder bucht nichts im securPharm-System aus.</p>
 </details>
@@ -246,8 +252,8 @@ td .chip.copied{background:var(--ok-bg);border-color:var(--ok)}
 </footer>
 
 <script src="../assets/common.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js" crossorigin="anonymous"></script>
+<script src="../assets/vendor/zxing-wasm/iife/reader/index.js"></script>
+<script src="../assets/vendor/zxing-library/index.min.js"></script>
 <script>
 (function(){
 'use strict';
@@ -518,7 +524,7 @@ function saveSet(){localStorage.setItem(LS_SET,JSON.stringify({gs:$('gsCustom').
 let detector=null,engineName='–',wasmOk=null;
 (async()=>{try{if('BarcodeDetector' in window){const f=await window.BarcodeDetector.getSupportedFormats();if(f.includes('data_matrix'))detector=new window.BarcodeDetector({formats:['data_matrix','qr_code']});}}catch(_){}})();
 // warm up the WASM decoder so the first frame is not lost on download
-(function(){if(!window.ZXingWASM)return;try{const r=window.ZXingWASM.prepareZXingModule&&window.ZXingWASM.prepareZXingModule({fireImmediately:true});if(r&&r.then)r.then(()=>{wasmOk=true;},e=>{wasmOk=false;console.warn('zxing-wasm',e);});}catch(e){console.warn(e);}})();
+(function(){if(!window.ZXingWASM)return;try{const r=window.ZXingWASM.prepareZXingModule&&window.ZXingWASM.prepareZXingModule({fireImmediately:true,overrides:{locateFile:(path,prefix)=>path.endsWith('.wasm')?new URL('../assets/vendor/zxing-wasm/reader/'+path,location.href).href:prefix+path}});if(r&&r.then)r.then(()=>{wasmOk=true;},e=>{wasmOk=false;console.warn('zxing-wasm',e);});}catch(e){console.warn(e);}})();
 const WASM_OPTS={formats:['DataMatrix','QRCode'],tryHarder:true,tryRotate:true,tryInvert:true,tryDownscale:true,maxNumberOfSymbols:1};
 async function wasmDecode(imageData){
   if(!window.ZXingWASM||wasmOk===false)return null;

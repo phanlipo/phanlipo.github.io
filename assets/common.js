@@ -61,5 +61,20 @@ window.Tools = (function () {
     return t === '' ? NaN : Number(t);
   }
 
+  /* ---------- PWA: offline cache + automatic updates ----------
+     Pages with <link rel="manifest"> register their generated sw.js (see scripts/build.mjs).
+     A new version downloads in the background; the hint appears once it has taken over. */
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator) || !document.querySelector('link[rel="manifest"]')) return;
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController) toast('Update geladen – aktiv ab dem nächsten Öffnen', 3500);
+    });
+    navigator.serviceWorker.register('sw.js', { scope: './' })
+      .catch(e => console.warn('Service Worker nicht registriert:', e));
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', registerServiceWorker);
+  else registerServiceWorker();
+
   return { $, load, save, remove, toast, esc, copyText, fmt, parseNum };
 })();
