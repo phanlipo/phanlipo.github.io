@@ -30,7 +30,7 @@ robots.txt            erlaubt Crawlen – damit Suchmaschinen das noindex jeder 
 ## Neue Seite
 
 1. `template/` nach `<tool-name>/` kopieren.
-2. `<title>`, `<meta name="description">`, `tool:tags` (Filter-Kategorien der Startseite; die erste ist der Bereich: `Alltag`, `Arbeit` oder `Freizeit`, danach 1–2 Themen wie `Rechner`, `Kamera`, `KI`), `tool:order`, `tool:short-name` (Name unter dem Home-Bildschirm-Icon, max. ca. 12 Zeichen) und `tool:storage` (Präfix der Speicher-Schlüssel, siehe „Daten sichern“) setzen. Aus diesen Angaben entstehen Karte, README-Eintrag und App-Manifest.
+2. `<title>`, `<meta name="description">`, `tool:tags` (Filter-Kategorien der Startseite; die erste ist der Bereich: `Alltag`, `Arbeit` oder `Freizeit`, danach 1–2 Themen wie `Rechner`, `Spiele`, `KI`), optional `tool:features` (zweite Filterreihe „Funktion“, nur Werte aus `FEATURES` in `scripts/build.mjs`, z. B. `Kamera`, `Verlauf`; was alle Apps können – offline, installierbar, lokal speichern – steht fest auf der Startseite und gehört nicht hinein), `tool:order`, `tool:short-name` (Name unter dem Home-Bildschirm-Icon, max. ca. 12 Zeichen) und `tool:storage` (Präfix der Speicher-Schlüssel, siehe „Daten sichern“) setzen. Aus diesen Angaben entstehen Karte, README-Eintrag und App-Manifest.
 3. Icon wählen: `tool:icon` = Name eines [Tabler Icons](https://tabler.io/icons) (Outline), `tool:color` = Hintergrund- und Theme-Farbe. Dann `node scripts/build-icons.mjs <tool-name>` ausführen.
 4. `node scripts/build.mjs` ausführen (macht auch der Git-Hook). Generierte Bereiche zwischen `<!-- tools/footer/head/data:start -->` und `…:end -->` sowie `manifest.webmanifest`, `sw.js` **nie von Hand** bearbeiten.
 

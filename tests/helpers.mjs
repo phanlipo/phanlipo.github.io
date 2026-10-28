@@ -51,6 +51,7 @@ export function tools() {
       folder: p.folder,
       title: p.html.match(/<title>([\s\S]*?)<\/title>/i)[1].replace(/&amp;/g, '&'),
       tags: (meta(p.html, 'tool:tags') || '').split(',').map(t => t.trim()).filter(Boolean),
+      features: (meta(p.html, 'tool:features') || '').split(',').map(t => t.trim()).filter(Boolean),
     }));
 }
 
