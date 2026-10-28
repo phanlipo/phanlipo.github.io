@@ -16,7 +16,7 @@
 <meta name="tool:share-target" content="audio/*, audio/ogg, audio/opus, .opus, .ogg, .oga, .m4a, .mp3, .wav, .webm">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-LGN3ARoHgRcCi4wg77R8WbSCcrpgupOBjaYrNS+5pEQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-JWwG9I3lWHbN/VzM5nhUNWUiMrtkwJY4Nzwb+Mb5OtU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -82,8 +82,8 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
     <h2 id="h-settings">2 · Transkribieren</h2>
     <label class="field"><span>Modell</span>
       <select id="model">
-        <option value="onnx-community/whisper-base" selected>Standard – base (80 MB)</option>
-        <option value="onnx-community/whisper-small">Genauer – small (250 MB, langsam)</option>
+        <option value="onnx-community/whisper-base" selected>Standard – base</option>
+        <option value="onnx-community/whisper-small">Genauer – small</option>
       </select>
     </label>
     <label class="field"><span>Sprache</span>
@@ -157,7 +157,7 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
   <ul>
     <li>Beim ersten Transkribieren lädt der Browser das gewählte Modell einmalig von <strong>Hugging Face</strong> (dabei wird kein Audio übertragen). Danach liegt es im Browser und funktioniert auch offline.</li>
     <li><strong>base</strong> ist schnell und für deutsche Sprachnachrichten meist gut; <strong>small</strong> ist genauer, aber groß und auf dem Handy deutlich langsamer.</li>
-    <li>Mit Grafikkarten-Unterstützung (WebGPU) geht es deutlich schneller; sonst rechnet der Prozessor.</li>
+    <li>Mit Grafikkarten-Unterstützung (WebGPU) geht es deutlich schneller; dafür ist der einmalige Download von <strong>base</strong> größer (ca. 200 statt 75 MB). Die Auswahl zeigt die Größe für dieses Gerät. <strong>small</strong> rechnet immer mit dem Prozessor, damit der Download nicht über 500 MB wächst.</li>
     <li>„Heruntergeladene Modelle“ zeigt den belegten Speicher und löscht die Modelle bei Bedarf.</li>
   </ul>
   <h3>Tipps</h3>
@@ -173,7 +173,7 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
   <p>Spracherkennung im Browser mit Whisper · Audio bleibt auf dem Gerät</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
-  <p class="footer-version">Version 27b268165f4b</p>
+  <p class="footer-version">Version 4fed29fcd602</p>
   <!-- footer:end -->
 </footer>
 
@@ -185,6 +185,14 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
 const { $, load, save, toast, copyText, fmt, takeSharedFile } = Tools;
 const LS_SET = 'voice-transcriber.settings.v1', LS_HIST = 'voice-transcriber.history.v1', MAX_HIST = 50;
 const MODEL_CACHE = 'transformers-cache';
+// Download size per model and device (sum of the ONNX files transformers.js loads):
+// WebGPU: fp32 encoder + q4 decoder; processor (WASM): q8 encoder + q8 decoder.
+// small on WebGPU would be ~560 MB – too much for phones, so it always uses the processor variant.
+const MODELS = {
+  'onnx-community/whisper-base': { label: 'Standard – base', gpu: true, mbGPU: 200, mbCPU: 75 },
+  'onnx-community/whisper-small': { label: 'Genauer – small', gpu: false, mbCPU: 240, note: 'langsamer' },
+};
+let hasGPU = false;
 
 let audio = null;        // { name, samples: Float32Array (16 kHz mono), duration, decoder }
 let worker = null, runId = 0, busy = false, timer = null, wakeLock = null;
@@ -332,7 +340,7 @@ $('btnRun').addEventListener('click', async () => {
   runId++;
   // Copy: the worker gets its own buffer, the page keeps the audio for another run
   const samples = audio.samples.slice();
-  getWorker().postMessage({ type: 'transcribe', id: runId, audio: samples, model: $('model').value, language: $('language').value }, [samples.buffer]);
+  getWorker().postMessage({ type: 'transcribe', id: runId, audio: samples, model: $('model').value, language: $('language').value, allowGPU: MODELS[$('model').value].gpu }, [samples.buffer]);
 });
 
 const modelLabel = () => $('model').selectedOptions[0].textContent.split(' (')[0];
@@ -403,6 +411,18 @@ function renderHist() {
 }
 $('btnClearHist').addEventListener('click', () => { if (hist.length && confirm('Verlauf löschen?')) { hist = []; save(LS_HIST, hist); renderHist(); } });
 renderHist();
+
+// Show the real download size for this device
+async function labelModels() {
+  try { hasGPU = !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch (_) { hasGPU = false; }
+  for (const o of $('model').options) {
+    const m = MODELS[o.value];
+    const mb = m.gpu && hasGPU ? m.mbGPU : m.mbCPU;
+    o.textContent = `${m.label} (ca. ${mb} MB${m.note ? ', ' + m.note : ''})`;
+    o.dataset.mb = mb;
+  }
+}
+labelModels();
 
 // File shared from another app (Android share sheet → installed app)
 takeSharedFile().then(f => { if (f) { toast('Geteilte Datei übernommen'); takeFile(f); } });

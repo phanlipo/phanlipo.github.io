@@ -96,3 +96,11 @@ test('history shows, opens and deletes transcripts', async ({ page }) => {
   await page.locator('#hist .btn.danger').click();
   await expect(page.locator('#histCount')).toHaveText('0');
 });
+
+test('model list shows the download size for this device', async ({ page }) => {
+  await page.goto(URL_);
+  const gpu = await page.evaluate(async () => !!(navigator.gpu && await navigator.gpu.requestAdapter()));
+  const base = page.locator('#model option[value="onnx-community/whisper-base"]');
+  await expect(base).toHaveText(gpu ? 'Standard – base (ca. 200 MB)' : 'Standard – base (ca. 75 MB)');
+  await expect(page.locator('#model option[value="onnx-community/whisper-small"]')).toHaveText('Genauer – small (ca. 240 MB, langsamer)');
+});
