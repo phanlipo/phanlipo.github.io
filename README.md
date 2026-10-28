@@ -10,6 +10,7 @@ Die Startseite (`index.html`) ist eine Übersicht aller Seiten mit kurzer Doku.
 |---|---|---|
 | [Scan-Copy-SecurPharm](https://phanlipo.github.io/Scan-Copy-SecurPharm/) | `Scan-Copy-SecurPharm/` | securPharm-DataMatrix scannen, Werte kopieren, Verlauf |
 | [Würfel & Münze](https://phanlipo.github.io/Wuerfel-Muenze/) | `Wuerfel-Muenze/` | Würfel und Münzwurf für Spiele, konfigurierbar, Einstellungen im localStorage |
+| [Brau-Rechner](https://phanlipo.github.io/Brau-Rechner/) | `Brau-Rechner/` | Topfvolumen, Stammwürze-Temperaturkorrektur, Zucker für Nachgärung – mit Formeln |
 
 ## Neue Seite hinzufügen
 
