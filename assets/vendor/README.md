@@ -14,6 +14,8 @@ Jeder Ordner enthält die Original-Lizenz (`LICENSE`) und die Herkunft (`SOURCE.
 | [transformers](transformers/SOURCE.md) | `@huggingface/transformers` | 4.3.2 | [Apache-2.0](transformers/LICENSE) | Whisper-Spracherkennung im Browser (Sprache zu Text) |
 | [onnxruntime-web](onnxruntime-web/SOURCE.md) | `onnxruntime-web` | 1.31.0-dev.20260914-8d85527a0 | [MIT](onnxruntime-web/LICENSE) | Rechen-Engine (WebAssembly/WebGPU) für transformers.js – Version muss zu transformers passen |
 | [ogg-opus-decoder](ogg-opus-decoder/SOURCE.md) | `ogg-opus-decoder` | 1.7.5 | [MIT](ogg-opus-decoder/LICENSE) | Ersatz-Decoder für Ogg-Opus-Sprachnachrichten (z. B. ältere iPhones) |
+| [pdfjs](pdfjs/SOURCE.md) | `pdfjs-dist` | 6.4.299 | [Apache-2.0](pdfjs/LICENSE) | PDF lesen (Text mit Position und Schrift) in PDF zu Word – Legacy-Build für ältere Handys |
+| [docx](docx/SOURCE.md) | `docx` | 9.15.0 | [MIT](docx/LICENSE) | Word-Datei (.docx) erzeugen in PDF zu Word |
 
 ## Aktualisieren
 
