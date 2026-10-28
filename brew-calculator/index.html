@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Brau-Rechner</title>
+<meta name="description" content="Rechner fürs Hobbybrauen: Volumen im zylindrischen Topf, Temperaturkorrektur der Stammwürze (Spindel) und Zuckermenge für die Nachgärung – jeweils mit Formeln und Rechenweg.">
+<meta name="tool:tags" content="Bierbrauen, Formeln, Handy, localStorage">
+<meta name="tool:order" content="30">
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css" crossorigin="anonymous">
+<style>
+:root{--accent:#a35a00;--accent-text:#ffffff;--page-width:920px}
+@media (prefers-color-scheme: dark){:root{--accent:#f0b35a;--accent-text:#1b1306}}
+nav.calcs{position:sticky;inset-block-start:0;z-index:5;background:var(--surface);border-block-end:1px solid var(--border);display:flex;gap:6px;padding:8px 12px;overflow-x:auto}
+nav.calcs a{flex:none;text-decoration:none;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:600;white-space:nowrap}
+nav.calcs a:hover{border-color:var(--accent)}
+main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
+.card{scroll-margin-top:60px}
+.card h2{font-size:18px;margin:0 0 4px;display:block}
+.card .intro{color:var(--muted);font-size:14px;margin:0 0 14px}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field>span{font-size:13px;color:var(--muted);font-weight:600}
+.inp{display:flex;align-items:stretch;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)}
+.inp:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+.inp input,.inp select{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font:inherit;font-size:17px;padding:0 10px;min-height:46px;outline:none}
+.inp .unit{display:flex;align-items:center;padding-inline:10px;background:var(--surface-2);color:var(--muted);font-size:14px;border-inline-start:1px solid var(--border);white-space:nowrap}
+select{appearance:auto}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{min-height:44px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit;font-size:14px;padding-inline:6px}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--border);background:var(--surface-2);color:var(--text);min-height:36px;padding-inline:10px;border-radius:999px;cursor:pointer;font:inherit;font-size:13px}
+.chip:hover{border-color:var(--accent)}
+.span-all{grid-column:1/-1}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-block:16px 4px}
+.res{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.res .k{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.res .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.25}
+.res .v small{font-size:14px;font-weight:600;color:var(--muted)}
+.res.main{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.msg{margin-block-start:10px;padding:8px 12px;border-radius:8px;font-size:14px}
+.msg.warn{background:var(--warn-bg);color:var(--warn)}
+.msg.err{background:var(--err-bg);color:var(--err)}
+.msg.ok{background:var(--ok-bg);color:var(--ok)}
+details.math{margin-block-start:12px;border-block-start:1px solid var(--border);padding-block-start:8px}
+details.math summary{cursor:pointer;font-weight:600;min-height:36px;display:flex;align-items:center}
+.f{overflow-x:auto;overflow-y:hidden;padding:4px 2px;-webkit-overflow-scrolling:touch}
+.f .katex{font-size:1.08em}
+.f.fallback{font-family:var(--mono);font-size:13px;white-space:pre-wrap;color:var(--muted)}
+.mathgrid h3{font-size:14px;margin:14px 0 4px;color:var(--muted)}
+.mathgrid p{margin:4px 0;font-size:14px;color:var(--muted)}
+.legend{font-size:13px;color:var(--muted);margin:6px 0 0;padding-inline-start:18px}
+.legend li{margin-block:2px}
+@media (max-width:500px){.f .katex{font-size:.95em}.card{padding:14px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Brau-Rechner</h1>
+  <p class="sub">Kleine Rechner fürs Hobbybrauen – mit Formeln und Rechenweg.</p>
+</header>
+<nav class="calcs" aria-label="Rechner">
+  <a href="#topf">1 · Topfvolumen</a>
+  <a href="#stammwuerze">2 · Stammwürze-Korrektur</a>
+  <a href="#zucker">3 · Zucker für Nachgärung</a>
+</nav>
+
+<main>
+<!-- ===================== 1. Topfvolumen ===================== -->
+<section class="card" id="topf">
+  <h2>1 · Volumen im zylindrischen Topf</h2>
+  <p class="intro">Füllmenge aus Innendurchmesser und Füllhöhe – oder umgekehrt die Füllhöhe für eine Zielmenge.</p>
+  <div class="form">
+    <div class="field span-all"><span>Berechnen</span>
+      <div class="seg" data-key="v.mode">
+        <button type="button" data-v="height">Volumen aus Füllhöhe</button>
+        <button type="button" data-v="gap">Volumen aus Abstand zum Rand</button>
+        <button type="button" data-v="target">Füllhöhe für Zielvolumen</button>
+      </div>
+    </div>
+    <label class="field"><span>Innendurchmesser d</span><div class="inp"><input data-key="v.d" inputmode="decimal"><span class="unit">cm</span></div></label>
+    <label class="field" data-show="v.mode=height"><span>Füllhöhe h</span><div class="inp"><input data-key="v.h" inputmode="decimal"><span class="unit">cm</span></div></label>
+    <label class="field" data-show="v.mode=gap"><span>Innenhöhe Topf H</span><div class="inp"><input data-key="v.H" inputmode="decimal"><span class="unit">cm</span></div></label>
+    <label class="field" data-show="v.mode=gap"><span>Abstand Rand → Flüssigkeit a</span><div class="inp"><input data-key="v.a" inputmode="decimal"><span class="unit">cm</span></div></label>
+    <label class="field" data-show="v.mode=target"><span>Zielvolumen V</span><div class="inp"><input data-key="v.V" inputmode="decimal"><span class="unit">L</span></div></label>
+    <label class="field"><span>Temperatur der Flüssigkeit (optional)</span><div class="inp"><input data-key="v.T" inputmode="decimal" placeholder="z. B. 98"><span class="unit">°C</span></div></label>
+  </div>
+  <div class="results" id="vRes"></div>
+  <div id="vMsg"></div>
+  <details class="math">
+    <summary>Formeln &amp; Rechenweg</summary>
+    <div class="mathgrid" id="vMath"></div>
+  </details>
+</section>
+
+<!-- ===================== 2. Stammwürze ===================== -->
+<section class="card" id="stammwuerze">
+  <h2>2 · Stammwürze-Korrektur nach Temperatur</h2>
+  <p class="intro">Eine Bierspindel (Saccharometer) ist auf eine Temperatur geeicht, meist 20 °C. Bei wärmerer oder kälterer Würze zeigt sie falsch an – hier wird der Messwert auf die Eichtemperatur umgerechnet. <em>Nicht für Refraktometer</em> (die gleichen die Temperatur meist selbst aus).</p>
+  <div class="form">
+    <div class="field"><span>Einheit der Messung</span>
+      <div class="seg" data-key="s.unit">
+        <button type="button" data-v="P">°Plato</button>
+        <button type="button" data-v="SG">SG (1,0xx)</button>
+      </div>
+    </div>
+    <label class="field"><span>Gemessener Wert</span><div class="inp"><input data-key="s.x" inputmode="decimal"><span class="unit" id="sUnit">°P</span></div></label>
+    <label class="field"><span>Temperatur der Probe T<sub>m</sub></span><div class="inp"><input data-key="s.T" inputmode="decimal"><span class="unit">°C</span></div></label>
+    <label class="field"><span>Eichtemperatur der Spindel T<sub>e</sub></span><div class="inp"><input data-key="s.Tc" inputmode="decimal"><span class="unit">°C</span></div></label>
+  </div>
+  <div class="results" id="sRes"></div>
+  <div id="sMsg"></div>
+  <details class="math">
+    <summary>Formeln &amp; Rechenweg</summary>
+    <div class="mathgrid" id="sMath"></div>
+  </details>
+</section>
+
+<!-- ===================== 3. Zucker ===================== -->
+<section class="card" id="zucker">
+  <h2>3 · Zuckermenge für die Nachgärung (Karbonisierung)</h2>
+  <p class="intro">Wie viel Zucker beim Abfüllen zugeben, damit das Bier den gewünschten CO₂-Gehalt erreicht. Das bereits gelöste CO₂ im Jungbier wird abgezogen.</p>
+  <div class="form">
+    <label class="field"><span>Biermenge V</span><div class="inp"><input data-key="z.V" inputmode="decimal"><span class="unit">L</span></div></label>
+    <label class="field"><span>Höchste Temperatur seit Gärende T</span><div class="inp"><input data-key="z.T" inputmode="decimal"><span class="unit">°C</span></div></label>
+    <label class="field"><span>Ziel-CO₂</span><div class="inp"><input data-key="z.C" inputmode="decimal"><span class="unit">g/L</span></div></label>
+    <label class="field"><span>Zuckerart</span><div class="inp"><select data-key="z.sugar">
+      <option value="sucrose">Haushaltszucker (Saccharose)</option>
+      <option value="glucose">Traubenzucker, wasserfrei</option>
+      <option value="dextrose">Traubenzucker-Monohydrat (Dextrose)</option>
+    </select></div></label>
+    <label class="field"><span>Flaschengröße</span><div class="inp"><input data-key="z.bottle" inputmode="decimal"><span class="unit">L</span></div></label>
+    <label class="field"><span>Lagertemperatur der Flaschen</span><div class="inp"><input data-key="z.Ts" inputmode="decimal"><span class="unit">°C</span></div></label>
+    <div class="field span-all"><span>Richtwerte CO₂ (antippen zum Übernehmen)</span>
+      <div class="chips" id="zChips"></div>
+    </div>
+  </div>
+  <div class="results" id="zRes"></div>
+  <div id="zMsg"></div>
+  <details class="math">
+    <summary>Formeln &amp; Rechenweg</summary>
+    <div class="mathgrid" id="zMath"></div>
+  </details>
+</section>
+</main>
+<details class="help card">
+  <summary>Anleitung &amp; Hinweise</summary>
+  <p>Drei Rechner fürs Hobbybrauen. Zu jedem Ergebnis werden die Formeln und der Rechenweg mit den eingesetzten Werten angezeigt. Eingaben bleiben im Browser gespeichert; Dezimalkomma und -punkt funktionieren beide.</p>
+  <h3>1 · Volumen im zylindrischen Topf</h3>
+  <ul>
+    <li>Volumen aus Innendurchmesser und Füllhöhe – oder aus Topfhöhe und Abstand vom Rand zur Flüssigkeit.</li>
+    <li>Umgekehrt: Füllhöhe für ein Zielvolumen. Zusätzlich „Liter je cm“.</li>
+    <li>Optional Temperatur: rechnet heiße Würze auf das Volumen bei 20 °C um (Wasserdichte nach Kell).</li>
+  </ul>
+  <h3>2 · Stammwürze-Korrektur nach Temperatur</h3>
+  <ul>
+    <li>Für Spindel/Saccharometer: Messwert in °Plato oder SG, Probentemperatur und Eichtemperatur (meist 20 °C).</li>
+    <li>Ergebnis: korrigierte Stammwürze in °P und SG. Nicht für Refraktometer.</li>
+  </ul>
+  <h3>3 · Zucker für die Nachgärung</h3>
+  <ul>
+    <li>Biermenge, höchste Temperatur seit Gärende und Ziel-CO₂ (g/L, Richtwerte je Bierstil antippbar).</li>
+    <li>Zuckerart: Haushaltszucker, Traubenzucker wasserfrei oder Monohydrat.</li>
+    <li>Ergebnis: Zucker gesamt, je Liter und je Flasche, dazu der zu erwartende Flaschendruck.</li>
+  </ul>
+  <p class="note">Richtwerte für den Hausgebrauch – Angaben ohne Gewähr. Bei hoher Karbonisierung druckfeste Flaschen verwenden.</p>
+</details>
+<footer>Alle Berechnungen laufen im Browser · Eingaben werden lokal gespeichert · Angaben ohne Gewähr</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js" crossorigin="anonymous"></script>
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const LS='brauRechner.inputs.v1';
+const DEF={
+  'v.mode':'height','v.d':'36','v.h':'25','v.H':'34','v.a':'9','v.V':'25','v.T':'',
+  's.unit':'P','s.x':'12','s.T':'30','s.Tc':'20',
+  'z.V':'20','z.T':'20','z.C':'5','z.sugar':'sucrose','z.bottle':'0,5','z.Ts':'8'
+};
+let S={...DEF};
+{const o=Tools.load(LS,null);if(o&&typeof o==='object')for(const k in DEF)if(typeof o[k]==='string')S[k]=o[k];}
+const save=()=>Tools.save(LS,S);
+
+/* ---------- Number helpers ---------- */
+const num=k=>Tools.parseNum(S[k]);
+const fmt=Tools.fmt;
+// LaTeX number with German decimal comma
+const t=(x,d=2)=>Number.isFinite(x)?x.toFixed(d).replace('-','-').replace('.','{,}'):'?';
+
+/* ---------- Math rendering ---------- */
+function math(el,tex,display=true){
+  const div=document.createElement('div');div.className='f';
+  if(window.katex){try{katex.render(tex,div,{displayMode:display,throwOnError:false});}catch(_){div.textContent=tex;div.classList.add('fallback');}}
+  else{div.textContent=tex;div.classList.add('fallback');}
+  el.append(div);
+}
+function block(host,parts){
+  host.textContent='';
+  parts.forEach(p=>{
+    if(p.h){const h=document.createElement('h3');h.textContent=p.h;host.append(h);}
+    if(p.p){const q=document.createElement('p');q.innerHTML=p.p;host.append(q);}
+    if(p.m)math(host,p.m);
+    if(p.legend){const ul=document.createElement('ul');ul.className='legend';ul.innerHTML=p.legend.map(x=>'<li>'+x+'</li>').join('');host.append(ul);}
+  });
+}
+function results(host,items){
+  host.innerHTML=items.map(i=>'<div class="res'+(i.main?' main':'')+'"><div class="k">'+i.k+'</div><div class="v">'+i.v+(i.u?' <small>'+i.u+'</small>':'')+'</div></div>').join('');
+}
+function msg(host,kind,text){host.innerHTML=text?'<div class="msg '+kind+'">'+text+'</div>':'';}
+
+/* ---------- Physics ---------- */
+// Density of air-free water in kg/m³ (Kell 1975), T in °C, valid 0–150 °C
+function rhoW(T){return (999.83952+16.945176*T-7.9870401e-3*T*T-46.170461e-6*T**3+105.56302e-9*T**4-280.54253e-12*T**5)/(1+16.879850e-3*T);}
+const RHO_TEX='\\begin{aligned}\\rho_W(T)&=\\frac{Z(T)}{1+16{,}879850\\cdot10^{-3}\\,T}\\\\[4pt]Z(T)&=999{,}83952+16{,}945176\\,T\\\\&\\quad-7{,}9870401\\cdot10^{-3}\\,T^2\\\\&\\quad-46{,}170461\\cdot10^{-6}\\,T^3\\\\&\\quad+105{,}56302\\cdot10^{-9}\\,T^4\\\\&\\quad-280{,}54253\\cdot10^{-12}\\,T^5\\end{aligned}';
+// °Plato <-> specific gravity (20/20)
+const sgFromP=P=>1+P/(258.6-(P/258.2)*227.1);
+const pFromSg=G=>-616.868+1111.14*G-630.272*G*G+135.997*G**3;
+// Hydrometer correction polynomial (T in °F)
+const hyd=F=>1.00130346-0.000134722124*F+0.00000204052596*F*F-0.00000000232820948*F**3;
+// Dissolved CO2 in g/L at absolute pressure p (bar), T in °C
+const co2Sat=(T,pAbs)=>10*pAbs*Math.exp(-10.73797+2617.25/(T+273.15));
+
+/* ---------- 1. Pot volume ---------- */
+function calcVolume(){
+  const mode=S['v.mode'],d=num('v.d'),T=num('v.T'),hasT=Number.isFinite(T);
+  const r=d/2,A=Math.PI*r*r;const parts=[];let res=[],warn='';
+  parts.push({h:'Grundformel',m:'V=\\pi\\cdot\\left(\\frac{d}{2}\\right)^{2}\\cdot h\\cdot\\frac{1\\,\\text{L}}{1000\\,\\text{cm}^3}',
+    legend:['<i>V</i> Volumen in Liter','<i>d</i> Innendurchmesser in cm','<i>h</i> Füllhöhe in cm (Abstand Boden → Flüssigkeitsoberfläche)']});
+  if(!(d>0)){msg($('vMsg'),'err','Bitte einen Innendurchmesser größer 0 eingeben.');results($('vRes'),[]);block($('vMath'),parts);return;}
+  let V,h;
+  if(mode==='target'){
+    V=num('v.V');if(!(V>0)){msg($('vMsg'),'err','Bitte ein Zielvolumen größer 0 eingeben.');results($('vRes'),[]);block($('vMath'),parts);return;}
+    let Vcalc=V;
+    if(hasT){Vcalc=V*rhoW(20)/rhoW(T);}
+    h=1000*Vcalc/A;
+    parts.push({h:'Umgestellt nach der Füllhöhe',m:'h=\\frac{1000\\cdot V}{\\pi\\cdot\\left(\\frac{d}{2}\\right)^{2}}'});
+    if(hasT)parts.push({h:'Volumen bei '+fmt(T,1)+' °C (Ausdehnung)',m:'\\begin{aligned}V_T&=V_{20}\\cdot\\frac{\\rho_W(20\\,°\\text{C})}{\\rho_W(T)}\\\\&='+t(V)+'\\cdot\\frac{'+t(rhoW(20),2)+'}{'+t(rhoW(T),2)+'}\\\\&='+t(Vcalc)+'\\,\\text{L}\\end{aligned}'});
+    parts.push({h:'Eingesetzt',m:'\\begin{aligned}h&=\\frac{1000\\cdot '+t(Vcalc)+'}{\\pi\\cdot\\left(\\frac{'+t(d,1)+'}{2}\\right)^{2}}\\\\&='+t(h,1)+'\\,\\text{cm}\\end{aligned}'});
+    res=[{k:'Füllhöhe',v:fmt(h,1),u:'cm',main:true},{k:'Liter je cm',v:fmt(A/1000,3),u:'L/cm'}];
+    if(hasT)res.push({k:'Volumen bei '+fmt(T,0)+' °C',v:fmt(Vcalc,2),u:'L'});
+  }else{
+    if(mode==='gap'){
+      const H=num('v.H'),a=num('v.a');h=H-a;
+      parts.push({h:'Füllhöhe aus Abstand zum Rand',m:'h=H-a='+t(H,1)+'-'+t(a,1)+'='+t(h,1)+'\\,\\text{cm}',legend:['<i>H</i> Innenhöhe des Topfs','<i>a</i> Abstand Oberkante → Flüssigkeitsoberfläche']});
+      if(!(H>0)||!(a>=0)){msg($('vMsg'),'err','Bitte Topfhöhe und Abstand eingeben.');results($('vRes'),[]);block($('vMath'),parts);return;}
+      if(h<0){msg($('vMsg'),'err','Der Abstand ist größer als die Topfhöhe.');results($('vRes'),[]);block($('vMath'),parts);return;}
+    }else h=num('v.h');
+    if(!(h>=0)){msg($('vMsg'),'err','Bitte eine Füllhöhe eingeben.');results($('vRes'),[]);block($('vMath'),parts);return;}
+    V=A*h/1000;
+    parts.push({h:'Eingesetzt',m:'\\begin{aligned}V&=\\pi\\cdot\\left(\\frac{'+t(d,1)+'}{2}\\right)^{2}\\cdot '+t(h,1)+'\\cdot\\frac{1}{1000}\\\\&='+t(V)+'\\,\\text{L}\\end{aligned}'});
+    res=[{k:'Volumen',v:fmt(V,2),u:'L',main:true},{k:'Liter je cm',v:fmt(A/1000,3),u:'L/cm'}];
+    if(hasT){
+      const V20=V*rhoW(T)/rhoW(20);
+      parts.push({h:'Umgerechnet auf 20 °C (heiße Würze dehnt sich aus)',m:'\\begin{aligned}V_{20}&=V_T\\cdot\\frac{\\rho_W(T)}{\\rho_W(20\\,°\\text{C})}\\\\&='+t(V)+'\\cdot\\frac{'+t(rhoW(T),2)+'}{'+t(rhoW(20),2)+'}\\\\&='+t(V20)+'\\,\\text{L}\\end{aligned}'});
+      res.push({k:'Volumen bei 20 °C',v:fmt(V20,2),u:'L'});
+      res.push({k:'Ausdehnung',v:fmt((V/V20-1)*100,1),u:'%'});
+    }
+    if(mode==='gap'){const Hn=num('v.H');res.push({k:'Topf voll',v:fmt(A*Hn/1000,1),u:'L'});}
+  }
+  if(hasT){
+    parts.push({h:'Dichte von Wasser (Kell-Gleichung, T in °C, ρ in kg/m³)',m:RHO_TEX,p:'Die Ausdehnung von Würze entspricht in guter Näherung der von Wasser.'});
+    if(T<0||T>100)warn='Temperatur außerhalb 0–100 °C – Ergebnis nur eingeschränkt gültig.';
+  }
+  msg($('vMsg'),'warn',warn||'');
+  if(!warn)$('vMsg').innerHTML='<div class="msg" style="color:var(--muted);padding-inline:0">Annahme: gerade Wand und flacher Boden. Gewölbte Böden oder Einbauten (Heizspirale, Läuterhexe) verringern das tatsächliche Volumen.</div>';
+  results($('vRes'),res);block($('vMath'),parts);
+}
+
+/* ---------- 2. Gravity correction ---------- */
+function calcGravity(){
+  const unit=S['s.unit'],x=num('s.x'),T=num('s.T'),Tc=num('s.Tc');
+  $('sUnit').textContent=unit==='P'?'°P':'SG';
+  const parts=[];
+  if(!Number.isFinite(x)||!Number.isFinite(T)||!Number.isFinite(Tc)){msg($('sMsg'),'err','Bitte Messwert und beide Temperaturen eingeben.');results($('sRes'),[]);block($('sMath'),parts);return;}
+  let SGm,Pm;
+  if(unit==='P'){Pm=x;SGm=sgFromP(x);}else{SGm=x;Pm=pFromSg(x);}
+  if(SGm<0.98||SGm>1.2){msg($('sMsg'),'err','Messwert unplausibel (erwartet etwa 0–40 °P bzw. 1,000–1,170).');results($('sRes'),[]);block($('sMath'),parts);return;}
+  const F=1.8*T+32,Fc=1.8*Tc+32,fm=hyd(F),fc=hyd(Fc);
+  const SGk=SGm*fm/fc,Pk=pFromSg(SGk);
+  if(unit==='P'){
+    parts.push({h:'① °Plato → spezifisches Gewicht',m:'\\begin{aligned}SG&=1+\\frac{P}{258{,}6-\\frac{P}{258{,}2}\\cdot 227{,}1}\\\\&=1+\\frac{'+t(Pm)+'}{258{,}6-\\frac{'+t(Pm)+'}{258{,}2}\\cdot 227{,}1}\\\\&='+t(SGm,4)+'\\end{aligned}'});
+  }
+  parts.push({h:(unit==='P'?'② ':'① ')+'Temperatur in °F umrechnen',m:'\\begin{aligned}T_F&=1{,}8\\cdot T+32\\\\T_{m,F}&='+t(F,1)+'\\,°\\text{F}\\\\T_{e,F}&='+t(Fc,1)+'\\,°\\text{F}\\end{aligned}'});
+  parts.push({h:(unit==='P'?'③ ':'② ')+'Korrekturfunktion (aus der Dichtekurve von Wasser)',m:'\\begin{aligned}f(T_F)&=1{,}00130346\\\\&\\quad-1{,}34722124\\cdot10^{-4}\\,T_F\\\\&\\quad+2{,}04052596\\cdot10^{-6}\\,T_F^{2}\\\\&\\quad-2{,}32820948\\cdot10^{-9}\\,T_F^{3}\\end{aligned}'});
+  parts.push({m:'\\begin{aligned}f(T_{m,F})&='+t(fm,6)+'\\\\f(T_{e,F})&='+t(fc,6)+'\\end{aligned}'});
+  parts.push({h:(unit==='P'?'④ ':'③ ')+'Korrigiertes spezifisches Gewicht',m:'\\begin{aligned}SG_{korr}&=SG_{gem}\\cdot\\frac{f(T_{m,F})}{f(T_{e,F})}\\\\&='+t(SGm,4)+'\\cdot\\frac{'+t(fm,6)+'}{'+t(fc,6)+'}\\\\&='+t(SGk,4)+'\\end{aligned}'});
+  parts.push({h:(unit==='P'?'⑤ ':'④ ')+'Spezifisches Gewicht → °Plato',m:'\\begin{aligned}P&=-616{,}868+1111{,}14\\cdot SG\\\\&\\quad-630{,}272\\cdot SG^{2}+135{,}997\\cdot SG^{3}\\\\&='+t(Pk)+'\\,°\\text{P}\\end{aligned}'});
+  const d=Pk-Pm;
+  results($('sRes'),[
+    {k:'Korrigierte Stammwürze',v:fmt(Pk,2),u:'°P',main:true},
+    {k:'Korrigiertes SG',v:fmt(SGk,4)},
+    {k:'Korrektur',v:(d>=0?'+':'')+fmt(d,2),u:'°P'},
+    {k:'Gemessen',v:fmt(Pm,2)+' °P',u:'/ '+fmt(SGm,4)}
+  ]);
+  let w='';
+  if(T>60)w='Über ca. 60 °C wird die Korrektur ungenau – Probe besser abkühlen (am besten auf Eichtemperatur).';
+  else if(Math.abs(T-Tc)>25)w='Große Temperaturdifferenz – Ergebnis ist eine Näherung. Am genauesten misst man nahe der Eichtemperatur.';
+  msg($('sMsg'),'warn',w);
+  block($('sMath'),parts);
+}
+
+/* ---------- 3. Priming sugar ---------- */
+const SUGARS={
+  sucrose:{name:'Saccharose',k:4*44.0095/342.2965,eq:'C_{12}H_{22}O_{11}+H_2O\\rightarrow 4\\,C_2H_5OH+4\\,CO_2',m:'342{,}30',co2:'4\\cdot 44{,}01'},
+  glucose:{name:'Glucose',k:2*44.0095/180.156,eq:'C_6H_{12}O_6\\rightarrow 2\\,C_2H_5OH+2\\,CO_2',m:'180{,}16',co2:'2\\cdot 44{,}01'},
+  dextrose:{name:'Glucose-Monohydrat',k:2*44.0095/198.171,eq:'C_6H_{12}O_6\\cdot H_2O\\rightarrow 2\\,C_2H_5OH+2\\,CO_2+H_2O',m:'198{,}17',co2:'2\\cdot 44{,}01'}
+};
+const STYLES=[['Stout / Porter',4],['Ale',4.5],['Lager / Märzen',5],['Pils',5.5],['Kölsch / Alt',5],['Weizen',7],['Belgisches Ale',7.5]];
+function calcSugar(){
+  const V=num('z.V'),T=num('z.T'),C=num('z.C'),sg=SUGARS[S['z.sugar']]||SUGARS.sucrose,bottle=num('z.bottle'),Ts=num('z.Ts');
+  const parts=[];
+  if(!(V>0)||!Number.isFinite(T)||!(C>0)){msg($('zMsg'),'err','Bitte Biermenge, Temperatur und Ziel-CO₂ eingeben.');results($('zRes'),[]);block($('zMath'),parts);return;}
+  const rest=co2Sat(T,1.013),dC=C-rest,m=Math.max(0,dC)*V/sg.k;
+  parts.push({h:'① Bereits gelöstes CO₂ im Jungbier',p:'Nach der Gärung ist das Jungbier bei Normaldruck mit CO₂ gesättigt. Maßgeblich ist die <b>höchste</b> Temperatur seit Gärende – wärmeres Bier hat CO₂ abgegeben.',
+    m:'\\begin{aligned}c_{rest}&=10\\cdot p\\cdot e^{\\,-10{,}73797+\\frac{2617{,}25}{T+273{,}15}}\\\\&=10\\cdot 1{,}013\\cdot e^{\\,-10{,}73797+\\frac{2617{,}25}{'+t(T,1)+'+273{,}15}}\\\\&='+t(rest)+'\\,\\tfrac{\\text{g}}{\\text{L}}\\end{aligned}',
+    legend:['<i>c</i> CO₂-Gehalt in g/L','<i>p</i> absoluter Druck in bar (1,013 bar = Normaldruck)','<i>T</i> Temperatur in °C']});
+  parts.push({h:'② Fehlendes CO₂',m:'\\begin{aligned}\\Delta c&=c_{ziel}-c_{rest}\\\\&='+t(C)+'-'+t(rest)+'='+t(dC)+'\\,\\tfrac{\\text{g}}{\\text{L}}\\end{aligned}'});
+  parts.push({h:'③ CO₂-Ausbeute von '+sg.name,p:'Aus der Gärungsgleichung (Hefe vergärt den Zucker vollständig):',m:'\\mathrm{'+sg.eq+'}'});
+  parts.push({m:'k=\\frac{'+sg.co2+'}{'+sg.m+'}='+t(sg.k,4)+'\\;\\frac{\\text{g CO}_2}{\\text{g Zucker}}'});
+  parts.push({h:'④ Zuckermenge',m:'\\begin{aligned}m_{Zucker}&=\\frac{\\Delta c\\cdot V}{k}=\\frac{'+t(Math.max(0,dC))+'\\cdot '+t(V,1)+'}{'+t(sg.k,4)+'}\\\\&='+t(m,1)+'\\,\\text{g}\\end{aligned}'});
+  const res=[{k:'Zucker gesamt',v:fmt(m,0),u:'g',main:true},{k:'je Liter',v:fmt(m/V,2),u:'g/L'}];
+  if(bottle>0)res.push({k:'je Flasche ('+fmt(bottle,2).replace(/,?0+$/,'')+' L)',v:fmt(m/V*bottle,2),u:'g'});
+  res.push({k:'Rest-CO₂',v:fmt(rest,2),u:'g/L'});
+  res.push({k:'Ziel in Vol.',v:fmt(C/1.977,2),u:'vol'});
+  if(Number.isFinite(Ts)){
+    const pAbs=C/(10*Math.exp(-10.73797+2617.25/(Ts+273.15))),pOver=pAbs-1.013;
+    parts.push({h:'⑤ Flaschendruck nach der Nachgärung',p:'Gleiche Sättigungsformel, nach dem Druck umgestellt (Überdruck = absoluter Druck − 1,013 bar):',
+      m:'\\begin{aligned}p_{\\ddot u}&=\\frac{c_{ziel}}{10\\cdot e^{\\,-10{,}73797+\\frac{2617{,}25}{T_L+273{,}15}}}-1{,}013\\\\&=\\frac{'+t(C)+'}{10\\cdot e^{\\,-10{,}73797+\\frac{2617{,}25}{'+t(Ts,1)+'+273{,}15}}}-1{,}013\\\\&='+t(pOver)+'\\,\\text{bar}\\end{aligned}'});
+    res.push({k:'Überdruck bei '+fmt(Ts,0)+' °C',v:fmt(pOver,2),u:'bar'});
+    const p20=C/(10*Math.exp(-10.73797+2617.25/293.15))-1.013;
+    res.push({k:'Überdruck bei 20 °C',v:fmt(p20,2),u:'bar'});
+  }
+  parts.push({h:'Umrechnung g/L ↔ Volumen',m:'1\\,\\text{vol}\\approx 1{,}977\\,\\tfrac{\\text{g}}{\\text{L}}',p:'Dichte von CO₂ bei 0 °C und 1,013 bar.'});
+  results($('zRes'),res);
+  if(dC<=0)msg($('zMsg'),'ok','Das Jungbier enthält bereits genug CO₂ – kein Zucker nötig.');
+  else if(C>7.5)msg($('zMsg'),'warn','Hoher CO₂-Gehalt: nur druckfeste Flaschen verwenden (z. B. Bügelflaschen, belgische Flaschen). Normale Flaschen sind meist bis ca. 3–4 bar ausgelegt.');
+  else if(T>30)msg($('zMsg'),'warn','Ungewöhnlich hohe Temperatur – stimmt die höchste Temperatur seit Gärende?');
+  else msg($('zMsg'),'','');
+  block($('zMath'),parts);
+}
+
+/* ---------- UI wiring ---------- */
+function syncInputs(){
+  document.querySelectorAll('[data-key]').forEach(el=>{
+    const k=el.dataset.key;
+    if(el.classList.contains('seg'))el.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===S[k])));
+    else if(document.activeElement!==el)el.value=S[k];
+  });
+  document.querySelectorAll('[data-show]').forEach(el=>{const [k,v]=el.dataset.show.split('=');el.hidden=S[k]!==v;});
+}
+function update(){syncInputs();calcVolume();calcGravity();calcSugar();save();}
+document.querySelectorAll('[data-key]').forEach(el=>{
+  const k=el.dataset.key;
+  if(el.classList.contains('seg'))el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    if(k==='s.unit'&&b.dataset.v!==S[k]){const x=num('s.x');if(Number.isFinite(x))S['s.x']=b.dataset.v==='SG'?fmt(sgFromP(x),4):fmt(pFromSg(x),2);}
+    S[k]=b.dataset.v;update();});
+  else el.addEventListener(el.tagName==='SELECT'?'change':'input',()=>{S[k]=el.value;update();});
+});
+$('zChips').innerHTML=STYLES.map(([n,c])=>'<button type="button" class="chip" data-c="'+c+'">'+n+' · '+fmt(c,1)+' g/L</button>').join('');
+$('zChips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;S['z.C']=fmt(+b.dataset.c,1);update();});
+update();
+})();
+</script>
+</body>
+</html>
