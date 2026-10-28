@@ -14,8 +14,12 @@ Jeder Ordner enthält die Original-Lizenz (`LICENSE`) und die Herkunft (`SOURCE.
 | [transformers](transformers/SOURCE.md) | `@huggingface/transformers` | 4.3.2 | [Apache-2.0](transformers/LICENSE) | Whisper-Spracherkennung im Browser (Sprache zu Text) |
 | [onnxruntime-web](onnxruntime-web/SOURCE.md) | `onnxruntime-web` | 1.31.0-dev.20260914-8d85527a0 | [MIT](onnxruntime-web/LICENSE) | Rechen-Engine (WebAssembly/WebGPU) für transformers.js – Version muss zu transformers passen |
 | [ogg-opus-decoder](ogg-opus-decoder/SOURCE.md) | `ogg-opus-decoder` | 1.7.5 | [MIT](ogg-opus-decoder/LICENSE) | Ersatz-Decoder für Ogg-Opus-Sprachnachrichten (z. B. ältere iPhones) |
-| [pdfjs](pdfjs/SOURCE.md) | `pdfjs-dist` | 6.4.299 | [Apache-2.0](pdfjs/LICENSE) | PDF lesen (Text mit Position und Schrift) in PDF zu Word – Legacy-Build für ältere Handys |
+| [pdfjs](pdfjs/SOURCE.md) | `pdfjs-dist` | 6.4.299 | [Apache-2.0](pdfjs/LICENSE) | PDF lesen (Text mit Position und Schrift, Bilder, Seiten für die Texterkennung) in PDF zu Word – Legacy-Build für ältere Handys; wasm/ dekodiert JBIG2-, JPEG-2000- und CMYK-Bilder |
 | [docx](docx/SOURCE.md) | `docx` | 9.15.0 | [MIT](docx/LICENSE) | Word-Datei (.docx) erzeugen in PDF zu Word |
+| [tesseract](tesseract/SOURCE.md) | `tesseract.js` | 7.0.0 | [Apache-2.0](tesseract/LICENSE) | Texterkennung (OCR) für gescannte PDFs in PDF zu Word |
+| [tesseract-core](tesseract-core/SOURCE.md) | `tesseract.js-core` | 7.0.0 | [Apache-2.0](tesseract-core/LICENSE) | Tesseract-Erkennung als WebAssembly für tesseract.js – nur die LSTM-Varianten; der Browser lädt eine davon |
+| [tesseract-deu](tesseract-deu/SOURCE.md) | `@tesseract.js-data/deu` | 1.0.0 | [MIT](tesseract-deu/LICENSE) | Sprachdaten Deutsch (tessdata_best, ganzzahlig) für die Texterkennung |
+| [tesseract-eng](tesseract-eng/SOURCE.md) | `@tesseract.js-data/eng` | 1.0.0 | [MIT](tesseract-eng/LICENSE) | Sprachdaten Englisch (tessdata_best, ganzzahlig) für die Texterkennung |
 
 ## Aktualisieren
 

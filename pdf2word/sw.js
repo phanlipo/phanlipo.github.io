@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "pdf2word";
-const VERSION = '1f818a57106c';
+const VERSION = '1fedaed9dd8f';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -14,9 +14,12 @@ const FILES = [
   "icon-maskable-512.png",
   "icon.svg",
   "manifest.webmanifest",
+  "ocr-worker.js",
+  "pdf-worker.mjs",
   "../assets/base.css",
   "../assets/common.js",
   "../assets/vendor/docx/index.iife.js",
+  "../assets/vendor/pdfjs/iccs/CGATS001Compat-v2-micro.icc",
   "../assets/vendor/pdfjs/pdf.min.mjs",
   "../assets/vendor/pdfjs/pdf.worker.min.mjs",
   "../assets/vendor/pdfjs/standard_fonts/FoxitDingbats.pfb",
@@ -34,10 +37,26 @@ const FILES = [
   "../assets/vendor/pdfjs/standard_fonts/LiberationSans-Bold.ttf",
   "../assets/vendor/pdfjs/standard_fonts/LiberationSans-BoldItalic.ttf",
   "../assets/vendor/pdfjs/standard_fonts/LiberationSans-Italic.ttf",
-  "../assets/vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf"
+  "../assets/vendor/pdfjs/standard_fonts/LiberationSans-Regular.ttf",
+  "../assets/vendor/pdfjs/wasm/LICENSE_JBIG2",
+  "../assets/vendor/pdfjs/wasm/LICENSE_OPENJPEG",
+  "../assets/vendor/pdfjs/wasm/LICENSE_PDFJS_JBIG2",
+  "../assets/vendor/pdfjs/wasm/LICENSE_PDFJS_OPENJPEG",
+  "../assets/vendor/pdfjs/wasm/LICENSE_PDFJS_QCMS",
+  "../assets/vendor/pdfjs/wasm/LICENSE_QCMS",
+  "../assets/vendor/pdfjs/wasm/jbig2.wasm",
+  "../assets/vendor/pdfjs/wasm/jbig2_nowasm_fallback.js",
+  "../assets/vendor/pdfjs/wasm/openjpeg.wasm",
+  "../assets/vendor/pdfjs/wasm/openjpeg_nowasm_fallback.js",
+  "../assets/vendor/pdfjs/wasm/qcms_bg.wasm"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
-const RUNTIME = {};
+const RUNTIME = {
+  "../assets/vendor/tesseract/": "vendor:tesseract@7.0.0",
+  "../assets/vendor/tesseract-core/": "vendor:tesseract-core@7.0.0",
+  "../assets/vendor/tesseract-deu/": "vendor:tesseract-deu@1.0.0",
+  "../assets/vendor/tesseract-eng/": "vendor:tesseract-eng@1.0.0"
+};
 const RUNTIME_URLS = Object.entries(RUNTIME).map(([dir, cache]) => [new URL(dir, self.location).href, cache]);
 
 self.addEventListener('install', event => {

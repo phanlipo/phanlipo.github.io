@@ -1,11 +1,12 @@
 // Test helpers for PDF zu Word: build small PDFs from scratch and read .docx files.
 // Kept dependency-free so the expected values stay independent of the libraries under test.
-import { inflateRawSync } from 'node:zlib';
+import { inflateRawSync, deflateSync } from 'node:zlib';
 
 /**
  * Builds a PDF with Courier text (monospace: every character is exactly 0.6 em wide, so
  * line widths can be computed without font metrics).
- *   pages: [{ texts: [{ x, y, size, text, bold }], draw: 'PDF operators' }]
+ *   pages: [{ texts: [{ x, y, size, text, bold }], draw: 'PDF operators',
+ *             images: [{ x, y, w, h, width, height, rgb }] }]   rgb: Buffer, 3 bytes per pixel, rows top to bottom
  * Coordinates in points, origin bottom left, A4.
  */
 export function makePdf(pages) {
@@ -19,10 +20,17 @@ export function makePdf(pages) {
     const ops = (p.texts || []).map(t =>
       `BT /${t.bold ? 'F2' : 'F1'} ${t.size} Tf ${t.x} ${t.y} Td (${t.text.replace(/[\\()]/g, '\\$&')}) Tj ET`);
     if (p.draw) ops.push(p.draw);
+    const xobjects = (p.images || []).map((im, i) => {
+      const data = deflateSync(im.rgb);
+      const ref = add(`<< /Type /XObject /Subtype /Image /Width ${im.width} /Height ${im.height} /ColorSpace /DeviceRGB ` +
+        `/BitsPerComponent 8 /Filter /FlateDecode /Length ${data.length} >>\nstream\n${data.toString('latin1')}\nendstream`);
+      ops.push(`q ${im.w} 0 0 ${im.h} ${im.x} ${im.y} cm /Im${i} Do Q`);
+      return `/Im${i} ${ref} 0 R`;
+    });
     const stream = Buffer.from(ops.join('\n'), 'latin1');
     const content = add(`<< /Length ${stream.length} >>\nstream\n${stream.toString('latin1')}\nendstream`);
     kids.push(add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 595 842] /Contents ${content} 0 R ` +
-      `/Resources << /Font << /F1 ${regular} 0 R /F2 ${bold} 0 R >> >> >>`));
+      `/Resources << /Font << /F1 ${regular} 0 R /F2 ${bold} 0 R >>${xobjects.length ? ` /XObject << ${xobjects.join(' ')} >>` : ''} >> >>`));
   }
   objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
   objs[pagesObj - 1] = `<< /Type /Pages /Kids [${kids.map(k => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`;

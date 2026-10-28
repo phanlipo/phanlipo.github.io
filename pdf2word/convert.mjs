@@ -1,15 +1,18 @@
-// PDF → Word: reads the text of a PDF with pdf.js (position, size, font) and rebuilds
-// paragraphs from the geometry, then writes a .docx with the docx library.
-// Everything runs in the browser; the file never leaves the device.
+// PDF → Word: reads the text and images of a PDF with pdf.js (position, size, font) and rebuilds
+// paragraphs from the geometry, then writes a .docx with the docx library. Pages without text
+// (scans) go through text recognition (Tesseract). Everything runs in the browser; the file
+// never leaves the device.
 //
-// Steps: extract() text items per page → lines (same baseline) → paragraphs (line pitch,
-// indentation, full lines) → layout() with indents, tabs, alignment → toDocx().
+// Steps: extract() text items and images per page (OCR for scanned pages) → lines (same
+// baseline) → paragraphs (line pitch, indentation, full lines) → layout() with indents, tabs,
+// alignment, images in reading order → toDocx().
 
 import * as pdfjs from '../assets/vendor/pdfjs/pdf.min.mjs';
 
 // Full literal paths: scripts/build.mjs finds the libraries for the offline cache by them
 const url = path => new URL(path, import.meta.url).href;
-pdfjs.GlobalWorkerOptions.workerSrc = url('../assets/vendor/pdfjs/pdf.worker.min.mjs');
+// Workers start from files in the app folder, so the service worker serves them offline
+pdfjs.GlobalWorkerOptions.workerSrc = url('./pdf-worker.mjs');
 
 /* ---------- 1. Read the PDF ---------- */
 
@@ -21,6 +24,8 @@ export async function open(data, password) {
     disableFontFace: true,           // only metrics and names are needed, never draw glyphs
     fontExtraProperties: true,
     standardFontDataUrl: url('../assets/vendor/pdfjs/standard_fonts/'),
+    wasmUrl: url('../assets/vendor/pdfjs/wasm/'),          // decoders for JBIG2 / JPEG 2000 scans
+    iccUrl: url('../assets/vendor/pdfjs/iccs/'),           // CMYK images
     useSystemFonts: false,
     stopAtErrors: false,
   });
@@ -38,16 +43,23 @@ export function close(pdf) {
   pdf?.loadingTask?.destroy?.();
 }
 
-// Text items of every page: { s, x, y, w, size, font, bold, italic } in PDF points,
-// origin bottom left of the page.
-export async function extract(pdf, onPage) {
+// Text items and images of every page. Items: { s, x, y, w, size, font, bold, italic } in PDF
+// points, origin bottom left of the page. Images: { x, y, w, h (points), data, type }.
+// options.ocr: { lang: 'deu' | 'eng' } – recognise the text of pages that have none (scans)
+// options.onProgress(text, fraction)
+export async function extract(pdf, options = {}) {
+  const { ocr, onProgress } = options;
   const pages = [];
-  for (let n = 1; n <= pdf.numPages; n++) {
-    const page = await pdf.getPage(n);
+  const n = pdf.numPages;
+  for (let i = 1; i <= n; i++) {
+    onProgress?.('Seite ' + i + ' von ' + n + ' …', (i - 1) / n);
+    const page = await pdf.getPage(i);
     const [x0, y0, x1, y1] = page.view;
+    const width = x1 - x0, height = y1 - y0;
     const text = await page.getTextContent();
     // The operator list makes pdf.js send the font objects (real name, bold/italic flags)
-    await page.getOperatorList().catch(() => {});
+    // and the images; it also tells where the images are drawn
+    const ops = await page.getOperatorList().catch(() => null);
     const fonts = {};
     const fontOf = id => {
       if (fonts[id]) return fonts[id];
@@ -60,7 +72,7 @@ export async function extract(pdf, onPage) {
         italic: !!f?.italic || /italic|oblique/i.test(raw),
       });
     };
-    const items = [];
+    let items = [];
     for (const it of text.items) {
       if (!it.str || !it.transform) continue;
       const [a, b, c, d, e, f] = it.transform;
@@ -69,11 +81,208 @@ export async function extract(pdf, onPage) {
       const font = fontOf(it.fontName);
       items.push({ s: it.str, x: e - x0, y: f - y0, w: it.width, size, font: font.name, bold: font.bold, italic: font.italic });
     }
-    pages.push({ width: x1 - x0, height: y1 - y0, items });
+
+    // A page without text is a scan (or a picture): recognise its text
+    const hasText = items.reduce((k, it) => k + it.s.trim().length, 0) >= 3;
+    let ocrDone = false, ocrError = null;
+    if (!hasText && ocr) {
+      try {
+        items = await recognise(page, ocr.lang, (t, f) => onProgress?.('Seite ' + i + ' von ' + n + ': ' + t, (i - 1 + f) / n));
+        ocrDone = true;
+      } catch (e) {
+        ocrError = e;
+      }
+    }
+
+    // Images – a picture covering (almost) the whole page is the background of a scan or of a
+    // searchable PDF: skipped when the page has text (from the PDF or recognised)
+    const images = [];
+    if (ops) {
+      for (const im of placedImages(ops, x0, y0)) {
+        if (im.w < 4 || im.h < 4) continue;                          // rules, dots
+        const cover = (im.w * im.h) / (width * height);
+        if (cover > 0.8 && (hasText || (ocrDone && items.length))) continue;
+        const pic = await imageData(page, im).catch(() => null);
+        if (pic) images.push({ x: im.x, y: im.y, w: im.w, h: im.h, ...pic });
+        if (images.length >= 50) break;
+      }
+    }
+    pages.push({ width, height, items, images, ocr: ocrDone, ocrError });
     page.cleanup();
-    onPage?.(n, pdf.numPages);
   }
+  onProgress?.('Fertig gelesen', 1);
   return pages;
+}
+
+/* ---------- Images ---------- */
+
+// Where the page draws images: follows the transformation matrix through the operator list.
+// The image fills the unit square of its matrix. Returns page-relative bounding boxes in points.
+export function placedImages(ops, x0 = 0, y0 = 0) {
+  const { OPS, Util } = pdfjs;
+  const found = [];
+  let ctm = [1, 0, 0, 1, 0, 0];
+  const stack = [];
+  for (let i = 0; i < ops.fnArray.length; i++) {
+    const fn = ops.fnArray[i], args = ops.argsArray[i];
+    if (fn === OPS.save) stack.push(ctm);
+    else if (fn === OPS.restore) { if (stack.length) ctm = stack.pop(); }
+    else if (fn === OPS.transform) ctm = Util.transform(ctm, args);
+    else if (fn === OPS.paintFormXObjectBegin) {
+      stack.push(ctm);
+      const m = args?.[0];
+      if (m && m.length === 6) ctm = Util.transform(ctm, Array.from(m));
+    } else if (fn === OPS.paintFormXObjectEnd) { if (stack.length) ctm = stack.pop(); }
+    else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject) {
+      const [a, b, c, d, e, f] = ctm;
+      const xs = [e, a + e, c + e, a + c + e], ys = [f, b + f, d + f, b + d + f];
+      const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+      found.push({
+        ref: args[0],
+        inline: fn === OPS.paintInlineImageXObject,
+        ctm, x: minX - x0, y: minY - y0, w: maxX - minX, h: maxY - minY, minX, maxY,
+      });
+    }
+  }
+  return found;
+}
+
+// Decoded picture of a placed image as JPEG (photos) or PNG (small or transparent images),
+// turned and flipped like on the page, at most 2000 px on the long side.
+async function imageData(page, im) {
+  const img = im.inline ? im.ref : await new Promise(resolve => {
+    const objs = String(im.ref).startsWith('g_') ? page.commonObjs : page.objs;
+    const timer = setTimeout(() => resolve(null), 10000);
+    try { objs.get(im.ref, data => { clearTimeout(timer); resolve(data); }); } catch { clearTimeout(timer); resolve(null); }
+  });
+  if (!img || !img.width || !img.height) return null;
+  const W = img.width, H = img.height;
+  const src = document.createElement('canvas');
+  src.width = W; src.height = H;
+  const sctx = src.getContext('2d');
+  let alpha = false;
+  if (img.bitmap) sctx.drawImage(img.bitmap, 0, 0);
+  else if (img.data) {
+    const out = sctx.createImageData(W, H);
+    alpha = toRGBA(img, out.data);
+    sctx.putImageData(out, 0, 0);
+  } else return null;
+
+  // Output canvas in page orientation; k = pixels per point (native resolution, capped)
+  const k = Math.min(Math.sqrt((W * H) / (im.w * im.h)), 2000 / Math.max(im.w, im.h));
+  const out = document.createElement('canvas');
+  out.width = Math.max(1, Math.round(im.w * k)); out.height = Math.max(1, Math.round(im.h * k));
+  const ctx = out.getContext('2d');
+  const png = alpha || W * H <= 300 * 300 || img.kind === pdfjs.ImageKind.GRAYSCALE_1BPP;
+  if (!png) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, out.width, out.height); }
+  // Image pixel (px, py) → page: u = px/W, v = 1 - py/H, P = ctm·(u, v) → canvas (P.x - minX, maxY - P.y)·k
+  const [a, b, c, d, e, f] = im.ctm;
+  ctx.setTransform(k * a / W, -k * b / W, -k * c / H, k * d / H, k * (c + e - im.minX), k * (im.maxY - d - f));
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(src, 0, 0);
+  src.width = src.height = 0;
+  const blob = await new Promise(r => out.toBlob(r, png ? 'image/png' : 'image/jpeg', 0.88));
+  out.width = out.height = 0;
+  if (!blob) return null;
+  return { data: new Uint8Array(await blob.arrayBuffer()), type: png ? 'png' : 'jpg', px: [Math.round(im.w * k), Math.round(im.h * k)] };
+}
+
+// pdf.js image data (1-bit gray, RGB or RGBA rows) → RGBA; returns whether it has transparency
+function toRGBA(img, dst) {
+  const { width: W, height: H, data, kind } = img;
+  const K = pdfjs.ImageKind;
+  let alpha = false;
+  if (kind === K.GRAYSCALE_1BPP) {
+    const rowBytes = (W + 7) >> 3;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = data[y * rowBytes + (x >> 3)] & (128 >> (x & 7)) ? 255 : 0;   // bit set = white
+      const o = (y * W + x) * 4;
+      dst[o] = dst[o + 1] = dst[o + 2] = v; dst[o + 3] = 255;
+    }
+  } else if (kind === K.RGB_24BPP) {
+    for (let i = 0, j = 0; j < W * H * 4; i += 3, j += 4) {
+      dst[j] = data[i]; dst[j + 1] = data[i + 1]; dst[j + 2] = data[i + 2]; dst[j + 3] = 255;
+    }
+  } else {
+    dst.set(data.subarray(0, W * H * 4));
+    for (let j = 3; j < dst.length; j += 4) if (dst[j] < 255) { alpha = true; break; }
+  }
+  return alpha;
+}
+
+/* ---------- Text recognition (OCR) ---------- */
+
+let tesseract = null;   // { lang, worker }
+
+// Renders a page at 300 dpi (at most 4000 px) and recognises its words with Tesseract.
+// Returns text items like extract(); throws when the recognition cannot be loaded.
+async function recognise(page, lang, onProgress) {
+  const worker = await ocrWorker(lang, onProgress);
+  const vp1 = page.getViewport({ scale: 1 });
+  const scale = Math.min(300 / 72, 4000 / Math.max(vp1.width, vp1.height));
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  onProgress?.('Seite wird für die Texterkennung gerendert …', 0.1);
+  await page.render({ canvasContext: ctx, viewport, background: 'white' }).promise;
+  progressTarget = onProgress;
+  let result;
+  try {
+    result = (await worker.recognize(canvas, {}, { blocks: true, text: false })).data;
+  } finally {
+    progressTarget = null;
+    canvas.width = canvas.height = 0;
+  }
+  return ocrItems(result, scale, vp1.height);
+}
+
+let progressTarget = null;
+async function ocrWorker(lang, onProgress) {
+  if (tesseract?.lang === lang) return tesseract.worker;
+  if (tesseract) { await tesseract.worker.terminate().catch(() => {}); tesseract = null; }
+  onProgress?.('Texterkennung wird geladen …', 0);
+  await loadScript(url('../assets/vendor/tesseract/tesseract.min.js'));
+  const langPath = lang === 'eng' ? url('../assets/vendor/tesseract-eng/') : url('../assets/vendor/tesseract-deu/');
+  const worker = await window.Tesseract.createWorker(lang === 'eng' ? 'eng' : 'deu', 1 /* LSTM only */, {
+    workerPath: url('./ocr-worker.js'),
+    corePath: url('../assets/vendor/tesseract-core/'),
+    langPath,
+    gzip: true,
+    cacheMethod: 'none',        // offline copy comes from the service worker, not IndexedDB
+    workerBlobURL: false,       // CSP: workers only from own files
+    logger: m => {
+      if (m.status === 'recognizing text') progressTarget?.('Texterkennung ' + Math.round(m.progress * 100) + ' %', 0.15 + 0.85 * m.progress);
+      else if (!progressTarget) onProgress?.('Texterkennung wird geladen …', 0);
+    },
+  });
+  tesseract = { lang, worker };
+  return worker;
+}
+
+// Tesseract words → text items. Pixel boxes (top left origin) → points (bottom left origin).
+// Font size: the tallest letters of a line (capitals, b, d, h …) reach about 0.72 em above the
+// baseline; sizes are then snapped to the page's typical size so lines group into paragraphs.
+export function ocrItems(data, scale, pageHeight) {
+  const items = [];
+  for (const block of data?.blocks || []) for (const para of block.paragraphs || []) for (const line of para.lines || []) {
+    const words = (line.words || []).filter(w => w.text && w.text.trim());
+    if (!words.length) continue;
+    const lb = line.bbox, base = line.baseline;
+    const baseAt = x => base && base.x1 !== base.x0 ? base.y0 + (base.y1 - base.y0) * (x - base.x0) / (base.x1 - base.x0) : lb.y1;
+    const ascent = baseAt((lb.x0 + lb.x1) / 2) - lb.y0;
+    const size = Math.max(4, (ascent > 0 ? ascent / 0.72 : (lb.y1 - lb.y0)) / scale);
+    for (const w of words) {
+      const by = baseAt((w.bbox.x0 + w.bbox.x1) / 2);
+      items.push({ s: w.text.trim(), x: w.bbox.x0 / scale, y: pageHeight - by / scale, w: (w.bbox.x1 - w.bbox.x0) / scale,
+        size, font: 'Arial', bold: false, italic: false });
+    }
+  }
+  // Snap sizes: within ±20 % of the median → median, then whole points
+  const m = median(items.map(it => it.size));
+  for (const it of items) it.size = Math.round(Math.abs(it.size - m) <= 0.2 * m ? m : it.size);
+  return items;
 }
 
 // "ABCDEF+Arial-BoldMT" → "Arial", "TimesNewRomanPSMT" → "Times New Roman"
@@ -175,15 +384,18 @@ export function layout(pages, options = {}) {
   const lines = all.flatMap(p => p.lines);
   const chars = lines.reduce((n, l) => n + l.text.replace(/\s/g, '').length, 0);
   const first = all[0] || { width: 595, height: 842 };
-  if (!lines.length) return { chars: 0, pages: all.length, emptyPages: all.length, paragraphs: [], page: { width: first.width, height: first.height } };
+  const cm = 28.35;
 
-  // Text area and body size of the whole document
-  const left = Math.min(...lines.map(l => l.x));
-  const right = Math.max(...lines.map(l => l.right));
+  // Text area: everything text and images cover, at least 1 cm from the edges (2 cm margins when
+  // there is nothing to measure). Full-page pictures are not counted.
+  const boxes = [...lines.map(l => [l.x, l.right]),
+    ...all.flatMap(p => (p.images || []).filter(im => im.w < 0.9 * p.width).map(im => [im.x, im.x + im.w]))];
+  const left = boxes.length ? Math.max(cm, Math.min(...boxes.map(b => b[0]))) : 2 * cm;
+  const right = boxes.length ? Math.min(first.width - cm / 2 - 3, Math.max(...boxes.map(b => b[1]))) : first.width - 2 * cm;
   const width = Math.max(right - left, 100);
   const sizeCount = {};
   for (const l of lines) sizeCount[l.size] = (sizeCount[l.size] || 0) + l.text.length;
-  const bodySize = +Object.entries(sizeCount).sort((p, q) => q[1] - p[1])[0][0];
+  const bodySize = +(Object.entries(sizeCount).sort((p, q) => q[1] - p[1])[0]?.[0] ?? 11);
   const fontCount = {};
   for (const l of lines) for (const c of l.cols) for (const r of c.runs) fontCount[r.font] = (fontCount[r.font] || 0) + r.text.length;
   const bodyFont = Object.entries(fontCount).sort((p, q) => q[1] - p[1])[0]?.[0] || 'Arial';
@@ -213,7 +425,7 @@ export function layout(pages, options = {}) {
       const dy = prev ? prev.y - l.y : null;
       const cont = para && para.lines.length && continues(para, l, dy, i === 0 && !keepPages);
       if (cont) { joinLine(para, l); return; }
-      para = { lines: [l], page: pageIndex, pageStart: i === 0 && pageIndex > 0 && keepPages, gap: dy, cols: l.cols.length > 1 };
+      para = { lines: [l], page: pageIndex, gap: dy, cols: l.cols.length > 1 };
       paragraphs.push(para);
     });
   });
@@ -274,7 +486,7 @@ export function layout(pages, options = {}) {
       indent, firstLine, align,
       before: pa.gap != null && pa.gap > 0 ? Math.max(0, pa.gap - pitch * f.size) : 0,
       line: Math.min(Math.max(ownPitch, f.size), 3 * f.size),
-      pageBreak: pa.pageStart,
+      page: pa.page, top: f.y + f.size,
       oneLine: pa.lines.length === 1,
       heading: f.bold && f.size >= bodySize * 1.15 && pa.lines.length <= 3,
     };
@@ -283,24 +495,53 @@ export function layout(pages, options = {}) {
   // Margins: the outermost text of all pages. Word puts the first baseline about one line
   // below the top margin and needs the descent below the last baseline.
   const withText = all.filter(p => p.lines.length);
-  const topGap = Math.min(...withText.map(p => p.height - p.lines[0].y - 0.85 * pitch * p.lines[0].size));
-  const bottom = Math.min(...withText.map(p => Math.min(...p.lines.map(l => l.y - 0.3 * l.size))));
-  const cm = 28.35;
+  const topGap = withText.length ? Math.min(...withText.map(p => p.height - p.lines[0].y - 0.85 * pitch * p.lines[0].size)) : 2 * cm;
+  // Bottom: lowest text of the pages that are followed by another one – the last page usually
+  // ends early and says nothing about the margin (a one-page document gets the top margin)
+  const fullPages = withText.filter(p => p !== all.at(-1));
+  const bottom = fullPages.length ? Math.min(...fullPages.map(p => Math.min(...p.lines.map(l => l.y - 0.3 * l.size))))
+    : Math.max(2 * cm, topGap) + 4;
+  const pageRight = Math.max(cm / 2, first.width - right - 3);
+  const textHeight = first.height - Math.max(cm / 2, topGap) - Math.max(cm / 2, bottom - 4);
+
+  // Images as paragraphs of their own, scaled down to the text area if needed
+  const pictures = all.flatMap((p, pageIndex) => (p.images || []).map(im => {
+    const fit = Math.min(1, (first.width - left - pageRight) / im.w, (textHeight - 2) / im.h);
+    const w = im.w * fit, h = im.h * fit;
+    const mid = im.x + im.w / 2, center = left + width / 2;
+    const centered = im.x - left > 0.1 * width && Math.abs(mid - center) < 0.05 * width;
+    return {
+      image: { data: im.data, type: im.type, w, h },
+      runs: [], tabs: [], firstLine: 0, before: 6, line: 0,
+      indent: centered ? 0 : Math.max(0, Math.min(im.x - left, first.width - left - pageRight - w)),
+      align: centered ? 'center' : 'left',
+      page: pageIndex, top: im.y + im.h,
+    };
+  }));
+
+  // Reading order: page by page, top to bottom (stable: paragraphs keep their order)
+  const blocks = [...out, ...pictures].sort((p, q) => p.page - q.page || q.top - p.top);
+  blocks.forEach((b, i) => { b.pageBreak = keepPages && b.page > 0 && (i === 0 || blocks[i - 1].page !== b.page); });
+
   return {
     pages: all.length,
-    emptyPages: all.filter(p => !p.lines.length).length,
+    emptyPages: all.filter(p => !p.lines.length && !(p.images || []).length).length,
+    ocrPages: all.filter(p => p.ocr).length,
+    ocrFailed: all.filter(p => p.ocrError).length,
+    ocrError: all.find(p => p.ocrError)?.ocrError || null,
+    images: pictures.length,
     chars,
     bodySize, bodyFont, pitch,
     page: {
       width: first.width, height: first.height,
       // 3 pt slack on the right: Word measures text slightly differently and would otherwise wrap
       // lines that end exactly at the margin
-      left: Math.max(cm, left), right: Math.max(cm / 2, first.width - right - 3),
+      left, right: pageRight,
       top: Math.max(cm / 2, topGap), bottom: Math.max(cm / 2, bottom - 4),
       footer: numberY != null ? Math.max(8, numberY - 0.3 * bodySize) : null,
     },
     pageNumbers: numbered >= Math.max(1, all.length / 2) ? numberAlign : null,
-    paragraphs: out,
+    paragraphs: blocks,
   };
 }
 
@@ -324,7 +565,14 @@ export async function toDocx(model, title) {
   const D = window.docx;
   const ALIGN = { left: D.AlignmentType.LEFT, center: D.AlignmentType.CENTER, right: D.AlignmentType.RIGHT, justify: D.AlignmentType.JUSTIFIED };
   const pg = model.page;
-  const children = model.paragraphs.map(p => new D.Paragraph({
+  const px = pt => Math.max(1, Math.round(pt * 96 / 72));   // docx sizes images in pixels at 96 dpi
+  const children = model.paragraphs.map(p => p.image ? new D.Paragraph({
+    children: [new D.ImageRun({ type: p.image.type, data: p.image.data, transformation: { width: px(p.image.w), height: px(p.image.h) } })],
+    alignment: p.align === 'center' ? ALIGN.center : undefined,
+    indent: { left: tw(p.indent) },
+    spacing: { before: tw(p.before), after: tw(6) },
+    pageBreakBefore: p.pageBreak || undefined,
+  }) : new D.Paragraph({
     children: p.runs.map(r => new D.TextRun({
       // Tabs as real Word tab elements, not as a raw character inside the text
       children: r.text.split('\t').flatMap((part, i) => i ? [new D.Tab(), part] : [part]).filter(c => c !== ''),
@@ -334,9 +582,9 @@ export async function toDocx(model, title) {
     alignment: p.align === 'left' ? undefined : ALIGN[p.align],
     indent: {
       left: tw(p.indent),
-      // A one-line paragraph may run into the right margin (up to 0.5 cm from the edge) instead of
-      // wrapping – PDFs often set such lines slightly condensed, which Word cannot reproduce
-      ...(p.oneLine && p.align === 'left' && pg.right > 14 ? { right: -tw(pg.right - 14) } : {}),
+      // A one-line paragraph may run up to 1 cm into the right margin (not closer than 0.5 cm to the
+      // edge) instead of wrapping – PDFs often set such lines slightly condensed, which Word cannot reproduce
+      ...(p.oneLine && p.align === 'left' && pg.right > 14 ? { right: -tw(Math.min(pg.right - 14, 28.35)) } : {}),
       ...(p.firstLine > 1 ? { firstLine: tw(p.firstLine) } : p.firstLine < -1 ? { hanging: tw(-p.firstLine) } : {}),
     },
     tabStops: p.tabs.map(x => ({ type: D.TabStopType.LEFT, position: tw(x) })),

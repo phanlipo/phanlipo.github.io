@@ -1,5 +1,6 @@
 // PDF zu Word: paragraphs, hanging indents, hyphenation, columns, page breaks and page numbers
 // are rebuilt from a generated PDF; the expected Word values are computed from the PDF geometry.
+// Images: position, size and orientation; scanned pages: text recognition (Tesseract, local files).
 import { test, expect } from './helpers.mjs';
 import { readFileSync } from 'node:fs';
 import { makePdf, wrap, unzip, docxParagraphs } from './pdf-tools.mjs';
@@ -46,7 +47,7 @@ function fixture() {
 async function convert(page, buffer, name = 'vertrag.pdf') {
   await page.setInputFiles('#file', { name, mimeType: 'application/pdf', buffer });
   await page.click('#btnRun');
-  await expect(page.locator('#result')).toBeVisible({ timeout: 30000 });
+  await expect(page.locator('#result')).toBeVisible({ timeout: 120000 });
   const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
   const files = unzip(readFileSync(await download.path()));
   return { name: download.suggestedFilename(), files, paras: docxParagraphs(files.get('word/document.xml').toString('utf8')) };
@@ -119,17 +120,19 @@ test('rejects files that are not PDFs', async ({ page }) => {
   await expect(page.locator('#result')).toBeHidden();
 });
 
-test('explains that scanned PDFs without text are not supported', async ({ page }) => {
+test('explains when a PDF has neither text nor pictures', async ({ page }) => {
+  test.setTimeout(120000);
   await page.goto(URL_);
   const pdf = makePdf([{ draw: '72 700 m 500 700 l S 100 600 200 100 re f' }]);
-  await page.setInputFiles('#file', { name: 'scan.pdf', mimeType: 'application/pdf', buffer: pdf });
+  await page.setInputFiles('#file', { name: 'linien.pdf', mimeType: 'application/pdf', buffer: pdf });
   await page.click('#btnRun');
-  await expect(page.locator('#status')).toContainText('keinen Text', { timeout: 30000 });
+  await expect(page.locator('#status')).toContainText('weder Text noch ein Bild', { timeout: 90000 });
   await expect(page.locator('#status')).toHaveClass(/err/);
   await expect(page.locator('#btnRun')).toBeEnabled();
 });
 
 test('warns about pages without text', async ({ page }) => {
+  test.setTimeout(120000);
   await page.goto(URL_);
   const pdf = makePdf([{ texts: [{ x: 72, y: 780, size: 11, text: 'Nur hier steht Text.' }] }, { draw: '72 700 m 500 700 l S' }]);
   const { paras } = await convert(page, pdf);
@@ -163,5 +166,165 @@ test('converts offline (pdf.js worker and docx come from the offline cache)', as
   await page.reload();
   const { paras } = await convert(page, fixture().pdf);
   expect(paras[0].text).toBe(TITLE);
+  await context.setOffline(false);
+});
+
+/* ---------- Images ---------- */
+
+// 60 × 40 px picture: left half red, right half blue (rows top to bottom)
+const PIC_W = 60, PIC_H = 40;
+function picture() {
+  const rgb = Buffer.alloc(PIC_W * PIC_H * 3);
+  for (let y = 0; y < PIC_H; y++) for (let x = 0; x < PIC_W; x++) rgb[(y * PIC_W + x) * 3 + (x < PIC_W / 2 ? 0 : 2)] = 220;
+  return rgb;
+}
+
+// Colour of the left and right edge of an image from the .docx, decoded by the browser
+async function edgeColours(page, files, name) {
+  const b64 = files.get(name).toString('base64');
+  return page.evaluate(async b64 => {
+    const img = await createImageBitmap(new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))]));
+    const c = new OffscreenCanvas(img.width, img.height), g = c.getContext('2d');
+    g.drawImage(img, 0, 0);
+    const at = x => { const d = g.getImageData(x, img.height >> 1, 1, 1).data; return d[0] > d[2] ? 'red' : 'blue'; };
+    return { w: img.width, h: img.height, left: at(2), right: at(img.width - 3) };
+  }, b64);
+}
+
+const EMU = pt => Math.round(pt * 96 / 72) * 9525;   // docx: pixels at 96 dpi, 9525 EMU per pixel
+
+test('takes over pictures at their place, size and orientation', async ({ page }) => {
+  await page.goto(URL_);
+  const pdf = makePdf([{
+    texts: [{ x: 72, y: 780, size: 11, text: 'Text oben.' }, { x: 72, y: 600, size: 11, text: 'Text unten.' },
+      { x: 72, y: 250, size: 11, text: 'Ende.' }],
+    images: [{ x: 72, y: 640, w: 120, h: 80, width: PIC_W, height: PIC_H, rgb: picture() }],
+    // the same picture mirrored (negative width) and turned by 90° (80 × 120 pt) below "Text unten."
+    draw: `q -120 0 0 80 192 500 cm /Im0 Do Q q 0 120 -80 0 152 300 cm /Im0 Do Q`,
+  }]);
+  const { files, paras } = await convert(page, pdf, 'bilder.pdf');
+  const kinds = paras.map(p => p.xml.includes('<w:drawing>') ? 'BILD' : p.text);
+  expect(kinds).toEqual(['Text oben.', 'BILD', 'Text unten.', 'BILD', 'BILD', 'Ende.']);
+  const extent = p => p.xml.match(/<wp:extent cx="(\d+)" cy="(\d+)"\/>/).slice(1).map(Number);
+  const pics = paras.filter(p => p.xml.includes('<w:drawing>'));
+  expect(extent(pics[0])).toEqual([EMU(120), EMU(80)]);
+  expect(extent(pics[1])).toEqual([EMU(120), EMU(80)]);
+  expect(extent(pics[2])).toEqual([EMU(80), EMU(120)]);     // turned: width and height swap
+
+  // Picture files in the order of the paragraphs (relationship ids → media files)
+  const rels = files.get('word/_rels/document.xml.rels').toString('utf8');
+  const media = pics.map(p => {
+    const id = p.xml.match(/r:embed="([^"]+)"/)[1];
+    return 'word/' + rels.match(new RegExp(`Id="${id}"[^>]*Target="([^"]+)"`))[1];
+  });
+  expect(await edgeColours(page, files, media[0])).toMatchObject({ left: 'red', right: 'blue' });
+  expect(await edgeColours(page, files, media[1])).toMatchObject({ left: 'blue', right: 'red' });   // mirrored
+  const turned = await edgeColours(page, files, media[2]);
+  expect(turned.h).toBeGreaterThan(turned.w);
+  await expect(page.locator('#resultMeta')).toContainText('3 Bilder');
+  await expect(page.locator('#preview img')).toHaveCount(3);
+});
+
+test('skips a full-page background picture behind text', async ({ page }) => {
+  await page.goto(URL_);
+  const pdf = makePdf([{ images: [{ x: 0, y: 0, w: 595, h: 842, width: PIC_W, height: PIC_H, rgb: picture() }],
+    texts: [{ x: 72, y: 780, size: 11, text: 'Briefpapier mit Hintergrund.' }] }]);
+  const { files, paras } = await convert(page, pdf);
+  expect(paras.map(p => p.text)).toEqual(['Briefpapier mit Hintergrund.']);
+  expect([...files.keys()].some(k => k.startsWith('word/media/'))).toBe(false);
+});
+
+/* ---------- Scanned pages (text recognition) ---------- */
+
+const SCAN_TITLE = 'Mietvertrag';
+const SCAN_LINES = ['Zwischen dem Vermieter und dem Mieter wird folgender Vertrag über',
+  'die Wohnung im ersten Stock geschlossen. Die Miete beträgt monatlich',
+  'achthundert Euro und ist bis zum dritten Werktag zu zahlen.'];
+const SCAN_LAST = 'Die Kündigungsfrist beträgt drei Monate.';
+
+// A "scan": the page is one picture (150 dpi) with text drawn by the browser – title 20 pt bold,
+// body 12 pt with 18 pt line pitch
+async function scanPdf(page) {
+  const dpi = 150, px = pt => pt * dpi / 72;
+  const rgb = await page.evaluate(({ title, lines, last, sizes }) => {
+    const c = document.createElement('canvas'); c.width = 1240; c.height = 1754;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#000';
+    g.font = `bold ${sizes.title}px Arial`; g.fillText(title, sizes.left, sizes.top);
+    g.font = `${sizes.body}px Arial`;
+    [...lines, '', last].forEach((l, i) => g.fillText(l, sizes.left, sizes.top + sizes.gap + i * sizes.pitch));
+    // RGB bytes as base64 (much faster to hand over than a plain array)
+    const d = g.getImageData(0, 0, c.width, c.height).data, rgb = new Uint8Array(d.length / 4 * 3);
+    for (let i = 0, j = 0; i < d.length; i += 4, j += 3) { rgb[j] = d[i]; rgb[j + 1] = d[i + 1]; rgb[j + 2] = d[i + 2]; }
+    let bin = '';
+    for (let i = 0; i < rgb.length; i += 0x8000) bin += String.fromCharCode(...rgb.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }, { title: SCAN_TITLE, lines: SCAN_LINES, last: SCAN_LAST,
+    sizes: { title: px(20), body: px(12), pitch: px(18), left: px(72), top: px(100), gap: px(48) } });
+  return makePdf([{ images: [{ x: 0, y: 0, w: 595, h: 842, width: 1240, height: 1754, rgb: Buffer.from(rgb, 'base64') }] }]);
+}
+
+test('reads scanned pages with text recognition', async ({ page }) => {
+  test.setTimeout(180000);
+  await page.goto(URL_);
+  await expect(page.locator('#optOcr')).toBeChecked();
+  await expect(page.locator('#optLang')).toHaveValue('deu');
+  const { files, paras } = await convert(page, await scanPdf(page), 'scan.pdf');
+  expect(paras.map(p => p.text)).toEqual([SCAN_TITLE, SCAN_LINES.join(' '), SCAN_LAST]);
+  // Font sizes from the letter heights: 20 pt title, 12 pt body (Word: half points)
+  expect(paras[0].xml).toContain('<w:sz w:val="40"/>');
+  expect(files.get('word/styles.xml').toString('utf8')).toMatch(/<w:docDefaults>[\s\S]*?<w:sz w:val="24"\/>/);
+  // The scan itself is not added as a picture on top of the recognised text
+  expect([...files.keys()].some(k => k.startsWith('word/media/'))).toBe(false);
+  await expect(page.locator('#status')).toContainText('1 gescannte Seite per Texterkennung');
+});
+
+test('without text recognition a scanned page comes over as a picture', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.goto(URL_);
+  await page.uncheck('#optOcr');
+  await expect(page.locator('#optLang')).toBeHidden();
+  await page.reload();
+  await expect(page.locator('#optOcr')).not.toBeChecked();
+  const { files, paras } = await convert(page, await scanPdf(page), 'scan.pdf');
+  expect(paras).toHaveLength(1);
+  expect(paras[0].xml).toContain('<w:drawing>');
+  expect([...files.keys()].filter(k => k.startsWith('word/media/'))).toHaveLength(1);
+});
+
+test.describe('text recognition not available', () => {
+  test.use({ allowedProblems: /tesseract|Failed to load resource|ERR_FAILED|net::/i });
+
+  test('falls back to the picture and says so', async ({ page }) => {
+    test.setTimeout(120000);
+    await page.context().route(/tesseract-core/, r => r.abort());
+    await page.goto(URL_);
+    const { files, paras } = await convert(page, await scanPdf(page), 'scan.pdf');
+    expect(paras).toHaveLength(1);
+    expect(paras[0].xml).toContain('<w:drawing>');
+    expect([...files.keys()].filter(k => k.startsWith('word/media/'))).toHaveLength(1);
+    await expect(page.locator('#status')).toHaveClass(/warn/);
+    await expect(page.locator('#status')).toContainText('als Bild übernommen');
+  });
+});
+
+test('the language of the text recognition is remembered', async ({ page }) => {
+  await page.goto(URL_);
+  await page.selectOption('#optLang', 'eng');
+  await page.reload();
+  await expect(page.locator('#optLang')).toHaveValue('eng');
+});
+
+test('text recognition works offline once it was used', async ({ page, context }) => {
+  test.setTimeout(240000);
+  await page.goto(URL_);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();                               // page now controlled → downloads go through the cache
+  const pdf = await scanPdf(page);
+  await convert(page, pdf, 'scan.pdf');
+  await context.setOffline(true);
+  await page.reload();
+  const { paras } = await convert(page, pdf, 'scan.pdf');
+  expect(paras[0].text).toBe(SCAN_TITLE);
   await context.setOffline(false);
 });
