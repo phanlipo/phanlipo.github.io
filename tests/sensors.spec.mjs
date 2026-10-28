@@ -15,8 +15,8 @@ async function orientation(page, values, type = 'deviceorientation', times = 40)
 async function tab(page, name) {
   await page.getByRole('tab', { name }).click();
 }
-async function start(page, panel) {
-  await page.locator(`[data-start="${panel}"]`).click();
+// Measurements start by themselves (on load and when a tab is chosen)
+async function running(page, panel) {
   await expect(page.locator(`[data-start="${panel}"]`)).toHaveText('Stoppen');
 }
 
@@ -29,21 +29,25 @@ test.beforeEach(async ({ page }) => {
 
 test('tabs switch panels, support arrow keys and are remembered', async ({ page }) => {
   await expect(page.locator('#p-compass')).toBeVisible();
-  await tab(page, 'Luftdruck');
-  await expect(page.locator('#p-pressure')).toBeVisible();
+  await running(page, 'compass');
+  await tab(page, 'Vibrometer');
+  await expect(page.locator('#p-vibro')).toBeVisible();
   await expect(page.locator('#p-compass')).toBeHidden();
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Schall' })).toBeFocused();
-  await expect(page.locator('#p-sound')).toBeVisible();
+  await running(page, 'vibro');
+  await expect(page.locator('[data-start="compass"]')).toHaveText('Starten');
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('tab', { name: 'Beschleunigung' })).toBeFocused();
+  await expect(page.locator('#p-accel')).toBeVisible();
   await page.reload();
-  await expect(page.locator('#p-sound')).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Schall' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#p-accel')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Beschleunigung' })).toHaveAttribute('aria-selected', 'true');
+  await running(page, 'accel');
 });
 
 for (const scheme of ['light', 'dark']) {
   test(`every tab has no accessibility violations (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
-    for (const name of ['Kompass', 'Wasserwaage', 'Beschleunigung', 'Vibrometer', 'Magnetfeld', 'Luftdruck', 'Schall']) {
+    for (const name of ['Kompass', 'Wasserwaage', 'Beschleunigung', 'Vibrometer', 'Schall']) {
       await tab(page, name);
       const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
       expect(violations.map(v => `${name}: ${v.id} → ${v.nodes.map(n => n.target.join(' ')).join(' | ')}`)).toEqual([]);
@@ -52,13 +56,13 @@ for (const scheme of ['light', 'dark']) {
 }
 
 test('compass: Android absolute orientation and iOS compass heading', async ({ page }) => {
-  await start(page, 'compass');
+  await running(page, 'compass');
   // alpha is counter-clockwise: alpha 90° → device top points west
   await orientation(page, { alpha: 90, beta: 0, gamma: 0, absolute: true }, 'deviceorientationabsolute');
   await expect(page.locator('#cDeg')).toHaveText('270°');
   await expect(page.locator('#cDir')).toHaveText('W');
   await page.reload();
-  await start(page, 'compass');
+  await running(page, 'compass');
   await page.evaluate(() => {
     for (let i = 0; i < 40; i++) {
       const e = new DeviceOrientationEvent('deviceorientation', { alpha: 10, beta: 0, gamma: 0 });
@@ -73,14 +77,52 @@ test('compass: Android absolute orientation and iOS compass heading', async ({ p
   await expect(page.locator('#st-compass')).toHaveText(/flach halten/);
 });
 
-test('compass: warns when no sensor data arrives', async ({ page }) => {
-  await start(page, 'compass');
+test('stop and start by hand; pauses in the background and continues afterwards', async ({ page }) => {
+  await running(page, 'compass');
+  const setVisibility = state => page.evaluate(state => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, state);
+  await setVisibility('hidden');
+  await expect(page.locator('[data-start="compass"]')).toHaveText('Starten');
+  await setVisibility('visible');
+  await running(page, 'compass');
+  // Stopped by hand → stays stopped after returning
+  await page.locator('[data-start="compass"]').click();
+  await expect(page.locator('[data-start="compass"]')).toHaveText('Starten');
+  await setVisibility('hidden');
+  await setVisibility('visible');
+  await expect(page.locator('[data-start="compass"]')).toHaveText('Starten');
+  await page.locator('[data-start="compass"]').click();
+  await running(page, 'compass');
+  await orientation(page, { alpha: 180, beta: 0, gamma: 0, absolute: true }, 'deviceorientationabsolute');
+  await expect(page.locator('#cDeg')).toHaveText('180°');
+});
+
+test('no data on automatic start: offers a permission request, then reports a missing sensor', async ({ page }) => {
+  // Chromium (like iOS) has DeviceOrientationEvent.requestPermission, which needs a tap
+  await expect(page.getByRole('button', { name: 'Zugriff erlauben' })).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('#st-compass')).toHaveText(/Freigabe/);
+  await page.getByRole('button', { name: 'Zugriff erlauben' }).click();
+  await running(page, 'compass');
   await expect(page.locator('#st-compass')).toHaveText(/Keine Kompassdaten/, { timeout: 6000 });
+  // Data after all → message disappears
+  await orientation(page, { alpha: 0, beta: 0, gamma: 0, absolute: true }, 'deviceorientationabsolute', 1);
+  await expect(page.locator('#st-compass')).toHaveText('');
+});
+
+test.describe('motion permission not granted', () => {
+  test.use({ permissions: [] });
+  test('tapping a tab asks; a refusal explains where to allow it', async ({ page }) => {
+    await tab(page, 'Wasserwaage');
+    await expect(page.locator('#st-level')).toHaveText(/abgelehnt.*Website-Einstellungen/);
+    await expect(page.locator('[data-start="level"]')).toHaveText('Erneut versuchen');
+  });
 });
 
 test('level: lying flat, calibration is stored', async ({ page }) => {
   await tab(page, 'Wasserwaage');
-  await start(page, 'level');
+  await running(page, 'level');
   await orientation(page, { alpha: 0, beta: 3, gamma: 0 });
   await expect(page.locator('#lvDeg')).toHaveText('3,0°');
   await expect(page.locator('#lvInfo')).toHaveText(/Liegend/);
@@ -97,7 +139,7 @@ test('level: lying flat, calibration is stored', async ({ page }) => {
   await expect(page.locator('#lvDeg')).toHaveText('0,0°');
   await expect(page.locator('#lvDial')).toHaveClass(/level-ok/);
   await page.reload();
-  await start(page, 'level');
+  await running(page, 'level');
   await orientation(page, { alpha: 0, beta: b, gamma: g });
   await expect(page.locator('#lvDeg')).toHaveText('0,0°');
   await page.click('#lvReset');
@@ -107,7 +149,7 @@ test('level: lying flat, calibration is stored', async ({ page }) => {
 
 test('level: standing on an edge', async ({ page }) => {
   await tab(page, 'Wasserwaage');
-  await start(page, 'level');
+  await running(page, 'level');
   // Upright (portrait), turned 2° in the screen plane: up = (sin 2°, cos 2°, 0) ⇔ beta 88°, gamma −90°
   await orientation(page, { alpha: 0, beta: 88, gamma: -90 });
   await expect(page.locator('#lvDeg')).toHaveText('2,0°');
@@ -120,7 +162,7 @@ test('level: standing on an edge', async ({ page }) => {
 
 test('acceleration with and without gravity', async ({ page }) => {
   await tab(page, 'Beschleunigung');
-  await start(page, 'accel');
+  await running(page, 'accel');
   const send = () => page.evaluate(() => {
     for (let i = 0; i < 5; i++) window.dispatchEvent(new DeviceMotionEvent('devicemotion', {
       acceleration: { x: 3, y: 4, z: 0 }, accelerationIncludingGravity: { x: 3, y: 4, z: 9.81 }, interval: 16,
@@ -142,7 +184,7 @@ test('acceleration with and without gravity', async ({ page }) => {
 
 test('vibrometer: RMS, peak and frequency of a 5 Hz vibration', async ({ page }) => {
   await tab(page, 'Vibrometer');
-  await start(page, 'vibro');
+  await running(page, 'vibro');
   const A = 2, f = 5, rate = 60, phase = 0.3;
   const xs = Array.from({ length: 3 * rate }, (_, k) => A * Math.sin(2 * Math.PI * f * (k + 1) / rate + phase));
   await page.evaluate(({ xs, rate }) => {
@@ -163,67 +205,6 @@ test('vibrometer: RMS, peak and frequency of a 5 Hz vibration', async ({ page })
   await expect(page.locator('#vPeak')).toHaveText('0,00');
 });
 
-test('magnetometer: field strength and change against the zero point', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.Magnetometer = class extends EventTarget {
-      constructor() { super(); this.x = null; this.y = null; this.z = null; }
-      start() { window.__mag = this; }
-      stop() { window.__magStopped = true; }
-    };
-    window.__read = (x, y, z) => { Object.assign(window.__mag, { x, y, z }); window.__mag.dispatchEvent(new Event('reading')); };
-  });
-  await page.reload();
-  await tab(page, 'Magnetfeld');
-  await start(page, 'mag');
-  await page.evaluate(() => window.__read(30, 0, 40));
-  await expect(page.locator('#mVal')).toHaveText('50,0');
-  await expect(page.locator('#mDelta')).toHaveText('0,0 µT');
-  await page.evaluate(() => window.__read(30, 40, 40));
-  const tot = Math.hypot(30, 40, 40);
-  await expect(page.locator('#mVal')).toHaveText(tot.toFixed(1).replace('.', ','));
-  await expect(page.locator('#mDelta')).toHaveText('+' + (tot - 50).toFixed(1).replace('.', ',') + ' µT');
-  await page.click('#mZero');
-  await page.evaluate(() => window.__read(30, 40, 40));
-  await expect(page.locator('#mDelta')).toHaveText('0,0 µT');
-  // Switching the tab stops the sensor
-  await tab(page, 'Kompass');
-  expect(await page.evaluate(() => window.__magStopped)).toBe(true);
-  await expect(page.locator('[data-start="mag"]')).toHaveText('Starten');
-});
-
-test('magnetometer: compass fallback without the sensor API', async ({ page }) => {
-  await page.addInitScript(() => { delete window.Magnetometer; });
-  await page.reload();
-  await tab(page, 'Magnetfeld');
-  await start(page, 'mag');
-  await expect(page.locator('#st-mag')).toHaveText(/Ersatzmodus/);
-  await orientation(page, { alpha: 0, beta: 0, gamma: 0, absolute: true }, 'deviceorientationabsolute', 1);
-  await orientation(page, { alpha: 330, beta: 0, gamma: 0, absolute: true }, 'deviceorientationabsolute', 1);
-  await expect(page.locator('#mVal')).toHaveText('30°');
-});
-
-test('pressure ↔ altitude by the barometric formula, boiling point', async ({ page }) => {
-  await tab(page, 'Luftdruck');
-  // Independent: h = 44330.8 m · (1 − (p/p0)^0.190263)
-  const p0 = 1013.25, p = 954.6;
-  const h = 44330.8 * (1 - Math.pow(p / p0, 0.190263));
-  await page.fill('#pPres', '954,6');
-  expect(Math.abs(num(await page.inputValue('#pAlt')) - h)).toBeLessThanOrEqual(1);
-  await page.fill('#pAlt', '0');
-  await expect(page.locator('#pPres')).toHaveValue('1013,3');
-  await expect(page.locator('#pResult')).toHaveText('Wasser siedet bei ca. 100,0 °C');
-  // 1500 m with a high-pressure day (1030 hPa)
-  await page.fill('#pQnh', '1030');
-  await page.fill('#pAlt', '1500');
-  const p1500 = 1030 * Math.pow(1 - 1500 / 44330.8, 5.25588);
-  expect(num(await page.inputValue('#pPres'))).toBeCloseTo(p1500, 1);
-  await page.reload();
-  await expect(page.locator('#pQnh')).toHaveValue('1030,00');
-  await expect(page.locator('#pAlt')).toHaveValue('1500');
-  await page.fill('#pQnh', '700');
-  await expect(page.locator('#pResult')).toHaveText(/zwischen 850 und 1100/);
-});
-
 test.describe('sound level', () => {
   test.beforeEach(async ({ page }) => {
     // Fake microphone: 1 kHz sine with amplitude 0.5 → RMS 0.5/√2 → −9.03 dBFS
@@ -237,12 +218,12 @@ test.describe('sound level', () => {
       };
     });
     await page.reload();
-    await tab(page, 'Schall');
   });
 
   test('level = microphone dBFS + calibration', async ({ page }) => {
     const dbfs = 20 * Math.log10(0.5 / Math.SQRT2);
-    await start(page, 'sound');
+    await tab(page, 'Schall');
+    await running(page, 'sound');
     await expect.poll(async () => num(await text(page, 'sNow')), { timeout: 8000 }).toBeGreaterThan(dbfs + 100 - 0.3);
     await page.waitForTimeout(800);
     expect(num(await text(page, 'sNow'))).toBeCloseTo(dbfs + 100, 0);
@@ -258,8 +239,8 @@ test.describe('sound level', () => {
     await page.evaluate(() => {
       navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('denied', 'NotAllowedError'); };
     });
-    await page.locator('[data-start="sound"]').click();
+    await tab(page, 'Schall');
     await expect(page.locator('#st-sound')).toHaveText('Zugriff auf das Mikrofon wurde abgelehnt.');
-    await expect(page.locator('[data-start="sound"]')).toHaveText('Starten');
+    await expect(page.locator('[data-start="sound"]')).toHaveText('Erneut versuchen');
   });
 });
