@@ -28,6 +28,36 @@ export function allPages() {
   return pages;
 }
 
+/* ---------- Vendor references of an app (checked by build.mjs) ----------
+   How an app must reference vendor files so that they work offline (see AGENTS.md):
+   - literally as ../assets/vendor/<name>/… with <name> from scripts/vendor.json. A path put together
+     at runtime ('…/vendor/' + name) is invisible to build.mjs and would be missing from the offline cache.
+   - a library's worker script is never started straight from assets/vendor/: a worker outside the app
+     folder is not served by the app's service worker and fails offline. A small worker in the app folder
+     loads it instead (import / importScripts on that line).
+   files: [{ file, text }] (page and scripts of the app), folder: app folder, names: vendor names.
+   Returns one message per problem ("file:line: …"). */
+export function vendorProblems(files, folder, names) {
+  const known = new Set(names);
+  const problems = [];
+  for (const { file, text } of files) {
+    text.split('\n').forEach((line, i) => {
+      for (const m of line.matchAll(/assets\/vendor\/([^\s"'`)]*)/g)) {
+        const at = `${file}:${i + 1}`;
+        const name = line.slice(Math.max(0, m.index - 3), m.index) === '../' && /^([^/]+)\//.exec(m[1])?.[1];
+        if (!name || !known.has(name)) {
+          problems.push(`${at}: vendor path not written as ../assets/vendor/<name>/… with <name> from scripts/vendor.json` +
+            ` – the offline cache would miss it: ${line.trim().slice(0, 100)}`);
+        } else if (/worker/i.test(m[1].split('/').pop()) && !/^\s*(import\b|importScripts\s*\()/.test(line)) {
+          problems.push(`${at}: worker ${m[1]} started from assets/vendor/ – outside ${folder}/ it bypasses the` +
+            ` service worker and fails offline; start a small worker in ${folder}/ that imports it`);
+        }
+      }
+    });
+  }
+  return problems;
+}
+
 /* ---------- npm packages (used by vendor.mjs and build-icons.mjs) ---------- */
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';

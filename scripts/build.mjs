@@ -30,7 +30,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
-import { ROOT, decode, meta, allPages } from './lib.mjs';
+import { ROOT, decode, meta, allPages, vendorProblems } from './lib.mjs';
 
 const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules', 'tests']);
 const SITE = 'https://phanlipo.github.io/';
@@ -241,6 +241,11 @@ function vendorsOf(p) {
   return [...names].sort();
 }
 
+// Vendor references that would break offline use (rules: see vendorProblems in lib.mjs)
+const appVendorProblems = p => vendorProblems(
+  [p.file, ...filesIn(p.folder).filter(f => /\.m?js$/.test(f) && !f.endsWith('/sw.js'))].map(f => ({ file: f, text: read(f) })),
+  p.folder, Object.keys(VENDOR));
+
 // Everything the app needs offline, as repo-relative paths
 function precacheList(p) {
   // Every file of the app folder (page, manifest, icons, helper scripts) except the service worker itself
@@ -362,6 +367,11 @@ for (const p of pages) {
 }
 for (const p of apps) {
   if (!p.storage) console.warn(`! ${p.file}: <meta name="tool:storage"> missing – no data backup section`);
+}
+const problems = apps.flatMap(appVendorProblems);
+if (problems.length) {
+  console.error(problems.map(x => `✗ ${x}`).join('\n'));
+  process.exit(1);
 }
 // Manifests first: they are part of the cached files and therefore of the version hash
 for (const p of apps) put(`${p.folder}/manifest.webmanifest`, manifest(p));
