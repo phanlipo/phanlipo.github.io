@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Handy-Sensoren</title>
+<meta name="description" content="Kompass, Wasserwaage, Beschleunigung, Vibrometer, Magnetfeld (Metalldetektor), Luftdruck-Höhe und Schallpegel – mit den Sensoren des Handys messen.">
+<meta name="tool:tags" content="Alltag, Messen, Werkzeug">
+<meta name="tool:features" content="Bewegungssensor, Mikrofon">
+<meta name="tool:order" content="70">
+<meta name="tool:icon" content="gauge">
+<meta name="tool:color" content="#be123c">
+<meta name="tool:short-name" content="Sensoren">
+<meta name="tool:storage" content="sensors.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-i/pwp6H1YA34sCmuDhMrbntAm3kiWf5tRiCQ1D5HQBo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Sensoren">
+<meta name="theme-color" content="#be123c">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#be123c;--accent-text:#ffffff;--c1:#be123c;--c2:#1d7a3a;--c3:#0b5cad;--bubble:#65a30d}
+@media (prefers-color-scheme: dark){
+  :root{--accent:#fb7185;--accent-text:#1b0a10;--c1:#fb7185;--c2:#6fd38c;--c3:#5aa2ef;--bubble:#a3e635}
+}
+main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--page-width:720px}
+.tabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.tab{border:1px solid var(--border);background:var(--surface);color:var(--text);min-height:44px;padding:4px 6px;border-radius:8px;cursor:pointer;font:inherit;font-size:14px;font-weight:600;hyphens:auto;overflow-wrap:anywhere}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.panel{display:grid;gap:12px}
+.panel h2{margin:0}
+.readout{font-size:52px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;line-height:1.1;margin:0}
+.readout small{font-size:20px;font-weight:600;color:var(--muted)}
+.under{text-align:center;color:var(--muted);margin:0;font-size:15px}
+.status{min-height:1.4em;font-size:14px;color:var(--muted);text-align:center;margin:0}
+.status.err{color:var(--err)}
+.status.warn{color:var(--warn)}
+.status.ok{color:var(--ok)}
+.btn{min-height:44px}
+.btn.start{flex:1 1 160px;font-size:18px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;text-align:center}
+.stat{background:var(--surface-2);border-radius:8px;padding:8px 4px;min-width:0}
+.stat b{display:block;font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat span{font-size:12px;color:var(--muted)}
+.graph{width:100%;height:150px;display:block;background:var(--surface-2);border-radius:8px}
+.legend{display:flex;gap:14px;justify-content:center;font-size:13px;color:var(--muted);margin:0}
+.legend i{display:inline-block;width:12px;height:4px;border-radius:2px;vertical-align:middle;margin-inline-end:4px}
+.seg{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;background:var(--surface-2);color:var(--text);min-height:44px;font:inherit;font-size:14px;cursor:pointer;padding-inline:6px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+.dial{width:min(260px,72vw);aspect-ratio:1;margin-inline:auto;position:relative}
+.dial svg{width:100%;height:100%;display:block}
+/* Compass */
+.rose{transform-origin:50% 50%}
+.rose .ring{fill:var(--surface-2);stroke:var(--border);stroke-width:2}
+.rose .tick{stroke:var(--muted);stroke-width:1}
+.rose .tick.major{stroke:var(--text);stroke-width:2}
+.rose text{fill:var(--text);font:600 15px var(--font);text-anchor:middle;dominant-baseline:central}
+.rose text.n{fill:var(--c1);font-size:19px}
+.pointer{fill:var(--c1)}
+/* Level */
+.lv-ring{fill:var(--surface-2);stroke:var(--border);stroke-width:2}
+.lv-cross{stroke:var(--muted);stroke-width:1}
+.lv-target{fill:none;stroke:var(--muted);stroke-width:1.5}
+.lv-bubble{fill:var(--bubble);fill-opacity:.85;stroke:var(--text);stroke-width:1.5}
+.lv-line{stroke:var(--c3);stroke-width:4;stroke-linecap:round}
+.lv-ref{stroke:var(--muted);stroke-width:1;stroke-dasharray:4 4}
+.dial.level-ok .lv-ring{stroke:var(--ok);stroke-width:5}
+/* Magnet */
+.meter{height:22px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden}
+.meter>div{height:100%;width:0;background:var(--accent);transition:width .1s}
+label.check{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+label.check input{width:22px;height:22px;accent-color:var(--accent)}
+/* Pressure */
+.form{display:grid;gap:10px}
+.form label{display:grid;gap:4px;font-size:14px;color:var(--muted);font-weight:600}
+.form input{min-height:44px;padding-inline:10px;font-size:18px;width:100%}
+.result{font-size:15px;margin:0}
+.cal{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+.cal label{display:grid;gap:4px;font-size:14px;color:var(--muted);font-weight:600}
+.cal input{min-height:44px;width:110px;padding-inline:10px;font-size:16px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Handy-Sensoren</h1>
+  <p class="sub">Kompass, Wasserwaage, Bewegung, Magnetfeld, Luftdruck und Schall</p>
+</header>
+
+<main>
+  <div class="tabs" role="tablist" aria-label="Messung wählen" id="tabs">
+    <button type="button" role="tab" class="tab" id="tab-compass" aria-controls="p-compass" data-tab="compass">Kompass</button>
+    <button type="button" role="tab" class="tab" id="tab-level" aria-controls="p-level" data-tab="level">Wasserwaage</button>
+    <button type="button" role="tab" class="tab" id="tab-accel" aria-controls="p-accel" data-tab="accel">Beschleunigung</button>
+    <button type="button" role="tab" class="tab" id="tab-vibro" aria-controls="p-vibro" data-tab="vibro">Vibrometer</button>
+    <button type="button" role="tab" class="tab" id="tab-mag" aria-controls="p-mag" data-tab="mag">Magnetfeld</button>
+    <button type="button" role="tab" class="tab" id="tab-pressure" aria-controls="p-pressure" data-tab="pressure">Luftdruck</button>
+    <button type="button" role="tab" class="tab" id="tab-sound" aria-controls="p-sound" data-tab="sound">Schall</button>
+  </div>
+
+  <!-- Compass -->
+  <section class="card panel" id="p-compass" role="tabpanel" aria-labelledby="tab-compass" hidden>
+    <h2>Kompass</h2>
+    <div class="dial">
+      <svg viewBox="0 0 200 200" aria-hidden="true">
+        <g class="rose" id="cRose">
+          <circle class="ring" cx="100" cy="100" r="92"></circle>
+          <g id="cTicks"></g>
+          <text class="n" x="100" y="30">N</text>
+          <text x="170" y="100">O</text>
+          <text x="100" y="170">S</text>
+          <text x="30" y="100">W</text>
+        </g>
+        <path class="pointer" d="M100 2 L108 18 L92 18 Z"></path>
+      </svg>
+    </div>
+    <p class="readout" aria-live="off"><span id="cDeg">–</span></p>
+    <p class="under">Richtung: <b id="cDir">–</b></p>
+    <p class="status" id="st-compass" role="status"></p>
+    <div class="row"><button type="button" class="btn primary start" data-start="compass">Starten</button></div>
+  </section>
+
+  <!-- Level -->
+  <section class="card panel" id="p-level" role="tabpanel" aria-labelledby="tab-level" hidden>
+    <h2>Wasserwaage</h2>
+    <div class="dial" id="lvDial">
+      <svg viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="lv-ring" cx="100" cy="100" r="95"></circle>
+        <g id="lvFlat">
+          <line class="lv-cross" x1="5" y1="100" x2="195" y2="100"></line>
+          <line class="lv-cross" x1="100" y1="5" x2="100" y2="195"></line>
+          <circle class="lv-target" cx="100" cy="100" r="22"></circle>
+          <circle class="lv-bubble" id="lvBubble" cx="100" cy="100" r="18"></circle>
+        </g>
+        <g id="lvEdge" hidden>
+          <line class="lv-ref" x1="10" y1="100" x2="190" y2="100"></line>
+          <line class="lv-line" id="lvLine" x1="15" y1="100" x2="185" y2="100"></line>
+        </g>
+      </svg>
+    </div>
+    <p class="readout"><span id="lvDeg">–</span></p>
+    <p class="under" id="lvInfo">Handy flach hinlegen oder mit der Kante an die Fläche halten.</p>
+    <p class="status" id="st-level" role="status"></p>
+    <div class="row">
+      <button type="button" class="btn primary start" data-start="level">Starten</button>
+      <button type="button" class="btn" id="lvZero">Nullpunkt setzen</button>
+      <button type="button" class="btn" id="lvReset">Nullpunkt zurücksetzen</button>
+    </div>
+  </section>
+
+  <!-- Acceleration -->
+  <section class="card panel" id="p-accel" role="tabpanel" aria-labelledby="tab-accel" hidden>
+    <h2>Beschleunigung</h2>
+    <div class="seg" role="group" aria-label="Messart">
+      <button type="button" data-grav="1" aria-pressed="true">mit Schwerkraft</button>
+      <button type="button" data-grav="0" aria-pressed="false">ohne Schwerkraft</button>
+    </div>
+    <p class="readout"><span id="aTot">–</span> <small>m/s²</small></p>
+    <p class="under"><span id="aG">–</span> g · Maximum <span id="aMax">–</span> m/s²</p>
+    <div class="stats">
+      <div class="stat"><b id="aX">–</b><span>X (m/s²)</span></div>
+      <div class="stat"><b id="aY">–</b><span>Y (m/s²)</span></div>
+      <div class="stat"><b id="aZ">–</b><span>Z (m/s²)</span></div>
+    </div>
+    <canvas class="graph" id="aGraph" role="img" aria-label="Verlauf der Beschleunigung der letzten 10 Sekunden"></canvas>
+    <p class="legend" aria-hidden="true"><span><i style="background:var(--c1)"></i>X</span><span><i style="background:var(--c2)"></i>Y</span><span><i style="background:var(--c3)"></i>Z</span></p>
+    <p class="status" id="st-accel" role="status"></p>
+    <div class="row">
+      <button type="button" class="btn primary start" data-start="accel">Starten</button>
+      <button type="button" class="btn" id="aReset">Maximum zurücksetzen</button>
+    </div>
+  </section>
+
+  <!-- Vibrometer -->
+  <section class="card panel" id="p-vibro" role="tabpanel" aria-labelledby="tab-vibro" hidden>
+    <h2>Vibrometer</h2>
+    <p class="readout"><span id="vRms">–</span> <small>m/s²</small></p>
+    <p class="under">Effektivwert der letzten Sekunde · <b id="vLevel">–</b></p>
+    <div class="stats">
+      <div class="stat"><b id="vPeak">–</b><span>Spitze (m/s²)</span></div>
+      <div class="stat"><b id="vFreq">–</b><span>Frequenz (Hz)</span></div>
+      <div class="stat"><b id="vRate">–</b><span>Messrate (Hz)</span></div>
+    </div>
+    <canvas class="graph" id="vGraph" role="img" aria-label="Verlauf der Schwingungsstärke der letzten 10 Sekunden"></canvas>
+    <p class="status" id="st-vibro" role="status"></p>
+    <div class="row">
+      <button type="button" class="btn primary start" data-start="vibro">Starten</button>
+      <button type="button" class="btn" id="vReset">Spitze zurücksetzen</button>
+    </div>
+  </section>
+
+  <!-- Magnetic field -->
+  <section class="card panel" id="p-mag" role="tabpanel" aria-labelledby="tab-mag" hidden>
+    <h2>Magnetfeld &amp; Metalldetektor</h2>
+    <p class="readout"><span id="mVal">–</span> <small id="mUnit">µT</small></p>
+    <p class="under" id="mInfo">Änderung zum Nullpunkt: <b id="mDelta">–</b></p>
+    <div class="meter" aria-hidden="true"><div id="mBar"></div></div>
+    <p class="under" id="mXYZ"></p>
+    <p class="status" id="st-mag" role="status"></p>
+    <label class="check"><input type="checkbox" id="mTone"> Ton bei Ausschlag</label>
+    <div class="row">
+      <button type="button" class="btn primary start" data-start="mag">Starten</button>
+      <button type="button" class="btn" id="mZero">Nullpunkt setzen</button>
+    </div>
+  </section>
+
+  <!-- Air pressure -->
+  <section class="card panel" id="p-pressure" role="tabpanel" aria-labelledby="tab-pressure" hidden>
+    <h2>Luftdruck &amp; Höhe</h2>
+    <p class="note">Browser erlauben keinen Zugriff auf den Luftdrucksensor (Barometer) des Handys. Hier lassen sich Luftdruck und Höhe nach der Standardatmosphäre umrechnen – den Druck z.&nbsp;B. von einer Wetter-App oder einem Barometer übernehmen.</p>
+    <div class="form">
+      <label for="pPres">Luftdruck am Ort (hPa)<input type="text" inputmode="decimal" id="pPres" autocomplete="off"></label>
+      <label for="pAlt">Höhe über Meeresspiegel (m)<input type="text" inputmode="decimal" id="pAlt" autocomplete="off"></label>
+      <label for="pQnh">Luftdruck auf Meereshöhe (hPa, Standard 1013,25)<input type="text" inputmode="decimal" id="pQnh" autocomplete="off"></label>
+    </div>
+    <p class="result" id="pResult" role="status"></p>
+    <div class="row"><button type="button" class="btn" id="pGps">Höhe per GPS übernehmen</button></div>
+    <p class="status" id="st-pressure" role="status"></p>
+  </section>
+
+  <!-- Sound level -->
+  <section class="card panel" id="p-sound" role="tabpanel" aria-labelledby="tab-sound" hidden>
+    <h2>Schallmessung</h2>
+    <p class="readout"><span id="sNow">–</span> <small>dB</small></p>
+    <p class="under" id="sDesc">–</p>
+    <div class="stats">
+      <div class="stat"><b id="sMin">–</b><span>Minimum (dB)</span></div>
+      <div class="stat"><b id="sAvg">–</b><span>Mittel (dB)</span></div>
+      <div class="stat"><b id="sMax">–</b><span>Maximum (dB)</span></div>
+    </div>
+    <canvas class="graph" id="sGraph" role="img" aria-label="Verlauf des Schallpegels der letzten 30 Sekunden"></canvas>
+    <p class="status" id="st-sound" role="status"></p>
+    <div class="row">
+      <button type="button" class="btn primary start" data-start="sound">Starten</button>
+      <button type="button" class="btn" id="sReset">Werte zurücksetzen</button>
+    </div>
+    <div class="cal">
+      <label for="sCal">Kalibrierung (dB)<input type="text" inputmode="decimal" id="sCal" autocomplete="off"></label>
+      <p class="muted" style="margin:0">Messwert = Mikrofonpegel <span id="sDbfs">–</span> dBFS + Kalibrierung</p>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary>Daten sichern &amp; übertragen</summary>
+  <p>Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary>Anleitung &amp; Hinweise</summary>
+  <p>Die App liest die Sensoren des Handys direkt im Browser aus. Oben den Bereich wählen und <b>Starten</b> tippen. Es läuft immer nur eine Messung; beim Wechsel des Bereichs wird sie beendet. Während einer Messung bleibt der Bildschirm an (falls das Gerät es erlaubt).</p>
+  <h3>Berechtigungen</h3>
+  <ul>
+    <li><b>iPhone/iPad:</b> Beim ersten Start fragt Safari nach dem Zugriff auf „Bewegung und Ausrichtung“ – erlauben. Wurde abgelehnt, die Seite schließen und neu öffnen.</li>
+    <li><b>Schallmessung:</b> braucht den Zugriff auf das Mikrofon. Der Ton wird nur ausgewertet, nicht aufgenommen oder gespeichert.</li>
+    <li>Am Computer gibt es meist keine Bewegungssensoren – dann erscheint ein Hinweis.</li>
+  </ul>
+  <h3>Kompass</h3>
+  <ul>
+    <li>Handy flach halten; die Spitze oben zeigt die Blickrichtung. Angezeigt wird die Richtung zum <b>magnetischen</b> Nordpol (in Deutschland ca. 3–5° östlich von geografisch Nord).</li>
+    <li>Zeigt der Kompass falsch: Handy in Form einer 8 schwenken (kalibrieren) und Abstand zu Metall, Magneten und Hüllen mit Magnetverschluss halten.</li>
+  </ul>
+  <h3>Wasserwaage</h3>
+  <ul>
+    <li><b>Liegend:</b> Handy auf die Fläche legen – die Blase wandert zur höheren Seite, die Zahl ist die Neigung.</li>
+    <li><b>Stehend:</b> Handy mit einer Kante an die Fläche halten – die blaue Linie zeigt die echte Waagerechte, die Zahl die Abweichung von waagerecht bzw. senkrecht.</li>
+    <li>Ein grüner Rand bedeutet: weniger als 0,3° Abweichung.</li>
+    <li><b>Nullpunkt setzen</b> gleicht einen schiefen Sensor oder eine Kamera-Wölbung aus: Handy auf eine sicher ebene Fläche legen, tippen. Wird gespeichert.</li>
+  </ul>
+  <h3>Beschleunigung</h3>
+  <ul>
+    <li><b>mit Schwerkraft:</b> Ruhend misst das Handy etwa 9,81 m/s² (= 1 g) nach oben. Die Achsen: X nach rechts, Y nach oben (Richtung Oberkante), Z aus dem Bildschirm heraus. Manche Geräte (v. a. ältere iPhones) zeigen umgekehrte Vorzeichen.</li>
+    <li><b>ohne Schwerkraft:</b> nur die Bewegung selbst, z. B. beim Anfahren im Auto oder Aufzug.</li>
+  </ul>
+  <h3>Vibrometer</h3>
+  <ul>
+    <li>Handy auf die schwingende Fläche legen (Waschmaschine, Boden, Tisch). Gemessen wird die Beschleunigung ohne Schwerkraft.</li>
+    <li><b>Effektivwert</b> = mittlere Stärke der letzten Sekunde, <b>Spitze</b> = größter Einzelwert. Die <b>Frequenz</b> ist eine Schätzung der Hauptschwingung; sie reicht höchstens bis zur halben Messrate (meist 30–50 Hz). Schnelle Vibrationen (Motoren) werden daher nicht richtig erfasst.</li>
+    <li>Kein geeichtes Messgerät, gut zum Vergleichen (vorher – nachher).</li>
+  </ul>
+  <h3>Magnetfeld &amp; Metalldetektor</h3>
+  <ul>
+    <li>Das Erdmagnetfeld hat in Deutschland etwa 48–50 µT. <b>Nullpunkt setzen</b> und das Handy dann langsam über Wand oder Boden führen: Eisen, Stahl (Nägel, Rohre, Bewehrung) und Magnete verändern den Wert. Kupfer, Aluminium und Gold reagieren <b>nicht</b>. Stromleitungen sind so nicht sicher zu finden – vor dem Bohren immer ein echtes Leitungssuchgerät benutzen.</li>
+    <li>Der Magnetsensor ist im Browser nur eingeschränkt verfügbar: In Chrome für Android muss dafür unter <code>chrome://flags</code> „Generic Sensor Extra Classes“ eingeschaltet werden. Safari bietet ihn nicht an.</li>
+    <li>Ohne Magnetsensor arbeitet die App im <b>Ersatzmodus</b>: Sie zeigt, um wie viel Grad Metall die Kompassrichtung ablenkt. Das ist ungenauer, findet aber z. B. Magnete und größere Eisenteile.</li>
+  </ul>
+  <h3>Luftdruck</h3>
+  <ul>
+    <li>Viele Handys haben ein Barometer, aber kein Browser gibt es an Webseiten weiter. Deshalb gibt es hier einen Umrechner: Luftdruck ↔ Höhe nach der internationalen Höhenformel (Standardatmosphäre, 15 °C auf Meereshöhe).</li>
+    <li>Für eine genaue Höhe den aktuellen <b>Luftdruck auf Meereshöhe</b> (QNH, steht in Wetterberichten) eintragen. Wetter verändert den Druck um bis zu ±30 hPa – das sind ±250 m.</li>
+    <li><b>Höhe per GPS</b> fragt den Standort des Geräts ab (nur die Höhe wird verwendet, nichts wird gesendet). Nicht jeder Browser liefert eine Höhe.</li>
+    <li>Zusätzlich wird der Siedepunkt von Wasser beim angegebenen Druck geschätzt (z. B. für Kochzeiten in den Bergen).</li>
+  </ul>
+  <h3>Schallmessung</h3>
+  <ul>
+    <li>Handy-Mikrofone sind nicht kalibriert; die Werte sind <b>Schätzungen</b> (ohne A-Bewertung, ±5–10 dB). Für Vergleiche (lauter/leiser) taugen sie gut.</li>
+    <li><b>Kalibrierung:</b> Neben ein Schallpegelmessgerät halten und den Wert so ändern, dass beide gleich anzeigen. Der Wert wird gespeichert. Voreinstellung: 100 dB.</li>
+    <li>Sehr laute Geräusche (über ca. 100 dB) übersteuern das Mikrofon – dann zeigt die App zu wenig an.</li>
+  </ul>
+  <table>
+    <caption class="sr-only">Typische Schallpegel</caption>
+    <thead><tr><th scope="col">Pegel</th><th scope="col">Beispiel</th></tr></thead>
+    <tbody>
+      <tr><td>30 dB</td><td>Flüstern, ruhiges Schlafzimmer</td></tr>
+      <tr><td>40 dB</td><td>leise Wohnung, Bibliothek</td></tr>
+      <tr><td>60 dB</td><td>normales Gespräch</td></tr>
+      <tr><td>70 dB</td><td>Staubsauger, laufender Fernseher</td></tr>
+      <tr><td>80 dB</td><td>starker Straßenverkehr – bei Dauerbelastung Gehör gefährdet</td></tr>
+      <tr><td>100 dB</td><td>Disco, Presslufthammer</td></tr>
+      <tr><td>120 dB</td><td>Flugzeugstart in der Nähe – Schmerzgrenze</td></tr>
+    </tbody>
+  </table>
+</details>
+
+<footer>
+  <p>Läuft vollständig im Browser · Messwerte verlassen das Gerät nicht</p>
+  <!-- footer:start -->
+  <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
+  <p class="footer-version">Version ddd384c0b8ff</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const {$, load, save, toast, fmt, parseNum} = Tools;
+const LS = 'sensors.settings.v1';
+const S = Object.assign({tab:'compass', level:{x:0, y:0, e:0}, grav:true, soundCal:100, magTone:false, qnh:1013.25, pres:null, alt:null, src:'pres'}, load(LS, {}) || {});
+S.level = Object.assign({x:0, y:0, e:0}, S.level);
+const store = () => save(LS, S);
+const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const TABS = ['compass', 'level', 'accel', 'vibro', 'mag', 'pressure', 'sound'];
+
+// Rotation of the screen content relative to the device (0, 90, 180, 270)
+function screenAngle(){
+  const o = screen.orientation;
+  const a = o && typeof o.angle === 'number' ? o.angle : (typeof window.orientation === 'number' ? window.orientation : 0);
+  return ((a % 360) + 360) % 360;
+}
+
+/* ---------- Running measurement: listeners, timers and resources are released on stop ---------- */
+let offs = [], running = null, watchdog = 0, wakeLock = null;
+function on(target, type, fn){ target.addEventListener(type, fn); offs.push(() => target.removeEventListener(type, fn)); }
+function loop(fn){
+  let id = 0;
+  const step = t => { fn(t); id = requestAnimationFrame(step); };
+  id = requestAnimationFrame(step);
+  offs.push(() => cancelAnimationFrame(id));
+}
+function cleanup(){ const list = offs; offs = []; list.forEach(f => { try { f(); } catch (_) {} }); }
+
+function setStatus(name, msg, cls){
+  const el = $('st-' + name);
+  el.textContent = msg || '';
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+const startBtn = name => document.querySelector(`[data-start="${name}"]`);
+
+async function requestWake(){
+  try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) { wakeLock = null; }
+}
+function releaseWake(){ try { if (wakeLock) wakeLock.release().catch(() => {}); } catch (_) {} wakeLock = null; }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && running) requestWake(); });
+
+function stopRunning(){
+  if (!running) return;
+  const n = running;
+  running = null;
+  clearTimeout(watchdog);
+  try { if (P[n].stop) P[n].stop(); } catch (_) {}
+  cleanup();
+  releaseWake();
+  startBtn(n).textContent = 'Starten';
+}
+async function startPanel(n){
+  stopRunning();
+  P[n].seen = false;
+  setStatus(n, '');
+  try { await P[n].start(); }
+  catch (e) { cleanup(); setStatus(n, e && e.message ? e.message : String(e), 'err'); return; }
+  running = n;
+  startBtn(n).textContent = 'Stoppen';
+  requestWake();
+  watchdog = setTimeout(() => { if (running === n && !P[n].seen) setStatus(n, P[n].noData, 'warn'); }, 3000);
+}
+function seen(n){
+  if (!P[n].seen) { P[n].seen = true; if ($('st-' + n).classList.contains('warn')) setStatus(n, ''); }
+}
+
+// iOS 13+: motion/orientation access must be requested from a tap
+async function askPermission(Ev){
+  if (!Ev) throw new Error('Dieser Browser unterstützt keine Bewegungs- und Lagesensoren.');
+  if (typeof Ev.requestPermission !== 'function') return;
+  let r;
+  try { r = await Ev.requestPermission(); }
+  catch (e) { throw new Error('Zugriff auf die Bewegungssensoren nicht möglich: ' + e.message); }
+  if (r !== 'granted') throw new Error('Zugriff auf Bewegung und Ausrichtung wurde abgelehnt. Seite schließen, neu öffnen und erlauben.');
+}
+
+// Compass heading in degrees (0 = magnetic north, clockwise), for compass and magnet fallback
+function listenHeading(cb){
+  let absolute = false;
+  on(window, 'deviceorientationabsolute', e => {
+    if (e.alpha == null) return;
+    absolute = true;
+    cb((360 - e.alpha + screenAngle()) % 360, e);
+  });
+  on(window, 'deviceorientation', e => {
+    if (typeof e.webkitCompassHeading === 'number' && e.webkitCompassHeading >= 0) cb((e.webkitCompassHeading + screenAngle()) % 360, e);
+    else if (!absolute && e.absolute === true && e.alpha != null) cb((360 - e.alpha + screenAngle()) % 360, e);
+  });
+}
+const angleDiff = (a, b) => ((a - b + 540) % 360) - 180;
+
+/* ---------- Canvas graph ---------- */
+function drawGraph(cv, series, colors, lo, hi, zero){
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const c = cv.getContext('2d'), css = getComputedStyle(document.documentElement);
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  const y = v => h - 6 - (clamp(v, lo, hi) - lo) / (hi - lo) * (h - 12);
+  if (zero != null) {
+    c.strokeStyle = css.getPropertyValue('--border'); c.lineWidth = 1;
+    c.beginPath(); c.moveTo(0, y(zero)); c.lineTo(w, y(zero)); c.stroke();
+  }
+  series.forEach((s, i) => {
+    if (s.length < 2) return;
+    c.strokeStyle = css.getPropertyValue(colors[i]); c.lineWidth = 2; c.lineJoin = 'round';
+    c.beginPath();
+    s.forEach((v, k) => { const x = w - (s.length - 1 - k) * (w / (s.cap - 1)); k ? c.lineTo(x, y(v)) : c.moveTo(x, y(v)); });
+    c.stroke();
+  });
+}
+// Fixed-size history for graphs
+function history(cap){ const a = []; a.cap = cap; a.add = v => { a.push(v); if (a.length > cap) a.shift(); }; return a; }
+
+/* ---------- Compass ---------- */
+const DIRS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+(function ticks(){
+  let s = '';
+  for (let d = 0; d < 360; d += 10) {
+    const major = d % 30 === 0, r1 = 92, r2 = major ? 80 : 85, a = rad(d);
+    s += `<line class="tick${major ? ' major' : ''}" x1="${100 + r1 * Math.sin(a)}" y1="${100 - r1 * Math.cos(a)}" x2="${100 + r2 * Math.sin(a)}" y2="${100 - r2 * Math.cos(a)}"></line>`;
+  }
+  $('cTicks').innerHTML = s;
+})();
+const compass = {
+  noData: 'Keine Kompassdaten – das Gerät hat keinen Magnetsensor oder der Browser stellt ihn nicht bereit.',
+  async start(){
+    await askPermission(window.DeviceOrientationEvent);
+    this.vx = null; this.rot = 0;
+    listenHeading((h, e) => this.update(h, e));
+  },
+  update(h, e){
+    seen('compass');
+    // Smooth on the unit circle so 359° → 1° does not jump
+    const x = Math.cos(rad(h)), y = Math.sin(rad(h));
+    if (this.vx == null) { this.vx = x; this.vy = y; }
+    else { this.vx += 0.3 * (x - this.vx); this.vy += 0.3 * (y - this.vy); }
+    const head = (deg(Math.atan2(this.vy, this.vx)) + 360) % 360;
+    this.rot += angleDiff(-head, this.rot);
+    $('cRose').style.transform = `rotate(${this.rot}deg)`;
+    $('cDeg').textContent = Math.round(head) % 360 + '°';
+    $('cDir').textContent = DIRS[Math.round(head / 22.5) % 16];
+    if (e && e.beta != null && (Math.abs(e.beta) > 35 || Math.abs(e.gamma) > 35)) setStatus('compass', 'Handy möglichst flach halten', 'warn');
+    else if ($('st-compass').classList.contains('warn')) setStatus('compass', '');
+  },
+};
+
+/* ---------- Level ---------- */
+const level = {
+  noData: 'Keine Lagedaten – das Gerät hat keinen Lagesensor oder der Browser stellt ihn nicht bereit.',
+  raw: null,
+  async start(){
+    await askPermission(window.DeviceOrientationEvent);
+    this.u = null;
+    on(window, 'deviceorientation', e => { if (e.beta != null && e.gamma != null) { seen('level'); this.update(e.beta, e.gamma); } });
+  },
+  update(b, g){
+    // "Up" direction in device coordinates (x right, y top edge, z out of the screen)
+    let ux = -Math.sin(rad(g)) * Math.cos(rad(b)), uy = Math.sin(rad(b)), uz = Math.cos(rad(g)) * Math.cos(rad(b));
+    if (!this.u) this.u = [ux, uy, uz];
+    else { const k = 0.35; this.u = this.u.map((v, i) => v + k * ([ux, uy, uz][i] - v)); }
+    [ux, uy, uz] = this.u;
+    // Into screen coordinates (screen content may be rotated)
+    const A = rad(screenAngle());
+    const sx = ux * Math.cos(A) - uy * Math.sin(A), sy = ux * Math.sin(A) + uy * Math.cos(A);
+    const n = Math.hypot(sx, sy, uz) || 1;
+    if (Math.abs(uz) / n >= Math.SQRT1_2) {
+      const tx = deg(Math.atan2(sx, Math.abs(uz))), ty = deg(Math.atan2(sy, Math.abs(uz)));
+      this.raw = {mode: 'flat', tx, ty};
+      const cx = tx - S.level.x, cy = ty - S.level.y, tot = Math.hypot(cx, cy);
+      const k = Math.min(1, 10 / Math.max(10, tot)); // bubble at the rim from 10°
+      $('lvBubble').setAttribute('cx', 100 + cx * 7.2 * k);
+      $('lvBubble').setAttribute('cy', 100 - cy * 7.2 * k);
+      $('lvFlat').hidden = false; $('lvEdge').hidden = true;
+      this.show(tot, `Liegend · links/rechts ${fmt(cx, 1)}° · oben/unten ${fmt(cy, 1)}°`);
+    } else {
+      const a = deg(Math.atan2(sx, sy));
+      const dev = a - 90 * Math.round(a / 90);
+      this.raw = {mode: 'edge', dev};
+      let cd = dev - S.level.e;
+      cd = cd - 90 * Math.round(cd / 90);
+      $('lvLine').setAttribute('transform', `rotate(${a - S.level.e} 100 100)`);
+      $('lvFlat').hidden = true; $('lvEdge').hidden = false;
+      const vertical = Math.abs(Math.round(a / 90)) % 2 === 0; // long edge points up → checking a vertical
+      this.show(Math.abs(cd), `Stehend · Abweichung von ${vertical ? 'senkrecht' : 'waagerecht'} (${cd > 0 ? 'im' : 'gegen den'} Uhrzeigersinn)`);
+    }
+  },
+  show(v, info){
+    $('lvDeg').textContent = fmt(v, 1) + '°';
+    $('lvInfo').textContent = info;
+    $('lvDial').classList.toggle('level-ok', v < 0.3);
+  },
+};
+$('lvZero').addEventListener('click', () => {
+  const r = level.raw;
+  if (!r) { toast('Erst die Messung starten'); return; }
+  if (r.mode === 'flat') { S.level.x = r.tx; S.level.y = r.ty; } else S.level.e = r.dev;
+  store(); toast('Nullpunkt gespeichert');
+});
+$('lvReset').addEventListener('click', () => { S.level = {x:0, y:0, e:0}; store(); toast('Nullpunkt zurückgesetzt'); });
+
+/* ---------- Acceleration ---------- */
+const G = 9.80665;
+const accel = {
+  noData: 'Keine Beschleunigungsdaten – das Gerät hat keinen Beschleunigungssensor oder der Browser stellt ihn nicht bereit.',
+  async start(){
+    await askPermission(window.DeviceMotionEvent);
+    this.reset();
+    this.cur = null;
+    on(window, 'devicemotion', e => {
+      const a = S.grav ? e.accelerationIncludingGravity : e.acceleration;
+      if (!a || a.x == null) {
+        if (!S.grav && e.accelerationIncludingGravity && e.accelerationIncludingGravity.x != null) setStatus('accel', 'Das Gerät liefert keine Werte ohne Schwerkraft.', 'warn');
+        return;
+      }
+      seen('accel');
+      const v = [a.x, a.y, a.z], tot = Math.hypot(...v);
+      this.cur = {v, tot};
+      this.max = Math.max(this.max, tot);
+      this.hist.forEach((h, i) => h.add(v[i]));
+    });
+    loop(() => this.render());
+  },
+  reset(){ this.max = 0; this.hist = [history(600), history(600), history(600)]; },
+  render(){
+    const c = this.cur;
+    if (!c) return;
+    ['aX', 'aY', 'aZ'].forEach((id, i) => { $(id).textContent = fmt(c.v[i], 2); });
+    $('aTot').textContent = fmt(c.tot, 2);
+    $('aG').textContent = fmt(c.tot / G, 2);
+    $('aMax').textContent = fmt(this.max, 2);
+    let m = S.grav ? 12 : 2;
+    this.hist.forEach(h => h.forEach(v => { m = Math.max(m, Math.abs(v)); }));
+    drawGraph($('aGraph'), this.hist, ['--c1', '--c2', '--c3'], -m, m, 0);
+  },
+};
+accel.reset();
+document.querySelectorAll('[data-grav]').forEach(b => b.addEventListener('click', () => {
+  S.grav = b.dataset.grav === '1'; store(); showGrav();
+  accel.reset(); accel.cur = null;
+  if (running === 'accel') setStatus('accel', '');
+}));
+function showGrav(){ document.querySelectorAll('[data-grav]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.grav === '1') === S.grav))); }
+$('aReset').addEventListener('click', () => { accel.max = accel.cur ? accel.cur.tot : 0; $('aMax').textContent = accel.cur ? fmt(accel.max, 2) : '–'; });
+
+/* ---------- Vibrometer ---------- */
+function vibLabel(rms){
+  return rms < 0.02 ? 'ruhig' : rms < 0.1 ? 'kaum spürbar' : rms < 0.5 ? 'leicht' : rms < 2 ? 'deutlich' : rms < 5 ? 'stark' : 'sehr stark';
+}
+const vibro = {
+  noData: 'Keine Bewegungsdaten – das Gerät hat keinen Beschleunigungssensor oder der Browser stellt ihn nicht bereit.',
+  async start(){
+    await askPermission(window.DeviceMotionEvent);
+    this.samples = []; this.t = 0; this.peak = 0; this.g = null; this.graph = history(600); this.dirty = false;
+    on(window, 'devicemotion', e => this.sample(e));
+    loop(() => this.render());
+  },
+  sample(e){
+    let x, y, z;
+    const a = e.acceleration, ag = e.accelerationIncludingGravity;
+    if (a && a.x != null) { x = a.x; y = a.y; z = a.z; }
+    else if (ag && ag.x != null) {
+      // No linear acceleration: remove gravity with a slow low-pass filter
+      if (!this.g) this.g = [ag.x, ag.y, ag.z];
+      this.g = this.g.map((v, i) => v + 0.1 * ([ag.x, ag.y, ag.z][i] - v));
+      x = ag.x - this.g[0]; y = ag.y - this.g[1]; z = ag.z - this.g[2];
+    } else return;
+    seen('vibro');
+    // interval: ms per spec; very old iOS reported seconds
+    const iv = e.interval > 1 ? e.interval : e.interval > 0 ? e.interval * 1000 : 16.7;
+    this.t += iv;
+    const m = Math.hypot(x, y, z);
+    this.samples.push({t: this.t, iv, x, y, z, m});
+    while (this.samples.length && this.samples[0].t < this.t - 2000) this.samples.shift();
+    this.peak = Math.max(this.peak, m);
+    this.graph.add(m);
+    this.dirty = true;
+  },
+  stats(){
+    const s = this.samples, now = this.t;
+    const last = s.filter(p => p.t > now - 999.5); // last second (tolerant of rounding in t)
+    const rms = last.length ? Math.sqrt(last.reduce((q, p) => q + p.m * p.m, 0) / last.length) : 0;
+    const rate = last.length ? 1000 / (last.reduce((q, p) => q + p.iv, 0) / last.length) : 0;
+    // Frequency: zero crossings of the axis that moves most (last 2 s), linearly interpolated
+    let freq = NaN;
+    if (rms >= 0.02 && s.length > 8) {
+      let best = null, bestVar = 0;
+      for (const k of ['x', 'y', 'z']) {
+        const mean = s.reduce((q, p) => q + p[k], 0) / s.length;
+        const v = s.reduce((q, p) => q + (p[k] - mean) ** 2, 0);
+        if (v > bestVar) { bestVar = v; best = {k, mean}; }
+      }
+      const cross = [];
+      let prev = null;
+      for (const p of s) {
+        const v = p[best.k] - best.mean;
+        if (v === 0) continue;
+        if (prev && (prev.v < 0) !== (v < 0)) cross.push(prev.t + (p.t - prev.t) * prev.v / (prev.v - v));
+        prev = {t: p.t, v};
+      }
+      if (cross.length >= 3) freq = (cross.length - 1) / 2 / ((cross[cross.length - 1] - cross[0]) / 1000);
+    }
+    return {rms, rate, freq};
+  },
+  render(){
+    if (!this.dirty) return;
+    this.dirty = false;
+    const {rms, rate, freq} = this.stats();
+    $('vRms').textContent = fmt(rms, 2);
+    $('vLevel').textContent = vibLabel(rms);
+    $('vPeak').textContent = fmt(this.peak, 2);
+    $('vFreq').textContent = Number.isFinite(freq) ? fmt(freq, 1) : '–';
+    $('vRate').textContent = fmt(rate, 0);
+    let m = 0.5;
+    this.graph.forEach(v => { m = Math.max(m, v); });
+    drawGraph($('vGraph'), [this.graph], ['--c1'], 0, m * 1.1, 0);
+  },
+};
+$('vReset').addEventListener('click', () => { vibro.peak = 0; $('vPeak').textContent = fmt(0, 2); });
+
+/* ---------- Magnetic field / metal detector ---------- */
+const mag = {
+  noData: 'Keine Messwerte vom Magnetsensor.',
+  async start(){
+    this.base = null; this.cur = null; this.mode = null;
+    let sensor = null;
+    if (typeof window.Magnetometer === 'function') {
+      try { sensor = new window.Magnetometer({frequency: 20}); } catch (_) { sensor = null; }
+    }
+    if (sensor) {
+      this.mode = 'sensor';
+      sensor.addEventListener('reading', () => this.value(sensor.x, sensor.y, sensor.z));
+      sensor.addEventListener('error', e => {
+        const n = e.error && e.error.name;
+        setStatus('mag', n === 'NotAllowedError' ? 'Zugriff auf den Magnetsensor wurde verweigert.' : n === 'NotReadableError' ? 'Der Magnetsensor ist nicht verfügbar.' : 'Fehler des Magnetsensors: ' + (e.error && e.error.message), 'err');
+      });
+      sensor.start();
+      offs.push(() => sensor.stop());
+      $('mUnit').textContent = 'µT';
+      $('mInfo').hidden = false;
+    } else {
+      await askPermission(window.DeviceOrientationEvent);
+      this.mode = 'compass';
+      this.noData = 'Weder Magnetsensor noch Kompass verfügbar.';
+      setStatus('mag', 'Ersatzmodus: Ablenkung des Kompasses (der Browser bietet keinen direkten Zugriff auf den Magnetsensor)');
+      listenHeading(h => this.heading(h));
+      $('mUnit').textContent = 'Ablenkung';
+      $('mInfo').hidden = true;
+    }
+    if (S.magTone) this.tone(true);
+    loop(() => this.render());
+  },
+  stop(){ this.tone(false); },
+  value(x, y, z){
+    if (x == null) return;
+    seen('mag');
+    const tot = Math.hypot(x, y, z);
+    if (this.base == null) this.base = tot;
+    this.cur = {x, y, z, tot};
+  },
+  heading(h){
+    seen('mag');
+    if (this.base == null) this.base = h;
+    this.cur = {h};
+  },
+  level(){
+    const c = this.cur;
+    if (!c) return 0;
+    return this.mode === 'sensor' ? Math.min(1, Math.abs(c.tot - this.base) / 100) : Math.min(1, Math.abs(angleDiff(c.h, this.base)) / 90);
+  },
+  render(){
+    const c = this.cur;
+    if (!c) return;
+    if (this.mode === 'sensor') {
+      const d = c.tot - this.base;
+      $('mVal').textContent = fmt(c.tot, 1);
+      $('mDelta').textContent = (d > 0 ? '+' : '') + fmt(d, 1) + ' µT';
+      $('mXYZ').textContent = `X ${fmt(c.x, 1)} · Y ${fmt(c.y, 1)} · Z ${fmt(c.z, 1)} µT`;
+    } else {
+      const d = angleDiff(c.h, this.base);
+      $('mVal').textContent = fmt(Math.abs(d), 0) + '°';
+      $('mXYZ').textContent = `Kompass ${Math.round(c.h) % 360}°`;
+    }
+    const lv = this.level();
+    $('mBar').style.width = (lv * 100).toFixed(1) + '%';
+    if (this.osc) {
+      const t = this.ctx.currentTime;
+      this.osc.frequency.setTargetAtTime(300 + 1200 * lv, t, 0.05);
+      this.gain.gain.setTargetAtTime(lv > 0.03 ? 0.15 : 0, t, 0.05);
+    }
+  },
+  tone(onOff){
+    if (onOff && !this.osc) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        this.osc = this.ctx.createOscillator(); this.gain = this.ctx.createGain();
+        this.gain.gain.value = 0;
+        this.osc.connect(this.gain).connect(this.ctx.destination);
+        this.osc.start();
+      } catch (_) { this.osc = null; }
+    } else if (!onOff && this.osc) {
+      try { this.osc.stop(); this.ctx.close(); } catch (_) {}
+      this.osc = null; this.ctx = null;
+    }
+  },
+};
+$('mTone').checked = !!S.magTone;
+$('mTone').addEventListener('change', () => {
+  S.magTone = $('mTone').checked; store();
+  if (running === 'mag') mag.tone(S.magTone);
+});
+$('mZero').addEventListener('click', () => {
+  if (!mag.cur) { toast('Erst die Messung starten'); return; }
+  mag.base = mag.mode === 'sensor' ? mag.cur.tot : mag.cur.h;
+  toast('Nullpunkt gesetzt');
+});
+
+/* ---------- Air pressure ↔ altitude (international barometric formula) ---------- */
+const EXP = 5.25588;
+const presAt = (h, p0) => p0 * Math.pow(1 - 0.0065 * h / 288.15, EXP);
+const altAt = (p, p0) => 288.15 / 0.0065 * (1 - Math.pow(p / p0, 1 / EXP));
+// Boiling point of water (Clausius–Clapeyron, ΔH = 40,66 kJ/mol)
+const boilAt = p => 1 / (1 / 373.15 - 8.314 * Math.log(p / 1013.25) / 40660) - 273.15;
+function pressureCalc(src){
+  if (src) S.src = src;
+  const p0 = parseNum($('pQnh').value), p = parseNum($('pPres').value), h = parseNum($('pAlt').value);
+  const okP0 = p0 >= 850 && p0 <= 1100;
+  S.qnh = Number.isFinite(p0) ? p0 : S.qnh;
+  let msg = '', pres = NaN;
+  if (!okP0) msg = 'Luftdruck auf Meereshöhe: Wert zwischen 850 und 1100 hPa eingeben.';
+  else if (S.src === 'pres') {
+    if (p > 0 && p <= 1100) { const alt = altAt(p, p0); $('pAlt').value = fmt(alt, 0).replace(/\./g, ''); pres = p; S.pres = p; S.alt = Math.round(alt); }
+    else if ($('pPres').value.trim()) msg = 'Luftdruck: Wert zwischen 1 und 1100 hPa eingeben.';
+  } else {
+    if (h > -500 && h < 11000) { pres = presAt(h, p0); $('pPres').value = fmt(pres, 1).replace(/\./g, ''); S.alt = h; S.pres = Math.round(pres * 10) / 10; }
+    else if ($('pAlt').value.trim()) msg = 'Höhe: Wert zwischen −500 und 11 000 m eingeben.';
+  }
+  $('pResult').textContent = msg || (Number.isFinite(pres) ? `Wasser siedet bei ca. ${fmt(boilAt(pres), 1)} °C` : '');
+  $('pResult').className = 'result' + (msg ? ' status err' : '');
+  store();
+}
+$('pQnh').value = fmt(S.qnh, 2).replace(/\./g, '');
+if (S.pres != null && S.src === 'pres') $('pPres').value = fmt(S.pres, 1).replace(/\./g, '');
+if (S.alt != null && S.src === 'alt') $('pAlt').value = fmt(S.alt, 0).replace(/\./g, '');
+$('pPres').addEventListener('input', () => pressureCalc('pres'));
+$('pAlt').addEventListener('input', () => pressureCalc('alt'));
+$('pQnh').addEventListener('input', () => pressureCalc());
+pressureCalc();
+$('pGps').addEventListener('click', () => {
+  if (!navigator.geolocation) { setStatus('pressure', 'Standort wird nicht unterstützt.', 'err'); return; }
+  setStatus('pressure', 'Standort wird ermittelt …');
+  navigator.geolocation.getCurrentPosition(pos => {
+    const alt = pos.coords.altitude;
+    if (alt == null) { setStatus('pressure', 'Der Browser liefert keine Höhe – bitte von Hand eintragen.', 'warn'); return; }
+    $('pAlt').value = fmt(alt, 0).replace(/\./g, '');
+    const acc = pos.coords.altitudeAccuracy;
+    setStatus('pressure', 'GPS-Höhe übernommen' + (acc ? ` (± ${fmt(acc, 0)} m)` : ''), 'ok');
+    pressureCalc('alt');
+  }, err => {
+    setStatus('pressure', err.code === 1 ? 'Zugriff auf den Standort wurde abgelehnt.' : 'Standort nicht verfügbar.', 'err');
+  }, {enableHighAccuracy: true, timeout: 20000, maximumAge: 60000});
+});
+
+/* ---------- Sound level ---------- */
+function soundLabel(db){
+  return db < 35 ? 'sehr leise' : db < 50 ? 'leise' : db < 65 ? 'Gespräch' : db < 80 ? 'laut' : db < 95 ? 'sehr laut – Gehör schonen' : 'extrem laut – Gehörschaden möglich';
+}
+const sound = {
+  noData: 'Keine Daten vom Mikrofon.',
+  async start(){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Mikrofon-Zugriff wird von diesem Browser nicht unterstützt.');
+    // Create the audio context during the tap (iOS)
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}, video: false});
+    } catch (e) {
+      ctx.close().catch(() => {});
+      throw new Error(e.name === 'NotAllowedError' ? 'Zugriff auf das Mikrofon wurde abgelehnt.' : e.name === 'NotFoundError' ? 'Kein Mikrofon gefunden.' : 'Mikrofon nicht verfügbar: ' + e.message);
+    }
+    offs.push(() => { stream.getTracks().forEach(t => t.stop()); ctx.close().catch(() => {}); });
+    if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+    const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(), mute = ctx.createGain();
+    an.fftSize = 2048; mute.gain.value = 0;
+    src.connect(an); an.connect(mute).connect(ctx.destination); // keeps the graph running everywhere
+    const buf = new Float32Array(an.fftSize);
+    this.reset();
+    let last = 0, lastGraph = 0;
+    loop(t => {
+      an.getFloatTimeDomainData(buf);
+      let q = 0;
+      for (let i = 0; i < buf.length; i++) q += buf[i] * buf[i];
+      q /= buf.length;
+      if (q === 0 && this.e == null) return; // stream not started yet
+      seen('sound');
+      const dt = last ? Math.min(0.5, (t - last) / 1000) : 0;
+      last = t;
+      // "Fast" time weighting (125 ms) on the energy
+      this.e = this.e == null ? q : this.e + (1 - Math.exp(-dt / 0.125)) * (q - this.e);
+      this.sum += q * dt; this.time += dt;
+      const dbfs = 10 * Math.log10(Math.max(this.e, 1e-12));
+      const db = dbfs + S.soundCal;
+      this.min = Math.min(this.min, db); this.max = Math.max(this.max, db);
+      $('sNow').textContent = fmt(db, 1);
+      $('sDbfs').textContent = fmt(dbfs, 1);
+      $('sDesc').textContent = soundLabel(db);
+      $('sMin').textContent = fmt(this.min, 1);
+      $('sMax').textContent = fmt(this.max, 1);
+      if (this.time > 0) $('sAvg').textContent = fmt(10 * Math.log10(Math.max(this.sum / this.time, 1e-12)) + S.soundCal, 1);
+      if (t - lastGraph >= 100) { lastGraph = t; this.graph.add(db); }
+      let lo = 30, hi = 100;
+      this.graph.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); });
+      drawGraph($('sGraph'), [this.graph], ['--c1'], lo - 5, hi + 5);
+    });
+  },
+  reset(){ this.e = null; this.sum = 0; this.time = 0; this.min = Infinity; this.max = -Infinity; this.graph = history(300); },
+};
+sound.reset();
+$('sReset').addEventListener('click', () => {
+  const e = sound.e; sound.reset(); sound.e = e;
+  ['sMin', 'sAvg', 'sMax'].forEach(id => { $(id).textContent = '–'; });
+});
+$('sCal').value = fmt(S.soundCal, 1).replace(/\./g, '');
+$('sCal').addEventListener('input', () => {
+  const v = parseNum($('sCal').value);
+  if (Number.isFinite(v) && v >= 0 && v <= 200) { S.soundCal = v; store(); sound.min = Infinity; sound.max = -Infinity; }
+});
+
+/* ---------- Tabs ---------- */
+const P = {compass, level, accel, vibro, mag, pressure: {}, sound};
+function selectTab(name, focus){
+  if (!TABS.includes(name)) name = 'compass';
+  if (running && running !== name) stopRunning();
+  TABS.forEach(t => {
+    const b = $('tab-' + t), sel = t === name;
+    b.setAttribute('aria-selected', String(sel));
+    b.tabIndex = sel ? 0 : -1;
+    $('p-' + t).hidden = !sel;
+  });
+  if (focus) $('tab-' + name).focus();
+  S.tab = name; store();
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) selectTab(b.dataset.tab); });
+$('tabs').addEventListener('keydown', e => {
+  const i = TABS.indexOf(S.tab);
+  const k = {ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1}[e.key];
+  if (k) { e.preventDefault(); selectTab(TABS[(i + k + TABS.length) % TABS.length], true); }
+  else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); selectTab(TABS[e.key === 'Home' ? 0 : TABS.length - 1], true); }
+});
+document.querySelectorAll('[data-start]').forEach(b => b.addEventListener('click', () => {
+  const n = b.dataset.start;
+  if (running === n) stopRunning(); else startPanel(n);
+}));
+window.addEventListener('pagehide', stopRunning);
+showGrav();
+selectTab(S.tab);
+})();
+</script>
+</body>
+</html>
