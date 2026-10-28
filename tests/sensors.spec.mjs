@@ -126,6 +126,13 @@ test('level: lying flat, calibration is stored', async ({ page }) => {
   await orientation(page, { alpha: 0, beta: 3, gamma: 0 });
   await expect(page.locator('#lvDeg')).toHaveText('3,0°');
   await expect(page.locator('#lvInfo')).toHaveText(/Liegend/);
+  await expect(page.locator('#lvBubble')).toBeVisible();
+  await expect(page.locator('#lvLine')).toBeHidden();
+  // Tube vials: top edge raised by 3° → vertical vial shows 3°, bubble moves up (towards the higher side)
+  await expect(page.locator('#lvValV')).toHaveText('3,0°');
+  await expect(page.locator('#lvValH')).toHaveText('0,0°');
+  expect(Number(await page.locator('#lvVB').getAttribute('cy'))).toBeLessThan(100);
+  expect(Number(await page.locator('#lvHB').getAttribute('cx'))).toBeCloseTo(100, 5);
   // Tilt about both axes: independent geometry – "up" vector from rotation matrices Rx(beta)·Ry(gamma)
   const b = 3, g = 4;
   const up = [-Math.sin(rad(g)) * Math.cos(rad(b)), Math.sin(rad(b)), Math.cos(rad(g)) * Math.cos(rad(b))];
@@ -133,6 +140,12 @@ test('level: lying flat, calibration is stored', async ({ page }) => {
   await orientation(page, { alpha: 0, beta: b, gamma: g });
   await expect(page.locator('#lvDeg')).toHaveText(expected.toFixed(1).replace('.', ',') + '°');
   await expect(page.locator('#lvDial')).not.toHaveClass(/level-ok/);
+  const side = deg(Math.atan(up[0] / up[2])), front = deg(Math.atan(up[1] / up[2]));
+  const de = v => v.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '°';
+  await expect(page.locator('#lvValH')).toHaveText(de(side));
+  await expect(page.locator('#lvValV')).toHaveText(de(front));
+  // Positive gamma lowers the right side → bubble moves left
+  expect(Number(await page.locator('#lvHB').getAttribute('cx'))).toBeLessThan(100);
   // Set zero on this "uneven" table → 0°
   await page.click('#lvZero');
   await orientation(page, { alpha: 0, beta: b, gamma: g });
@@ -154,10 +167,31 @@ test('level: standing on an edge', async ({ page }) => {
   await orientation(page, { alpha: 0, beta: 88, gamma: -90 });
   await expect(page.locator('#lvDeg')).toHaveText('2,0°');
   await expect(page.locator('#lvInfo')).toHaveText(/Stehend.*senkrecht/);
+  await expect(page.locator('#lvLine')).toBeVisible();
+  await expect(page.locator('#lvBubble')).toBeHidden();
   // Landscape on the long edge, 2° off: up = (cos 2°, sin 2°, 0) ⇔ beta 2°, gamma −90°
   await orientation(page, { alpha: 0, beta: 2, gamma: -90 });
   await expect(page.locator('#lvDeg')).toHaveText('2,0°');
   await expect(page.locator('#lvInfo')).toHaveText(/Stehend.*waagerecht/);
+});
+
+test('level: standing on an edge, leaning forward/backward in the tube vial', async ({ page }) => {
+  await tab(page, 'Wasserwaage');
+  await running(page, 'level');
+  // Upright, screen tilted 5° towards the sky: up = (0, cos 5°, sin 5°) ⇔ beta 85°, gamma 0°
+  await orientation(page, { alpha: 0, beta: 85, gamma: 0 });
+  await expect(page.locator('#lvInfo')).toHaveText(/Stehend/);
+  await expect(page.locator('#lvDeg')).toHaveText('0,0°');
+  await expect(page.locator('#lvLblV')).toHaveText('vorne/hinten');
+  await expect(page.locator('#lvValV')).toHaveText('5,0°');
+  await expect(page.locator('#lvVialV')).not.toHaveClass(/ok/);
+  // Zero point also takes the lean
+  await page.click('#lvZero');
+  await orientation(page, { alpha: 0, beta: 85, gamma: 0 });
+  await expect(page.locator('#lvValV')).toHaveText('0,0°');
+  await expect(page.locator('#lvVialV')).toHaveClass(/ok/);
+  await orientation(page, { alpha: 0, beta: 90, gamma: 0 });
+  await expect(page.locator('#lvValV')).toHaveText('-5,0°');
 });
 
 test('acceleration with and without gravity', async ({ page }) => {
