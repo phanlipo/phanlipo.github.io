@@ -1,46 +1,48 @@
 #!/usr/bin/env node
-// Creates the favicon of every page from its metadata:
+// Creates the icons of every page from its metadata:
 //   <meta name="tool:icon"  content="dice-5">    Tabler icon name (https://tabler.io/icons, MIT)
 //   <meta name="tool:color" content="#7a3fb0">   background colour
 //
-// Output per page folder: icon.svg (favicon) and icon-180.png (apple-touch-icon, home screen).
+// Output per page folder:
+//   icon.svg                favicon
+//   icon-180.png            apple-touch-icon (iPhone home screen)
+//   icon-192.png, icon-512.png   PWA manifest icons (tool folders only, not the start page)
+//   icon-maskable-512.png   PWA icon Android may crop to a circle/squircle (icon kept in the safe zone)
+//
 // Run manually after adding a page or changing its icon – not part of the git hook.
+//   node scripts/build-icons.mjs              all pages
+//   node scripts/build-icons.mjs dice-coin    only this folder ("." = start page)
 //
-// Usage:
-//   node scripts/build-icons.mjs                 all pages
-//   node scripts/build-icons.mjs dice-coin       only this folder ("." = start page)
-//
-// Icon source: downloads the SVG from jsdelivr (pinned version). For offline use point
-// TABLER_ICONS_DIR at a local copy of @tabler/icons/icons/outline.
-// The PNG needs Playwright (Chromium); without it only icon.svg is written.
+// The Tabler version comes from scripts/vendor.json (entry "tabler-icons"); the package is
+// downloaded from the npm registry. PNGs need Playwright (Chromium); without it only icon.svg is written.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { ROOT, allPages, meta } from './lib.mjs';
+import { ROOT, allPages, meta, npmFiles } from './lib.mjs';
 
-const TABLER_VERSION = '3.19.0';
-
+const tabler = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'))['tabler-icons'];
+let tablerFiles = null;
 async function tablerSvg(name) {
-  const dir = process.env.TABLER_ICONS_DIR;
-  if (dir) return readFileSync(join(dir, `${name}.svg`), 'utf8');
-  const url = `https://cdn.jsdelivr.net/npm/@tabler/icons@${TABLER_VERSION}/icons/outline/${name}.svg`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${name}: ${res.status} ${url}`);
-  return res.text();
+  tablerFiles ??= (await npmFiles(tabler.package, tabler.version)).files;
+  const f = tablerFiles.get(`icons/outline/${name}.svg`);
+  if (!f) throw new Error(`Tabler icon "${name}" not found in ${tabler.package}@${tabler.version}`);
+  return f.toString('utf8');
 }
 
-// Puts the 24×24 outline icon in white onto a rounded, coloured 64×64 tile
-function compose(svg, color) {
+// Puts the 24×24 outline icon in white onto a coloured 64×64 tile.
+// maskable: full-bleed square, icon shrunk into the central safe zone (radius 40 %).
+function compose(svg, color, maskable) {
   const inner = svg
     .replace(/^[\s\S]*?<svg[^>]*>/, '')
     .replace(/<\/svg>\s*$/, '')
     .replace(/<path stroke="none" d="M0 0h24v24H0z" fill="none"\s*\/>/, '')
     .replace(/currentColor/g, '#fff')
     .trim();
+  const [size, offset] = maskable ? [32, 16] : [40, 12];
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-<rect width="64" height="64" rx="14" fill="${color}"/>
-<g transform="translate(12 12) scale(1.6667)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<rect width="64" height="64"${maskable ? '' : ' rx="14"'} fill="${color}"/>
+<g transform="translate(${offset} ${offset}) scale(${(size / 24).toFixed(4)})" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 ${inner}
 </g>
 </svg>
@@ -50,14 +52,22 @@ ${inner}
 async function renderPngs(jobs) {
   let chromium;
   try { ({ chromium } = createRequire(import.meta.url)('playwright')); } catch (_) {
-    console.warn('! Playwright not available – icon-180.png not generated');
+    console.warn('! Playwright not available – PNG icons not generated');
     return;
   }
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 180, height: 180 } });
-  for (const { dir, svg } of jobs) {
-    await page.setContent(`<html><body style="margin:0">${svg.replace('<svg ', '<svg width="180" height="180" ')}</body></html>`);
-    await page.screenshot({ path: join(dir, 'icon-180.png'), omitBackground: true });
+  const page = await browser.newPage();
+  const shot = async (svg, px, file) => {
+    await page.setViewportSize({ width: px, height: px });
+    await page.setContent(`<html><body style="margin:0">${svg.replace('<svg ', `<svg width="${px}" height="${px}" `)}</body></html>`);
+    await page.screenshot({ path: file, omitBackground: true });
+  };
+  for (const { dir, svg, mask, pwa } of jobs) {
+    await shot(svg, 180, join(dir, 'icon-180.png'));
+    if (!pwa) continue; // start page is not an installable app
+    await shot(svg, 192, join(dir, 'icon-192.png'));
+    await shot(svg, 512, join(dir, 'icon-512.png'));
+    await shot(mask, 512, join(dir, 'icon-maskable-512.png'));
   }
   await browser.close();
 }
@@ -69,10 +79,11 @@ for (const { folder, file } of allPages()) {
   const html = readFileSync(join(ROOT, file), 'utf8');
   const icon = meta(html, 'tool:icon'), color = meta(html, 'tool:color') || '#334155';
   if (!icon) continue;
-  const svg = compose(await tablerSvg(icon), color);
+  const raw = await tablerSvg(icon);
+  const svg = compose(raw, color, false), mask = compose(raw, color, true);
   const dir = join(ROOT, folder);
   writeFileSync(join(dir, 'icon.svg'), svg);
-  jobs.push({ dir, svg });
+  jobs.push({ dir, svg, mask, pwa: folder !== '' });
   console.log(`${folder || '(start page)'}: ${icon} ${color}`);
 }
 await renderPngs(jobs);

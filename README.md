@@ -6,7 +6,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 
 ## Seiten
 
-<!-- Automatisch erzeugt von scripts/build-index.mjs – nicht von Hand bearbeiten -->
+<!-- Automatisch erzeugt von scripts/build.mjs – nicht von Hand bearbeiten -->
 <!-- tools:start -->
 | Seite | Ordner | Beschreibung |
 |---|---|---|
@@ -20,29 +20,39 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 ```
 index.html            Startseite (Kartenliste wird automatisch erzeugt)
 assets/base.css       gemeinsame Farben, Dark Mode, Karten, Buttons, Hilfe-Bereich
-assets/common.js      gemeinsame Helfer (window.Tools: load/save, toast, copyText, fmt …)
+assets/common.js      gemeinsame Helfer (window.Tools) + Registrierung des Service Workers
+assets/vendor/        Fremdbibliotheken mit Lizenz und Herkunft (siehe assets/vendor/README.md)
 template/             Vorlage für neue Seiten
-scripts/              build-index.mjs (Seitenliste + Fußzeile), build-icons.mjs (Favicons)
-<tool-name>/          je Tool ein Ordner mit index.html (englischer Name, kebab-case)
-.githooks/pre-commit  aktualisiert die Seitenliste vor jedem Commit
+scripts/              build.mjs, build-icons.mjs, vendor.mjs (+ vendor.json)
+<tool-name>/          je Tool ein Ordner (englischer Name, kebab-case) – installierbar als PWA
 AGENTS.md             Konventionen für Mitwirkende und KI-Agenten
 ```
+
+## Als App installieren (PWA)
+
+Jedes Tool lässt sich einzeln installieren und funktioniert danach offline:
+
+- **Android / Chrome:** Menü → „App installieren“ (oder der Hinweis in der Adressleiste).
+- **iPhone / Safari:** Teilen → „Zum Home-Bildschirm“. Achtung: Die installierte App hat eigenen Speicher, getrennt von Safari.
+
+Updates kommen automatisch: Nach einer Änderung lädt die App die neue Version im Hintergrund und zeigt sie beim nächsten Öffnen.
 
 ## Neue Seite hinzufügen
 
 1. `template/` kopieren und englisch benennen, z. B. `unit-converter/`.
-2. In der `index.html` Titel, `description`, `tool:tags`, `tool:order`, `tool:icon` und `tool:color` anpassen.
-3. `node scripts/build-icons.mjs <ordner>` erzeugt das Favicon.
-4. `node scripts/build-index.mjs` aktualisiert Seitenliste und Fußzeile (passiert per Git-Hook bzw. GitHub Action auch automatisch).
+2. In der `index.html` Titel, `description`, `tool:tags`, `tool:order`, `tool:short-name`, `tool:icon` und `tool:color` anpassen.
+3. `node scripts/build-icons.mjs <ordner>` erzeugt die Icons.
+4. `node scripts/build.mjs` aktualisiert Seitenliste, Fußzeile, `<head>`-Links, Manifest und Service Worker (passiert per Git-Hook bzw. GitHub Action auch automatisch).
 
 Die Seite ist dann unter `https://phanlipo.github.io/<ordner>/` erreichbar.
 
-## Generierte Teile
+## Automatisierung
 
-Die Seitenliste (Startseite und README) wird aus den Metadaten der Tool-Seiten erzeugt, die gemeinsame Fußzeile aus `scripts/partials/footer.html`:
+- **Vor jedem Commit:** einmalig `git config core.hooksPath .githooks` ausführen – dann läuft `build.mjs` automatisch.
+- **Bei jedem Push:** die Action `.github/workflows/build.yml` führt `build.mjs` aus und committet Änderungen.
+- **Monatlich:** die Action `.github/workflows/vendor-check.yml` prüft, ob es neuere Versionen der Bibliotheken gibt, und öffnet dann ein Issue.
+- **Prüfen ohne zu schreiben:** `node scripts/build.mjs --check`
 
-- **Lokal vor jedem Commit:** einmalig `git config core.hooksPath .githooks` ausführen.
-- **Auf GitHub:** die Action `.github/workflows/tool-index.yml` baut die Liste bei jedem Push neu und committet Änderungen.
-- **Prüfen ohne zu schreiben:** `node scripts/build-index.mjs --check`
+## Fremdbibliotheken und Lizenzen
 
-Icons: [Tabler Icons](https://tabler.io/icons), MIT-Lizenz (`assets/LICENSE-tabler-icons.txt`).
+Alle Bibliotheken liegen lokal in `assets/vendor/` (kein CDN), jeweils mit Original-Lizenz und Herkunftsangabe. Übersicht: [`assets/vendor/README.md`](assets/vendor/README.md). Icons: [Tabler Icons](https://tabler.io/icons), MIT.

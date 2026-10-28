@@ -1,0 +1,43 @@
+# Checks monthly whether newer versions of the libraries in assets/vendor/ exist
+# (configured in scripts/vendor.json). If so, it opens – or updates – one issue
+# "Vendor-Updates verfügbar" with the list. Nothing is changed automatically:
+# updating is done with `node scripts/vendor.mjs --update <name>` followed by a test of the pages.
+name: Vendor-Updates prüfen
+
+on:
+  schedule:
+    - cron: '17 6 3 * *'   # 3rd of every month, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check npm for newer versions
+        run: node scripts/vendor.mjs --check --markdown report.md
+      - name: Open or update issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Vendor-Updates verfügbar"
+          existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ ! -s report.md ]; then
+            echo "All vendor libraries are up to date."
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" --comment "Alle Bibliotheken sind wieder aktuell."
+            fi
+            exit 0
+          fi
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file report.md
+          else
+            gh issue create --title "$title" --body-file report.md
+          fi
