@@ -94,10 +94,12 @@ function setBlock(file, name, content, required) {
 
 function renderCards() {
   if (!tools.length) return '\n  <p class="muted">Noch keine Seiten.</p>\n  ';
-  // Filter bar: every tag once, most used first. Hidden until the page script enables it (no JS = no filter).
-  const count = new Map();
-  for (const t of tools) for (const x of t.tags) count.set(x, (count.get(x) || 0) + 1);
-  const tags = [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || a.localeCompare(b, 'de'));
+  // Filter bar: every tag once. The first tag of a tool is its area (Alltag, Arbeit, Freizeit …);
+  // areas come first, then the other tags, each alphabetically. Hidden until the page script runs (no JS = no filter).
+  const areas = new Set(tools.map(t => t.tags[0]).filter(Boolean));
+  const byName = (a, b) => a.localeCompare(b, 'de');
+  const tags = [...areas].sort(byName)
+    .concat([...new Set(tools.flatMap(t => t.tags))].filter(x => !areas.has(x)).sort(byName));
   const chip = (label, value, pressed) =>
     `<button type="button" class="chip" data-tag="${escHtml(value)}" aria-pressed="${pressed}">${escHtml(label)}</button>`;
   const filter = tags.length ? `  <div class="filter" role="group" aria-label="Nach Kategorie filtern" hidden>
