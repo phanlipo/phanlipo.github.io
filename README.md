@@ -15,6 +15,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | [Brau-Rechner](https://phanlipo.github.io/brew-calculator/) | `brew-calculator/` | Rechner fürs Hobbybrauen: Volumen im zylindrischen Topf, Temperaturkorrektur der Stammwürze (Spindel) und Zuckermenge für die Nachgärung – jeweils mit Formeln und Rechenweg. |
 | [Sprache zu Text](https://phanlipo.github.io/voice-transcriber/) | `voice-transcriber/` | Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht. |
 | [Schere, Stein, Papier](https://phanlipo.github.io/rock-paper-scissors/) | `rock-paper-scissors/` | Spiel gegen den Computer – klassisch, mit Brunnen oder mit Echse und Spock. |
+| [PDF zu Word](https://phanlipo.github.io/pdf2word/) | `pdf2word/` | PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – ohne Upload: Die Datei verlässt das Gerät nicht. |
 <!-- tools:end -->
 
 ## Struktur

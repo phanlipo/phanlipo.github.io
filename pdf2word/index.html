@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>PDF zu Word</title>
+<meta name="description" content="PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – ohne Upload: Die Datei verlässt das Gerät nicht.">
+<meta name="tool:tags" content="Arbeit, Dokumente">
+<meta name="tool:features" content="Datei öffnen, Teilen an App">
+<meta name="tool:order" content="60">
+<meta name="tool:icon" content="file-type-docx">
+<meta name="tool:color" content="#4338ca">
+<meta name="tool:short-name" content="PDF zu Word">
+<meta name="tool:storage" content="pdf2word.">
+<meta name="tool:share-target" content="application/pdf, .pdf">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-SmjsbyV87FjUGZnDJ9xzAMCXUk4864PtssHmymdptJY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="PDF zu Word">
+<meta name="theme-color" content="#4338ca">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#4338ca;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#a5b4fc;--accent-text:#1e1b4b}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.full{grid-column:1/-1}
+.drop{display:block;width:100%;border:2px dashed var(--border);border-radius:var(--radius);padding:22px 14px;text-align:center;color:var(--muted);background:transparent;cursor:pointer;font:inherit}
+.drop strong{color:var(--text)}
+.drop.over,.drop:hover{border-color:var(--accent);color:var(--text)}
+.fileinfo{margin-block:10px 0;font-size:14px;word-break:break-word}
+.check{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding-block:6px;cursor:pointer}
+.check input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--accent)}
+.check small{display:block;color:var(--muted);font-size:13px}
+.pw{display:flex;flex-direction:column;gap:6px;margin-block:10px}
+.pw input{min-height:44px;padding-inline:10px;font-size:16px;width:100%}
+.btn.big{width:100%;min-height:54px;font-size:18px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10px}
+.status{font-size:14px;margin-block:8px 0;min-height:1.4em}
+.status.err{color:var(--err)}
+.status.ok{color:var(--ok)}
+.status.warn{color:var(--warn)}
+.preview{border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:14px;max-height:70vh;overflow:auto;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.35;overflow-wrap:anywhere}
+.preview p{margin:0;white-space:pre-wrap;tab-size:6}
+.preview .pb{border-block-start:1px dashed var(--muted);margin-block:10px;font-size:11px;color:var(--muted);text-align:center;font-family:var(--font)}
+.meta-line{font-size:13px;color:var(--muted);margin-block:8px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>PDF zu Word</h1>
+  <p class="sub">PDF in eine bearbeitbare Word-Datei umwandeln – die Datei verlässt das Gerät nicht.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-file">
+    <h2 id="h-file">1 · PDF wählen</h2>
+    <button type="button" class="drop" id="drop">
+      <strong>PDF-Datei wählen</strong><br>oder hierher ziehen
+    </button>
+    <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+    <p class="fileinfo" id="fileInfo" aria-live="polite"></p>
+    <div class="pw" id="pwBox" hidden>
+      <label for="pw">Passwort der PDF</label>
+      <input type="password" id="pw" autocomplete="off">
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-run">
+    <h2 id="h-run">2 · Umwandeln</h2>
+    <label class="check"><input type="checkbox" id="optPages" checked>
+      <span>Seitenumbrüche wie im PDF<small>Jede PDF-Seite beginnt in Word auf einer neuen Seite.</small></span></label>
+    <button type="button" class="btn primary big" id="btnRun" disabled>In Word umwandeln</button>
+    <progress id="progress" max="100" value="0" hidden></progress>
+    <p class="status" id="status" role="status"></p>
+  </section>
+
+  <section class="card full" aria-labelledby="h-result" id="result" hidden>
+    <h2 id="h-result">3 · Word-Datei</h2>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnSave">Word-Datei speichern</button>
+      <button type="button" class="btn" id="btnShare" hidden>Teilen …</button>
+    </div>
+    <p class="meta-line" id="resultMeta"></p>
+    <h3>Vorschau des Textes</h3>
+    <div class="preview" id="preview" tabindex="0" aria-label="Vorschau des erkannten Textes"></div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary>Daten sichern &amp; übertragen</summary>
+  <p>Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary>Anleitung &amp; Hinweise</summary>
+  <p>Macht aus einer PDF eine <strong>Word-Datei (.docx)</strong>, die sich in Word, LibreOffice, Pages oder Google Docs bearbeiten lässt. Die Umwandlung läuft komplett im Browser – die PDF wird <strong>nicht hochgeladen</strong> und es funktioniert auch offline.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>PDF wählen (oder auf den Kasten ziehen), dann „In Word umwandeln“.</li>
+    <li>Die Vorschau zeigt den erkannten Text. „Word-Datei speichern“ lädt die .docx herunter; „Teilen …“ schickt sie z. B. per Mail oder in eine andere App.</li>
+    <li><strong>Android, App installiert:</strong> In einer anderen App eine PDF teilen → „PDF zu Word“ wählen.</li>
+    <li>Passwortgeschützte PDFs fragen nach dem Passwort.</li>
+  </ul>
+  <h3>Was übernommen wird</h3>
+  <ul>
+    <li>Text mit Absätzen, Schriftgröße, <strong>fett</strong> und <em>kursiv</em>, Einrückungen, Spalten innerhalb einer Zeile (als Tabulator), zentrierte Zeilen, Seitenformat und Seitenränder.</li>
+    <li>Seitenzahlen werden erkannt und als automatische Seitenzahl in die Fußzeile gesetzt.</li>
+    <li>Am Zeilenende getrennte Wörter („Arbeits-“ / „vertrag“) werden wieder zusammengefügt.</li>
+  </ul>
+  <h3>Grenzen</h3>
+  <ul>
+    <li><strong>Bilder, Linien und Tabellenrahmen</strong> werden nicht übernommen – nur der Text. Tabellen erscheinen als Zeilen mit Tabulatoren.</li>
+    <li><strong>Gescannte PDFs</strong> (nur Bilder, kein markierbarer Text) lassen sich noch nicht umwandeln.</li>
+    <li>Absätze werden aus der Lage der Zeilen erraten. Bei ungewöhnlichen Layouts (mehrere Spalten, Textfelder) das Ergebnis bitte prüfen.</li>
+  </ul>
+  <p class="note">Formatierung und Zeilenumbrüche weichen etwas vom Original ab – Word setzt den Text neu. Wichtige Dokumente bitte mit der PDF vergleichen.</p>
+</details>
+
+<footer>
+  <p>Umwandlung im Browser mit pdf.js und docx · PDF bleibt auf dem Gerät</p>
+  <!-- footer:start -->
+  <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
+  <p class="footer-version">Version 1f818a57106c</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const { $, load, save, toast, fmt, takeSharedFile } = Tools;
+const LS = 'pdf2word.settings.v1';
+const settings = Object.assign({ pageBreaks: true }, load(LS, {}));
+$('optPages').checked = settings.pageBreaks !== false;
+$('optPages').addEventListener('change', () => { settings.pageBreaks = $('optPages').checked; save(LS, settings); });
+
+let file = null, result = null, busy = false, lib = null;
+
+function status(text, kind) {
+  $('status').textContent = text || '';
+  $('status').className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function takeFile(f) {
+  if (!f || busy) return;
+  file = f;
+  result = null;
+  $('result').hidden = true;
+  $('pwBox').hidden = true;
+  $('pw').value = '';
+  $('fileInfo').textContent = '„' + f.name + '“ · ' + fmt(f.size / 1024, 0) + ' KB';
+  status('');
+  $('btnRun').disabled = false;
+}
+
+const drop = $('drop');
+drop.addEventListener('click', () => { $('file').value = ''; $('file').click(); });
+$('file').addEventListener('change', () => takeFile($('file').files[0]));
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); takeFile(e.dataTransfer.files[0]); });
+$('pw').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+
+async function run() {
+  if (!file || busy) return;
+  busy = true;
+  $('btnRun').disabled = true;
+  $('result').hidden = true;
+  const bar = $('progress');
+  bar.hidden = false; bar.value = 0;
+  status('Lese die PDF …');
+  try {
+    lib = lib || await import('./convert.mjs');
+    const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
+    if (!String.fromCharCode(...head).includes('%PDF-')) throw Object.assign(new Error('no pdf'), { code: 'invalid' });
+    const pdf = await lib.open(new Uint8Array(await file.arrayBuffer()), $('pw').value || undefined);
+    $('pwBox').hidden = true;
+    const pages = await lib.extract(pdf, (n, total) => { bar.value = Math.round(n / total * 90); status('Seite ' + n + ' von ' + total + ' …'); });
+    lib.close(pdf);
+    const model = lib.layout(pages, { pageBreaks: $('optPages').checked });
+    if (!model.chars) {
+      throw Object.assign(new Error('no text'), { code: 'notext' });
+    }
+    status('Erstelle die Word-Datei …');
+    const title = file.name.replace(/\.pdf$/i, '');
+    const blob = await lib.toDocx(model, title);
+    bar.value = 100;
+    result = new File([blob], title + '.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    showResult(model);
+    status(model.emptyPages
+      ? 'Fertig – ' + model.emptyPages + ' von ' + model.pages + ' Seiten enthalten keinen Text (z. B. Bilder oder Scans) und sind leer geblieben.'
+      : 'Fertig.', model.emptyPages ? 'warn' : 'ok');
+  } catch (e) {
+    const msg = {
+      password: 'Die PDF ist mit einem Passwort geschützt – bitte Passwort eingeben und erneut umwandeln.',
+      'password-wrong': 'Das Passwort ist falsch.',
+      invalid: 'Das ist keine lesbare PDF-Datei.',
+      notext: 'Diese PDF enthält keinen Text – vermutlich ist sie gescannt (nur Bilder). Gescannte PDFs werden noch nicht unterstützt.',
+    }[e.code];
+    if (e.code === 'password' || e.code === 'password-wrong') { $('pwBox').hidden = false; $('pw').focus(); }
+    if (!msg) console.warn(e);
+    status(msg || 'Umwandlung fehlgeschlagen: ' + (e.message || e), 'err');
+  } finally {
+    bar.hidden = true;
+    busy = false;
+    $('btnRun').disabled = !file;
+  }
+}
+$('btnRun').addEventListener('click', run);
+
+function showResult(model) {
+  const box = $('preview');
+  box.textContent = '';
+  const textWidth = model.page.width - model.page.left - model.page.right;
+  const pct = pt => (Math.max(0, pt) / textWidth * 100).toFixed(1) + '%';
+  model.paragraphs.forEach(p => {
+    if (p.pageBreak) {
+      const pb = document.createElement('div');
+      pb.className = 'pb'; pb.textContent = 'Seitenumbruch';
+      box.append(pb);
+    }
+    const el = document.createElement('p');
+    // Hanging indent: the left margin holds the paragraph, a negative text-indent pulls the first line back
+    el.style.marginInlineStart = pct(p.indent);
+    if (Math.abs(p.firstLine) > 1) el.style.textIndent = (p.firstLine < 0 ? '-' : '') + pct(Math.abs(p.firstLine));
+    el.style.textAlign = p.align;
+    if (p.before > 2) el.style.marginBlockStart = Math.min(p.before / model.bodySize, 2).toFixed(2) + 'em';
+    for (const r of p.runs) {
+      const s = document.createElement(r.bold ? 'strong' : 'span');
+      s.textContent = r.text;
+      if (r.italic) s.style.fontStyle = 'italic';
+      if (Math.abs(r.size - model.bodySize) > 0.5) s.style.fontSize = (r.size / model.bodySize).toFixed(2) + 'em';
+      el.append(s);
+    }
+    box.append(el);
+  });
+  $('resultMeta').textContent = result.name + ' · ' + model.pages + (model.pages === 1 ? ' Seite' : ' Seiten') + ' · ' +
+    model.paragraphs.length + ' Absätze · ' + fmt(result.size / 1024, 0) + ' KB';
+  const r = $('result');
+  r.dataset.paragraphs = model.paragraphs.length;
+  r.hidden = false;
+  try { $('btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [result] })); } catch (_) { $('btnShare').hidden = true; }
+}
+
+$('btnSave').addEventListener('click', () => {
+  if (!result) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(result); a.download = result.name; document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+});
+$('btnShare').addEventListener('click', async () => {
+  if (!result) return;
+  try { await navigator.share({ files: [result], title: result.name }); } catch (e) { if (e.name !== 'AbortError') toast('Teilen nicht möglich'); }
+});
+
+takeSharedFile().then(f => { if (f) takeFile(f); });
+})();
+</script>
+</body>
+</html>
