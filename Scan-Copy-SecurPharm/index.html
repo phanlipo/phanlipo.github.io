@@ -26,7 +26,8 @@ header h1{font-size:20px;margin:0}
 header .sub{color:var(--muted);font-size:13px}
 header .spacer{flex:1}
 main{max-width:1280px;margin-inline:auto;padding:16px;display:grid;grid-template-columns:minmax(320px,1fr) minmax(360px,1.2fr);gap:16px}
-@media (max-width:900px){main{grid-template-columns:1fr}}
+@media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+main>*{min-width:0}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
 .card h2{font-size:16px;margin-block:0 12px;margin-inline:0;display:flex;align-items:center;gap:8px}
 .full{grid-column:1/-1}
@@ -82,6 +83,40 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px}
 .wedge{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--ok)}
 footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+
+/* ---------- Mobile ---------- */
+@media (max-width:640px){
+  body{font-size:16px;-webkit-text-size-adjust:100%}
+  header{padding-inline:16px;padding-block:10px}
+  header h1{font-size:18px}
+  header .spacer,header .wedge{display:none}
+  main{padding-inline:10px;padding-block:10px;gap:10px}
+  .card{padding:14px}
+  /* Bigger touch targets; 16px inputs prevent iOS auto-zoom */
+  .tab,button.btn{min-height:44px}
+  button.btn.small{min-height:36px;padding-inline:12px}
+  textarea,input[type=text],input[type=search],select{font-size:16px;min-height:44px}
+  .tabs{display:grid;grid-template-columns:repeat(3,1fr)}
+  .tab{padding-inline:6px;font-size:14px}
+  .row>.btn{flex:1 1 auto}
+  .drop{padding:20px}
+  /* Result fields: label on its own line, value + badge below */
+  .fields{grid-template-columns:minmax(0,1fr) auto;gap:2px 8px}
+  .fields .lbl{grid-column:1/-1;margin-block-start:8px}
+  .val{min-height:44px;display:flex;align-items:center;font-size:17px}
+  /* History table becomes a list of cards */
+  .histwrap{max-height:none;overflow:visible;border:0}
+  .histwrap table,.histwrap tbody,.histwrap tr,.histwrap td{display:block;width:100%}
+  .histwrap thead{display:none}
+  .histwrap tr{border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-block-end:8px;background:var(--surface)}
+  .histwrap td{border:0;padding:3px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .histwrap td[data-label]::before{content:attr(data-label);flex:0 0 88px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+  .histwrap td .chip{word-break:break-all;padding-block:4px;padding-inline:0}
+  .tab .lg{display:none}
+  .histwrap td.act{justify-content:flex-end;padding-block-start:6px}
+  .histwrap td[colspan]{justify-content:center}
+  .toast{max-width:calc(100% - 32px);text-align:center}
+}
 </style>
 </head>
 <body>
@@ -98,9 +133,9 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
   <section class="card" aria-labelledby="h-input">
     <h2 id="h-input">1 · Code erfassen</h2>
     <div class="tabs" role="tablist">
-      <button class="tab" role="tab" aria-selected="true" data-tab="scanner">Barcode-Scanner</button>
+      <button class="tab" role="tab" aria-selected="true" data-tab="scanner"><span class="lg">Barcode-</span>Scanner</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="camera">Webcam</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="image">Bild (Drag &amp; Drop)</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="image">Bild<span class="lg"> (Drag &amp; Drop)</span></button>
     </div>
 
     <div class="panel" data-panel="scanner">
@@ -380,12 +415,12 @@ function renderHist(){
   const counts={};h.forEach(x=>{const k=keyOf(x.fields);counts[k]=(counts[k]||0)+1;});
   h.filter(x=>!q||JSON.stringify(x.fields).toLowerCase().includes(q)||(x.source||'').toLowerCase().includes(q)).forEach(x=>{
     const f=x.fields,tr=document.createElement('tr');
-    const cell=(v,label)=>{const td=document.createElement('td');if(v){const sp=document.createElement('span');sp.className='chip';sp.textContent=v;sp.title='Klicken zum Kopieren';sp.addEventListener('click',()=>copyFrom(sp,v,label));td.append(sp);}else td.textContent='—';return td;};
-    const t1=document.createElement('td');t1.textContent=fmtTs(x.ts);t1.className='muted';
-    const t2=document.createElement('td');t2.textContent=x.source||'';t2.className='muted';
+    const cell=(v,label)=>{const td=document.createElement('td');td.dataset.label=label;if(v){const sp=document.createElement('span');sp.className='chip';sp.textContent=v;sp.title='Klicken zum Kopieren';sp.addEventListener('click',()=>copyFrom(sp,v,label));td.append(sp);}else td.textContent='—';return td;};
+    const t1=document.createElement('td');t1.textContent=fmtTs(x.ts);t1.className='muted';t1.dataset.label='Zeit';
+    const t2=document.createElement('td');t2.textContent=x.source||'';t2.className='muted';t2.dataset.label='Quelle';
     const tExp=cell(f.expiryText,'Verfall');if(x.expired)tExp.insertAdjacentHTML('beforeend','<span class="badge err">abgel.</span>');
     const tSer=cell(f.serial,'Seriennr.');if(f.serial&&counts[keyOf(f)]>1)tSer.insertAdjacentHTML('beforeend','<span class="badge warn">'+counts[keyOf(f)]+'× gescannt</span>');
-    const act=document.createElement('td');act.style.whiteSpace='nowrap';
+    const act=document.createElement('td');act.className='act';act.style.whiteSpace='nowrap';
     const bl=document.createElement('button');bl.className='btn small';bl.textContent='Anzeigen';bl.addEventListener('click',()=>{renderResult(parseCode(x.raw));window.scrollTo({top:0,behavior:'smooth'});});
     const bd=document.createElement('button');bd.className='btn small danger';bd.textContent='✕';bd.title='Eintrag löschen';bd.addEventListener('click',()=>{saveHist(loadHist().filter(y=>y.id!==x.id));renderHist();});
     act.append(bl,' ',bd);
