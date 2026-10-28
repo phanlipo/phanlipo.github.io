@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Sprache zu Text</title>
+<meta name="description" content="Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht.">
+<meta name="tool:tags" content="Whisper, Sprachnachricht, KI im Browser, Offline">
+<meta name="tool:order" content="40">
+<meta name="tool:icon" content="microphone">
+<meta name="tool:color" content="#0f766e">
+<meta name="tool:short-name" content="Transkript">
+<meta name="tool:storage" content="voice-transcriber.">
+<meta name="tool:share-target" content="audio/*, audio/ogg, audio/opus, .opus, .ogg, .oga, .m4a, .mp3, .wav, .webm">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-LGN3ARoHgRcCi4wg77R8WbSCcrpgupOBjaYrNS+5pEQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Transkript">
+<meta name="theme-color" content="#0f766e">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0f766e;--accent-text:#ffffff;--page-width:1100px}
+@media (prefers-color-scheme: dark){:root{--accent:#5eead4;--accent-text:#042f2e}}
+header{display:flex;flex-direction:column}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.full{grid-column:1/-1}
+.drop{display:block;width:100%;border:2px dashed var(--border);border-radius:var(--radius);padding:22px 14px;text-align:center;color:var(--muted);background:transparent;cursor:pointer;font:inherit}
+.drop strong{color:var(--text)}
+.drop.over,.drop:hover{border-color:var(--accent);color:var(--text)}
+.fileinfo{margin-block:10px 6px;font-size:14px;word-break:break-word}
+audio{width:100%;margin-block-start:6px}
+.field{display:flex;flex-direction:column;gap:4px;margin-block-end:12px}
+.field>span{font-size:13px;color:var(--muted);font-weight:600}
+select{min-height:44px;padding-inline:10px;width:100%}
+.btn.big{width:100%;min-height:54px;font-size:18px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.progress{margin-block-start:10px}
+progress{width:100%;height:10px;accent-color:var(--accent)}
+.status{font-size:14px;margin-block:6px 0;min-height:1.4em}
+.status.err{color:var(--err)}
+.status.ok{color:var(--ok)}
+.status.warn{color:var(--warn)}
+textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:1.5;resize:vertical}
+.chunks{list-style:none;margin:6px 0 0;padding:0;font-size:14px}
+.chunks li{display:flex;gap:10px;padding-block:4px;border-block-end:1px solid var(--border)}
+.chunks time{font-family:var(--mono);font-size:12px;color:var(--muted);flex:none;padding-block-start:2px}
+.card details{margin-block-start:10px}
+.card details summary{cursor:pointer;color:var(--muted);font-size:14px;min-height:32px;display:flex;align-items:center}
+.hist{list-style:none;margin:0;padding:0}
+.hist li{display:flex;gap:8px;align-items:flex-start;border-block-end:1px solid var(--border);padding-block:8px}
+.hist .open{flex:1;min-width:0;text-align:start;background:none;border:0;color:var(--text);font:inherit;cursor:pointer;padding:0}
+.hist .meta{display:block;font-size:12px;color:var(--muted)}
+.hist .snip{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta-line{font-size:13px;color:var(--muted);margin-block-start:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sprache zu Text</h1>
+  <p class="sub">Sprachnachrichten direkt im Browser transkribieren – das Audio verlässt das Gerät nicht.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-audio">
+    <h2 id="h-audio">1 · Sprachnachricht wählen</h2>
+    <button type="button" class="drop" id="drop">
+      <strong>Audiodatei wählen</strong><br>oder hierher ziehen · z. B. WhatsApp-Sprachnachricht (.opus)
+    </button>
+    <input type="file" id="file" accept="audio/*,.opus,.ogg,.oga,.m4a,.mp3,.wav,.webm,.aac,.flac" hidden>
+    <div class="fileinfo" id="fileInfo" aria-live="polite"></div>
+    <audio id="player" controls hidden></audio>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings">
+    <h2 id="h-settings">2 · Transkribieren</h2>
+    <label class="field"><span>Modell</span>
+      <select id="model">
+        <option value="onnx-community/whisper-base" selected>Standard – base (80 MB)</option>
+        <option value="onnx-community/whisper-small">Genauer – small (250 MB, langsam)</option>
+      </select>
+    </label>
+    <label class="field"><span>Sprache</span>
+      <select id="language">
+        <option value="german" selected>Deutsch</option>
+        <option value="english">Englisch</option>
+        <option value="">Automatisch erkennen</option>
+      </select>
+    </label>
+    <button type="button" class="btn primary big" id="btnRun" disabled>Transkribieren</button>
+    <div class="progress" id="progressBox" hidden>
+      <progress id="progress" max="100"></progress>
+    </div>
+    <p class="status" id="status" role="status"></p>
+    <details id="modelBox">
+      <summary>Heruntergeladene Modelle</summary>
+      <p class="muted" id="modelInfo"></p>
+      <button type="button" class="btn small danger" id="btnDeleteModels">Modelle löschen</button>
+    </details>
+  </section>
+
+  <section class="card full" aria-labelledby="h-text">
+    <h2 id="h-text">3 · Text</h2>
+    <label class="sr-only" for="text">Transkribierter Text</label>
+    <textarea id="text" placeholder="Hier erscheint der Text – er lässt sich danach bearbeiten."></textarea>
+    <div class="row" style="margin-block-start:8px">
+      <button type="button" class="btn" id="btnCopy">Kopieren</button>
+      <button type="button" class="btn" id="btnSaveTxt">Als Textdatei speichern</button>
+      <button type="button" class="btn" id="btnShare" hidden>Teilen …</button>
+    </div>
+    <p class="meta-line" id="resultMeta"></p>
+    <details id="chunkBox" hidden>
+      <summary>Mit Zeitstempeln</summary>
+      <ul class="chunks" id="chunks"></ul>
+    </details>
+  </section>
+
+  <section class="card full" aria-labelledby="h-hist">
+    <h2 id="h-hist">Verlauf <span class="badge" id="histCount">0</span></h2>
+    <ul class="hist" id="hist"></ul>
+    <div class="row" style="margin-block-start:8px">
+      <button type="button" class="btn small danger" id="btnClearHist">Verlauf löschen</button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary>Daten sichern &amp; übertragen</summary>
+  <p>Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary>Anleitung &amp; Hinweise</summary>
+  <p>Wandelt Sprachaufnahmen in Text um – mit dem Spracherkennungsmodell <strong>Whisper</strong>, das direkt im Browser läuft. Das Audio wird <strong>nicht hochgeladen</strong>.</p>
+  <h3>Sprachnachricht aus WhatsApp holen</h3>
+  <ul>
+    <li><strong>Android, App installiert:</strong> Sprachnachricht lange antippen → Teilen → „Transkript“ wählen – die Datei landet direkt hier.</li>
+    <li><strong>Android ohne Installation:</strong> Sprachnachricht teilen → z. B. „In Dateien speichern“; dann hier die .opus-Datei wählen.</li>
+    <li><strong>iPhone:</strong> Sprachnachricht lange drücken → Weiterleiten → Teilen-Symbol → „In Dateien sichern“; dann hier wählen.</li>
+    <li><strong>PC:</strong> WhatsApp Web/Desktop → Sprachnachricht herunterladen und hierher ziehen.</li>
+  </ul>
+  <h3>Modelle</h3>
+  <ul>
+    <li>Beim ersten Transkribieren lädt der Browser das gewählte Modell einmalig von <strong>Hugging Face</strong> (dabei wird kein Audio übertragen). Danach liegt es im Browser und funktioniert auch offline.</li>
+    <li><strong>base</strong> ist schnell und für deutsche Sprachnachrichten meist gut; <strong>small</strong> ist genauer, aber groß und auf dem Handy deutlich langsamer.</li>
+    <li>Mit Grafikkarten-Unterstützung (WebGPU) geht es deutlich schneller; sonst rechnet der Prozessor.</li>
+    <li>„Heruntergeladene Modelle“ zeigt den belegten Speicher und löscht die Modelle bei Bedarf.</li>
+  </ul>
+  <h3>Tipps</h3>
+  <ul>
+    <li>Die Sprache fest einzustellen ist genauer und schneller als „Automatisch erkennen“.</li>
+    <li>Das Ergebnis lässt sich im Textfeld korrigieren und dann kopieren, speichern oder teilen.</li>
+    <li>Während der Umwandlung die Seite geöffnet lassen (das Display bleibt dafür an, wo der Browser das erlaubt).</li>
+  </ul>
+  <p class="note">Spracherkennung macht Fehler – besonders bei Namen, Dialekt und Hintergrundgeräuschen. Wichtige Inhalte bitte gegenhören.</p>
+</details>
+
+<footer>
+  <p>Spracherkennung im Browser mit Whisper · Audio bleibt auf dem Gerät</p>
+  <!-- footer:start -->
+  <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
+  <p class="footer-version">Version 27b268165f4b</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/vendor/ogg-opus-decoder/ogg-opus-decoder.min.js"></script>
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const { $, load, save, toast, copyText, fmt, takeSharedFile } = Tools;
+const LS_SET = 'voice-transcriber.settings.v1', LS_HIST = 'voice-transcriber.history.v1', MAX_HIST = 50;
+const MODEL_CACHE = 'transformers-cache';
+
+let audio = null;        // { name, samples: Float32Array (16 kHz mono), duration, decoder }
+let worker = null, runId = 0, busy = false, timer = null, wakeLock = null;
+
+/* ---------- Settings ---------- */
+const settings = Object.assign({ model: 'onnx-community/whisper-base', language: 'german' }, load(LS_SET, {}));
+if ([...$('model').options].some(o => o.value === settings.model)) $('model').value = settings.model;
+if ([...$('language').options].some(o => o.value === settings.language)) $('language').value = settings.language;
+for (const id of ['model', 'language']) $(id).addEventListener('change', () => { settings[id] = $(id).value; save(LS_SET, settings); });
+
+const status = (text, kind) => { const s = $('status'); s.textContent = text; s.className = 'status' + (kind ? ' ' + kind : ''); };
+const mmss = s => { s = Math.round(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const mb = b => fmt(b / 1048576, b < 10485760 ? 1 : 0) + ' MB';
+
+/* ---------- Audio decoding → 16 kHz mono Float32Array (what Whisper expects) ---------- */
+const isOgg = buf => buf.byteLength > 4 && new TextDecoder().decode(new Uint8Array(buf, 0, 4)) === 'OggS';
+
+function mixDown(buffer) {
+  if (buffer.numberOfChannels === 1) return buffer.getChannelData(0).slice();
+  const out = new Float32Array(buffer.length);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const d = buffer.getChannelData(c);
+    for (let i = 0; i < d.length; i++) out[i] += d[i] / buffer.numberOfChannels;
+  }
+  return out;
+}
+async function resampleTo16k(channels, sampleRate) {
+  const len = channels[0].length;
+  const ctx = new OfflineAudioContext(1, Math.max(1, Math.ceil(len * 16000 / sampleRate)), 16000);
+  const buf = ctx.createBuffer(channels.length, len, sampleRate);
+  channels.forEach((c, i) => buf.copyToChannel(c, i));
+  const src = ctx.createBufferSource();
+  src.buffer = buf; src.connect(ctx.destination); src.start();
+  return (await ctx.startRendering()).getChannelData(0).slice();
+}
+async function decodeAudio(file) {
+  const buf = await file.arrayBuffer();
+  try {
+    // The browser decodes and resamples to the context's 16 kHz in one step
+    const decoded = await new OfflineAudioContext(1, 1, 16000).decodeAudioData(buf.slice(0));
+    return { samples: mixDown(decoded), decoder: 'browser' };
+  } catch (e) {
+    // e.g. older iPhones cannot decode Ogg Opus (WhatsApp) themselves
+    const lib = window['ogg-opus-decoder'];
+    if (!isOgg(buf) || !lib) throw new Error('Dieses Audioformat kann der Browser nicht lesen.');
+    const dec = new lib.OggOpusDecoder();
+    await dec.ready;
+    try {
+      const r = await dec.decodeFile(new Uint8Array(buf));
+      if (!r.samplesDecoded) throw new Error('Die Opus-Datei enthält keine lesbaren Audiodaten.');
+      return { samples: await resampleTo16k(r.channelData, r.sampleRate), decoder: 'opus' };
+    } finally { dec.free(); }
+  }
+}
+
+async function takeFile(file) {
+  if (!file || busy) return;
+  status('');
+  $('fileInfo').textContent = 'Lese „' + file.name + '“ …';
+  $('btnRun').disabled = true;
+  try {
+    const { samples, decoder } = await decodeAudio(file);
+    audio = { name: file.name, samples, duration: samples.length / 16000, decoder };
+    $('fileInfo').textContent = '„' + file.name + '“ · ' + mmss(audio.duration) + ' min' + (decoder === 'opus' ? ' · mit Ersatz-Decoder gelesen' : '');
+    $('fileInfo').dataset.decoder = decoder;
+    $('fileInfo').dataset.duration = audio.duration.toFixed(2);
+    const p = $('player');
+    if (p.src) URL.revokeObjectURL(p.src);
+    p.src = URL.createObjectURL(file);
+    p.hidden = false;
+    $('btnRun').disabled = false;
+  } catch (e) {
+    audio = null;
+    $('fileInfo').textContent = '';
+    $('player').hidden = true;
+    status(e.message, 'err');
+  }
+}
+const drop = $('drop');
+drop.addEventListener('click', () => { $('file').value = ''; $('file').click(); });
+$('file').addEventListener('change', () => takeFile($('file').files[0]));
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); takeFile(e.dataTransfer.files[0]); });
+
+/* ---------- Transcription (worker.js) ---------- */
+function getWorker() {
+  if (worker) return worker;
+  worker = new Worker('worker.js', { type: 'module' });
+  worker.onmessage = ({ data }) => { if (data.id === runId) handle(data); };
+  worker.onerror = e => { finish(); status('Die Spracherkennung konnte nicht gestartet werden' + (e.message ? ': ' + e.message : '.'), 'err'); worker = null; };
+  return worker;
+}
+
+function handle(m) {
+  // Late progress/status messages (e.g. downloads still in flight after an error) must not overwrite the outcome
+  if (!busy) return;
+  if (m.type === 'progress' && m.total) {
+    $('progressBox').hidden = false;
+    $('progress').value = Math.min(100, m.loaded / m.total * 100);
+    // Small totals = only config files so far; show numbers once the model files are counted
+    status('Modell wird geladen …' + (m.total > 5e6 ? ' ' + mb(m.loaded) + ' von ' + mb(m.total) : '') + ' (nur beim ersten Mal)');
+  } else if (m.type === 'status' && m.status === 'transcribing') {
+    $('progress').removeAttribute('value'); // indeterminate
+    $('progressBox').hidden = false;
+    const started = Date.now(), dev = m.device === 'webgpu' ? 'Grafikkarte' : 'Prozessor';
+    clearInterval(timer);
+    const tick = () => status('Transkribiere mit ' + dev + ' … ' + mmss((Date.now() - started) / 1000));
+    tick(); timer = setInterval(tick, 1000);
+  } else if (m.type === 'status' && m.status === 'loading') {
+    $('progressBox').hidden = false;
+    status('Modell wird vorbereitet …');
+  } else if (m.type === 'result') {
+    finish();
+    showResult(m.text, m.chunks);
+    $('resultMeta').textContent = modelLabel() + ' · ' + (m.device === 'webgpu' ? 'Grafikkarte' : 'Prozessor') + ' · ' + fmt(m.seconds, 0) + ' s für ' + mmss(audio.duration) + ' min Audio';
+    status(m.text ? 'Fertig.' : 'Fertig – es wurde keine Sprache erkannt.', m.text ? 'ok' : 'warn');
+    if (m.text) addHist({ t: Date.now(), file: audio.name, duration: audio.duration, model: $('model').value, text: m.text, chunks: m.chunks });
+    try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (_) {}
+    updateModelInfo();
+  } else if (m.type === 'error') {
+    finish();
+    status(m.stage === 'load'
+      ? 'Das Modell konnte nicht geladen werden. Für den ersten Download ist eine Internetverbindung nötig. (' + m.message + ')'
+      : 'Fehler bei der Transkription: ' + m.message, 'err');
+  }
+}
+
+function finish() {
+  busy = false;
+  clearInterval(timer);
+  $('progressBox').hidden = true;
+  $('btnRun').disabled = !audio;
+  $('btnRun').textContent = 'Transkribieren';
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+
+$('btnRun').addEventListener('click', async () => {
+  if (!audio || busy) return;
+  busy = true;
+  $('btnRun').disabled = true;
+  $('btnRun').textContent = 'Läuft …';
+  status('Starte …');
+  try { wakeLock = navigator.wakeLock ? await navigator.wakeLock.request('screen') : null; } catch (_) { wakeLock = null; }
+  runId++;
+  // Copy: the worker gets its own buffer, the page keeps the audio for another run
+  const samples = audio.samples.slice();
+  getWorker().postMessage({ type: 'transcribe', id: runId, audio: samples, model: $('model').value, language: $('language').value }, [samples.buffer]);
+});
+
+const modelLabel = () => $('model').selectedOptions[0].textContent.split(' (')[0];
+
+/* ---------- Result ---------- */
+function showResult(text, chunks) {
+  $('text').value = text;
+  const ul = $('chunks');
+  ul.textContent = '';
+  for (const c of chunks || []) {
+    const li = document.createElement('li');
+    const t = document.createElement('time');
+    t.textContent = c.from == null ? '–' : mmss(c.from);
+    const s = document.createElement('span');
+    s.textContent = c.text;
+    li.append(t, s);
+    ul.append(li);
+  }
+  $('chunkBox').hidden = !(chunks && chunks.length);
+}
+$('btnCopy').addEventListener('click', async () => {
+  const t = $('text').value.trim();
+  if (!t) return toast('Noch kein Text');
+  toast(await copyText(t) ? 'Text kopiert' : 'Kopieren nicht möglich');
+});
+const txtFile = () => new File([$('text').value.trim() + '\n'], ((audio && audio.name) || 'transkript').replace(/\.[^.]+$/, '') + '.txt', { type: 'text/plain' });
+$('btnSaveTxt').addEventListener('click', () => {
+  if (!$('text').value.trim()) return toast('Noch kein Text');
+  const f = txtFile(), a = document.createElement('a');
+  a.href = URL.createObjectURL(f); a.download = f.name; document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+});
+if (navigator.share) {
+  $('btnShare').hidden = false;
+  $('btnShare').addEventListener('click', async () => {
+    if (!$('text').value.trim()) return toast('Noch kein Text');
+    try { await navigator.share({ text: $('text').value.trim() }); } catch (e) { if (e.name !== 'AbortError') toast('Teilen nicht möglich'); }
+  });
+}
+
+/* ---------- History ---------- */
+let hist = load(LS_HIST, []);
+if (!Array.isArray(hist)) hist = [];
+function addHist(entry) { hist.unshift(entry); hist = hist.slice(0, MAX_HIST); save(LS_HIST, hist); renderHist(); }
+function renderHist() {
+  $('histCount').textContent = hist.length;
+  const ul = $('hist');
+  ul.textContent = '';
+  hist.forEach((h, i) => {
+    const li = document.createElement('li');
+    const open = document.createElement('button');
+    open.type = 'button'; open.className = 'open';
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = new Date(h.t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) + ' · ' + h.file + ' · ' + mmss(h.duration || 0) + ' min';
+    const snip = document.createElement('span');
+    snip.className = 'snip'; snip.textContent = h.text;
+    open.append(meta, snip);
+    open.addEventListener('click', () => { showResult(h.text, h.chunks); $('resultMeta').textContent = 'Aus dem Verlauf: ' + h.file; $('text').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'btn small danger'; del.textContent = '✕';
+    del.setAttribute('aria-label', 'Eintrag löschen');
+    del.addEventListener('click', () => { hist.splice(i, 1); save(LS_HIST, hist); renderHist(); });
+    li.append(open, del);
+    ul.append(li);
+  });
+  if (!hist.length) { const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'Noch keine Transkripte.'; ul.append(li); }
+}
+$('btnClearHist').addEventListener('click', () => { if (hist.length && confirm('Verlauf löschen?')) { hist = []; save(LS_HIST, hist); renderHist(); } });
+renderHist();
+
+// File shared from another app (Android share sheet → installed app)
+takeSharedFile().then(f => { if (f) { toast('Geteilte Datei übernommen'); takeFile(f); } });
+
+/* ---------- Downloaded models ---------- */
+async function updateModelInfo() {
+  let files = 0;
+  try { if (await caches.has(MODEL_CACHE)) files = (await (await caches.open(MODEL_CACHE)).keys()).length; } catch (_) {}
+  let usage = '';
+  try { const est = await navigator.storage.estimate(); usage = ' · Speicher der Seite insgesamt: ' + mb(est.usage || 0); } catch (_) {}
+  $('modelInfo').textContent = (files ? files + ' Modelldateien gespeichert' : 'Noch kein Modell heruntergeladen') + usage;
+  $('btnDeleteModels').disabled = !files;
+}
+$('modelBox').addEventListener('toggle', () => { if ($('modelBox').open) updateModelInfo(); });
+$('btnDeleteModels').addEventListener('click', async () => {
+  if (!confirm('Heruntergeladene Modelle löschen? Beim nächsten Transkribieren werden sie neu geladen.')) return;
+  try { await caches.delete(MODEL_CACHE); } catch (_) {}
+  if (worker) { worker.terminate(); worker = null; }
+  toast('Modelle gelöscht');
+  updateModelInfo();
+});
+})();
+</script>
+</body>
+</html>
