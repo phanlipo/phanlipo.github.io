@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Schere, Stein, Papier</title>
+<meta name="description" content="Spiel gegen den Computer – klassisch, mit Brunnen oder mit Echse und Spock.">
+<meta name="tool:tags" content="Spiel, Kinder">
+<meta name="tool:order" content="50">
+<meta name="tool:icon" content="scissors">
+<meta name="tool:color" content="#c2410c">
+<meta name="tool:short-name" content="Schnick">
+<meta name="tool:storage" content="rock-paper-scissors.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-iFsSFSXGDngWSv3U0GESUqTqJeBJ0w6oKvKrZ3L0AXY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Schnick">
+<meta name="theme-color" content="#c2410c">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#c2410c;--accent-text:#ffffff;--page-width:640px}
+@media (prefers-color-scheme: dark){:root{--accent:#fb923c;--accent-text:#1b0d03}}
+main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;gap:12px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.seg.two{grid-template-columns:1fr 1fr}
+.seg button{min-height:48px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;padding:4px 6px;line-height:1.2}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:700}
+.seg small{display:block;font-size:12px}
+
+/* ---------- Arena ---------- */
+.arena{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin-block:16px 8px}
+.side{text-align:center}
+.side .who{font-size:14px;color:var(--muted);font-weight:600}
+.hand{width:96px;height:96px;margin:4px auto 0;border-radius:50%;background:var(--surface-2);border:3px solid var(--border);display:grid;place-items:center;font-size:52px;line-height:1}
+.hand.win{border-color:var(--ok)}
+.hand.lose{border-color:var(--err)}
+.vs{font-weight:700;color:var(--muted)}
+.pop{animation:pop .35s ease-out}
+@keyframes pop{0%{transform:scale(.4) rotate(-20deg)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.pop{animation:none}}
+.result{text-align:center;min-height:62px;margin-block-end:8px}
+.result .big{font-size:22px;font-weight:700}
+.result .why{color:var(--muted);font-size:15px}
+.result[data-outcome="win"] .big{color:var(--ok)}
+.result[data-outcome="lose"] .big{color:var(--err)}
+.status{text-align:center;font-size:15px;margin-block-end:10px}
+
+/* ---------- Choices ---------- */
+.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
+.choice{min-height:96px;border:2px solid var(--border);border-radius:14px;background:var(--surface-2);color:var(--text);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-weight:600;padding:6px;-webkit-tap-highlight-color:transparent;transition:transform .1s}
+.choice:hover{border-color:var(--accent)}
+.choice:active{transform:scale(.95)}
+.choice .e{font-size:42px;line-height:1.1}
+
+/* ---------- Score & history ---------- */
+.score{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;margin-block:14px 8px}
+.score div{background:var(--surface-2);border-radius:10px;padding:6px 4px}
+.score b{display:block;font-size:26px;font-variant-numeric:tabular-nums}
+.score span{font-size:13px;color:var(--muted)}
+.last{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;min-height:32px;padding:0;margin:0;list-style:none}
+.last li{background:var(--surface-2);border:2px solid var(--border);border-radius:999px;padding:2px 8px;font-size:18px;white-space:nowrap}
+.last li.win{border-color:var(--ok)}
+.last li.lose{border-color:var(--err)}
+.btn.grow{flex:1 1 auto}
+
+/* ---------- Diagrams in the help ---------- */
+.rules{display:grid;gap:4px 16px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:600px){.rules{grid-template-columns:minmax(0,260px) minmax(0,1fr);align-items:center}}
+.rules svg{width:100%;max-width:300px;height:auto;display:block;margin-inline:auto;color:var(--text)}
+.rules svg .node{fill:var(--surface-2);stroke:var(--border);stroke-width:2}
+.rules svg .lbl{fill:var(--text);font-size:15px;font-weight:600}
+.rules svg .arrow{stroke:var(--accent);fill:var(--accent)}
+.rules ul{margin:0;padding-inline-start:20px}
+@media (max-width:420px){.hand{width:80px;height:80px;font-size:44px}.choices{grid-template-columns:repeat(auto-fit,minmax(88px,1fr))}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Schere, Stein, Papier</h1>
+  <p class="sub">Spiel gegen den Computer</p>
+</header>
+
+<main>
+  <section class="card" aria-label="Spiel">
+    <div class="seg" id="variants" role="group" aria-label="Spielvariante">
+      <button type="button" data-v="3">3 Klassisch<small>✂️ 🪨 📄</small></button>
+      <button type="button" data-v="4">4 Brunnen<small>✂️ 🪨 📄 ⛲</small></button>
+      <button type="button" data-v="5">5 Echse &amp; Spock<small>✂️ 🪨 📄 🦎 🖖</small></button>
+    </div>
+
+    <div class="arena">
+      <div class="side"><div class="who">Du</div><div class="hand" id="you" data-move="">❔</div></div>
+      <div class="vs" aria-hidden="true">gegen</div>
+      <div class="side"><div class="who">Computer</div><div class="hand" id="cpu" data-move="">❔</div></div>
+    </div>
+    <div class="result" id="result" aria-live="polite"></div>
+    <p class="status" id="status">🤫 Der Computer hat schon gewählt – jetzt du!</p>
+
+    <div class="choices" id="choices" role="group" aria-label="Deine Wahl"></div>
+
+    <div class="score" aria-label="Punktestand">
+      <div><b id="sWin">0</b><span>Du</span></div>
+      <div><b id="sDraw">0</b><span>Gleich</span></div>
+      <div><b id="sLose">0</b><span>Computer</span></div>
+    </div>
+    <h2 id="h-last" class="sr-only">Letzte Runden</h2>
+    <ul class="last" id="last" aria-labelledby="h-last"></ul>
+    <div class="row" style="margin-block-start:12px">
+      <button type="button" class="btn grow" id="btnReset">Punkte zurücksetzen</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-cpu">
+    <h2 id="h-cpu">Wie spielt der Computer?</h2>
+    <div class="seg two" id="modes" role="group" aria-label="Spielweise des Computers">
+      <button type="button" data-m="random">🎲 Zufall</button>
+      <button type="button" data-m="smart">🧠 Schlau</button>
+    </div>
+    <p class="muted" id="modeHelp"></p>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary>Daten sichern &amp; übertragen</summary>
+  <p>Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary>Anleitung &amp; Hinweise</summary>
+  <p>Wähle oben eine Variante und tippe auf ein Zeichen. Der Computer hat <strong>vorher</strong> gewählt – er sieht deine Wahl nicht. Er kennt nur die vorherigen Runden.</p>
+  <h3>Wer gewinnt?</h3>
+  <p>Jeder Pfeil zeigt vom Gewinner zum Verlierer. Gleiche Zeichen = unentschieden.</p>
+  <div id="ruleDiagrams"></div>
+  <h3>Der Computer</h3>
+  <ul>
+    <li><strong>Zufall:</strong> Der Computer wählt ganz zufällig.</li>
+    <li><strong>Schlau:</strong> Der Computer merkt sich, was du in den letzten Runden gewählt hast, und rät, was du als Nächstes nimmst. Ein bisschen Zufall ist immer dabei. Tipp: Wer immer dasselbe nimmt, verliert bald!</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Jede Variante hat einen eigenen Punktestand.</li>
+    <li>Die Variante mit Brunnen ist nicht ausgeglichen: Brunnen und Papier gewinnen je zweimal, Schere und Stein nur einmal.</li>
+    <li>„Stein, Papier, Schere, Echse, Spock“ stammt aus der Serie „The Big Bang Theory“.</li>
+  </ul>
+</details>
+
+<footer>
+  <p>Läuft vollständig im Browser · Punkte werden lokal gespeichert</p>
+  <!-- footer:start -->
+  <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
+  <p class="footer-version">Version b3bd9c255591</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const LS='rock-paper-scissors.state.v1';
+const MOVES={
+  schere:{e:'✂️',n:'Schere'},stein:{e:'🪨',n:'Stein'},papier:{e:'📄',n:'Papier'},
+  brunnen:{e:'⛲',n:'Brunnen'},echse:{e:'🦎',n:'Echse'},spock:{e:'🖖',n:'Spock'}
+};
+// [winner, loser, explanation]
+const CLASSIC=[
+  ['schere','papier','Schere schneidet Papier'],
+  ['papier','stein','Papier wickelt Stein ein'],
+  ['stein','schere','Stein macht Schere stumpf']
+];
+const VARIANTS={
+  3:{name:'Klassisch',moves:['schere','stein','papier'],rules:CLASSIC},
+  4:{name:'Mit Brunnen',moves:['schere','stein','papier','brunnen'],rules:[...CLASSIC,
+    ['brunnen','schere','Schere fällt in den Brunnen'],
+    ['brunnen','stein','Stein fällt in den Brunnen'],
+    ['papier','brunnen','Papier deckt den Brunnen zu']]},
+  5:{name:'Mit Echse & Spock',moves:['schere','papier','stein','echse','spock'],rules:[...CLASSIC,
+    ['stein','echse','Stein zerquetscht Echse'],
+    ['echse','spock','Echse beißt Spock'],
+    ['spock','schere','Spock zerbricht Schere'],
+    ['schere','echse','Schere schnappt Echse'],
+    ['echse','papier','Echse frisst Papier'],
+    ['papier','spock','Papier widerlegt Spock'],
+    ['spock','stein','Spock lässt Stein verdampfen']]}
+};
+const MAX_ROUNDS=100;
+
+const state=Tools.load(LS,{variant:'3',mode:'smart',v:{}});
+if(!VARIANTS[state.variant])state.variant='3';
+if(state.mode!=='random'&&state.mode!=='smart')state.mode='smart';
+if(!state.v||typeof state.v!=='object')state.v={};
+const save=()=>Tools.save(LS,state);
+function vs(){
+  const k=state.variant;
+  if(!state.v[k]||!Array.isArray(state.v[k].rounds))state.v[k]={rounds:[],win:0,lose:0,draw:0};
+  return state.v[k];
+}
+const rule=(variant,a,b)=>VARIANTS[variant].rules.find(r=>r[0]===a&&r[1]===b);
+function outcome(variant,p,c){
+  if(p===c)return 'draw';
+  return rule(variant,p,c)?'win':'lose';
+}
+const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
+
+// The computer decides BEFORE the player chooses – only from the previous rounds.
+function computerMove(){
+  const v=VARIANTS[state.variant];
+  const hist=vs().rounds.map(r=>r[0]).filter(m=>v.moves.includes(m));
+  if(state.mode==='random'||hist.length<2||Math.random()<0.25)return pick(v.moves);
+  // Guess the player's next move: overall habits (recent rounds count more)
+  // plus what the player chose after their last move.
+  const w={};v.moves.forEach(m=>w[m]=1);
+  hist.slice(-30).forEach((m,i,a)=>{w[m]+=1+i/a.length});
+  const last=hist[hist.length-1];
+  for(let i=0;i<hist.length-1;i++)if(hist[i]===last)w[hist[i+1]]+=2;
+  let r=Math.random()*v.moves.reduce((s,m)=>s+w[m],0),guess=v.moves[0];
+  for(const m of v.moves){r-=w[m];if(r<0){guess=m;break}}
+  // Play something that beats the guessed move
+  return pick(v.rules.filter(x=>x[1]===guess).map(x=>x[0]));
+}
+let cpuNext=computerMove();
+
+function renderChoices(){
+  const box=Tools.$('choices');
+  box.innerHTML='';
+  for(const m of VARIANTS[state.variant].moves){
+    const b=document.createElement('button');
+    b.type='button';b.className='choice';b.dataset.move=m;
+    b.innerHTML=`<span class="e" aria-hidden="true">${MOVES[m].e}</span><span>${MOVES[m].n}</span>`;
+    box.appendChild(b);
+  }
+}
+function renderScore(){
+  const s=vs();
+  Tools.$('sWin').textContent=s.win;Tools.$('sDraw').textContent=s.draw;Tools.$('sLose').textContent=s.lose;
+  const ul=Tools.$('last');ul.innerHTML='';
+  s.rounds.slice(-8).reverse().forEach(([p,c,o])=>{
+    const li=document.createElement('li');li.className=o;
+    li.innerHTML=`<span aria-hidden="true">${MOVES[p].e} : ${MOVES[c].e}</span><span class="sr-only">${MOVES[p].n} gegen ${MOVES[c].n}: ${o==='win'?'gewonnen':o==='lose'?'verloren':'unentschieden'}</span>`;
+    ul.appendChild(li);
+  });
+}
+function clearArena(){
+  for(const id of ['you','cpu']){const h=Tools.$(id);h.textContent='❔';h.dataset.move='';h.className='hand'}
+  const r=Tools.$('result');r.innerHTML='';r.dataset.outcome='';
+  Tools.$('status').textContent='🤫 Der Computer hat schon gewählt – jetzt du!';
+}
+function renderAll(){
+  document.querySelectorAll('#variants button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===state.variant)));
+  document.querySelectorAll('#modes button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.m===state.mode)));
+  Tools.$('modeHelp').textContent=state.mode==='smart'
+    ?'Der Computer merkt sich deine letzten Züge und versucht zu erraten, was du als Nächstes nimmst.'
+    :'Der Computer wählt ganz zufällig.';
+  renderChoices();renderScore();
+}
+
+function play(p){
+  const c=cpuNext,variant=state.variant,o=outcome(variant,p,c);
+  const s=vs();
+  s.rounds.push([p,c,o]);
+  if(s.rounds.length>MAX_ROUNDS)s.rounds.splice(0,s.rounds.length-MAX_ROUNDS);
+  s[o]++;
+  save();
+  const you=Tools.$('you'),cpu=Tools.$('cpu');
+  for(const [el,m,cls] of [[you,p,o],[cpu,c,o==='win'?'lose':o==='lose'?'win':'draw']]){
+    el.textContent=MOVES[m].e;el.dataset.move=m;
+    el.className='hand '+cls;void el.offsetWidth;el.classList.add('pop');
+  }
+  const big={win:'Du gewinnst! 🎉',lose:'Der Computer gewinnt!',draw:'Unentschieden!'}[o];
+  const why=o==='draw'?`Ihr habt beide ${MOVES[p].n}.`:(o==='win'?rule(variant,p,c):rule(variant,c,p))[2]+'.';
+  const r=Tools.$('result');r.dataset.outcome=o;
+  r.innerHTML=`<div class="big">${big}</div><div class="why">${Tools.esc(why)}</div>`;
+  renderScore();
+  cpuNext=computerMove();
+  Tools.$('status').textContent='🤫 Der Computer hat schon neu gewählt. Nochmal?';
+}
+
+Tools.$('choices').addEventListener('click',e=>{
+  const b=e.target.closest('.choice');if(b)play(b.dataset.move);
+});
+Tools.$('variants').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||b.dataset.v===state.variant)return;
+  state.variant=b.dataset.v;save();cpuNext=computerMove();clearArena();renderAll();
+});
+Tools.$('modes').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  state.mode=b.dataset.m;save();cpuNext=computerMove();renderAll();
+});
+Tools.$('btnReset').addEventListener('click',()=>{
+  if(!confirm('Punkte und Verlauf dieser Variante zurücksetzen?'))return;
+  delete state.v[state.variant];save();cpuNext=computerMove();clearArena();renderAll();
+});
+
+// ---------- Help: one diagram per variant, arrows point from winner to loser ----------
+function diagram(key){
+  const v=VARIANTS[key],n=v.moves.length,C=170,R=105,NR=30;
+  const pos=v.moves.map((m,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;return {m,x:C+R*Math.cos(a),y:C+R*Math.sin(a),dx:Math.cos(a),dy:Math.sin(a)}});
+  const at=m=>pos.find(p=>p.m===m);
+  const f=x=>x.toFixed(1);
+  let arrows='',nodes='';
+  for(const [w,l] of v.rules){
+    const a=at(w),b=at(l),dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),ux=dx/len,uy=dy/len;
+    const x1=a.x+ux*(NR+4),y1=a.y+uy*(NR+4),x2=b.x-ux*(NR+4),y2=b.y-uy*(NR+4);
+    const bx=x2-ux*13,by=y2-uy*13,px=-uy*6.5,py=ux*6.5;
+    arrows+=`<line class="arrow" x1="${f(x1)}" y1="${f(y1)}" x2="${f(bx)}" y2="${f(by)}" stroke-width="3"/>`+
+      `<polygon class="arrow" points="${f(x2)},${f(y2)} ${f(bx+px)},${f(by+py)} ${f(bx-px)},${f(by-py)}"/>`;
+  }
+  for(const p of pos){
+    const lx=C+(R+NR+16)*p.dx,ly=C+(R+NR+16)*p.dy+5;
+    nodes+=`<circle class="node" cx="${f(p.x)}" cy="${f(p.y)}" r="${NR}"/>`+
+      `<text x="${f(p.x)}" y="${f(p.y+11)}" text-anchor="middle" font-size="30">${MOVES[p.m].e}</text>`+
+      `<text class="lbl" x="${f(lx)}" y="${f(ly)}" text-anchor="middle">${MOVES[p.m].n}</text>`;
+  }
+  const items=v.rules.map(r=>`<li>${MOVES[r[0]].e} <strong>${MOVES[r[0]].n}</strong> schlägt ${MOVES[r[1]].e} ${MOVES[r[1]].n} – ${r[2]}</li>`).join('');
+  return `<h3>${key} – ${Tools.esc(v.name)}</h3><div class="rules" data-variant="${key}">`+
+    `<svg viewBox="-40 0 420 340" role="img" aria-label="Pfeil-Bild: wer gegen wen gewinnt (${Tools.esc(v.name)})">${arrows}${nodes}</svg>`+
+    `<ul>${items}</ul></div>`;
+}
+Tools.$('ruleDiagrams').innerHTML=Object.keys(VARIANTS).map(diagram).join('');
+
+renderAll();
+})();
+</script>
+</body>
+</html>
