@@ -17,7 +17,7 @@ test.describe('start page', () => {
     test(`loads cleanly (${name})`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await page.goto('/');
-      await expect(page.locator('h1')).toHaveText('Werkzeugkiste');
+      await expect(page.locator('h1')).toHaveText('App-Regal');
       await expectNoHorizontalScroll(page);
     });
   }
