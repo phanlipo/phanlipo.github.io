@@ -10,12 +10,22 @@
 //   node scripts/vendor.mjs --update <name>  set <name> (or "all") to the latest version and download it
 //
 // Each library folder gets LICENSE (from the package) and SOURCE.md (origin, version, integrity).
+//
+// Optional fields per entry:
+//   "versionFrom": { "entry": "transformers", "dependency": "onnxruntime-web" }
+//        the version is dictated by another library's dependency (must match exactly);
+//        --check reports it with that library, --update sets it automatically
+//   "wasm": true       library compiles WebAssembly → build.mjs adds 'wasm-unsafe-eval' to the page's CSP
+//   "precache": false  too large for the install-time offline cache → cached on first use instead
+//   "licenseFallback": { "copyright": "...", "source": "<url>" }
+//        for packages without a licence file: LICENSE is written from the standard MIT text
+//        (only allowed when package.json says "MIT")
 // assets/vendor/README.md lists all libraries.
 // Files come from the npm registry tarball; its integrity hash is verified before anything is written.
 
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { ROOT, npmFiles, npmLatest } from './lib.mjs';
+import { ROOT, npmFiles, npmLatest, npmVersionInfo } from './lib.mjs';
 
 const CONFIG = join(ROOT, 'scripts/vendor.json');
 const VENDOR = join(ROOT, 'assets/vendor');
@@ -57,8 +67,9 @@ async function download(name, entry) {
     }
   }
   const lic = LICENSE_NAMES.find(n => files.has(n));
-  if (!lic) throw new Error(`${name}: no licence file in package`);
-  writeFileSync(join(dir, 'LICENSE'), files.get(lic));
+  if (lic) writeFileSync(join(dir, 'LICENSE'), files.get(lic));
+  else if (entry.licenseFallback && entry.license === 'MIT') writeFileSync(join(dir, 'LICENSE'), mitLicense(entry));
+  else throw new Error(`${name}: no licence file in package (add "licenseFallback" for MIT packages)`);
 
   writeFileSync(join(dir, 'SOURCE.md'), `# ${name}
 
@@ -77,6 +88,35 @@ Dateien:
 ${written.length ? written.map(f => `- \`${f}\``).join('\n') : '- (keine – nur Lizenz)'}
 `);
   console.log(`✓ ${name} ${entry.version} (${written.length} Dateien)`);
+}
+
+function mitLicense(entry) {
+  return `Note: the npm package ${entry.package}@${entry.version} ships no licence file.
+Its package.json declares "license": "MIT". Standard MIT text below; upstream licence:
+${entry.licenseFallback.source}
+
+MIT License
+
+${entry.licenseFallback.copyright}
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+`;
 }
 
 function writeIndex() {
@@ -100,9 +140,24 @@ ${rows.join('\n')}
 `);
 }
 
+// Version a dependent entry must have, according to the parent library's package.json
+async function requiredVersion(e) {
+  const parent = config[e.versionFrom.entry];
+  const info = await npmVersionInfo(parent.package, parent.version);
+  const v = (info.dependencies || {})[e.versionFrom.dependency];
+  if (!v) throw new Error(`${parent.package}@${parent.version} has no dependency ${e.versionFrom.dependency}`);
+  return v.replace(/^[\^~=]/, '');
+}
+
 async function check() {
   const outdated = [];
   for (const [name, e] of Object.entries(config)) {
+    if (e.versionFrom) {
+      const need = await requiredVersion(e);
+      console.log(`${need === e.version ? '✓' : '↑'} ${name}: ${e.version}${need === e.version ? '' : ` → ${need}`} (vorgegeben von ${e.versionFrom.entry})`);
+      if (need !== e.version) outdated.push({ name, pkg: e.package, current: e.version, latest: need, major: false });
+      continue;
+    }
     const latest = await npmLatest(e.package);
     // Breaking per semver: major changed, or minor changed while major is 0 (0.x)
     const [a1, a2] = e.version.split('.').map(Number), [b1, b2] = latest.split('.').map(Number);
@@ -133,8 +188,10 @@ if (flag('--check')) {
     const names = upd === 'all' ? Object.keys(config) : [upd];
     for (const n of names) {
       if (!config[n]) throw new Error(`Unbekannt: ${n}`);
-      config[n].version = await npmLatest(config[n].package);
+      if (!config[n].versionFrom) config[n].version = await npmLatest(config[n].package);
     }
+    // Dependent entries follow their parent (also when only the parent was updated)
+    for (const e of Object.values(config)) if (e.versionFrom) e.version = await requiredVersion(e);
     writeFileSync(CONFIG, JSON.stringify(config, null, 2) + '\n');
   }
   for (const [name, e] of Object.entries(config)) {

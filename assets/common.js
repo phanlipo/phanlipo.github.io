@@ -205,11 +205,27 @@ window.Tools = (function () {
     });
   }
 
+  /* ---------- Share target (Android): file shared to the installed app ----------
+     sw.js parks it in the cache "share:<app>" and opens the page with ?shared=1.
+     Returns the File once (or null) and removes it from the cache and the URL. */
+  async function takeSharedFile() {
+    if (!/[?&]shared=1\b/.test(location.search) || !('caches' in window)) return null;
+    history.replaceState(null, '', location.pathname + location.hash);
+    try {
+      const cache = await caches.open('share:' + appId());
+      const res = await cache.match('shared-file');
+      if (!res) return null;
+      await cache.delete('shared-file');
+      const name = decodeURIComponent(res.headers.get('X-File-Name') || 'geteilt');
+      return new File([await res.blob()], name, { type: res.headers.get('Content-Type') || '' });
+    } catch (_) { return null; }
+  }
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupDataUi);
   else setupDataUi();
 
   return {
-    $, load, save, remove, toast, esc, copyText, fmt, parseNum,
+    $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile,
     data: { exportData, validateBackup, importData, clearData, keys: ownKeys, prefixes: storagePrefixes, appId },
   };
 })();
