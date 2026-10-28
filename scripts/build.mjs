@@ -19,6 +19,7 @@
 // Page metadata (in <head>):
 //   <title>, <meta name="description">                  required for the tool list
 //   tool:tags ("a, b"), tool:order (number), tool:hidden ("true" = not listed, no PWA)
+//   tool:features ("a, b")                               what sets the app apart, from FEATURES below
 //   tool:icon, tool:color                                icons (see build-icons.mjs), theme colour
 //   tool:short-name                                      name under the home-screen icon (≤ 12 chars)
 //   tool:storage                                         localStorage key prefix(es) of the app, comma-separated
@@ -34,6 +35,10 @@ const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules', 'tests'])
 const SITE = 'https://phanlipo.github.io/';
 const SW_FORMAT = 2; // bump when the generated sw.js logic changes
 const VENDOR = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'));
+
+// Features for the second filter row on the start page, in display order. Only what sets apps apart:
+// things every app has (offline, installable, data stays on the device) are stated once on the start page.
+const FEATURES = ['Kamera', 'Datei öffnen', 'Teilen an App', 'Kopieren', 'Verlauf', 'Schütteln', 'Download nötig'];
 
 const escHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const escMd = s => s.replace(/\|/g, '\\|');
@@ -53,6 +58,7 @@ function pageInfo({ folder, file }) {
     folder, file, title,
     description: meta(html, 'description'),
     tags: (meta(html, 'tool:tags') || '').split(',').map(t => t.trim()).filter(Boolean),
+    features: (meta(html, 'tool:features') || '').split(',').map(t => t.trim()).filter(Boolean),
     order: Number(meta(html, 'tool:order')) || 100,
     hidden: meta(html, 'tool:hidden') === 'true',
     color: meta(html, 'tool:color') || '#334155',
@@ -94,13 +100,36 @@ function setBlock(file, name, content, required) {
 
 function renderCards() {
   if (!tools.length) return '\n  <p class="muted">Noch keine Seiten.</p>\n  ';
-  const cards = tools.map(t => `    <article class="card tool">
+  for (const t of tools) for (const f of t.features)
+    if (!FEATURES.includes(f)) throw new Error(`${t.file}: unknown tool:features value "${f}" – allowed: ${FEATURES.join(', ')}`);
+  // Filter rows: every value once. Categories: the first tag of a tool is its area (Alltag, Arbeit, Freizeit …);
+  // areas come first, then the other tags, each alphabetically. Features in FEATURES order.
+  // Hidden until the page script runs (no JS = no filter).
+  const areas = new Set(tools.map(t => t.tags[0]).filter(Boolean));
+  const byName = (a, b) => a.localeCompare(b, 'de');
+  const tags = [...areas].sort(byName)
+    .concat([...new Set(tools.flatMap(t => t.tags))].filter(x => !areas.has(x)).sort(byName));
+  const features = FEATURES.filter(f => tools.some(t => t.features.includes(f)));
+  const chip = (label, value, pressed) =>
+    `<button type="button" class="chip" data-tag="${escHtml(value)}" aria-pressed="${pressed}">${escHtml(label)}</button>`;
+  const row = (id, label, chips) => `    <div class="filter-row" role="group" aria-labelledby="${id}">
+      <span class="filter-label" id="${id}">${label}</span>
+      <div class="chips">
+        ${chips.join('\n        ')}
+      </div>
+    </div>
+`;
+  const filter = tags.length || features.length ? `  <div class="filter" hidden>
+${row('f-cat', 'Kategorie', [chip('Alle', '', true), ...tags.map(x => chip(x, x, false))])}${features.length ? row('f-feat', 'Funktion', features.map(x => chip(x, x, false))) : ''}  </div>
+  <p class="filter-status sr-only" aria-live="polite"></p>
+` : '';
+  const cards = tools.map(t => `    <article class="card tool" data-tags="${escHtml(JSON.stringify([...t.tags, ...t.features]))}">
       <h2>${t.icon ? `<img src="${t.folder}/icon.svg" alt="" width="32" height="32">` : ''}${escHtml(t.title)}</h2>
       <p>${escHtml(t.description)}</p>
-      <div class="tags">${t.tags.map(x => `<span class="tag">${escHtml(x)}</span>`).join('')}</div>
+      <div class="tags">${t.tags.map(x => `<span class="tag">${escHtml(x)}</span>`).join('')}${t.features.map(x => `<span class="tag feat">${escHtml(x)}</span>`).join('')}</div>
       <a class="btn primary" href="${t.folder}/">Öffnen</a>
     </article>`).join('\n');
-  return `\n  <div class="grid">\n${cards}\n  </div>\n  `;
+  return `\n${filter}  <div class="grid">\n${cards}\n  </div>\n  `;
 }
 
 function renderTable() {

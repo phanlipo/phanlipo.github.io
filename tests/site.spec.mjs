@@ -17,7 +17,7 @@ test.describe('start page', () => {
     test(`loads cleanly (${name})`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await page.goto('/');
-      await expect(page.locator('h1')).toHaveText('Web-Tools');
+      await expect(page.locator('h1')).toHaveText('App-Regal');
       await expectNoHorizontalScroll(page);
     });
   }
@@ -31,6 +31,32 @@ test.describe('start page', () => {
       await expect(card.locator('a.btn')).toHaveAttribute('href', `${t.folder}/`);
       await expect(card.locator('img')).toHaveAttribute('src', `${t.folder}/icon.svg`);
     }
+  });
+
+  test('filters the list by category', async ({ page }) => {
+    await page.goto('/');
+    const list = tools();
+    const all = page.getByRole('button', { name: 'Alle', exact: true });
+    await expect(all).toHaveAttribute('aria-pressed', 'true');
+    // Every category and feature of every tool has exactly one filter button
+    const tags = [...new Set(list.flatMap(t => [...t.tags, ...t.features]))];
+    await expect(page.locator('.filter .chip')).toHaveCount(tags.length + 1);
+    for (const tag of tags) {
+      const chip = page.getByRole('button', { name: tag, exact: true });
+      await chip.click();
+      await expect(chip).toHaveAttribute('aria-pressed', 'true');
+      await expect(all).toHaveAttribute('aria-pressed', 'false');
+      for (const t of list) {
+        const card = page.locator('.tool', { has: page.locator('h2', { hasText: t.title }) });
+        await expect(card).toBeVisible({ visible: t.tags.includes(tag) || t.features.includes(tag) });
+      }
+      await expectNoHorizontalScroll(page);
+    }
+    // Tapping the active category again shows everything
+    const last = page.locator(`.filter .chip[data-tag="${tags.at(-1)}"]`);
+    await last.click();
+    await expect(page.locator('.tool:visible')).toHaveCount(list.length);
+    await expect(all).toHaveAttribute('aria-pressed', 'true');
   });
 });
 
