@@ -1,6 +1,6 @@
-# Rebuilds the tool list on the start page and in README.md from the tool folders
-# and commits the result, so the list is always current after a push.
-name: Tool-Liste aktualisieren
+# Regenerates the tool list (start page + README) and the shared footer in every page
+# and commits the result, so generated parts are always current after a push.
+name: Tool-Liste & Fußzeile aktualisieren
 
 on:
   push:
@@ -21,16 +21,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Build tool list
+      - name: Build generated parts
         run: node scripts/build-index.mjs
       - name: Commit changes
         run: |
-          if git diff --quiet -- index.html README.md; then
-            echo "Tool list already up to date."
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Generated parts already up to date."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html README.md
-          git commit -m "Update tool list"
+          git add -A
+          git commit -m "Update generated tool list and footer"
           git push

@@ -22,7 +22,7 @@ index.html            Startseite (Kartenliste wird automatisch erzeugt)
 assets/base.css       gemeinsame Farben, Dark Mode, Karten, Buttons, Hilfe-Bereich
 assets/common.js      gemeinsame Helfer (window.Tools: load/save, toast, copyText, fmt …)
 template/             Vorlage für neue Seiten
-scripts/              build-index.mjs erzeugt die Seitenliste
+scripts/              build-index.mjs (Seitenliste + Fußzeile), build-icons.mjs (Favicons)
 <tool-name>/          je Tool ein Ordner mit index.html (englischer Name, kebab-case)
 .githooks/pre-commit  aktualisiert die Seitenliste vor jedem Commit
 AGENTS.md             Konventionen für Mitwirkende und KI-Agenten
@@ -31,15 +31,18 @@ AGENTS.md             Konventionen für Mitwirkende und KI-Agenten
 ## Neue Seite hinzufügen
 
 1. `template/` kopieren und englisch benennen, z. B. `unit-converter/`.
-2. In der `index.html` Titel, `description`, `tool:tags` und `tool:order` anpassen.
-3. `node scripts/build-index.mjs` ausführen (passiert per Git-Hook bzw. GitHub Action auch automatisch).
+2. In der `index.html` Titel, `description`, `tool:tags`, `tool:order`, `tool:icon` und `tool:color` anpassen.
+3. `node scripts/build-icons.mjs <ordner>` erzeugt das Favicon.
+4. `node scripts/build-index.mjs` aktualisiert Seitenliste und Fußzeile (passiert per Git-Hook bzw. GitHub Action auch automatisch).
 
 Die Seite ist dann unter `https://phanlipo.github.io/<ordner>/` erreichbar.
 
-## Seitenliste automatisch aktualisieren
+## Generierte Teile
 
-Die Liste auf der Startseite und hier in der README wird aus den Metadaten der Tool-Seiten erzeugt:
+Die Seitenliste (Startseite und README) wird aus den Metadaten der Tool-Seiten erzeugt, die gemeinsame Fußzeile aus `scripts/partials/footer.html`:
 
 - **Lokal vor jedem Commit:** einmalig `git config core.hooksPath .githooks` ausführen.
 - **Auf GitHub:** die Action `.github/workflows/tool-index.yml` baut die Liste bei jedem Push neu und committet Änderungen.
 - **Prüfen ohne zu schreiben:** `node scripts/build-index.mjs --check`
+
+Icons: [Tabler Icons](https://tabler.io/icons), MIT-Lizenz (`assets/LICENSE-tabler-icons.txt`).

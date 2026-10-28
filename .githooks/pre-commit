@@ -1,9 +1,10 @@
 #!/bin/sh
-# Rebuilds the tool list (start page + README) before every commit.
+# Regenerates tool list and shared footer before every commit and stages the result.
 # Enable once per clone:  git config core.hooksPath .githooks
 if ! command -v node >/dev/null 2>&1; then
-  echo "pre-commit: node not found – tool list not updated (GitHub Action will do it)." >&2
+  echo "pre-commit: node not found – generated parts not updated (GitHub Action will do it)." >&2
   exit 0
 fi
-node scripts/build-index.mjs || exit 1
-git add index.html README.md
+changed=$(node scripts/build-index.mjs --print-changed) || exit 1
+[ -n "$changed" ] && echo "$changed" | while IFS= read -r f; do git add -- "$f"; done
+exit 0
