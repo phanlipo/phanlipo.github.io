@@ -29,6 +29,7 @@ Passt der installierte Browser nicht zur Playwright-Version (z. B. in vorkonfigu
 | `rock-paper-scissors.spec.mjs` | Regeln aller drei Varianten (unabhängig nachgeprüft), Computer wählt unabhängig von der Spielerwahl, „Schlau“ lernt aus dem Verlauf, Pfeil-Bilder in der Hilfe, Punktestand je Variante |
 | `voice-transcriber.spec.mjs` | Audio dekodieren (Browser + Opus-Ersatz-Decoder), Fehler bei Nicht-Audio, verständliche Meldung wenn das Modell nicht ladbar ist, Teilen-Ziel (Android), Verlauf |
 | `pdf2word.spec.mjs` | PDF zu Word: Absätze, hängender Einzug, Silbentrennung, Spalten (Tabulator), zentrierte Zeilen, Seitenumbrüche, Seitenzahl in der Fußzeile, Ränder – geprüft in der erzeugten .docx gegen die Geometrie einer selbst gebauten PDF (`pdf-tools.mjs`, Courier = feste Zeichenbreite); Bilder (Position, Größe, gespiegelt/gedreht, Hintergrundbild übersprungen), Texterkennung gescannter Seiten (Text und Schriftgrößen; ausgeschaltet oder nicht ladbar → Seite als Bild; offline nach dem ersten Mal), Nicht-PDF, PDF ohne Inhalt, Teilen-Ziel, offline |
+| `build.spec.mjs` | `build.mjs --check` ist sauber; die Prüfung der Vendor-Pfade erkennt zusammengesetzte Pfade und Worker, die direkt aus `assets/vendor/` starten (beides bricht offline) |
 | `helpers.mjs` | gemeinsame Helfer; der `page`-Fixture lässt jeden Test bei JS-Fehlern, Konsolenfehlern, **Anfragen an fremde Server** oder **localStorage-Schlüsseln außerhalb von `tool:storage`** scheitern |
 
 ## Manuelle Tests
