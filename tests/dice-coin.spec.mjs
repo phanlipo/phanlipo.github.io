@@ -126,3 +126,26 @@ test('W6 is roughly uniform (600 rolls)', async ({ page }) => {
   });
   for (const n of counts) expect(n).toBeGreaterThan(55), expect(n).toBeLessThan(145);
 });
+
+test('backup round trip: roll, export, clear, import', async ({ page }) => {
+  await setStepper(page, 'dice.count', 3);
+  await page.click('#btnRoll');
+  await page.click('#btnRoll');
+  const rolled = await dice(page);
+  await page.locator('details.data summary').click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('[data-data="export"]')]);
+  const path = await download.path();
+
+  page.once('dialog', d => d.accept());
+  await page.click('[data-data="clear"]');
+  await page.waitForEvent('load');
+  await expect(page.locator('#board .die')).toHaveCount(2);          // back to defaults
+  await expect(page.locator('#histCount')).toHaveText('0');
+
+  await page.locator('details.data summary').click();
+  page.once('dialog', d => d.accept());
+  await page.setInputFiles('details.data input[type=file]', path);
+  await page.waitForEvent('load');
+  expect(await dice(page)).toEqual(rolled);
+  await expect(page.locator('#histCount')).toHaveText('2');
+});

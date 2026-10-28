@@ -16,6 +16,7 @@ scripts/build.mjs     erzeugt Seitenliste, Fußzeile, <head>-Links, manifest.web
 scripts/build-icons.mjs  erzeugt icon.svg und PNG-Icons (180/192/512/maskable) je Seite (Tabler Icons)
 scripts/vendor.mjs    lädt Bibliotheken aus scripts/vendor.json nach assets/vendor/, prüft auf Updates
 scripts/partials/footer.html  Text der gemeinsamen Fußzeile
+scripts/partials/data.html    Bereich „Daten sichern & übertragen“ (in jede App eingesetzt)
 tests/                Playwright-Tests (siehe tests/README.md)
 <tool-name>/          index.html + generiert: manifest.webmanifest, sw.js, icon-*
 .githooks/pre-commit  ruft build.mjs vor jedem Commit auf
@@ -28,9 +29,9 @@ robots.txt            sperrt alle Crawler
 ## Neue Seite
 
 1. `template/` nach `<tool-name>/` kopieren.
-2. `<title>`, `<meta name="description">`, `tool:tags`, `tool:order` und `tool:short-name` (Name unter dem Home-Bildschirm-Icon, max. ca. 12 Zeichen) setzen. Aus diesen Angaben entstehen Karte, README-Eintrag und App-Manifest.
+2. `<title>`, `<meta name="description">`, `tool:tags`, `tool:order`, `tool:short-name` (Name unter dem Home-Bildschirm-Icon, max. ca. 12 Zeichen) und `tool:storage` (Präfix der Speicher-Schlüssel, siehe „Daten sichern“) setzen. Aus diesen Angaben entstehen Karte, README-Eintrag und App-Manifest.
 3. Icon wählen: `tool:icon` = Name eines [Tabler Icons](https://tabler.io/icons) (Outline), `tool:color` = Hintergrund- und Theme-Farbe. Dann `node scripts/build-icons.mjs <tool-name>` ausführen.
-4. `node scripts/build.mjs` ausführen (macht auch der Git-Hook). Generierte Bereiche zwischen `<!-- tools/footer/head:start -->` und `…:end -->` sowie `manifest.webmanifest`, `sw.js` **nie von Hand** bearbeiten.
+4. `node scripts/build.mjs` ausführen (macht auch der Git-Hook). Generierte Bereiche zwischen `<!-- tools/footer/head/data:start -->` und `…:end -->` sowie `manifest.webmanifest`, `sw.js` **nie von Hand** bearbeiten.
 
 5. Fachliche Tests in `tests/<tool-name>.spec.mjs` anlegen. Die allgemeinen Prüfungen (Fehler, Layout, PWA, offline) greifen automatisch.
 
@@ -55,6 +56,34 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 - **Datenschutz:** keine Tracker, keine Analytics, keine Daten an Server senden (die Tests schlagen bei jeder Anfrage an eine fremde Domain fehl).
 - **Tests:** Fehler nie durch Abschwächen, Überspringen oder Löschen eines Tests „beheben“. Erwartete Werte unabhängig nachrechnen.
 - **Zahlen:** deutsch formatieren (`Tools.fmt`), Eingaben mit Komma und Punkt akzeptieren (`Tools.parseNum`).
+
+## Daten sichern (Standard für jede App)
+
+Jede App bietet am Seitenende den einklappbaren Bereich **„Daten sichern & übertragen“** mit *Sicherung speichern*, *Teilen …* (nur wenn das Gerät Dateien teilen kann, z. B. iPhone/Android), *Sicherung laden* und *Alle Daten löschen*. Der Bereich kommt aus `scripts/partials/data.html` (Marker `<!-- data:start -->` / `<!-- data:end -->` vor der Hilfe), die Logik aus `assets/common.js` (`Tools.data`).
+
+**Regeln für Apps**
+
+- Alles, was dauerhaft gespeichert wird, liegt im `localStorage` unter einem eigenen Präfix, angegeben in `<meta name="tool:storage" content="<präfix>.">` (mehrere kommagetrennt). Für neue Tools: `<tool-name>.`. Kein IndexedDB/Cookies ohne Erweiterung dieses Standards.
+- Die Tests schlagen fehl, wenn eine Seite einen Schlüssel außerhalb ihrer Präfixe schreibt – sonst fehlte er in der Sicherung.
+- Ändert sich das Format gespeicherter Daten: Schlüssel-Version erhöhen (`…v2`) **und** beim Laden alte Versionen (`…v1`) übernehmen. So lassen sich auch ältere Sicherungen weiter laden.
+
+**Dateiformat** (`<app>-sicherung-JJJJ-MM-TT.json`)
+
+```json
+{
+  "format": "phanlipo-tools-backup",
+  "formatVersion": 1,
+  "app": "dice-coin",
+  "title": "Würfel & Münze",
+  "exportedAt": "2026-10-28T12:00:00.000Z",
+  "data": { "wuerfelMuenze.config.v1": "{\"tab\":\"dice\", …}" }
+}
+```
+
+- `app` ist der Ordnername. `data` enthält die Rohwerte aus `localStorage` (Strings) 1:1 – das Zurückschreiben ist damit verlustfrei.
+- **Laden** prüft: Format-Kennung, `formatVersion` ≤ unterstützte Version, passende `app`, nur Schlüssel mit eigenem Präfix und nur String-Werte, Datei ≤ 5 MB. Erst nach Rückfrage werden die Daten der App **ersetzt** (nicht zusammengeführt); schlägt das Schreiben fehl, wird der vorherige Stand wiederhergestellt. Danach lädt die Seite neu.
+- **Löschen** entfernt nach Rückfrage nur Schlüssel mit eigenem Präfix – andere Apps derselben Domain bleiben unberührt.
+- Wird das Format grundlegend geändert: `formatVersion` erhöhen und in `Tools.data.validateBackup` ältere Versionen weiter annehmen.
 
 ## Prüfen vor dem Commit
 

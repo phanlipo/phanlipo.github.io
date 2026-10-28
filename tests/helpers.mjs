@@ -6,7 +6,8 @@ import { ROOT, allPages, meta } from '../scripts/lib.mjs';
 
 /**
  * `page` fixture that fails the test on JavaScript errors, console errors
- * and any request to another origin (the pages must work without CDNs/trackers).
+ * and any request to another origin (the pages must work without CDNs/trackers),
+ * and on localStorage keys outside the prefixes in <meta name="tool:storage">.
  * Tests that provoke errors on purpose can allow them with one RegExp:
  *   test.use({ allowedProblems: /zxing-wasm/ });
  */
@@ -21,6 +22,17 @@ export const test = base.extend({
       if (!u.startsWith(baseURL) && !/^(data|blob):/.test(u)) problems.push(`external request: ${u}`);
     });
     await use(page);
+    // Every localStorage key must belong to a prefix the page declares in <meta name="tool:storage">,
+    // otherwise the data backup would silently miss it.
+    if (!page.isClosed() && page.url().startsWith(baseURL)) {
+      const undeclared = await page.evaluate(() => {
+        const m = document.querySelector('meta[name="tool:storage"]');
+        if (!m) return [];
+        const prefixes = m.content.split(',').map(s => s.trim()).filter(Boolean);
+        return Object.keys(localStorage).filter(k => !prefixes.some(p => k.startsWith(p)));
+      }).catch(() => []);
+      problems.push(...undeclared.map(k => `undeclared localStorage key: ${k}`));
+    }
     const unexpected = problems.filter(p => !(allowedProblems && allowedProblems.test(p)));
     expect(unexpected, 'JS errors, console errors or external requests').toEqual([]);
   },
