@@ -55,7 +55,8 @@ async function renderPngs(jobs) {
     console.warn('! Playwright not available – PNG icons not generated');
     return;
   }
-  const browser = await chromium.launch();
+  // PW_CHROMIUM_PATH: use an existing Chromium (same as playwright.config.mjs, see tests/README.md)
+  const browser = await chromium.launch(process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {});
   const page = await browser.newPage();
   const shot = async (svg, px, file) => {
     await page.setViewportSize({ width: px, height: px });
