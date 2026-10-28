@@ -221,11 +221,22 @@ window.Tools = (function () {
     } catch (_) { return null; }
   }
 
+  // Link or text shared to the installed app (Android, <meta name="tool:share-text" content="true">):
+  // the page opens as ./?title=…&text=…&url=…. Returns { title, text, url } (missing parts = '') or null,
+  // and removes the parameters from the address bar so a reload does not repeat it.
+  function takeSharedText() {
+    const q = new URLSearchParams(location.search);
+    if (!['title', 'text', 'url'].some(k => q.has(k))) return null;
+    history.replaceState(null, '', location.pathname + location.hash);
+    const r = { title: q.get('title') || '', text: q.get('text') || '', url: q.get('url') || '' };
+    return r.title || r.text || r.url ? r : null;
+  }
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupDataUi);
   else setupDataUi();
 
   return {
-    $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile,
+    $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedText,
     data: { exportData, validateBackup, importData, clearData, keys: ownKeys, prefixes: storagePrefixes, appId },
   };
 })();

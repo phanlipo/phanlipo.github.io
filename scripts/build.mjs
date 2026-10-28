@@ -25,6 +25,7 @@
 //   tool:storage                                         localStorage key prefix(es) of the app, comma-separated
 //   tool:share-target                                    accepted file types for "share to this app" (Android),
 //                                                        e.g. "audio/*, .opus" – see AGENTS.md
+//   tool:share-text ("true")                             receive shared links/text (Android) as ?title=&text=&url=
 
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, posix } from 'node:path';
@@ -65,6 +66,7 @@ function pageInfo({ folder, file }) {
     shortName: meta(html, 'tool:short-name') || title,
     storage: meta(html, 'tool:storage'),
     shareAccept: (meta(html, 'tool:share-target') || '').split(',').map(s => s.trim()).filter(Boolean),
+    shareText: meta(html, 'tool:share-text') === 'true',
     icon: existsSync(join(ROOT, folder, 'icon.svg')),
   };
 }
@@ -181,6 +183,7 @@ function renderHead(p) {
 
 /* ---------- PWA ---------- */
 function manifest(p) {
+  if (p.shareAccept.length && p.shareText) throw new Error(`${p.file}: tool:share-target and tool:share-text together are not supported yet`);
   const icon = (src, sizes, extra) => existsSync(join(ROOT, p.folder, src)) ? [{ src, sizes, type: 'image/png', ...extra }] : [];
   return JSON.stringify({
     id: './',
@@ -200,6 +203,15 @@ function manifest(p) {
         method: 'POST',
         enctype: 'multipart/form-data',
         params: { files: [{ name: 'file', accept: p.shareAccept }] },
+      },
+    } : {}),
+    ...(p.shareText ? {
+      // Shared links/text (Android) open the start page as ./?title=…&text=…&url=… – Tools.takeSharedText().
+      // The service worker serves the cached page for it (ignoreSearch), so this works offline too.
+      share_target: {
+        action: './',
+        method: 'GET',
+        params: { title: 'title', text: 'text', url: 'url' },
       },
     } : {}),
     icons: [
