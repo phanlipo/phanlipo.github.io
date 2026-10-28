@@ -436,7 +436,10 @@ test.describe('sound extensions', () => {
     await page.getByRole('button', { name: 'Protokoll starten' }).click();
     await page.waitForTimeout(2600);
     await page.getByRole('button', { name: 'Protokoll beenden' }).click();
-    await expect(page.locator('#sLogInfo')).toHaveText(/Beendet: 0:0[23] · Mittel \(Leq\) 91,0 dB/);
+    const info = await text(page, 'sLogInfo');
+    expect(info).toMatch(/^Beendet: 0:0[23] · Mittel \(Leq\) \d+,\d dB · lautester Wert \d+,\d dB$/);
+    // 90,97 dB lies on a rounding boundary – compare the number, not the rounded text
+    expect(Math.abs(num(info.match(/Leq\) ([\d,]+)/)[1]) - (20 * Math.log10(0.5 / Math.SQRT2) + 100))).toBeLessThan(0.3);
     const { name, text: csv } = await download(page, () => page.locator('#sLogCsv').click());
     expect(name).toMatch(/^laermprotokoll-.*\.csv$/);
     const lines = csv.trim().split(/\r\n/);
