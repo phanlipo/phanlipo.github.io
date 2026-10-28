@@ -38,6 +38,10 @@ Jedes Tool lässt sich einzeln installieren und funktioniert danach offline:
 
 Updates kommen automatisch: Nach einer Änderung lädt die App die neue Version im Hintergrund und zeigt sie beim nächsten Öffnen.
 
+## Daten sichern & übertragen
+
+Jede App hat am Seitenende den Bereich **„Daten sichern & übertragen“**: Einstellungen, Verläufe und Vorlagen als JSON-Datei speichern oder teilen, wieder laden oder löschen. So lassen sich Daten z. B. von Safari in die installierte iPhone-App oder auf ein neues Gerät mitnehmen. Format und Regeln: `AGENTS.md`, Abschnitt „Daten sichern“.
+
 ## Neue Seite hinzufügen
 
 1. `template/` kopieren und englisch benennen, z. B. `unit-converter/`.

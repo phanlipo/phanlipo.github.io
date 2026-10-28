@@ -84,3 +84,90 @@ for (const app of apps()) {
     });
   });
 }
+
+// ---------- Data backup standard (export / import / clear) – see AGENTS.md "Daten sichern" ----------
+for (const app of apps()) {
+  test.describe(`${app.folder} · data backup`, () => {
+    const url = `/${app.folder}/`;
+
+    /** Prefix declared by the page, an own test key and a foreign key that must never be touched */
+    async function prepare(page) {
+      await page.goto(url);
+      const prefix = await page.evaluate(() => Tools.data.prefixes()[0]);
+      expect(prefix, 'page declares <meta name="tool:storage">').toBeTruthy();
+      const own = `${prefix}backuptest.v1`;
+      await page.evaluate(([own]) => {
+        localStorage.setItem(own, JSON.stringify({ hello: 'Grüße', n: 1 }));
+      }, [own]);
+      await page.locator('details.data summary').click();
+      return { own };
+    }
+
+    async function exportBackup(page) {
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.click('[data-data="export"]'),
+      ]);
+      expect(download.suggestedFilename()).toMatch(new RegExp(`^${app.folder}-sicherung-\\d{4}-\\d{2}-\\d{2}\\.json$`));
+      const chunks = [];
+      for await (const c of await download.createReadStream()) chunks.push(c);
+      return Buffer.concat(chunks);
+    }
+
+    const importFile = (page, buffer) =>
+      page.setInputFiles('details.data input[type=file]', { name: 'backup.json', mimeType: 'application/json', buffer });
+
+    test('export contains only this app’s data, import restores it', async ({ page }) => {
+      const { own } = await prepare(page);
+      const file = await exportBackup(page);
+      const backup = JSON.parse(file.toString('utf8'));
+      expect(backup).toMatchObject({ format: 'phanlipo-tools-backup', formatVersion: 1, app: app.folder, title: app.title });
+      expect(Date.parse(backup.exportedAt)).not.toBeNaN();
+      expect(JSON.parse(backup.data[own])).toEqual({ hello: 'Grüße', n: 1 });
+      const prefixes = await page.evaluate(() => Tools.data.prefixes());
+      for (const k of Object.keys(backup.data)) expect(prefixes.some(p => k.startsWith(p)), k).toBe(true);
+
+      // Change the data, then import the backup again
+      await page.evaluate(([own]) => localStorage.setItem(own, '"changed"'), [own]);
+      page.once('dialog', d => d.accept());
+      await importFile(page, file);
+      await page.waitForEvent('load');
+      expect(await page.evaluate(([own]) => localStorage.getItem(own), [own])).toBe(JSON.stringify({ hello: 'Grüße', n: 1 }));
+    });
+
+    test('rejects invalid files and backups of other apps', async ({ page }) => {
+      const { own } = await prepare(page);
+      const before = await page.evaluate(() => JSON.stringify(Tools.data.exportData().data));
+      const info = page.locator('[data-data="info"]');
+
+      await importFile(page, Buffer.from('not json'));
+      await expect(info).toHaveText('Die Datei ist keine gültige JSON-Sicherung.');
+
+      const other = { format: 'phanlipo-tools-backup', formatVersion: 1, app: 'other-app', title: 'Andere App', exportedAt: new Date().toISOString(), data: {} };
+      await importFile(page, Buffer.from(JSON.stringify(other)));
+      await expect(info).toContainText('Andere App');
+
+      const foreign = { ...other, app: app.folder, data: { [own]: '1', 'someone.else': '2' } };
+      await importFile(page, Buffer.from(JSON.stringify(foreign)));
+      await expect(info).toContainText('unbekannte Einträge');
+
+      const newer = { ...other, app: app.folder, formatVersion: 99 };
+      await importFile(page, Buffer.from(JSON.stringify(newer)));
+      await expect(info).toContainText('neueren Version');
+
+      expect(await page.evaluate(() => JSON.stringify(Tools.data.exportData().data))).toBe(before);
+    });
+
+    test('clear removes this app’s data only', async ({ page }) => {
+      const { own } = await prepare(page);
+      // A key of another app on the same domain must survive (removed again before the end of the test)
+      await page.evaluate(() => localStorage.setItem('zzOtherApp.data.v1', 'keep'));
+      page.once('dialog', d => d.accept());
+      await page.click('[data-data="clear"]');
+      await page.waitForEvent('load');
+      const state = await page.evaluate(([own]) => ({ own: localStorage.getItem(own), other: localStorage.getItem('zzOtherApp.data.v1') }), [own]);
+      expect(state).toEqual({ own: null, other: 'keep' });
+      await page.evaluate(() => localStorage.removeItem('zzOtherApp.data.v1'));
+    });
+  });
+}

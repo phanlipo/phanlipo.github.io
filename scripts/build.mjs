@@ -5,7 +5,8 @@
 //   1. Tool list on the start page (index.html) and in README.md      <!-- tools:start/end -->
 //   2. Shared footer line in every page (scripts/partials/footer.html) <!-- footer:start/end -->
 //   3. Head links (favicon, manifest, theme colour) in every page      <!-- head:start/end -->
-//   4. Per app (every listed tool + template): manifest.webmanifest and sw.js (offline cache).
+//   4. Data backup section in every app (scripts/partials/data.html)   <!-- data:start/end -->
+//   5. Per app (every listed tool + template): manifest.webmanifest and sw.js (offline cache).
 //      The cache version is a hash of all cached files, so every change ships automatically.
 //
 // Usage:
@@ -18,6 +19,7 @@
 //   tool:tags ("a, b"), tool:order (number), tool:hidden ("true" = not listed, no PWA)
 //   tool:icon, tool:color                                icons (see build-icons.mjs), theme colour
 //   tool:short-name                                      name under the home-screen icon (≤ 12 chars)
+//   tool:storage                                         localStorage key prefix(es) of the app, comma-separated
 
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, posix } from 'node:path';
@@ -50,6 +52,7 @@ function pageInfo({ folder, file }) {
     hidden: meta(html, 'tool:hidden') === 'true',
     color: meta(html, 'tool:color') || '#334155',
     shortName: meta(html, 'tool:short-name') || title,
+    storage: meta(html, 'tool:storage'),
     icon: existsSync(join(ROOT, folder, 'icon.svg')),
   };
 }
@@ -207,11 +210,16 @@ self.addEventListener('fetch', event => {
 
 /* ---------- Run ---------- */
 const footer = readFileSync(join(ROOT, 'scripts/partials/footer.html'), 'utf8').trim();
+const dataBlock = readFileSync(join(ROOT, 'scripts/partials/data.html'), 'utf8').trim();
 setBlock('index.html', 'tools', renderCards(), true);
 setBlock('README.md', 'tools', renderTable(), true);
 for (const p of pages) {
   setBlock(p.file, 'footer', `\n  ${footer}\n  `, false);
   if (!p.hidden) setBlock(p.file, 'head', renderHead(p), false);
+  setBlock(p.file, 'data', isApp(p) && p.storage ? `\n${dataBlock}\n` : '\n', false);
+}
+for (const p of apps) {
+  if (!p.storage) console.warn(`! ${p.file}: <meta name="tool:storage"> missing – no data backup section`);
 }
 // Manifests first: they are part of the cached files and therefore of the version hash
 for (const p of apps) put(`${p.folder}/manifest.webmanifest`, manifest(p));
