@@ -3,11 +3,11 @@
 Automatisch erzeugt von `scripts/vendor.mjs` – nicht von Hand ändern.
 
 - Paket: `katex`
-- Version: 0.16.9
+- Version: 0.19.1
 - Lizenz: MIT (siehe `LICENSE`)
 - Projekt: https://katex.org
-- Herkunft: https://registry.npmjs.org/katex/-/katex-0.16.9.tgz
-- Integrität: `sha512-fsSYjWS0EEOwvy81j3vRA8TEAhQhKiqO+FQaKWp0m39qwOzHVBgAUBIXWj1pB+O2W3fIpNa6Y9KSKCVbfPhyAQ==`
+- Herkunft: https://registry.npmjs.org/katex/-/katex-0.19.1.tgz
+- Integrität: `sha512-jG8uKntjSEcm2EpQOh0XturpPuuC9r3Sq5HLHdsFdWZT27E672SF19QEi+of0/YeOy15lDgRhKvr5614uRrEfA==`
 - Heruntergeladen: 2026-10-28
 - Zweck: Formelsatz (LaTeX) im Brau-Rechner
 
