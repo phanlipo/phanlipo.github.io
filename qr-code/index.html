@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>QR-Code-Generator</title>
+<meta name="description" content="QR-Codes für Links, Text und WLAN erzeugen – Links direkt aus anderen Apps hierher teilen (Android), mit Verlauf.">
+<meta name="tool:tags" content="Alltag, Barcode">
+<meta name="tool:features" content="Teilen an App, Kopieren, Verlauf">
+<meta name="tool:order" content="15">
+<meta name="tool:icon" content="qrcode">
+<meta name="tool:color" content="#15803d">
+<meta name="tool:short-name" content="QR-Code">
+<meta name="tool:storage" content="qr-code.">
+<meta name="tool:share-text" content="true">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vz9KBrZUl34YH/t2xg7FOjQlhxmpvBTFAu0Xr92WI4w='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="QR-Code">
+<meta name="theme-color" content="#15803d">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#15803d;--accent-text:#ffffff;--page-width:1100px}
+@media (prefers-color-scheme: dark){:root{--accent:#86efac;--accent-text:#052e16}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.full{grid-column:1/-1}
+.seg{display:flex;gap:0;margin-block-end:12px}
+.seg .btn{flex:1;border-radius:0}
+.seg .btn:first-child{border-start-start-radius:8px;border-end-start-radius:8px}
+.seg .btn:last-child{border-start-end-radius:8px;border-end-end-radius:8px}
+.seg .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+.field{display:flex;flex-direction:column;gap:4px;margin-block-end:12px}
+.field>span{font-size:13px;color:var(--muted);font-weight:600}
+textarea#txt{width:100%;min-height:120px;padding:10px;line-height:1.4;resize:vertical;word-break:break-all}
+input[type=text]{min-height:44px;padding-inline:10px;width:100%}
+select{min-height:44px;padding-inline:10px;width:100%}
+.check{display:flex;align-items:center;gap:8px;min-height:44px;font-size:15px}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.preview{display:flex;flex-direction:column;align-items:center;gap:8px}
+/* The code itself stays black on white in dark mode too – scanners need the contrast */
+#qr{width:100%;max-width:300px;aspect-ratio:1;image-rendering:pixelated;border-radius:6px;background:#fff}
+.empty{width:100%;max-width:300px;aspect-ratio:1;border:2px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;color:var(--muted);font-size:14px}
+.info{font-size:13px;color:var(--muted);margin:0;text-align:center;word-break:break-word}
+.info.err{color:var(--err)}
+.actions{justify-content:center;margin-block-start:8px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.link{font-size:14px;word-break:break-all;text-align:center}
+.link a{color:var(--accent)}
+.page-link{margin-block-start:14px;border-block-start:1px solid var(--border);padding-block-start:12px}
+.page-link .field{margin:0}
+.page-link .row{flex-wrap:nowrap}
+.page-link input{flex:1;min-width:0;font-family:var(--mono);font-size:14px}
+.page-link .hint{font-size:12px;color:var(--warn);margin:6px 0 0}
+.hist{list-style:none;margin:0;padding:0}
+.hist li{display:flex;gap:8px;align-items:center;border-block-end:1px solid var(--border);padding-block:6px}
+.hist .open{flex:1;min-width:0;min-height:44px;text-align:start;background:none;border:0;color:var(--text);font:inherit;cursor:pointer;padding:0}
+.hist .meta{display:block;font-size:12px;color:var(--muted)}
+.hist .snip{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-block-end:4px}
+.hist-head h2{margin:0}
+</style>
+</head>
+<body>
+<header>
+  <h1>QR-Code-Generator</h1>
+  <p class="sub">Link, Text oder WLAN eingeben – der QR-Code entsteht sofort, ganz ohne Server.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-input">
+    <h2 id="h-input">Inhalt</h2>
+    <div class="seg" role="group" aria-label="Art des Inhalts">
+      <button type="button" class="btn" data-type="text" aria-pressed="true">Link / Text</button>
+      <button type="button" class="btn" data-type="wifi" aria-pressed="false">WLAN</button>
+    </div>
+
+    <div id="paneText">
+      <label class="field"><span>Link oder Text</span>
+        <textarea id="txt" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="https://…"></textarea>
+      </label>
+      <div class="row">
+        <button type="button" class="btn small" id="btnPaste" hidden>Einfügen</button>
+        <button type="button" class="btn small" id="btnClear">Leeren</button>
+      </div>
+    </div>
+
+    <div id="paneWifi" hidden>
+      <label class="field"><span>Netzwerkname (SSID)</span>
+        <input type="text" id="wSsid" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </label>
+      <label class="field"><span>Passwort</span>
+        <input type="text" id="wPass" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </label>
+      <label class="field"><span>Verschlüsselung</span>
+        <select id="wEnc">
+          <option value="WPA">WPA / WPA2 / WPA3</option>
+          <option value="WEP">WEP (veraltet)</option>
+          <option value="nopass">Keine (offenes Netz)</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="wHidden"> Verstecktes Netzwerk</label>
+    </div>
+
+    <label class="field" style="margin-block:12px 0"><span>Fehlerkorrektur</span>
+      <select id="ec">
+        <option value="L">Niedrig (L, ~7 %) – kleinster Code</option>
+        <option value="M">Mittel (M, ~15 %) – Standard</option>
+        <option value="Q">Hoch (Q, ~25 %)</option>
+        <option value="H">Sehr hoch (H, ~30 %) – für Ausdrucke</option>
+      </select>
+    </label>
+  </section>
+
+  <section class="card" aria-labelledby="h-result">
+    <h2 id="h-result">QR-Code</h2>
+    <div class="preview">
+      <canvas id="qr" role="img" aria-label="QR-Code" hidden></canvas>
+      <div class="empty" id="empty">Link oder Text eingeben – der QR-Code erscheint hier.</div>
+      <p class="info" id="info" role="status"></p>
+      <p class="link" id="linkLine" hidden><a id="link" href="#" target="_blank" rel="noopener noreferrer">Link öffnen</a></p>
+    </div>
+    <div class="row actions">
+      <button type="button" class="btn primary" id="btnShare" hidden disabled>Teilen …</button>
+      <button type="button" class="btn" id="btnSave" disabled>Bild speichern</button>
+      <button type="button" class="btn" id="btnCopy" hidden disabled>Bild kopieren</button>
+      <button type="button" class="btn" id="btnKeep" disabled>Im Verlauf merken</button>
+    </div>
+    <div class="page-link" id="pageLinkBox" hidden>
+      <label class="field" for="pageLink"><span>Link zu diesem QR-Code</span></label>
+      <div class="row">
+        <input type="text" id="pageLink" readonly aria-describedby="pageLinkInfo">
+        <button type="button" class="btn" id="btnCopyLink">Link kopieren</button>
+      </div>
+      <p class="muted" id="pageLinkInfo" style="font-size:12px;margin:6px 0 0">Öffnet diesen Generator mit genau diesem Inhalt – zum Weitergeben oder für später.</p>
+      <p class="hint" id="pageLinkWarn" hidden>Achtung: Der Link enthält das WLAN-Passwort im Klartext.</p>
+    </div>
+  </section>
+
+  <section class="card full" aria-labelledby="h-hist">
+    <div class="hist-head">
+      <h2 id="h-hist">Verlauf <span class="badge" id="histCount">0</span></h2>
+      <button type="button" class="btn small danger" id="btnClearHist">Verlauf löschen</button>
+    </div>
+    <ul class="hist" id="hist"></ul>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary>Daten sichern &amp; übertragen</summary>
+  <p>Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary>Anleitung &amp; Hinweise</summary>
+  <p>Erzeugt QR-Codes direkt im Browser. Inhalt und Code verlassen das Gerät nicht.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><strong>Link / Text:</strong> eintippen oder einfügen – der QR-Code wird sofort aktualisiert.</li>
+    <li><strong>WLAN:</strong> Netzwerkname und Passwort eingeben. Handys verbinden sich nach dem Scannen mit einem Tipp, ohne das Passwort abzutippen.</li>
+    <li><strong>Teilen …</strong> schickt das Bild an andere Apps (z. B. Messenger), <strong>Bild speichern</strong> lädt es als PNG herunter, <strong>Bild kopieren</strong> legt es in die Zwischenablage.</li>
+    <li><strong>Fehlerkorrektur:</strong> Je höher, desto besser lässt sich ein verschmutzter oder teilweise verdeckter Code noch lesen – der Code wird dafür dichter.</li>
+  </ul>
+  <h3>Link zum QR-Code</h3>
+  <ul>
+    <li>Unter dem Code steht ein <strong>Link zu diesem QR-Code</strong>. Wer ihn öffnet, sieht den Generator mit genau diesem Inhalt und derselben Fehlerkorrektur – praktisch zum Weitergeben, wenn jemand den Code selbst speichern oder drucken will.</li>
+    <li>Der Inhalt steht dabei im Link selbst (nicht auf einem Server). Bei WLAN-Codes enthält der Link also das <strong>Passwort</strong>.</li>
+  </ul>
+  <h3>Links aus anderen Apps teilen (Android)</h3>
+  <ul>
+    <li>Die Seite einmal über das Browser-Menü <em>„Zum Startbildschirm hinzufügen“</em> bzw. <em>„App installieren“</em> installieren.</li>
+    <li>Danach erscheint <strong>QR-Code</strong> im Teilen-Menü anderer Apps (Chrome, YouTube, Maps …). Der geteilte Link wird sofort zum QR-Code und landet im Verlauf.</li>
+    <li>Auf dem iPhone gibt es das nicht – dort den Link kopieren und mit <em>Einfügen</em> übernehmen.</li>
+  </ul>
+  <h3>Verlauf</h3>
+  <ul>
+    <li>Gespeichert wird beim Teilen, Speichern oder Kopieren des Bildes, mit <em>Im Verlauf merken</em> und bei Links, die aus anderen Apps geteilt wurden. Ein Tipp auf einen Eintrag öffnet ihn wieder.</li>
+    <li>Der Verlauf liegt nur in diesem Browser (höchstens 100 Einträge). <strong>WLAN-Passwörter</strong> stehen darin im Klartext – auf geteilten Geräten den Eintrag danach löschen.</li>
+  </ul>
+</details>
+
+<footer>
+  <p>Läuft vollständig im Browser · QR-Bibliothek: <a href="https://github.com/kazuhikoarase/qrcode-generator">qrcode-generator</a> (MIT) · „QR Code“ ist eine Marke der DENSO WAVE INCORPORATED</p>
+  <!-- footer:start -->
+  <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
+  <p class="footer-version">Version 0e8ac90a92da</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/vendor/qrcode-generator/qrcode.js"></script>
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const { $, load, save, toast } = Tools;
+const LS_SET = 'qr-code.settings.v1', LS_HIST = 'qr-code.history.v1', MAX_HIST = 100;
+const QUIET = 4;          // white border in modules (required by the QR standard)
+const EXPORT_PX = 1024;   // approximate size of saved/shared images
+
+// UTF-8 so umlauts and emojis survive; modern scanners detect it
+qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+
+const defaults = { type: 'text', ec: 'M', text: '', wifi: { ssid: '', pass: '', enc: 'WPA', hidden: false } };
+const s = Object.assign({}, defaults, load(LS_SET, {}));
+s.wifi = Object.assign({}, defaults.wifi, s.wifi);
+if (!['text', 'wifi'].includes(s.type)) s.type = 'text';
+if (!'LMQH'.includes(s.ec) || s.ec.length !== 1) s.ec = 'M';
+let hist = load(LS_HIST, []);
+if (!Array.isArray(hist)) hist = [];
+
+/* ---------- Content ---------- */
+// WIFI:T:WPA;S:name;P:pass;H:true;;  – \ ; , : " are escaped with a backslash
+const wifiEsc = v => String(v).replace(/([\\;,:"])/g, '\\$1');
+function wifiString(w) {
+  let out = 'WIFI:T:' + w.enc + ';S:' + wifiEsc(w.ssid) + ';';
+  if (w.enc !== 'nopass') out += 'P:' + wifiEsc(w.pass) + ';';
+  if (w.hidden) out += 'H:true;';
+  return out + ';';
+}
+function current() {
+  if (s.type === 'wifi') {
+    if (!s.wifi.ssid) return null;
+    return { type: 'wifi', data: wifiString(s.wifi), label: s.wifi.ssid, wifi: Object.assign({}, s.wifi) };
+  }
+  if (!s.text.trim()) return null;
+  return { type: 'text', data: s.text, label: '' };
+}
+// WIFI:… back into the form fields (for page links); null if it is not a valid WLAN code
+function parseWifi(str) {
+  if (!/^WIFI:/i.test(str)) return null;
+  const w = Object.assign({}, defaults.wifi), body = str.slice(5);
+  let key = '', val = '', inVal = false, seen = false;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (inVal && ch === '\\' && i + 1 < body.length) { val += body[++i]; continue; }
+    if (!inVal && ch === ':') { inVal = true; continue; }
+    if (ch === ';') {
+      if (inVal) {
+        const k = key.toUpperCase();
+        if (k === 'S') { w.ssid = val; seen = true; }
+        else if (k === 'P') w.pass = val;
+        else if (k === 'T') w.enc = /^wep$/i.test(val) ? 'WEP' : /^(nopass)?$/i.test(val) ? 'nopass' : 'WPA';
+        else if (k === 'H') w.hidden = /^true$/i.test(val);
+      }
+      key = ''; val = ''; inVal = false; continue;
+    }
+    if (inVal) val += ch; else key += ch;
+  }
+  return seen ? w : null;
+}
+const isLink = t => /^(https?:\/\/|mailto:|tel:)\S+$/i.test(t.trim());
+
+/* ---------- QR ---------- */
+function makeQr(data, ec) {
+  const qr = qrcode(0, ec);
+  qr.addData(data, 'Byte');
+  qr.make();
+  return qr;
+}
+function draw(canvas, qr, scale) {
+  const n = qr.getModuleCount(), size = (n + 2 * QUIET) * scale;
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++)
+    if (qr.isDark(r, c)) ctx.fillRect((c + QUIET) * scale, (r + QUIET) * scale, scale, scale);
+}
+
+let shown = null; // { entry, qr } of the code on screen
+function render() {
+  const entry = current(), canvas = $('qr'), info = $('info');
+  shown = null; info.className = 'info'; info.textContent = '';
+  $('linkLine').hidden = true;
+  $('pageLinkBox').hidden = true;
+  if (entry) {
+    try {
+      const qr = makeQr(entry.data, s.ec);
+      const n = qr.getModuleCount();
+      draw(canvas, qr, Math.max(2, Math.ceil(600 / (n + 2 * QUIET))));
+      shown = { entry, qr };
+      const bytes = new TextEncoder().encode(entry.data).length;
+      info.textContent = `${n} × ${n} Module · ${bytes} Byte${bytes === 1 ? '' : 's'}`;
+      canvas.setAttribute('aria-label', entry.type === 'wifi' ? `QR-Code für das WLAN „${entry.label}“` : `QR-Code für: ${entry.data.slice(0, 200)}`);
+      if (entry.type === 'text' && /^https?:\/\//i.test(entry.data.trim()) && isLink(entry.data)) {
+        $('link').href = entry.data.trim(); $('linkLine').hidden = false;
+      }
+    } catch (_) {
+      info.className = 'info err';
+      info.textContent = 'Zu lang für einen QR-Code. Text kürzen oder eine niedrigere Fehlerkorrektur wählen.';
+    }
+  }
+  canvas.hidden = !shown;
+  $('empty').hidden = !!shown;
+  $('empty').textContent = s.type === 'wifi' ? 'Netzwerkname eingeben – der QR-Code erscheint hier.' : 'Link oder Text eingeben – der QR-Code erscheint hier.';
+  for (const id of ['btnShare', 'btnSave', 'btnCopy', 'btnKeep']) $(id).disabled = !shown;
+  if (shown) {
+    $('pageLink').value = pageLink(shown.entry);
+    $('pageLinkWarn').hidden = !(shown.entry.type === 'wifi' && shown.entry.wifi.enc !== 'nopass' && shown.entry.wifi.pass);
+    $('pageLinkBox').hidden = false;
+  }
+}
+
+/* ---------- Form ---------- */
+function fillForm() {
+  for (const b of document.querySelectorAll('[data-type]')) b.setAttribute('aria-pressed', String(b.dataset.type === s.type));
+  $('paneText').hidden = s.type !== 'text';
+  $('paneWifi').hidden = s.type !== 'wifi';
+  $('txt').value = s.text;
+  $('wSsid').value = s.wifi.ssid; $('wPass').value = s.wifi.pass;
+  $('wEnc').value = s.wifi.enc; $('wHidden').checked = s.wifi.hidden;
+  $('wPass').disabled = s.wifi.enc === 'nopass';
+  $('ec').value = s.ec;
+}
+function changed() { save(LS_SET, s); render(); }
+
+for (const b of document.querySelectorAll('[data-type]')) b.addEventListener('click', () => {
+  s.type = b.dataset.type; fillForm(); changed();
+});
+$('txt').addEventListener('input', e => { s.text = e.target.value; changed(); });
+$('wSsid').addEventListener('input', e => { s.wifi.ssid = e.target.value; changed(); });
+$('wPass').addEventListener('input', e => { s.wifi.pass = e.target.value; changed(); });
+$('wEnc').addEventListener('change', e => { s.wifi.enc = e.target.value; $('wPass').disabled = s.wifi.enc === 'nopass'; changed(); });
+$('wHidden').addEventListener('change', e => { s.wifi.hidden = e.target.checked; changed(); });
+$('ec').addEventListener('change', e => { s.ec = e.target.value; changed(); });
+$('btnClear').addEventListener('click', () => { s.text = ''; fillForm(); changed(); $('txt').focus(); });
+if (navigator.clipboard && navigator.clipboard.readText) {
+  $('btnPaste').hidden = false;
+  $('btnPaste').addEventListener('click', async () => {
+    try {
+      const t = await navigator.clipboard.readText();
+      if (!t) { toast('Zwischenablage ist leer'); return; }
+      s.type = 'text'; s.text = t; fillForm(); changed();
+    } catch (_) { toast('Kein Zugriff auf die Zwischenablage'); }
+  });
+}
+
+/* ---------- Link to this page with the content ---------- */
+// ?q=<exact content>&ec=<level> – unlike shared text (Android) nothing is extracted from it
+function pageLink(entry) {
+  const q = new URLSearchParams({ q: entry.data });
+  if (s.ec !== 'M') q.set('ec', s.ec);
+  return location.origin + location.pathname + '?' + q;
+}
+$('btnCopyLink').addEventListener('click', async () => {
+  if (!shown) return;
+  toast(await Tools.copyText($('pageLink').value) ? 'Link kopiert' : 'Kopieren nicht möglich');
+});
+$('pageLink').addEventListener('focus', e => e.target.select());
+
+/* ---------- Image export ---------- */
+function slug() {
+  const e = shown.entry;
+  const base = e.type === 'wifi' ? 'wlan-' + e.label : e.data.replace(/^https?:\/\/(www\.)?/i, '');
+  return base.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'code';
+}
+function pngFile() {
+  const c = document.createElement('canvas');
+  draw(c, shown.qr, Math.max(4, Math.round(EXPORT_PX / (shown.qr.getModuleCount() + 2 * QUIET))));
+  return new Promise((resolve, reject) => c.toBlob(b => b
+    ? resolve(new File([b], `qr-${slug()}.png`, { type: 'image/png' }))
+    : reject(new Error('PNG')), 'image/png'));
+}
+
+const canShareFiles = (() => {
+  try { return !!(navigator.canShare && navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] })); }
+  catch (_) { return false; }
+})();
+$('btnShare').hidden = !canShareFiles;
+$('btnShare').addEventListener('click', async () => {
+  if (!shown) return;
+  const entry = shown.entry;
+  try {
+    const file = await pngFile();
+    await navigator.share({ files: [file], title: 'QR-Code' });
+    addHist(entry);
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+    toast('Teilen nicht möglich');
+  }
+});
+$('btnSave').addEventListener('click', async () => {
+  if (!shown) return;
+  const entry = shown.entry;
+  try {
+    const file = await pngFile();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = file.name;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    addHist(entry);
+  } catch (_) { toast('Speichern nicht möglich'); }
+});
+if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
+  $('btnCopy').hidden = false;
+  $('btnCopy').addEventListener('click', async () => {
+    if (!shown) return;
+    const entry = shown.entry;
+    try {
+      // Safari needs the promise passed into ClipboardItem directly
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngFile() })]);
+      toast('Bild kopiert');
+      addHist(entry);
+    } catch (_) { toast('Kopieren nicht möglich'); }
+  });
+}
+$('btnKeep').addEventListener('click', () => { if (shown) { addHist(shown.entry); toast('Im Verlauf gespeichert'); } });
+
+/* ---------- History ---------- */
+// Same content again: the old entry moves to the top
+function addHist(entry, title) {
+  const old = hist.find(h => h.type === entry.type && h.data === entry.data);
+  hist = hist.filter(h => h !== old);
+  hist.unshift({ type: entry.type, data: entry.data, label: title || entry.label || (old && old.label) || '',
+    ec: s.ec, wifi: entry.wifi, ts: Date.now() });
+  hist = hist.slice(0, MAX_HIST);
+  save(LS_HIST, hist);
+  renderHist();
+}
+function kind(h) { return h.type === 'wifi' ? 'WLAN' : isLink(h.data) ? 'Link' : 'Text'; }
+function renderHist() {
+  $('histCount').textContent = hist.length;
+  $('btnClearHist').hidden = !hist.length;
+  const ul = $('hist');
+  ul.textContent = '';
+  if (!hist.length) {
+    const li = document.createElement('li'); li.className = 'muted';
+    li.textContent = 'Noch keine Einträge.'; ul.append(li); return;
+  }
+  hist.forEach((h, i) => {
+    const li = document.createElement('li');
+    const open = document.createElement('button');
+    open.type = 'button'; open.className = 'open';
+    const meta = document.createElement('span'); meta.className = 'meta';
+    meta.textContent = kind(h) + ' · ' + new Date(h.ts).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
+    const snip = document.createElement('span'); snip.className = 'snip';
+    snip.textContent = h.type === 'wifi' ? h.label : (h.label ? h.label + ' – ' : '') + h.data.replace(/\s+/g, ' ');
+    open.append(snip, meta);
+    open.addEventListener('click', () => {
+      if (h.type === 'wifi' && h.wifi) { s.type = 'wifi'; s.wifi = Object.assign({}, defaults.wifi, h.wifi); }
+      else { s.type = 'text'; s.text = h.data; }
+      if (h.ec && 'LMQH'.includes(h.ec)) s.ec = h.ec;
+      fillForm(); changed();
+      $('h-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'btn small'; del.textContent = '✕';
+    del.setAttribute('aria-label', 'Eintrag löschen: ' + (h.label || h.data).slice(0, 60));
+    del.addEventListener('click', () => { hist.splice(i, 1); save(LS_HIST, hist); renderHist(); });
+    li.append(open, del);
+    ul.append(li);
+  });
+}
+$('btnClearHist').addEventListener('click', () => {
+  if (hist.length && confirm('Ganzen Verlauf löschen?')) { hist = []; save(LS_HIST, hist); renderHist(); }
+});
+
+/* ---------- Start ---------- */
+// Link shared from another app (Android, installed app): prefer the URL, otherwise the text
+// Page link (?q=…&ec=…): open exactly this content
+const params = new URLSearchParams(location.search);
+if (params.has('q')) {
+  const q = params.get('q'), w = parseWifi(q), ec = params.get('ec');
+  if (w) { s.type = 'wifi'; s.wifi = w; } else { s.type = 'text'; s.text = q; }
+  if (ec && ec.length === 1 && 'LMQH'.includes(ec)) s.ec = ec;
+  save(LS_SET, s);
+  history.replaceState(null, '', location.pathname + location.hash);
+}
+const shared = params.has('q') ? null : Tools.takeSharedText();
+let sharedTitle = '';
+if (shared) {
+  const inText = (shared.text.match(/https?:\/\/\S+/i) || [])[0];
+  const data = (shared.url || inText || shared.text || shared.title).trim();
+  // Title only if it is not the link itself (some apps send the URL as title)
+  sharedTitle = shared.title.trim() !== data ? shared.title.trim() : '';
+  s.type = 'text'; s.text = data;
+  save(LS_SET, s);
+}
+fillForm();
+render();
+renderHist();
+if (shared && shown) { addHist(shown.entry, sharedTitle); toast('Geteilter Link übernommen'); }
+})();
+</script>
+</body>
+</html>
