@@ -32,13 +32,13 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 ## Konventionen
 
 - **Ordnernamen:** Englisch, klein, kebab-case, ohne Umlaute (`brew-calculator`). Die Oberfläche selbst ist **Deutsch**.
-- **Umbenennen:** Im alten Ordner eine Weiterleitungsseite lassen (siehe `Wuerfel-Muenze/index.html`), damit Lesezeichen weiter funktionieren.
+- **Umbenennen:** Sobald eine Seite geteilt wurde, im alten Ordner eine kleine Weiterleitungsseite lassen (`<meta http-equiv="refresh">` + `<meta name="tool:hidden" content="true">`), damit Links weiter funktionieren.
 - **Gemeinsame Basis nutzen:** `../assets/base.css` zuerst einbinden, `../assets/common.js` vor dem Seiten-Script. Im Seiten-CSS nur seitenspezifische Regeln; eigene Akzentfarbe über `--accent` / `--accent-text` (hell und dunkel).
 - **Gemeinsames ändern = alle Seiten prüfen.** Eine Änderung in `assets/` wirkt sofort auf jedes Tool.
 - **Mobile-first:** muss bei 375 px Breite ohne seitliches Scrollen funktionieren. Touch-Ziele mindestens 44 px, Eingabefelder 16 px Schrift (sonst zoomt iOS).
 - **Dark Mode:** nur Farben aus den Tokens verwenden, keine festen Farben für Flächen und Text.
 - **Hilfe:** Anleitung als `<details class="help card">` am Ende der Seite, standardmäßig eingeklappt.
-- **Fußzeile:** `<footer>` mit optionaler seitenspezifischer Zeile `<p>…</p>`, darunter die Marker `<!-- footer:start -->` / `<!-- footer:end -->`. Den gemeinsamen Text (inkl. Hinweis „KI-generiert“) nur in `scripts/partials/footer.html` ändern.
+- **Fußzeile:** `<footer>` mit optionaler seitenspezifischer Zeile `<p>…</p>`, darunter die Marker `<!-- footer:start -->` / `<!-- footer:end -->`. Den gemeinsamen Text (inkl. Hinweis „KI-generiert“, ohne Namen eines bestimmten KI-Anbieters) nur in `scripts/partials/footer.html` ändern.
 - **Icons:** nur frei lizenzierte Icons (aktuell Tabler Icons, MIT – Lizenz in `assets/LICENSE-tabler-icons.txt`). Jede Seite hat eine eigene Farbe.
 - **Speicher:** nur über `Tools.load` / `Tools.save` (fangen Fehler im privaten Modus ab). Schlüssel für neue Tools: `<tool-name>.<was>.v1`. **Bestehende Schlüssel nie umbenennen** – sonst sind Einstellungen und Verläufe der Nutzer weg (`scanCopySecurPharm.*`, `wuerfelMuenze.*`, `brauRechner.*`).
 - **Externe Bibliotheken:** nur mit fester Version von cdnjs oder jsdelivr. Die Seite soll ohne die Bibliothek wenigstens teilweise nutzbar bleiben.
