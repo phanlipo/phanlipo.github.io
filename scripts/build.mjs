@@ -94,13 +94,24 @@ function setBlock(file, name, content, required) {
 
 function renderCards() {
   if (!tools.length) return '\n  <p class="muted">Noch keine Seiten.</p>\n  ';
-  const cards = tools.map(t => `    <article class="card tool">
+  // Filter bar: every tag once, most used first. Hidden until the page script enables it (no JS = no filter).
+  const count = new Map();
+  for (const t of tools) for (const x of t.tags) count.set(x, (count.get(x) || 0) + 1);
+  const tags = [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || a.localeCompare(b, 'de'));
+  const chip = (label, value, pressed) =>
+    `<button type="button" class="chip" data-tag="${escHtml(value)}" aria-pressed="${pressed}">${escHtml(label)}</button>`;
+  const filter = tags.length ? `  <div class="filter" role="group" aria-label="Nach Kategorie filtern" hidden>
+    ${[chip('Alle', '', true), ...tags.map(x => chip(x, x, false))].join('\n    ')}
+  </div>
+  <p class="filter-status sr-only" aria-live="polite"></p>
+` : '';
+  const cards = tools.map(t => `    <article class="card tool" data-tags="${escHtml(JSON.stringify(t.tags))}">
       <h2>${t.icon ? `<img src="${t.folder}/icon.svg" alt="" width="32" height="32">` : ''}${escHtml(t.title)}</h2>
       <p>${escHtml(t.description)}</p>
       <div class="tags">${t.tags.map(x => `<span class="tag">${escHtml(x)}</span>`).join('')}</div>
       <a class="btn primary" href="${t.folder}/">Öffnen</a>
     </article>`).join('\n');
-  return `\n  <div class="grid">\n${cards}\n  </div>\n  `;
+  return `\n${filter}  <div class="grid">\n${cards}\n  </div>\n  `;
 }
 
 function renderTable() {

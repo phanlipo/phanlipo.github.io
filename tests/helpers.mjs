@@ -47,7 +47,11 @@ export function tools() {
     .filter(p => p.folder && !SKIP.has(p.folder))
     .map(p => ({ ...p, html: readFileSync(join(ROOT, p.file), 'utf8') }))
     .filter(p => meta(p.html, 'tool:hidden') !== 'true' && meta(p.html, 'description'))
-    .map(p => ({ folder: p.folder, title: p.html.match(/<title>([\s\S]*?)<\/title>/i)[1].replace(/&amp;/g, '&') }));
+    .map(p => ({
+      folder: p.folder,
+      title: p.html.match(/<title>([\s\S]*?)<\/title>/i)[1].replace(/&amp;/g, '&'),
+      tags: (meta(p.html, 'tool:tags') || '').split(',').map(t => t.trim()).filter(Boolean),
+    }));
 }
 
 /** Installable apps: every tool plus the template */
