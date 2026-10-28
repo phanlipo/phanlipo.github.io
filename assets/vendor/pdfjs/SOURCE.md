@@ -9,7 +9,7 @@ Automatisch erzeugt von `scripts/vendor.mjs` – nicht von Hand ändern.
 - Herkunft: https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.4.299.tgz
 - Integrität: `sha512-AVl138zALtfaAPvADulE0PZThbYzCBS79nL4pOSL/6Sm/4AH5A21BD9VHt97OlCuzJuCpmeZtAtkinisF4Vb1g==`
 - Heruntergeladen: 2026-10-28
-- Zweck: PDF lesen (Text mit Position und Schrift) in PDF zu Word – Legacy-Build für ältere Handys
+- Zweck: PDF lesen (Text mit Position und Schrift, Bilder, Seiten für die Texterkennung) in PDF zu Word – Legacy-Build für ältere Handys; wasm/ dekodiert JBIG2-, JPEG-2000- und CMYK-Bilder
 
 Dateien:
 - `pdf.min.mjs`
@@ -30,3 +30,16 @@ Dateien:
 - `standard_fonts/LiberationSans-BoldItalic.ttf`
 - `standard_fonts/LiberationSans-Italic.ttf`
 - `standard_fonts/LiberationSans-Regular.ttf`
+- `wasm/jbig2.wasm`
+- `wasm/openjpeg.wasm`
+- `wasm/qcms_bg.wasm`
+- `wasm/jbig2_nowasm_fallback.js`
+- `wasm/openjpeg_nowasm_fallback.js`
+- `wasm/LICENSE_JBIG2`
+- `wasm/LICENSE_OPENJPEG`
+- `wasm/LICENSE_PDFJS_JBIG2`
+- `wasm/LICENSE_PDFJS_OPENJPEG`
+- `wasm/LICENSE_PDFJS_QCMS`
+- `wasm/LICENSE_QCMS`
+- `iccs/CGATS001Compat-v2-micro.icc`
+- `iccs/LICENSE`

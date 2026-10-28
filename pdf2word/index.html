@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>PDF zu Word</title>
-<meta name="description" content="PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – ohne Upload: Die Datei verlässt das Gerät nicht.">
+<meta name="description" content="PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – mit Bildern und Texterkennung für gescannte Seiten, ohne Upload: Die Datei verlässt das Gerät nicht.">
 <meta name="tool:tags" content="Arbeit, Dokumente">
 <meta name="tool:features" content="Datei öffnen, Teilen an App">
 <meta name="tool:order" content="60">
@@ -17,7 +17,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-SmjsbyV87FjUGZnDJ9xzAMCXUk4864PtssHmymdptJY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-aVwvokgLRFTAqNxA/qedRM0m5hV021dKmym/aYhWid8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -38,6 +38,10 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template
 .check{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding-block:6px;cursor:pointer}
 .check input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--accent)}
 .check small{display:block;color:var(--muted);font-size:13px}
+.field{display:flex;flex-direction:column;gap:4px;margin-block:4px 12px}
+.field>span{font-size:13px;color:var(--muted);font-weight:600}
+select{min-height:44px;padding-inline:10px;width:100%;font-size:16px}
+.preview img{display:block;max-width:100%;height:auto;margin-block:6px;background:#fff}
 .pw{display:flex;flex-direction:column;gap:6px;margin-block:10px}
 .pw input{min-height:44px;padding-inline:10px;font-size:16px;width:100%}
 .btn.big{width:100%;min-height:54px;font-size:18px}
@@ -77,6 +81,14 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
     <h2 id="h-run">2 · Umwandeln</h2>
     <label class="check"><input type="checkbox" id="optPages" checked>
       <span>Seitenumbrüche wie im PDF<small>Jede PDF-Seite beginnt in Word auf einer neuen Seite.</small></span></label>
+    <label class="check"><input type="checkbox" id="optOcr" checked>
+      <span>Texterkennung für gescannte Seiten<small>Liest den Text aus Seiten, die nur ein Bild sind. Beim ersten Mal werden ca. 5 MB geladen.</small></span></label>
+    <label class="field" id="langBox"><span>Sprache der Texterkennung</span>
+      <select id="optLang">
+        <option value="deu" selected>Deutsch</option>
+        <option value="eng">Englisch</option>
+      </select>
+    </label>
     <button type="button" class="btn primary big" id="btnRun" disabled>In Word umwandeln</button>
     <progress id="progress" max="100" value="0" hidden></progress>
     <p class="status" id="status" role="status"></p>
@@ -89,8 +101,8 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
       <button type="button" class="btn" id="btnShare" hidden>Teilen …</button>
     </div>
     <p class="meta-line" id="resultMeta"></p>
-    <h3>Vorschau des Textes</h3>
-    <div class="preview" id="preview" tabindex="0" aria-label="Vorschau des erkannten Textes"></div>
+    <h3>Vorschau</h3>
+    <div class="preview" id="preview" tabindex="0" aria-label="Vorschau des erkannten Textes und der Bilder"></div>
   </section>
 </main>
 
@@ -113,7 +125,7 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
   <h3>Bedienung</h3>
   <ul>
     <li>PDF wählen (oder auf den Kasten ziehen), dann „In Word umwandeln“.</li>
-    <li>Die Vorschau zeigt den erkannten Text. „Word-Datei speichern“ lädt die .docx herunter; „Teilen …“ schickt sie z. B. per Mail oder in eine andere App.</li>
+    <li>Die Vorschau zeigt den erkannten Text und die Bilder. „Word-Datei speichern“ lädt die .docx herunter; „Teilen …“ schickt sie z. B. per Mail oder in eine andere App.</li>
     <li><strong>Android, App installiert:</strong> In einer anderen App eine PDF teilen → „PDF zu Word“ wählen.</li>
     <li>Passwortgeschützte PDFs fragen nach dem Passwort.</li>
   </ul>
@@ -122,21 +134,32 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
     <li>Text mit Absätzen, Schriftgröße, <strong>fett</strong> und <em>kursiv</em>, Einrückungen, Spalten innerhalb einer Zeile (als Tabulator), zentrierte Zeilen, Seitenformat und Seitenränder.</li>
     <li>Seitenzahlen werden erkannt und als automatische Seitenzahl in die Fußzeile gesetzt.</li>
     <li>Am Zeilenende getrennte Wörter („Arbeits-“ / „vertrag“) werden wieder zusammengefügt.</li>
+    <li><strong>Bilder</strong> (Fotos, Logos, Grafiken) kommen an ihrer Stelle im Text mit ihrer Größe in die Word-Datei.</li>
+  </ul>
+  <h3>Gescannte Seiten (Texterkennung)</h3>
+  <ul>
+    <li>Seiten ohne markierbaren Text (Scans, Fotos von Dokumenten) werden automatisch mit <strong>Tesseract</strong> gelesen – direkt auf dem Gerät.</li>
+    <li>Beim ersten Mal lädt der Browser die Erkennung einmalig von dieser Seite (ca. 4 MB plus 1–3 MB Sprachdaten). Danach geht es auch offline.</li>
+    <li>Die Sprache einstellen, in der das Dokument geschrieben ist – das verbessert Umlaute und Wörter deutlich.</li>
+    <li>Pro Seite dauert es auf dem Handy einige Sekunden bis etwa eine halbe Minute.</li>
+    <li>Fett, kursiv und Schriftarten erkennt die Texterkennung nicht; der Text kommt in Arial.</li>
+    <li>Ist die Texterkennung ausgeschaltet oder nicht möglich, kommt die Seite als Bild in die Word-Datei.</li>
   </ul>
   <h3>Grenzen</h3>
   <ul>
-    <li><strong>Bilder, Linien und Tabellenrahmen</strong> werden nicht übernommen – nur der Text. Tabellen erscheinen als Zeilen mit Tabulatoren.</li>
-    <li><strong>Gescannte PDFs</strong> (nur Bilder, kein markierbarer Text) lassen sich noch nicht umwandeln.</li>
+    <li><strong>Linien, Tabellenrahmen und gezeichnete Grafiken</strong> (Vektorgrafik) werden nicht übernommen. Tabellen erscheinen als Zeilen mit Tabulatoren.</li>
+    <li>Ein Bild, das hinter Text liegt (z. B. ein Briefpapier-Hintergrund), steht in Word über oder unter dem Text statt dahinter.</li>
+    <li>Texterkennung macht Fehler – besonders bei schlechten Scans, Handschrift und kleiner Schrift. Ergebnis bitte prüfen.</li>
     <li>Absätze werden aus der Lage der Zeilen erraten. Bei ungewöhnlichen Layouts (mehrere Spalten, Textfelder) das Ergebnis bitte prüfen.</li>
   </ul>
   <p class="note">Formatierung und Zeilenumbrüche weichen etwas vom Original ab – Word setzt den Text neu. Wichtige Dokumente bitte mit der PDF vergleichen.</p>
 </details>
 
 <footer>
-  <p>Umwandlung im Browser mit pdf.js und docx · PDF bleibt auf dem Gerät</p>
+  <p>Umwandlung im Browser mit pdf.js, Tesseract und docx · PDF bleibt auf dem Gerät</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
-  <p class="footer-version">Version 1f818a57106c</p>
+  <p class="footer-version">Version 1fedaed9dd8f</p>
   <!-- footer:end -->
 </footer>
 
@@ -146,11 +169,20 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
 'use strict';
 const { $, load, save, toast, fmt, takeSharedFile } = Tools;
 const LS = 'pdf2word.settings.v1';
-const settings = Object.assign({ pageBreaks: true }, load(LS, {}));
+const settings = Object.assign({ pageBreaks: true, ocr: true, lang: 'deu' }, load(LS, {}));
 $('optPages').checked = settings.pageBreaks !== false;
-$('optPages').addEventListener('change', () => { settings.pageBreaks = $('optPages').checked; save(LS, settings); });
+$('optOcr').checked = settings.ocr !== false;
+$('optLang').value = settings.lang === 'eng' ? 'eng' : 'deu';
+const syncLang = () => { $('langBox').hidden = !$('optOcr').checked; };
+syncLang();
+function saveSettings() {
+  Object.assign(settings, { pageBreaks: $('optPages').checked, ocr: $('optOcr').checked, lang: $('optLang').value });
+  save(LS, settings);
+  syncLang();
+}
+for (const id of ['optPages', 'optOcr', 'optLang']) $(id).addEventListener('change', saveSettings);
 
-let file = null, result = null, busy = false, lib = null;
+let file = null, result = null, busy = false, lib = null, previewUrls = [];
 
 function status(text, kind) {
   $('status').textContent = text || '';
@@ -191,27 +223,32 @@ async function run() {
     if (!String.fromCharCode(...head).includes('%PDF-')) throw Object.assign(new Error('no pdf'), { code: 'invalid' });
     const pdf = await lib.open(new Uint8Array(await file.arrayBuffer()), $('pw').value || undefined);
     $('pwBox').hidden = true;
-    const pages = await lib.extract(pdf, (n, total) => { bar.value = Math.round(n / total * 90); status('Seite ' + n + ' von ' + total + ' …'); });
+    const pages = await lib.extract(pdf, {
+      ocr: $('optOcr').checked ? { lang: $('optLang').value } : null,
+      onProgress: (text, f) => { bar.value = Math.round(f * 90); status(text); },
+    });
     lib.close(pdf);
     const model = lib.layout(pages, { pageBreaks: $('optPages').checked });
-    if (!model.chars) {
-      throw Object.assign(new Error('no text'), { code: 'notext' });
-    }
+    if (!model.chars && !model.images) throw Object.assign(new Error('no text'), { code: 'notext' });
     status('Erstelle die Word-Datei …');
     const title = file.name.replace(/\.pdf$/i, '');
     const blob = await lib.toDocx(model, title);
     bar.value = 100;
     result = new File([blob], title + '.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
     showResult(model);
-    status(model.emptyPages
-      ? 'Fertig – ' + model.emptyPages + ' von ' + model.pages + ' Seiten enthalten keinen Text (z. B. Bilder oder Scans) und sind leer geblieben.'
-      : 'Fertig.', model.emptyPages ? 'warn' : 'ok');
+    const notes = [];
+    if (model.ocrPages) notes.push(model.ocrPages === 1 ? '1 gescannte Seite per Texterkennung gelesen – bitte prüfen.' : model.ocrPages + ' gescannte Seiten per Texterkennung gelesen – bitte prüfen.');
+    if (model.ocrFailed) notes.push('Texterkennung nicht möglich' + (navigator.onLine === false ? ' (offline und noch nicht geladen)' : '') + ' – ' + model.ocrFailed + (model.ocrFailed === 1 ? ' Seite wurde' : ' Seiten wurden') + ' als Bild übernommen.');
+    if (model.emptyPages) notes.push(model.emptyPages + ' von ' + model.pages + ' Seiten sind leer geblieben.');
+    const warn = model.ocrFailed || model.emptyPages;
+    status('Fertig.' + (notes.length ? ' ' + notes.join(' ') : ''), warn ? 'warn' : 'ok');
+    if (model.ocrError) console.warn(model.ocrError);
   } catch (e) {
     const msg = {
       password: 'Die PDF ist mit einem Passwort geschützt – bitte Passwort eingeben und erneut umwandeln.',
       'password-wrong': 'Das Passwort ist falsch.',
       invalid: 'Das ist keine lesbare PDF-Datei.',
-      notext: 'Diese PDF enthält keinen Text – vermutlich ist sie gescannt (nur Bilder). Gescannte PDFs werden noch nicht unterstützt.',
+      notext: 'In dieser PDF wurde weder Text noch ein Bild gefunden.',
     }[e.code];
     if (e.code === 'password' || e.code === 'password-wrong') { $('pwBox').hidden = false; $('pw').focus(); }
     if (!msg) console.warn(e);
@@ -229,11 +266,23 @@ function showResult(model) {
   box.textContent = '';
   const textWidth = model.page.width - model.page.left - model.page.right;
   const pct = pt => (Math.max(0, pt) / textWidth * 100).toFixed(1) + '%';
+  for (const u of previewUrls) URL.revokeObjectURL(u);
+  previewUrls = [];
   model.paragraphs.forEach(p => {
     if (p.pageBreak) {
       const pb = document.createElement('div');
       pb.className = 'pb'; pb.textContent = 'Seitenumbruch';
       box.append(pb);
+    }
+    if (p.image) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(new Blob([p.image.data], { type: p.image.type === 'png' ? 'image/png' : 'image/jpeg' }));
+      previewUrls.push(img.src);
+      img.alt = 'Bild aus der PDF';
+      img.style.width = pct(p.image.w);
+      if (p.align === 'center') img.style.marginInline = 'auto'; else img.style.marginInlineStart = pct(p.indent);
+      box.append(img);
+      return;
     }
     const el = document.createElement('p');
     // Hanging indent: the left margin holds the paragraph, a negative text-indent pulls the first line back
@@ -251,9 +300,11 @@ function showResult(model) {
     box.append(el);
   });
   $('resultMeta').textContent = result.name + ' · ' + model.pages + (model.pages === 1 ? ' Seite' : ' Seiten') + ' · ' +
-    model.paragraphs.length + ' Absätze · ' + fmt(result.size / 1024, 0) + ' KB';
+    (model.paragraphs.length - model.images) + ' Absätze' + (model.images ? ' · ' + model.images + (model.images === 1 ? ' Bild' : ' Bilder') : '') +
+    ' · ' + fmt(result.size / 1024, 0) + ' KB';
   const r = $('result');
-  r.dataset.paragraphs = model.paragraphs.length;
+  r.dataset.paragraphs = model.paragraphs.length - model.images;
+  r.dataset.images = model.images;
   r.hidden = false;
   try { $('btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [result] })); } catch (_) { $('btnShare').hidden = true; }
 }
