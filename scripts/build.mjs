@@ -22,6 +22,8 @@
 //   tool:icon, tool:color                                icons (see build-icons.mjs), theme colour
 //   tool:short-name                                      name under the home-screen icon (≤ 12 chars)
 //   tool:storage                                         localStorage key prefix(es) of the app, comma-separated
+//   tool:share-target                                    accepted file types for "share to this app" (Android),
+//                                                        e.g. "audio/*, .opus" – see AGENTS.md
 
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, posix } from 'node:path';
@@ -56,6 +58,7 @@ function pageInfo({ folder, file }) {
     color: meta(html, 'tool:color') || '#334155',
     shortName: meta(html, 'tool:short-name') || title,
     storage: meta(html, 'tool:storage'),
+    shareAccept: (meta(html, 'tool:share-target') || '').split(',').map(s => s.trim()).filter(Boolean),
     icon: existsSync(join(ROOT, folder, 'icon.svg')),
   };
 }
@@ -161,6 +164,15 @@ function manifest(p) {
     display: 'standalone',
     background_color: '#f4f6f9',
     theme_color: p.color,
+    ...(p.shareAccept.length ? {
+      // Installed app appears in the system share sheet (Android). sw.js receives the POST.
+      share_target: {
+        action: './share-target',
+        method: 'POST',
+        enctype: 'multipart/form-data',
+        params: { files: [{ name: 'file', accept: p.shareAccept }] },
+      },
+    } : {}),
     icons: [
       ...(existsSync(join(ROOT, p.folder, 'icon.svg')) ? [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml' }] : []),
       ...icon('icon-192.png', '192x192'),
@@ -253,7 +265,29 @@ self.addEventListener('activate', event => {
 });
 
 // Cache first: instant start and offline use. Anything not cached goes to the network.
+${p.shareAccept.length ? `// Share target: a file shared to the installed app arrives as POST ./share-target.
+// It is parked in a cache and the page is opened with ?shared=1 (Tools.takeSharedFile() picks it up).
+const SHARE_URL = new URL('./share-target', self.location).href;
+const SHARE_CACHE = \`share:\${APP}\`;
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'POST' || event.request.url.split('?')[0] !== SHARE_URL) return;
+  event.respondWith((async () => {
+    try {
+      const form = await event.request.formData();
+      const file = form.getAll('file').find(f => f && typeof f !== 'string');
+      if (file) {
+        const cache = await caches.open(SHARE_CACHE);
+        await cache.put('shared-file', new Response(file, { headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name || 'geteilt'),
+        } }));
+      }
+    } catch (_) {}
+    return Response.redirect(new URL('./?shared=1', self.location).href, 303);
+  })());
+});
+
+` : ''}self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const runtime = RUNTIME_URLS.find(([prefix]) => event.request.url.startsWith(prefix));
   if (runtime) {

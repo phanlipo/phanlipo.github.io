@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "voice-transcriber";
-const VERSION = '133123001568';
+const VERSION = '27b268165f4b';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -48,6 +48,28 @@ self.addEventListener('activate', event => {
 });
 
 // Cache first: instant start and offline use. Anything not cached goes to the network.
+// Share target: a file shared to the installed app arrives as POST ./share-target.
+// It is parked in a cache and the page is opened with ?shared=1 (Tools.takeSharedFile() picks it up).
+const SHARE_URL = new URL('./share-target', self.location).href;
+const SHARE_CACHE = `share:${APP}`;
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'POST' || event.request.url.split('?')[0] !== SHARE_URL) return;
+  event.respondWith((async () => {
+    try {
+      const form = await event.request.formData();
+      const file = form.getAll('file').find(f => f && typeof f !== 'string');
+      if (file) {
+        const cache = await caches.open(SHARE_CACHE);
+        await cache.put('shared-file', new Response(file, { headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name || 'geteilt'),
+        } }));
+      }
+    } catch (_) {}
+    return Response.redirect(new URL('./?shared=1', self.location).href, 303);
+  })());
+});
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const runtime = RUNTIME_URLS.find(([prefix]) => event.request.url.startsWith(prefix));

@@ -13,9 +13,10 @@
 <meta name="tool:color" content="#0f766e">
 <meta name="tool:short-name" content="Transkript">
 <meta name="tool:storage" content="voice-transcriber.">
+<meta name="tool:share-target" content="audio/*, audio/ogg, audio/opus, .opus, .ogg, .oga, .m4a, .mp3, .wav, .webm">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-J8OgLjrKEReANM2/pjm7UFeMudOjCrKypmoPjwV+Wpg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-LGN3ARoHgRcCi4wg77R8WbSCcrpgupOBjaYrNS+5pEQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -81,9 +82,8 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
     <h2 id="h-settings">2 · Transkribieren</h2>
     <label class="field"><span>Modell</span>
       <select id="model">
-        <option value="onnx-community/whisper-tiny">Schnell – tiny (ca. 40 MB)</option>
-        <option value="onnx-community/whisper-base" selected>Ausgewogen – base (ca. 80 MB)</option>
-        <option value="onnx-community/whisper-small">Genau – small (ca. 250 MB)</option>
+        <option value="onnx-community/whisper-base" selected>Standard – base (80 MB)</option>
+        <option value="onnx-community/whisper-small">Genauer – small (250 MB, langsam)</option>
       </select>
     </label>
     <label class="field"><span>Sprache</span>
@@ -148,14 +148,15 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
   <p>Wandelt Sprachaufnahmen in Text um – mit dem Spracherkennungsmodell <strong>Whisper</strong>, das direkt im Browser läuft. Das Audio wird <strong>nicht hochgeladen</strong>.</p>
   <h3>Sprachnachricht aus WhatsApp holen</h3>
   <ul>
-    <li><strong>Android:</strong> Sprachnachricht lange antippen → Teilen → z. B. „In Dateien speichern“; dann hier die .opus-Datei wählen.</li>
+    <li><strong>Android, App installiert:</strong> Sprachnachricht lange antippen → Teilen → „Transkript“ wählen – die Datei landet direkt hier.</li>
+    <li><strong>Android ohne Installation:</strong> Sprachnachricht teilen → z. B. „In Dateien speichern“; dann hier die .opus-Datei wählen.</li>
     <li><strong>iPhone:</strong> Sprachnachricht lange drücken → Weiterleiten → Teilen-Symbol → „In Dateien sichern“; dann hier wählen.</li>
     <li><strong>PC:</strong> WhatsApp Web/Desktop → Sprachnachricht herunterladen und hierher ziehen.</li>
   </ul>
   <h3>Modelle</h3>
   <ul>
     <li>Beim ersten Transkribieren lädt der Browser das gewählte Modell einmalig von <strong>Hugging Face</strong> (dabei wird kein Audio übertragen). Danach liegt es im Browser und funktioniert auch offline.</li>
-    <li><strong>tiny</strong> ist schnell, aber ungenauer; <strong>base</strong> ist ein guter Kompromiss; <strong>small</strong> ist am genauesten, aber groß und auf dem Handy langsam.</li>
+    <li><strong>base</strong> ist schnell und für deutsche Sprachnachrichten meist gut; <strong>small</strong> ist genauer, aber groß und auf dem Handy deutlich langsamer.</li>
     <li>Mit Grafikkarten-Unterstützung (WebGPU) geht es deutlich schneller; sonst rechnet der Prozessor.</li>
     <li>„Heruntergeladene Modelle“ zeigt den belegten Speicher und löscht die Modelle bei Bedarf.</li>
   </ul>
@@ -172,7 +173,7 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
   <p>Spracherkennung im Browser mit Whisper · Audio bleibt auf dem Gerät</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
-  <p class="footer-version">Version 133123001568</p>
+  <p class="footer-version">Version 27b268165f4b</p>
   <!-- footer:end -->
 </footer>
 
@@ -181,7 +182,7 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
 <script>
 (function(){
 'use strict';
-const { $, load, save, toast, copyText, fmt } = Tools;
+const { $, load, save, toast, copyText, fmt, takeSharedFile } = Tools;
 const LS_SET = 'voice-transcriber.settings.v1', LS_HIST = 'voice-transcriber.history.v1', MAX_HIST = 50;
 const MODEL_CACHE = 'transformers-cache';
 
@@ -284,7 +285,8 @@ function handle(m) {
   if (m.type === 'progress' && m.total) {
     $('progressBox').hidden = false;
     $('progress').value = Math.min(100, m.loaded / m.total * 100);
-    status('Modell wird geladen … ' + mb(m.loaded) + ' von ' + mb(m.total) + ' (nur beim ersten Mal)');
+    // Small totals = only config files so far; show numbers once the model files are counted
+    status('Modell wird geladen …' + (m.total > 5e6 ? ' ' + mb(m.loaded) + ' von ' + mb(m.total) : '') + ' (nur beim ersten Mal)');
   } else if (m.type === 'status' && m.status === 'transcribing') {
     $('progress').removeAttribute('value'); // indeterminate
     $('progressBox').hidden = false;
@@ -401,6 +403,9 @@ function renderHist() {
 }
 $('btnClearHist').addEventListener('click', () => { if (hist.length && confirm('Verlauf löschen?')) { hist = []; save(LS_HIST, hist); renderHist(); } });
 renderHist();
+
+// File shared from another app (Android share sheet → installed app)
+takeSharedFile().then(f => { if (f) { toast('Geteilte Datei übernommen'); takeFile(f); } });
 
 /* ---------- Downloaded models ---------- */
 async function updateModelInfo() {
