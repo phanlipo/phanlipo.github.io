@@ -38,7 +38,7 @@ const VENDOR = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'
 
 // Features for the second filter row on the start page, in display order. Only what sets apps apart:
 // things every app has (offline, installable, data stays on the device) are stated once on the start page.
-const FEATURES = ['Kamera', 'Datei öffnen', 'Teilen an App', 'Kopieren', 'Verlauf', 'Schütteln', 'Download nötig'];
+const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Datei öffnen', 'Teilen an App', 'Kopieren', 'Verlauf', 'Schütteln', 'Download nötig'];
 
 const escHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const escMd = s => s.replace(/\|/g, '\\|');
