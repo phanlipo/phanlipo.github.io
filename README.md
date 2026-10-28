@@ -25,6 +25,7 @@ assets/vendor/        Fremdbibliotheken mit Lizenz und Herkunft (siehe assets/ve
 template/             Vorlage für neue Seiten
 scripts/              build.mjs, build-icons.mjs, vendor.mjs (+ vendor.json)
 <tool-name>/          je Tool ein Ordner (englischer Name, kebab-case) – installierbar als PWA
+tests/                Browser-Tests (Playwright) – siehe tests/README.md
 AGENTS.md             Konventionen für Mitwirkende und KI-Agenten
 ```
 
@@ -50,6 +51,7 @@ Die Seite ist dann unter `https://phanlipo.github.io/<ordner>/` erreichbar.
 
 - **Vor jedem Commit:** einmalig `git config core.hooksPath .githooks` ausführen – dann läuft `build.mjs` automatisch.
 - **Bei jedem Push:** die Action `.github/workflows/build.yml` führt `build.mjs` aus und committet Änderungen.
+- **Bei jedem PR und Push auf main:** die Action `.github/workflows/test.yml` führt alle Tests aus (lokal: `npm install`, `npx playwright install chromium`, `npm test`).
 - **Monatlich:** die Action `.github/workflows/vendor-check.yml` prüft, ob es neuere Versionen der Bibliotheken gibt, und öffnet dann ein Issue.
 - **Prüfen ohne zu schreiben:** `node scripts/build.mjs --check`
 

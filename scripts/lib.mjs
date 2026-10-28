@@ -22,7 +22,7 @@ export function meta(html, name) {
 export function allPages() {
   const pages = [{ folder: '', file: 'index.html' }];
   for (const e of readdirSync(ROOT, { withFileTypes: true })) {
-    if (!e.isDirectory() || e.name.startsWith('.') || e.name === 'node_modules') continue;
+    if (!e.isDirectory() || e.name.startsWith('.') || ['node_modules', 'tests', 'test-results', 'playwright-report'].includes(e.name)) continue;
     if (existsSync(join(ROOT, e.name, 'index.html'))) pages.push({ folder: e.name, file: `${e.name}/index.html` });
   }
   return pages;

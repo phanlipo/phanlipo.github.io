@@ -24,7 +24,7 @@ import { join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
 import { ROOT, decode, meta, allPages } from './lib.mjs';
 
-const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules']);
+const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules', 'tests']);
 const SITE = 'https://phanlipo.github.io/';
 const SW_FORMAT = 1; // bump when the generated sw.js logic changes
 

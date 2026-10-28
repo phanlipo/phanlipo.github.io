@@ -4,7 +4,7 @@ Hinweise für alle, die an diesem Repository arbeiten – Menschen wie KI-Agente
 
 ## Projekt
 
-Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/). Kein Server, keine Paketverwaltung. Jede Seite ist eine einzelne `index.html` in einem eigenen Ordner, wird hauptsächlich **auf dem Handy** benutzt und ist als **PWA** installierbar und offline nutzbar.
+Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/). Kein Server; die veröffentlichten Seiten brauchen keine Pakete (`package.json` gibt es nur für die Tests). Jede Seite ist eine einzelne `index.html` in einem eigenen Ordner, wird hauptsächlich **auf dem Handy** benutzt und ist als **PWA** installierbar und offline nutzbar.
 
 ```
 index.html            Startseite – die Kartenliste ist generiert
@@ -16,10 +16,12 @@ scripts/build.mjs     erzeugt Seitenliste, Fußzeile, <head>-Links, manifest.web
 scripts/build-icons.mjs  erzeugt icon.svg und PNG-Icons (180/192/512/maskable) je Seite (Tabler Icons)
 scripts/vendor.mjs    lädt Bibliotheken aus scripts/vendor.json nach assets/vendor/, prüft auf Updates
 scripts/partials/footer.html  Text der gemeinsamen Fußzeile
+tests/                Playwright-Tests (siehe tests/README.md)
 <tool-name>/          index.html + generiert: manifest.webmanifest, sw.js, icon-*
 .githooks/pre-commit  ruft build.mjs vor jedem Commit auf
 .github/workflows/build.yml         dasselbe bei jedem Push auf GitHub
 .github/workflows/vendor-check.yml  prüft monatlich auf Bibliotheks-Updates und öffnet ein Issue
+.github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus
 robots.txt            sperrt alle Crawler
 ```
 
@@ -29,6 +31,8 @@ robots.txt            sperrt alle Crawler
 2. `<title>`, `<meta name="description">`, `tool:tags`, `tool:order` und `tool:short-name` (Name unter dem Home-Bildschirm-Icon, max. ca. 12 Zeichen) setzen. Aus diesen Angaben entstehen Karte, README-Eintrag und App-Manifest.
 3. Icon wählen: `tool:icon` = Name eines [Tabler Icons](https://tabler.io/icons) (Outline), `tool:color` = Hintergrund- und Theme-Farbe. Dann `node scripts/build-icons.mjs <tool-name>` ausführen.
 4. `node scripts/build.mjs` ausführen (macht auch der Git-Hook). Generierte Bereiche zwischen `<!-- tools/footer/head:start -->` und `…:end -->` sowie `manifest.webmanifest`, `sw.js` **nie von Hand** bearbeiten.
+
+5. Fachliche Tests in `tests/<tool-name>.spec.mjs` anlegen. Die allgemeinen Prüfungen (Fehler, Layout, PWA, offline) greifen automatisch.
 
 Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<meta name="tool:hidden" content="true">`.
 
@@ -45,13 +49,16 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 - **Icons:** nur frei lizenzierte Icons (aktuell Tabler Icons, MIT – Version und Lizenz in `assets/vendor/tabler-icons/`). Jede Seite hat eine eigene Farbe.
 - **Speicher:** nur über `Tools.load` / `Tools.save` (fangen Fehler im privaten Modus ab). Schlüssel für neue Tools: `<tool-name>.<was>.v1`. **Bestehende Schlüssel nie umbenennen** – sonst sind Einstellungen und Verläufe der Nutzer weg (`scanCopySecurPharm.*`, `wuerfelMuenze.*`, `brauRechner.*`).
 - **Externe Bibliotheken:** nie per CDN einbinden, sondern in `scripts/vendor.json` eintragen (npm-Paket, feste Version, Lizenz, Dateien) und `node scripts/vendor.mjs` ausführen. Eingebunden wird aus `../assets/vendor/<name>/`. Lädt eine Bibliothek selbst weitere Dateien nach (z. B. `.wasm`), den Pfad auf `assets/vendor` umbiegen. Nur Lizenzen, die Weitergabe erlauben (MIT, Apache-2.0, BSD …).
-- **Bibliotheks-Updates:** Die Action „Vendor-Updates prüfen“ öffnet monatlich ein Issue. Aktualisieren mit `node scripts/vendor.mjs --update <name>`, dann die Seiten aus der Spalte „Zweck“ in `assets/vendor/README.md` testen. Bei 0.x- oder Major-Sprüngen das Changelog lesen.
+- **Bibliotheks-Updates:** Die Action „Vendor-Updates prüfen“ öffnet monatlich ein Issue. Aktualisieren mit `node scripts/vendor.mjs --update <name>`, bei Tabler danach `node scripts/build-icons.mjs`, dann `npm test`. Bei 0.x- oder Major-Sprüngen das Changelog lesen.
 - **PWA / Offline:** `sw.js` cacht die Seite, `assets/base.css`, `assets/common.js`, Icons und jede genutzte Vendor-Bibliothek komplett. Die Cache-Version ist ein Hash dieser Dateien – Updates kommen automatisch. Lädt eine Seite zur Laufzeit weitere eigene Dateien, müssen sie unter `assets/vendor/` liegen oder in `build.mjs` (`precacheList`) ergänzt werden. Nie Daten an fremde Server senden – offline gibt es keine.
 - **iPhone:** Eine zum Home-Bildschirm hinzugefügte App hat **eigenen Speicher**, getrennt von Safari.
-- **Datenschutz:** keine Tracker, keine Analytics, keine Daten an Server senden.
+- **Datenschutz:** keine Tracker, keine Analytics, keine Daten an Server senden (die Tests schlagen bei jeder Anfrage an eine fremde Domain fehl).
+- **Tests:** Fehler nie durch Abschwächen, Überspringen oder Löschen eines Tests „beheben“. Erwartete Werte unabhängig nachrechnen.
 - **Zahlen:** deutsch formatieren (`Tools.fmt`), Eingaben mit Komma und Punkt akzeptieren (`Tools.parseNum`).
 
 ## Prüfen vor dem Commit
+
+`npm test` muss grün sein (einmalig vorher `npm install` und `npx playwright install chromium`). Die Tests prüfen das Folgende größtenteils automatisch:
 
 - Seite lädt ohne JavaScript-Fehler.
 - Bei 375 px und bei Desktop-Breite kein horizontales Scrollen.
