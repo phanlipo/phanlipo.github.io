@@ -17,7 +17,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | [Sprache zu Text](https://phanlipo.github.io/voice-transcriber/) | `voice-transcriber/` | Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht. |
 | [Schere, Stein, Papier](https://phanlipo.github.io/rock-paper-scissors/) | `rock-paper-scissors/` | Spiel gegen den Computer – klassisch, mit Brunnen oder mit Echse und Spock. |
 | [PDF zu Word](https://phanlipo.github.io/pdf2word/) | `pdf2word/` | PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – mit Bildern und Texterkennung für gescannte Seiten, ohne Upload: Die Datei verlässt das Gerät nicht. |
-| [Handy-Sensoren](https://phanlipo.github.io/sensors/) | `sensors/` | Kompass, Wasserwaage, Beschleunigung, Vibrometer, Magnetfeld (Metalldetektor), Luftdruck-Höhe und Schallpegel – mit den Sensoren des Handys messen. |
+| [Handy-Sensoren](https://phanlipo.github.io/sensors/) | `sensors/` | Kompass, Wasserwaage, Beschleunigung, Vibrometer, Metalldetektor und Schallpegel – mit den Sensoren des Handys messen. |
 <!-- tools:end -->
 
 ## Struktur

@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Handy-Sensoren</title>
-<meta name="description" content="Kompass, Wasserwaage, Beschleunigung, Vibrometer, Magnetfeld (Metalldetektor), Luftdruck-Höhe und Schallpegel – mit den Sensoren des Handys messen.">
+<meta name="description" content="Kompass, Wasserwaage, Beschleunigung, Vibrometer, Metalldetektor und Schallpegel – mit den Sensoren des Handys messen.">
 <meta name="tool:tags" content="Alltag, Messen, Werkzeug">
 <meta name="tool:features" content="Bewegungssensor, Mikrofon">
 <meta name="tool:order" content="70">
@@ -16,7 +16,7 @@
 <meta name="tool:storage" content="sensors.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-i/pwp6H1YA34sCmuDhMrbntAm3kiWf5tRiCQ1D5HQBo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/qhd4ScSZIWQURez1BRwYHrLaKu5F3QVHjiabnaA2rU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -77,11 +77,6 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
 .meter>div{height:100%;width:0;background:var(--accent);transition:width .1s}
 label.check{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
 label.check input{width:22px;height:22px;accent-color:var(--accent)}
-/* Pressure */
-.form{display:grid;gap:10px}
-.form label{display:grid;gap:4px;font-size:14px;color:var(--muted);font-weight:600}
-.form input{min-height:44px;padding-inline:10px;font-size:18px;width:100%}
-.result{font-size:15px;margin:0}
 .cal{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
 .cal label{display:grid;gap:4px;font-size:14px;color:var(--muted);font-weight:600}
 .cal input{min-height:44px;width:110px;padding-inline:10px;font-size:16px}
@@ -90,7 +85,7 @@ label.check input{width:22px;height:22px;accent-color:var(--accent)}
 <body>
 <header>
   <h1>Handy-Sensoren</h1>
-  <p class="sub">Kompass, Wasserwaage, Bewegung, Magnetfeld, Luftdruck und Schall</p>
+  <p class="sub">Kompass, Wasserwaage, Bewegung, Metalldetektor und Schall</p>
 </header>
 
 <main>
@@ -99,8 +94,7 @@ label.check input{width:22px;height:22px;accent-color:var(--accent)}
     <button type="button" role="tab" class="tab" id="tab-level" aria-controls="p-level" data-tab="level">Wasserwaage</button>
     <button type="button" role="tab" class="tab" id="tab-accel" aria-controls="p-accel" data-tab="accel">Beschleunigung</button>
     <button type="button" role="tab" class="tab" id="tab-vibro" aria-controls="p-vibro" data-tab="vibro">Vibrometer</button>
-    <button type="button" role="tab" class="tab" id="tab-mag" aria-controls="p-mag" data-tab="mag">Magnetfeld</button>
-    <button type="button" role="tab" class="tab" id="tab-pressure" aria-controls="p-pressure" data-tab="pressure">Luftdruck</button>
+    <button type="button" role="tab" class="tab" id="tab-mag" aria-controls="p-mag" data-tab="mag">Metalldetektor</button>
     <button type="button" role="tab" class="tab" id="tab-sound" aria-controls="p-sound" data-tab="sound">Schall</button>
   </div>
 
@@ -197,31 +191,18 @@ label.check input{width:22px;height:22px;accent-color:var(--accent)}
 
   <!-- Magnetic field -->
   <section class="card panel" id="p-mag" role="tabpanel" aria-labelledby="tab-mag" hidden>
-    <h2>Magnetfeld &amp; Metalldetektor</h2>
+    <h2>Metalldetektor</h2>
     <p class="readout"><span id="mVal">–</span> <small id="mUnit">µT</small></p>
-    <p class="under" id="mInfo">Änderung zum Nullpunkt: <b id="mDelta">–</b></p>
+    <p class="under" id="mInfo" hidden>Änderung zum Nullpunkt: <b id="mDelta">–</b></p>
     <div class="meter" aria-hidden="true"><div id="mBar"></div></div>
     <p class="under" id="mXYZ"></p>
+    <p class="muted" id="mMode"></p>
     <p class="status" id="st-mag" role="status"></p>
     <label class="check"><input type="checkbox" id="mTone"> Ton bei Ausschlag</label>
     <div class="row">
       <button type="button" class="btn primary start" data-start="mag">Starten</button>
       <button type="button" class="btn" id="mZero">Nullpunkt setzen</button>
     </div>
-  </section>
-
-  <!-- Air pressure -->
-  <section class="card panel" id="p-pressure" role="tabpanel" aria-labelledby="tab-pressure" hidden>
-    <h2>Luftdruck &amp; Höhe</h2>
-    <p class="note">Browser erlauben keinen Zugriff auf den Luftdrucksensor (Barometer) des Handys. Hier lassen sich Luftdruck und Höhe nach der Standardatmosphäre umrechnen – den Druck z.&nbsp;B. von einer Wetter-App oder einem Barometer übernehmen.</p>
-    <div class="form">
-      <label for="pPres">Luftdruck am Ort (hPa)<input type="text" inputmode="decimal" id="pPres" autocomplete="off"></label>
-      <label for="pAlt">Höhe über Meeresspiegel (m)<input type="text" inputmode="decimal" id="pAlt" autocomplete="off"></label>
-      <label for="pQnh">Luftdruck auf Meereshöhe (hPa, Standard 1013,25)<input type="text" inputmode="decimal" id="pQnh" autocomplete="off"></label>
-    </div>
-    <p class="result" id="pResult" role="status"></p>
-    <div class="row"><button type="button" class="btn" id="pGps">Höhe per GPS übernehmen</button></div>
-    <p class="status" id="st-pressure" role="status"></p>
   </section>
 
   <!-- Sound level -->
@@ -262,10 +243,11 @@ label.check input{width:22px;height:22px;accent-color:var(--accent)}
 <!-- data:end -->
 <details class="help card">
   <summary>Anleitung &amp; Hinweise</summary>
-  <p>Die App liest die Sensoren des Handys direkt im Browser aus. Oben den Bereich wählen und <b>Starten</b> tippen. Es läuft immer nur eine Messung; beim Wechsel des Bereichs wird sie beendet. Während einer Messung bleibt der Bildschirm an (falls das Gerät es erlaubt).</p>
+  <p>Die App liest die Sensoren des Handys direkt im Browser aus. Oben den Bereich wählen – die Messung startet sofort. Es läuft immer nur eine Messung; mit <b>Stoppen</b> lässt sie sich anhalten. Wird die App in den Hintergrund gelegt, pausiert sie und läuft beim Zurückkehren weiter. Während einer Messung bleibt der Bildschirm an (falls das Gerät es erlaubt).</p>
   <h3>Berechtigungen</h3>
   <ul>
-    <li><b>iPhone/iPad:</b> Beim ersten Start fragt Safari nach dem Zugriff auf „Bewegung und Ausrichtung“ – erlauben. Wurde abgelehnt, die Seite schließen und neu öffnen.</li>
+    <li><b>iPhone/iPad:</b> Safari gibt die Sensoren erst nach einer Freigabe frei. Erscheint <b>Zugriff erlauben</b>, darauf tippen und „Erlauben“ wählen. Wurde abgelehnt, die Seite schließen und neu öffnen.</li>
+    <li><b>Android:</b> Kommen keine Werte, in den Website-Einstellungen des Browsers „Bewegungssensoren“ erlauben.</li>
     <li><b>Schallmessung:</b> braucht den Zugriff auf das Mikrofon. Der Ton wird nur ausgewertet, nicht aufgenommen oder gespeichert.</li>
     <li>Am Computer gibt es meist keine Bewegungssensoren – dann erscheint ein Hinweis.</li>
   </ul>
@@ -292,18 +274,11 @@ label.check input{width:22px;height:22px;accent-color:var(--accent)}
     <li><b>Effektivwert</b> = mittlere Stärke der letzten Sekunde, <b>Spitze</b> = größter Einzelwert. Die <b>Frequenz</b> ist eine Schätzung der Hauptschwingung; sie reicht höchstens bis zur halben Messrate (meist 30–50 Hz). Schnelle Vibrationen (Motoren) werden daher nicht richtig erfasst.</li>
     <li>Kein geeichtes Messgerät, gut zum Vergleichen (vorher – nachher).</li>
   </ul>
-  <h3>Magnetfeld &amp; Metalldetektor</h3>
+  <h3>Metalldetektor</h3>
   <ul>
-    <li>Das Erdmagnetfeld hat in Deutschland etwa 48–50 µT. <b>Nullpunkt setzen</b> und das Handy dann langsam über Wand oder Boden führen: Eisen, Stahl (Nägel, Rohre, Bewehrung) und Magnete verändern den Wert. Kupfer, Aluminium und Gold reagieren <b>nicht</b>. Stromleitungen sind so nicht sicher zu finden – vor dem Bohren immer ein echtes Leitungssuchgerät benutzen.</li>
-    <li>Der Magnetsensor ist im Browser nur eingeschränkt verfügbar: In Chrome für Android muss dafür unter <code>chrome://flags</code> „Generic Sensor Extra Classes“ eingeschaltet werden. Safari bietet ihn nicht an.</li>
-    <li>Ohne Magnetsensor arbeitet die App im <b>Ersatzmodus</b>: Sie zeigt, um wie viel Grad Metall die Kompassrichtung ablenkt. Das ist ungenauer, findet aber z. B. Magnete und größere Eisenteile.</li>
-  </ul>
-  <h3>Luftdruck</h3>
-  <ul>
-    <li>Viele Handys haben ein Barometer, aber kein Browser gibt es an Webseiten weiter. Deshalb gibt es hier einen Umrechner: Luftdruck ↔ Höhe nach der internationalen Höhenformel (Standardatmosphäre, 15 °C auf Meereshöhe).</li>
-    <li>Für eine genaue Höhe den aktuellen <b>Luftdruck auf Meereshöhe</b> (QNH, steht in Wetterberichten) eintragen. Wetter verändert den Druck um bis zu ±30 hPa – das sind ±250 m.</li>
-    <li><b>Höhe per GPS</b> fragt den Standort des Geräts ab (nur die Höhe wird verwendet, nichts wird gesendet). Nicht jeder Browser liefert eine Höhe.</li>
-    <li>Zusätzlich wird der Siedepunkt von Wasser beim angegebenen Druck geschätzt (z. B. für Kochzeiten in den Bergen).</li>
+    <li>Normalerweise misst die App, um wie viel Grad Eisen oder ein Magnet den <b>Kompass ablenkt</b> – das funktioniert auf jedem Handy mit Kompass. <b>Nullpunkt setzen</b>, dann das Handy flach und ohne es zu drehen langsam über Wand oder Boden führen. Ein Ausschlag zeigt Eisen, Stahl (Nägel, Rohre, Bewehrung) oder Magnete an.</li>
+    <li>Kupfer, Aluminium und Gold reagieren <b>nicht</b>. Stromleitungen sind so nicht sicher zu finden – vor dem Bohren immer ein echtes Leitungssuchgerät benutzen.</li>
+    <li>Stellt der Browser den Magnetsensor direkt bereit (in Chrome für Android nur nach Einschalten von „Generic Sensor Extra Classes“ unter <code>chrome://flags</code>), zeigt die App die Feldstärke in µT. Das Erdmagnetfeld hat in Deutschland etwa 48–50 µT.</li>
   </ul>
   <h3>Schallmessung</h3>
   <ul>
@@ -330,7 +305,7 @@ label.check input{width:22px;height:22px;accent-color:var(--accent)}
   <p>Läuft vollständig im Browser · Messwerte verlassen das Gerät nicht</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
-  <p class="footer-version">Version ddd384c0b8ff</p>
+  <p class="footer-version">Version 7231c0d5d4ea</p>
   <!-- footer:end -->
 </footer>
 
@@ -340,12 +315,12 @@ label.check input{width:22px;height:22px;accent-color:var(--accent)}
 'use strict';
 const {$, load, save, toast, fmt, parseNum} = Tools;
 const LS = 'sensors.settings.v1';
-const S = Object.assign({tab:'compass', level:{x:0, y:0, e:0}, grav:true, soundCal:100, magTone:false, qnh:1013.25, pres:null, alt:null, src:'pres'}, load(LS, {}) || {});
+const S = Object.assign({tab:'compass', level:{x:0, y:0, e:0}, grav:true, soundCal:100, magTone:false}, load(LS, {}) || {});
 S.level = Object.assign({x:0, y:0, e:0}, S.level);
 const store = () => save(LS, S);
 const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const TABS = ['compass', 'level', 'accel', 'vibro', 'mag', 'pressure', 'sound'];
+const TABS = ['compass', 'level', 'accel', 'vibro', 'mag', 'sound'];
 
 // Rotation of the screen content relative to the device (0, 90, 180, 270)
 function screenAngle(){
@@ -376,9 +351,9 @@ async function requestWake(){
   try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) { wakeLock = null; }
 }
 function releaseWake(){ try { if (wakeLock) wakeLock.release().catch(() => {}); } catch (_) {} wakeLock = null; }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && running) requestWake(); });
 
-function stopRunning(){
+let userStopped = false, resumeTab = null;
+function stopRunning(byUser){
   if (!running) return;
   const n = running;
   running = null;
@@ -386,31 +361,56 @@ function stopRunning(){
   try { if (P[n].stop) P[n].stop(); } catch (_) {}
   cleanup();
   releaseWake();
-  startBtn(n).textContent = 'Starten';
+  const b = startBtn(n);
+  b.textContent = 'Starten'; delete b.dataset.permit;
+  if (byUser) userStopped = true;
 }
-async function startPanel(n){
+// gesture = started by a tap (needed for permission prompts on iOS); otherwise started automatically
+async function startPanel(n, gesture){
   stopRunning();
-  P[n].seen = false;
+  userStopped = false;
+  const p = P[n], b = startBtn(n);
+  p.seen = false;
   setStatus(n, '');
-  try { await P[n].start(); }
-  catch (e) { cleanup(); setStatus(n, e && e.message ? e.message : String(e), 'err'); return; }
+  delete b.dataset.permit;
+  try { await p.start(gesture); }
+  catch (e) { cleanup(); setStatus(n, e && e.message ? e.message : String(e), 'err'); b.textContent = 'Erneut versuchen'; return; }
   running = n;
-  startBtn(n).textContent = 'Stoppen';
+  b.textContent = 'Stoppen';
   requestWake();
-  watchdog = setTimeout(() => { if (running === n && !P[n].seen) setStatus(n, P[n].noData, 'warn'); }, 3000);
+  watchdog = setTimeout(() => {
+    if (running !== n || p.seen || (p.waiting && p.waiting())) return;
+    const Ev = p.perm && p.perm();
+    if (!gesture && Ev && typeof Ev.requestPermission === 'function') {
+      // iOS (and some Chromium versions) deliver data only after a permission request from a tap
+      setStatus(n, 'Der Browser gibt die Sensoren erst nach einer Freigabe frei.', 'warn');
+      b.textContent = 'Zugriff erlauben'; b.dataset.permit = '1';
+    } else setStatus(n, p.noData, 'warn');
+  }, gesture ? 3000 : 1500);
 }
 function seen(n){
-  if (!P[n].seen) { P[n].seen = true; if ($('st-' + n).classList.contains('warn')) setStatus(n, ''); }
+  if (P[n].seen) return;
+  P[n].seen = true;
+  if ($('st-' + n).classList.contains('warn')) setStatus(n, '');
+  const b = startBtn(n);
+  if (b.dataset.permit) { delete b.dataset.permit; b.textContent = 'Stoppen'; }
 }
+// Pause in the background (battery, microphone), continue when the app is visible again
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { if (running) { resumeTab = running; stopRunning(); } }
+  else if (resumeTab) { const n = resumeTab; resumeTab = null; if (!userStopped && n === S.tab) startPanel(n, false); }
+});
 
-// iOS 13+: motion/orientation access must be requested from a tap
-async function askPermission(Ev){
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// Motion/orientation access: iOS 13+ (and newer Chromium) want a request from a tap.
+// Without a tap the listeners are attached anyway – where no request is needed, data simply arrives.
+async function askPermission(Ev, gesture){
   if (!Ev) throw new Error('Dieser Browser unterstützt keine Bewegungs- und Lagesensoren.');
-  if (typeof Ev.requestPermission !== 'function') return;
+  if (!gesture || typeof Ev.requestPermission !== 'function') return;
   let r;
   try { r = await Ev.requestPermission(); }
   catch (e) { throw new Error('Zugriff auf die Bewegungssensoren nicht möglich: ' + e.message); }
-  if (r !== 'granted') throw new Error('Zugriff auf Bewegung und Ausrichtung wurde abgelehnt. Seite schließen, neu öffnen und erlauben.');
+  if (r === 'denied') throw new Error('Zugriff auf Bewegung und Ausrichtung wurde abgelehnt. ' + (isIOS ? 'Seite schließen, neu öffnen und erlauben.' : 'In den Website-Einstellungen des Browsers „Bewegungssensoren“ erlauben.'));
 }
 
 // Compass heading in degrees (0 = magnetic north, clockwise), for compass and magnet fallback
@@ -463,9 +463,10 @@ const DIRS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW'
   $('cTicks').innerHTML = s;
 })();
 const compass = {
+  perm: () => window.DeviceOrientationEvent,
   noData: 'Keine Kompassdaten – das Gerät hat keinen Magnetsensor oder der Browser stellt ihn nicht bereit.',
-  async start(){
-    await askPermission(window.DeviceOrientationEvent);
+  async start(gesture){
+    await askPermission(window.DeviceOrientationEvent, gesture);
     this.vx = null; this.rot = 0;
     listenHeading((h, e) => this.update(h, e));
   },
@@ -487,10 +488,11 @@ const compass = {
 
 /* ---------- Level ---------- */
 const level = {
+  perm: () => window.DeviceOrientationEvent,
   noData: 'Keine Lagedaten – das Gerät hat keinen Lagesensor oder der Browser stellt ihn nicht bereit.',
   raw: null,
-  async start(){
-    await askPermission(window.DeviceOrientationEvent);
+  async start(gesture){
+    await askPermission(window.DeviceOrientationEvent, gesture);
     this.u = null;
     on(window, 'deviceorientation', e => { if (e.beta != null && e.gamma != null) { seen('level'); this.update(e.beta, e.gamma); } });
   },
@@ -533,7 +535,7 @@ const level = {
 };
 $('lvZero').addEventListener('click', () => {
   const r = level.raw;
-  if (!r) { toast('Erst die Messung starten'); return; }
+  if (!r) { toast('Noch keine Messwerte'); return; }
   if (r.mode === 'flat') { S.level.x = r.tx; S.level.y = r.ty; } else S.level.e = r.dev;
   store(); toast('Nullpunkt gespeichert');
 });
@@ -542,9 +544,10 @@ $('lvReset').addEventListener('click', () => { S.level = {x:0, y:0, e:0}; store(
 /* ---------- Acceleration ---------- */
 const G = 9.80665;
 const accel = {
+  perm: () => window.DeviceMotionEvent,
   noData: 'Keine Beschleunigungsdaten – das Gerät hat keinen Beschleunigungssensor oder der Browser stellt ihn nicht bereit.',
-  async start(){
-    await askPermission(window.DeviceMotionEvent);
+  async start(gesture){
+    await askPermission(window.DeviceMotionEvent, gesture);
     this.reset();
     this.cur = null;
     on(window, 'devicemotion', e => {
@@ -588,9 +591,10 @@ function vibLabel(rms){
   return rms < 0.02 ? 'ruhig' : rms < 0.1 ? 'kaum spürbar' : rms < 0.5 ? 'leicht' : rms < 2 ? 'deutlich' : rms < 5 ? 'stark' : 'sehr stark';
 }
 const vibro = {
+  perm: () => window.DeviceMotionEvent,
   noData: 'Keine Bewegungsdaten – das Gerät hat keinen Beschleunigungssensor oder der Browser stellt ihn nicht bereit.',
-  async start(){
-    await askPermission(window.DeviceMotionEvent);
+  async start(gesture){
+    await askPermission(window.DeviceMotionEvent, gesture);
     this.samples = []; this.t = 0; this.peak = 0; this.g = null; this.graph = history(600); this.dirty = false;
     on(window, 'devicemotion', e => this.sample(e));
     loop(() => this.render());
@@ -661,7 +665,8 @@ $('vReset').addEventListener('click', () => { vibro.peak = 0; $('vPeak').textCon
 /* ---------- Magnetic field / metal detector ---------- */
 const mag = {
   noData: 'Keine Messwerte vom Magnetsensor.',
-  async start(){
+  perm(){ return this.mode === 'compass' ? window.DeviceOrientationEvent : null; },
+  async start(gesture){
     this.base = null; this.cur = null; this.mode = null;
     let sensor = null;
     if (typeof window.Magnetometer === 'function') {
@@ -678,14 +683,15 @@ const mag = {
       offs.push(() => sensor.stop());
       $('mUnit').textContent = 'µT';
       $('mInfo').hidden = false;
+      $('mMode').textContent = 'Misst die Stärke des Magnetfelds mit dem Magnetsensor.';
     } else {
-      await askPermission(window.DeviceOrientationEvent);
+      await askPermission(window.DeviceOrientationEvent, gesture);
       this.mode = 'compass';
-      this.noData = 'Weder Magnetsensor noch Kompass verfügbar.';
-      setStatus('mag', 'Ersatzmodus: Ablenkung des Kompasses (der Browser bietet keinen direkten Zugriff auf den Magnetsensor)');
+      this.noData = 'Keine Kompassdaten – das Gerät hat keinen Magnetsensor oder der Browser stellt ihn nicht bereit.';
       listenHeading(h => this.heading(h));
       $('mUnit').textContent = 'Ablenkung';
       $('mInfo').hidden = true;
+      $('mMode').textContent = 'Misst, wie stark Eisen oder Magnete den Kompass ablenken.';
     }
     if (S.magTone) this.tone(true);
     loop(() => this.render());
@@ -751,55 +757,9 @@ $('mTone').addEventListener('change', () => {
   if (running === 'mag') mag.tone(S.magTone);
 });
 $('mZero').addEventListener('click', () => {
-  if (!mag.cur) { toast('Erst die Messung starten'); return; }
+  if (!mag.cur) { toast('Noch keine Messwerte'); return; }
   mag.base = mag.mode === 'sensor' ? mag.cur.tot : mag.cur.h;
   toast('Nullpunkt gesetzt');
-});
-
-/* ---------- Air pressure ↔ altitude (international barometric formula) ---------- */
-const EXP = 5.25588;
-const presAt = (h, p0) => p0 * Math.pow(1 - 0.0065 * h / 288.15, EXP);
-const altAt = (p, p0) => 288.15 / 0.0065 * (1 - Math.pow(p / p0, 1 / EXP));
-// Boiling point of water (Clausius–Clapeyron, ΔH = 40,66 kJ/mol)
-const boilAt = p => 1 / (1 / 373.15 - 8.314 * Math.log(p / 1013.25) / 40660) - 273.15;
-function pressureCalc(src){
-  if (src) S.src = src;
-  const p0 = parseNum($('pQnh').value), p = parseNum($('pPres').value), h = parseNum($('pAlt').value);
-  const okP0 = p0 >= 850 && p0 <= 1100;
-  S.qnh = Number.isFinite(p0) ? p0 : S.qnh;
-  let msg = '', pres = NaN;
-  if (!okP0) msg = 'Luftdruck auf Meereshöhe: Wert zwischen 850 und 1100 hPa eingeben.';
-  else if (S.src === 'pres') {
-    if (p > 0 && p <= 1100) { const alt = altAt(p, p0); $('pAlt').value = fmt(alt, 0).replace(/\./g, ''); pres = p; S.pres = p; S.alt = Math.round(alt); }
-    else if ($('pPres').value.trim()) msg = 'Luftdruck: Wert zwischen 1 und 1100 hPa eingeben.';
-  } else {
-    if (h > -500 && h < 11000) { pres = presAt(h, p0); $('pPres').value = fmt(pres, 1).replace(/\./g, ''); S.alt = h; S.pres = Math.round(pres * 10) / 10; }
-    else if ($('pAlt').value.trim()) msg = 'Höhe: Wert zwischen −500 und 11 000 m eingeben.';
-  }
-  $('pResult').textContent = msg || (Number.isFinite(pres) ? `Wasser siedet bei ca. ${fmt(boilAt(pres), 1)} °C` : '');
-  $('pResult').className = 'result' + (msg ? ' status err' : '');
-  store();
-}
-$('pQnh').value = fmt(S.qnh, 2).replace(/\./g, '');
-if (S.pres != null && S.src === 'pres') $('pPres').value = fmt(S.pres, 1).replace(/\./g, '');
-if (S.alt != null && S.src === 'alt') $('pAlt').value = fmt(S.alt, 0).replace(/\./g, '');
-$('pPres').addEventListener('input', () => pressureCalc('pres'));
-$('pAlt').addEventListener('input', () => pressureCalc('alt'));
-$('pQnh').addEventListener('input', () => pressureCalc());
-pressureCalc();
-$('pGps').addEventListener('click', () => {
-  if (!navigator.geolocation) { setStatus('pressure', 'Standort wird nicht unterstützt.', 'err'); return; }
-  setStatus('pressure', 'Standort wird ermittelt …');
-  navigator.geolocation.getCurrentPosition(pos => {
-    const alt = pos.coords.altitude;
-    if (alt == null) { setStatus('pressure', 'Der Browser liefert keine Höhe – bitte von Hand eintragen.', 'warn'); return; }
-    $('pAlt').value = fmt(alt, 0).replace(/\./g, '');
-    const acc = pos.coords.altitudeAccuracy;
-    setStatus('pressure', 'GPS-Höhe übernommen' + (acc ? ` (± ${fmt(acc, 0)} m)` : ''), 'ok');
-    pressureCalc('alt');
-  }, err => {
-    setStatus('pressure', err.code === 1 ? 'Zugriff auf den Standort wurde abgelehnt.' : 'Standort nicht verfügbar.', 'err');
-  }, {enableHighAccuracy: true, timeout: 20000, maximumAge: 60000});
 });
 
 /* ---------- Sound level ---------- */
@@ -808,11 +768,13 @@ function soundLabel(db){
 }
 const sound = {
   noData: 'Keine Daten vom Mikrofon.',
+  waiting(){ return this.ctx && this.ctx.state !== 'running'; },
   async start(){
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Mikrofon-Zugriff wird von diesem Browser nicht unterstützt.');
     // Create the audio context during the tap (iOS)
     const AC = window.AudioContext || window.webkitAudioContext;
     const ctx = new AC();
+    this.ctx = ctx;
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}, video: false});
@@ -821,7 +783,12 @@ const sound = {
       throw new Error(e.name === 'NotAllowedError' ? 'Zugriff auf das Mikrofon wurde abgelehnt.' : e.name === 'NotFoundError' ? 'Kein Mikrofon gefunden.' : 'Mikrofon nicht verfügbar: ' + e.message);
     }
     offs.push(() => { stream.getTracks().forEach(t => t.stop()); ctx.close().catch(() => {}); });
-    if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+    if (ctx.state !== 'running') {
+      // Started without a tap: audio may only run after one (autoplay rules)
+      ctx.resume().catch(() => {});
+      on(document, 'pointerdown', () => ctx.resume().catch(() => {}));
+      setStatus('sound', 'Zum Messen einmal auf den Bildschirm tippen.', 'warn');
+    }
     const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(), mute = ctx.createGain();
     an.fftSize = 2048; mute.gain.value = 0;
     src.connect(an); an.connect(mute).connect(ctx.destination); // keeps the graph running everywhere
@@ -869,10 +836,9 @@ $('sCal').addEventListener('input', () => {
 });
 
 /* ---------- Tabs ---------- */
-const P = {compass, level, accel, vibro, mag, pressure: {}, sound};
-function selectTab(name, focus){
+const P = {compass, level, accel, vibro, mag, sound};
+function selectTab(name, focus, gesture){
   if (!TABS.includes(name)) name = 'compass';
-  if (running && running !== name) stopRunning();
   TABS.forEach(t => {
     const b = $('tab-' + t), sel = t === name;
     b.setAttribute('aria-selected', String(sel));
@@ -881,21 +847,22 @@ function selectTab(name, focus){
   });
   if (focus) $('tab-' + name).focus();
   S.tab = name; store();
+  startPanel(name, !!gesture);
 }
-$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) selectTab(b.dataset.tab); });
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b && (b.dataset.tab !== S.tab || !running)) selectTab(b.dataset.tab, false, true); });
 $('tabs').addEventListener('keydown', e => {
   const i = TABS.indexOf(S.tab);
   const k = {ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1}[e.key];
-  if (k) { e.preventDefault(); selectTab(TABS[(i + k + TABS.length) % TABS.length], true); }
-  else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); selectTab(TABS[e.key === 'Home' ? 0 : TABS.length - 1], true); }
+  if (k) { e.preventDefault(); selectTab(TABS[(i + k + TABS.length) % TABS.length], true, true); }
+  else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); selectTab(TABS[e.key === 'Home' ? 0 : TABS.length - 1], true, true); }
 });
 document.querySelectorAll('[data-start]').forEach(b => b.addEventListener('click', () => {
   const n = b.dataset.start;
-  if (running === n) stopRunning(); else startPanel(n);
+  if (running === n && !b.dataset.permit) stopRunning(true); else startPanel(n, true);
 }));
-window.addEventListener('pagehide', stopRunning);
+window.addEventListener('pagehide', () => stopRunning());
 showGrav();
-selectTab(S.tab);
+selectTab(S.tab, false, false);
 })();
 </script>
 </body>
