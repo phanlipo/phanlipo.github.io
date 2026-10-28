@@ -20,6 +20,7 @@ Jeder Ordner enthält die Original-Lizenz (`LICENSE`) und die Herkunft (`SOURCE.
 | [tesseract-core](tesseract-core/SOURCE.md) | `tesseract.js-core` | 7.0.0 | [Apache-2.0](tesseract-core/LICENSE) | Tesseract-Erkennung als WebAssembly für tesseract.js – nur die LSTM-Varianten; der Browser lädt eine davon |
 | [tesseract-deu](tesseract-deu/SOURCE.md) | `@tesseract.js-data/deu` | 1.0.0 | [MIT](tesseract-deu/LICENSE) | Sprachdaten Deutsch (tessdata_best, ganzzahlig) für die Texterkennung |
 | [tesseract-eng](tesseract-eng/SOURCE.md) | `@tesseract.js-data/eng` | 1.0.0 | [MIT](tesseract-eng/LICENSE) | Sprachdaten Englisch (tessdata_best, ganzzahlig) für die Texterkennung |
+| [qrcode-generator](qrcode-generator/SOURCE.md) | `qrcode-generator` | 2.0.4 | [MIT](qrcode-generator/LICENSE) | QR-Codes erzeugen im QR-Code-Generator |
 
 ## Aktualisieren
 
