@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Würfel &amp; Münze</title>
+<style>
+:root{
+  --bg:#f4f6f9;--surface:#ffffff;--surface-2:#eef2f7;--text:#1b2430;--muted:#5d6b7c;
+  --border:#d6dde6;--accent:#0b5cad;--accent-text:#ffffff;--ok:#1d7a3a;--warn:#a35a00;--err:#b3261e;
+  --ok-bg:#e3f4e8;--warn-bg:#fdf1de;--shadow:0 1px 3px rgba(0,0,0,.08);
+  --die:#ffffff;--die-text:#1b2430;--pip:#1b2430;--held:#fdf1de;--held-border:#a35a00;
+  --heads:#c9a227;--tails:#8a96a6;
+  --radius:10px;--mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#11161d;--surface:#1a212b;--surface-2:#232c38;--text:#e6ebf1;--muted:#9aa8b8;
+    --border:#2f3a48;--accent:#5aa2ef;--accent-text:#0b1520;--ok:#6fd38c;--warn:#f0b35a;--err:#ff8a80;
+    --ok-bg:#163222;--warn-bg:#3a2a12;--shadow:0 1px 3px rgba(0,0,0,.4);
+    --die:#e9edf2;--die-text:#11161d;--pip:#11161d;--held:#3a2a12;--held-border:#f0b35a;
+    --heads:#d9b443;--tails:#7d8a9b;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+header{background:var(--surface);border-block-end:1px solid var(--border);padding-block:12px;padding-inline:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:20px;margin:0}
+header .spacer{flex:1}
+header a{color:var(--accent);text-decoration:none;font-size:14px}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;min-width:0}
+.card h2{font-size:16px;margin-block:0 12px;margin-inline:0;display:flex;align-items:center;gap:8px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-block-end:14px}
+.tab{border:1px solid var(--border);background:var(--surface-2);color:var(--text);min-height:44px;padding-inline:12px;border-radius:999px;cursor:pointer;font:inherit;font-weight:600}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+[hidden]{display:none!important}
+button{font:inherit}
+.btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);min-height:44px;padding-inline:14px;border-radius:8px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+.btn.big{min-height:60px;font-size:20px;width:100%}
+.btn.danger{color:var(--err)}
+.btn.small{min-height:34px;padding-inline:10px;font-size:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>.grow{flex:1 1 auto}
+.muted{color:var(--muted);font-size:14px}
+
+/* ---------- Board ---------- */
+.board{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center;min-height:140px;padding-block:14px}
+.die{--s:76px;width:var(--s);height:var(--s);border-radius:16px;background:var(--die);color:var(--die-text);border:2px solid var(--border);box-shadow:0 3px 0 rgba(0,0,0,.18);display:grid;place-items:center;position:relative;cursor:pointer;padding:0;user-select:none;-webkit-tap-highlight-color:transparent;transition:transform .12s}
+.die:active{transform:scale(.95)}
+.die .num{font-size:calc(var(--s)*.42);font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.die .num.long{font-size:calc(var(--s)*.3)}
+.die .type{position:absolute;inset-block-end:3px;inset-inline:0;text-align:center;font-size:11px;color:#6b7686;font-weight:600}
+.die.empty .num{color:#9aa5b3}
+.die.held{background:var(--held);border-color:var(--held-border);color:var(--text)}
+.die.held .pip{background:var(--text)}
+.die.held::after{content:"gehalten";position:absolute;inset-block-start:-9px;inset-inline:0;margin-inline:auto;width:max-content;font-size:10px;font-weight:700;padding-inline:5px;border-radius:999px;background:var(--held-border);color:var(--surface)}
+.die.max{border-color:var(--ok)}
+.die.min{border-color:var(--err)}
+.pips{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);width:72%;height:72%}
+.pip{width:62%;height:62%;border-radius:50%;background:var(--pip);place-self:center}
+.coin{--s:84px;width:var(--s);height:var(--s);border-radius:50%;border:3px solid rgba(0,0,0,.15);display:grid;place-items:center;cursor:pointer;padding:6px;font-weight:700;font-size:15px;color:#1b2430;background:var(--surface-2);box-shadow:inset 0 0 0 5px rgba(255,255,255,.25),0 3px 0 rgba(0,0,0,.18);user-select:none;-webkit-tap-highlight-color:transparent;text-align:center;line-height:1.1;word-break:break-word}
+.coin.h{background:var(--heads)}
+.coin.t{background:var(--tails)}
+.coin.empty{color:var(--muted)}
+.rolling{animation:shake .45s ease-in-out}
+.coin.rolling{animation:flip .5s ease-in-out}
+@keyframes shake{0%{transform:rotate(0)}20%{transform:rotate(-14deg) translateY(-6px)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg) translateY(-3px)}80%{transform:rotate(5deg)}100%{transform:rotate(0)}}
+@keyframes flip{0%{transform:rotateY(0) translateY(0)}50%{transform:rotateY(540deg) translateY(-18px)}100%{transform:rotateY(1080deg) translateY(0)}}
+@media (prefers-reduced-motion:reduce){.rolling,.coin.rolling{animation:none}}
+.summary{text-align:center;margin-block:4px 14px;min-height:30px}
+.summary .total{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+.summary .detail{color:var(--muted);font-size:14px}
+.hint{text-align:center;color:var(--muted);font-size:13px;margin-block-start:10px}
+
+/* ---------- Settings ---------- */
+.set{display:grid;gap:14px}
+.field>.lbl{display:block;font-size:13px;color:var(--muted);margin-block-end:6px;font-weight:600}
+.stepper{display:flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;width:max-content}
+.stepper button{width:48px;min-height:44px;border:0;background:var(--surface-2);color:var(--text);font-size:22px;cursor:pointer}
+.stepper input{width:70px;min-height:44px;border:0;border-inline:1px solid var(--border);text-align:center;font:inherit;font-size:18px;font-weight:600;background:var(--surface);color:var(--text);-moz-appearance:textfield;appearance:textfield}
+.stepper input::-webkit-inner-spin-button,.stepper input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--border);background:var(--surface-2);color:var(--text);min-height:40px;min-width:52px;padding-inline:10px;border-radius:999px;cursor:pointer;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{min-height:44px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;padding-inline:8px}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+.check{display:flex;gap:10px;align-items:center;min-height:36px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+input[type=text],input[type=number],select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding-inline:10px;min-height:44px;font:inherit;font-size:16px}
+input[type=text]{width:100%}
+.perdie{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.perdie label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
+.perdie input{width:100%}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+details{border-block-start:1px solid var(--border);padding-block-start:10px}
+details summary{cursor:pointer;font-weight:600;min-height:32px;display:flex;align-items:center}
+.presets{display:flex;flex-direction:column;gap:6px;margin-block-start:8px}
+.preset{display:flex;gap:6px;align-items:center}
+.preset .btn:first-child{flex:1;text-align:start;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- History ---------- */
+.hist{list-style:none;margin:0;padding:0;max-height:340px;overflow:auto}
+.hist li{display:flex;gap:10px;padding-block:7px;border-block-end:1px solid var(--border);font-size:14px}
+.hist time{color:var(--muted);font-family:var(--mono);font-size:12px;flex:none;padding-block-start:2px}
+.hist span{word-break:break-word}
+.stats{display:flex;gap:6px;flex-wrap:wrap;margin-block-end:8px}
+.badge{display:inline-block;font-size:12px;padding-block:1px;padding-inline:8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
+.toast{position:fixed;inset-block-end:20px;inset-inline-start:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding-block:8px;padding-inline:16px;border-radius:999px;opacity:0;transition:opacity .2s;pointer-events:none;font-size:14px;z-index:10;max-width:calc(100% - 32px);text-align:center}
+.toast.show{opacity:1}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+@media (max-width:420px){
+  .die{--s:64px}
+  .coin{--s:74px;font-size:14px}
+  .board{gap:10px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Würfel &amp; Münze</h1>
+  <span class="spacer"></span>
+  <a href="../">Alle Tools</a>
+</header>
+
+<main>
+  <section class="card" aria-label="Spielfeld">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="dice" aria-selected="true">🎲 Würfel</button>
+      <button class="tab" role="tab" data-tab="coin" aria-selected="false">🪙 Münze</button>
+    </div>
+    <div class="board" id="board" aria-live="polite"></div>
+    <div class="summary" id="summary"></div>
+    <div class="row">
+      <button class="btn primary big grow" id="btnRoll">Würfeln</button>
+    </div>
+    <div class="row" style="margin-block-start:8px">
+      <button class="btn grow" id="btnReset">Zurücksetzen</button>
+      <button class="btn grow" id="btnRelease" hidden>Alle freigeben</button>
+    </div>
+    <div class="hint" id="hint"></div>
+  </section>
+
+  <div style="display:grid;gap:12px;min-width:0">
+    <section class="card" aria-labelledby="h-set">
+      <h2 id="h-set">Einstellungen</h2>
+
+      <!-- Dice settings -->
+      <div class="set" id="setDice">
+        <div class="field">
+          <span class="lbl">Anzahl Würfel</span>
+          <div class="stepper" data-stepper="dice.count" data-min="1" data-max="30">
+            <button type="button" data-d="-1" aria-label="Weniger">−</button><input type="number" inputmode="numeric" aria-label="Anzahl Würfel"><button type="button" data-d="1" aria-label="Mehr">+</button>
+          </div>
+        </div>
+        <div class="field">
+          <span class="lbl">Seiten pro Würfel</span>
+          <div class="chips" id="sideChips"></div>
+          <label class="check" style="margin-block-start:6px">
+            <span class="muted">Eigene Anzahl:</span>
+            <input type="number" id="sidesCustom" min="2" max="1000" inputmode="numeric" style="width:100px">
+          </label>
+          <label class="check"><input type="checkbox" id="optMixed"> Jeder Würfel mit eigener Seitenzahl</label>
+          <div class="perdie" id="perDie" hidden></div>
+        </div>
+        <div class="field">
+          <span class="lbl">Würfelmodus</span>
+          <div class="seg" id="segDiceMode">
+            <button type="button" data-v="all">Alle gleichzeitig</button>
+            <button type="button" data-v="single">Einzeln</button>
+          </div>
+          <div class="muted" id="modeHelp" style="margin-block-start:6px"></div>
+        </div>
+        <div class="field">
+          <span class="lbl">Optionen</span>
+          <label class="check"><input type="checkbox" id="optHold"> Würfel halten (antippen, z. B. für Kniffel)</label>
+          <label class="check"><input type="checkbox" id="optSum"> Summe anzeigen</label>
+          <label class="check"><input type="checkbox" id="optSort"> Ergebnis sortiert anzeigen</label>
+          <label class="check"><input type="checkbox" id="optPips"> Augen statt Zahlen (bei W6)</label>
+          <label class="check"><input type="checkbox" id="optHighlight"> Höchst-/Tiefstwert markieren</label>
+        </div>
+        <div class="field">
+          <span class="lbl">Bonus/Malus auf die Summe</span>
+          <div class="stepper" data-stepper="dice.mod" data-min="-999" data-max="999">
+            <button type="button" data-d="-1" aria-label="Weniger">−</button><input type="number" inputmode="numeric" aria-label="Bonus oder Malus"><button type="button" data-d="1" aria-label="Mehr">+</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Coin settings -->
+      <div class="set" id="setCoin" hidden>
+        <div class="field">
+          <span class="lbl">Anzahl Münzen</span>
+          <div class="stepper" data-stepper="coin.count" data-min="1" data-max="30">
+            <button type="button" data-d="-1" aria-label="Weniger">−</button><input type="number" inputmode="numeric" aria-label="Anzahl Münzen"><button type="button" data-d="1" aria-label="Mehr">+</button>
+          </div>
+        </div>
+        <div class="field">
+          <span class="lbl">Beschriftung</span>
+          <div class="two">
+            <label><span class="muted">Seite 1</span><input type="text" id="coinHeads" maxlength="16"></label>
+            <label><span class="muted">Seite 2</span><input type="text" id="coinTails" maxlength="16"></label>
+          </div>
+        </div>
+        <div class="field">
+          <span class="lbl">Wurfmodus</span>
+          <div class="seg" id="segCoinMode">
+            <button type="button" data-v="all">Alle gleichzeitig</button>
+            <button type="button" data-v="single">Einzeln</button>
+          </div>
+        </div>
+      </div>
+
+      <details style="margin-block-start:14px">
+        <summary>Effekte</summary>
+        <label class="check"><input type="checkbox" id="optAnim"> Animation</label>
+        <label class="check"><input type="checkbox" id="optSound"> Ton</label>
+        <label class="check"><input type="checkbox" id="optVibrate"> Vibration (Handy)</label>
+        <label class="check"><input type="checkbox" id="optShake"> Schütteln zum Würfeln (Handy)</label>
+      </details>
+
+      <details style="margin-block-start:10px" id="presetBox">
+        <summary>Vorlagen</summary>
+        <div class="muted" style="margin-block:4px 8px">Aktuelle Einstellungen unter einem Namen speichern und später mit einem Tipp laden.</div>
+        <div class="row">
+          <input type="text" id="presetName" class="grow" style="width:auto;flex:1 1 140px" placeholder="Name, z. B. Kniffel" maxlength="40">
+          <button class="btn" id="btnPresetSave">Speichern</button>
+        </div>
+        <div class="presets" id="presets"></div>
+        <div class="row" style="margin-block-start:10px">
+          <button class="btn small danger" id="btnFactory">Alle Einstellungen zurücksetzen</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="card" aria-labelledby="h-hist">
+      <h2 id="h-hist">Verlauf <span class="badge" id="histCount">0</span></h2>
+      <div class="stats" id="stats"></div>
+      <ul class="hist" id="hist"></ul>
+      <div class="row" style="margin-block-start:10px">
+        <button class="btn small" id="btnCopyHist">Kopieren</button>
+        <button class="btn small danger" id="btnClearHist">Verlauf löschen</button>
+      </div>
+    </section>
+  </div>
+</main>
+<footer>Zufall per <code>crypto.getRandomValues</code> · Einstellungen &amp; Verlauf nur lokal im Browser gespeichert</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const LS_CFG='wuerfelMuenze.config.v1',LS_HIST='wuerfelMuenze.history.v1',LS_PRE='wuerfelMuenze.presets.v1',MAX_HIST=200;
+const SIDE_PRESETS=[2,4,6,8,10,12,20,100];
+const DEFAULTS={
+  tab:'dice',
+  dice:{count:2,sides:6,mixed:false,perSides:[],mode:'all',hold:false,sum:true,sort:false,pips:true,highlight:false,mod:0},
+  coin:{count:1,heads:'Kopf',tails:'Zahl',mode:'all'},
+  fx:{anim:true,sound:true,vibrate:true,shake:false}
+};
+const clone=o=>JSON.parse(JSON.stringify(o));
+function merge(base,over){const out=clone(base);if(over&&typeof over==='object')for(const k in out){if(!(k in over))continue;if(out[k]&&typeof out[k]==='object'&&!Array.isArray(out[k]))out[k]=merge(out[k],over[k]);else if(typeof over[k]===typeof out[k])out[k]=over[k];}return out;}
+function lsGet(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(_){return d;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(_){}}
+
+let cfg=merge(DEFAULTS,lsGet(LS_CFG,null));
+// Runtime state (also persisted, so a reload keeps the last throw)
+let st=lsGet(LS_CFG+'.state',null)||{};
+st={dice:Array.isArray(st.dice)?st.dice:[],held:Array.isArray(st.held)?st.held:[],coin:Array.isArray(st.coin)?st.coin:[]};
+const save=()=>{lsSet(LS_CFG,cfg);lsSet(LS_CFG+'.state',st);};
+
+/* ---------- Random (unbiased, crypto) ---------- */
+function rnd(n){
+  const a=new Uint32Array(1),lim=Math.floor(0x100000000/n)*n;
+  do{crypto.getRandomValues(a);}while(a[0]>=lim);
+  return a[0]%n+1;
+}
+
+/* ---------- Helpers ---------- */
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const int=(v,d)=>{const n=parseInt(v,10);return Number.isFinite(n)?n:d;};
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),1500);}
+function sidesOf(i){const d=cfg.dice;return d.mixed?clamp(int(d.perSides[i],d.sides),2,1000):d.sides;}
+function fx(){
+  if(cfg.fx.vibrate&&navigator.vibrate)try{navigator.vibrate(40);}catch(_){}
+  if(!cfg.fx.sound)return;
+  try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const ac=fx.ac||(fx.ac=new C());
+    for(let i=0;i<3;i++){const o=ac.createOscillator(),g=ac.createGain(),t=ac.currentTime+i*.06;o.type='triangle';o.frequency.value=300+Math.random()*500;g.gain.setValueAtTime(.06,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);o.connect(g);g.connect(ac.destination);o.start(t);o.stop(t+.06);}
+  }catch(_){}
+}
+function fitArrays(){
+  const n=cfg.dice.count;
+  st.dice=st.dice.slice(0,n);st.held=st.held.slice(0,n);
+  while(st.dice.length<n)st.dice.push(null);
+  while(st.held.length<n)st.held.push(false);
+  st.dice=st.dice.map((v,i)=>v!=null&&v<=sidesOf(i)?v:null);
+  while(cfg.dice.perSides.length<n)cfg.dice.perSides.push(cfg.dice.sides);
+  const c=cfg.coin.count;st.coin=st.coin.slice(0,c);while(st.coin.length<c)st.coin.push(null);
+}
+
+function clearDice(){st.dice=st.dice.map(()=>null);st.held=st.held.map(()=>false);}
+
+/* ---------- Rendering ---------- */
+const PIPS={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+function dieFace(el,v,s){
+  el.textContent='';
+  if(v!=null&&s===6&&cfg.dice.pips){const g=document.createElement('span');g.className='pips';for(let i=0;i<9;i++){const p=document.createElement('span');if(PIPS[v].includes(i))p.className='pip';g.append(p);}el.append(g);}
+  else{const n=document.createElement('span');n.className='num'+(String(v==null?'?':v).length>2?' long':'');n.textContent=v==null?'?':v;el.append(n);}
+  if(!(s===6&&cfg.dice.pips&&v!=null)||cfg.dice.mixed){const t=document.createElement('span');t.className='type';t.textContent='W'+s;el.append(t);}
+}
+function order(arr){const idx=arr.map((_,i)=>i);if(cfg.dice.sort&&cfg.tab==='dice')idx.sort((a,b)=>(arr[a]??Infinity)-(arr[b]??Infinity));return idx;}
+function render(){
+  fitArrays();
+  const dice=cfg.tab==='dice',board=$('board');board.textContent='';
+  document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected',String(t.dataset.tab===cfg.tab)));
+  $('setDice').hidden=!dice;$('setCoin').hidden=dice;
+  if(dice){
+    const vals=st.dice,rolled=vals.filter(v=>v!=null);
+    const mx=Math.max(...rolled),mn=Math.min(...rolled);
+    order(vals).forEach(i=>{
+      const s=sidesOf(i),v=vals[i],b=document.createElement('button');
+      b.type='button';b.className='die'+(v==null?' empty':'')+(st.held[i]?' held':'');
+      if(cfg.dice.highlight&&rolled.length>1&&mx!==mn&&v!=null){if(v===mx)b.classList.add('max');else if(v===mn)b.classList.add('min');}
+      b.dataset.i=i;dieFace(b,v,s);
+      b.setAttribute('aria-label','Würfel '+(i+1)+' (W'+s+'): '+(v==null?'noch nicht gewürfelt':v)+(st.held[i]?', gehalten':''));
+      board.append(b);
+    });
+    const sum=rolled.reduce((a,b)=>a+b,0),mod=cfg.dice.mod;
+    let html='';
+    if(rolled.length&&cfg.dice.sum){
+      html='<div class="total">'+(sum+mod)+'</div><div class="detail">'+(rolled.length<vals.length?rolled.length+' von '+vals.length+' gewürfelt · ':'')+(mod?'Würfel '+sum+(mod>0?' + ':' − ')+Math.abs(mod)+' · ':'')+'Ø '+(sum/rolled.length).toFixed(1).replace('.',',')+'</div>';
+    }else if(rolled.length){html='<div class="detail">'+rolled.length+' von '+vals.length+' gewürfelt</div>';}
+    $('summary').innerHTML=html;
+    const single=cfg.dice.mode==='single',next=vals.findIndex(v=>v==null);
+    $('btnRoll').textContent=single?(next<0?'Neue Runde':'Würfel '+(next+1)+' würfeln'):(st.held.some(Boolean)?'Freie Würfel würfeln':'Würfeln');
+    $('btnRelease').hidden=!(cfg.dice.hold&&!single&&st.held.some(Boolean));
+    $('hint').textContent=single?'Tippe einen Würfel an, um nur ihn zu würfeln.':cfg.dice.hold?'Tippe einen Würfel an, um ihn zu halten.':'Leertaste oder Enter würfelt.';
+    $('modeHelp').textContent=single?'Jeder Würfel wird einzeln geworfen – per Antippen oder nacheinander über den großen Button.':'Alle Würfel werden mit einem Tipp gleichzeitig geworfen.';
+  }else{
+    const c=cfg.coin;
+    st.coin.forEach((v,i)=>{
+      const b=document.createElement('button');b.type='button';b.dataset.i=i;
+      b.className='coin '+(v==null?'empty':v===1?'h':'t');
+      b.textContent=v==null?'?':v===1?c.heads:c.tails;
+      b.setAttribute('aria-label','Münze '+(i+1)+': '+(v==null?'noch nicht geworfen':b.textContent));
+      board.append(b);
+    });
+    const h=st.coin.filter(v=>v===1).length,t=st.coin.filter(v=>v===2).length;
+    $('summary').innerHTML=(h+t)?'<div class="total" style="font-size:22px">'+esc(c.heads)+': '+h+' · '+esc(c.tails)+': '+t+'</div>':'';
+    const single=c.mode==='single',next=st.coin.findIndex(v=>v==null);
+    $('btnRoll').textContent=single?(next<0?'Neue Runde':'Münze '+(next+1)+' werfen'):'Werfen';
+    $('btnRelease').hidden=true;
+    $('hint').textContent=single?'Tippe eine Münze an, um nur sie zu werfen.':'Leertaste oder Enter wirft.';
+  }
+  renderSettings();renderHist();
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+function renderSettings(){
+  const d=cfg.dice,c=cfg.coin;
+  document.querySelectorAll('[data-stepper]').forEach(w=>{const [a,b]=w.dataset.stepper.split('.');const inp=w.querySelector('input');if(document.activeElement!==inp)inp.value=cfg[a][b];});
+  const chips=$('sideChips');
+  if(!chips.children.length)SIDE_PRESETS.forEach(s=>{const b=document.createElement('button');b.type='button';b.className='chip';b.dataset.s=s;b.textContent='W'+s;chips.append(b);});
+  chips.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',String(!d.mixed&&+b.dataset.s===d.sides)));
+  if(document.activeElement!==$('sidesCustom'))$('sidesCustom').value=d.sides;
+  $('optMixed').checked=d.mixed;
+  const pd=$('perDie');pd.hidden=!d.mixed;
+  if(d.mixed){
+    if(pd.children.length!==d.count){pd.textContent='';for(let i=0;i<d.count;i++){const l=document.createElement('label');l.innerHTML='Würfel '+(i+1)+'<input type="number" min="2" max="1000" inputmode="numeric" data-i="'+i+'">';pd.append(l);}}
+    pd.querySelectorAll('input').forEach(inp=>{if(document.activeElement!==inp)inp.value=sidesOf(+inp.dataset.i);});
+  }
+  $('segDiceMode').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===d.mode)));
+  $('segCoinMode').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===c.mode)));
+  $('optHold').checked=d.hold;$('optHold').disabled=d.mode==='single';
+  $('optSum').checked=d.sum;$('optSort').checked=d.sort;$('optPips').checked=d.pips;$('optHighlight').checked=d.highlight;
+  if(document.activeElement!==$('coinHeads'))$('coinHeads').value=c.heads;
+  if(document.activeElement!==$('coinTails'))$('coinTails').value=c.tails;
+  $('optAnim').checked=cfg.fx.anim;$('optSound').checked=cfg.fx.sound;$('optVibrate').checked=cfg.fx.vibrate;$('optShake').checked=cfg.fx.shake;
+  renderPresets();
+}
+
+/* ---------- History ---------- */
+let hist=lsGet(LS_HIST,[]);if(!Array.isArray(hist))hist=[];
+function addHist(text){hist.unshift({t:Date.now(),text});hist=hist.slice(0,MAX_HIST);lsSet(LS_HIST,hist);}
+function fmtTime(t){return new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+function renderHist(){
+  $('histCount').textContent=hist.length;
+  const ul=$('hist');ul.textContent='';
+  hist.slice(0,100).forEach(h=>{const li=document.createElement('li');const tm=document.createElement('time');tm.textContent=fmtTime(h.t);const sp=document.createElement('span');sp.textContent=h.text;li.append(tm,sp);ul.append(li);});
+  if(!hist.length){const li=document.createElement('li');li.className='muted';li.textContent='Noch keine Würfe.';ul.append(li);}
+  // Simple stats for the current dice set-up
+  const s=$('stats');s.textContent='';
+  if(cfg.tab==='dice'){
+    const all=st.dice.filter(v=>v!=null);
+    if(all.length>1){const cnt={};all.forEach(v=>cnt[v]=(cnt[v]||0)+1);const pairs=Object.entries(cnt).filter(([,n])=>n>1).sort((a,b)=>b[1]-a[1]);pairs.forEach(([v,n])=>{const b=document.createElement('span');b.className='badge';b.textContent=n+'× '+v;s.append(b);});}
+  }
+}
+function diceLabel(){const d=cfg.dice;if(!d.mixed)return d.count+'W'+d.sides;const g={};for(let i=0;i<d.count;i++){const s=sidesOf(i);g[s]=(g[s]||0)+1;}return Object.entries(g).map(([s,n])=>n+'W'+s).join('+');}
+function logDice(idx){
+  const d=cfg.dice,vals=st.dice;
+  if(d.mode==='single'){const i=idx[0];addHist('Würfel '+(i+1)+' (W'+sidesOf(i)+'): '+vals[i]);return;}
+  const r=vals.filter(v=>v!=null),sum=r.reduce((a,b)=>a+b,0);
+  const shown=d.sort?r.slice().sort((a,b)=>a-b):r;
+  addHist(diceLabel()+(d.mod?(d.mod>0?'+':'')+d.mod:'')+': '+shown.join(', ')+(r.length>1||d.mod?' = '+(sum+d.mod):'')+(st.held.some(Boolean)?' ('+st.held.filter(Boolean).length+' gehalten)':''));
+}
+
+/* ---------- Rolling ---------- */
+let busy=false;
+function animate(targets,done){
+  if(!cfg.fx.anim||matchMedia('(prefers-reduced-motion: reduce)').matches){done();return;}
+  busy=true;
+  const els=targets.map(i=>document.querySelector('#board [data-i="'+i+'"]')).filter(Boolean);
+  els.forEach(e=>{e.classList.remove('rolling');void e.offsetWidth;e.classList.add('rolling');});
+  const dice=cfg.tab==='dice';let n=0;
+  const iv=setInterval(()=>{els.forEach(e=>{const i=+e.dataset.i;if(dice){const n2=e.querySelector('.num');if(n2)n2.textContent=rnd(sidesOf(i));else dieFace(e,rnd(sidesOf(i)),sidesOf(i));}else{e.textContent=rnd(2)===1?cfg.coin.heads:cfg.coin.tails;}});if(++n>=6){clearInterval(iv);busy=false;done();}},70);
+}
+function roll(target){
+  if(busy)return;
+  if(cfg.tab==='dice'){
+    const d=cfg.dice;let idx;
+    if(d.mode==='single'){
+      if(target==null){target=st.dice.findIndex(v=>v==null);if(target<0){st.dice=st.dice.map(()=>null);save();render();return;}}
+      idx=[target];
+    }else{
+      if(target!=null)return;
+      idx=st.dice.map((_,i)=>i).filter(i=>!(d.hold&&st.held[i]));
+      if(!idx.length){toast('Alle Würfel sind gehalten');return;}
+    }
+    fx();
+    animate(idx,()=>{idx.forEach(i=>st.dice[i]=rnd(sidesOf(i)));logDice(idx);save();render();});
+  }else{
+    const c=cfg.coin;let idx;
+    if(c.mode==='single'){
+      if(target==null){target=st.coin.findIndex(v=>v==null);if(target<0){st.coin=st.coin.map(()=>null);save();render();return;}}
+      idx=[target];
+    }else{if(target!=null)return;idx=st.coin.map((_,i)=>i);}
+    fx();
+    animate(idx,()=>{
+      idx.forEach(i=>st.coin[i]=rnd(2));
+      const name=v=>v===1?c.heads:c.tails;
+      if(c.mode==='single')addHist('Münze '+(idx[0]+1)+': '+name(st.coin[idx[0]]));
+      else{const h=st.coin.filter(v=>v===1).length;addHist(c.count+'× Münze: '+(c.count>1?c.heads+' '+h+' · '+c.tails+' '+(c.count-h):name(st.coin[0])));}
+      save();render();
+    });
+  }
+}
+
+/* ---------- Events ---------- */
+$('btnRoll').addEventListener('click',()=>roll());
+$('board').addEventListener('click',e=>{
+  const el=e.target.closest('[data-i]');if(!el||busy)return;const i=+el.dataset.i;
+  if(cfg.tab==='dice'){
+    if(cfg.dice.mode==='single')roll(i);
+    else if(cfg.dice.hold){if(st.dice[i]==null){toast('Erst würfeln, dann halten');return;}st.held[i]=!st.held[i];save();render();}
+  }else if(cfg.coin.mode==='single')roll(i);
+});
+$('btnReset').addEventListener('click',()=>{if(cfg.tab==='dice'){st.dice=st.dice.map(()=>null);st.held=st.held.map(()=>false);}else st.coin=st.coin.map(()=>null);save();render();});
+$('btnRelease').addEventListener('click',()=>{st.held=st.held.map(()=>false);save();render();});
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{cfg.tab=t.dataset.tab;save();render();}));
+document.addEventListener('keydown',e=>{
+  if((e.key===' '||e.key==='Enter')&&!e.repeat){const tg=e.target;if(tg.closest&&tg.closest('input,select,textarea,button,summary'))return;e.preventDefault();roll();}
+});
+
+// Steppers
+document.querySelectorAll('[data-stepper]').forEach(w=>{
+  const [a,b]=w.dataset.stepper.split('.'),min=+w.dataset.min,max=+w.dataset.max,inp=w.querySelector('input');
+  const set=v=>{cfg[a][b]=clamp(int(v,cfg[a][b]),min,max);if(b==='count'&&a==='dice'&&!cfg.dice.mixed)cfg.dice.perSides=[];save();render();};
+  w.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>set(cfg[a][b]+ +btn.dataset.d)));
+  inp.addEventListener('change',()=>set(inp.value));
+});
+$('sideChips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;cfg.dice.sides=+b.dataset.s;cfg.dice.mixed=false;cfg.dice.perSides=[];clearDice();save();render();});
+$('sidesCustom').addEventListener('change',e=>{cfg.dice.sides=clamp(int(e.target.value,6),2,1000);cfg.dice.mixed=false;cfg.dice.perSides=[];clearDice();save();render();});
+$('optMixed').addEventListener('change',e=>{cfg.dice.mixed=e.target.checked;cfg.dice.perSides=Array.from({length:cfg.dice.count},()=>cfg.dice.sides);save();render();});
+$('perDie').addEventListener('change',e=>{const inp=e.target.closest('input[data-i]');if(!inp)return;const i=+inp.dataset.i;cfg.dice.perSides[i]=clamp(int(inp.value,cfg.dice.sides),2,1000);st.dice[i]=null;st.held[i]=false;save();render();});
+const bindSeg=(id,obj)=>$(id).addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;obj().mode=b.dataset.v;if(cfg.tab==='dice')st.held=st.held.map(()=>false);save();render();});
+bindSeg('segDiceMode',()=>cfg.dice);bindSeg('segCoinMode',()=>cfg.coin);
+const bindChk=(id,get,key)=>$(id).addEventListener('change',e=>{get()[key]=e.target.checked;if(key==='hold'&&!e.target.checked)st.held=st.held.map(()=>false);save();render();});
+bindChk('optHold',()=>cfg.dice,'hold');bindChk('optSum',()=>cfg.dice,'sum');bindChk('optSort',()=>cfg.dice,'sort');bindChk('optPips',()=>cfg.dice,'pips');bindChk('optHighlight',()=>cfg.dice,'highlight');
+bindChk('optAnim',()=>cfg.fx,'anim');bindChk('optSound',()=>cfg.fx,'sound');bindChk('optVibrate',()=>cfg.fx,'vibrate');
+['coinHeads','coinTails'].forEach(id=>$(id).addEventListener('input',e=>{const k=id==='coinHeads'?'heads':'tails';cfg.coin[k]=e.target.value.trim()||DEFAULTS.coin[k];save();render();}));
+
+// Shake to roll
+let lastShake=0,shakeOn=false;
+function onMotion(e){const a=e.accelerationIncludingGravity||e.acceleration;if(!a)return;const g=Math.sqrt((a.x||0)**2+(a.y||0)**2+(a.z||0)**2);const now=Date.now();if(g>24&&now-lastShake>1200){lastShake=now;roll();}}
+function setShake(on){
+  if(on&&!shakeOn){window.addEventListener('devicemotion',onMotion);shakeOn=true;}
+  if(!on&&shakeOn){window.removeEventListener('devicemotion',onMotion);shakeOn=false;}
+}
+$('optShake').addEventListener('change',async e=>{
+  let on=e.target.checked;
+  if(on&&typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
+    try{on=(await DeviceMotionEvent.requestPermission())==='granted';}catch(_){on=false;}
+    if(!on)toast('Bewegungssensor nicht freigegeben');
+  }else if(on&&typeof DeviceMotionEvent==='undefined'){toast('Gerät hat keinen Bewegungssensor');on=false;}
+  cfg.fx.shake=on;setShake(on);save();render();
+});
+// iOS needs a fresh permission per page load; other browsers can listen right away
+if(cfg.fx.shake&&!(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'))setShake(true);
+else if(cfg.fx.shake){cfg.fx.shake=false;}
+
+/* ---------- Presets ---------- */
+let presets=lsGet(LS_PRE,null);
+if(!Array.isArray(presets)){presets=[
+  {name:'Kniffel (5×W6, halten)',cfg:{dice:{count:5,sides:6,mixed:false,mode:'all',hold:true,sum:true,sort:true}}},
+  {name:'Mensch ärgere dich nicht (1×W6)',cfg:{dice:{count:1,sides:6,mixed:false,mode:'all',hold:false}}},
+  {name:'Siedler (2×W6)',cfg:{dice:{count:2,sides:6,mixed:false,mode:'all',hold:false,sum:true}}},
+  {name:'Rollenspiel (1×W20)',cfg:{dice:{count:1,sides:20,mixed:false,mode:'all',hold:false}}},
+  {name:'Münzwurf',cfg:{tab:'coin',coin:{count:1,mode:'all'}}}
+];}
+function snapshot(){const c=clone(cfg);delete c.fx;return c;}
+function renderPresets(){
+  const box=$('presets');box.textContent='';
+  presets.forEach((p,i)=>{
+    const row=document.createElement('div');row.className='preset';
+    const load=document.createElement('button');load.className='btn';load.textContent=p.name;load.title='Vorlage laden';
+    load.addEventListener('click',()=>{const keep=cfg.fx;cfg=merge(DEFAULTS,merge(snapshot(),p.cfg));cfg.fx=keep;if(p.cfg.tab==null&&p.cfg.dice)cfg.tab='dice';if(!cfg.dice.mixed)cfg.dice.perSides=[];st.dice=[];st.held=[];st.coin=[];save();render();toast('Vorlage „'+p.name+'“ geladen');});
+    const del=document.createElement('button');del.className='btn small danger';del.textContent='✕';del.title='Vorlage löschen';del.setAttribute('aria-label','Vorlage '+p.name+' löschen');
+    del.addEventListener('click',()=>{if(!confirm('Vorlage „'+p.name+'“ löschen?'))return;presets.splice(i,1);lsSet(LS_PRE,presets);renderPresets();});
+    row.append(load,del);box.append(row);
+  });
+  if(!presets.length){const m=document.createElement('div');m.className='muted';m.textContent='Keine Vorlagen gespeichert.';box.append(m);}
+}
+$('btnPresetSave').addEventListener('click',()=>{
+  const name=$('presetName').value.trim()||(cfg.tab==='dice'?diceLabel():cfg.coin.count+'× Münze');
+  const i=presets.findIndex(p=>p.name===name);const entry={name,cfg:snapshot()};
+  if(i>=0)presets[i]=entry;else presets.push(entry);
+  lsSet(LS_PRE,presets);$('presetName').value='';renderPresets();toast('Vorlage „'+name+'“ gespeichert');
+});
+$('btnFactory').addEventListener('click',()=>{if(!confirm('Alle Einstellungen auf Standard zurücksetzen? Vorlagen und Verlauf bleiben erhalten.'))return;cfg=clone(DEFAULTS);setShake(false);st={dice:[],held:[],coin:[]};save();render();});
+
+/* ---------- History buttons ---------- */
+$('btnClearHist').addEventListener('click',()=>{if(!hist.length||!confirm('Verlauf löschen?'))return;hist=[];lsSet(LS_HIST,hist);renderHist();});
+$('btnCopyHist').addEventListener('click',async()=>{
+  const txt=hist.map(h=>new Date(h.t).toLocaleString('de-DE')+'\t'+h.text).join('\n');
+  if(!txt){toast('Verlauf ist leer');return;}
+  try{await navigator.clipboard.writeText(txt);toast('Verlauf kopiert');}catch(_){toast('Kopieren nicht möglich');}
+});
+
+render();
+})();
+</script>
+</body>
+</html>
