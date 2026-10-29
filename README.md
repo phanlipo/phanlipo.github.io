@@ -60,7 +60,7 @@ Die Seite ist dann unter `https://phanlipo.github.io/<ordner>/` erreichbar.
 
 - **Vor jedem Commit:** einmalig `git config core.hooksPath .githooks` ausführen – dann läuft `build.mjs` automatisch.
 - **Bei jedem Push:** die Action `.github/workflows/build.yml` führt `build.mjs` aus und committet Änderungen.
-- **Bei jedem Push auf main:** die Action `.github/workflows/pages.yml` veröffentlicht die Seiten auf GitHub Pages.
+- **Bei jedem Push auf main:** die Action `.github/workflows/pages.yml` veröffentlicht die Seiten auf GitHub Pages; danach testet `.github/workflows/live-test.yml` die Live-Seite (auch auf Knopfdruck; lokal: `npm run test:live`).
 - **Bei jedem PR und Push auf main:** die Action `.github/workflows/test.yml` führt alle Tests aus (lokal: `npm install`, `npx playwright install chromium`, `npm test`).
 - **Wöchentlich:** Dependabot öffnet Update-PRs für GitHub Actions und die Test-Werkzeuge.
 - **Monatlich:** die Action `.github/workflows/vendor-check.yml` prüft, ob es neuere Versionen der Bibliotheken gibt, und öffnet dann ein Issue.

@@ -1,5 +1,6 @@
 // Helpers shared by the build scripts.
 import { readdirSync, existsSync } from 'node:fs';
+import { posix } from 'node:path';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -128,4 +129,16 @@ export function isPublished(rel) {
   if (top === 'assets') return true;
   return !['scripts', 'template', 'node_modules', 'tests', 'test-results', 'playwright-report'].includes(top)
     && existsSync(join(ROOT, top, 'index.html'));
+}
+
+// Every published file (repo-relative, sorted) – what scripts/site.mjs copies and tests/live compares
+export function publishedFiles(dir = '') {
+  const out = [];
+  for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+    if (e.name.startsWith('.') || e.name === 'node_modules' || (!dir && e.name.startsWith('_'))) continue;
+    const rel = dir ? posix.join(dir, e.name) : e.name;
+    if (e.isDirectory()) out.push(...publishedFiles(rel));
+    else if (isPublished(rel)) out.push(rel);
+  }
+  return out.sort();
 }

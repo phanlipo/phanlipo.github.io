@@ -1,0 +1,40 @@
+# Tests the published site (tests/live, npm run test:live): every file identical to the repository,
+# repository files not published, every app loads, is current and works offline.
+# Runs after every deployment (called by pages.yml) and on demand (Actions → Run workflow).
+name: Live-Seite testen
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      # After a deployment: the deployed commit; otherwise main
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Same generated state as published (pages.yml builds the same way)
+      - name: Build generated files
+        run: node scripts/build.mjs
+      - name: Test live site
+        run: npm run test:live
+        env:
+          # Wait up to 10 minutes for a fresh deployment to be visible
+          LIVE_WAIT: 600
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-live
+          path: playwright-report-live/
+          retention-days: 14

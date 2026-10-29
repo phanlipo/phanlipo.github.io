@@ -18,14 +18,15 @@ scripts/site.mjs      sammelt die veröffentlichten Dateien (Regel: isPublished 
 scripts/vendor.mjs    lädt Bibliotheken aus scripts/vendor.json nach assets/vendor/, prüft auf Updates
 scripts/partials/footer.html  Text der gemeinsamen Fußzeile
 scripts/partials/data.html    Bereich „Daten sichern & übertragen“ (in jede App eingesetzt)
-tests/                Playwright-Tests (siehe tests/README.md)
+tests/                Playwright-Tests (siehe tests/README.md); tests/live/ prüft die veröffentlichte Seite (npm run test:live)
 <tool-name>/          index.html + generiert: manifest.webmanifest, sw.js, icon-*
 .githooks/pre-commit  ruft build.mjs vor jedem Commit auf
 .claude/hooks/session-start.sh  richtet Cloud-Sessions von Claude Code ein (Git-Hook, npm install, Browser für Playwright)
 .github/workflows/build.yml         dasselbe bei jedem Push auf GitHub
 .github/workflows/vendor-check.yml  prüft monatlich auf Bibliotheks-Updates und öffnet ein Issue
 .github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus
-.github/workflows/pages.yml         veröffentlicht main auf GitHub Pages (nur die Dateien aus scripts/site.mjs)
+.github/workflows/pages.yml         veröffentlicht main auf GitHub Pages (nur die Dateien aus scripts/site.mjs), danach Live-Test
+.github/workflows/live-test.yml     testet die veröffentlichte Seite (tests/live) – nach jeder Veröffentlichung und auf Knopfdruck
 .github/dependabot.yml              wöchentliche Update-PRs für GitHub Actions und Test-Werkzeuge
 NOTICE.md             Hinweise zu Fremdsoftware (Lizenzen der Bibliotheken) – generiert von build.mjs, verlinkt in der Fußzeile
 robots.txt            erlaubt Crawlen – damit Suchmaschinen das noindex jeder Seite sehen
@@ -143,6 +144,8 @@ Jede App bietet am Seitenende den einklappbaren Bereich **„Daten sichern & üb
 - Hell und dunkel ansehen.
 - `node scripts/build.mjs --check` meldet „Up to date“.
 - Offline: Seite einmal laden, Netz trennen, neu laden – muss vollständig funktionieren.
+
+Nach dem Merge prüft die Action „Live-Seite testen“ die veröffentlichte Seite (jede Datei gleich dem Repo, Apps laden und laufen offline). Ist sie rot, die Ursache beheben wie bei roten Tests. Von Hand: auf dem aktuellen `main` `node scripts/build.mjs && npm run test:live`.
 
 ## Git
 

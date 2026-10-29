@@ -36,6 +36,25 @@ Passt der installierte Browser nicht zur Playwright-Version (z. B. in vorkonfigu
 | `build.spec.mjs` | `build.mjs --check` ist sauber; `NOTICE.md` nennt jede Bibliothek mit Version und funktionierendem Lizenz-Link; die Prüfung der Vendor-Pfade erkennt zusammengesetzte Pfade und Worker, die direkt aus `assets/vendor/` starten (beides bricht offline) |
 | `helpers.mjs` | gemeinsame Helfer; der `page`-Fixture lässt jeden Test bei JS-Fehlern, Konsolenfehlern, **Anfragen an fremde Server** oder **localStorage-Schlüsseln außerhalb von `tool:storage`** scheitern (Ausnahme: die gemeinsame Sprachwahl `tools.lang.v1`) |
 
+## Live-Seite
+
+`tests/live/` prüft die **veröffentlichte** Seite (https://phanlipo.github.io/) statt des lokalen Servers – eigene Konfiguration `playwright.live.config.mjs`, nicht Teil von `npm test`:
+
+```sh
+node scripts/build.mjs && npm run test:live      # auf dem aktuellen main
+LIVE_WAIT=600 npm run test:live                  # bis zu 10 Minuten warten, bis die Veröffentlichung sichtbar ist
+LIVE_URL=https://example.org npm run test:live   # andere Adresse
+```
+
+| Prüft | |
+|---|---|
+| Stand | **jede veröffentlichte Datei** (`publishedFiles` in `scripts/lib.mjs`) ist erreichbar und byte-gleich mit dem Repository |
+| Nicht veröffentlicht | `README.md`, `AGENTS.md`, `NOTICE.md`, `scripts/`, `tests/`, `template/`, `package.json`, Dotfiles … liefern 404 |
+| Auslieferung | HTTPS, passende Content-Types |
+| Jede App | lädt ohne Fehler und fremde Anfragen auf dem Handy, noindex, CSP, Fußzeile zeigt die aktuelle Version, installierbar, offline nutzbar (echter Service Worker über HTTPS) |
+
+Verglichen wird mit dem lokalen Stand – auf einem Branch mit Änderungen schlagen die Vergleiche deshalb erwartungsgemäß fehl. Die Action `.github/workflows/live-test.yml` läuft nach jeder Veröffentlichung (aus `pages.yml`) und auf Knopfdruck (Actions → „Live-Seite testen“ → Run workflow). Schlägt sie fehl, schickt GitHub eine E-Mail.
+
 ## Manuelle Tests
 
 `tests/manual/` enthält Prüfungen, die bewusst **nicht** in `npm test` laufen, weil sie große Downloads oder private Dateien brauchen:
