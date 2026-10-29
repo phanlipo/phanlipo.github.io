@@ -206,6 +206,8 @@ test('blocked: reminders still show in the app', async ({ page }) => {
 
 test('permission "default": button asks, then the test notification works', async ({ page }) => {
   await open(page, 'default');
+  await expect(page.locator('#install')).toBeHidden(); // not Android
+  await expect(page.locator('#btnPerm')).toHaveClass(/primary/);
   await expect(page.locator('#btnPerm')).toBeVisible();
   await expect(page.locator('#btnTest')).toBeHidden();
   await page.click('#btnPerm');
@@ -285,6 +287,20 @@ test.describe('Android', () => {
     await page.click('#btnTest');
     await expect.poll(async () => (await notes(page)).map(n => n.title)).toEqual(['Test-Benachrichtigung']);
   });
+  test('tapped while the service worker is still installing: waits for it, then asks', async ({ page }) => {
+    // Service worker becomes ready only 1 s after the tap (first visit, or site data just cleared)
+    await page.addInitScript(() => {
+      const desc = Object.getOwnPropertyDescriptor(ServiceWorkerContainer.prototype, 'ready');
+      Object.defineProperty(ServiceWorkerContainer.prototype, 'ready', { configurable: true,
+        get() { const ready = desc.get.call(this); return new Promise(r => setTimeout(() => r(ready), 1000)); } });
+    });
+    await open(page, 'default');
+    await page.click('#btnPerm');
+    await expect(page.locator('#permText')).not.toContainText('erlaubt');
+    await page.clock.runFor(1000);
+    await expect(page.locator('#permText')).toContainText('erlaubt');
+    expect(await page.evaluate(() => [window.__push, window.__unsub])).toEqual([1, 1]);
+  });
   test('push subscription declined at once: hint about the block', async ({ page }) => {
     await open(page, 'dismiss');
     await page.evaluate(() => navigator.serviceWorker.ready);
@@ -304,6 +320,39 @@ test.describe('Android', () => {
     expect(text).toContain('push: subscribe …');
     expect(text).toContain('push: unsubscribed');
     expect(text).toMatch(/ask: done .*"permission":"granted"/);
+  });
+  test('in a Chrome tab: suggests installing, with Chrome’s install prompt when offered', async ({ page }) => {
+    await open(page, 'default');
+    await expect(page.locator('#install')).toBeVisible();
+    await expect(page.locator('#btnInstall')).toBeHidden();
+    await expect(page.locator('#installInfo')).toContainText('⋮ → „App installieren“');
+    await expect(page.locator('#btnPerm')).not.toHaveClass(/primary/);
+    // Chrome offers installing: the button appears and opens its prompt
+    await page.evaluate(() => {
+      const e = new Event('beforeinstallprompt', { cancelable: true });
+      e.prompt = () => { window.__installPrompt = (window.__installPrompt || 0) + 1; return Promise.resolve(); };
+      e.userChoice = Promise.resolve({ outcome: 'accepted', platform: 'web' });
+      window.dispatchEvent(e);
+    });
+    await expect(page.locator('#btnInstall')).toBeVisible();
+    await expect(page.locator('#installInfo')).toHaveText('');
+    await page.click('#btnInstall');
+    await expect(page.locator('#installInfo')).toContainText('vom Startbildschirm öffnen');
+    expect(await page.evaluate(() => window.__installPrompt)).toBe(1);
+    await expect(page.locator('#btnInstall')).toBeHidden();
+  });
+  test('installed app: no install box, allowing is the main button', async ({ page }) => {
+    await page.addInitScript(() => {
+      const mm = window.matchMedia.bind(window);
+      window.matchMedia = q => q === '(display-mode: standalone)' ? { matches: true, media: q, addEventListener() {}, removeEventListener() {} } : mm(q);
+    });
+    await open(page, 'default');
+    await expect(page.locator('#install')).toBeHidden();
+    await expect(page.locator('#btnPerm')).toHaveClass(/primary/);
+  });
+  test('already allowed in the tab: no install box', async ({ page }) => {
+    await open(page, 'granted');
+    await expect(page.locator('#install')).toBeHidden();
   });
   test('hints name the Chrome and app settings', async ({ page }) => {
     await open(page, 'dismiss');
