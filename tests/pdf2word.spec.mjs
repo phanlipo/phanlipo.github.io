@@ -335,3 +335,22 @@ test('text recognition works offline once it was used', async ({ page, context }
   expect(paras[0].text).toBe(SCAN_TITLE);
   await context.setOffline(false);
 });
+
+test.describe('English', () => {
+  test.use({ locale: 'en-US' });
+
+  test('texts, progress and result in English; OCR language follows the app', async ({ page }) => {
+    await page.goto(URL_);
+    await expect(page.locator('#btnRun')).toHaveText('Convert to Word');
+    await expect(page.locator('#optLang')).toHaveValue('eng');
+    const pdf = makePdf([{ texts: [{ x: 72, y: 760, size: 11, text: 'First page.' }] }, { texts: [{ x: 72, y: 760, size: 11, text: 'Second page.' }] }]);
+    await page.setInputFiles('#file', { name: 'test.pdf', mimeType: 'application/pdf', buffer: pdf });
+    await page.click('#btnRun');
+    await expect(page.locator('#result')).toBeVisible({ timeout: 120000 });
+    await expect(page.locator('#status')).toHaveText('Done.');
+    await expect(page.locator('#resultMeta')).toContainText('2 pages · 2 paragraphs');
+    await expect(page.locator('#preview .pb')).toHaveText('Page break');
+    await page.getByRole('button', { name: 'Deutsch' }).click();
+    await expect(page.locator('#resultMeta')).toContainText('2 Seiten · 2 Absätze');
+  });
+});
