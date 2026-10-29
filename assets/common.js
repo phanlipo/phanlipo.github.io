@@ -389,13 +389,16 @@ window.Tools = (function () {
   /* ---------- WebMCP: app functions as tools for AI agents in the browser ----------
      Draft standard (W3C Web Machine Learning CG): document.modelContext.registerTool(tool, { signal }).
      Older drafts and polyfills use navigator.modelContext – both are supported. Without it: nothing happens.
-     Tools.mcp.register({ name, title, description, inputSchema, execute, readOnly, label })
+     Tools.mcp.register({ name, title, description, inputSchema, execute, readOnly, untrusted, label })
        name         short English snake_case name; the app id is put in front (dice_coin_roll_dice)
        description  English – what the tool does, what it returns
        inputSchema  JSON Schema (type object); the input is checked against it before execute runs
        execute      (input) => result (JSON-serialisable, English keys); throw an Error for problems
        readOnly     true if the tool only reads data (annotation readOnlyHint)
-       label        key for Tools.t(): shown to the user as a toast when an agent runs the tool
+       untrusted    true if the result contains content from outside (PDF text, transcripts, scanned or
+                    shared content) – annotation untrustedContentHint, agents treat it as data, not instructions
+       label        shown to the user as a toast when an agent runs the tool: a key for Tools.t() on translated
+                    pages, otherwise the German text itself
      Never register destructive tools (delete data, load backups) or tools that use camera/microphone.
      Tools are only for this origin (no exposedTo). */
   const mcpTools = [];
@@ -445,7 +448,7 @@ window.Tools = (function () {
       title: def.title || def.name,
       description: def.description,
       inputSchema: schema,
-      annotations: { readOnlyHint: !!def.readOnly },
+      annotations: Object.assign({ readOnlyHint: !!def.readOnly }, def.untrusted ? { untrustedContentHint: true } : {}),
       execute: async input => {
         const args = input == null ? {} : input;
         checkSchema(args, schema);

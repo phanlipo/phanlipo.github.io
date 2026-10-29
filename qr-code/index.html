@@ -8,7 +8,7 @@
 <title>QR-Code-Generator</title>
 <meta name="description" content="QR-Codes für Links, Text und WLAN erzeugen – Links direkt aus anderen Apps hierher teilen (Android), mit Verlauf.">
 <meta name="tool:tags" content="Alltag, Barcode">
-<meta name="tool:features" content="Teilen an App, Kopieren, Verlauf">
+<meta name="tool:features" content="Teilen an App, Kopieren, Verlauf, KI-Agent">
 <meta name="tool:order" content="15">
 <meta name="tool:icon" content="qrcode">
 <meta name="tool:color" content="#15803d">
@@ -17,10 +17,11 @@
 <meta name="tool:description-en" content="Create QR codes for links, text and Wi-Fi – share links straight from other apps (Android), with history.">
 <meta name="tool:short-name-en" content="QR Code">
 <meta name="tool:storage" content="qr-code.">
+<meta name="tool:webmcp" content="create_qr_code, create_wifi_qr_code, get_history">
 <meta name="tool:share-text" content="true">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vz9KBrZUl34YH/t2xg7FOjQlhxmpvBTFAu0Xr92WI4w='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-XglW07zMi/N/paYD6JOLWaY5lfLNsjbYIJ3T0jy4vUg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -194,6 +195,12 @@ select{min-height:44px;padding-inline:10px;width:100%}
     <li>Gespeichert wird beim Teilen, Speichern oder Kopieren des Bildes, mit <em>Im Verlauf merken</em> und bei Links, die aus anderen Apps geteilt wurden. Ein Tipp auf einen Eintrag öffnet ihn wieder.</li>
     <li>Der Verlauf liegt nur in diesem Browser (höchstens 100 Einträge). <strong>WLAN-Passwörter</strong> stehen darin im Klartext – auf geteilten Geräten den Eintrag danach löschen.</li>
   </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <ul>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser QR-Codes für Text, Links und WLAN erstellen und den Verlauf lesen. Der Code erscheint hier; Teilen, Speichern und Kopieren bleiben bei dir. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
+    <li>Aus dem Verlauf bekommt ein Agent bei WLAN-Codes nur den Netzwerknamen, nie das Passwort.</li>
+    <li>Löschen und Sicherungen sind für Agenten nicht zugänglich. Es werden keine Daten an Server gesendet.</li>
+  </ul>
 </details>
 
 <footer>
@@ -202,7 +209,7 @@ select{min-height:44px;padding-inline:10px;width:100%}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version c9010e961307</p>
+  <p class="footer-version">Version da302fdc116e</p>
   <!-- footer:end -->
 </footer>
 
@@ -499,6 +506,66 @@ fillForm();
 render();
 renderHist();
 if (shared && shown) { addHist(shown.entry, sharedTitle); toast('Geteilter Link übernommen'); }
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   The code appears in the app, where the user can share, save or copy it. WLAN passwords are never returned. */
+function agentResult() {
+  if (!shown) throw new Error('The content is too long for a QR code – shorten it or use a lower error correction.');
+  return {
+    modules: shown.qr.getModuleCount(),
+    bytes: new TextEncoder().encode(shown.entry.data).length,
+    error_correction: s.ec,
+    page_link: pageLink(shown.entry),
+    image_png_data_url: $('qr').toDataURL('image/png'),
+  };
+}
+const ecSchema = { type: 'string', enum: ['L', 'M', 'Q', 'H'], description: 'Error correction: L (7 %), M (15 %), Q (25 %) or H (30 % of the code may be damaged). Default: the current setting of the app.' };
+Tools.mcp.register({
+  name: 'create_qr_code', title: 'Create a QR code', label: 'QR-Code erstellt',
+  description: 'Creates a QR code for a link or any text (UTF-8, emoji allowed) and shows it in the app, where the user can share, save or copy the image. Returns the image as PNG data URL, its size in modules and a link that opens the generator with this content.',
+  inputSchema: { type: 'object', properties: {
+    text: { type: 'string', minLength: 1, maxLength: 4000, description: 'Content of the code, e.g. a URL.' },
+    error_correction: ecSchema,
+  }, required: ['text'], additionalProperties: false },
+  execute: ({ text, error_correction }) => {
+    s.type = 'text'; s.text = text;
+    if (error_correction) s.ec = error_correction;
+    fillForm(); changed();
+    return agentResult();
+  },
+});
+Tools.mcp.register({
+  name: 'create_wifi_qr_code', title: 'Create a Wi-Fi QR code', label: 'WLAN-QR-Code erstellt',
+  description: 'Creates a Wi-Fi QR code: phones that scan it can join the network without typing the password. Shown in the app. Returns the image as PNG data URL and a link to the generator – note that this link contains the password.',
+  inputSchema: { type: 'object', properties: {
+    ssid: { type: 'string', minLength: 1, maxLength: 32, description: 'Network name (SSID).' },
+    password: { type: 'string', maxLength: 63, description: 'Network password (not needed for open networks).' },
+    encryption: { type: 'string', enum: ['WPA', 'WEP', 'nopass'], description: 'WPA (also WPA2/WPA3, default), WEP or nopass for an open network.' },
+    hidden: { type: 'boolean', description: 'true if the network name is hidden. Default false.' },
+    error_correction: ecSchema,
+  }, required: ['ssid'], additionalProperties: false },
+  execute: ({ ssid, password = '', encryption = 'WPA', hidden = false, error_correction }) => {
+    if (encryption !== 'nopass' && !password) throw new Error('A password is needed unless encryption is nopass.');
+    s.type = 'wifi';
+    s.wifi = { ssid, pass: encryption === 'nopass' ? '' : password, enc: encryption, hidden };
+    if (error_correction) s.ec = error_correction;
+    fillForm(); changed();
+    return agentResult();
+  },
+});
+Tools.mcp.register({
+  name: 'get_history', title: 'Read QR code history', label: 'QR-Verlauf gelesen', readOnly: true, untrusted: true,
+  description: 'Reads the saved QR codes of the app (shared, saved or kept by the user), newest first. Links and texts are returned with their content; Wi-Fi codes only with the network name, never the password.',
+  inputSchema: { type: 'object', properties: {
+    limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Maximum number of entries. Default 20.' },
+  }, additionalProperties: false },
+  execute: ({ limit = 20 }) => ({
+    total: hist.length,
+    entries: hist.slice(0, limit).map(h => h.type === 'wifi'
+      ? { time: new Date(h.ts).toISOString(), kind: 'wifi', network: h.label }
+      : { time: new Date(h.ts).toISOString(), kind: isLink(h.data) ? 'link' : 'text', title: h.label || null, content: h.data }),
+  }),
+});
 })();
 </script>
 </body>

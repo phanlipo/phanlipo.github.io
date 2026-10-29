@@ -8,7 +8,7 @@
 <title>Schere, Stein, Papier</title>
 <meta name="description" content="Spiel gegen den Computer – klassisch, mit Brunnen oder mit Echse und Spock.">
 <meta name="tool:tags" content="Freizeit, Spiele, Kinder">
-<meta name="tool:features" content="Verlauf">
+<meta name="tool:features" content="Verlauf, KI-Agent">
 <meta name="tool:order" content="50">
 <meta name="tool:icon" content="scissors">
 <meta name="tool:color" content="#c2410c">
@@ -17,9 +17,10 @@
 <meta name="tool:description-en" content="Play against the computer – classic, with well or with lizard and Spock.">
 <meta name="tool:short-name-en" content="RPS">
 <meta name="tool:storage" content="rock-paper-scissors.">
+<meta name="tool:webmcp" content="play_round, get_score">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-iFsSFSXGDngWSv3U0GESUqTqJeBJ0w6oKvKrZ3L0AXY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-6/zvh3f6YX1FJg+shYSRIImW3vnUJfhr1PZz9MYreYQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -161,6 +162,11 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
     <li>Die Variante mit Brunnen ist nicht ausgeglichen: Brunnen und Papier gewinnen je zweimal, Schere und Stein nur einmal.</li>
     <li>„Stein, Papier, Schere, Echse, Spock“ stammt aus der Serie „The Big Bang Theory“.</li>
   </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <ul>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser Runden spielen und den Punktestand lesen. Auch dann hat der Computer schon vorher gewählt. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
+    <li>Löschen und Sicherungen sind für Agenten nicht zugänglich. Es werden keine Daten an Server gesendet.</li>
+  </ul>
 </details>
 
 <footer>
@@ -168,7 +174,7 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 6bb8ed4df43c</p>
+  <p class="footer-version">Version 97e4804d47cb</p>
   <!-- footer:end -->
 </footer>
 
@@ -338,6 +344,48 @@ function diagram(key){
 Tools.$('ruleDiagrams').innerHTML=Object.keys(VARIANTS).map(diagram).join('');
 
 renderAll();
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   English names; the computer has chosen before the move arrives, just like in the app. */
+const EN={schere:'scissors',stein:'rock',papier:'paper',brunnen:'well',echse:'lizard',spock:'spock'};
+const FROM_EN=Object.fromEntries(Object.entries(EN).map(([d,e])=>[e,d]));
+const VAR_EN={3:'classic',4:'with_well',5:'lizard_spock'};
+const VAR_FROM_EN={classic:'3',with_well:'4',lizard_spock:'5'};
+const variantSchema={type:'string',enum:['classic','with_well','lizard_spock'],description:'classic (rock, paper, scissors), with_well (plus well) or lizard_spock (plus lizard and Spock). Default: the variant currently chosen in the app.'};
+function scoreOf(){const s=vs();return {you:s.win,draws:s.draw,computer:s.lose};}
+function useVariant(v){
+  if(!v||VAR_FROM_EN[v]===state.variant)return;
+  state.variant=VAR_FROM_EN[v];save();cpuNext=computerMove();clearArena();renderAll();
+}
+Tools.mcp.register({
+  name:'play_round',title:'Play a round',label:'Schere, Stein, Papier: Runde gespielt',
+  description:'Plays one round against the computer in the app. The computer has already chosen before the move is made (it only knows earlier rounds). Shows the round in the app and returns both moves, who won and why, and the score of this variant.',
+  inputSchema:{type:'object',properties:{
+    move:{type:'string',enum:['rock','paper','scissors','well','lizard','spock'],description:'Your move. well only in with_well, lizard and spock only in lizard_spock.'},
+    variant:variantSchema
+  },required:['move'],additionalProperties:false},
+  execute:({move,variant})=>{
+    const v=variant?VAR_FROM_EN[variant]:state.variant,p=FROM_EN[move];
+    if(!VARIANTS[v].moves.includes(p))throw new Error(`${move} is not part of the variant ${VAR_EN[v]} – allowed: ${VARIANTS[v].moves.map(m=>EN[m]).join(', ')}.`);
+    useVariant(variant);
+    play(p);
+    const [,c,o]=vs().rounds[vs().rounds.length-1];
+    const r=o==='win'?rule(state.variant,p,c):o==='lose'?rule(state.variant,c,p):null;
+    return {variant:VAR_EN[state.variant],your_move:move,computer_move:EN[c],
+      outcome:o==='win'?'you_win':o==='lose'?'computer_wins':'draw',
+      explanation:r?`${EN[r[0]]} beats ${EN[r[1]]}`:`both chose ${move}`,score:scoreOf()};
+  }
+});
+Tools.mcp.register({
+  name:'get_score',title:'Read the score',label:'Schere, Stein, Papier: Punkte gelesen',readOnly:true,
+  description:'Reads the score of a variant (each variant has its own), how the computer plays (random or smart) and the last rounds, newest first.',
+  inputSchema:{type:'object',properties:{variant:variantSchema},additionalProperties:false},
+  execute:({variant})=>{
+    const k=variant?VAR_FROM_EN[variant]:state.variant,s=state.v[k]&&Array.isArray(state.v[k].rounds)?state.v[k]:{rounds:[],win:0,lose:0,draw:0};
+    return {variant:VAR_EN[k],computer_mode:state.mode,score:{you:s.win,draws:s.draw,computer:s.lose},
+      last_rounds:s.rounds.slice(-10).reverse().map(([p,c,o])=>({you:EN[p],computer:EN[c],outcome:o==='win'?'you_win':o==='lose'?'computer_wins':'draw'}))};
+  }
+});
 })();
 </script>
 </body>

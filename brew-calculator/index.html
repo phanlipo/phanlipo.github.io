@@ -7,6 +7,7 @@
 <title>Brau-Rechner</title>
 <meta name="description" content="Rechner fürs Hobbybrauen: Volumen im zylindrischen Topf, Temperaturkorrektur der Stammwürze (Spindel) und Zuckermenge für die Nachgärung – jeweils mit Formeln und Erklärung.">
 <meta name="tool:tags" content="Freizeit, Bierbrauen, Rechner">
+<meta name="tool:features" content="KI-Agent">
 <meta name="tool:order" content="30">
 <meta name="tool:icon" content="beer">
 <meta name="tool:color" content="#a35a00">
@@ -15,9 +16,10 @@
 <meta name="tool:description-en" content="Homebrewing calculators: volume in a cylindrical pot, temperature correction of the original gravity (hydrometer) and priming sugar for bottle conditioning – each with formulas and explanation.">
 <meta name="tool:short-name-en" content="Brewing">
 <meta name="tool:storage" content="brauRechner.">
+<meta name="tool:webmcp" content="pot_volume, fill_height_for_volume, correct_gravity, priming_sugar">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-kpj4mTtKzcjO1W9BLlbdXejPzxjBJFcUwHo3I1c+/44='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Fc1Aarv4u19kNufhLyeOb56Wc7BOX3SvTU/8rnhOx4g='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -198,6 +200,11 @@ details.math summary{cursor:pointer;font-weight:600;min-height:36px;display:flex
     <li>Ergebnis: Zucker gesamt, je Liter und je Flasche, dazu der zu erwartende Flaschendruck.</li>
     <li>Herleitung: gelöstes CO₂ nach dem Henry-Gesetz (proportional zum Druck), die Temperaturabhängigkeit nach van ’t Hoff; die CO₂-Ausbeute je Gramm Zucker aus der Gärungsgleichung.</li>
   </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <ul>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser alle drei Rechner direkt benutzen (Volumen, Füllhöhe, Stammwürze-Korrektur, Zucker für die Nachgärung). Die Werte erscheinen hier in den Eingabefeldern, das Ergebnis wird wie gewohnt berechnet. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
+    <li>Löschen und Sicherungen sind für Agenten nicht zugänglich. Es werden keine Daten an Server gesendet.</li>
+  </ul>
   <p class="note">Richtwerte für den Hausgebrauch – Angaben ohne Gewähr. Bei hoher Karbonisierung druckfeste Flaschen verwenden.</p>
 </details>
 <footer>
@@ -205,7 +212,7 @@ details.math summary{cursor:pointer;font-weight:600;min-height:36px;display:flex
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version d8cb503b62e4</p>
+  <p class="footer-version">Version 718321a39abd</p>
   <!-- footer:end -->
 </footer>
 
@@ -435,6 +442,99 @@ document.querySelectorAll('[data-key]').forEach(el=>{
 $('zChips').innerHTML=STYLES.map(([n,c])=>'<button type="button" class="chip" data-c="'+c+'">'+n+' · '+fmt(c,1)+' g/L</button>').join('');
 $('zChips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;S['z.C']=fmt(+b.dataset.c,1);update();});
 update();
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   English; the values are filled into the calculator so the user sees the same calculation. */
+const put=(k,v)=>{S[k]=v==null?'':String(v).replace('.',Tools.lang()==='en'?'.':',');};
+const round=(x,d)=>Math.round(x*10**d)/10**d;
+const tempSchema={type:'number',minimum:0,maximum:100,description:'Optional temperature of the liquid in °C. Hot wort takes more space; the result then also states the volume at 20 °C.'};
+Tools.mcp.register({
+  name:'pot_volume',title:'Volume in a cylindrical pot',label:'Brau-Rechner: Volumen berechnet',
+  description:'Calculates the liquid volume in a cylindrical (brewing) pot from the inner diameter and the fill height – or from the inner pot height and the gap between rim and liquid. Assumes straight walls and a flat bottom. The values are filled into the volume calculator of the app.',
+  inputSchema:{type:'object',properties:{
+    diameter_cm:{type:'number',minimum:1,maximum:1000,description:'Inner diameter of the pot in cm.'},
+    fill_height_cm:{type:'number',minimum:0,maximum:1000,description:'Height of the liquid above the bottom in cm.'},
+    pot_height_cm:{type:'number',minimum:1,maximum:1000,description:'Inner height of the pot in cm – instead of fill_height_cm, together with gap_cm.'},
+    gap_cm:{type:'number',minimum:0,maximum:1000,description:'Distance from the rim down to the liquid surface in cm (with pot_height_cm).'},
+    temperature_c:tempSchema
+  },required:['diameter_cm'],additionalProperties:false},
+  execute:i=>{
+    const gap=i.pot_height_cm!=null||i.gap_cm!=null;
+    if(gap&&i.fill_height_cm!=null)throw new Error('Give either fill_height_cm or pot_height_cm with gap_cm, not both.');
+    if(gap&&(i.pot_height_cm==null||i.gap_cm==null))throw new Error('pot_height_cm and gap_cm are needed together.');
+    if(!gap&&i.fill_height_cm==null)throw new Error('Give fill_height_cm, or pot_height_cm together with gap_cm.');
+    const h=gap?i.pot_height_cm-i.gap_cm:i.fill_height_cm;
+    if(h<0)throw new Error('gap_cm is larger than pot_height_cm.');
+    S['v.mode']=gap?'gap':'height';put('v.d',i.diameter_cm);
+    if(gap){put('v.H',i.pot_height_cm);put('v.a',i.gap_cm);}else put('v.h',i.fill_height_cm);
+    put('v.T',i.temperature_c);update();
+    const A=Math.PI*(i.diameter_cm/2)**2,V=A*h/1000,out={volume_l:round(V,3),liters_per_cm:round(A/1000,4),fill_height_cm:round(h,2)};
+    if(i.temperature_c!=null)out.volume_at_20c_l=round(V*rhoW(i.temperature_c)/rhoW(20),3);
+    return out;
+  }
+});
+Tools.mcp.register({
+  name:'fill_height_for_volume',title:'Fill height for a target volume',label:'Brau-Rechner: Füllhöhe berechnet',
+  description:'Calculates up to which height a cylindrical pot must be filled to hold a target volume. With a temperature, the target volume is meant at 20 °C and the height is for the hot liquid. The values are filled into the volume calculator of the app.',
+  inputSchema:{type:'object',properties:{
+    diameter_cm:{type:'number',minimum:1,maximum:1000,description:'Inner diameter of the pot in cm.'},
+    target_volume_l:{type:'number',minimum:0.01,maximum:100000,description:'Wanted volume in litres.'},
+    temperature_c:tempSchema
+  },required:['diameter_cm','target_volume_l'],additionalProperties:false},
+  execute:i=>{
+    S['v.mode']='target';put('v.d',i.diameter_cm);put('v.V',i.target_volume_l);put('v.T',i.temperature_c);update();
+    const A=Math.PI*(i.diameter_cm/2)**2,T=i.temperature_c;
+    const VT=T!=null?i.target_volume_l*rhoW(20)/rhoW(T):i.target_volume_l;
+    const out={fill_height_cm:round(1000*VT/A,2),liters_per_cm:round(A/1000,4)};
+    if(T!=null)out.volume_at_temperature_l=round(VT,3);
+    return out;
+  }
+});
+Tools.mcp.register({
+  name:'correct_gravity',title:'Hydrometer temperature correction',label:'Brau-Rechner: Stammwürze korrigiert',
+  description:'Corrects a hydrometer reading (original gravity in °Plato or specific gravity) taken at a sample temperature that differs from the calibration temperature of the hydrometer. Not for refractometers. The values are filled into the gravity calculator of the app.',
+  inputSchema:{type:'object',properties:{
+    reading:{type:'number',minimum:-5,maximum:45,description:'Value read from the hydrometer: °Plato (e.g. 12.5) or specific gravity (e.g. 1.050).'},
+    unit:{type:'string',enum:['plato','sg'],description:'Unit of the reading: plato or sg (specific gravity). Default plato.'},
+    sample_temperature_c:{type:'number',minimum:0,maximum:100,description:'Temperature of the sample in °C.'},
+    calibration_temperature_c:{type:'number',minimum:0,maximum:40,description:'Calibration temperature of the hydrometer in °C. Default 20.'}
+  },required:['reading','sample_temperature_c'],additionalProperties:false},
+  execute:i=>{
+    const unit=i.unit||'plato',x=i.reading,T=i.sample_temperature_c,Tc=i.calibration_temperature_c==null?20:i.calibration_temperature_c;
+    const SGm=unit==='plato'?sgFromP(x):x,Pm=unit==='plato'?x:pFromSg(x);
+    if(!(SGm>=0.98&&SGm<=1.2)||!(Pm>-5&&Pm<45))throw new Error('Implausible reading – expected about 0–40 °Plato or 1.000–1.170 SG.');
+    S['s.unit']=unit==='plato'?'P':'SG';put('s.x',x);put('s.T',T);put('s.Tc',Tc);update();
+    const SGk=SGm*rhoW(Tc)/rhoW(T),Pk=pFromSg(SGk);
+    const out={measured_plato:round(Pm,2),measured_sg:round(SGm,4),corrected_plato:round(Pk,2),corrected_sg:round(SGk,4),correction_plato:round(Pk-Pm,2)};
+    if(T>60)out.warning='Above about 60 °C the correction gets inaccurate – cool the sample down.';
+    else if(Math.abs(T-Tc)>25)out.warning='Large temperature difference – the result is an approximation.';
+    return out;
+  }
+});
+Tools.mcp.register({
+  name:'priming_sugar',title:'Priming sugar for bottle conditioning',label:'Brau-Rechner: Zucker berechnet',
+  description:'Calculates how much sugar to add to fermented beer before bottling to reach a target CO2 content, taking into account the CO2 already dissolved (depends on the highest temperature since the end of fermentation). Optionally per bottle and the expected bottle pressure. The values are filled into the priming calculator of the app.',
+  inputSchema:{type:'object',properties:{
+    beer_volume_l:{type:'number',minimum:0.1,maximum:100000,description:'Amount of beer in litres.'},
+    max_temperature_c:{type:'number',minimum:-5,maximum:40,description:'Highest temperature of the beer since the end of fermentation in °C.'},
+    target_co2_g_per_l:{type:'number',minimum:1,maximum:15,description:'Target CO2 in g/L, e.g. 4 stout, 5 lager, 7 wheat beer (1 vol ≈ 1.977 g/L).'},
+    sugar:{type:'string',enum:['sucrose','glucose','glucose_monohydrate'],description:'sucrose (table sugar, default), glucose (anhydrous dextrose) or glucose_monohydrate (dextrose monohydrate).'},
+    bottle_size_l:{type:'number',minimum:0.05,maximum:20,description:'Optional bottle size in litres for the amount per bottle.'},
+    storage_temperature_c:{type:'number',minimum:-5,maximum:40,description:'Optional storage temperature of the bottles in °C for the expected pressure.'}
+  },required:['beer_volume_l','max_temperature_c','target_co2_g_per_l'],additionalProperties:false},
+  execute:i=>{
+    const key={sucrose:'sucrose',glucose:'glucose',glucose_monohydrate:'dextrose'}[i.sugar||'sucrose'],sg=SUGARS[key];
+    const V=i.beer_volume_l,T=i.max_temperature_c,C=i.target_co2_g_per_l;
+    put('z.V',V);put('z.T',T);put('z.C',C);S['z.sugar']=key;put('z.bottle',i.bottle_size_l);put('z.Ts',i.storage_temperature_c);update();
+    const rest=co2Sat(T,P0),m=Math.max(0,C-rest)*V/sg.k;
+    const out={sugar_g:round(m,1),sugar_g_per_l:round(m/V,2),residual_co2_g_per_l:round(rest,2),target_co2_volumes:round(C/RHO_CO2,2)};
+    if(i.bottle_size_l!=null)out.sugar_g_per_bottle=round(m/V*i.bottle_size_l,2);
+    if(i.storage_temperature_c!=null){out.pressure_bar_at_storage=round(C/henry(i.storage_temperature_c)-P0,2);out.pressure_bar_at_20c=round(C/henry(20)-P0,2);}
+    if(C<=rest)out.note='The beer already holds enough CO2 – no sugar needed.';
+    else if(C>7.5)out.note='High carbonation: use pressure-resistant bottles only.';
+    return out;
+  }
+});
 })();
 </script>
 </body>

@@ -8,7 +8,7 @@
 <title>Sprache zu Text</title>
 <meta name="description" content="Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht.">
 <meta name="tool:tags" content="Alltag, KI, Sprache">
-<meta name="tool:features" content="Datei öffnen, Teilen an App, Kopieren, Verlauf, Download nötig">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, Kopieren, Verlauf, Download nötig, KI-Agent">
 <meta name="tool:order" content="40">
 <meta name="tool:icon" content="microphone">
 <meta name="tool:color" content="#0f766e">
@@ -17,10 +17,11 @@
 <meta name="tool:description-en" content="Turn voice messages (e.g. WhatsApp Opus files) into text right in the browser – with the Whisper model, no upload: the audio never leaves the device.">
 <meta name="tool:short-name-en" content="Transcript">
 <meta name="tool:storage" content="voice-transcriber.">
+<meta name="tool:webmcp" content="get_transcript, get_transcript_history">
 <meta name="tool:share-target" content="audio/*, audio/ogg, audio/opus, .opus, .ogg, .oga, .m4a, .mp3, .wav, .webm">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-NyM/JbO/s+R/DI/36sgdM7SfOl+qcIs3uU+mEBPEW/g='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-uLgXSpDnfZE4O0EpHEm6OX2yq03JbpBDFcKLj3xdF/I='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -177,6 +178,11 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
     <li>Das Ergebnis lässt sich im Textfeld korrigieren und dann kopieren, speichern oder teilen.</li>
     <li>Während der Umwandlung die Seite geöffnet lassen (das Display bleibt dafür an, wo der Browser das erlaubt).</li>
   </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <ul>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser das aktuelle Transkript und den Verlauf lesen, z. B. um eine Sprachnachricht zusammenzufassen. Das Transkribieren startest weiterhin du. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
+    <li>Löschen und Sicherungen sind für Agenten nicht zugänglich. Es werden keine Daten an Server gesendet.</li>
+  </ul>
   <p class="note">Spracherkennung macht Fehler – besonders bei Namen, Dialekt und Hintergrundgeräuschen. Wichtige Inhalte bitte gegenhören.</p>
 </details>
 
@@ -185,7 +191,7 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 1d52d9e87db8</p>
+  <p class="footer-version">Version ffbbf4a124a8</p>
   <!-- footer:end -->
 </footer>
 
@@ -469,6 +475,30 @@ $('btnDeleteModels').addEventListener('click', async () => {
   if (worker) { worker.terminate(); worker = null; }
   toast('Modelle gelöscht');
   updateModelInfo();
+});
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   Read only: transcripts are untrusted content. Starting a transcription stays with the user (large download). */
+Tools.mcp.register({
+  name: 'get_transcript', title: 'Current transcript', label: 'Transkript gelesen', readOnly: true, untrusted: true,
+  description: 'Returns the transcript currently shown in the app (including corrections the user typed), e.g. of a voice message, to summarise it or answer questions about it.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  execute: () => {
+    const text = $('text').value.trim();
+    if (!text) throw new Error('No transcript yet – the user has to choose an audio file and press "Transkribieren" in the app.');
+    return { text, file_name: audio ? audio.name : null };
+  },
+});
+Tools.mcp.register({
+  name: 'get_transcript_history', title: 'Transcript history', label: 'Transkript-Verlauf gelesen', readOnly: true, untrusted: true,
+  description: 'Returns the saved transcripts of the app, newest first: time, file name, duration and text.',
+  inputSchema: { type: 'object', properties: {
+    limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Maximum number of entries. Default 10.' },
+  }, additionalProperties: false },
+  execute: ({ limit = 10 }) => ({
+    total: hist.length,
+    entries: hist.slice(0, limit).map(h => ({ time: new Date(h.t).toISOString(), file_name: h.file, duration_s: Math.round(h.duration || 0), text: h.text })),
+  }),
 });
 })();
 </script>

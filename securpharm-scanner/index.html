@@ -7,7 +7,7 @@
 <title>Scan-Copy-SecurPharm</title>
 <meta name="description" content="securPharm-DataMatrix von Arzneimittel-/Impfstoffpackungen scannen und einzelne Werte (PZN, Charge, Verfall, Seriennummer …) per Klick kopieren. Mit lokalem Verlauf.">
 <meta name="tool:tags" content="Arbeit, Apotheke, Barcode">
-<meta name="tool:features" content="Kamera, Datei öffnen, Kopieren, Verlauf">
+<meta name="tool:features" content="Kamera, Datei öffnen, Kopieren, Verlauf, KI-Agent">
 <meta name="tool:order" content="10">
 <meta name="tool:icon" content="scan">
 <meta name="tool:color" content="#0b5cad">
@@ -16,9 +16,10 @@
 <meta name="tool:description-en" content="Scan the securPharm DataMatrix code on medicine and vaccine packs and copy single values (PZN, batch, expiry, serial number …) with one click. With local history.">
 <meta name="tool:short-name-en" content="SecurPharm">
 <meta name="tool:storage" content="scanCopySecurPharm.">
+<meta name="tool:webmcp" content="parse_pack_code, get_scan_history">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-nd+iT/rl+a1MsiomPmAbHYRCQNc6CJnqvfEvhQawPmk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-WI/jH6Q1LgBzmq5QX3u6rZmUXgIwVFzA8IfzH3M7vTk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -262,6 +263,12 @@ td .chip.copied{background:var(--ok-bg);border-color:var(--ok)}
     <li>Bei Problemen hilft der Bereich „Technik-Diagnose“ in der App.</li>
     <li>Die Decoder-Bibliotheken liegen lokal bei der Seite – Kamera- und Bild-Scan funktionieren auch offline, wenn die App installiert ist. Der Hand-Scanner braucht sie gar nicht.</li>
   </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <ul>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser den Text eines Packungscodes auswerten und den Verlauf lesen (z. B. „Welche Chargen habe ich heute gescannt?“). Ausgewertete Codes erscheinen hier, werden dabei aber nicht im Verlauf gespeichert. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
+    <li>Kamera, Export und Löschen sind für Agenten nicht zugänglich.</li>
+    <li>Löschen und Sicherungen sind für Agenten nicht zugänglich. Es werden keine Daten an Server gesendet.</li>
+  </ul>
   <p class="note">Die App liest den Code nur aus. Sie verifiziert oder bucht nichts im securPharm-System aus.</p>
 </details>
 <footer>
@@ -269,7 +276,7 @@ td .chip.copied{background:var(--ok-bg);border-color:var(--ok)}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 6cc983a56734</p>
+  <p class="footer-version">Version 7cb4685a367b</p>
   <!-- footer:end -->
 </footer>
 
@@ -727,6 +734,44 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCam();}
 loadSet();renderResult(null);renderHist();listCams();manual.focus();
 window.addEventListener('load',()=>{if(!window.ZXing&&!window.ZXingWASM&&!detector)setStatus('Hinweis: Bild-Decoder konnte nicht geladen werden – Webcam/Bild-Scan nicht verfügbar. Hand-Scanner funktioniert weiterhin.','warn');});
 window.__scp={parseCode};
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   Only reads codes and the history; no camera, no deleting. Field names in English. */
+function agentFields(r){
+  const f=r.fields;
+  return {format:r.format==='GS1'?'GS1':'IFA',pzn:f.pzn||null,gtin:f.gtin||null,ppn:f.ppn||null,batch:f.batch||null,
+    expiry:f.expiryIso||null,expiry_raw:f.expiry||null,serial:f.serial||null,expired:!!r.expired};
+}
+Tools.mcp.register({
+  name:'parse_pack_code',title:'Read a securPharm pack code',label:'SecurPharm: Code ausgewertet',readOnly:true,
+  description:'Splits the text content of a securPharm DataMatrix code from a German medicine or vaccine pack (GS1 or IFA format) into its values: PZN, GTIN/NTIN or PPN, batch, expiry date and serial number, and checks the check digits. Group separators may be written as <GS>. Shows the values in the app; nothing is verified against the securPharm system and nothing is saved.',
+  inputSchema:{type:'object',properties:{
+    code:{type:'string',minLength:1,maxLength:2000,description:'Raw content of the code, e.g. 0104150123456782 21ABC123 <GS>10CH4711<GS>17281231.'}
+  },required:['code'],additionalProperties:false},
+  execute:({code})=>{
+    const r=parseCode(code);
+    if(r.error)throw new Error('Not a readable securPharm code (neither GS1 nor IFA format).');
+    renderResult(r);
+    const f=r.fields,out=agentFields(r);
+    out.check_digits={pzn:f.pzn?pznValid(f.pzn):null,gtin:f.gtin?gtinValid(f.gtin):null,ppn:f.ppn?ppnValid(f.ppn):null};
+    out.warnings=r.warnings.map(w=>/^Keine Seriennummer/.test(w)?'No serial number found':'Read without group separators'+(/nicht eindeutig/.test(w)?' – the split is ambiguous, please check':''));
+    if(r.other.length)out.other=r.other.map(o=>({id:o.id,value:o.v}));
+    return out;
+  }
+});
+Tools.mcp.register({
+  name:'get_scan_history',title:'Read the scan history',label:'SecurPharm: Verlauf gelesen',readOnly:true,untrusted:true,
+  description:'Reads the scan history of the app (newest first): time, source, PZN, GTIN/PPN, batch, expiry, serial number and whether the pack was expired. Can be filtered by a search text.',
+  inputSchema:{type:'object',properties:{
+    limit:{type:'integer',minimum:1,maximum:1000,description:'Maximum number of entries. Default 20.'},
+    search:{type:'string',maxLength:100,description:'Only entries whose values contain this text (case-insensitive).'}
+  },additionalProperties:false},
+  execute:({limit=20,search=''})=>{
+    const q=search.toLowerCase().trim(),h=loadHist();
+    const hits=h.filter(x=>!q||JSON.stringify(x.fields).toLowerCase().includes(q));
+    return {total:h.length,matches:hits.length,entries:hits.slice(0,limit).map(x=>Object.assign({time:x.ts,source:x.source||null},agentFields(x)))};
+  }
+});
 })();
 </script>
 </body>
