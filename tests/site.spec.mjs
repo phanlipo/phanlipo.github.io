@@ -101,6 +101,9 @@ for (const app of apps()) {
       expect(await help.evaluate(d => d.open)).toBe(false);
       await expect(help.locator('summary')).toHaveText('Anleitung & Hinweise');
       await expect(page.locator('footer .footer-common')).toContainText('KI-generiert');
+      // Licences of the bundled libraries (MIT/Apache-2.0 ask for the licence text to be available)
+      await expect(page.locator('footer .footer-common').getByRole('link', { name: 'Open-Source-Lizenzen' }))
+        .toHaveAttribute('href', 'https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md');
     });
 
     test('is an installable PWA and works offline', async ({ page, context }) => {

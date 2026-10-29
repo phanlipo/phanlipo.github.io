@@ -47,3 +47,17 @@ test('flags library workers started straight from assets/vendor', () => {
   for (const p of problems) expect(p).toContain('bypasses the service worker');
   expect(problems[0]).toMatch(/^app\/convert\.mjs:1: worker pdfjs\/pdf\.worker\.min\.mjs/);
 });
+
+test('NOTICE.md lists every bundled library with version and a working licence link', async () => {
+  const { readFileSync, existsSync } = await import('node:fs');
+  const vendor = JSON.parse(readFileSync('scripts/vendor.json', 'utf8'));
+  const notice = readFileSync('NOTICE.md', 'utf8');
+  for (const [name, v] of Object.entries(vendor)) {
+    const row = notice.split('\n').find(l => l.includes(`(\`${v.package}\`)`));
+    expect(row, name).toBeTruthy();
+    expect(row).toContain(`| ${v.version} |`);
+    expect(row).toContain(`[${v.license}](assets/vendor/${name}/LICENSE)`);
+  }
+  // every linked file exists
+  for (const [, href] of notice.matchAll(/\]\((assets\/vendor\/[^)]+)\)/g)) expect(existsSync(href), href).toBe(true);
+});

@@ -10,6 +10,7 @@
 //   5. Per app (every listed tool + template): manifest.webmanifest and sw.js (offline cache).
 //      The cache version is a hash of all cached files, so every change ships automatically;
 //      it is also shown in the app's footer ("Version …").
+//   6. NOTICE.md: third-party notices from scripts/vendor.json and the LICENSE files (whole file)
 //
 // Usage:
 //   node scripts/build.mjs                  update files
@@ -380,6 +381,35 @@ for (const p of apps) {
   put(`${p.folder}/sw.js`, code);
   setBlock(p.file, 'footer', `\n  ${footer}\n  <p class="footer-version">Version ${version}</p>\n  `, false);
 }
+
+// Third-party notices: every bundled library with version, licence and copyright (from its LICENSE)
+function renderNotice() {
+  const rows = [], extra = [];
+  for (const [name, v] of Object.entries(VENDOR)) {
+    const dir = `assets/vendor/${name}`;
+    const lic = existsSync(join(ROOT, dir, 'LICENSE')) ? readFileSync(join(ROOT, dir, 'LICENSE'), 'utf8') : '';
+    const owners = lic.split('\n').map(l => l.trim())
+      .filter(l => /^Copyright\s+(\(c\)|©|\d{4}|[A-Z])/.test(l) && !/[[{]yyyy[\]}]/i.test(l) && l.length < 200);
+    const pkg = v.homepage ? `[${escMd(name)}](${v.homepage})` : escMd(name);
+    rows.push(`| ${pkg} (\`${v.package}\`) | ${v.version} | [${v.license}](${dir}/LICENSE) | ${escMd(owners.join('; ') || 'siehe Lizenztext')} | ${escMd(v.purpose || '')} |`);
+    const more = readdirSync(join(ROOT, dir), { recursive: true }).map(f => String(f).replace(/\\/g, '/'))
+      .filter(f => f !== 'LICENSE' && /(^|\/)(LICEN[CS]E|NOTICE)[^/]*$/i.test(f)).sort();
+    if (more.length) extra.push(`- **${name}:** ${more.map(f => `[${f}](${dir}/${f})`).join(', ')}`);
+  }
+  return `# Hinweise zu Fremdsoftware (Third-Party Notices)
+
+Automatisch erzeugt von \`scripts/build.mjs\` aus \`scripts/vendor.json\` und den Lizenzdateien – nicht von Hand ändern.
+
+Die Web-Tools selbst stehen unter der [MIT-Lizenz](LICENSE). Sie enthalten die folgenden Open-Source-Bibliotheken
+(aus den npm-Paketen übernommen, Herkunft je Ordner in \`SOURCE.md\`). Der vollständige Lizenztext liegt
+neben jeder Bibliothek in \`assets/vendor/<name>/LICENSE\` und wird mit ihr ausgeliefert.
+
+| Bibliothek | Version | Lizenz | Copyright | Verwendet für |
+|---|---|---|---|---|
+${rows.join('\n')}
+${extra.length ? `\n## Weitere Lizenzdateien\n\nTeile einzelner Pakete stehen unter eigenen Lizenzen:\n\n${extra.join('\n')}\n` : ''}`;
+}
+put('NOTICE.md', renderNotice());
 
 const changed = [];
 for (const [file, content] of pending) {
