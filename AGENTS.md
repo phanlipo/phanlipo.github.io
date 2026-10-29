@@ -9,7 +9,7 @@ Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/). Kein Server;
 ```
 index.html            Startseite – die Kartenliste ist generiert
 assets/base.css       Design-Tokens, Dark Mode, Karten, Buttons, Toast, Hilfe-Bereich
-assets/common.js      window.Tools: $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedText; registriert den Service Worker
+assets/common.js      window.Tools: $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedText, i18n, t, lang, setLang, locale, onLang; registriert den Service Worker
 assets/vendor/        Fremdbibliotheken mit LICENSE + SOURCE.md je Ordner (generiert, nicht von Hand ändern)
 template/             Vorlage für neue Seiten (wird nicht gelistet)
 scripts/build.mjs     erzeugt Seitenliste, Fußzeile (inkl. Version), <head>-Block (noindex, CSP, Icons, Manifest), manifest.webmanifest + sw.js je App
@@ -32,17 +32,18 @@ robots.txt            erlaubt Crawlen – damit Suchmaschinen das noindex jeder 
 ## Neue Seite
 
 1. `template/` nach `<tool-name>/` kopieren.
-2. `<title>`, `<meta name="description">`, `tool:tags` (Filter-Kategorien der Startseite; die erste ist der Bereich: `Alltag`, `Arbeit` oder `Freizeit`, danach 1–2 Themen wie `Rechner`, `Spiele`, `KI`), optional `tool:features` (zweite Filterreihe „Funktion“, nur Werte aus `FEATURES` in `scripts/build.mjs`, z. B. `Kamera`, `Verlauf`; was alle Apps können – offline, installierbar, lokal speichern – steht fest auf der Startseite und gehört nicht hinein), `tool:order`, `tool:short-name` (Name unter dem Home-Bildschirm-Icon, max. ca. 12 Zeichen) und `tool:storage` (Präfix der Speicher-Schlüssel, siehe „Daten sichern“) setzen. Aus diesen Angaben entstehen Karte, README-Eintrag und App-Manifest.
+2. `<title>`, `<meta name="description">`, `tool:tags` (Filter-Kategorien der Startseite; die erste ist der Bereich: `Alltag`, `Arbeit` oder `Freizeit`, danach 1–2 Themen wie `Rechner`, `Spiele`, `KI`), optional `tool:features` (zweite Filterreihe „Funktion“, nur Werte aus `FEATURES` in `scripts/build.mjs`, z. B. `Kamera`, `Verlauf`; was alle Apps können – offline, installierbar, lokal speichern – steht fest auf der Startseite und gehört nicht hinein), `tool:order`, `tool:short-name` (Name unter dem Home-Bildschirm-Icon, max. ca. 12 Zeichen), die englischen Fassungen `tool:title-en`, `tool:description-en` (Pflicht – sonst bricht `build.mjs` ab) und `tool:short-name-en` (max. 12 Zeichen) sowie `tool:storage` (Präfix der Speicher-Schlüssel, siehe „Daten sichern“) setzen. Aus diesen Angaben entstehen Karte, README-Eintrag und App-Manifest.
 3. Icon wählen: `tool:icon` = Name eines [Tabler Icons](https://tabler.io/icons) (Outline), `tool:color` = Hintergrund- und Theme-Farbe. Dann `node scripts/build-icons.mjs <tool-name>` ausführen.
 4. `node scripts/build.mjs` ausführen (macht auch der Git-Hook). Generierte Bereiche zwischen `<!-- tools/footer/head/data:start -->` und `…:end -->` sowie `manifest.webmanifest`, `sw.js` **nie von Hand** bearbeiten.
 
-5. Fachliche Tests in `tests/<tool-name>.spec.mjs` anlegen. Die allgemeinen Prüfungen (Fehler, Layout, PWA, offline) greifen automatisch.
+5. Texte zweisprachig anlegen (siehe „Sprachen“); die Vorlage zeigt das Muster.
+6. Fachliche Tests in `tests/<tool-name>.spec.mjs` anlegen. Die allgemeinen Prüfungen (Fehler, Layout, PWA, offline) greifen automatisch.
 
 Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<meta name="tool:hidden" content="true">`.
 
 ## Konventionen
 
-- **Ordnernamen:** Englisch, klein, kebab-case, ohne Umlaute (`brew-calculator`). Die Oberfläche selbst ist **Deutsch**.
+- **Ordnernamen:** Englisch, klein, kebab-case, ohne Umlaute (`brew-calculator`). Die Oberfläche ist **Deutsch**, mit **Englisch** als zweiter Sprache (siehe „Sprachen“).
 - **Umbenennen:** Sobald eine Seite geteilt wurde, im alten Ordner eine kleine Weiterleitungsseite lassen (`<meta http-equiv="refresh">` + `<meta name="tool:hidden" content="true">`), damit Links weiter funktionieren.
 - **Gemeinsame Basis nutzen:** `../assets/base.css` zuerst einbinden, `../assets/common.js` vor dem Seiten-Script. Im Seiten-CSS nur seitenspezifische Regeln; eigene Akzentfarbe über `--accent` / `--accent-text` (hell und dunkel).
 - **Gemeinsames ändern = alle Seiten prüfen.** Eine Änderung in `assets/` wirkt sofort auf jedes Tool.
@@ -51,7 +52,7 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 - **Hilfe:** Anleitung als `<details class="help card">` am Ende der Seite, standardmäßig eingeklappt.
 - **Fußzeile:** `<footer>` mit den Markern `<!-- footer:start -->` / `<!-- footer:end -->`. Infos zur App (läuft im Browser, was gespeichert wird, Bibliotheken) gehören in die Hilfe, nicht in die Fußzeile; eine eigene Zeile `<p>…</p>` vor den Markern nur für Pflichthinweise (z. B. Marken). Den gemeinsamen Text (inkl. Hinweis „KI-generiert“, ohne Namen eines bestimmten KI-Anbieters) nur in `scripts/partials/footer.html` ändern. Die Zeile `footer-home` (Link „Alle Tools“ zur Startseite) setzt `build.mjs` in jede Seite außer der Startseite.
 - **Icons:** nur frei lizenzierte Icons (aktuell Tabler Icons, MIT – Version und Lizenz in `assets/vendor/tabler-icons/`). Jede Seite hat eine eigene Farbe.
-- **Speicher:** nur über `Tools.load` / `Tools.save` (fangen Fehler im privaten Modus ab). Schlüssel für neue Tools: `<tool-name>.<was>.v1`. **Bestehende Schlüssel nie umbenennen** – sonst sind Einstellungen und Verläufe der Nutzer weg (`scanCopySecurPharm.*`, `wuerfelMuenze.*`, `brauRechner.*`).
+- **Speicher:** nur über `Tools.load` / `Tools.save` (fangen Fehler im privaten Modus ab). Der Präfix `tools.` ist für domainweite Einstellungen reserviert (bisher nur `tools.lang.v1`) und darf in keinem `tool:storage` stehen. Schlüssel für neue Tools: `<tool-name>.<was>.v1`. **Bestehende Schlüssel nie umbenennen** – sonst sind Einstellungen und Verläufe der Nutzer weg (`scanCopySecurPharm.*`, `wuerfelMuenze.*`, `brauRechner.*`).
 - **Modelle/Daten von externen Diensten** (z. B. Whisper-Modelle von Hugging Face) nur, wenn es nicht anders geht: erst bei Bedarf laden, nie Nutzerdaten mitschicken, in der Hilfe erklären. Die Tests blockieren solche Anfragen und prüfen die Fehlermeldung; echte Downloads nur in `tests/manual/`.
 - **Externe Bibliotheken:** nie per CDN einbinden, sondern in `scripts/vendor.json` eintragen (npm-Paket, feste Version, Lizenz, Dateien) und `node scripts/vendor.mjs` ausführen. Eingebunden wird aus `../assets/vendor/<name>/`. Lädt eine Bibliothek selbst weitere Dateien nach (z. B. `.wasm`), den Pfad auf `assets/vendor` umbiegen. Nur Lizenzen, die Weitergabe erlauben (MIT, Apache-2.0, BSD …).
 - **Lizenzhinweise:** `NOTICE.md` (Bibliothek, Version, Lizenz, Copyright aus der `LICENSE`, weitere Lizenzdateien eines Pakets) erzeugt `build.mjs` aus `scripts/vendor.json` – nie von Hand ändern. Die gemeinsame Fußzeile verlinkt sie („Open-Source-Lizenzen“).
@@ -72,7 +73,20 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 - **Barrierefreiheit:** `tests/a11y.spec.mjs` prüft jede Seite hell und dunkel mit axe-core (WCAG 2.1 A/AA). Bedienelemente brauchen einen zugänglichen Namen, der den sichtbaren Text enthält; reine Vorlese-Texte mit `.sr-only`.
 - **Datenschutz:** keine Tracker, keine Analytics, keine Daten an Server senden (die Tests schlagen bei jeder Anfrage an eine fremde Domain fehl).
 - **Tests:** Fehler nie durch Abschwächen, Überspringen oder Löschen eines Tests „beheben“. Erwartete Werte unabhängig nachrechnen.
-- **Zahlen:** deutsch formatieren (`Tools.fmt`), Eingaben mit Komma und Punkt akzeptieren (`Tools.parseNum`).
+- **Zahlen:** mit `Tools.fmt` formatieren (deutsch bzw. englisch je nach Sprache), Datum/Uhrzeit mit `toLocaleString(Tools.locale())`, Eingaben mit Komma und Punkt akzeptieren (`Tools.parseNum`).
+
+## Sprachen (Deutsch/Englisch)
+
+Deutsch ist Standard und Ausgangssprache, Englisch die zweite Sprache. Die Umstellung läuft App für App (Issue #33); übersetzt sind bisher Startseite und `dice-coin`.
+
+- **Wahl:** `?lang=de|en` in der Adresse → gespeicherte Wahl → Sprache des Browsers → Deutsch. Der Umschalter *Deutsch | English* steht in der gemeinsamen Fußzeile und erscheint nur auf übersetzten Seiten; nicht übersetzte Seiten bleiben komplett deutsch.
+- **Gemeinsam für alle Apps:** gespeichert unter `tools.lang.v1` – bewusst außerhalb jedes App-Präfixes: nicht in App-Sicherungen, bleibt bei „Alle Daten löschen“ erhalten (die Tests erlauben genau diesen Schlüssel). iPhone: Jede installierte App hat eigenen Speicher, dort gilt die Wahl je App.
+- **Seite übersetzen:** Deutsch bleibt im HTML. Feste Texte bekommen `data-i18n="key"` (Text), `data-i18n-html="key"` (mit Auszeichnung) oder `data-i18n-attr="aria-label:key; placeholder:key2"`. Texte in Elementen mit Kindern (z. B. Checkbox-Labels) in ein eigenes `<span data-i18n>` setzen. Lange Texte (Hilfe) als Blöcke `<div data-lang="de">…</div><div data-lang="en" lang="en" hidden>…</div>`.
+- Im Seiten-Script **zuerst** `Tools.i18n({ de: { … }, en: { … } })`: `en` enthält alle `data-i18n`-Schlüssel, `de` und `en` alle Texte, die das Script erzeugt (`Tools.t('key', { n: 3 })` mit Platzhaltern `{n}`). Beim Umschalten ohne Neuladen feuert `Tools.onLang(fn)` – dort neu rendern.
+- Gemeinsame Texte (Fußzeile, „Daten sichern & übertragen“, „Anleitung & Hinweise“ = `help.summary`, Meldungen) übersetzt `common.js`.
+- Gespeicherte Standardwerte nicht übersetzen, sondern beim Anzeigen ersetzen (Beispiel `dice-coin`: Münz-Beschriftung „Kopf“/„Zahl“, eingebaute Vorlagen mit `key`). Bestehende Speicherformate bleiben gleich.
+- **Titel/Startseite/Manifest:** aus `tool:title-en`, `tool:description-en`, `tool:short-name-en` (Seitentitel, Name beim „Zum Home-Bildschirm“, Karten der Startseite, `name_localized` usw. im Manifest). Das Manifest wählt nach Browser-/Systemsprache (Chrome/Edge 148+), nicht nach dem Umschalter. Neue Kategorien/Funktionen brauchen einen Eintrag in `TAGS_EN` in `scripts/build.mjs`.
+- **Tests:** `tests/i18n.spec.mjs` prüft jede übersetzte Seite automatisch auf fehlende englische Texte (`Tools.i18nMissing()`), Hilfe, Layout; `a11y.spec.mjs` prüft sie zusätzlich auf Englisch. Fachliche Tests auf Englisch mit `test.use({ locale: 'en-US' })`.
 
 ## Daten sichern (Standard für jede App)
 

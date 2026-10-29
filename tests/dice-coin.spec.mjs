@@ -15,8 +15,8 @@ async function setStepper(page, key, value) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/dice-coin/');
-  // Instant results: no animation, sound or vibration
-  await openDetails(page, 'Effekte');
+  // Instant results: no animation, sound or vibration (opened without its title: works in both languages)
+  await page.locator('#optAnim').evaluate(el => { el.closest('details').open = true; });
   for (const id of ['#optAnim', '#optSound', '#optVibrate']) await page.uncheck(id);
 });
 
@@ -148,4 +148,61 @@ test('backup round trip: roll, export, clear, import', async ({ page }) => {
   await page.waitForEvent('load');
   expect(await dice(page)).toEqual(rolled);
   await expect(page.locator('#histCount')).toHaveText('2');
+});
+
+// ---------- English ----------
+test.describe('English', () => {
+  test.use({ locale: 'en-US' });
+
+  test('labels, roll, summary and history in English', async ({ page }) => {
+    await expect(page.locator('h1')).toHaveText('Dice & Coin');
+    await expect(page.locator('#sideChips [data-s="20"]')).toHaveText('d20');
+    await expect(page.locator('#btnRoll')).toHaveText('Roll');
+    await expect(page.locator('#hint')).toHaveText('Space or Enter rolls.');
+    await page.uncheck('#optPips');
+    await page.click('#btnRoll');
+    const v = await dice(page);
+    const sum = v[0] + v[1];
+    // English number format: decimal point
+    await expect(page.locator('#summary .detail')).toHaveText(`Ø ${(sum / 2).toFixed(1)}`);
+    await expect(page.locator('#board .die').nth(0)).toHaveAccessibleName(`Die 1: ${v[0]} d6`);
+    await expect(page.locator('#hist li span').first()).toHaveText(`2d6: ${v[0]}, ${v[1]} = ${sum}`);
+  });
+
+  test('default coin labels follow the language, own labels stay', async ({ page }) => {
+    await page.click('[data-tab=coin]');
+    await expect(page.locator('#coinHeads')).toHaveValue('Heads');
+    await page.click('#btnRoll');
+    expect(['Heads', 'Tails']).toContain(await page.locator('#board .coin').textContent());
+    await page.getByRole('button', { name: 'Deutsch' }).click();
+    expect(['Kopf', 'Zahl']).toContain(await page.locator('#board .coin').textContent());
+    await expect(page.locator('#coinHeads')).toHaveValue('Kopf');
+    await page.fill('#coinHeads', 'Ja');
+    await page.getByRole('button', { name: 'English' }).click();
+    await expect(page.locator('#coinHeads')).toHaveValue('Ja');
+    await expect(page.locator('#coinTails')).toHaveValue('Tails');
+  });
+
+  test('built-in presets in English, also when saved earlier with German names', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('wuerfelMuenze.presets.v1', JSON.stringify([
+      { name: 'Siedler (2×W6)', cfg: { dice: { count: 2, sides: 6, mixed: false, mode: 'all', hold: false, sum: true } } },
+      { name: 'Mein Spiel', cfg: { dice: { count: 3, sides: 8 } } },
+    ])));
+    await page.reload();
+    await page.locator('#presetBox summary').click();
+    await expect(page.locator('#presets .preset > .btn:first-child')).toHaveText(['Catan (2×d6)', 'Mein Spiel']);
+    await page.locator('#presets .btn', { hasText: 'Mein Spiel' }).click();
+    await expect(page.locator('#board .die')).toHaveCount(3);
+  });
+});
+
+test('switching the language updates the generated texts at once', async ({ page }) => {
+  await setStepper(page, 'dice.count', 3);
+  await page.click('#segDiceMode [data-v="single"]');
+  await expect(page.locator('#btnRoll')).toHaveText('Würfel 1 würfeln');
+  await page.getByRole('button', { name: 'English' }).click();
+  await expect(page.locator('#btnRoll')).toHaveText('Roll die 1');
+  await expect(page.locator('#modeHelp')).toContainText('Each die is rolled on its own');
+  await expect(page.locator('#segDiceMode [data-v="single"]')).toHaveText('One by one');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });
