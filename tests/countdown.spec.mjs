@@ -137,3 +137,75 @@ test.describe('English', () => {
     await expect(page.locator('#when')).toHaveText('until Thursday, 24 December 2026'); // shared English locale is en-GB
   });
 });
+
+test.describe('history', () => {
+  const items = page => page.locator('#hist li');
+  const pause = page => page.clock.runFor(1600); // entries are saved after a short pause
+
+  test('a calculation is saved after a pause, with name and days left', async ({ page }) => {
+    await expect(page.locator('#histEmpty')).toBeVisible();
+    await page.fill('#td', '2026-12-24');
+    await expect(items(page)).toHaveCount(0); // not while still typing
+    await pause(page);
+    await expect(items(page)).toHaveCount(1);
+    await expect(items(page).first().locator('.name')).toHaveText('Do., 24. Dez. 2026');
+    await expect(items(page).first().locator('.rel')).toHaveText('in 56 Tagen');
+    // The name labels the same entry – it does not create a second one
+    await page.fill('#name', 'Heiligabend');
+    await pause(page);
+    await expect(items(page)).toHaveCount(1);
+    await expect(items(page).first().locator('.name')).toHaveText('Heiligabend');
+    await expect(items(page).first().locator('.meta')).toHaveText('Do., 24. Dez. 2026 · in 56 Tagen');
+    await expect(items(page).first().locator('.load')).toHaveAttribute('aria-current', 'true');
+    await expect(page.locator('#histEmpty')).toBeHidden();
+  });
+
+  test('relative days: today, tomorrow, yesterday, ago, and own start', async ({ page }) => {
+    for (const [td, tt] of [['2026-10-29', '18:00'], ['2026-10-30', ''], ['2026-10-28', ''], ['2026-10-20', '']]) {
+      await page.fill('#td', td);
+      await page.fill('#tt', tt);
+      await pause(page);
+    }
+    await custom(page, '2026-05-01', '', '2026-05-10', '');
+    await pause(page);
+    await expect(items(page).locator('.rel')).toHaveText(['9 Tage ab Fr., 1. Mai 2026', 'vor 9 Tagen', 'gestern', 'morgen', 'heute']);
+    await expect(items(page).nth(4).locator('.name')).toHaveText('Do., 29. Okt. 2026, 18:00');
+  });
+
+  test('tap loads an entry, × deletes it, kept after a reload', async ({ page }) => {
+    await page.fill('#name', 'Urlaub');
+    await page.fill('#td', '2027-07-15');
+    await page.fill('#tt', '06:30');
+    await pause(page);
+    await page.fill('#name', '');
+    await custom(page, '2026-01-01', '', '2026-03-01', '');
+    await pause(page);
+    await expect(items(page)).toHaveCount(2);
+    await page.reload();
+    await expect(items(page)).toHaveCount(2);
+    await items(page).filter({ hasText: 'Urlaub' }).locator('.load').click();
+    await expect(page.locator('#name')).toHaveValue('Urlaub');
+    await expect(page.locator('#td')).toHaveValue('2027-07-15');
+    await expect(page.locator('#tt')).toHaveValue('06:30');
+    await expect(page.locator('[data-start="now"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(items(page).first().locator('.name')).toHaveText('Urlaub'); // moved to the top
+    await page.getByRole('button', { name: 'Löschen: So., 1. März 2026' }).click();
+    await expect(items(page)).toHaveCount(1);
+    await page.reload();
+    await expect(items(page)).toHaveCount(1);
+    await expect(items(page).locator('.name')).toHaveText('Urlaub');
+  });
+
+  test('invalid input is not saved, at most 30 entries', async ({ page }) => {
+    await page.fill('#td', '');
+    await pause(page);
+    await expect(items(page)).toHaveCount(0);
+    for (let d = 1; d <= 31; d++) {
+      await page.fill('#td', `2027-01-${String(d).padStart(2, '0')}`);
+      await pause(page);
+    }
+    await expect(items(page)).toHaveCount(30);
+    await expect(items(page).first().locator('.name')).toHaveText('So., 31. Jan. 2027');
+    await expect(items(page).last().locator('.name')).toHaveText('Sa., 2. Jan. 2027');
+  });
+});
