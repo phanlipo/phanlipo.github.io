@@ -112,3 +112,25 @@ test('score is kept per variant, survives reload and can be reset', async ({ pag
   await expect(page.locator('#last li')).toHaveCount(0);
   await expect(page.locator('#sWin')).toHaveText('0');
 });
+
+test.describe('English', () => {
+  test.use({ locale: 'en-US' });
+
+  test('signs, result and rules in English; switching keeps the last round', async ({ page }) => {
+    await page.goto('/rock-paper-scissors/');
+    await expect(page.locator('#choices .choice')).toHaveText(['✂️Scissors', '🪨Rock', '📄Paper']);
+    await expect(page.locator('#status')).toHaveText('🤫 The computer has already chosen – your turn!');
+    await page.locator('#choices [data-move="stein"]').click();
+    const cpu = await page.locator('#cpu').getAttribute('data-move');
+    // Independent rules: rock beats scissors, loses to paper
+    const big = cpu === 'stein' ? 'Draw!' : cpu === 'schere' ? 'You win! 🎉' : 'The computer wins!';
+    const why = cpu === 'stein' ? 'You both chose Rock.' : cpu === 'schere' ? 'Rock crushes scissors.' : 'Paper covers rock.';
+    await expect(page.locator('#result .big')).toHaveText(big);
+    await expect(page.locator('#result .why')).toHaveText(why);
+    await expect(page.locator('#ruleDiagrams [data-variant="3"] li').first()).toContainText('Scissors beats');
+    await page.getByRole('button', { name: 'Deutsch' }).click();
+    await expect(page.locator('#result .why')).toHaveText(
+      cpu === 'stein' ? 'Ihr habt beide Stein.' : cpu === 'schere' ? 'Stein macht Schere stumpf.' : 'Papier wickelt Stein ein.');
+    await expect(page.locator('#choices .choice').first()).toHaveText('✂️Schere');
+  });
+});

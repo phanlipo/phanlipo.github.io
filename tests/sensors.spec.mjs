@@ -27,7 +27,9 @@ test.use({ permissions: ['accelerometer', 'gyroscope', 'magnetometer'] });
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/sensors/');
-  await tab(page, 'Kompass');
+  // Open the compass independent of the interface language
+  if (await page.locator('#overview').isVisible()) await page.locator('#overview [data-open="compass"]').click();
+  else await page.locator('#tab-compass').click();
 });
 
 test('overview: tiles open a tool, back returns, the last tool reopens', async ({ page }) => {
@@ -732,4 +734,40 @@ test('speedometer: coordinates in both formats, copy and map link', async ({ pag
   await expect(page.locator('#gMap')).toHaveAttribute('href', 'geo:-33.856780,-70.650500?q=-33.856780,-70.650500');
   await page.getByRole('button', { name: 'Koordinaten kopieren' }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('-33.856780, -70.650500');
+});
+
+test.describe('English', () => {
+  test.use({ locale: 'en-US' });
+
+  test('tools, compass directions, number inputs and CSV in English', async ({ page }) => {
+    await expect(page.locator('#overview')).toBeHidden();
+    await expect(page.getByRole('tab', { name: 'Compass' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('[data-start="compass"]')).toHaveText('Stop');
+    // alpha 270° → the top of the device points east (German: O)
+    await orientation(page, { alpha: 270, beta: 0, gamma: 0, absolute: true }, 'deviceorientationabsolute');
+    await expect(page.locator('#cDeg')).toHaveText('90°');
+    await expect(page.locator('#cDir')).toHaveText('E');
+    await expect(page.locator('#cNorthInfo')).toHaveText('magnetic north');
+    // Number fields use the decimal point
+    await page.getByRole('tab', { name: 'Tuner' }).click();
+    await expect(page.locator('#tRef')).toHaveValue('440.0');
+
+    await page.getByRole('tab', { name: 'Vibrometer' }).click();
+    await expect(page.locator('[data-start="vibro"]')).toHaveText('Stop');
+    await page.getByRole('button', { name: 'Start recording' }).click();
+    await page.evaluate(() => {
+      for (let i = 0; i < 60; i++) window.dispatchEvent(new DeviceMotionEvent('devicemotion', {
+        acceleration: { x: 0.3, y: 0.4, z: 0 }, accelerationIncludingGravity: { x: 0.3, y: 0.4, z: 9.81 }, interval: 1000 / 60,
+      }));
+    });
+    await expect(page.locator('#vRecInfo')).toHaveText(/60 values/);
+    await page.getByRole('button', { name: 'Stop recording' }).click();
+    const { text: csv } = await download(page, () => page.getByRole('button', { name: 'Save CSV' }).click());
+    const lines = csv.trim().split(/\r\n/);
+    expect(lines[0]).toBe('Time (s),X (m/s²),Y (m/s²),Z (m/s²),Magnitude (m/s²)');
+    expect(lines[1]).toBe('0.017,0.3000,0.4000,0.0000,0.5000');
+    // Switching back to German changes the texts at once
+    await page.getByRole('button', { name: 'Deutsch' }).click();
+    await expect(page.locator('#vRec')).toHaveText('Aufnahme starten');
+  });
 });

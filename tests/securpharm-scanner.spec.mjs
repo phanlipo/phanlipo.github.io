@@ -116,3 +116,23 @@ test.describe('image decoding', () => {
     await expect(page.locator('#status')).toContainText('Kein DataMatrix-Code', { timeout: 20000 });
   });
 });
+
+test.describe('English', () => {
+  test.use({ locale: 'en-US' });
+
+  test('values, status and history in English; exports keep their German field names', async ({ page }) => {
+    await page.goto('/securpharm-scanner/');
+    await page.fill('#manual', '010415012345678221ABC123XYZ9<GS>10CH4711<GS>17281231');
+    await page.click('#btnParse');
+    await expect(page.locator('#status')).toHaveText('Read successfully (GS1, source: Manual)');
+    await expect(page.locator('#fields')).toContainText('Batch (lot)');
+    await expect(page.locator('#fields')).toContainText('check digit ok');
+    await expect(page.locator('#histBody td[data-label="Source"]')).toHaveText('Manual');
+    // Stored source and exported column names stay German
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('scanCopySecurPharm.history.v1'))[0].source)).toBe('Manuell');
+    const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnExportCsv')]);
+    const csv = (await import('node:fs')).readFileSync(await download.path(), 'utf8');
+    expect(csv).toContain('"Zeitpunkt";"Quelle";"Format";"PZN"');
+    expect(csv).toContain('"Manuell"');
+  });
+});

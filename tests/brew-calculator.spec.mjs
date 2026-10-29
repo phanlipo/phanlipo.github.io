@@ -162,3 +162,24 @@ test('inputs survive a reload', async ({ page }) => {
   await expect(page.locator('[data-key="v.d"]')).toHaveValue('42');
   await expect(page.locator('[data-key="s.unit"] [data-v="SG"]')).toHaveAttribute('aria-pressed', 'true');
 });
+
+test.describe('English', () => {
+  test.use({ locale: 'en-US' });
+
+  test('labels, results with decimal point and formulas in English', async ({ page }) => {
+    await expect(page.locator('#topf h2')).toHaveText('1 · Volume in a cylindrical pot');
+    await set(page, 'v.d', '36');
+    await set(page, 'v.h', '25');
+    await expect(main(page, 'vRes')).toContainText((Math.PI * 18 ** 2 * 25 / 1000).toFixed(2)); // 25.45
+    await expect(result(page, 'vRes', 'Litres per cm')).toBeVisible();
+    await set(page, 'z.V', 20);
+    await set(page, 'z.T', 20);
+    await set(page, 'z.C', 5);
+    await expect(result(page, 'zRes', 'Residual CO')).toContainText(co2(20, 1.013).toFixed(2));
+    await expect(page.locator('#zChips .chip').first()).toContainText('Stout / Porter · 4.0 g/L');
+    await openDetails(page.locator('#stammwuerze'), 'Formulas');
+    await expect(page.locator('#sMath .legend', { hasText: 'ASBC' })).toContainText('−616.868');
+    await page.getByRole('button', { name: 'Deutsch' }).click();
+    await expect(main(page, 'vRes')).toContainText('25,45');
+  });
+});

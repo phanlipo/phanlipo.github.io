@@ -195,3 +195,20 @@ test('page link of a WLAN code restores the form, special characters included', 
   await expect(page.locator('#wEnc')).toHaveValue('nopass');
   await expect(page.locator('#pageLinkWarn')).toBeHidden();
 });
+
+test.describe('English', () => {
+  test.use({ locale: 'en-US' });
+
+  test('labels, info and history in English', async ({ page }) => {
+    await page.goto('/qr-code/');
+    await expect(page.locator('#empty')).toHaveText('Enter a link or text – the QR code appears here.');
+    await page.fill('#txt', 'https://example.org');
+    await expect(page.locator('#info')).toHaveText(/^\d+ × \d+ modules · 19 bytes$/);
+    await expect(page.locator('#qr')).toHaveAttribute('aria-label', 'QR code for: https://example.org');
+    await page.click('#btnKeep');
+    await expect(page.locator('#hist .meta').first()).toContainText('Link · ');
+    await page.click('[data-type=wifi]');
+    await expect(page.locator('#empty')).toHaveText('Enter a network name – the QR code appears here.');
+    await expect(page.locator('footer')).toContainText('“QR Code” is a registered trademark of DENSO WAVE INCORPORATED');
+  });
+});

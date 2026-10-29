@@ -46,13 +46,13 @@ export function close(pdf) {
 // Text items and images of every page. Items: { s, x, y, w, size, font, bold, italic } in PDF
 // points, origin bottom left of the page. Images: { x, y, w, h (points), data, type }.
 // options.ocr: { lang: 'deu' | 'eng' } – recognise the text of pages that have none (scans)
-// options.onProgress(text, fraction)
+// options.onProgress(message, fraction) – message is { k: code, … }; the page turns it into text
 export async function extract(pdf, options = {}) {
   const { ocr, onProgress } = options;
   const pages = [];
   const n = pdf.numPages;
   for (let i = 1; i <= n; i++) {
-    onProgress?.('Seite ' + i + ' von ' + n + ' …', (i - 1) / n);
+    onProgress?.({ k: 'page', i, n }, (i - 1) / n);
     const page = await pdf.getPage(i);
     const [x0, y0, x1, y1] = page.view;
     const width = x1 - x0, height = y1 - y0;
@@ -87,7 +87,7 @@ export async function extract(pdf, options = {}) {
     let ocrDone = false, ocrError = null;
     if (!hasText && ocr) {
       try {
-        items = await recognise(page, ocr.lang, (t, f) => onProgress?.('Seite ' + i + ' von ' + n + ': ' + t, (i - 1 + f) / n));
+        items = await recognise(page, ocr.lang, (sub, f) => onProgress?.({ k: 'pageOcr', i, n, sub }, (i - 1 + f) / n));
         ocrDone = true;
       } catch (e) {
         ocrError = e;
@@ -110,7 +110,7 @@ export async function extract(pdf, options = {}) {
     pages.push({ width, height, items, images, ocr: ocrDone, ocrError });
     page.cleanup();
   }
-  onProgress?.('Fertig gelesen', 1);
+  onProgress?.({ k: 'read' }, 1);
   return pages;
 }
 
@@ -225,7 +225,7 @@ async function recognise(page, lang, onProgress) {
   canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  onProgress?.('Seite wird für die Texterkennung gerendert …', 0.1);
+  onProgress?.({ k: 'render' }, 0.1);
   await page.render({ canvasContext: ctx, viewport, background: 'white' }).promise;
   progressTarget = onProgress;
   let result;
@@ -242,7 +242,7 @@ let progressTarget = null;
 async function ocrWorker(lang, onProgress) {
   if (tesseract?.lang === lang) return tesseract.worker;
   if (tesseract) { await tesseract.worker.terminate().catch(() => {}); tesseract = null; }
-  onProgress?.('Texterkennung wird geladen …', 0);
+  onProgress?.({ k: 'ocrLoad' }, 0);
   await loadScript(url('../assets/vendor/tesseract/tesseract.min.js'));
   const langPath = lang === 'eng' ? url('../assets/vendor/tesseract-eng/') : url('../assets/vendor/tesseract-deu/');
   const worker = await window.Tesseract.createWorker(lang === 'eng' ? 'eng' : 'deu', 1 /* LSTM only */, {
@@ -253,8 +253,8 @@ async function ocrWorker(lang, onProgress) {
     cacheMethod: 'none',        // offline copy comes from the service worker, not IndexedDB
     workerBlobURL: false,       // CSP: workers only from own files
     logger: m => {
-      if (m.status === 'recognizing text') progressTarget?.('Texterkennung ' + Math.round(m.progress * 100) + ' %', 0.15 + 0.85 * m.progress);
-      else if (!progressTarget) onProgress?.('Texterkennung wird geladen …', 0);
+      if (m.status === 'recognizing text') progressTarget?.({ k: 'ocr', p: Math.round(m.progress * 100) }, 0.15 + 0.85 * m.progress);
+      else if (!progressTarget) onProgress?.({ k: 'ocrLoad' }, 0);
     },
   });
   tesseract = { lang, worker };
