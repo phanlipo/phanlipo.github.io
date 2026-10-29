@@ -56,6 +56,7 @@ export function tools() {
       descriptionEn: meta(p.html, 'tool:description-en'),
       tags: (meta(p.html, 'tool:tags') || '').split(',').map(t => t.trim()).filter(Boolean),
       features: (meta(p.html, 'tool:features') || '').split(',').map(t => t.trim()).filter(Boolean),
+      webmcp: (meta(p.html, 'tool:webmcp') || '').split(',').map(t => t.trim()).filter(Boolean),
     }));
 }
 
