@@ -319,6 +319,21 @@ test.describe('Android', () => {
     expect(text).toContain('push: unsubscribed');
     expect(text).toMatch(/ask: done .*"permission":"granted"/);
   });
+  test('declined in a Chrome tab: first suggests installing the app', async ({ page }) => {
+    await open(page, 'dismiss');
+    await page.click('#btnPerm');
+    await expect(page.locator('#permHint')).toContainText('die App installieren');
+  });
+  test('installed app: no install tip', async ({ page }) => {
+    await page.addInitScript(() => {
+      const mm = window.matchMedia.bind(window);
+      window.matchMedia = q => q === '(display-mode: standalone)' ? { matches: true, media: q, addEventListener() {}, removeEventListener() {} } : mm(q);
+    });
+    await open(page, 'dismiss');
+    await page.click('#btnPerm');
+    await expect(page.locator('#permHint')).toContainText('sofort abgelehnt');
+    await expect(page.locator('#permHint')).not.toContainText('installieren');
+  });
   test('hints name the Chrome and app settings', async ({ page }) => {
     await open(page, 'dismiss');
     await page.click('#btnPerm');
