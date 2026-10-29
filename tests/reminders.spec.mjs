@@ -206,6 +206,8 @@ test('blocked: reminders still show in the app', async ({ page }) => {
 
 test('permission "default": button asks, then the test notification works', async ({ page }) => {
   await open(page, 'default');
+  await expect(page.locator('#install')).toBeHidden(); // not Android
+  await expect(page.locator('#btnPerm')).toHaveClass(/primary/);
   await expect(page.locator('#btnPerm')).toBeVisible();
   await expect(page.locator('#btnTest')).toBeHidden();
   await page.click('#btnPerm');
@@ -319,20 +321,38 @@ test.describe('Android', () => {
     expect(text).toContain('push: unsubscribed');
     expect(text).toMatch(/ask: done .*"permission":"granted"/);
   });
-  test('declined in a Chrome tab: first suggests installing the app', async ({ page }) => {
-    await open(page, 'dismiss');
-    await page.click('#btnPerm');
-    await expect(page.locator('#permHint')).toContainText('die App installieren');
+  test('in a Chrome tab: suggests installing, with Chrome’s install prompt when offered', async ({ page }) => {
+    await open(page, 'default');
+    await expect(page.locator('#install')).toBeVisible();
+    await expect(page.locator('#btnInstall')).toBeHidden();
+    await expect(page.locator('#installInfo')).toContainText('⋮ → „App installieren“');
+    await expect(page.locator('#btnPerm')).not.toHaveClass(/primary/);
+    // Chrome offers installing: the button appears and opens its prompt
+    await page.evaluate(() => {
+      const e = new Event('beforeinstallprompt', { cancelable: true });
+      e.prompt = () => { window.__installPrompt = (window.__installPrompt || 0) + 1; return Promise.resolve(); };
+      e.userChoice = Promise.resolve({ outcome: 'accepted', platform: 'web' });
+      window.dispatchEvent(e);
+    });
+    await expect(page.locator('#btnInstall')).toBeVisible();
+    await expect(page.locator('#installInfo')).toHaveText('');
+    await page.click('#btnInstall');
+    await expect(page.locator('#installInfo')).toContainText('vom Startbildschirm öffnen');
+    expect(await page.evaluate(() => window.__installPrompt)).toBe(1);
+    await expect(page.locator('#btnInstall')).toBeHidden();
   });
-  test('installed app: no install tip', async ({ page }) => {
+  test('installed app: no install box, allowing is the main button', async ({ page }) => {
     await page.addInitScript(() => {
       const mm = window.matchMedia.bind(window);
       window.matchMedia = q => q === '(display-mode: standalone)' ? { matches: true, media: q, addEventListener() {}, removeEventListener() {} } : mm(q);
     });
-    await open(page, 'dismiss');
-    await page.click('#btnPerm');
-    await expect(page.locator('#permHint')).toContainText('sofort abgelehnt');
-    await expect(page.locator('#permHint')).not.toContainText('installieren');
+    await open(page, 'default');
+    await expect(page.locator('#install')).toBeHidden();
+    await expect(page.locator('#btnPerm')).toHaveClass(/primary/);
+  });
+  test('already allowed in the tab: no install box', async ({ page }) => {
+    await open(page, 'granted');
+    await expect(page.locator('#install')).toBeHidden();
   });
   test('hints name the Chrome and app settings', async ({ page }) => {
     await open(page, 'dismiss');
