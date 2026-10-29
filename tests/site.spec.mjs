@@ -22,6 +22,12 @@ test.describe('start page', () => {
     });
   }
 
+  test('footer has no link to itself', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('footer .footer-common')).toContainText('KI-generiert');
+    await expect(page.locator('footer .footer-home')).toHaveCount(0);
+  });
+
   test('lists every tool with a working link', async ({ page }) => {
     await page.goto('/');
     const list = tools();
@@ -104,6 +110,8 @@ for (const app of apps()) {
       // Licences of the bundled libraries (MIT/Apache-2.0 ask for the licence text to be available)
       await expect(page.locator('footer .footer-common').getByRole('link', { name: 'Open-Source-Lizenzen' }))
         .toHaveAttribute('href', 'https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md');
+      await expect(page.locator('footer .footer-home').getByRole('link', { name: 'Alle Tools auf phanlipo.github.io' }))
+        .toHaveAttribute('href', 'https://phanlipo.github.io/');
     });
 
     test('is an installable PWA and works offline', async ({ page, context }) => {

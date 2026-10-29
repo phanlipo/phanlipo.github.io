@@ -358,11 +358,13 @@ self.addEventListener('fetch', event => {
 
 /* ---------- Run ---------- */
 const footer = readFileSync(join(ROOT, 'scripts/partials/footer.html'), 'utf8').trim();
+// The start page needs no link to itself
+const footerFor = p => p.folder ? footer : footer.split('\n').filter(l => !l.includes('footer-home')).join('\n');
 const dataBlock = readFileSync(join(ROOT, 'scripts/partials/data.html'), 'utf8').trim();
 setBlock('index.html', 'tools', renderCards(), true);
 setBlock('README.md', 'tools', renderTable(), true);
 for (const p of pages) {
-  setBlock(p.file, 'footer', `\n  ${footer}\n  `, false);
+  setBlock(p.file, 'footer', `\n  ${footerFor(p).replaceAll('\n', '\n  ')}\n  `, false);
   if (!p.hidden) setBlock(p.file, 'head', renderHead(p), false);
   setBlock(p.file, 'data', isApp(p) && p.storage ? `\n${dataBlock}\n` : '\n', false);
 }
@@ -379,7 +381,7 @@ for (const p of apps) put(`${p.folder}/manifest.webmanifest`, manifest(p));
 for (const p of apps) {
   const { version, code } = serviceWorker(p);
   put(`${p.folder}/sw.js`, code);
-  setBlock(p.file, 'footer', `\n  ${footer}\n  <p class="footer-version">Version ${version}</p>\n  `, false);
+  setBlock(p.file, 'footer', `\n  ${footerFor(p).replaceAll('\n', '\n  ')}\n  <p class="footer-version">Version ${version}</p>\n  `, false);
 }
 
 // Third-party notices: every bundled library with version, licence and copyright (from its LICENSE)
