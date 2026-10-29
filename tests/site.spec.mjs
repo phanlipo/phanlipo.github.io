@@ -1,9 +1,22 @@
 // Generic checks that run automatically for every page – a new tool is covered without extra work.
 import { test, expect, tools, apps, VIEWPORTS, expectNoHorizontalScroll } from './helpers.mjs';
+import { allPages } from '../scripts/lib.mjs';
 
 test('robots.txt allows crawling so search engines can see the noindex tag', async ({ request }) => {
   const txt = await (await request.get('/robots.txt')).text();
   expect(txt).not.toMatch(/^Disallow:\s*\/\s*$/m);
+  // Only repository files (README.md, scripts/ …) may be blocked – never the start page, an app or a redirect page
+  const rules = [...txt.matchAll(/^Disallow:\s*(\S+)/gm)].map(m => m[1]);
+  const blocked = path => rules.some(r => {
+    const re = new RegExp('^' + r.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
+    return re.test(path);
+  });
+  for (const path of ['/', '/index.html', ...allPages().map(p => p.folder).filter(a => a && !['scripts', 'tests', 'template', 'node_modules'].includes(a)).flatMap(a => [`/${a}/`, `/${a}/index.html`, `/${a}/manifest.webmanifest`, `/${a}/sw.js`]),
+    '/assets/base.css', '/assets/common.js', '/robots.txt']) {
+    expect(blocked(path), `robots.txt blocks ${path}`).toBe(false);
+  }
+  expect(blocked('/README.md')).toBe(true);
+  expect(blocked('/scripts/build.mjs')).toBe(true);
 });
 
 test.describe('start page', () => {

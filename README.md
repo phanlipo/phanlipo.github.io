@@ -26,7 +26,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 index.html            Startseite (Kartenliste wird automatisch erzeugt)
 assets/base.css       gemeinsame Farben, Dark Mode, Karten, Buttons, Hilfe-Bereich
 assets/common.js      gemeinsame Helfer (window.Tools) + Registrierung des Service Workers
-assets/vendor/        Fremdbibliotheken mit Lizenz und Herkunft (siehe assets/vendor/README.md)
+assets/vendor/        Fremdbibliotheken mit Lizenz und Herkunft (Übersicht in NOTICE.md)
 template/             Vorlage für neue Seiten
 scripts/              build.mjs, build-icons.mjs, vendor.mjs (+ vendor.json)
 <tool-name>/          je Tool ein Ordner (englischer Name, kebab-case) – installierbar als PWA
@@ -67,10 +67,10 @@ Die Seite ist dann unter `https://phanlipo.github.io/<ordner>/` erreichbar.
 
 ## Sichtbarkeit und Sicherheit
 
-- Die Seiten sind **nicht für Suchmaschinen gedacht**: Jede Seite trägt `noindex`; `robots.txt` erlaubt das Crawlen bewusst, damit Suchmaschinen diesen Hinweis sehen. Wer den Link hat, kann die Seiten trotzdem öffnen.
+- Die Seiten sind **nicht für Suchmaschinen gedacht**: Jede Seite trägt `noindex`; `robots.txt` erlaubt das Crawlen der Seiten bewusst, damit Suchmaschinen diesen Hinweis sehen. Gesperrt sind nur die übrigen Repo-Dateien (`README.md`, `scripts/`, `tests/` …), die GitHub Pages ebenfalls ausliefert, die aber kein `noindex` tragen können. Wer den Link hat, kann die Seiten trotzdem öffnen.
 - Eine strenge **Content Security Policy** erlaubt nur eigene Dateien – keine fremden Skripte, Tracker oder CDNs.
 - Die Fußzeile jeder App zeigt die **Version** (= Offline-Cache-Version), um Updates auf installierten Apps prüfen zu können.
 
 ## Fremdbibliotheken und Lizenzen
 
-Alle Bibliotheken liegen lokal in `assets/vendor/` (kein CDN), jeweils mit Original-Lizenz und Herkunftsangabe. Übersicht: [`assets/vendor/README.md`](assets/vendor/README.md). Icons: [Tabler Icons](https://tabler.io/icons), MIT.
+Alle Bibliotheken liegen lokal in `assets/vendor/` (kein CDN), jeweils mit Original-Lizenz und Herkunftsangabe. Version, Lizenz und Zweck jeder Bibliothek: [`NOTICE.md`](NOTICE.md).
