@@ -109,6 +109,19 @@ for (const app of apps()) {
       });
     }
 
+    test('accent colour matches the icon colour (tool:color)', async ({ page, request }) => {
+      const html = await (await request.get(url)).text();
+      const color = html.match(/<meta name="tool:color" content="([^"]+)"/)[1].toLowerCase();
+      const accent = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().toLowerCase());
+      await page.goto(url);
+      expect(await accent()).toBe(color);
+      // Dark mode uses its own (lighter) shade, not the shared default blue – unless the app is that blue
+      await page.emulateMedia({ colorScheme: 'dark' });
+      const dark = await accent();
+      expect(dark).not.toBe(color);
+      if (color !== '#0b5cad') expect(dark).not.toBe('#5aa2ef');
+    });
+
     test('not indexed, strict CSP, footer shows the offline cache version', async ({ page, request }) => {
       await page.goto(url);
       await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
