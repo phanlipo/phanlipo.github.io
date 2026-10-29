@@ -467,4 +467,18 @@ test.describe('reminders tools', () => {
     expect((await call(page, 'reminders_update_reminder', { id: 'nope', text: 'x' })).error).toMatch(/No reminder with id nope/);
     expect((await call(page, 'reminders_update_reminder', { id: reminder.id })).error).toMatch(/Nothing to change/);
   });
+
+  test('repeat: daily series stays scheduled, ends with repeat none', async ({ page }) => {
+    const { result: { reminder } } = await call(page, 'reminders_create_reminder', { text: 'Tabletten', at: '2026-10-29T12:01', repeat: 'daily' });
+    expect(reminder.repeat).toBe('daily');
+    await page.clock.runFor(2 * 60e3);
+    let { result } = await call(page, 'reminders_list_reminders', {});
+    expect(result.scheduled).toMatchObject([{ id: reminder.id, at: '2026-10-30T12:01', repeat: 'daily' }]);
+    expect(result.due).toMatchObject([{ text: 'Tabletten', at: '2026-10-29T12:01', status: 'due' }]);
+    await call(page, 'reminders_update_reminder', { id: reminder.id, text: 'Tabletten (abends)' });
+    expect((await call(page, 'reminders_list_reminders', {})).result.scheduled[0]).toMatchObject({ text: 'Tabletten (abends)', repeat: 'daily' });
+    const u = await call(page, 'reminders_update_reminder', { id: reminder.id, repeat: 'none' });
+    expect(u.result.reminder).toMatchObject({ repeat: 'none', at: '2026-10-30T12:01' });
+    await expect(page.locator('#upList .rel')).not.toContainText('🔁');
+  });
 });
