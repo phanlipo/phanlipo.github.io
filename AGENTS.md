@@ -77,7 +77,7 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 
 ## Sprachen (Deutsch/Englisch)
 
-Deutsch ist Standard und Ausgangssprache, Englisch die zweite Sprache. Die Umstellung läuft App für App (Issue #33); übersetzt sind bisher Startseite und `dice-coin`.
+Deutsch ist Standard und Ausgangssprache, Englisch die zweite Sprache. Alle Apps und die Startseite sind übersetzt; neue Apps kommen gleich zweisprachig (Vorlage `template/`).
 
 - **Wahl:** `?lang=de|en` in der Adresse → gespeicherte Wahl → Sprache des Browsers → Deutsch. Der Umschalter *Deutsch | English* steht in der gemeinsamen Fußzeile und erscheint nur auf übersetzten Seiten; nicht übersetzte Seiten bleiben komplett deutsch.
 - **Gemeinsam für alle Apps:** gespeichert unter `tools.lang.v1` – bewusst außerhalb jedes App-Präfixes: nicht in App-Sicherungen, bleibt bei „Alle Daten löschen“ erhalten (die Tests erlauben genau diesen Schlüssel). iPhone: Jede installierte App hat eigenen Speicher, dort gilt die Wahl je App.
@@ -85,6 +85,9 @@ Deutsch ist Standard und Ausgangssprache, Englisch die zweite Sprache. Die Umste
 - Im Seiten-Script **zuerst** `Tools.i18n({ de: { … }, en: { … } })`: `en` enthält alle `data-i18n`-Schlüssel, `de` und `en` alle Texte, die das Script erzeugt (`Tools.t('key', { n: 3 })` mit Platzhaltern `{n}`). Beim Umschalten ohne Neuladen feuert `Tools.onLang(fn)` – dort neu rendern.
 - Gemeinsame Texte (Fußzeile, „Daten sichern & übertragen“, „Anleitung & Hinweise“ = `help.summary`, Meldungen) übersetzt `common.js`.
 - Gespeicherte Standardwerte nicht übersetzen, sondern beim Anzeigen ersetzen (Beispiel `dice-coin`: Münz-Beschriftung „Kopf“/„Zahl“, eingebaute Vorlagen mit `key`). Bestehende Speicherformate bleiben gleich.
+- **Exporte für andere Programme** (z. B. SecurPharm CSV/JSON, Feldnamen im kopierten JSON) bleiben in jeder Sprache gleich, damit die Weiterverarbeitung nicht bricht. Exporte für Tabellenprogramme (Sensoren-CSV) folgen der Sprache: Deutsch mit Semikolon und Dezimalkomma, Englisch mit Komma und Dezimalpunkt.
+- **Meldungen aus Workern/Modulen** (z. B. `pdf2word/convert.mjs`) als Codes (`{ k: 'page', i, n }`) liefern und auf der Seite mit `Tools.t()` übersetzen.
+- **Sprachabhängige Voreinstellungen** (Erkennungssprache in Sprache zu Text, OCR-Sprache in PDF zu Word) folgen der Oberfläche nur, solange der Nutzer nichts gewählt hat.
 - **Titel/Startseite/Manifest:** aus `tool:title-en`, `tool:description-en`, `tool:short-name-en` (Seitentitel, Name beim „Zum Home-Bildschirm“, Karten der Startseite, `name_localized` usw. im Manifest). Das Manifest wählt nach Browser-/Systemsprache (Chrome/Edge 148+), nicht nach dem Umschalter. Neue Kategorien/Funktionen brauchen einen Eintrag in `TAGS_EN` in `scripts/build.mjs`.
 - **Tests:** `tests/i18n.spec.mjs` prüft jede übersetzte Seite automatisch auf fehlende englische Texte (`Tools.i18nMissing()`), Hilfe, Layout; `a11y.spec.mjs` prüft sie zusätzlich auf Englisch. Fachliche Tests auf Englisch mit `test.use({ locale: 'en-US' })`.
 
