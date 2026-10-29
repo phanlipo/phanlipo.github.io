@@ -44,7 +44,7 @@ const VENDOR = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'
 
 // Features for the second filter row on the start page, in display order. Only what sets apps apart:
 // things every app has (offline, installable, data stays on the device) are stated once on the start page.
-const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Standort', 'Datei öffnen', 'Teilen an App', 'Kopieren', 'Verlauf', 'Schütteln', 'KI-Agent', 'Download nötig'];
+const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Standort', 'Datei öffnen', 'Teilen an App', 'Benachrichtigung', 'Kopieren', 'Verlauf', 'Schütteln', 'KI-Agent', 'Download nötig'];
 // English names of all tags and features (start page filter). A new tag needs an entry here.
 const TAGS_EN = {
   Alltag: 'Everyday', Arbeit: 'Work', Freizeit: 'Leisure',
@@ -52,7 +52,7 @@ const TAGS_EN = {
   Kinder: 'Kids', Messen: 'Measuring', Rechner: 'Calculators', Spiele: 'Games', Sprache: 'Speech',
   Werkzeug: 'Tools', Zufall: 'Random',
   Kamera: 'Camera', Mikrofon: 'Microphone', Bewegungssensor: 'Motion sensor', Standort: 'Location',
-  'Datei öffnen': 'Open file', 'Teilen an App': 'Share to app', Kopieren: 'Copy', Verlauf: 'History',
+  'Datei öffnen': 'Open file', 'Teilen an App': 'Share to app', Benachrichtigung: 'Notifications', Kopieren: 'Copy', Verlauf: 'History',
   Schütteln: 'Shake', 'KI-Agent': 'AI agent', 'Download nötig': 'Download needed',
 };
 
@@ -369,6 +369,18 @@ self.addEventListener('fetch', event => {
       }
     } catch (_) {}
     return Response.redirect(new URL('./?shared=1', self.location).href, 303);
+  })());
+});
+
+` : ''}${p.features.includes('Benachrichtigung') ? `// Notifications (feature "Benachrichtigung"): a tap on one brings the open app to the front or opens it
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const start = new URL('./', self.location).href;
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const win = wins.find(c => c.url.startsWith(start));
+    if (win) return win.focus();
+    return self.clients.openWindow(start);
   })());
 });
 

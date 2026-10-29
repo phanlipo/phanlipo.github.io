@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Erinnerungen</title>
+<meta name="description" content="Eigene Erinnerungen mit Zeitpunkt und Text – zur Zeit kommt eine Benachrichtigung, im Verlauf lassen sie sich anpassen.">
+<meta name="tool:tags" content="Alltag, Werkzeug">
+<meta name="tool:features" content="Benachrichtigung, Verlauf, KI-Agent">
+<meta name="tool:order" content="15">
+<meta name="tool:icon" content="bell-ringing">
+<meta name="tool:color" content="#a21caf">
+<meta name="tool:short-name" content="Erinnerung">
+<meta name="tool:title-en" content="Reminders">
+<meta name="tool:description-en" content="Your own reminders with time and text – a notification arrives on time, and they can be changed in the history.">
+<meta name="tool:short-name-en" content="Reminders">
+<meta name="tool:storage" content="reminders.">
+<meta name="tool:webmcp" content="create_reminder, update_reminder, list_reminders">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-KeY+XnXUbrlTMTy8oesEw6uKlEUXHx9XJ+mC5vgFUvY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Erinnerung">
+<meta name="theme-color" content="#a21caf">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#a21caf;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f0abfc;--accent-text:#2a0730}}
+main{max-width:640px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+label.field{display:grid;gap:4px;margin-block-end:12px;font-weight:600}
+.field textarea{min-height:76px;resize:vertical}
+input[type=datetime-local]{width:100%;font:inherit;font-size:16px;min-height:44px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text)}
+.quick{display:flex;flex-wrap:wrap;gap:6px;margin-block:-4px 12px}
+.quick .btn{flex:1 1 auto}
+.form-msg{min-height:1.4em;margin:8px 0 0;font-size:15px}
+.form-msg.err{color:var(--err)}
+.perm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.perm p{margin:0;flex:1 1 220px}
+.due{border:2px solid var(--accent)}
+.due h2{margin-block-end:4px}
+.due ul{margin:0 0 10px;padding-inline-start:20px}
+.list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.list li{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px;display:grid;gap:6px}
+.list li.editing{border-color:var(--accent);border-width:2px}
+.list .when{font-weight:700;font-variant-numeric:tabular-nums}
+.list .rel{color:var(--muted);font-size:14px;font-weight:400}
+.list .text{white-space:pre-wrap;overflow-wrap:anywhere}
+.list .acts{display:flex;flex-wrap:wrap;gap:6px}
+.empty{color:var(--muted);margin:0}
+.head-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-block-end:8px}
+.head-row h2{margin:0}
+</style>
+</head>
+<body>
+<header>
+  <h1 data-i18n="title">Erinnerungen</h1>
+  <p class="sub" data-i18n="sub">Zeitpunkt und Text wählen – zur Zeit kommt eine Benachrichtigung</p>
+</header>
+
+<main>
+  <section class="card due" id="due" aria-labelledby="h-due" hidden>
+    <h2 id="h-due" data-i18n="due">⏰ Fällig</h2>
+    <ul id="dueList" aria-live="assertive"></ul>
+    <button type="button" class="btn" id="btnDueOk" data-i18n="dueOk">OK</button>
+  </section>
+
+  <section class="card perm" aria-label="Benachrichtigungen" data-i18n-attr="aria-label:perm">
+    <p id="permText" role="status"></p>
+    <button type="button" class="btn primary" id="btnPerm" hidden data-i18n="permAsk">Benachrichtigungen erlauben</button>
+    <button type="button" class="btn small" id="btnTest" hidden data-i18n="test">Test</button>
+  </section>
+
+  <section class="card" aria-labelledby="h-form">
+    <h2 id="h-form">Neue Erinnerung</h2>
+    <form id="form" novalidate>
+      <label class="field"><span data-i18n="what">Woran erinnern?</span>
+        <textarea id="text" maxlength="500" required placeholder="z. B. Tabletten nehmen" data-i18n-attr="placeholder:whatPh"></textarea>
+      </label>
+      <label class="field"><span data-i18n="when">Wann?</span>
+        <input type="datetime-local" id="at" required>
+      </label>
+      <div class="quick" role="group" aria-label="Schnellauswahl" data-i18n-attr="aria-label:quick">
+        <button type="button" class="btn small" data-quick="10" data-i18n="q10">+10 Min.</button>
+        <button type="button" class="btn small" data-quick="60" data-i18n="q60">+1 Std.</button>
+        <button type="button" class="btn small" data-quick="tomorrow" data-i18n="qTomorrow">Morgen 9:00</button>
+      </div>
+      <div class="row">
+        <button type="submit" class="btn primary" id="btnSave">Erinnerung speichern</button>
+        <button type="button" class="btn" id="btnCancel" hidden data-i18n="cancel">Abbrechen</button>
+      </div>
+      <p class="form-msg" id="formMsg" role="status"></p>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="h-up">
+    <h2 id="h-up"><span data-i18n="upcoming">Geplant</span> <span>(<span id="upCount">0</span>)</span></h2>
+    <ul class="list" id="upList"></ul>
+    <p class="empty" id="upEmpty" data-i18n="upEmpty">Keine geplanten Erinnerungen.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-past">
+    <div class="head-row">
+      <h2 id="h-past"><span data-i18n="history">Verlauf</span> <span>(<span id="pastCount">0</span>)</span></h2>
+      <button type="button" class="btn small" id="btnClearPast" hidden data-i18n="clearPast">Verlauf leeren</button>
+    </div>
+    <ul class="list" id="pastList"></ul>
+    <p class="empty" id="pastEmpty" data-i18n="pastEmpty">Noch keine fälligen Erinnerungen.</p>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Eigene Erinnerungen: Text und Zeitpunkt eingeben, speichern – zum Zeitpunkt zeigt das Gerät eine Benachrichtigung.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Einmal <strong>Benachrichtigungen erlauben</strong> tippen und im Browser bestätigen. Mit <strong>Test</strong> prüfen, ob sie ankommen.</li>
+    <li>Text und Zeitpunkt eingeben (oder <em>+10 Min.</em>, <em>+1 Std.</em>, <em>Morgen 9:00</em>) und speichern.</li>
+    <li><strong>Geplant</strong> zeigt die kommenden Erinnerungen, <strong>Verlauf</strong> die fälligen. Mit <strong>Bearbeiten</strong> bzw. <strong>Erneut planen</strong> lassen sich Text und Zeitpunkt ändern – die Erinnerung wird dann wieder geplant.</li>
+    <li>Ist eine Erinnerung fällig, erscheint sie zusätzlich oben in der App.</li>
+  </ul>
+  <h3>Wichtig: App muss laufen</h3>
+  <ul>
+    <li>Die Benachrichtigung kommt nur, solange die App geöffnet ist – auch im Hintergrund oder in einem anderen Tab. Die Seite hat keinen Server, der Nachrichten schicken könnte, und Browser können Benachrichtigungen (noch) nicht selbst für später planen.</li>
+    <li>Handys pausieren Apps im Hintergrund oft nach einiger Zeit. Dann kommt die Erinnerung, sobald die App wieder geöffnet wird, und ist im Verlauf als <em>verspätet</em> markiert. Für Wichtiges zusätzlich Wecker oder Kalender nutzen.</li>
+    <li>iPhone/iPad: Benachrichtigungen gibt es nur, wenn die Seite über <em>Teilen → Zum Home-Bildschirm</em> installiert ist (ab iOS 16.4). Die installierte App hat eigenen Speicher, getrennt von Safari.</li>
+    <li>Blockiert? In den Einstellungen des Browsers (bzw. des Systems) die Benachrichtigungen für diese Seite erlauben.</li>
+  </ul>
+  <h3>Daten &amp; KI-Agenten</h3>
+  <ul>
+    <li>Erinnerungen bleiben nur auf diesem Gerät (im Browser gespeichert) – nichts wird verschickt. Der Verlauf behält die letzten 200 fälligen Erinnerungen.</li>
+    <li>KI-Agenten im Browser (WebMCP) können Erinnerungen anlegen, ändern und auflisten, aber nicht löschen. Was sie tun, erscheint sofort in der App.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Your own reminders: enter a text and a time, save – at that time your device shows a notification.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Tap <strong>Allow notifications</strong> once and confirm in the browser. Use <strong>Test</strong> to check that they arrive.</li>
+    <li>Enter a text and a time (or <em>+10 min</em>, <em>+1 hr</em>, <em>Tomorrow 9:00</em>) and save.</li>
+    <li><strong>Scheduled</strong> lists the upcoming reminders, <strong>History</strong> the ones that were due. <strong>Edit</strong> or <strong>Schedule again</strong> changes text and time – the reminder is then scheduled again.</li>
+    <li>When a reminder is due, it also appears at the top of the app.</li>
+  </ul>
+  <h3>Important: the app must be running</h3>
+  <ul>
+    <li>The notification only arrives while the app is open – also in the background or in another tab. The page has no server that could send messages, and browsers cannot (yet) schedule notifications for later on their own.</li>
+    <li>Phones often pause apps in the background after a while. The reminder then arrives as soon as the app is opened again and is marked <em>late</em> in the history. For important things, also use an alarm or calendar.</li>
+    <li>iPhone/iPad: notifications only work if the page is installed via <em>Share → Add to Home Screen</em> (iOS 16.4 or later). The installed app has its own storage, separate from Safari.</li>
+    <li>Blocked? Allow notifications for this site in the browser (or system) settings.</li>
+  </ul>
+  <h3>Data &amp; AI agents</h3>
+  <ul>
+    <li>Reminders stay on this device only (stored in the browser) – nothing is sent anywhere. The history keeps the last 200 reminders that were due.</li>
+    <li>AI agents in the browser (WebMCP) can create, change and list reminders, but not delete them. What they do shows up in the app right away.</li>
+  </ul>
+  </div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 4f478ac20904</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  'perm.granted':'🔔 Benachrichtigungen sind erlaubt.',
+  'perm.default':'Damit Erinnerungen als Benachrichtigung kommen, bitte erlauben.',
+  'perm.denied':'🔕 Benachrichtigungen sind blockiert – in den Browser-Einstellungen für diese Seite erlauben. Fällige Erinnerungen erscheinen trotzdem in der App.',
+  'perm.none':'Dieser Browser zeigt keine Benachrichtigungen. iPhone: über „Teilen → Zum Home-Bildschirm“ installieren (ab iOS 16.4). Fällige Erinnerungen erscheinen in der App.',
+  testTitle:'Test-Benachrichtigung',testBody:'So sehen Erinnerungen aus.',testFail:'Benachrichtigung nicht möglich',
+  newH:'Neue Erinnerung',editH:'Erinnerung bearbeiten',save:'Erinnerung speichern',saveEdit:'Änderungen speichern',
+  errText:'Bitte einen Text eingeben.',errTime:'Bitte einen Zeitpunkt wählen.',errPast:'Der Zeitpunkt liegt in der Vergangenheit.',
+  saved:'Erinnerung für {when} gespeichert',updated:'Erinnerung geändert: {when}',
+  edit:'Bearbeiten',again:'Erneut planen',del:'Löschen',
+  editAria:'Bearbeiten: {text}',againAria:'Erneut planen: {text}',delAria:'Löschen: {text}',
+  confirmDel:'Diese Erinnerung löschen?\n„{text}“',confirmClear:'Alle {n} Einträge im Verlauf löschen? Geplante Erinnerungen bleiben.',
+  deleted:'Erinnerung gelöscht',
+  sent:'benachrichtigt {when}',late:'verspätet: {when}',inApp:'nur in der App',
+  lateBody:'Fällig war: {when}',
+  'mcp.create':'Erinnerung angelegt','mcp.update':'Erinnerung geändert','mcp.list':'Erinnerungen gelesen'
+},
+en:{
+  title:'Reminders',sub:'Choose time and text – a notification arrives on time',
+  due:'⏰ Due',dueOk:'OK',perm:'Notifications',permAsk:'Allow notifications',test:'Test',
+  what:'Remind me of',whatPh:'e.g. take pills',when:'When?',quick:'Quick choice',
+  q10:'+10 min',q60:'+1 hr',qTomorrow:'Tomorrow 9:00',cancel:'Cancel',
+  upcoming:'Scheduled',upEmpty:'No scheduled reminders.',history:'History',clearPast:'Clear history',pastEmpty:'No reminders have been due yet.',
+  'perm.granted':'🔔 Notifications are allowed.',
+  'perm.default':'Please allow notifications so reminders can arrive as notifications.',
+  'perm.denied':'🔕 Notifications are blocked – allow them for this site in the browser settings. Due reminders still appear in the app.',
+  'perm.none':'This browser does not show notifications. iPhone: install via “Share → Add to Home Screen” (iOS 16.4 or later). Due reminders appear in the app.',
+  testTitle:'Test notification',testBody:'This is how reminders look.',testFail:'Notification not possible',
+  newH:'New reminder',editH:'Edit reminder',save:'Save reminder',saveEdit:'Save changes',
+  errText:'Please enter a text.',errTime:'Please choose a time.',errPast:'The time is in the past.',
+  saved:'Reminder saved for {when}',updated:'Reminder changed: {when}',
+  edit:'Edit',again:'Schedule again',del:'Delete',
+  editAria:'Edit: {text}',againAria:'Schedule again: {text}',delAria:'Delete: {text}',
+  confirmDel:'Delete this reminder?\n“{text}”',confirmClear:'Delete all {n} entries in the history? Scheduled reminders stay.',
+  deleted:'Reminder deleted',
+  sent:'notified {when}',late:'late: {when}',inApp:'in the app only',
+  lateBody:'Was due: {when}',
+  'mcp.create':'reminder created','mcp.update':'reminder changed','mcp.list':'reminders read'
+}});
+const t=Tools.t,$=Tools.$;
+const LS='reminders.list.v1';
+const MAX_PAST=200,MAX_TEXT=500;
+const LATE_MS=2*60*1000; // shown as "late" when the notification came more than 2 minutes after the time
+
+/* ---------- Storage: [{ id, text, at (ms), created (ms), fired (ms, 0 = not yet), shown (bool) }] ---------- */
+function loadList(){
+  const v=Tools.load(LS,[]);
+  return Array.isArray(v)?v.filter(r=>r&&typeof r.id==='string'&&typeof r.text==='string'&&Number.isFinite(r.at)):[];
+}
+let list=loadList();
+function store(){
+  // Keep the newest due reminders only
+  const past=list.filter(r=>r.fired).sort((a,b)=>b.at-a.at);
+  if(past.length>MAX_PAST){const drop=new Set(past.slice(MAX_PAST).map(r=>r.id));list=list.filter(r=>!drop.has(r.id));}
+  Tools.save(LS,list);
+}
+const newId=()=>'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const byId=id=>list.find(r=>r.id===id);
+
+/* ---------- Dates: <input type="datetime-local"> works in local time ---------- */
+const pad=n=>String(n).padStart(2,'0');
+function toLocalInput(ms){const d=new Date(ms);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;}
+function fromLocalInput(s){
+  const m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(s||'');
+  if(!m)return NaN;
+  const d=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]);
+  // Reject dates that do not exist (e.g. 31 February)
+  return d.getMonth()===m[2]-1&&d.getDate()===+m[3]?d.getTime():NaN;
+}
+const fmtWhen=ms=>new Date(ms).toLocaleString(Tools.locale(),{weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+function fmtRel(ms){
+  const rtf=new Intl.RelativeTimeFormat(Tools.locale(),{numeric:'auto'});
+  const diff=ms-Date.now(),a=Math.abs(diff);
+  if(a<45e3)return rtf.format(0,'second');
+  if(a<45*60e3)return rtf.format(Math.round(diff/60e3),'minute');
+  if(a<22*3600e3)return rtf.format(Math.round(diff/3600e3),'hour');
+  return rtf.format(Math.round(diff/86400e3),'day');
+}
+// Times are whole minutes (like the input field): round to the nearest one
+const roundMinute=ms=>Math.round(ms/60e3)*60e3;
+
+/* ---------- Notifications ---------- */
+const hasNotif=()=>'Notification' in window;
+const permission=()=>hasNotif()?Notification.permission:'unsupported';
+function renderPerm(){
+  const p=permission();
+  $('permText').textContent=t(p==='granted'?'perm.granted':p==='denied'?'perm.denied':p==='default'?'perm.default':'perm.none');
+  $('btnPerm').hidden=p!=='default';
+  $('btnTest').hidden=p!=='granted';
+}
+async function askPermission(){
+  if(!hasNotif()||Notification.permission!=='default')return;
+  try{
+    // Older Safari only knows the callback form
+    await new Promise(res=>{const r=Notification.requestPermission(res);if(r&&r.then)r.then(res,res);});
+  }catch(_){}
+  renderPerm();
+}
+// Via the service worker where possible: Android Chrome and installed iPhone apps do not allow new Notification()
+async function notify(title,body,tag){
+  if(permission()!=='granted')return false;
+  const opts={body,tag,icon:'icon-192.png',badge:'icon-192.png',renotify:true,requireInteraction:true,data:{tag}};
+  try{
+    const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();
+    if(reg&&reg.showNotification){await reg.showNotification(title,opts);return true;}
+  }catch(_){}
+  try{
+    const n=new Notification(title,opts);
+    n.onclick=()=>{window.focus();n.close();};
+    return true;
+  }catch(_){return false;}
+}
+
+/* ---------- Firing due reminders ---------- */
+let timer=0;
+const dueNow=[]; // ids shown in the "due" box
+async function check(){
+  clearTimeout(timer);
+  // Another tab may have fired already: always work on the stored state
+  list=loadList();
+  const now=Date.now();
+  const due=list.filter(r=>!r.fired&&r.at<=now).sort((a,b)=>a.at-b.at);
+  for(const r of due){r.fired=now;r.shown=false;}
+  if(due.length){
+    store();
+    for(const r of due){
+      const late=now-r.at>LATE_MS;
+      r.shown=await notify(r.text,late?t('lateBody',{when:fmtWhen(r.at)}):fmtWhen(r.at),'reminder-'+r.id);
+      if(!dueNow.includes(r.id))dueNow.push(r.id);
+    }
+    // Write "shown" without overwriting changes made meanwhile
+    const cur=loadList();
+    for(const r of due){const c=cur.find(x=>x.id===r.id);if(c&&c.fired===r.fired)c.shown=r.shown;}
+    list=cur;store();
+  }
+  render();
+  schedule();
+}
+function schedule(){
+  clearTimeout(timer);
+  const next=list.filter(r=>!r.fired).reduce((m,r)=>Math.min(m,r.at),Infinity);
+  // Short steps: timers in background tabs are throttled, and the relative times in the list stay fresh
+  const wait=next===Infinity?60e3:Math.max(0,Math.min(next-Date.now(),30e3));
+  timer=setTimeout(check,wait);
+}
+
+/* ---------- Rendering ---------- */
+let editing=null;
+function item(r,past){
+  const li=document.createElement('li');
+  li.dataset.id=r.id;
+  if(editing===r.id)li.classList.add('editing');
+  let status='';
+  if(past){
+    const late=r.fired-r.at>LATE_MS;
+    status=r.shown===false?t('inApp'):t(late?'late':'sent',{when:fmtWhen(r.fired)});
+  }
+  li.innerHTML=`<div class="when">${Tools.esc(fmtWhen(r.at))} <span class="rel">· ${Tools.esc(past?status:fmtRel(r.at))}</span></div>`+
+    `<div class="text">${Tools.esc(r.text)}</div>`+
+    `<div class="acts"><button type="button" class="btn small" data-act="edit" aria-label="${Tools.esc(t(past?'againAria':'editAria',{text:r.text}))}">${Tools.esc(t(past?'again':'edit'))}</button>`+
+    `<button type="button" class="btn small danger" data-act="del" aria-label="${Tools.esc(t('delAria',{text:r.text}))}">${Tools.esc(t('del'))}</button></div>`;
+  return li;
+}
+function render(){
+  const up=list.filter(r=>!r.fired).sort((a,b)=>a.at-b.at);
+  const past=list.filter(r=>r.fired).sort((a,b)=>b.at-a.at);
+  $('upList').replaceChildren(...up.map(r=>item(r,false)));
+  $('pastList').replaceChildren(...past.map(r=>item(r,true)));
+  $('upCount').textContent=up.length;$('pastCount').textContent=past.length;
+  $('upEmpty').hidden=!!up.length;$('pastEmpty').hidden=!!past.length;
+  $('btnClearPast').hidden=!past.length;
+  // Due box
+  const shown=dueNow.map(byId).filter(Boolean);
+  $('due').hidden=!shown.length;
+  // Only touch the live region when its content changes (no repeated announcements)
+  const dueTexts=shown.map(r=>`${r.text} – ${fmtWhen(r.at)}`);
+  if(dueTexts.join('\n')!==[...$('dueList').children].map(li=>li.textContent).join('\n'))
+    $('dueList').replaceChildren(...dueTexts.map(x=>{const li=document.createElement('li');li.textContent=x;return li;}));
+  $('h-form').textContent=t(editing?'editH':'newH');
+  $('btnSave').textContent=t(editing?'saveEdit':'save');
+  $('btnCancel').hidden=!editing;
+  renderPerm();
+}
+
+/* ---------- Form ---------- */
+function msg(text,err){const m=$('formMsg');m.textContent=text||'';m.classList.toggle('err',!!err);}
+function resetForm(){editing=null;$('text').value='';$('at').value='';msg('');render();}
+// Create or change a reminder; returns it, throws an Error with a user text
+function upsert(id,text,at){
+  text=String(text||'').trim().slice(0,MAX_TEXT);
+  if(!text)throw new Error(t('errText'));
+  if(!Number.isFinite(at))throw new Error(t('errTime'));
+  if(at<=Date.now())throw new Error(t('errPast'));
+  list=loadList();
+  let r=id&&byId(id);
+  if(r){r.text=text;r.at=at;r.fired=0;delete r.shown;}
+  else{r={id:newId(),text,at,created:Date.now(),fired:0};list.push(r);}
+  const i=dueNow.indexOf(r.id);if(i>=0)dueNow.splice(i,1);
+  store();
+  return r;
+}
+$('form').addEventListener('submit',e=>{
+  e.preventDefault();
+  const wasEdit=!!editing;
+  try{
+    const r=upsert(editing,$('text').value,fromLocalInput($('at').value));
+    resetForm();
+    msg(t(wasEdit?'updated':'saved',{when:fmtWhen(r.at)}));
+    askPermission();
+    schedule();
+  }catch(err){msg(err.message,true);}
+});
+$('btnCancel').addEventListener('click',resetForm);
+document.querySelector('.quick').addEventListener('click',e=>{
+  const b=e.target.closest('[data-quick]');if(!b)return;
+  let ms;
+  if(b.dataset.quick==='tomorrow'){const d=new Date();d.setDate(d.getDate()+1);d.setHours(9,0,0,0);ms=d.getTime();}
+  else ms=roundMinute(Date.now()+Number(b.dataset.quick)*60e3);
+  $('at').value=toLocalInput(ms);
+  msg('');
+});
+function startEdit(r){
+  editing=r.id;
+  $('text').value=r.text;
+  // A past reminder: same time of day, on the next day where it lies in the future
+  let at=r.at;
+  if(at<=Date.now()){const d=new Date(at),now=new Date();d.setFullYear(now.getFullYear(),now.getMonth(),now.getDate());if(d.getTime()<=Date.now())d.setDate(d.getDate()+1);at=d.getTime();}
+  $('at').value=toLocalInput(at);
+  msg('');render();
+  $('h-form').scrollIntoView({behavior:'smooth',block:'start'});
+  $('text').focus({preventScroll:true});
+}
+for(const id of ['upList','pastList'])$(id).addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const r=byId(b.closest('li').dataset.id);if(!r)return;
+  if(b.dataset.act==='edit')return startEdit(r);
+  if(!confirm(t('confirmDel',{text:r.text})))return;
+  list=loadList().filter(x=>x.id!==r.id);store();
+  if(editing===r.id)resetForm();
+  Tools.toast(t('deleted'));render();schedule();
+});
+$('btnClearPast').addEventListener('click',()=>{
+  const n=list.filter(r=>r.fired).length;
+  if(!confirm(t('confirmClear',{n})))return;
+  list=loadList().filter(r=>!r.fired);store();dueNow.length=0;
+  if(editing&&!byId(editing))resetForm();
+  render();
+});
+$('btnDueOk').addEventListener('click',()=>{dueNow.length=0;render();});
+$('btnPerm').addEventListener('click',askPermission);
+$('btnTest').addEventListener('click',async()=>{if(!await notify(t('testTitle'),t('testBody'),'reminder-test'))Tools.toast(t('testFail'));});
+
+// Changes from another tab, coming back to the app, waking up the phone
+window.addEventListener('storage',e=>{if(e.key===LS){list=loadList();render();schedule();}});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)check();});
+window.addEventListener('focus',check);
+if(navigator.permissions&&navigator.permissions.query)
+  navigator.permissions.query({name:'notifications'}).then(s=>{s.onchange=renderPerm;},()=>{});
+
+Tools.onLang(render);
+check();
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const AT_RE=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+const tz=()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'';}catch(_){return '';}};
+function out(r){
+  const o={id:r.id,text:r.text,at:toLocalInput(r.at),at_utc:new Date(r.at).toISOString(),status:r.fired?'due':'scheduled'};
+  if(r.fired){o.notified_at=new Date(r.fired).toISOString();o.notification_shown=r.shown!==false;}
+  return o;
+}
+function agentTime({at,in_minutes},required){
+  if(at!=null&&in_minutes!=null)throw new Error('Give either at or in_minutes, not both.');
+  if(in_minutes!=null)return roundMinute(Date.now()+in_minutes*60e3);
+  if(at!=null){
+    if(!AT_RE.test(at))throw new Error('at must look like 2026-10-29T18:30 (local time of the device, no time zone).');
+    const ms=fromLocalInput(at);
+    if(!Number.isFinite(ms))throw new Error(`at is not a valid date: ${at}`);
+    if(ms<=Date.now())throw new Error(`at is in the past – it is now ${toLocalInput(Date.now())} on the device.`);
+    return ms;
+  }
+  if(required)throw new Error('Give the time as at or in_minutes.');
+  return null;
+}
+// Agent errors are English, independent of the interface language
+function agentUpsert(id,text,at){
+  if(!String(text).trim())throw new Error('text must not be empty.');
+  if(at<=Date.now())throw new Error('The time is in the past.');
+  const r=upsert(id,text,at);
+  if(editing===r.id)resetForm();
+  render();schedule();
+  return r;
+}
+const timeProps={
+  at:{type:'string',maxLength:16,description:'Local date and time on the device, format YYYY-MM-DDTHH:MM (e.g. 2026-10-29T18:30). Must be in the future.'},
+  in_minutes:{type:'integer',minimum:1,maximum:525600,description:'Alternative to at: minutes from now (rounded to the nearest full minute).'}
+};
+const extra=()=>({now:toLocalInput(Date.now()),time_zone:tz(),notifications:permission()});
+Tools.mcp.register({
+  name:'create_reminder',title:'Create a reminder',label:'mcp.create',
+  description:'Creates a reminder in the app with a text and a time (at, local time, or in_minutes). At that time the device shows a notification, as long as the app is open. Returns the reminder, the current local time, the time zone and whether notifications are allowed (granted, default, denied or unsupported) – only the user can allow them, in the app.',
+  inputSchema:{type:'object',properties:{text:{type:'string',minLength:1,maxLength:MAX_TEXT,description:'What to remind of, shown in the notification.'},...timeProps},required:['text'],additionalProperties:false},
+  execute:args=>{const r=agentUpsert(null,args.text,agentTime(args,true));return {reminder:out(r),...extra()};}
+});
+Tools.mcp.register({
+  name:'update_reminder',title:'Change a reminder',label:'mcp.update',
+  description:'Changes the text and/or time of a reminder (scheduled or already due, id from list_reminders). The reminder is scheduled again, so the new time must be in the future; a due reminder needs a new time. Returns the changed reminder.',
+  inputSchema:{type:'object',properties:{id:{type:'string',maxLength:40,description:'Id of the reminder.'},text:{type:'string',minLength:1,maxLength:MAX_TEXT,description:'New text.'},...timeProps},required:['id'],additionalProperties:false},
+  execute:args=>{
+    const r=loadList().find(x=>x.id===args.id);
+    if(!r)throw new Error(`No reminder with id ${args.id}.`);
+    if(args.text==null&&args.at==null&&args.in_minutes==null)throw new Error('Nothing to change: give text, at or in_minutes.');
+    const at=agentTime(args,false);
+    const changed=agentUpsert(r.id,args.text!=null?args.text:r.text,at!=null?at:r.at);
+    return {reminder:out(changed),...extra()};
+  }
+});
+Tools.mcp.register({
+  name:'list_reminders',title:'List reminders',label:'mcp.list',readOnly:true,
+  description:'Lists the scheduled reminders (soonest first) and, unless include_due is false, the reminders that were already due (newest first, up to limit). Times are local (at) and UTC (at_utc). Also returns the current local time, the time zone and whether notifications are allowed.',
+  inputSchema:{type:'object',properties:{
+    include_due:{type:'boolean',description:'Also list reminders that were already due. Default true.'},
+    limit:{type:'integer',minimum:1,maximum:MAX_PAST,description:'Maximum number of due reminders. Default 20.'}
+  },additionalProperties:false},
+  execute:({include_due,limit})=>{
+    const all=loadList();
+    const res={...extra(),scheduled:all.filter(r=>!r.fired).sort((a,b)=>a.at-b.at).map(out)};
+    if(include_due!==false)res.due=all.filter(r=>r.fired).sort((a,b)=>b.at-a.at).slice(0,limit||20).map(out);
+    return res;
+  }
+});
+})();
+</script>
+</body>
+</html>
