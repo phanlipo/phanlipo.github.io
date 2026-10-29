@@ -285,6 +285,20 @@ test.describe('Android', () => {
     await page.click('#btnTest');
     await expect.poll(async () => (await notes(page)).map(n => n.title)).toEqual(['Test-Benachrichtigung']);
   });
+  test('tapped while the service worker is still installing: waits for it, then asks', async ({ page }) => {
+    // Service worker becomes ready only 1 s after the tap (first visit, or site data just cleared)
+    await page.addInitScript(() => {
+      const desc = Object.getOwnPropertyDescriptor(ServiceWorkerContainer.prototype, 'ready');
+      Object.defineProperty(ServiceWorkerContainer.prototype, 'ready', { configurable: true,
+        get() { const ready = desc.get.call(this); return new Promise(r => setTimeout(() => r(ready), 1000)); } });
+    });
+    await open(page, 'default');
+    await page.click('#btnPerm');
+    await expect(page.locator('#permText')).not.toContainText('erlaubt');
+    await page.clock.runFor(1000);
+    await expect(page.locator('#permText')).toContainText('erlaubt');
+    expect(await page.evaluate(() => [window.__push, window.__unsub])).toEqual([1, 1]);
+  });
   test('push subscription declined at once: hint about the block', async ({ page }) => {
     await open(page, 'dismiss');
     await page.evaluate(() => navigator.serviceWorker.ready);

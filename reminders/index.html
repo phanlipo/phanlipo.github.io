@@ -20,7 +20,7 @@
 <meta name="tool:webmcp" content="create_reminder, update_reminder, list_reminders">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-nfpkV7LQwuORq4ptl4J8n8GhiNvVUQyBxUmfskW23KM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-7CgxyVt07gDrgVnwlaGj1gqy55Fju+znglXO2lr+cTs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -195,7 +195,7 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version f4e2f1689554</p>
+  <p class="footer-version">Version 82ca181a737e</p>
   <!-- footer:end -->
 </footer>
 
@@ -355,8 +355,13 @@ function renderPerm(){
 const PUSH_KEY='BF0pAl2pT6k1qwRTIlPZUQwY6UNEqhW5tj13va7cJfv82O1ftuyI4Xx5Bzo6YXfgxoq0xtkX_yFgQNWsyKVR36c';
 function keyBytes(k){const b=atob(k.replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(b,c=>c.charCodeAt(0));}
 async function askViaPush(){
-  const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration().catch(e=>{log('getRegistration failed:',errText(e));return null;});
-  if(!reg||!reg.pushManager){log('push: no registration or no pushManager – using requestPermission',{reg:!!reg});return false;}
+  // Right after the first visit (or after clearing site data) the service worker may still be installing:
+  // wait for it a moment, subscribe() needs an active one
+  let reg=null;
+  if(navigator.serviceWorker)try{
+    reg=await Promise.race([navigator.serviceWorker.ready,new Promise(r=>setTimeout(()=>r(null),3000))]);
+  }catch(e){log('serviceWorker.ready failed:',errText(e));}
+  if(!reg||!reg.pushManager||!reg.active){log('push: no active service worker or no pushManager – using requestPermission',{reg:!!reg,active:!!(reg&&reg.active)});return false;}
   log('push: subscribe …',{scope:reg.scope,active:!!reg.active});
   try{
     const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(PUSH_KEY)});
