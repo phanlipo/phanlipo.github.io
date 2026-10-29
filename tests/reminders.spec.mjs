@@ -12,11 +12,13 @@ async function fakeNotifications(page, permission = 'granted') {
   await page.addInitScript(perm => {
     window.__notes = [];
     window.__asked = 0;
+    if (perm === 'unsupported') { delete window.Notification; return; }
     let p = perm;
     class FakeNotification {
       constructor(title, opts) { window.__notes.push({ title, ...opts, via: 'page' }); }
-      static get permission() { return p; }
-      static requestPermission() { window.__asked++; if (p === 'default') p = 'granted'; return Promise.resolve(p); }
+      static get permission() { return p === 'dismiss' ? 'default' : p; }
+      // 'dismiss': the request gets no answer (closed, or blocked quietly by the browser) and stays 'default'
+      static requestPermission() { window.__asked++; if (p === 'default') p = 'granted'; return Promise.resolve(p === 'dismiss' ? 'default' : p); }
     }
     window.Notification = FakeNotification;
     ServiceWorkerRegistration.prototype.showNotification = function (title, opts) {
@@ -33,11 +35,13 @@ async function open(page, permission) {
   await fakeNotifications(page, permission);
   await page.goto('/reminders/');
 }
-async function add(page, text, at) {
+async function add(page, text, at, repeat) {
   await page.fill('#text', text);
   await page.fill('#at', at);
+  if (repeat) await page.selectOption('#repeat', repeat);
   await page.click('#btnSave');
 }
+const at = s => new Date(s).getTime();
 
 test('reminder fires at its time, not before, and moves to the history', async ({ page }) => {
   await open(page);
@@ -196,6 +200,105 @@ test('permission "default": button asks, then the test notification works', asyn
   await page.click('#btnTest');
   await expect.poll(async () => (await notes(page)).map(n => n.title)).toEqual(['Test-Benachrichtigung']);
   expect(await page.evaluate(() => window.__asked)).toBe(1);
+});
+
+test('no answer to the request (Android quiet prompt): explains how to allow by hand', async ({ page }) => {
+  await open(page, 'dismiss');
+  await expect(page.locator('#permHint')).toBeHidden();
+  await page.click('#btnPerm');
+  await expect(page.locator('#permHint')).toBeVisible();
+  await expect(page.locator('#permHint')).toContainText('Keine Abfrage erschienen?');
+  await expect(page.locator('#btnPerm')).toBeVisible();
+});
+
+test('blocked: shows how to allow', async ({ page }) => {
+  await open(page, 'denied');
+  await expect(page.locator('#permHint')).toContainText('Benachrichtigungen');
+});
+
+test('no Notification API at all (in-app browser): hint, reminders still show in the app', async ({ page }) => {
+  await open(page, 'unsupported');
+  await expect(page.locator('#permText')).toContainText('in Chrome öffnen');
+  await expect(page.locator('#btnPerm')).toBeHidden();
+  await add(page, 'Trotzdem', '2026-10-29T12:01');
+  await page.clock.runFor(2 * 60e3);
+  await expect(page.locator('#dueList')).toContainText('Trotzdem');
+  await expect(page.locator('#pastList li')).toContainText('nur in der App');
+});
+
+test.describe('Android', () => {
+  test.use({ userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36' });
+  test('hint names the Chrome and app settings', async ({ page }) => {
+    await open(page, 'dismiss');
+    await page.fill('#text', 'x');
+    await page.fill('#at', '2026-10-29T13:00');
+    await page.click('#btnSave');
+    await expect(page.locator('#permHint')).toContainText('⋮ → ⓘ → Berechtigungen → Benachrichtigungen');
+    await expect(page.locator('#permHint')).toContainText('App-Info');
+  });
+});
+
+test('daily: stays scheduled at the next day, every date goes to the history', async ({ page }) => {
+  await open(page);
+  await add(page, 'Tabletten', '2026-10-29T12:01', 'daily');
+  await expect(page.locator('#upList .rel')).toContainText('🔁 täglich');
+  await expect(page.locator('#repeat')).toHaveValue('none');
+  await page.clock.runFor(2 * 60e3);
+  await expect.poll(() => notes(page)).toHaveLength(1);
+  await expect(page.locator('#upList li')).toHaveCount(1);
+  await expect(page.locator('#pastList li')).toHaveCount(1);
+  let list = await stored(page);
+  expect(list.find(r => !r.fired)).toMatchObject({ text: 'Tabletten', repeat: 'daily', at: at('2026-10-30T12:01:00+01:00') });
+  await page.clock.runFor(24 * 3600e3);
+  await expect.poll(async () => (await notes(page)).map(n => n.title)).toEqual(['Tabletten', 'Tabletten']);
+  await expect(page.locator('#pastList li')).toHaveCount(2);
+  list = await stored(page);
+  expect(list.find(r => !r.fired).at).toBe(at('2026-10-31T12:01:00+01:00'));
+  expect(list.filter(r => r.fired).map(r => r.at).sort()).toEqual([at('2026-10-29T12:01:00+01:00'), at('2026-10-30T12:01:00+01:00')]);
+});
+
+test('daily across the change to winter time keeps the local time of day', async ({ page }) => {
+  // Daylight saving time ends on Sunday, 25 October 2026 in Germany: that day has 25 hours
+  await page.clock.install({ time: new Date('2026-10-24T11:00:00+02:00') });
+  await fakeNotifications(page);
+  await page.goto('/reminders/');
+  await add(page, 'Gießen', '2026-10-24T12:00', 'daily');
+  await page.clock.runFor(61 * 60e3);
+  await expect.poll(() => notes(page)).toHaveLength(1);
+  expect((await stored(page)).find(r => !r.fired).at).toBe(at('2026-10-25T12:00:00+01:00'));
+  await page.clock.runFor(25 * 3600e3);
+  await expect.poll(() => notes(page)).toHaveLength(2);
+  expect((await stored(page)).find(r => !r.fired).at).toBe(at('2026-10-26T12:00:00+01:00'));
+});
+
+test('weekly, app closed for several weeks: one late notification, next date in the future', async ({ page }) => {
+  await open(page);
+  // Wednesday 14 October, 12:00 – missed on 14, 21 and 28 October
+  await page.evaluate(([k, a]) => localStorage.setItem(k, JSON.stringify([
+    { id: 'rw', text: 'Gelber Sack', at: a, created: a, fired: 0, repeat: 'weekly' },
+  ])), [KEY, at('2026-10-14T12:00:00+02:00')]);
+  await page.reload();
+  await expect.poll(() => notes(page)).toHaveLength(1);
+  expect((await notes(page))[0].body).toContain('Fällig war');
+  await expect(page.locator('#upList .rel')).toContainText('🔁 wöchentlich');
+  const list = await stored(page);
+  expect(list.find(r => !r.fired)).toMatchObject({ id: 'rw', at: at('2026-11-04T12:00:00+01:00') });
+  expect(list.filter(r => r.fired)).toHaveLength(1);
+});
+
+test('edit a series: shows its repetition, "Nie" ends it', async ({ page }) => {
+  await open(page);
+  await add(page, 'Sport', '2026-10-29T12:01', 'weekly');
+  await page.click('#upList [data-act="edit"]');
+  await expect(page.locator('#repeat')).toHaveValue('weekly');
+  await page.selectOption('#repeat', 'none');
+  await page.click('#btnSave');
+  await page.clock.runFor(2 * 60e3);
+  await expect.poll(() => notes(page)).toHaveLength(1);
+  await expect(page.locator('#upList li')).toHaveCount(0);
+  // Scheduling a history entry again starts without repetition
+  await page.click('#pastList [data-act="edit"]');
+  await expect(page.locator('#repeat')).toHaveValue('none');
 });
 
 test('delete a reminder and clear the history', async ({ page }) => {
