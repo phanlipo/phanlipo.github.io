@@ -25,6 +25,7 @@ tests/                Playwright-Tests (siehe tests/README.md)
 .github/workflows/vendor-check.yml  prüft monatlich auf Bibliotheks-Updates und öffnet ein Issue
 .github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus
 .github/dependabot.yml              wöchentliche Update-PRs für GitHub Actions und Test-Werkzeuge
+NOTICE.md             Hinweise zu Fremdsoftware (Lizenzen der Bibliotheken) – generiert von build.mjs, verlinkt in der Fußzeile
 robots.txt            erlaubt Crawlen – damit Suchmaschinen das noindex jeder Seite sehen
 ```
 
@@ -53,6 +54,7 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 - **Speicher:** nur über `Tools.load` / `Tools.save` (fangen Fehler im privaten Modus ab). Schlüssel für neue Tools: `<tool-name>.<was>.v1`. **Bestehende Schlüssel nie umbenennen** – sonst sind Einstellungen und Verläufe der Nutzer weg (`scanCopySecurPharm.*`, `wuerfelMuenze.*`, `brauRechner.*`).
 - **Modelle/Daten von externen Diensten** (z. B. Whisper-Modelle von Hugging Face) nur, wenn es nicht anders geht: erst bei Bedarf laden, nie Nutzerdaten mitschicken, in der Hilfe erklären. Die Tests blockieren solche Anfragen und prüfen die Fehlermeldung; echte Downloads nur in `tests/manual/`.
 - **Externe Bibliotheken:** nie per CDN einbinden, sondern in `scripts/vendor.json` eintragen (npm-Paket, feste Version, Lizenz, Dateien) und `node scripts/vendor.mjs` ausführen. Eingebunden wird aus `../assets/vendor/<name>/`. Lädt eine Bibliothek selbst weitere Dateien nach (z. B. `.wasm`), den Pfad auf `assets/vendor` umbiegen. Nur Lizenzen, die Weitergabe erlauben (MIT, Apache-2.0, BSD …).
+- **Lizenzhinweise:** `NOTICE.md` (Bibliothek, Version, Lizenz, Copyright aus der `LICENSE`, weitere Lizenzdateien eines Pakets) erzeugt `build.mjs` aus `scripts/vendor.json` – nie von Hand ändern. Die gemeinsame Fußzeile verlinkt sie („Open-Source-Lizenzen“).
 - **Bibliotheks-Updates:** Die Action „Vendor-Updates prüfen“ öffnet monatlich ein Issue. Aktualisieren mit `node scripts/vendor.mjs --update <name>`, bei Tabler danach `node scripts/build-icons.mjs`, dann `npm test`. Bei 0.x- oder Major-Sprüngen das Changelog lesen.
 - **PWA / Offline:** `sw.js` cacht die Seite, `assets/base.css`, `assets/common.js`, Icons und jede genutzte Vendor-Bibliothek komplett. Die Cache-Version ist ein Hash dieser Dateien – Updates kommen automatisch. Lädt eine Seite zur Laufzeit weitere eigene Dateien, müssen sie unter `assets/vendor/` liegen oder in `build.mjs` (`precacheList`) ergänzt werden. Nie Daten an fremde Server senden – offline gibt es keine.
 - **Große Bibliotheken:** In `scripts/vendor.json` mit `"precache": false` markieren – sie werden nicht bei der Installation, sondern beim ersten Gebrauch gecacht (Cache `vendor:<name>@<version>`, bleibt über App-Updates erhalten). `"wasm": true` kennzeichnet Bibliotheken, die WebAssembly kompilieren (CSP bekommt dann `'wasm-unsafe-eval'`). Muss eine Bibliothek exakt zur Abhängigkeit einer anderen passen, `"versionFrom"` setzen (Beispiel: onnxruntime-web ↔ transformers). Pakete ohne Lizenzdatei (nur MIT) bekommen `"licenseFallback"`.
