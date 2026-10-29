@@ -16,9 +16,15 @@ async function fakeNotifications(page, permission = 'granted') {
     let p = perm;
     class FakeNotification {
       constructor(title, opts) { window.__notes.push({ title, ...opts, via: 'page' }); }
-      static get permission() { return p === 'dismiss' ? 'default' : p; }
-      // 'dismiss': the request gets no answer (closed, or blocked quietly by the browser) and stays 'default'
-      static requestPermission() { window.__asked++; if (p === 'default') p = 'granted'; return Promise.resolve(p === 'dismiss' ? 'default' : p); }
+      static get permission() { return p === 'dismiss' || p === 'timeout' ? 'default' : p; }
+      // 'dismiss': answered at once without a prompt (Chrome's block after ignored prompts), stays 'default'
+      // 'timeout': the prompt is shown and expires after 5 s without a decision (Chrome 155+ on Android), stays 'default'
+      static requestPermission() {
+        window.__asked++;
+        if (p === 'default') p = 'granted';
+        if (p === 'timeout') return new Promise(r => setTimeout(() => r('default'), 5000));
+        return Promise.resolve(p === 'dismiss' ? 'default' : p);
+      }
     }
     window.Notification = FakeNotification;
     ServiceWorkerRegistration.prototype.showNotification = function (title, opts) {
@@ -178,7 +184,7 @@ test('reminder that was due while the app was closed comes when it opens, marked
   await expect(page.locator('#upList li .text')).toHaveText(['Später']);
 });
 
-test('without permission: asks once on saving, blocked reminders still show in the app', async ({ page }) => {
+test('blocked: reminders still show in the app', async ({ page }) => {
   await open(page, 'denied');
   await expect(page.locator('#permText')).toContainText('blockiert');
   await expect(page.locator('#btnPerm')).toBeHidden();
@@ -202,12 +208,29 @@ test('permission "default": button asks, then the test notification works', asyn
   expect(await page.evaluate(() => window.__asked)).toBe(1);
 });
 
-test('no answer to the request (Android quiet prompt): explains how to allow by hand', async ({ page }) => {
+test('declined at once without a prompt: explains the block and how to lift it', async ({ page }) => {
   await open(page, 'dismiss');
   await expect(page.locator('#permHint')).toBeHidden();
   await page.click('#btnPerm');
   await expect(page.locator('#permHint')).toBeVisible();
-  await expect(page.locator('#permHint')).toContainText('Keine Abfrage erschienen?');
+  await expect(page.locator('#permHint')).toContainText('sofort abgelehnt');
+  await expect(page.locator('#btnPerm')).toBeVisible();
+});
+
+test('prompt expired without a decision: says to look for the banner and tap again', async ({ page }) => {
+  await open(page, 'timeout');
+  await page.click('#btnPerm');
+  await expect(page.locator('#permHint')).toBeHidden();
+  await page.clock.runFor(5000);
+  await expect(page.locator('#permHint')).toContainText('kleines Banner');
+  await expect(page.locator('#btnPerm')).toBeVisible();
+});
+
+test('saving a reminder does not ask for permission (unanswered requests count against the site)', async ({ page }) => {
+  await open(page, 'default');
+  await add(page, 'Ohne Abfrage', '2026-10-29T13:00');
+  await expect(page.locator('#upList li')).toHaveCount(1);
+  expect(await page.evaluate(() => window.__asked)).toBe(0);
   await expect(page.locator('#btnPerm')).toBeVisible();
 });
 
@@ -228,12 +251,14 @@ test('no Notification API at all (in-app browser): hint, reminders still show in
 
 test.describe('Android', () => {
   test.use({ userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36' });
-  test('hint names the Chrome and app settings', async ({ page }) => {
+  test('hints name the Chrome and app settings', async ({ page }) => {
     await open(page, 'dismiss');
-    await page.fill('#text', 'x');
-    await page.fill('#at', '2026-10-29T13:00');
-    await page.click('#btnSave');
-    await expect(page.locator('#permHint')).toContainText('⋮ → ⓘ → Berechtigungen → Benachrichtigungen');
+    await page.click('#btnPerm');
+    await expect(page.locator('#permHint')).toContainText('ⓘ links neben der Adresse → Berechtigungen → „Berechtigungen zurücksetzen“');
+  });
+  test('blocked: names site and app settings', async ({ page }) => {
+    await open(page, 'denied');
+    await expect(page.locator('#permHint')).toContainText('ⓘ links neben der Adresse → Berechtigungen → Benachrichtigungen');
     await expect(page.locator('#permHint')).toContainText('App-Info');
   });
 });
