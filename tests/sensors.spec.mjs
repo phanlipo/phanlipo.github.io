@@ -12,8 +12,10 @@ async function orientation(page, values, type = 'deviceorientation', times = 40)
     for (let i = 0; i < times; i++) window.dispatchEvent(new DeviceOrientationEvent(type, values));
   }, { values, type, times });
 }
+// Opens a tool: from the overview tiles, or in the tool view from the tab bar
 async function tab(page, name) {
-  await page.getByRole('tab', { name }).click();
+  if (await page.locator('#overview').isVisible()) await page.locator('#overview').getByRole('button', { name, exact: true }).click();
+  else await page.getByRole('tab', { name }).click();
 }
 // Measurements start by themselves (on load and when a tab is chosen)
 async function running(page, panel) {
@@ -25,6 +27,56 @@ test.use({ permissions: ['accelerometer', 'gyroscope', 'magnetometer'] });
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/sensors/');
+  await tab(page, 'Kompass');
+});
+
+test('overview: tiles open a tool, back returns, the last tool reopens', async ({ page }) => {
+  // Fresh start shows the overview, nothing running
+  await page.evaluate(() => localStorage.clear());
+  await page.reload(); // like „Alle Daten löschen“: reload inside the tool's history entry
+  await expect(page.locator('#overview')).toBeVisible();
+  await expect(page.locator('#toolbar')).toBeHidden();
+  await expect(page.locator('.panel:visible')).toHaveCount(0);
+  await expect(page.locator('#overview .tile')).toHaveCount(12);
+  await page.locator('#overview').getByRole('button', { name: 'Wasserwaage' }).click();
+  await expect(page.locator('#p-level')).toBeVisible();
+  await expect(page.locator('#overview')).toBeHidden();
+  await running(page, 'level');
+  await expect(page.getByRole('tab', { name: 'Wasserwaage' })).toHaveAttribute('aria-selected', 'true');
+  // Browser/phone back button → overview, measurement stops
+  await page.goBack();
+  await expect(page.locator('#overview')).toBeVisible();
+  await expect(page.locator('[data-start="level"]')).toHaveText('Starten');
+  // Forward again and the on-screen back button
+  await page.locator('#overview').getByRole('button', { name: 'Tacho' }).click();
+  await expect(page.locator('#p-speed')).toBeVisible();
+  await page.getByRole('button', { name: 'Übersicht' }).click();
+  await expect(page.locator('#overview')).toBeVisible();
+  await expect(page.locator('#toolbar')).toBeHidden();
+  // Reload: the overview stays; after opening a tool the app reopens it
+  await page.reload();
+  await expect(page.locator('#overview')).toBeVisible();
+  await page.locator('#overview').getByRole('button', { name: 'Vibrometer' }).click();
+  await page.reload();
+  await expect(page.locator('#p-vibro')).toBeVisible();
+  await running(page, 'vibro');
+  await page.goBack();
+  await expect(page.locator('#overview')).toBeVisible();
+});
+
+test('tab bar: swipeable without making the page scroll sideways; active tab scrolled into view', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await tab(page, 'Tacho');
+  const bar = page.locator('#tabs');
+  expect(await bar.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+  const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+  expect(sw).toBeLessThanOrEqual(iw);
+  // The selected tab (last one) is fully visible inside the bar
+  const inView = await page.getByRole('tab', { name: 'Tacho' }).evaluate(el => {
+    const b = el.parentElement.getBoundingClientRect(), r = el.getBoundingClientRect();
+    return r.left >= b.left - 1 && r.right <= b.right + 1;
+  });
+  expect(inView).toBe(true);
 });
 
 test('tabs switch panels, support arrow keys and are remembered', async ({ page }) => {
@@ -100,6 +152,7 @@ test('stop and start by hand; pauses in the background and continues afterwards'
 });
 
 test('no data on automatic start: offers a permission request, then reports a missing sensor', async ({ page }) => {
+  await page.reload(); // reopens the compass without a tap
   // Chromium (like iOS) has DeviceOrientationEvent.requestPermission, which needs a tap
   await expect(page.getByRole('button', { name: 'Zugriff erlauben' })).toBeVisible({ timeout: 5000 });
   await expect(page.locator('#st-compass')).toHaveText(/Freigabe/);
