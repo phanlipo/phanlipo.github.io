@@ -20,7 +20,7 @@
 <meta name="tool:webmcp" content="create_reminder, update_reminder, list_reminders">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-No7W4CZdV1AuZdVwHSzNKnr8JjrpL7T+uAMb5pYwIRQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-FO38AHAc6bkDduj/Gznj7oTY/YfrcIK12TTM3akUnBQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -197,9 +197,10 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
     <li>AI agents in the browser (WebMCP) can create (also repeating), change and list reminders, but not delete them. What they do shows up in the app right away.</li>
   </ul>
   </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
   <h3 data-i18n="diag.h">Fehlersuche</h3>
-  <p data-i18n="diag.intro">Klappt etwas nicht (z. B. die Abfrage zum Erlauben)? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, Status der Berechtigung und ein Protokoll der Schritte – keine Erinnerungstexte.</p>
-  <div class="row"><button type="button" class="btn" id="btnDiag" data-i18n="diag.copy">Diagnose kopieren</button></div>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
 </details>
 
 <footer>
@@ -207,7 +208,7 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version b646fceb0b16</p>
+  <p class="footer-version">Version 471a1aa7bf48</p>
   <!-- footer:end -->
 </footer>
 
@@ -215,17 +216,9 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
 <script>
 (function(){
 'use strict';
-/* ---------- Diagnostics: a short log of what happened, copied from the help ("Diagnose kopieren") ---------- */
-const diag=[];
+// Diagnostics log ("Diagnose kopieren" in the help, see assets/common.js) – steps and states, never reminder texts
+const log=Tools.diag.log;
 const errText=e=>e?(e.name?e.name+': ':'')+(e.message||String(e)):String(e);
-function log(...parts){
-  const line=new Date().toISOString().slice(11,23)+' '+parts.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' ');
-  diag.push(line);
-  if(diag.length>300)diag.shift();
-  console.info('[reminders]',line);
-}
-window.addEventListener('error',e=>log('JS error:',errText(e.error||e.message),e.filename?`${e.filename}:${e.lineno}`:''));
-window.addEventListener('unhandledrejection',e=>log('unhandled rejection:',errText(e.reason)));
 Tools.i18n({
 de:{
   'perm.granted':'🔔 Benachrichtigungen sind erlaubt.',
@@ -250,8 +243,7 @@ de:{
   deleted:'Erinnerung gelöscht',
   sent:'benachrichtigt {when}',late:'verspätet: {when}',inApp:'nur in der App',
   lateBody:'Fällig war: {when}',
-  'mcp.create':'Erinnerung angelegt','mcp.update':'Erinnerung geändert','mcp.list':'Erinnerungen gelesen',
-  'diag.copied':'Diagnose kopiert','diag.fail':'Kopieren nicht möglich'
+  'mcp.create':'Erinnerung angelegt','mcp.update':'Erinnerung geändert','mcp.list':'Erinnerungen gelesen'
 },
 en:{
   title:'Reminders',sub:'Choose time and text – a notification arrives on time',
@@ -283,9 +275,7 @@ en:{
   deleted:'Reminder deleted',
   sent:'notified {when}',late:'late: {when}',inApp:'in the app only',
   lateBody:'Was due: {when}',
-  'mcp.create':'reminder created','mcp.update':'reminder changed','mcp.list':'reminders read',
-  'diag.h':'Troubleshooting','diag.intro':'Something does not work (e.g. the request to allow notifications)? First make the problem happen, then copy the diagnostics and pass them on. They contain the browser, the permission state and a log of the steps – no reminder texts.',
-  'diag.copy':'Copy diagnostics','diag.copied':'Diagnostics copied','diag.fail':'Copying not possible'
+  'mcp.create':'reminder created','mcp.update':'reminder changed','mcp.list':'reminders read'
 }});
 const t=Tools.t,$=Tools.$;
 const LS='reminders.list.v1';
@@ -437,30 +427,20 @@ async function notify(title,body,tag){
   }catch(e){log('notify: new Notification() failed:',errText(e));return false;}
 }
 
-// Snapshot of the environment for "Diagnose kopieren" (no reminder texts)
-async function diagnostics(){
-  const out=[];
-  const add=(k,v)=>out.push(`${k}: ${typeof v==='string'?v:JSON.stringify(v)}`);
-  add('app','reminders – '+(document.querySelector('.footer-version')||{}).textContent);
-  add('time',new Date().toString());
-  add('userAgent',navigator.userAgent);
-  add('standalone',matchMedia('(display-mode: standalone)').matches);
-  add('Notification API',hasNotif());
-  add('Notification.permission',permission());
-  try{add('permissions.query',(await navigator.permissions.query({name:'notifications'})).state);}catch(e){add('permissions.query',errText(e));}
-  add('serviceWorker.controller',!!(navigator.serviceWorker&&navigator.serviceWorker.controller));
+// Notification state for "Diagnose kopieren" (common part: app, browser, service worker … see assets/common.js)
+Tools.diag.info(async()=>{
+  const o={'Notification API':hasNotif(),'Notification.permission':permission()};
+  try{o['permissions.query']=(await navigator.permissions.query({name:'notifications'})).state;}catch(e){o['permissions.query']=errText(e);}
   try{
     const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();
-    add('registration',reg?{scope:reg.scope,active:!!reg.active,waiting:!!reg.waiting,pushManager:!!reg.pushManager}:null);
     if(reg&&reg.pushManager){
-      try{add('push.permissionState',await reg.pushManager.permissionState({userVisibleOnly:true}));}catch(e){add('push.permissionState',errText(e));}
-      try{add('push.subscription',!!(await reg.pushManager.getSubscription()));}catch(e){add('push.subscription',errText(e));}
+      try{o['push.permissionState']=await reg.pushManager.permissionState({userVisibleOnly:true});}catch(e){o['push.permissionState']=errText(e);}
+      try{o['push.subscription']=!!(await reg.pushManager.getSubscription());}catch(e){o['push.subscription']=errText(e);}
     }
-  }catch(e){add('registration',errText(e));}
-  add('reminders',{scheduled:list.filter(r=>!r.fired).length,due:list.filter(r=>r.fired).length,repeating:list.filter(r=>!r.fired&&r.repeat).length});
-  add('language',Tools.lang());
-  return out.join('\n')+'\n\nlog:\n'+(diag.join('\n')||'(empty)');
-}
+  }catch(e){o.push=errText(e);}
+  o.reminders={scheduled:list.filter(r=>!r.fired).length,due:list.filter(r=>r.fired).length,repeating:list.filter(r=>!r.fired&&r.repeat).length};
+  return o;
+});
 
 /* ---------- Firing due reminders ---------- */
 let timer=0;
@@ -631,7 +611,6 @@ if(navigator.permissions&&navigator.permissions.query)
   navigator.permissions.query({name:'notifications'}).then(s=>{s.onchange=renderPerm;},()=>{});
 
 Tools.onLang(render);
-$('btnDiag').addEventListener('click',async()=>{Tools.toast(t(await Tools.copyText(await diagnostics())?'diag.copied':'diag.fail'));});
 log('start',{permission:permission(),android:isAndroid,standalone:matchMedia('(display-mode: standalone)').matches});
 check();
 
