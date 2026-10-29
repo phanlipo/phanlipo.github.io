@@ -5,7 +5,7 @@ import { allPages } from '../scripts/lib.mjs';
 test('robots.txt allows crawling so search engines can see the noindex tag', async ({ request }) => {
   const txt = await (await request.get('/robots.txt')).text();
   expect(txt).not.toMatch(/^Disallow:\s*\/\s*$/m);
-  // Only repository files (README.md, scripts/ …) may be blocked – never the start page, an app or a redirect page
+  // Never block the start page, an app or a redirect page
   const rules = [...txt.matchAll(/^Disallow:\s*(\S+)/gm)].map(m => m[1]);
   const blocked = path => rules.some(r => {
     const re = new RegExp('^' + r.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
@@ -15,8 +15,18 @@ test('robots.txt allows crawling so search engines can see the noindex tag', asy
     '/assets/base.css', '/assets/common.js', '/robots.txt']) {
     expect(blocked(path), `robots.txt blocks ${path}`).toBe(false);
   }
-  expect(blocked('/README.md')).toBe(true);
-  expect(blocked('/scripts/build.mjs')).toBe(true);
+});
+
+test('repository files are not published, only what the pages need', async ({ request }) => {
+  // Same rule as GitHub Pages via scripts/site.mjs – these files cannot carry noindex
+  for (const path of ['/README.md', '/AGENTS.md', '/NOTICE.md', '/LICENSE', '/package.json', '/package-lock.json',
+    '/playwright.config.mjs', '/scripts/build.mjs', '/scripts/vendor.json', '/tests/server.mjs',
+    '/assets/vendor/README.md', '/assets/vendor/katex/SOURCE.md', '/.nojekyll', '/.github/workflows/pages.yml']) {
+    expect((await request.get(path)).status(), path).toBe(404);
+  }
+  for (const path of ['/', '/robots.txt', '/icon.svg', '/assets/base.css', '/assets/vendor/katex/LICENSE', '/dice-coin/', '/dice-coin/sw.js']) {
+    expect((await request.get(path)).status(), path).toBe(200);
+  }
 });
 
 test.describe('start page', () => {

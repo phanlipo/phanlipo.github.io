@@ -1,0 +1,41 @@
+# Publishes the site to GitHub Pages – only the files the pages need (scripts/site.mjs),
+# not README.md, scripts/, tests/ … (those cannot carry noindex and stay on github.com).
+# Requires: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+name: GitHub Pages veröffentlichen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a running one is not cancelled
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # Same generated state the tests ran against
+      - name: Build generated files
+        run: node scripts/build.mjs
+      - name: Collect published files
+        run: node scripts/site.mjs _site
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

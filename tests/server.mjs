@@ -1,9 +1,11 @@
 // Minimal static file server for the tests (behaves like GitHub Pages for our needs):
-// serves the repository root, "folder" -> 301 "folder/", "folder/" -> folder/index.html.
+// serves only what is published (isPublished in scripts/lib.mjs) – plus template/, which is tested
+// like an app but not published –, "folder" -> 301 "folder/", "folder/" -> folder/index.html.
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { join, extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isPublished } from '../scripts/lib.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = Number(process.argv[2]) || 4173;
@@ -25,6 +27,8 @@ createServer(async (req, res) => {
       file = join(file, 'index.html');
       s = await stat(file);
     }
+    const rel = file.slice(ROOT.length).split('\\').join('/').replace(/^\//, '');
+    if (!isPublished(rel) && !rel.startsWith('template/')) throw new Error('not published');
     res.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(await readFile(file));
   } catch {

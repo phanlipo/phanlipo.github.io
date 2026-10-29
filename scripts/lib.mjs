@@ -18,11 +18,12 @@ export function meta(html, name) {
   return v == null ? null : decode(v.trim());
 }
 
-// All pages: root index.html plus <folder>/index.html (incl. template and redirects)
+// All pages: root index.html plus <folder>/index.html (incl. template and redirects);
+// folders starting with "_" (e.g. the _site output of scripts/site.mjs) are no pages
 export function allPages() {
   const pages = [{ folder: '', file: 'index.html' }];
   for (const e of readdirSync(ROOT, { withFileTypes: true })) {
-    if (!e.isDirectory() || e.name.startsWith('.') || ['node_modules', 'tests', 'test-results', 'playwright-report'].includes(e.name)) continue;
+    if (!e.isDirectory() || e.name.startsWith('.') || e.name.startsWith('_') || ['node_modules', 'tests', 'test-results', 'playwright-report'].includes(e.name)) continue;
     if (existsSync(join(ROOT, e.name, 'index.html'))) pages.push({ folder: e.name, file: `${e.name}/index.html` });
   }
   return pages;
@@ -113,4 +114,18 @@ function untar(buf) {
     off += 512 + Math.ceil(size / 512) * 512;
   }
   return out;
+}
+
+/* ---------- What GitHub Pages publishes (scripts/site.mjs, tests/server.mjs) ----------
+   Only what the pages need: start page, robots.txt, root icons, assets/ and the page folders
+   (tools and redirect pages). Never: Markdown files, dotfiles, _folders, scripts/, tests/, template/,
+   package.json, LICENSE … – they stay on github.com. rel: repo-relative path with "/". */
+export function isPublished(rel) {
+  const parts = rel.split('/');
+  if (parts.some(s => !s || s.startsWith('.')) || parts[0].startsWith('_') || rel.endsWith('.md')) return false;
+  if (parts.length === 1) return rel === 'index.html' || rel === 'robots.txt' || /^icon[\w-]*\.(svg|png)$/.test(rel);
+  const top = parts[0];
+  if (top === 'assets') return true;
+  return !['scripts', 'template', 'node_modules', 'tests', 'test-results', 'playwright-report'].includes(top)
+    && existsSync(join(ROOT, top, 'index.html'));
 }

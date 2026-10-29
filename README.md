@@ -60,6 +60,7 @@ Die Seite ist dann unter `https://phanlipo.github.io/<ordner>/` erreichbar.
 
 - **Vor jedem Commit:** einmalig `git config core.hooksPath .githooks` ausführen – dann läuft `build.mjs` automatisch.
 - **Bei jedem Push:** die Action `.github/workflows/build.yml` führt `build.mjs` aus und committet Änderungen.
+- **Bei jedem Push auf main:** die Action `.github/workflows/pages.yml` veröffentlicht die Seiten auf GitHub Pages.
 - **Bei jedem PR und Push auf main:** die Action `.github/workflows/test.yml` führt alle Tests aus (lokal: `npm install`, `npx playwright install chromium`, `npm test`).
 - **Wöchentlich:** Dependabot öffnet Update-PRs für GitHub Actions und die Test-Werkzeuge.
 - **Monatlich:** die Action `.github/workflows/vendor-check.yml` prüft, ob es neuere Versionen der Bibliotheken gibt, und öffnet dann ein Issue.
@@ -67,7 +68,7 @@ Die Seite ist dann unter `https://phanlipo.github.io/<ordner>/` erreichbar.
 
 ## Sichtbarkeit und Sicherheit
 
-- Die Seiten sind **nicht für Suchmaschinen gedacht**: Jede Seite trägt `noindex`; `robots.txt` erlaubt das Crawlen der Seiten bewusst, damit Suchmaschinen diesen Hinweis sehen. Gesperrt sind nur die übrigen Repo-Dateien (`README.md`, `scripts/`, `tests/` …), die GitHub Pages ebenfalls ausliefert, die aber kein `noindex` tragen können. Wer den Link hat, kann die Seiten trotzdem öffnen.
+- Die Seiten sind **nicht für Suchmaschinen gedacht**: Jede Seite trägt `noindex`; `robots.txt` erlaubt das Crawlen der Seiten bewusst, damit Suchmaschinen diesen Hinweis sehen. Die übrigen Repo-Dateien (`README.md`, `scripts/`, `tests/` …) werden gar nicht veröffentlicht – die Action `.github/workflows/pages.yml` lädt nur die Seiten und `assets/` hoch (`scripts/site.mjs`). Wer den Link hat, kann die Seiten trotzdem öffnen.
 - Eine strenge **Content Security Policy** erlaubt nur eigene Dateien – keine fremden Skripte, Tracker oder CDNs.
 - Die Fußzeile jeder App zeigt die **Version** (= Offline-Cache-Version), um Updates auf installierten Apps prüfen zu können.
 

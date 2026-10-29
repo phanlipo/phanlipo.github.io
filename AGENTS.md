@@ -14,6 +14,7 @@ assets/vendor/        Fremdbibliotheken mit LICENSE + SOURCE.md je Ordner (gener
 template/             Vorlage für neue Seiten (wird nicht gelistet)
 scripts/build.mjs     erzeugt Seitenliste, Fußzeile (inkl. Version), <head>-Block (noindex, CSP, Icons, Manifest), manifest.webmanifest + sw.js je App
 scripts/build-icons.mjs  erzeugt icon.svg und PNG-Icons (180/192/512/maskable) je Seite (Tabler Icons)
+scripts/site.mjs      sammelt die veröffentlichten Dateien (Regel: isPublished in scripts/lib.mjs) für GitHub Pages
 scripts/vendor.mjs    lädt Bibliotheken aus scripts/vendor.json nach assets/vendor/, prüft auf Updates
 scripts/partials/footer.html  Text der gemeinsamen Fußzeile
 scripts/partials/data.html    Bereich „Daten sichern & übertragen“ (in jede App eingesetzt)
@@ -24,6 +25,7 @@ tests/                Playwright-Tests (siehe tests/README.md)
 .github/workflows/build.yml         dasselbe bei jedem Push auf GitHub
 .github/workflows/vendor-check.yml  prüft monatlich auf Bibliotheks-Updates und öffnet ein Issue
 .github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus
+.github/workflows/pages.yml         veröffentlicht main auf GitHub Pages (nur die Dateien aus scripts/site.mjs)
 .github/dependabot.yml              wöchentliche Update-PRs für GitHub Actions und Test-Werkzeuge
 NOTICE.md             Hinweise zu Fremdsoftware (Lizenzen der Bibliotheken) – generiert von build.mjs, verlinkt in der Fußzeile
 robots.txt            erlaubt Crawlen – damit Suchmaschinen das noindex jeder Seite sehen
@@ -67,7 +69,7 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 - **Teilen an die App (Android):** `<meta name="tool:share-target" content="audio/*, .opus">` erzeugt einen `share_target` im Manifest und den Empfang im `sw.js`; die Seite holt die Datei mit `Tools.takeSharedFile()`. Nur Android/Chromium und nur bei installierter App; iPhone unterstützt das nicht.
 - **Links/Text an die App teilen (Android):** `<meta name="tool:share-text" content="true">` erzeugt einen `share_target` (GET) im Manifest – die Seite öffnet sich als `./?title=…&text=…&url=…`; `Tools.takeSharedText()` liefert `{ title, text, url }` und entfernt die Parameter aus der Adresse. Viele Apps schicken den Link in `text`, nicht in `url`. Zusammen mit `tool:share-target` (Dateien) noch nicht unterstützt.
 - **iPhone:** Eine zum Home-Bildschirm hinzugefügte App hat **eigenen Speicher**, getrennt von Safari.
-- **Nicht auffindbar:** Jede Seite trägt `<meta name="robots" content="noindex, nofollow">` (generiert). `robots.txt` darf **kein** `Disallow: /` enthalten, sonst sehen Suchmaschinen das noindex nicht. GitHub Pages liefert aber auch alle übrigen Dateien des Repos aus (`README.md`, `scripts/`, `tests/` …); die können kein noindex tragen und sind deshalb in `robots.txt` gesperrt. Neue Nicht-App-Dateien im Hauptordner dort ergänzen – App-Ordner, `assets/` und die Startseite nie sperren (prüft `tests/site.spec.mjs`). Das ist Unauffindbarkeit, kein Zugriffsschutz – wer den Link hat, kann die Seite öffnen.
+- **Nicht auffindbar:** Jede Seite trägt `<meta name="robots" content="noindex, nofollow">` (generiert). `robots.txt` darf **kein** `Disallow: /` enthalten, sonst sehen Suchmaschinen das noindex nicht. Die übrigen Repo-Dateien (`README.md`, `scripts/`, `tests/`, `template/` …) könnten kein noindex tragen und werden deshalb **gar nicht veröffentlicht**: Auf GitHub Pages kommen nur Startseite, `robots.txt`, Icons im Hauptordner, `assets/` und die Seiten-Ordner, jeweils ohne `.md`-Dateien (`isPublished` in `scripts/lib.mjs`). Der Test-Server liefert nach derselben Regel aus (plus `template/`) – braucht eine Seite eine Datei, die nicht darunter fällt, scheitern die Tests. Ordner mit `_` am Anfang sind keine Seiten (`_site/` = Ausgabe von `site.mjs`). Das ist Unauffindbarkeit, kein Zugriffsschutz – wer den Link hat, kann die Seite öffnen.
 - **Content Security Policy:** Der `<head>`-Block enthält eine strenge CSP: nur eigene Dateien, Inline-Skripte nur per SHA-256-Prüfsumme (berechnet `build.mjs`), WebAssembly nur wo nötig. Nach jeder Änderung an einem `<script>` deshalb `node scripts/build.mjs` (macht der Git-Hook). Keine Inline-Event-Handler (`onclick="…"`), kein `eval`. Ein CSP-Verstoß erscheint als Konsolenfehler und lässt die Tests scheitern.
 - **Version:** Die Fußzeile jeder App zeigt „Version …“ = Cache-Version aus `sw.js`. So lässt sich auf dem Handy prüfen, ob eine installierte App aktuell ist.
 - **Barrierefreiheit:** `tests/a11y.spec.mjs` prüft jede Seite hell und dunkel mit axe-core (WCAG 2.1 A/AA). Bedienelemente brauchen einen zugänglichen Namen, der den sichtbaren Text enthält; reine Vorlese-Texte mit `.sr-only`.
@@ -148,5 +150,5 @@ Jede App bietet am Seitenende den einklappbaren Bereich **„Daten sichern & üb
 - **Mergen ohne Rückfrage:** Ist der Check **test** auf dem aktuellen Stand des PRs grün und gibt es keine Konflikte, wird der PR direkt gemergt – das gilt auch für Dependabot-PRs (vorher auf den aktuellen `main` bringen). Bei roten Tests: Ursache beheben, nie Tests abschwächen. `main` ist geschützt: Merge nur mit grünem Check **test**; direkte Pushes sind gesperrt.
 - PR-Branches werden nach dem Merge automatisch gelöscht.
 - Dependabot öffnet wöchentlich Update-PRs (Actions, Test-Werkzeuge); mergen, wenn die Tests grün sind.
-- GitHub Pages veröffentlicht `main` direkt; ein Merge ist nach 1–2 Minuten live.
+- GitHub Pages veröffentlicht `main` über die Action `pages.yml` (Einstellung: Pages → Source „GitHub Actions“); ein Merge ist nach 1–2 Minuten live. `.nojekyll` bleibt als Absicherung, falls die Quelle je wieder auf „Branch“ steht.
 - Hook einmalig aktivieren: `git config core.hooksPath .githooks` (in Cloud-Sessions von Claude Code erledigt das `.claude/hooks/session-start.sh` automatisch)
