@@ -413,3 +413,58 @@ test.describe('voice-transcriber tools', () => {
     expect((await call(page, 'voice_transcriber_get_transcript', {})).result.text).toBe('Hallo Welt, korrigiert');
   });
 });
+
+test.describe('reminders tools', () => {
+  test.use({ timezoneId: 'Europe/Berlin' });
+  const START = new Date('2026-10-29T12:00:00+01:00');
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: START });
+    await page.addInitScript(() => {
+      // Stand-in Notification API: permission granted, notifications recorded
+      window.__notes = [];
+      window.Notification = class { constructor(title) { window.__notes.push(title); } static get permission() { return 'granted'; } };
+      ServiceWorkerRegistration.prototype.showNotification = function (title) { window.__notes.push(title); return Promise.resolve(); };
+    });
+    await open(page, '/reminders/');
+  });
+
+  test('create_reminder with at and in_minutes, shown in the app, fires on time', async ({ page }) => {
+    const a = await call(page, 'reminders_create_reminder', { text: 'Tee ziehen lassen', in_minutes: 5 });
+    expect(a.ok).toBe(true);
+    expect(a.result).toMatchObject({ now: '2026-10-29T12:00', time_zone: 'Europe/Berlin', notifications: 'granted',
+      reminder: { text: 'Tee ziehen lassen', at: '2026-10-29T12:05', at_utc: '2026-10-29T11:05:00.000Z', status: 'scheduled' } });
+    const b = await call(page, 'reminders_create_reminder', { text: 'Meeting', at: '2026-10-29T12:03' });
+    expect(b.result.reminder.at_utc).toBe('2026-10-29T11:03:00.000Z');
+    await expect(page.locator('#upList li .text')).toHaveText(['Meeting', 'Tee ziehen lassen']);
+    await page.clock.runFor(6 * 60e3);
+    await expect.poll(() => page.evaluate(() => window.__notes)).toEqual(['Meeting', 'Tee ziehen lassen']);
+    const { result } = await call(page, 'reminders_list_reminders', {});
+    expect(result.scheduled).toEqual([]);
+    expect(result.due.map(r => [r.text, r.status, r.notification_shown])).toEqual([['Tee ziehen lassen', 'due', true], ['Meeting', 'due', true]]);
+    expect((await call(page, 'reminders_list_reminders', { include_due: false, limit: 1 })).result.due).toBeUndefined();
+  });
+
+  test('invalid times and texts are rejected and change nothing', async ({ page }) => {
+    const err = async input => (await call(page, 'reminders_create_reminder', input)).error;
+    expect(await err({ text: 'x', at: '2026-10-29T11:00' })).toMatch(/in the past – it is now 2026-10-29T12:00/);
+    expect(await err({ text: 'x', at: '29.10.2026 13:00' })).toMatch(/format|look like/);
+    expect(await err({ text: 'x', at: '2026-02-31T10:00' })).toMatch(/not a valid date/);
+    expect(await err({ text: 'x' })).toMatch(/at or in_minutes/);
+    expect(await err({ text: 'x', at: '2026-10-30T10:00', in_minutes: 5 })).toMatch(/not both/);
+    expect(await err({ text: '   ', in_minutes: 5 })).toMatch(/must not be empty/);
+    expect(await err({ text: 'x', in_minutes: 0 })).toMatch(/>= 1/);
+    expect((await call(page, 'reminders_list_reminders', {})).result).toMatchObject({ scheduled: [], due: [] });
+  });
+
+  test('update_reminder changes text and time, also of a due reminder', async ({ page }) => {
+    const { result: { reminder } } = await call(page, 'reminders_create_reminder', { text: 'Wäsche', in_minutes: 1 });
+    await page.clock.runFor(2 * 60e3);
+    expect((await call(page, 'reminders_update_reminder', { id: reminder.id, text: 'Wäsche aufhängen' })).error).toMatch(/in the past/);
+    const u = await call(page, 'reminders_update_reminder', { id: reminder.id, text: 'Wäsche aufhängen', at: '2026-10-29T18:00' });
+    expect(u.result.reminder).toMatchObject({ id: reminder.id, text: 'Wäsche aufhängen', at: '2026-10-29T18:00', status: 'scheduled' });
+    await expect(page.locator('#upList li .text')).toHaveText(['Wäsche aufhängen']);
+    await expect(page.locator('#pastList li')).toHaveCount(0);
+    expect((await call(page, 'reminders_update_reminder', { id: 'nope', text: 'x' })).error).toMatch(/No reminder with id nope/);
+    expect((await call(page, 'reminders_update_reminder', { id: reminder.id })).error).toMatch(/Nothing to change/);
+  });
+});

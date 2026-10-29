@@ -11,6 +11,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | Seite | Ordner | Beschreibung |
 |---|---|---|
 | [Scan-Copy-SecurPharm](https://phanlipo.github.io/securpharm-scanner/) | `securpharm-scanner/` | securPharm-DataMatrix von Arzneimittel-/Impfstoffpackungen scannen und einzelne Werte (PZN, Charge, Verfall, Seriennummer …) per Klick kopieren. Mit lokalem Verlauf. |
+| [Erinnerungen](https://phanlipo.github.io/reminders/) | `reminders/` | Eigene Erinnerungen mit Zeitpunkt und Text – zur Zeit kommt eine Benachrichtigung, im Verlauf lassen sie sich anpassen. |
 | [QR-Code-Generator](https://phanlipo.github.io/qr-code/) | `qr-code/` | QR-Codes für Links, Text und WLAN erzeugen – Links direkt aus anderen Apps hierher teilen (Android), mit Verlauf. |
 | [Würfel & Münze](https://phanlipo.github.io/dice-coin/) | `dice-coin/` | Würfel und Münzwurf für Spiele: Anzahl und Seiten frei wählbar, alle gleichzeitig oder einzeln würfeln, Würfel halten, Vorlagen. Einstellungen werden im Browser gespeichert. |
 | [Brau-Rechner](https://phanlipo.github.io/brew-calculator/) | `brew-calculator/` | Rechner fürs Hobbybrauen: Volumen im zylindrischen Topf, Temperaturkorrektur der Stammwürze (Spindel) und Zuckermenge für die Nachgärung – jeweils mit Formeln und Erklärung. |
