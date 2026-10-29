@@ -257,6 +257,23 @@ test('no Notification API at all (in-app browser): hint, reminders still show in
   await expect(page.locator('#pastList li')).toContainText('nur in der App');
 });
 
+test('diagnostics: copied from the help with permission state and the steps, without reminder texts', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await open(page, 'dismiss');
+  await add(page, 'Geheimer Termin', '2026-10-29T13:00');
+  await page.click('#btnPerm');
+  await page.locator('details.help summary').click();
+  await page.click('#btnDiag');
+  await expect(page.locator('#toast')).toHaveText('Diagnose kopiert');
+  const text = await page.evaluate(() => navigator.clipboard.readText());
+  expect(text).toContain('Notification.permission: default');
+  expect(text).toContain('userAgent: ');
+  expect(text).toContain('ask: requestPermission resolved default');
+  expect(text).toMatch(/ask: done .*"result":"blocked"/);
+  expect(text).toContain('reminders: {"scheduled":1');
+  expect(text).not.toContain('Geheimer Termin');
+});
+
 test.describe('Android', () => {
   test.use({ userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36' });
   test('asks through a push subscription and cancels it right away', async ({ page }) => {
@@ -274,6 +291,19 @@ test.describe('Android', () => {
     await page.click('#btnPerm');
     await expect(page.locator('#permHint')).toContainText('sofort abgelehnt');
     expect(await page.evaluate(() => [window.__push, window.__unsub])).toEqual([1, 0]);
+  });
+  test('diagnostics log the push steps', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await open(page, 'default');
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.click('#btnPerm');
+    await page.locator('details.help summary').click();
+    await page.click('#btnDiag');
+    await expect(page.locator('#toast')).toHaveText('Diagnose kopiert');
+    const text = await page.evaluate(() => navigator.clipboard.readText());
+    expect(text).toContain('push: subscribe …');
+    expect(text).toContain('push: unsubscribed');
+    expect(text).toMatch(/ask: done .*"permission":"granted"/);
   });
   test('hints name the Chrome and app settings', async ({ page }) => {
     await open(page, 'dismiss');
