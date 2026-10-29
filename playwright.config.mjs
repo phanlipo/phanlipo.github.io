@@ -6,6 +6,8 @@ const PORT = 4173;
 export default defineConfig({
   testDir: 'tests',
   testMatch: '*.spec.mjs',
+  // Live tests against the published site: npm run test:live (playwright.live.config.mjs)
+  testIgnore: 'live/**',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
