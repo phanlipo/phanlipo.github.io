@@ -122,3 +122,20 @@ test('model list shows the download size for the chosen device', async ({ page }
     expect(await gpuOption.evaluate(o => o.disabled && o.hidden)).toBe(true);
   }
 });
+
+test.describe('English', () => {
+  test.use({ locale: 'en-US' });
+
+  test('texts in English; the recognition language follows the app until chosen', async ({ page }) => {
+    await page.goto(URL_);
+    await expect(page.locator('#btnRun')).toHaveText('Transcribe');
+    await expect(page.locator('#language')).toHaveValue('english');
+    await expect(page.locator('#model option').first()).toHaveText(/^Standard – base \(approx\. \d+ MB\)$/);
+    await page.setInputFiles('#file', { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
+    await expect(page.locator('#status')).toHaveText('The browser cannot read this audio format.');
+    // A saved choice wins over the app language
+    await page.selectOption('#language', 'german');
+    await page.reload();
+    await expect(page.locator('#language')).toHaveValue('german');
+  });
+});
