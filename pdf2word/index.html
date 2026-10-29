@@ -8,7 +8,7 @@
 <title>PDF zu Word</title>
 <meta name="description" content="PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – mit Bildern und Texterkennung für gescannte Seiten, ohne Upload: Die Datei verlässt das Gerät nicht.">
 <meta name="tool:tags" content="Arbeit, Dokumente">
-<meta name="tool:features" content="Datei öffnen, Teilen an App">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
 <meta name="tool:order" content="60">
 <meta name="tool:icon" content="file-type-docx">
 <meta name="tool:color" content="#4338ca">
@@ -17,10 +17,11 @@
 <meta name="tool:description-en" content="Convert PDF documents into an editable Word file (.docx, also for LibreOffice) right in the browser – with images and text recognition for scanned pages, no upload: the file never leaves the device.">
 <meta name="tool:short-name-en" content="PDF to Word">
 <meta name="tool:storage" content="pdf2word.">
+<meta name="tool:webmcp" content="convert_selected_pdf, get_converted_text">
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-aVwvokgLRFTAqNxA/qedRM0m5hV021dKmym/aYhWid8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-bKHRiieuch+sNl10yPsKiWtzl8Z8uUakovTtaJ/wkjI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -155,6 +156,11 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
     <li>Texterkennung macht Fehler – besonders bei schlechten Scans, Handschrift und kleiner Schrift. Ergebnis bitte prüfen.</li>
     <li>Absätze werden aus der Lage der Zeilen erraten. Bei ungewöhnlichen Layouts (mehrere Spalten, Textfelder) das Ergebnis bitte prüfen.</li>
   </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <ul>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser die hier gewählte PDF umwandeln und ihren Text lesen, z. B. um sie zusammenzufassen. Eine Datei auswählen kann nur du. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
+    <li>Löschen und Sicherungen sind für Agenten nicht zugänglich. Es werden keine Daten an Server gesendet.</li>
+  </ul>
   <p class="note">Formatierung und Zeilenumbrüche weichen etwas vom Original ab – Word setzt den Text neu. Wichtige Dokumente bitte mit der PDF vergleichen.</p>
 </details>
 
@@ -163,7 +169,7 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 48de777bf20a</p>
+  <p class="footer-version">Version 98a091c9d4e8</p>
   <!-- footer:end -->
 </footer>
 
@@ -187,6 +193,7 @@ function saveSettings() {
 for (const id of ['optPages', 'optOcr', 'optLang']) $(id).addEventListener('change', saveSettings);
 
 let file = null, result = null, busy = false, lib = null, previewUrls = [];
+let lastModel = null, lastError = null; // for the WebMCP tools
 
 function status(text, kind) {
   $('status').textContent = text || '';
@@ -216,6 +223,7 @@ $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
 async function run() {
   if (!file || busy) return;
   busy = true;
+  lastError = null;
   $('btnRun').disabled = true;
   $('result').hidden = true;
   const bar = $('progress');
@@ -254,6 +262,7 @@ async function run() {
       invalid: 'Das ist keine lesbare PDF-Datei.',
       notext: 'In dieser PDF wurde weder Text noch ein Bild gefunden.',
     }[e.code];
+    lastError = e.code || 'failed';
     if (e.code === 'password' || e.code === 'password-wrong') { $('pwBox').hidden = false; $('pw').focus(); }
     if (!msg) console.warn(e);
     status(msg || 'Umwandlung fehlgeschlagen: ' + (e.message || e), 'err');
@@ -266,6 +275,7 @@ async function run() {
 $('btnRun').addEventListener('click', run);
 
 function showResult(model) {
+  lastModel = model;
   const box = $('preview');
   box.textContent = '';
   const textWidth = model.page.width - model.page.left - model.page.right;
@@ -325,6 +335,47 @@ $('btnShare').addEventListener('click', async () => {
 });
 
 takeSharedFile().then(f => { if (f) takeFile(f); });
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   Works on the PDF the user has chosen – agents cannot pick files. The document text is untrusted content. */
+const AGENT_ERRORS = {
+  password: 'The PDF is password protected – the user has to enter the password in the app.',
+  'password-wrong': 'The password entered in the app is wrong.',
+  invalid: 'The chosen file is not a readable PDF.',
+  notext: 'The PDF contains neither text nor images.',
+};
+function agentText(max) {
+  const m = lastModel, parts = [];
+  for (const p of m.paragraphs) {
+    if (p.pageBreak) parts.push('--- page break ---');
+    parts.push(p.image ? '[image]' : p.runs.map(r => r.text).join(''));
+  }
+  const text = parts.join('\n\n');
+  return { pdf_name: file ? file.name : null, docx_name: result.name, pages: m.pages, paragraphs: m.paragraphs.length - m.images,
+    images: m.images, ocr_pages: m.ocrPages || 0, text: text.slice(0, max), truncated: text.length > max };
+}
+const maxSchema = { type: 'integer', minimum: 100, maximum: 200000, description: 'Maximum number of characters of text to return. Default 20000.' };
+Tools.mcp.register({
+  name: 'convert_selected_pdf', title: 'Convert the chosen PDF to Word', label: 'PDF zu Word: umgewandelt', untrusted: true,
+  description: 'Converts the PDF the user has chosen in the app into a Word file (.docx), using the settings of the app (text recognition for scanned pages, page breaks). Runs on the device; the user can then save or share the Word file. Returns the recognised text and some figures. Fails if no PDF is chosen.',
+  inputSchema: { type: 'object', properties: { max_characters: maxSchema }, additionalProperties: false },
+  execute: async ({ max_characters = 20000 }) => {
+    if (!file) throw new Error('No PDF chosen – ask the user to choose a PDF in the app first.');
+    if (busy) throw new Error('A conversion is already running – try again when it is done.');
+    await run();
+    if (!result || !lastModel) throw new Error(AGENT_ERRORS[lastError] || 'The conversion failed.');
+    return agentText(max_characters);
+  },
+});
+Tools.mcp.register({
+  name: 'get_converted_text', title: 'Text of the converted PDF', label: 'PDF zu Word: Text gelesen', readOnly: true, untrusted: true,
+  description: 'Returns the text of the PDF that was last converted in the app (paragraphs separated by blank lines, page breaks and images marked), e.g. to summarise or answer questions about it.',
+  inputSchema: { type: 'object', properties: { max_characters: maxSchema }, additionalProperties: false },
+  execute: ({ max_characters = 20000 }) => {
+    if (!result || !lastModel) throw new Error('Nothing converted yet – choose a PDF in the app and convert it (or use convert_selected_pdf).');
+    return agentText(max_characters);
+  },
+});
 })();
 </script>
 </body>

@@ -8,7 +8,7 @@
 <title>Handy-Sensoren</title>
 <meta name="description" content="Kompass, Wasserwaage, Beschleunigung, Vibrometer, Schallpegel, Stimmgerät, Tacho, Schrittzähler, Tongenerator, Taschenlampe mit Morse, Puls und Klatsch-Stoppuhr – mit den Sensoren des Handys.">
 <meta name="tool:tags" content="Alltag, Messen, Werkzeug">
-<meta name="tool:features" content="Bewegungssensor, Mikrofon, Kamera, Standort">
+<meta name="tool:features" content="Bewegungssensor, Mikrofon, Kamera, Standort, KI-Agent">
 <meta name="tool:order" content="70">
 <meta name="tool:icon" content="gauge">
 <meta name="tool:color" content="#be123c">
@@ -17,9 +17,10 @@
 <meta name="tool:description-en" content="Compass, spirit level, acceleration, vibrometer, sound level, tuner, speedometer, step counter, tone generator, flashlight with Morse, pulse and clap stopwatch – using the sensors of your phone.">
 <meta name="tool:short-name-en" content="Sensors">
 <meta name="tool:storage" content="sensors.">
+<meta name="tool:webmcp" content="get_step_count, get_compass_heading">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-04B8g0aMB5UC56XI5WaNDFEHTr9I2BQqbdTSUzqdLy0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-PU3ieIZYFrSOfAwlMR4R2Fj9e2Gq5b3ibTPbot9AWNw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -632,6 +633,12 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
     <li>Ein Klatschen (oder anderer lauter Knall) startet die Zeit, das nächste stoppt sie. Danach startet ein neues Klatschen eine neue Messung; die letzten Zeiten stehen darunter.</li>
     <li>Die <b>Auslöseschwelle</b> so einstellen, dass Sprechen und Hintergrund unter der Markierung bleiben. Genauigkeit etwa ±0,05 s.</li>
   </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <ul>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser die Schritte von heute und – solange der Kompass offen ist – die aktuelle Richtung lesen. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
+    <li>Agenten können keine Messung starten und bekommen weder Kamera, Mikrofon noch Standort.</li>
+    <li>Löschen und Sicherungen sind für Agenten nicht zugänglich. Es werden keine Daten an Server gesendet.</li>
+  </ul>
 </details>
 
 <footer>
@@ -639,7 +646,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 135e0055de74</p>
+  <p class="footer-version">Version 73e869ba1241</p>
   <!-- footer:end -->
 </footer>
 
@@ -1971,6 +1978,34 @@ if (S.view === 'tool') {
   if (history.state && history.state.sensorTool) history.replaceState(null, '');
   showView('overview');
 }
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   Read only and without permission prompts: no camera, microphone or location for agents. */
+Tools.mcp.register({
+  name: 'get_step_count', title: 'Steps today', label: 'Sensoren: Schritte gelesen', readOnly: true,
+  description: 'Returns the steps counted today by the step counter of the app, the step length set by the user and the distance. Steps are only counted while the step counter is open in the app.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  execute: () => {
+    rollDay();
+    const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { date: day, steps: S.steps.count, step_length_m: S.steps.len, distance_m: Math.round(S.steps.count * S.steps.len * 10) / 10 };
+  },
+});
+Tools.mcp.register({
+  name: 'get_compass_heading', title: 'Current compass heading', label: 'Sensoren: Kompass gelesen', readOnly: true,
+  description: 'Returns the current heading of the compass in degrees (0 = north, 90 = east) with the cardinal direction, while the user has the compass open in the app. Also states whether it refers to magnetic or true (geographic) north and the saved bearing, if any.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  execute: () => {
+    if (running !== 'compass' || compass.mag == null)
+      throw new Error('The compass is not running. Ask the user to open the compass in the app (on iPhone it needs a tap to allow the motion sensors).');
+    const off = northOffset(), h = (compass.mag + off + 360) % 360;
+    const out = { heading_deg: Math.round(h) % 360, direction: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(h / 45) % 8],
+      reference: S.compass.north === 'geo' ? 'true_north' : 'magnetic_north' };
+    if (S.compass.north === 'geo') out.declination_deg = S.compass.decl;
+    if (S.compass.bearing != null) out.bearing_deg = Math.round((S.compass.bearing + off + 360) % 360) % 360;
+    return out;
+  },
+});
 })();
 </script>
 </body>
