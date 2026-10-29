@@ -20,7 +20,7 @@
 <meta name="tool:webmcp" content="create_reminder, update_reminder, list_reminders">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-w6huaPGrYcbVNpoORCUacdHf4Sm5OtxaLnvC6Mtpmx8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-nfpkV7LQwuORq4ptl4J8n8GhiNvVUQyBxUmfskW23KM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -157,7 +157,7 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
   </ul>
   <h3>Daten &amp; KI-Agenten</h3>
   <ul>
-    <li>Erinnerungen bleiben nur auf diesem Gerät (im Browser gespeichert) – nichts wird verschickt. Der Verlauf behält die letzten 200 fälligen Erinnerungen.</li>
+    <li>Erinnerungen bleiben nur auf diesem Gerät (im Browser gespeichert) – nichts wird verschickt. Einzige Ausnahme beim Erlauben auf Android: Chrome fragt dort zuverlässig nur über ein Push-Abo. Dafür meldet Chrome die App kurz bei seinem Push-Dienst (Google) an; das Abo wird sofort wieder gekündigt, Erinnerungen laufen nie darüber. Der Verlauf behält die letzten 200 fälligen Erinnerungen.</li>
     <li>KI-Agenten im Browser (WebMCP) können Erinnerungen anlegen (auch wiederholend), ändern und auflisten, aber nicht löschen. Was sie tun, erscheint sofort in der App.</li>
   </ul>
   </div>
@@ -181,10 +181,13 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
   </ul>
   <h3>Data &amp; AI agents</h3>
   <ul>
-    <li>Reminders stay on this device only (stored in the browser) – nothing is sent anywhere. The history keeps the last 200 reminders that were due.</li>
+    <li>Reminders stay on this device only (stored in the browser) – nothing is sent anywhere. One exception when allowing notifications on Android: Chrome asks reliably only through a push subscription. For this, Chrome briefly registers the app with its push service (Google); the subscription is cancelled right away, reminders never go through it. The history keeps the last 200 reminders that were due.</li>
     <li>AI agents in the browser (WebMCP) can create (also repeating), change and list reminders, but not delete them. What they do shows up in the app right away.</li>
   </ul>
   </div>
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht (z. B. die Abfrage zum Erlauben)? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, Status der Berechtigung und ein Protokoll der Schritte – keine Erinnerungstexte.</p>
+  <div class="row"><button type="button" class="btn" id="btnDiag" data-i18n="diag.copy">Diagnose kopieren</button></div>
 </details>
 
 <footer>
@@ -192,7 +195,7 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 1d7e6a65ec6d</p>
+  <p class="footer-version">Version f4e2f1689554</p>
   <!-- footer:end -->
 </footer>
 
@@ -200,6 +203,17 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
 <script>
 (function(){
 'use strict';
+/* ---------- Diagnostics: a short log of what happened, copied from the help ("Diagnose kopieren") ---------- */
+const diag=[];
+const errText=e=>e?(e.name?e.name+': ':'')+(e.message||String(e)):String(e);
+function log(...parts){
+  const line=new Date().toISOString().slice(11,23)+' '+parts.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' ');
+  diag.push(line);
+  if(diag.length>300)diag.shift();
+  console.info('[reminders]',line);
+}
+window.addEventListener('error',e=>log('JS error:',errText(e.error||e.message),e.filename?`${e.filename}:${e.lineno}`:''));
+window.addEventListener('unhandledrejection',e=>log('unhandled rejection:',errText(e.reason)));
 Tools.i18n({
 de:{
   'perm.granted':'🔔 Benachrichtigungen sind erlaubt.',
@@ -222,7 +236,8 @@ de:{
   deleted:'Erinnerung gelöscht',
   sent:'benachrichtigt {when}',late:'verspätet: {when}',inApp:'nur in der App',
   lateBody:'Fällig war: {when}',
-  'mcp.create':'Erinnerung angelegt','mcp.update':'Erinnerung geändert','mcp.list':'Erinnerungen gelesen'
+  'mcp.create':'Erinnerung angelegt','mcp.update':'Erinnerung geändert','mcp.list':'Erinnerungen gelesen',
+  'diag.copied':'Diagnose kopiert','diag.fail':'Kopieren nicht möglich'
 },
 en:{
   title:'Reminders',sub:'Choose time and text – a notification arrives on time',
@@ -250,7 +265,9 @@ en:{
   deleted:'Reminder deleted',
   sent:'notified {when}',late:'late: {when}',inApp:'in the app only',
   lateBody:'Was due: {when}',
-  'mcp.create':'reminder created','mcp.update':'reminder changed','mcp.list':'reminders read'
+  'mcp.create':'reminder created','mcp.update':'reminder changed','mcp.list':'reminders read',
+  'diag.h':'Troubleshooting','diag.intro':'Something does not work (e.g. the request to allow notifications)? First make the problem happen, then copy the diagnostics and pass them on. They contain the browser, the permission state and a log of the steps – no reminder texts.',
+  'diag.copy':'Copy diagnostics','diag.copied':'Diagnostics copied','diag.fail':'Copying not possible'
 }});
 const t=Tools.t,$=Tools.$;
 const LS='reminders.list.v1';
@@ -331,11 +348,36 @@ function renderPerm(){
   $('permHint').textContent=hint?text:'';
 }
 // Only on a tap on the button: every request that stays unanswered counts against the site in Chrome
+// Android: ask through a push subscription instead of Notification.requestPermission(). Chrome on Android shows
+// that prompt reliably (tested on a phone where requestPermission() showed nothing, like whatpwacando.today does).
+// Chrome registers the app with its push service (Google) for this; the subscription is cancelled right away and
+// never leaves the device – reminders are still shown locally. The key is a public key without a private key.
+const PUSH_KEY='BF0pAl2pT6k1qwRTIlPZUQwY6UNEqhW5tj13va7cJfv82O1ftuyI4Xx5Bzo6YXfgxoq0xtkX_yFgQNWsyKVR36c';
+function keyBytes(k){const b=atob(k.replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(b,c=>c.charCodeAt(0));}
+async function askViaPush(){
+  const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration().catch(e=>{log('getRegistration failed:',errText(e));return null;});
+  if(!reg||!reg.pushManager){log('push: no registration or no pushManager – using requestPermission',{reg:!!reg});return false;}
+  log('push: subscribe …',{scope:reg.scope,active:!!reg.active});
+  try{
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(PUSH_KEY)});
+    log('push: subscribed',{endpointHost:(()=>{try{return new URL(sub.endpoint).host;}catch(_){return '';}})()});
+    try{await sub.unsubscribe();log('push: unsubscribed');}catch(e){log('push: unsubscribe failed:',errText(e));}
+  }catch(e){log('push: subscribe failed:',errText(e));} // denied, dismissed, or granted but the push service was not reachable (offline)
+  return true;
+}
 async function askPermission(){
+  log('ask: button tapped',{permission:permission(),activation:navigator.userActivation?navigator.userActivation.isActive:null});
   if(!hasNotif()||Notification.permission!=='default')return;
   const start=Date.now();
-  try{await Notification.requestPermission();}catch(_){}
+  try{
+    if(!(isAndroid&&await askViaPush())){
+      log('ask: Notification.requestPermission() …');
+      const r=await Notification.requestPermission();
+      log('ask: requestPermission resolved',r);
+    }
+  }catch(e){log('ask: failed:',errText(e));}
   asked=Notification.permission==='default'?(Date.now()-start<BLOCKED_MS?'blocked':'timeout'):'';
+  log('ask: done',{permission:Notification.permission,ms:Date.now()-start,result:asked||'decided'});
   renderPerm();
 }
 // Via the service worker where possible: Android Chrome and installed iPhone apps do not allow new Notification()
@@ -344,13 +386,40 @@ async function notify(title,body,tag){
   const opts={body,tag,icon:'icon-192.png',renotify:true,requireInteraction:true,data:{tag}};
   try{
     const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();
-    if(reg&&reg.showNotification){await reg.showNotification(title,opts);return true;}
-  }catch(_){}
+    if(reg&&reg.showNotification){await reg.showNotification(title,opts);log('notify: shown via service worker',{tag});return true;}
+    log('notify: no service worker registration');
+  }catch(e){log('notify: showNotification failed:',errText(e));}
   try{
     const n=new Notification(title,opts);
     n.onclick=()=>{window.focus();n.close();};
+    log('notify: shown via new Notification()',{tag});
     return true;
-  }catch(_){return false;}
+  }catch(e){log('notify: new Notification() failed:',errText(e));return false;}
+}
+
+// Snapshot of the environment for "Diagnose kopieren" (no reminder texts)
+async function diagnostics(){
+  const out=[];
+  const add=(k,v)=>out.push(`${k}: ${typeof v==='string'?v:JSON.stringify(v)}`);
+  add('app','reminders – '+(document.querySelector('.footer-version')||{}).textContent);
+  add('time',new Date().toString());
+  add('userAgent',navigator.userAgent);
+  add('standalone',matchMedia('(display-mode: standalone)').matches);
+  add('Notification API',hasNotif());
+  add('Notification.permission',permission());
+  try{add('permissions.query',(await navigator.permissions.query({name:'notifications'})).state);}catch(e){add('permissions.query',errText(e));}
+  add('serviceWorker.controller',!!(navigator.serviceWorker&&navigator.serviceWorker.controller));
+  try{
+    const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();
+    add('registration',reg?{scope:reg.scope,active:!!reg.active,waiting:!!reg.waiting,pushManager:!!reg.pushManager}:null);
+    if(reg&&reg.pushManager){
+      try{add('push.permissionState',await reg.pushManager.permissionState({userVisibleOnly:true}));}catch(e){add('push.permissionState',errText(e));}
+      try{add('push.subscription',!!(await reg.pushManager.getSubscription()));}catch(e){add('push.subscription',errText(e));}
+    }
+  }catch(e){add('registration',errText(e));}
+  add('reminders',{scheduled:list.filter(r=>!r.fired).length,due:list.filter(r=>r.fired).length,repeating:list.filter(r=>!r.fired&&r.repeat).length});
+  add('language',Tools.lang());
+  return out.join('\n')+'\n\nlog:\n'+(diag.join('\n')||'(empty)');
 }
 
 /* ---------- Firing due reminders ---------- */
@@ -515,6 +584,8 @@ if(navigator.permissions&&navigator.permissions.query)
   navigator.permissions.query({name:'notifications'}).then(s=>{s.onchange=renderPerm;},()=>{});
 
 Tools.onLang(render);
+$('btnDiag').addEventListener('click',async()=>{Tools.toast(t(await Tools.copyText(await diagnostics())?'diag.copied':'diag.fail'));});
+log('start',{permission:permission(),android:isAndroid,standalone:matchMedia('(display-mode: standalone)').matches});
 check();
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */

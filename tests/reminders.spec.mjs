@@ -27,6 +27,14 @@ async function fakeNotifications(page, permission = 'granted') {
       }
     }
     window.Notification = FakeNotification;
+    // Push subscription (used to ask on Android): asks like the browser, then the page cancels it
+    window.__push = 0; window.__unsub = 0;
+    PushManager.prototype.subscribe = function () {
+      window.__push++;
+      return FakeNotification.requestPermission().then(r => r === 'granted'
+        ? { unsubscribe: () => { window.__unsub++; return Promise.resolve(true); } }
+        : Promise.reject(new DOMException('Registration failed - permission denied', 'NotAllowedError')));
+    };
     ServiceWorkerRegistration.prototype.showNotification = function (title, opts) {
       window.__notes.push({ title, ...opts, via: 'sw' });
       return Promise.resolve();
@@ -205,7 +213,7 @@ test('permission "default": button asks, then the test notification works', asyn
   await expect(page.locator('#btnPerm')).toBeHidden();
   await page.click('#btnTest');
   await expect.poll(async () => (await notes(page)).map(n => n.title)).toEqual(['Test-Benachrichtigung']);
-  expect(await page.evaluate(() => window.__asked)).toBe(1);
+  expect(await page.evaluate(() => [window.__asked, window.__push])).toEqual([1, 0]); // no push subscription outside Android
 });
 
 test('declined at once without a prompt: explains the block and how to lift it', async ({ page }) => {
@@ -249,8 +257,54 @@ test('no Notification API at all (in-app browser): hint, reminders still show in
   await expect(page.locator('#pastList li')).toContainText('nur in der App');
 });
 
+test('diagnostics: copied from the help with permission state and the steps, without reminder texts', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await open(page, 'dismiss');
+  await add(page, 'Geheimer Termin', '2026-10-29T13:00');
+  await page.click('#btnPerm');
+  await page.locator('details.help summary').click();
+  await page.click('#btnDiag');
+  await expect(page.locator('#toast')).toHaveText('Diagnose kopiert');
+  const text = await page.evaluate(() => navigator.clipboard.readText());
+  expect(text).toContain('Notification.permission: default');
+  expect(text).toContain('userAgent: ');
+  expect(text).toContain('ask: requestPermission resolved default');
+  expect(text).toMatch(/ask: done .*"result":"blocked"/);
+  expect(text).toContain('reminders: {"scheduled":1');
+  expect(text).not.toContain('Geheimer Termin');
+});
+
 test.describe('Android', () => {
   test.use({ userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36' });
+  test('asks through a push subscription and cancels it right away', async ({ page }) => {
+    await open(page, 'default');
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.click('#btnPerm');
+    await expect(page.locator('#permText')).toContainText('erlaubt');
+    expect(await page.evaluate(() => [window.__push, window.__unsub, window.__asked])).toEqual([1, 1, 1]);
+    await page.click('#btnTest');
+    await expect.poll(async () => (await notes(page)).map(n => n.title)).toEqual(['Test-Benachrichtigung']);
+  });
+  test('push subscription declined at once: hint about the block', async ({ page }) => {
+    await open(page, 'dismiss');
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.click('#btnPerm');
+    await expect(page.locator('#permHint')).toContainText('sofort abgelehnt');
+    expect(await page.evaluate(() => [window.__push, window.__unsub])).toEqual([1, 0]);
+  });
+  test('diagnostics log the push steps', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await open(page, 'default');
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.click('#btnPerm');
+    await page.locator('details.help summary').click();
+    await page.click('#btnDiag');
+    await expect(page.locator('#toast')).toHaveText('Diagnose kopiert');
+    const text = await page.evaluate(() => navigator.clipboard.readText());
+    expect(text).toContain('push: subscribe …');
+    expect(text).toContain('push: unsubscribed');
+    expect(text).toMatch(/ask: done .*"permission":"granted"/);
+  });
   test('hints name the Chrome and app settings', async ({ page }) => {
     await open(page, 'dismiss');
     await page.click('#btnPerm');
