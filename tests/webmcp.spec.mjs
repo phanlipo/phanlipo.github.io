@@ -519,6 +519,25 @@ test.describe('countdown tools', () => {
     expect(r.result).toMatchObject({ is_past: true, days: 9, hours: 216 });
   });
 
+  test('time_until saves to the history, get_history reads it (read only)', async ({ page }) => {
+    await call(page, 'countdown_time_until', { target_date: '2026-12-24', name: 'Heiligabend' });
+    await call(page, 'countdown_time_until', { start_date: '2026-05-10', target_date: '2026-05-01' });
+    await call(page, 'countdown_time_until', { target_date: '2026-10-20', target_time: '08:00' });
+    await expect(page.locator('#hist li')).toHaveCount(3);
+    await expect(page.locator('#hist li').last().locator('.name')).toHaveText('Heiligabend');
+    const { ok, result } = await call(page, 'countdown_get_history', { limit: 3 });
+    expect(ok).toBe(true);
+    expect(result).toEqual({ count: 3, entries: [
+      { name: '', target: '2026-10-20T08:00:00', start: 'now', is_past: true, calendar_days: -9 },
+      { name: '', target: '2026-05-01T00:00:00', start: '2026-05-10T00:00:00', is_past: true, calendar_days: -9 },
+      { name: 'Heiligabend', target: '2026-12-24T00:00:00', start: 'now', is_past: false, calendar_days: 56 },
+    ] });
+    expect((await call(page, 'countdown_get_history', { limit: 1 })).result.entries).toHaveLength(1);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'countdown_get_history').annotations.readOnlyHint).toBe(true);
+    expect(tools.find(t => t.name === 'countdown_time_until').annotations.readOnlyHint).toBe(false);
+  });
+
   test('invalid input is rejected and changes nothing', async ({ page }) => {
     for (const [input, msg] of [
       [{ target_date: '2026-02-31' }, /Invalid target_date/],

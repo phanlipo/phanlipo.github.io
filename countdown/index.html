@@ -8,8 +8,8 @@
 <title>Countdown – wie lange noch?</title>
 <meta name="description" content="Tage, Stunden, Minuten oder Sekunden bis zu einem Datum mit Uhrzeit – live ab jetzt oder ab einem eigenen Startdatum.">
 <meta name="tool:tags" content="Alltag, Rechner">
-<meta name="tool:features" content="KI-Agent">
-<meta name="tool:webmcp" content="time_until">
+<meta name="tool:features" content="Verlauf, KI-Agent">
+<meta name="tool:webmcp" content="time_until, get_history">
 <meta name="tool:order" content="25">
 <meta name="tool:icon" content="hourglass-high">
 <meta name="tool:color" content="#0e7490">
@@ -20,7 +20,7 @@
 <meta name="tool:storage" content="countdown.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-AJd5BQ2YExU3BjKXM9vbXz1+/CwDtuTYvHp9J1rkatg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-jYDkWG2ySgJVMjsKiXrkbgMat3e56xBandR+58LbGPg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -35,6 +35,7 @@
 main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .card h2{font-size:18px;margin:0 0 10px;display:block}
 .form{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.span-all{grid-column:1/-1}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .field>span{font-size:13px;color:var(--muted);font-weight:600}
 .field input{font:inherit;font-size:17px;min-height:46px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);min-width:0;width:100%}
@@ -58,6 +59,15 @@ main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .res .k{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
 .res .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .res.main{border-color:var(--accent)}
+.hist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.hist li{display:flex;align-items:stretch;gap:6px}
+.hist .load{flex:1;min-width:0;min-height:52px;text-align:start;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit;padding:6px 12px;display:flex;flex-direction:column;justify-content:center}
+.hist .load[aria-current="true"]{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.hist .name{font-weight:600;overflow-wrap:anywhere}
+.hist .meta{font-size:13px;color:var(--muted)}
+.hist .rel{font-weight:600;color:var(--text)}
+.hist .del{flex:none;width:44px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--muted);cursor:pointer;font:inherit;font-size:20px}
+.hist .del:hover{color:var(--err);border-color:var(--err)}
 .msg{padding:10px 12px;border-radius:8px;font-size:15px;background:var(--err-bg);color:var(--err);margin:0}
 </style>
 </head>
@@ -71,6 +81,7 @@ main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <section class="card" aria-labelledby="h-target">
     <h2 id="h-target" data-i18n="target">Ziel</h2>
     <div class="form">
+      <label class="field span-all"><span data-i18n="name">Name (optional)</span><input type="text" id="name" maxlength="60" autocomplete="off" placeholder="z. B. Urlaub" data-i18n-attr="placeholder:namePh"></label>
       <label class="field"><span data-i18n="date">Datum</span><input type="date" id="td" required></label>
       <label class="field"><span data-i18n="timeOpt">Uhrzeit (optional)</span><input type="time" id="tt"></label>
     </div>
@@ -112,6 +123,12 @@ main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
       <div class="results" id="results"></div>
     </div>
   </section>
+
+  <section class="card" aria-labelledby="h-hist">
+    <h2 id="h-hist" data-i18n="hist">Verlauf</h2>
+    <p class="hint" id="histEmpty" data-i18n="histEmpty">Noch nichts hier – jede Berechnung erscheint automatisch im Verlauf.</p>
+    <ul class="hist" id="hist"></ul>
+  </section>
 </main>
 
 <!-- data:start -->
@@ -146,10 +163,16 @@ main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li><b>Monate:</b> volle Kalendermonate plus der Anteil des angefangenen Monats. Vom 31. Januar ist ein Monat später der 28. (bzw. 29.) Februar. Jahre = Monate ÷ 12.</li>
     <li><b>Kalendertage:</b> Anzahl der Datumswechsel, ohne Uhrzeit – z. B. von heute bis morgen 1, egal wie spät es ist.</li>
   </ul>
+  <h3>Verlauf</h3>
+  <ul>
+    <li>Jede Berechnung landet nach kurzer Pause automatisch im <b>Verlauf</b> (die letzten 30). Mit einem <b>Namen</b> („Urlaub“, „Geburtstag“) ist sie leichter wiederzufinden.</li>
+    <li>Jeder Eintrag zeigt, wie viele Tage es noch sind (bzw. her ist). Antippen lädt ihn wieder, <b>×</b> löscht ihn.</li>
+    <li>Gleiche Ziel- und Startangaben ergeben einen Eintrag – er wandert nach oben und übernimmt den neuen Namen.</li>
+  </ul>
   <h3>Gespeichert</h3>
-  <p>Die letzten Eingaben bleiben in diesem Browser gespeichert. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  <p>Eingaben und Verlauf bleiben in diesem Browser gespeichert. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
   <h3>KI-Agent</h3>
-  <p>Ein KI-Agent im Browser (WebMCP) kann die Spanne bis zu einem Datum berechnen lassen; das Ergebnis erscheint hier in der App.</p>
+  <p>Ein KI-Agent im Browser (WebMCP) kann die Spanne bis zu einem Datum berechnen lassen und den Verlauf lesen; das Ergebnis erscheint hier in der App und im Verlauf.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
   <p>Works out how much time is left until a date – or how long ago it was.</p>
@@ -168,10 +191,16 @@ main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li><b>Months:</b> full calendar months plus the share of the month begun. One month after 31 January is 28 (or 29) February. Years = months ÷ 12.</li>
     <li><b>Calendar days:</b> the number of date changes, ignoring the time – e.g. from today to tomorrow is 1, however late it is.</li>
   </ul>
+  <h3>History</h3>
+  <ul>
+    <li>Every calculation goes into the <b>history</b> automatically after a short pause (the last 30). A <b>name</b> ("Holiday", "Birthday") makes it easier to find again.</li>
+    <li>Each entry shows how many days are left (or have passed). Tap it to load it again, <b>×</b> deletes it.</li>
+    <li>The same target and start make one entry – it moves to the top and takes the new name.</li>
+  </ul>
   <h3>Saved</h3>
-  <p>Your last entries stay saved in this browser. Nothing is sent to a server; the app also works offline.</p>
+  <p>Entries and history stay saved in this browser. Nothing is sent to a server; the app also works offline.</p>
   <h3>AI agent</h3>
-  <p>An AI agent in the browser (WebMCP) can have the span until a date calculated; the result appears here in the app.</p>
+  <p>An AI agent in the browser (WebMCP) can have the span until a date calculated and read the history; the result appears here in the app and in the history.</p>
   </div>
   <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
   <h3 data-i18n="diag.h">Fehlersuche</h3>
@@ -184,7 +213,7 @@ main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version d87211521371</p>
+  <p class="footer-version">Version 2e0a44c10de7</p>
   <!-- footer:end -->
 </footer>
 
@@ -200,7 +229,9 @@ Tools.i18n({
     calDays:'Kalendertage',leadFuture:'Noch',leadPast:'Vorbei seit',leadNow:'Jetzt ist es so weit!',
     until:'bis {date}',since:'seit {date}',at:'{date}',
     errTarget:'Bitte ein gültiges Zieldatum wählen.',errStart:'Bitte ein gültiges Startdatum wählen.',
-    'mcp.calc':'Zeitspanne berechnet'
+    'rel.today':'heute','rel.tomorrow':'morgen','rel.yesterday':'gestern','rel.in':'in {n} Tagen','rel.ago':'vor {n} Tagen',
+    'rel.span1':'1 Tag ab {date}','rel.span':'{n} Tage ab {date}',del:'Löschen: {name}',deleted:'Eintrag gelöscht',
+    'mcp.calc':'Zeitspanne berechnet','mcp.hist':'Verlauf gelesen'
   },
   en:{
     title:'Countdown',sub:'How long until a date – in days, hours, seconds and more.',
@@ -213,11 +244,15 @@ Tools.i18n({
     calDays:'Calendar days',leadFuture:'Still',leadPast:'Over for',leadNow:'The time has come!',
     until:'until {date}',since:'since {date}',at:'{date}',
     errTarget:'Please pick a valid target date.',errStart:'Please pick a valid start date.',
-    'mcp.calc':'time span calculated'
+    name:'Name (optional)',namePh:'e.g. Holiday',hist:'History',histEmpty:'Nothing here yet – every calculation appears in the history automatically.',
+    'rel.today':'today','rel.tomorrow':'tomorrow','rel.yesterday':'yesterday','rel.in':'in {n} days','rel.ago':'{n} days ago',
+    'rel.span1':'1 day from {date}','rel.span':'{n} days from {date}',del:'Delete: {name}',deleted:'Entry deleted',
+    'mcp.calc':'time span calculated','mcp.hist':'history read'
   }
 });
 const t=Tools.t,$=Tools.$;
 const LS='countdown.settings.v1';
+const LS_HIST='countdown.history.v1',HIST_MAX=30;
 const UNITS=['s','min','h','d','w','mo','y'];
 const UNIT_EN={s:'seconds',min:'minutes',h:'hours',d:'days',w:'weeks',mo:'months',y:'years'};
 const DAY=864e5;
@@ -226,7 +261,9 @@ const isoDate=d=>`${String(d.getFullYear()).padStart(4,'0')}-${pad(d.getMonth()+
 const isoLocal=d=>`${isoDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
 const today=new Date();
-const S=Object.assign({td:`${today.getFullYear()+1}-01-01`,tt:'',start:'now',sd:isoDate(today),st:'',unit:'d'},Tools.load(LS,{}));
+const S=Object.assign({name:'',td:`${today.getFullYear()+1}-01-01`,tt:'',start:'now',sd:isoDate(today),st:'',unit:'d'},Tools.load(LS,{}));
+let hist=Tools.load(LS_HIST,[]);
+if(!Array.isArray(hist))hist=[];
 if(!UNITS.includes(S.unit))S.unit='d';
 if(S.start!=='custom')S.start='now';
 
@@ -288,7 +325,7 @@ const num=x=>{const r=Math.round(x*100)/100;return Tools.fmt(r,Number.isInteger(
 // Unit in running text: singular for exactly 1 (u1.*), else plural (p.* – lower case in English)
 const unitName=(u,x)=>x===1?t('u1.'+u):t('p.'+u);
 const dateText=(d,withTime)=>d.toLocaleString(Tools.locale(),Object.assign({weekday:'long',day:'numeric',month:'long',year:'numeric'},withTime?{hour:'2-digit',minute:'2-digit'}:{}));
-const els={td:$('td'),tt:$('tt'),sd:$('sd'),st:$('st')};
+const els={name:$('name'),td:$('td'),tt:$('tt'),sd:$('sd'),st:$('st')};
 let lastErr=null;
 function render(){
   for(const b of document.querySelectorAll('[data-start]'))b.setAttribute('aria-pressed',String(b.dataset.start===S.start));
@@ -317,22 +354,90 @@ function render(){
   tile(t('calDays'),Tools.fmt(r.calDays,0),false);
 }
 function save(){Tools.save(LS,S);}
-function fill(){els.td.value=S.td;els.tt.value=S.tt;els.sd.value=S.sd;els.st.value=S.st;}
+function fill(){for(const k of Object.keys(els))els[k].value=S[k];}
 
-for(const k of Object.keys(els))els[k].addEventListener('input',()=>{S[k]=els[k].value;save();render();});
+/* ---------- History ---------- */
+// One entry per target + start; the name is a label and does not count
+const keyOf=e=>[e.td,e.tt,e.start,e.start==='custom'?e.sd:'',e.start==='custom'?e.st:''].join('|');
+const fromState=()=>({name:S.name.trim(),td:S.td,tt:S.tt,start:S.start,sd:S.start==='custom'?S.sd:'',st:S.start==='custom'?S.st:''});
+function remember(){
+  clearTimeout(remember.timer);
+  if(current().err)return false;
+  const e=fromState(),k=keyOf(e);
+  hist=[e,...hist.filter(h=>keyOf(h)!==k)].slice(0,HIST_MAX);
+  Tools.save(LS_HIST,hist);renderHist();
+  Tools.diag.log('history saved',{count:hist.length});
+  return true;
+}
+// After a short pause, so half-typed dates do not end up in the history
+const rememberSoon=()=>{clearTimeout(remember.timer);remember.timer=setTimeout(remember,1500);};
+const shortDate=(d,withTime)=>d.toLocaleString(Tools.locale(),Object.assign({weekday:'short',day:'numeric',month:'short',year:'numeric'},withTime?{hour:'2-digit',minute:'2-digit'}:{}));
+// Relative text of an entry: calendar days from today, or the span from its own start
+function relText(e){
+  const end=parse(e.td,e.tt);
+  if(e.start==='custom'){
+    const start=parse(e.sd,e.st),n=Math.abs(span(start,end).calDays);
+    return t(n===1?'rel.span1':'rel.span',{n:Tools.fmt(n,0),date:shortDate(start,!!e.st)});
+  }
+  const r=span(parse(isoDate(new Date()),''),end),n=r.past?-r.calDays:r.calDays;
+  if(n===0)return t('rel.today');
+  if(n===1)return t('rel.tomorrow');
+  if(n===-1)return t('rel.yesterday');
+  return n>0?t('rel.in',{n:Tools.fmt(n,0)}):t('rel.ago',{n:Tools.fmt(-n,0)});
+}
+let histDay='';
+function renderHist(){
+  histDay=isoDate(new Date());
+  const list=$('hist'),cur=keyOf(fromState());list.textContent='';
+  hist=hist.filter(e=>e&&parse(e.td,e.tt)&&(e.start!=='custom'||parse(e.sd,e.st)));
+  $('histEmpty').hidden=hist.length>0;
+  for(const e of hist){
+    const end=parse(e.td,e.tt),title=e.name||shortDate(end,!!e.tt);
+    const li=document.createElement('li');
+    const b=document.createElement('button');b.type='button';b.className='load';
+    if(keyOf(e)===cur)b.setAttribute('aria-current','true');
+    const n=document.createElement('span');n.className='name';n.textContent=title;
+    const m=document.createElement('span');m.className='meta';
+    const rel=document.createElement('span');rel.className='rel';rel.textContent=relText(e);
+    if(e.name)m.append(shortDate(end,!!e.tt),' · ');
+    m.append(rel);
+    b.append(n,m);
+    b.addEventListener('click',()=>{
+      clearTimeout(remember.timer);
+      Object.assign(S,{name:e.name||'',td:e.td,tt:e.tt,start:e.start});
+      if(e.start==='custom'){S.sd=e.sd;S.st=e.st;}
+      fill();save();render();remember();
+      Tools.diag.log('history loaded',{start:e.start});
+      window.scrollTo({top:0,behavior:'smooth'});
+    });
+    const x=document.createElement('button');x.type='button';x.className='del';x.textContent='×';
+    x.setAttribute('aria-label',t('del',{name:title}));
+    x.addEventListener('click',()=>{
+      hist=hist.filter(h=>h!==e);Tools.save(LS_HIST,hist);renderHist();
+      Tools.toast(t('deleted'));Tools.diag.log('history deleted',{count:hist.length});
+    });
+    li.append(b,x);list.append(li);
+  }
+}
+
+for(const k of Object.keys(els))els[k].addEventListener('input',()=>{S[k]=els[k].value;save();render();rememberSoon();});
 for(const b of document.querySelectorAll('[data-start]'))b.addEventListener('click',()=>{
   S.start=b.dataset.start;
   if(S.start==='custom'&&!parse(S.sd,'')){S.sd=isoDate(new Date());els.sd.value=S.sd;}
-  save();render();Tools.diag.log('start',{mode:S.start});
+  save();render();rememberSoon();Tools.diag.log('start',{mode:S.start});
 });
 for(const b of document.querySelectorAll('[data-unit]'))b.addEventListener('click',()=>{S.unit=b.dataset.unit;save();render();});
 
 // Live: tick on every full second while counting from now
-function tick(){if(S.start==='now'&&!document.hidden)render();setTimeout(tick,1000-Date.now()%1000+5);}
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)render();});
-fill();render();tick();
-Tools.onLang(render);
-Tools.diag.info(()=>{const c=current();return {start:S.start,unit:S.unit,targetTime:!!S.tt,startTime:!!S.st,error:c.err||null,past:c.r?c.r.past:null};});
+// The history only changes when the date does (rebuilding it every second would steal focus)
+function tick(){
+  if(!document.hidden){if(S.start==='now')render();if(histDay!==isoDate(new Date()))renderHist();}
+  setTimeout(tick,1000-Date.now()%1000+5);
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){render();renderHist();}});
+fill();render();renderHist();tick();
+Tools.onLang(()=>{render();renderHist();});
+Tools.diag.info(()=>{const c=current();return {start:S.start,unit:S.unit,named:!!S.name,targetTime:!!S.tt,startTime:!!S.st,error:c.err||null,past:c.r?c.r.past:null,history:hist.length};});
 
 /* ---------- WebMCP ---------- */
 const round=(x,d)=>{const f=10**d;return Math.round(x*f)/f;};
@@ -340,13 +445,14 @@ const dateSchema=d=>({type:'string',minLength:10,maxLength:10,description:d});
 const timeSchema=d=>({type:'string',minLength:5,maxLength:8,description:d});
 Tools.mcp.register({
   name:'time_until',title:'Time until a date',label:'mcp.calc',
-  description:'Calculates the time between a start (default: now) and a target date with an optional time of day, in the local time zone of the device. Returns the span in seconds, minutes, hours, days, weeks, months and years, the number of calendar days and a breakdown into years, months, days, hours, minutes and seconds. Days, weeks, months and years follow the calendar; hours, minutes and seconds count the real elapsed time (daylight saving changes included). If the target lies before the start, is_past is true and all values are the positive time since then. The values are filled into the app.',
+  description:'Calculates the time between a start (default: now) and a target date with an optional time of day, in the local time zone of the device. Returns the span in seconds, minutes, hours, days, weeks, months and years, the number of calendar days and a breakdown into years, months, days, hours, minutes and seconds. Days, weeks, months and years follow the calendar; hours, minutes and seconds count the real elapsed time (daylight saving changes included). If the target lies before the start, is_past is true and all values are the positive time since then. The values are filled into the app and saved in its history.',
   inputSchema:{type:'object',properties:{
     target_date:dateSchema('Target date as YYYY-MM-DD.'),
     target_time:timeSchema('Time of day of the target as HH:MM or HH:MM:SS (24 h). Default 00:00.'),
     start_date:dateSchema('Start date as YYYY-MM-DD. Default: count from now.'),
     start_time:timeSchema('Time of day of the start as HH:MM or HH:MM:SS (24 h), only with start_date. Default 00:00.'),
-    unit:{type:'string',enum:Object.values(UNIT_EN),description:'Unit for the big display in the app. Default: keep the current one.'}
+    unit:{type:'string',enum:Object.values(UNIT_EN),description:'Unit for the big display in the app. Default: keep the current one.'},
+    name:{type:'string',maxLength:60,description:'Optional label for the history entry, e.g. "Holiday".'}
   },required:['target_date'],additionalProperties:false},
   execute:i=>{
     const end=parse(i.target_date,i.target_time||'');
@@ -354,10 +460,10 @@ Tools.mcp.register({
     if(i.start_time!=null&&i.start_date==null)throw new Error('start_time needs start_date.');
     const custom=i.start_date!=null,start=custom?parse(i.start_date,i.start_time||''):nowSec();
     if(!start)throw new Error('Invalid start_date or start_time – expected YYYY-MM-DD and HH:MM.');
-    S.td=i.target_date;S.tt=i.target_time||'';S.start=custom?'custom':'now';
+    S.name=(i.name||'').trim();S.td=i.target_date;S.tt=i.target_time||'';S.start=custom?'custom':'now';
     if(custom){S.sd=i.start_date;S.st=i.start_time||'';}
     if(i.unit)S.unit=UNITS.find(u=>UNIT_EN[u]===i.unit);
-    fill();save();render();
+    fill();save();render();remember();
     Tools.diag.log('mcp time_until',{start:S.start,unit:S.unit});
     const r=span(start,end),out={start:isoLocal(start),target:isoLocal(end),
       time_zone:Intl.DateTimeFormat().resolvedOptions().timeZone,is_past:r.past};
@@ -365,6 +471,22 @@ Tools.mcp.register({
     out.calendar_days=r.calDays;
     out.breakdown={years:r.bd.y,months:r.bd.mo,days:r.bd.d,hours:r.bd.h,minutes:r.bd.min,seconds:r.bd.s};
     return out;
+  }
+});
+Tools.mcp.register({
+  name:'get_history',title:'Countdown history',label:'mcp.hist',readOnly:true,
+  description:'Returns the saved countdowns of the history, newest first: name (may be empty), target date and time, start (now or a date), whether the target is past, and the whole calendar days from today (start now) or from the own start until the target.',
+  inputSchema:{type:'object',properties:{
+    limit:{type:'integer',minimum:1,maximum:HIST_MAX,description:'Maximum number of entries. Default 10.'}
+  },additionalProperties:false},
+  execute:i=>{
+    const today=parse(isoDate(new Date()),'');
+    const entries=hist.slice(0,i.limit||10).map(e=>{
+      const end=parse(e.td,e.tt),start=e.start==='custom'?parse(e.sd,e.st):today,r=span(start,end);
+      return {name:e.name||'',target:isoLocal(end),start:e.start==='custom'?isoLocal(start):'now',
+        is_past:e.start==='custom'?end<start:end<nowSec(),calendar_days:r.past?-r.calDays:r.calDays};
+    });
+    return {count:hist.length,entries};
   }
 });
 })();
