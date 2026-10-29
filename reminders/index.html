@@ -20,7 +20,7 @@
 <meta name="tool:webmcp" content="create_reminder, update_reminder, list_reminders">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-w6huaPGrYcbVNpoORCUacdHf4Sm5OtxaLnvC6Mtpmx8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-4z73MX1XR+YXzhG0XpAimwtbzHQYrcIk9alfAOOLuoo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -157,7 +157,7 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
   </ul>
   <h3>Daten &amp; KI-Agenten</h3>
   <ul>
-    <li>Erinnerungen bleiben nur auf diesem Gerät (im Browser gespeichert) – nichts wird verschickt. Der Verlauf behält die letzten 200 fälligen Erinnerungen.</li>
+    <li>Erinnerungen bleiben nur auf diesem Gerät (im Browser gespeichert) – nichts wird verschickt. Einzige Ausnahme beim Erlauben auf Android: Chrome fragt dort zuverlässig nur über ein Push-Abo. Dafür meldet Chrome die App kurz bei seinem Push-Dienst (Google) an; das Abo wird sofort wieder gekündigt, Erinnerungen laufen nie darüber. Der Verlauf behält die letzten 200 fälligen Erinnerungen.</li>
     <li>KI-Agenten im Browser (WebMCP) können Erinnerungen anlegen (auch wiederholend), ändern und auflisten, aber nicht löschen. Was sie tun, erscheint sofort in der App.</li>
   </ul>
   </div>
@@ -181,7 +181,7 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
   </ul>
   <h3>Data &amp; AI agents</h3>
   <ul>
-    <li>Reminders stay on this device only (stored in the browser) – nothing is sent anywhere. The history keeps the last 200 reminders that were due.</li>
+    <li>Reminders stay on this device only (stored in the browser) – nothing is sent anywhere. One exception when allowing notifications on Android: Chrome asks reliably only through a push subscription. For this, Chrome briefly registers the app with its push service (Google); the subscription is cancelled right away, reminders never go through it. The history keeps the last 200 reminders that were due.</li>
     <li>AI agents in the browser (WebMCP) can create (also repeating), change and list reminders, but not delete them. What they do shows up in the app right away.</li>
   </ul>
   </div>
@@ -192,7 +192,7 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 1d7e6a65ec6d</p>
+  <p class="footer-version">Version 24dce8f56d9a</p>
   <!-- footer:end -->
 </footer>
 
@@ -331,10 +331,25 @@ function renderPerm(){
   $('permHint').textContent=hint?text:'';
 }
 // Only on a tap on the button: every request that stays unanswered counts against the site in Chrome
+// Android: ask through a push subscription instead of Notification.requestPermission(). Chrome on Android shows
+// that prompt reliably (tested on a phone where requestPermission() showed nothing, like whatpwacando.today does).
+// Chrome registers the app with its push service (Google) for this; the subscription is cancelled right away and
+// never leaves the device – reminders are still shown locally. The key is a public key without a private key.
+const PUSH_KEY='BF0pAl2pT6k1qwRTIlPZUQwY6UNEqhW5tj13va7cJfv82O1ftuyI4Xx5Bzo6YXfgxoq0xtkX_yFgQNWsyKVR36c';
+function keyBytes(k){const b=atob(k.replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(b,c=>c.charCodeAt(0));}
+async function askViaPush(){
+  const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration().catch(()=>null);
+  if(!reg||!reg.pushManager)return false;
+  try{
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(PUSH_KEY)});
+    try{await sub.unsubscribe();}catch(_){}
+  }catch(_){} // denied, dismissed, or granted but the push service was not reachable (offline)
+  return true;
+}
 async function askPermission(){
   if(!hasNotif()||Notification.permission!=='default')return;
   const start=Date.now();
-  try{await Notification.requestPermission();}catch(_){}
+  try{if(!(isAndroid&&await askViaPush()))await Notification.requestPermission();}catch(_){}
   asked=Notification.permission==='default'?(Date.now()-start<BLOCKED_MS?'blocked':'timeout'):'';
   renderPerm();
 }
