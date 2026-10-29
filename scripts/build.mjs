@@ -156,13 +156,12 @@ ${row('f-cat', 'Kategorie', [chip('Alle', '', true), ...tags.map(x => chip(x, x,
 ` : '';
   const tag = (x, cls) => `<span class="${cls}" data-tag="${escHtml(x)}" data-i18n="tag.${escHtml(x)}">${escHtml(x)}</span>`;
   const cards = tools.map(t => `    <article class="card tool" data-tags="${escHtml(JSON.stringify([...t.tags, ...t.features]))}">
-      <h2>${t.icon ? `<img src="${t.folder}/icon.svg" alt="" width="32" height="32">` : ''}<span data-i18n="card.${t.folder}.title">${escHtml(t.title)}</span></h2>
+      <h2>${t.icon ? `<img src="${t.folder}/icon.svg" alt="" width="32" height="32">` : ''}<a class="open" href="${t.folder}/"><span data-i18n="card.${t.folder}.title">${escHtml(t.title)}</span></a><span class="chevron" aria-hidden="true">›</span></h2>
       <p data-i18n="card.${t.folder}.desc">${escHtml(t.description)}</p>
       <div class="tags">${t.tags.map(x => tag(x, 'tag')).join('')}${t.features.map(x => tag(x, 'tag feat')).join('')}</div>
-      <a class="btn primary" href="${t.folder}/" data-i18n="open">Öffnen</a>
     </article>`).join('\n');
   // English texts of the cards and filters for the start page script (Tools.i18n)
-  const en = { 'filter.all': 'All', 'f-cat': 'Category', 'f-feat': 'Feature', open: 'Open' };
+  const en = { 'filter.all': 'All', 'f-cat': 'Category', 'f-feat': 'Feature' };
   for (const x of [...tags, ...features]) en['tag.' + x] = TAGS_EN[x];
   for (const t of tools) { en[`card.${t.folder}.title`] = t.titleEn; en[`card.${t.folder}.desc`] = t.descriptionEn; }
   const json = JSON.stringify({ en }, null, 2).replace(/</g, '\\u003c').replace(/\n/g, '\n  ');

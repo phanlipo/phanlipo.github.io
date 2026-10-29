@@ -57,7 +57,13 @@ test.describe('start page', () => {
     await expect(page.locator('.tool')).toHaveCount(list.length);
     for (const t of list) {
       const card = page.locator('.tool', { has: page.locator('h2', { hasText: t.title }) });
-      await expect(card.locator('a.btn')).toHaveAttribute('href', `${t.folder}/`);
+      await expect(card.getByRole('link', { name: t.title, exact: true })).toHaveAttribute('href', `${t.folder}/`);
+      // The link covers the whole card: a tap on the description opens the tool too
+      expect(await card.locator('p').evaluate(p => {
+        p.scrollIntoView({ block: 'center' });
+        const r = p.getBoundingClientRect();
+        return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('a')?.getAttribute('href');
+      })).toBe(`${t.folder}/`);
       await expect(card.locator('img')).toHaveAttribute('src', `${t.folder}/icon.svg`);
     }
   });

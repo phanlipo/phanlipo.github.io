@@ -28,7 +28,7 @@ test.describe('browser language English', () => {
     for (const t of list) {
       const card = page.locator('.tool', { has: page.locator('h2', { hasText: t.titleEn }) });
       await expect(card.locator('p')).toHaveText(t.descriptionEn);
-      await expect(card.locator('a.btn')).toHaveText('Open');
+      await expect(card.getByRole('link', { name: t.titleEn, exact: true })).toHaveAttribute('href', `${t.folder}/`);
     }
     // Filter by an English category; the German tag value behind it stays the same
     await expect(page.getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true');
