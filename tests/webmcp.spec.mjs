@@ -484,3 +484,49 @@ test.describe('reminders tools', () => {
     await expect(page.locator('#upList .rel')).not.toContainText('🔁');
   });
 });
+
+test.describe('countdown tools', () => {
+  test.use({ timezoneId: 'Europe/Berlin' });
+  const NOW = new Date('2026-10-29T10:00:00+01:00');
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: NOW - 1000 });
+    await page.clock.pauseAt(NOW);
+    await open(page, '/countdown/');
+  });
+
+  test('time_until from now: all units, breakdown, shown in the app', async ({ page }) => {
+    const { ok, result } = await call(page, 'countdown_time_until', { target_date: '2026-12-24', unit: 'hours' });
+    expect(ok).toBe(true);
+    // 29 Oct 10:00 → 24 Dec 00:00 = 55 d 14 h, no clock change in between
+    expect(result).toMatchObject({
+      start: '2026-10-29T10:00:00', target: '2026-12-24T00:00:00', time_zone: 'Europe/Berlin', is_past: false,
+      seconds: 4802400, minutes: 80040, hours: 1334, calendar_days: 56,
+      breakdown: { years: 0, months: 1, days: 24, hours: 14, minutes: 0, seconds: 0 },
+    });
+    expect(result.days).toBeCloseTo(55 + 14 / 24, 4);
+    expect(result.weeks).toBeCloseTo((55 + 14 / 24) / 7, 4);
+    expect(result.months).toBeCloseTo(1 + (24 + 14 / 24) / 30, 4);
+    await expect(page.locator('#td')).toHaveValue('2026-12-24');
+    await expect(page.locator('#big')).toHaveText('1.334Stunden');
+  });
+
+  test('time_until with own start across the clock change, and in the past', async ({ page }) => {
+    let r = await call(page, 'countdown_time_until', { start_date: '2026-10-24', start_time: '12:00', target_date: '2026-10-26', target_time: '12:00' });
+    expect(r.result).toMatchObject({ hours: 49, days: 2, calendar_days: 2, is_past: false });
+    await expect(page.locator('[data-start="custom"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#st')).toHaveValue('12:00');
+    r = await call(page, 'countdown_time_until', { start_date: '2026-05-10', target_date: '2026-05-01' });
+    expect(r.result).toMatchObject({ is_past: true, days: 9, hours: 216 });
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    for (const [input, msg] of [
+      [{ target_date: '2026-02-31' }, /Invalid target_date/],
+      [{ target_date: '24.12.2026' }, /Invalid target_date/],
+      [{ target_date: '2026-12-24', target_time: '25:00' }, /Invalid target_date or target_time/],
+      [{ target_date: '2026-12-24', start_time: '10:00' }, /start_time needs start_date/],
+      [{ target_date: '2026-12-24', unit: 'fortnights' }, /must be one of/],
+    ]) expect((await call(page, 'countdown_time_until', input)).error).toMatch(msg);
+    await expect(page.locator('#td')).toHaveValue('2027-01-01');
+  });
+});

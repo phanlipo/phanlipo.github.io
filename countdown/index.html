@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Countdown – wie lange noch?</title>
+<meta name="description" content="Tage, Stunden, Minuten oder Sekunden bis zu einem Datum mit Uhrzeit – live ab jetzt oder ab einem eigenen Startdatum.">
+<meta name="tool:tags" content="Alltag, Rechner">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="time_until">
+<meta name="tool:order" content="25">
+<meta name="tool:icon" content="hourglass-high">
+<meta name="tool:color" content="#0e7490">
+<meta name="tool:short-name" content="Countdown">
+<meta name="tool:title-en" content="Countdown – how long until?">
+<meta name="tool:description-en" content="Days, hours, minutes or seconds until a date and time – live from now or from your own start date.">
+<meta name="tool:short-name-en" content="Countdown">
+<meta name="tool:storage" content="countdown.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-AJd5BQ2YExU3BjKXM9vbXz1+/CwDtuTYvHp9J1rkatg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Countdown">
+<meta name="theme-color" content="#0e7490">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#0e7490;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#5fc4dc;--accent-text:#06222a}}
+main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.card h2{font-size:18px;margin:0 0 10px;display:block}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field>span{font-size:13px;color:var(--muted);font-weight:600}
+.field input{font:inherit;font-size:17px;min-height:46px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);min-width:0;width:100%}
+.field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+.hint{font-size:13px;color:var(--muted);margin:8px 0 0}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-block-end:12px}
+.seg button{min-height:44px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit;font-size:15px;padding-inline:6px}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+.units{display:flex;flex-wrap:wrap;gap:6px;margin-block-end:14px}
+.units button{min-height:44px;padding-inline:14px;border:1px solid var(--border);border-radius:999px;background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit;font-size:15px}
+.units button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-text);font-weight:600}
+.hero{text-align:center;padding:14px 8px;border-radius:12px;border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.hero .lead{margin:0;font-size:15px;color:var(--muted);font-weight:600}
+.hero .big{margin:2px 0;font-size:clamp(34px,11vw,56px);font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.hero .big small{font-size:.45em;font-weight:700;color:var(--muted);margin-inline-start:.25em}
+.hero .when{margin:4px 0 0;font-size:15px}
+.hero .bd{margin:8px 0 0;font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-block-start:12px}
+.res{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;min-width:0}
+.res .k{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.res .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.res.main{border-color:var(--accent)}
+.msg{padding:10px 12px;border-radius:8px;font-size:15px;background:var(--err-bg);color:var(--err);margin:0}
+</style>
+</head>
+<body>
+<header>
+  <h1 data-i18n="title">Countdown</h1>
+  <p class="sub" data-i18n="sub">Wie lange noch bis zu einem Datum – in Tagen, Stunden, Sekunden und mehr.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-target">
+    <h2 id="h-target" data-i18n="target">Ziel</h2>
+    <div class="form">
+      <label class="field"><span data-i18n="date">Datum</span><input type="date" id="td" required></label>
+      <label class="field"><span data-i18n="timeOpt">Uhrzeit (optional)</span><input type="time" id="tt"></label>
+    </div>
+    <p class="hint" data-i18n="timeHint">Ohne Uhrzeit zählt der Beginn des Tages (00:00 Uhr).</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-start">
+    <h2 id="h-start" data-i18n="start">Start</h2>
+    <div class="seg" role="group" aria-labelledby="h-start">
+      <button type="button" data-start="now" aria-pressed="true" data-i18n="now">Jetzt</button>
+      <button type="button" data-start="custom" aria-pressed="false" data-i18n="custom">Eigenes Datum</button>
+    </div>
+    <div class="form" id="startFields" hidden>
+      <label class="field"><span data-i18n="date">Datum</span><input type="date" id="sd"></label>
+      <label class="field"><span data-i18n="timeOpt">Uhrzeit (optional)</span><input type="time" id="st"></label>
+    </div>
+    <p class="hint" id="nowHint" data-i18n="nowHint">Die Anzeige läuft live mit.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-res">
+    <h2 id="h-res" data-i18n="result">Ergebnis</h2>
+    <div class="units" role="group" aria-label="Einheit" data-i18n-attr="aria-label:unit">
+      <button type="button" data-unit="s" aria-pressed="false" data-i18n="u.s">Sekunden</button>
+      <button type="button" data-unit="min" aria-pressed="false" data-i18n="u.min">Minuten</button>
+      <button type="button" data-unit="h" aria-pressed="false" data-i18n="u.h">Stunden</button>
+      <button type="button" data-unit="d" aria-pressed="false" data-i18n="u.d">Tage</button>
+      <button type="button" data-unit="w" aria-pressed="false" data-i18n="u.w">Wochen</button>
+      <button type="button" data-unit="mo" aria-pressed="false" data-i18n="u.mo">Monate</button>
+      <button type="button" data-unit="y" aria-pressed="false" data-i18n="u.y">Jahre</button>
+    </div>
+    <p class="msg" id="msg" role="alert" hidden></p>
+    <div id="out">
+      <div class="hero">
+        <p class="lead" id="lead"></p>
+        <p class="big" id="big"></p>
+        <p class="when" id="when"></p>
+        <p class="bd" id="bd"></p>
+      </div>
+      <div class="results" id="results"></div>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Rechnet aus, wie viel Zeit bis zu einem Datum bleibt – oder wie lange es schon her ist.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Ziel:</b> Datum wählen, bei Bedarf eine Uhrzeit. Ohne Uhrzeit gilt 00:00 Uhr, also der Beginn des Tages.</li>
+    <li><b>Start:</b> <i>Jetzt</i> zählt live ab dem aktuellen Moment. Mit <i>Eigenes Datum</i> lässt sich die Spanne zwischen zwei beliebigen Zeitpunkten berechnen (ohne Uhrzeit ebenfalls 00:00 Uhr).</li>
+    <li><b>Einheit:</b> Sekunden, Minuten, Stunden, Tage, Wochen, Monate oder Jahre für die große Anzeige. Darunter stehen alle Einheiten und die Aufteilung in Jahre, Monate, Tage, Stunden, Minuten und Sekunden.</li>
+    <li>Liegt das Ziel vor dem Start, zeigt die App, wie lange es <b>vorbei</b> ist.</li>
+  </ul>
+  <h3>So wird gerechnet</h3>
+  <ul>
+    <li>Alles in der Zeitzone des Geräts.</li>
+    <li><b>Tage, Wochen, Monate, Jahre</b> folgen dem Kalender: Von 10:00 Uhr bis 10:00 Uhr am nächsten Tag ist immer 1 Tag, auch bei der Zeitumstellung.</li>
+    <li><b>Stunden, Minuten, Sekunden</b> zählen die Zeit, die tatsächlich vergeht. Über eine Zeitumstellung hinweg hat ein Tag deshalb 23 oder 25 Stunden.</li>
+    <li><b>Monate:</b> volle Kalendermonate plus der Anteil des angefangenen Monats. Vom 31. Januar ist ein Monat später der 28. (bzw. 29.) Februar. Jahre = Monate ÷ 12.</li>
+    <li><b>Kalendertage:</b> Anzahl der Datumswechsel, ohne Uhrzeit – z. B. von heute bis morgen 1, egal wie spät es ist.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Die letzten Eingaben bleiben in diesem Browser gespeichert. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  <h3>KI-Agent</h3>
+  <p>Ein KI-Agent im Browser (WebMCP) kann die Spanne bis zu einem Datum berechnen lassen; das Ergebnis erscheint hier in der App.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Works out how much time is left until a date – or how long ago it was.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Target:</b> pick a date and, if you like, a time. Without a time, 00:00 counts – the start of the day.</li>
+    <li><b>Start:</b> <i>Now</i> counts live from the current moment. With <i>Own date</i> you get the span between any two points in time (without a time also 00:00).</li>
+    <li><b>Unit:</b> seconds, minutes, hours, days, weeks, months or years for the big display. Below are all units and the breakdown into years, months, days, hours, minutes and seconds.</li>
+    <li>If the target lies before the start, the app shows how long it has been <b>over</b>.</li>
+  </ul>
+  <h3>How it is calculated</h3>
+  <ul>
+    <li>Everything in the time zone of the device.</li>
+    <li><b>Days, weeks, months, years</b> follow the calendar: from 10:00 to 10:00 the next day is always 1 day, even across a daylight saving change.</li>
+    <li><b>Hours, minutes, seconds</b> count the time that really passes. Across a daylight saving change a day therefore has 23 or 25 hours.</li>
+    <li><b>Months:</b> full calendar months plus the share of the month begun. One month after 31 January is 28 (or 29) February. Years = months ÷ 12.</li>
+    <li><b>Calendar days:</b> the number of date changes, ignoring the time – e.g. from today to tomorrow is 1, however late it is.</li>
+  </ul>
+  <h3>Saved</h3>
+  <p>Your last entries stay saved in this browser. Nothing is sent to a server; the app also works offline.</p>
+  <h3>AI agent</h3>
+  <p>An AI agent in the browser (WebMCP) can have the span until a date calculated; the result appears here in the app.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version d87211521371</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'u1.s':'Sekunde','u1.min':'Minute','u1.h':'Stunde','u1.d':'Tag','u1.w':'Woche','u1.mo':'Monat','u1.y':'Jahr',
+    'u.s':'Sekunden','u.min':'Minuten','u.h':'Stunden','u.d':'Tage','u.w':'Wochen','u.mo':'Monate','u.y':'Jahre',
+    'p.s':'Sekunden','p.min':'Minuten','p.h':'Stunden','p.d':'Tage','p.w':'Wochen','p.mo':'Monate','p.y':'Jahre',
+    calDays:'Kalendertage',leadFuture:'Noch',leadPast:'Vorbei seit',leadNow:'Jetzt ist es so weit!',
+    until:'bis {date}',since:'seit {date}',at:'{date}',
+    errTarget:'Bitte ein gültiges Zieldatum wählen.',errStart:'Bitte ein gültiges Startdatum wählen.',
+    'mcp.calc':'Zeitspanne berechnet'
+  },
+  en:{
+    title:'Countdown',sub:'How long until a date – in days, hours, seconds and more.',
+    target:'Target',date:'Date',timeOpt:'Time (optional)',timeHint:'Without a time, the start of the day (00:00) counts.',
+    start:'Start',now:'Now',custom:'Own date',nowHint:'The display updates live.',
+    result:'Result',unit:'Unit',
+    'u1.s':'second','u1.min':'minute','u1.h':'hour','u1.d':'day','u1.w':'week','u1.mo':'month','u1.y':'year',
+    'u.s':'Seconds','u.min':'Minutes','u.h':'Hours','u.d':'Days','u.w':'Weeks','u.mo':'Months','u.y':'Years',
+    'p.s':'seconds','p.min':'minutes','p.h':'hours','p.d':'days','p.w':'weeks','p.mo':'months','p.y':'years',
+    calDays:'Calendar days',leadFuture:'Still',leadPast:'Over for',leadNow:'The time has come!',
+    until:'until {date}',since:'since {date}',at:'{date}',
+    errTarget:'Please pick a valid target date.',errStart:'Please pick a valid start date.',
+    'mcp.calc':'time span calculated'
+  }
+});
+const t=Tools.t,$=Tools.$;
+const LS='countdown.settings.v1';
+const UNITS=['s','min','h','d','w','mo','y'];
+const UNIT_EN={s:'seconds',min:'minutes',h:'hours',d:'days',w:'weeks',mo:'months',y:'years'};
+const DAY=864e5;
+const pad=n=>String(n).padStart(2,'0');
+const isoDate=d=>`${String(d.getFullYear()).padStart(4,'0')}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const isoLocal=d=>`${isoDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+const today=new Date();
+const S=Object.assign({td:`${today.getFullYear()+1}-01-01`,tt:'',start:'now',sd:isoDate(today),st:'',unit:'d'},Tools.load(LS,{}));
+if(!UNITS.includes(S.unit))S.unit='d';
+if(S.start!=='custom')S.start='now';
+
+/* ---------- Calculation ---------- */
+// Local date + optional time ("HH:MM" or "HH:MM:SS", empty = 00:00) → Date, or null if invalid
+function parse(date,time){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(date||'');
+  const tm=/^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(time||'00:00');
+  if(!m||!tm)return null;
+  const y=+m[1],mo=+m[2]-1,d=+m[3],h=+tm[1],mi=+tm[2],s=+(tm[3]||0);
+  if(h>23||mi>59||s>59)return null;
+  const x=new Date(2000,0,1);
+  x.setFullYear(y,mo,d);x.setHours(h,mi,s,0);
+  if(x.getFullYear()!==y||x.getMonth()!==mo||x.getDate()!==d)return null; // e.g. 31 February
+  return x;
+}
+// Wall-clock time as if it were UTC: calendar arithmetic without daylight saving jumps
+function wall(d){
+  const u=new Date(0);
+  u.setUTCFullYear(d.getFullYear(),d.getMonth(),d.getDate());
+  u.setUTCHours(d.getHours(),d.getMinutes(),d.getSeconds(),d.getMilliseconds());
+  return u.getTime();
+}
+// n calendar months later; the day is clamped to the month's length (31 Jan + 1 month = 28/29 Feb)
+function addMonths(w,n){
+  const d=new Date(w),y=d.getUTCFullYear(),m=d.getUTCMonth()+n;
+  const last=new Date(0);last.setUTCFullYear(y,m+1,0);
+  const r=new Date(w);r.setUTCFullYear(y,m,Math.min(d.getUTCDate(),last.getUTCDate()));
+  return r.getTime();
+}
+function span(start,end){
+  const ms=end-start,past=ms<0,abs=Math.abs(ms);
+  const wa=wall(past?end:start),wb=wall(past?start:end);
+  const da=new Date(wa),db=new Date(wb);
+  let whole=(db.getUTCFullYear()-da.getUTCFullYear())*12+db.getUTCMonth()-da.getUTCMonth();
+  if(addMonths(wa,whole)>wb)whole--;
+  const base=addMonths(wa,whole),next=addMonths(wa,whole+1),rest=wb-base;
+  const months=whole+rest/(next-base);
+  return {
+    past,ms,
+    v:{s:abs/1e3,min:abs/6e4,h:abs/36e5,d:(wb-wa)/DAY,w:(wb-wa)/(7*DAY),mo:months,y:months/12},
+    calDays:Math.floor(wb/DAY)-Math.floor(wa/DAY),
+    bd:{y:Math.floor(whole/12),mo:whole%12,d:Math.floor(rest/DAY),h:Math.floor(rest%DAY/36e5),
+      min:Math.floor(rest%36e5/6e4),s:Math.floor(rest%6e4/1e3)}
+  };
+}
+const nowSec=()=>new Date(Math.floor(Date.now()/1e3)*1e3); // whole seconds, so the countdown ticks evenly
+function current(){
+  const end=parse(S.td,S.tt);
+  if(!end)return {err:'errTarget'};
+  const start=S.start==='now'?nowSec():parse(S.sd,S.st);
+  if(!start)return {err:'errStart'};
+  return {start,end,r:span(start,end)};
+}
+
+/* ---------- Display ---------- */
+// Up to 2 decimals, without trailing zeros (12,5 – not 12,50)
+const num=x=>{const r=Math.round(x*100)/100;return Tools.fmt(r,Number.isInteger(r)?0:Number.isInteger(r*10)?1:2);};
+// Unit in running text: singular for exactly 1 (u1.*), else plural (p.* – lower case in English)
+const unitName=(u,x)=>x===1?t('u1.'+u):t('p.'+u);
+const dateText=(d,withTime)=>d.toLocaleString(Tools.locale(),Object.assign({weekday:'long',day:'numeric',month:'long',year:'numeric'},withTime?{hour:'2-digit',minute:'2-digit'}:{}));
+const els={td:$('td'),tt:$('tt'),sd:$('sd'),st:$('st')};
+let lastErr=null;
+function render(){
+  for(const b of document.querySelectorAll('[data-start]'))b.setAttribute('aria-pressed',String(b.dataset.start===S.start));
+  for(const b of document.querySelectorAll('[data-unit]'))b.setAttribute('aria-pressed',String(b.dataset.unit===S.unit));
+  $('startFields').hidden=S.start!=='custom';
+  $('nowHint').hidden=S.start!=='now';
+  const c=current();
+  $('msg').hidden=!c.err;$('out').hidden=!!c.err;
+  if(c.err){$('msg').textContent=t(c.err);if(lastErr!==c.err)Tools.diag.log('invalid input',{err:c.err});lastErr=c.err;return;}
+  lastErr=null;
+  const r=c.r,x=r.v[S.unit],zero=r.ms===0;
+  $('lead').textContent=t(zero?'leadNow':r.past?'leadPast':'leadFuture');
+  const big=$('big');big.textContent=num(x);
+  const small=document.createElement('small');small.textContent=unitName(S.unit,Math.round(x*100)/100);big.append(small);
+  $('when').textContent=t(r.past?'since':'until',{date:dateText(c.end,!!S.tt||c.end.getHours()||c.end.getMinutes())});
+  const parts=['y','mo','d','h','min','s'].filter(k=>r.bd[k]).map(k=>`${Tools.fmt(r.bd[k],0)} ${unitName(k,r.bd[k])}`);
+  $('bd').textContent=parts.length?parts.join(', '):`0 ${t('p.s')}`;
+  const res=$('results');res.textContent='';
+  const tile=(label,value,main)=>{
+    const d=document.createElement('div');d.className='res'+(main?' main':'');
+    const k=document.createElement('div');k.className='k';k.textContent=label;
+    const v=document.createElement('div');v.className='v';v.textContent=value;
+    d.append(k,v);res.append(d);
+  };
+  for(const u of UNITS)tile(t('u.'+u),num(r.v[u]),u===S.unit);
+  tile(t('calDays'),Tools.fmt(r.calDays,0),false);
+}
+function save(){Tools.save(LS,S);}
+function fill(){els.td.value=S.td;els.tt.value=S.tt;els.sd.value=S.sd;els.st.value=S.st;}
+
+for(const k of Object.keys(els))els[k].addEventListener('input',()=>{S[k]=els[k].value;save();render();});
+for(const b of document.querySelectorAll('[data-start]'))b.addEventListener('click',()=>{
+  S.start=b.dataset.start;
+  if(S.start==='custom'&&!parse(S.sd,'')){S.sd=isoDate(new Date());els.sd.value=S.sd;}
+  save();render();Tools.diag.log('start',{mode:S.start});
+});
+for(const b of document.querySelectorAll('[data-unit]'))b.addEventListener('click',()=>{S.unit=b.dataset.unit;save();render();});
+
+// Live: tick on every full second while counting from now
+function tick(){if(S.start==='now'&&!document.hidden)render();setTimeout(tick,1000-Date.now()%1000+5);}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)render();});
+fill();render();tick();
+Tools.onLang(render);
+Tools.diag.info(()=>{const c=current();return {start:S.start,unit:S.unit,targetTime:!!S.tt,startTime:!!S.st,error:c.err||null,past:c.r?c.r.past:null};});
+
+/* ---------- WebMCP ---------- */
+const round=(x,d)=>{const f=10**d;return Math.round(x*f)/f;};
+const dateSchema=d=>({type:'string',minLength:10,maxLength:10,description:d});
+const timeSchema=d=>({type:'string',minLength:5,maxLength:8,description:d});
+Tools.mcp.register({
+  name:'time_until',title:'Time until a date',label:'mcp.calc',
+  description:'Calculates the time between a start (default: now) and a target date with an optional time of day, in the local time zone of the device. Returns the span in seconds, minutes, hours, days, weeks, months and years, the number of calendar days and a breakdown into years, months, days, hours, minutes and seconds. Days, weeks, months and years follow the calendar; hours, minutes and seconds count the real elapsed time (daylight saving changes included). If the target lies before the start, is_past is true and all values are the positive time since then. The values are filled into the app.',
+  inputSchema:{type:'object',properties:{
+    target_date:dateSchema('Target date as YYYY-MM-DD.'),
+    target_time:timeSchema('Time of day of the target as HH:MM or HH:MM:SS (24 h). Default 00:00.'),
+    start_date:dateSchema('Start date as YYYY-MM-DD. Default: count from now.'),
+    start_time:timeSchema('Time of day of the start as HH:MM or HH:MM:SS (24 h), only with start_date. Default 00:00.'),
+    unit:{type:'string',enum:Object.values(UNIT_EN),description:'Unit for the big display in the app. Default: keep the current one.'}
+  },required:['target_date'],additionalProperties:false},
+  execute:i=>{
+    const end=parse(i.target_date,i.target_time||'');
+    if(!end)throw new Error('Invalid target_date or target_time – expected YYYY-MM-DD and HH:MM.');
+    if(i.start_time!=null&&i.start_date==null)throw new Error('start_time needs start_date.');
+    const custom=i.start_date!=null,start=custom?parse(i.start_date,i.start_time||''):nowSec();
+    if(!start)throw new Error('Invalid start_date or start_time – expected YYYY-MM-DD and HH:MM.');
+    S.td=i.target_date;S.tt=i.target_time||'';S.start=custom?'custom':'now';
+    if(custom){S.sd=i.start_date;S.st=i.start_time||'';}
+    if(i.unit)S.unit=UNITS.find(u=>UNIT_EN[u]===i.unit);
+    fill();save();render();
+    Tools.diag.log('mcp time_until',{start:S.start,unit:S.unit});
+    const r=span(start,end),out={start:isoLocal(start),target:isoLocal(end),
+      time_zone:Intl.DateTimeFormat().resolvedOptions().timeZone,is_past:r.past};
+    for(const u of UNITS)out[UNIT_EN[u]]=round(r.v[u],u==='s'?0:4);
+    out.calendar_days=r.calDays;
+    out.breakdown={years:r.bd.y,months:r.bd.mo,days:r.bd.d,hours:r.bd.h,minutes:r.bd.min,seconds:r.bd.s};
+    return out;
+  }
+});
+})();
+</script>
+</body>
+</html>
