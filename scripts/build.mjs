@@ -27,6 +27,8 @@
 //   tool:share-target                                    accepted file types for "share to this app" (Android),
 //                                                        e.g. "audio/*, .opus" – see AGENTS.md
 //   tool:share-text ("true")                             receive shared links/text (Android) as ?title=&text=&url=
+//   tool:title-en, tool:description-en, tool:short-name-en   English texts (start page, manifest, page title);
+//                                                        title and description required for every listed tool
 
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, posix } from 'node:path';
@@ -41,6 +43,16 @@ const VENDOR = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'
 // Features for the second filter row on the start page, in display order. Only what sets apps apart:
 // things every app has (offline, installable, data stays on the device) are stated once on the start page.
 const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Standort', 'Datei öffnen', 'Teilen an App', 'Kopieren', 'Verlauf', 'Schütteln', 'Download nötig'];
+// English names of all tags and features (start page filter). A new tag needs an entry here.
+const TAGS_EN = {
+  Alltag: 'Everyday', Arbeit: 'Work', Freizeit: 'Leisure',
+  Apotheke: 'Pharmacy', Barcode: 'Barcode', Bierbrauen: 'Homebrewing', Dokumente: 'Documents', KI: 'AI',
+  Kinder: 'Kids', Messen: 'Measuring', Rechner: 'Calculators', Spiele: 'Games', Sprache: 'Speech',
+  Werkzeug: 'Tools', Zufall: 'Random',
+  Kamera: 'Camera', Mikrofon: 'Microphone', Bewegungssensor: 'Motion sensor', Standort: 'Location',
+  'Datei öffnen': 'Open file', 'Teilen an App': 'Share to app', Kopieren: 'Copy', Verlauf: 'History',
+  Schütteln: 'Shake', 'Download nötig': 'Download needed',
+};
 
 const escHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const escMd = s => s.replace(/\|/g, '\\|');
@@ -65,6 +77,9 @@ function pageInfo({ folder, file }) {
     hidden: meta(html, 'tool:hidden') === 'true',
     color: meta(html, 'tool:color') || '#334155',
     shortName: meta(html, 'tool:short-name') || title,
+    titleEn: meta(html, 'tool:title-en'),
+    descriptionEn: meta(html, 'tool:description-en'),
+    shortNameEn: meta(html, 'tool:short-name-en') || meta(html, 'tool:title-en'),
     storage: meta(html, 'tool:storage'),
     shareAccept: (meta(html, 'tool:share-target') || '').split(',').map(s => s.trim()).filter(Boolean),
     shareText: meta(html, 'tool:share-text') === 'true',
@@ -81,6 +96,10 @@ const tools = pages
     return false;
   })
   .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, 'de'));
+for (const t of tools) {
+  if (!t.titleEn || !t.descriptionEn)
+    throw new Error(`${t.file}: <meta name="tool:title-en"> and <meta name="tool:description-en"> are required (English start page and manifest)`);
+}
 // Installable apps: every listed tool plus the template (so copies work right away)
 const apps = [...tools, ...pages.filter(p => p.folder === 'template')];
 const isApp = p => apps.includes(p);
@@ -105,6 +124,8 @@ function renderCards() {
   if (!tools.length) return '\n  <p class="muted">Noch keine Seiten.</p>\n  ';
   for (const t of tools) for (const f of t.features)
     if (!FEATURES.includes(f)) throw new Error(`${t.file}: unknown tool:features value "${f}" – allowed: ${FEATURES.join(', ')}`);
+  for (const t of tools) for (const x of [...t.tags, ...t.features])
+    if (!TAGS_EN[x]) throw new Error(`${t.file}: no English name for tag "${x}" – add it to TAGS_EN in scripts/build.mjs`);
   // Filter rows: every value once. Categories: the first tag of a tool is its area (Alltag, Arbeit, Freizeit …);
   // areas come first, then the other tags, each alphabetically. Features in FEATURES order.
   // Hidden until the page script runs (no JS = no filter).
@@ -114,9 +135,9 @@ function renderCards() {
     .concat([...new Set(tools.flatMap(t => t.tags))].filter(x => !areas.has(x)).sort(byName));
   const features = FEATURES.filter(f => tools.some(t => t.features.includes(f)));
   const chip = (label, value, pressed) =>
-    `<button type="button" class="chip" data-tag="${escHtml(value)}" aria-pressed="${pressed}">${escHtml(label)}</button>`;
+    `<button type="button" class="chip" data-tag="${escHtml(value)}" data-i18n="${value ? 'tag.' + escHtml(value) : 'filter.all'}" aria-pressed="${pressed}">${escHtml(label)}</button>`;
   const row = (id, label, chips) => `    <div class="filter-row" role="group" aria-labelledby="${id}">
-      <span class="filter-label" id="${id}">${label}</span>
+      <span class="filter-label" id="${id}" data-i18n="${id}">${label}</span>
       <div class="chips">
         ${chips.join('\n        ')}
       </div>
@@ -126,13 +147,19 @@ function renderCards() {
 ${row('f-cat', 'Kategorie', [chip('Alle', '', true), ...tags.map(x => chip(x, x, false))])}${features.length ? row('f-feat', 'Funktion', features.map(x => chip(x, x, false))) : ''}  </div>
   <p class="filter-status sr-only" aria-live="polite"></p>
 ` : '';
+  const tag = (x, cls) => `<span class="${cls}" data-tag="${escHtml(x)}" data-i18n="tag.${escHtml(x)}">${escHtml(x)}</span>`;
   const cards = tools.map(t => `    <article class="card tool" data-tags="${escHtml(JSON.stringify([...t.tags, ...t.features]))}">
-      <h2>${t.icon ? `<img src="${t.folder}/icon.svg" alt="" width="32" height="32">` : ''}${escHtml(t.title)}</h2>
-      <p>${escHtml(t.description)}</p>
-      <div class="tags">${t.tags.map(x => `<span class="tag">${escHtml(x)}</span>`).join('')}${t.features.map(x => `<span class="tag feat">${escHtml(x)}</span>`).join('')}</div>
-      <a class="btn primary" href="${t.folder}/">Öffnen</a>
+      <h2>${t.icon ? `<img src="${t.folder}/icon.svg" alt="" width="32" height="32">` : ''}<span data-i18n="card.${t.folder}.title">${escHtml(t.title)}</span></h2>
+      <p data-i18n="card.${t.folder}.desc">${escHtml(t.description)}</p>
+      <div class="tags">${t.tags.map(x => tag(x, 'tag')).join('')}${t.features.map(x => tag(x, 'tag feat')).join('')}</div>
+      <a class="btn primary" href="${t.folder}/" data-i18n="open">Öffnen</a>
     </article>`).join('\n');
-  return `\n${filter}  <div class="grid">\n${cards}\n  </div>\n  `;
+  // English texts of the cards and filters for the start page script (Tools.i18n)
+  const en = { 'filter.all': 'All', 'f-cat': 'Category', 'f-feat': 'Feature', open: 'Open' };
+  for (const x of [...tags, ...features]) en['tag.' + x] = TAGS_EN[x];
+  for (const t of tools) { en[`card.${t.folder}.title`] = t.titleEn; en[`card.${t.folder}.desc`] = t.descriptionEn; }
+  const json = JSON.stringify({ en }, null, 2).replace(/</g, '\\u003c').replace(/\n/g, '\n  ');
+  return `\n${filter}  <div class="grid">\n${cards}\n  </div>\n  <script type="application/json" id="i18n-cards">\n  ${json}\n  </script>\n  `;
 }
 
 function renderTable() {
@@ -192,6 +219,11 @@ function manifest(p) {
     short_name: p.shortName,
     description: p.description || '',
     lang: 'de',
+    // English name under the icon where the browser supports it (Chrome/Edge 148+): chosen by the
+    // browser/system language, not by the language switch of the page
+    ...(p.titleEn ? { name_localized: { en: p.titleEn } } : {}),
+    ...(p.shortNameEn ? { short_name_localized: { en: p.shortNameEn } } : {}),
+    ...(p.descriptionEn ? { description_localized: { en: p.descriptionEn } } : {}),
     start_url: './',
     scope: './',
     display: 'standalone',
