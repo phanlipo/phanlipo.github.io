@@ -16,7 +16,7 @@
 <meta name="tool:storage" content="sensors.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-bu6td5+vkiow11XkxaCgC6x1saLmN1G3jRoutPocYR4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-04B8g0aMB5UC56XI5WaNDFEHTr9I2BQqbdTSUzqdLy0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -62,6 +62,8 @@ main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--pag
 .btn.start{flex:1 1 160px;font-size:18px}
 .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
 .btn:disabled{opacity:.55;cursor:default}
+a.btn{display:inline-flex;align-items:center;text-decoration:none}
+.coord{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;text-align:center}
 .stat{background:var(--surface-2);border-radius:8px;padding:8px 4px;min-width:0}
 .stat b{display:block;font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -407,6 +409,16 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
       <button type="button" class="btn primary start" data-start="speed">Starten</button>
       <button type="button" class="btn" id="gReset">Strecke zurücksetzen</button>
     </div>
+    <h3>Standort</h3>
+    <p class="info coord" id="gCoord">Noch keine Position</p>
+    <div class="seg" role="group" aria-label="Koordinatenformat">
+      <button type="button" data-cfmt="dec" aria-pressed="true">Dezimalgrad</button>
+      <button type="button" data-cfmt="dms" aria-pressed="false">Grad, Minuten, Sekunden</button>
+    </div>
+    <div class="row">
+      <button type="button" class="btn" id="gCopy" disabled>Koordinaten kopieren</button>
+      <a class="btn" id="gMap" hidden>In Karten-App öffnen</a>
+    </div>
   </section>
 
   <!-- Pedometer -->
@@ -589,6 +601,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <ul>
     <li>Nutzt das GPS: Geschwindigkeit, Höchst- und Durchschnittsgeschwindigkeit, Strecke, Höhe und Fahrzeit (nur Zeit in Bewegung). Im Freien dauert das erste Signal manchmal bis zu einer Minute; in Gebäuden ist es ungenau.</li>
     <li>Ungenaue Positionen (über ±50 m) werden ignoriert, kleine Sprünge im Stand nicht als Strecke gezählt. Die Strecke bleibt bis <b>Strecke zurücksetzen</b> erhalten, solange die App offen ist.</li>
+    <li><b>Standort:</b> zeigt die Koordinaten als Dezimalgrad oder in Grad, Minuten, Sekunden. <b>Koordinaten kopieren</b> legt sie in der Form „50.110230, 8.682120“ in die Zwischenablage (versteht jede Karten-App und jeder Messenger), <b>In Karten-App öffnen</b> zeigt den Punkt in der Karten-App des Handys. Die App selbst sendet den Standort nirgendwohin.</li>
     <li>Nur als Orientierung – kein Ersatz für den Tacho im Fahrzeug.</li>
   </ul>
   <h3>Schrittzähler</h3>
@@ -622,7 +635,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <p>Läuft vollständig im Browser · Messwerte verlassen das Gerät nicht</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
-  <p class="footer-version">Version 844e3f1d5a45</p>
+  <p class="footer-version">Version 4795ccbbcf7a</p>
   <!-- footer:end -->
 </footer>
 
@@ -639,7 +652,7 @@ const DEF = {
   steps: {day: '', count: 0, len: 0.7, sens: 'mid'},
   tone: {type: 'sine', freq: 1000, vol: 30, sweep: false, f2: 10000, dur: 10},
   morse: {text: 'SOS', wpm: 12},
-  clapThr: -20,
+  clapThr: -20, coordFmt: 'dec',
 };
 const S = Object.assign({}, DEF, load(LS, {}) || {});
 for (const k of ['level', 'compass', 'tuner', 'steps', 'tone', 'morse']) S[k] = Object.assign({}, DEF[k], S[k]);
@@ -1452,6 +1465,8 @@ const speed = {
   fix(p){
     seen('speed');
     const c = p.coords, t = p.timestamp, acc = c.accuracy;
+    this.pos = {lat: c.latitude, lon: c.longitude, acc};
+    this.showPos();
     if (acc > 50) {
       setStatus('speed', `Ungenaues Signal (± ${fmt(acc, 0)} m) – wird nicht gezählt`, 'warn');
       this.cur = Object.assign({}, this.cur, {acc});
@@ -1491,6 +1506,36 @@ const speed = {
   },
 };
 $('gReset').addEventListener('click', () => { speed.resetTrip(); speed.render(); toast('Strecke zurückgesetzt'); });
+// Coordinates: decimal degrees or degrees/minutes/seconds (rounded to 0,1″)
+function dms(a){
+  const t = Math.round(Math.abs(a) * 36000);
+  return `${Math.floor(t / 36000)}° ${Math.floor(t % 36000 / 600)}′ ${fmt(t % 600 / 10, 1)}″`;
+}
+function coordText(lat, lon){
+  const ns = lat >= 0 ? 'N' : 'S', ew = lon >= 0 ? 'O' : 'W';
+  return S.coordFmt === 'dms' ? `${dms(lat)} ${ns}, ${dms(lon)} ${ew}` : `${fmt(Math.abs(lat), 5)}° ${ns}, ${fmt(Math.abs(lon), 5)}° ${ew}`;
+}
+speed.showPos = function(){
+  const p = this.pos;
+  if (!p) return;
+  $('gCoord').textContent = coordText(p.lat, p.lon) + (p.acc != null ? ` (± ${fmt(p.acc, 0)} m)` : '');
+  $('gCopy').disabled = false;
+  // Opens the phone's map app directly; the page itself sends nothing
+  const ll = p.lat.toFixed(6) + ',' + p.lon.toFixed(6);
+  $('gMap').href = isIOS ? `maps://?ll=${ll}&q=${ll}` : `geo:${ll}?q=${ll}`;
+  $('gMap').hidden = false;
+};
+function showCoordFmt(){
+  document.querySelectorAll('[data-cfmt]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cfmt === S.coordFmt)));
+  speed.showPos();
+}
+document.querySelectorAll('[data-cfmt]').forEach(b => b.addEventListener('click', () => { S.coordFmt = b.dataset.cfmt; store(); showCoordFmt(); }));
+$('gCopy').addEventListener('click', async () => {
+  const p = speed.pos;
+  if (!p) return;
+  // Copied in the international form that map apps and messengers understand
+  toast(await Tools.copyText(p.lat.toFixed(6) + ', ' + p.lon.toFixed(6)) ? 'Koordinaten kopiert' : 'Kopieren nicht möglich');
+});
 
 /* ---------- Pedometer ---------- */
 const SENS = {low: 1.6, mid: 1.0, high: 0.6};
@@ -1909,7 +1954,7 @@ window.addEventListener('popstate', e => {
   if (e.state && e.state.sensorTool) { if (view !== 'tool') { showView('tool'); selectTab(S.tab, false, false); } }
   else if (view !== 'overview') { showView('overview'); window.scrollTo(0, 0); }
 });
-showGrav(); showNorth(); showWeight(); showTunerMode(); showSens(); toneUi(); showThr();
+showGrav(); showCoordFmt(); showNorth(); showWeight(); showTunerMode(); showSens(); toneUi(); showThr();
 rollDay(); steps.render();
 if (S.view === 'tool') {
   // Reopen the last tool; "back" then leads to the overview

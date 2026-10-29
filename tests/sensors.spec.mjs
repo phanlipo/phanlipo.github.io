@@ -700,3 +700,36 @@ test('clap stopwatch: a clap starts, the next one stops', async ({ page }) => {
   await page.getByRole('button', { name: 'Zurücksetzen' }).click();
   await expect(page.locator('#kTime')).toHaveText('0,00');
 });
+
+test('speedometer: coordinates in both formats, copy and map link', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.addInitScript(() => {
+    const watchers = new Map();
+    let id = 0;
+    const geo = { watchPosition(ok) { watchers.set(++id, ok); return id; }, clearWatch(i) { watchers.delete(i); }, getCurrentPosition() {} };
+    Object.defineProperty(Navigator.prototype, 'geolocation', { get: () => geo, configurable: true });
+    window.__fix = (lat, lon, acc) => watchers.forEach(cb => cb({ timestamp: Date.now(), coords: {
+      latitude: lat, longitude: lon, accuracy: acc, altitude: null, altitudeAccuracy: null, heading: null, speed: null } }));
+  });
+  await page.reload();
+  await tab(page, 'Tacho');
+  await running(page, 'speed');
+  await expect(page.locator('#gCopy')).toBeDisabled();
+  await expect(page.locator('#gMap')).toBeHidden();
+  await page.evaluate(() => window.__fix(50.11023, 8.68212, 6));
+  await expect(page.locator('#gCoord')).toHaveText('50,11023° N, 8,68212° O (± 6 m)');
+  // Degrees, minutes, seconds – computed independently
+  const toDms = a => { const d = Math.trunc(a), mf = (a - d) * 60, m = Math.trunc(mf); return `${d}° ${m}′ ${de((mf - m) * 60, 1)}″`; };
+  await page.getByRole('button', { name: 'Grad, Minuten, Sekunden' }).click();
+  await expect(page.locator('#gCoord')).toHaveText(`${toDms(50.11023)} N, ${toDms(8.68212)} O (± 6 m)`);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Grad, Minuten, Sekunden' })).toHaveAttribute('aria-pressed', 'true');
+  // Southern/western hemisphere, also shown for an inaccurate fix
+  await page.evaluate(() => window.__fix(-33.85678, -70.6505, 80));
+  await expect(page.locator('#gCoord')).toHaveText(`${toDms(33.85678)} S, ${toDms(70.6505)} W (± 80 m)`);
+  await page.getByRole('button', { name: 'Dezimalgrad' }).click();
+  await expect(page.locator('#gCoord')).toHaveText('33,85678° S, 70,65050° W (± 80 m)');
+  await expect(page.locator('#gMap')).toHaveAttribute('href', 'geo:-33.856780,-70.650500?q=-33.856780,-70.650500');
+  await page.getByRole('button', { name: 'Koordinaten kopieren' }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('-33.856780, -70.650500');
+});
