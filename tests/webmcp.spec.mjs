@@ -472,7 +472,9 @@ test.describe('reminders tools', () => {
     const { result: { reminder } } = await call(page, 'reminders_create_reminder', { text: 'Tabletten', at: '2026-10-29T12:01', repeat: 'daily' });
     expect(reminder.repeat).toBe('daily');
     await page.clock.runFor(2 * 60e3);
-    let { result } = await call(page, 'reminders_list_reminders', {});
+    // Firing runs asynchronously (Web Lock, then saving): wait until the date is in the history
+    await expect.poll(async () => (await call(page, 'reminders_list_reminders', {})).result.due.length).toBe(1);
+    const { result } = await call(page, 'reminders_list_reminders', {});
     expect(result.scheduled).toMatchObject([{ id: reminder.id, at: '2026-10-30T12:01', repeat: 'daily' }]);
     expect(result.due).toMatchObject([{ text: 'Tabletten', at: '2026-10-29T12:01', status: 'due' }]);
     await call(page, 'reminders_update_reminder', { id: reminder.id, text: 'Tabletten (abends)' });

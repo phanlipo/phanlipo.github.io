@@ -265,7 +265,7 @@ test('diagnostics: copied from the help with permission state and the steps, wit
   await add(page, 'Geheimer Termin', '2026-10-29T13:00');
   await page.click('#btnPerm');
   await page.locator('details.help summary').click();
-  await page.click('#btnDiag');
+  await page.click('[data-diag="copy"]');
   await expect(page.locator('#toast')).toHaveText('Diagnose kopiert');
   const text = await page.evaluate(() => navigator.clipboard.readText());
   expect(text).toContain('Notification.permission: default');
@@ -314,7 +314,7 @@ test.describe('Android', () => {
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.click('#btnPerm');
     await page.locator('details.help summary').click();
-    await page.click('#btnDiag');
+    await page.click('[data-diag="copy"]');
     await expect(page.locator('#toast')).toHaveText('Diagnose kopiert');
     const text = await page.evaluate(() => navigator.clipboard.readText());
     expect(text).toContain('push: subscribe …');

@@ -82,6 +82,7 @@ window.Tools = (function () {
     'data.errEmpty': 'Die Sicherung enthält keine Daten.',
     'data.errForeign': 'Die Sicherung enthält unbekannte Einträge und wurde nicht geladen.',
     'data.errWrite': 'Speichern nicht möglich (Speicher voll oder gesperrt).',
+    'diag.copied': 'Diagnose kopiert', 'diag.fail': 'Kopieren nicht möglich',
   });
   Object.assign(dict.en, {
     'sw.updated': 'Update loaded – active the next time you open the app',
@@ -105,6 +106,9 @@ window.Tools = (function () {
     'data.errEmpty': 'The backup contains no data.',
     'data.errForeign': 'The backup contains unknown entries and was not loaded.',
     'data.errWrite': 'Saving is not possible (storage full or blocked).',
+    'diag.h': 'Troubleshooting',
+    'diag.intro': 'Something does not work? First make the problem happen, then copy the diagnostics and pass them on. They contain the browser, app version, state and a log of the last steps – nothing you entered.',
+    'diag.copy': 'Copy diagnostics', 'diag.copied': 'Diagnostics copied', 'diag.fail': 'Copying not possible',
   });
 
   function t(key, vars) {
@@ -469,10 +473,69 @@ window.Tools = (function () {
     return tool;
   }
 
+  /* ---------- Diagnostics: "Diagnose kopieren" (block at the end of the help, see template/) ----------
+     Tools.diag.log(...parts)  one line in the log: steps, results, errors – never user content (texts, passwords,
+                               file contents). Strings as they are, Errors as "Name: message", the rest as JSON.
+     Tools.diag.info(fn)       page-specific state for the report: fn() returns (or resolves to) { key: value }.
+     A button with data-diag="copy" copies the report: app, version, browser, installed or not, language, online,
+     service worker, own storage (number of keys and size – no content), the page's info and the log.
+     JS errors, unhandled rejections and console warnings/errors are logged automatically. */
+  const diagLines = [];
+  const diagInfos = [];
+  function diagStr(x) {
+    if (typeof x === 'string') return x;
+    if (x instanceof Error || (x && typeof x === 'object' && 'name' in x && 'message' in x)) return `${x.name}: ${x.message}`;
+    try { return JSON.stringify(x); } catch (_) { return String(x); }
+  }
+  function diagLog(...parts) {
+    diagLines.push(new Date().toISOString().slice(11, 23) + ' ' + parts.map(diagStr).join(' '));
+    if (diagLines.length > 300) diagLines.shift();
+  }
+  async function diagText() {
+    const out = [];
+    const add = (k, v) => out.push(`${k}: ${diagStr(v)}`);
+    const version = document.querySelector('.footer-version');
+    add('app', appId());
+    add('version', version ? version.textContent.trim().replace(/^Version\s+/, '') : '');
+    add('time', new Date().toString());
+    add('userAgent', navigator.userAgent);
+    add('standalone', matchMedia('(display-mode: standalone)').matches || navigator.standalone === true);
+    add('language', lang);
+    add('online', navigator.onLine);
+    const sw = navigator.serviceWorker;
+    add('serviceWorker.controller', !!(sw && sw.controller));
+    try {
+      const reg = sw && await sw.getRegistration();
+      add('registration', reg ? { scope: reg.scope, active: !!reg.active, waiting: !!reg.waiting } : null);
+    } catch (e) { add('registration', e); }
+    const keys = ownKeys();
+    let bytes = 0;
+    try { bytes = keys.reduce((n, k) => n + k.length + (localStorage.getItem(k) || '').length, 0) * 2; } catch (_) {}
+    add('storage', { keys: keys.length, bytes });
+    for (const fn of diagInfos) {
+      try { for (const [k, v] of Object.entries((await fn()) || {})) add(k, v); } catch (e) { add('info failed', e); }
+    }
+    return out.join('\n') + '\n\nlog:\n' + (diagLines.join('\n') || '(empty)');
+  }
+  window.addEventListener('error', e => diagLog('JS error:', e.error || e.message || 'unknown', e.filename ? `${e.filename}:${e.lineno}` : ''));
+  window.addEventListener('unhandledrejection', e => diagLog('unhandled rejection:', e.reason));
+  for (const level of ['warn', 'error']) {
+    const orig = console[level];
+    console[level] = function (...args) { diagLog(`console.${level}:`, ...args); return orig.apply(this, args); };
+  }
+  function setupDiagUi() {
+    document.querySelectorAll('[data-diag="copy"]').forEach(b => b.addEventListener('click', async () => {
+      toast(t((await copyText(await diagText())) ? 'diag.copied' : 'diag.fail'));
+    }));
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupDiagUi);
+  else setupDiagUi();
+
   return {
     $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedText,
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     data: { exportData, validateBackup, importData, clearData, keys: ownKeys, prefixes: storagePrefixes, appId },
+    diag: { log: diagLog, info: fn => { diagInfos.push(fn); }, text: diagText },
   };
 })();
