@@ -386,9 +386,90 @@ window.Tools = (function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupDataUi);
   else setupDataUi();
 
+  /* ---------- WebMCP: app functions as tools for AI agents in the browser ----------
+     Draft standard (W3C Web Machine Learning CG): document.modelContext.registerTool(tool, { signal }).
+     Older drafts and polyfills use navigator.modelContext – both are supported. Without it: nothing happens.
+     Tools.mcp.register({ name, title, description, inputSchema, execute, readOnly, label })
+       name         short English snake_case name; the app id is put in front (dice_coin_roll_dice)
+       description  English – what the tool does, what it returns
+       inputSchema  JSON Schema (type object); the input is checked against it before execute runs
+       execute      (input) => result (JSON-serialisable, English keys); throw an Error for problems
+       readOnly     true if the tool only reads data (annotation readOnlyHint)
+       label        key for Tools.t(): shown to the user as a toast when an agent runs the tool
+     Never register destructive tools (delete data, load backups) or tools that use camera/microphone.
+     Tools are only for this origin (no exposedTo). */
+  const mcpTools = [];
+  const modelContext = () => document.modelContext || navigator.modelContext || null;
+  const mcpPrefix = () => appId().replace(/[^A-Za-z0-9]+/g, '_');
+  Object.assign(dict.de, { 'mcp.used': 'KI-Agent: {action}' });
+  Object.assign(dict.en, { 'mcp.used': 'AI agent: {action}' });
+
+  // Small JSON Schema check (the subset the tools use): type, properties, required,
+  // additionalProperties: false, enum, minimum, maximum, minLength, maxLength, items, maxItems
+  function checkSchema(value, schema, path) {
+    const where = path || 'input';
+    const type = schema.type;
+    const isInt = Number.isInteger(value);
+    const ok = { object: value && typeof value === 'object' && !Array.isArray(value), array: Array.isArray(value),
+      string: typeof value === 'string', number: typeof value === 'number' && Number.isFinite(value),
+      integer: isInt, boolean: typeof value === 'boolean' };
+    if (type && !ok[type]) throw new Error(`${where} must be of type ${type}`);
+    if (schema.enum && !schema.enum.includes(value)) throw new Error(`${where} must be one of: ${schema.enum.join(', ')}`);
+    if (typeof value === 'number') {
+      if (schema.minimum != null && value < schema.minimum) throw new Error(`${where} must be >= ${schema.minimum}`);
+      if (schema.maximum != null && value > schema.maximum) throw new Error(`${where} must be <= ${schema.maximum}`);
+    }
+    if (typeof value === 'string') {
+      if (schema.minLength != null && value.length < schema.minLength) throw new Error(`${where} must have at least ${schema.minLength} characters`);
+      if (schema.maxLength != null && value.length > schema.maxLength) throw new Error(`${where} must have at most ${schema.maxLength} characters`);
+    }
+    if (Array.isArray(value)) {
+      if (schema.maxItems != null && value.length > schema.maxItems) throw new Error(`${where} must have at most ${schema.maxItems} items`);
+      if (schema.items) value.forEach((v, i) => checkSchema(v, schema.items, `${where}[${i}]`));
+    }
+    if (type === 'object') {
+      const props = schema.properties || {};
+      for (const k of schema.required || []) if (!(k in value)) throw new Error(`${where}.${k} is required`);
+      for (const [k, v] of Object.entries(value)) {
+        if (props[k]) checkSchema(v, props[k], `${where}.${k}`);
+        else if (schema.additionalProperties === false) throw new Error(`${where}.${k} is not allowed`);
+      }
+    }
+  }
+
+  function mcpRegister(def) {
+    const name = `${mcpPrefix()}_${def.name}`;
+    const schema = def.inputSchema || { type: 'object', properties: {}, additionalProperties: false };
+    const tool = {
+      name,
+      title: def.title || def.name,
+      description: def.description,
+      inputSchema: schema,
+      annotations: { readOnlyHint: !!def.readOnly },
+      execute: async input => {
+        const args = input == null ? {} : input;
+        checkSchema(args, schema);
+        const result = await def.execute(args);
+        if (def.label) toast(t('mcp.used', { action: t(def.label) }), 2500);
+        return result;
+      },
+    };
+    mcpTools.push(tool);
+    const mc = modelContext();
+    if (!mc || typeof mc.registerTool !== 'function') return tool;
+    const controller = new AbortController();
+    tool.unregister = () => controller.abort();
+    try {
+      Promise.resolve(mc.registerTool(tool, { signal: controller.signal }))
+        .catch(e => console.warn('WebMCP: Werkzeug nicht registriert:', name, e));
+    } catch (e) { console.warn('WebMCP: Werkzeug nicht registriert:', name, e); }
+    return tool;
+  }
+
   return {
     $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedText,
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
+    mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     data: { exportData, validateBackup, importData, clearData, keys: ownKeys, prefixes: storagePrefixes, appId },
   };
 })();

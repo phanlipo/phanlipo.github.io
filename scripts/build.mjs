@@ -27,6 +27,8 @@
 //   tool:share-target                                    accepted file types for "share to this app" (Android),
 //                                                        e.g. "audio/*, .opus" – see AGENTS.md
 //   tool:share-text ("true")                             receive shared links/text (Android) as ?title=&text=&url=
+//   tool:webmcp ("a, b")                                 WebMCP tools the page registers (names without app prefix);
+//                                                        needs the feature "KI-Agent", checked by tests/webmcp.spec.mjs
 //   tool:title-en, tool:description-en, tool:short-name-en   English texts (start page, manifest, page title);
 //                                                        title and description required for every listed tool
 
@@ -42,7 +44,7 @@ const VENDOR = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'
 
 // Features for the second filter row on the start page, in display order. Only what sets apps apart:
 // things every app has (offline, installable, data stays on the device) are stated once on the start page.
-const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Standort', 'Datei öffnen', 'Teilen an App', 'Kopieren', 'Verlauf', 'Schütteln', 'Download nötig'];
+const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Standort', 'Datei öffnen', 'Teilen an App', 'Kopieren', 'Verlauf', 'Schütteln', 'KI-Agent', 'Download nötig'];
 // English names of all tags and features (start page filter). A new tag needs an entry here.
 const TAGS_EN = {
   Alltag: 'Everyday', Arbeit: 'Work', Freizeit: 'Leisure',
@@ -51,7 +53,7 @@ const TAGS_EN = {
   Werkzeug: 'Tools', Zufall: 'Random',
   Kamera: 'Camera', Mikrofon: 'Microphone', Bewegungssensor: 'Motion sensor', Standort: 'Location',
   'Datei öffnen': 'Open file', 'Teilen an App': 'Share to app', Kopieren: 'Copy', Verlauf: 'History',
-  Schütteln: 'Shake', 'Download nötig': 'Download needed',
+  Schütteln: 'Shake', 'KI-Agent': 'AI agent', 'Download nötig': 'Download needed',
 };
 
 const escHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -83,6 +85,7 @@ function pageInfo({ folder, file }) {
     storage: meta(html, 'tool:storage'),
     shareAccept: (meta(html, 'tool:share-target') || '').split(',').map(s => s.trim()).filter(Boolean),
     shareText: meta(html, 'tool:share-text') === 'true',
+    webmcp: (meta(html, 'tool:webmcp') || '').split(',').map(s => s.trim()).filter(Boolean),
     icon: existsSync(join(ROOT, folder, 'icon.svg')),
   };
 }
@@ -97,6 +100,10 @@ const tools = pages
   })
   .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, 'de'));
 for (const t of tools) {
+  if (t.webmcp.length !== 0 && !t.features.includes('KI-Agent'))
+    throw new Error(`${t.file}: tool:webmcp is set – add "KI-Agent" to tool:features`);
+  if (t.features.includes('KI-Agent') && !t.webmcp.length)
+    throw new Error(`${t.file}: feature "KI-Agent" needs <meta name="tool:webmcp"> with the tool names`);
   if (!t.titleEn || !t.descriptionEn)
     throw new Error(`${t.file}: <meta name="tool:title-en"> and <meta name="tool:description-en"> are required (English start page and manifest)`);
 }
