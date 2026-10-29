@@ -16,7 +16,7 @@
 <meta name="tool:storage" content="sensors.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-4D9e8xzg4Q06ZDmN6RIq78cdloNUajZc4bMeGpbEczQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-bu6td5+vkiow11XkxaCgC6x1saLmN1G3jRoutPocYR4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -30,9 +30,23 @@
   :root{--accent:#fb7185;--accent-text:#1b0a10;--c1:#fb7185;--c2:#6fd38c;--c3:#5aa2ef;--bubble:#a3e635}
 }
 main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px;--page-width:720px}
-.tabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
-.tab{border:1px solid var(--border);background:var(--surface);color:var(--text);min-height:44px;padding:4px 6px;border-radius:8px;cursor:pointer;font:inherit;font-size:14px;font-weight:600;hyphens:auto;overflow-wrap:anywhere}
-.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+/* Icons (Tabler sprite) */
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+.ic{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+/* Overview: tiles grouped by sensor */
+.overview{display:grid;gap:4px}
+.ov-h{font-size:14px;color:var(--muted);margin:8px 2px 4px;font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+.tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:84px;padding:8px 4px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font:inherit;font-size:13px;font-weight:600;line-height:1.2;cursor:pointer;box-shadow:var(--shadow);hyphens:auto;overflow-wrap:anywhere;text-align:center}
+.tile .ic{width:30px;height:30px;color:var(--accent)}
+.tile:hover{border-color:var(--accent)}
+/* Tool view: sticky bar with back button and swipeable icon tabs */
+.toolbar{position:sticky;top:0;z-index:10;display:flex;align-items:stretch;background:var(--bg);border-bottom:1px solid var(--border);margin:-12px -12px 0;padding:4px 4px 0;min-width:0}
+.back{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:none;min-width:60px;min-height:54px;padding:0 6px;border:0;border-inline-end:1px solid var(--border);background:none;color:var(--text);font:inherit;font-size:12px;cursor:pointer}
+.tabs{position:relative;display:flex;gap:2px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;scroll-behavior:smooth}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:70px;min-height:54px;padding:4px 6px 3px;border:0;border-bottom:3px solid transparent;background:none;color:var(--muted);font:inherit;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer}
+.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
 .panel{display:grid;gap:12px}
 .panel h2{margin:0}
 .panel h3{font-size:15px;margin:6px 0 0}
@@ -115,25 +129,68 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
 </style>
 </head>
 <body>
+<!-- Icons: Tabler Icons 3.50.0 (MIT, Lizenz im Ordner der Fremdbibliotheken) -->
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-compass" viewBox="0 0 24 24"><path d="M8 16l2 -6l6 -2l-2 6l-6 2" /> <path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /> <path d="M12 3l0 2" /> <path d="M12 19l0 2" /> <path d="M3 12l2 0" /> <path d="M19 12l2 0" /></symbol>
+  <symbol id="i-level" viewBox="0 0 24 24"><path d="M4 8v-2a2 2 0 0 1 2 -2h2" /> <path d="M4 16v2a2 2 0 0 0 2 2h2" /> <path d="M16 4h2a2 2 0 0 1 2 2v2" /> <path d="M16 20h2a2 2 0 0 0 2 -2v-2" /> <path d="M9 12l6 0" /> <path d="M12 9l0 6" /></symbol>
+  <symbol id="i-accel" viewBox="0 0 24 24"><path d="M18 9l3 3l-3 3" /> <path d="M15 12h6" /> <path d="M6 9l-3 3l3 3" /> <path d="M3 12h6" /> <path d="M9 18l3 3l3 -3" /> <path d="M12 15v6" /> <path d="M15 6l-3 -3l-3 3" /> <path d="M12 3v6" /></symbol>
+  <symbol id="i-vibro" viewBox="0 0 24 24"><path d="M3 5a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -14" /> <path d="M8 4l2 0" /> <path d="M9 17l0 .01" /> <path d="M21 6l-2 3l2 3l-2 3l2 3" /></symbol>
+  <symbol id="i-steps" viewBox="0 0 24 24"><path d="M12 4a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /> <path d="M7 21l3 -4" /> <path d="M16 21l-2 -4l-3 -3l1 -6" /> <path d="M6 12l2 -3l4 -1l3 3l3 1" /></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M15 8a5 5 0 0 1 0 8" /> <path d="M17.7 5a9 9 0 0 1 0 14" /> <path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5" /></symbol>
+  <symbol id="i-tuner" viewBox="0 0 24 24"><path d="M3 17a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" /> <path d="M13 17a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" /> <path d="M9 17v-13h10v13" /> <path d="M9 8h10" /></symbol>
+  <symbol id="i-tone" viewBox="0 0 24 24"><path d="M21 12h-2c-.894 0 -1.662 -.857 -1.761 -2c-.296 -3.45 -.749 -6 -2.749 -6s-2.5 3.582 -2.5 8s-.5 8 -2.5 8s-2.452 -2.547 -2.749 -6c-.1 -1.147 -.867 -2 -1.763 -2h-2" /></symbol>
+  <symbol id="i-clap" viewBox="0 0 24 24"><path d="M5 13a7 7 0 1 0 14 0a7 7 0 0 0 -14 0" /> <path d="M14.5 10.5l-2.5 2.5" /> <path d="M17 8l1 -1" /> <path d="M14 3h-4" /></symbol>
+  <symbol id="i-torch" viewBox="0 0 24 24"><path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7" /> <path d="M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3" /> <path d="M9.7 17l4.6 0" /></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M19.5 13.572l-7.5 7.428l-2.896 -2.868m-6.117 -8.104a5 5 0 0 1 9.013 -3.022a5 5 0 1 1 7.5 6.572" /> <path d="M3 13h2l2 3l2 -6l1 3h3" /></symbol>
+  <symbol id="i-speed" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /> <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /> <path d="M13.41 10.59l2.59 -2.59" /> <path d="M7 12a5 5 0 0 1 5 -5" /></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6l6 6" /></symbol>
+</svg>
 <header>
   <h1>Handy-Sensoren</h1>
   <p class="sub">Messen mit Lage- und Bewegungssensor, Mikrofon, Kamera und GPS</p>
 </header>
 
 <main>
-  <div class="tabs" role="tablist" aria-label="Messung wählen" id="tabs">
-    <button type="button" role="tab" class="tab" id="tab-compass" aria-controls="p-compass" data-tab="compass">Kompass</button>
-    <button type="button" role="tab" class="tab" id="tab-level" aria-controls="p-level" data-tab="level">Wasserwaage</button>
-    <button type="button" role="tab" class="tab" id="tab-accel" aria-controls="p-accel" data-tab="accel">Beschleunigung</button>
-    <button type="button" role="tab" class="tab" id="tab-vibro" aria-controls="p-vibro" data-tab="vibro">Vibrometer</button>
-    <button type="button" role="tab" class="tab" id="tab-sound" aria-controls="p-sound" data-tab="sound">Schall</button>
-    <button type="button" role="tab" class="tab" id="tab-tuner" aria-controls="p-tuner" data-tab="tuner">Stimmgerät</button>
-    <button type="button" role="tab" class="tab" id="tab-speed" aria-controls="p-speed" data-tab="speed">Tacho</button>
-    <button type="button" role="tab" class="tab" id="tab-steps" aria-controls="p-steps" data-tab="steps">Schritte</button>
-    <button type="button" role="tab" class="tab" id="tab-tone" aria-controls="p-tone" data-tab="tone">Tongenerator</button>
-    <button type="button" role="tab" class="tab" id="tab-torch" aria-controls="p-torch" data-tab="torch">Lampe &amp; Morse</button>
-    <button type="button" role="tab" class="tab" id="tab-pulse" aria-controls="p-pulse" data-tab="pulse">Puls</button>
-    <button type="button" role="tab" class="tab" id="tab-clap" aria-controls="p-clap" data-tab="clap">Klatsch-Stoppuhr</button>
+  <section class="overview" id="overview" aria-label="Übersicht">
+    <h2 class="ov-h">Lage &amp; Bewegung</h2>
+    <div class="tiles">
+      <button type="button" class="tile" data-open="compass"><svg class="ic" aria-hidden="true"><use href="#i-compass"></use></svg><span>Kompass</span></button>
+      <button type="button" class="tile" data-open="level"><svg class="ic" aria-hidden="true"><use href="#i-level"></use></svg><span>Wasserwaage</span></button>
+      <button type="button" class="tile" data-open="accel"><svg class="ic" aria-hidden="true"><use href="#i-accel"></use></svg><span>Beschleunigung</span></button>
+      <button type="button" class="tile" data-open="vibro"><svg class="ic" aria-hidden="true"><use href="#i-vibro"></use></svg><span>Vibrometer</span></button>
+      <button type="button" class="tile" data-open="steps"><svg class="ic" aria-hidden="true"><use href="#i-steps"></use></svg><span>Schritte</span></button>
+    </div>
+    <h2 class="ov-h">Ton</h2>
+    <div class="tiles">
+      <button type="button" class="tile" data-open="sound"><svg class="ic" aria-hidden="true"><use href="#i-sound"></use></svg><span>Schall</span></button>
+      <button type="button" class="tile" data-open="tuner"><svg class="ic" aria-hidden="true"><use href="#i-tuner"></use></svg><span>Stimmgerät</span></button>
+      <button type="button" class="tile" data-open="tone"><svg class="ic" aria-hidden="true"><use href="#i-tone"></use></svg><span>Tongenerator</span></button>
+      <button type="button" class="tile" data-open="clap"><svg class="ic" aria-hidden="true"><use href="#i-clap"></use></svg><span>Klatsch-Stoppuhr</span></button>
+    </div>
+    <h2 class="ov-h">Kamera &amp; GPS</h2>
+    <div class="tiles">
+      <button type="button" class="tile" data-open="torch"><svg class="ic" aria-hidden="true"><use href="#i-torch"></use></svg><span>Lampe &amp; Morse</span></button>
+      <button type="button" class="tile" data-open="pulse"><svg class="ic" aria-hidden="true"><use href="#i-pulse"></use></svg><span>Puls</span></button>
+      <button type="button" class="tile" data-open="speed"><svg class="ic" aria-hidden="true"><use href="#i-speed"></use></svg><span>Tacho</span></button>
+    </div>
+  </section>
+
+  <div class="toolbar" id="toolbar" hidden>
+    <button type="button" class="back" id="toOverview"><svg class="ic" aria-hidden="true"><use href="#i-back"></use></svg><span>Übersicht</span></button>
+    <div class="tabs" role="tablist" aria-label="Messung wählen" id="tabs">
+      <button type="button" role="tab" class="tab" id="tab-compass" aria-controls="p-compass" data-tab="compass"><svg class="ic" aria-hidden="true"><use href="#i-compass"></use></svg><span>Kompass</span></button>
+      <button type="button" role="tab" class="tab" id="tab-level" aria-controls="p-level" data-tab="level"><svg class="ic" aria-hidden="true"><use href="#i-level"></use></svg><span>Wasserwaage</span></button>
+      <button type="button" role="tab" class="tab" id="tab-accel" aria-controls="p-accel" data-tab="accel"><svg class="ic" aria-hidden="true"><use href="#i-accel"></use></svg><span>Beschleunigung</span></button>
+      <button type="button" role="tab" class="tab" id="tab-vibro" aria-controls="p-vibro" data-tab="vibro"><svg class="ic" aria-hidden="true"><use href="#i-vibro"></use></svg><span>Vibrometer</span></button>
+      <button type="button" role="tab" class="tab" id="tab-steps" aria-controls="p-steps" data-tab="steps"><svg class="ic" aria-hidden="true"><use href="#i-steps"></use></svg><span>Schritte</span></button>
+      <button type="button" role="tab" class="tab" id="tab-sound" aria-controls="p-sound" data-tab="sound"><svg class="ic" aria-hidden="true"><use href="#i-sound"></use></svg><span>Schall</span></button>
+      <button type="button" role="tab" class="tab" id="tab-tuner" aria-controls="p-tuner" data-tab="tuner"><svg class="ic" aria-hidden="true"><use href="#i-tuner"></use></svg><span>Stimmgerät</span></button>
+      <button type="button" role="tab" class="tab" id="tab-tone" aria-controls="p-tone" data-tab="tone"><svg class="ic" aria-hidden="true"><use href="#i-tone"></use></svg><span>Tongenerator</span></button>
+      <button type="button" role="tab" class="tab" id="tab-clap" aria-controls="p-clap" data-tab="clap"><svg class="ic" aria-hidden="true"><use href="#i-clap"></use></svg><span>Klatsch-Stoppuhr</span></button>
+      <button type="button" role="tab" class="tab" id="tab-torch" aria-controls="p-torch" data-tab="torch"><svg class="ic" aria-hidden="true"><use href="#i-torch"></use></svg><span>Lampe &amp; Morse</span></button>
+      <button type="button" role="tab" class="tab" id="tab-pulse" aria-controls="p-pulse" data-tab="pulse"><svg class="ic" aria-hidden="true"><use href="#i-pulse"></use></svg><span>Puls</span></button>
+      <button type="button" role="tab" class="tab" id="tab-speed" aria-controls="p-speed" data-tab="speed"><svg class="ic" aria-hidden="true"><use href="#i-speed"></use></svg><span>Tacho</span></button>
+    </div>
   </div>
 
   <!-- Compass -->
@@ -464,7 +521,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
 <!-- data:end -->
 <details class="help card">
   <summary>Anleitung &amp; Hinweise</summary>
-  <p>Die App liest die Sensoren des Handys direkt im Browser aus. Oben den Bereich wählen – die Messung startet sofort (Tongenerator, Lampe und Puls erst auf Knopfdruck). Es läuft immer nur eine Messung; mit <b>Stoppen</b> lässt sie sich anhalten. Wird die App in den Hintergrund gelegt, pausiert sie und läuft beim Zurückkehren weiter. Während einer Messung bleibt der Bildschirm an (falls das Gerät es erlaubt).</p>
+  <p>Die App liest die Sensoren des Handys direkt im Browser aus. In der Übersicht ein Werkzeug antippen – die Messung startet sofort (Tongenerator, Lampe und Puls erst auf Knopfdruck). Oben in der Leiste lässt sich wischen und direkt wechseln; <b>‹ Übersicht</b> (oder die Zurück-Taste) führt zurück. Es läuft immer nur eine Messung; mit <b>Stoppen</b> lässt sie sich anhalten. Beim nächsten Öffnen der App erscheint das zuletzt benutzte Werkzeug. Wird die App in den Hintergrund gelegt, pausiert sie und läuft beim Zurückkehren weiter. Während einer Messung bleibt der Bildschirm an (falls das Gerät es erlaubt).</p>
   <h3>Berechtigungen</h3>
   <ul>
     <li><b>iPhone/iPad:</b> Safari gibt die Sensoren erst nach einer Freigabe frei. Erscheint <b>Zugriff erlauben</b>, darauf tippen und „Erlauben“ wählen. Wurde abgelehnt, die Seite schließen und neu öffnen.</li>
@@ -565,7 +622,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <p>Läuft vollständig im Browser · Messwerte verlassen das Gerät nicht</p>
   <!-- footer:start -->
   <p class="footer-common">KI-generiert · Angaben ohne Gewähr · Icons: <a href="https://tabler.io/icons">Tabler Icons</a> (MIT)</p>
-  <p class="footer-version">Version 68c9d24b82bb</p>
+  <p class="footer-version">Version 844e3f1d5a45</p>
   <!-- footer:end -->
 </footer>
 
@@ -576,7 +633,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
 const {$, load, save, toast, fmt, parseNum} = Tools;
 const LS = 'sensors.settings.v1';
 const DEF = {
-  tab: 'compass', level: {x:0, y:0, e:0, l:0}, levelBeep: false, grav: true, soundCal: 100, soundW: 'Z',
+  tab: 'compass', view: 'overview', level: {x:0, y:0, e:0, l:0}, levelBeep: false, grav: true, soundCal: 100, soundW: 'Z',
   compass: {north: 'mag', decl: 4, bearing: null},
   tuner: {mode: 'chrom', ref: 440},
   steps: {day: '', count: 0, len: 0.7, sens: 'mid'},
@@ -590,7 +647,7 @@ const store = () => save(LS, S);
 const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const TABS = ['compass', 'level', 'accel', 'vibro', 'sound', 'tuner', 'speed', 'steps', 'tone', 'torch', 'pulse', 'clap'];
+const TABS = ['compass', 'level', 'accel', 'vibro', 'steps', 'sound', 'tuner', 'tone', 'clap', 'torch', 'pulse', 'speed'];
 const AC = window.AudioContext || window.webkitAudioContext;
 // German number without thousands separator for input fields
 const inputNum = (v, d) => fmt(v, d).replace(/\./g, '');
@@ -805,8 +862,8 @@ function drawGraph(cv, series, colors, lo, hi, zero){
     c.stroke();
   });
 }
-// Fixed-size history for graphs
-function history(cap){ const a = []; a.cap = cap; a.add = v => { a.push(v); if (a.length > cap) a.shift(); }; return a; }
+// Fixed-size ring buffer for graphs
+function ring(cap){ const a = []; a.cap = cap; a.add = v => { a.push(v); if (a.length > cap) a.shift(); }; return a; }
 
 /* ---------- Compass ---------- */
 (function ticks(){
@@ -994,7 +1051,7 @@ const accel = {
     });
     loop(() => this.render());
   },
-  reset(){ this.max = 0; this.hist = [history(600), history(600), history(600)]; },
+  reset(){ this.max = 0; this.hist = [ring(600), ring(600), ring(600)]; },
   render(){
     if (this.rot) ['rA', 'rB', 'rG'].forEach((id, i) => { $(id).textContent = fmt(this.rot[i], 1); });
     const c = this.cur;
@@ -1028,7 +1085,7 @@ const vibro = {
   rec: null,
   async start(gesture){
     await askPermission(window.DeviceMotionEvent, gesture);
-    this.samples = []; this.t = 0; this.peak = 0; this.g = null; this.graph = history(600); this.dirty = false;
+    this.samples = []; this.t = 0; this.peak = 0; this.g = null; this.graph = ring(600); this.dirty = false;
     on(window, 'devicemotion', e => this.sample(e));
     loop(() => this.render());
   },
@@ -1230,7 +1287,7 @@ const sound = {
     });
   },
   stop(){ if (this.log.on) { this.log.on = false; this.logInfo(); } },
-  reset(){ this.e = null; this.sum = 0; this.time = 0; this.min = Infinity; this.max = -Infinity; this.graph = history(300); },
+  reset(){ this.e = null; this.sum = 0; this.time = 0; this.min = Infinity; this.max = -Infinity; this.graph = ring(300); },
   logInfo(){
     const L = this.log, n = L.rows.length, unit = S.soundW === 'A' ? 'dB(A)' : 'dB';
     $('sLog').textContent = L.on ? 'Protokoll beenden' : 'Protokoll starten';
@@ -1240,7 +1297,7 @@ const sound = {
     L.rows.forEach(r => { e += Math.pow(10, r[1] / 10); mx = Math.max(mx, r[1]); });
     $('sLogInfo').textContent = `${L.on ? 'Läuft' : 'Beendet'}: ${duration(n)} · Mittel (Leq) ${fmt(10 * Math.log10(e / n), 1)} ${unit} · lautester Wert ${fmt(mx, 1)} ${unit}`;
     // Graph: at most 300 points, each the loudest second of its bucket
-    const k = Math.ceil(n / 300), pts = history(Math.max(2, Math.ceil(n / k)));
+    const k = Math.ceil(n / 300), pts = ring(Math.max(2, Math.ceil(n / k)));
     let lo = Infinity, hi = -Infinity;
     for (let i = 0; i < n; i += k) {
       let m = -Infinity;
@@ -1675,7 +1732,7 @@ const pulse = {
     const cv = document.createElement('canvas');
     cv.width = cv.height = 24;
     const c = cv.getContext('2d', {willReadFrequently: true});
-    this.samples = []; this.graph = history(180); this.lastCalc = 0; this.bpm = null;
+    this.samples = []; this.graph = ring(180); this.lastCalc = 0; this.bpm = null;
     $('pBpm').textContent = '–';
     loop(t => this.frame(t, video, c));
   },
@@ -1811,6 +1868,9 @@ function selectTab(name, focus, gesture){
     $('p-' + t).hidden = !sel;
   });
   if (focus) $('tab-' + name).focus();
+  // Keep the active tab visible in the swipeable bar
+  const bar = $('tabs'), act = $('tab-' + name);
+  bar.scrollLeft = act.offsetLeft - (bar.clientWidth - act.offsetWidth) / 2;
   S.tab = name; store();
   if (P[name].manual) { stopRunning(); setStatus(name, ''); }
   else startPanel(name, !!gesture);
@@ -1827,9 +1887,41 @@ document.querySelectorAll('[data-start]').forEach(b => b.addEventListener('click
   if (running === n && !b.dataset.permit) stopRunning(true); else startPanel(n, true);
 }));
 window.addEventListener('pagehide', () => stopRunning());
+
+/* ---------- Overview ↔ tool (the back button of the phone/browser returns to the overview) ---------- */
+let view = 'overview';
+function showView(v){
+  view = v;
+  $('overview').hidden = v !== 'overview';
+  $('toolbar').hidden = v === 'overview';
+  if (v === 'overview') { stopRunning(); TABS.forEach(t => { $('p-' + t).hidden = true; }); }
+  S.view = v; store();
+}
+function openTool(name, gesture){
+  if (view === 'overview') { history.pushState({sensorTool: true}, ''); showView('tool'); window.scrollTo(0, 0); }
+  selectTab(name, false, gesture);
+}
+document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => openTool(b.dataset.open, true)));
+$('toOverview').addEventListener('click', () => {
+  if (history.state && history.state.sensorTool) history.back(); else showView('overview');
+});
+window.addEventListener('popstate', e => {
+  if (e.state && e.state.sensorTool) { if (view !== 'tool') { showView('tool'); selectTab(S.tab, false, false); } }
+  else if (view !== 'overview') { showView('overview'); window.scrollTo(0, 0); }
+});
 showGrav(); showNorth(); showWeight(); showTunerMode(); showSens(); toneUi(); showThr();
 rollDay(); steps.render();
-selectTab(S.tab, false, false);
+if (S.view === 'tool') {
+  // Reopen the last tool; "back" then leads to the overview
+  history.replaceState(null, '');
+  history.pushState({sensorTool: true}, '');
+  showView('tool');
+  selectTab(S.tab, false, false);
+} else {
+  // e.g. after deleting all data: the page reloads in a tool entry – make it the overview entry
+  if (history.state && history.state.sensorTool) history.replaceState(null, '');
+  showView('overview');
+}
 })();
 </script>
 </body>
