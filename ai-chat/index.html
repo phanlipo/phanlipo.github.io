@@ -8,8 +8,8 @@
 <title>KI-Chat</title>
 <meta name="description" content="Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht.">
 <meta name="tool:tags" content="Alltag, KI">
-<meta name="tool:features" content="Kopieren, Verlauf, Download nötig, KI-Agent">
-<meta name="tool:order" content="45">
+<meta name="tool:features" content="Teilen an App, Kopieren, Verlauf, Download nötig, KI-Agent">
+<meta name="tool:share-text" content="true">
 <meta name="tool:icon" content="message-chatbot">
 <meta name="tool:color" content="#4d7c0f">
 <meta name="tool:short-name" content="KI-Chat">
@@ -20,7 +20,7 @@
 <meta name="tool:webmcp" content="get_conversation, ask_model">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-6KrSeMpqIpgZzzwZucnodMkZ6IwPY/kThnaK3uYhwvc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-6vh4m3POTSRP0H7Vyi7UBC+3Fxqp55qVutNW6L3LS/Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -47,8 +47,17 @@ progress{width:100%;height:10px;accent-color:var(--accent)}
 .status{font-size:14px;margin-block:6px 0;min-height:1.4em}
 .status.err{color:var(--err)}
 .status.ok{color:var(--ok)}
-.card details{margin-block-start:10px}
-.card details>summary{cursor:pointer;color:var(--muted);font-size:14px;min-height:44px;display:flex;align-items:center}
+.settings>summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center;gap:8px;list-style:none}
+.settings>summary::-webkit-details-marker{display:none}
+.settings>summary::before{content:"▸";color:var(--muted);transition:transform .15s}
+.settings[open]>summary::before{transform:rotate(90deg)}
+.settings[open]>summary{margin-block-end:8px}
+.ico{width:22px;height:22px;display:block}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;padding-inline:12px}
+.btn.small.icon-btn{min-width:44px;min-height:44px}
+.btn.small.icon-btn .ico{width:20px;height:20px}
+.tools-row{margin-block-start:8px}
+#modelBadge:empty{display:none}
 /* Chat */
 .chat{display:flex;flex-direction:column;gap:10px;max-height:min(65vh,640px);min-height:120px;overflow-y:auto;overscroll-behavior:contain;padding-block:4px}
 .empty{color:var(--muted);font-size:14px;text-align:center;margin:auto;padding:20px 8px}
@@ -69,7 +78,7 @@ progress{width:100%;height:10px;accent-color:var(--accent)}
 .msg .foot .btn{margin-inline-start:auto}
 .composer{display:flex;gap:8px;align-items:flex-end;margin-block-start:10px}
 .composer textarea{flex:1;min-width:0;min-height:48px;max-height:180px;padding:10px;resize:none;line-height:1.4}
-.composer .btn{min-height:48px;flex:none}
+.composer .btn{min-height:48px;min-width:52px;flex:none}
 textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
 /* History */
 .hist{list-style:none;margin:0;padding:0}
@@ -83,18 +92,37 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
 </head>
 <body>
 <header>
-  <h1 data-i18n="title">KI-Chat</h1>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">KI-Chat</span></h1>
   <p class="sub" data-i18n="sub">Mit Gemma direkt auf dem Gerät chatten – offline, ohne Konto, nichts verlässt das Gerät.</p>
 </header>
 
 <main>
-  <section class="card" aria-labelledby="h-model">
-    <h2 id="h-model" data-i18n="h.model">Modell</h2>
+  <section class="card" aria-labelledby="h-chat">
+    <h2 id="h-chat"><span data-i18n="h.chat">Chat</span> <span class="badge" id="modelBadge"></span></h2>
     <div class="note warn" id="crashNote" role="alert" hidden><p id="crashText"></p></div>
     <div class="note warn" id="noGpu" hidden>
       <p><strong data-i18n="noGpu.h">Dieser Browser unterstützt kein WebGPU.</strong></p>
       <p data-i18n="noGpu.text">Das Sprachmodell braucht die Grafikkarte über WebGPU. Das bieten z. B. Chrome auf Android (ab Version 121), Chrome und Edge auf dem PC sowie Safari ab iOS/macOS 26. Bitte die Seite dort öffnen.</p>
     </div>
+    <div class="chat" id="chat" role="log" aria-live="polite" aria-labelledby="h-chat" tabindex="0">
+      <p class="empty" id="empty" data-i18n="empty">Stell eine Frage – die Antwort entsteht auf diesem Gerät.</p>
+    </div>
+    <div class="progress" id="progressBox" hidden><progress id="progress" max="100"></progress></div>
+    <p class="status" id="status" role="status"></p>
+    <p class="model-info" id="firstHint" hidden></p>
+    <form class="composer" id="form">
+      <label class="sr-only" for="input" data-i18n="inputLabel">Nachricht</label>
+      <textarea id="input" rows="1" maxlength="8000" placeholder="Nachricht …" data-i18n-attr="placeholder:inputPh" enterkeyhint="send"></textarea>
+      <button type="submit" class="btn primary icon-btn" id="btnSend" aria-label="Senden" title="Senden"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14l11 -11"/><path d="M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5"/></svg></button>
+    </form>
+    <div class="row tools-row">
+      <button type="button" class="btn small icon-btn" id="btnNew" aria-label="Neuer Chat" title="Neuer Chat" data-i18n-attr="aria-label:newChat; title:newChat"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9h8"/><path d="M8 13h6"/><path d="M12.01 18.594l-4.01 2.406v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v5.5"/><path d="M16 19h6"/><path d="M19 16v6"/></svg></button>
+      <button type="button" class="btn small icon-btn" id="btnCopyChat" aria-label="Chat kopieren" title="Chat kopieren" data-i18n-attr="aria-label:copyChat; title:copyChat"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666"/><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"/></svg></button>
+    </div>
+  </section>
+
+  <details class="card settings" id="settingsBox">
+    <summary data-i18n="settings">Einstellungen</summary>
     <label class="field"><span data-i18n="model">Sprachmodell</span>
       <select id="model">
         <option value="gemma4-e2b">Gemma 4 E2B</option>
@@ -103,43 +131,19 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
       </select>
     </label>
     <p class="model-info" id="modelInfo" aria-live="polite"></p>
-    <details id="modelBox">
-      <summary data-i18n="models">Heruntergeladene Modelle</summary>
-      <p class="muted" id="modelList"></p>
-      <button type="button" class="btn small danger" id="btnDeleteModels" data-i18n="deleteModels">Modelle löschen</button>
-    </details>
-  </section>
-
-  <section class="card" aria-labelledby="h-chat">
-    <h2 id="h-chat"><span data-i18n="h.chat">Chat</span></h2>
-    <div class="chat" id="chat" role="log" aria-live="polite" aria-labelledby="h-chat" tabindex="0">
-      <p class="empty" id="empty" data-i18n="empty">Stell eine Frage – die Antwort entsteht auf diesem Gerät.</p>
-    </div>
-    <div class="progress" id="progressBox" hidden><progress id="progress" max="100"></progress></div>
-    <p class="status" id="status" role="status"></p>
-    <form class="composer" id="form">
-      <label class="sr-only" for="input" data-i18n="inputLabel">Nachricht</label>
-      <textarea id="input" rows="1" maxlength="4000" placeholder="Nachricht …" data-i18n-attr="placeholder:inputPh" enterkeyhint="send"></textarea>
-      <button type="submit" class="btn primary" id="btnSend" data-i18n="send">Senden</button>
-    </form>
-    <div class="row" style="margin-block-start:8px">
-      <button type="button" class="btn small" id="btnNew" data-i18n="newChat">Neuer Chat</button>
-      <button type="button" class="btn small" id="btnCopyChat" data-i18n="copyChat">Chat kopieren</button>
-    </div>
-    <details id="settingsBox">
-      <summary data-i18n="settings">Einstellungen</summary>
-      <label class="field"><span data-i18n="system">Anweisung an das Modell (Systemtext)</span>
-        <textarea id="system" maxlength="2000"></textarea>
-      </label>
-      <label class="field"><span data-i18n="maxTokens">Höchstlänge einer Antwort</span>
-        <select id="maxTokens">
-          <option value="256" data-i18n="len.short">Kurz (ca. 200 Wörter)</option>
-          <option value="1024" data-i18n="len.normal">Normal (ca. 750 Wörter)</option>
-          <option value="2048" data-i18n="len.long">Lang (ca. 1500 Wörter)</option>
-        </select>
-      </label>
-    </details>
-  </section>
+    <p class="muted"><span data-i18n="models">Heruntergeladene Modelle</span>: <span id="modelList"></span></p>
+    <div class="row"><button type="button" class="btn small danger" id="btnDeleteModels" data-i18n="deleteModels">Modelle löschen</button></div>
+    <label class="field" style="margin-block-start:14px"><span data-i18n="system">Anweisung an das Modell (Systemtext)</span>
+      <textarea id="system" maxlength="2000"></textarea>
+    </label>
+    <label class="field"><span data-i18n="maxTokens">Höchstlänge einer Antwort</span>
+      <select id="maxTokens">
+        <option value="256" data-i18n="len.short">Kurz (ca. 200 Wörter)</option>
+        <option value="1024" data-i18n="len.normal">Normal (ca. 750 Wörter)</option>
+        <option value="2048" data-i18n="len.long">Lang (ca. 1500 Wörter)</option>
+      </select>
+    </label>
+  </details>
 
   <section class="card" aria-labelledby="h-hist">
     <h2 id="h-hist"><span data-i18n="history">Verlauf</span> <span class="badge" id="histCount">0</span></h2>
@@ -169,8 +173,10 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
   <p>Ein Chat mit einem KI-Sprachmodell, das <strong>komplett auf diesem Gerät</strong> läuft. Nach dem einmaligen Download des Modells funktioniert er <strong>offline</strong>; Fragen und Antworten werden nirgends hingeschickt.</p>
   <h3>Bedienung</h3>
   <ul>
-    <li>Modell wählen, Frage eintippen, <strong>Senden</strong>. Beim ersten Mal wird das Modell heruntergeladen – am besten im WLAN. Danach startet es aus dem Speicher des Browsers.</li>
-    <li>Die Antwort erscheint Wort für Wort; <strong>Stopp</strong> bricht sie ab. Am PC sendet <span class="kbd">Enter</span>, <span class="kbd">Umschalt</span>+<span class="kbd">Enter</span> macht eine neue Zeile.</li>
+    <li>Frage eintippen, <strong>Senden</strong> (Papierflieger). Beim ersten Mal wird das Modell heruntergeladen – am besten im WLAN. Danach startet es aus dem Speicher des Browsers. Welches Modell antwortet, steht neben „Chat“; ändern lässt es sich unter <em>Einstellungen</em>.</li>
+    <li>Die Antwort erscheint Wort für Wort; <strong>Stopp</strong> (Quadrat) bricht sie ab.</li>
+    <li><strong>Teilen (Android, installierte App):</strong> In einer anderen App Text oder Link teilen → „KI-Chat“ wählen. Der Text steht dann im Eingabefeld; darunter die eigene Frage schreiben (z. B. „Fasse das zusammen“) und senden.</li>
+    <li>Kopieren-Symbol unter einer Antwort kopiert sie; die Symbole unter dem Eingabefeld beginnen einen neuen Chat bzw. kopieren den ganzen Chat. Am PC sendet <span class="kbd">Enter</span>, <span class="kbd">Umschalt</span>+<span class="kbd">Enter</span> macht eine neue Zeile.</li>
     <li>Das Modell kennt den bisherigen Chat. Wird er sehr lang, vergisst es die ältesten Nachrichten. <strong>Neuer Chat</strong> beginnt von vorn; frühere Chats stehen im <strong>Verlauf</strong> und lassen sich fortsetzen.</li>
     <li>Unter <em>Einstellungen</em> lässt sich dem Modell eine feste Anweisung geben (z. B. „Antworte immer in Stichpunkten“) und die Länge der Antworten begrenzen.</li>
   </ul>
@@ -208,8 +214,10 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
   <p>A chat with an AI language model that runs <strong>entirely on this device</strong>. After the model has been downloaded once it works <strong>offline</strong>; questions and answers are never sent anywhere.</p>
   <h3>How to use</h3>
   <ul>
-    <li>Choose a model, type a question, press <strong>Send</strong>. The first time, the model is downloaded – preferably over Wi-Fi. Afterwards it starts from the browser’s storage.</li>
-    <li>The answer appears word by word; <strong>Stop</strong> ends it. On a computer <span class="kbd">Enter</span> sends, <span class="kbd">Shift</span>+<span class="kbd">Enter</span> starts a new line.</li>
+    <li>Type a question, press <strong>Send</strong> (paper plane). The first time, the model is downloaded – preferably over Wi-Fi. Afterwards it starts from the browser’s storage. The model that answers is shown next to “Chat”; change it under <em>Settings</em>.</li>
+    <li>The answer appears word by word; <strong>Stop</strong> (square) ends it.</li>
+    <li><strong>Share (Android, installed app):</strong> share text or a link in another app → choose “AI Chat”. The text is put into the input field; write your own question below it (e.g. “Summarise this”) and send.</li>
+    <li>The copy icon below an answer copies it; the icons below the input field start a new chat or copy the whole chat. On a computer <span class="kbd">Enter</span> sends, <span class="kbd">Shift</span>+<span class="kbd">Enter</span> starts a new line.</li>
     <li>The model knows the chat so far. If it gets very long, it forgets the oldest messages. <strong>New chat</strong> starts over; earlier chats are in the <strong>history</strong> and can be continued.</li>
     <li>Under <em>Settings</em> you can give the model a fixed instruction (e.g. “Always answer in bullet points”) and limit the length of answers.</li>
   </ul>
@@ -254,7 +262,7 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version fd50719aee1c</p>
+  <p class="footer-version">Version a5238d6c7f78</p>
   <!-- footer:end -->
 </footer>
 
@@ -268,7 +276,10 @@ Tools.i18n({
   de: {
     send: 'Senden', stop: 'Stopp', 'm.gemma4': 'Gemma 4 E2B – empfohlen', 'm.gemma3-1b': 'Gemma 3 1B – mittel', 'm.gemma3-270m': 'Gemma 3 270M – klein, schnell',
     'm.size': '{label} (ca. {size})', 'm.noF16': '{label} – nicht auf diesem Gerät', 'm.crashed': '{label} – auf diesem Gerät abgestürzt',
-    downloaded: 'Heruntergeladen – startet ohne Internet.', toDownload: 'Wird beim ersten Senden heruntergeladen: ca. {size} – am besten im WLAN.',
+    downloaded: 'Heruntergeladen – startet ohne Internet.',
+    toDownloadNamed: 'Beim ersten Senden wird {model} heruntergeladen (ca. {size}) – am besten im WLAN. Ändern unter „Einstellungen“.',
+    partlyNamed: '{model} ist teilweise heruntergeladen – beim nächsten Senden geht es weiter (insgesamt ca. {size}).',
+    sharedTaken: 'Geteilter Text übernommen – eigene Frage dazuschreiben und senden.', toDownload: 'Wird beim ersten Senden heruntergeladen: ca. {size} – am besten im WLAN.',
     needsF16: 'Gemma 4 braucht eine Grafikkarte mit 16-Bit-Rechnung (shader-f16), die dieses Gerät nicht meldet. Bitte Gemma 3 wählen.',
     needsBig: 'Gemma 4 läuft hier nicht: Das Gerät hat zu wenig Arbeitsspeicher (unter 8 GB), oder die Grafikkarte erlaubt keine so großen Speicherblöcke (1,2 GB am Stück) bzw. keine 16-Bit-Rechnung. Gemma 3 funktioniert.',
     partly: 'Teilweise heruntergeladen – beim nächsten Senden geht es weiter (insgesamt ca. {size}).', fileOf: ' (Datei {i} von {n})',
@@ -290,7 +301,7 @@ Tools.i18n({
   },
   en: {
     title: 'AI Chat', sub: 'Chat with Gemma right on the device – offline, no account, nothing leaves the device.',
-    'h.model': 'Model', 'noGpu.h': 'This browser does not support WebGPU.',
+    'noGpu.h': 'This browser does not support WebGPU.',
     'noGpu.text': 'The language model needs the graphics card via WebGPU. It is available e.g. in Chrome on Android (version 121 or later), Chrome and Edge on computers and Safari from iOS/macOS 26. Please open the page there.',
     model: 'Language model', models: 'Downloaded models', deleteModels: 'Delete models', 'h.chat': 'Chat',
     empty: 'Ask a question – the answer is created on this device.', inputLabel: 'Message', inputPh: 'Message …',
@@ -299,7 +310,10 @@ Tools.i18n({
     history: 'History', clearHist: 'Clear history',
     send: 'Send', stop: 'Stop', 'm.gemma4': 'Gemma 4 E2B – recommended', 'm.gemma3-1b': 'Gemma 3 1B – medium', 'm.gemma3-270m': 'Gemma 3 270M – small, fast',
     'm.size': '{label} (approx. {size})', 'm.noF16': '{label} – not on this device', 'm.crashed': '{label} – crashed on this device',
-    downloaded: 'Downloaded – starts without internet.', toDownload: 'Downloaded when you first send: approx. {size} – preferably over Wi-Fi.',
+    downloaded: 'Downloaded – starts without internet.',
+    toDownloadNamed: '{model} is downloaded when you first send (approx. {size}) – preferably over Wi-Fi. Change it under “Settings”.',
+    partlyNamed: '{model} is partly downloaded – it continues the next time you send (approx. {size} in total).',
+    sharedTaken: 'Shared text taken over – add your own question and send.', toDownload: 'Downloaded when you first send: approx. {size} – preferably over Wi-Fi.',
     needsF16: 'Gemma 4 needs a graphics card with 16-bit maths (shader-f16), which this device does not report. Please choose Gemma 3.',
     needsBig: 'Gemma 4 does not run here: the device has too little memory (below 8 GB), or the graphics card does not allow memory blocks that big (1.2 GB in one piece) or 16-bit maths. Gemma 3 works.',
     partly: 'Partly downloaded – it continues the next time you send (approx. {size} in total).', fileOf: ' (file {i} of {n})',
@@ -372,6 +386,10 @@ let justCrashed = false;
 let cached = new Set();    // model keys with downloaded files
 let worker = null, runId = 0, busy = false, wakeLock = null, current = null;   // current = { msg, el, resolve }
 
+// Icons: Tabler Icons (MIT), same source as the app icons
+const ICON_SEND = $('btnSend').innerHTML;
+const ICON_STOP = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path d="M17 4h-10a3 3 0 0 0 -3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3 -3v-10a3 3 0 0 0 -3 -3z"/></svg>';
+const ICON_COPY = $('btnCopyChat').innerHTML;
 const status = (text, kind) => { const s = $('status'); s.textContent = text; s.className = 'status' + (kind ? ' ' + kind : ''); };
 const sizeText = mb => mb >= 1000 ? fmt(mb / 1000, 1) + ' GB' : fmt(mb, 0) + ' MB';
 const bytes = b => b >= 1e9 ? fmt(b / 1e9, 1) + ' GB' : fmt(b / 1e6, b < 1e7 ? 1 : 0) + ' MB';
@@ -410,6 +428,11 @@ function renderModels() {
   else if (partial.has(key)) { info.textContent = t('partly', { size: sizeText(modelMb(key)) }); info.className = 'model-info'; }
   else { info.textContent = t('toDownload', { size: sizeText(modelMb(key)) }); info.className = 'model-info'; }
   $('noGpu').hidden = gpu !== 'none';
+  // In the chat: which model answers, and a hint before its first (large) download
+  $('modelBadge').textContent = gpu && gpu !== 'none' && usable(key) ? MODEL_NAMES[key] : '';
+  const hint = gpu && gpu !== 'none' && usable(key) && !cached.has(key);
+  $('firstHint').hidden = !hint;
+  if (hint) $('firstHint').textContent = t(partial.has(key) ? 'partlyNamed' : 'toDownloadNamed', { model: MODEL_NAMES[key], size: sizeText(modelMb(key)) });
   updateControls();
 }
 function chooseDefault() {
@@ -441,7 +464,7 @@ async function updateCached() {
   $('btnDeleteModels').disabled = !ours.length || busy;
   renderModels();
 }
-$('modelBox').addEventListener('toggle', () => { if ($('modelBox').open) updateCached(); });
+$('settingsBox').addEventListener('toggle', () => { if ($('settingsBox').open) updateCached(); });
 $('btnDeleteModels').addEventListener('click', async () => {
   if (busy || !confirm(t('confirmModels'))) return;
   try {
@@ -526,7 +549,8 @@ function fillFoot(el, m) {
   const meta = document.createElement('span');
   meta.textContent = msgMeta(m);
   const btn = document.createElement('button');
-  btn.type = 'button'; btn.className = 'btn small'; btn.textContent = t('copy');
+  btn.type = 'button'; btn.className = 'btn small icon-btn'; btn.innerHTML = ICON_COPY;
+  btn.setAttribute('aria-label', t('copy')); btn.title = t('copy');
   btn.addEventListener('click', async () => toast(t(await copyText(m.content) ? 'copied' : 'copyFail')));
   foot.append(meta, btn);
   el.append(foot);
@@ -647,7 +671,9 @@ function finish() {
 }
 function updateControls() {
   const canRun = gpu !== 'none' && gpu !== null && usable($('model').value);
-  $('btnSend').textContent = t(busy ? 'stop' : 'send');
+  $('btnSend').innerHTML = busy ? ICON_STOP : ICON_SEND;
+  $('btnSend').setAttribute('aria-label', t(busy ? 'stop' : 'send'));
+  $('btnSend').title = t(busy ? 'stop' : 'send');
   $('btnSend').classList.toggle('danger', busy);
   $('btnSend').classList.toggle('primary', !busy);
   $('btnSend').disabled = !busy && !canRun;
@@ -779,7 +805,22 @@ Tools.remove(LS_LOADING);
 renderChat();
 renderHist();
 updateControls();
-detectGpu().then(() => { chooseDefault(); renderModels(); return updateCached(); });
+const ready = detectGpu().then(() => { chooseDefault(); renderModels(); return updateCached(); });
+
+// Text or link shared from another app (Android share menu → installed app): into the input field,
+// followed by an empty line for the user's own question
+const shared = Tools.takeSharedText();
+if (shared) {
+  const parts = [shared.title, shared.text, shared.url].map(x => x.trim()).filter(Boolean);
+  // Many apps put the link into text as well, or the title equals the text
+  const uniq = parts.filter((x, i) => !parts.some((y, j) => j !== i && y.includes(x) && (y !== x || j < i)));
+  $('input').value = uniq.join('\n') + '\n\n';
+  autosize();
+  Tools.diag.log('shared text taken', { chars: $('input').value.length });
+  toast(t('sharedTaken'), 3000);
+  // Focus once the input is enabled (after the graphics card check)
+  ready.then(() => { const i = $('input'); if (i.disabled) return; i.focus(); i.setSelectionRange(i.value.length, i.value.length); });
+}
 
 // Diagnostics: states and counts only – never chat contents
 Tools.diag.info(() => ({
@@ -820,7 +861,7 @@ Tools.mcp.register({
 });
 
 // Language switched: generated texts
-Tools.onLang(() => { renderModels(); systemPh(); renderChat(); renderHist(); if ($('modelBox').open) updateCached(); });
+Tools.onLang(() => { renderModels(); updateControls(); systemPh(); renderChat(); renderHist(); if ($('settingsBox').open) updateCached(); });
 })();
 </script>
 </body>

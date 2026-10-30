@@ -10,17 +10,17 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 <!-- tools:start -->
 | Seite | Ordner | Beschreibung |
 |---|---|---|
-| [Scan-Copy-SecurPharm](https://phanlipo.github.io/securpharm-scanner/) | `securpharm-scanner/` | securPharm-DataMatrix von Arzneimittel-/Impfstoffpackungen scannen und einzelne Werte (PZN, Charge, Verfall, Seriennummer …) per Klick kopieren. Mit lokalem Verlauf. |
-| [Erinnerungen](https://phanlipo.github.io/reminders/) | `reminders/` | Eigene Erinnerungen mit Zeitpunkt und Text – zur Zeit kommt eine Benachrichtigung, im Verlauf lassen sie sich anpassen. |
-| [QR-Code-Generator](https://phanlipo.github.io/qr-code/) | `qr-code/` | QR-Codes für Links, Text und WLAN erzeugen – Links direkt aus anderen Apps hierher teilen (Android), mit Verlauf. |
-| [Würfel & Münze](https://phanlipo.github.io/dice-coin/) | `dice-coin/` | Würfel und Münzwurf für Spiele: Anzahl und Seiten frei wählbar, alle gleichzeitig oder einzeln würfeln, Würfel halten, Vorlagen. Einstellungen werden im Browser gespeichert. |
-| [Countdown – wie lange noch?](https://phanlipo.github.io/countdown/) | `countdown/` | Tage, Stunden, Minuten oder Sekunden bis zu einem Datum mit Uhrzeit – live ab jetzt oder ab einem eigenen Startdatum. |
 | [Brau-Rechner](https://phanlipo.github.io/brew-calculator/) | `brew-calculator/` | Rechner fürs Hobbybrauen: Volumen im zylindrischen Topf, Temperaturkorrektur der Stammwürze (Spindel) und Zuckermenge für die Nachgärung – jeweils mit Formeln und Erklärung. |
-| [Sprache zu Text](https://phanlipo.github.io/voice-transcriber/) | `voice-transcriber/` | Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht. |
-| [KI-Chat](https://phanlipo.github.io/ai-chat/) | `ai-chat/` | Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht. |
-| [Schere, Stein, Papier](https://phanlipo.github.io/rock-paper-scissors/) | `rock-paper-scissors/` | Spiel gegen den Computer – klassisch, mit Brunnen oder mit Echse und Spock. |
-| [PDF zu Word](https://phanlipo.github.io/pdf2word/) | `pdf2word/` | PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – mit Bildern und Texterkennung für gescannte Seiten, ohne Upload: Die Datei verlässt das Gerät nicht. |
+| [Countdown – wie lange noch?](https://phanlipo.github.io/countdown/) | `countdown/` | Tage, Stunden, Minuten oder Sekunden bis zu einem Datum mit Uhrzeit – live ab jetzt oder ab einem eigenen Startdatum. |
+| [Erinnerungen](https://phanlipo.github.io/reminders/) | `reminders/` | Eigene Erinnerungen mit Zeitpunkt und Text – zur Zeit kommt eine Benachrichtigung, im Verlauf lassen sie sich anpassen. |
 | [Handy-Sensoren](https://phanlipo.github.io/sensors/) | `sensors/` | Kompass, Wasserwaage, Beschleunigung, Vibrometer, Schallpegel, Stimmgerät, Tacho, Schrittzähler, Tongenerator, Taschenlampe mit Morse, Puls und Klatsch-Stoppuhr – mit den Sensoren des Handys. |
+| [KI-Chat](https://phanlipo.github.io/ai-chat/) | `ai-chat/` | Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht. |
+| [PDF zu Word](https://phanlipo.github.io/pdf2word/) | `pdf2word/` | PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – mit Bildern und Texterkennung für gescannte Seiten, ohne Upload: Die Datei verlässt das Gerät nicht. |
+| [QR-Code-Generator](https://phanlipo.github.io/qr-code/) | `qr-code/` | QR-Codes für Links, Text und WLAN erzeugen – Links direkt aus anderen Apps hierher teilen (Android), mit Verlauf. |
+| [Scan-Copy-SecurPharm](https://phanlipo.github.io/securpharm-scanner/) | `securpharm-scanner/` | securPharm-DataMatrix von Arzneimittel-/Impfstoffpackungen scannen und einzelne Werte (PZN, Charge, Verfall, Seriennummer …) per Klick kopieren. Mit lokalem Verlauf. |
+| [Schere, Stein, Papier](https://phanlipo.github.io/rock-paper-scissors/) | `rock-paper-scissors/` | Spiel gegen den Computer – klassisch, mit Brunnen oder mit Echse und Spock. |
+| [Sprache zu Text](https://phanlipo.github.io/voice-transcriber/) | `voice-transcriber/` | Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht. |
+| [Würfel & Münze](https://phanlipo.github.io/dice-coin/) | `dice-coin/` | Würfel und Münzwurf für Spiele: Anzahl und Seiten frei wählbar, alle gleichzeitig oder einzeln würfeln, Würfel halten, Vorlagen. Einstellungen werden im Browser gespeichert. |
 <!-- tools:end -->
 
 ## Struktur
@@ -53,7 +53,7 @@ Jede App hat am Seitenende den Bereich **„Daten sichern & übertragen“**: Ei
 ## Neue Seite hinzufügen
 
 1. `template/` kopieren und englisch benennen, z. B. `unit-converter/`.
-2. In der `index.html` Titel, `description`, `tool:tags`, `tool:order`, `tool:short-name`, `tool:icon` und `tool:color` anpassen.
+2. In der `index.html` Titel, `description`, `tool:tags`, `tool:short-name`, `tool:icon` und `tool:color` anpassen.
 3. `node scripts/build-icons.mjs <ordner>` erzeugt die Icons.
 4. `node scripts/build.mjs` aktualisiert Seitenliste, Fußzeile, `<head>`-Links, Manifest und Service Worker (passiert per Git-Hook bzw. GitHub Action auch automatisch).
 

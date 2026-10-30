@@ -68,6 +68,18 @@ test.describe('start page', () => {
     }
   });
 
+  test('lists the tools alphabetically – in English by their English titles', async ({ page }) => {
+    const titles = () => page.locator('.tool .open').allTextContents().then(a => a.map(x => x.trim()));
+    await page.goto('/');
+    const de = tools().map(t => t.title).sort((a, b) => a.localeCompare(b, 'de'));
+    expect(await titles()).toEqual(de);
+    await page.locator('[data-set-lang="en"]').click();
+    const en = tools().map(t => t.titleEn).sort((a, b) => a.localeCompare(b, 'en'));
+    expect(await titles()).toEqual(en);
+    await page.locator('[data-set-lang="de"]').click();
+    expect(await titles()).toEqual(de);
+  });
+
   test('filters the list by category', async ({ page }) => {
     await page.goto('/');
     const list = tools();
@@ -105,6 +117,11 @@ for (const app of apps()) {
         await page.goto(url);
         await expect(page.locator('h1')).toBeVisible();
         await expect(page).toHaveTitle(app.title);
+        // App icon next to the title, decorative (the title is the name)
+        const logo = page.locator('header h1 img.app-logo');
+        await expect(logo).toHaveAttribute('src', 'icon.svg');
+        await expect(logo).toHaveAttribute('alt', '');
+        expect(await logo.evaluate(i => i.complete && i.naturalWidth > 0 && i.getBoundingClientRect().width === 32)).toBe(true);
         await expectNoHorizontalScroll(page);
       });
     }
