@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>KI-Chat</title>
+<meta name="description" content="Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht.">
+<meta name="tool:tags" content="Alltag, KI">
+<meta name="tool:features" content="Kopieren, Verlauf, Download nötig, KI-Agent">
+<meta name="tool:order" content="45">
+<meta name="tool:icon" content="message-chatbot">
+<meta name="tool:color" content="#4d7c0f">
+<meta name="tool:short-name" content="KI-Chat">
+<meta name="tool:title-en" content="AI Chat">
+<meta name="tool:description-en" content="Chat with Google’s Gemma language model – it runs right on the device, even offline. No account, no cloud: the conversation never leaves the device.">
+<meta name="tool:short-name-en" content="AI Chat">
+<meta name="tool:storage" content="ai-chat.">
+<meta name="tool:webmcp" content="get_conversation, ask_model">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-8g1YmF3r+voPQ0wwLsBk3s6dJqZmnChh3nX8t48aOSI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="KI-Chat">
+<meta name="theme-color" content="#4d7c0f">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#4d7c0f;--accent-text:#ffffff;--page-width:900px}
+@media (prefers-color-scheme: dark){:root{--accent:#a3e635;--accent-text:#1a2e05}}
+main{max-width:900px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;margin-block-end:10px}
+.field>span{font-size:13px;color:var(--muted);font-weight:600}
+select{min-height:44px;padding-inline:10px;width:100%}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.note.warn{border-inline-start-color:var(--warn)}
+.note p{margin:0 0 4px;font-size:14px}
+.note p:last-child{margin:0}
+.model-info{font-size:14px;color:var(--muted);margin:0}
+.model-info.ok{color:var(--ok)}
+.progress{margin-block-start:10px}
+progress{width:100%;height:10px;accent-color:var(--accent)}
+.status{font-size:14px;margin-block:6px 0;min-height:1.4em}
+.status.err{color:var(--err)}
+.status.ok{color:var(--ok)}
+.card details{margin-block-start:10px}
+.card details>summary{cursor:pointer;color:var(--muted);font-size:14px;min-height:44px;display:flex;align-items:center}
+/* Chat */
+.chat{display:flex;flex-direction:column;gap:10px;max-height:min(65vh,640px);min-height:120px;overflow-y:auto;overscroll-behavior:contain;padding-block:4px}
+.empty{color:var(--muted);font-size:14px;text-align:center;margin:auto;padding:20px 8px}
+.msg{max-width:88%;padding:8px 12px;border-radius:14px;line-height:1.5;overflow-wrap:anywhere}
+.msg.user{align-self:flex-end;background:var(--accent);color:var(--accent-text);border-end-end-radius:4px;white-space:pre-wrap}
+.msg.assistant{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border);border-end-start-radius:4px}
+.msg.assistant .body>:first-child{margin-block-start:0}
+.msg.assistant .body>:last-child{margin-block-end:0}
+.msg.assistant p,.msg.assistant ul,.msg.assistant ol,.msg.assistant pre{margin-block:6px}
+.msg.assistant ul,.msg.assistant ol{padding-inline-start:20px}
+.msg.assistant h3,.msg.assistant h4{font-size:15px;margin-block:10px 4px}
+.msg.assistant pre{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;overflow-x:auto;font-size:13px}
+.msg.assistant pre code{background:none;border:0;padding:0;font-size:inherit}
+.msg.pending .body::after{content:"▍";animation:blink 1s steps(1) infinite;color:var(--muted)}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion: reduce){.msg.pending .body::after{animation:none}}
+.msg .foot{display:flex;align-items:center;gap:8px;margin-block-start:6px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.msg .foot .btn{margin-inline-start:auto}
+.composer{display:flex;gap:8px;align-items:flex-end;margin-block-start:10px}
+.composer textarea{flex:1;min-width:0;min-height:48px;max-height:180px;padding:10px;resize:none;line-height:1.4}
+.composer .btn{min-height:48px;flex:none}
+textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
+/* History */
+.hist{list-style:none;margin:0;padding:0}
+.hist li{display:flex;gap:8px;align-items:flex-start;border-block-end:1px solid var(--border);padding-block:8px}
+.hist .open{flex:1;min-width:0;min-height:44px;text-align:start;background:none;border:0;color:var(--text);font:inherit;cursor:pointer;padding:0}
+.hist .meta{display:block;font-size:12px;color:var(--muted)}
+.hist .snip{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist li.current .snip{font-weight:600}
+.hist .btn{min-width:44px;min-height:44px}
+</style>
+</head>
+<body>
+<header>
+  <h1 data-i18n="title">KI-Chat</h1>
+  <p class="sub" data-i18n="sub">Mit Gemma direkt auf dem Gerät chatten – offline, ohne Konto, nichts verlässt das Gerät.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-model">
+    <h2 id="h-model" data-i18n="h.model">Modell</h2>
+    <div class="note warn" id="noGpu" hidden>
+      <p><strong data-i18n="noGpu.h">Dieser Browser unterstützt kein WebGPU.</strong></p>
+      <p data-i18n="noGpu.text">Das Sprachmodell braucht die Grafikkarte über WebGPU. Das bieten z. B. Chrome auf Android (ab Version 121), Chrome und Edge auf dem PC sowie Safari ab iOS/macOS 26. Bitte die Seite dort öffnen.</p>
+    </div>
+    <label class="field"><span data-i18n="model">Sprachmodell</span>
+      <select id="model">
+        <option value="gemma4-e2b">Gemma 4 E2B</option>
+        <option value="gemma3-1b">Gemma 3 1B</option>
+        <option value="gemma3-270m">Gemma 3 270M</option>
+      </select>
+    </label>
+    <p class="model-info" id="modelInfo" aria-live="polite"></p>
+    <details id="modelBox">
+      <summary data-i18n="models">Heruntergeladene Modelle</summary>
+      <p class="muted" id="modelList"></p>
+      <button type="button" class="btn small danger" id="btnDeleteModels" data-i18n="deleteModels">Modelle löschen</button>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-chat">
+    <h2 id="h-chat"><span data-i18n="h.chat">Chat</span></h2>
+    <div class="chat" id="chat" role="log" aria-live="polite" aria-labelledby="h-chat" tabindex="0">
+      <p class="empty" id="empty" data-i18n="empty">Stell eine Frage – die Antwort entsteht auf diesem Gerät.</p>
+    </div>
+    <div class="progress" id="progressBox" hidden><progress id="progress" max="100"></progress></div>
+    <p class="status" id="status" role="status"></p>
+    <form class="composer" id="form">
+      <label class="sr-only" for="input" data-i18n="inputLabel">Nachricht</label>
+      <textarea id="input" rows="1" maxlength="4000" placeholder="Nachricht …" data-i18n-attr="placeholder:inputPh" enterkeyhint="send"></textarea>
+      <button type="submit" class="btn primary" id="btnSend" data-i18n="send">Senden</button>
+    </form>
+    <div class="row" style="margin-block-start:8px">
+      <button type="button" class="btn small" id="btnNew" data-i18n="newChat">Neuer Chat</button>
+      <button type="button" class="btn small" id="btnCopyChat" data-i18n="copyChat">Chat kopieren</button>
+    </div>
+    <details id="settingsBox">
+      <summary data-i18n="settings">Einstellungen</summary>
+      <label class="field"><span data-i18n="system">Anweisung an das Modell (Systemtext)</span>
+        <textarea id="system" maxlength="2000"></textarea>
+      </label>
+      <label class="field"><span data-i18n="maxTokens">Höchstlänge einer Antwort</span>
+        <select id="maxTokens">
+          <option value="256" data-i18n="len.short">Kurz (ca. 200 Wörter)</option>
+          <option value="1024" data-i18n="len.normal">Normal (ca. 750 Wörter)</option>
+          <option value="2048" data-i18n="len.long">Lang (ca. 1500 Wörter)</option>
+        </select>
+      </label>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-hist">
+    <h2 id="h-hist"><span data-i18n="history">Verlauf</span> <span class="badge" id="histCount">0</span></h2>
+    <ul class="hist" id="hist"></ul>
+    <div class="row" style="margin-block-start:8px">
+      <button type="button" class="btn small danger" id="btnClearHist" data-i18n="clearHist">Verlauf löschen</button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Chat mit einem KI-Sprachmodell, das <strong>komplett auf diesem Gerät</strong> läuft. Nach dem einmaligen Download des Modells funktioniert er <strong>offline</strong>; Fragen und Antworten werden nirgends hingeschickt.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Modell wählen, Frage eintippen, <strong>Senden</strong>. Beim ersten Mal wird das Modell heruntergeladen – am besten im WLAN. Danach startet es aus dem Speicher des Browsers.</li>
+    <li>Die Antwort erscheint Wort für Wort; <strong>Stopp</strong> bricht sie ab. Am PC sendet <span class="kbd">Enter</span>, <span class="kbd">Umschalt</span>+<span class="kbd">Enter</span> macht eine neue Zeile.</li>
+    <li>Das Modell kennt den bisherigen Chat. Wird er sehr lang, vergisst es die ältesten Nachrichten. <strong>Neuer Chat</strong> beginnt von vorn; frühere Chats stehen im <strong>Verlauf</strong> und lassen sich fortsetzen.</li>
+    <li>Unter <em>Einstellungen</em> lässt sich dem Modell eine feste Anweisung geben (z. B. „Antworte immer in Stichpunkten“) und die Länge der Antworten begrenzen.</li>
+  </ul>
+  <h3>Modelle – woher sie kommen</h3>
+  <p>Alle Modelle stammen aus Googles <strong>Gemma</strong>-Familie (Google DeepMind). Die Dateien lädt der Browser direkt von <strong>Hugging Face</strong> (Konto <code>onnx-community</code>, in das Browser-Format ONNX umgewandelt), immer in einer fest eingestellten Version. Dabei sieht Hugging Face wie bei jedem Download die IP-Adresse – aber nie die Chats.</p>
+  <table>
+    <tr><th>Modell</th><th>Download</th><th>Eignung</th></tr>
+    <tr><td>Gemma 4 E2B</td><td>ca. 2,3 GB</td><td>Empfohlen: deutlich bessere Antworten, auch auf Deutsch. Dieselbe Modellfamilie wie in Googles App „AI Edge Gallery“. Braucht viel Arbeitsspeicher und eine Grafikkarte, die 16-Bit-Rechnung (<code>shader-f16</code>) und Speicherblöcke von 1,2 GB am Stück erlaubt – das schaffen die meisten PCs und Macs, aber nur manche Handys. Die Seite prüft das und bietet Gemma 4 nur an, wo es laufen kann. (Googles App nutzt eine eigene Rechen-Engine ohne diese Grenze.)</td></tr>
+    <tr><td>Gemma 3 1B</td><td>ca. 780–880 MB</td><td>Mittel: für einfache Fragen und Texte, läuft auf mehr Geräten.</td></tr>
+    <tr><td>Gemma 3 270M</td><td>ca. 290–340 MB</td><td>Sehr klein und schnell, aber oft ungenau – eher zum Ausprobieren.</td></tr>
+  </table>
+  <p>Lizenzen: Gemma 4 steht unter der <a href="https://ai.google.dev/gemma/docs/gemma_4_license">Apache-2.0-Lizenz</a>, Gemma 3 unter den <a href="https://ai.google.dev/gemma/terms">Gemma-Nutzungsbedingungen</a> (mit <a href="https://ai.google.dev/gemma/prohibited_use_policy">Richtlinie zur verbotenen Nutzung</a>). Die Modelle sind nicht Teil dieser Seite, sondern werden nur auf Wunsch geladen. Die Rechen-Bibliotheken (transformers.js, ONNX Runtime) liegen auf dieser Seite.</p>
+  <h3>Gut zu wissen</h3>
+  <ul>
+    <li><strong>WebGPU nötig:</strong> Das Modell rechnet auf der Grafikkarte. Ohne WebGPU (z. B. ältere Browser, Firefox auf Android) geht es nicht – dann erscheint oben ein Hinweis.</li>
+    <li>Kleine Modelle <strong>irren sich oft</strong> und erfinden Dinge. Sie kennen keine aktuellen Ereignisse und können nicht im Internet suchen. Wichtiges immer prüfen.</li>
+    <li>Während einer Antwort bleibt der Bildschirm an. Das Gerät kann dabei warm werden; der Akku wird stärker beansprucht.</li>
+    <li>Stürzt die Seite beim Laden ab, reicht meist der Arbeitsspeicher nicht: andere Apps schließen oder ein kleineres Modell wählen.</li>
+    <li>Gespeichert wird nur in diesem Browser: Einstellungen und Chats (siehe „Daten sichern“), das Modell im Browser-Speicher. <em>Heruntergeladene Modelle</em> zeigt und löscht es.</li>
+    <li><strong>iPhone:</strong> Eine zum Home-Bildschirm hinzugefügte App hat eigenen Speicher und lädt das Modell dort noch einmal.</li>
+    <li><strong>KI-Agent (WebMCP):</strong> Ein KI-Agent im Browser kann den aktuellen Chat lesen und dem Modell eine Frage stellen, wenn es schon heruntergeladen ist; Frage und Antwort erscheinen hier im Chat.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A chat with an AI language model that runs <strong>entirely on this device</strong>. After the model has been downloaded once it works <strong>offline</strong>; questions and answers are never sent anywhere.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Choose a model, type a question, press <strong>Send</strong>. The first time, the model is downloaded – preferably over Wi-Fi. Afterwards it starts from the browser’s storage.</li>
+    <li>The answer appears word by word; <strong>Stop</strong> ends it. On a computer <span class="kbd">Enter</span> sends, <span class="kbd">Shift</span>+<span class="kbd">Enter</span> starts a new line.</li>
+    <li>The model knows the chat so far. If it gets very long, it forgets the oldest messages. <strong>New chat</strong> starts over; earlier chats are in the <strong>history</strong> and can be continued.</li>
+    <li>Under <em>Settings</em> you can give the model a fixed instruction (e.g. “Always answer in bullet points”) and limit the length of answers.</li>
+  </ul>
+  <h3>Models – where they come from</h3>
+  <p>All models are from Google’s <strong>Gemma</strong> family (Google DeepMind). The browser downloads the files directly from <strong>Hugging Face</strong> (account <code>onnx-community</code>, converted to the browser format ONNX), always in a fixed version. Like with any download, Hugging Face sees the IP address – but never the chats.</p>
+  <table>
+    <tr><th>Model</th><th>Download</th><th>Suitable for</th></tr>
+    <tr><td>Gemma 4 E2B</td><td>approx. 2.3 GB</td><td>Recommended: much better answers. The same model family as in Google’s “AI Edge Gallery” app. Needs plenty of memory and a graphics card that supports 16-bit maths (<code>shader-f16</code>) and memory blocks of 1.2 GB in one piece – most PCs and Macs do, but only some phones. The page checks this and only offers Gemma 4 where it can run. (Google’s app uses its own engine without this limit.)</td></tr>
+    <tr><td>Gemma 3 1B</td><td>approx. 780–880 MB</td><td>Medium: simple questions and texts, runs on more devices.</td></tr>
+    <tr><td>Gemma 3 270M</td><td>approx. 290–340 MB</td><td>Very small and fast, but often inaccurate – mainly for trying it out.</td></tr>
+  </table>
+  <p>Licences: Gemma 4 is under the <a href="https://ai.google.dev/gemma/docs/gemma_4_license">Apache 2.0 licence</a>, Gemma 3 under the <a href="https://ai.google.dev/gemma/terms">Gemma Terms of Use</a> (with the <a href="https://ai.google.dev/gemma/prohibited_use_policy">Prohibited Use Policy</a>). The models are not part of this site; they are only downloaded on request. The computing libraries (transformers.js, ONNX Runtime) are served from this site.</p>
+  <h3>Good to know</h3>
+  <ul>
+    <li><strong>WebGPU required:</strong> the model runs on the graphics card. Without WebGPU (e.g. older browsers, Firefox on Android) it does not work – a notice appears at the top.</li>
+    <li>Small models <strong>often get things wrong</strong> and make things up. They know nothing about current events and cannot search the internet. Always check what matters.</li>
+    <li>The screen stays on while an answer is written. The device may get warm and the battery drains faster.</li>
+    <li>If the page crashes while loading, there is usually not enough memory: close other apps or choose a smaller model.</li>
+    <li>Only stored in this browser: settings and chats (see “Back up data”), the model in the browser’s storage. <em>Downloaded models</em> shows and deletes it.</li>
+    <li><strong>iPhone:</strong> an app added to the home screen has its own storage and downloads the model there again.</li>
+    <li><strong>AI agent (WebMCP):</strong> an AI agent in the browser can read the current chat and ask the model a question once it has been downloaded; question and answer appear here in the chat.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 7668e1c931f4</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const { $, load, save, toast, copyText, fmt, esc } = Tools;
+/* ---------- Texts (German in the HTML; dynamic texts here) ---------- */
+Tools.i18n({
+  de: {
+    send: 'Senden', stop: 'Stopp', 'm.gemma4': 'Gemma 4 E2B – empfohlen', 'm.gemma3-1b': 'Gemma 3 1B – mittel', 'm.gemma3-270m': 'Gemma 3 270M – klein, schnell',
+    'm.size': '{label} (ca. {size})', 'm.noF16': '{label} – nicht auf diesem Gerät',
+    downloaded: 'Heruntergeladen – startet ohne Internet.', toDownload: 'Wird beim ersten Senden heruntergeladen: ca. {size} – am besten im WLAN.',
+    needsF16: 'Gemma 4 braucht eine Grafikkarte mit 16-Bit-Rechnung (shader-f16), die dieses Gerät nicht meldet. Bitte Gemma 3 wählen.',
+    needsBig: 'Gemma 4 läuft hier nicht: Die Grafikkarte dieses Geräts erlaubt keine so großen Speicherblöcke (nötig: 1,2 GB am Stück) oder keine 16-Bit-Rechnung. Gemma 3 funktioniert.',
+    noGpuShort: 'Ohne WebGPU kann das Modell nicht laufen.',
+    defaultSystem: 'Du bist ein hilfreicher Assistent. Antworte auf Deutsch, außer der Nutzer schreibt in einer anderen Sprache. Antworte klar und knapp.',
+    systemPh: 'Leer = Standard: „{s}“',
+    loadingModel: 'Modell wird geladen …', ofTotal: ' {a} von {b}', firstTime: ' (nur beim ersten Mal)', preparing: 'Modell wird vorbereitet …',
+    thinking: 'Schreibt …', loadFail: 'Das Modell konnte nicht geladen werden. Für den ersten Download ist eine Internetverbindung nötig. ({m})',
+    runFail: 'Fehler beim Antworten: {m}', noStart: 'Das Modell konnte nicht gestartet werden', memory: ' Vielleicht reicht der Arbeitsspeicher nicht – ein kleineres Modell wählen.',
+    meta: '{model} · {n} Token · {s} Token/s', stopped: ' · abgebrochen', dropped: ' · ältere Nachrichten vergessen',
+    copy: 'Kopieren', copied: 'Kopiert', copyFail: 'Kopieren nicht möglich', noChat: 'Noch kein Chat', confirmClear: 'Gesamten Verlauf löschen?',
+    delEntry: 'Chat löschen', noChats: 'Noch keine Chats.', untitled: 'Chat', msgs: '{n} Nachrichten', you: 'Du', ai: 'KI',
+    modelFiles: '{list}', noModel: 'Noch kein Modell heruntergeladen.', usage: ' · Speicher der Seite insgesamt: {u}',
+    confirmModels: 'Heruntergeladene Gemma-Modelle löschen? Beim nächsten Senden werden sie neu geladen.', modelsDeleted: 'Modelle gelöscht', busy: 'Bitte warten, bis die Antwort fertig ist.',
+    'mcp.read': 'Chat gelesen', 'mcp.ask': 'Frage an das Modell gestellt',
+  },
+  en: {
+    title: 'AI Chat', sub: 'Chat with Gemma right on the device – offline, no account, nothing leaves the device.',
+    'h.model': 'Model', 'noGpu.h': 'This browser does not support WebGPU.',
+    'noGpu.text': 'The language model needs the graphics card via WebGPU. It is available e.g. in Chrome on Android (version 121 or later), Chrome and Edge on computers and Safari from iOS/macOS 26. Please open the page there.',
+    model: 'Language model', models: 'Downloaded models', deleteModels: 'Delete models', 'h.chat': 'Chat',
+    empty: 'Ask a question – the answer is created on this device.', inputLabel: 'Message', inputPh: 'Message …',
+    newChat: 'New chat', copyChat: 'Copy chat', settings: 'Settings', system: 'Instruction to the model (system text)',
+    maxTokens: 'Maximum length of an answer', 'len.short': 'Short (approx. 200 words)', 'len.normal': 'Normal (approx. 750 words)', 'len.long': 'Long (approx. 1500 words)',
+    history: 'History', clearHist: 'Clear history',
+    send: 'Send', stop: 'Stop', 'm.gemma4': 'Gemma 4 E2B – recommended', 'm.gemma3-1b': 'Gemma 3 1B – medium', 'm.gemma3-270m': 'Gemma 3 270M – small, fast',
+    'm.size': '{label} (approx. {size})', 'm.noF16': '{label} – not on this device',
+    downloaded: 'Downloaded – starts without internet.', toDownload: 'Downloaded when you first send: approx. {size} – preferably over Wi-Fi.',
+    needsF16: 'Gemma 4 needs a graphics card with 16-bit maths (shader-f16), which this device does not report. Please choose Gemma 3.',
+    needsBig: 'Gemma 4 does not run here: the graphics card of this device does not allow memory blocks that big (needed: 1.2 GB in one piece) or 16-bit maths. Gemma 3 works.',
+    noGpuShort: 'The model cannot run without WebGPU.',
+    defaultSystem: 'You are a helpful assistant. Answer in English unless the user writes in another language. Answer clearly and concisely.',
+    systemPh: 'Empty = default: “{s}”',
+    loadingModel: 'Loading model …', ofTotal: ' {a} of {b}', firstTime: ' (first time only)', preparing: 'Preparing model …',
+    thinking: 'Writing …', loadFail: 'The model could not be loaded. The first download needs an internet connection. ({m})',
+    runFail: 'Error while answering: {m}', noStart: 'The model could not be started', memory: ' Maybe there is not enough memory – choose a smaller model.',
+    meta: '{model} · {n} tokens · {s} tokens/s', stopped: ' · stopped', dropped: ' · older messages forgotten',
+    copy: 'Copy', copied: 'Copied', copyFail: 'Copying is not possible', noChat: 'No chat yet', confirmClear: 'Clear the whole history?',
+    delEntry: 'Delete chat', noChats: 'No chats yet.', untitled: 'Chat', msgs: '{n} messages', you: 'You', ai: 'AI',
+    modelFiles: '{list}', noModel: 'No model downloaded yet.', usage: ' · storage used by the page in total: {u}',
+    confirmModels: 'Delete the downloaded Gemma models? They will be downloaded again the next time you send.', modelsDeleted: 'Models deleted', busy: 'Please wait until the answer is finished.',
+    'mcp.read': 'chat read', 'mcp.ask': 'question asked to the model',
+  },
+});
+const t = Tools.t;
+
+/* ---------- Models ----------
+   Fixed revisions: the files never change under the user (and stay valid in the cache).
+   Download size = model files + tokenizer for the dtype this device uses
+   (f16 = graphics card with shader-f16, f32 = without). Only WebGPU – see worker.js. */
+const MODELS = {
+  'gemma4-e2b': {
+    label: 'm.gemma4', arch: 'gemma4',
+    id: 'onnx-community/gemma-4-E2B-it-qat-mobile-ONNX', revision: 'a7f19b0ab28252b77cea830f52b8290b2479c87d',
+    dtypes: { f16: 'q2f16' }, mb: { f16: 2330 },
+    // The per-layer embedding table is one 1.17 GB tensor: the graphics card must allow buffers that big
+    // (many desktop GPUs do, many phone GPUs do not)
+    minBuffer: 1174405120,
+    // Google's recommendation for Gemma 4
+    sampling: { temperature: 1.0, top_p: 0.95, top_k: 64 },
+  },
+  'gemma3-1b': {
+    label: 'm.gemma3-1b', arch: 'gemma3',
+    id: 'onnx-community/gemma-3-1b-it-ONNX', revision: 'a58439f40017d3b99c7d378ff525e54e0ba08ebf',
+    dtypes: { f16: 'q4f16', f32: 'q4' }, mb: { f16: 780, f32: 880 },
+    // Small models wander off less with a lower temperature and a light repetition penalty
+    sampling: { temperature: 0.7, top_p: 0.95, top_k: 64, repetition_penalty: 1.1 },
+  },
+  'gemma3-270m': {
+    label: 'm.gemma3-270m', arch: 'gemma3',
+    id: 'onnx-community/gemma-3-270m-it-ONNX', revision: '2dbbfdb1b59bd034eb959428c6a7da9dd7ea27f0',
+    dtypes: { f16: 'q4f16', f32: 'q4' }, mb: { f16: 290, f32: 340 },
+    sampling: { temperature: 0.7, top_p: 0.95, top_k: 64, repetition_penalty: 1.1 },
+  },
+};
+const MODEL_NAMES = { 'gemma4-e2b': 'Gemma 4 E2B', 'gemma3-1b': 'Gemma 3 1B', 'gemma3-270m': 'Gemma 3 270M' };
+const MODEL_CACHE = 'transformers-cache';   // shared with other apps of this site (e.g. Whisper) – only touch our files
+const MAX_CONTEXT = 4096;                   // prompt + answer in tokens; older turns are dropped beyond this
+const LS_SET = 'ai-chat.settings.v1', LS_CHATS = 'ai-chat.chats.v1', MAX_CHATS = 30;
+
+const settings = Object.assign({ model: '', system: '', maxTokens: 1024 }, load(LS_SET, {}));
+let gpu = null;            // null = not checked yet, 'none' | 'f32' | 'f16'
+let maxBuffer = 0;         // largest GPU buffer the device allows (bytes)
+let cached = new Set();    // model keys with downloaded files
+let worker = null, runId = 0, busy = false, wakeLock = null, current = null;   // current = { msg, el, resolve }
+
+const status = (text, kind) => { const s = $('status'); s.textContent = text; s.className = 'status' + (kind ? ' ' + kind : ''); };
+const sizeText = mb => mb >= 1000 ? fmt(mb / 1000, 1) + ' GB' : fmt(mb, 0) + ' MB';
+const bytes = b => b >= 1e9 ? fmt(b / 1e9, 1) + ' GB' : fmt(b / 1e6, b < 1e7 ? 1 : 0) + ' MB';
+const usable = key => (gpu === 'f16' || (gpu === 'f32' && !!MODELS[key].dtypes.f32)) && maxBuffer >= (MODELS[key].minBuffer || 0);
+const modelMb = key => MODELS[key].mb[gpu === 'f16' ? 'f16' : 'f32'] || MODELS[key].mb.f16;
+
+/* ---------- Device check & model choice ---------- */
+async function detectGpu() {
+  try {
+    const a = navigator.gpu && await navigator.gpu.requestAdapter();
+    gpu = !a ? 'none' : a.features && a.features.has('shader-f16') ? 'f16' : 'f32';
+    maxBuffer = a ? Math.min(a.limits.maxBufferSize, a.limits.maxStorageBufferBindingSize) : 0;
+  } catch (e) { gpu = 'none'; Tools.diag.log('webgpu check failed', { error: String(e && e.message || e) }); }
+  $('model').dataset.gpu = gpu;
+  Tools.diag.log('webgpu', { gpu, maxBufferMB: Math.round(maxBuffer / 1048576) });
+}
+function renderModels() {
+  for (const o of $('model').options) {
+    const label = t(MODELS[o.value].label);
+    const ok = gpu === null || gpu === 'none' || usable(o.value);
+    o.disabled = !ok;
+    o.textContent = ok ? t('m.size', { label, size: sizeText(modelMb(o.value)) }) : t('m.noF16', { label });
+  }
+  const key = $('model').value, info = $('modelInfo');
+  if (gpu === 'none') { info.textContent = t('noGpuShort'); info.className = 'model-info'; }
+  else if (!usable(key)) { info.textContent = t('needsBig'); info.className = 'model-info'; }
+  else if (cached.has(key)) { info.textContent = '✓ ' + t('downloaded'); info.className = 'model-info ok'; }
+  else { info.textContent = t('toDownload', { size: sizeText(modelMb(key)) }); info.className = 'model-info'; }
+  $('noGpu').hidden = gpu !== 'none';
+  updateControls();
+}
+function chooseDefault() {
+  // Saved choice if it runs here; otherwise the best model this device can run
+  const order = ['gemma4-e2b', 'gemma3-1b', 'gemma3-270m'];
+  const key = MODELS[settings.model] && (gpu === 'none' || usable(settings.model)) ? settings.model : order.find(usable) || 'gemma3-1b';
+  $('model').value = key;
+}
+$('model').addEventListener('change', () => { settings.model = $('model').value; save(LS_SET, settings); renderModels(); });
+
+/* ---------- Downloaded models (Cache Storage of transformers.js) ---------- */
+const fileUrlOf = (key, url) => url.includes('/' + MODELS[key].id + '/resolve/');
+async function cacheKeys() {
+  try { if (await caches.has(MODEL_CACHE)) return (await (await caches.open(MODEL_CACHE)).keys()).map(r => r.url); } catch (_) {}
+  return [];
+}
+async function updateCached() {
+  const urls = await cacheKeys();
+  // Downloaded = the ONNX weights of the pinned revision are there
+  cached = new Set(Object.keys(MODELS).filter(k => urls.some(u => u.includes(`/${MODELS[k].id}/resolve/${MODELS[k].revision}/onnx/`))));
+  const ours = urls.filter(u => Object.keys(MODELS).some(k => fileUrlOf(k, u)));
+  let usage = '';
+  try { const est = await navigator.storage.estimate(); usage = t('usage', { u: bytes(est.usage || 0) }); } catch (_) {}
+  $('modelList').textContent = (cached.size ? [...cached].map(k => MODEL_NAMES[k]).join(', ') : t('noModel')) + usage;
+  $('btnDeleteModels').disabled = !ours.length || busy;
+  renderModels();
+}
+$('modelBox').addEventListener('toggle', () => { if ($('modelBox').open) updateCached(); });
+$('btnDeleteModels').addEventListener('click', async () => {
+  if (busy || !confirm(t('confirmModels'))) return;
+  try {
+    const c = await caches.open(MODEL_CACHE);
+    for (const r of await c.keys()) if (Object.keys(MODELS).some(k => fileUrlOf(k, r.url))) await c.delete(r);
+  } catch (_) {}
+  if (worker) { worker.terminate(); worker = null; }
+  Tools.diag.log('models deleted');
+  toast(t('modelsDeleted'));
+  updateCached();
+});
+
+/* ---------- Chats ---------- */
+let chats = load(LS_CHATS, []);
+if (!Array.isArray(chats)) chats = [];
+let chat = newChat();
+function newChat() { return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), messages: [] }; }
+function storeChat() {
+  if (!chat.messages.length) return;
+  chat.t = Date.now();
+  chats = [chat, ...chats.filter(c => c.id !== chat.id)].slice(0, MAX_CHATS);
+  save(LS_CHATS, chats);
+  renderHist();
+}
+
+/* Small, safe Markdown subset for answers: code blocks, `code`, **bold**, *italic*, headings, lists.
+   Everything is escaped first – model output is never inserted as HTML. */
+function inline(s) {
+  return s.replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, '$1<em>$2</em>');
+}
+function md(text) {
+  const out = [];
+  const parts = text.split(/```[^\n]*\n?/);
+  parts.forEach((part, i) => {
+    if (i % 2) { out.push('<pre><code>' + esc(part.replace(/\n$/, '')) + '</code></pre>'); return; }
+    let list = null, para = [];
+    const flushPara = () => { if (para.length) { out.push('<p>' + para.join('<br>') + '</p>'); para = []; } };
+    const flushList = () => { if (list) { out.push(`<${list.tag}>` + list.items.map(x => '<li>' + x + '</li>').join('') + `</${list.tag}>`); list = null; } };
+    for (const raw of part.split('\n')) {
+      const line = raw.trimEnd();
+      let m;
+      if (!line.trim()) { flushPara(); flushList(); }
+      else if ((m = line.match(/^#{1,6}\s+(.*)$/))) { flushPara(); flushList(); out.push('<h3>' + inline(esc(m[1])) + '</h3>'); }
+      else if ((m = line.match(/^\s*(?:[-*•]|(\d+)[.)])\s+(.*)$/))) {
+        flushPara();
+        const tag = m[1] ? 'ol' : 'ul';
+        if (!list || list.tag !== tag) { flushList(); list = { tag, items: [] }; }
+        list.items.push(inline(esc(m[2])));
+      } else { flushList(); para.push(inline(esc(line))); }
+    }
+    flushPara(); flushList();
+  });
+  return out.join('');
+}
+
+function msgMeta(m) {
+  if (!m.meta) return '';
+  const { model, tokens, seconds, stopped, dropped } = m.meta;
+  return t('meta', { model: MODEL_NAMES[model] || model, n: tokens, s: fmt(seconds ? tokens / seconds : 0, 1) }) + (stopped ? t('stopped') : '') + (dropped ? t('dropped') : '');
+}
+function renderMsg(m) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + m.role;
+  if (m.role === 'user') { el.textContent = m.content; return el; }
+  const label = document.createElement('span');
+  label.className = 'sr-only'; label.textContent = t('ai') + ': ';
+  const body = document.createElement('div');
+  body.className = 'body';
+  body.innerHTML = md(m.content);
+  el.append(label, body);
+  fillFoot(el, m);
+  return el;
+}
+function fillFoot(el, m) {
+  let foot = el.querySelector('.foot');
+  if (foot) foot.remove();
+  if (!m.content) return;
+  foot = document.createElement('div');
+  foot.className = 'foot';
+  const meta = document.createElement('span');
+  meta.textContent = msgMeta(m);
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'btn small'; btn.textContent = t('copy');
+  btn.addEventListener('click', async () => toast(t(await copyText(m.content) ? 'copied' : 'copyFail')));
+  foot.append(meta, btn);
+  el.append(foot);
+}
+const nearBottom = () => { const c = $('chat'); return c.scrollHeight - c.scrollTop - c.clientHeight < 80; };
+const toBottom = () => { const c = $('chat'); c.scrollTop = c.scrollHeight; };
+function renderChat() {
+  const box = $('chat');
+  box.querySelectorAll('.msg').forEach(e => e.remove());
+  $('empty').hidden = chat.messages.length > 0;
+  for (const m of chat.messages) box.append(renderMsg(m));
+  toBottom();
+}
+
+/* ---------- Sending (worker.js) ---------- */
+function getWorker() {
+  if (worker) return worker;
+  worker = new Worker('worker.js', { type: 'module' });
+  worker.onmessage = ({ data }) => { if (data.id === runId) handle(data); };
+  worker.onerror = e => {
+    Tools.diag.log('worker error', { message: e.message || '' });
+    fail(t('noStart') + (e.message ? ': ' + e.message : '.') + t('memory'), 'The model could not be started (maybe not enough memory).');
+    worker = null;
+  };
+  return worker;
+}
+
+let renderQueued = false;
+function handle(m) {
+  if (!busy || !current) return;
+  if (m.type === 'progress' && m.total) {
+    $('progressBox').hidden = false;
+    $('progress').value = Math.min(100, m.loaded / m.total * 100);
+    // Small totals = only config files so far; show numbers once the model files are counted
+    status(t('loadingModel') + (m.total > 5e7 ? t('ofTotal', { a: bytes(m.loaded), b: bytes(m.total) }) : '') + t('firstTime'));
+  } else if (m.type === 'status' && m.status === 'loading') {
+    $('progressBox').hidden = false;
+    $('progress').removeAttribute('value');
+    status(t('preparing'));
+    current.loadStart = performance.now();
+  } else if (m.type === 'status' && m.status === 'generating') {
+    $('progressBox').hidden = true;
+    status(t('thinking'));
+    if (current.loadStart) Tools.diag.log('model ready', { model: current.key, dtype: m.dtype, seconds: Math.round((performance.now() - current.loadStart) / 100) / 10 });
+    current.loadStart = 0;
+    if (!cached.has(current.key)) updateCached();
+  } else if (m.type === 'token') {
+    current.msg.content += m.text;
+    if (!renderQueued) {
+      renderQueued = true;
+      requestAnimationFrame(() => {
+        renderQueued = false;
+        if (!current) return;
+        const stick = nearBottom();
+        current.el.querySelector('.body').innerHTML = md(current.msg.content);
+        if (stick) toBottom();
+      });
+    }
+  } else if (m.type === 'done') {
+    const c = current;
+    c.msg.content = m.text;
+    c.msg.meta = { model: c.key, tokens: m.tokens, seconds: Math.round(m.seconds * 10) / 10, stopped: m.stopped, dropped: m.dropped };
+    Tools.diag.log('answer', { model: c.key, dtype: m.dtype, promptTokens: m.promptTokens, tokens: m.tokens, seconds: Math.round(m.seconds * 10) / 10, stopped: m.stopped, dropped: m.dropped });
+    if (!m.text) chat.messages.pop();   // nothing came out (e.g. stopped at once)
+    finish();
+    renderChat();
+    storeChat();
+    status('');
+    try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (_) {}
+    c.resolve({ ok: true, text: m.text, stopped: m.stopped });
+  } else if (m.type === 'error') {
+    Tools.diag.log('error', { stage: m.stage, message: m.message });
+    const msg = m.message === 'NO_WEBGPU' ? t('noGpuShort')
+      : m.message === 'NEEDS_F16' ? t('needsF16')
+      : m.stage === 'load' ? t('loadFail', { m: m.message }) + (/memory|alloc|device lost|OOM/i.test(m.message) ? t('memory') : '')
+      : t('runFail', { m: m.message });
+    // English for AI agents (WebMCP)
+    const en = m.message === 'NO_WEBGPU' ? 'This browser has no WebGPU, so the model cannot run here.'
+      : m.message === 'NEEDS_F16' ? 'The selected model needs shader-f16, which this graphics card does not support.'
+      : (m.stage === 'load' ? 'The model could not be loaded: ' : 'The model failed while answering: ') + m.message;
+    fail(msg, en);
+  }
+}
+
+// Failed: take the question back into the input field so it can simply be sent again
+function fail(msg, en) {
+  const c = current;
+  if (!c) { status(msg, 'err'); return; }
+  const i = chat.messages.indexOf(c.msg);
+  if (i > 0 && chat.messages[i - 1].role === 'user') { if (!$('input').value) $('input').value = chat.messages[i - 1].content; chat.messages.splice(i - 1, 2); }
+  else if (i >= 0) chat.messages.splice(i, 1);
+  finish();
+  renderChat();
+  status(msg, 'err');
+  c.resolve({ ok: false, error: en || msg });
+}
+
+function finish() {
+  busy = false;
+  current = null;
+  $('progressBox').hidden = true;
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  updateControls();
+}
+function updateControls() {
+  const canRun = gpu !== 'none' && gpu !== null && usable($('model').value);
+  $('btnSend').textContent = t(busy ? 'stop' : 'send');
+  $('btnSend').classList.toggle('danger', busy);
+  $('btnSend').classList.toggle('primary', !busy);
+  $('btnSend').disabled = !busy && !canRun;
+  $('input').disabled = !canRun && !busy;
+  $('model').disabled = busy;
+  $('btnNew').disabled = busy;
+  $('btnDeleteModels').disabled = busy || $('btnDeleteModels').disabled;
+}
+
+// Sends one question; resolves when the answer is finished (also used by the WebMCP tool)
+async function ask(text) {
+  const key = $('model').value;
+  busy = true;
+  const user = { role: 'user', content: text };
+  const msg = { role: 'assistant', content: '' };
+  chat.messages.push(user, msg);
+  if (!chat.model) chat.model = key;
+  renderChat();
+  const el = $('chat').lastElementChild;
+  el.classList.add('pending');
+  updateControls();
+  status(t('preparing'));
+  try { wakeLock = navigator.wakeLock ? await navigator.wakeLock.request('screen') : null; } catch (_) { wakeLock = null; }
+  runId++;
+  const done = new Promise(resolve => { current = { msg, el, key, resolve, loadStart: 0 }; });
+  const system = settings.system.trim() || t('defaultSystem');
+  const history = chat.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
+  const M = MODELS[key];
+  Tools.diag.log('send', { model: key, messages: history.length, maxTokens: settings.maxTokens });
+  getWorker().postMessage({
+    type: 'generate', id: runId,
+    model: { id: M.id, revision: M.revision, arch: M.arch, dtypes: M.dtypes, sampling: M.sampling },
+    messages: [{ role: 'system', content: system }, ...history],
+    maxTokens: settings.maxTokens, maxContext: MAX_CONTEXT,
+  });
+  return done;
+}
+
+$('form').addEventListener('submit', e => {
+  e.preventDefault();
+  if (busy) { if (worker) worker.postMessage({ type: 'stop' }); Tools.diag.log('stop pressed'); return; }
+  const text = $('input').value.trim();
+  if (!text || $('btnSend').disabled) return;
+  $('input').value = '';
+  autosize();
+  ask(text);
+});
+// Enter sends on devices with a keyboard; on touch screens Enter makes a new line
+$('input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); $('form').requestSubmit(); }
+});
+function autosize() { const i = $('input'); i.style.height = 'auto'; i.style.height = Math.min(i.scrollHeight + 2, 180) + 'px'; }
+$('input').addEventListener('input', autosize);
+
+$('btnNew').addEventListener('click', () => { if (busy) return; chat = newChat(); renderChat(); renderHist(); status(''); $('input').focus(); });
+$('btnCopyChat').addEventListener('click', async () => {
+  if (!chat.messages.length) return toast(t('noChat'));
+  const txt = chat.messages.map(m => (m.role === 'user' ? t('you') : t('ai')) + ': ' + m.content).join('\n\n');
+  toast(t(await copyText(txt) ? 'copied' : 'copyFail'));
+});
+
+/* ---------- Settings ---------- */
+const maxOpts = [...$('maxTokens').options].map(o => Number(o.value));
+if (!maxOpts.includes(Number(settings.maxTokens))) settings.maxTokens = 1024;
+$('maxTokens').value = String(settings.maxTokens);
+$('maxTokens').addEventListener('change', () => { settings.maxTokens = Number($('maxTokens').value); save(LS_SET, settings); });
+$('system').value = settings.system;
+const systemPh = () => $('system').setAttribute('placeholder', t('systemPh', { s: t('defaultSystem') }));
+systemPh();
+$('system').addEventListener('change', () => { settings.system = $('system').value; save(LS_SET, settings); });
+
+/* ---------- History ---------- */
+function renderHist() {
+  $('histCount').textContent = chats.length;
+  const ul = $('hist');
+  ul.textContent = '';
+  chats.forEach(c => {
+    const li = document.createElement('li');
+    if (c.id === chat.id) li.className = 'current';
+    const open = document.createElement('button');
+    open.type = 'button'; open.className = 'open';
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = new Date(c.t).toLocaleString(Tools.locale(), { dateStyle: 'short', timeStyle: 'short' }) + ' · ' + t('msgs', { n: c.messages.length }) + (c.model ? ' · ' + (MODEL_NAMES[c.model] || c.model) : '');
+    const snip = document.createElement('span');
+    snip.className = 'snip';
+    snip.textContent = (c.messages.find(m => m.role === 'user') || {}).content || t('untitled');
+    open.append(meta, snip);
+    open.addEventListener('click', () => {
+      if (busy) return toast(t('busy'));
+      chat = JSON.parse(JSON.stringify(c));
+      renderChat(); renderHist(); status('');
+      $('chat').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'btn small danger'; del.textContent = '✕';
+    del.setAttribute('aria-label', t('delEntry'));
+    del.addEventListener('click', () => {
+      if (busy && c.id === chat.id) return toast(t('busy'));
+      chats = chats.filter(x => x.id !== c.id); save(LS_CHATS, chats);
+      if (c.id === chat.id) { chat = newChat(); renderChat(); }
+      renderHist();
+    });
+    li.append(open, del);
+    ul.append(li);
+  });
+  if (!chats.length) { const li = document.createElement('li'); li.className = 'muted'; li.textContent = t('noChats'); ul.append(li); }
+}
+$('btnClearHist').addEventListener('click', () => {
+  if (!chats.length || !confirm(t('confirmClear'))) return;
+  if (busy) return toast(t('busy'));
+  chats = []; save(LS_CHATS, chats); chat = newChat(); renderChat(); renderHist();
+});
+
+/* ---------- Start ---------- */
+renderChat();
+renderHist();
+updateControls();
+detectGpu().then(() => { chooseDefault(); renderModels(); return updateCached(); });
+
+// Diagnostics: states and counts only – never chat contents
+Tools.diag.info(() => ({
+  webgpu: gpu, maxBufferMB: Math.round(maxBuffer / 1048576), model: $('model').value, downloaded: [...cached].join(',') || '–', busy,
+  chats: chats.length, messages: chat.messages.length, maxTokens: settings.maxTokens, customSystem: !!settings.system.trim(),
+}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   Reading the chat is read-only. Asking works only with a model that is already downloaded –
+   an agent must not start a download of several hundred MB. Model answers are untrusted content. */
+Tools.mcp.register({
+  name: 'get_conversation', title: 'Current chat', label: 'mcp.read', readOnly: true, untrusted: true,
+  description: 'Returns the chat currently shown in the app: the local Gemma model in use and all messages (role user or assistant, text), oldest first.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  execute: () => ({
+    model: MODEL_NAMES[$('model').value],
+    messages: chat.messages.filter(m => m.content).map(m => ({ role: m.role, text: m.content })),
+  }),
+});
+Tools.mcp.register({
+  name: 'ask_model', title: 'Ask the local model', label: 'mcp.ask', untrusted: true,
+  description: 'Sends a question to the Gemma language model running locally in this app and returns its answer. The question and answer are added to the current chat, so the model sees the earlier messages. Works only once the user has downloaded the model; small local models can be wrong.',
+  inputSchema: { type: 'object', properties: {
+    prompt: { type: 'string', minLength: 1, maxLength: 4000, description: 'The question or instruction for the model.' },
+  }, required: ['prompt'], additionalProperties: false },
+  execute: async ({ prompt }) => {
+    if (busy) throw new Error('The model is busy with another answer – try again when it is finished.');
+    if (gpu === null) await detectGpu();
+    if (gpu === 'none') throw new Error('This browser has no WebGPU, so the model cannot run here.');
+    const key = $('model').value;
+    if (!usable(key)) throw new Error('The selected model cannot run on this device (graphics card limits).');
+    if (!cached.has(key)) await updateCached();
+    if (!cached.has(key)) throw new Error('The model is not downloaded yet – the user has to send a first message in the app to download it.');
+    const r = await ask(prompt.trim());
+    if (!r.ok) throw new Error(r.error);
+    return { model: MODEL_NAMES[key], answer: r.text, stopped: !!r.stopped };
+  },
+});
+
+// Language switched: generated texts
+Tools.onLang(() => { renderModels(); systemPh(); renderChat(); renderHist(); if ($('modelBox').open) updateCached(); });
+})();
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@
 // the tests then call the tools like an agent would.
 import { test, expect, apps } from './helpers.mjs';
 import { makePdf } from './pdf-tools.mjs';
+import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -547,5 +548,51 @@ test.describe('countdown tools', () => {
       [{ target_date: '2026-12-24', unit: 'fortnights' }, /must be one of/],
     ]) expect((await call(page, 'countdown_time_until', input)).error).toMatch(msg);
     await expect(page.locator('#td')).toHaveValue('2027-01-01');
+  });
+});
+
+test.describe('ai-chat tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await fakeLlm(page, { gpu: 'f16' });
+    await page.goto('/ai-chat/');
+    await expect(page.locator('#model')).toHaveAttribute('data-gpu', 'f16');
+  });
+
+  test('ask_model: only with a downloaded model; question and answer appear in the chat', async ({ page }) => {
+    // Not downloaded yet: an agent must not start a download of several GB
+    expect(await call(page, 'ai_chat_ask_model', { prompt: 'Hallo' })).toEqual({
+      ok: false, error: 'The model is not downloaded yet – the user has to send a first message in the app to download it.',
+    });
+    await expect(page.locator('.msg')).toHaveCount(0);
+    expect(await page.evaluate(() => window.__llm.posted.length)).toBe(0);
+
+    await markDownloaded(page, 'onnx-community/gemma-4-E2B-it-qat-mobile-ONNX', 'a7f19b0ab28252b77cea830f52b8290b2479c87d');
+    await page.evaluate(() => { window.__llm.reply = { tokens: ['Paris', '.'], delay: 5 }; });
+    const r = await call(page, 'ai_chat_ask_model', { prompt: 'Hauptstadt von Frankreich?' });
+    expect(r).toEqual({ ok: true, result: { model: 'Gemma 4 E2B', answer: 'Paris.', stopped: false } });
+    await expect(page.locator('.msg.user')).toHaveText('Hauptstadt von Frankreich?');
+    await expect(page.locator('.msg.assistant .body')).toHaveText('Paris.');
+    await expect(page.locator('#histCount')).toHaveText('1');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Frage an das Modell gestellt');
+
+    // get_conversation returns exactly that
+    expect(await call(page, 'ai_chat_get_conversation', {})).toEqual({ ok: true, result: {
+      model: 'Gemma 4 E2B',
+      messages: [{ role: 'user', text: 'Hauptstadt von Frankreich?' }, { role: 'assistant', text: 'Paris.' }],
+    } });
+  });
+
+  test('ask_model: errors from the model and invalid input', async ({ page }) => {
+    await markDownloaded(page, 'onnx-community/gemma-4-E2B-it-qat-mobile-ONNX', 'a7f19b0ab28252b77cea830f52b8290b2479c87d');
+    await page.evaluate(() => { window.__llm.reply = { tokens: [], error: { stage: 'generate', message: 'device lost' } }; });
+    expect(await call(page, 'ai_chat_ask_model', { prompt: 'x' })).toEqual({ ok: false, error: 'The model failed while answering: device lost' });
+    for (const [input, msg] of [
+      [{}, /prompt is required/],
+      [{ prompt: '' }, /at least 1/],
+      [{ prompt: 'x'.repeat(4001) }, /at most 4000/],
+      [{ prompt: 'x', model: 'gpt' }, /not allowed/],
+    ]) expect((await call(page, 'ai_chat_ask_model', input)).error).toMatch(msg);
+    await expect(page.locator('#histCount')).toHaveText('0');
   });
 });
