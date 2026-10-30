@@ -24,7 +24,7 @@ test('repository files are not published, only what the pages need', async ({ re
     '/assets/vendor/README.md', '/assets/vendor/katex/SOURCE.md', '/.nojekyll', '/.github/workflows/pages.yml']) {
     expect((await request.get(path)).status(), path).toBe(404);
   }
-  for (const path of ['/', '/robots.txt', '/icon.svg', '/assets/base.css', '/assets/vendor/katex/LICENSE', '/dice-coin/', '/dice-coin/sw.js']) {
+  for (const path of ['/', '/robots.txt', '/icon.svg', '/manifest.webmanifest', '/assets/base.css', '/assets/vendor/katex/LICENSE', '/dice-coin/', '/dice-coin/sw.js']) {
     expect((await request.get(path)).status(), path).toBe(200);
   }
 });
@@ -104,6 +104,51 @@ test.describe('start page', () => {
     await last.click();
     await expect(page.locator('.tool:visible')).toHaveCount(list.length);
     await expect(all).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('phone: filter rows scroll sideways without a scroll bar, a faded edge shows there is more', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.mobile);
+    await page.goto('/');
+    const row = page.locator('.filter .chips').first();
+    // Overlay or classic: no scroll bar is drawn (same height with and without scrollable content)
+    expect(await row.evaluate(r => [r.scrollWidth > r.clientWidth, getComputedStyle(r).scrollbarWidth, r.offsetHeight - r.clientHeight]))
+      .toEqual([true, 'none', 0]);
+    await expect(row).toHaveClass(/more-end/);
+    await expect(row).not.toHaveClass(/more-start/);
+    expect(await row.evaluate(r => getComputedStyle(r).maskImage)).toMatch(/linear-gradient/);
+    await row.evaluate(r => { r.scrollLeft = 60; });
+    await expect(row).toHaveClass(/more-start more-end|more-end more-start/);
+    await row.evaluate(r => { r.scrollLeft = r.scrollWidth; });
+    await expect(row).toHaveClass(/more-start/);
+    await expect(row).not.toHaveClass(/more-end/);
+    // Wide screens: rows wrap, nothing faded
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await expect(row).not.toHaveClass(/more-end|more-start/);
+    expect(await row.evaluate(r => getComputedStyle(r).maskImage)).toBe('none');
+  });
+
+  test('home screen shortcut (Android): manifest with full-bleed icon, opens as a normal tab', async ({ page, request }) => {
+    await page.goto('/');
+    const href = await page.locator('link[rel="manifest"]').getAttribute('href');
+    expect(href).toBe('manifest.webmanifest');
+    const m = await (await request.get('/' + href)).json();
+    expect(m).toMatchObject({ short_name: 'App-Regal', short_name_localized: { en: 'App Shelf' }, start_url: './',
+      display: 'browser', theme_color: '#334155', background_color: '#334155' });
+    // Without a maskable icon Android puts the icon on a white circle
+    const maskable = m.icons.find(i => i.purpose === 'maskable');
+    expect(maskable).toMatchObject({ src: 'icon-maskable-512.png', sizes: '512x512' });
+    for (const i of m.icons) expect((await request.get('/' + i.src)).status(), i.src).toBe(200);
+    // Every corner of the maskable icon is the page colour, not white or transparent
+    const corners = await page.evaluate(async src => {
+      const img = new Image(); img.src = src; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+      return [[0, 0], [img.width - 1, 0], [0, img.height - 1], [img.width - 1, img.height - 1]]
+        .map(([x, y]) => [...ctx.getImageData(x, y, 1, 1).data]);
+    }, maskable.src);
+    for (const c of corners) expect(c).toEqual([0x33, 0x41, 0x55, 255]);
+    // No service worker of its own: it would sit above every app's scope
+    expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length)).toBe(0);
   });
 });
 
