@@ -43,11 +43,17 @@ test('graphics card with shader-f16 and big buffers: Gemma 4 is the default', as
   // Sizes = ONNX files + tokenizer of the dtype this device loads (q2f16 / q4f16)
   await expect(page.locator('#model option[value="gemma4-e2b"]')).toHaveText('Gemma 4 E2B – empfohlen (ca. 2,3 GB)');
   await expect(page.locator('#model option[value="gemma3-1b"]')).toHaveText('Gemma 3 1B – mittel (ca. 780 MB)');
-  await expect(page.locator('#model option[value="gemma3-270m"]')).toHaveText('Gemma 3 270M – klein, schnell (ca. 290 MB)');
+  await expect(page.locator('#model option[value="gemma3-270m"]')).toHaveText('Gemma 3 270M – nur zum Ausprobieren (ca. 290 MB)');
   await expect(page.locator('#modelInfo')).toHaveText('Wird beim ersten Senden heruntergeladen: ca. 2,3 GB – am besten im WLAN.');
   await expect(page.locator('#btnSend')).toBeEnabled();
   // The choice is remembered
   await pickModel(page, 'gemma3-270m');
+  // 270M: short answers, no repetition penalty (it pushes small models into other languages)
+  await send(page, 'Hallo');
+  await expect(page.locator('.msg.assistant .foot')).toBeVisible();
+  const gen = (await posted(page)).find(m => m.type === 'generate');
+  expect(gen.maxTokens).toBe(384);
+  expect(gen.model.sampling).toEqual({ temperature: 0.7, top_p: 0.95, top_k: 64 });
   await page.reload();
   await expect(page.locator('#model')).toHaveValue('gemma3-270m');
 });
