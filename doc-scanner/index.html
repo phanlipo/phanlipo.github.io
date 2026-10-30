@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Dokumentenscanner</title>
+<meta name="description" content="Dokumente mit der Kamera oder aus Fotos scannen: Ecken zuschneiden, Seiten sortieren, Schatten entfernen, als PDF speichern.">
+<meta name="tool:tags" content="Arbeit, Dokumente">
+<meta name="tool:features" content="Kamera, Datei öffnen, KI-Agent">
+<meta name="tool:icon" content="scan">
+<meta name="tool:color" content="#854d0e">
+<meta name="tool:short-name" content="Scanner">
+<meta name="tool:title-en" content="Document Scanner">
+<meta name="tool:description-en" content="Scan documents with the camera or from photos: crop the corners, sort pages, remove shadows, save as PDF.">
+<meta name="tool:short-name-en" content="Scanner">
+<meta name="tool:storage" content="doc-scanner.">
+<meta name="tool:webmcp" content="list_pages, set_filter, move_page, rotate_page">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-iRylMvGWqc7DPGwuGWiXzQ7AOd40p1KuD363Im+6Sbs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Scanner">
+<meta name="theme-color" content="#854d0e">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#854d0e;--accent-text:#ffffff;--page-width:1100px}
+@media (prefers-color-scheme: dark){:root{--accent:#f0c27a;--accent-text:#2a1803}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.add .btn{flex:1 1 160px;min-height:52px;font-size:17px}
+.btn:disabled{opacity:.55;cursor:default}
+.btn:disabled:hover{border-color:var(--border)}
+.seg{display:flex;flex-wrap:wrap;gap:0;border:0;margin:0;padding:0;min-width:0}
+.seg legend{font-size:14px;color:var(--muted);margin-block-end:6px;padding:0}
+.seg label{flex:1 1 0;min-width:0}
+.seg input{position:absolute;opacity:0;width:1px;height:1px}
+.seg span{display:flex;align-items:center;justify-content:center;min-height:44px;padding-inline:6px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;font-size:14px;text-align:center;line-height:1.2}
+.seg label:first-of-type span{border-start-start-radius:8px;border-end-start-radius:8px}
+.seg label:last-of-type span{border-start-end-radius:8px;border-end-end-radius:8px}
+.seg label+label span{border-inline-start:0}
+.seg input:checked+span{background:var(--accent);border-color:var(--accent);color:var(--accent-text);font-weight:600}
+.seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+#pages{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+#pages li{border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:6px;display:grid;gap:6px;min-width:0}
+.thumb{display:block;width:100%;aspect-ratio:1/1.2;padding:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer;overflow:hidden;position:relative}
+.thumb img{width:100%;height:100%;object-fit:contain;display:block}
+.thumb .num{position:absolute;inset-block-start:4px;inset-inline-start:4px;background:var(--accent);color:var(--accent-text);border-radius:999px;font-size:13px;font-weight:600;min-width:24px;padding-inline:6px;line-height:24px;text-align:center}
+.pbtns{display:flex;gap:4px}
+.pbtns .btn{flex:1;padding-inline:0;min-width:0;min-height:44px;font-size:18px}
+#empty{margin:12px 0 0}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-block-end:12px}
+.field{display:grid;gap:4px;font-size:14px;color:var(--muted)}
+.field input,.field select{min-height:44px;padding-inline:10px;color:var(--text);font-size:16px}
+#status{min-height:1.4em;margin:8px 0 0}
+#status.err{color:var(--err)}
+.export .btn.primary{flex:1 1 200px;min-height:52px;font-size:17px}
+/* Corner editor (full screen on phones) */
+dialog#editor{border:0;padding:0;background:var(--surface);color:var(--text);width:min(900px,100vw);max-width:100vw;max-height:100dvh;border-radius:var(--radius)}
+dialog#editor::backdrop{background:rgba(0,0,0,.6)}
+@media (max-width:640px){dialog#editor{width:100vw;height:100dvh;border-radius:0}}
+.ed{display:flex;flex-direction:column;gap:10px;padding:12px;height:100%}
+.ed h2{font-size:16px;margin:0}
+.ed .hint{margin:0}
+.stage{position:relative;align-self:center;touch-action:none;user-select:none;-webkit-user-select:none;max-width:100%}
+.stage canvas{display:block;width:100%;height:100%}
+.stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.stage polygon{fill:rgba(240,160,40,.15);stroke:#f59e0b;stroke-width:2;vector-effect:non-scaling-stroke}
+.handle{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;padding:0;border:0;background:transparent;cursor:grab;touch-action:none;border-radius:50%}
+.handle::after{content:"";position:absolute;inset:13px;border-radius:50%;background:rgba(245,158,11,.35);border:3px solid #f59e0b;box-shadow:0 0 0 2px rgba(0,0,0,.45)}
+.handle:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.handle.active::after{background:rgba(245,158,11,.1)}
+#loupe{position:absolute;inset-block-start:8px;width:120px;height:120px;border-radius:50%;border:3px solid #f59e0b;box-shadow:0 2px 8px rgba(0,0,0,.5);pointer-events:none;background:#000}
+.ed .row .btn{flex:1 1 auto}
+.ed-foot{margin-block-start:auto}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Dokumentenscanner</span></h1>
+  <p class="sub" data-i18n="sub">Fotografieren, zuschneiden, als PDF speichern – alles bleibt auf dem Gerät.</p>
+</header>
+
+<main>
+  <section class="card add" aria-labelledby="h-add">
+    <h2 id="h-add" data-i18n="add.h">Seiten hinzufügen</h2>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnCamera" data-i18n="add.camera">Foto aufnehmen</button>
+      <button type="button" class="btn" id="btnPick" data-i18n="add.pick">Bilder wählen</button>
+    </div>
+    <input type="file" id="inCamera" accept="image/*" capture="environment" hidden>
+    <input type="file" id="inPick" accept="image/*" multiple hidden>
+    <p class="muted" id="addInfo" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="card" aria-labelledby="h-pages">
+    <h2 id="h-pages"><span data-i18n="pages.h">Seiten</span> <span class="badge" id="pageCount">0</span></h2>
+    <fieldset class="seg" id="filterAll">
+      <legend data-i18n="filter.legendAll">Filter für alle Seiten</legend>
+      <label><input type="radio" name="filterAll" value="color"><span data-i18n="filter.color">Farbe</span></label>
+      <label><input type="radio" name="filterAll" value="gray"><span data-i18n="filter.gray">Graustufen</span></label>
+      <label><input type="radio" name="filterAll" value="bw"><span data-i18n="filter.bw">Schwarz-weiß</span></label>
+      <label><input type="radio" name="filterAll" value="original"><span data-i18n="filter.original">Original</span></label>
+    </fieldset>
+    <p class="muted" id="empty" data-i18n="pages.empty">Noch keine Seiten. Ein Foto aufnehmen oder Bilder wählen – die Ecken des Dokuments werden automatisch gesucht.</p>
+    <ol id="pages"></ol>
+  </section>
+
+  <section class="card export" aria-labelledby="h-export">
+    <h2 id="h-export" data-i18n="export.h">PDF erstellen</h2>
+    <div class="opts">
+      <label class="field"><span data-i18n="export.name">Dateiname</span><input type="text" id="fileName" maxlength="80" autocomplete="off" spellcheck="false"></label>
+      <label class="field"><span data-i18n="export.size">Seitengröße</span>
+        <select id="pageSize">
+          <option value="a4" data-i18n="size.a4">A4</option>
+          <option value="letter" data-i18n="size.letter">US Letter</option>
+          <option value="fit" data-i18n="size.fit">Wie das Bild</option>
+        </select></label>
+      <label class="field"><span data-i18n="export.quality">Qualität</span>
+        <select id="quality">
+          <option value="150" data-i18n="q.150">Klein (150 dpi)</option>
+          <option value="200" data-i18n="q.200">Standard (200 dpi)</option>
+          <option value="300" data-i18n="q.300">Hoch (300 dpi)</option>
+        </select></label>
+    </div>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnPdf" data-i18n="export.save" disabled>PDF speichern</button>
+      <button type="button" class="btn" id="btnShare" data-i18n="export.share" hidden disabled>Teilen …</button>
+    </div>
+    <p class="muted" id="status" role="status" aria-live="polite"></p>
+  </section>
+</main>
+
+<dialog id="editor" aria-labelledby="edTitle">
+  <div class="ed">
+    <h2 id="edTitle"></h2>
+    <p class="muted hint" data-i18n="ed.hint">Die vier Punkte auf die Ecken des Dokuments ziehen.</p>
+    <div class="stage" id="stage">
+      <canvas id="edCanvas" width="10" height="10"></canvas>
+      <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><polygon id="edPoly" points=""></polygon></svg>
+      <button type="button" class="handle" data-i="0" aria-label="Ecke oben links" data-i18n-attr="aria-label:ed.c0"></button>
+      <button type="button" class="handle" data-i="1" aria-label="Ecke oben rechts" data-i18n-attr="aria-label:ed.c1"></button>
+      <button type="button" class="handle" data-i="2" aria-label="Ecke unten rechts" data-i18n-attr="aria-label:ed.c2"></button>
+      <button type="button" class="handle" data-i="3" aria-label="Ecke unten links" data-i18n-attr="aria-label:ed.c3"></button>
+      <canvas id="loupe" width="120" height="120" hidden></canvas>
+    </div>
+    <div class="row">
+      <button type="button" class="btn small" id="edAuto" data-i18n="ed.auto">Automatisch</button>
+      <button type="button" class="btn small" id="edFull" data-i18n="ed.full">Ganzes Bild</button>
+      <button type="button" class="btn small" id="edRotL"><span aria-hidden="true">↺ </span><span data-i18n="ed.rotL">Links drehen</span></button>
+      <button type="button" class="btn small" id="edRotR"><span aria-hidden="true">↻ </span><span data-i18n="ed.rotR">Rechts drehen</span></button>
+    </div>
+    <fieldset class="seg" id="filterPage">
+      <legend data-i18n="filter.legendPage">Filter für diese Seite</legend>
+      <label><input type="radio" name="filterPage" value="color"><span data-i18n="filter.color">Farbe</span></label>
+      <label><input type="radio" name="filterPage" value="gray"><span data-i18n="filter.gray">Graustufen</span></label>
+      <label><input type="radio" name="filterPage" value="bw"><span data-i18n="filter.bw">Schwarz-weiß</span></label>
+      <label><input type="radio" name="filterPage" value="original"><span data-i18n="filter.original">Original</span></label>
+    </fieldset>
+    <div class="row ed-foot">
+      <button type="button" class="btn danger" id="edDelete" data-i18n="ed.delete">Seite löschen</button>
+      <button type="button" class="btn primary" id="edDone" data-i18n="ed.done">Fertig</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Scannt Papierdokumente mit der Handykamera – z. B. Formulare, Briefe oder Befunde für die digitale Akte – und speichert sie als eine PDF-Datei. Eine Texterkennung gibt es nicht; die PDF enthält die Seiten als Bilder.</p>
+  <h3>Bedienung</h3>
+  <ol>
+    <li><b>Foto aufnehmen</b> öffnet die Kamera, <b>Bilder wählen</b> nimmt vorhandene Fotos (auch mehrere auf einmal).</li>
+    <li>Die Ecken des Dokuments werden automatisch gesucht. Nach einem Kamerafoto öffnet sich der Zuschnitt direkt; sonst ein Vorschaubild antippen. Die vier Punkte auf die Ecken ziehen – beim Ziehen zeigt eine Lupe die Stelle vergrößert. Mit der Tastatur: Punkt antippen bzw. auswählen und mit den Pfeiltasten verschieben (mit Umschalt in großen Schritten).</li>
+    <li>Das Bild wird dabei entzerrt: Ein schräg fotografiertes Blatt wird wieder rechteckig. Liegt das Seitenverhältnis nahe an A4, wird es genau auf A4 gebracht.</li>
+    <li><b>Sortieren:</b> mit ← und → unter dem Vorschaubild verschieben, mit ✕ löschen. Drehen im Zuschnitt.</li>
+    <li><b>Filter:</b>
+      <ul>
+        <li><b>Farbe</b> – Papier wird weiß, Schatten und Lichtflecken werden ausgeglichen, Farben bleiben (Stempel, farbige Stifte).</li>
+        <li><b>Graustufen</b> – wie Farbe, aber ohne Farbe; gut lesbar, kleinere Datei.</li>
+        <li><b>Schwarz-weiß</b> – nur Schwarz und Weiß, wie ein Fax; am besten für reinen Text, Fotos und Bilder gehen dabei verloren.</li>
+        <li><b>Original</b> – nur zugeschnitten, sonst unverändert.</li>
+      </ul>
+      Der Filter oben gilt für alle Seiten und neue Seiten; im Zuschnitt lässt er sich für eine einzelne Seite ändern.</li>
+    <li><b>PDF speichern</b> lädt die Datei herunter. <b>Teilen …</b> (Handy) schickt sie direkt an eine andere App, z. B. Mail, Messenger oder Dateien.</li>
+  </ol>
+  <h3>Tipps für gute Scans</h3>
+  <ul>
+    <li>Blatt auf eine dunkle, ruhige Unterlage legen – dann findet die App die Ecken am sichersten.</li>
+    <li>Gleichmäßiges Licht, möglichst von oben und ohne Blitz; das Handy parallel zum Blatt halten.</li>
+    <li>Qualität <b>Standard (200 dpi)</b> reicht für Akten gut; <b>Hoch</b> für kleine Schrift, <b>Klein</b> für Mail-Anhänge.</li>
+  </ul>
+  <h3>Datenschutz &amp; Speicher</h3>
+  <ul>
+    <li>Alles passiert im Browser auf dem Gerät; Fotos und PDF werden nirgends hochgeladen. Die App funktioniert auch offline.</li>
+    <li>Die Seiten werden <b>nicht gespeichert</b>: Nach dem Schließen oder Neuladen sind sie weg – vorher die PDF speichern. Gespeichert werden nur die Einstellungen (Filter, Seitengröße, Qualität).</li>
+    <li>Wird das Fenster während der Aufnahme vom System geschlossen (bei wenig Arbeitsspeicher möglich), sind bisherige Seiten weg. Bei langen Dokumenten zwischendurch speichern oder die Fotos zuerst mit der Kamera-App aufnehmen und dann mit <b>Bilder wählen</b> übernehmen.</li>
+  </ul>
+  <h3>KI-Agenten</h3>
+  <p>Unterstützt der Browser WebMCP, kann ein KI-Agent die Seitenliste lesen, Filter setzen, Seiten verschieben und drehen. Bilder oder Dateien kann er nicht auswählen.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Scans paper documents with the phone camera – forms, letters or medical reports for your digital records – and saves them as one PDF file. There is no text recognition; the PDF contains the pages as images.</p>
+  <h3>How to use</h3>
+  <ol>
+    <li><b>Take photo</b> opens the camera, <b>Choose images</b> uses existing photos (several at once, too).</li>
+    <li>The document corners are found automatically. After a camera photo the crop view opens right away; otherwise tap a preview. Drag the four points onto the corners – a magnifier shows the spot while dragging. With a keyboard: select a point and move it with the arrow keys (with Shift in big steps).</li>
+    <li>The image is straightened: a sheet photographed at an angle becomes rectangular again. If the aspect ratio is close to A4, it is made exactly A4.</li>
+    <li><b>Sort:</b> move with ← and → below the preview, delete with ✕. Rotate in the crop view.</li>
+    <li><b>Filters:</b>
+      <ul>
+        <li><b>Colour</b> – paper turns white, shadows and bright spots are evened out, colours stay (stamps, coloured pens).</li>
+        <li><b>Greyscale</b> – like colour, without colour; easy to read, smaller file.</li>
+        <li><b>Black &amp; white</b> – only black and white, like a fax; best for plain text, photos and pictures get lost.</li>
+        <li><b>Original</b> – only cropped, otherwise unchanged.</li>
+      </ul>
+      The filter at the top applies to all pages and new pages; in the crop view it can be changed for a single page.</li>
+    <li><b>Save PDF</b> downloads the file. <b>Share …</b> (phone) sends it straight to another app, e.g. mail, messenger or Files.</li>
+  </ol>
+  <h3>Tips for good scans</h3>
+  <ul>
+    <li>Put the sheet on a dark, plain surface – the corners are found most reliably then.</li>
+    <li>Even light, ideally from above and without flash; hold the phone parallel to the sheet.</li>
+    <li>Quality <b>Standard (200 dpi)</b> is fine for records; <b>High</b> for small print, <b>Small</b> for email attachments.</li>
+  </ul>
+  <h3>Privacy &amp; storage</h3>
+  <ul>
+    <li>Everything happens in the browser on your device; photos and PDF are never uploaded. The app works offline, too.</li>
+    <li>Pages are <b>not saved</b>: after closing or reloading they are gone – save the PDF first. Only the settings (filter, page size, quality) are stored.</li>
+    <li>If the system closes the window while the camera is open (possible with little memory), earlier pages are lost. For long documents save in between, or take the photos with the camera app first and add them with <b>Choose images</b>.</li>
+  </ul>
+  <h3>AI agents</h3>
+  <p>If the browser supports WebMCP, an AI agent can read the page list, set filters, move and rotate pages. It cannot choose images or files.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version ddea33876b5a</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'add.loading':'Bild {i} von {n} wird vorbereitet …','add.done':'{n} Seite(n) hinzugefügt.','add.fail':'„{name}“ konnte nicht gelesen werden – ist es ein Bild?',
+    'add.noCorners':'Ecken nicht sicher erkannt – bitte im Zuschnitt prüfen.',
+    'page.n':'Seite {n}','page.edit':'Seite {n} zuschneiden','page.earlier':'Seite {n} nach vorne','page.later':'Seite {n} nach hinten','page.delete':'Seite {n} löschen',
+    'ed.title':'Seite {n} von {total} zuschneiden','confirm.delete':'Seite {n} löschen?',
+    'export.busy':'PDF wird erstellt: Seite {i} von {n} …','export.done':'PDF gespeichert: {n} Seite(n), {size}.','export.shared':'PDF geteilt: {n} Seite(n), {size}.',
+    'export.fail':'PDF konnte nicht erstellt werden: {msg}','export.shareAgain':'PDF ist fertig – bitte noch einmal auf „Teilen …“ tippen.',
+    'export.shareFail':'Teilen hat nicht geklappt. Bitte „PDF speichern“ verwenden.',
+    'mb':'{n} MB','kb':'{n} KB','leave':'Die gescannten Seiten sind noch nicht gespeichert.',
+    'mcp.filter':'Filter geändert','mcp.move':'Seite verschoben','mcp.rotate':'Seite gedreht'
+  },
+  en:{
+    title:'Document Scanner',sub:'Take a photo, crop it, save as PDF – everything stays on your device.',
+    'add.h':'Add pages','add.camera':'Take photo','add.pick':'Choose images',
+    'pages.h':'Pages','pages.empty':'No pages yet. Take a photo or choose images – the document corners are found automatically.',
+    'filter.legendAll':'Filter for all pages','filter.legendPage':'Filter for this page',
+    'filter.color':'Colour','filter.gray':'Greyscale','filter.bw':'Black & white','filter.original':'Original',
+    'export.h':'Create PDF','export.name':'File name','export.size':'Page size','export.quality':'Quality',
+    'size.a4':'A4','size.letter':'US Letter','size.fit':'Same as image',
+    'q.150':'Small (150 dpi)','q.200':'Standard (200 dpi)','q.300':'High (300 dpi)',
+    'export.save':'Save PDF','export.share':'Share …',
+    'ed.hint':'Drag the four points onto the corners of the document.',
+    'ed.c0':'Top left corner','ed.c1':'Top right corner','ed.c2':'Bottom right corner','ed.c3':'Bottom left corner',
+    'ed.auto':'Automatic','ed.full':'Whole image','ed.rotL':'Rotate left','ed.rotR':'Rotate right',
+    'ed.delete':'Delete page','ed.done':'Done',
+    'add.loading':'Preparing image {i} of {n} …','add.done':'{n} page(s) added.','add.fail':'Could not read “{name}” – is it an image?',
+    'add.noCorners':'Corners not found reliably – please check the crop.',
+    'page.n':'Page {n}','page.edit':'Crop page {n}','page.earlier':'Move page {n} earlier','page.later':'Move page {n} later','page.delete':'Delete page {n}',
+    'ed.title':'Crop page {n} of {total}','confirm.delete':'Delete page {n}?',
+    'export.busy':'Creating PDF: page {i} of {n} …','export.done':'PDF saved: {n} page(s), {size}.','export.shared':'PDF shared: {n} page(s), {size}.',
+    'export.fail':'Could not create the PDF: {msg}','export.shareAgain':'The PDF is ready – please tap “Share …” again.',
+    'export.shareFail':'Sharing did not work. Please use “Save PDF”.',
+    'mb':'{n} MB','kb':'{n} KB','leave':'The scanned pages are not saved yet.',
+    'mcp.filter':'Filter changed','mcp.move':'Page moved','mcp.rotate':'Page rotated'
+  }
+});
+const t=Tools.t, $=Tools.$;
+const LS='doc-scanner.settings.v1';
+const FILTERS=['color','gray','bw','original'];
+const settings=Object.assign({filter:'color',size:'a4',dpi:200},Tools.load(LS,{}));
+if(!FILTERS.includes(settings.filter)) settings.filter='color';
+const saveSettings=()=>Tools.save(LS,settings);
+
+/* ================= Image processing ================= */
+const PREVIEW_MAX=1200;      // working copy for the crop view and thumbnails
+const THUMB_MAX=420;
+const SRC_MAX_PIXELS=16e6;   // iOS refuses bigger canvases
+const A4=Math.SQRT2;
+
+function canvas(w,h){const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w));c.height=Math.max(1,Math.round(h));return c;}
+const ctx2d=c=>c.getContext('2d',{willReadFrequently:true});
+
+// Decodes an image file (EXIF orientation is applied by the browser)
+function loadImage(blob){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(blob), img=new Image();
+    img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('decode failed'));};
+    img.src=url;
+  });
+}
+function scaledCopy(img,maxSide,maxPixels){
+  const w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+  let s=Math.min(1,maxSide/Math.max(w,h));
+  if(maxPixels&&w*h*s*s>maxPixels) s=Math.sqrt(maxPixels/(w*h));
+  const c=canvas(w*s,h*s), g=ctx2d(c);
+  g.imageSmoothingQuality='high';
+  g.drawImage(img,0,0,c.width,c.height);
+  return c;
+}
+
+// Homography from the unit square onto the quad p (TL, TR, BR, BL) – Heckbert's square-to-quad
+function squareToQuad(p){
+  const [x0,y0,x1,y1,x2,y2,x3,y3]=[p[0].x,p[0].y,p[1].x,p[1].y,p[2].x,p[2].y,p[3].x,p[3].y];
+  const dx1=x1-x2, dx2=x3-x2, dx3=x0-x1+x2-x3, dy1=y1-y2, dy2=y3-y2, dy3=y0-y1+y2-y3;
+  let a,b,d,e,g=0,h=0;
+  if(Math.abs(dx3)<1e-9&&Math.abs(dy3)<1e-9){a=x1-x0;b=x3-x0;d=y1-y0;e=y3-y0;}
+  else{
+    const den=dx1*dy2-dx2*dy1;
+    g=(dx3*dy2-dx2*dy3)/den; h=(dx1*dy3-dx3*dy1)/den;
+    a=x1-x0+g*x1; b=x3-x0+h*x3; d=y1-y0+g*y1; e=y3-y0+h*y3;
+  }
+  return {a,b,c:x0,d,e,f:y0,g,h};
+}
+const dist=(p,q)=>Math.hypot(p.x-q.x,p.y-q.y);
+
+// Size of the straightened page in source pixels. Photos taken at an angle make the sheet look
+// shorter, so a ratio close to the paper format (A4 or Letter) is snapped to it.
+function outputAspect(q){
+  const w=(dist(q[0],q[1])+dist(q[3],q[2]))/2, h=(dist(q[0],q[3])+dist(q[1],q[2]))/2;
+  const P=settings.size==='letter'?11/8.5:A4;
+  let r=h/w;
+  if(Math.abs(r/P-1)<0.15) r=P; else if(Math.abs(r*P-1)<0.15) r=1/P;
+  return {w,h,r};
+}
+
+// Perspective warp of the quad (pixel coordinates in src) into a w×h image, bilinear
+function warp(src,quad,w,h){
+  const sw=src.width, sh=src.height, s=ctx2d(src).getImageData(0,0,sw,sh).data;
+  const out=new ImageData(w,h), o=out.data, m=squareToQuad(quad);
+  let k=0;
+  for(let Y=0;Y<h;Y++){
+    const v=(Y+.5)/h;
+    for(let X=0;X<w;X++){
+      const u=(X+.5)/w, den=m.g*u+m.h*v+1;
+      let x=(m.a*u+m.b*v+m.c)/den-.5, y=(m.d*u+m.e*v+m.f)/den-.5;
+      if(x<0)x=0; else if(x>sw-1)x=sw-1;
+      if(y<0)y=0; else if(y>sh-1)y=sh-1;
+      const x0=x|0, y0=y|0, x1=x0<sw-1?x0+1:x0, y1=y0<sh-1?y0+1:y0, fx=x-x0, fy=y-y0;
+      const i00=(y0*sw+x0)*4, i10=(y0*sw+x1)*4, i01=(y1*sw+x0)*4, i11=(y1*sw+x1)*4;
+      for(let c=0;c<3;c++){
+        const top=s[i00+c]+(s[i10+c]-s[i00+c])*fx, bot=s[i01+c]+(s[i11+c]-s[i01+c])*fx;
+        o[k+c]=top+(bot-top)*fy;
+      }
+      o[k+3]=255; k+=4;
+    }
+  }
+  return out;
+}
+
+// Paper brightness per pixel: brightest values in blocks, widened and smoothed, scaled up.
+// Dividing by it makes the paper white and evens out shadows and light spots.
+function background(L,w,h){
+  const bs=Math.max(6,Math.round(Math.max(w,h)/64)), gw=Math.ceil(w/bs), gh=Math.ceil(h/bs);
+  let g=new Float32Array(gw*gh);
+  for(let by=0;by<gh;by++)for(let bx=0;bx<gw;bx++){
+    const hist=new Uint32Array(64); let n=0;
+    for(let y=by*bs;y<Math.min(h,(by+1)*bs);y+=2)for(let x=bx*bs;x<Math.min(w,(bx+1)*bs);x+=2){hist[L[y*w+x]>>2]++;n++;}
+    // 95th percentile instead of the maximum: ignores single bright pixels (noise, JPEG)
+    let need=n*0.05, v=63; while(v>0&&(need-=hist[v])>0)v--;
+    g[by*gw+bx]=v*4+2;
+  }
+  // 3×3 neighbourhood: max widens bright areas over blocks full of ink, mean smooths
+  const pass=useMax=>{
+    const r=new Float32Array(gw*gh);
+    for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){
+      let sum=0,cnt=0,mx=0;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        const xx=x+dx,yy=y+dy; if(xx<0||yy<0||xx>=gw||yy>=gh) continue;
+        const val=g[yy*gw+xx]; sum+=val; cnt++; if(val>mx) mx=val;
+      }
+      r[y*gw+x]=useMax?mx:sum/cnt;
+    }
+    g=r;
+  };
+  pass(true); pass(false);
+  const B=new Float32Array(w*h);
+  for(let y=0;y<h;y++){
+    let gy=(y+.5)/bs-.5; if(gy<0)gy=0; if(gy>gh-1)gy=gh-1;
+    const y0=gy|0, y1=Math.min(gh-1,y0+1), fy=gy-y0;
+    for(let x=0;x<w;x++){
+      let gx=(x+.5)/bs-.5; if(gx<0)gx=0; if(gx>gw-1)gx=gw-1;
+      const x0=gx|0, x1=Math.min(gw-1,x0+1), fx=gx-x0;
+      const top=g[y0*gw+x0]+(g[y0*gw+x1]-g[y0*gw+x0])*fx, bot=g[y1*gw+x0]+(g[y1*gw+x1]-g[y1*gw+x0])*fx;
+      B[y*w+x]=Math.max(48,top+(bot-top)*fy);
+    }
+  }
+  return B;
+}
+
+function applyFilter(img,filter){
+  if(filter==='original') return img;
+  const {width:w,height:h,data:d}=img, n=w*h, L=new Uint8Array(n);
+  for(let i=0,k=0;i<n;i++,k+=4) L[i]=(d[k]*77+d[k+1]*150+d[k+2]*29)>>8;
+  const B=background(L,w,h);
+  // Tone curve after normalising: paper (≈255) stays white, ink gets darker
+  const curve=(lo,hi,gamma)=>{const c=new Uint8ClampedArray(256);for(let i=0;i<256;i++){const x=Math.min(1,Math.max(0,(i-lo)/(hi-lo)));c[i]=255*Math.pow(x,gamma);}return c;};
+  if(filter==='color'){
+    const c=curve(25,228,1.25);
+    for(let i=0,k=0;i<n;i++,k+=4){const f=255/B[i];d[k]=c[Math.min(255,d[k]*f|0)];d[k+1]=c[Math.min(255,d[k+1]*f|0)];d[k+2]=c[Math.min(255,d[k+2]*f|0)];}
+  }else if(filter==='gray'){
+    const c=curve(30,226,1.35);
+    for(let i=0,k=0;i<n;i++,k+=4){const v=c[Math.min(255,L[i]*255/B[i]|0)];d[k]=d[k+1]=d[k+2]=v;}
+  }else{
+    // Black & white: threshold on the normalised brightness; thin strokes stay connected
+    for(let i=0,k=0;i<n;i++,k+=4){const v=L[i]*255/B[i]<190?0:255;d[k]=d[k+1]=d[k+2]=v;}
+  }
+  return img;
+}
+
+// Rotates ImageData by 0/90/180/270° into a canvas
+function rotated(img,rot){
+  const src=canvas(img.width,img.height); src.getContext('2d').putImageData(img,0,0);
+  if(!rot) return src;
+  const swap=rot%180!==0, c=canvas(swap?img.height:img.width,swap?img.width:img.height), g=c.getContext('2d');
+  g.translate(c.width/2,c.height/2); g.rotate(rot*Math.PI/180); g.drawImage(src,-src.width/2,-src.height/2);
+  return c;
+}
+
+// Straightened, filtered, rotated page. src = canvas with the photo, maxLong = long side of the result
+function renderPage(src,page,maxLong){
+  const quad=page.quad.map(p=>({x:p.x*src.width,y:p.y*src.height}));
+  const a=outputAspect(quad);
+  // Never larger than the photo itself
+  const srcLong=Math.max(a.w,a.h), long=Math.max(16,Math.min(maxLong,srcLong));
+  const w=Math.round(a.r>=1?long/a.r:long), h=Math.round(a.r>=1?long:long*a.r);
+  return rotated(applyFilter(warp(src,quad,w,h),page.filter),page.rot);
+}
+
+/* ---------- Finding the document: bright, large area → convex hull → best quadrilateral ---------- */
+function otsu(hist,n){
+  let sum=0; for(let i=0;i<256;i++) sum+=i*hist[i];
+  let sumB=0,wB=0,best=0,th=128;
+  for(let i=0;i<256;i++){
+    wB+=hist[i]; if(!wB) continue; const wF=n-wB; if(!wF) break;
+    sumB+=i*hist[i]; const mB=sumB/wB, mF=(sum-sumB)/wF, v=wB*wF*(mB-mF)*(mB-mF);
+    if(v>best){best=v;th=i;}
+  }
+  return th;
+}
+function hull(pts){
+  pts.sort((a,b)=>a.x-b.x||a.y-b.y);
+  const cross=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x), lo=[], up=[];
+  for(const p of pts){while(lo.length>=2&&cross(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p);}
+  for(let i=pts.length-1;i>=0;i--){const p=pts[i];while(up.length>=2&&cross(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p);}
+  return lo.slice(0,-1).concat(up.slice(0,-1));
+}
+const area=q=>Math.abs(q.reduce((s,p,i)=>{const r=q[(i+1)%q.length];return s+p.x*r.y-r.x*p.y;},0))/2;
+// Corners in reading order TL, TR, BR, BL
+function orderCorners(q){
+  const c={x:q.reduce((s,p)=>s+p.x,0)/4,y:q.reduce((s,p)=>s+p.y,0)/4};
+  const s=q.slice().sort((a,b)=>Math.atan2(a.y-c.y,a.x-c.x)-Math.atan2(b.y-c.y,b.x-c.x));
+  // sorted clockwise (y down) starting near -180°; rotate so the point with the smallest x+y comes first
+  let k=0; s.forEach((p,i)=>{if(p.x+p.y<s[k].x+s[k].y)k=i;});
+  return s.slice(k).concat(s.slice(0,k));
+}
+
+function detectQuad(src){
+  const S=320, sc=Math.min(1,S/Math.max(src.width,src.height));
+  const c=canvas(src.width*sc,src.height*sc), g=ctx2d(c);
+  g.drawImage(src,0,0,c.width,c.height);
+  const w=c.width,h=c.height,n=w*h,d=g.getImageData(0,0,w,h).data;
+  // Paper is bright and hardly coloured
+  const v=new Uint8Array(n), hist=new Uint32Array(256);
+  for(let i=0,k=0;i<n;i++,k+=4){
+    const r=d[k],gg=d[k+1],b=d[k+2],mx=Math.max(r,gg,b),mn=Math.min(r,gg,b);
+    const val=Math.max(0,((r*77+gg*150+b*29)>>8)-(mx-mn)*0.6)|0;
+    v[i]=val; hist[val]++;
+  }
+  const th=otsu(hist,n);
+  let m=new Uint8Array(n); for(let i=0;i<n;i++) m[i]=v[i]>th?1:0;
+  // Opening (erode, then dilate) cuts thin bridges to bright things next to the sheet
+  const morph=(src,erode,r)=>{const o=new Uint8Array(n);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let val=erode?1:0;for(let dy=-r;dy<=r&&val===(erode?1:0);dy++)for(let dx=-r;dx<=r;dx++){const xx=x+dx,yy=y+dy;const s=(xx<0||yy<0||xx>=w||yy>=h)?0:src[yy*w+xx];if(erode&&!s){val=0;break;}if(!erode&&s){val=1;break;}}o[y*w+x]=val;}return o;};
+  m=morph(morph(m,true,2),false,2);
+  // Largest connected bright area
+  const lab=new Int32Array(n); let best=0,bestN=0,id=0; const stack=[];
+  for(let i=0;i<n;i++){
+    if(!m[i]||lab[i]) continue;
+    id++; let cnt=0; stack.push(i); lab[i]=id;
+    while(stack.length){const j=stack.pop();cnt++;const x=j%w,y=(j/w)|0;
+      if(x>0&&m[j-1]&&!lab[j-1]){lab[j-1]=id;stack.push(j-1);}
+      if(x<w-1&&m[j+1]&&!lab[j+1]){lab[j+1]=id;stack.push(j+1);}
+      if(y>0&&m[j-w]&&!lab[j-w]){lab[j-w]=id;stack.push(j-w);}
+      if(y<h-1&&m[j+w]&&!lab[j+w]){lab[j+w]=id;stack.push(j+w);}}
+    if(cnt>bestN){bestN=cnt;best=id;}
+  }
+  if(bestN<n*0.12) return null;
+  // Outline points of the area (first and last pixel of each row and column) → convex hull
+  const pts=[];
+  for(let y=0;y<h;y++){let a=-1,b=-1;for(let x=0;x<w;x++)if(lab[y*w+x]===best){if(a<0)a=x;b=x;}if(a>=0){pts.push({x:a,y},{x:b+1,y});}}
+  for(let x=0;x<w;x++){let a=-1,b=-1;for(let y=0;y<h;y++)if(lab[y*w+x]===best){if(a<0)a=y;b=y;}if(a>=0){pts.push({x,y:a},{x,y:b+1});}}
+  const H=hull(pts);
+  if(H.length<4) return null;
+  // Start with the extreme points in the four diagonal directions, then move each corner
+  // along the hull as long as the quadrilateral gets bigger
+  const ext=f=>H.reduce((bi,p,i)=>f(p)>f(H[bi])?i:bi,0);
+  let idx=[ext(p=>-p.x-p.y),ext(p=>p.x-p.y),ext(p=>p.x+p.y),ext(p=>-p.x+p.y)];
+  for(let it=0;it<20;it++){
+    let changed=false;
+    for(let k=0;k<4;k++){
+      let bi=idx[k], ba=area(idx.map(i=>H[i]));
+      for(let i=0;i<H.length;i++){const t=idx.slice();t[k]=i;if(new Set(t).size<4)continue;const a=area(t.map(j=>H[j]));if(a>ba+1e-6){ba=a;bi=i;}}
+      if(bi!==idx[k]){idx[k]=bi;changed=true;}
+    }
+    if(!changed) break;
+  }
+  const q=orderCorners(idx.map(i=>H[i]));
+  if(area(q)<n*0.12) return null;
+  return q.map(p=>({x:Math.min(1,Math.max(0,p.x/w)),y:Math.min(1,Math.max(0,p.y/h))}));
+}
+const FULL=()=>[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
+
+/* ---------- Minimal PDF writer: one JPEG image per page ---------- */
+const PAGE_PT={a4:[595.28,841.89],letter:[612,792]};
+function pdfString(s){
+  // Text as UTF-16BE hex string – works for umlauts in the title
+  let hex='FEFF';
+  for(const ch of s){const c=ch.codePointAt(0);if(c>0xFFFF){const v=c-0x10000;hex+=(0xD800+(v>>10)).toString(16).padStart(4,'0')+(0xDC00+(v&1023)).toString(16).padStart(4,'0');}else hex+=c.toString(16).padStart(4,'0');}
+  return '<'+hex.toUpperCase()+'>';
+}
+function buildPdf(pages,title){
+  const enc=new TextEncoder(), parts=[], offs=[]; let len=0;
+  const add=x=>{const b=typeof x==='string'?enc.encode(x):x;parts.push(b);len+=b.length;};
+  const obj=(id,body,stream)=>{offs[id]=len;add(`${id} 0 obj\n${body}\n`);if(stream){add('stream\n');add(stream);add('\nendstream\n');}add('endobj\n');};
+  add(new Uint8Array([37,80,68,70,45,49,46,52,10,37,226,227,207,211,10])); // %PDF-1.4 + binary marker
+  const n=pages.length, pageIds=pages.map((_,i)=>4+i*3);
+  obj(1,'<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2,`<< /Type /Pages /Kids [${pageIds.map(i=>i+' 0 R').join(' ')}] /Count ${n} >>`);
+  const now=new Date(), z=x=>String(x).padStart(2,'0');
+  const date=`D:${now.getFullYear()}${z(now.getMonth()+1)}${z(now.getDate())}${z(now.getHours())}${z(now.getMinutes())}${z(now.getSeconds())}`;
+  obj(3,`<< /Title ${pdfString(title)} /Producer (phanlipo.github.io doc-scanner) /CreationDate (${date}) >>`);
+  const f=x=>(Math.round(x*100)/100).toString();
+  pages.forEach((p,i)=>{
+    const id=pageIds[i], content=`q ${f(p.dw)} 0 0 ${f(p.dh)} ${f(p.x)} ${f(p.y)} cm /Im0 Do Q`;
+    obj(id,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(p.pw)} ${f(p.ph)}] /Resources << /XObject << /Im0 ${id+2} 0 R >> >> /Contents ${id+1} 0 R >>`);
+    obj(id+1,`<< /Length ${content.length} >>`,enc.encode(content));
+    obj(id+2,`<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.jpeg.length} >>`,p.jpeg);
+  });
+  const size=4+n*3, xref=len;
+  add(`xref\n0 ${size}\n0000000000 65535 f \n`+offs.slice(1,size).map(o=>String(o).padStart(10,'0')+' 00000 n \n').join(''));
+  add(`trailer\n<< /Size ${size} /Root 1 0 R /Info 3 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts,{type:'application/pdf'});
+}
+// Page box and image placement (points) for an image of w×h pixels
+function placement(w,h,size,dpi){
+  if(size==='fit'){const pw=w/dpi*72, ph=h/dpi*72;return {pw,ph,x:0,y:0,dw:pw,dh:ph};}
+  let [pw,ph]=PAGE_PT[size]||PAGE_PT.a4;
+  if(w>h) [pw,ph]=[ph,pw];
+  const s=Math.min(pw/w,ph/h), dw=w*s, dh=h*s;
+  return {pw,ph,x:(pw-dw)/2,y:(ph-dh)/2,dw,dh};
+}
+const toBlob=(c,type,q)=>new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('toBlob failed')),type,q));
+
+/* ================= App state & UI ================= */
+let pages=[];          // {id, file, preview (canvas), quad, rot, filter, auto, thumbUrl}
+let nextId=1, editing=null, pdfCache=null, saved=false;
+const pageList=$('pages');
+
+function invalidate(){pdfCache=null;}
+const fmtSize=b=>b>=1024*1024?t('mb',{n:Tools.fmt(b/1048576,1)}):t('kb',{n:Tools.fmt(Math.max(1,b/1024),0)});
+
+async function updateThumb(p){
+  const c=renderPage(p.preview,p,THUMB_MAX);
+  const url=URL.createObjectURL(await toBlob(c,'image/jpeg',0.8));
+  if(p.thumbUrl) URL.revokeObjectURL(p.thumbUrl);
+  p.thumbUrl=url;
+  const img=pageList.querySelector(`li[data-id="${p.id}"] img`);
+  if(img) img.src=url;
+}
+
+function render(){
+  $('pageCount').textContent=pages.length;
+  $('empty').hidden=pages.length>0;
+  $('btnPdf').disabled=$('btnShare').disabled=!pages.length;
+  pageList.textContent='';
+  pages.forEach((p,i)=>{
+    const n=i+1, li=document.createElement('li');
+    li.dataset.id=p.id;
+    li.innerHTML=`<button type="button" class="thumb" data-act="edit"><img alt=""><span class="num" aria-hidden="true">${n}</span><span class="sr-only"></span></button>
+      <div class="pbtns">
+        <button type="button" class="btn" data-act="up"><span aria-hidden="true">←</span><span class="sr-only"></span></button>
+        <button type="button" class="btn" data-act="down"><span aria-hidden="true">→</span><span class="sr-only"></span></button>
+        <button type="button" class="btn danger" data-act="del"><span aria-hidden="true">✕</span><span class="sr-only"></span></button>
+      </div>`;
+    const sr=li.querySelectorAll('.sr-only');
+    sr[0].textContent=t('page.edit',{n}); sr[1].textContent=t('page.earlier',{n}); sr[2].textContent=t('page.later',{n}); sr[3].textContent=t('page.delete',{n});
+    li.querySelector('[data-act="up"]').disabled=i===0;
+    li.querySelector('[data-act="down"]').disabled=i===pages.length-1;
+    if(p.thumbUrl) li.querySelector('img').src=p.thumbUrl;
+    pageList.append(li);
+  });
+}
+
+pageList.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-act]'); if(!b) return;
+  const id=Number(b.closest('li').dataset.id), i=pages.findIndex(p=>p.id===id);
+  if(i<0) return;
+  const act=b.dataset.act;
+  if(act==='edit') openEditor(pages[i]);
+  else if(act==='up'||act==='down'){
+    const j=act==='up'?i-1:i+1;
+    movePage(i,j);
+    const again=pageList.querySelector(`li[data-id="${id}"] [data-act="${act}"]`);
+    (again&&!again.disabled?again:pageList.querySelector(`li[data-id="${id}"] .thumb`)).focus();
+  }else if(act==='del'){
+    if(confirm(t('confirm.delete',{n:i+1}))) deletePage(i);
+  }
+});
+
+function movePage(from,to){
+  if(to<0||to>=pages.length||from===to) return;
+  const [p]=pages.splice(from,1); pages.splice(to,0,p);
+  invalidate(); render();
+  Tools.diag.log('move page',{from:from+1,to:to+1});
+}
+function deletePage(i){
+  const [p]=pages.splice(i,1);
+  if(p.thumbUrl) URL.revokeObjectURL(p.thumbUrl);
+  invalidate(); render();
+  Tools.diag.log('delete page',{left:pages.length});
+}
+
+/* ---------- Adding photos ---------- */
+async function addFiles(files,openAfter){
+  files=[...files]; if(!files.length) return;
+  const info=$('addInfo'); let added=0, unsure=0, last=null;
+  for(let i=0;i<files.length;i++){
+    const f=files[i];
+    info.textContent=t('add.loading',{i:i+1,n:files.length});
+    try{
+      const img=await loadImage(f);
+      const preview=scaledCopy(img,PREVIEW_MAX);
+      let quad=null;
+      try{quad=detectQuad(preview);}catch(e){Tools.diag.log('detect failed',e);}
+      if(!quad) unsure++;
+      const p={id:nextId++,file:f,preview,quad:quad||FULL(),auto:quad,rot:0,filter:settings.filter,thumbUrl:null};
+      pages.push(p); added++; last=p;
+      Tools.diag.log('page added',{w:img.naturalWidth,h:img.naturalHeight,type:f.type||'?',bytes:f.size,corners:quad?'auto':'none'});
+      render(); await updateThumb(p);
+    }catch(e){
+      Tools.diag.log('add failed',{type:f.type||'?',bytes:f.size},e);
+      Tools.toast(t('add.fail',{name:f.name||'?'}),4000);
+    }
+  }
+  invalidate();
+  info.textContent=added?t('add.done',{n:added})+(unsure?' '+t('add.noCorners'):''):'';
+  if(openAfter&&last) openEditor(last);
+}
+$('btnCamera').addEventListener('click',()=>{$('inCamera').value='';$('inCamera').click();});
+$('btnPick').addEventListener('click',()=>{$('inPick').value='';$('inPick').click();});
+$('inCamera').addEventListener('change',e=>addFiles(e.target.files,true));
+$('inPick').addEventListener('change',e=>addFiles(e.target.files,false));
+
+/* ---------- Filters ---------- */
+function setRadio(name,value){const r=document.querySelector(`input[name="${name}"][value="${value}"]`);if(r)r.checked=true;}
+async function setFilterAll(f){
+  settings.filter=f; saveSettings(); setRadio('filterAll',f);
+  pages.forEach(p=>p.filter=f); invalidate();
+  for(const p of pages) await updateThumb(p);
+}
+$('filterAll').addEventListener('change',e=>{setFilterAll(e.target.value);Tools.diag.log('filter all',e.target.value);});
+
+/* ---------- Corner editor ---------- */
+const dlg=$('editor'), stage=$('stage'), edCanvas=$('edCanvas'), loupe=$('loupe'), handles=[...stage.querySelectorAll('.handle')];
+function layoutStage(){
+  const p=editing; if(!p) return;
+  const iw=p.preview.width, ih=p.preview.height;
+  // Fit into the space between the title and the buttons
+  const maxW=Math.min(dlg.clientWidth-24,900), maxH=Math.max(200,window.innerHeight-(window.innerWidth<=640?330:300));
+  const s=Math.min(maxW/iw,maxH/ih);
+  stage.style.width=Math.round(iw*s)+'px'; stage.style.height=Math.round(ih*s)+'px';
+}
+function drawQuad(){
+  const q=editing.quad;
+  $('edPoly').setAttribute('points',q.map(p=>`${p.x},${p.y}`).join(' '));
+  handles.forEach((h,i)=>{h.style.left=(q[i].x*100)+'%';h.style.top=(q[i].y*100)+'%';});
+}
+function openEditor(p){
+  editing=p;
+  const i=pages.indexOf(p);
+  $('edTitle').textContent=t('ed.title',{n:i+1,total:pages.length});
+  edCanvas.width=p.preview.width; edCanvas.height=p.preview.height;
+  edCanvas.getContext('2d').drawImage(p.preview,0,0);
+  setRadio('filterPage',p.filter);
+  $('edAuto').disabled=!p.auto;
+  if(!dlg.open) dlg.showModal();
+  layoutStage(); drawQuad();
+}
+async function closeEditor(){
+  const p=editing; if(!p) return;
+  editing=null; if(dlg.open) dlg.close();
+  invalidate();
+  if(pages.includes(p)) await updateThumb(p);
+}
+dlg.addEventListener('cancel',e=>{e.preventDefault();closeEditor();});
+window.addEventListener('resize',()=>{if(editing)layoutStage();});
+$('edDone').addEventListener('click',closeEditor);
+$('edDelete').addEventListener('click',()=>{
+  const p=editing, i=pages.indexOf(p);
+  if(!confirm(t('confirm.delete',{n:i+1}))) return;
+  editing=null; dlg.close(); deletePage(i);
+});
+$('edAuto').addEventListener('click',()=>{if(editing.auto){editing.quad=editing.auto.map(p=>({...p}));drawQuad();}});
+$('edFull').addEventListener('click',()=>{editing.quad=FULL();drawQuad();});
+const rotate=(p,dir)=>{p.rot=(p.rot+(dir>0?90:270))%360;invalidate();};
+$('edRotL').addEventListener('click',()=>{rotate(editing,-1);Tools.toast('↺ '+editing.rot+'°',1200);});
+$('edRotR').addEventListener('click',()=>{rotate(editing,1);Tools.toast('↻ '+editing.rot+'°',1200);});
+$('filterPage').addEventListener('change',e=>{editing.filter=e.target.value;invalidate();});
+
+function showLoupe(i){
+  const q=editing.quad[i], src=editing.preview, Z=3, R=60;
+  loupe.hidden=false;
+  // On the side away from the finger
+  loupe.style.left=q.x<0.5?'auto':'8px'; loupe.style.right=q.x<0.5?'8px':'auto';
+  const g=loupe.getContext('2d'), sx=q.x*src.width, sy=q.y*src.height, scale=edCanvas.getBoundingClientRect().width/src.width;
+  const half=R/(Z*scale);
+  g.fillStyle='#000'; g.fillRect(0,0,120,120);
+  g.drawImage(src,sx-half,sy-half,half*2,half*2,0,0,120,120);
+  g.strokeStyle='#f59e0b'; g.lineWidth=1.5;
+  g.beginPath(); g.moveTo(60,48); g.lineTo(60,72); g.moveTo(48,60); g.lineTo(72,60); g.stroke();
+}
+let drag=null;
+handles.forEach((h,i)=>{
+  h.addEventListener('pointerdown',e=>{
+    e.preventDefault(); h.setPointerCapture(e.pointerId); h.classList.add('active');
+    const r=stage.getBoundingClientRect(), q=editing.quad[i];
+    // Keep the offset between finger and point so the point does not jump
+    drag={i,id:e.pointerId,dx:q.x*r.width-(e.clientX-r.left),dy:q.y*r.height-(e.clientY-r.top)};
+    showLoupe(i);
+  });
+  h.addEventListener('pointermove',e=>{
+    if(!drag||drag.id!==e.pointerId) return;
+    const r=stage.getBoundingClientRect();
+    editing.quad[i]={x:Math.min(1,Math.max(0,(e.clientX-r.left+drag.dx)/r.width)),y:Math.min(1,Math.max(0,(e.clientY-r.top+drag.dy)/r.height))};
+    drawQuad(); showLoupe(i);
+  });
+  const end=e=>{if(!drag||drag.id!==e.pointerId)return;drag=null;h.classList.remove('active');loupe.hidden=true;};
+  h.addEventListener('pointerup',end); h.addEventListener('pointercancel',end);
+  h.addEventListener('keydown',e=>{
+    const step=e.shiftKey?0.02:0.004, mv={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+    if(!mv) return;
+    e.preventDefault();
+    const q=editing.quad[i];
+    editing.quad[i]={x:Math.min(1,Math.max(0,q.x+mv[0]*step)),y:Math.min(1,Math.max(0,q.y+mv[1]*step))};
+    drawQuad();
+  });
+});
+
+/* ---------- Export ---------- */
+const fileNameInput=$('fileName');
+const today=()=>{const d=new Date(),z=x=>String(x).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;};
+fileNameInput.value='Scan '+today();
+function fileName(){
+  const base=(fileNameInput.value||'').replace(/\.pdf$/i,'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'-').trim()||('Scan '+today());
+  return base+'.pdf';
+}
+const status=(msg,err)=>{$('status').textContent=msg;$('status').className='muted'+(err?' err':'');};
+let busy=false;
+async function makePdf(){
+  if(pdfCache&&pdfCache.name===fileName()) return pdfCache;
+  const dpi=settings.dpi, out=[];
+  const t0=performance.now();
+  for(let i=0;i<pages.length;i++){
+    status(t('export.busy',{i:i+1,n:pages.length}));
+    await new Promise(r=>setTimeout(r,0));
+    const p=pages[i];
+    const img=await loadImage(p.file);
+    // Full resolution, but not more than needed (and not more than iOS allows)
+    const longPx=Math.round(11.69*dpi);
+    const src=scaledCopy(img,Math.max(longPx*1.6,1),SRC_MAX_PIXELS);
+    const c=renderPage(src,p,longPx);
+    const jpeg=new Uint8Array(await (await toBlob(c,'image/jpeg',0.82)).arrayBuffer());
+    out.push(Object.assign({jpeg,w:c.width,h:c.height},placement(c.width,c.height,settings.size,dpi)));
+    src.width=src.height=c.width=c.height=0;
+  }
+  const blob=buildPdf(out,fileName().replace(/\.pdf$/,''));
+  const file=new File([blob],fileName(),{type:'application/pdf'});
+  Tools.diag.log('pdf built',{pages:out.length,bytes:file.size,dpi,size:settings.size,ms:Math.round(performance.now()-t0)});
+  pdfCache=file;
+  return file;
+}
+async function run(fn){
+  if(busy) return; busy=true;
+  $('btnPdf').disabled=$('btnShare').disabled=true;
+  try{await fn();}
+  catch(e){Tools.diag.log('export failed',e);status(t('export.fail',{msg:e.message||String(e)}),true);}
+  finally{busy=false;$('btnPdf').disabled=$('btnShare').disabled=!pages.length;}
+}
+$('btnPdf').addEventListener('click',()=>run(async()=>{
+  const file=await makePdf();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(file); a.download=file.name;
+  document.body.append(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  saved=true;
+  status(t('export.done',{n:pages.length,size:fmtSize(file.size)}));
+}));
+const canShareFiles=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File([''],'x.pdf',{type:'application/pdf'})]}));}catch(_){return false;}})();
+$('btnShare').hidden=!canShareFiles;
+$('btnShare').addEventListener('click',()=>run(async()=>{
+  const ready=!!pdfCache&&pdfCache.name===fileName();
+  const file=await makePdf();
+  try{
+    await navigator.share({files:[file],title:file.name});
+    saved=true;
+    status(t('export.shared',{n:pages.length,size:fmtSize(file.size)}));
+  }catch(e){
+    Tools.diag.log('share',e);
+    if(e.name==='AbortError') status('');
+    // Building took too long for the browser's "user tapped" window – the second tap shares the ready file
+    else if(e.name==='NotAllowedError'&&!ready) status(t('export.shareAgain'));
+    else status(t('export.shareFail'),true);
+  }
+}));
+
+/* ---------- Settings ---------- */
+const sizeSel=$('pageSize'), qSel=$('quality');
+sizeSel.value=settings.size; if(!sizeSel.value){sizeSel.value='a4';settings.size='a4';}
+qSel.value=String(settings.dpi); if(!qSel.value){qSel.value='200';settings.dpi=200;}
+sizeSel.addEventListener('change',()=>{settings.size=sizeSel.value;saveSettings();invalidate();});
+qSel.addEventListener('change',()=>{settings.dpi=Number(qSel.value);saveSettings();invalidate();});
+setRadio('filterAll',settings.filter);
+
+// Pages live only in memory – warn before they get lost
+window.addEventListener('beforeunload',e=>{if(pages.length&&!saved){e.preventDefault();e.returnValue=t('leave');}});
+const markChanged=()=>{saved=false;};
+['click','change'].forEach(ev=>document.querySelector('main').addEventListener(ev,e=>{if(!e.target.closest('.export'))markChanged();}));
+dlg.addEventListener('close',markChanged);
+
+Tools.onLang(()=>{render();if(editing)$('edTitle').textContent=t('ed.title',{n:pages.indexOf(editing)+1,total:pages.length});});
+render();
+
+/* ---------- Diagnostics ---------- */
+Tools.diag.info(()=>({
+  pages:pages.length,
+  filters:pages.map(p=>p.filter).join(',')||'-',
+  autoCorners:pages.filter(p=>p.auto).length,
+  settings:{filter:settings.filter,size:settings.size,dpi:settings.dpi},
+  canShareFiles,
+  pdfReady:!!pdfCache
+}));
+
+/* ---------- WebMCP tools ---------- */
+Tools.mcp.register({
+  name:'list_pages',title:'List scanned pages',readOnly:true,
+  description:'Lists the scanned pages in PDF order with their filter (color, gray, bw, original) and rotation in degrees, plus the PDF settings (page size, dpi, default filter). Returns no image data.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({count:pages.length,pages:pages.map((p,i)=>({page:i+1,filter:p.filter,rotation:p.rot,corners_found_automatically:!!p.auto})),
+    settings:{default_filter:settings.filter,page_size:settings.size,dpi:settings.dpi}})
+});
+const needPage=n=>{if(n>pages.length) throw new Error(pages.length?`page must be between 1 and ${pages.length}`:'there are no pages yet');return pages[n-1];};
+Tools.mcp.register({
+  name:'set_filter',title:'Set image filter',label:'mcp.filter',
+  description:'Sets the image filter of one page, or of all pages (and new pages) when page is omitted. color = white paper with shadows removed, gray = the same in greyscale, bw = black and white only, original = cropped only. Returns the updated page list.',
+  inputSchema:{type:'object',properties:{filter:{type:'string',enum:FILTERS},page:{type:'integer',minimum:1,maximum:500}},required:['filter'],additionalProperties:false},
+  execute:async({filter,page})=>{
+    if(page==null) await setFilterAll(filter);
+    else{const p=needPage(page);p.filter=filter;invalidate();await updateThumb(p);}
+    return {pages:pages.map((p,i)=>({page:i+1,filter:p.filter,rotation:p.rot}))};
+  }
+});
+Tools.mcp.register({
+  name:'move_page',title:'Move a page',label:'mcp.move',
+  description:'Moves a page to another position in the PDF (1 = first page). The other pages shift accordingly. Returns the new order as the former page numbers.',
+  inputSchema:{type:'object',properties:{from:{type:'integer',minimum:1,maximum:500},to:{type:'integer',minimum:1,maximum:500}},required:['from','to'],additionalProperties:false},
+  execute:({from,to})=>{
+    needPage(from); needPage(to);
+    const before=pages.slice();
+    movePage(from-1,to-1);
+    return {order:pages.map(p=>before.indexOf(p)+1),count:pages.length};
+  }
+});
+Tools.mcp.register({
+  name:'rotate_page',title:'Rotate a page',label:'mcp.rotate',
+  description:'Rotates one page by 90 degrees to the left or right (for pages photographed sideways). Returns the new rotation of the page in degrees (0, 90, 180 or 270, clockwise).',
+  inputSchema:{type:'object',properties:{page:{type:'integer',minimum:1,maximum:500},direction:{type:'string',enum:['left','right']}},required:['page','direction'],additionalProperties:false},
+  execute:async({page,direction})=>{
+    const p=needPage(page); rotate(p,direction==='right'?1:-1); await updateThumb(p);
+    return {page,rotation:p.rot};
+  }
+});
+})();
+</script>
+</body>
+</html>

@@ -12,6 +12,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 |---|---|---|
 | [Brau-Rechner](https://phanlipo.github.io/brew-calculator/) | `brew-calculator/` | Rechner fürs Hobbybrauen: Volumen im zylindrischen Topf, Temperaturkorrektur der Stammwürze (Spindel) und Zuckermenge für die Nachgärung – jeweils mit Formeln und Erklärung. |
 | [Countdown – wie lange noch?](https://phanlipo.github.io/countdown/) | `countdown/` | Tage, Stunden, Minuten oder Sekunden bis zu einem Datum mit Uhrzeit – live ab jetzt oder ab einem eigenen Startdatum. |
+| [Dokumentenscanner](https://phanlipo.github.io/doc-scanner/) | `doc-scanner/` | Dokumente mit der Kamera oder aus Fotos scannen: Ecken zuschneiden, Seiten sortieren, Schatten entfernen, als PDF speichern. |
 | [Erinnerungen](https://phanlipo.github.io/reminders/) | `reminders/` | Eigene Erinnerungen mit Zeitpunkt und Text – zur Zeit kommt eine Benachrichtigung, im Verlauf lassen sie sich anpassen. |
 | [Handy-Sensoren](https://phanlipo.github.io/sensors/) | `sensors/` | Kompass, Wasserwaage, Beschleunigung, Vibrometer, Schallpegel, Stimmgerät, Tacho, Schrittzähler, Tongenerator, Taschenlampe mit Morse, Puls und Klatsch-Stoppuhr – mit den Sensoren des Handys. |
 | [KI-Chat](https://phanlipo.github.io/ai-chat/) | `ai-chat/` | Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht. |
