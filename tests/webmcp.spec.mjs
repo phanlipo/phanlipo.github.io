@@ -749,3 +749,39 @@ test.describe('data-logger tools', () => {
     expect((await call(page, 'data_logger_get_data', { measurement: 'Puls' })).error).toMatch(/Unknown measurement/);
   });
 });
+
+test.describe('whoopee-cushion tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/whoopee-cushion/'));
+
+  test('play_sound plays the chosen sound, counts it and shows it in the app', async ({ page }) => {
+    const { ok, result } = await call(page, 'whoopee_cushion_play_sound', { sound: 'thunder' });
+    expect(ok).toBe(true);
+    expect(result).toMatchObject({ sound: 'thunder', total: 1 });
+    expect(result.duration_ms).toBeGreaterThanOrEqual(1000);
+    expect(result.duration_ms).toBeLessThanOrEqual(1600);
+    // Depends on the browser's autoplay rule (headless Chromium allows sound without a tap)
+    expect(typeof result.audible).toBe('boolean');
+    await expect(page.locator('#count')).toHaveText('1');
+    await expect(page.locator('#cushion')).toHaveAttribute('data-sound', 'thunder');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: gepupst');
+    const random = (await call(page, 'whoopee_cushion_play_sound', {})).result;
+    expect(['short', 'long', 'wet', 'squeaky', 'thunder', 'stutter']).toContain(random.sound);
+  });
+
+  test('get_stats counts per sound and reports the settings', async ({ page }) => {
+    await page.click('#sounds [data-s="wet"]');
+    await page.click('#cushion');
+    await page.click('#cushion');
+    await call(page, 'whoopee_cushion_play_sound', { sound: 'short' });
+    const { result } = await call(page, 'whoopee_cushion_get_stats', {});
+    expect(result).toEqual({
+      total: 3, per_sound: { short: 1, long: 0, wet: 2, squeaky: 0, thunder: 0, stutter: 0 },
+      settings: { sound: 'wet', time_fuse_seconds: 0, vibration: true },
+    });
+  });
+
+  test('invalid sound is rejected and nothing is counted', async ({ page }) => {
+    expect((await call(page, 'whoopee_cushion_play_sound', { sound: 'burp' })).ok).toBe(false);
+    await expect(page.locator('#count')).toHaveText('0');
+  });
+});

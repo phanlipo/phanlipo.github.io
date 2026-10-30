@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Furzkissen</title>
+<meta name="description" content="Drauftippen und pupsen lassen – sieben Geräusche, Zeitzünder für Streiche und Vibration.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="wind">
+<meta name="tool:color" content="#9d174d">
+<meta name="tool:short-name" content="Furzkissen">
+<meta name="tool:title-en" content="Whoopee Cushion">
+<meta name="tool:description-en" content="Tap it and let it rip – seven sounds, a time fuse for pranks and vibration.">
+<meta name="tool:short-name-en" content="Whoopee">
+<meta name="tool:storage" content="whoopee-cushion.">
+<meta name="tool:webmcp" content="play_sound, get_stats">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gVV45QmEppLjjjKj5zbDp718lYO4dc6uyWmshwK5VoQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Furzkissen">
+<meta name="theme-color" content="#9d174d">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#9d174d;--accent-text:#ffffff;--page-width:640px}
+@media (prefers-color-scheme: dark){:root{--accent:#f472b6;--accent-text:#2a0614}}
+main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;gap:12px}
+
+/* ---------- Cushion ---------- */
+.stage{position:relative;display:grid;place-items:center;padding-block:8px 4px}
+.cushion{position:relative;width:min(78vw,300px);aspect-ratio:1;border:0;border-radius:50%;background:none;padding:0;cursor:pointer;color:var(--text);-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.cushion:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+.cushion svg{width:100%;height:100%;display:block;overflow:visible}
+.cushion .body{fill:var(--accent)}
+.cushion .shine{fill:#fff;opacity:.22}
+.cushion .neck{fill:var(--accent);filter:brightness(.85)}
+.cushion .label{position:absolute;inset:0;display:grid;place-items:center;font-size:22px;font-weight:700;color:var(--accent-text);pointer-events:none;padding-block-start:14%}
+.cushion.squish svg{animation:squish .45s ease-out}
+@keyframes squish{0%{transform:scale(1)}25%{transform:scale(1.12,.78)}55%{transform:scale(.94,1.06)}100%{transform:scale(1)}}
+.cushion[aria-disabled="true"]{cursor:default}
+.cushion[aria-disabled="true"] .label{opacity:.9}
+.puff{position:absolute;inset-inline-start:50%;top:2%;font-size:44px;pointer-events:none;opacity:0}
+.puff.go{animation:puff .9s ease-out}
+@keyframes puff{0%{opacity:0;transform:translate(-50%,10px) scale(.6)}25%{opacity:1}100%{opacity:0;transform:translate(-50%,-70px) scale(1.5)}}
+@media (prefers-reduced-motion:reduce){.cushion.squish svg,.puff.go{animation:none}}
+.status{text-align:center;min-height:28px;margin:4px 0 0;font-weight:600}
+.status.armed{color:var(--err)}
+.count{text-align:center;color:var(--muted);margin:0}
+.count b{color:var(--text);font-variant-numeric:tabular-nums}
+
+/* ---------- Choices ---------- */
+.sounds{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px}
+.sounds button{min-height:64px;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-weight:600;padding:4px;line-height:1.2}
+.sounds button .e{font-size:26px;line-height:1.2}
+.sounds button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.seg button{min-height:48px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;padding:4px 6px}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:700}
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-child{margin-top:0}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.btn.grow{flex:1 1 auto}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Furzkissen</span></h1>
+  <p class="sub" data-i18n="sub">Drauftippen und pupsen lassen</p>
+</header>
+
+<main>
+  <section class="card" aria-label="Furzkissen" data-i18n-attr="aria-label:title">
+    <div class="stage">
+      <button type="button" class="cushion" id="cushion" aria-describedby="status">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <rect class="neck" x="86" y="2" width="28" height="44" rx="8"/>
+          <ellipse class="body" cx="100" cy="116" rx="92" ry="80"/>
+          <ellipse class="shine" cx="66" cy="84" rx="30" ry="16" transform="rotate(-25 66 84)"/>
+        </svg>
+        <span class="label" id="cushionLabel" data-i18n="press">Draufdrücken!</span>
+      </button>
+      <span class="puff" id="puff" aria-hidden="true">💨</span>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="row" id="armedRow" hidden>
+      <button type="button" class="btn grow" id="btnCancel" data-i18n="cancel">Zeitzünder abbrechen</button>
+    </div>
+    <p class="count"><span data-i18n="countLabel">Gepupst:</span> <b id="count">0</b>×</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings">
+    <h2 id="h-settings" class="sr-only" data-i18n="settings">Einstellungen</h2>
+    <h3 id="h-sound" data-i18n="sound">Geräusch</h3>
+    <div class="sounds" id="sounds" role="group" aria-labelledby="h-sound"></div>
+    <h3 id="h-delay" data-i18n="delay">Zeitzünder</h3>
+    <div class="seg" id="delays" role="group" aria-labelledby="h-delay">
+      <button type="button" data-d="0" data-i18n="now">Sofort</button>
+      <button type="button" data-d="3">3 s</button>
+      <button type="button" data-d="10">10 s</button>
+      <button type="button" data-d="30">30 s</button>
+    </div>
+    <label class="check" style="margin-top:8px"><input type="checkbox" id="optVibrate"> <span data-i18n="vibrate">Vibration (Handy)</span></label>
+    <div class="row" style="margin-top:8px">
+      <button type="button" class="btn grow" id="btnReset" data-i18n="reset">Zähler zurücksetzen</button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Furzkissen für die Hosentasche: aufs Kissen tippen – es pupst.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Geräusch</b> wählen: Kurz, Lang, Nass, Quietscher, Donner, Stotterer – oder <b>Zufall</b>. Jeder Pups klingt ein bisschen anders.</li>
+    <li><b>Zeitzünder</b> für Streiche: 3, 10 oder 30 Sekunden einstellen, aufs Kissen tippen, Handy unauffällig hinlegen. Mit <i>Zeitzünder abbrechen</i> lässt er sich stoppen.</li>
+    <li><b>Vibration</b> rüttelt das Handy passend zum Geräusch (nur Android; iPhone kann das im Browser nicht).</li>
+  </ul>
+  <h3>Kein Ton?</h3>
+  <ul>
+    <li>Lautstärke aufdrehen. Auf dem iPhone den <b>Stummschalter</b> ausschalten – sonst bleibt der Browser still.</li>
+    <li>Beim Zeitzünder den Bildschirm anlassen: Ist das Handy gesperrt, läuft der Zünder nicht weiter.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Die Geräusche sind keine Aufnahmen, sondern werden bei jedem Tippen im Browser berechnet. Alles funktioniert offline.</li>
+    <li>Gespeichert werden nur deine Einstellungen und der Zähler – in diesem Browser.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann das Kissen pupsen lassen und den Zähler lesen (WebMCP). Jeder Aufruf erscheint hier als Hinweis. Ton gibt es erst, wenn du einmal selbst getippt hast.</li>
+    <li>Bitte nur Streiche, über die alle lachen können. 😉</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A whoopee cushion for your pocket: tap the cushion – it farts.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Pick a <b>sound</b>: short, long, wet, squeaker, thunder, stutter – or <b>random</b>. Every fart sounds a little different.</li>
+    <li><b>Time fuse</b> for pranks: set 3, 10 or 30 seconds, tap the cushion, put the phone down inconspicuously. <i>Cancel time fuse</i> stops it.</li>
+    <li><b>Vibration</b> shakes the phone along with the sound (Android only; iPhone cannot do this in the browser).</li>
+  </ul>
+  <h3>No sound?</h3>
+  <ul>
+    <li>Turn up the volume. On iPhone switch off the <b>silent switch</b> – otherwise the browser stays quiet.</li>
+    <li>Keep the screen on while the time fuse runs: if the phone locks, the fuse stops.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>The sounds are not recordings – they are computed in the browser on every tap. Everything works offline.</li>
+    <li>Only your settings and the counter are stored – in this browser.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can make the cushion fart and read the counter (WebMCP). Each call shows a note here. There is only sound once you have tapped yourself.</li>
+    <li>Please only play pranks everyone can laugh about. 😉</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 7d4e0d3049cf</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  's.random':'Zufall','s.short':'Kurz','s.long':'Lang','s.wet':'Nass','s.squeaky':'Quietscher','s.thunder':'Donner','s.stutter':'Stotterer',
+  armed:'💣 Pupst in {n} s – Handy hinlegen!',played:'💨 {s}!',cancelled:'Zeitzünder abgebrochen',
+  noAudio:'Dieser Browser kann keine Töne erzeugen.',confirmReset:'Zähler auf 0 zurücksetzen?',
+  'mcp.play':'gepupst','mcp.stats':'Zähler gelesen'
+},
+en:{
+  title:'Whoopee Cushion',sub:'Tap it and let it rip',press:'Press me!',cancel:'Cancel time fuse',countLabel:'Farts:',
+  settings:'Settings',sound:'Sound',delay:'Time fuse',now:'Now',vibrate:'Vibration (phone)',reset:'Reset counter',
+  's.random':'Random','s.short':'Short','s.long':'Long','s.wet':'Wet','s.squeaky':'Squeaker','s.thunder':'Thunder','s.stutter':'Stutter',
+  armed:'💣 Farts in {n} s – put the phone down!',played:'💨 {s}!',cancelled:'Time fuse cancelled',
+  noAudio:'This browser cannot play generated sounds.',confirmReset:'Reset the counter to 0?',
+  'mcp.play':'farted','mcp.stats':'counter read'
+}});
+const {$,t}=Tools;
+const LS='whoopee-cushion.state.v1';
+const SOUNDS=['random','short','long','wet','squeaky','thunder','stutter'];
+const KINDS=SOUNDS.slice(1);
+const EMOJI={random:'🎲',short:'💨',long:'🎺',wet:'💦',squeaky:'🐭',thunder:'⛈️',stutter:'🥁'};
+const DELAYS=[0,3,10,30];
+
+const state=Tools.load(LS,{sound:'random',delay:0,vibrate:true,total:0,counts:{}});
+if(!SOUNDS.includes(state.sound))state.sound='random';
+if(!DELAYS.includes(state.delay))state.delay=0;
+if(typeof state.vibrate!=='boolean')state.vibrate=true;
+if(!(Number.isInteger(state.total)&&state.total>=0))state.total=0;
+if(!state.counts||typeof state.counts!=='object')state.counts={};
+const save=()=>Tools.save(LS,state);
+
+/* ---------- Sound synthesis ----------
+   A fart is a low "flapping" pulse train: short open pulses at 40–500 Hz whose pitch wanders,
+   filtered (two one-pole low-passes), with noise for wetness and an amplitude envelope. */
+const rr=(a,b)=>a+Math.random()*(b-a);
+function voice(out,sr,start,dur,o){
+  const s0=Math.floor(start*sr),n=Math.min(Math.floor(dur*sr),out.length-s0);
+  const a=1-Math.exp(-2*Math.PI*o.cut/sr);
+  const step=Math.max(1,Math.floor(sr/40));
+  let ph=0,l1=0,l2=0,wob=0,wobT=0,gate=1,gateT=1;
+  for(let i=0;i<n;i++){
+    const x01=i/n;
+    if(i%step===0){wobT=(Math.random()*2-1)*o.wobble;gateT=o.bubble&&Math.random()<o.bubble?rr(.05,.35):1;}
+    wob+=(wobT-wob)*.003;gate+=(gateT-gate)*.01;
+    const f=Math.max(20,(o.f0+(o.f1-o.f0)*x01)*(1+wob));
+    ph+=f/sr;if(ph>=1)ph-=1;
+    const open=ph<o.duty;
+    let x=open?Math.sin(Math.PI*ph/o.duty):-.3*Math.sin(Math.PI*(ph-o.duty)/(1-o.duty));
+    x+=(Math.random()*2-1)*o.noise*(open?1:.35);
+    l1+=a*(x-l1);l2+=a*(l1-l2);
+    const env=Math.min(1,i/(.012*sr))*Math.min(1,(n-i)/(.04*sr))*(1-o.fade*x01);
+    out[s0+i]+=l2*env*gate;
+  }
+}
+const PRESETS={
+  short:()=>{const d=rr(.25,.45),f=rr(110,150);return {dur:d,parts:[[0,d,{f0:f,f1:f*.8,duty:.35,wobble:.15,noise:.15,cut:900,fade:.3}]],drive:2,peak:.85};},
+  long:()=>{const d=rr(1.4,2.4);return {dur:d,parts:[[0,d,{f0:rr(95,120),f1:rr(55,70),duty:.4,wobble:.25,noise:.1,cut:800,fade:.4}]],drive:2,peak:.85};},
+  wet:()=>{const d=rr(.6,1);return {dur:d,parts:[[0,d,{f0:rr(70,100),f1:rr(55,75),duty:.45,wobble:.5,noise:.8,cut:1400,fade:.2,bubble:.35}]],drive:1.5,peak:.8};},
+  squeaky:()=>{const d=rr(.5,1),f=rr(260,340);return {dur:d,parts:[[0,d,{f0:f,f1:f*rr(1.3,1.6),duty:.25,wobble:.12,noise:.05,cut:2500,fade:.2}]],drive:1.2,peak:.6};},
+  thunder:()=>{const d=rr(1,1.6);return {dur:d,parts:[[0,d,{f0:rr(48,60),f1:rr(38,48),duty:.5,wobble:.3,noise:.3,cut:500,fade:.5}]],drive:4,peak:.95};},
+  stutter:()=>{
+    const parts=[],k=4+Math.floor(Math.random()*4);let at=0;
+    for(let i=0;i<k;i++){const d=rr(.08,.18),f=rr(90,160);parts.push([at,d,{f0:f,f1:f*rr(.8,1.1),duty:.35,wobble:.15,noise:.2,cut:1000,fade:.2}]);at+=d+rr(.05,.12);}
+    return {dur:at,parts,drive:2,peak:.85};
+  }
+};
+// Returns { data, duration (s), peak } – samples in [-1, 1]
+function synth(kind,sr){
+  const p=PRESETS[kind]();
+  const data=new Float32Array(Math.ceil(p.dur*sr)+1);
+  for(const [at,d,o] of p.parts)voice(data,sr,at,d,o);
+  let m=0;for(let i=0;i<data.length;i++){const v=Math.tanh(data[i]*p.drive*8);data[i]=v;if(Math.abs(v)>m)m=Math.abs(v);}
+  const g=m>0?p.peak/m:0;let peak=0;
+  for(let i=0;i<data.length;i++){data[i]*=g;if(!Number.isFinite(data[i]))data[i]=0;peak=Math.max(peak,Math.abs(data[i]));}
+  return {data,duration:p.dur,peak};
+}
+
+let ac=null;
+function audio(){
+  if(ac)return ac;
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(!C){Tools.diag.log('no AudioContext');return null;}
+  try{ac=new C();Tools.diag.log('audio context created',{state:ac.state,rate:ac.sampleRate});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});ac=null;}
+  return ac;
+}
+// Called in a user gesture: browsers only allow sound after one (iPhone: also for the time fuse)
+function unlock(){const c=audio();if(c&&c.state!=='running')c.resume().then(()=>Tools.diag.log('audio resumed',{state:c.state}),e=>Tools.diag.log('audio resume failed',{error:String(e)}));}
+
+/* ---------- Playing ---------- */
+const cushion=$('cushion'),puff=$('puff'),status=$('status');
+let lastKind=null;
+function fart(sound){
+  const kind=sound==='random'?KINDS[Math.floor(Math.random()*KINDS.length)]:sound;
+  const c=audio();
+  const s=synth(kind,c?c.sampleRate:44100);
+  let audible=false;
+  if(c){
+    try{
+      const buf=c.createBuffer(1,s.data.length,c.sampleRate);
+      buf.getChannelData(0).set(s.data);
+      const src=c.createBufferSource();src.buffer=buf;src.connect(c.destination);src.start();
+      audible=c.state==='running';
+    }catch(e){Tools.diag.log('play failed',{error:String(e)});}
+  }
+  if(state.vibrate&&navigator.vibrate)try{navigator.vibrate(Math.round(Math.min(s.duration,2)*1000));}catch(_){}
+  state.total++;state.counts[kind]=(state.counts[kind]||0)+1;save();
+  lastKind=kind;
+  const ms=Math.round(s.duration*1000);
+  cushion.dataset.sound=kind;cushion.dataset.duration=String(ms);cushion.dataset.peak=s.peak.toFixed(3);
+  for(const el of [cushion,puff]){const cls=el===cushion?'squish':'go';el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls);}
+  status.classList.remove('armed');status.textContent=t('played',{s:t('s.'+kind)});
+  renderCount();
+  Tools.diag.log('fart',{kind,ms,audible,state:c?c.state:'none'});
+  return {kind,ms,audible};
+}
+
+/* ---------- Time fuse ---------- */
+let fuse=null;
+function disarm(){
+  if(!fuse)return;
+  clearInterval(fuse.timer);fuse=null;
+  cushion.removeAttribute('aria-disabled');$('armedRow').hidden=true;status.classList.remove('armed');
+}
+function arm(sec){
+  const end=Date.now()+sec*1000;
+  const tick=()=>{
+    const left=Math.ceil((end-Date.now())/1000);
+    if(left<=0){disarm();fart(state.sound);return;}
+    status.textContent=t('armed',{n:Tools.fmt(left,0)});
+  };
+  fuse={timer:setInterval(tick,200),end};
+  cushion.setAttribute('aria-disabled','true');$('armedRow').hidden=false;status.classList.add('armed');
+  tick();
+  Tools.diag.log('fuse armed',{sec});
+}
+cushion.addEventListener('click',()=>{
+  if(fuse)return;
+  unlock();
+  if(state.delay>0)arm(state.delay);else fart(state.sound);
+});
+$('btnCancel').addEventListener('click',()=>{disarm();status.textContent=t('cancelled');Tools.diag.log('fuse cancelled');});
+
+/* ---------- Settings ---------- */
+function renderSounds(){
+  $('sounds').innerHTML=SOUNDS.map(s=>`<button type="button" data-s="${s}" aria-pressed="${s===state.sound}"><span class="e" aria-hidden="true">${EMOJI[s]}</span><span>${Tools.esc(t('s.'+s))}</span></button>`).join('');
+}
+function renderSettings(){
+  renderSounds();
+  for(const b of document.querySelectorAll('#delays button'))b.setAttribute('aria-pressed',String(Number(b.dataset.d)===state.delay));
+  $('optVibrate').checked=state.vibrate;
+}
+function renderCount(){$('count').textContent=Tools.fmt(state.total,0);}
+$('sounds').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-s]');if(!b)return;
+  state.sound=b.dataset.s;save();renderSounds();
+});
+$('delays').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-d]');if(!b)return;
+  state.delay=Number(b.dataset.d);save();renderSettings();
+});
+$('optVibrate').addEventListener('change',e=>{state.vibrate=e.target.checked;save();});
+$('btnReset').addEventListener('click',()=>{
+  if(!confirm(t('confirmReset')))return;
+  state.total=0;state.counts={};save();renderCount();
+});
+renderSettings();renderCount();
+if(!(window.AudioContext||window.webkitAudioContext))status.textContent=t('noAudio');
+Tools.onLang(()=>{renderSounds();if(lastKind&&!fuse)status.textContent=t('played',{s:t('s.'+lastKind)});});
+Tools.diag.info(()=>({sound:state.sound,delay:state.delay,vibrate:state.vibrate,total:state.total,
+  audio:ac?ac.state:'not created',fuse:fuse?Math.max(0,Math.ceil((fuse.end-Date.now())/1000)):0,canVibrate:!!navigator.vibrate}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+Tools.mcp.register({
+  name:'play_sound',title:'Play a fart sound',label:'mcp.play',
+  description:'Makes the whoopee cushion in the app fart right now and counts it. Browsers only play sound after the user has tapped the page once; audible says whether it could be heard. Returns the sound played, its length in milliseconds, whether it was audible and the new total count.',
+  inputSchema:{type:'object',properties:{
+    sound:{type:'string',enum:SOUNDS,description:'Which sound: short, long, wet, squeaky, thunder, stutter, or random. Default: the sound chosen in the app.'}
+  },additionalProperties:false},
+  execute:({sound})=>{
+    disarm();
+    const r=fart(sound||state.sound);
+    return {sound:r.kind,duration_ms:r.ms,audible:r.audible,total:state.total};
+  }
+});
+Tools.mcp.register({
+  name:'get_stats',title:'Read the counter',label:'mcp.stats',readOnly:true,
+  description:'Reads how often the cushion has farted in total and per sound, plus the settings chosen in the app (sound, time fuse in seconds, vibration).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({total:state.total,per_sound:Object.fromEntries(KINDS.map(k=>[k,state.counts[k]||0])),
+    settings:{sound:state.sound,time_fuse_seconds:state.delay,vibration:state.vibrate}})
+});
+})();
+</script>
+</body>
+</html>
