@@ -326,8 +326,9 @@ test('share target: shared text and link land in the input, ready for an own que
   await expect(page.locator('#toast')).toContainText('Geteilter Text übernommen');
   await page.locator('#input').pressSequentially('Fasse das zusammen');
   await page.click('#btnSend');
-  const gen = (await posted(page)).find(m => m.type === 'generate');
-  expect(gen.messages.at(-1)).toEqual({ role: 'user', content: 'Artikel\nLesenswert: https://example.org/a\n\nFasse das zusammen' });
+  // The page posts to the worker after asking for a wake lock – wait for it
+  await expect.poll(async () => (await posted(page)).find(m => m.type === 'generate')?.messages.at(-1))
+    .toEqual({ role: 'user', content: 'Artikel\nLesenswert: https://example.org/a\n\nFasse das zusammen' });
 });
 
 test('copy chat puts both sides into the clipboard', async ({ page, context }) => {
