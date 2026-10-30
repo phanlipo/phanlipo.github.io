@@ -12,6 +12,12 @@ const GEMMA3_1B = { id: 'onnx-community/gemma-3-1b-it-ONNX', revision: 'a58439f4
 const posted = page => page.evaluate(() => window.__llm.posted);
 const setReply = (page, reply) => page.evaluate(r => { window.__llm.reply = r; }, reply);
 
+// The model choice is inside the (collapsed) settings
+async function pickModel(page, key) {
+  if (!(await page.locator('#settingsBox').evaluate(d => d.open))) await page.locator('#settingsBox summary').click();
+  await page.selectOption('#model', key);
+}
+
 async function send(page, text) {
   await page.fill('#input', text);
   await page.click('#btnSend');
@@ -25,6 +31,8 @@ test('without WebGPU: notice, nothing can be sent', async ({ page }) => {
   await expect(page.locator('#btnSend')).toBeDisabled();
   await expect(page.locator('#input')).toBeDisabled();
   await expect(page.locator('#modelInfo')).toHaveText('Ohne WebGPU kann das Modell nicht laufen.');
+  await expect(page.locator('#modelBadge')).toBeHidden();
+  await expect(page.locator('#firstHint')).toBeHidden();
 });
 
 test('graphics card with shader-f16 and big buffers: Gemma 4 is the default', async ({ page }) => {
@@ -35,11 +43,17 @@ test('graphics card with shader-f16 and big buffers: Gemma 4 is the default', as
   // Sizes = ONNX files + tokenizer of the dtype this device loads (q2f16 / q4f16)
   await expect(page.locator('#model option[value="gemma4-e2b"]')).toHaveText('Gemma 4 E2B – empfohlen (ca. 2,3 GB)');
   await expect(page.locator('#model option[value="gemma3-1b"]')).toHaveText('Gemma 3 1B – mittel (ca. 780 MB)');
-  await expect(page.locator('#model option[value="gemma3-270m"]')).toHaveText('Gemma 3 270M – klein, schnell (ca. 290 MB)');
+  await expect(page.locator('#model option[value="gemma3-270m"]')).toHaveText('Gemma 3 270M – nur zum Ausprobieren (ca. 290 MB)');
   await expect(page.locator('#modelInfo')).toHaveText('Wird beim ersten Senden heruntergeladen: ca. 2,3 GB – am besten im WLAN.');
   await expect(page.locator('#btnSend')).toBeEnabled();
   // The choice is remembered
-  await page.selectOption('#model', 'gemma3-270m');
+  await pickModel(page, 'gemma3-270m');
+  // 270M: short answers, no repetition penalty (it pushes small models into other languages)
+  await send(page, 'Hallo');
+  await expect(page.locator('.msg.assistant .foot')).toBeVisible();
+  const gen = (await posted(page)).find(m => m.type === 'generate');
+  expect(gen.maxTokens).toBe(384);
+  expect(gen.model.sampling).toEqual({ temperature: 0.7, top_p: 0.95, top_k: 64 });
   await page.reload();
   await expect(page.locator('#model')).toHaveValue('gemma3-270m');
 });
@@ -67,12 +81,12 @@ for (const [name, opts, size] of [
 test('chat: streams the answer, renders Markdown, saves and continues from the history', async ({ page }) => {
   await fakeLlm(page, { gpu: 'f16' });
   await page.goto(URL_);
-  await page.selectOption('#model', 'gemma3-1b');
+  await pickModel(page, 'gemma3-1b');
   await setReply(page, { tokens: ['Das ist **wichtig**:\n', '- eins\n', '- zwei\n\n', '```\nx = 1\n```'], delay: 30 });
   await send(page, 'Erkläre etwas');
   await expect(page.locator('.msg.user')).toHaveText('Erkläre etwas');
   await expect(page.locator('#input')).toHaveValue('');
-  await expect(page.locator('#btnSend')).toHaveText('Senden');
+  await expect(page.locator('#btnSend')).toHaveAttribute('aria-label', 'Senden');
   const answer = page.locator('.msg.assistant');
   await expect(answer.locator('strong')).toHaveText('wichtig');
   await expect(answer.locator('li')).toHaveText(['eins', 'zwei']);
@@ -112,11 +126,11 @@ test('stop keeps the text so far and marks the answer', async ({ page }) => {
   await page.goto(URL_);
   await setReply(page, { tokens: Array.from({ length: 200 }, (_, i) => `w${i} `), delay: 40 });
   await send(page, 'Erzähl lang');
-  await expect(page.locator('#btnSend')).toHaveText('Stopp');
+  await expect(page.locator('#btnSend')).toHaveAttribute('aria-label', 'Stopp');
   await expect(page.locator('#model')).toBeDisabled();
   await expect(page.locator('.msg.assistant .body')).toContainText('w2');
   await page.click('#btnSend');
-  await expect(page.locator('#btnSend')).toHaveText('Senden');
+  await expect(page.locator('#btnSend')).toHaveAttribute('aria-label', 'Senden');
   expect((await posted(page)).some(m => m.type === 'stop')).toBe(true);
   await expect(page.locator('.msg.assistant .foot span')).toContainText('abgebrochen');
   const words = (await page.locator('.msg.assistant .body').textContent()).trim().split(/\s+/).length;
@@ -133,7 +147,7 @@ test('load error: clear message, question back in the input, nothing saved', asy
   await expect(page.locator('#status')).toHaveClass(/err/);
   await expect(page.locator('.msg')).toHaveCount(0);
   await expect(page.locator('#input')).toHaveValue('Hallo?');
-  await expect(page.locator('#btnSend')).toHaveText('Senden');
+  await expect(page.locator('#btnSend')).toHaveAttribute('aria-label', 'Senden');
   await expect(page.locator('#histCount')).toHaveText('0');
   // Out of memory: hint to choose a smaller model
   await setReply(page, { tokens: [], error: { stage: 'load', message: 'Out of memory while allocating' } });
@@ -195,7 +209,7 @@ test('downloaded models: shown as downloaded, deleting keeps other apps\' models
   await page.evaluate(u => caches.open('transformers-cache').then(c => c.put(u, new Response('w'))), whisper);
   await page.reload();
   await expect(page.locator('#modelInfo')).toHaveText('✓ Heruntergeladen – startet ohne Internet.');
-  await page.locator('#modelBox summary').click();
+  await page.locator('#settingsBox summary').click();
   await expect(page.locator('#modelList')).toContainText('Gemma 4 E2B');
   page.once('dialog', d => d.accept());
   await page.click('#btnDeleteModels');
@@ -252,7 +266,7 @@ test('a load that never finished (tab crashed) is reported on the next start', a
   await expect(page.locator('#crashNote')).toBeHidden();
   await expect(page.locator('#model')).toHaveValue('gemma3-1b');           // stays on the smaller model
   // Picked again on purpose: kept after a reload; a successful start removes the mark
-  await page.selectOption('#model', 'gemma4-e2b');
+  await pickModel(page, 'gemma4-e2b');
   await page.reload();
   await expect(page.locator('#model')).toHaveValue('gemma4-e2b');
   await setReply(page, { tokens: ['Ok'], delay: 5, stages: [{ stage: 'prepare' }] });
@@ -270,6 +284,51 @@ test('not enough storage: clear message', async ({ page }) => {
   await send(page, 'Hallo');
   await expect(page.locator('#status')).toHaveText('Nicht genug freier Speicher auf dem Gerät für das Modell (ca. 2,3 GB). Bitte Platz schaffen oder ein kleineres Modell wählen.');
   expect(await page.evaluate(() => localStorage.getItem('ai-chat.loading.v1'))).toBeNull();
+});
+
+test('before the first download: model and size shown in the chat; the choice is in the settings', async ({ page }) => {
+  await fakeLlm(page, { gpu: 'f16' });
+  await page.goto(URL_);
+  await expect(page.locator('#modelBadge')).toHaveText('Gemma 4 E2B');
+  await expect(page.locator('#firstHint')).toHaveText('Beim ersten Senden wird Gemma 4 E2B heruntergeladen (ca. 2,3 GB) – am besten im WLAN. Ändern unter „Einstellungen“.');
+  await expect(page.locator('#model')).toBeHidden();      // folded away in the settings
+  await pickModel(page, 'gemma3-270m');
+  await expect(page.locator('#modelBadge')).toHaveText('Gemma 3 270M');
+  await expect(page.locator('#firstHint')).toContainText('Gemma 3 270M heruntergeladen (ca. 290 MB)');
+  await markDownloaded(page, { id: 'onnx-community/gemma-3-270m-it-ONNX', revision: '2dbbfdb1b59bd034eb959428c6a7da9dd7ea27f0', sessions: ['model'], dtype: 'q4f16' });
+  await page.reload();
+  await expect(page.locator('#modelBadge')).toHaveText('Gemma 3 270M');
+  await expect(page.locator('#firstHint')).toBeHidden();
+});
+
+test('icon buttons have names: send/stop, new chat, copy', async ({ page }) => {
+  await fakeLlm(page, { gpu: 'f16' });
+  await page.goto(URL_);
+  await expect(page.getByRole('button', { name: 'Senden' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Neuer Chat' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Chat kopieren' })).toBeVisible();
+  await setReply(page, { tokens: Array.from({ length: 50 }, () => 'x '), delay: 30 });
+  await send(page, 'Hallo');
+  await expect(page.locator('.msg.assistant .body')).toContainText('x x');
+  await page.getByRole('button', { name: 'Stopp' }).click();
+  await expect(page.locator('.msg.assistant').getByRole('button', { name: 'Kopieren' })).toBeVisible();
+});
+
+test('share target: shared text and link land in the input, ready for an own question', async ({ page, request }) => {
+  const manifest = await (await request.get(`${URL_}manifest.webmanifest`)).json();
+  expect(manifest.share_target).toMatchObject({ action: './', method: 'GET', params: { title: 'title', text: 'text', url: 'url' } });
+  await fakeLlm(page, { gpu: 'f16' });
+  // Many apps send the link inside text as well
+  await page.goto(`${URL_}?title=${encodeURIComponent('Artikel')}&text=${encodeURIComponent('Lesenswert: https://example.org/a')}&url=${encodeURIComponent('https://example.org/a')}`);
+  await expect(page).toHaveURL(/\/ai-chat\/$/);
+  await expect(page.locator('#input')).toHaveValue('Artikel\nLesenswert: https://example.org/a\n\n');
+  await expect(page.locator('#input')).toBeFocused();
+  await expect(page.locator('#toast')).toContainText('Geteilter Text übernommen');
+  await page.locator('#input').pressSequentially('Fasse das zusammen');
+  await page.click('#btnSend');
+  // The page posts to the worker after asking for a wake lock – wait for it
+  await expect.poll(async () => (await posted(page)).find(m => m.type === 'generate')?.messages.at(-1))
+    .toEqual({ role: 'user', content: 'Artikel\nLesenswert: https://example.org/a\n\nFasse das zusammen' });
 });
 
 test('copy chat puts both sides into the clipboard', async ({ page, context }) => {
@@ -293,7 +352,7 @@ test.describe('real worker', () => {
     await page.goto(URL_);
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload();                              // controlled by the service worker → libraries get cached
-    await page.selectOption('#model', 'gemma3-270m');
+    await pickModel(page, 'gemma3-270m');
     const expected = /Ohne WebGPU kann das Modell nicht laufen\.|Das Modell konnte nicht geladen werden/;
     await send(page, 'Hallo');
     await expect(page.locator('#status')).toHaveText(expected, { timeout: 30000 });
@@ -341,7 +400,7 @@ Object.defineProperty(navigator.storage, 'estimate', { configurable: true, value
   test('files go one by one into the cache; an interrupted download continues', async ({ page, context }) => {
     const failData = { value: true };
     const hits = await setup(page, context, { failData });
-    await page.selectOption('#model', 'gemma3-270m');
+    await pickModel(page, 'gemma3-270m');
     await send(page, 'Hallo');
     await expect(page.locator('#status')).toHaveText(/Das Modell konnte nicht geladen werden/, { timeout: 30000 });
     // The small graph file made it, the weights did not
@@ -360,7 +419,7 @@ Object.defineProperty(navigator.storage, 'estimate', { configurable: true, value
 
   test('not enough storage: nothing is downloaded', async ({ page, context }) => {
     const hits = await setup(page, context, { quota: 1e8 });
-    await page.selectOption('#model', 'gemma3-1b');
+    await pickModel(page, 'gemma3-1b');
     await send(page, 'Hallo');
     await expect(page.locator('#status')).toHaveText(/^Nicht genug freier Speicher auf dem Gerät für das Modell \(ca\. 780 MB\)/, { timeout: 30000 });
     expect(hits).toEqual([]);
@@ -373,7 +432,9 @@ test.describe('English', () => {
   test('texts in English, English default instruction, numbers with a decimal point', async ({ page }) => {
     await fakeLlm(page, { gpu: 'f16' });
     await page.goto(URL_);
-    await expect(page.locator('#btnSend')).toHaveText('Send');
+    await expect(page.locator('#btnSend')).toHaveAttribute('aria-label', 'Send');
+    await expect(page.getByRole('button', { name: 'New chat' })).toBeVisible();
+    await expect(page.locator('#firstHint')).toHaveText('Gemma 4 E2B is downloaded when you first send (approx. 2.3 GB) – preferably over Wi-Fi. Change it under “Settings”.');
     await expect(page.locator('#model option[value="gemma4-e2b"]')).toHaveText('Gemma 4 E2B – recommended (approx. 2.3 GB)');
     await send(page, 'Hi');
     await expect(page.locator('.msg.assistant .foot span')).toHaveText('Gemma 4 E2B · 3 tokens · 1.5 tokens/s');

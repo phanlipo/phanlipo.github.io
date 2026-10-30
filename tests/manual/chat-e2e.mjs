@@ -32,6 +32,7 @@ try {
   await page.goto(`http://localhost:${PORT}/ai-chat/`);
   await page.waitForFunction(() => document.getElementById('model').dataset.gpu);
   console.log('WebGPU:', await page.getAttribute('#model', 'data-gpu'));
+  await page.locator('#settingsBox summary').click();
   await page.selectOption('#model', model);
   console.log('Model:', await page.textContent('#modelInfo'));
   await page.fill('#input', question);
@@ -45,7 +46,7 @@ try {
     const line = `${st} | ${ans.slice(-80)}`;
     if (line !== last) { console.log(`${Math.round((Date.now() - t0) / 1000)}s  ${line}`); last = line; }
     if (stopAfter && !stopped && ans.split(/\s+/).length > stopAfter) { await page.click('#btnSend'); stopped = true; console.log('-> Stopp'); }
-    if ((await page.textContent('#btnSend')) !== 'Stopp' && !st) break;
+    if ((await page.getAttribute('#btnSend', 'aria-label')) !== 'Stopp' && !st) break;
     if (/\berr\b/.test(await page.getAttribute('#status', 'class'))) break;
   }
   console.log('\nAnswer:', await page.locator('.msg.assistant').last().locator('.body').textContent().catch(() => '–'));

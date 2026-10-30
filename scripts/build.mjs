@@ -19,7 +19,7 @@
 //
 // Page metadata (in <head>):
 //   <title>, <meta name="description">                  required for the tool list
-//   tool:tags ("a, b"), tool:order (number), tool:hidden ("true" = not listed, no PWA)
+//   tool:tags ("a, b"), tool:hidden ("true" = not listed, no PWA)
 //   tool:features ("a, b")                               what sets the app apart, from FEATURES below
 //   tool:icon, tool:color                                icons (see build-icons.mjs), theme colour
 //   tool:short-name                                      name under the home-screen icon (≤ 12 chars)
@@ -75,7 +75,6 @@ function pageInfo({ folder, file }) {
     description: meta(html, 'description'),
     tags: (meta(html, 'tool:tags') || '').split(',').map(t => t.trim()).filter(Boolean),
     features: (meta(html, 'tool:features') || '').split(',').map(t => t.trim()).filter(Boolean),
-    order: Number(meta(html, 'tool:order')) || 100,
     hidden: meta(html, 'tool:hidden') === 'true',
     color: meta(html, 'tool:color') || '#334155',
     shortName: meta(html, 'tool:short-name') || title,
@@ -98,7 +97,8 @@ const tools = pages
     console.warn(`! ${p.file}: <title> or <meta name="description"> missing – not listed`);
     return false;
   })
-  .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, 'de'));
+  // Alphabetical (the start page re-sorts by the English titles when shown in English)
+  .sort((a, b) => a.title.localeCompare(b.title, 'de'));
 for (const t of tools) {
   if (t.webmcp.length !== 0 && !t.features.includes('KI-Agent'))
     throw new Error(`${t.file}: tool:webmcp is set – add "KI-Agent" to tool:features`);
