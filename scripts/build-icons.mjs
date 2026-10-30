@@ -6,7 +6,7 @@
 // Output per page folder:
 //   icon.svg                favicon
 //   icon-180.png            apple-touch-icon (iPhone home screen)
-//   icon-192.png, icon-512.png   PWA manifest icons (tool folders only, not the start page)
+//   icon-192.png, icon-512.png   PWA manifest icons (start page: for its home screen shortcut on Android)
 //   icon-maskable-512.png   PWA icon Android may crop to a circle/squircle (icon kept in the safe zone)
 //
 // Run manually after adding a page or changing its icon – not part of the git hook.
@@ -84,7 +84,7 @@ for (const { folder, file } of allPages()) {
   const svg = compose(raw, color, false), mask = compose(raw, color, true);
   const dir = join(ROOT, folder);
   writeFileSync(join(dir, 'icon.svg'), svg);
-  jobs.push({ dir, svg, mask, pwa: folder !== '' });
+  jobs.push({ dir, svg, mask, pwa: true });
   console.log(`${folder || '(start page)'}: ${icon} ${color}`);
 }
 await renderPngs(jobs);

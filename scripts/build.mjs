@@ -207,6 +207,8 @@ function renderHead(p) {
     lines.push('<link rel="icon" href="icon.svg" type="image/svg+xml">');
     lines.push('<link rel="apple-touch-icon" href="icon-180.png">');
   }
+  // Start page: manifest only for the home screen icon, no service worker (data-no-sw, see common.js)
+  if (p.folder === '') lines.push('<link rel="manifest" href="manifest.webmanifest" data-no-sw>');
   if (isApp(p)) {
     lines.push('<link rel="manifest" href="manifest.webmanifest">');
     lines.push(`<meta name="apple-mobile-web-app-title" content="${escHtml(p.shortName)}">`);
@@ -260,6 +262,15 @@ function manifest(p) {
       ...icon('icon-maskable-512.png', '512x512', { purpose: 'maskable' }),
     ],
   }, null, 2) + '\n';
+}
+
+// Start page: a manifest only for its home screen shortcut (Android otherwise puts the icon on a white
+// circle). display "browser" and no service worker: it opens as a normal tab and does not capture the
+// apps below it, which are installed on their own.
+function startManifest(p) {
+  const m = JSON.parse(manifest(p));
+  delete m.description_localized;
+  return JSON.stringify({ ...m, description: '', display: 'browser', background_color: p.color }, null, 2) + '\n';
 }
 
 function filesIn(dir) {
@@ -434,6 +445,8 @@ if (problems.length) {
 }
 // Manifests first: they are part of the cached files and therefore of the version hash
 for (const p of apps) put(`${p.folder}/manifest.webmanifest`, manifest(p));
+const start = pages.find(p => p.folder === '');
+if (start) put('manifest.webmanifest', startManifest(start));
 for (const p of apps) {
   const { version, code } = serviceWorker(p);
   put(`${p.folder}/sw.js`, code);

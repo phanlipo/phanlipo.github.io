@@ -8,11 +8,14 @@
 <meta name="tool:title-en" content="phanlipo – App Shelf">
 <meta name="tool:icon" content="layout-grid">
 <meta name="tool:color" content="#334155">
+<meta name="tool:short-name" content="App-Regal">
+<meta name="tool:short-name-en" content="App Shelf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-uX2ElPA06wWwZ/L1rREpQmNS3qYnCh5JeoXEdR+ipzs=' 'sha256-8IBc+4m1X6WKr2eCwm1xADoHBZcnnwJI3+aVAS0wJDI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-uX2ElPA06wWwZ/L1rREpQmNS3qYnCh5JeoXEdR+ipzs=' 'sha256-jNMUfYR99w3p8ItNLfXMbJg5Kz0egKV2o4wbYjCb1uU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest" data-no-sw>
 <meta name="theme-color" content="#334155">
 <!-- head:end -->
 <link rel="stylesheet" href="assets/base.css">
@@ -43,7 +46,12 @@ main{padding-block:20px}
 .filter{display:grid;gap:10px;margin-block-end:16px}
 .filter-row{display:grid;gap:4px}
 .filter-label{font-size:13px;font-weight:600;color:var(--muted)}
-.chips{display:flex;gap:8px;overflow-x:auto;padding-block-end:4px;scrollbar-width:thin}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-block-end:4px;scrollbar-width:none;--fade:linear-gradient(to right,#000 calc(100% - 48px),transparent)}
+.chips::-webkit-scrollbar{display:none}
+/* No scroll bar: a faded edge shows that a row continues (classes set by the script) */
+.chips.more-end{-webkit-mask-image:var(--fade);mask-image:var(--fade)}
+.chips.more-start{--fade:linear-gradient(to right,transparent,#000 48px)}
+.chips.more-start.more-end{--fade:linear-gradient(to right,transparent,#000 48px,#000 calc(100% - 48px),transparent)}
 @media (min-width:700px){.chips{flex-wrap:wrap;overflow:visible}}
 .chip{flex:none;min-height:44px;padding-inline:16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:15px}
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
@@ -289,8 +297,19 @@ main{padding-block:20px}
     // Tapping the active category again shows everything
     apply(chip.getAttribute('aria-pressed') === 'true' ? '' : chip.dataset.tag);
   });
-  Tools.onLang(() => { if (status.textContent) apply(current); });
+  // Faded edges where a chip row can scroll further (phones)
+  const rows = [...bar.querySelectorAll('.chips')];
+  const edges = () => {
+    for (const r of rows) {
+      r.classList.toggle('more-start', r.scrollLeft > 1);
+      r.classList.toggle('more-end', r.scrollLeft + r.clientWidth < r.scrollWidth - 1);
+    }
+  };
+  for (const r of rows) r.addEventListener('scroll', edges, { passive: true });
+  window.addEventListener('resize', edges);
+  Tools.onLang(() => { if (status.textContent) apply(current); edges(); });
   bar.hidden = false;
+  edges();
 })();
 </script>
 </body>

@@ -118,13 +118,13 @@ function untar(buf) {
 }
 
 /* ---------- What GitHub Pages publishes (scripts/site.mjs, tests/server.mjs) ----------
-   Only what the pages need: start page, robots.txt, root icons, assets/ and the page folders
+   Only what the pages need: start page (with its manifest), robots.txt, root icons, assets/ and the page folders
    (tools and redirect pages). Never: Markdown files, dotfiles, _folders, scripts/, tests/, template/,
    package.json, LICENSE … – they stay on github.com. rel: repo-relative path with "/". */
 export function isPublished(rel) {
   const parts = rel.split('/');
   if (parts.some(s => !s || s.startsWith('.')) || parts[0].startsWith('_') || rel.endsWith('.md')) return false;
-  if (parts.length === 1) return rel === 'index.html' || rel === 'robots.txt' || /^icon[\w-]*\.(svg|png)$/.test(rel);
+  if (parts.length === 1) return rel === 'index.html' || rel === 'robots.txt' || rel === 'manifest.webmanifest' || /^icon[\w-]*\.(svg|png)$/.test(rel);
   const top = parts[0];
   if (top === 'assets') return true;
   return !['scripts', 'template', 'node_modules', 'tests', 'test-results', 'playwright-report'].includes(top)

@@ -217,10 +217,11 @@ window.Tools = (function () {
   }
 
   /* ---------- PWA: offline cache + automatic updates ----------
-     Pages with <link rel="manifest"> register their generated sw.js (see scripts/build.mjs).
+     Pages with <link rel="manifest"> register their generated sw.js (see scripts/build.mjs) – not the start
+     page (data-no-sw): its manifest only gives the home screen icon, a service worker there would sit above every app.
      A new version downloads in the background; the hint appears once it has taken over. */
   function registerServiceWorker() {
-    if (!('serviceWorker' in navigator) || !document.querySelector('link[rel="manifest"]')) return;
+    if (!('serviceWorker' in navigator) || !document.querySelector('link[rel="manifest"]:not([data-no-sw])')) return;
     const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (hadController) toast(t('sw.updated'), 3500);
