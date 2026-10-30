@@ -1,11 +1,13 @@
 // Chat worker: runs a Gemma language model (transformers.js, WebGPU) off the main thread.
-// Messages in:  { type: 'generate', id, model: { id, revision, arch, dtypes: { f16, f32 }, sampling }, messages: [{ role, content }], maxTokens, maxContext }
+// Messages in:  { type: 'generate', id, model: { id, revision, arch, sessions, dtypes: { f16, f32 }, bytes, sampling }, messages: [{ role, content }], maxTokens, maxContext }
 //               { type: 'stop' }    ends the running answer early (the text so far is kept)
 // Messages out: { type: 'progress', id, loaded, total }   model download
+//               { type: 'stage', id, stage: 'download', index, count } | { type: 'stage', id, stage: 'prepare' }
 //               { type: 'status', id, status: 'loading' | 'generating', dtype }
 //               { type: 'token', id, text }               streamed piece of the answer
 //               { type: 'done', id, text, tokens, promptTokens, dropped, seconds, dtype, stopped }
-//               { type: 'error', id, message, stage }    message 'NO_WEBGPU' / 'NEEDS_F16' = device cannot run the model
+//               { type: 'error', id, message, stage }    message 'NO_WEBGPU' / 'NEEDS_F16' = device cannot run the model,
+//                                                         'NO_SPACE' = not enough storage for the download
 import {
   AutoTokenizer, AutoModelForCausalLM, Gemma4Processor, Gemma4ForCausalLM,
   TextStreamer, InterruptableStoppingCriteria, env,
@@ -23,6 +25,9 @@ env.backends.onnx.wasm.wasmPaths = {
 env.backends.onnx.wasm.proxy = false;
 
 let loaded = { key: null, tokenizer: null, model: null, dtype: null };
+const CACHE = 'transformers-cache';
+const HUB = 'https://huggingface.co/';
+const SUFFIX = { q2f16: '_q2f16', q4f16: '_q4f16', q4: '_q4', fp16: '_fp16' };
 const stopper = new InterruptableStoppingCriteria();
 
 // Only WebGPU: the processor build of the ONNX runtime cannot run these quantised models
@@ -57,6 +62,8 @@ async function load(id, m) {
     for (const v of files.values()) { l += v.loaded; t += v.total; }
     self.postMessage({ type: 'progress', id, loaded: l, total: t });
   };
+  await prefetch(id, m, dtype);
+  self.postMessage({ type: 'stage', id, stage: 'prepare' });
   self.postMessage({ type: 'status', id, status: 'loading', dtype });
   const opts = { revision: m.revision, progress_callback };
   let tokenizer, model;
@@ -73,6 +80,44 @@ async function load(id, m) {
   }
   loaded = { key, tokenizer, model, dtype };
   return loaded;
+}
+
+// Downloads the big model files one after the other and streams each straight into the cache of
+// transformers.js, which then finds them there. transformers.js itself would keep every file whole in
+// memory while downloading (and copy it once more for the cache) – with Gemma 4 several GB at once,
+// which makes Chrome on phones kill the tab. Files already in the cache are skipped, so an interrupted
+// download continues with the next missing file. The cache key is the URL transformers.js uses.
+async function prefetch(id, m, dtype) {
+  if (typeof caches === 'undefined') return;
+  const cache = await caches.open(CACHE);
+  const base = `${HUB}${m.id}/resolve/${m.revision}/`;
+  const files = m.sessions.flatMap(s => [`onnx/${s}${SUFFIX[dtype]}.onnx`, `onnx/${s}${SUFFIX[dtype]}.onnx_data`]);
+  const missing = [];
+  for (const f of files) if (!(await cache.match(base + f))) missing.push(f);
+  if (!missing.length) return;
+  // Enough room? (estimate: the whole model; files of a few hundred KB do not matter)
+  try {
+    const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+    if (quota && quota - usage < m.bytes * 1.05) throw new Error('NO_SPACE');
+  } catch (e) { if (e.message === 'NO_SPACE') throw e; }
+  let done = 0;
+  for (const [i, f] of missing.entries()) {
+    self.postMessage({ type: 'stage', id, stage: 'download', index: i + 1, count: missing.length });
+    const res = await fetch(base + f);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${f}`);
+    let got = 0, last = 0;
+    const count = new TransformStream({
+      transform(chunk, ctl) {
+        got += chunk.byteLength;
+        const now = performance.now();
+        if (now - last > 250) { last = now; self.postMessage({ type: 'progress', id, loaded: done + got, total: Math.max(m.bytes, done + got) }); }
+        ctl.enqueue(chunk);
+      },
+    });
+    const headers = new Headers(res.headers);
+    await cache.put(base + f, new Response(res.body.pipeThrough(count), { status: 200, headers }));
+    done += got;
+  }
 }
 
 // Chat template → token ids. Drops the oldest turns (never the system text or the last question)

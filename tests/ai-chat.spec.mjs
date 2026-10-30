@@ -7,6 +7,7 @@ import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 
 const URL_ = '/ai-chat/';
 const GEMMA4 = { id: 'onnx-community/gemma-4-E2B-it-qat-mobile-ONNX', revision: 'a7f19b0ab28252b77cea830f52b8290b2479c87d' };
+const GEMMA4_FILES = { ...GEMMA4, sessions: ['embed_tokens', 'decoder_model_merged'], dtype: 'q2f16' };
 const GEMMA3_1B = { id: 'onnx-community/gemma-3-1b-it-ONNX', revision: 'a58439f40017d3b99c7d378ff525e54e0ba08ebf' };
 const posted = page => page.evaluate(() => window.__llm.posted);
 const setReply = (page, reply) => page.evaluate(r => { window.__llm.reply = r; }, reply);
@@ -46,6 +47,7 @@ test('graphics card with shader-f16 and big buffers: Gemma 4 is the default', as
 for (const [name, opts, size] of [
   ['no shader-f16', { gpu: 'f32' }, '880 MB'],
   ['buffers smaller than the 1.17 GB embedding table', { gpu: 'f16', maxBuffer: 1024 ** 3 }, '780 MB'],
+  ['less than 8 GB of memory', { gpu: 'f16', memory: 4 }, '780 MB'],
 ]) {
   test(`Gemma 4 not offered: ${name}`, async ({ page }) => {
     await fakeLlm(page, opts);
@@ -188,7 +190,7 @@ test('history: delete one chat, clear all', async ({ page }) => {
 test('downloaded models: shown as downloaded, deleting keeps other apps\' models (Whisper)', async ({ page }) => {
   await fakeLlm(page, { gpu: 'f16' });
   await page.goto(URL_);
-  await markDownloaded(page, GEMMA4.id, GEMMA4.revision);
+  await markDownloaded(page, GEMMA4_FILES);
   const whisper = 'https://huggingface.co/onnx-community/whisper-base/resolve/main/onnx/encoder_model.onnx';
   await page.evaluate(u => caches.open('transformers-cache').then(c => c.put(u, new Response('w'))), whisper);
   await page.reload();
@@ -201,6 +203,59 @@ test('downloaded models: shown as downloaded, deleting keeps other apps\' models
   await expect(page.locator('#modelInfo')).toContainText('Wird beim ersten Senden heruntergeladen');
   const left = await page.evaluate(() => caches.open('transformers-cache').then(c => c.keys()).then(k => k.map(r => r.url)));
   expect(left).toEqual([whisper]);
+});
+
+test('partly downloaded: shown as such, not as downloaded', async ({ page }) => {
+  await fakeLlm(page, { gpu: 'f16' });
+  await page.goto(URL_);
+  await markDownloaded(page, GEMMA4_FILES, { only: 3 });   // the decoder's weights are missing
+  await page.reload();
+  await expect(page.locator('#modelInfo')).toHaveText('Teilweise heruntergeladen – beim nächsten Senden geht es weiter (insgesamt ca. 2,3 GB).');
+  await markDownloaded(page, GEMMA4_FILES);
+  await page.reload();
+  await expect(page.locator('#modelInfo')).toHaveText('✓ Heruntergeladen – startet ohne Internet.');
+  // Starting a downloaded model is not called a download
+  await setReply(page, { tokens: [], hang: true });
+  await send(page, 'Hallo');
+  await expect(page.locator('#status')).toHaveText('Modell wird gestartet … 150 MB von 300 MB');
+});
+
+test('a load that never finished (tab crashed) is reported on the next start', async ({ page }) => {
+  await fakeLlm(page, { gpu: 'f16' });
+  await page.goto(URL_);
+  await expect(page.locator('#crashNote')).toBeHidden();
+  // Downloading file 2 of 4, then the tab "dies"
+  await setReply(page, { tokens: [], hang: true, stages: [{ stage: 'download', index: 2, count: 4 }] });
+  await send(page, 'Hallo');
+  await expect(page.locator('#status')).toContainText('(Datei 2 von 4)');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ai-chat.loading.v1')))).toMatchObject({ model: 'gemma4-e2b', stage: 'download' });
+  await page.reload();
+  await expect(page.locator('#crashNote')).toBeVisible();
+  await expect(page.locator('#crashNote')).toHaveText(/Herunterladen von Gemma 4 E2B nicht beendet.*geht es weiter/);
+  // Shown once
+  expect(await page.evaluate(() => localStorage.getItem('ai-chat.loading.v1'))).toBeNull();
+  await page.reload();
+  await expect(page.locator('#crashNote')).toBeHidden();
+
+  // Crash while starting on the graphics card: memory hint; a successful load clears the marker
+  await setReply(page, { tokens: [], hang: true, stages: [{ stage: 'download', index: 1, count: 1 }, { stage: 'prepare' }] });
+  await send(page, 'Hallo');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ai-chat.loading.v1'))?.stage)).toBe('prepare');
+  await page.reload();
+  await expect(page.locator('#crashNote')).toHaveText(/beim Starten von Gemma 4 E2B abgestürzt – vermutlich reicht der Arbeitsspeicher nicht/);
+  await setReply(page, { tokens: ['Ok'], delay: 5, stages: [{ stage: 'prepare' }] });
+  await send(page, 'Nochmal');
+  await expect(page.locator('.msg.assistant .foot')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('ai-chat.loading.v1'))).toBeNull();
+});
+
+test('not enough storage: clear message', async ({ page }) => {
+  await fakeLlm(page, { gpu: 'f16' });
+  await page.goto(URL_);
+  await setReply(page, { tokens: [], error: { stage: 'load', message: 'NO_SPACE' } });
+  await send(page, 'Hallo');
+  await expect(page.locator('#status')).toHaveText('Nicht genug freier Speicher auf dem Gerät für das Modell (ca. 2,3 GB). Bitte Platz schaffen oder ein kleineres Modell wählen.');
+  expect(await page.evaluate(() => localStorage.getItem('ai-chat.loading.v1'))).toBeNull();
 });
 
 test('copy chat puts both sides into the clipboard', async ({ page, context }) => {
@@ -235,6 +290,66 @@ test.describe('real worker', () => {
     await expect(page.locator('#status')).toHaveText(expected, { timeout: 30000 });
     await expect(page.locator('#status')).not.toContainText('gestartet');   // worker and library came from the cache
     await context.setOffline(false);
+  });
+});
+
+test.describe('download into the cache (real worker)', () => {
+  // The worker streams the large files one by one into the cache of transformers.js (instead of
+  // transformers.js keeping each whole file in memory). Hugging Face is replaced by small fake files;
+  // the worker gets a fake graphics card (and storage estimate) put in front of worker.js.
+  test.use({ serviceWorkers: 'block', allowedProblems: /huggingface\.co|Failed to load resource|ERR_FAILED|Failed to fetch/ });
+  const SIZE = 300000;
+
+  async function setup(page, context, { quota = 1e12, failData = false } = {}) {
+    const hits = [];
+    await context.route('**/ai-chat/worker.js', async route => {
+      const res = await route.fetch();
+      const prelude = `Object.defineProperty(WorkerNavigator.prototype, 'gpu', { configurable: true, get: () => ({ requestAdapter: async () => ({ features: new Set(['shader-f16']), limits: {} }) }) });
+Object.defineProperty(navigator.storage, 'estimate', { configurable: true, value: async () => ({ usage: 0, quota: ${quota} }) });\n`;
+      await route.fulfill({ response: res, body: prelude + await res.text() });
+    });
+    await context.route(/huggingface\.co/, async route => {
+      const url = route.request().url();
+      hits.push(url.split('/onnx/')[1] || url);
+      if (!/\.onnx(_data)?$/.test(url)) return route.abort();       // config etc.: "offline" → load error afterwards
+      if (failData.value && url.endsWith('.onnx_data')) return route.abort();
+      return route.fulfill({ status: 200, body: Buffer.alloc(SIZE, 7), headers: { 'content-type': 'application/octet-stream', 'content-length': String(SIZE) } });
+    });
+    await fakeLlm(page, { gpu: 'f16', worker: false });
+    await page.goto(URL_);
+    return hits;
+  }
+  const cachedFiles = page => page.evaluate(async () => {
+    const c = await caches.open('transformers-cache');
+    return Promise.all((await c.keys()).map(async r => [r.url.split('/onnx/')[1], (await (await c.match(r)).arrayBuffer()).byteLength]));
+  });
+
+  test('files go one by one into the cache; an interrupted download continues', async ({ page, context }) => {
+    const failData = { value: true };
+    const hits = await setup(page, context, { failData });
+    await page.selectOption('#model', 'gemma3-270m');
+    await send(page, 'Hallo');
+    await expect(page.locator('#status')).toHaveText(/Das Modell konnte nicht geladen werden/, { timeout: 30000 });
+    // The small graph file made it, the weights did not
+    expect(await cachedFiles(page)).toEqual([['model_q4f16.onnx', SIZE]]);
+    await expect(page.locator('#modelInfo')).toContainText('Teilweise heruntergeladen');
+    expect(await page.evaluate(() => localStorage.getItem('ai-chat.loading.v1'))).toBeNull();
+    // Second try: only the missing file is fetched, then transformers.js takes over (config → fails here)
+    failData.value = false;
+    hits.length = 0;
+    await send(page, 'Hallo');
+    await expect(page.locator('#status')).toHaveText(/Das Modell konnte nicht geladen werden/, { timeout: 30000 });
+    expect(hits.filter(h => h.startsWith('model_'))).toEqual(['model_q4f16.onnx_data']);
+    expect((await cachedFiles(page)).sort()).toEqual([['model_q4f16.onnx', SIZE], ['model_q4f16.onnx_data', SIZE]]);
+    await expect(page.locator('#modelInfo')).toHaveText('✓ Heruntergeladen – startet ohne Internet.');
+  });
+
+  test('not enough storage: nothing is downloaded', async ({ page, context }) => {
+    const hits = await setup(page, context, { quota: 1e8 });
+    await page.selectOption('#model', 'gemma3-1b');
+    await send(page, 'Hallo');
+    await expect(page.locator('#status')).toHaveText(/^Nicht genug freier Speicher auf dem Gerät für das Modell \(ca\. 780 MB\)/, { timeout: 30000 });
+    expect(hits).toEqual([]);
   });
 });
 
