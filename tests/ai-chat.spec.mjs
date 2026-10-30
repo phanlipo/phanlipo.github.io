@@ -242,11 +242,25 @@ test('a load that never finished (tab crashed) is reported on the next start', a
   await send(page, 'Hallo');
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ai-chat.loading.v1'))?.stage)).toBe('prepare');
   await page.reload();
-  await expect(page.locator('#crashNote')).toHaveText(/beim Starten von Gemma 4 E2B abgestürzt – vermutlich reicht der Arbeitsspeicher nicht/);
+  await expect(page.locator('#crashNote')).toHaveText(/beim Starten von Gemma 4 E2B abgestürzt – der Arbeitsspeicher des Geräts reicht dafür vermutlich nicht\. Deshalb ist jetzt ein kleineres Modell gewählt\..*\(ca\. 2,3 GB\)/);
+  // Remembered: a smaller model is chosen, Gemma 4 is marked but can still be picked
+  const g4 = page.locator('#model option[value="gemma4-e2b"]');
+  await expect(page.locator('#model')).toHaveValue('gemma3-1b');
+  await expect(g4).toHaveText('Gemma 4 E2B – empfohlen – auf diesem Gerät abgestürzt');
+  expect(await g4.evaluate(o => o.disabled)).toBe(false);
+  await page.reload();
+  await expect(page.locator('#crashNote')).toBeHidden();
+  await expect(page.locator('#model')).toHaveValue('gemma3-1b');           // stays on the smaller model
+  // Picked again on purpose: kept after a reload; a successful start removes the mark
+  await page.selectOption('#model', 'gemma4-e2b');
+  await page.reload();
+  await expect(page.locator('#model')).toHaveValue('gemma4-e2b');
   await setReply(page, { tokens: ['Ok'], delay: 5, stages: [{ stage: 'prepare' }] });
   await send(page, 'Nochmal');
   await expect(page.locator('.msg.assistant .foot')).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('ai-chat.loading.v1'))).toBeNull();
+  await expect(g4).toHaveText('Gemma 4 E2B – empfohlen (ca. 2,3 GB)');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai-chat.crashed.v1')))).toEqual({});
 });
 
 test('not enough storage: clear message', async ({ page }) => {
