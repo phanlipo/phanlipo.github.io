@@ -596,3 +596,71 @@ test.describe('ai-chat tools', () => {
     await expect(page.locator('#histCount')).toHaveText('0');
   });
 });
+
+test.describe('doc-scanner tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await open(page, '/doc-scanner/');
+    // two simple "photos": a light sheet on a dark table, told apart by their size
+    const files = await page.evaluate(() => [300, 360].map(w => {
+      const c = document.createElement('canvas'); c.width = 400; c.height = 500;
+      const g = c.getContext('2d');
+      g.fillStyle = '#333'; g.fillRect(0, 0, 400, 500);
+      g.fillStyle = '#eee'; g.fillRect((400 - w) / 2, 40, w, 420);
+      return c.toDataURL('image/png').split(',')[1];
+    }));
+    await page.setInputFiles('#inPick', files.map((b, i) => ({ name: `p${i}.png`, mimeType: 'image/png', buffer: Buffer.from(b, 'base64') })));
+    await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(2);
+  });
+
+  test('list_pages reads pages and settings without changing anything', async ({ page }) => {
+    const r = await call(page, 'doc_scanner_list_pages', {});
+    expect(r.result).toEqual({
+      count: 2,
+      pages: [
+        { page: 1, filter: 'color', rotation: 0, corners_found_automatically: true },
+        { page: 2, filter: 'color', rotation: 0, corners_found_automatically: true },
+      ],
+      settings: { default_filter: 'color', page_size: 'a4', dpi: 200 },
+    });
+  });
+
+  test('set_filter for one page or all pages, shown in the app', async ({ page }) => {
+    let r = await call(page, 'doc_scanner_set_filter', { filter: 'bw', page: 2 });
+    expect(r.result.pages.map(p => p.filter)).toEqual(['color', 'bw']);
+    await expect(page.locator('.toast')).toContainText('KI-Agent: Filter geändert');
+    await expect(page.locator('input[name="filterAll"][value="color"]')).toBeChecked();
+    r = await call(page, 'doc_scanner_set_filter', { filter: 'gray' });
+    expect(r.result.pages.map(p => p.filter)).toEqual(['gray', 'gray']);
+    await expect(page.locator('input[name="filterAll"][value="gray"]')).toBeChecked();
+  });
+
+  test('move_page and rotate_page change the PDF order and rotation', async ({ page }) => {
+    // page 2 is the wider sheet – its thumbnail is wider than page 1's
+    const ratio = () => page.locator('#pages li img').evaluateAll(imgs => imgs.map(i => i.naturalWidth / i.naturalHeight));
+    await expect.poll(async () => (await ratio()).every(Boolean)).toBe(true);
+    const [w1, w2] = await ratio();
+    expect(w2).toBeGreaterThan(w1);
+    let r = await call(page, 'doc_scanner_move_page', { from: 2, to: 1 });
+    expect(r.result).toEqual({ order: [2, 1], count: 2 });
+    await expect.poll(async () => (await ratio())[0]).toBeCloseTo(w2, 2);
+    r = await call(page, 'doc_scanner_rotate_page', { page: 1, direction: 'left' });
+    expect(r.result).toEqual({ page: 1, rotation: 270 });
+    r = await call(page, 'doc_scanner_rotate_page', { page: 1, direction: 'right' });
+    expect(r.result).toEqual({ page: 1, rotation: 0 });
+    await call(page, 'doc_scanner_rotate_page', { page: 2, direction: 'right' });
+    await expect.poll(async () => (await ratio())[1]).toBeGreaterThan(1);
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    for (const [name, input, msg] of [
+      ['doc_scanner_set_filter', { filter: 'sepia' }, /one of/],
+      ['doc_scanner_set_filter', { filter: 'bw', page: 3 }, /between 1 and 2/],
+      ['doc_scanner_move_page', { from: 1, to: 5 }, /between 1 and 2/],
+      ['doc_scanner_move_page', { from: 0, to: 1 }, />= 1/],
+      ['doc_scanner_rotate_page', { page: 1, direction: 'up' }, /one of/],
+      ['doc_scanner_rotate_page', { page: 1 }, /required/],
+    ]) expect((await call(page, name, input)).error, name).toMatch(msg);
+    const r = await call(page, 'doc_scanner_list_pages', {});
+    expect(r.result.pages.map(p => [p.filter, p.rotation])).toEqual([['color', 0], ['color', 0]]);
+  });
+});
