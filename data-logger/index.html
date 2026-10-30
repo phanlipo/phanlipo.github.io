@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Datensammler – Messwerte erfassen &amp; auswerten</title>
+<meta name="description" content="Eigene Profile mit Messwerten und Einheiten anlegen, Werte mit Zeitpunkt erfassen und als Kurven auswerten – Export als Bild, JSON oder CSV.">
+<meta name="tool:tags" content="Alltag, Messen">
+<meta name="tool:features" content="Datei öffnen, Verlauf, KI-Agent">
+<meta name="tool:webmcp" content="list_profiles, add_data_point, get_data">
+<meta name="tool:icon" content="chart-line">
+<meta name="tool:color" content="#1e40af">
+<meta name="tool:short-name" content="Datensammler">
+<meta name="tool:title-en" content="Data Logger – record &amp; chart measurements">
+<meta name="tool:description-en" content="Create your own profiles with measurements and units, record values with a timestamp and see them as curves – export as image, JSON or CSV.">
+<meta name="tool:short-name-en" content="Data Logger">
+<meta name="tool:storage" content="data-logger.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-aEL+y/JtnGaXfXhEI/I+unyGNgohnge++pDHjBMQMeE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Datensammler">
+<meta name="theme-color" content="#1e40af">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#1e40af;--accent-text:#ffffff;
+  /* Series colours (fixed order, one per measurement – see dataviz reference palette) */
+  --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;--s7:#6250d6;--s8:#e34948}
+@media (prefers-color-scheme: dark){:root{--accent:#93b0f5;--accent-text:#0b1530;
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--s7:#9085e9;--s8:#e66767}}
+main{max-width:900px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.card h2{font-size:18px;margin:0 0 10px;display:block}
+.hint{font-size:13px;color:var(--muted);margin:8px 0 0}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field>span{font-size:13px;color:var(--muted);font-weight:600;overflow-wrap:anywhere}
+.field input,.field select{font:inherit;font-size:17px;min-height:46px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);min-width:0;width:100%}
+.field input:focus,.field select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.span-all{grid-column:1/-1}
+.row{margin-block-start:10px}
+.metrics{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.metrics li{display:grid;grid-template-columns:14px minmax(0,2fr) minmax(0,1fr) 44px;gap:8px;align-items:end}
+.swatch{display:inline-block;width:14px;height:14px;border-radius:4px;flex:none}
+.metrics .swatch{margin-block-end:16px}
+.icon-btn{width:44px;min-height:46px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--muted);cursor:pointer;font:inherit;font-size:20px}
+.icon-btn:hover{color:var(--err);border-color:var(--err)}
+.msg{padding:10px 12px;border-radius:8px;font-size:15px;background:var(--err-bg);color:var(--err);margin:10px 0 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-block-end:12px}
+.chips button{min-height:44px;padding-inline:14px;border:1px solid var(--border);border-radius:999px;background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit;font-size:15px}
+.chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-text);font-weight:600}
+.charts{display:grid;gap:18px}
+.chart h3{display:flex;align-items:center;gap:8px;font-size:16px;margin:0;overflow-wrap:anywhere}
+.chart .stats{font-size:13px;color:var(--muted);margin:2px 0 6px;font-variant-numeric:tabular-nums}
+.plot{position:relative}
+.plot canvas{display:block;width:100%;height:200px;touch-action:pan-y}
+.tip{position:absolute;top:4px;pointer-events:none;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:13px;box-shadow:var(--shadow);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tip b{display:block;font-size:15px}
+.empty{font-size:14px;color:var(--muted);margin:0;padding:12px;border:1px dashed var(--border);border-radius:8px;text-align:center}
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px}
+.tablewrap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:end;white-space:nowrap;border-bottom:1px solid var(--border)}
+th:first-child,td:first-child{text-align:start}
+thead th{background:var(--surface-2);font-weight:600;position:sticky;top:0}
+tbody tr:last-child td{border-bottom:0}
+td.del{padding:2px 4px;width:48px}
+td.del button{width:44px;min-height:44px;border:0;background:none;color:var(--muted);cursor:pointer;font:inherit;font-size:20px;border-radius:8px}
+td.del button:hover{color:var(--err)}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Datensammler</span></h1>
+  <p class="sub" data-i18n="sub">Messwerte mit Zeitpunkt erfassen und als Kurven auswerten.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-profile">
+    <h2 id="h-profile" data-i18n="profile">Profil</h2>
+    <p class="hint" id="noProfile" data-i18n="noProfile">Noch kein Profil – lege eins an, z. B. „Garten“, „Gesundheit“ oder „Auto“.</p>
+    <div class="form" id="profileFields" hidden>
+      <label class="field"><span data-i18n="choose">Profil wählen</span><select id="profileSel"></select></label>
+      <label class="field"><span data-i18n="profileName">Name des Profils</span><input type="text" id="profileName" maxlength="40" autocomplete="off"></label>
+    </div>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnNewProfile" data-i18n="newProfile">+ Neues Profil</button>
+      <button type="button" class="btn danger" id="btnDelProfile" data-i18n="delProfile" hidden>Profil löschen</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-metrics" id="metricsCard" hidden>
+    <h2 id="h-metrics" data-i18n="metrics">Messwerte</h2>
+    <ul class="metrics" id="metrics"></ul>
+    <p class="hint" id="noMetrics" data-i18n="noMetrics">Noch keine Messwerte – lege mindestens einen an (Name und Einheit, z. B. „Gewicht“ in „kg“).</p>
+    <div class="row">
+      <button type="button" class="btn" id="btnAddMetric" data-i18n="addMetric">+ Messwert</button>
+    </div>
+    <p class="hint" id="maxMetrics" data-i18n="maxMetrics" hidden>Höchstens 8 Messwerte je Profil.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-entry" id="entryCard" hidden>
+    <h2 id="h-entry" data-i18n="entry">Neuer Datenpunkt</h2>
+    <form id="entryForm" novalidate>
+      <div class="form" id="entryFields"></div>
+      <div class="form" style="margin-block-start:12px">
+        <label class="field"><span data-i18n="when">Zeitpunkt</span><input type="datetime-local" id="entryTime" step="60"></label>
+      </div>
+      <p class="hint" data-i18n="whenHint">Leer = jetzt. Felder ohne Wert werden übersprungen.</p>
+      <p class="msg" id="entryMsg" role="alert" hidden></p>
+      <div class="row"><button type="submit" class="btn primary" id="btnSavePoint" data-i18n="savePoint">Datenpunkt speichern</button></div>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="h-charts" id="chartsCard" hidden>
+    <h2 id="h-charts" data-i18n="charts">Auswertung</h2>
+    <div class="chips" role="group" aria-label="Zeitraum" data-i18n-attr="aria-label:range">
+      <button type="button" data-range="all" aria-pressed="true" data-i18n="r.all">Alles</button>
+      <button type="button" data-range="1d" aria-pressed="false" data-i18n="r.1d">24 h</button>
+      <button type="button" data-range="7d" aria-pressed="false" data-i18n="r.7d">7 Tage</button>
+      <button type="button" data-range="30d" aria-pressed="false" data-i18n="r.30d">30 Tage</button>
+      <button type="button" data-range="1y" aria-pressed="false" data-i18n="r.1y">1 Jahr</button>
+    </div>
+    <div class="charts" id="charts"></div>
+    <h3 data-i18n="export" style="font-size:16px;margin:18px 0 0">Export</h3>
+    <div class="row">
+      <button type="button" class="btn" id="btnPng" data-i18n="png">Bild speichern (PNG)</button>
+      <button type="button" class="btn" id="btnShare" data-i18n="share" hidden>Bild teilen …</button>
+      <button type="button" class="btn" id="btnJson" data-i18n="json">JSON speichern</button>
+      <button type="button" class="btn" id="btnCsv" data-i18n="csv">CSV speichern</button>
+      <button type="button" class="btn" id="btnImport" data-i18n="import">Profil aus JSON laden</button>
+      <input type="file" id="fileImport" accept=".json,application/json" hidden>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-points" id="pointsCard" hidden>
+    <h2 id="h-points" data-i18n="points">Datenpunkte</h2>
+    <p class="hint" id="noPoints" data-i18n="noPoints">Noch keine Datenpunkte.</p>
+    <div class="tablewrap" id="pointsWrap" tabindex="0" role="region" aria-labelledby="h-points">
+      <table id="pointsTable"><thead></thead><tbody></tbody></table>
+    </div>
+    <div class="row"><button type="button" class="btn" id="btnMore" hidden></button></div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Sammelt eigene Messwerte – Gewicht, Blutdruck, Zählerstände, Pflanzenhöhe, Temperaturen … – und zeigt sie als Kurven über die Zeit.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Profil:</b> fasst zusammengehörige Messwerte zusammen, z. B. „Gesundheit“ oder „Stromzähler“. Beliebig viele Profile lassen sich anlegen, umbenennen und löschen.</li>
+    <li><b>Messwerte:</b> je Profil bis zu 8, jeweils mit Name und Einheit. Jeder Messwert hat eine feste Farbe. <b>×</b> löscht den Messwert samt seiner Werte (nach Rückfrage).</li>
+    <li><b>Neuer Datenpunkt:</b> Werte eintragen (Komma oder Punkt) und speichern. Der Zeitpunkt ist „jetzt“, lässt sich aber auch nachträglich wählen. Nicht jeder Messwert braucht bei jedem Datenpunkt einen Wert.</li>
+    <li><b>Auswertung:</b> für jeden Messwert eine eigene Kurve – alle mit derselben Zeitachse, damit sie sich vergleichen lassen, aber jede mit eigener Werte-Achse (verschiedene Einheiten passen nicht auf eine Skala). Antippen oder darüberfahren zeigt den nächsten Wert. Darüber: letzter Wert, kleinster, größter und Mittelwert im gewählten Zeitraum.</li>
+    <li><b>Datenpunkte:</b> Tabelle aller Werte, neueste zuerst. <b>×</b> löscht einen Datenpunkt.</li>
+  </ul>
+  <h3>Export</h3>
+  <ul>
+    <li><b>Bild speichern:</b> alle Kurven des Zeitraums als PNG (hell, zum Weitergeben oder Drucken). <b>Bild teilen</b> erscheint, wenn das Gerät Dateien teilen kann.</li>
+    <li><b>JSON speichern:</b> das ganze Profil mit Messwerten und allen Datenpunkten (Zeit in UTC). <b>Profil aus JSON laden</b> legt daraus ein neues Profil an – so lässt sich ein einzelnes Profil auf ein anderes Gerät bringen.</li>
+    <li><b>CSV speichern:</b> Tabelle für Excel, LibreOffice oder Numbers (Semikolon-getrennt, deutsches Komma; in der englischen Ansicht komma-getrennt mit Dezimalpunkt).</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Profile und Werte bleiben nur in diesem Browser gespeichert. Nichts wird an einen Server geschickt; die App läuft auch offline. Alle Profile auf einmal sichern oder übertragen: <i>Daten sichern &amp; übertragen</i>.</p>
+  <h3>KI-Agent</h3>
+  <p>Ein KI-Agent im Browser (WebMCP) kann die Profile auflisten, Datenpunkte eintragen und die Werte samt Kennzahlen lesen. Eingetragene Werte erscheinen hier in der App. Löschen kann er nichts.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Collects your own measurements – weight, blood pressure, meter readings, plant height, temperatures … – and shows them as curves over time.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Profile:</b> groups measurements that belong together, e.g. “Health” or “Electricity meter”. Create, rename and delete as many profiles as you like.</li>
+    <li><b>Measurements:</b> up to 8 per profile, each with a name and a unit. Every measurement has a fixed colour. <b>×</b> deletes the measurement and its values (after asking).</li>
+    <li><b>New data point:</b> enter values (comma or point) and save. The time is “now”, but you can also pick it afterwards. Not every measurement needs a value in every data point.</li>
+    <li><b>Charts:</b> one curve per measurement – all on the same time axis so they can be compared, but each with its own value axis (different units do not fit on one scale). Tap or hover to see the nearest value. Above it: latest value, minimum, maximum and average in the chosen period.</li>
+    <li><b>Data points:</b> table of all values, newest first. <b>×</b> deletes a data point.</li>
+  </ul>
+  <h3>Export</h3>
+  <ul>
+    <li><b>Save image:</b> all curves of the period as PNG (light, for passing on or printing). <b>Share image</b> appears if the device can share files.</li>
+    <li><b>Save JSON:</b> the whole profile with its measurements and all data points (time in UTC). <b>Load profile from JSON</b> creates a new profile from it – the way to move a single profile to another device.</li>
+    <li><b>Save CSV:</b> a table for Excel, LibreOffice or Numbers (in English comma-separated with a decimal point, in German semicolon-separated with a decimal comma).</li>
+  </ul>
+  <h3>Storage</h3>
+  <p>Profiles and values stay in this browser only. Nothing is sent to a server; the app works offline too. To back up or move all profiles at once: <i>Back up &amp; transfer data</i>.</p>
+  <h3>AI agent</h3>
+  <p>An AI agent in the browser (WebMCP) can list the profiles, add data points and read the values with key figures. Added values appear here in the app. It cannot delete anything.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 14a83d245596</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    profileN:'Profil {n}',metricN:'Messwert {n}',metricName:'Name',unit:'Einheit',unitPh:'z. B. kg',namePh:'z. B. Gewicht',
+    delMetric:'Messwert löschen: {name}',delPoint:'Datenpunkt vom {time} löschen',time:'Zeitpunkt',
+    confirmProfile:'Profil „{name}“ mit {n} Datenpunkten löschen?',confirmMetric:'Messwert „{name}“ mit {n} Werten löschen?',
+    confirmPoint:'Datenpunkt vom {time} löschen?',
+    profileDeleted:'Profil gelöscht',metricDeleted:'Messwert gelöscht',pointDeleted:'Datenpunkt gelöscht',
+    saved:'Datenpunkt gespeichert',errNum:'„{name}“ ist keine Zahl.',errEmpty:'Bitte mindestens einen Wert eintragen.',errTime:'Bitte einen gültigen Zeitpunkt wählen.',
+    noData:'Keine Werte im gewählten Zeitraum.',noMetricsYet:'Lege zuerst einen Messwert an.',
+    stats:'Letzter {last} · Min {min} · Max {max} · Ø {avg} · {n} Werte',stats1:'1 Wert: {last}',
+    aria:'Kurve {name}: {n} Werte von {from} bis {to}, kleinster {min}, größter {max}, letzter {last}',
+    more:'Alle {n} anzeigen',nothing:'Keine Werte im gewählten Zeitraum.',
+    pngSaved:'Bild gespeichert',jsonSaved:'JSON gespeichert',csvSaved:'CSV gespeichert',fileFail:'Speichern hat nicht geklappt.',shareFail:'Teilen hat nicht geklappt.',
+    imported:'Profil „{name}“ mit {n} Datenpunkten geladen',importErr:'Diese Datei ist kein Profil aus dem Datensammler.',
+    exportRange:'Zeitraum: {range}',csvTime:'Zeit',delCol:'Löschen',
+    'mcp.list':'Profile gelesen','mcp.add':'Datenpunkt eingetragen','mcp.get':'Werte gelesen'
+  },
+  en:{
+    title:'Data Logger',sub:'Record measurements with a timestamp and see them as curves.',
+    profile:'Profile',noProfile:'No profile yet – create one, e.g. “Garden”, “Health” or “Car”.',choose:'Choose profile',profileName:'Profile name',
+    newProfile:'+ New profile',delProfile:'Delete profile',
+    metrics:'Measurements',noMetrics:'No measurements yet – create at least one (name and unit, e.g. “Weight” in “kg”).',addMetric:'+ Measurement',
+    maxMetrics:'At most 8 measurements per profile.',
+    entry:'New data point',when:'Time',whenHint:'Empty = now. Fields without a value are skipped.',savePoint:'Save data point',
+    charts:'Charts',range:'Period','r.all':'All','r.1d':'24 h','r.7d':'7 days','r.30d':'30 days','r.1y':'1 year',
+    export:'Export',png:'Save image (PNG)',share:'Share image …',json:'Save JSON',csv:'Save CSV',import:'Load profile from JSON',
+    points:'Data points',noPoints:'No data points yet.',
+    profileN:'Profile {n}',metricN:'Measurement {n}',metricName:'Name',unit:'Unit',unitPh:'e.g. kg',namePh:'e.g. Weight',
+    delMetric:'Delete measurement: {name}',delPoint:'Delete data point from {time}',time:'Time',
+    confirmProfile:'Delete profile “{name}” with {n} data points?',confirmMetric:'Delete measurement “{name}” with {n} values?',
+    confirmPoint:'Delete data point from {time}?',
+    profileDeleted:'Profile deleted',metricDeleted:'Measurement deleted',pointDeleted:'Data point deleted',
+    saved:'Data point saved',errNum:'“{name}” is not a number.',errEmpty:'Please enter at least one value.',errTime:'Please pick a valid time.',
+    noData:'No values in the chosen period.',noMetricsYet:'Create a measurement first.',
+    stats:'Latest {last} · Min {min} · Max {max} · Avg {avg} · {n} values',stats1:'1 value: {last}',
+    aria:'Curve {name}: {n} values from {from} to {to}, minimum {min}, maximum {max}, latest {last}',
+    more:'Show all {n}',nothing:'No values in the chosen period.',
+    pngSaved:'Image saved',jsonSaved:'JSON saved',csvSaved:'CSV saved',fileFail:'Saving did not work.',shareFail:'Sharing did not work.',
+    imported:'Profile “{name}” with {n} data points loaded',importErr:'This file is not a Data Logger profile.',
+    exportRange:'Period: {range}',csvTime:'Time',delCol:'Delete',
+    'mcp.list':'profiles read','mcp.add':'data point added','mcp.get':'values read'
+  }
+});
+const t=Tools.t,$=Tools.$;
+const LS='data-logger.profiles.v1',LS_SET='data-logger.settings.v1';
+const MAX_PROFILES=50,MAX_METRICS=8,MAX_POINTS=20000,PAGE=50;
+const MIN=6e4,HOUR=36e5,DAY=864e5;
+const RANGES={all:0,'1d':DAY,'7d':7*DAY,'30d':30*DAY,'1y':365*DAY};
+const FORMAT='phanlipo-data-logger',FORMAT_VERSION=1;
+// Light series colours for the exported image (same as --s1 … --s8 in light mode)
+const LIGHT_SERIES=['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'];
+
+/* ---------- Data ---------- */
+const uid=()=>Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4);
+const str=(x,n)=>typeof x==='string'?x.slice(0,n):'';
+// Repairs whatever comes from storage or a file: known fields only, unique ids, one colour slot per measurement
+function cleanProfile(p){
+  if(!p||typeof p!=='object'||Array.isArray(p))return null;
+  const metrics=[],ids=new Set();
+  for(const m of Array.isArray(p.metrics)?p.metrics:[]){
+    if(!m||typeof m.id!=='string'||!m.id||ids.has(m.id)||metrics.length>=MAX_METRICS)continue;
+    ids.add(m.id);
+    metrics.push({id:m.id.slice(0,40),name:str(m.name,40),unit:str(m.unit,15),slot:Number.isInteger(m.slot)&&m.slot>=0&&m.slot<8?m.slot:-1});
+  }
+  const used=new Set();
+  for(const m of metrics){if(m.slot<0||used.has(m.slot))m.slot=-1;else used.add(m.slot);}
+  for(const m of metrics)if(m.slot<0){m.slot=[0,1,2,3,4,5,6,7].find(s=>!used.has(s));used.add(m.slot);}
+  const points=[];
+  for(const x of Array.isArray(p.points)?p.points:[]){
+    if(!x||!Number.isFinite(x.t)||!x.v||typeof x.v!=='object')continue;
+    const v={};
+    for(const m of metrics)if(Number.isFinite(x.v[m.id]))v[m.id]=x.v[m.id];
+    if(Object.keys(v).length)points.push({id:typeof x.id==='string'&&x.id?x.id.slice(0,20):uid(),t:x.t,v});
+  }
+  points.sort((a,b)=>a.t-b.t);
+  return {id:typeof p.id==='string'&&p.id?p.id.slice(0,40):uid(),name:str(p.name,40),metrics,points:points.slice(-MAX_POINTS)};
+}
+function loadStore(){
+  const raw=Tools.load(LS,{profiles:[]});
+  const out=[],ids=new Set();
+  for(const p of raw&&Array.isArray(raw.profiles)?raw.profiles:[]){
+    const c=cleanProfile(p);
+    if(c&&!ids.has(c.id)&&out.length<MAX_PROFILES){ids.add(c.id);out.push(c);}
+  }
+  return {profiles:out};
+}
+const store=loadStore();
+const set=Object.assign({active:'',range:'all'},Tools.load(LS_SET,{}));
+if(!(set.range in RANGES))set.range='all';
+const save=()=>Tools.save(LS,store);
+const saveSet=()=>Tools.save(LS_SET,set);
+function cur(){
+  let p=store.profiles.find(x=>x.id===set.active);
+  if(!p&&store.profiles.length){p=store.profiles[0];set.active=p.id;}
+  return p||null;
+}
+const pName=p=>p.name.trim()||t('profileN',{n:store.profiles.indexOf(p)+1});
+const mName=(p,m)=>m.name.trim()||t('metricN',{n:p.metrics.indexOf(m)+1});
+const mLabel=(p,m)=>m.unit.trim()?`${mName(p,m)} (${m.unit.trim()})`:mName(p,m);
+const color=m=>`var(--s${m.slot+1})`;
+
+/* ---------- Formatting ---------- */
+// As many decimals as the value has (at most 6): 72 → "72", 72.35 → "72,35"
+function decimals(x){
+  const s=String(+x.toPrecision(10));
+  if(/e/.test(s))return 6;
+  return Math.min(6,(s.split('.')[1]||'').length);
+}
+const num=x=>Tools.fmt(x,decimals(x));
+const withUnit=(x,m)=>m.unit.trim()?`${num(x)} ${m.unit.trim()}`:num(x);
+const dateTime=x=>new Date(x).toLocaleString(Tools.locale(),{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+const pad=n=>String(n).padStart(2,'0');
+const isoDate=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const isoLocal=x=>{const d=new Date(x);return `${isoDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;};
+function slug(s){
+  const r=s.toLowerCase().replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
+    .normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);
+  return r||'profil';
+}
+
+/* ---------- Chart ---------- */
+const TIME_STEPS=[MIN,2*MIN,5*MIN,10*MIN,15*MIN,30*MIN,HOUR,2*HOUR,3*HOUR,6*HOUR,12*HOUR,DAY,2*DAY,7*DAY,14*DAY];
+// Time axis ticks on whole minutes/hours/days (local time) or on the 1st of a month
+function timeTicks(lo,hi,maxN){
+  const span=hi-lo,out=[];
+  const step=TIME_STEPS.find(s=>span/s<=maxN);
+  if(step&&step<DAY){
+    const d=new Date(lo);d.setHours(0,0,0,0);
+    let x=d.getTime();
+    while(x<lo)x+=step;
+    for(;x<=hi;x+=step)out.push(x);
+    return {ticks:out,step};
+  }
+  if(step){
+    const d=new Date(lo);d.setHours(0,0,0,0);
+    if(d.getTime()<lo)d.setDate(d.getDate()+1);
+    for(;d.getTime()<=hi;d.setDate(d.getDate()+step/DAY))out.push(d.getTime());
+    return {ticks:out,step};
+  }
+  const months=[1,2,3,6,12,24,60,120].find(m=>span/(m*30.44*DAY)<=maxN)||120;
+  const d=new Date(lo);d.setHours(0,0,0,0);d.setDate(1);
+  if(d.getTime()<lo)d.setMonth(d.getMonth()+1);
+  while(d.getMonth()%Math.min(months,12)!==0)d.setMonth(d.getMonth()+1);
+  for(;d.getTime()<=hi;d.setMonth(d.getMonth()+months))out.push(d.getTime());
+  return {ticks:out,step:months*30*DAY};
+}
+function timeLabel(x,step){
+  const d=new Date(x),L=Tools.locale();
+  if(step<DAY){
+    if(d.getHours()===0&&d.getMinutes()===0)return d.toLocaleDateString(L,{day:'numeric',month:'short'});
+    return d.toLocaleTimeString(L,{hour:'2-digit',minute:'2-digit'});
+  }
+  if(step<28*DAY)return d.toLocaleDateString(L,{day:'numeric',month:'short'});
+  return d.toLocaleDateString(L,{month:'short',year:'2-digit'});
+}
+// Round value axis: steps of 1, 2, 2.5 or 5 × 10^k
+function valueTicks(lo,hi,n){
+  if(lo===hi){const d=Math.abs(lo)*0.1||1;lo-=d;hi+=d;}
+  const raw=(hi-lo)/n,p=10**Math.floor(Math.log10(raw)),f=raw/p;
+  const step=(f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p;
+  const a=Math.floor(lo/step)*step,b=Math.ceil(hi/step)*step,ticks=[];
+  for(let i=0;a+i*step<=b+step*1e-9;i++)ticks.push(+(a+i*step).toPrecision(12));
+  return {lo:a,hi:b,ticks,dec:decimals(step)};
+}
+// Domain of the time axis: the chosen period up to now, or all data
+function domain(p){
+  const r=RANGES[set.range],now=Date.now();
+  const pts=r?p.points.filter(x=>x.t>=now-r):p.points;
+  if(!pts.length)return {pts,lo:0,hi:0};
+  let lo=r?now-r:pts[0].t,hi=r?Math.max(now,pts[pts.length-1].t):pts[pts.length-1].t;
+  if(hi-lo<MIN){lo-=30*MIN;hi+=30*MIN;}
+  return {pts,lo,hi};
+}
+const series=(pts,m)=>pts.filter(x=>m.id in x.v).map(x=>[x.t,x.v[m.id]]);
+/** Draws one curve. th: colours, font, scale k. Returns the mapping for hover. */
+function drawChart(ctx,W,H,data,lo,hi,col,th,hover){
+  const k=th.k;
+  ctx.fillStyle=th.bg;ctx.fillRect(0,0,W,H);
+  ctx.font=`${12*k}px ${th.font}`;
+  const vals=data.map(d=>d[1]);
+  const yt=valueTicks(Math.min(...vals),Math.max(...vals),H/k<220?4:5);
+  const yl=yt.ticks.map(v=>Tools.fmt(v,yt.dec));
+  const x0=Math.ceil(Math.max(...yl.map(l=>ctx.measureText(l).width)))+12*k,x1=W-14*k,y0=10*k,y1=H-26*k;
+  const X=x=>x0+(x-lo)/(hi-lo)*(x1-x0),Y=v=>y1-(v-yt.lo)/(yt.hi-yt.lo)*(y1-y0);
+  // Recessive grid and axis labels
+  ctx.lineWidth=1*k;ctx.strokeStyle=th.grid;ctx.fillStyle=th.muted;
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  yt.ticks.forEach((v,i)=>{const y=Math.round(Y(v))+.5;ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x1,y);ctx.stroke();ctx.fillText(yl[i],x0-6*k,y);});
+  const tt=timeTicks(lo,hi,Math.max(2,Math.floor((x1-x0)/(78*k))));
+  ctx.textAlign='center';ctx.textBaseline='top';
+  let lastRight=-Infinity;
+  for(const x of tt.ticks){
+    const l=timeLabel(x,tt.step),w=ctx.measureText(l).width,cx=Math.min(Math.max(X(x),x0+w/2),W-w/2-2*k);
+    if(cx-w/2<lastRight+8*k)continue;
+    ctx.beginPath();ctx.moveTo(X(x),y1);ctx.lineTo(X(x),y1+4*k);ctx.stroke();
+    ctx.fillText(l,cx,y1+7*k);lastRight=cx+w/2;
+  }
+  // Curve: 2 px line, markers with a ring in the surface colour
+  ctx.strokeStyle=col;ctx.lineWidth=2*k;ctx.lineJoin='round';ctx.lineCap='round';
+  ctx.beginPath();data.forEach((d,i)=>{const x=X(d[0]),y=Y(d[1]);if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);});ctx.stroke();
+  const marker=(d,r)=>{ctx.beginPath();ctx.arc(X(d[0]),Y(d[1]),r*k,0,2*Math.PI);ctx.fillStyle=col;ctx.fill();ctx.lineWidth=2*k;ctx.strokeStyle=th.bg;ctx.stroke();};
+  if(data.length<=60)data.forEach(d=>marker(d,4));else marker(data[data.length-1],4);
+  if(hover!=null){
+    const d=data[hover];
+    ctx.strokeStyle=th.muted;ctx.lineWidth=1*k;ctx.setLineDash([4*k,4*k]);
+    ctx.beginPath();ctx.moveTo(X(d[0]),y0);ctx.lineTo(X(d[0]),y1);ctx.stroke();ctx.setLineDash([]);
+    marker(d,6);
+  }
+  return {X,Y,x0,x1};
+}
+function theme(){
+  const cs=getComputedStyle(document.documentElement),g=n=>cs.getPropertyValue(n).trim();
+  return {k:1,bg:g('--surface')||'#fff',text:g('--text'),muted:g('--muted'),grid:g('--border'),font:g('--font')||'sans-serif',
+    series:[1,2,3,4,5,6,7,8].map(i=>g('--s'+i))};
+}
+const stats=vals=>({min:Math.min(...vals),max:Math.max(...vals),avg:vals.reduce((a,b)=>a+b,0)/vals.length,last:vals[vals.length-1],n:vals.length});
+function statsText(s,m){
+  if(s.n===1)return t('stats1',{last:withUnit(s.last,m)});
+  return t('stats',{last:withUnit(s.last,m),min:num(s.min),max:num(s.max),avg:Tools.fmt(s.avg,Math.min(6,Math.max(1,decimals(s.last)+1))),n:Tools.fmt(s.n,0)});
+}
+
+/* ---------- Rendering ---------- */
+let charts=[]; // {canvas, data, lo, hi, m, map, hover}
+function renderProfiles(){
+  const p=cur(),sel=$('profileSel');
+  $('noProfile').hidden=!!p;$('profileFields').hidden=!p;$('btnDelProfile').hidden=!p;
+  for(const id of ['metricsCard','entryCard','chartsCard','pointsCard'])$(id).hidden=!p;
+  sel.textContent='';
+  for(const x of store.profiles){const o=document.createElement('option');o.value=x.id;o.textContent=pName(x);sel.append(o);}
+  if(p){
+    sel.value=p.id;
+    // Keep what is being typed, but always show the name of a newly chosen profile
+    const n=$('profileName');if(document.activeElement!==n||n.dataset.id!==p.id){n.value=p.name;n.dataset.id=p.id;}
+    $('profileName').placeholder=t('profileN',{n:store.profiles.indexOf(p)+1});}
+  $('btnNewProfile').disabled=store.profiles.length>=MAX_PROFILES;
+}
+function renderMetrics(){
+  const p=cur(),ul=$('metrics');ul.textContent='';
+  if(!p)return;
+  for(const m of p.metrics){
+    const li=document.createElement('li');
+    const sw=document.createElement('span');sw.className='swatch';sw.style.background=color(m);
+    const field=(label,value,max,ph,key)=>{
+      const l=document.createElement('label');l.className='field';
+      const s=document.createElement('span');s.textContent=label;
+      const i=document.createElement('input');i.type='text';i.maxLength=max;i.value=value;i.placeholder=ph;i.autocomplete='off';
+      i.dataset.metric=m.id;i.dataset.key=key;
+      i.addEventListener('input',()=>{m[key]=i.value;save();renderLabels();});
+      l.append(s,i);return l;
+    };
+    const x=document.createElement('button');x.type='button';x.className='icon-btn';x.textContent='×';
+    x.setAttribute('aria-label',t('delMetric',{name:mName(p,m)}));
+    x.addEventListener('click',()=>delMetric(p,m));
+    li.append(sw,field(t('metricName'),m.name,40,t('metricN',{n:p.metrics.indexOf(m)+1}),'name'),field(t('unit'),m.unit,15,t('unitPh'),'unit'),x);
+    ul.append(li);
+  }
+  $('noMetrics').hidden=p.metrics.length>0;
+  $('btnAddMetric').disabled=p.metrics.length>=MAX_METRICS;
+  $('maxMetrics').hidden=p.metrics.length<MAX_METRICS;
+}
+function renderEntry(){
+  const p=cur(),box=$('entryFields');
+  const old={};for(const i of box.querySelectorAll('input'))old[i.dataset.metric]=i.value;
+  box.textContent='';
+  if(!p)return;
+  for(const m of p.metrics){
+    const l=document.createElement('label');l.className='field';
+    const s=document.createElement('span');s.className='lbl';s.textContent=mLabel(p,m);
+    const i=document.createElement('input');i.type='text';i.inputMode='decimal';i.autocomplete='off';i.dataset.metric=m.id;
+    i.value=old[m.id]||'';
+    l.append(s,i);box.append(l);
+  }
+  $('btnSavePoint').disabled=!p.metrics.length;
+}
+// Names or units changed: update labels without rebuilding the inputs being typed in
+function renderLabels(){
+  const p=cur();if(!p)return;
+  for(const m of p.metrics){
+    const i=$('entryFields').querySelector(`input[data-metric="${m.id}"]`);
+    if(i)i.previousElementSibling.textContent=mLabel(p,m);
+    const x=$('metrics').querySelector(`input[data-metric="${m.id}"]`);
+    if(x)x.closest('li').querySelector('.icon-btn').setAttribute('aria-label',t('delMetric',{name:mName(p,m)}));
+  }
+  renderProfiles();renderCharts();renderPoints();
+}
+function renderCharts(){
+  const p=cur(),box=$('charts');box.textContent='';charts=[];
+  if(!p)return;
+  for(const b of document.querySelectorAll('[data-range]'))b.setAttribute('aria-pressed',String(b.dataset.range===set.range));
+  if(!p.metrics.length){const e=document.createElement('p');e.className='empty';e.textContent=t('noMetricsYet');box.append(e);return;}
+  const {pts,lo,hi}=domain(p),th=theme();
+  for(const m of p.metrics){
+    const data=series(pts,m);
+    const sec=document.createElement('section');sec.className='chart';
+    const h=document.createElement('h3');
+    const sw=document.createElement('span');sw.className='swatch';sw.style.background=color(m);
+    const ht=document.createElement('span');ht.textContent=mLabel(p,m);
+    h.append(sw,ht);sec.append(h);
+    if(!data.length){const e=document.createElement('p');e.className='empty';e.textContent=t('noData');sec.append(e);box.append(sec);continue;}
+    const s=stats(data.map(d=>d[1]));
+    const st=document.createElement('p');st.className='stats';st.textContent=statsText(s,m);sec.append(st);
+    const plot=document.createElement('div');plot.className='plot';
+    const c=document.createElement('canvas');c.setAttribute('role','img');
+    c.setAttribute('aria-label',t('aria',{name:mLabel(p,m),n:Tools.fmt(s.n,0),from:dateTime(data[0][0]),to:dateTime(data[data.length-1][0]),min:num(s.min),max:num(s.max),last:num(s.last)}));
+    const tip=document.createElement('div');tip.className='tip';tip.hidden=true;
+    plot.append(c,tip);sec.append(plot);box.append(sec);
+    const ch={canvas:c,tip,data,lo,hi,m,col:th.series[m.slot],th,hover:null,map:null};
+    charts.push(ch);
+    c.addEventListener('pointermove',e=>hoverAt(ch,e));
+    c.addEventListener('pointerdown',e=>hoverAt(ch,e));
+    c.addEventListener('pointerleave',()=>{if(ch.hover!=null){ch.hover=null;ch.tip.hidden=true;paint(ch);}});
+  }
+  for(const ch of charts)paint(ch);
+}
+function paint(ch){
+  const c=ch.canvas,W=c.clientWidth,H=c.clientHeight,dpr=window.devicePixelRatio||1;
+  if(!W||!H)return;
+  c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);
+  const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+  ch.map=drawChart(ctx,W,H,ch.data,ch.lo,ch.hi,ch.col,ch.th,ch.hover);
+}
+function hoverAt(ch,e){
+  if(!ch.map)return;
+  const r=ch.canvas.getBoundingClientRect(),px=e.clientX-r.left;
+  let best=-1,bd=Infinity;
+  ch.data.forEach((d,i)=>{const dx=Math.abs(ch.map.X(d[0])-px);if(dx<bd){bd=dx;best=i;}});
+  if(best<0||bd>48){if(ch.hover!=null){ch.hover=null;ch.tip.hidden=true;paint(ch);}return;}
+  if(best!==ch.hover){ch.hover=best;paint(ch);}
+  const d=ch.data[best];
+  ch.tip.textContent='';
+  const b=document.createElement('b');b.textContent=withUnit(d[1],ch.m);
+  ch.tip.append(b,dateTime(d[0]));
+  ch.tip.hidden=false;
+  const x=ch.map.X(d[0]),w=ch.tip.offsetWidth,W=ch.canvas.clientWidth;
+  ch.tip.style.left=`${Math.min(Math.max(x-w/2,0),W-w)}px`;
+}
+let shownAll=false;
+function renderPoints(){
+  const p=cur();if(!p)return;
+  const tbl=$('pointsTable'),thead=tbl.tHead,tbody=tbl.tBodies[0];
+  thead.textContent='';tbody.textContent='';
+  $('noPoints').hidden=p.points.length>0;$('pointsWrap').hidden=!p.points.length;
+  const more=$('btnMore');more.hidden=shownAll||p.points.length<=PAGE;
+  more.textContent=t('more',{n:Tools.fmt(p.points.length,0)});
+  if(!p.points.length)return;
+  const hr=document.createElement('tr');
+  const th=txt=>{const x=document.createElement('th');x.scope='col';x.textContent=txt;hr.append(x);return x;};
+  th(t('time'));
+  for(const m of p.metrics)th(mLabel(p,m));
+  const last=th('');last.append(Object.assign(document.createElement('span'),{className:'sr-only',textContent:t('delCol')}));
+  thead.append(hr);
+  const list=p.points.slice().reverse().slice(0,shownAll?undefined:PAGE);
+  for(const x of list){
+    const tr=document.createElement('tr');
+    const td0=document.createElement('td');td0.textContent=dateTime(x.t);tr.append(td0);
+    for(const m of p.metrics){const td=document.createElement('td');td.textContent=m.id in x.v?num(x.v[m.id]):'–';tr.append(td);}
+    const tdx=document.createElement('td');tdx.className='del';
+    const b=document.createElement('button');b.type='button';b.textContent='×';
+    b.setAttribute('aria-label',t('delPoint',{time:dateTime(x.t)}));
+    b.addEventListener('click',()=>delPoint(p,x));
+    tdx.append(b);tr.append(tdx);tbody.append(tr);
+  }
+}
+function renderAll(){renderProfiles();renderMetrics();renderEntry();renderCharts();renderPoints();}
+
+/* ---------- Actions ---------- */
+function newProfile(){
+  if(store.profiles.length>=MAX_PROFILES)return;
+  const p={id:uid(),name:'',metrics:[{id:uid(),name:'',unit:'',slot:0}],points:[]};
+  store.profiles.push(p);set.active=p.id;shownAll=false;save();saveSet();renderAll();
+  $('profileName').focus();
+  Tools.diag.log('profile created',{profiles:store.profiles.length});
+}
+function delProfile(){
+  const p=cur();if(!p)return;
+  if(!confirm(t('confirmProfile',{name:pName(p),n:Tools.fmt(p.points.length,0)})))return;
+  store.profiles.splice(store.profiles.indexOf(p),1);set.active=store.profiles[0]?store.profiles[0].id:'';
+  shownAll=false;save();saveSet();renderAll();Tools.toast(t('profileDeleted'));
+  Tools.diag.log('profile deleted',{profiles:store.profiles.length});
+}
+function addMetric(){
+  const p=cur();if(!p||p.metrics.length>=MAX_METRICS)return;
+  const used=new Set(p.metrics.map(m=>m.slot));
+  const m={id:uid(),name:'',unit:'',slot:[0,1,2,3,4,5,6,7].find(s=>!used.has(s))};
+  p.metrics.push(m);save();renderMetrics();renderEntry();renderCharts();renderPoints();
+  const i=$('metrics').querySelector(`input[data-metric="${m.id}"]`);if(i)i.focus();
+  Tools.diag.log('metric added',{metrics:p.metrics.length});
+}
+function delMetric(p,m){
+  const n=p.points.filter(x=>m.id in x.v).length;
+  if(!confirm(t('confirmMetric',{name:mName(p,m),n:Tools.fmt(n,0)})))return;
+  p.metrics.splice(p.metrics.indexOf(m),1);
+  for(const x of p.points)delete x.v[m.id];
+  p.points=p.points.filter(x=>Object.keys(x.v).length);
+  save();renderMetrics();renderEntry();renderCharts();renderPoints();Tools.toast(t('metricDeleted'));
+  Tools.diag.log('metric deleted',{metrics:p.metrics.length,points:p.points.length});
+}
+function addPoint(p,time,v){
+  const x={id:uid(),t:time,v};
+  p.points.push(x);p.points.sort((a,b)=>a.t-b.t);
+  if(p.points.length>MAX_POINTS)p.points.splice(0,p.points.length-MAX_POINTS);
+  save();renderCharts();renderPoints();
+  return x;
+}
+function delPoint(p,x){
+  if(!confirm(t('confirmPoint',{time:dateTime(x.t)})))return;
+  p.points.splice(p.points.indexOf(x),1);
+  save();renderCharts();renderPoints();Tools.toast(t('pointDeleted'));
+  Tools.diag.log('point deleted',{points:p.points.length});
+}
+// "YYYY-MM-DDTHH:MM[:SS]" in local time → ms, or NaN
+function parseLocal(s){
+  const m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s||'');
+  if(!m)return NaN;
+  const d=new Date(2000,0,1);d.setFullYear(+m[1],+m[2]-1,+m[3]);d.setHours(+m[4],+m[5],+(m[6]||0),0);
+  if(d.getMonth()!==+m[2]-1||d.getDate()!==+m[3]||d.getHours()!==+m[4]||d.getMinutes()!==+m[5])return NaN;
+  return d.getTime();
+}
+function showMsg(text){const e=$('entryMsg');e.textContent=text||'';e.hidden=!text;}
+$('entryForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const p=cur();if(!p)return;
+  const v={};
+  for(const m of p.metrics){
+    const i=$('entryFields').querySelector(`input[data-metric="${m.id}"]`),raw=i.value;
+    if(!raw.trim())continue;
+    const x=Tools.parseNum(raw);
+    if(!Number.isFinite(x)){showMsg(t('errNum',{name:mName(p,m)}));i.focus();Tools.diag.log('entry invalid number');return;}
+    v[m.id]=x;
+  }
+  if(!Object.keys(v).length){showMsg(t('errEmpty'));Tools.diag.log('entry empty');return;}
+  const tv=$('entryTime').value,time=tv?parseLocal(tv.length===16?tv:tv.slice(0,19)):Date.now();
+  if(!Number.isFinite(time)){showMsg(t('errTime'));Tools.diag.log('entry invalid time');return;}
+  showMsg('');
+  addPoint(p,time,v);
+  for(const i of $('entryFields').querySelectorAll('input'))i.value='';
+  $('entryTime').value='';
+  Tools.toast(t('saved'));
+  Tools.diag.log('point saved',{values:Object.keys(v).length,customTime:!!tv,points:p.points.length});
+});
+$('btnNewProfile').addEventListener('click',newProfile);
+$('btnDelProfile').addEventListener('click',delProfile);
+$('btnAddMetric').addEventListener('click',addMetric);
+$('profileSel').addEventListener('change',()=>{set.active=$('profileSel').value;shownAll=false;saveSet();showMsg('');renderAll();Tools.diag.log('profile selected');});
+$('profileName').addEventListener('input',()=>{const p=cur();if(!p)return;p.name=$('profileName').value;save();renderProfiles();});
+for(const b of document.querySelectorAll('[data-range]'))b.addEventListener('click',()=>{set.range=b.dataset.range;saveSet();renderCharts();Tools.diag.log('range',{range:set.range});});
+$('btnMore').addEventListener('click',()=>{shownAll=true;renderPoints();});
+
+/* ---------- Export ---------- */
+function rangeText(lo,hi){return `${dateTime(lo)} – ${dateTime(hi)}`;}
+// All curves of the period in one light image (independent of dark mode)
+function exportCanvas(p){
+  const {pts,lo,hi}=domain(p);
+  const items=p.metrics.map(m=>({m,data:series(pts,m)})).filter(x=>x.data.length);
+  if(!items.length)return null;
+  const k=2,W=900*k,CH=260*k,HEAD=78*k,ITEM=52*k,PAD=24*k;
+  const th={k,bg:'#ffffff',text:'#1b2430',muted:'#5d6b7c',grid:'#d6dde6',font:theme().font};
+  const c=document.createElement('canvas');c.width=W;c.height=HEAD+items.length*(ITEM+CH+PAD);
+  const ctx=c.getContext('2d');
+  ctx.fillStyle=th.bg;ctx.fillRect(0,0,c.width,c.height);
+  ctx.textAlign='left';ctx.textBaseline='alphabetic';
+  ctx.fillStyle=th.text;ctx.font=`bold ${24*k}px ${th.font}`;ctx.fillText(pName(p),PAD,34*k);
+  ctx.fillStyle=th.muted;ctx.font=`${14*k}px ${th.font}`;ctx.fillText(t('exportRange',{range:rangeText(pts[0].t,pts[pts.length-1].t)}),PAD,58*k);
+  let y=HEAD;
+  for(const {m,data} of items){
+    ctx.fillStyle=LIGHT_SERIES[m.slot];ctx.beginPath();
+    if(ctx.roundRect)ctx.roundRect(PAD,y+8*k,14*k,14*k,4*k);else ctx.rect(PAD,y+8*k,14*k,14*k);
+    ctx.fill();
+    ctx.textAlign='left';ctx.textBaseline='alphabetic';
+    ctx.fillStyle=th.text;ctx.font=`bold ${17*k}px ${th.font}`;ctx.fillText(mLabel(p,m),PAD+22*k,y+21*k);
+    ctx.fillStyle=th.muted;ctx.font=`${13*k}px ${th.font}`;ctx.fillText(statsText(stats(data.map(d=>d[1])),m),PAD,y+42*k);
+    ctx.save();ctx.translate(PAD/2,y+ITEM);
+    drawChart(ctx,W-PAD,CH,data,lo,hi,LIGHT_SERIES[m.slot],th,null);
+    ctx.restore();
+    y+=ITEM+CH+PAD;
+  }
+  return c;
+}
+const fileBase=p=>`${slug(pName(p))}-${isoDate(new Date())}`;
+function pngFile(p){
+  const c=exportCanvas(p);
+  if(!c)return Promise.resolve(null);
+  return new Promise((res,rej)=>c.toBlob(b=>b?res(new File([b],`${fileBase(p)}.png`,{type:'image/png'})):rej(new Error('PNG')),'image/png'));
+}
+function download(file){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(file);a.download=file.name;
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+}
+$('btnPng').addEventListener('click',async()=>{
+  const p=cur();if(!p)return;
+  try{
+    const f=await pngFile(p);
+    if(!f){Tools.toast(t('nothing'));return;}
+    download(f);Tools.toast(t('pngSaved'));Tools.diag.log('png saved',{bytes:f.size});
+  }catch(e){Tools.toast(t('fileFail'));Tools.diag.log('png failed',e);}
+});
+const canShareFiles=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File([''],'x.png',{type:'image/png'})]}));}catch(_){return false;}})();
+$('btnShare').hidden=!canShareFiles;
+$('btnShare').addEventListener('click',async()=>{
+  const p=cur();if(!p)return;
+  try{
+    const f=await pngFile(p);
+    if(!f){Tools.toast(t('nothing'));return;}
+    await navigator.share({files:[f],title:pName(p)});
+    Tools.diag.log('png shared');
+  }catch(e){if(e&&e.name==='AbortError')return;Tools.toast(t('shareFail'));Tools.diag.log('share failed',e);}
+});
+function profileJson(p){
+  return {format:FORMAT,formatVersion:FORMAT_VERSION,app:'data-logger',exportedAt:new Date().toISOString(),
+    profile:{name:p.name,metrics:p.metrics.map(m=>({id:m.id,name:m.name,unit:m.unit})),
+      points:p.points.map(x=>({time:new Date(x.t).toISOString(),values:Object.assign({},x.v)}))}};
+}
+$('btnJson').addEventListener('click',()=>{
+  const p=cur();if(!p)return;
+  const f=new File([JSON.stringify(profileJson(p),null,2)],`${fileBase(p)}.json`,{type:'application/json'});
+  download(f);Tools.toast(t('jsonSaved'));Tools.diag.log('json saved',{points:p.points.length});
+});
+// CSV for spreadsheets: German with semicolon and decimal comma, English with comma and point
+function csvText(p){
+  const en=Tools.lang()==='en',sep=en?',':';';
+  const q=s=>/[",;\n\r]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;
+  const n=x=>{const s=String(+x.toPrecision(15));return en?s:s.replace('.',',');};
+  const rows=[[t('csvTime'),...p.metrics.map(m=>mLabel(p,m))].map(q).join(sep)];
+  for(const x of p.points)rows.push([isoLocal(x.t).replace('T',' '),...p.metrics.map(m=>m.id in x.v?n(x.v[m.id]):'')].join(sep));
+  return '﻿'+rows.join('\r\n')+'\r\n';
+}
+$('btnCsv').addEventListener('click',()=>{
+  const p=cur();if(!p)return;
+  download(new File([csvText(p)],`${fileBase(p)}.csv`,{type:'text/csv;charset=utf-8'}));
+  Tools.toast(t('csvSaved'));Tools.diag.log('csv saved',{points:p.points.length});
+});
+$('btnImport').addEventListener('click',()=>{$('fileImport').value='';$('fileImport').click();});
+$('fileImport').addEventListener('change',async()=>{
+  const f=$('fileImport').files[0];if(!f)return;
+  try{
+    if(f.size>5*1024*1024)throw new Error('too large');
+    const j=JSON.parse(await f.text());
+    if(!j||j.format!==FORMAT||!(j.formatVersion<=FORMAT_VERSION)||!j.profile||typeof j.profile!=='object')throw new Error('format');
+    if(store.profiles.length>=MAX_PROFILES)throw new Error('too many profiles');
+    const src=j.profile;
+    const p=cleanProfile({id:uid(),name:src.name,metrics:src.metrics,
+      points:(Array.isArray(src.points)?src.points:[]).map(x=>x&&{t:Date.parse(x.time),v:x.values})});
+    if(!p||!p.metrics.length)throw new Error('no metrics');
+    store.profiles.push(p);set.active=p.id;shownAll=false;save();saveSet();renderAll();
+    Tools.toast(t('imported',{name:pName(p),n:Tools.fmt(p.points.length,0)}));
+    Tools.diag.log('profile imported',{metrics:p.metrics.length,points:p.points.length});
+  }catch(e){Tools.toast(t('importErr'));Tools.diag.log('import failed',e);}
+});
+
+/* ---------- Start ---------- */
+renderAll();
+let lastW=0;
+new ResizeObserver(()=>{const w=$('charts').clientWidth;if(w&&w!==lastW){lastW=w;for(const ch of charts)paint(ch);}}).observe($('charts'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderCharts);
+Tools.onLang(renderAll);
+Tools.diag.info(()=>{const p=cur();return {profiles:store.profiles.length,metrics:p?p.metrics.length:0,points:p?p.points.length:0,range:set.range,share:canShareFiles};});
+
+/* ---------- WebMCP ---------- */
+// Names for agents: English fallback for unnamed profiles/measurements, independent of the UI language
+const aProfile=p=>p.name.trim()||`Profile ${store.profiles.indexOf(p)+1}`;
+const aMetric=(p,m)=>m.name.trim()||`Measurement ${p.metrics.indexOf(m)+1}`;
+const same=(a,b)=>a.trim().toLowerCase()===b.trim().toLowerCase();
+function findProfile(name){
+  if(name==null){const p=cur();if(!p)throw new Error('There is no profile yet – the user has to create one in the app first.');return p;}
+  const p=store.profiles.find(x=>same(aProfile(x),name)||same(pName(x),name));
+  if(!p)throw new Error(`Unknown profile "${name}". Known profiles: ${store.profiles.map(aProfile).join(', ')||'none'}.`);
+  return p;
+}
+function findMetric(p,name){
+  const m=p.metrics.find(x=>same(aMetric(p,x),name)||same(mName(p,x),name));
+  if(!m)throw new Error(`Unknown measurement "${name}" in profile "${aProfile(p)}". Known: ${p.metrics.map(x=>aMetric(p,x)).join(', ')||'none'}.`);
+  return m;
+}
+const tz=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
+const r6=x=>Math.round(x*1e6)/1e6;
+Tools.mcp.register({
+  name:'list_profiles',title:'List profiles',readOnly:true,label:'mcp.list',
+  description:'Lists all profiles of the data logger with their measurements (name and unit), the number of data points and the time of the first and last data point (local time, ISO format). The active profile is the one shown in the app.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    const a=cur();
+    return {time_zone:tz(),profiles:store.profiles.map(p=>({name:aProfile(p),active:p===a,
+      measurements:p.metrics.map(m=>({name:aMetric(p,m),unit:m.unit.trim()})),
+      data_points:p.points.length,
+      first:p.points.length?isoLocal(p.points[0].t):null,last:p.points.length?isoLocal(p.points[p.points.length-1].t):null}))};
+  }
+});
+Tools.mcp.register({
+  name:'add_data_point',title:'Add a data point',label:'mcp.add',
+  description:'Adds one data point to a profile: values for one or more of its measurements at one point in time (default: now). Measurements are matched by name (case-insensitive); use list_profiles to see them. The profile is shown in the app and the new values appear in its charts. Returns the stored data point and the new number of data points.',
+  inputSchema:{type:'object',properties:{
+    profile:{type:'string',minLength:1,maxLength:40,description:'Profile name. Default: the profile shown in the app.'},
+    values:{type:'array',maxItems:8,description:'One entry per measurement.',items:{type:'object',properties:{
+      measurement:{type:'string',minLength:1,maxLength:40,description:'Name of the measurement.'},
+      value:{type:'number',description:'The value in the unit of the measurement.'}
+    },required:['measurement','value'],additionalProperties:false}},
+    time:{type:'string',minLength:16,maxLength:19,description:'Local time of the data point as YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS. Default: now.'}
+  },required:['values'],additionalProperties:false},
+  execute:i=>{
+    const p=findProfile(i.profile);
+    if(!i.values.length)throw new Error('values must contain at least one entry.');
+    const time=i.time==null?Date.now():parseLocal(i.time);
+    if(!Number.isFinite(time))throw new Error('Invalid time – expected YYYY-MM-DDTHH:MM in local time.');
+    const v={};
+    for(const e of i.values){
+      const m=findMetric(p,e.measurement);
+      if(m.id in v)throw new Error(`Measurement "${aMetric(p,m)}" is given twice.`);
+      v[m.id]=e.value;
+    }
+    if(set.active!==p.id){set.active=p.id;shownAll=false;saveSet();renderAll();}
+    addPoint(p,time,v);
+    Tools.diag.log('mcp add_data_point',{values:Object.keys(v).length});
+    return {profile:aProfile(p),time:isoLocal(time),time_zone:tz(),
+      values:p.metrics.filter(m=>m.id in v).map(m=>({measurement:aMetric(p,m),unit:m.unit.trim(),value:v[m.id]})),
+      data_points:p.points.length};
+  }
+});
+Tools.mcp.register({
+  name:'get_data',title:'Read data points',readOnly:true,label:'mcp.get',
+  description:'Reads the data points of a profile, newest first, with key figures per measurement over all its values (count, minimum, maximum, mean, latest value and its time). Times are local (ISO format). Values are keyed by measurement name.',
+  inputSchema:{type:'object',properties:{
+    profile:{type:'string',minLength:1,maxLength:40,description:'Profile name. Default: the profile shown in the app.'},
+    measurement:{type:'string',minLength:1,maxLength:40,description:'Only this measurement. Default: all.'},
+    limit:{type:'integer',minimum:1,maximum:1000,description:'Maximum number of data points to return (newest first). Default 50.'}
+  },additionalProperties:false},
+  execute:i=>{
+    const p=findProfile(i.profile);
+    const ms=i.measurement!=null?[findMetric(p,i.measurement)]:p.metrics;
+    const measurements=ms.map(m=>{
+      const d=series(p.points,m),out={name:aMetric(p,m),unit:m.unit.trim(),count:d.length};
+      if(d.length){const s=stats(d.map(x=>x[1]));Object.assign(out,{min:s.min,max:s.max,mean:r6(s.avg),latest:s.last,latest_time:isoLocal(d[d.length-1][0])});}
+      return out;
+    });
+    const pts=p.points.filter(x=>ms.some(m=>m.id in x.v));
+    const lim=i.limit||50;
+    return {profile:aProfile(p),time_zone:tz(),measurements,total_points:pts.length,
+      points:pts.slice(-lim).reverse().map(x=>{const values={};for(const m of ms)if(m.id in x.v)values[aMetric(p,m)]=x.v[m.id];return {time:isoLocal(x.t),values};})};
+  }
+});
+})();
+</script>
+</body>
+</html>
