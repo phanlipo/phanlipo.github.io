@@ -12,6 +12,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 |---|---|---|
 | [Brau-Rechner](https://phanlipo.github.io/brew-calculator/) | `brew-calculator/` | Rechner fürs Hobbybrauen: Volumen im zylindrischen Topf, Temperaturkorrektur der Stammwürze (Spindel) und Zuckermenge für die Nachgärung – jeweils mit Formeln und Erklärung. |
 | [Countdown – wie lange noch?](https://phanlipo.github.io/countdown/) | `countdown/` | Tage, Stunden, Minuten oder Sekunden bis zu einem Datum mit Uhrzeit – live ab jetzt oder ab einem eigenen Startdatum. |
+| [Datensammler – Messwerte erfassen & auswerten](https://phanlipo.github.io/data-logger/) | `data-logger/` | Eigene Profile mit Messwerten und Einheiten anlegen, Werte mit Zeitpunkt erfassen und als Kurven auswerten – Export als Bild, JSON oder CSV. |
 | [Dokumentenscanner](https://phanlipo.github.io/doc-scanner/) | `doc-scanner/` | Dokumente mit der Kamera oder aus Fotos scannen – Fotos auch aus der Galerie hierher teilen (Android): Ecken zuschneiden, Seiten sortieren, Schatten entfernen, als PDF speichern. |
 | [Erinnerungen](https://phanlipo.github.io/reminders/) | `reminders/` | Eigene Erinnerungen mit Zeitpunkt und Text – zur Zeit kommt eine Benachrichtigung, im Verlauf lassen sie sich anpassen. |
 | [Handy-Sensoren](https://phanlipo.github.io/sensors/) | `sensors/` | Kompass, Wasserwaage, Beschleunigung, Vibrometer, Schallpegel, Stimmgerät, Tacho, Schrittzähler, Tongenerator, Taschenlampe mit Morse, Puls und Klatsch-Stoppuhr – mit den Sensoren des Handys. |

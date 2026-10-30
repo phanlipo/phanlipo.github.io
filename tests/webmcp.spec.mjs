@@ -664,3 +664,88 @@ test.describe('doc-scanner tools', () => {
     expect(r.result.pages.map(p => [p.filter, p.rotation])).toEqual([['color', 0], ['color', 0]]);
   });
 });
+
+test.describe('data-logger tools', () => {
+  test.use({ timezoneId: 'Europe/Berlin' });
+  const NOW = new Date('2026-10-30T12:00:00+01:00');
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: NOW - 1000 });
+    await page.clock.pauseAt(NOW);
+    await open(page, '/data-logger/');
+  });
+  // Profile "Gesundheit" with weight (kg) and an unnamed second measurement, created by the user in the app
+  async function setup(page) {
+    await page.click('#btnNewProfile');
+    await page.fill('#profileName', 'Gesundheit');
+    await page.locator('#metrics [data-key=name]').first().fill('Gewicht');
+    await page.locator('#metrics [data-key=unit]').first().fill('kg');
+    await page.click('#btnAddMetric');
+  }
+
+  test('without a profile: list is empty, adding explains what to do', async ({ page }) => {
+    expect((await call(page, 'data_logger_list_profiles', {})).result).toEqual({ time_zone: 'Europe/Berlin', profiles: [] });
+    expect((await call(page, 'data_logger_add_data_point', { values: [{ measurement: 'x', value: 1 }] })).error).toMatch(/no profile yet/);
+  });
+
+  test('add_data_point stores values shown in the app, get_data reads them with key figures', async ({ page }) => {
+    await setup(page);
+    let r = await call(page, 'data_logger_add_data_point', { values: [{ measurement: 'gewicht', value: 80.5 }], time: '2026-10-29T08:30' });
+    expect(r.result).toEqual({ profile: 'Gesundheit', time: '2026-10-29T08:30:00', time_zone: 'Europe/Berlin',
+      values: [{ measurement: 'Gewicht', unit: 'kg', value: 80.5 }], data_points: 1 });
+    // Unnamed measurement: English name for agents, regardless of the UI language
+    r = await call(page, 'data_logger_add_data_point', { profile: 'gesundheit', values: [{ measurement: 'Measurement 2', value: 7 }, { measurement: 'Gewicht', value: 79.5 }] });
+    expect(r.result).toMatchObject({ time: '2026-10-30T12:00:00', data_points: 2 });
+    await expect(page.locator('#pointsTable tbody tr')).toHaveCount(2);
+    await expect(page.locator('#pointsTable tbody tr').first().locator('td')).toHaveText(['30.10.2026, 12:00', '79,5', '7', '×']);
+    await expect(page.locator('.chart .stats').first()).toHaveText('Letzter 79,5 kg · Min 79,5 · Max 80,5 · Ø 80,00 · 2 Werte');
+
+    const list = await call(page, 'data_logger_list_profiles', {});
+    expect(list.result.profiles).toEqual([{ name: 'Gesundheit', active: true,
+      measurements: [{ name: 'Gewicht', unit: 'kg' }, { name: 'Measurement 2', unit: '' }],
+      data_points: 2, first: '2026-10-29T08:30:00', last: '2026-10-30T12:00:00' }]);
+
+    const g = await call(page, 'data_logger_get_data', {});
+    expect(g.result).toEqual({ profile: 'Gesundheit', time_zone: 'Europe/Berlin', total_points: 2,
+      measurements: [
+        { name: 'Gewicht', unit: 'kg', count: 2, min: 79.5, max: 80.5, mean: 80, latest: 79.5, latest_time: '2026-10-30T12:00:00' },
+        { name: 'Measurement 2', unit: '', count: 1, min: 7, max: 7, mean: 7, latest: 7, latest_time: '2026-10-30T12:00:00' },
+      ],
+      points: [
+        { time: '2026-10-30T12:00:00', values: { Gewicht: 79.5, 'Measurement 2': 7 } },
+        { time: '2026-10-29T08:30:00', values: { Gewicht: 80.5 } },
+      ] });
+    const one = await call(page, 'data_logger_get_data', { measurement: 'Measurement 2', limit: 5 });
+    expect(one.result.total_points).toBe(1);
+    expect(one.result.points).toEqual([{ time: '2026-10-30T12:00:00', values: { 'Measurement 2': 7 } }]);
+    expect((await call(page, 'data_logger_get_data', { limit: 1 })).result.points).toHaveLength(1);
+
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'data_logger_get_data').annotations.readOnlyHint).toBe(true);
+    expect(tools.find(t => t.name === 'data_logger_list_profiles').annotations.readOnlyHint).toBe(true);
+    expect(tools.find(t => t.name === 'data_logger_add_data_point').annotations.readOnlyHint).toBe(false);
+  });
+
+  test('add_data_point switches the app to the named profile', async ({ page }) => {
+    await setup(page);
+    await page.click('#btnNewProfile');
+    await page.fill('#profileName', 'Garten');
+    await call(page, 'data_logger_add_data_point', { profile: 'Gesundheit', values: [{ measurement: 'Gewicht', value: 80 }] });
+    await expect(page.locator('#profileName')).toHaveValue('Gesundheit');
+    await expect(page.locator('#pointsTable tbody tr')).toHaveCount(1);
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    await setup(page);
+    for (const [input, msg] of [
+      [{ values: [] }, /at least one/],
+      [{ values: [{ measurement: 'Puls', value: 60 }] }, /Unknown measurement "Puls".*Known: Gewicht, Measurement 2/],
+      [{ profile: 'Auto', values: [{ measurement: 'Gewicht', value: 1 }] }, /Unknown profile "Auto".*Gesundheit/],
+      [{ values: [{ measurement: 'Gewicht', value: 1 }, { measurement: 'gewicht', value: 2 }] }, /given twice/],
+      [{ values: [{ measurement: 'Gewicht', value: 1 }], time: '2026-02-30T10:00' }, /Invalid time/],
+      [{ values: [{ measurement: 'Gewicht', value: '80' }] }, /must be of type number/],
+      [{ values: [{ measurement: 'Gewicht', value: 1 }], note: 'x' }, /not allowed/],
+    ]) expect((await call(page, 'data_logger_add_data_point', input)).error).toMatch(msg);
+    await expect(page.locator('#noPoints')).toBeVisible();
+    expect((await call(page, 'data_logger_get_data', { measurement: 'Puls' })).error).toMatch(/Unknown measurement/);
+  });
+});
