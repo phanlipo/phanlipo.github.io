@@ -334,6 +334,44 @@ test('the camera button opens the crop view after the photo', async ({ page }) =
   await expect(page.locator('input[name="filterAll"][value="color"]')).toBeChecked();
 });
 
+test('share target: several photos shared to the installed app become pages in that order', async ({ page, request }) => {
+  const manifest = await (await request.get(`${URL_}manifest.webmanifest`)).json();
+  expect(manifest.share_target).toMatchObject({ action: './share-target', method: 'POST', enctype: 'multipart/form-data' });
+  expect(manifest.share_target.params.files[0].accept).toContain('image/*');
+  // The service worker must control the page for the POST to be intercepted
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  const a = await photo(page, { mark: 'tl' }), b = await photo(page, { mark: 'br' }), c = await photo(page, { mark: 'tl', angle: -6 });
+  // Simulate the share sheet: Android sends one multipart POST with all files under the same name
+  const share = list => page.evaluate(async list => {
+    const fd = new FormData();
+    for (const [name, b64] of list) fd.append('file', new File([Uint8Array.from(atob(b64), ch => ch.charCodeAt(0))], name, { type: 'image/png' }));
+    return (await fetch('share-target', { method: 'POST', body: fd })).ok;
+  }, list.map(([n, p]) => [n, p.toString('base64')]));
+  // an earlier share that was never opened must not mix in
+  expect(await share([['alt1.png', c.png], ['alt2.png', c.png], ['alt3.png', c.png]])).toBe(true);
+  expect(await share([['b.png', b.png], ['a.png', a.png]])).toBe(true);
+  await page.goto(`${URL_}?shared=1`);
+  await expect(page).toHaveURL(/\/doc-scanner\/$/);   // parameter removed again
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(2);
+  await expect(page.locator('#addInfo')).toHaveText('2 Seite(n) hinzugefügt.');
+  // several photos: no crop view opens by itself
+  await expect(page.locator('#editor')).toBeHidden();
+  const pdf = (await savePdf(page)).pdf;
+  expect((await measure(page, pdf.pages[0].jpeg, REGIONS)).markBR).toBeLessThan(80);   // b first
+  expect((await measure(page, pdf.pages[1].jpeg, REGIONS)).markTL).toBeLessThan(80);   // then a
+  // picked up once: nothing left in the cache, a reload adds nothing
+  expect(await page.evaluate(async () => (await (await caches.open('share:doc-scanner')).keys()).length)).toBe(0);
+  await page.goto(`${URL_}?shared=1`);
+  await expect(page.locator('#pageCount')).toHaveText('0');
+
+  // a single shared photo opens the crop view
+  expect(await share([['a.png', a.png]])).toBe(true);
+  await page.goto(`${URL_}?shared=1`);
+  await expect(page.locator('#editor')).toBeVisible();
+  await expect(page.locator('#pageCount')).toHaveText('1');
+});
+
 test('works offline: add a photo and save the PDF', async ({ page, context }) => {
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();

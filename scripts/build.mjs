@@ -24,7 +24,7 @@
 //   tool:icon, tool:color                                icons (see build-icons.mjs), theme colour
 //   tool:short-name                                      name under the home-screen icon (≤ 12 chars)
 //   tool:storage                                         localStorage key prefix(es) of the app, comma-separated
-//   tool:share-target                                    accepted file types for "share to this app" (Android),
+//   tool:share-target                                    accepted file types for "share to this app" (Android, one or several files),
 //                                                        e.g. "audio/*, .opus" – see AGENTS.md
 //   tool:share-text ("true")                             receive shared links/text (Android) as ?title=&text=&url=
 //   tool:webmcp ("a, b")                                 WebMCP tools the page registers (names without app prefix);
@@ -350,22 +350,28 @@ self.addEventListener('activate', event => {
 });
 
 // Cache first: instant start and offline use. Anything not cached goes to the network.
-${p.shareAccept.length ? `// Share target: a file shared to the installed app arrives as POST ./share-target.
-// It is parked in a cache and the page is opened with ?shared=1 (Tools.takeSharedFile() picks it up).
+${p.shareAccept.length ? `// Share target: files shared to the installed app arrive as POST ./share-target (one or several).
+// They are parked in a cache ("shared-file", "shared-file-1", …) and the page is opened with ?shared=1
+// (Tools.takeSharedFiles() / Tools.takeSharedFile() pick them up).
 const SHARE_URL = new URL('./share-target', self.location).href;
 const SHARE_CACHE = \`share:\${APP}\`;
+const SHARE_MAX = 100;
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'POST' || event.request.url.split('?')[0] !== SHARE_URL) return;
   event.respondWith((async () => {
     try {
       const form = await event.request.formData();
-      const file = form.getAll('file').find(f => f && typeof f !== 'string');
-      if (file) {
+      const files = form.getAll('file').filter(f => f && typeof f !== 'string').slice(0, SHARE_MAX);
+      if (files.length) {
+        // Leftovers of an earlier share that was never picked up must not mix in
+        await caches.delete(SHARE_CACHE);
         const cache = await caches.open(SHARE_CACHE);
-        await cache.put('shared-file', new Response(file, { headers: {
-          'Content-Type': file.type || 'application/octet-stream',
-          'X-File-Name': encodeURIComponent(file.name || 'geteilt'),
-        } }));
+        for (let i = 0; i < files.length; i++) {
+          await cache.put(i ? \`shared-file-\${i}\` : 'shared-file', new Response(files[i], { headers: {
+            'Content-Type': files[i].type || 'application/octet-stream',
+            'X-File-Name': encodeURIComponent(files[i].name || 'geteilt'),
+          } }));
+        }
       }
     } catch (_) {}
     return Response.redirect(new URL('./?shared=1', self.location).href, 303);

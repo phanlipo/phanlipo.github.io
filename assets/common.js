@@ -360,20 +360,29 @@ window.Tools = (function () {
     });
   }
 
-  /* ---------- Share target (Android): file shared to the installed app ----------
-     sw.js parks it in the cache "share:<app>" and opens the page with ?shared=1.
-     Returns the File once (or null) and removes it from the cache and the URL. */
-  async function takeSharedFile() {
-    if (!/[?&]shared=1\b/.test(location.search) || !('caches' in window)) return null;
+  /* ---------- Share target (Android): files shared to the installed app ----------
+     sw.js parks them in the cache "share:<app>" ("shared-file", "shared-file-1", …) and opens the page with
+     ?shared=1. takeSharedFiles() returns them once, in the order shared (or []), and removes them from the
+     cache and the URL. takeSharedFile() returns only the first one (or null) – for apps that take one file. */
+  async function takeSharedFiles() {
+    if (!/[?&]shared=1\b/.test(location.search) || !('caches' in window)) return [];
     history.replaceState(null, '', location.pathname + location.hash);
     try {
       const cache = await caches.open('share:' + appId());
-      const res = await cache.match('shared-file');
-      if (!res) return null;
-      await cache.delete('shared-file');
-      const name = decodeURIComponent(res.headers.get('X-File-Name') || 'geteilt');
-      return new File([await res.blob()], name, { type: res.headers.get('Content-Type') || '' });
-    } catch (_) { return null; }
+      const files = [];
+      for (let i = 0; ; i++) {
+        const key = i ? `shared-file-${i}` : 'shared-file';
+        const res = await cache.match(key);
+        if (!res) break;
+        const name = decodeURIComponent(res.headers.get('X-File-Name') || 'geteilt');
+        files.push(new File([await res.blob()], name, { type: res.headers.get('Content-Type') || '' }));
+      }
+      await caches.delete('share:' + appId());
+      return files;
+    } catch (_) { return []; }
+  }
+  async function takeSharedFile() {
+    return (await takeSharedFiles())[0] || null;
   }
 
   // Link or text shared to the installed app (Android, <meta name="tool:share-text" content="true">):
@@ -532,7 +541,7 @@ window.Tools = (function () {
   else setupDiagUi();
 
   return {
-    $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedText,
+    $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText,
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     data: { exportData, validateBackup, importData, clearData, keys: ownKeys, prefixes: storagePrefixes, appId },

@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "securpharm-scanner";
-const VERSION = 'a8e0bbe25871';
+const VERSION = '4a0394cf26e5';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

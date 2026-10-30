@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "doc-scanner";
-const VERSION = 'ddea33876b5a';
+const VERSION = '0cf2c10fc374';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -43,6 +43,34 @@ self.addEventListener('activate', event => {
 });
 
 // Cache first: instant start and offline use. Anything not cached goes to the network.
+// Share target: files shared to the installed app arrive as POST ./share-target (one or several).
+// They are parked in a cache ("shared-file", "shared-file-1", …) and the page is opened with ?shared=1
+// (Tools.takeSharedFiles() / Tools.takeSharedFile() pick them up).
+const SHARE_URL = new URL('./share-target', self.location).href;
+const SHARE_CACHE = `share:${APP}`;
+const SHARE_MAX = 100;
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'POST' || event.request.url.split('?')[0] !== SHARE_URL) return;
+  event.respondWith((async () => {
+    try {
+      const form = await event.request.formData();
+      const files = form.getAll('file').filter(f => f && typeof f !== 'string').slice(0, SHARE_MAX);
+      if (files.length) {
+        // Leftovers of an earlier share that was never picked up must not mix in
+        await caches.delete(SHARE_CACHE);
+        const cache = await caches.open(SHARE_CACHE);
+        for (let i = 0; i < files.length; i++) {
+          await cache.put(i ? `shared-file-${i}` : 'shared-file', new Response(files[i], { headers: {
+            'Content-Type': files[i].type || 'application/octet-stream',
+            'X-File-Name': encodeURIComponent(files[i].name || 'geteilt'),
+          } }));
+        }
+      }
+    } catch (_) {}
+    return Response.redirect(new URL('./?shared=1', self.location).href, 303);
+  })());
+});
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const runtime = RUNTIME_URLS.find(([prefix]) => event.request.url.startsWith(prefix));
