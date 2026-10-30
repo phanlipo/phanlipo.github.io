@@ -567,7 +567,7 @@ test.describe('ai-chat tools', () => {
     await expect(page.locator('.msg')).toHaveCount(0);
     expect(await page.evaluate(() => window.__llm.posted.length)).toBe(0);
 
-    await markDownloaded(page, 'onnx-community/gemma-4-E2B-it-qat-mobile-ONNX', 'a7f19b0ab28252b77cea830f52b8290b2479c87d');
+    await markDownloaded(page, { id: 'onnx-community/gemma-4-E2B-it-qat-mobile-ONNX', revision: 'a7f19b0ab28252b77cea830f52b8290b2479c87d', sessions: ['embed_tokens', 'decoder_model_merged'], dtype: 'q2f16' });
     await page.evaluate(() => { window.__llm.reply = { tokens: ['Paris', '.'], delay: 5 }; });
     const r = await call(page, 'ai_chat_ask_model', { prompt: 'Hauptstadt von Frankreich?' });
     expect(r).toEqual({ ok: true, result: { model: 'Gemma 4 E2B', answer: 'Paris.', stopped: false } });
@@ -584,7 +584,7 @@ test.describe('ai-chat tools', () => {
   });
 
   test('ask_model: errors from the model and invalid input', async ({ page }) => {
-    await markDownloaded(page, 'onnx-community/gemma-4-E2B-it-qat-mobile-ONNX', 'a7f19b0ab28252b77cea830f52b8290b2479c87d');
+    await markDownloaded(page, { id: 'onnx-community/gemma-4-E2B-it-qat-mobile-ONNX', revision: 'a7f19b0ab28252b77cea830f52b8290b2479c87d', sessions: ['embed_tokens', 'decoder_model_merged'], dtype: 'q2f16' });
     await page.evaluate(() => { window.__llm.reply = { tokens: [], error: { stage: 'generate', message: 'device lost' } }; });
     expect(await call(page, 'ai_chat_ask_model', { prompt: 'x' })).toEqual({ ok: false, error: 'The model failed while answering: device lost' });
     for (const [input, msg] of [

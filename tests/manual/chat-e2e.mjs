@@ -3,6 +3,7 @@
 // Not part of `npm test`: it downloads the model (~300 MB to 2.3 GB) from Hugging Face.
 //
 //   node tests/manual/chat-e2e.mjs [model] [question] [--stop-after=N]
+//   CHAT_PROFILE=/tmp/profil node tests/manual/chat-e2e.mjs …   reuse a browser profile (model stays downloaded)
 //     model: gemma3-270m (default) | gemma3-1b | gemma4-e2b
 //
 // Starts the local test server, opens the page in Chromium with WebGPU switched on (without a real
@@ -11,6 +12,9 @@
 import { chromium } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const args = process.argv.slice(2);
 const stopAfter = Number((args.find(a => a.startsWith('--stop-after=')) || '').split('=')[1]) || 0;
@@ -19,9 +23,11 @@ const [model = 'gemma3-270m', question = 'Was ist die Hauptstadt von Frankreich?
 const PORT = 4183;
 const server = spawn(process.execPath, [fileURLToPath(new URL('../server.mjs', import.meta.url)), String(PORT)], { stdio: 'ignore' });
 await new Promise(r => setTimeout(r, 800));
-const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined, args: ['--enable-unsafe-webgpu'] });
+// A real profile on disk (like on a phone): private windows keep Cache Storage in memory with a small limit
+const profile = process.env.CHAT_PROFILE || mkdtempSync(join(tmpdir(), 'ai-chat-'));
+const browser = await chromium.launchPersistentContext(profile, { executablePath: process.env.PW_CHROMIUM_PATH || undefined, args: ['--enable-unsafe-webgpu'], locale: 'de-DE' });
 try {
-  const page = await browser.newPage({ locale: 'de-DE' });
+  const page = await browser.newPage();
   page.on('pageerror', e => console.log('pageerror:', e.message));
   await page.goto(`http://localhost:${PORT}/ai-chat/`);
   await page.waitForFunction(() => document.getElementById('model').dataset.gpu);

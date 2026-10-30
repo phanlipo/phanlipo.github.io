@@ -1,12 +1,13 @@
-// Stand-ins for the KI-Chat tests: a graphics card (WebGPU adapter) and the model worker.
+// Stand-ins for the KI-Chat tests: a graphics card (WebGPU adapter), device memory and the model worker.
 // The real model is far too big for `npm test` – see tests/manual/chat-e2e.mjs.
 //
-//   await fakeLlm(page, { gpu: 'f16' | 'f32' | 'none', maxBuffer })
-//   then in the page: window.__llm.reply = { tokens: [...], delay, error: { stage, message } }
+//   await fakeLlm(page, { gpu: 'f16' | 'f32' | 'none', maxBuffer, memory (GB, navigator.deviceMemory) })
+//   then in the page: window.__llm.reply = { tokens: [...], delay, error: { stage, message }, stages: [...], hang }
 //                     window.__llm.posted   all messages the page sent to the worker
 
-export async function fakeLlm(page, { gpu = 'f16', maxBuffer = 4 * 1024 ** 3, worker = true } = {}) {
-  await page.addInitScript(({ gpu, maxBuffer, worker }) => {
+export async function fakeLlm(page, { gpu = 'f16', maxBuffer = 4 * 1024 ** 3, worker = true, memory = 8 } = {}) {
+  await page.addInitScript(({ gpu, maxBuffer, worker, memory }) => {
+    if (memory !== undefined) Object.defineProperty(Navigator.prototype, 'deviceMemory', { configurable: true, get: () => memory });
     const adapter = gpu === 'none' ? null : {
       features: new Set(gpu === 'f16' ? ['shader-f16'] : []),
       limits: { maxBufferSize: maxBuffer, maxStorageBufferBindingSize: maxBuffer },
@@ -31,6 +32,8 @@ export async function fakeLlm(page, { gpu = 'f16', maxBuffer = 4 * 1024 ** 3, wo
           const wait = ms => new Promise(res => setTimeout(res, ms));
           send({ type: 'progress', loaded: 0, total: 3e8 }); await wait(d);
           send({ type: 'progress', loaded: 1.5e8, total: 3e8 }); await wait(d);
+          if (r.stages) for (const st of r.stages) { send({ type: 'stage', ...st }); await wait(d); }
+          if (r.hang) return;   // e.g. the tab "crashes" while loading
           if (r.error && r.error.stage === 'load') { send({ type: 'error', ...r.error }); return; }
           send({ type: 'status', status: 'loading', dtype: 'q4f16' }); await wait(d);
           send({ type: 'status', status: 'generating', dtype: 'q4f16' }); await wait(d);
@@ -47,13 +50,14 @@ export async function fakeLlm(page, { gpu = 'f16', maxBuffer = 4 * 1024 ** 3, wo
       }
       terminate() {}
     };
-  }, { gpu, maxBuffer, worker });
+  }, { gpu, maxBuffer, worker, memory });
 }
 
-/** Marks a model as downloaded: a file of its pinned revision in the transformers.js cache */
-export async function markDownloaded(page, id, revision) {
-  await page.evaluate(async ([id, revision]) => {
+/** Marks a model as downloaded: its large files (per session: .onnx + .onnx_data) in the transformers.js cache */
+export async function markDownloaded(page, { id, revision, sessions, dtype }, { only } = {}) {
+  await page.evaluate(async ([id, revision, sessions, dtype, only]) => {
     const c = await caches.open('transformers-cache');
-    await c.put(`https://huggingface.co/${id}/resolve/${revision}/onnx/model_q4f16.onnx`, new Response('x'));
-  }, [id, revision]);
+    const files = sessions.flatMap(s => [`${s}_${dtype}.onnx`, `${s}_${dtype}.onnx_data`]).slice(0, only || undefined);
+    for (const f of files) await c.put(`https://huggingface.co/${id}/resolve/${revision}/onnx/${f}`, new Response('x'));
+  }, [id, revision, sessions, dtype, only || 0]);
 }
