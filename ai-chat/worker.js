@@ -5,12 +5,12 @@
 //               { type: 'stage', id, stage: 'download', index, count } | { type: 'stage', id, stage: 'prepare' }
 //               { type: 'status', id, status: 'loading' | 'generating', dtype }
 //               { type: 'token', id, text }               streamed piece of the answer
-//               { type: 'done', id, text, tokens, promptTokens, dropped, seconds, dtype, stopped }
+//               { type: 'done', id, text, tokens, promptTokens, dropped, chunks, seconds, dtype, stopped }
 //               { type: 'error', id, message, stage }    message 'NO_WEBGPU' / 'NEEDS_F16' = device cannot run the model,
 //                                                         'NO_SPACE' = not enough storage for the download
 import {
   AutoTokenizer, AutoModelForCausalLM, Gemma4Processor, Gemma4ForCausalLM,
-  TextStreamer, InterruptableStoppingCriteria, env,
+  TextStreamer, InterruptableStoppingCriteria, env, ones,
 } from '../assets/vendor/transformers/transformers.min.js';
 
 // Models come from the Hugging Face Hub and are kept by transformers.js in the
@@ -136,6 +136,36 @@ function encode(tokenizer, messages, maxContext, maxTokens) {
   }
 }
 
+// Gemma 3 computes scores over its whole vocabulary (262,144 words) for every token of the prompt,
+// not just the last one. With a longer chat (a few thousand tokens) that is more than 1 GB at once,
+// and Chrome on phones kills the tab. So the prompt minus its last token is first read in pieces
+// of CHUNK tokens, which only fill the model's cache; generate then starts with just the last token.
+// Gemma 4 has the input num_logits_to_keep and computes the last token's scores only.
+const CHUNK = 128;
+async function prefill(model, inputs) {
+  const session = model.sessions.decoder_model_merged || model.sessions.model;
+  const n = inputs.input_ids.dims.at(-1);
+  if (!session || session.inputNames.includes('num_logits_to_keep') || n <= CHUNK) return { cache: null, chunks: 0 };
+  let cache = null, chunks = 0;
+  try {
+    for (let end = 0; end < n - 1 && !stopper.interrupted;) {
+      end = Math.min(end + CHUNK, n - 1);
+      const out = await model.generate({
+        input_ids: inputs.input_ids.slice(null, [0, end]),
+        attention_mask: ones([1, end]),
+        past_key_values: cache,
+        max_new_tokens: 1, do_sample: false, return_dict_in_generate: true,
+      });
+      cache = out.past_key_values;
+      chunks++;
+    }
+  } catch (e) {
+    if (cache) await cache.dispose();
+    throw e;
+  }
+  return { cache, chunks };
+}
+
 self.onmessage = async ({ data }) => {
   if (data.type === 'stop') { stopper.interrupt(); return; }
   if (data.type !== 'generate') return;
@@ -147,6 +177,8 @@ self.onmessage = async ({ data }) => {
     const { inputs, n, dropped } = encode(tokenizer, data.messages, data.maxContext, data.maxTokens);
     self.postMessage({ type: 'status', id, status: 'generating', dtype });
     stopper.reset();
+    const started = performance.now();
+    const { cache, chunks } = await prefill(model, inputs);
     let text = '', tokens = 0;
     const streamer = new TextStreamer(tokenizer, {
       skip_prompt: true,
@@ -154,17 +186,25 @@ self.onmessage = async ({ data }) => {
       callback_function: piece => { text += piece; self.postMessage({ type: 'token', id, text: piece }); },
       token_callback_function: () => { tokens++; },
     });
-    const started = performance.now();
-    await model.generate({
-      ...inputs,
-      max_new_tokens: data.maxTokens,
-      do_sample: true,
-      ...data.model.sampling,
-      streamer,
-      stopping_criteria: stopper,
-    });
+    // Stopped while reading the prompt: no answer
+    if (!stopper.interrupted) {
+      try {
+        await model.generate({
+          ...inputs,
+          ...(cache ? { past_key_values: cache, return_dict_in_generate: true } : {}),
+          max_new_tokens: data.maxTokens,
+          do_sample: true,
+          ...data.model.sampling,
+          streamer,
+          stopping_criteria: stopper,
+        });
+      } finally {
+        // generate leaves a cache it was given alone – free its GPU memory
+        if (cache) await cache.dispose();
+      }
+    } else if (cache) await cache.dispose();
     self.postMessage({
-      type: 'done', id, dtype, text: text.trim(), tokens, promptTokens: n, dropped,
+      type: 'done', id, dtype, text: text.trim(), tokens, promptTokens: n, dropped, chunks,
       seconds: (performance.now() - started) / 1000, stopped: stopper.interrupted,
     });
   } catch (e) {
