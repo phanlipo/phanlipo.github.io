@@ -21,7 +21,7 @@ test('repository files are not published, only what the pages need', async ({ re
   // Same rule as GitHub Pages via scripts/site.mjs – these files cannot carry noindex
   for (const path of ['/README.md', '/AGENTS.md', '/NOTICE.md', '/LICENSE', '/package.json', '/package-lock.json',
     '/playwright.config.mjs', '/scripts/build.mjs', '/scripts/vendor.json', '/tests/server.mjs',
-    '/assets/vendor/README.md', '/assets/vendor/katex/SOURCE.md', '/.nojekyll', '/.github/workflows/pages.yml']) {
+    '/assets/vendor/README.md', '/sbom.cdx.json', '/.nojekyll', '/.github/workflows/pages.yml']) {
     expect((await request.get(path)).status(), path).toBe(404);
   }
   for (const path of ['/', '/robots.txt', '/icon.svg', '/manifest.webmanifest', '/assets/base.css', '/assets/vendor/katex/LICENSE', '/dice-coin/', '/dice-coin/sw.js']) {

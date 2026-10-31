@@ -17,7 +17,7 @@ git config core.hooksPath .githooks
 hashes=node_modules/.session-start.sha256
 if ! sha256sum --check --status "$hashes" 2>/dev/null; then
   rm -f "$hashes"
-  npm install --no-audit --no-fund
+  npm install --no-audit --no-fund --ignore-scripts
   sha256sum .claude/hooks/session-start.sh package.json package-lock.json > "$hashes" || rm -f "$hashes"
 fi
 

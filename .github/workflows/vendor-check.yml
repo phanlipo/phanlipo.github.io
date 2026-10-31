@@ -1,41 +1,98 @@
-# Checks monthly whether newer versions of the libraries in assets/vendor/ exist
-# (configured in scripts/vendor.json). If so, it opens – or updates – one issue
-# "Vendor-Updates verfügbar" with the list. Nothing is changed automatically:
-# updating is done with `node scripts/vendor.mjs --update <name>` followed by a test of the pages.
-name: Vendor-Updates prüfen
+# Checks the libraries in assets/vendor/ (scripts/vendor.json) with `node scripts/vendor.mjs --check`:
+#   - still maintained? (npm deprecated, archived repository, releases/commits – deps.dev, OpenSSF Scorecard, GitHub)
+#   - known vulnerabilities (OSV)
+#   - newer versions
+# Monthly: one issue "Bibliotheken: Updates & Sicherheit" with everything that needs attention
+#          (updated each month, closed when nothing is left). Nothing is changed automatically.
+# Every pull request (so it can be a required check): if it changes scripts/vendor.json, fails when a new
+#          or changed library is not maintained or has a high/critical (or unrated) vulnerability;
+#          otherwise done in seconds. Existing libraries only go to the issue.
+name: Bibliotheken prüfen
 
 on:
   schedule:
     - cron: '17 6 3 * *'   # 3rd of every month, 06:17 UTC
+  pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  issues: write
+permissions: {}
 
 jobs:
-  check:
+  pull-request:
+    name: Bibliotheken prüfen
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 20
-      - name: Check npm for newer versions
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Libraries before this pull request
+        id: base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --depth=1 origin "$BASE_REF"
+          git show "origin/$BASE_REF:scripts/vendor.json" > "$RUNNER_TEMP/base.json"
+          if git diff --quiet "origin/$BASE_REF" HEAD -- scripts/vendor.json; then
+            echo "scripts/vendor.json unchanged – nothing to check."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check new or changed libraries
+        if: steps.base.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          status=0
+          node scripts/vendor.mjs --check --base "$RUNNER_TEMP/base.json" --markdown report.md || status=$?
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+  monthly:
+    name: Monatsbericht
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Check libraries
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/vendor.mjs --check --markdown report.md
-      - name: Open or update issue
+      - name: Open, update or close the issue
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          title="Vendor-Updates verfügbar"
-          existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          title="Bibliotheken: Updates & Sicherheit"
+          find_issue() { gh issue list --state open --search "\"$1\" in:title" --json number --jq '.[0].number'; }
+          existing=$(find_issue "$title")
+          # Issue of the former update-only check: carry it on under the new title
+          old=$(find_issue "Vendor-Updates verfügbar")
+          if [ -z "$existing" ] && [ -n "$old" ]; then
+            gh issue edit "$old" --title "$title"
+            existing=$old
+          fi
           if [ ! -s report.md ]; then
-            echo "All vendor libraries are up to date."
+            echo "Nothing to do: all libraries maintained, no known vulnerabilities, up to date."
             if [ -n "$existing" ]; then
-              gh issue close "$existing" --comment "Alle Bibliotheken sind wieder aktuell."
+              gh issue close "$existing" --comment "Alles erledigt: Bibliotheken gepflegt, keine bekannten Schwachstellen, aktuell."
             fi
             exit 0
           fi
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$existing" ]; then
             gh issue edit "$existing" --body-file report.md
           else

@@ -11,12 +11,13 @@ index.html            Startseite – die Kartenliste ist generiert
 manifest.webmanifest  generiert: nur für das Home-Bildschirm-Icon der Startseite (Android), `display: browser`, ohne Service Worker
 assets/base.css       Design-Tokens, Dark Mode, Karten, Buttons, Toast, Hilfe-Bereich
 assets/common.js      window.Tools: $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, i18n, t, lang, setLang, locale, onLang, mcp, diag; registriert den Service Worker
-assets/vendor/        Fremdbibliotheken mit LICENSE + SOURCE.md je Ordner (generiert, nicht von Hand ändern)
+assets/vendor/        Fremdbibliotheken mit LICENSE je Ordner (generiert, nicht von Hand ändern)
 template/             Vorlage für neue Seiten (wird nicht gelistet)
 scripts/build.mjs     erzeugt Seitenliste, Fußzeile (inkl. Version), <head>-Block (noindex, CSP, Icons, Manifest), manifest.webmanifest + sw.js je App
 scripts/build-icons.mjs  erzeugt icon.svg und PNG-Icons (180/192/512/maskable) je Seite (Tabler Icons)
 scripts/site.mjs      sammelt die veröffentlichten Dateien (Regel: isPublished in scripts/lib.mjs) für GitHub Pages
-scripts/vendor.mjs    lädt Bibliotheken aus scripts/vendor.json nach assets/vendor/, prüft auf Updates
+scripts/vendor.mjs    lädt Bibliotheken aus scripts/vendor.json nach assets/vendor/, prüft Updates, Pflege und Schwachstellen
+scripts/sbom.mjs      SBOM der Bibliotheken (von build.mjs aufgerufen), meldet sie an GitHubs Dependency Graph
 scripts/partials/footer.html  Text der gemeinsamen Fußzeile
 scripts/partials/data.html    Bereich „Daten sichern & übertragen“ (in jede App eingesetzt)
 tests/                Playwright-Tests (siehe tests/README.md); tests/live/ prüft die veröffentlichte Seite (npm run test:live)
@@ -24,12 +25,16 @@ tests/                Playwright-Tests (siehe tests/README.md); tests/live/ prü
 .githooks/pre-commit  ruft build.mjs vor jedem Commit auf
 .claude/hooks/session-start.sh  richtet Cloud-Sessions von Claude Code ein (Git-Hook, npm install, Browser für Playwright)
 .github/workflows/build.yml         dasselbe bei jedem Push auf GitHub
-.github/workflows/vendor-check.yml  prüft monatlich auf Bibliotheks-Updates und öffnet ein Issue
+.github/workflows/vendor-check.yml  „Bibliotheken prüfen“: monatlich Updates, Pflege, Schwachstellen → ein Issue; bei jedem PR als Sperre für neue/geänderte Bibliotheken
+.github/workflows/codeql.yml        monatlich CodeQL (eigener Code + Workflows) → Security-Tab
+.github/workflows/scorecard.yml     monatlich OpenSSF Scorecard des Repos → Security-Tab
+.github/workflows/zizmor.yml        „Workflows prüfen“: Sicherheitsprüfung der Workflows bei jedem PR
 .github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus
 .github/workflows/pages.yml         veröffentlicht main auf GitHub Pages (nur die Dateien aus scripts/site.mjs), danach Live-Test
 .github/workflows/live-test.yml     testet die veröffentlichte Seite (tests/live) – nach jeder Veröffentlichung und auf Knopfdruck
-.github/dependabot.yml              wöchentliche Update-PRs für GitHub Actions und Test-Werkzeuge
+.github/dependabot.yml              monatliche Update-PRs für GitHub Actions und Test-Werkzeuge (erst 7 Tage nach Release)
 NOTICE.md             Hinweise zu Fremdsoftware (Lizenzen der Bibliotheken) – generiert von build.mjs, verlinkt in der Fußzeile
+sbom.cdx.json         SBOM (CycloneDX) der ausgelieferten Bibliotheken – generiert von build.mjs, nicht veröffentlicht
 robots.txt            erlaubt Crawlen – damit Suchmaschinen das noindex jeder Seite sehen
 ```
 
@@ -61,7 +66,7 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 - **Modelle/Daten von externen Diensten** (z. B. Whisper-Modelle von Hugging Face) nur, wenn es nicht anders geht: erst bei Bedarf laden, nie Nutzerdaten mitschicken, in der Hilfe erklären. Die Tests blockieren solche Anfragen und prüfen die Fehlermeldung; echte Downloads nur in `tests/manual/`.
 - **Externe Bibliotheken:** nie per CDN einbinden, sondern in `scripts/vendor.json` eintragen (npm-Paket, feste Version, Lizenz, Dateien) und `node scripts/vendor.mjs` ausführen. Eingebunden wird aus `../assets/vendor/<name>/`. Lädt eine Bibliothek selbst weitere Dateien nach (z. B. `.wasm`), den Pfad auf `assets/vendor` umbiegen. Nur Lizenzen, die Weitergabe erlauben (MIT, Apache-2.0, BSD …).
 - **Lizenzhinweise:** `NOTICE.md` (Bibliothek, Version, Lizenz, Copyright aus der `LICENSE`, weitere Lizenzdateien eines Pakets) erzeugt `build.mjs` aus `scripts/vendor.json` – nie von Hand ändern. Die gemeinsame Fußzeile verlinkt sie („Open-Source-Lizenzen“).
-- **Bibliotheks-Updates:** Die Action „Vendor-Updates prüfen“ öffnet monatlich ein Issue. Aktualisieren mit `node scripts/vendor.mjs --update <name>`, bei Tabler danach `node scripts/build-icons.mjs`, dann `npm test`. Bei 0.x- oder Major-Sprüngen das Changelog lesen.
+- **Bibliotheks-Updates:** Die Action „Bibliotheken prüfen“ öffnet monatlich ein Issue (siehe „Bibliotheken: Pflege & Sicherheit“). Aktualisieren mit `node scripts/vendor.mjs --update <name>` (übernimmt nur Versionen, die mindestens 7 Tage alt sind; sofort: `--no-cooldown`, z. B. für einen Sicherheits-Fix), bei Tabler danach `node scripts/build-icons.mjs`, dann `node scripts/build.mjs` und `npm test`. Bei 0.x- oder Major-Sprüngen das Changelog lesen.
 - **PWA / Offline:** `sw.js` cacht die Seite, `assets/base.css`, `assets/common.js`, Icons und jede genutzte Vendor-Bibliothek komplett. Die Cache-Version ist ein Hash dieser Dateien – Updates kommen automatisch. Lädt eine Seite zur Laufzeit weitere eigene Dateien, müssen sie unter `assets/vendor/` liegen oder in `build.mjs` (`precacheList`) ergänzt werden. Nie Daten an fremde Server senden – offline gibt es keine.
 - **Große Bibliotheken:** In `scripts/vendor.json` mit `"precache": false` markieren – sie werden nicht bei der Installation, sondern beim ersten Gebrauch gecacht (Cache `vendor:<name>@<version>`, bleibt über App-Updates erhalten). `"wasm": true` kennzeichnet Bibliotheken, die WebAssembly kompilieren (CSP bekommt dann `'wasm-unsafe-eval'`). Muss eine Bibliothek exakt zur Abhängigkeit einer anderen passen, `"versionFrom"` setzen (Beispiel: onnxruntime-web ↔ transformers). Pakete ohne Lizenzdatei (nur MIT) bekommen `"licenseFallback"`.
 - **Worker & Hilfsdateien:** Alle Dateien im App-Ordner werden offline gecacht; Vendor-Pfade werden auch in `.js`-Dateien des Ordners (z. B. `worker.js`) erkannt. Module-Worker laden Bibliotheken per `import` aus `../assets/vendor/`.
@@ -111,6 +116,22 @@ Apps können Funktionen als **WebMCP-Werkzeuge** anbieten, damit ein KI-Agent im
 - **Angaben:** `<meta name="tool:webmcp" content="roll_dice, flip_coin">` (Namen ohne Präfix) und die Funktion `KI-Agent` in `tool:features` – `build.mjs` prüft, dass beides zusammen gesetzt ist. In der Hilfe kurz erklären.
 - **Tests:** `tests/webmcp.spec.mjs` stellt ein nachgebautes `modelContext` bereit und prüft jede App automatisch (genau die Werkzeuge aus `tool:webmcp`, englisch, Schema, nur `signal`, nichts Zerstörerisches). Fachliche Tests der Werkzeuge dort ergänzen (Ergebnis unabhängig nachrechnen, falsche Eingaben, offline).
 
+## Bibliotheken: Pflege & Sicherheit
+
+Ziel: keine Bibliothek ausliefern, die nicht mehr gepflegt wird oder bekannte Lücken hat – und jederzeit wissen, was genau ausgeliefert wird. Einzige Liste, die von Hand gepflegt wird, ist `scripts/vendor.json`; alles andere wird daraus erzeugt.
+
+- **SBOM:** `build.mjs` erzeugt `sbom.cdx.json` (CycloneDX 1.6) – je Bibliothek purl, Lizenz, npm-Tarball mit Prüfsumme (`integrity` in `vendor.json`, schreibt `vendor.mjs`), SHA-256 jeder ausgelieferten Datei und welche App sie nutzt. Ohne Zeitstempel, also prüfbar mit `build.mjs --check`; nie von Hand ändern. Nicht auf der Seite veröffentlicht. Bei jeder Veröffentlichung (`pages.yml`): signierte Bestätigung (Artifact Attestation, Subjekt = Dateien in `assets/vendor/`), Workflow-Artefakt `sbom` und Meldung an den Dependency Graph – damit gelten Dependabot-Warnungen auch für die Bibliotheken. Das SBOM der Test-Werkzeuge exportiert GitHub selbst (Insights → Dependency graph → Export SBOM).
+- **Prüfung** (`node scripts/vendor.mjs --check`, Regeln in `assessHealth` in `scripts/lib.mjs`, Tests in `tests/vendor-health.spec.mjs`):
+  - **Fehler (nicht gepflegt):** Version oder Paket auf npm als *deprecated* markiert, Repository archiviert, oder seit mehr als 24 Monaten kein Release **und** seit mehr als 12 Monaten kein Commit (ohne GitHub-Daten: Scorecard „Maintained“ = 0, also nichts in 90 Tagen).
+  - **Warnung:** seit mehr als 12 Monaten kein Release, Repository oder Aktivität unbekannt, Abfrage fehlgeschlagen.
+  - **Schwachstellen:** OSV-Datenbank (api.osv.dev); Schwere laut GitHub-Advisory.
+  - Quellen: deps.dev (npm-Daten, Repository, OpenSSF Scorecard), GitHub-API (archiviert, letzter Push), OSV. Nur Paketnamen und Versionen werden abgefragt.
+- **Monatlich** („Bibliotheken prüfen“): ein Issue *Bibliotheken: Updates & Sicherheit* mit allem, was zu tun ist; ist nichts mehr offen, wird es geschlossen.
+- **Pull Request, der `vendor.json` ändert:** Der Check schlägt fehl, wenn eine **neue oder geänderte** Bibliothek nicht gepflegt ist oder eine hohe, kritische oder nicht bewertete Schwachstelle hat. Dann eine andere Bibliothek oder Version wählen – nicht die Regeln aufweichen. Bestehende Bibliotheken landen nur im Issue.
+- **Ausnahme** nur begründet und befristet: `"maintenanceException": { "reason": "…", "until": "JJJJ-MM" }` in `vendor.json` (Beispiel: Tesseract-Sprachdaten – trainierte Daten, kein Code). Nach dem Datum wird die Bibliothek wieder gemeldet.
+- **Lieferkette der Abläufe:** Actions immer auf Commit-SHA festlegen (`uses: owner/action@<sha> # vX.Y.Z`; Dependabot aktualisiert beides) – Tags lassen sich umbiegen (Trivy-Action, März 2026). Je Job nur die nötigen `permissions`, `persist-credentials: false` außer beim Pushen, `npm ci --ignore-scripts`. Neue Versionen erst nach 7 Tagen (Dependabot `cooldown`, `vendor.mjs --update`). „Workflows prüfen“ (zizmor) läuft bei jedem PR und muss grün sein; lokal: `pipx run zizmor .github`.
+- **Takt:** geplante Prüfungen höchstens monatlich (Bibliotheken am 3., CodeQL am 5., Scorecard am 7.); dazu bei PRs (ohne Änderung an `vendor.json` nach Sekunden fertig). Dependabot-Warnungen zu neuen Schwachstellen kommen sofort.
+
 ## Daten sichern (Standard für jede App)
 
 Jede App bietet am Seitenende den einklappbaren Bereich **„Daten sichern & übertragen“** mit *Sicherung speichern*, *Teilen …* (nur wenn das Gerät Dateien teilen kann, z. B. iPhone/Android), *Sicherung laden* und *Alle Daten löschen*. Der Bereich kommt aus `scripts/partials/data.html` (Marker `<!-- data:start -->` / `<!-- data:end -->` vor der Hilfe), die Logik aus `assets/common.js` (`Tools.data`).
@@ -154,8 +175,8 @@ Nach dem Merge prüft die Action „Live-Seite testen“ die veröffentlichte Se
 ## Git
 
 - Änderungen über einen Pull Request auf `main`, Squash-Merge.
-- **Mergen ohne Rückfrage:** Ist der Check **test** auf dem aktuellen Stand des PRs grün und gibt es keine Konflikte, wird der PR direkt gemergt – das gilt auch für Dependabot-PRs (vorher auf den aktuellen `main` bringen). Bei roten Tests: Ursache beheben, nie Tests abschwächen. `main` ist geschützt: Merge nur mit grünem Check **test**; direkte Pushes sind gesperrt.
+- **Mergen ohne Rückfrage:** Ist der Check **test** auf dem aktuellen Stand des PRs grün – und auch **Bibliotheken prüfen** und **Workflows prüfen** – und gibt es keine Konflikte, wird der PR direkt gemergt – das gilt auch für Dependabot-PRs (vorher auf den aktuellen `main` bringen). Bei roten Tests: Ursache beheben, nie Tests abschwächen. `main` ist geschützt: Merge nur mit grünem Check **test**; direkte Pushes sind gesperrt.
 - PR-Branches werden nach dem Merge automatisch gelöscht.
-- Dependabot öffnet wöchentlich Update-PRs (Actions, Test-Werkzeuge); mergen, wenn die Tests grün sind.
+- Dependabot öffnet monatlich Update-PRs (Actions, Test-Werkzeuge; erst 7 Tage nach einem Release); mergen, wenn die Tests grün sind.
 - GitHub Pages veröffentlicht `main` über die Action `pages.yml` (Einstellung: Pages → Source „GitHub Actions“); ein Merge ist nach 1–2 Minuten live. `.nojekyll` bleibt als Absicherung, falls die Quelle je wieder auf „Branch“ steht.
 - Hook einmalig aktivieren: `git config core.hooksPath .githooks` (in Cloud-Sessions von Claude Code erledigt das `.claude/hooks/session-start.sh` automatisch)
