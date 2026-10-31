@@ -13,11 +13,15 @@ const filesIn = dir => readdirSync(dir, { withFileTypes: true })
   .flatMap(e => e.isDirectory() ? filesIn(posix.join(dir, e.name)) : [posix.join(dir, e.name)]);
 
 test.describe('SBOM', () => {
-  test('is CycloneDX 1.6 without timestamp (deterministic)', () => {
+  test('is CycloneDX 1.6, deterministic: no timestamp, serial number derived from the content', () => {
     expect(bom.bomFormat).toBe('CycloneDX');
     expect(bom.specVersion).toBe('1.6');
     expect(bom.metadata.timestamp).toBeUndefined();
-    expect(bom.serialNumber).toBeUndefined();
+    // actions/attest (pages.yml) only accepts CycloneDX with bomFormat, specVersion and serialNumber
+    const { $schema, bomFormat, specVersion, serialNumber, version, ...body } = bom;
+    const h = createHash('sha256').update(JSON.stringify(body)).digest('hex');
+    expect(serialNumber).toMatch(/^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(serialNumber.replace(/-/g, '').slice(9, 17)).toBe(h.slice(0, 8));
   });
 
   test('lists every library with purl, licence, npm integrity and the hash of every shipped file', () => {

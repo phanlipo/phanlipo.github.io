@@ -7,8 +7,8 @@
 //                     sends the libraries to GitHub's dependency graph (Dependency Submission API), so
 //                     Dependabot alerts cover them too. Runs in pages.yml; needs GITHUB_TOKEN with contents: write.
 //
-// The SBOM is deterministic (no timestamp, no random serial number): the same libraries give the same
-// file, so `build.mjs --check` can verify it. Per library it records package URL (purl), licence,
+// The SBOM is deterministic (no timestamp; the serial number is derived from the content): the same
+// libraries give the same file, so `build.mjs --check` can verify it. Per library it records package URL (purl), licence,
 // npm tarball with its integrity hash, the SHA-256 of every shipped file and which apps use it.
 // Test tooling (package.json) is not shipped; GitHub's dependency graph lists it.
 
@@ -85,11 +85,7 @@ export function renderSbom(vendor, apps) {
     description: a.title,
     externalReferences: [{ type: 'website', url: `${SITE}${a.folder}/` }],
   }));
-  const bom = {
-    $schema: 'http://cyclonedx.org/schema/bom-1.6.schema.json',
-    bomFormat: 'CycloneDX',
-    specVersion: '1.6',
-    version: 1,
+  const body = {
     metadata: {
       lifecycles: [{ phase: 'build' }],
       tools: { components: [{ type: 'application', name: 'scripts/build.mjs', externalReferences: [{ type: 'vcs', url: REPO }] }] },
@@ -110,6 +106,18 @@ export function renderSbom(vendor, apps) {
         dependsOn: Object.entries(vendor).filter(([, d]) => d.versionFrom?.entry === name).map(([n]) => ref(n)),
       })),
     ],
+  };
+  // Serial number (required by actions/attest): a UUID from the SHA-256 of the content, so it only
+  // changes when the libraries or their files change
+  const h = createHash('sha256').update(JSON.stringify(body)).digest('hex');
+  const uuid = `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${(8 | (parseInt(h[16], 16) & 3)).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+  const bom = {
+    $schema: 'http://cyclonedx.org/schema/bom-1.6.schema.json',
+    bomFormat: 'CycloneDX',
+    specVersion: '1.6',
+    serialNumber: `urn:uuid:${uuid}`,
+    version: 1,
+    ...body,
   };
   return JSON.stringify(bom, null, 2) + '\n';
 }
