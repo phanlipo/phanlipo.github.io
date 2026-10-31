@@ -25,10 +25,10 @@ tests/                Playwright-Tests (siehe tests/README.md); tests/live/ prü
 .githooks/pre-commit  ruft build.mjs vor jedem Commit auf
 .claude/hooks/session-start.sh  richtet Cloud-Sessions von Claude Code ein (Git-Hook, npm install, Browser für Playwright)
 .github/workflows/build.yml         dasselbe bei jedem Push auf GitHub
-.github/workflows/vendor-check.yml  „Bibliotheken prüfen“: monatlich Updates, Pflege, Schwachstellen → ein Issue; bei PRs auf vendor.json als Sperre
+.github/workflows/vendor-check.yml  „Bibliotheken prüfen“: monatlich Updates, Pflege, Schwachstellen → ein Issue; bei jedem PR als Sperre für neue/geänderte Bibliotheken
 .github/workflows/codeql.yml        monatlich CodeQL (eigener Code + Workflows) → Security-Tab
 .github/workflows/scorecard.yml     monatlich OpenSSF Scorecard des Repos → Security-Tab
-.github/workflows/zizmor.yml        „Workflows prüfen“: Sicherheitsprüfung der Workflows bei PRs, die .github/ ändern
+.github/workflows/zizmor.yml        „Workflows prüfen“: Sicherheitsprüfung der Workflows bei jedem PR
 .github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus
 .github/workflows/pages.yml         veröffentlicht main auf GitHub Pages (nur die Dateien aus scripts/site.mjs), danach Live-Test
 .github/workflows/live-test.yml     testet die veröffentlichte Seite (tests/live) – nach jeder Veröffentlichung und auf Knopfdruck
@@ -129,8 +129,8 @@ Ziel: keine Bibliothek ausliefern, die nicht mehr gepflegt wird oder bekannte L�
 - **Monatlich** („Bibliotheken prüfen“): ein Issue *Bibliotheken: Updates & Sicherheit* mit allem, was zu tun ist; ist nichts mehr offen, wird es geschlossen.
 - **Pull Request, der `vendor.json` ändert:** Der Check schlägt fehl, wenn eine **neue oder geänderte** Bibliothek nicht gepflegt ist oder eine hohe, kritische oder nicht bewertete Schwachstelle hat. Dann eine andere Bibliothek oder Version wählen – nicht die Regeln aufweichen. Bestehende Bibliotheken landen nur im Issue.
 - **Ausnahme** nur begründet und befristet: `"maintenanceException": { "reason": "…", "until": "JJJJ-MM" }` in `vendor.json` (Beispiel: Tesseract-Sprachdaten – trainierte Daten, kein Code). Nach dem Datum wird die Bibliothek wieder gemeldet.
-- **Lieferkette der Abläufe:** Actions immer auf Commit-SHA festlegen (`uses: owner/action@<sha> # vX.Y.Z`; Dependabot aktualisiert beides) – Tags lassen sich umbiegen (Trivy-Action, März 2026). Je Job nur die nötigen `permissions`, `persist-credentials: false` außer beim Pushen, `npm ci --ignore-scripts`. Neue Versionen erst nach 7 Tagen (Dependabot `cooldown`, `vendor.mjs --update`). „Workflows prüfen“ (zizmor) muss bei Änderungen an `.github/` grün sein; lokal: `pipx run zizmor .github`.
-- **Takt:** geplante Prüfungen höchstens monatlich (Bibliotheken am 3., CodeQL am 5., Scorecard am 7.); dazu nur anlassbezogen bei PRs. Dependabot-Warnungen zu neuen Schwachstellen kommen sofort.
+- **Lieferkette der Abläufe:** Actions immer auf Commit-SHA festlegen (`uses: owner/action@<sha> # vX.Y.Z`; Dependabot aktualisiert beides) – Tags lassen sich umbiegen (Trivy-Action, März 2026). Je Job nur die nötigen `permissions`, `persist-credentials: false` außer beim Pushen, `npm ci --ignore-scripts`. Neue Versionen erst nach 7 Tagen (Dependabot `cooldown`, `vendor.mjs --update`). „Workflows prüfen“ (zizmor) läuft bei jedem PR und muss grün sein; lokal: `pipx run zizmor .github`.
+- **Takt:** geplante Prüfungen höchstens monatlich (Bibliotheken am 3., CodeQL am 5., Scorecard am 7.); dazu bei PRs (ohne Änderung an `vendor.json` nach Sekunden fertig). Dependabot-Warnungen zu neuen Schwachstellen kommen sofort.
 
 ## Daten sichern (Standard für jede App)
 
@@ -175,7 +175,7 @@ Nach dem Merge prüft die Action „Live-Seite testen“ die veröffentlichte Se
 ## Git
 
 - Änderungen über einen Pull Request auf `main`, Squash-Merge.
-- **Mergen ohne Rückfrage:** Ist der Check **test** auf dem aktuellen Stand des PRs grün – und, falls sie gelaufen sind, auch **Bibliotheken prüfen** und **Workflows prüfen** – und gibt es keine Konflikte, wird der PR direkt gemergt – das gilt auch für Dependabot-PRs (vorher auf den aktuellen `main` bringen). Bei roten Tests: Ursache beheben, nie Tests abschwächen. `main` ist geschützt: Merge nur mit grünem Check **test**; direkte Pushes sind gesperrt.
+- **Mergen ohne Rückfrage:** Ist der Check **test** auf dem aktuellen Stand des PRs grün – und auch **Bibliotheken prüfen** und **Workflows prüfen** – und gibt es keine Konflikte, wird der PR direkt gemergt – das gilt auch für Dependabot-PRs (vorher auf den aktuellen `main` bringen). Bei roten Tests: Ursache beheben, nie Tests abschwächen. `main` ist geschützt: Merge nur mit grünem Check **test**; direkte Pushes sind gesperrt.
 - PR-Branches werden nach dem Merge automatisch gelöscht.
 - Dependabot öffnet monatlich Update-PRs (Actions, Test-Werkzeuge; erst 7 Tage nach einem Release); mergen, wenn die Tests grün sind.
 - GitHub Pages veröffentlicht `main` über die Action `pages.yml` (Einstellung: Pages → Source „GitHub Actions“); ein Merge ist nach 1–2 Minuten live. `.nojekyll` bleibt als Absicherung, falls die Quelle je wieder auf „Branch“ steht.

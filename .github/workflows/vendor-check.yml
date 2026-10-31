@@ -4,21 +4,22 @@
 #   - newer versions
 # Monthly: one issue "Bibliotheken: Updates & Sicherheit" with everything that needs attention
 #          (updated each month, closed when nothing is left). Nothing is changed automatically.
-# Pull request that changes scripts/vendor.json: fails if a new or changed library is not maintained
-#          or has a high/critical (or unrated) vulnerability. Existing libraries only go to the issue.
+# Every pull request (so it can be a required check): if it changes scripts/vendor.json, fails when a new
+#          or changed library is not maintained or has a high/critical (or unrated) vulnerability;
+#          otherwise done in seconds. Existing libraries only go to the issue.
 name: Bibliotheken prüfen
 
 on:
   schedule:
     - cron: '17 6 3 * *'   # 3rd of every month, 06:17 UTC
   pull_request:
-    paths: [scripts/vendor.json]
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
   pull-request:
+    name: Bibliotheken prüfen
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -31,12 +32,20 @@ jobs:
         with:
           node-version: 22
       - name: Libraries before this pull request
+        id: base
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
           git fetch --depth=1 origin "$BASE_REF"
           git show "origin/$BASE_REF:scripts/vendor.json" > "$RUNNER_TEMP/base.json"
+          if git diff --quiet "origin/$BASE_REF" HEAD -- scripts/vendor.json; then
+            echo "scripts/vendor.json unchanged – nothing to check."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Check new or changed libraries
+        if: steps.base.outputs.changed == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -46,6 +55,7 @@ jobs:
           exit $status
 
   monthly:
+    name: Monatsbericht
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
