@@ -383,8 +383,7 @@ test('works offline: add a photo and save the PDF', async ({ page, context }) =>
   await context.setOffline(false);
 });
 
-test('diagnostics report pages and steps, but no file names', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('diagnostics report pages and steps, but no file names', async ({ page }) => {
   const { png } = await photo(page);
   await addPhotos(page, [file(png, 'Geheimer-Befund.png')]);
   const text = await page.evaluate(() => Tools.diag.text());

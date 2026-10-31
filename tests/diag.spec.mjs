@@ -1,12 +1,33 @@
 // "Diagnose kopieren" (Tools.diag in assets/common.js): every app with the button in its help – the template
 // included, so new apps start with it – copies a report with app, version, browser, storage size and the log,
 // never stored content.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, apps } from './helpers.mjs';
+import { test, expect, apps, clipboardText, privateClipboard } from './helpers.mjs';
 import { ROOT } from '../scripts/lib.mjs';
 
 const withDiag = apps().filter(a => readFileSync(join(ROOT, a.folder, 'index.html'), 'utf8').includes('data-diag="copy"'));
+
+// The system clipboard is shared by all test workers running in parallel: tests read each other's
+// text. Every page has its own clipboard instead (privateClipboard in helpers.mjs).
+test('each page has its own clipboard, so parallel tests cannot mix up copied text', async ({ page, context }) => {
+  const other = await context.newPage();
+  await privateClipboard(other);
+  await page.goto('/template/');
+  await other.goto('/template/');
+  await page.evaluate(() => navigator.clipboard.writeText('eins'));
+  await other.evaluate(() => navigator.clipboard.writeText('zwei'));
+  expect(await clipboardText(page)).toBe('eins');
+  expect(await clipboardText(other)).toBe('zwei');
+  await other.close();
+});
+test('no test uses the shared system clipboard', () => {
+  const dir = join(ROOT, 'tests');
+  for (const f of readdirSync(dir).filter(f => f.endsWith('.spec.mjs'))) {
+    const src = readFileSync(join(dir, f), 'utf8');
+    expect(src, `${f}: use clipboardText(page) instead of clipboard permissions`).not.toMatch(/['"]clipboard-(read|write)['"]/);
+  }
+});
 
 test('the template has the troubleshooting block', () => {
   expect(withDiag.map(a => a.folder)).toContain('template');
@@ -16,12 +37,11 @@ async function copyReport(page) {
   await page.locator('details.help summary').click();
   await page.click('[data-diag="copy"]');
   await expect(page.locator('#toast')).toHaveText(/Diagnose kopiert|Diagnostics copied/);
-  return page.evaluate(() => navigator.clipboard.readText());
+  return clipboardText(page);
 }
 
 for (const app of withDiag) {
-  test(`${app.folder}: copies the diagnostics report`, async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  test(`${app.folder}: copies the diagnostics report`, async ({ page }) => {
     await page.goto(`/${app.folder}/`);
     const version = (await page.locator('.footer-version').textContent()).replace('Version ', '');
     const text = await copyReport(page);
@@ -33,8 +53,7 @@ for (const app of withDiag) {
   });
 }
 
-test('log: steps, console warnings and rejections; storage only as size, page info added', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('log: steps, console warnings and rejections; storage only as size, page info added', async ({ page }) => {
   await page.goto('/template/');
   await page.evaluate(() => {
     localStorage.setItem('new-tool.secret.v1', JSON.stringify({ note: 'streng-geheim' }));
@@ -53,8 +72,7 @@ test('log: steps, console warnings and rejections; storage only as size, page in
 
 test.describe('English', () => {
   test.use({ locale: 'en-US' });
-  test('button and message in English', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  test('button and message in English', async ({ page }) => {
     await page.goto('/template/');
     await expect(page.locator('[data-diag="copy"]')).toHaveText('Copy diagnostics');
     const text = await copyReport(page);

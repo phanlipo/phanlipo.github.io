@@ -1,7 +1,7 @@
 // Erinnerungen: create, fire on time (notification via the service worker), late after the app was closed,
 // edit and schedule again from the history, validation, permission states, English.
 // Time is controlled with Playwright's clock; notifications are recorded by a stand-in Notification API.
-import { test, expect } from './helpers.mjs';
+import { test, expect, clipboardText } from './helpers.mjs';
 
 const KEY = 'reminders.list.v1';
 const START = new Date('2026-10-29T12:00:00+01:00'); // = 12:00 in Europe/Berlin (winter time)
@@ -259,15 +259,14 @@ test('no Notification API at all (in-app browser): hint, reminders still show in
   await expect(page.locator('#pastList li')).toContainText('nur in der App');
 });
 
-test('diagnostics: copied from the help with permission state and the steps, without reminder texts', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('diagnostics: copied from the help with permission state and the steps, without reminder texts', async ({ page }) => {
   await open(page, 'dismiss');
   await add(page, 'Geheimer Termin', '2026-10-29T13:00');
   await page.click('#btnPerm');
   await page.locator('details.help summary').click();
   await page.click('[data-diag="copy"]');
   await expect(page.locator('#toast')).toHaveText('Diagnose kopiert');
-  const text = await page.evaluate(() => navigator.clipboard.readText());
+  const text = await clipboardText(page);
   expect(text).toContain('Notification.permission: default');
   expect(text).toContain('userAgent: ');
   expect(text).toContain('ask: requestPermission resolved default');
@@ -308,15 +307,14 @@ test.describe('Android', () => {
     await expect(page.locator('#permHint')).toContainText('sofort abgelehnt');
     expect(await page.evaluate(() => [window.__push, window.__unsub])).toEqual([1, 0]);
   });
-  test('diagnostics log the push steps', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  test('diagnostics log the push steps', async ({ page }) => {
     await open(page, 'default');
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.click('#btnPerm');
     await page.locator('details.help summary').click();
     await page.click('[data-diag="copy"]');
     await expect(page.locator('#toast')).toHaveText('Diagnose kopiert');
-    const text = await page.evaluate(() => navigator.clipboard.readText());
+    const text = await clipboardText(page);
     expect(text).toContain('push: subscribe …');
     expect(text).toContain('push: unsubscribed');
     expect(text).toMatch(/ask: done .*"permission":"granted"/);

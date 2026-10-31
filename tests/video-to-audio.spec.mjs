@@ -2,7 +2,7 @@
 // unchanged or as WAV; the files are checked with independent readers (audio-files.mjs).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, openDetails } from './helpers.mjs';
+import { test, expect, openDetails, clipboardText } from './helpers.mjs';
 import { CLIPS, FIX, clip, mp4Info, oggInfo, wavInfo, toneHz, peak } from './audio-files.mjs';
 
 const URL_ = '/video-to-audio/';
@@ -140,13 +140,12 @@ test('works offline', async ({ page, context }) => {
   await context.setOffline(false);
 });
 
-test('diagnostics: steps and codec, never the file name', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('diagnostics: steps and codec, never the file name', async ({ page }) => {
   await page.goto(URL_);
   await extract(page, 'aac', 'original');
   await openDetails(page, 'Anleitung & Hinweise');
   await page.click('[data-diag="copy"]');
-  const text = await page.evaluate(() => navigator.clipboard.readText());
+  const text = await clipboardText(page);
   expect(text).toContain('audio track');
   expect(text).toContain('extracted');
   expect(text).toContain('"codec":"aac"');
