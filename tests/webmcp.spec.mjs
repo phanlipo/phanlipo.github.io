@@ -840,3 +840,51 @@ test.describe('talking-animal tools', () => {
     await expect(page.locator('#animals [data-a="cat"]')).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+test.describe('paint tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/paint/');
+  });
+
+  test('select_tool picks colour and tool in the app; get_canvas reads the state', async ({ page }) => {
+    const { result } = await call(page, 'paint_select_tool', { tool: 'spray', color: 'green' });
+    expect(result).toEqual({ tool: 'spray', color: 'green' });
+    await expect(page.locator('[data-tool="spray"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-color="green"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Werkzeug gewählt');
+    const empty = (await call(page, 'paint_get_canvas', {})).result;
+    expect(empty).toMatchObject({ tool: 'spray', color: 'green', painted_percent: 0 });
+    expect(empty.tools).toEqual(['pencil', 'brush', 'marker', 'spray', 'eraser']);
+    expect(empty.colors).toHaveLength(6);
+    // Fill the left half with the brush: independently ≈ 50 % painted
+    await call(page, 'paint_select_tool', { tool: 'brush' });
+    const box = await page.locator('#paper').boundingBox();
+    const cw = await page.locator('#paper').evaluate(c => c.clientWidth);
+    for (let y = 0; y < box.height + 14; y += 10) {
+      await page.mouse.move(box.x, box.y + y);
+      await page.mouse.down();
+      await page.mouse.move(box.x + cw / 2 - 7, box.y + y, { steps: 4 });
+      await page.mouse.up();
+    }
+    const half = (await call(page, 'paint_get_canvas', {})).result;
+    expect(half.painted_percent).toBeGreaterThan(45);
+    expect(half.painted_percent).toBeLessThan(55);
+  });
+
+  test('a colour switches from eraser back to the last tool', async ({ page }) => {
+    await call(page, 'paint_select_tool', { tool: 'marker' });
+    await call(page, 'paint_select_tool', { tool: 'eraser' });
+    const { result } = await call(page, 'paint_select_tool', { color: 'red' });
+    expect(result).toEqual({ tool: 'marker', color: 'red' });
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    expect((await call(page, 'paint_select_tool', { tool: 'roller' })).ok).toBe(false);
+    expect((await call(page, 'paint_select_tool', { color: 'pink' })).ok).toBe(false);
+    expect((await call(page, 'paint_select_tool', {})).ok).toBe(false);
+    expect((await call(page, 'paint_get_canvas', { x: 1 })).ok).toBe(false);
+    await expect(page.locator('[data-tool="pencil"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-color="black"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+});
