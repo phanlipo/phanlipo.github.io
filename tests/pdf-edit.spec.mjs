@@ -3,9 +3,16 @@
 // and each page is recognised by the text it shows.
 import { test, expect } from './helpers.mjs';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { makePdf, readPdfPages } from './pdf-tools.mjs';
 
 const URL_ = '/pdf-edit/';
+// The vendored browser bundle, used in Node only to create an AES-256 test file
+const libInNode = () => {
+  const file = new URL('../assets/vendor/pdf-lib/pdf-lib.min.js', import.meta.url).pathname;
+  const m = createRequire(import.meta.url)(file);
+  return globalThis.PDFLib || m;
+};
 const doc = (labels, rotate = {}) => makePdf(labels.map(l => ({ rotate: rotate[l], texts: [{ x: 72, y: 700, size: 40, text: l }] })));
 const A = () => ({ name: 'a.pdf', mimeType: 'application/pdf', buffer: doc(['A1', 'A2', 'A3']) });
 // B2 is already turned 90° in the source file – user rotation adds to it
@@ -174,14 +181,10 @@ test('a file name typed by the user is kept when more files are added', async ({
   expect((await save(page)).name).toBe('Mein Vertrag.pdf');
 });
 
-test('not a PDF, damaged or password-protected files get a clear message', async ({ page }) => {
+test('not a PDF or damaged files get a clear message', async ({ page }) => {
   await page.goto(URL_);
-  const good = doc(['X1']).toString('latin1');
-  // Same file with an /Encrypt entry in the trailer (as a password-protected PDF has)
-  const encrypted = Buffer.from(good.replace('trailer\n<<', 'trailer\n<< /Encrypt << /Filter /Standard /V 1 /R 2 /O <00> /U <00> /P -4 >>'), 'latin1');
   await page.setInputFiles('#inPick', [
     { name: 'bild.png', mimeType: 'image/png', buffer: Buffer.from('not a pdf at all') },
-    { name: 'geheim.pdf', mimeType: 'application/pdf', buffer: encrypted },
     { name: 'kaputt.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n garbage without objects') },
     A(),
   ]);
@@ -189,9 +192,87 @@ test('not a PDF, damaged or password-protected files get a clear message', async
   const info = page.locator('#addInfo');
   await expect(info).toContainText('1 Datei(en) mit 3 Seite(n) hinzugefügt.');
   await expect(info).toContainText('„bild.png“ ist keine PDF-Datei.');
-  await expect(info).toContainText('„geheim.pdf“ ist passwortgeschützt');
   await expect(info).toContainText('„kaputt.pdf“ konnte nicht gelesen werden');
   await expect(info).toHaveClass(/err/);
+});
+
+/* ---------- Password-protected PDFs ---------- */
+// Encrypted by pdf-tools.mjs itself (RC4, PDF standard security handler) – independent of the library
+const S = () => ({ name: 'geheim.pdf', mimeType: 'application/pdf',
+  buffer: makePdf([{ texts: [{ x: 72, y: 700, size: 40, text: 'S1' }] }, { texts: [{ x: 72, y: 700, size: 40, text: 'S2' }] }], { encrypt: { user: 'Sesam 1', owner: 'chef' } }) });
+// only protected against changes: opens with the empty user password
+const R = () => ({ name: 'schreibschutz.pdf', mimeType: 'application/pdf',
+  buffer: makePdf([{ rotate: 180, texts: [{ x: 72, y: 700, size: 40, text: 'R1' }] }], { encrypt: { user: '', owner: 'chef' } }) });
+const dlg = page => page.locator('#pwDlg');
+
+test('password-protected PDFs: asks for the password, wrong ones are rejected, saved without password', async ({ page }) => {
+  await page.goto(URL_);
+  await page.setInputFiles('#inPick', [A(), S(), R()]);
+  await expect(dlg(page)).toBeVisible();
+  await expect(page.locator('#pwTitle')).toHaveText('„geheim.pdf“ ist passwortgeschützt');
+  await expect(page.locator('#pwInput')).toBeFocused();
+  await expect(page.locator('#pwInput')).toHaveAttribute('type', 'password');
+  await page.click('#pwOk');                                       // nothing entered
+  await expect(page.locator('#pwErr')).toHaveText('Bitte das Passwort eingeben.');
+  await page.fill('#pwInput', 'sesam 1');                          // wrong case
+  await page.press('#pwInput', 'Enter');
+  await expect(page.locator('#pwErr')).toHaveText('Falsches Passwort – bitte noch einmal versuchen.');
+  await expect(page.locator('#pwInput')).toHaveValue('');
+  await page.fill('#pwInput', 'Sesam 1');
+  await page.click('#pwOk');
+  await expect(dlg(page)).toBeHidden();
+  // the write-protected file opened without asking
+  await expect(thumbs(page)).toHaveCount(6);
+  await expect(page.locator('#addInfo')).toHaveText('3 Datei(en) mit 6 Seite(n) hinzugefügt.');
+  // previews of the encrypted file (pdf.js gets the password, too)
+  await expect(thumbs(page).nth(3).locator('img')).toHaveAttribute('src', /^blob:/);
+  await expect(thumbs(page).nth(5).locator('img')).toHaveAttribute('src', /^blob:/);
+
+  await pageBtn(page, 4, 'rot').click();
+  const r = await save(page);
+  // readable by a parser that knows nothing about encryption → really decrypted
+  expect(r.pages).toEqual(['A1@0', 'A2@0', 'A3@0', 'S1@90', 'S2@0', 'R1@180']);
+  expect(r.pdf.toString('latin1')).not.toContain('/Encrypt');
+
+  // the password never shows up in the diagnostics
+  // same text as "Diagnose kopieren" (the button itself is tested in diag.spec.mjs)
+  const text = await page.evaluate(() => Tools.diag.text());
+  expect(text).toContain('encrypted: 2');
+  expect(text).toContain('wrong password');
+  expect(text).not.toContain('Sesam');
+  expect(text).not.toContain('sesam');
+});
+
+test('password-protected PDF can be skipped (button or Escape); the other files are still added', async ({ page }) => {
+  await page.goto(URL_);
+  await page.setInputFiles('#inPick', [S(), A(), { ...S(), name: 'zwei.pdf' }]);
+  await expect(page.locator('#pwTitle')).toHaveText('„geheim.pdf“ ist passwortgeschützt');
+  await page.click('#pwCancel');
+  await expect(page.locator('#pwTitle')).toHaveText('„zwei.pdf“ ist passwortgeschützt');
+  await page.keyboard.press('Escape');
+  await expect(dlg(page)).toBeHidden();
+  await expect(thumbs(page)).toHaveCount(3);
+  const info = page.locator('#addInfo');
+  await expect(info).toContainText('1 Datei(en) mit 3 Seite(n) hinzugefügt.');
+  await expect(info).toContainText('„geheim.pdf“ wurde ohne Passwort nicht geöffnet.');
+  await expect(info).toContainText('„zwei.pdf“ wurde ohne Passwort nicht geöffnet.');
+});
+
+test('password-protected PDF with AES-256 (current standard)', async ({ page }) => {
+  // made with the library's own encrypt() – the content is checked with the independent parser
+  const lib = libInNode();
+  const d = await lib.PDFDocument.load(doc(['N1', 'N2']));
+  d.encrypt({ userPassword: 'neu', ownerPassword: 'chef' });
+  const buffer = Buffer.from(await d.save());
+  expect(buffer.toString('latin1')).toMatch(/\/V 5/);               // AES-256
+  await page.goto(URL_);
+  await page.setInputFiles('#inPick', [{ name: 'aes.pdf', mimeType: 'application/pdf', buffer }]);
+  await page.fill('#pwInput', 'neu');
+  await page.click('#pwOk');
+  await expect(thumbs(page)).toHaveCount(2);
+  await expect(thumbs(page).nth(0).locator('img')).toHaveAttribute('src', /^blob:/);
+  await pageBtn(page, 2, 'up').click();
+  expect((await save(page)).pages).toEqual(['N2@0', 'N1@0']);
 });
 
 test('share target: several PDFs shared to the installed app are merged in order', async ({ page, request }) => {
@@ -226,14 +307,12 @@ test('works offline: editing library, pdf.js and its worker come from the offlin
   await context.setOffline(false);
 });
 
-test('diagnostics count pages but never contain file names', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('diagnostics count pages but never contain file names', async ({ page }) => {
   await page.goto(URL_);
   await openFiles(page, [A(), B()], 5);
   await pageBtn(page, 2, 'rot').click();
-  await page.locator('details.help summary').click();
-  await page.click('[data-diag="copy"]');
-  const text = await page.evaluate(() => navigator.clipboard.readText());
+  // same text as "Diagnose kopieren" (the button itself is tested in diag.spec.mjs)
+  const text = await page.evaluate(() => Tools.diag.text());
   expect(text).toContain('files: 2');
   expect(text).toContain('pages: 5');
   expect(text).toContain('rotated: 1');
@@ -254,6 +333,13 @@ test.describe('English', () => {
     await page.fill('#range', '9');
     await page.click('#btnRotSel');
     await expect(page.locator('.toast')).toContainText('There are only 3 page(s).');
+    await page.setInputFiles('#inPick', [S()]);
+    await expect(page.locator('#pwTitle')).toHaveText('“geheim.pdf” is password-protected');
+    await page.fill('#pwInput', 'x');
+    await page.click('#pwOk');
+    await expect(page.locator('#pwErr')).toHaveText('Wrong password – please try again.');
+    await page.click('#pwCancel');
+    await expect(page.locator('#addInfo')).toHaveText('“geheim.pdf” was not opened without a password.');
     // switching the language renames the suggested file name until the user types one
     await page.click('[data-set-lang="de"]');
     await expect(page.locator('#fileName')).toHaveValue('a (bearbeitet)');

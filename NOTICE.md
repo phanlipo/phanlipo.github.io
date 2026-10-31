@@ -23,7 +23,7 @@ neben jeder Bibliothek in `assets/vendor/<name>/LICENSE` und wird mit ihr ausgel
 | [tesseract-eng](https://github.com/naptha/tessdata) (`@tesseract.js-data/eng`) | 1.0.0 | [MIT](assets/vendor/tesseract-eng/LICENSE) | Copyright (c) 2015 Jerome Wu (tesseract.js-data); trained data: Copyright Google LLC, tesseract-ocr/tessdata_best (Apache-2.0) | Sprachdaten Englisch (tessdata_best, ganzzahlig) für die Texterkennung |
 | [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (`qrcode-generator`) | 2.0.4 | [MIT](assets/vendor/qrcode-generator/LICENSE) | Copyright (c) 2009 Kazuhiko Arase | QR-Codes erzeugen im QR-Code-Generator |
 | [mediabunny](https://mediabunny.dev) (`mediabunny`) | 1.65.0 | [MPL-2.0](assets/vendor/mediabunny/LICENSE) | siehe Lizenztext | Video-Container lesen (MP4, MOV, WebM, MKV …) und die Tonspur ohne Neukodierung bzw. als WAV speichern in Video zu Audio |
-| [pdf-lib](https://pdf-lib.js.org) (`pdf-lib`) | 1.17.1 | [MIT](assets/vendor/pdf-lib/LICENSE) | Copyright (c) 2019 Andrew Dillon | PDF-Seiten kopieren, drehen und zusammenführen in PDF bearbeiten |
+| [pdf-lib](https://github.com/cantoo-scribe/pdf-lib) (`@cantoo/pdf-lib`) | 2.11.1 | [MIT](assets/vendor/pdf-lib/LICENSE) | Copyright (c) 2019 Andrew Dillon | PDF-Seiten kopieren, drehen, zusammenführen und passwortgeschützte PDFs öffnen in PDF bearbeiten – gepflegter Fork von pdf-lib |
 
 ## Weitere Lizenzdateien
 
