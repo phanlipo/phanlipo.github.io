@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Video zu Audio</title>
+<meta name="description" content="Die Tonspur aus einem Video speichern – als Original ohne Qualitätsverlust (z. B. .m4a) oder als WAV, direkt im Browser: das Video verlässt das Gerät nicht.">
+<meta name="tool:tags" content="Alltag, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
+<meta name="tool:icon" content="file-music">
+<meta name="tool:color" content="#b91c1c">
+<meta name="tool:short-name" content="Video→Audio">
+<meta name="tool:title-en" content="Video to Audio">
+<meta name="tool:description-en" content="Save the sound track of a video – as the original without quality loss (e.g. .m4a) or as WAV, right in the browser: the video never leaves the device.">
+<meta name="tool:short-name-en" content="Video→Audio">
+<meta name="tool:storage" content="video-to-audio.">
+<meta name="tool:webmcp" content="get_selected_video_info, extract_audio_from_selected_video">
+<meta name="tool:share-target" content="video/*, .mp4, .m4v, .mov, .webm, .mkv, .3gp">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-1G9tPoFtK7aMfHLP/3jCSxjtkCxkBSYewyG/+tFugq4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Video→Audio">
+<meta name="theme-color" content="#b91c1c">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#b91c1c;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#fca5a5;--accent-text:#450a0a}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.full{grid-column:1/-1}
+.drop{display:block;width:100%;border:2px dashed var(--border);border-radius:var(--radius);padding:22px 14px;text-align:center;color:var(--muted);background:transparent;cursor:pointer;font:inherit}
+.drop strong{color:var(--text)}
+.drop.over,.drop:hover{border-color:var(--accent);color:var(--text)}
+.fileinfo{margin-block:10px 0;font-size:14px;overflow-wrap:anywhere}
+.fileinfo:empty{display:none}
+.choice{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding-block:6px;cursor:pointer}
+.choice input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--accent)}
+.choice small{display:block;color:var(--muted);font-size:13px}
+fieldset{border:0;margin:0 0 8px;padding:0;min-width:0}
+legend{font-size:13px;color:var(--muted);font-weight:600;padding:0;margin-block-end:4px}
+.btn.big{width:100%;min-height:54px;font-size:18px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10px}
+.status{font-size:14px;margin-block:8px 0;min-height:1.4em}
+.status.err{color:var(--err)}
+.status.ok{color:var(--ok)}
+.status.warn{color:var(--warn)}
+audio{display:block;width:100%;margin-block:10px}
+.meta-line{font-size:13px;color:var(--muted);margin-block:8px 0;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Video zu Audio</span></h1>
+  <p class="sub" data-i18n="sub">Die Tonspur aus einem Video speichern – das Video verlässt das Gerät nicht.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-file">
+    <h2 id="h-file" data-i18n="h.file">1 · Video wählen</h2>
+    <button type="button" class="drop" id="drop">
+      <span data-i18n-html="drop"><strong>Video wählen</strong><br>oder hierher ziehen</span>
+    </button>
+    <input type="file" id="file" accept="video/*,.mp4,.m4v,.mov,.webm,.mkv,.3gp" hidden>
+    <p class="fileinfo" id="fileInfo" aria-live="polite"></p>
+  </section>
+
+  <section class="card" aria-labelledby="h-run">
+    <h2 id="h-run" data-i18n="h.run">2 · Audio speichern</h2>
+    <fieldset>
+      <legend data-i18n="format">Format</legend>
+      <label class="choice"><input type="radio" name="format" value="original" checked>
+        <span data-i18n-html="f.original">Original<small>Die Tonspur wird unverändert übernommen – keine Qualitätsverluste, schnell. Meist .m4a (AAC), bei WebM-Videos .ogg.</small></span></label>
+      <label class="choice"><input type="radio" name="format" value="wav">
+        <span data-i18n-html="f.wav">WAV<small>Unkomprimiert, passt in jedes Schnitt- und Audioprogramm. Deutlich größere Datei.</small></span></label>
+    </fieldset>
+    <button type="button" class="btn primary big" id="btnRun" data-i18n="run" disabled>Audio herausziehen</button>
+    <progress id="progress" max="100" value="0" hidden></progress>
+    <p class="status" id="status" role="status"></p>
+  </section>
+
+  <section class="card full" aria-labelledby="h-result" id="result" hidden>
+    <h2 id="h-result" data-i18n="h.result">3 · Audiodatei</h2>
+    <audio id="player" controls preload="metadata"></audio>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnSave" data-i18n="save">Audio speichern</button>
+      <button type="button" class="btn" id="btnShare" data-i18n="share" hidden>Teilen …</button>
+    </div>
+    <p class="meta-line" id="resultMeta"></p>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Speichert die Tonspur eines Videos als eigene Audiodatei – z. B. Musik, einen Vortrag oder eine Sprachaufnahme aus einem Handy-Video.</p>
+  <h3>Bedienung</h3>
+  <ol>
+    <li>Video wählen (oder hierher ziehen). Auf Android lässt sich ein Video auch aus der Galerie an die installierte App <em>teilen</em>.</li>
+    <li>Format wählen und <em>Audio herausziehen</em> tippen.</li>
+    <li>Probehören, dann <em>Audio speichern</em> oder <em>Teilen …</em>.</li>
+  </ol>
+  <h3>Formate</h3>
+  <ul>
+    <li><strong>Original</strong> übernimmt die Tonspur 1:1, ohne sie neu zu kodieren – gleiche Qualität, kleine Datei, auch bei langen Videos schnell. Handy-Videos (MP4/MOV) enthalten fast immer AAC → <code>.m4a</code>, das jedes Handy und jeder Computer abspielt. WebM-Videos enthalten meist Opus → <code>.ogg</code>; MP3 → <code>.mp3</code>, FLAC → <code>.flac</code>.</li>
+    <li><strong>WAV</strong> ist unkomprimiert (16 Bit) und ca. 10 MB pro Minute in Stereo groß. Dafür muss der Browser den Ton dekodieren können; das klappt in aktuellen Browsern bei fast allen Videos.</li>
+    <li>MP3 wird nicht erzeugt: Ein MP3-Encoder lässt sich hier nicht offline und sicher einbinden. <code>.m4a</code> ist ähnlich klein und wird überall abgespielt.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Alles läuft im Browser, auch offline. Das Video wird nicht hochgeladen und nicht gespeichert; gespeichert wird nur das gewählte Format.</li>
+    <li>Gelesen werden MP4, MOV, M4V, 3GP, WebM und MKV. Hat ein Video mehrere Tonspuren, wird die erste genommen.</li>
+    <li>Sehr große Videos: Das Video wird nur stückweise gelesen, die Audiodatei aber im Arbeitsspeicher erstellt. Bei WAV aus sehr langen Videos (über ca. 1 Stunde) kann das Handy an seine Grenzen kommen – dann <em>Original</em> nehmen.</li>
+    <li>Bibliothek: <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) zum Lesen und Schreiben der Dateien.</li>
+    <li>KI-Agenten im Browser (WebMCP) können Angaben zum gewählten Video lesen und die Tonspur herausziehen lassen – ein Video auswählen können sie nicht.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Saves the sound track of a video as a separate audio file – e.g. music, a talk or a voice recording from a phone video.</p>
+  <h3>How to use</h3>
+  <ol>
+    <li>Choose a video (or drag it here). On Android you can also <em>share</em> a video from the gallery to the installed app.</li>
+    <li>Choose a format and tap <em>Extract audio</em>.</li>
+    <li>Listen, then <em>Save audio</em> or <em>Share …</em>.</li>
+  </ol>
+  <h3>Formats</h3>
+  <ul>
+    <li><strong>Original</strong> takes the sound track 1:1 without re-encoding it – same quality, small file, fast even for long videos. Phone videos (MP4/MOV) almost always contain AAC → <code>.m4a</code>, which every phone and computer plays. WebM videos usually contain Opus → <code>.ogg</code>; MP3 → <code>.mp3</code>, FLAC → <code>.flac</code>.</li>
+    <li><strong>WAV</strong> is uncompressed (16 bit), about 10 MB per minute in stereo. The browser has to be able to decode the sound for this; current browsers manage that for almost every video.</li>
+    <li>MP3 is not offered: an MP3 encoder cannot be included here offline and safely. <code>.m4a</code> is similarly small and plays everywhere.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Everything runs in the browser, offline too. The video is neither uploaded nor stored; only the chosen format is saved.</li>
+    <li>Reads MP4, MOV, M4V, 3GP, WebM and MKV. If a video has several sound tracks, the first one is used.</li>
+    <li>Very large videos: the video is read piece by piece, but the audio file is built in memory. WAV from very long videos (over about 1 hour) may be too much for a phone – use <em>Original</em> then.</li>
+    <li>Library: <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) to read and write the files.</li>
+    <li>AI agents in the browser (WebMCP) can read details of the chosen video and have its sound track extracted – they cannot choose a video.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 79f485177c3d</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script type="module">
+import * as MB from '../assets/vendor/mediabunny/mediabunny.min.mjs';
+const { $, load, save, toast, fmt, takeSharedFile } = Tools;
+/* ---------- Texts (German in the HTML; dynamic texts here) ---------- */
+Tools.i18n({
+  de: {
+    fileInfo: '„{f}“ · {mb} MB', reading: 'Lese das Video …', info: 'Tonspur: {codec}, {ch}, {rate} kHz · {dur}',
+    mono: 'Mono', stereo: 'Stereo', channels: '{n} Kanäle',
+    working: 'Ziehe die Tonspur heraus … {p} %', decoding: 'Dekodiere den Ton …', done: 'Fertig.',
+    doneFallback: 'Fertig. Die Tonspur ließ sich nicht unverändert übernehmen und wurde als WAV gespeichert.',
+    'e.invalid': 'Das ist kein lesbares Video.', 'e.noaudio': 'Dieses Video hat keine Tonspur.',
+    'e.decode': 'Dieser Browser kann den Ton dieses Videos ({codec}) nicht dekodieren – bitte „Original“ wählen.',
+    failed: 'Fehlgeschlagen: {m}', shareFail: 'Teilen nicht möglich', saved: 'Gespeichert',
+    'mcp.info': 'Video gelesen', 'mcp.extract': 'Tonspur herausgezogen',
+  },
+  en: {
+    title: 'Video to Audio', sub: 'Save the sound track of a video – the video never leaves the device.',
+    'h.file': '1 · Choose a video', drop: '<strong>Choose a video</strong><br>or drag it here', 'h.run': '2 · Save audio', format: 'Format',
+    'f.original': 'Original<small>The sound track is taken over unchanged – no quality loss, fast. Usually .m4a (AAC), .ogg for WebM videos.</small>',
+    'f.wav': 'WAV<small>Uncompressed, works in every editing and audio program. Much larger file.</small>',
+    run: 'Extract audio', 'h.result': '3 · Audio file', save: 'Save audio', share: 'Share …',
+    fileInfo: '“{f}” · {mb} MB', reading: 'Reading the video …', info: 'Sound track: {codec}, {ch}, {rate} kHz · {dur}',
+    mono: 'mono', stereo: 'stereo', channels: '{n} channels',
+    working: 'Extracting the sound track … {p} %', decoding: 'Decoding the sound …', done: 'Done.',
+    doneFallback: 'Done. The sound track could not be taken over unchanged and was saved as WAV.',
+    'e.invalid': 'This is not a readable video.', 'e.noaudio': 'This video has no sound track.',
+    'e.decode': 'This browser cannot decode the sound of this video ({codec}) – please choose “Original”.',
+    failed: 'Failed: {m}', shareFail: 'Sharing is not possible', saved: 'Saved',
+    'mcp.info': 'video read', 'mcp.extract': 'sound track extracted',
+  },
+});
+const t = Tools.t;
+const LS = 'video-to-audio.settings.v1';
+const settings = Object.assign({ format: 'original' }, load(LS, {}));
+const radios = [...document.querySelectorAll('input[name="format"]')];
+const getFormat = () => (radios.find(r => r.checked) || radios[0]).value;
+const setFormat = f => { for (const r of radios) r.checked = r.value === f; };
+setFormat(settings.format === 'wav' ? 'wav' : 'original');
+for (const r of radios) r.addEventListener('change', () => { settings.format = getFormat(); save(LS, settings); });
+
+let file = null, info = null, result = null, busy = false, playerUrl = null, lastError = null, lastNote = null;
+
+function status(text, kind) {
+  $('status').textContent = text || '';
+  $('status').className = 'status' + (kind ? ' ' + kind : '');
+}
+const codecName = c => ({ aac: 'AAC', opus: 'Opus', mp3: 'MP3', vorbis: 'Vorbis', flac: 'FLAC', ac3: 'AC-3', eac3: 'E-AC-3', alaw: 'A-law', ulaw: 'µ-law' })[c] || (c && c.startsWith('pcm') ? 'PCM' : (c || '?'));
+const chName = n => n === 1 ? t('mono') : n === 2 ? t('stereo') : t('channels', { n });
+function duration(s) {
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+}
+function renderInfo() {
+  if (!file) { $('fileInfo').textContent = ''; return; }
+  let s = t('fileInfo', { f: file.name, mb: fmt(file.size / 1048576, 1) });
+  if (info) s += ' · ' + t('info', { codec: codecName(info.codec), ch: chName(info.channels), rate: fmt(info.sampleRate / 1000, 1), dur: duration(info.duration) });
+  $('fileInfo').textContent = s;
+}
+
+/* ---------- Reading the video ---------- */
+const err = (code, extra) => Object.assign(new Error(code), { code }, extra);
+const openInput = f => new MB.Input({ source: new MB.BlobSource(f), formats: MB.ALL_FORMATS });
+
+async function readInfo(f) {
+  const input = openInput(f);
+  try {
+    let track;
+    try { track = await input.getPrimaryAudioTrack(); } catch (e) { throw err('invalid', { cause: e }); }
+    if (!track) throw err('noaudio');
+    const dur = await input.computeDuration([track]).catch(() => 0);
+    return { codec: track.codec, channels: track.numberOfChannels, sampleRate: track.sampleRate, duration: dur, container: (await input.getMimeType().catch(() => '')) };
+  } finally { input.dispose && input.dispose(); }
+}
+
+async function takeFile(f) {
+  if (!f || busy) return;
+  file = f; info = null; result = null; lastError = null;
+  $('result').hidden = true;
+  $('btnRun').disabled = true;
+  renderInfo();
+  status(t('reading'));
+  Tools.diag.log('file chosen', { mb: +(f.size / 1048576).toFixed(1), type: f.type || '?' });
+  try {
+    info = await readInfo(f);
+    Tools.diag.log('audio track', { codec: info.codec, channels: info.channels, rate: info.sampleRate, s: +info.duration.toFixed(1), container: info.container });
+    renderInfo();
+    status('');
+    $('btnRun').disabled = false;
+  } catch (e) {
+    lastError = e.code || 'failed';
+    Tools.diag.log('read failed', { code: lastError, msg: String(e.cause && e.cause.message || e.message).slice(0, 200) });
+    status(e.code ? t('e.' + e.code) : t('failed', { m: e.message }), 'err');
+  }
+}
+
+/* ---------- Extracting ---------- */
+// Container for an unchanged copy of each audio codec
+function copyTarget(codec) {
+  if (codec === 'aac' || codec === 'ac3' || codec === 'eac3') return { format: new MB.Mp4OutputFormat({ fastStart: 'in-memory' }), ext: '.m4a', mime: 'audio/mp4' };
+  if (codec === 'mp3') return { format: new MB.Mp3OutputFormat(), ext: '.mp3', mime: 'audio/mpeg' };
+  if (codec === 'opus' || codec === 'vorbis') return { format: new MB.OggOutputFormat(), ext: '.ogg', mime: 'audio/ogg' };
+  if (codec === 'flac') return { format: new MB.FlacOutputFormat(), ext: '.flac', mime: 'audio/flac' };
+  if (codec && codec.startsWith('pcm')) return { format: new MB.WavOutputFormat(), ext: '.wav', mime: 'audio/wav' };
+  return null;
+}
+
+async function convert(target, audio, onProgress) {
+  const input = openInput(file);
+  try {
+    const primary = await input.getPrimaryAudioTrack();
+    const output = new MB.Output({ format: target.format, target: new MB.BufferTarget() });
+    const conversion = await MB.Conversion.init({
+      input, output, showWarnings: false,
+      video: { discard: true },
+      audio: track => track.id === primary.id ? audio : { discard: true },
+    });
+    if (!conversion.isValid) {
+      const reasons = conversion.discardedTracks.filter(d => d.reason !== 'discarded_by_user').map(d => d.reason);
+      Tools.diag.log('conversion invalid', { reasons: reasons.join(',') });
+      return null;
+    }
+    conversion.onProgress = p => onProgress(p);
+    await conversion.execute();
+    return new Uint8Array(output.target.buffer);
+  } finally { input.dispose && input.dispose(); }
+}
+
+// WAV without WebCodecs: let the browser decode the whole file (works for most videos, needs more memory)
+async function wavFromWebAudio() {
+  const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!Ctx) return null;
+  const ctx = new Ctx(1, 1, 44100);
+  let buf;
+  try { buf = await ctx.decodeAudioData(await file.arrayBuffer()); } catch (e) { Tools.diag.log('decodeAudioData failed', { msg: String(e.message || e).slice(0, 200) }); return null; }
+  return encodeWav(buf);
+}
+function encodeWav(buf) {
+  const ch = buf.numberOfChannels, n = buf.length, rate = buf.sampleRate;
+  const out = new DataView(new ArrayBuffer(44 + n * ch * 2));
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); out.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, ch, true);
+  out.setUint32(24, rate, true); out.setUint32(28, rate * ch * 2, true); out.setUint16(32, ch * 2, true); out.setUint16(34, 16, true);
+  str(36, 'data'); out.setUint32(40, n * ch * 2, true);
+  const data = []; for (let c = 0; c < ch; c++) data.push(buf.getChannelData(c));
+  let o = 44;
+  for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) {
+    const v = Math.max(-1, Math.min(1, data[c][i]));
+    out.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7fff, true); o += 2;
+  }
+  return new Uint8Array(out.buffer);
+}
+
+async function run(format = getFormat()) {
+  if (!file || !info || busy) return;
+  busy = true; lastError = null; lastNote = null;
+  $('btnRun').disabled = true;
+  $('result').hidden = true;
+  const bar = $('progress');
+  bar.hidden = false; bar.value = 0;
+  const progress = p => { bar.value = Math.round(p * 100); status(t('working', { p: Math.round(p * 100) })); };
+  progress(0);
+  const t0 = performance.now();
+  try {
+    let bytes = null, ext, mime, used = format;
+    if (format === 'original') {
+      const target = copyTarget(info.codec);
+      if (target) {
+        bytes = await convert(target, { forceTranscode: false }, progress);
+        ext = target.ext; mime = target.mime;
+      }
+      if (!bytes) { used = 'wav'; lastNote = 'fallback'; Tools.diag.log('copy not possible, trying wav', { codec: info.codec }); }
+    }
+    if (!bytes) {
+      ext = '.wav'; mime = 'audio/wav';
+      bytes = await convert({ format: new MB.WavOutputFormat() }, { codec: 'pcm-s16', forceTranscode: true }, progress);
+      if (!bytes) { status(t('decoding')); bytes = await wavFromWebAudio(); }
+      if (!bytes) throw err('decode');
+    }
+    bar.value = 100;
+    const base = file.name.replace(/\.[^.]+$/, '') || 'audio';
+    result = { file: new File([bytes], base + ext, { type: mime }), format: used };
+    Tools.diag.log('extracted', { format: used, ext, kb: Math.round(bytes.length / 1024), ms: Math.round(performance.now() - t0) });
+    showResult();
+    status(lastNote === 'fallback' ? t('doneFallback') : t('done'), lastNote ? 'warn' : 'ok');
+  } catch (e) {
+    lastError = e.code || 'failed';
+    Tools.diag.log('extract failed', { code: lastError, msg: String(e.message).slice(0, 200) });
+    if (!e.code) console.warn(e);
+    status(e.code ? t('e.' + e.code, { codec: codecName(info.codec) }) : t('failed', { m: e.message || e }), 'err');
+  } finally {
+    bar.hidden = true;
+    busy = false;
+    $('btnRun').disabled = !info;
+  }
+}
+$('btnRun').addEventListener('click', () => run());
+
+function showResult() {
+  if (playerUrl) URL.revokeObjectURL(playerUrl);
+  playerUrl = URL.createObjectURL(result.file);
+  $('player').src = playerUrl;
+  $('resultMeta').textContent = result.file.name + ' · ' + fmt(result.file.size / 1024, 0) + ' KB';
+  const r = $('result');
+  r.dataset.format = result.format;
+  r.hidden = false;
+  try { $('btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [result.file] })); } catch (_) { $('btnShare').hidden = true; }
+}
+
+$('btnSave').addEventListener('click', () => {
+  if (!result) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(result.file); a.download = result.file.name; document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  Tools.diag.log('saved', { format: result.format });
+});
+$('btnShare').addEventListener('click', async () => {
+  if (!result) return;
+  try { await navigator.share({ files: [result.file], title: result.file.name }); Tools.diag.log('shared'); }
+  catch (e) { if (e.name !== 'AbortError') { Tools.diag.log('share failed', { name: e.name }); toast(t('shareFail')); } }
+});
+
+const drop = $('drop');
+drop.addEventListener('click', () => { $('file').value = ''; $('file').click(); });
+$('file').addEventListener('change', () => takeFile($('file').files[0]));
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); takeFile(e.dataTransfer.files[0]); });
+
+takeSharedFile().then(f => { if (f) { Tools.diag.log('shared file received'); takeFile(f); } });
+
+Tools.diag.info(() => ({
+  file: !!file, codec: info ? info.codec : null, format: getFormat(), busy, result: result ? result.format : null, lastError,
+  webcodecs: typeof AudioDecoder !== 'undefined',
+}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   Works on the video the user has chosen – agents cannot pick files. */
+const AGENT_ERRORS = {
+  invalid: 'The chosen file is not a readable video.',
+  noaudio: 'The chosen video has no sound track.',
+  decode: 'This browser cannot decode the sound of the video – use format "original" instead.',
+};
+const needVideo = () => {
+  if (!file) throw new Error('No video chosen – ask the user to choose a video in the app first.');
+  if (!info) throw new Error(AGENT_ERRORS[lastError] || 'The chosen video is still being read – try again in a moment.');
+};
+const agentInfo = () => ({ file_name: file.name, size_bytes: file.size, audio_codec: info.codec, channels: info.channels,
+  sample_rate_hz: info.sampleRate, duration_seconds: Math.round(info.duration * 100) / 100 });
+Tools.mcp.register({
+  name: 'get_selected_video_info', title: 'Details of the chosen video', label: 'mcp.info', readOnly: true, untrusted: true,
+  description: 'Returns details of the video the user has chosen in the app: file name, size, codec, channels, sample rate and duration of its sound track. Fails if no video is chosen.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  execute: () => { needVideo(); return agentInfo(); },
+});
+Tools.mcp.register({
+  name: 'extract_audio_from_selected_video', title: 'Extract the sound track of the chosen video', label: 'mcp.extract', untrusted: true,
+  description: 'Extracts the sound track of the video the user has chosen in the app, on the device. "original" copies it unchanged (usually .m4a/AAC, .ogg for Opus), "wav" decodes it to uncompressed 16-bit WAV. The user can then play, save or share the audio file in the app. Returns the file name, format and size.',
+  inputSchema: { type: 'object', properties: {
+    format: { type: 'string', enum: ['original', 'wav'], description: 'Output format. Default: the format chosen in the app.' },
+  }, additionalProperties: false },
+  execute: async ({ format }) => {
+    needVideo();
+    if (busy) throw new Error('An extraction is already running – try again when it is done.');
+    if (format) { setFormat(format); settings.format = format; save(LS, settings); }
+    result = null;
+    await run(getFormat());
+    if (!result) throw new Error(AGENT_ERRORS[lastError] || 'The extraction failed.');
+    return { ...agentInfo(), output_file_name: result.file.name, output_format: result.format, output_mime_type: result.file.type,
+      output_size_bytes: result.file.size, fell_back_to_wav: lastNote === 'fallback' };
+  },
+});
+// Language switched: generated texts
+Tools.onLang(() => { renderInfo(); if (result) showResult(); });
+</script>
+</body>
+</html>
