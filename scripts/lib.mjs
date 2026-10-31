@@ -142,3 +142,59 @@ export function publishedFiles(dir = '') {
   }
   return out.sort();
 }
+
+/* ---------- Health of the vendor libraries (vendor.mjs --check) ----------
+   Pure rules, so tests can check them without network. Facts per library:
+     deprecated        reason string if the used version is deprecated on npm, else ''
+     latestDeprecated  reason string if the newest version is deprecated (= whole package given up), else ''
+     archived          true/false, null = unknown (GitHub repository)
+     lastRelease       ISO date of the newest published version (any tag), null = unknown
+     lastCommit        ISO date of the last push to the repository, null = unknown
+     maintained        OpenSSF Scorecard "Maintained" score 0–10 (activity in the last 90 days), null = unknown
+     repo              "github.com/owner/name" or null
+   Result: { level: 'ok' | 'warn' | 'fail', reasons: [...] } – see AGENTS.md "Bibliotheken: Pflege & Sicherheit". */
+export const HEALTH = { failReleaseMonths: 24, failCommitMonths: 12, warnReleaseMonths: 12 };
+const monthsSince = (iso, now) => (now - Date.parse(iso)) / (30.44 * 864e5);
+
+export function assessHealth(f, { now = Date.now(), exception = null } = {}) {
+  const fail = [], warn = [];
+  if (f.deprecated) fail.push(`Version ist auf npm als veraltet markiert: „${f.deprecated}“`);
+  if (f.latestDeprecated) fail.push(`Paket ist auf npm als veraltet markiert: „${f.latestDeprecated}“`);
+  if (f.archived) fail.push('Repository ist archiviert');
+  if (!f.repo) warn.push('Quell-Repository unbekannt – Pflege nicht prüfbar');
+  const release = f.lastRelease ? monthsSince(f.lastRelease, now) : null;
+  // Commit activity: from GitHub if known, otherwise the Scorecard (0 = nothing in the last 90 days)
+  const stale = f.lastCommit ? monthsSince(f.lastCommit, now) > HEALTH.failCommitMonths
+    : f.maintained == null ? null : f.maintained === 0;
+  if (release == null) warn.push('Datum des letzten Releases unbekannt');
+  else if (release > HEALTH.failReleaseMonths) {
+    const r = `seit ${Math.floor(release)} Monaten kein Release`;
+    if (stale === true) fail.push(`${r} und ${f.lastCommit ? `seit ${Math.floor(monthsSince(f.lastCommit, now))} Monaten` : 'in den letzten 90 Tagen'} keine Commits`);
+    else if (stale === null) warn.push(`${r}, Commit-Aktivität unbekannt`);
+    else warn.push(r);
+  } else if (release > HEALTH.warnReleaseMonths) warn.push(`seit ${Math.floor(release)} Monaten kein Release`);
+
+  let level = fail.length ? 'fail' : warn.length ? 'warn' : 'ok';
+  const reasons = [...fail, ...warn];
+  if (exception) {
+    const month = new Date(now).toISOString().slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(exception.until || '') || !exception.reason) {
+      return { level: 'fail', reasons: [...reasons, 'maintenanceException braucht "reason" und "until" (JJJJ-MM)'] };
+    }
+    if (exception.until < month) {
+      reasons.push(`Ausnahme seit ${exception.until} abgelaufen – prüfen und verlängern oder entfernen`);
+      if (level === 'ok') level = 'warn';
+    } else if (level !== 'ok') {
+      return { level: 'ok', reasons: [...reasons, `Ausnahme bis ${exception.until}: ${exception.reason}`] };
+    }
+  }
+  return { level, reasons };
+}
+
+// Severity of an OSV vulnerability: GitHub's rating if present, otherwise unknown
+export function vulnSeverity(v) {
+  const s = (v.database_specific?.severity || v.affected?.find(a => a.ecosystem_specific?.severity)?.ecosystem_specific.severity || '').toUpperCase();
+  return ['LOW', 'MODERATE', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(s) ? (s === 'MEDIUM' ? 'MODERATE' : s) : 'UNKNOWN';
+}
+// Blocks a new or changed library: high, critical or not rated
+export const vulnBlocks = sev => ['HIGH', 'CRITICAL', 'UNKNOWN'].includes(sev);

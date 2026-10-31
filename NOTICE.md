@@ -3,7 +3,7 @@
 Automatisch erzeugt von `scripts/build.mjs` aus `scripts/vendor.json` und den Lizenzdateien – nicht von Hand ändern.
 
 Die Web-Tools selbst stehen unter der [MIT-Lizenz](LICENSE). Sie enthalten die folgenden Open-Source-Bibliotheken
-(aus den npm-Paketen übernommen, Herkunft je Ordner in `SOURCE.md`). Der vollständige Lizenztext liegt
+(aus den npm-Paketen übernommen; Herkunft und Prüfsummen im SBOM [`sbom.cdx.json`](sbom.cdx.json)). Der vollständige Lizenztext liegt
 neben jeder Bibliothek in `assets/vendor/<name>/LICENSE` und wird mit ihr ausgeliefert.
 
 | Bibliothek | Version | Lizenz | Copyright | Verwendet für |

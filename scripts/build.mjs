@@ -11,6 +11,7 @@
 //      The cache version is a hash of all cached files, so every change ships automatically;
 //      it is also shown in the app's footer ("Version …").
 //   6. NOTICE.md: third-party notices from scripts/vendor.json and the LICENSE files (whole file)
+//   7. sbom.cdx.json: Software Bill of Materials (CycloneDX) of the shipped libraries (scripts/sbom.mjs)
 //
 // Usage:
 //   node scripts/build.mjs                  update files
@@ -36,6 +37,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
 import { ROOT, decode, meta, allPages, vendorProblems } from './lib.mjs';
+import { renderSbom, SBOM_FILE } from './sbom.mjs';
 
 const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules', 'tests']);
 const SITE = 'https://phanlipo.github.io/';
@@ -278,7 +280,7 @@ function filesIn(dir) {
   for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
     const rel = posix.join(dir, e.name);
     if (e.isDirectory()) out.push(...filesIn(rel));
-    else if (!['LICENSE', 'SOURCE.md'].includes(e.name)) out.push(rel);
+    else if (e.name !== 'LICENSE') out.push(rel);
   }
   return out;
 }
@@ -472,7 +474,7 @@ function renderNotice() {
 Automatisch erzeugt von \`scripts/build.mjs\` aus \`scripts/vendor.json\` und den Lizenzdateien – nicht von Hand ändern.
 
 Die Web-Tools selbst stehen unter der [MIT-Lizenz](LICENSE). Sie enthalten die folgenden Open-Source-Bibliotheken
-(aus den npm-Paketen übernommen, Herkunft je Ordner in \`SOURCE.md\`). Der vollständige Lizenztext liegt
+(aus den npm-Paketen übernommen; Herkunft und Prüfsummen im SBOM [\`sbom.cdx.json\`](sbom.cdx.json)). Der vollständige Lizenztext liegt
 neben jeder Bibliothek in \`assets/vendor/<name>/LICENSE\` und wird mit ihr ausgeliefert.
 
 | Bibliothek | Version | Lizenz | Copyright | Verwendet für |
@@ -481,6 +483,9 @@ ${rows.join('\n')}
 ${extra.length ? `\n## Weitere Lizenzdateien\n\nTeile einzelner Pakete stehen unter eigenen Lizenzen:\n\n${extra.join('\n')}\n` : ''}`;
 }
 put('NOTICE.md', renderNotice());
+// SBOM: which app ships which library (same detection as the offline cache)
+put(SBOM_FILE, renderSbom(VENDOR, tools.map(p => ({ folder: p.folder, title: p.title, vendors: vendorsOf(p) }))
+  .sort((a, b) => a.folder.localeCompare(b.folder))));
 
 const changed = [];
 for (const [file, content] of pending) {

@@ -36,9 +36,9 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 index.html            Startseite (Kartenliste wird automatisch erzeugt)
 assets/base.css       gemeinsame Farben, Dark Mode, Karten, Buttons, Hilfe-Bereich
 assets/common.js      gemeinsame Helfer (window.Tools) + Registrierung des Service Workers
-assets/vendor/        Fremdbibliotheken mit Lizenz und Herkunft (Übersicht in NOTICE.md)
+assets/vendor/        Fremdbibliotheken mit Lizenz (Übersicht in NOTICE.md, Herkunft und Prüfsummen im SBOM sbom.cdx.json)
 template/             Vorlage für neue Seiten
-scripts/              build.mjs, build-icons.mjs, vendor.mjs (+ vendor.json)
+scripts/              build.mjs, build-icons.mjs, vendor.mjs (+ vendor.json), sbom.mjs
 <tool-name>/          je Tool ein Ordner (englischer Name, kebab-case) – installierbar als PWA
 tests/                Browser-Tests (Playwright) – siehe tests/README.md
 AGENTS.md             Konventionen für Mitwirkende und KI-Agenten
@@ -72,8 +72,8 @@ Die Seite ist dann unter `https://phanlipo.github.io/<ordner>/` erreichbar.
 - **Bei jedem Push:** die Action `.github/workflows/build.yml` führt `build.mjs` aus und committet Änderungen.
 - **Bei jedem Push auf main:** die Action `.github/workflows/pages.yml` veröffentlicht die Seiten auf GitHub Pages; danach testet `.github/workflows/live-test.yml` die Live-Seite (auch auf Knopfdruck; lokal: `npm run test:live`).
 - **Bei jedem PR und Push auf main:** die Action `.github/workflows/test.yml` führt alle Tests aus (lokal: `npm install`, `npx playwright install chromium`, `npm test`).
-- **Wöchentlich:** Dependabot öffnet Update-PRs für GitHub Actions und die Test-Werkzeuge.
-- **Monatlich:** die Action `.github/workflows/vendor-check.yml` prüft, ob es neuere Versionen der Bibliotheken gibt, und öffnet dann ein Issue.
+- **Monatlich:** die Action `.github/workflows/vendor-check.yml` („Bibliotheken prüfen“) prüft die Bibliotheken auf neuere Versionen, Pflege (deprecated, archiviert, inaktiv) und bekannte Schwachstellen und öffnet ein gemeinsames Issue; bei PRs, die `scripts/vendor.json` ändern, sperrt sie ungepflegte oder unsichere neue Bibliotheken. Außerdem CodeQL und OpenSSF Scorecard (Ergebnisse im Security-Tab) und Dependabot-Update-PRs für GitHub Actions und die Test-Werkzeuge.
+- **Bei jeder Veröffentlichung:** SBOM der Bibliotheken (`sbom.cdx.json`) als signierte Bestätigung und Workflow-Artefakt, Meldung an den Dependency Graph (Dependabot-Warnungen). Details: `AGENTS.md` → „Bibliotheken: Pflege & Sicherheit“.
 - **Prüfen ohne zu schreiben:** `node scripts/build.mjs --check`
 
 ## Sichtbarkeit und Sicherheit
@@ -84,4 +84,4 @@ Die Seite ist dann unter `https://phanlipo.github.io/<ordner>/` erreichbar.
 
 ## Fremdbibliotheken und Lizenzen
 
-Alle Bibliotheken liegen lokal in `assets/vendor/` (kein CDN), jeweils mit Original-Lizenz und Herkunftsangabe. Version, Lizenz und Zweck jeder Bibliothek: [`NOTICE.md`](NOTICE.md).
+Alle Bibliotheken liegen lokal in `assets/vendor/` (kein CDN), jeweils mit Original-Lizenz; Herkunft und Prüfsummen im SBOM [`sbom.cdx.json`](sbom.cdx.json). Version, Lizenz und Zweck jeder Bibliothek: [`NOTICE.md`](NOTICE.md).
