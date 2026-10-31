@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Malen</title>
+<meta name="description" content="Weiße Leinwand zum Malen mit dem Finger: 6 Farben, Stift, Pinsel, Marker, Spray und Radierer.">
+<meta name="tool:tags" content="Freizeit, Kinder">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="select_tool, get_canvas">
+<meta name="tool:icon" content="brush">
+<meta name="tool:color" content="#a16207">
+<meta name="tool:short-name" content="Malen">
+<meta name="tool:title-en" content="Paint">
+<meta name="tool:description-en" content="A white canvas to paint on with your finger: 6 colours, pencil, brush, marker, spray and eraser.">
+<meta name="tool:short-name-en" content="Paint">
+<meta name="tool:storage" content="paint.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-pwsb/P9bCAFQLEk3o6AKYY+U0QNtQxBgU6RQIqcmOK4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Malen">
+<meta name="theme-color" content="#a16207">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#a16207;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#facc15;--accent-text:#1c1400}}
+main{max-width:1100px;margin-inline:auto;padding:8px;display:grid;gap:8px}
+header{padding-block:8px}
+.bar{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;padding:8px}
+.group{display:flex;gap:6px;flex-wrap:nowrap}
+.sw,.tool{width:44px;height:44px;border-radius:50%;cursor:pointer;padding:0;display:grid;place-items:center;flex:none}
+.sw{border:2px solid var(--border);background:var(--c)}
+.sw[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:2px;border-color:var(--surface)}
+.tool{border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:10px}
+.tool[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.tool.danger{color:var(--err)}
+.tool:focus-visible,.sw:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.tool svg{width:24px;height:24px}
+/* The canvas fills the rest of the screen; the drawing surface may be larger (kept when rotating) */
+.wrap{position:relative;overflow:hidden;height:calc(100vh - 190px);height:calc(100dvh - 190px);min-height:240px;
+  border:1px solid var(--border);border-radius:var(--radius);background:#ffffff;touch-action:none}
+.wrap canvas{position:absolute;inset-block-start:0;inset-inline-start:0;display:block;touch-action:none}
+#layer{pointer-events:none;opacity:.45}
+#paper{cursor:crosshair}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Malen</span></h1>
+</header>
+
+<main>
+  <section class="card bar" aria-label="Farben und Werkzeuge" data-i18n-attr="aria-label:bar">
+    <div class="group" id="colors" role="group" aria-label="Farbe" data-i18n-attr="aria-label:color"></div>
+    <div class="group" role="group" aria-label="Werkzeug" data-i18n-attr="aria-label:tool">
+      <button type="button" class="tool" data-tool="pencil" aria-label="Stift" title="Stift" data-i18n-attr="aria-label:t.pencil; title:t.pencil"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"/><path d="M13.5 6.5l4 4"/></svg></button>
+      <button type="button" class="tool" data-tool="brush" aria-label="Pinsel" title="Pinsel" data-i18n-attr="aria-label:t.brush; title:t.brush"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21v-4a4 4 0 1 1 4 4h-4"/><path d="M21 3a16 16 0 0 0 -12.8 10.2"/><path d="M21 3a16 16 0 0 1 -10.2 12.8"/><path d="M10.6 9a9 9 0 0 1 4.4 4.4"/></svg></button>
+      <button type="button" class="tool" data-tool="marker" aria-label="Marker" title="Marker" data-i18n-attr="aria-label:t.marker; title:t.marker"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"/><path d="M12.5 5.5l4 4"/><path d="M4.5 13.5l4 4"/><path d="M21 15v4h-8l4 -4l4 0"/></svg></button>
+      <button type="button" class="tool" data-tool="spray" aria-label="Spray" title="Spray" data-i18n-attr="aria-label:t.spray; title:t.spray"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a2 2 0 0 1 2 -2h4a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-4a2 2 0 0 1 -2 -2l0 -7"/><path d="M6 10v-4a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v4"/><path d="M15 7h.01"/><path d="M18 9h.01"/><path d="M18 5h.01"/><path d="M21 3h.01"/><path d="M21 7h.01"/><path d="M21 11h.01"/><path d="M10 7h1"/></svg></button>
+      <button type="button" class="tool" data-tool="eraser" aria-label="Radierer" title="Radierer" data-i18n-attr="aria-label:t.eraser; title:t.eraser"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3"/><path d="M18 13.3l-6.3 -6.3"/></svg></button>
+      <button type="button" class="tool danger" id="btnReset" aria-label="Leinwand leeren" title="Leinwand leeren" data-i18n-attr="aria-label:reset; title:reset"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg></button>
+    </div>
+  </section>
+  <div class="wrap" id="wrap">
+    <canvas id="paper" role="img" aria-label="Leinwand" data-i18n-attr="aria-label:canvas"></canvas>
+    <canvas id="layer" aria-hidden="true"></canvas>
+  </div>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Eine weiße Leinwand zum Malen mit Finger, Stift oder Maus.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Farbe</b> antippen – es gibt 6 Farben.</li>
+    <li><b>Werkzeug</b> wählen: <b>Stift</b> (dünn), <b>Pinsel</b> (dick), <b>Marker</b> (breit und durchscheinend) oder <b>Spray</b> (sprüht, solange der Finger liegt – je länger, desto dichter).</li>
+    <li><b>Radierer</b> malt weiß und entfernt so, was darunter ist. Wer danach eine Farbe antippt, malt wieder mit dem letzten Werkzeug.</li>
+    <li><b>Papierkorb</b> leert die ganze Leinwand (nach Rückfrage).</li>
+    <li>Das Bild bleibt nach dem Schließen erhalten und wird nur in diesem Browser gespeichert. Beim Drehen des Handys geht nichts verloren.</li>
+  </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Unterstützt der Browser WebMCP, kann ein KI-Agent Farbe und Werkzeug wählen und abfragen, wie viel der Leinwand bemalt ist. Das Bild selbst bekommt er nicht.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A white canvas to paint on with your finger, a stylus or the mouse.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Tap a <b>colour</b> – there are 6.</li>
+    <li>Pick a <b>tool</b>: <b>pencil</b> (thin), <b>brush</b> (thick), <b>marker</b> (wide and see-through) or <b>spray</b> (sprays while your finger rests – the longer, the denser).</li>
+    <li>The <b>eraser</b> paints white and so removes what is underneath. Tapping a colour afterwards switches back to the last tool.</li>
+    <li>The <b>bin</b> clears the whole canvas (after asking).</li>
+    <li>The picture is kept after closing and stored only in this browser. Rotating the phone loses nothing.</li>
+  </ul>
+  <h3>AI agents (WebMCP)</h3>
+  <p>If the browser supports WebMCP, an AI agent can pick colour and tool and ask how much of the canvas is painted. It does not get the picture itself.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version c982f82f7985</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{'c.black':'Schwarz','c.red':'Rot','c.yellow':'Gelb','c.green':'Grün','c.blue':'Blau','c.purple':'Lila',
+    confirmReset:'Ganze Leinwand leeren?',cleared:'Leinwand geleert',saveFail:'Bild zu groß zum Speichern – es bleibt nur bis zum Schließen.',
+    'mcp.select':'Werkzeug gewählt'},
+  en:{title:'Paint',bar:'Colours and tools',color:'Colour',tool:'Tool',canvas:'Canvas',reset:'Clear canvas',
+    't.pencil':'Pencil','t.brush':'Brush','t.marker':'Marker','t.spray':'Spray','t.eraser':'Eraser',
+    'c.black':'Black','c.red':'Red','c.yellow':'Yellow','c.green':'Green','c.blue':'Blue','c.purple':'Purple',
+    confirmReset:'Clear the whole canvas?',cleared:'Canvas cleared',saveFail:'Picture too large to save – it is kept only until you close the app.',
+    'mcp.select':'tool selected'}
+});
+const t=Tools.t;
+const COLORS={black:'#1b1b1b',red:'#e53935',yellow:'#fdd835',green:'#43a047',blue:'#1e88e5',purple:'#8e24aa'};
+// Sizes in CSS pixels
+const TOOLS={pencil:{w:3},brush:{w:14},marker:{w:26},spray:{r:18},eraser:{w:30}};
+const DRAW_TOOLS=['pencil','brush','marker','spray'];
+const LS_SET='paint.settings.v1',LS_IMG='paint.drawing.v1';
+const WHITE='#ffffff';
+
+const st=Tools.load(LS_SET,{});
+const S={color:COLORS[st.color]?st.color:'black',tool:TOOLS[st.tool]?st.tool:'pencil',last:DRAW_TOOLS.includes(st.last)?st.last:'pencil'};
+if(DRAW_TOOLS.includes(S.tool))S.last=S.tool;
+const saveSettings=()=>Tools.save(LS_SET,{color:S.color,tool:S.tool,last:S.last});
+
+const wrap=Tools.$('wrap'),paper=Tools.$('paper'),layer=Tools.$('layer');
+const ctx=paper.getContext('2d'),lctx=layer.getContext('2d');
+const dpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));
+let W=0,H=0;// drawing surface in CSS px (only grows, so rotating keeps the picture)
+let strokes=0,saveFailed=false;
+
+// ---------- UI ----------
+const colorBox=Tools.$('colors');
+colorBox.innerHTML=Object.entries(COLORS).map(([k,c])=>`<button type="button" class="sw" data-color="${k}" style="--c:${c}"></button>`).join('');
+function renderLabels(){
+  colorBox.querySelectorAll('.sw').forEach(b=>{const n=t('c.'+b.dataset.color);b.setAttribute('aria-label',n);b.title=n;});
+}
+function renderSel(){
+  colorBox.querySelectorAll('.sw').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.color===S.color&&S.tool!=='eraser')));
+  document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===S.tool)));
+}
+function setColor(c){S.color=c;if(S.tool==='eraser')S.tool=S.last;saveSettings();renderSel();}
+function setTool(k){S.tool=k;if(DRAW_TOOLS.includes(k))S.last=k;saveSettings();renderSel();}
+colorBox.addEventListener('click',e=>{const b=e.target.closest('[data-color]');if(b)setColor(b.dataset.color);});
+document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+Tools.$('btnReset').addEventListener('click',()=>{
+  if(!confirm(t('confirmReset')))return;
+  ctx.fillStyle=WHITE;ctx.fillRect(0,0,paper.width,paper.height);
+  strokes=0;Tools.remove(LS_IMG);saveFailed=false;
+  Tools.diag.log('canvas cleared');
+  Tools.toast(t('cleared'));
+});
+renderLabels();renderSel();
+Tools.onLang(renderLabels);
+
+// ---------- Surface ----------
+// Grows the drawing surface to at least w×h CSS px and keeps the picture
+function grow(w,h){
+  w=Math.max(w,W);h=Math.max(h,H);
+  if(w===W&&h===H)return;
+  let old=null;
+  if(W&&H){old=document.createElement('canvas');old.width=paper.width;old.height=paper.height;old.getContext('2d').drawImage(paper,0,0);}
+  for(const c of [paper,layer]){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);c.style.width=w+'px';c.style.height=h+'px';}
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=WHITE;ctx.fillRect(0,0,paper.width,paper.height);
+  if(old)ctx.drawImage(old,0,0);
+  W=w;H=h;
+  Tools.diag.log('surface',{w:W,h:H,dpr});
+}
+const fit=()=>grow(Math.ceil(wrap.clientWidth),Math.ceil(wrap.clientHeight));
+fit();
+if('ResizeObserver' in window)new ResizeObserver(fit).observe(wrap);else window.addEventListener('resize',fit);
+
+// Restore the saved picture (at the size it was saved with)
+const saved=Tools.load(LS_IMG,null);
+if(saved&&typeof saved.png==='string'&&saved.png.startsWith('data:image/png')){
+  const img=new Image();
+  img.onload=()=>{
+    const w=+saved.w||img.width/dpr,h=+saved.h||img.height/dpr;
+    grow(Math.ceil(w),Math.ceil(h));
+    ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(img,0,0,w*dpr,h*dpr);
+    strokes=+saved.strokes||1;
+    Tools.diag.log('picture restored',{w,h});
+  };
+  img.onerror=()=>Tools.diag.log('restore failed');
+  img.src=saved.png;
+}
+
+let saveTimer=0;
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    const ok=Tools.save(LS_IMG,{w:W,h:H,strokes,png:paper.toDataURL('image/png')});
+    if(!ok&&!saveFailed){saveFailed=true;Tools.toast(t('saveFail'),4000);Tools.diag.log('save failed',{w:W,h:H});}
+    if(ok)saveFailed=false;
+  },400);
+}
+// Save right away when the app goes to the background
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&saveTimer){clearTimeout(saveTimer);Tools.save(LS_IMG,{w:W,h:H,strokes,png:paper.toDataURL('image/png')});saveTimer=0;}});
+
+// ---------- Drawing ----------
+let cur=null;// {id, tool, color, x, y, raf}
+function pos(e){const r=paper.getBoundingClientRect();return {x:(e.clientX-r.left)*dpr,y:(e.clientY-r.top)*dpr};}
+function lineCtx(c,tool,color){
+  c.setTransform(1,0,0,1,0,0);
+  c.lineCap='round';c.lineJoin='round';
+  c.strokeStyle=c.fillStyle=tool==='eraser'?WHITE:color;
+  c.lineWidth=TOOLS[tool].w*dpr;
+  return c;
+}
+function seg(p){
+  const c=cur.tool==='marker'?lctx:ctx;
+  lineCtx(c,cur.tool,cur.color);
+  c.beginPath();c.moveTo(cur.x,cur.y);c.lineTo(p.x,p.y);c.stroke();
+  cur.x=p.x;cur.y=p.y;
+}
+function dot(p){
+  const c=cur.tool==='marker'?lctx:ctx;
+  lineCtx(c,cur.tool,cur.color);
+  c.beginPath();c.arc(p.x,p.y,c.lineWidth/2,0,Math.PI*2);c.fill();
+}
+function spray(){
+  const r=TOOLS.spray.r*dpr,s=Math.max(1,dpr);
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=cur.color;
+  for(let i=0;i<24;i++){
+    const a=Math.random()*Math.PI*2,d=Math.sqrt(Math.random())*r;
+    ctx.fillRect(cur.x+Math.cos(a)*d,cur.y+Math.sin(a)*d,s,s);
+  }
+}
+function sprayLoop(){if(!cur)return;spray();cur.raf=requestAnimationFrame(sprayLoop);}
+
+paper.addEventListener('pointerdown',e=>{
+  if(cur||(e.pointerType==='mouse'&&e.button!==0))return;
+  e.preventDefault();
+  try{paper.setPointerCapture(e.pointerId);}catch(_){}
+  const p=pos(e);
+  cur={id:e.pointerId,tool:S.tool,color:COLORS[S.color],x:p.x,y:p.y,raf:0};
+  if(cur.tool==='spray'){spray();cur.raf=requestAnimationFrame(sprayLoop);}
+  else dot(p);
+});
+paper.addEventListener('pointermove',e=>{
+  if(!cur||e.pointerId!==cur.id)return;
+  const evs=e.getCoalescedEvents?e.getCoalescedEvents():[];
+  for(const ev of (evs.length?evs:[e])){
+    const p=pos(ev);
+    if(cur.tool==='spray'){cur.x=p.x;cur.y=p.y;spray();}else seg(p);
+  }
+});
+function end(e){
+  if(!cur||e.pointerId!==cur.id)return;
+  cancelAnimationFrame(cur.raf);
+  if(cur.tool==='marker'){
+    // Marker: the whole stroke goes on at once, so overlapping parts are not darker
+    ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=.45;ctx.drawImage(layer,0,0);ctx.globalAlpha=1;
+    lctx.setTransform(1,0,0,1,0,0);lctx.clearRect(0,0,layer.width,layer.height);
+  }
+  cur=null;strokes++;
+  scheduleSave();
+}
+paper.addEventListener('pointerup',end);
+paper.addEventListener('pointercancel',end);
+paper.addEventListener('contextmenu',e=>e.preventDefault());
+
+// ---------- Diagnostics & WebMCP ----------
+function painted(){
+  // Share of non-white pixels (sampled grid, fast enough for big canvases)
+  const d=ctx.getImageData(0,0,paper.width,paper.height).data,step=4;
+  let n=0,all=0;
+  for(let y=0;y<paper.height;y+=step)for(let x=0;x<paper.width;x+=step){
+    const i=(y*paper.width+x)*4;all++;
+    if(d[i]<250||d[i+1]<250||d[i+2]<250)n++;
+  }
+  return all?Math.round(n/all*1000)/10:0;
+}
+Tools.diag.info(()=>({tool:S.tool,color:S.color,surface:`${W}x${H}`,dpr,strokes,saveFailed}));
+
+const toolEnum=Object.keys(TOOLS),colorEnum=Object.keys(COLORS);
+const state=()=>({tool:S.tool,color:S.color,width:W,height:H});
+Tools.mcp.register({
+  name:'select_tool',title:'Select colour and tool',label:'mcp.select',
+  description:'Selects the colour and/or the painting tool in the app, as if the user tapped them. The eraser paints white; choosing a colour while the eraser is active switches back to the last painting tool. Returns the selected tool and colour.',
+  inputSchema:{type:'object',properties:{
+    tool:{type:'string',enum:toolEnum,description:'pencil (thin), brush (thick), marker (wide, see-through), spray or eraser.'},
+    color:{type:'string',enum:colorEnum,description:'One of the six colours.'}
+  },additionalProperties:false},
+  execute:({tool,color})=>{
+    if(!tool&&!color)throw new Error('Give tool and/or color.');
+    if(color)setColor(color);
+    if(tool)setTool(tool);
+    return {tool:S.tool,color:S.color};
+  }
+});
+Tools.mcp.register({
+  name:'get_canvas',title:'Read the canvas state',readOnly:true,
+  description:'Reads the selected tool and colour, the available tools and colours, the canvas size in CSS pixels and how much of the canvas is painted (percent of non-white area). Does not return the picture.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({...state(),painted_percent:painted(),tools:toolEnum,colors:colorEnum})
+});
+})();
+</script>
+</body>
+</html>
