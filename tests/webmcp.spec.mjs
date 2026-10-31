@@ -1,9 +1,11 @@
 // WebMCP: app functions as tools for AI agents (document.modelContext, draft standard).
 // Browsers do not ship it yet, so a stand-in modelContext records what the page registers;
 // the tests then call the tools like an agent would.
+import { readFileSync } from 'node:fs';
 import { test, expect, apps } from './helpers.mjs';
 import { makePdf } from './pdf-tools.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
+import { CLIPS, clip, wavInfo, toneHz } from './audio-files.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -395,6 +397,47 @@ test.describe('pdf2word tools', () => {
   test('convert_selected_pdf reports a file that is no PDF', async ({ page }) => {
     await page.setInputFiles('#file', { name: 'notiz.pdf', mimeType: 'application/pdf', buffer: Buffer.from('kein pdf') });
     expect(await call(page, 'pdf2word_convert_selected_pdf', {})).toEqual({ ok: false, error: 'The chosen file is not a readable PDF.' });
+  });
+});
+
+test.describe('video-to-audio tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/video-to-audio/'));
+  const P = 'video_to_audio_';
+
+  test('get_selected_video_info and extract_audio_from_selected_video work on the chosen video', async ({ page }) => {
+    expect((await call(page, P + 'get_selected_video_info', {})).error).toMatch(/No video chosen/);
+    expect((await call(page, P + 'extract_audio_from_selected_video', {})).error).toMatch(/No video chosen/);
+    await page.setInputFiles('#file', clip('opus'));
+    await expect(page.locator('#btnRun')).toBeEnabled();
+    const info = (await call(page, P + 'get_selected_video_info', {})).result;
+    expect(info).toMatchObject({ file_name: 'clip-opus.webm', audio_codec: 'opus', channels: 1, sample_rate_hz: CLIPS.opus.rate });
+    expect(Math.abs(info.duration_seconds - CLIPS.opus.seconds)).toBeLessThan(0.1);
+    // Default: the format chosen in the app (original)
+    const orig = (await call(page, P + 'extract_audio_from_selected_video', {})).result;
+    expect(orig).toMatchObject({ output_file_name: 'clip-opus.ogg', output_format: 'original', output_mime_type: 'audio/ogg', fell_back_to_wav: false });
+    await expect(page.locator('#result')).toBeVisible();
+    // WAV: shown in the app, the app remembers the format; the file holds the tone of the video
+    const wav = (await call(page, P + 'extract_audio_from_selected_video', { format: 'wav' })).result;
+    expect(wav).toMatchObject({ output_file_name: 'clip-opus.wav', output_format: 'wav', output_mime_type: 'audio/wav' });
+    await expect(page.locator('input[value="wav"]')).toBeChecked();
+    await expect(page.locator('#result')).toHaveAttribute('data-format', 'wav');
+    const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+    const w = wavInfo(readFileSync(await download.path()));
+    expect(w.frames * 2 + 44).toBe(wav.output_size_bytes);
+    expect(Math.abs(toneHz(w.samples, w.rate) - CLIPS.opus.hz)).toBeLessThan(5);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === P + 'get_selected_video_info').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+  });
+
+  test('wrong input and videos without sound are rejected', async ({ page }) => {
+    await page.setInputFiles('#file', clip('aac'));
+    await expect(page.locator('#btnRun')).toBeEnabled();
+    expect((await call(page, P + 'extract_audio_from_selected_video', { format: 'mp3' })).ok).toBe(false);
+    expect((await call(page, P + 'extract_audio_from_selected_video', { format: 'wav', x: 1 })).ok).toBe(false);
+    await expect(page.locator('input[value="original"]')).toBeChecked();
+    await page.setInputFiles('#file', clip('silent'));
+    await expect(page.locator('#status')).toHaveText('Dieses Video hat keine Tonspur.');
+    expect(await call(page, P + 'extract_audio_from_selected_video', {})).toEqual({ ok: false, error: 'The chosen video has no sound track.' });
   });
 });
 

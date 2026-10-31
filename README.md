@@ -25,6 +25,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | [Scan-Copy-SecurPharm](https://phanlipo.github.io/securpharm-scanner/) | `securpharm-scanner/` | securPharm-DataMatrix von Arzneimittel-/Impfstoffpackungen scannen und einzelne Werte (PZN, Charge, Verfall, Seriennummer …) per Klick kopieren. Mit lokalem Verlauf. |
 | [Schere, Stein, Papier](https://phanlipo.github.io/rock-paper-scissors/) | `rock-paper-scissors/` | Spiel gegen den Computer – klassisch, mit Brunnen oder mit Echse und Spock. |
 | [Sprache zu Text](https://phanlipo.github.io/voice-transcriber/) | `voice-transcriber/` | Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht. |
+| [Video zu Audio](https://phanlipo.github.io/video-to-audio/) | `video-to-audio/` | Die Tonspur aus einem Video speichern – als Original ohne Qualitätsverlust (z. B. .m4a) oder als WAV, direkt im Browser: das Video verlässt das Gerät nicht. |
 | [Würfel & Münze](https://phanlipo.github.io/dice-coin/) | `dice-coin/` | Würfel und Münzwurf für Spiele: Anzahl und Seiten frei wählbar, alle gleichzeitig oder einzeln würfeln, Würfel halten, Vorlagen. Einstellungen werden im Browser gespeichert. |
 <!-- tools:end -->
 
