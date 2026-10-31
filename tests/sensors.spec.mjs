@@ -1,7 +1,7 @@
 // Handy-Sensoren: sensor values are simulated with synthetic events (Chromium has no real sensors here).
 // Expected values are recomputed independently in the tests.
 import AxeBuilder from '@axe-core/playwright';
-import { test, expect } from './helpers.mjs';
+import { test, expect, clipboardText } from './helpers.mjs';
 
 const num = s => Number(String(s).replace(/[^\d,.\-−+]/g, '').replace('−', '-').replace(/\./g, '').replace(',', '.'));
 const text = (page, id) => page.locator('#' + id).textContent();
@@ -703,8 +703,7 @@ test('clap stopwatch: a clap starts, the next one stops', async ({ page }) => {
   await expect(page.locator('#kTime')).toHaveText('0,00');
 });
 
-test('speedometer: coordinates in both formats, copy and map link', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('speedometer: coordinates in both formats, copy and map link', async ({ page }) => {
   await page.addInitScript(() => {
     const watchers = new Map();
     let id = 0;
@@ -733,7 +732,7 @@ test('speedometer: coordinates in both formats, copy and map link', async ({ pag
   await expect(page.locator('#gCoord')).toHaveText('33,85678° S, 70,65050° W (± 80 m)');
   await expect(page.locator('#gMap')).toHaveAttribute('href', 'geo:-33.856780,-70.650500?q=-33.856780,-70.650500');
   await page.getByRole('button', { name: 'Koordinaten kopieren' }).click();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('-33.856780, -70.650500');
+  expect(await clipboardText(page)).toBe('-33.856780, -70.650500');
 });
 
 test.describe('English', () => {

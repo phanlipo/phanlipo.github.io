@@ -2,7 +2,7 @@
 // safe rendering of answers, deleting only our model files, offline, English.
 // The model itself is replaced by a stand-in worker (tests/fake-llm.mjs) – the real Gemma download is
 // far too big for `npm test`; see tests/manual/chat-e2e.mjs.
-import { test, expect } from './helpers.mjs';
+import { test, expect, clipboardText } from './helpers.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 
 const URL_ = '/ai-chat/';
@@ -331,14 +331,13 @@ test('share target: shared text and link land in the input, ready for an own que
     .toEqual({ role: 'user', content: 'Artikel\nLesenswert: https://example.org/a\n\nFasse das zusammen' });
 });
 
-test('copy chat puts both sides into the clipboard', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('copy chat puts both sides into the clipboard', async ({ page }) => {
   await fakeLlm(page, { gpu: 'f16' });
   await page.goto(URL_);
   await send(page, 'Frage');
   await expect(page.locator('.msg.assistant .foot')).toBeVisible();
   await page.click('#btnCopyChat');
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('Du: Frage\n\nKI: Hallo Welt.');
+  expect(await clipboardText(page)).toBe('Du: Frage\n\nKI: Hallo Welt.');
 });
 
 test.describe('real worker', () => {

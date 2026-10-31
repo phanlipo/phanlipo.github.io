@@ -10,10 +10,12 @@ import { ROOT, allPages, meta } from '../scripts/lib.mjs';
  * and on localStorage keys outside the prefixes in <meta name="tool:storage">.
  * Tests that provoke errors on purpose can allow them with one RegExp:
  *   test.use({ allowedProblems: /zxing-wasm/ });
+ * Every page gets its own clipboard (see privateClipboard) – read it with clipboardText(page).
  */
 export const test = base.extend({
   allowedProblems: [null, { option: true }],
   page: async ({ page, baseURL, allowedProblems }, use) => {
+    await privateClipboard(page);
     const problems = [];
     page.on('pageerror', e => problems.push(`pageerror: ${e.message}`));
     page.on('console', m => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
@@ -40,6 +42,30 @@ export const test = base.extend({
   },
 });
 export { expect };
+
+/**
+ * Replaces navigator.clipboard with an in-memory clipboard for this page. The real one is shared by
+ * all test workers running in parallel, so tests would read each other's text. Kept for the life of
+ * the document (a reload empties it). Never grant 'clipboard-read'/'clipboard-write' in tests.
+ */
+export async function privateClipboard(page) {
+  await page.addInitScript(() => {
+    let text = '', items = [];
+    const clipboard = {
+      writeText: async t => { text = String(t); items = []; },
+      readText: async () => text,
+      write: async list => {
+        items = [...list]; text = '';
+        for (const it of items) if (it.types.includes('text/plain')) text = await (await it.getType('text/plain')).text();
+      },
+      read: async () => items.length ? items : [new ClipboardItem({ 'text/plain': new Blob([text], { type: 'text/plain' }) })],
+      addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true; },
+    };
+    Object.defineProperty(Navigator.prototype, 'clipboard', { get: () => clipboard, configurable: true });
+  });
+}
+/** Text in the page's private clipboard */
+export const clipboardText = page => page.evaluate(() => navigator.clipboard.readText());
 
 const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules', 'tests']);
 

@@ -79,7 +79,7 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 - **Version:** Die Fußzeile jeder App zeigt „Version …“ = Cache-Version aus `sw.js`. So lässt sich auf dem Handy prüfen, ob eine installierte App aktuell ist.
 - **Barrierefreiheit:** `tests/a11y.spec.mjs` prüft jede Seite hell und dunkel mit axe-core (WCAG 2.1 A/AA). Bedienelemente brauchen einen zugänglichen Namen, der den sichtbaren Text enthält; reine Vorlese-Texte mit `.sr-only`.
 - **Datenschutz:** keine Tracker, keine Analytics, keine Daten an Server senden (die Tests schlagen bei jeder Anfrage an eine fremde Domain fehl).
-- **Tests:** Fehler nie durch Abschwächen, Überspringen oder Löschen eines Tests „beheben“. Erwartete Werte unabhängig nachrechnen.
+- **Tests:** Fehler nie durch Abschwächen, Überspringen oder Löschen eines Tests „beheben“. Erwartete Werte unabhängig nachrechnen. Kopiertes mit `clipboardText(page)` aus `tests/helpers.mjs` lesen – jede Testseite hat ihre eigene Zwischenablage, die echte teilen sich alle parallel laufenden Tests.
 - **Zahlen:** mit `Tools.fmt` formatieren (deutsch bzw. englisch je nach Sprache), Datum/Uhrzeit mit `toLocaleString(Tools.locale())`, Eingaben mit Komma und Punkt akzeptieren (`Tools.parseNum`).
 
 ## Sprachen (Deutsch/Englisch)
