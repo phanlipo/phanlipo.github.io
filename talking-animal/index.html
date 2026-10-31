@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Plappertier</title>
+<meta name="description" content="Ein Tier, das nachplappert: ins Mikrofon sprechen – es antwortet mit verzerrter Stimme und bewegt den Mund. Piepsig, tief, Roboter, Echo, rückwärts, Alien.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="Mikrofon, KI-Agent">
+<meta name="tool:icon" content="cat">
+<meta name="tool:color" content="#6b21a8">
+<meta name="tool:short-name" content="Plappertier">
+<meta name="tool:title-en" content="Talking Pet">
+<meta name="tool:description-en" content="A pet that talks back: speak into the microphone – it repeats it with a funny voice and moves its mouth. Squeaky, deep, robot, echo, backwards, alien.">
+<meta name="tool:short-name-en" content="Talking Pet">
+<meta name="tool:storage" content="talking-animal.">
+<meta name="tool:webmcp" content="play_last_recording, set_options, get_status">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-O2UN8B6s6WVXkzqgXIq0r476y3eD+/iMT0fr6LUwr3g='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Plappertier">
+<meta name="theme-color" content="#6b21a8">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#6b21a8;--accent-text:#ffffff;--page-width:640px}
+@media (prefers-color-scheme: dark){:root{--accent:#c084fc;--accent-text:#1e0833}}
+main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;gap:12px}
+
+/* ---------- Stage ---------- */
+.stage{display:grid;place-items:center;padding-block:4px 0}
+.animal{width:min(80vw,300px);aspect-ratio:24/25;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:pointer}
+.animal svg{width:100%;height:100%;display:block;overflow:hidden}
+.animal.poke svg{animation:poke .5s ease-out}
+@keyframes poke{0%{transform:scale(1)}30%{transform:scale(1.08,.9)}60%{transform:scale(.96,1.05)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.animal.poke svg{animation:none}}
+.status{text-align:center;min-height:28px;margin:4px 0 8px;font-weight:600}
+.status.err{color:var(--err)}
+.meter{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin:0 auto 10px;max-width:300px;visibility:hidden}
+.meter.on{visibility:visible}
+.meter span{display:block;height:100%;width:0;background:var(--accent);transition:width .08s linear}
+.actions{display:grid;grid-template-columns:3fr 2fr;gap:8px}
+.actions .btn{min-height:56px;font-size:17px;font-weight:600;white-space:nowrap;padding-inline:8px}
+.btn.rec{background:var(--err);border-color:var(--err);color:#fff}
+
+/* ---------- Choices ---------- */
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-child{margin-top:0}
+.choices{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.choices button{min-height:64px;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;font:inherit;font-size:13px;font-weight:600;padding:4px 0;line-height:1.2;min-width:0;hyphens:auto;-webkit-hyphens:auto}
+.choices button .e{font-size:26px;line-height:1.2}
+.choices button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer;margin-top:8px}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Plappertier</span></h1>
+  <p class="sub" data-i18n="sub">Sprich – das Tier plappert lustig nach</p>
+</header>
+
+<main>
+  <section class="card" aria-label="Plappertier" data-i18n-attr="aria-label:title">
+    <div class="stage">
+      <div class="animal" id="animal" role="img" aria-label="Katze"></div>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="meter" id="meter" aria-hidden="true"><span id="meterBar"></span></div>
+    <div class="actions">
+      <button type="button" class="btn primary" id="btnMain">🎤 Aufnehmen</button>
+      <button type="button" class="btn" id="btnAgain" disabled><span aria-hidden="true">🔁 </span><span data-i18n="again">Nochmal</span></button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings">
+    <h2 id="h-settings" class="sr-only" data-i18n="settings">Einstellungen</h2>
+    <h3 id="h-effect" data-i18n="effect">Stimme</h3>
+    <div class="choices" id="effects" role="group" aria-labelledby="h-effect"></div>
+    <h3 id="h-animal" data-i18n="animal">Tier</h3>
+    <div class="choices" id="animals" role="group" aria-labelledby="h-animal"></div>
+    <label class="check"><input type="checkbox" id="optAuto"> <span data-i18n="auto">Automatisch zuhören – plappert nach, sobald du eine Pause machst</span></label>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Tier, das alles nachplappert – mit lustig verstellter Stimme und passender Mundbewegung.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Aufnehmen</b> tippen, etwas sagen, dann <b>Stopp</b> tippen: Das Tier wiederholt es sofort (höchstens 10 Sekunden).</li>
+    <li><b>Automatisch zuhören</b>: Nach <i>Zuhören starten</i> wartet das Tier, bis du sprichst, und plappert nach, sobald du kurz still bist – wie ein Papagei. Für leise Umgebungen am besten.</li>
+    <li><b>Stimme</b> wählen: Normal, Piepsig, Brummbär, Roboter, Echo, Rückwärts oder Alien. Ein Tipp auf eine Stimme spielt die letzte Aufnahme gleich damit ab, ebenso <i>Nochmal</i>.</li>
+    <li><b>Tier</b> wählen: Katze, Hund, Frosch oder Panda. Antippen kitzelt es.</li>
+  </ul>
+  <h3>Kein Ton oder keine Aufnahme?</h3>
+  <ul>
+    <li>Beim ersten Mal fragt der Browser nach dem <b>Mikrofon</b> – erlauben. Abgelehnt? In den Website-Einstellungen des Browsers wieder freigeben.</li>
+    <li>Lautstärke aufdrehen; auf dem iPhone den <b>Stummschalter</b> ausschalten. Während das Mikrofon an ist, spielt das iPhone manchmal leiser ab.</li>
+    <li>Beim automatischen Zuhören hört das Tier nicht zu, während es selbst spricht – so plappert es sich nicht selbst nach.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Die Aufnahme bleibt nur im Arbeitsspeicher, wird nie gespeichert oder verschickt und ist nach dem Schließen weg. Gespeichert werden nur Tier, Stimme und die Einstellung „Automatisch“. Alles funktioniert offline.</li>
+    <li>Die Effekte werden im Browser berechnet (Web Audio): Piepsig und Brummbär spielen schneller bzw. langsamer ab, Roboter und Alien mischen einen Ton dazu.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann Tier und Stimme wählen, die letzte Aufnahme nochmal abspielen und den Zustand lesen (WebMCP). Das Mikrofon kann er nicht einschalten; jeder Aufruf erscheint hier als Hinweis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A pet that repeats everything you say – with a funny voice and a moving mouth.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Tap <b>Record</b>, say something, then tap <b>Stop</b>: the pet repeats it right away (10 seconds at most).</li>
+    <li><b>Listen automatically</b>: after <i>Start listening</i> the pet waits until you speak and talks back as soon as you pause – like a parrot. Works best in quiet places.</li>
+    <li>Pick a <b>voice</b>: normal, squeaky, deep, robot, echo, backwards or alien. Tapping a voice plays the last recording with it right away, so does <i>Again</i>.</li>
+    <li>Pick a <b>pet</b>: cat, dog, frog or panda. Tap it to tickle it.</li>
+  </ul>
+  <h3>No sound or no recording?</h3>
+  <ul>
+    <li>The first time, the browser asks for the <b>microphone</b> – allow it. Denied? Allow it again in the browser's site settings.</li>
+    <li>Turn up the volume; on iPhone switch off the <b>silent switch</b>. While the microphone is on, iPhones sometimes play back more quietly.</li>
+    <li>When listening automatically, the pet does not listen while it talks – so it does not repeat itself.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>The recording only stays in memory; it is never stored or sent and is gone once you close the app. Only the pet, the voice and the “automatic” setting are stored. Everything works offline.</li>
+    <li>The effects are computed in the browser (Web Audio): squeaky and deep play faster or slower, robot and alien mix in a tone.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can choose the pet and the voice, play the last recording again and read the state (WebMCP). It cannot switch on the microphone; each call shows a note here.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version b62add8c788e</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  'a.cat':'Katze','a.dog':'Hund','a.frog':'Frosch','a.panda':'Panda',
+  'e.normal':'Normal','e.high':'Piepsig','e.low':'Brummbär','e.robot':'Roboter','e.echo':'Echo','e.reverse':'Rückwärts','e.alien':'Alien',
+  record:'🎤 Aufnehmen',stop:'⏹️ Stopp – nachplappern',listen:'👂 Zuhören starten',stopListen:'⏹️ Zuhören beenden',
+  hintManual:'Tippe auf „Aufnehmen“ und sag etwas.',hintAuto:'Tippe auf „Zuhören starten“ und sag etwas.',
+  starting:'Mikrofon wird eingeschaltet …',listening:'👂 Ich höre zu … sag etwas!',recManual:'🔴 Aufnahme … tippe auf Stopp, wenn du fertig bist.',
+  recAuto:'🔴 Ich höre zu …',playing:'🗣️ {e}!',tooShort:'Das war zu kurz – nochmal!',tickle:'Hihi, das kitzelt!',
+  'err.api':'Dieser Browser kann nicht auf das Mikrofon zugreifen.','err.denied':'Zugriff auf das Mikrofon wurde abgelehnt.',
+  'err.none':'Kein Mikrofon gefunden.','err.mic':'Mikrofon-Fehler: {m}','err.audio':'Dieser Browser kann keine Töne erzeugen.',
+  'mcp.play':'nachgeplappert','mcp.options':'Tier/Stimme gewählt','mcp.status':'Zustand gelesen'
+},
+en:{
+  title:'Talking Pet',sub:'Speak – the pet repeats it with a funny voice',again:'Again',settings:'Settings',effect:'Voice',animal:'Pet',
+  auto:'Listen automatically – talks back as soon as you pause',
+  'a.cat':'Cat','a.dog':'Dog','a.frog':'Frog','a.panda':'Panda',
+  'e.normal':'Normal','e.high':'Squeaky','e.low':'Deep','e.robot':'Robot','e.echo':'Echo','e.reverse':'Backwards','e.alien':'Alien',
+  record:'🎤 Record',stop:'⏹️ Stop – talk back',listen:'👂 Start listening',stopListen:'⏹️ Stop listening',
+  hintManual:'Tap “Record” and say something.',hintAuto:'Tap “Start listening” and say something.',
+  starting:'Switching on the microphone …',listening:'👂 Listening … say something!',recManual:'🔴 Recording … tap Stop when you are done.',
+  recAuto:'🔴 Listening …',playing:'🗣️ {e}!',tooShort:'That was too short – try again!',tickle:'Hehe, that tickles!',
+  'err.api':'This browser cannot access the microphone.','err.denied':'Access to the microphone was denied.',
+  'err.none':'No microphone found.','err.mic':'Microphone error: {m}','err.audio':'This browser cannot play generated sounds.',
+  'mcp.play':'talked back','mcp.options':'pet/voice chosen','mcp.status':'state read'
+}});
+const {$,t}=Tools;
+const LS='talking-animal.settings.v1';
+const ANIMALS=['cat','dog','frog','panda'];
+const A_EMOJI={cat:'🐱',dog:'🐶',frog:'🐸',panda:'🐼'};
+const EFFECTS=['normal','high','low','robot','echo','reverse','alien'];
+const E_EMOJI={normal:'🙂',high:'🐭',low:'🐻',robot:'🤖',echo:'🏔️',reverse:'🔄',alien:'👽'};
+const MAX_SEC=10;
+
+const s=Tools.load(LS,{animal:'cat',effect:'high',auto:false});
+if(!ANIMALS.includes(s.animal))s.animal='cat';
+if(!EFFECTS.includes(s.effect))s.effect='high';
+if(typeof s.auto!=='boolean')s.auto=false;
+const save=()=>Tools.save(LS,s);
+
+/* ---------- Drawing (SVG, viewBox 240×250) ---------- */
+const INK='#2b2118';
+const A={
+  cat:{fur:'#f2a541',muzzle:'#fff3e0',eye:{y:104,dx:36,r:15},mouth:{y:160,w:18},
+    back:`<polygon points="44,84 58,6 112,46" fill="#f2a541" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><polygon points="196,84 182,6 128,46" fill="#f2a541" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/><polygon points="60,66 64,26 96,48" fill="#f7b9c0"/><polygon points="180,66 176,26 144,48" fill="#f7b9c0"/>`,
+    front:`<path d="M104 46 l4 18 M120 42 v20 M136 46 l-4 18" stroke="#c8741f" stroke-width="6" stroke-linecap="round"/>`,
+    nose:`<path d="M110 141 h20 l-10 11 z" fill="#e86a7f" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>`,
+    extra:`<g stroke="${INK}" stroke-width="2.5" stroke-linecap="round"><path d="M86 154 L34 146 M86 162 L36 168"/><path d="M154 154 L206 146 M154 162 L204 168"/></g>`},
+  dog:{fur:'#c98d55',muzzle:'#f3dfc1',eye:{y:102,dx:34,r:14},mouth:{y:164,w:20},
+    back:'',
+    front:`<ellipse cx="84" cy="98" rx="24" ry="20" fill="#a86d38"/>`,
+    nose:`<ellipse cx="120" cy="144" rx="17" ry="12" fill="${INK}"/><ellipse cx="114" cy="140" rx="5" ry="3" fill="#fff" opacity=".5"/>`,
+    extra:`<ellipse cx="40" cy="118" rx="24" ry="54" transform="rotate(18 40 118)" fill="#7b4b2a" stroke="${INK}" stroke-width="4"/><ellipse cx="200" cy="118" rx="24" ry="54" transform="rotate(-18 200 118)" fill="#7b4b2a" stroke="${INK}" stroke-width="4"/>`},
+  frog:{fur:'#6cbf4a',muzzle:null,eye:{y:58,dx:42,r:18},mouth:{y:156,w:46},
+    back:`<circle cx="78" cy="60" r="32" fill="#6cbf4a" stroke="${INK}" stroke-width="4"/><circle cx="162" cy="60" r="32" fill="#6cbf4a" stroke="${INK}" stroke-width="4"/>`,
+    front:`<circle cx="78" cy="60" r="28" fill="#6cbf4a"/><circle cx="162" cy="60" r="28" fill="#6cbf4a"/><ellipse cx="62" cy="148" rx="16" ry="9" fill="#f08aa0" opacity=".55"/><ellipse cx="178" cy="148" rx="16" ry="9" fill="#f08aa0" opacity=".55"/>`,
+    nose:`<circle cx="110" cy="126" r="3.5" fill="${INK}"/><circle cx="130" cy="126" r="3.5" fill="${INK}"/>`,
+    extra:''},
+  panda:{fur:'#fbfbfb',muzzle:'#ffffff',eye:{y:108,dx:38,r:11},mouth:{y:160,w:16},
+    back:`<circle cx="52" cy="50" r="28" fill="${INK}"/><circle cx="188" cy="50" r="28" fill="${INK}"/>`,
+    front:`<ellipse cx="82" cy="110" rx="24" ry="31" transform="rotate(35 82 110)" fill="${INK}"/><ellipse cx="158" cy="110" rx="24" ry="31" transform="rotate(-35 158 110)" fill="${INK}"/>`,
+    nose:`<ellipse cx="120" cy="143" rx="13" ry="9" fill="${INK}"/>`,
+    extra:''}
+};
+let parts=null;
+function draw(){
+  const a=A[s.animal],e=a.eye,m=a.mouth;
+  const lip=s.animal==='frog'?`M${-m.w} -6 Q0 10 ${m.w} -6`:`M${-m.w} -3 Q${-m.w/2} 7 0 0 Q${m.w/2} 7 ${m.w} -3`;
+  const eye=side=>`<g transform="translate(${120+side*e.dx} ${e.y})"><g class="lid"><ellipse rx="${e.r}" ry="${e.r*1.12}" fill="#fff" stroke="${INK}" stroke-width="3"/><g class="pupil"><circle r="${e.r*.58}" fill="${INK}"/><circle cx="${-e.r*.2}" cy="${-e.r*.25}" r="${e.r*.2}" fill="#fff"/></g></g></g>`;
+  $('animal').innerHTML=`<svg viewBox="0 0 240 250" aria-hidden="true">
+<ellipse cx="120" cy="236" rx="80" ry="46" fill="${a.fur}" stroke="${INK}" stroke-width="4"/>
+${s.animal==='frog'?'<ellipse cx="120" cy="240" rx="50" ry="30" fill="#c9e8a8"/>':''}
+<g class="head">${a.back}
+<ellipse cx="120" cy="124" rx="${s.animal==='frog'?96:88}" ry="${s.animal==='frog'?70:80}" fill="${a.fur}" stroke="${INK}" stroke-width="4"/>
+${a.front}${a.muzzle?`<ellipse cx="120" cy="160" rx="48" ry="34" fill="${a.muzzle}"/>`:''}
+${eye(-1)}${eye(1)}${a.nose}
+<g transform="translate(120 ${m.y})"><ellipse class="mouth" cx="0" cy="1" rx="${m.w*.9}" ry="1" fill="#5a1426"/><ellipse class="tongue" cx="0" cy="1" rx="${m.w*.5}" ry="1" fill="#ef6f8a" opacity="0"/><path d="${lip}" fill="none" stroke="${INK}" stroke-width="3" stroke-linecap="round"/></g>
+${a.extra}</g></svg>`;
+  const q=c=>$('animal').querySelector(c);
+  parts={head:q('.head'),mouth:q('.mouth'),tongue:q('.tongue'),lids:[...$('animal').querySelectorAll('.lid')],pupils:[...$('animal').querySelectorAll('.pupil')],r:e.r,w:m.w};
+  $('animal').setAttribute('aria-label',t('a.'+s.animal));
+}
+
+/* ---------- Animation ---------- */
+const reduce=matchMedia('(prefers-reduced-motion: reduce)');
+let open=0,maxOpen=0,blinkUntil=0,nextBlink=performance.now()+2500,look={x:0,y:0},level=0;
+function frame(now){
+  requestAnimationFrame(frame);
+  if(!parts)return;
+  let target=0;
+  if(playing){
+    const i=Math.floor((now-playing.t0)/1000*60);
+    target=playing.env[Math.min(i,playing.env.length-1)]||0;
+  }
+  open+=(target-open)*(target>open?.6:.35);
+  if(open<.01)open=0;
+  if(playing){maxOpen=Math.max(maxOpen,open);$('animal').dataset.mouth=open.toFixed(2);}
+  const ry=1+open*parts.w*.95;
+  parts.mouth.setAttribute('cy',ry.toFixed(1));parts.mouth.setAttribute('ry',ry.toFixed(1));
+  parts.tongue.setAttribute('cy',(ry*1.55).toFixed(1));parts.tongue.setAttribute('ry',(ry*.42).toFixed(1));
+  parts.tongue.setAttribute('opacity',open>.15?'1':'0');
+  // Head: breathing when idle, wobbling while talking
+  const still=reduce.matches;
+  const bob=still?0:Math.sin(now/700)*1.5+(playing?Math.sin(now/90)*open*2.5:0);
+  const tilt=still?0:(playing?Math.sin(now/260)*open*4:0)+(mode==='recording'?6:0);
+  parts.head.setAttribute('transform',`translate(0 ${bob.toFixed(2)}) rotate(${tilt.toFixed(2)} 120 160)`);
+  // Eyes: blink now and then; look up while listening
+  if(now>nextBlink){blinkUntil=now+140;nextBlink=now+2000+Math.random()*3500;}
+  const lid=now<blinkUntil?.1:1;
+  const goal=mode==='recording'||mode==='listening'?{x:.5,y:-.6}:playing?{x:Math.sin(now/600)*.4,y:0}:{x:0,y:0};
+  look.x+=(goal.x-look.x)*.1;look.y+=(goal.y-look.y)*.1;
+  for(const l of parts.lids)l.setAttribute('transform',`scale(1 ${lid})`);
+  for(const p of parts.pupils)p.setAttribute('transform',`translate(${(look.x*parts.r*.38).toFixed(2)} ${(look.y*parts.r*.38).toFixed(2)})`);
+  $('meterBar').style.width=Math.min(100,Math.round(Math.sqrt(level)*250))+'%';
+}
+
+/* ---------- Audio ---------- */
+let ctx=null;
+function audio(){
+  if(ctx)return ctx;
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(!C){Tools.diag.log('no AudioContext');return null;}
+  try{ctx=new C();Tools.diag.log('audio context created',{state:ctx.state,rate:ctx.sampleRate});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});}
+  return ctx;
+}
+// Called in a tap: browsers (iPhone above all) only play sound after one
+function unlock(){const c=audio();if(c&&c.state!=='running')c.resume().catch(e=>Tools.diag.log('audio resume failed',{error:String(e)}));}
+
+let mic=null,mode='idle'; // idle | starting | listening | recording
+let chunks=[],recLen=0,preRoll=[],voiceFor=0,silentFor=0,voiced=0,floor=.005,quietUntil=0;
+let last=null,lastEffect=null,lastOut=null,playing=null,playToken=0;
+
+async function startMic(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error(t('err.api'));
+  const c=audio();if(!c)throw new Error(t('err.audio'));
+  unlock();
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});}
+  catch(e){
+    Tools.diag.log('microphone failed',{name:e.name,error:e.message});
+    throw new Error(e.name==='NotAllowedError'?t('err.denied'):e.name==='NotFoundError'?t('err.none'):t('err.mic',{m:e.message}));
+  }
+  // ScriptProcessor: simple and available everywhere (also older iPhones); 2048 samples ≈ 43 ms
+  const src=c.createMediaStreamSource(stream),proc=c.createScriptProcessor(2048,1,1),mute=c.createGain();
+  mute.gain.value=0;src.connect(proc);proc.connect(mute);mute.connect(c.destination);
+  proc.onaudioprocess=e=>onBlock(e.inputBuffer.getChannelData(0),c.sampleRate);
+  mic={stream,src,proc,mute};
+  $('meter').classList.add('on');
+  Tools.diag.log('microphone on',{state:c.state,rate:c.sampleRate});
+}
+function stopMic(){
+  if(!mic)return;
+  mic.proc.onaudioprocess=null;
+  try{mic.src.disconnect();mic.proc.disconnect();mic.mute.disconnect();}catch(_){}
+  mic.stream.getTracks().forEach(tr=>tr.stop());
+  mic=null;level=0;$('meter').classList.remove('on');
+  Tools.diag.log('microphone off');
+}
+const rmsOf=d=>{let q=0;for(let i=0;i<d.length;i++)q+=d[i]*d[i];return Math.sqrt(q/d.length);};
+function onBlock(data,sr){
+  const copy=new Float32Array(data),rms=rmsOf(copy),dur=copy.length/sr;
+  level=rms;
+  if(playing||performance.now()<quietUntil)return; // never record the pet itself
+  if(mode==='recording'){
+    chunks.push(copy);recLen+=copy.length;
+    if(s.auto){const quiet=rms<Math.max(.008,floor*2.5);silentFor=quiet?silentFor+dur:0;if(!quiet)voiced+=dur;if(silentFor>=.9){finish(silentFor);return;}}
+    if(recLen>=MAX_SEC*sr)finish(0);
+  }else if(mode==='listening'){
+    preRoll.push(copy);while(preRoll.length*dur>.3)preRoll.shift();
+    if(rms>Math.max(.015,floor*4)){
+      voiceFor+=dur;
+      if(voiceFor>=.08){chunks=preRoll.slice();recLen=chunks.reduce((n,c)=>n+c.length,0);preRoll=[];silentFor=0;voiced=voiceFor;mode='recording';render();Tools.diag.log('voice detected',{floor:+floor.toFixed(4)});}
+    }else{voiceFor=0;floor=rms<floor?floor*.8+rms*.2:Math.min(.05,floor*.995+rms*.005);}
+  }
+}
+// Stops a recording and plays it back (trailing silence in automatic mode is cut off)
+function finish(tail){
+  const c=ctx,sr=c.sampleRate;
+  const all=new Float32Array(recLen);let o=0;for(const ch of chunks){all.set(ch,o);o+=ch.length;}
+  chunks=[];recLen=0;voiceFor=0;silentFor=0;
+  const keep=Math.max(0,all.length-Math.max(0,Math.floor((tail-.15)*sr)));
+  const data=all.subarray(0,keep);
+  if(!s.auto)stopMic();
+  mode=mic?'listening':'idle';
+  // Automatic: a cough or a clap is not speech
+  if(data.length<.25*sr||(s.auto&&voiced<.25)){status(t('tooShort'));render(false);Tools.diag.log('recording too short',{ms:Math.round(data.length/sr*1000),voicedMs:Math.round(voiced*1000)});return;}
+  normalize(data,.9,12);
+  last=c.createBuffer(1,data.length,sr);last.getChannelData(0).set(data);
+  Tools.diag.log('recorded',{ms:Math.round(last.duration*1000)});
+  render();
+  play(s.effect);
+}
+function normalize(d,peak,maxGain){
+  let m=0;for(let i=0;i<d.length;i++){const v=Math.abs(d[i]);if(v>m)m=v;}
+  const g=m>0?Math.min(maxGain,peak/m):0;
+  for(let i=0;i<d.length;i++)d[i]*=g;
+}
+
+/* ---------- Effects: rendered offline, then played as one buffer ---------- */
+const RATE={normal:1,high:1.6,low:.65,robot:1,echo:1,reverse:1,alien:1.15};
+async function renderEffect(buf,fx){
+  const sr=buf.sampleRate,OC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+  const slow=fx==='alien'?RATE.alien-.12:RATE[fx];
+  const len=Math.ceil(buf.length/slow+(fx==='echo'?2:.1)*sr);
+  const oc=new OC(1,len,sr);
+  let input=buf;
+  if(fx==='reverse'){input=oc.createBuffer(1,buf.length,sr);const a=buf.getChannelData(0),b=input.getChannelData(0);for(let i=0,n=a.length;i<n;i++)b[i]=a[n-1-i];}
+  const src=oc.createBufferSource();src.buffer=input;src.playbackRate.value=RATE[fx];
+  const out=oc.createGain();out.connect(oc.destination);
+  const osc=(f,type)=>{const o=oc.createOscillator();o.type=type||'sine';o.frequency.value=f;o.start();return o;};
+  const ring=f=>{const g=oc.createGain();g.gain.value=0;osc(f).connect(g.gain);return g;};
+  if(fx==='robot'){
+    // Ring modulation at 50 Hz plus a short metallic comb
+    const r=ring(50),d=oc.createDelay(.1),fb=oc.createGain();d.delayTime.value=.012;fb.gain.value=.5;
+    src.connect(r);r.connect(out);r.connect(d);d.connect(fb);fb.connect(d);d.connect(out);
+  }else if(fx==='echo'){
+    const d=oc.createDelay(1),fb=oc.createGain(),wet=oc.createGain();d.delayTime.value=.28;fb.gain.value=.45;wet.gain.value=.6;
+    src.connect(out);src.connect(d);d.connect(fb);fb.connect(d);d.connect(wet);wet.connect(out);
+  }else if(fx==='alien'){
+    // Wobbling pitch (vibrato) plus a little ring modulation
+    const depth=oc.createGain();depth.gain.value=.12;osc(6).connect(depth);depth.connect(src.playbackRate);
+    const r=ring(320),dry=oc.createGain(),wet=oc.createGain();dry.gain.value=.65;wet.gain.value=.45;
+    src.connect(dry);dry.connect(out);src.connect(r);r.connect(wet);wet.connect(out);
+  }else src.connect(out);
+  src.start();
+  const res=await new Promise((ok,fail)=>{
+    oc.oncomplete=e=>ok(e.renderedBuffer);
+    try{const p=oc.startRendering();if(p&&p.then)p.then(ok,fail);}catch(e){fail(e);}
+  });
+  // Cut trailing silence, then normalise
+  const d=res.getChannelData(0);let end=d.length;while(end>0&&Math.abs(d[end-1])<.002)end--;
+  const trimmed=d.slice(0,Math.max(end,1));
+  normalize(trimmed,.9,4);
+  return trimmed;
+}
+// Mouth opening per 1/60 s (0…1) from the loudness of the sound
+function envelope(d,sr){
+  const step=Math.round(sr/60),env=[];let m=0;
+  for(let i=0;i<d.length;i+=step){const v=rmsOf(d.subarray(i,i+step));env.push(v);if(v>m)m=v;}
+  return env.map(v=>{const x=m>0?v/m:0;return x<.12?0:Math.min(1,Math.sqrt(x)*1.1);});
+}
+// Pitch estimate from zero crossings (for the diagnostics)
+function pitch(d,sr){let n=0;for(let i=1;i<d.length;i++)if(d[i-1]<0&&d[i]>=0)n++;return Math.round(n/(d.length/sr));}
+
+async function play(fx){
+  if(!last)return null;
+  const c=audio();if(!c)return null;
+  const token=++playToken;
+  stopPlayback();
+  const data=await renderEffect(last,fx);
+  if(token!==playToken)return null;
+  const buf=c.createBuffer(1,data.length,c.sampleRate);buf.getChannelData(0).set(data);
+  const src=c.createBufferSource();src.buffer=buf;src.connect(c.destination);src.start();
+  const ms=Math.round(buf.duration*1000),audible=c.state==='running';
+  maxOpen=0;
+  playing={src,env:envelope(data,c.sampleRate),t0:performance.now(),timer:setTimeout(()=>endPlayback(token),ms+60)};
+  lastEffect=fx;
+  lastOut={in_ms:Math.round(last.duration*1000),out_ms:ms,pitch_hz:pitch(data,c.sampleRate)};
+  const el=$('animal');el.dataset.effect=fx;el.dataset.inMs=String(lastOut.in_ms);el.dataset.outMs=String(ms);el.dataset.pitch=String(lastOut.pitch_hz);el.dataset.state='playing';
+  render();
+  Tools.diag.log('play',{effect:fx,ms,audible,state:c.state});
+  return {effect:fx,recording_ms:lastOut.in_ms,played_ms:ms,audible};
+}
+function stopPlayback(){
+  if(!playing)return;
+  clearTimeout(playing.timer);try{playing.src.stop();}catch(_){}
+  playing=null;
+}
+function endPlayback(token){
+  if(token!==playToken||!playing)return;
+  playing=null;quietUntil=performance.now()+300;
+  const el=$('animal');el.dataset.state='done';el.dataset.mouthMax=maxOpen.toFixed(2);
+  render();
+}
+
+/* ---------- UI ---------- */
+const st=$('status');
+function status(text,err){st.textContent=text;st.classList.toggle('err',!!err);}
+function render(updateStatus=true){
+  const b=$('btnMain');
+  b.textContent=s.auto?(mic?t('stopListen'):t('listen')):(mode==='recording'?t('stop'):t('record'));
+  b.classList.toggle('rec',mode==='recording'||(s.auto&&!!mic));
+  b.classList.toggle('primary',!b.classList.contains('rec'));
+  b.disabled=mode==='starting';
+  $('btnAgain').disabled=!last||mode==='recording';
+  if(!updateStatus)return;
+  if(playing)status(t('playing',{e:t('e.'+lastEffect)}));
+  else if(mode==='starting')status(t('starting'));
+  else if(mode==='recording')status(s.auto?t('recAuto'):t('recManual'));
+  else if(mode==='listening')status(t('listening'));
+  else status(s.auto?t('hintAuto'):t('hintManual'));
+}
+function renderChoices(){
+  $('effects').innerHTML=EFFECTS.map(e=>`<button type="button" data-e="${e}" aria-pressed="${e===s.effect}"><span class="e" aria-hidden="true">${E_EMOJI[e]}</span><span>${Tools.esc(t('e.'+e))}</span></button>`).join('');
+  $('animals').innerHTML=ANIMALS.map(a=>`<button type="button" data-a="${a}" aria-pressed="${a===s.animal}"><span class="e" aria-hidden="true">${A_EMOJI[a]}</span><span>${Tools.esc(t('a.'+a))}</span></button>`).join('');
+  $('optAuto').checked=s.auto;
+}
+function stopAll(){
+  stopPlayback();stopMic();chunks=[];recLen=0;preRoll=[];voiceFor=0;mode='idle';
+}
+$('btnMain').addEventListener('click',async()=>{
+  unlock();
+  if(mode==='recording'&&!s.auto){finish(0);return;}
+  if(s.auto&&mic){stopAll();render();return;}
+  stopPlayback();
+  mode='starting';render();
+  try{await startMic();}
+  catch(e){mode='idle';render(false);status(e.message,true);return;}
+  chunks=[];recLen=0;preRoll=[];voiceFor=0;silentFor=0;
+  mode=s.auto?'listening':'recording';
+  render();
+});
+$('btnAgain').addEventListener('click',()=>{unlock();play(s.effect);});
+$('effects').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-e]');if(!b)return;
+  unlock();s.effect=b.dataset.e;save();renderChoices();
+  if(last&&mode!=='recording')play(s.effect);
+});
+$('animals').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-a]');if(!b)return;
+  s.animal=b.dataset.a;save();renderChoices();draw();
+});
+$('optAuto').addEventListener('change',e=>{
+  s.auto=e.target.checked;save();
+  if(mic||mode==='recording')stopAll();
+  render();
+  Tools.diag.log('auto',{on:s.auto});
+});
+$('animal').addEventListener('click',()=>{
+  unlock();
+  const el=$('animal');el.classList.remove('poke');void el.offsetWidth;el.classList.add('poke');
+  blinkUntil=performance.now()+400;
+  if(!playing&&mode==='idle')status(t('tickle'));
+});
+
+draw();renderChoices();render();
+if(!(window.AudioContext||window.webkitAudioContext))status(t('err.audio'),true);
+requestAnimationFrame(frame);
+Tools.onLang(()=>{renderChoices();render();$('animal').setAttribute('aria-label',t('a.'+s.animal));});
+Tools.diag.info(()=>({animal:s.animal,effect:s.effect,auto:s.auto,mode,microphone:!!mic,playing:!!playing,
+  audio:ctx?ctx.state:'not created',recordingMs:last?Math.round(last.duration*1000):0,last:lastOut,
+  mic:!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+Tools.mcp.register({
+  name:'play_last_recording',title:'Play the last recording again',label:'mcp.play',
+  description:'Makes the pet in the app repeat the last thing the user said into the microphone, with a voice effect, and animates its mouth. The agent cannot record – the user has to record first. Browsers only play sound after the user has tapped the page once; audible says whether it could be heard. Returns the effect, the length of the recording and of the played sound in milliseconds and audible.',
+  inputSchema:{type:'object',properties:{
+    effect:{type:'string',enum:EFFECTS,description:'Voice effect: normal, high (squeaky), low (deep), robot, echo, reverse (backwards) or alien. Default: the effect chosen in the app.'}
+  },additionalProperties:false},
+  execute:async({effect})=>{
+    if(!last)throw new Error('No recording yet – the user has to speak into the microphone in the app first.');
+    if(mode==='recording')throw new Error('The app is recording right now – try again when the user has finished.');
+    if(effect&&effect!==s.effect){s.effect=effect;save();renderChoices();}
+    const r=await play(effect||s.effect);
+    if(!r)throw new Error('Sound could not be played in this browser.');
+    return r;
+  }
+});
+Tools.mcp.register({
+  name:'set_options',title:'Choose pet and voice',label:'mcp.options',
+  description:'Chooses which pet is shown (cat, dog, frog, panda) and which voice effect is used for playback. Nothing is played. Returns the settings now in use.',
+  inputSchema:{type:'object',properties:{
+    animal:{type:'string',enum:ANIMALS,description:'Pet shown in the app.'},
+    effect:{type:'string',enum:EFFECTS,description:'Voice effect: normal, high (squeaky), low (deep), robot, echo, reverse (backwards) or alien.'}
+  },additionalProperties:false},
+  execute:({animal,effect})=>{
+    if(animal)s.animal=animal;
+    if(effect)s.effect=effect;
+    save();renderChoices();if(animal)draw();
+    return {animal:s.animal,effect:s.effect,auto_listen:s.auto};
+  }
+});
+Tools.mcp.register({
+  name:'get_status',title:'Read the state',label:'mcp.status',readOnly:true,
+  description:'Reads the state of the app: chosen pet and voice effect, whether automatic listening is on, whether the microphone is on, what the pet is doing (idle, listening, recording, talking) and whether there is a recording and how long it is in milliseconds. Never returns the audio itself.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({animal:s.animal,effect:s.effect,auto_listen:s.auto,microphone_on:!!mic,
+    state:playing?'talking':mode==='starting'?'idle':mode,has_recording:!!last,recording_ms:last?Math.round(last.duration*1000):0})
+});
+})();
+</script>
+</body>
+</html>

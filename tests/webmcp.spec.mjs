@@ -785,3 +785,58 @@ test.describe('whoopee-cushion tools', () => {
     await expect(page.locator('#count')).toHaveText('0');
   });
 });
+
+test.describe('talking-animal tools', () => {
+  test.beforeEach(async ({ page }) => {
+    // Fake microphone: 440 Hz sine
+    await page.addInitScript(() => {
+      navigator.mediaDevices.getUserMedia = async () => {
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator(), gain = ctx.createGain(), dest = ctx.createMediaStreamDestination();
+        osc.frequency.value = 440; gain.gain.value = 0.5;
+        osc.connect(gain).connect(dest); osc.start();
+        return dest.stream;
+      };
+    });
+    await open(page, '/talking-animal/');
+  });
+
+  test('without a recording play_last_recording explains what to do; get_status reads the state', async ({ page }) => {
+    const r = await call(page, 'talking_animal_play_last_recording', {});
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/No recording yet/);
+    expect((await call(page, 'talking_animal_get_status', {})).result).toEqual({
+      animal: 'cat', effect: 'high', auto_listen: false, microphone_on: false, state: 'idle', has_recording: false, recording_ms: 0,
+    });
+  });
+
+  test('set_options changes pet and voice in the app; play_last_recording replays with an effect', async ({ page }) => {
+    const { result } = await call(page, 'talking_animal_set_options', { animal: 'frog', effect: 'robot' });
+    expect(result).toEqual({ animal: 'frog', effect: 'robot', auto_listen: false });
+    await expect(page.locator('#animals [data-a="frog"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#effects [data-e="robot"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#animal')).toHaveAttribute('aria-label', 'Frosch');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Tier/Stimme gewählt');
+    // The user records; then the agent replays it squeaky (1.6 × faster)
+    await page.click('#btnMain');
+    await page.waitForTimeout(1000);
+    await page.click('#btnMain');
+    await expect(page.locator('#animal')).toHaveAttribute('data-state', 'done', { timeout: 5000 });
+    const p = await call(page, 'talking_animal_play_last_recording', { effect: 'high' });
+    expect(p.ok).toBe(true);
+    expect(p.result.effect).toBe('high');
+    expect(p.result.played_ms / p.result.recording_ms).toBeCloseTo(1 / 1.6, 1);
+    expect(typeof p.result.audible).toBe('boolean');
+    await expect(page.locator('#effects [data-e="high"]')).toHaveAttribute('aria-pressed', 'true');
+    const st = (await call(page, 'talking_animal_get_status', {})).result;
+    expect(st).toMatchObject({ animal: 'frog', effect: 'high', has_recording: true, microphone_on: false, state: 'talking' });
+    expect(st.recording_ms).toBe(p.result.recording_ms);
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    expect((await call(page, 'talking_animal_set_options', { animal: 'unicorn' })).ok).toBe(false);
+    expect((await call(page, 'talking_animal_set_options', { volume: 3 })).ok).toBe(false);
+    expect((await call(page, 'talking_animal_play_last_recording', { effect: 'loud' })).ok).toBe(false);
+    await expect(page.locator('#animals [data-a="cat"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+});
