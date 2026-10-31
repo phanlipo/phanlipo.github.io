@@ -1,6 +1,7 @@
 // Test helpers for PDF zu Word and PDF bearbeiten: build small PDFs from scratch, read their pages back, read .docx files.
 // Kept dependency-free so the expected values stay independent of the libraries under test.
 import { inflateRawSync, deflateSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 
 /**
  * Builds a PDF with Courier text (monospace: every character is exactly 0.6 em wide, so
@@ -8,8 +9,11 @@ import { inflateRawSync, deflateSync } from 'node:zlib';
  *   pages: [{ texts: [{ x, y, size, text, bold }], draw: 'PDF operators', rotate: 90,
  *             images: [{ x, y, w, h, width, height, rgb }] }]   rgb: Buffer, 3 bytes per pixel, rows top to bottom
  * Coordinates in points, origin bottom left, A4.
+ *   options.encrypt: { user, owner } – password protection with the PDF standard security handler,
+ *   revision 2 (RC4, 40 bit; PDF 1.7 spec, algorithms 1–4). user '' = opens without a password,
+ *   only protected against changes (as many "secured" PDFs are).
  */
-export function makePdf(pages) {
+export function makePdf(pages, options = {}) {
   const objs = [];
   const add = body => { objs.push(body); return objs.length; };
   const catalog = add(null), pagesObj = add(null);
@@ -34,12 +38,46 @@ export function makePdf(pages) {
   }
   objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
   objs[pagesObj - 1] = `<< /Type /Pages /Kids [${kids.map(k => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`;
+  const enc = options.encrypt && encryption(options.encrypt);
+  if (enc) {
+    // every stream encrypted with its object key (the file has no strings outside streams)
+    objs.forEach((body, i) => {
+      objs[i] = body.replace(/stream\n([\s\S]*)\nendstream$/, (_, data) =>
+        `stream\n${rc4(enc.objectKey(i + 1), Buffer.from(data, 'latin1')).toString('latin1')}\nendstream`);
+    });
+    objs.push(`<< /Filter /Standard /V 1 /R 2 /O <${enc.O.toString('hex')}> /U <${enc.U.toString('hex')}> /P ${enc.P} >>`);
+  }
   let out = '%PDF-1.4\n';
   const offsets = objs.map((body, i) => { const o = Buffer.byteLength(out, 'latin1'); out += `${i + 1} 0 obj\n${body}\nendobj\n`; return o; });
   const xref = Buffer.byteLength(out, 'latin1');
   out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offsets.map(o => `${String(o).padStart(10, '0')} 00000 n \n`).join('');
-  out += `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  const encTrailer = enc ? ` /Encrypt ${objs.length} 0 R /ID [<${enc.id.toString('hex')}> <${enc.id.toString('hex')}>]` : '';
+  out += `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R${encTrailer} >>\nstartxref\n${xref}\n%%EOF\n`;
   return Buffer.from(out, 'latin1');
+}
+
+const md5 = (...parts) => createHash('md5').update(Buffer.concat(parts)).digest();
+function rc4(key, data) {
+  const S = [...Array(256).keys()];
+  for (let i = 0, j = 0; i < 256; i++) { j = (j + S[i] + key[i % key.length]) & 255; [S[i], S[j]] = [S[j], S[i]]; }
+  const out = Buffer.alloc(data.length);
+  for (let k = 0, i = 0, j = 0; k < data.length; k++) {
+    i = (i + 1) & 255; j = (j + S[i]) & 255; [S[i], S[j]] = [S[j], S[i]];
+    out[k] = data[k] ^ S[(S[i] + S[j]) & 255];
+  }
+  return out;
+}
+const PAD = Buffer.from('28BF4E5E4E758A4164004E56FFFA01082E2E00B6D0683E802F0CA9FE6453697A', 'hex');
+const padPw = pw => Buffer.concat([Buffer.from(pw, 'latin1'), PAD]).subarray(0, 32);
+function encryption({ user, owner }) {
+  const P = -44;                                                            // print only, no changes
+  const id = md5(Buffer.from('pdf-tools test file'));
+  const O = rc4(md5(padPw(owner || user)).subarray(0, 5), padPw(user));      // algorithm 3
+  const p = Buffer.alloc(4); p.writeInt32LE(P);
+  const key = md5(padPw(user), O, p, id).subarray(0, 5);                    // algorithm 2
+  const U = rc4(key, PAD);                                                  // algorithm 4
+  const objectKey = n => md5(key, Buffer.from([n & 255, (n >> 8) & 255, (n >> 16) & 255, 0, 0])).subarray(0, 10);   // algorithm 1
+  return { P, id, O, U, objectKey };
 }
 
 /** Greedy word wrap at `width` characters (how a word processor breaks ragged-right text) */
