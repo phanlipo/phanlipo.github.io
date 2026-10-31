@@ -1,11 +1,11 @@
-// Test helpers for PDF zu Word: build small PDFs from scratch and read .docx files.
+// Test helpers for PDF zu Word and PDF bearbeiten: build small PDFs from scratch, read their pages back, read .docx files.
 // Kept dependency-free so the expected values stay independent of the libraries under test.
 import { inflateRawSync, deflateSync } from 'node:zlib';
 
 /**
  * Builds a PDF with Courier text (monospace: every character is exactly 0.6 em wide, so
  * line widths can be computed without font metrics).
- *   pages: [{ texts: [{ x, y, size, text, bold }], draw: 'PDF operators',
+ *   pages: [{ texts: [{ x, y, size, text, bold }], draw: 'PDF operators', rotate: 90,
  *             images: [{ x, y, w, h, width, height, rgb }] }]   rgb: Buffer, 3 bytes per pixel, rows top to bottom
  * Coordinates in points, origin bottom left, A4.
  */
@@ -29,7 +29,7 @@ export function makePdf(pages) {
     });
     const stream = Buffer.from(ops.join('\n'), 'latin1');
     const content = add(`<< /Length ${stream.length} >>\nstream\n${stream.toString('latin1')}\nendstream`);
-    kids.push(add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 595 842] /Contents ${content} 0 R ` +
+    kids.push(add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 595 842]${p.rotate ? ` /Rotate ${p.rotate}` : ''} /Contents ${content} 0 R ` +
       `/Resources << /Font << /F1 ${regular} 0 R /F2 ${bold} 0 R >>${xobjects.length ? ` /XObject << ${xobjects.join(' ')} >>` : ''} >> >>`));
   }
   objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
@@ -86,4 +86,40 @@ export function docxParagraphs(xml) {
     const textRuns = runs.filter(r => /<w:t[\s>]/.test(r));
     return { text, xml: m[1], bold: textRuns.length > 0 && textRuns.every(r => /<w:b\/>|<w:b w:val="true"\/>/.test(r)) };
   });
+}
+
+/**
+ * Pages of a PDF without object streams or compressed content (as written by makePdf and by
+ * "PDF bearbeiten"), in document order: [{ rotate, texts: ['strings shown with Tj'] }].
+ * Follows Catalog → Pages → Kids; /Rotate may be inherited from a Pages node.
+ */
+export function readPdfPages(buf) {
+  const src = buf.toString('latin1');
+  const objs = new Map();
+  for (const m of src.matchAll(/(\d+) 0 obj\s*([\s\S]*?)endobj/g)) objs.set(Number(m[1]), m[2]);
+  const dict = n => { const o = objs.get(n); if (o == null) throw new Error(`object ${n} missing`); return o.split(/\bstream\r?\n/)[0]; };
+  const trailer = src.slice(src.lastIndexOf('trailer'));
+  const root = Number(trailer.match(/\/Root (\d+) 0 R/)[1]);
+  const pagesRef = Number(dict(root).match(/\/Pages (\d+) 0 R/)[1]);
+  const out = [];
+  const walk = (n, inherited) => {
+    const d = dict(n);
+    const rot = d.match(/\/Rotate (-?\d+)/);
+    const rotate = rot ? Number(rot[1]) : inherited;
+    if (/\/Type\s*\/Pages\b/.test(d)) {
+      const kids = d.match(/\/Kids\s*\[([^\]]*)\]/)[1];
+      for (const k of kids.matchAll(/(\d+) 0 R/g)) walk(Number(k[1]), rotate);
+      return;
+    }
+    const c = d.match(/\/Contents\s*(\[[^\]]*\]|\d+ 0 R)/)[1];
+    const texts = [];
+    for (const r of c.matchAll(/(\d+) 0 R/g)) {
+      const body = objs.get(Number(r[1]));
+      const stream = body.slice(body.search(/\bstream\r?\n/)).replace(/^stream\r?\n/, '').replace(/\s*endstream[\s\S]*$/, '');
+      for (const t of stream.matchAll(/\(((?:\\.|[^\\)])*)\)\s*Tj/g)) texts.push(t[1].replace(/\\(.)/g, '$1'));
+    }
+    out.push({ rotate: ((rotate % 360) + 360) % 360, texts });
+  };
+  walk(pagesRef, 0);
+  return out;
 }
