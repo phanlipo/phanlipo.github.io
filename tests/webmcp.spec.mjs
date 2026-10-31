@@ -931,3 +931,65 @@ test.describe('paint tools', () => {
     await expect(page.locator('[data-color="black"]')).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+test.describe('pdf-edit tools', () => {
+  const pdf = labels => makePdf(labels.map(l => ({ texts: [{ x: 72, y: 700, size: 30, text: l }] })));
+  test.beforeEach(async ({ page }) => open(page, '/pdf-edit/'));
+
+  test('without an open PDF the tools explain what is missing', async ({ page }) => {
+    expect((await call(page, 'pdf_edit_list_pages', {})).result).toEqual({ count: 0, files: [], pages: [] });
+    expect((await call(page, 'pdf_edit_rotate_pages', { direction: 'right' })).error).toBe('no PDF is open yet');
+    expect((await call(page, 'pdf_edit_move_page', { from: 1, to: 1 })).error).toBe('no PDF is open yet');
+  });
+
+  test('list, rotate and move pages; shown in the app', async ({ page }) => {
+    await page.setInputFiles('#inPick', [
+      { name: 'eins.pdf', mimeType: 'application/pdf', buffer: pdf(['A1', 'A2']) },
+      { name: 'zwei.pdf', mimeType: 'application/pdf', buffer: pdf(['B1']) },
+    ]);
+    await expect(page.locator('#pages li')).toHaveCount(3);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'pdf_edit_list_pages').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+    let r = await call(page, 'pdf_edit_list_pages', {});
+    expect(r.result).toEqual({
+      count: 3,
+      files: [{ file: 'A', name: 'eins.pdf', pages: 2 }, { file: 'B', name: 'zwei.pdf', pages: 1 }],
+      pages: [
+        { page: 1, file: 'A', original_page: 1, rotation: 0 },
+        { page: 2, file: 'A', original_page: 2, rotation: 0 },
+        { page: 3, file: 'B', original_page: 1, rotation: 0 },
+      ],
+    });
+    r = await call(page, 'pdf_edit_rotate_pages', { direction: 'left', pages: '2-' });
+    expect(r.result.rotated).toBe(2);
+    expect(r.result.pages.map(p => p.rotation)).toEqual([0, 270, 270]);
+    await expect(page.locator('.toast')).toContainText('KI-Agent: Seiten gedreht');
+    r = await call(page, 'pdf_edit_rotate_pages', { direction: 'half' });
+    expect(r.result.pages.map(p => p.rotation)).toEqual([180, 90, 90]);
+    r = await call(page, 'pdf_edit_move_page', { from: 3, to: 1 });
+    expect(r.result.pages.map(p => p.file + p.original_page)).toEqual(['B1', 'A1', 'A2']);
+    await expect(page.locator('#pages li').nth(0).locator('.src')).toHaveText('B·1');
+    await expect(page.locator('#pages li').nth(0).locator('.thumb')).toHaveAttribute('aria-label', /gedreht um 90°/);
+    // the user can undo what the agent did
+    await page.click('#btnUndo');
+    await expect(page.locator('#pages li').nth(0).locator('.src')).toHaveText('A·1');
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    await page.setInputFiles('#inPick', [{ name: 'x.pdf', mimeType: 'application/pdf', buffer: pdf(['X1', 'X2']) }]);
+    await expect(page.locator('#pages li')).toHaveCount(2);
+    for (const [name, input, msg] of [
+      ['pdf_edit_rotate_pages', { direction: 'up' }, /one of/],
+      ['pdf_edit_rotate_pages', { direction: 'left', pages: '1-5' }, /between 1 and 2/],
+      ['pdf_edit_rotate_pages', { direction: 'left', pages: 'all' }, /look like/],
+      ['pdf_edit_move_page', { from: 1, to: 3 }, /between 1 and 2/],
+      ['pdf_edit_move_page', { from: 0, to: 1 }, />= 1/],
+      ['pdf_edit_move_page', { from: 1 }, /required/],
+    ]) expect((await call(page, name, input)).error).toMatch(msg);
+    const r = await call(page, 'pdf_edit_list_pages', {});
+    expect(r.result.pages.map(p => `${p.original_page}@${p.rotation}`)).toEqual(['1@0', '2@0']);
+    await expect(page.locator('#btnUndo')).toBeEnabled();   // only the opening of the file can be undone
+    await page.click('#btnUndo');
+    await expect(page.locator('#pages li')).toHaveCount(0);
+  });
+});

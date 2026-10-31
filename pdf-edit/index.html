@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>PDF bearbeiten</title>
+<meta name="description" content="PDF-Dateien zusammenführen, Seiten entfernen, drehen und neu sortieren – direkt im Browser, ohne Upload.">
+<meta name="tool:tags" content="Arbeit, Dokumente">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
+<meta name="tool:icon" content="file-pencil">
+<meta name="tool:color" content="#0369a1">
+<meta name="tool:short-name" content="PDF bearb.">
+<meta name="tool:title-en" content="Edit PDF">
+<meta name="tool:description-en" content="Merge PDF files, remove, rotate and reorder pages – right in the browser, no upload.">
+<meta name="tool:short-name-en" content="Edit PDF">
+<meta name="tool:storage" content="pdf-edit.">
+<meta name="tool:webmcp" content="list_pages, rotate_pages, move_page">
+<meta name="tool:share-target" content="application/pdf, .pdf">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-57BYCVj18rIBmGfqd+VRykWHlZR/SFasNzcsBHEOStA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="PDF bearb.">
+<meta name="theme-color" content="#0369a1">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0369a1;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#7dd3fc;--accent-text:#082f49}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.add .btn.primary{flex:1 1 200px;min-height:52px;font-size:17px}
+.btn:disabled{opacity:.55;cursor:default}
+.btn:disabled:hover{border-color:var(--border)}
+#files{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:6px}
+#files li{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:4px 4px 4px 10px;min-width:0}
+#files .fname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#files .fname small{color:var(--muted)}
+#files .btn{min-width:44px;min-height:44px;padding-inline:0;font-size:18px}
+.letter{display:inline-block;min-width:24px;padding-inline:6px;line-height:24px;border-radius:999px;background:var(--accent);color:var(--accent-text);font-size:13px;font-weight:600;text-align:center;margin-inline-end:6px}
+.tools{display:grid;gap:8px;margin-block-end:12px}
+.tools .row .btn{flex:1 1 auto}
+.field{display:grid;gap:4px;font-size:14px;color:var(--muted)}
+.field input{min-height:44px;padding-inline:10px;color:var(--text);font-size:16px;min-width:0}
+#pages{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+#pages li{border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:6px;display:grid;gap:6px;min-width:0}
+.thumb{display:block;width:100%;aspect-ratio:1/1;border:1px solid var(--border);border-radius:6px;background:var(--bg);overflow:hidden;position:relative}
+.thumb img{width:100%;height:100%;object-fit:contain;display:block;transition:transform .2s}
+.thumb .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;padding:8px;text-align:center}
+.thumb .num{position:absolute;inset-block-start:4px;inset-inline-start:4px;background:var(--accent);color:var(--accent-text);border-radius:999px;font-size:13px;font-weight:600;min-width:24px;padding-inline:6px;line-height:24px;text-align:center}
+.thumb .src{position:absolute;inset-block-end:4px;inset-inline-end:4px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:999px;font-size:12px;padding-inline:6px;line-height:20px}
+.pbtns{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.pbtns .btn{padding-inline:0;min-width:0;min-height:44px;font-size:18px}
+#empty{margin:12px 0 0}
+#status,#addInfo{min-height:1.4em;margin:8px 0 0}
+#status.err,#addInfo.err{color:var(--err)}
+.export .opts{margin-block-end:12px}
+.export .btn.primary{flex:1 1 200px;min-height:52px;font-size:17px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">PDF bearbeiten</span></h1>
+  <p class="sub" data-i18n="sub">Zusammenführen, Seiten entfernen, drehen – alles bleibt auf dem Gerät.</p>
+</header>
+
+<main>
+  <section class="card add" aria-labelledby="h-add">
+    <h2 id="h-add" data-i18n="add.h">PDF-Dateien</h2>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnPick" data-i18n="add.pick">PDF wählen</button>
+      <button type="button" class="btn" id="btnReset" data-i18n="add.reset" hidden>Neu beginnen</button>
+    </div>
+    <input type="file" id="inPick" accept="application/pdf,.pdf" multiple hidden>
+    <p class="muted" id="addInfo" role="status" aria-live="polite"></p>
+    <ul id="files" aria-label="Dateien" data-i18n-attr="aria-label:files.label"></ul>
+  </section>
+
+  <section class="card" aria-labelledby="h-pages">
+    <h2 id="h-pages"><span data-i18n="pages.h">Seiten</span> <span class="badge" id="pageCount">0</span></h2>
+    <div class="tools" id="tools" hidden>
+      <label class="field"><span data-i18n="range.label">Seiten auswählen, z. B. 1, 3-5, 8-</span><input type="text" id="range" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="200"></label>
+      <div class="row">
+        <button type="button" class="btn" id="btnRotSel"><span aria-hidden="true">↻ </span><span data-i18n="range.rotate">Drehen</span></button>
+        <button type="button" class="btn" id="btnKeepSel" data-i18n="range.keep">Nur diese behalten</button>
+        <button type="button" class="btn danger" id="btnDelSel" data-i18n="range.delete">Entfernen</button>
+      </div>
+      <div class="row">
+        <button type="button" class="btn" id="btnRotAllL"><span aria-hidden="true">↺ </span><span data-i18n="all.rotL">Alle links drehen</span></button>
+        <button type="button" class="btn" id="btnRotAllR"><span aria-hidden="true">↻ </span><span data-i18n="all.rotR">Alle rechts drehen</span></button>
+        <button type="button" class="btn" id="btnUndo" disabled><span aria-hidden="true">⟲ </span><span data-i18n="undo">Rückgängig</span></button>
+      </div>
+    </div>
+    <p class="muted" id="empty" data-i18n="pages.empty">Noch keine Seiten. Eine oder mehrere PDF-Dateien wählen – weitere Dateien werden hinten angehängt.</p>
+    <ol id="pages"></ol>
+  </section>
+
+  <section class="card export" aria-labelledby="h-export">
+    <h2 id="h-export" data-i18n="export.h">Neue PDF speichern</h2>
+    <div class="opts">
+      <label class="field"><span data-i18n="export.name">Dateiname</span><input type="text" id="fileName" maxlength="80" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnSave" data-i18n="export.save" disabled>PDF speichern</button>
+      <button type="button" class="btn" id="btnShare" data-i18n="export.share" hidden disabled>Teilen …</button>
+    </div>
+    <p class="muted" id="status" role="status" aria-live="polite"></p>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Bearbeitet PDF-Dateien direkt auf dem Gerät: mehrere Dateien zu einer zusammenführen, einzelne Seiten entfernen, drehen und neu sortieren. Der Inhalt der Seiten bleibt unverändert (Text bleibt Text, keine Qualitätsverluste).</p>
+  <h3>Bedienung</h3>
+  <ol>
+    <li><b>PDF wählen</b> öffnet eine oder mehrere Dateien. Jede weitere Datei wird hinten angehängt – so entsteht aus mehreren PDFs eine. Jede Datei bekommt einen Buchstaben (A, B, …); unten rechts im Vorschaubild steht, aus welcher Datei und von welcher Seite sie stammt.</li>
+    <li><b>Teilen (Android):</b> Ist die App installiert, erscheint „PDF bearb.“ im Teilen-Menü, z. B. in der Dateien-App oder bei einem Mail-Anhang. Auf dem iPhone geht das nicht; dort <b>PDF wählen</b> verwenden.</li>
+    <li>Unter jedem Vorschaubild: <b>←</b> / <b>→</b> verschiebt die Seite, <b>↻</b> dreht sie um 90° nach rechts, <b>✕</b> entfernt sie.</li>
+    <li>In der Dateiliste verschieben <b>↑</b> / <b>↓</b> eine ganze Datei; die Seiten werden dabei nach Dateien geordnet. <b>✕</b> entfernt alle Seiten der Datei.</li>
+    <li><b>Seiten auswählen:</b> Für viele Seiten auf einmal die Nummern eintragen, z. B. <code>1, 3-5, 8-</code> (8- = ab Seite 8 bis zum Ende), dann <b>Drehen</b>, <b>Nur diese behalten</b> oder <b>Entfernen</b>. Die Nummern sind die aktuellen Nummern oben links im Vorschaubild.</li>
+    <li><b>Rückgängig</b> nimmt die letzten Schritte zurück.</li>
+    <li><b>PDF speichern</b> lädt die neue Datei herunter. <b>Teilen …</b> (Handy) schickt sie direkt an eine andere App. Die Originaldateien bleiben unverändert.</li>
+  </ol>
+  <h3>Gut zu wissen</h3>
+  <ul>
+    <li>Links und Kommentare auf den Seiten bleiben erhalten. Lesezeichen (Inhaltsverzeichnis am Rand) und ausfüllbare Formularfelder können beim Zusammenführen verloren gehen.</li>
+    <li>Passwortgeschützte PDFs lassen sich nicht öffnen – vorher in einem anderen Programm das Passwort entfernen.</li>
+    <li>Sehr große Dateien (mehrere hundert MB) können auf dem Handy am Arbeitsspeicher scheitern.</li>
+  </ul>
+  <h3>Datenschutz &amp; Speicher</h3>
+  <ul>
+    <li>Alles passiert im Browser auf dem Gerät; die Dateien werden nirgends hochgeladen. Die App funktioniert auch offline.</li>
+    <li>Nichts wird gespeichert: Nach dem Schließen oder Neuladen sind die geöffneten Dateien weg – vorher die neue PDF speichern.</li>
+    <li>Verwendet <a href="https://pdf-lib.js.org">pdf-lib</a> (MIT) zum Bearbeiten und <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0) für die Vorschaubilder.</li>
+  </ul>
+  <h3>KI-Agenten</h3>
+  <p>Unterstützt der Browser WebMCP, kann ein KI-Agent die Seitenliste lesen, Seiten drehen und verschieben. Dateien öffnen, Seiten entfernen oder speichern kann er nicht.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Edits PDF files right on your device: merge several files into one, remove, rotate and reorder pages. The content of the pages stays as it is (text stays text, no loss of quality).</p>
+  <h3>How to use</h3>
+  <ol>
+    <li><b>Choose PDF</b> opens one or more files. Every further file is added at the end – that is how several PDFs become one. Each file gets a letter (A, B, …); the bottom right of each preview shows which file and page it comes from.</li>
+    <li><b>Share (Android):</b> once the app is installed, “Edit PDF” appears in the share menu, e.g. in the Files app or for a mail attachment. iPhones do not support this; use <b>Choose PDF</b> there.</li>
+    <li>Below each preview: <b>←</b> / <b>→</b> moves the page, <b>↻</b> rotates it 90° to the right, <b>✕</b> removes it.</li>
+    <li>In the file list, <b>↑</b> / <b>↓</b> moves a whole file; the pages are then ordered by file. <b>✕</b> removes all pages of the file.</li>
+    <li><b>Select pages:</b> for many pages at once, enter the numbers, e.g. <code>1, 3-5, 8-</code> (8- = from page 8 to the end), then <b>Rotate</b>, <b>Keep only these</b> or <b>Remove</b>. The numbers are the current numbers at the top left of each preview.</li>
+    <li><b>Undo</b> takes back the last steps.</li>
+    <li><b>Save PDF</b> downloads the new file. <b>Share …</b> (phone) sends it straight to another app. The original files stay unchanged.</li>
+  </ol>
+  <h3>Good to know</h3>
+  <ul>
+    <li>Links and comments on the pages are kept. Bookmarks (the outline in the side bar) and fillable form fields may be lost when merging.</li>
+    <li>Password-protected PDFs cannot be opened – remove the password in another program first.</li>
+    <li>Very large files (several hundred MB) may run out of memory on a phone.</li>
+  </ul>
+  <h3>Privacy &amp; storage</h3>
+  <ul>
+    <li>Everything happens in the browser on your device; the files are never uploaded. The app works offline, too.</li>
+    <li>Nothing is stored: after closing or reloading, the opened files are gone – save the new PDF first.</li>
+    <li>Uses <a href="https://pdf-lib.js.org">pdf-lib</a> (MIT) for editing and <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0) for the previews.</li>
+  </ul>
+  <h3>AI agents</h3>
+  <p>If the browser supports WebMCP, an AI agent can read the page list, rotate and move pages. It cannot open files, remove pages or save.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 4e40b977b2b1</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'add.loading':'Datei {i} von {n} wird geöffnet …','add.done':'{n} Datei(en) mit {p} Seite(n) hinzugefügt.',
+    'add.notPdf':'„{name}“ ist keine PDF-Datei.','add.encrypted':'„{name}“ ist passwortgeschützt und lässt sich nicht öffnen.',
+    'add.fail':'„{name}“ konnte nicht gelesen werden – ist die Datei beschädigt?','add.noPages':'„{name}“ enthält keine Seiten.',
+    'add.libFail':'Die PDF-Bibliothek konnte nicht geladen werden. Bitte einmal mit Internet neu laden.',
+    'file.pages':'{n} Seite(n)','file.up':'Datei {l} nach vorne','file.down':'Datei {l} nach hinten','file.remove':'Datei {l} entfernen',
+    'page.label':'Seite {n} – Datei {l}, Seite {o}','page.rotated':'gedreht um {deg}°',
+    'page.earlier':'Seite {n} nach vorne','page.later':'Seite {n} nach hinten','page.rotate':'Seite {n} rechts drehen','page.delete':'Seite {n} entfernen',
+    'page.preview':'Vorschau …','page.noPreview':'Seite {o}',
+    'range.bad':'Seitenauswahl nicht verstanden. Beispiel: 1, 3-5, 8-','range.out':'Es gibt nur {n} Seite(n).','range.empty':'Bitte zuerst Seiten eintragen, z. B. 1, 3-5.',
+    'range.all':'Es müssen Seiten übrig bleiben.','range.rotated':'{n} Seite(n) gedreht.','range.deleted':'{n} Seite(n) entfernt.','range.kept':'{n} Seite(n) behalten.',
+    'confirm.reset':'Alle geöffneten Dateien schließen?',
+    'suffix':' (bearbeitet)','more':'{name} + {n} weitere',
+    'export.busy':'PDF wird erstellt …','export.done':'PDF gespeichert: {n} Seite(n), {size}.','export.shared':'PDF geteilt: {n} Seite(n), {size}.',
+    'export.fail':'PDF konnte nicht erstellt werden: {msg}','export.shareAgain':'PDF ist fertig – bitte noch einmal auf „Teilen …“ tippen.',
+    'export.shareFail':'Teilen hat nicht geklappt. Bitte „PDF speichern“ verwenden.',
+    'mb':'{n} MB','kb':'{n} KB','leave':'Die bearbeitete PDF ist noch nicht gespeichert.',
+    'mcp.rotate':'Seiten gedreht','mcp.move':'Seite verschoben'
+  },
+  en:{
+    title:'Edit PDF',sub:'Merge, remove pages, rotate – everything stays on your device.',
+    'add.h':'PDF files','add.pick':'Choose PDF','add.reset':'Start over','files.label':'Files',
+    'pages.h':'Pages','pages.empty':'No pages yet. Choose one or more PDF files – further files are added at the end.',
+    'range.label':'Select pages, e.g. 1, 3-5, 8-','range.rotate':'Rotate','range.keep':'Keep only these','range.delete':'Remove',
+    'all.rotL':'Rotate all left','all.rotR':'Rotate all right','undo':'Undo',
+    'export.h':'Save new PDF','export.name':'File name','export.save':'Save PDF','export.share':'Share …',
+    'add.loading':'Opening file {i} of {n} …','add.done':'{n} file(s) with {p} page(s) added.',
+    'add.notPdf':'“{name}” is not a PDF file.','add.encrypted':'“{name}” is password-protected and cannot be opened.',
+    'add.fail':'Could not read “{name}” – is the file damaged?','add.noPages':'“{name}” contains no pages.',
+    'add.libFail':'The PDF library could not be loaded. Please reload once with internet.',
+    'file.pages':'{n} page(s)','file.up':'Move file {l} earlier','file.down':'Move file {l} later','file.remove':'Remove file {l}',
+    'page.label':'Page {n} – file {l}, page {o}','page.rotated':'rotated by {deg}°',
+    'page.earlier':'Move page {n} earlier','page.later':'Move page {n} later','page.rotate':'Rotate page {n} right','page.delete':'Remove page {n}',
+    'page.preview':'Preview …','page.noPreview':'Page {o}',
+    'range.bad':'Page selection not understood. Example: 1, 3-5, 8-','range.out':'There are only {n} page(s).','range.empty':'Please enter pages first, e.g. 1, 3-5.',
+    'range.all':'Some pages must be left.','range.rotated':'{n} page(s) rotated.','range.deleted':'{n} page(s) removed.','range.kept':'{n} page(s) kept.',
+    'confirm.reset':'Close all opened files?',
+    'suffix':' (edited)','more':'{name} + {n} more',
+    'export.busy':'Creating PDF …','export.done':'PDF saved: {n} page(s), {size}.','export.shared':'PDF shared: {n} page(s), {size}.',
+    'export.fail':'Could not create the PDF: {msg}','export.shareAgain':'The PDF is ready – please tap “Share …” again.',
+    'export.shareFail':'Sharing did not work. Please use “Save PDF”.',
+    'mb':'{n} MB','kb':'{n} KB','leave':'The edited PDF is not saved yet.',
+    'mcp.rotate':'Pages rotated','mcp.move':'Page moved'
+  }
+});
+const t=Tools.t, $=Tools.$;
+
+/* ================= Libraries (loaded on first use, cached offline by sw.js) ================= */
+let libP=null;
+function pdfLib(){
+  if(window.PDFLib) return Promise.resolve(window.PDFLib);
+  return libP||(libP=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='../assets/vendor/pdf-lib/pdf-lib.min.js';
+    s.onload=()=>window.PDFLib?resolve(window.PDFLib):reject(new Error('PDFLib missing'));
+    s.onerror=()=>{libP=null;s.remove();reject(new Error('pdf-lib could not be loaded'));};
+    document.head.append(s);
+  }));
+}
+let jsP=null;
+function pdfjs(){
+  return jsP||(jsP=import('../assets/vendor/pdfjs/pdf.min.mjs').then(m=>{
+    // Worker from the app folder: a worker outside it would bypass the service worker (offline)
+    m.GlobalWorkerOptions.workerSrc=new URL('pdf-worker.mjs',location.href).href;
+    return m;
+  }).catch(e=>{jsP=null;throw e;}));
+}
+
+/* ================= State ================= */
+// files: {id, letter, name, bytes (Uint8Array), doc (pdf-lib), count, baseRot[], view (pdf.js doc promise), thumbs Map}
+// pages: {fid, idx (0-based page in the file), rot (extra clockwise rotation: 0/90/180/270)}
+let files=[], pages=[], nextFid=1, history=[], saved=true, pdfCache=null;
+const MAX_UNDO=30;
+const pageList=$('pages'), fileList=$('files');
+const fileById=id=>files.find(f=>f.id===id);
+const LETTERS='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const letterOf=i=>i<26?LETTERS[i]:LETTERS[Math.floor(i/26)-1]+LETTERS[i%26];
+const norm=d=>((d%360)+360)%360;
+const fmtSize=b=>b>=1024*1024?t('mb',{n:Tools.fmt(b/1048576,1)}):t('kb',{n:Tools.fmt(Math.max(1,b/1024),0)});
+
+function snapshot(){
+  history.push({pages:pages.map(p=>({...p})),files:files.slice()});
+  if(history.length>MAX_UNDO) history.shift();
+}
+function changed(){pdfCache=null;saved=false;render();}
+function undo(){
+  const s=history.pop(); if(!s) return;
+  pages=s.pages; files=s.files;
+  changed(); Tools.diag.log('undo',{pages:pages.length,left:history.length});
+}
+
+/* ================= Opening files ================= */
+const looksLikePdf=b=>{
+  // "%PDF" within the first 1024 bytes (some files have junk before the header)
+  const n=Math.min(b.length-4,1024);
+  for(let i=0;i<=n;i++) if(b[i]===37&&b[i+1]===80&&b[i+2]===68&&b[i+3]===70) return true;
+  return false;
+};
+async function addFiles(list){
+  list=[...list]; if(!list.length) return;
+  const info=$('addInfo'); info.className='muted';
+  let lib;
+  try{lib=await pdfLib();}
+  catch(e){Tools.diag.log('pdf-lib load failed',e);info.textContent=t('add.libFail');info.className='muted err';return;}
+  let added=0, addedPages=0; const errors=[];
+  const before={pages:pages.map(p=>({...p})),files:files.slice()};
+  for(let i=0;i<list.length;i++){
+    const f=list[i], name=f.name||'?';
+    info.textContent=t('add.loading',{i:i+1,n:list.length});
+    try{
+      const bytes=new Uint8Array(await f.arrayBuffer());
+      if(!looksLikePdf(bytes)){errors.push(t('add.notPdf',{name}));Tools.diag.log('not a pdf',{type:f.type||'?',bytes:f.size});continue;}
+      let doc;
+      try{doc=await lib.PDFDocument.load(bytes,{updateMetadata:false});}
+      catch(e){
+        const enc=e&&(e.name==='EncryptedPDFError'||/encrypt/i.test(e.message||''));
+        errors.push(t(enc?'add.encrypted':'add.fail',{name}));
+        Tools.diag.log('open failed',{bytes:f.size,encrypted:!!enc},e);
+        continue;
+      }
+      const count=doc.getPageCount();
+      if(!count){errors.push(t('add.noPages',{name}));continue;}
+      const baseRot=doc.getPages().map(p=>norm(p.getRotation().angle||0));
+      const file={id:nextFid++,letter:letterOf(nextFid-2),name,bytes,doc,count,baseRot,view:null,thumbs:new Map()};
+      files.push(file);
+      for(let k=0;k<count;k++) pages.push({fid:file.id,idx:k,rot:0});
+      added++; addedPages+=count;
+      Tools.diag.log('file added',{pages:count,bytes:f.size,rotated:baseRot.filter(r=>r).length});
+      render();
+    }catch(e){
+      errors.push(t('add.fail',{name}));
+      Tools.diag.log('add failed',{bytes:f.size},e);
+    }
+  }
+  if(added){
+    history.push(before); if(history.length>MAX_UNDO) history.shift();
+    if(!fileNameInput.value||fileNameInput.dataset.auto==='1') setDefaultName();
+    changed();
+  }
+  info.textContent=[added?t('add.done',{n:added,p:addedPages}):'',...errors].filter(Boolean).join(' ');
+  if(errors.length) info.className='muted err';
+}
+$('btnPick').addEventListener('click',()=>{$('inPick').value='';$('inPick').click();});
+$('inPick').addEventListener('change',e=>addFiles(e.target.files));
+$('btnReset').addEventListener('click',()=>{
+  if(!confirm(t('confirm.reset'))) return;
+  files.forEach(dropFile);
+  files=[]; pages=[]; history=[]; nextFid=1;
+  fileNameInput.value=''; fileNameInput.dataset.auto='1';
+  $('addInfo').textContent=''; status('');
+  changed(); saved=true;
+  Tools.diag.log('reset');
+});
+function dropFile(f){
+  f.thumbs.forEach(u=>URL.revokeObjectURL(u)); f.thumbs.clear();
+  if(f.view) f.view.then(d=>d&&d.destroy()).catch(()=>{});
+}
+// PDFs shared to the installed app (Android share menu)
+Tools.takeSharedFiles().then(list=>{
+  if(!list.length) return;
+  Tools.diag.log('shared files',{count:list.length});
+  addFiles(list);
+});
+
+/* ================= Page operations ================= */
+function movePage(from,to){
+  if(to<0||to>=pages.length||from===to) return;
+  snapshot();
+  const [p]=pages.splice(from,1); pages.splice(to,0,p);
+  changed(); Tools.diag.log('move page',{from:from+1,to:to+1});
+}
+function rotatePages(idxs,deg){
+  if(!idxs.length) return;
+  snapshot();
+  idxs.forEach(i=>{pages[i].rot=norm(pages[i].rot+deg);});
+  changed(); Tools.diag.log('rotate',{pages:idxs.length,deg});
+}
+function deletePages(idxs){
+  if(!idxs.length) return;
+  snapshot();
+  const del=new Set(idxs);
+  pages=pages.filter((_,i)=>!del.has(i));
+  files=files.filter(f=>pages.some(p=>p.fid===f.id));
+  changed(); Tools.diag.log('delete pages',{removed:idxs.length,left:pages.length});
+}
+function moveFile(i,dir){
+  const j=i+dir; if(j<0||j>=files.length) return;
+  snapshot();
+  const order=files.slice(); [order[i],order[j]]=[order[j],order[i]]; files=order;
+  // Pages ordered by file (stable: the order inside each file is kept)
+  const rank=new Map(files.map((f,k)=>[f.id,k]));
+  pages=pages.map((p,k)=>({p,k})).sort((a,b)=>rank.get(a.p.fid)-rank.get(b.p.fid)||a.k-b.k).map(x=>x.p);
+  changed(); Tools.diag.log('move file',{from:i+1,to:j+1});
+}
+function removeFile(i){
+  const f=files[i]; if(!f) return;
+  snapshot();
+  pages=pages.filter(p=>p.fid!==f.id); files=files.filter(x=>x!==f);
+  changed(); Tools.diag.log('remove file',{left:files.length});
+}
+
+// "1, 3-5, 8-" → sorted 0-based indices; throws {key} for messages
+function parseRange(text,total){
+  const s=String(text||'').replace(/\s+/g,'');
+  if(!s) throw {key:'range.empty'};
+  const out=new Set();
+  for(const part of s.split(/[,;]+/).filter(Boolean)){
+    const m=part.match(/^(\d*)(?:([-–])(\d*))?$/);
+    if(!m||(!m[1]&&!m[3]&&!m[2])||(!m[1]&&!m[3])) throw {key:'range.bad'};
+    const a=m[1]?Number(m[1]):1, b=m[2]?(m[3]?Number(m[3]):total):a;
+    if(a<1||b<1||a>b) throw {key:'range.bad'};
+    if(b>total) throw {key:'range.out',n:total};
+    for(let k=a;k<=b;k++) out.add(k-1);
+  }
+  return [...out].sort((x,y)=>x-y);
+}
+function rangeOrToast(){
+  try{return parseRange($('range').value,pages.length);}
+  catch(e){Tools.toast(t(e.key||'range.bad',{n:e.n}),3500);return null;}
+}
+$('btnRotSel').addEventListener('click',()=>{const r=rangeOrToast();if(r){rotatePages(r,90);Tools.toast(t('range.rotated',{n:r.length}));}});
+$('btnDelSel').addEventListener('click',()=>{
+  const r=rangeOrToast(); if(!r) return;
+  if(r.length>=pages.length){Tools.toast(t('range.all'),3500);return;}
+  deletePages(r); $('range').value=''; Tools.toast(t('range.deleted',{n:r.length}));
+});
+$('btnKeepSel').addEventListener('click',()=>{
+  const r=rangeOrToast(); if(!r) return;
+  const keep=new Set(r), del=pages.map((_,i)=>i).filter(i=>!keep.has(i));
+  deletePages(del); $('range').value=''; Tools.toast(t('range.kept',{n:r.length}));
+});
+$('btnRotAllL').addEventListener('click',()=>rotatePages(pages.map((_,i)=>i),-90));
+$('btnRotAllR').addEventListener('click',()=>rotatePages(pages.map((_,i)=>i),90));
+$('btnUndo').addEventListener('click',undo);
+
+/* ================= Rendering ================= */
+function render(){
+  const has=pages.length>0;
+  $('pageCount').textContent=pages.length;
+  $('empty').hidden=has; $('tools').hidden=!has; $('btnReset').hidden=!files.length;
+  $('btnSave').disabled=$('btnShare').disabled=!has||busy;
+  $('btnUndo').disabled=!history.length;
+  // Files
+  fileList.textContent='';
+  files.forEach((f,i)=>{
+    const li=document.createElement('li');
+    li.innerHTML=`<span class="fname"><span class="letter" aria-hidden="true"></span><span class="n"></span> <small></small></span>
+      <button type="button" class="btn" data-act="fup"><span aria-hidden="true">↑</span><span class="sr-only"></span></button>
+      <button type="button" class="btn" data-act="fdown"><span aria-hidden="true">↓</span><span class="sr-only"></span></button>
+      <button type="button" class="btn danger" data-act="fdel"><span aria-hidden="true">✕</span><span class="sr-only"></span></button>`;
+    li.dataset.i=i;
+    li.querySelector('.letter').textContent=f.letter;
+    li.querySelector('.n').textContent=f.name;
+    li.querySelector('small').textContent='· '+t('file.pages',{n:pages.filter(p=>p.fid===f.id).length});
+    const sr=li.querySelectorAll('.sr-only');
+    sr[0].textContent=t('file.up',{l:f.letter}); sr[1].textContent=t('file.down',{l:f.letter}); sr[2].textContent=t('file.remove',{l:f.letter});
+    li.querySelector('[data-act="fup"]').disabled=i===0;
+    li.querySelector('[data-act="fdown"]').disabled=i===files.length-1;
+    fileList.append(li);
+  });
+  // Pages
+  pageList.textContent='';
+  pages.forEach((p,i)=>{
+    const f=fileById(p.fid), n=i+1, o=p.idx+1;
+    const li=document.createElement('li');
+    li.dataset.i=i;
+    li.innerHTML=`<div class="thumb" role="img"><span class="ph"></span><img alt="" hidden><span class="num" aria-hidden="true"></span><span class="src" aria-hidden="true"></span></div>
+      <div class="pbtns">
+        <button type="button" class="btn" data-act="up"><span aria-hidden="true">←</span><span class="sr-only"></span></button>
+        <button type="button" class="btn" data-act="down"><span aria-hidden="true">→</span><span class="sr-only"></span></button>
+        <button type="button" class="btn" data-act="rot"><span aria-hidden="true">↻</span><span class="sr-only"></span></button>
+        <button type="button" class="btn danger" data-act="del"><span aria-hidden="true">✕</span><span class="sr-only"></span></button>
+      </div>`;
+    const th=li.querySelector('.thumb');
+    th.setAttribute('aria-label',t('page.label',{n,l:f.letter,o})+(p.rot?', '+t('page.rotated',{deg:p.rot}):''));
+    th.querySelector('.num').textContent=n;
+    th.querySelector('.src').textContent=`${f.letter}·${o}`;
+    th.querySelector('.ph').textContent=t('page.preview');
+    const img=th.querySelector('img');
+    img.style.transform=p.rot?`rotate(${p.rot}deg)`:'';
+    const sr=li.querySelectorAll('.sr-only');
+    sr[0].textContent=t('page.earlier',{n}); sr[1].textContent=t('page.later',{n}); sr[2].textContent=t('page.rotate',{n}); sr[3].textContent=t('page.delete',{n});
+    li.querySelector('[data-act="up"]').disabled=i===0;
+    li.querySelector('[data-act="down"]').disabled=i===pages.length-1;
+    li.querySelector('[data-act="del"]').disabled=pages.length===1;
+    const url=f.thumbs.get(p.idx);
+    if(url){img.src=url;img.hidden=false;th.querySelector('.ph').hidden=true;}
+    else thumbObserver.observe(li);
+    pageList.append(li);
+  });
+}
+
+fileList.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-act]'); if(!b) return;
+  const i=Number(b.closest('li').dataset.i), act=b.dataset.act;
+  if(act==='fup'||act==='fdown'){
+    const id=files[i].id; moveFile(i,act==='fup'?-1:1);
+    const k=files.findIndex(f=>f.id===id), again=fileList.children[k]?.querySelector(`[data-act="${act}"]`);
+    if(again&&!again.disabled) again.focus();
+  }else if(act==='fdel') removeFile(i);
+});
+pageList.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-act]'); if(!b) return;
+  const i=Number(b.closest('li').dataset.i), act=b.dataset.act;
+  let focusAt=i;
+  if(act==='up'){movePage(i,i-1);focusAt=i-1;}
+  else if(act==='down'){movePage(i,i+1);focusAt=i+1;}
+  else if(act==='rot') rotatePages([i],90);
+  else if(act==='del'){deletePages([i]);focusAt=Math.min(i,pages.length-1);}
+  const li=pageList.children[focusAt];
+  if(li){const again=li.querySelector(`[data-act="${act}"]`);(again&&!again.disabled?again:li.querySelector('button:not(:disabled)'))?.focus();}
+});
+
+/* ---------- Thumbnails (pdf.js, only for visible pages) ---------- */
+const THUMB=280;
+let thumbQueue=Promise.resolve(), previewsBroken=false;
+const thumbObserver='IntersectionObserver' in window
+  ? new IntersectionObserver(entries=>entries.forEach(en=>{if(en.isIntersecting){thumbObserver.unobserve(en.target);queueThumb(en.target);}}),{rootMargin:'300px'})
+  : {observe:li=>queueThumb(li),unobserve(){}};
+function viewDoc(f){
+  if(!f.view) f.view=pdfjs().then(lib=>lib.getDocument({
+    data:f.bytes.slice(),   // pdf.js takes over the buffer – pdf-lib still needs the original
+    isEvalSupported:false,
+    standardFontDataUrl:new URL('../assets/vendor/pdfjs/standard_fonts/',location.href).href,
+    wasmUrl:new URL('../assets/vendor/pdfjs/wasm/',location.href).href,
+    iccUrl:new URL('../assets/vendor/pdfjs/iccs/',location.href).href
+  }).promise);
+  return f.view;
+}
+function queueThumb(li){
+  const p=pages[Number(li.dataset.i)]; if(!p) return;
+  const fid=p.fid, idx=p.idx;
+  thumbQueue=thumbQueue.then(()=>makeThumb(fid,idx)).catch(()=>{});
+}
+function noPreview(fid,idx){
+  pages.forEach((q,i)=>{
+    if(q.fid!==fid||q.idx!==idx) return;
+    const ph=pageList.children[i]?.querySelector('.ph'); if(ph) ph.textContent=t('page.noPreview',{o:idx+1});
+  });
+}
+async function makeThumb(fid,idx){
+  const f=fileById(fid); if(!f||f.thumbs.has(idx)) return;
+  if(previewsBroken){noPreview(fid,idx);return;}
+  try{
+    const doc=await viewDoc(f), page=await doc.getPage(idx+1);
+    const vp1=page.getViewport({scale:1});
+    const scale=THUMB/Math.max(vp1.width,vp1.height), viewport=page.getViewport({scale});
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(viewport.width)); c.height=Math.max(1,Math.round(viewport.height));
+    await page.render({canvasContext:c.getContext('2d'),viewport,background:'white'}).promise;
+    page.cleanup();
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.8));
+    if(!blob) throw new Error('toBlob failed');
+    const url=URL.createObjectURL(blob);
+    f.thumbs.set(idx,url);
+    pages.forEach((q,i)=>{
+      if(q.fid!==fid||q.idx!==idx) return;
+      const th=pageList.children[i]?.querySelector('.thumb'); if(!th) return;
+      const img=th.querySelector('img'); img.src=url; img.hidden=false; th.querySelector('.ph').hidden=true;
+    });
+  }catch(e){
+    Tools.diag.log('preview failed',{page:idx+1},e);
+    if(!jsP) previewsBroken=true;   // pdf.js itself could not be loaded: show page numbers only
+    noPreview(fid,idx);
+  }
+}
+
+/* ================= Saving ================= */
+const fileNameInput=$('fileName');
+fileNameInput.dataset.auto='1';
+fileNameInput.addEventListener('input',()=>{fileNameInput.dataset.auto='';pdfCache=null;});
+function setDefaultName(){
+  const base=f=>f.name.replace(/\.pdf$/i,'');
+  fileNameInput.value=files.length===1?base(files[0])+t('suffix'):files.length===2?base(files[0])+' + '+base(files[1]):t('more',{name:base(files[0]),n:files.length-1});
+  fileNameInput.dataset.auto='1';
+}
+function fileName(){
+  const base=(fileNameInput.value||'').replace(/\.pdf$/i,'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'-').trim()||'PDF';
+  return base+'.pdf';
+}
+const status=(msg,err)=>{$('status').textContent=msg;$('status').className='muted'+(err?' err':'');};
+let busy=false;
+async function buildPdf(){
+  if(pdfCache&&pdfCache.name===fileName()) return pdfCache;
+  status(t('export.busy'));
+  const lib=await pdfLib(), t0=performance.now();
+  const out=await lib.PDFDocument.create();
+  // One copy per source file, so shared fonts and images are copied only once
+  const copied=new Map();
+  for(const f of files){
+    const idxs=[...new Set(pages.filter(p=>p.fid===f.id).map(p=>p.idx))];
+    if(!idxs.length) continue;
+    const cp=await out.copyPages(f.doc,idxs);
+    copied.set(f.id,new Map(idxs.map((k,j)=>[k,cp[j]])));
+  }
+  const used=new Set();
+  for(const p of pages){
+    const f=fileById(p.fid);
+    let pg=copied.get(p.fid).get(p.idx);
+    if(used.has(pg)) pg=(await out.copyPages(f.doc,[p.idx]))[0];   // same page twice (not possible in the UI yet)
+    used.add(pg);
+    pg.setRotation(lib.degrees(norm(f.baseRot[p.idx]+p.rot)));
+    out.addPage(pg);
+  }
+  const title=fileName().replace(/\.pdf$/,'');
+  out.setTitle(title); out.setProducer('phanlipo.github.io – PDF bearbeiten'); out.setCreator('pdf-lib');
+  // Without object streams: readable by older PDF programs, too
+  const bytes=await out.save({useObjectStreams:false});
+  const file=new File([bytes],fileName(),{type:'application/pdf'});
+  Tools.diag.log('pdf built',{pages:pages.length,files:files.length,bytes:file.size,ms:Math.round(performance.now()-t0)});
+  pdfCache=file;
+  return file;
+}
+async function run(fn){
+  if(busy) return; busy=true;
+  $('btnSave').disabled=$('btnShare').disabled=true;
+  try{await fn();}
+  catch(e){Tools.diag.log('export failed',e);status(t('export.fail',{msg:e.message||String(e)}),true);}
+  finally{busy=false;$('btnSave').disabled=$('btnShare').disabled=!pages.length;}
+}
+$('btnSave').addEventListener('click',()=>run(async()=>{
+  const file=await buildPdf();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(file); a.download=file.name;
+  document.body.append(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  saved=true;
+  status(t('export.done',{n:pages.length,size:fmtSize(file.size)}));
+}));
+const canShareFiles=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File([''],'x.pdf',{type:'application/pdf'})]}));}catch(_){return false;}})();
+$('btnShare').hidden=!canShareFiles;
+$('btnShare').addEventListener('click',()=>run(async()=>{
+  const ready=!!pdfCache&&pdfCache.name===fileName();
+  const file=await buildPdf();
+  try{
+    await navigator.share({files:[file],title:file.name});
+    saved=true;
+    status(t('export.shared',{n:pages.length,size:fmtSize(file.size)}));
+  }catch(e){
+    Tools.diag.log('share',e);
+    if(e.name==='AbortError') status('');
+    // Building took too long for the browser's "user tapped" window – the second tap shares the ready file
+    else if(e.name==='NotAllowedError'&&!ready) status(t('export.shareAgain'));
+    else status(t('export.shareFail'),true);
+  }
+}));
+
+// Files live only in memory – warn before the work gets lost
+window.addEventListener('beforeunload',e=>{if(pages.length&&!saved){e.preventDefault();e.returnValue=t('leave');}});
+
+Tools.onLang(()=>{if(fileNameInput.dataset.auto==='1'&&files.length)setDefaultName();render();});
+render();
+
+/* ---------- Diagnostics (no file names or content) ---------- */
+Tools.diag.info(()=>({
+  files:files.length,
+  pages:pages.length,
+  rotated:pages.filter(p=>p.rot).length,
+  sourcePages:files.map(f=>f.count).join(',')||'-',
+  undoSteps:history.length,
+  pdfLib:!!window.PDFLib,
+  previews:files.reduce((n,f)=>n+f.thumbs.size,0),
+  previewsBroken,
+  canShareFiles,
+  pdfReady:!!pdfCache
+}));
+
+/* ---------- WebMCP tools ---------- */
+const pageInfo=()=>pages.map((p,i)=>{const f=fileById(p.fid);return {page:i+1,file:f.letter,original_page:p.idx+1,rotation:norm(f.baseRot[p.idx]+p.rot)};});
+Tools.mcp.register({
+  name:'list_pages',title:'List PDF pages',readOnly:true,untrusted:true,
+  description:'Lists the opened PDF files (letter, file name, page count) and the pages of the new PDF in order: source file letter, page number in that file and rotation in degrees (0, 90, 180, 270, clockwise). Returns no page content.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({count:pages.length,files:files.map(f=>({file:f.letter,name:f.name,pages:f.count})),pages:pageInfo()})
+});
+Tools.mcp.register({
+  name:'rotate_pages',title:'Rotate pages',label:'mcp.rotate',
+  description:'Rotates pages of the new PDF by 90 degrees left or right, or by 180 degrees. pages is a selection of current page numbers like "1, 3-5, 8-" (8- = to the end); omit it to rotate all pages. Returns the updated page list.',
+  inputSchema:{type:'object',properties:{direction:{type:'string',enum:['left','right','half']},pages:{type:'string',minLength:1,maxLength:200}},required:['direction'],additionalProperties:false},
+  execute:({direction,pages:sel})=>{
+    if(!pages.length) throw new Error('no PDF is open yet');
+    let idxs;
+    if(sel==null) idxs=pages.map((_,i)=>i);
+    else{
+      try{idxs=parseRange(sel,pages.length);}
+      catch(e){throw new Error(e.key==='range.out'?`pages must be between 1 and ${pages.length}`:'pages must look like "1, 3-5, 8-"');}
+    }
+    rotatePages(idxs,direction==='left'?-90:direction==='right'?90:180);
+    return {rotated:idxs.length,pages:pageInfo()};
+  }
+});
+Tools.mcp.register({
+  name:'move_page',title:'Move a page',label:'mcp.move',
+  description:'Moves a page of the new PDF to another position (1 = first page). The other pages shift accordingly. Returns the updated page list.',
+  inputSchema:{type:'object',properties:{from:{type:'integer',minimum:1,maximum:10000},to:{type:'integer',minimum:1,maximum:10000}},required:['from','to'],additionalProperties:false},
+  execute:({from,to})=>{
+    if(!pages.length) throw new Error('no PDF is open yet');
+    if(from>pages.length||to>pages.length) throw new Error(`page numbers must be between 1 and ${pages.length}`);
+    movePage(from-1,to-1);
+    return {pages:pageInfo()};
+  }
+});
+})();
+</script>
+</body>
+</html>
