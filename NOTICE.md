@@ -24,6 +24,7 @@ neben jeder Bibliothek in `assets/vendor/<name>/LICENSE` und wird mit ihr ausgel
 | [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (`qrcode-generator`) | 2.0.4 | [MIT](assets/vendor/qrcode-generator/LICENSE) | Copyright (c) 2009 Kazuhiko Arase | QR-Codes erzeugen im QR-Code-Generator |
 | [mediabunny](https://mediabunny.dev) (`mediabunny`) | 1.65.0 | [MPL-2.0](assets/vendor/mediabunny/LICENSE) | siehe Lizenztext | Video-Container lesen (MP4, MOV, WebM, MKV …) und die Tonspur ohne Neukodierung bzw. als WAV speichern in Video zu Audio |
 | [pdf-lib](https://github.com/cantoo-scribe/pdf-lib) (`@cantoo/pdf-lib`) | 2.11.1 | [MIT](assets/vendor/pdf-lib/LICENSE) | Copyright (c) 2019 Andrew Dillon | PDF-Seiten kopieren, drehen, zusammenführen und passwortgeschützte PDFs öffnen in PDF bearbeiten – gepflegter Fork von pdf-lib |
+| [js-yaml](https://github.com/nodeca/js-yaml) (`js-yaml`) | 5.5.0 | [MIT](assets/vendor/js-yaml/LICENSE) | siehe Lizenztext | YAML-Specs (OpenAPI/Swagger) lesen im API-Check |
 
 ## Weitere Lizenzdateien
 

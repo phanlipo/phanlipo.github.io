@@ -191,6 +191,9 @@ for (const app of apps()) {
       expect(policy).toContain("default-src 'self'");
       expect(policy).toContain("object-src 'none'");
       expect(policy).not.toMatch(/script-src[^;]*'unsafe-inline'/);
+      // Only own server, unless the page declares more in <meta name="tool:connect"> (api-check)
+      const connect = await page.evaluate(() => document.querySelector('meta[name="tool:connect"]')?.content);
+      expect(policy).toContain(`connect-src 'self'${connect ? ' ' + connect.trim().split(/\s+/).join(' ') : ''};`);
       const sw = await (await request.get(`${url}sw.js`)).text();
       const version = sw.match(/const VERSION = '([0-9a-f]+)'/)[1];
       await expect(page.locator('footer .footer-version')).toHaveText(`Version ${version}`);

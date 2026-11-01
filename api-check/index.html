@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>API-Check</title>
+<meta name="description" content="REST-APIs ausprobieren: API-Adresse und OpenAPI/Swagger-Spezifikation (JSON oder YAML) angeben – daraus entsteht ein Formular für jede Anfrage. Konfigurationen bleiben gespeichert.">
+<meta name="tool:tags" content="Arbeit, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Kopieren, Verlauf, KI-Agent">
+<meta name="tool:icon" content="api">
+<meta name="tool:color" content="#1f2937">
+<meta name="tool:short-name" content="API-Check">
+<meta name="tool:title-en" content="API Check">
+<meta name="tool:description-en" content="Try out REST APIs: enter the API address and an OpenAPI/Swagger spec (JSON or YAML) – you get a form for every request. Configurations are saved.">
+<meta name="tool:short-name-en" content="API Check">
+<meta name="tool:storage" content="api-check.">
+<meta name="tool:webmcp" content="list_configs, select_config, list_operations, prepare_request, get_last_response">
+<!-- The app's purpose is calling APIs the user enters: requests go straight from the browser to them (see help) -->
+<meta name="tool:connect" content="https: http://localhost:* http://127.0.0.1:*">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-SdPZ6eNZts0bDeA2zDBVGmgcZZHNA9Wt5PFTih+9ff4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="API-Check">
+<meta name="theme-color" content="#1f2937">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#1f2937;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#cbd5e1;--accent-text:#0f172a}}
+main{max-width:900px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;margin-block-end:12px}
+.field>span,.field>label{font-size:13px;color:var(--muted);font-weight:600}
+.field .desc{font-size:13px;color:var(--muted);font-weight:400}
+input[type=text],input[type=url],input[type=password],input[type=search],select{min-height:44px;padding-inline:10px;width:100%;min-width:0}
+input[type=url],input[type=password]{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;font:inherit}
+@media (max-width:640px){input[type=url],input[type=password]{font-size:16px}}
+textarea{width:100%;padding:10px;line-height:1.4;resize:vertical}
+.mono,textarea.mono{font-family:var(--mono);font-size:14px}
+@media (max-width:640px){textarea.mono{font-size:16px}}
+.check{display:flex;align-items:center;gap:8px;min-height:44px;font-size:15px}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.seg{display:flex;margin-block-end:12px}
+.seg .btn{flex:1;border-radius:0}
+.seg .btn:first-child{border-start-start-radius:8px;border-end-start-radius:8px}
+.seg .btn:last-child{border-start-end-radius:8px;border-end-end-radius:8px}
+.seg .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.sub-details{border-block-start:1px solid var(--border);margin-block-start:8px}
+.sub-details>summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center;gap:8px;list-style:none}
+.sub-details>summary::-webkit-details-marker{display:none}
+.sub-details>summary::before{content:"▸";color:var(--muted);transition:transform .15s}
+.sub-details[open]>summary::before{transform:rotate(90deg)}
+.info{font-size:14px;color:var(--muted);margin:0 0 4px;word-break:break-word}
+.err-text{color:var(--err);font-size:14px;margin:4px 0;word-break:break-word;white-space:pre-wrap}
+.method{display:inline-block;min-width:4.2em;font-family:var(--mono);font-size:12px;font-weight:700;padding:1px 6px;border:1px solid currentColor;border-radius:6px;text-align:center;flex:none}
+.m-GET{color:var(--ok)}.m-POST{color:var(--text)}.m-PUT,.m-PATCH{color:var(--warn)}.m-DELETE{color:var(--err)}.m-HEAD,.m-OPTIONS,.m-FREE{color:var(--muted)}
+.ops-wrap{max-height:55vh;overflow-y:auto;margin-inline:-4px;padding-inline:4px}
+.ops-wrap h3{font-size:13px;color:var(--muted);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.03em}
+.ops{list-style:none;margin:0;padding:0}
+.ops button{display:flex;gap:8px;align-items:flex-start;width:100%;min-height:44px;padding:8px 6px;background:none;border:0;border-block-end:1px solid var(--border);color:var(--text);font:inherit;text-align:start;cursor:pointer}
+.ops button:hover{background:var(--surface-2)}
+.ops button[aria-current="true"]{background:var(--surface-2);box-shadow:inset 3px 0 0 var(--accent)}
+.ops .txt{flex:1;min-width:0}
+.ops .path{display:block;font-family:var(--mono);font-size:14px;word-break:break-all}
+.ops .sum{display:block;font-size:13px;color:var(--muted)}
+.ops .dep .path{text-decoration:line-through}
+.ops .path.plain{font-family:inherit;font-size:15px}
+.req-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.req-head .path{font-family:var(--mono);word-break:break-all}
+.req-desc{font-size:14px;color:var(--muted);white-space:pre-wrap;margin:4px 0 12px}
+.req-desc:empty{display:none}
+.req-label{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+.req-label .in{font-weight:400;font-size:12px}
+.req-label .star{color:var(--err)}
+.invalid{border-color:var(--err)!important;outline:1px solid var(--err)}
+.free-row{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:8px}
+.preview{font-family:var(--mono);font-size:13px;word-break:break-all;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px;margin:0 0 12px}
+.res-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-block-end:8px}
+.res-head .badge{font-size:14px;font-weight:700}
+pre.body{margin:0;max-height:60vh;overflow:auto;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px;font-family:var(--mono);font-size:13px;white-space:pre-wrap;word-break:break-word}
+.res-img{max-width:100%;border-radius:8px;border:1px solid var(--border)}
+.hdrs{font-size:13px;font-family:var(--mono);margin:0;padding:0;list-style:none;word-break:break-all}
+.hdrs li{padding-block:2px;border-block-end:1px solid var(--border)}
+.hist{list-style:none;margin:0;padding:0}
+.hist li{border-block-end:1px solid var(--border)}
+.hist button{display:flex;gap:8px;align-items:flex-start;width:100%;min-height:44px;padding:6px 0;background:none;border:0;color:var(--text);font:inherit;text-align:start;cursor:pointer}
+.hist .txt{flex:1;min-width:0}
+.hist .path{display:block;font-family:var(--mono);font-size:14px;word-break:break-all}
+.hist .meta{display:block;font-size:12px;color:var(--muted)}
+.hist-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-block-end:4px}
+.hist-head h2{margin:0}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">API-Check</span></h1>
+  <p class="sub" data-i18n="sub">API-Adresse und OpenAPI/Swagger-Spezifikation angeben – daraus entsteht ein Formular für jede Anfrage.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-cfg">
+    <h2 id="h-cfg" data-i18n="cfgH">API &amp; Spezifikation</h2>
+    <label class="field"><span data-i18n="cfgSel">Konfiguration</span>
+      <select id="cfgSel"></select>
+    </label>
+    <p class="info" id="specInfo" role="status"></p>
+
+    <details class="sub-details" id="cfgEdit">
+      <summary data-i18n="cfgEdit">Bearbeiten</summary>
+      <label class="field"><span data-i18n="cfgName">Name</span>
+        <input type="text" id="cfgName" autocomplete="off" maxlength="100" placeholder="z. B. Petstore" data-i18n-attr="placeholder:cfgNamePh">
+      </label>
+      <label class="field"><span data-i18n="baseUrl">API-URL (Basisadresse)</span>
+        <input type="url" id="baseUrl" class="mono" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://api.example.com/v1">
+        <span class="desc" data-i18n="baseUrlHint">Leer lassen, um die Server aus der Spezifikation zu nutzen.</span>
+      </label>
+      <p class="field" style="margin-block-end:4px"><span data-i18n="specH">Spezifikation (OpenAPI 3 / Swagger 2, JSON oder YAML)</span></p>
+      <div class="seg" role="group" aria-label="Quelle der Spezifikation" data-i18n-attr="aria-label:specSrc">
+        <button type="button" class="btn" data-src="url" aria-pressed="true" data-i18n="srcUrl">URL</button>
+        <button type="button" class="btn" data-src="file" aria-pressed="false" data-i18n="srcFile">Datei</button>
+        <button type="button" class="btn" data-src="text" aria-pressed="false" data-i18n="srcText">Text</button>
+      </div>
+      <div data-src-box="url">
+        <label class="field"><span data-i18n="specUrl">URL der Spezifikation</span>
+          <input type="url" id="specUrl" class="mono" inputmode="url" spellcheck="false" placeholder="https://api.example.com/openapi.json">
+        </label>
+      </div>
+      <div data-src-box="file" hidden>
+        <div class="row" style="margin-block-end:12px">
+          <button type="button" class="btn" id="btnFile" data-i18n="chooseFile">Datei wählen …</button>
+          <span class="info" id="fileName"></span>
+          <input type="file" id="specFile" accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml,text/plain" hidden>
+        </div>
+      </div>
+      <div data-src-box="text" hidden>
+        <label class="field"><span data-i18n="specText">Spezifikation einfügen</span>
+          <textarea id="specText" class="mono" rows="8" spellcheck="false" placeholder="openapi: 3.0.3 …"></textarea>
+        </label>
+      </div>
+      <p class="err-text" id="cfgErr" role="alert" hidden></p>
+      <div class="row">
+        <button type="button" class="btn primary" id="btnSave" data-i18n="save">Laden &amp; speichern</button>
+        <button type="button" class="btn" id="btnReload" data-i18n="reload" hidden>Spezifikation neu laden</button>
+        <button type="button" class="btn" id="btnExample" data-i18n="example">Beispiel</button>
+        <button type="button" class="btn danger" id="btnDelete" data-i18n="delete" hidden>Konfiguration löschen</button>
+      </div>
+    </details>
+
+    <details class="sub-details" id="authBox" hidden>
+      <summary><span data-i18n="authH">Anmeldung</span> <span class="badge" id="authBadge"></span></summary>
+      <label class="field"><span data-i18n="authType">Art</span>
+        <select id="authType">
+          <option value="none" data-i18n="authNone">Keine</option>
+          <option value="bearer" data-i18n="authBearer">Bearer-Token</option>
+          <option value="basic" data-i18n="authBasic">Benutzer und Passwort (Basic)</option>
+          <option value="apikey" data-i18n="authKey">API-Schlüssel</option>
+        </select>
+      </label>
+      <div data-auth="bearer" hidden>
+        <label class="field"><span data-i18n="token">Token</span>
+          <input type="password" id="authToken" class="mono" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+      <div data-auth="basic" hidden>
+        <label class="field"><span data-i18n="user">Benutzer</span>
+          <input type="text" id="authUser" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="field"><span data-i18n="pass">Passwort</span>
+          <input type="password" id="authPass" autocomplete="off">
+        </label>
+      </div>
+      <div data-auth="apikey" hidden>
+        <label class="field"><span data-i18n="keyName">Name des Schlüssels</span>
+          <input type="text" id="authKeyName" class="mono" autocomplete="off" spellcheck="false" placeholder="X-API-Key">
+        </label>
+        <label class="field"><span data-i18n="keyIn">Senden als</span>
+          <select id="authKeyIn">
+            <option value="header" data-i18n="inHeader">Header</option>
+            <option value="query" data-i18n="inQuery">Query-Parameter</option>
+          </select>
+        </label>
+        <label class="field"><span data-i18n="keyValue">Schlüssel</span>
+          <input type="password" id="authKeyValue" class="mono" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" id="authSave"> <span data-i18n="authSave">Zugangsdaten auf diesem Gerät speichern</span></label>
+      <p class="info" data-i18n="authHint">Ohne Haken gelten sie nur, bis die Seite geschlossen wird. Gespeicherte Zugangsdaten stehen auch in der Sicherungsdatei.</p>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-ops" id="opsCard" hidden>
+    <h2 id="h-ops"><span data-i18n="opsH">Endpunkte</span> <span class="badge" id="opsCount">0</span></h2>
+    <label class="field"><span class="sr-only" data-i18n="filter">Endpunkte filtern</span>
+      <input type="search" id="opFilter" placeholder="Filtern …" data-i18n-attr="placeholder:filterPh" autocomplete="off">
+    </label>
+    <div class="ops-wrap" id="ops"></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-req" id="reqCard" hidden>
+    <h2 id="h-req" class="req-head"></h2>
+    <p class="req-desc" id="reqDesc"></p>
+    <div id="freeBox" hidden>
+      <div class="free-row">
+        <label class="field"><span data-i18n="method">Methode</span>
+          <select id="freeMethod"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select>
+        </label>
+        <label class="field"><span data-i18n="path">Pfad oder URL</span>
+          <input type="text" id="freePath" class="mono" autocomplete="off" spellcheck="false" placeholder="/users?limit=10">
+        </label>
+      </div>
+    </div>
+    <label class="field" id="serverBox"><span data-i18n="server">Server</span>
+      <select id="server" class="mono"></select>
+    </label>
+    <div id="params"></div>
+    <div id="bodyBox" hidden>
+      <label class="field"><span data-i18n="bodyType">Format des Inhalts</span>
+        <select id="bodyType" class="mono"></select>
+      </label>
+      <label class="field"><span class="req-label"><span data-i18n="body">Inhalt (Body)</span><span class="star" id="bodyStar" hidden>*</span></span>
+        <textarea id="body" class="mono" rows="8" spellcheck="false"></textarea>
+        <span class="desc" id="bodyHint" data-i18n="bodyFormHint" hidden>Als JSON-Objekt eingeben – wird als Formular gesendet.</span>
+      </label>
+      <div class="row" style="margin-block-end:12px">
+        <button type="button" class="btn small" id="btnSample" data-i18n="sample">Beispiel einsetzen</button>
+        <button type="button" class="btn small" id="btnPretty" data-i18n="pretty">JSON formatieren</button>
+      </div>
+    </div>
+    <p class="preview" id="preview" aria-live="off"></p>
+    <p class="err-text" id="reqErr" role="alert" hidden></p>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnSend" data-i18n="send">Senden</button>
+      <button type="button" class="btn" id="btnAbort" data-i18n="abort" hidden>Abbrechen</button>
+      <button type="button" class="btn" id="btnCurl" data-i18n="curl">Als curl kopieren</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-res" id="resCard" hidden>
+    <h2 id="h-res" data-i18n="resH">Antwort</h2>
+    <div class="res-head" id="resHead" role="status"></div>
+    <p class="err-text" id="resErr" hidden></p>
+    <div id="resBody"></div>
+    <details class="sub-details" id="resHdrs" hidden>
+      <summary><span data-i18n="headers">Header</span> <span class="badge" id="hdrCount">0</span></summary>
+      <ul class="hdrs" id="hdrList"></ul>
+    </details>
+    <div class="row" style="margin-block-start:12px">
+      <button type="button" class="btn" id="btnCopyRes" data-i18n="copyRes">Antwort kopieren</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-hist" data-menu>
+    <div class="hist-head">
+      <h2 id="h-hist"><span data-i18n="history">Verlauf</span> <span class="badge" id="histCount">0</span></h2>
+      <button type="button" class="btn small danger" id="btnClearHist" data-i18n="clearHist">Verlauf löschen</button>
+    </div>
+    <p class="info" id="histEmpty" data-i18n="histEmpty">Noch keine Anfragen.</p>
+    <ul class="hist" id="hist"></ul>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Mit dem API-Check probierst du REST-APIs direkt im Browser aus. Aus einer OpenAPI- bzw. Swagger-Spezifikation entsteht für jeden Endpunkt ein Formular mit allen Parametern und einem Beispiel-Inhalt.</p>
+  <h3>Bedienung</h3>
+  <ol>
+    <li>Unter <em>Bearbeiten</em> einen Namen, die <strong>API-URL</strong> und die <strong>Spezifikation</strong> angeben – als URL, Datei (<code>.json</code>, <code>.yaml</code>) oder eingefügten Text. Unterstützt werden OpenAPI 3.x und Swagger 2.0.</li>
+    <li><em>Laden &amp; speichern</em> – die Konfiguration steht danach in der Auswahl oben und bleibt gespeichert. Mehrere APIs lassen sich nebeneinander anlegen.</li>
+    <li>Bei Bedarf unter <em>Anmeldung</em> Bearer-Token, Benutzer/Passwort oder API-Schlüssel eintragen. Ist in der Spezifikation ein Verfahren beschrieben, ist es schon ausgewählt.</li>
+    <li>Einen <strong>Endpunkt</strong> antippen, Felder ausfüllen (Pflichtfelder mit *) und <em>Senden</em>. Status, Dauer, Header und Inhalt der Antwort erscheinen darunter.</li>
+    <li><em>Freie Anfrage</em> geht immer – auch ohne Spezifikation: Methode, Pfad oder komplette URL und Inhalt selbst eintragen.</li>
+  </ol>
+  <p>Im Menü (☰) liegen der <strong>Verlauf</strong> der letzten Anfragen (antippen füllt das Formular wieder aus), „Daten sichern“ und diese Hilfe.</p>
+  <h3>Wenn keine Antwort kommt</h3>
+  <ul>
+    <li><strong>CORS:</strong> Browser dürfen eine fremde API nur abfragen, wenn deren Server das erlaubt (Header <code>Access-Control-Allow-Origin</code>). Fehlt er, meldet der Browser nur „keine Antwort“. Das lässt sich in der App nicht umgehen – dann <em>Als curl kopieren</em> und im Terminal ausführen.</li>
+    <li>Nur <code>https://</code>-Adressen, außer <code>http://localhost</code> und <code>http://127.0.0.1</code> für eigene Test-Server.</li>
+    <li>Nicht alle Antwort-Header sind für den Browser lesbar – nur die, die der Server freigibt.</li>
+  </ul>
+  <h3>Datenschutz</h3>
+  <ul>
+    <li>Anfragen gehen direkt von deinem Browser an die API, die du einträgst – und nur dorthin. Es gibt keinen Zwischenserver.</li>
+    <li>Konfigurationen, Spezifikationen und Verlauf liegen nur in diesem Browser. Zugangsdaten werden nur gespeichert, wenn du den Haken setzt; dann stehen sie auch in der Sicherungsdatei.</li>
+    <li>YAML liest die Bibliothek js-yaml (MIT).</li>
+  </ul>
+  <h3>KI-Agenten</h3>
+  <p>Ein KI-Agent im Browser (WebMCP) kann Konfigurationen und Endpunkte auflisten, eine Konfiguration wählen, das Formular ausfüllen und die letzte Antwort lesen. <strong>Senden</strong> musst du selbst – Agenten schicken keine Anfragen ab und sehen keine Zugangsdaten.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>API Check lets you try out REST APIs right in the browser. An OpenAPI or Swagger spec becomes a form for each endpoint, with all parameters and a sample body.</p>
+  <h3>How to use</h3>
+  <ol>
+    <li>Under <em>Edit</em>, enter a name, the <strong>API URL</strong> and the <strong>spec</strong> – as a URL, a file (<code>.json</code>, <code>.yaml</code>) or pasted text. OpenAPI 3.x and Swagger 2.0 are supported.</li>
+    <li><em>Load &amp; save</em> – the configuration then appears in the selection at the top and stays saved. You can keep several APIs side by side.</li>
+    <li>If needed, enter a bearer token, user/password or API key under <em>Sign-in</em>. If the spec describes a method, it is preselected.</li>
+    <li>Tap an <strong>endpoint</strong>, fill in the fields (required ones marked *) and <em>Send</em>. Status, duration, headers and body of the response appear below.</li>
+    <li><em>Free request</em> always works – even without a spec: enter method, path or full URL and body yourself.</li>
+  </ol>
+  <p>The menu (☰) holds the <strong>history</strong> of recent requests (tap one to fill the form again), “Back up data” and this help.</p>
+  <h3>If no response arrives</h3>
+  <ul>
+    <li><strong>CORS:</strong> browsers may only call another site's API if its server allows it (header <code>Access-Control-Allow-Origin</code>). Without it the browser just reports “no response”. The app cannot get around this – use <em>Copy as curl</em> and run it in a terminal.</li>
+    <li>Only <code>https://</code> addresses, except <code>http://localhost</code> and <code>http://127.0.0.1</code> for your own test servers.</li>
+    <li>Not all response headers are readable in the browser – only those the server exposes.</li>
+  </ul>
+  <h3>Privacy</h3>
+  <ul>
+    <li>Requests go straight from your browser to the API you enter – and nowhere else. There is no server in between.</li>
+    <li>Configurations, specs and history stay in this browser only. Credentials are only saved if you tick the box; then they are also in the backup file.</li>
+    <li>YAML is read by the js-yaml library (MIT).</li>
+  </ul>
+  <h3>AI agents</h3>
+  <p>An AI agent in the browser (WebMCP) can list configurations and endpoints, select a configuration, fill in the form and read the last response. <strong>Sending</strong> is up to you – agents never send requests and never see credentials.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 4f8a2f3a0ead</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/vendor/js-yaml/js-yaml.umd.min.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    newCfg:'+ Neue Konfiguration', noCfg:'Noch keine Konfiguration – unter „Bearbeiten“ API-URL und Spezifikation angeben.',
+    specSummary:'{kind} · {title} · {n} Endpunkte', noSpec:'Ohne Spezifikation – nur freie Anfragen.',
+    free:'Freie Anfrage', freeSum:'Methode und Pfad selbst eingeben', untagged:'Weitere', more:'… {n} weitere – Filter verfeinern.', noMatch:'Kein Endpunkt passt.',
+    saved:'Konfiguration gespeichert', deleted:'Konfiguration gelöscht', confirmDelete:'Konfiguration „{name}“ löschen?', reloaded:'Spezifikation neu geladen',
+    loading:'Lädt …', saveFail:'Speichern fehlgeschlagen – der Speicher des Browsers ist voll.',
+    errNoSpec:'Keine OpenAPI- oder Swagger-Spezifikation (Feld „openapi“ bzw. „swagger: 2.0“ fehlt).',
+    errJson:'JSON fehlerhaft: {m}', errYaml:'YAML fehlerhaft: {m}', errTooBig:'Die Spezifikation ist zu groß zum Speichern ({n} MB, höchstens 3 MB).',
+    errFetchSpec:'Spezifikation nicht ladbar ({m}). Oft erlaubt der Server keinen Abruf aus dem Browser (CORS) – dann als Datei oder Text einfügen.',
+    errHttpStatus:'HTTP {n}', errUrl:'Bitte eine gültige Adresse mit https:// angeben.', errNeed:'Bitte eine API-URL oder eine Spezifikation angeben.',
+    errNoFile:'Bitte eine Datei wählen.', errNoText:'Bitte die Spezifikation einfügen.',
+    errHttp:'Nur https:// ist möglich (außer localhost).', errNoServer:'Kein Server bekannt – bitte unter „Bearbeiten“ eine API-URL angeben.',
+    errRequired:'Pflichtfeld fehlt: {names}', errBodyJson:'Inhalt ist kein gültiges JSON: {m}', errFormObj:'Für dieses Format den Inhalt als JSON-Objekt eingeben.',
+    errNetwork:'Keine Antwort. Mögliche Ursachen: Server nicht erreichbar, offline oder der Server erlaubt keine Anfragen aus dem Browser (CORS) – siehe Hilfe.',
+    errTimeout:'Keine Antwort nach 60 Sekunden – abgebrochen.', errAborted:'Abgebrochen.', errSpecBroken:'Gespeicherte Spezifikation nicht lesbar: {m}',
+    sending:'Wird gesendet …', duration:'{ms} ms', size:'{n}', truncated:'… gekürzt (Anzeige bis {n} Zeichen; „Antwort kopieren“ kopiert alles).', emptyBody:'(kein Inhalt)',
+    copied:'Kopiert', copyFail:'Kopieren fehlgeschlagen', curlCopied:'curl-Befehl kopiert', deprecated:'veraltet',
+    in_path:'Pfad', in_query:'Query', in_header:'Header', select:'– wählen –', pathPh:'/pfad',
+    clearHistQ:'Verlauf löschen?', histMissing:'Die Konfiguration dieser Anfrage gibt es nicht mehr.', histOpNotFound:'Endpunkt nicht mehr in der Spezifikation.',
+    authOn:'aktiv', example:'Beispiel', exampleFilled:'Beispiel eingesetzt: Swagger Petstore', filePicked:'{name} ({n} kB)',
+    'mcp.select':'Konfiguration gewählt', 'mcp.prepare':'Anfrage ausgefüllt – zum Abschicken „Senden“ tippen'
+  },
+  en:{
+    title:'API Check', sub:'Enter the API address and an OpenAPI/Swagger spec – you get a form for every request.',
+    cfgH:'API & spec', cfgSel:'Configuration', cfgEdit:'Edit', cfgName:'Name', cfgNamePh:'e.g. Petstore', baseUrl:'API URL (base address)',
+    baseUrlHint:'Leave empty to use the servers from the spec.', specH:'Spec (OpenAPI 3 / Swagger 2, JSON or YAML)', specSrc:'Source of the spec',
+    srcUrl:'URL', srcFile:'File', srcText:'Text', specUrl:'URL of the spec', chooseFile:'Choose file …', specText:'Paste spec',
+    save:'Load & save', reload:'Reload spec', example:'Example', delete:'Delete configuration',
+    authH:'Sign-in', authType:'Type', authNone:'None', authBearer:'Bearer token', authBasic:'User and password (Basic)', authKey:'API key',
+    token:'Token', user:'User', pass:'Password', keyName:'Name of the key', keyIn:'Send as', inHeader:'Header', inQuery:'Query parameter', keyValue:'Key',
+    authSave:'Save credentials on this device', authHint:'Without the tick they only apply until the page is closed. Saved credentials are also in the backup file.',
+    opsH:'Endpoints', filter:'Filter endpoints', filterPh:'Filter …', method:'Method', path:'Path or URL', server:'Server',
+    bodyType:'Body format', body:'Body', bodyFormHint:'Enter as a JSON object – sent as a form.', sample:'Insert example', pretty:'Format JSON',
+    send:'Send', abort:'Cancel', curl:'Copy as curl', resH:'Response', headers:'Headers', copyRes:'Copy response',
+    history:'History', clearHist:'Clear history', histEmpty:'No requests yet.',
+    newCfg:'+ New configuration', noCfg:'No configuration yet – enter API URL and spec under “Edit”.',
+    specSummary:'{kind} · {title} · {n} endpoints', noSpec:'Without a spec – free requests only.',
+    free:'Free request', freeSum:'Enter method and path yourself', untagged:'Other', more:'… {n} more – refine the filter.', noMatch:'No endpoint matches.',
+    saved:'Configuration saved', deleted:'Configuration deleted', confirmDelete:'Delete configuration “{name}”?', reloaded:'Spec reloaded',
+    loading:'Loading …', saveFail:'Saving failed – the browser storage is full.',
+    errNoSpec:'Not an OpenAPI or Swagger spec (field “openapi” or “swagger: 2.0” missing).',
+    errJson:'Invalid JSON: {m}', errYaml:'Invalid YAML: {m}', errTooBig:'The spec is too large to save ({n} MB, at most 3 MB).',
+    errFetchSpec:'Could not load the spec ({m}). Often the server does not allow fetching from the browser (CORS) – then add it as a file or text.',
+    errHttpStatus:'HTTP {n}', errUrl:'Please enter a valid address starting with https://.', errNeed:'Please enter an API URL or a spec.',
+    errNoFile:'Please choose a file.', errNoText:'Please paste the spec.',
+    errHttp:'Only https:// is possible (except localhost).', errNoServer:'No server known – please enter an API URL under “Edit”.',
+    errRequired:'Required field missing: {names}', errBodyJson:'Body is not valid JSON: {m}', errFormObj:'For this format, enter the body as a JSON object.',
+    errNetwork:'No response. Possible causes: server unreachable, offline, or the server does not allow requests from the browser (CORS) – see help.',
+    errTimeout:'No response after 60 seconds – cancelled.', errAborted:'Cancelled.', errSpecBroken:'Saved spec cannot be read: {m}',
+    sending:'Sending …', duration:'{ms} ms', size:'{n}', truncated:'… truncated (showing up to {n} characters; “Copy response” copies everything).', emptyBody:'(no body)',
+    copied:'Copied', copyFail:'Copying failed', curlCopied:'curl command copied', deprecated:'deprecated',
+    in_path:'path', in_query:'query', in_header:'header', select:'– choose –', pathPh:'/path',
+    clearHistQ:'Clear history?', histMissing:'The configuration of this request no longer exists.', histOpNotFound:'Endpoint no longer in the spec.',
+    authOn:'active', exampleFilled:'Example inserted: Swagger Petstore', filePicked:'{name} ({n} kB)',
+    'mcp.select':'configuration selected', 'mcp.prepare':'request filled in – tap “Send” to send it'
+  }
+});
+const t=Tools.t, $=Tools.$;
+const LS_CFG='api-check.configs.v1', LS_STATE='api-check.state.v1', LS_HIST='api-check.history.v1';
+const METHODS=['get','post','put','patch','delete','head','options'];
+const SHOW_MAX=300000, TIMEOUT=60000, HIST_MAX=30, SPEC_MAX=3e6;
+const EXAMPLE={name:'Swagger Petstore',baseUrl:'',specUrl:'https://petstore3.swagger.io/api/v3/openapi.json'};
+
+let configs=Tools.load(LS_CFG,[]); if(!Array.isArray(configs)) configs=[];
+configs=configs.filter(c=>c&&typeof c==='object'&&c.id);
+for(const c of configs) if(!c.auth) c.auth={type:'none'};
+const state=Object.assign({cur:null},Tools.load(LS_STATE,{}));
+let hist=Tools.load(LS_HIST,[]); if(!Array.isArray(hist)) hist=[];
+let model=null, modelErr='', curOp=null, lastRes=null, running=null, specSrc='url', fileText=null;
+
+const cur=()=>configs.find(c=>c.id===state.cur)||null;
+const str=x=>typeof x==='string'?x:'';
+function persist(){
+  const ok=Tools.save(LS_CFG,configs.map(c=>c.saveAuth?c:Object.assign({},c,{auth:{type:'none'}})));
+  if(!ok) Tools.toast(t('saveFail'),4000);
+  return ok;
+}
+const saveState=()=>Tools.save(LS_STATE,state);
+const fmtBytes=n=>n<1024?n+' B':n<1048576?Tools.fmt(n/1024,1)+' kB':Tools.fmt(n/1048576,1)+' MB';
+
+/* ---------- Spec: parse and normalise (OpenAPI 3.x, Swagger 2.0) ---------- */
+function parseSpecText(text){
+  const s=text.replace(/^﻿/,'').trim();
+  if(/^[{[]/.test(s)){ try{ return JSON.parse(s); }catch(e){ throw new Error(t('errJson',{m:e.message})); } }
+  try{ return window.jsyaml.load(s); }catch(e){ throw new Error(t('errYaml',{m:e.reason||e.message})); }
+}
+// Plain JSON copy (YAML dates → strings) that fits the storage
+function cleanSpec(obj){
+  const json=JSON.stringify(obj);
+  if(json.length>SPEC_MAX) throw new Error(t('errTooBig',{n:Tools.fmt(json.length/1e6,1)}));
+  return JSON.parse(json);
+}
+function normalize(spec){
+  if(!spec||typeof spec!=='object') throw new Error(t('errNoSpec'));
+  const v3=typeof spec.openapi==='string'&&/^3\./.test(spec.openapi), v2=/^2\./.test(String(spec.swagger||''));
+  if(!v3&&!v2) throw new Error(t('errNoSpec'));
+  const ptr=ref=>{
+    if(typeof ref!=='string'||!ref.startsWith('#/')) return {};
+    let o=spec;
+    for(const p of ref.slice(2).split('/')){
+      const k=decodeURIComponent(p).replace(/~1/g,'/').replace(/~0/g,'~');
+      o=o&&typeof o==='object'&&Object.prototype.hasOwnProperty.call(o,k)?o[k]:undefined;
+    }
+    return o&&typeof o==='object'?o:{};
+  };
+  const R=x=>{ let n=0; while(x&&typeof x==='object'&&typeof x.$ref==='string'&&n++<32) x=ptr(x.$ref); return x&&typeof x==='object'?x:{}; };
+  const consumes=op=>{ const c=op.consumes||spec.consumes; return Array.isArray(c)&&c.length?c.map(String):['application/json']; };
+  const ops=[];
+  const paths=spec.paths&&typeof spec.paths==='object'?spec.paths:{};
+  for(const [path,item0] of Object.entries(paths)){
+    const item=R(item0);
+    const common=(Array.isArray(item.parameters)?item.parameters:[]).map(R);
+    for(const m of METHODS){
+      const op=item[m]; if(!op||typeof op!=='object') continue;
+      const own=(Array.isArray(op.parameters)?op.parameters:[]).map(R);
+      const all=[...common.filter(c=>!own.some(o=>o.name===c.name&&o.in===c.in)),...own].filter(p=>p.name!=null&&p.in);
+      const params=[], form=[]; let body=null;
+      for(const p of all){
+        if(p.in==='body'){ body={types:consumes(op),schema:R(p.schema),required:!!p.required}; continue; }
+        if(p.in==='formData'){ form.push(p); continue; }
+        if(!['path','query','header'].includes(p.in)) continue;
+        const s=v3?R(p.schema):p;
+        const items=R(s.items);
+        params.push({name:String(p.name),in:p.in,required:p.in==='path'||!!p.required,description:str(p.description),
+          type:Array.isArray(s.type)?s.type.find(x=>x!=='null'):s.type,format:s.format,enum:Array.isArray(s.enum)?s.enum:(Array.isArray(items.enum)?items.enum:null),
+          default:s.default,example:p.example!==undefined?p.example:s.example});
+      }
+      if(form.length){
+        const props={}, req=[];
+        for(const p of form){ props[p.name]={type:p.type==='file'?'string':p.type,format:p.format,enum:p.enum,default:p.default}; if(p.required) req.push(String(p.name)); }
+        const types=consumes(op).filter(x=>/form/.test(x));
+        body={types:types.length?types:['application/x-www-form-urlencoded'],schema:{type:'object',properties:props,required:req},required:req.length>0};
+      }
+      if(v3&&op.requestBody){
+        const rb=R(op.requestBody), content=rb.content&&typeof rb.content==='object'?rb.content:{};
+        const types=Object.keys(content);
+        if(types.length){
+          const sorted=[...types.filter(x=>/json/.test(x)),...types.filter(x=>!/json/.test(x))];
+          const media={};
+          for(const ct of sorted){
+            const md=R(content[ct]); let ex=md.example;
+            if(ex===undefined&&md.examples&&typeof md.examples==='object'){ const first=Object.values(md.examples)[0]; if(first) ex=R(first).value; }
+            media[ct]={schema:R(md.schema),example:ex};
+          }
+          body={types:sorted,media,required:!!rb.required};
+        }
+      }
+      ops.push({key:m.toUpperCase()+' '+path,method:m.toUpperCase(),path,id:str(op.operationId),summary:str(op.summary),description:str(op.description),
+        tag:Array.isArray(op.tags)&&op.tags.length?String(op.tags[0]):'',deprecated:!!op.deprecated,params,body});
+    }
+  }
+  let servers=[];
+  if(v3&&Array.isArray(spec.servers)) servers=spec.servers.map(sv=>{
+    const vars=sv&&sv.variables&&typeof sv.variables==='object'?sv.variables:{};
+    return String(sv&&sv.url||'').replace(/\{([^}]+)\}/g,(m0,k)=>vars[k]&&vars[k].default!=null?String(vars[k].default):m0);
+  }).filter(Boolean);
+  if(v2){
+    const base=str(spec.basePath);
+    if(spec.host){ const sch=Array.isArray(spec.schemes)&&spec.schemes.length?(spec.schemes.includes('https')?'https':String(spec.schemes[0])):'https'; servers=[sch+'://'+spec.host+base]; }
+    else if(base) servers=[base];
+  }
+  let security=null;
+  const schemes=(v3?spec.components&&spec.components.securitySchemes:spec.securityDefinitions)||{};
+  for(const s0 of Object.values(schemes)){
+    const s=R(s0), sch=String(s.scheme||'').toLowerCase();
+    if((s.type==='http'&&sch==='bearer')||s.type==='oauth2'||s.type==='openIdConnect'){ security={type:'bearer'}; break; }
+    if((s.type==='http'&&sch==='basic')||s.type==='basic'){ security={type:'basic'}; break; }
+    if(s.type==='apiKey'&&(s.in==='header'||s.in==='query')){ security={type:'apikey',keyName:String(s.name||''),keyIn:s.in}; break; }
+  }
+  const info=spec.info&&typeof spec.info==='object'?spec.info:{};
+  return {kind:v3?'OpenAPI '+spec.openapi:'Swagger '+spec.swagger,title:str(info.title)||'API',apiVersion:info.version!=null?String(info.version):'',servers,ops,security,R};
+}
+// Example value from a JSON schema
+function sample(s0,R,d){
+  const s=R(s0); if(d>8) return null;
+  if(s.example!==undefined) return s.example;
+  if(s.default!==undefined) return s.default;
+  if(Array.isArray(s.examples)&&s.examples.length) return s.examples[0];
+  if(Array.isArray(s.enum)&&s.enum.length) return s.enum[0];
+  if(s.const!==undefined) return s.const;
+  if(Array.isArray(s.allOf)){ const o={}; for(const x of s.allOf){ const v=sample(x,R,d+1); if(v&&typeof v==='object'&&!Array.isArray(v)) Object.assign(o,v); } return o; }
+  const alt=s.oneOf||s.anyOf; if(Array.isArray(alt)&&alt.length) return sample(alt[0],R,d+1);
+  let type=Array.isArray(s.type)?s.type.find(x=>x!=='null'):s.type;
+  if(!type) type=s.properties?'object':s.items?'array':'';
+  switch(type){
+    case 'object':{ const o={}; for(const [k,v] of Object.entries(s.properties||{})){ const rv=R(v); if(rv.readOnly) continue; o[k]=sample(rv,R,d+1); } return o; }
+    case 'array': return s.items?[sample(s.items,R,d+1)]:[];
+    case 'integer': case 'number': return typeof s.minimum==='number'?s.minimum:0;
+    case 'boolean': return false;
+    case 'string': {
+      const now=new Date().toISOString();
+      return ({'date-time':now.slice(0,19)+'Z',date:now.slice(0,10),email:'user@example.com',uuid:'00000000-0000-0000-0000-000000000000',uri:'https://example.com',url:'https://example.com',ipv4:'192.0.2.1'})[s.format]||'string';
+    }
+    default: return null;
+  }
+}
+function bodySample(op,ct){
+  const b=op.body; if(!b) return '';
+  let v;
+  if(b.media){ const m=b.media[ct]||b.media[b.types[0]]; v=m.example!==undefined?m.example:sample(m.schema,model.R,0); }
+  else v=sample(b.schema,model.R,0);
+  if(v==null) return '';
+  return typeof v==='string'&&!/json/.test(ct)?v:JSON.stringify(v,null,2);
+}
+
+/* ---------- Configurations ---------- */
+function loadModel(){
+  const c=cur(); model=null; modelErr='';
+  if(c&&c.spec){ try{ model=normalize(c.spec); }catch(e){ modelErr=t('errSpecBroken',{m:e.message}); } }
+}
+function renderCfgSelect(){
+  const sel=$('cfgSel'); sel.textContent='';
+  for(const c of configs){ const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; sel.append(o); }
+  const o=document.createElement('option'); o.value=''; o.textContent=t('newCfg'); sel.append(o);
+  sel.value=cur()?state.cur:'';
+}
+function renderSpecInfo(){
+  const c=cur(), el=$('specInfo');
+  el.classList.toggle('err-text',!!modelErr);
+  if(!c) el.textContent=configs.length?'':t('noCfg');
+  else if(modelErr) el.textContent=modelErr;
+  else if(model) el.textContent=t('specSummary',{kind:model.kind,title:model.title+(model.apiVersion?' '+model.apiVersion:''),n:model.ops.length});
+  else el.textContent=t('noSpec');
+}
+function fillCfgForm(){
+  const c=cur();
+  $('cfgName').value=c?c.name:''; $('baseUrl').value=c?c.baseUrl||'':''; $('specUrl').value=c?c.specUrl||'':'';
+  $('specText').value=''; fileText=null; $('fileName').textContent=''; $('specFile').value='';
+  setSrc(c&&!c.specUrl&&c.spec?'text':'url');
+  $('btnDelete').hidden=!c; $('btnReload').hidden=!(c&&c.specUrl);
+  $('cfgEdit').open=!c;
+  showCfgErr('');
+}
+function setSrc(s){
+  specSrc=s;
+  document.querySelectorAll('[data-src]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.src===s)));
+  document.querySelectorAll('[data-src-box]').forEach(b=>{ b.hidden=b.dataset.srcBox!==s; });
+}
+function showCfgErr(m){ $('cfgErr').hidden=!m; $('cfgErr').textContent=m; }
+function validUrl(u){ try{ const x=new URL(u); return /^https?:$/.test(x.protocol); }catch(_){ return false; } }
+async function fetchSpec(url){
+  let res;
+  try{ res=await fetch(url,{credentials:'omit',cache:'no-store'}); }
+  catch(e){ Tools.diag.log('spec fetch failed',e.name); throw new Error(t('errFetchSpec',{m:e.message})); }
+  if(!res.ok){ Tools.diag.log('spec fetch status',res.status); throw new Error(t('errFetchSpec',{m:t('errHttpStatus',{n:res.status})})); }
+  return res.text();
+}
+function selectConfig(id){
+  state.cur=id; saveState();
+  loadModel(); curOp=null; lastRes=null;
+  renderCfgSelect(); renderSpecInfo(); fillCfgForm(); renderAuth(); renderOps(); renderOp(); renderRes();
+}
+async function saveCfg(){
+  showCfgErr('');
+  const c0=cur(), name=$('cfgName').value.trim(), baseUrl=$('baseUrl').value.trim().replace(/\/+$/,''), specUrl=$('specUrl').value.trim();
+  if(baseUrl&&!validUrl(baseUrl)) return showCfgErr(t('errUrl'));
+  if(specSrc==='url'&&specUrl&&!validUrl(specUrl)) return showCfgErr(t('errUrl'));
+  const btn=$('btnSave'); btn.disabled=true; const label=btn.textContent; btn.textContent=t('loading');
+  try{
+    let text=null;
+    if(specSrc==='url'&&specUrl) text=await fetchSpec(specUrl);
+    else if(specSrc==='file'){ if(fileText==null&&!(c0&&c0.spec)) throw new Error(t('errNoFile')); text=fileText; }
+    else if(specSrc==='text'){ const v=$('specText').value; if(!v.trim()&&!(c0&&c0.spec)) throw new Error(t('errNoText')); text=v.trim()?v:null; }
+    let spec=c0&&!(specSrc==='url'&&!specUrl&&c0.specUrl)?c0.spec:null, m=null;
+    if(text!=null){ spec=cleanSpec(parseSpecText(text)); }
+    if(spec) m=normalize(spec);
+    if(!spec&&!baseUrl) throw new Error(t('errNeed'));
+    const c=c0||{id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),auth:{type:'none'},saveAuth:false};
+    c.name=name||(m&&m.title)||(baseUrl?new URL(baseUrl).host:'API');
+    c.baseUrl=baseUrl; c.specUrl=specSrc==='url'?specUrl:''; c.spec=spec||null; c.updated=new Date().toISOString();
+    if(m&&m.security&&c.auth.type==='none') c.auth=Object.assign({type:'none'},m.security);
+    if(!c0) configs.push(c);
+    if(!persist()){ if(!c0) configs.pop(); return; }
+    Tools.diag.log('config saved',{kind:m?m.kind:null,ops:m?m.ops.length:0,servers:m?m.servers.length:0,src:specSrc,auth:c.auth.type});
+    selectConfig(c.id);
+    $('cfgEdit').open=false;
+    Tools.toast(t('saved'));
+  }catch(e){
+    Tools.diag.log('config not saved',e.name);
+    showCfgErr(e.message);
+  }finally{ btn.disabled=false; btn.textContent=label; }
+}
+async function reloadSpec(){
+  const c=cur(); if(!c||!c.specUrl) return;
+  showCfgErr('');
+  try{
+    const spec=cleanSpec(parseSpecText(await fetchSpec(c.specUrl)));
+    const m=normalize(spec);
+    const old=c.spec; c.spec=spec; c.updated=new Date().toISOString();
+    if(!persist()){ c.spec=old; return; }
+    Tools.diag.log('spec reloaded',{kind:m.kind,ops:m.ops.length});
+    const key=curOp&&curOp.key; selectConfig(c.id);
+    if(key&&key!=='free'){ const op=model.ops.find(o=>o.key===key); if(op) openOp(op); }
+    Tools.toast(t('reloaded'));
+  }catch(e){ showCfgErr(e.message); }
+}
+function deleteCfg(){
+  const c=cur(); if(!c||!confirm(t('confirmDelete',{name:c.name}))) return;
+  configs=configs.filter(x=>x!==c); persist();
+  Tools.diag.log('config deleted');
+  selectConfig(configs.length?configs[0].id:null);
+  Tools.toast(t('deleted'));
+}
+
+/* ---------- Sign-in ---------- */
+function renderAuth(){
+  const c=cur(); $('authBox').hidden=!c; if(!c) return;
+  const a=c.auth||{type:'none'};
+  $('authType').value=a.type||'none'; $('authToken').value=a.token||''; $('authUser').value=a.user||''; $('authPass').value=a.pass||'';
+  $('authKeyName').value=a.keyName||''; $('authKeyIn').value=a.keyIn==='query'?'query':'header'; $('authKeyValue').value=a.keyValue||'';
+  $('authSave').checked=!!c.saveAuth;
+  showAuthFields();
+}
+function showAuthFields(){
+  const type=$('authType').value;
+  document.querySelectorAll('[data-auth]').forEach(b=>{ b.hidden=b.dataset.auth!==type; });
+  $('authBadge').textContent=type==='none'?'':t('authOn'); $('authBadge').hidden=type==='none';
+}
+function readAuth(){
+  const c=cur(); if(!c) return;
+  c.auth={type:$('authType').value,token:$('authToken').value,user:$('authUser').value,pass:$('authPass').value,
+    keyName:$('authKeyName').value.trim(),keyIn:$('authKeyIn').value,keyValue:$('authKeyValue').value};
+  c.saveAuth=$('authSave').checked;
+  showAuthFields(); persist(); updatePreview();
+}
+
+/* ---------- Endpoints ---------- */
+const FREE={key:'free',free:true,method:'FREE',params:[],body:null};
+function methodBadge(m){ const s=document.createElement('span'); s.className='method m-'+m; s.textContent=m==='FREE'?'…':m; return s; }
+function renderOps(){
+  const c=cur(), box=$('ops');
+  $('opsCard').hidden=!c; box.textContent=''; if(!c) return;
+  const ops=model?model.ops:[];
+  $('opsCount').textContent=String(ops.length);
+  const q=$('opFilter').value.trim().toLowerCase();
+  const match=o=>!q||(o.key+' '+o.id+' '+o.summary+' '+o.tag).toLowerCase().includes(q);
+  const list=ops.filter(match);
+  const groups=new Map();
+  if(!q||t('free').toLowerCase().includes(q)) groups.set('\u0000',[FREE]);
+  let shown=0, hidden=0;
+  for(const o of list){ if(shown>=200){ hidden++; continue; } shown++; const g=o.tag||'\u0001'; if(!groups.has(g)) groups.set(g,[]); groups.get(g).push(o); }
+  if(!groups.size){ const p=document.createElement('p'); p.className='info'; p.textContent=t('noMatch'); box.append(p); return; }
+  for(const [g,items] of groups){
+    if(g!=='\u0000'&&groups.size>1){ const h=document.createElement('h3'); h.textContent=g==='\u0001'?t('untagged'):g; box.append(h); }
+    const ul=document.createElement('ul'); ul.className='ops';
+    for(const o of items){
+      const li=document.createElement('li'), b=document.createElement('button');
+      b.type='button'; b.dataset.key=o.key; if(o.deprecated) b.className='dep';
+      if(curOp&&curOp.key===o.key) b.setAttribute('aria-current','true');
+      const tx=document.createElement('span'); tx.className='txt';
+      const p=document.createElement('span'); p.className=o.free?'path plain':'path'; p.textContent=o.free?t('free'):o.path;
+      const s=document.createElement('span'); s.className='sum'; s.textContent=o.free?t('freeSum'):[o.summary||o.id,o.deprecated?t('deprecated'):''].filter(Boolean).join(' · ');
+      tx.append(p); if(s.textContent) tx.append(s);
+      b.append(methodBadge(o.method),tx);
+      b.addEventListener('click',()=>{ openOp(o); $('reqCard').scrollIntoView({behavior:'smooth',block:'start'}); });
+      li.append(b); ul.append(li);
+    }
+    box.append(ul);
+  }
+  if(hidden){ const p=document.createElement('p'); p.className='info'; p.textContent=t('more',{n:hidden}); box.append(p); }
+}
+function findOp(ref){
+  if(ref==='free') return FREE;
+  if(!model) return null;
+  const r=String(ref).trim();
+  return model.ops.find(o=>o.id&&o.id===r)||model.ops.find(o=>o.key.toLowerCase()===r.replace(/\s+/,' ').toLowerCase())||null;
+}
+
+/* ---------- Request form ---------- */
+function serverList(){
+  const c=cur(), out=[]; if(!c) return out;
+  const add=u=>{ u=u.replace(/\/+$/,''); if(u&&!out.includes(u)) out.push(u); };
+  if(c.baseUrl) add(c.baseUrl);
+  for(const s of model?model.servers:[]){
+    try{ add(new URL(s,c.baseUrl||c.specUrl||undefined).href); }
+    catch(_){ if(/^https?:\/\//i.test(s)) add(s); }
+  }
+  return out;
+}
+function openOp(op,values){
+  curOp=op; values=values||{};
+  $('reqCard').hidden=false;
+  const h=$('h-req'); h.textContent='';
+  const p=document.createElement('span'); p.className='path'; p.textContent=op.free?t('free'):op.path;
+  h.append(methodBadge(op.method),p);
+  $('reqDesc').textContent=op.free?'':[op.summary,op.description].filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).join('\n\n');
+  $('freeBox').hidden=!op.free;
+  if(op.free){ $('freeMethod').value=values.method||'GET'; $('freePath').value=values.path||''; }
+  // Server
+  const sel=$('server'), list=serverList(); sel.textContent='';
+  for(const u of list){ const o=document.createElement('option'); o.textContent=u; sel.append(o); }
+  if(values.server&&list.includes(values.server)) sel.value=values.server;
+  $('serverBox').hidden=!list.length;
+  // Parameters
+  const box=$('params'); box.textContent='';
+  op.params.forEach((pa,i)=>{
+    const id='param-'+i;
+    const wrap=document.createElement('div'); wrap.className='field';
+    const lab=document.createElement('label'); lab.htmlFor=id; lab.className='req-label';
+    const nm=document.createElement('span'); nm.className='mono'; nm.textContent=pa.name;
+    const inn=document.createElement('span'); inn.className='in'; inn.textContent='('+t('in_'+pa.in)+(pa.type?', '+pa.type+(pa.format?' '+pa.format:''):'')+')';
+    lab.append(nm,' ',inn);
+    if(pa.required){ const st=document.createElement('span'); st.className='star'; st.textContent='*'; st.setAttribute('aria-hidden','true'); lab.append(st); }
+    let el;
+    const opts=pa.enum||(pa.type==='boolean'?['true','false']:null);
+    if(opts){
+      el=document.createElement('select');
+      const e0=document.createElement('option'); e0.value=''; e0.textContent=t('select'); el.append(e0);
+      for(const v of opts){ const o=document.createElement('option'); o.value=String(v); o.textContent=String(v); el.append(o); }
+    }else{
+      el=document.createElement('input'); el.type='text'; el.autocomplete='off'; el.spellcheck=false; el.className='mono';
+      if(pa.type==='integer'||pa.type==='number') el.inputMode=pa.type==='integer'?'numeric':'decimal';
+      const ex=pa.example!==undefined?pa.example:pa.default;
+      if(ex!==undefined&&ex!==null&&typeof ex!=='object') el.placeholder=String(ex);
+    }
+    el.id=id; el.dataset.i=String(i);
+    if(pa.required) el.required=true;
+    const key=pa.in+':'+pa.name;
+    if(values.params&&values.params[key]!=null) el.value=String(values.params[key]);
+    else if(pa.default!==undefined&&pa.default!==null&&typeof pa.default!=='object') el.value=String(pa.default);
+    wrap.append(lab,el);
+    if(pa.description){ const d=document.createElement('span'); d.className='desc'; d.textContent=pa.description; wrap.append(d); }
+    box.append(wrap);
+  });
+  // Body
+  const hasBody=op.free||!!op.body;
+  $('bodyBox').hidden=!hasBody;
+  if(hasBody){
+    const types=op.free?['application/json','text/plain','application/x-www-form-urlencoded','application/xml']:op.body.types;
+    const bt=$('bodyType'); bt.textContent='';
+    for(const ct of types){ const o=document.createElement('option'); o.textContent=ct; bt.append(o); }
+    if(values.bodyType&&types.includes(values.bodyType)) bt.value=values.bodyType;
+    $('body').dataset.touched=values.body!=null?'1':'';
+    $('body').value=values.body!=null?values.body:(op.free?'':bodySample(op,bt.value));
+    $('bodyStar').hidden=!(op.body&&op.body.required);
+    $('btnSample').hidden=op.free;
+    bodyTypeChanged();
+  }
+  showReqErr('');
+  updatePreview();
+  renderOpsCurrent();
+}
+function renderOpsCurrent(){
+  document.querySelectorAll('#ops button').forEach(b=>{ if(curOp&&b.dataset.key===curOp.key) b.setAttribute('aria-current','true'); else b.removeAttribute('aria-current'); });
+}
+function renderOp(){ if(!curOp){ $('reqCard').hidden=true; } }
+function bodyTypeChanged(){ $('bodyHint').hidden=!/form/.test($('bodyType').value); }
+function showReqErr(m){ $('reqErr').hidden=!m; $('reqErr').textContent=m; }
+function currentMethod(){ return curOp.free?$('freeMethod').value:curOp.method; }
+function formValues(){
+  const v={server:$('server').value,params:{}};
+  document.querySelectorAll('#params [data-i]').forEach(el=>{ const p=curOp.params[+el.dataset.i]; if(el.value!=='') v.params[p.in+':'+p.name]=el.value; });
+  if(curOp.free){ v.method=$('freeMethod').value; v.path=$('freePath').value; }
+  if(!$('bodyBox').hidden){ v.body=$('body').value; v.bodyType=$('bodyType').value; }
+  return v;
+}
+const isLocal=h=>h==='localhost'||h==='127.0.0.1'||h==='[::1]';
+// Builds the request from the form. withAuth=false for previews and agents (no credentials).
+function buildRequest(withAuth,strict){
+  const op=curOp, c=cur(), method=currentMethod(), missing=[];
+  let path=op.free?($('freePath').value.trim()||'/'):op.path;
+  const headers={}, query=[];
+  document.querySelectorAll('#params [data-i]').forEach(el=>{
+    const p=op.params[+el.dataset.i], v=el.value.trim();
+    el.classList.remove('invalid'); el.removeAttribute('aria-invalid');
+    if(!v){ if(p.required){ missing.push(p.name); if(strict){ el.classList.add('invalid'); el.setAttribute('aria-invalid','true'); } } return; }
+    if(p.in==='path') path=path.split('{'+p.name+'}').join(encodeURIComponent(v));
+    else if(p.in==='query'){ if(p.type==='array') v.split(',').map(x=>x.trim()).filter(Boolean).forEach(x=>query.push([p.name,x])); else query.push([p.name,v]); }
+    else headers[p.name]=v;
+  });
+  if(strict&&missing.length) throw new Error(t('errRequired',{names:missing.join(', ')}));
+  let url;
+  if(/^https?:\/\//i.test(path)){ try{ url=new URL(path); }catch(_){ throw new Error(t('errUrl')); } }
+  else{
+    const server=$('server').value;
+    if(!server) throw new Error(t('errNoServer'));
+    try{ url=new URL(server+(path.startsWith('/')?path:'/'+path)); }catch(_){ throw new Error(t('errUrl')); }
+  }
+  if(url.protocol==='http:'&&!isLocal(url.hostname)&&location.protocol==='https:') throw new Error(t('errHttp'));
+  if(!/^https?:$/.test(url.protocol)) throw new Error(t('errUrl'));
+  for(const [k,v] of query) url.searchParams.append(k,v);
+  const a=c&&c.auth||{type:'none'};
+  if(withAuth){
+    if(a.type==='bearer'&&a.token) headers.Authorization='Bearer '+a.token.trim();
+    else if(a.type==='basic'&&(a.user||a.pass)) headers.Authorization='Basic '+btoa(String.fromCharCode(...new TextEncoder().encode(a.user+':'+a.pass)));
+    else if(a.type==='apikey'&&a.keyName&&a.keyValue){ if(a.keyIn==='query') url.searchParams.set(a.keyName,a.keyValue); else headers[a.keyName]=a.keyValue; }
+  }
+  let body, bodyText=null, form=null;
+  const text=$('body').value;
+  if(!$('bodyBox').hidden&&!/^(GET|HEAD)$/.test(method)&&text.trim()){
+    const ct=$('bodyType').value;
+    if(/json/.test(ct)){
+      try{ JSON.parse(text); }catch(e){ if(strict) throw new Error(t('errBodyJson',{m:e.message})); }
+      body=bodyText=text; headers['Content-Type']=ct;
+    }else if(/x-www-form-urlencoded|multipart\/form-data/.test(ct)){
+      let obj; try{ obj=JSON.parse(text); }catch(_){ obj=null; }
+      if(!obj||typeof obj!=='object'||Array.isArray(obj)){ if(strict) throw new Error(t('errFormObj')); obj={}; }
+      const pairs=[];
+      for(const [k,v] of Object.entries(obj)) for(const x of Array.isArray(v)?v:[v]) pairs.push([k,x!==null&&typeof x==='object'?JSON.stringify(x):String(x)]);
+      if(/multipart/.test(ct)){ body=new FormData(); for(const [k,v] of pairs) body.append(k,v); form=pairs; }
+      else{ body=bodyText=new URLSearchParams(pairs).toString(); headers['Content-Type']=ct; }
+    }else{ body=bodyText=text; headers['Content-Type']=ct; }
+  }else if(strict&&!$('bodyBox').hidden&&op.body&&op.body.required&&!text.trim()&&!/^(GET|HEAD)$/.test(method)) throw new Error(t('errRequired',{names:t('body')}));
+  return {method,url:url.href,headers,body,bodyText,form,missing};
+}
+function updatePreview(){
+  const el=$('preview'); if(!curOp){ el.textContent=''; return; }
+  try{ const r=buildRequest(false,false); el.textContent=r.method+' '+r.url; }
+  catch(e){ el.textContent=currentMethod()+' –'; }
+}
+const shq=s=>"'"+String(s).replace(/'/g,"'\\''")+"'";
+function curl(r){
+  const parts=['curl'];
+  if(r.method!=='GET'||r.form||r.bodyText!=null) parts.push('-X',r.method);
+  parts.push(shq(r.url));
+  for(const [k,v] of Object.entries(r.headers)) parts.push('-H',shq(k+': '+v));
+  if(r.form) for(const [k,v] of r.form) parts.push('-F',shq(k+'='+v));
+  else if(r.bodyText!=null) parts.push('--data-raw',shq(r.bodyText));
+  return parts.join(' ');
+}
+async function send(){
+  if(!curOp||running) return;
+  showReqErr('');
+  let r;
+  try{ r=buildRequest(true,true); }catch(e){ showReqErr(e.message); return; }
+  const values=formValues();
+  const ctrl=new AbortController(); let timedOut=false;
+  const timer=setTimeout(()=>{ timedOut=true; ctrl.abort(); },TIMEOUT);
+  running=ctrl; $('btnSend').disabled=true; $('btnAbort').hidden=false;
+  lastRes={pending:true,method:r.method,url:stripUrl(r.url)}; renderRes();
+  Tools.diag.log('request',r.method,{params:Object.keys(values.params).length,body:r.bodyText!=null||!!r.form});
+  const t0=performance.now();
+  try{
+    const res=await fetch(r.url,{method:r.method,headers:r.headers,body:r.body,signal:ctrl.signal,credentials:'omit',cache:'no-store',redirect:'follow'});
+    const buf=await res.arrayBuffer();
+    const ms=Math.round(performance.now()-t0), ct=res.headers.get('content-type')||'';
+    const out={method:r.method,url:stripUrl(r.url),status:res.status,statusText:res.statusText,ok:res.ok,ms,size:buf.byteLength,ct,headers:[...res.headers.entries()],text:'',img:null};
+    if(/^image\/(png|jpeg|gif|webp|avif|svg\+xml)/i.test(ct)&&buf.byteLength) out.img=URL.createObjectURL(new Blob([buf],{type:ct}));
+    else out.text=new TextDecoder().decode(buf);
+    lastRes=out;
+    Tools.diag.log('response',res.status,ms+'ms',buf.byteLength+'B',ct.split(';')[0]);
+  }catch(e){
+    const ms=Math.round(performance.now()-t0);
+    lastRes={method:r.method,url:stripUrl(r.url),ms,error:timedOut?t('errTimeout'):ctrl.signal.aborted?t('errAborted'):t('errNetwork'),errorCode:timedOut?'timeout':ctrl.signal.aborted?'aborted':'network'};
+    Tools.diag.log('request failed',e.name,ms+'ms',timedOut?'timeout':'');
+  }finally{
+    clearTimeout(timer); running=null; $('btnSend').disabled=false; $('btnAbort').hidden=true;
+  }
+  addHist(values);
+  renderRes();
+}
+// URL without credentials in the query (API key) – for display, history and agents
+function stripUrl(u){
+  const a=cur()&&cur().auth;
+  if(!a||a.type!=='apikey'||a.keyIn!=='query'||!a.keyName) return u;
+  try{ const x=new URL(u); if(x.searchParams.has(a.keyName)) x.searchParams.set(a.keyName,'***'); return x.href; }catch(_){ return u; }
+}
+
+/* ---------- Response ---------- */
+let prevImg=null;
+function prettyBody(r){
+  if(!r.text) return '';
+  if(/json/i.test(r.ct)||/^\s*[{[]/.test(r.text)){ try{ return JSON.stringify(JSON.parse(r.text),null,2); }catch(_){} }
+  return r.text;
+}
+function renderRes(){
+  const r=lastRes, card=$('resCard');
+  if(prevImg&&(!r||r.img!==prevImg)){ URL.revokeObjectURL(prevImg); prevImg=null; }
+  card.hidden=!r; if(!r) return;
+  const head=$('resHead'); head.textContent='';
+  const body=$('resBody'); body.textContent='';
+  $('resErr').hidden=!r.error; $('resErr').textContent=r.error||'';
+  $('resHdrs').hidden=!r.headers; $('btnCopyRes').hidden=!!(r.pending||r.error||r.img);
+  const meta=document.createElement('span'); meta.className='info'; meta.style.margin='0';
+  if(r.pending){ meta.textContent=t('sending'); head.append(meta); return; }
+  if(r.error){ meta.textContent=r.method+' · '+t('duration',{ms:r.ms}); head.append(meta); return; }
+  const b=document.createElement('span'); b.className='badge '+(r.status<300?'ok':r.status<400?'warn':'err');
+  b.textContent=String(r.status)+(r.statusText?' '+r.statusText:'');
+  meta.textContent=[t('duration',{ms:r.ms}),fmtBytes(r.size),r.ct.split(';')[0]].filter(Boolean).join(' · ');
+  head.append(b,meta);
+  if(r.img){ const im=document.createElement('img'); im.className='res-img'; im.src=r.img; im.alt=r.ct; body.append(im); prevImg=r.img; }
+  else{
+    const pre=document.createElement('pre'); pre.className='body'; pre.tabIndex=0; pre.setAttribute('aria-label',t('body'));
+    const txt=prettyBody(r);
+    pre.textContent=txt?(txt.length>SHOW_MAX?txt.slice(0,SHOW_MAX):txt):t('emptyBody');
+    body.append(pre);
+    if(txt.length>SHOW_MAX){ const p=document.createElement('p'); p.className='info'; p.textContent=t('truncated',{n:Tools.fmt(SHOW_MAX,0)}); body.append(p); }
+  }
+  const ul=$('hdrList'); ul.textContent='';
+  for(const [k,v] of r.headers){ const li=document.createElement('li'); li.textContent=k+': '+v; ul.append(li); }
+  $('hdrCount').textContent=String(r.headers.length);
+}
+
+/* ---------- History ---------- */
+function addHist(values){
+  const c=cur();
+  hist.unshift({cfg:c?c.id:null,cfgName:c?c.name:'',op:curOp.key,method:currentMethod(),path:curOp.free?(values.path||'/'):curOp.path,values,
+    status:lastRes&&lastRes.status||null,error:lastRes&&lastRes.errorCode||null,ms:lastRes&&lastRes.ms,at:new Date().toISOString()});
+  hist=hist.slice(0,HIST_MAX);
+  Tools.save(LS_HIST,hist);
+  renderHist();
+}
+function renderHist(){
+  const ul=$('hist'); ul.textContent='';
+  $('histCount').textContent=String(hist.length); $('histEmpty').hidden=hist.length>0; $('btnClearHist').hidden=!hist.length;
+  hist.forEach((h,i)=>{
+    const li=document.createElement('li'), b=document.createElement('button'); b.type='button';
+    const tx=document.createElement('span'); tx.className='txt';
+    const p=document.createElement('span'); p.className='path'; p.textContent=h.path;
+    const m=document.createElement('span'); m.className='meta';
+    m.textContent=[h.status||(h.error?t(h.error==='timeout'?'errTimeout':h.error==='aborted'?'errAborted':'errNetwork').split(/[.:]/)[0]:''),h.ms!=null?t('duration',{ms:h.ms}):'',
+      new Date(h.at).toLocaleString(Tools.locale(),{dateStyle:'short',timeStyle:'short'}),h.cfgName].filter(Boolean).join(' · ');
+    tx.append(p,m); b.append(methodBadge(h.method),tx);
+    b.addEventListener('click',()=>openHist(i));
+    li.append(b); ul.append(li);
+  });
+}
+function openHist(i){
+  const h=hist[i]; if(!h) return;
+  if(!configs.some(c=>c.id===h.cfg)){ Tools.toast(t('histMissing'),3000); return; }
+  if(state.cur!==h.cfg) selectConfig(h.cfg);
+  const op=h.op==='free'?FREE:findOp(h.op);
+  if(!op){ Tools.toast(t('histOpNotFound'),3000); return; }
+  openOp(op,h.values||{});
+  Tools.menu.close();
+  $('reqCard').scrollIntoView({block:'start'});
+}
+
+/* ---------- Events ---------- */
+$('cfgSel').addEventListener('change',e=>{ selectConfig(e.target.value||null); if(!e.target.value) $('cfgEdit').open=true; });
+document.querySelectorAll('[data-src]').forEach(b=>b.addEventListener('click',()=>setSrc(b.dataset.src)));
+$('btnFile').addEventListener('click',()=>$('specFile').click());
+$('specFile').addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  try{ fileText=await f.text(); $('fileName').textContent=t('filePicked',{name:f.name,n:Tools.fmt(f.size/1024,0)}); showCfgErr(''); Tools.diag.log('spec file picked',{bytes:f.size}); }
+  catch(err){ fileText=null; showCfgErr(err.message); }
+});
+$('btnSave').addEventListener('click',saveCfg);
+$('btnReload').addEventListener('click',reloadSpec);
+$('btnDelete').addEventListener('click',deleteCfg);
+$('btnExample').addEventListener('click',()=>{
+  $('cfgName').value=EXAMPLE.name; $('baseUrl').value=EXAMPLE.baseUrl; $('specUrl').value=EXAMPLE.specUrl; setSrc('url');
+  Tools.toast(t('exampleFilled'));
+});
+['authType','authToken','authUser','authPass','authKeyName','authKeyIn','authKeyValue','authSave'].forEach(id=>$(id).addEventListener(id==='authType'||id==='authKeyIn'||id==='authSave'?'change':'input',readAuth));
+$('opFilter').addEventListener('input',renderOps);
+$('reqCard').addEventListener('input',e=>{ if(e.target.classList.contains('invalid')&&e.target.value.trim()){ e.target.classList.remove('invalid'); e.target.removeAttribute('aria-invalid'); } updatePreview(); });
+$('reqCard').addEventListener('change',updatePreview);
+$('bodyType').addEventListener('change',()=>{
+  bodyTypeChanged();
+  if(curOp&&curOp.body&&curOp.body.media&&$('body').dataset.touched!=='1') $('body').value=bodySample(curOp,$('bodyType').value);
+});
+$('body').addEventListener('input',()=>{ $('body').dataset.touched='1'; });
+$('btnSample').addEventListener('click',()=>{ if(curOp) $('body').value=bodySample(curOp,$('bodyType').value); updatePreview(); });
+$('btnPretty').addEventListener('click',()=>{ try{ $('body').value=JSON.stringify(JSON.parse($('body').value),null,2); showReqErr(''); }catch(e){ showReqErr(t('errBodyJson',{m:e.message})); } });
+$('btnSend').addEventListener('click',send);
+$('btnAbort').addEventListener('click',()=>{ if(running) running.abort(); });
+$('btnCurl').addEventListener('click',async()=>{
+  if(!curOp) return;
+  let r; try{ r=buildRequest(true,false); }catch(e){ showReqErr(e.message); return; }
+  Tools.toast(await Tools.copyText(curl(r))?t('curlCopied'):t('copyFail'));
+});
+$('btnCopyRes').addEventListener('click',async()=>{ if(lastRes&&lastRes.text!=null) Tools.toast(await Tools.copyText(prettyBody(lastRes))?t('copied'):t('copyFail')); });
+$('btnClearHist').addEventListener('click',()=>{ if(!confirm(t('clearHistQ'))) return; hist=[]; Tools.remove(LS_HIST); renderHist(); });
+Tools.onLang(()=>{ renderCfgSelect(); renderSpecInfo(); showAuthFields(); renderOps(); if(curOp) openOp(curOp,formValues()); renderRes(); renderHist(); });
+
+/* ---------- WebMCP: agents fill the form; sending stays with the user ---------- */
+const opInfo=o=>({operation_id:o.id||null,method:o.method,path:o.path,summary:o.summary||null,tag:o.tag||null,deprecated:o.deprecated,
+  parameters:o.params.map(p=>({name:p.name,in:p.in,required:p.required,type:p.type||null,enum:p.enum||undefined})),
+  body:o.body?{content_types:o.body.types,required:o.body.required}:null});
+Tools.mcp.register({
+  name:'list_configs', title:'List saved API configurations', readOnly:true,
+  description:'Lists the saved API configurations (name, base URL, spec title and version, number of operations) and which one is selected. Credentials are never returned.',
+  execute:()=>({selected:cur()?cur().name:null,configs:configs.map(c=>{ let m=null; try{ m=c.spec?normalize(c.spec):null; }catch(_){}
+    return {name:c.name,base_url:c.baseUrl||null,spec_url:c.specUrl||null,spec:m?{kind:m.kind,title:m.title,version:m.apiVersion||null}:null,operations:m?m.ops.length:0,auth_type:(c.auth&&c.auth.type)||'none'}; })})
+});
+Tools.mcp.register({
+  name:'select_config', title:'Select an API configuration', label:'mcp.select',
+  description:'Selects a saved API configuration by its name (as returned by list_configs) and shows it in the app. Returns the spec summary and the server URLs.',
+  inputSchema:{type:'object',properties:{name:{type:'string',minLength:1,maxLength:200,description:'Name of the configuration'}},required:['name'],additionalProperties:false},
+  execute:({name})=>{
+    const c=configs.find(x=>x.name===name)||configs.find(x=>x.name.toLowerCase()===name.trim().toLowerCase());
+    if(!c) throw new Error(`Unknown configuration: ${name}. Known: ${configs.map(x=>x.name).join(', ')||'none'}`);
+    selectConfig(c.id);
+    return {name:c.name,spec:model?{kind:model.kind,title:model.title,version:model.apiVersion||null}:null,operations:model?model.ops.length:0,servers:serverList()};
+  }
+});
+Tools.mcp.register({
+  name:'list_operations', title:'List API operations', readOnly:true,
+  description:'Lists the operations (endpoints) of the selected API configuration: operation id, method, path, summary, parameters and request body content types. Optional filter text matches method, path, id, summary and tag. At most 100 results.',
+  inputSchema:{type:'object',properties:{filter:{type:'string',maxLength:200,description:'Optional text filter'}},additionalProperties:false},
+  execute:({filter})=>{
+    if(!cur()) throw new Error('No configuration selected. Use list_configs and select_config first.');
+    const q=(filter||'').trim().toLowerCase();
+    const ops=(model?model.ops:[]).filter(o=>!q||(o.key+' '+o.id+' '+o.summary+' '+o.tag).toLowerCase().includes(q));
+    return {config:cur().name,total:ops.length,operations:ops.slice(0,100).map(opInfo)};
+  }
+});
+Tools.mcp.register({
+  name:'prepare_request', title:'Fill in an API request', label:'mcp.prepare',
+  description:'Fills in the request form of the app for one operation of the selected configuration: parameter values and an optional body. It does NOT send the request – the user reviews it and presses "Send". Use operation "free" for a free request (then method and path are required). Returns the resulting URL (without credentials) and missing required parameters.',
+  inputSchema:{type:'object',properties:{
+    operation:{type:'string',minLength:1,maxLength:500,description:'operationId, "METHOD /path" as in list_operations, or "free"'},
+    parameters:{type:'object',description:'Parameter values by name, e.g. {"petId": 3}'},
+    body:{type:'string',maxLength:200000,description:'Request body as text (JSON as a string)'},
+    content_type:{type:'string',maxLength:200,description:'One of the content types of the operation'},
+    method:{type:'string',enum:['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'],description:'Only for operation "free"'},
+    path:{type:'string',maxLength:2000,description:'Only for operation "free": path or full URL'},
+    server:{type:'string',maxLength:2000,description:'Optional: one of the server URLs'}
+  },required:['operation'],additionalProperties:false},
+  execute:args=>{
+    if(!cur()) throw new Error('No configuration selected. Use list_configs and select_config first.');
+    const op=findOp(args.operation);
+    if(!op) throw new Error(`Unknown operation: ${args.operation}. Use list_operations.`);
+    const params={}, given=args.parameters||{};
+    for(const [k,v] of Object.entries(given)){
+      const p=op.params.find(x=>x.name===k);
+      if(!p) throw new Error(`Unknown parameter: ${k}. Known: ${op.params.map(x=>x.name).join(', ')||'none'}`);
+      if(v!==null&&typeof v==='object'&&!Array.isArray(v)) throw new Error(`parameters.${k} must be a string, number, boolean or array`);
+      params[p.in+':'+p.name]=Array.isArray(v)?v.join(','):String(v);
+    }
+    if(op.free&&(!args.method||!args.path)) throw new Error('A free request needs method and path.');
+    const types=op.free?null:op.body&&op.body.types;
+    if(args.content_type&&types&&!types.includes(args.content_type)) throw new Error(`content_type must be one of: ${types.join(', ')}`);
+    if(args.body!=null&&!op.free&&!op.body) throw new Error('This operation has no request body.');
+    const list=serverList();
+    if(args.server&&!list.includes(args.server.replace(/\/+$/,''))) throw new Error(`server must be one of: ${list.join(', ')||'none'}`);
+    openOp(op,{params,method:args.method,path:args.path,body:args.body,bodyType:args.content_type,server:args.server&&args.server.replace(/\/+$/,'')});
+    $('reqCard').scrollIntoView({block:'start'});
+    let url=null, missing=[];
+    try{ const r=buildRequest(false,false); url=r.url; missing=r.missing; }catch(e){ return {method:currentMethod(),url:null,error:e.message,sent:false}; }
+    return {method:currentMethod(),url,missing_required:missing,sent:false,note:'The user has to press "Send" in the app.'};
+  }
+});
+Tools.mcp.register({
+  name:'get_last_response', title:'Read the last API response', readOnly:true, untrusted:true,
+  description:'Returns the last response shown in the app: method, URL (without credentials), status, duration in ms, size in bytes, content type, readable headers and the body (text, at most 20000 characters). Returns an error message if the request failed.',
+  execute:()=>{
+    const r=lastRes;
+    if(!r) return {response:null};
+    if(r.pending) return {pending:true,method:r.method,url:r.url};
+    if(r.error) return {method:r.method,url:r.url,error:r.errorCode,message:new Map([['timeout','No response after 60 seconds'],['aborted','Cancelled by the user']]).get(r.errorCode)||'No response (network error or CORS)'};
+    const txt=r.img?'':r.text;
+    return {method:r.method,url:r.url,status:r.status,status_text:r.statusText,duration_ms:r.ms,size_bytes:r.size,content_type:r.ct,
+      headers:Object.fromEntries(r.headers),body:txt.slice(0,20000),body_truncated:txt.length>20000,image:!!r.img};
+  }
+});
+
+/* ---------- Diagnostics (no URLs, specs or credentials) ---------- */
+Tools.diag.info(()=>({configs:configs.length,spec:model?model.kind:(modelErr?'broken':null),operations:model?model.ops.length:0,
+  servers:serverList().length,auth:cur()&&cur().auth?cur().auth.type:null,authSaved:cur()?!!cur().saveAuth:null,history:hist.length,
+  last:lastRes?(lastRes.status||lastRes.errorCode||'pending'):null,yaml:!!window.jsyaml}));
+
+/* ---------- Start ---------- */
+if(state.cur&&!cur()) state.cur=null;
+if(!state.cur&&configs.length) state.cur=configs[0].id;
+selectConfig(state.cur);
+renderHist();
+})();
+</script>
+</body>
+</html>
