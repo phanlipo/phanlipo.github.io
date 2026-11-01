@@ -30,8 +30,8 @@ test('starts as a white canvas with pencil and black', async ({ page }) => {
   await expect(page.locator('[data-tool="pencil"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-color="black"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#colors .sw')).toHaveCount(6);
-  // 4 painting tools + eraser
-  await expect(page.locator('[data-tool]')).toHaveCount(5);
+  // 4 painting tools + paint bucket + eraser
+  await expect(page.locator('[data-tool]')).toHaveCount(6);
 });
 
 test('paints in the chosen colour, the pencil is thin and the brush thick', async ({ page }) => {
@@ -148,10 +148,129 @@ test('the page does not scroll when painting on the canvas', async ({ page }) =>
   expect(style).toBe('none');
 });
 
+// ---------- Paint bucket ----------
+
+/** One continuous stroke through the points (CSS px relative to the canvas) */
+async function path(page, points) {
+  const box = await page.locator('#paper').boundingBox();
+  await page.mouse.move(box.x + points[0][0], box.y + points[0][1]);
+  await page.mouse.down();
+  for (const [x, y] of points.slice(1)) await page.mouse.move(box.x + x, box.y + y, { steps: 15 });
+  await page.mouse.up();
+}
+async function tap(page, x, y) {
+  const box = await page.locator('#paper').boundingBox();
+  await page.mouse.click(box.x + x, box.y + y);
+}
+/** Counts pixels in a CSS rectangle: exactly the colour, near white, other */
+const count = (page, [x1, y1, x2, y2], rgb) => page.evaluate(([x1, y1, x2, y2, rgb]) => {
+  const c = document.getElementById('paper'), r = c.width / c.clientWidth;
+  const X1 = Math.round(x1 * r), Y1 = Math.round(y1 * r), X2 = Math.round(x2 * r), Y2 = Math.round(y2 * r);
+  const d = c.getContext('2d').getImageData(X1, Y1, X2 - X1, Y2 - Y1).data;
+  const res = { color: 0, white: 0, other: 0, all: d.length / 4 };
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i] === rgb[0] && d[i + 1] === rgb[1] && d[i + 2] === rgb[2]) res.color++;
+    else if (d[i] > 230 && d[i + 1] > 230 && d[i + 2] > 230) res.white++;
+    else res.other++;
+  }
+  return res;
+}, [x1, y1, x2, y2, rgb]);
+const RED = [0xe5, 0x39, 0x35], BLUE = [0x1e, 0x88, 0xe5];
+const whole = page => page.evaluate(() => { const c = document.getElementById('paper'); return [0, 0, c.clientWidth, c.clientHeight]; });
+// Rectangle 40…200 × 40…160, pencil line 3 px wide
+const RECT = [[40, 40], [200, 40], [200, 160], [40, 160], [40, 40]];
+const INSIDE = [44, 44, 196, 156], OUTSIDE_BAND = [210, 20, 280, 180];
+
+test.describe('paint bucket', () => {
+  test('on an empty canvas it fills the whole canvas', async ({ page }) => {
+    await page.click('[data-tool="fill"]');
+    await page.click('[data-color="red"]');
+    await expect(page.locator('[data-tool="fill"]')).toHaveAttribute('aria-pressed', 'true');
+    await tap(page, 100, 100);
+    const c = await count(page, await whole(page), RED);
+    expect(c.color).toBe(c.all);
+  });
+
+  test('fills the inside of a closed shape completely – no light seam at the line', async ({ page }) => {
+    await path(page, RECT);
+    await page.click('[data-tool="fill"]');
+    await page.click('[data-color="red"]');
+    await tap(page, 120, 100);
+    const inside = await count(page, INSIDE, RED);
+    expect(inside.white).toBe(0);
+    // Inside the line only red (plus the line's own smoothed edge, which is dark, not white)
+    expect(inside.color).toBeGreaterThan(inside.all * 0.97);
+    // Outside the shape stays white, the line is still there
+    const out = await count(page, OUTSIDE_BAND, RED);
+    expect(out.white).toBe(out.all);
+    const line = await pixel(page, 120, 40);
+    expect(line[0]).toBeLessThan(100);
+  });
+
+  test('outside a closed shape it fills up to the canvas edge and leaves the inside', async ({ page }) => {
+    await path(page, RECT);
+    await page.click('[data-tool="fill"]');
+    await page.click('[data-color="blue"]');
+    await tap(page, 250, 250);
+    expect(near(await pixel(page, 0, 0), BLUE, 0)).toBe(true);
+    const [, , w, h] = await whole(page);
+    expect(near(await pixel(page, w - 1, h - 1), BLUE, 0)).toBe(true);
+    const inside = await count(page, INSIDE, BLUE);
+    expect(inside.white).toBe(inside.all);
+  });
+
+  test('a gap in the shape lets the paint run out', async ({ page }) => {
+    await path(page, [[40, 40], [200, 40], [200, 160], [40, 160], [40, 70]]);// left side open from 40…70
+    await page.click('[data-tool="fill"]');
+    await page.click('[data-color="red"]');
+    await tap(page, 120, 100);
+    expect(near(await pixel(page, 120, 100), RED, 0)).toBe(true);
+    expect(near(await pixel(page, 300, 300), RED, 0)).toBe(true);
+  });
+
+  test('fills a marker area with solid colour; same colour again changes nothing', async ({ page }) => {
+    await page.click('[data-tool="marker"]');
+    await stroke(page, 20, 100, 260, 100);
+    await page.click('[data-tool="fill"]');
+    await page.click('[data-color="blue"]');
+    await tap(page, 140, 100);
+    expect(near(await pixel(page, 140, 100), BLUE, 0)).toBe(true);
+    expect(near(await pixel(page, 140, 112), BLUE, 0)).toBe(true);
+    // The white around the marker stroke is a different area
+    expect(await pixel(page, 140, 160)).toEqual(WHITE);
+    const before = await page.evaluate(() => document.getElementById('paper').toDataURL());
+    await tap(page, 140, 100);
+    expect(await page.evaluate(() => document.getElementById('paper').toDataURL())).toBe(before);
+  });
+
+  test('stays after reload; eraser then colour goes back to the paint bucket', async ({ page }) => {
+    await path(page, RECT);
+    await page.click('[data-tool="fill"]');
+    await page.click('[data-color="red"]');
+    await tap(page, 120, 100);
+    await page.click('[data-tool="eraser"]');
+    await page.click('[data-color="green"]');
+    await expect(page.locator('[data-tool="fill"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => page.evaluate(() => !!localStorage.getItem('paint.drawing.v1'))).toBe(true);
+    await page.reload();
+    await expect.poll(async () => near(await pixel(page, 120, 100), RED, 0)).toBe(true);
+    expect(await pixel(page, 250, 250)).toEqual(WHITE);
+    await expect(page.locator('[data-tool="fill"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('toolbar still fits at 375 px', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    const right = await page.locator('#btnReset').evaluate(el => el.getBoundingClientRect().right);
+    expect(right).toBeLessThanOrEqual(375);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  });
+});
+
 test.describe('English', () => {
   test.use({ locale: 'en-US' });
   test('labels are English', async ({ page }) => {
     await expect(page.locator('[data-tool="eraser"]')).toHaveAttribute('aria-label', 'Eraser');
+    await expect(page.locator('[data-tool="fill"]')).toHaveAttribute('aria-label', 'Paint bucket');
     await expect(page.locator('[data-color="purple"]')).toHaveAttribute('aria-label', 'Purple');
     await expect(page.locator('#btnReset')).toHaveAttribute('aria-label', 'Clear canvas');
   });
