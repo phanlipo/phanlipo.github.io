@@ -1,6 +1,7 @@
-// Stage layout (<body class="stage">, see AGENTS.md "Bühne"): the interaction fills the screen, the page does not
-// scroll; settings, history, data backup, help and footer are in the menu (☰), which "back" closes.
-import { test, expect, stageApps, VIEWPORTS, expectNoHorizontalScroll } from './helpers.mjs';
+// App menu (☰, every app) and stage layout (<body class="stage">), see AGENTS.md "Layout: Karten oder Bühne".
+// Every app: settings/history marked data-menu, data backup, help and footer are in the menu, which "back" closes.
+// Stage apps additionally fill the screen, the page does not scroll.
+import { test, expect, apps, stageApps, VIEWPORTS, expectNoHorizontalScroll } from './helpers.mjs';
 
 const list = stageApps();
 
@@ -13,7 +14,6 @@ const PHONES = { portrait: { width: 375, height: 667 }, landscape: { width: 667,
 for (const app of list) {
   test.describe(`${app.folder} · stage`, () => {
     const url = `/${app.folder}/`;
-
     for (const [name, viewport] of Object.entries(PHONES)) {
       test(`fills the screen without scrolling (${name})`, async ({ page }) => {
         await page.setViewportSize(viewport);
@@ -33,6 +33,34 @@ for (const app of list) {
         await expect(page.locator('.menu-btn')).toBeVisible();
       });
     }
+  });
+}
+
+for (const app of apps()) {
+  test.describe(`${app.folder} · menu`, () => {
+    const url = `/${app.folder}/`;
+
+    test('menu button at the right of the header, fits at 375 px', async ({ page }) => {
+      await page.setViewportSize(VIEWPORTS.mobile);
+      await page.goto(url);
+      const btn = page.locator('body > header .menu-btn');
+      await expect(btn).toBeVisible();
+      const b = await btn.boundingBox();
+      expect(b.width).toBeGreaterThanOrEqual(44);
+      expect(b.height).toBeGreaterThanOrEqual(44);
+      expect(b.x + b.width).toBeLessThanOrEqual(375);
+      expect(b.x + b.width, 'right edge of the header').toBeGreaterThan(375 - 24);
+      // Nothing in the header lies under the button
+      const overlap = await page.evaluate(() => {
+        const r = document.querySelector('.menu-btn').getBoundingClientRect();
+        return [...document.querySelectorAll('body > header > :not(.stage-actions)')].some(el => {
+          const e = el.getBoundingClientRect();
+          return e.width && e.height && e.right > r.left + 1 && e.left < r.right - 1 && e.bottom > r.top + 1 && e.top < r.bottom - 1;
+        });
+      });
+      expect(overlap).toBe(false);
+      await expectNoHorizontalScroll(page);
+    });
 
     test('menu holds settings, data backup, help and footer; opens and closes', async ({ page }) => {
       await page.setViewportSize(PHONES.portrait);
@@ -109,7 +137,7 @@ for (const app of list) {
 
     test.describe('without JavaScript', () => {
       test.use({ javaScriptEnabled: false });
-      test('help, data backup and footer stay reachable below the stage', async ({ page }) => {
+      test('help, data backup and footer stay reachable at the end of the page', async ({ page }) => {
         await page.setViewportSize(PHONES.portrait);
         await page.goto(url);
         await expect(page.locator('#appMenu')).toHaveCount(0);

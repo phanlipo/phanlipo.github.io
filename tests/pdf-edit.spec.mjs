@@ -1,7 +1,7 @@
 // PDF bearbeiten: merge, remove, rotate and reorder pages. The saved PDF is read back with a small
 // independent parser (pdf-tools.mjs) – page order from the page tree, rotation from /Rotate,
 // and each page is recognised by the text it shows.
-import { test, expect } from './helpers.mjs';
+import { test, expect, switchLang } from './helpers.mjs';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { makePdf, readPdfPages } from './pdf-tools.mjs';
@@ -341,7 +341,7 @@ test.describe('English', () => {
     await page.click('#pwCancel');
     await expect(page.locator('#addInfo')).toHaveText('“geheim.pdf” was not opened without a password.');
     // switching the language renames the suggested file name until the user types one
-    await page.click('[data-set-lang="de"]');
+    await switchLang(page, 'de');
     await expect(page.locator('#fileName')).toHaveValue('a (bearbeitet)');
     await expect(thumbs(page).nth(1).locator('.thumb')).toHaveAttribute('aria-label', 'Seite 2 – Datei A, Seite 2');
   });

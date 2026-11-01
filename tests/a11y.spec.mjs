@@ -20,7 +20,7 @@ for (const p of pages) {
         return violations.map(v => `${v.id} (${v.impact}): ${v.help} → ${v.nodes.slice(0, 3).map(n => n.target.join(' ')).join(' | ')}`);
       };
       expect(await check()).toEqual([]);
-      // Stage apps: once more with the menu open (help, data backup, settings and footer are in it)
+      // Once more with the menu open (help, data backup, settings and footer are in it)
       if (await page.locator('.menu-btn').count()) {
         await page.locator('.menu-btn').click();
         await expect(page.locator('#appMenu')).toBeVisible();

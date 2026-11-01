@@ -2,7 +2,7 @@
 // unchanged or as WAV; the files are checked with independent readers (audio-files.mjs).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, openDetails, clipboardText } from './helpers.mjs';
+import { test, expect, openDetails, clipboardText, switchLang, openMenu } from './helpers.mjs';
 import { CLIPS, FIX, clip, mp4Info, oggInfo, wavInfo, toneHz, peak } from './audio-files.mjs';
 
 const URL_ = '/video-to-audio/';
@@ -143,6 +143,7 @@ test('works offline', async ({ page, context }) => {
 test('diagnostics: steps and codec, never the file name', async ({ page }) => {
   await page.goto(URL_);
   await extract(page, 'aac', 'original');
+  await openMenu(page);
   await openDetails(page, 'Anleitung & Hinweise');
   await page.click('[data-diag="copy"]');
   const text = await clipboardText(page);
@@ -163,7 +164,7 @@ test.describe('English', () => {
     await page.click('#btnRun');
     await expect(page.locator('#status')).toHaveText('Done.');
     await expect(page.locator('#btnSave')).toHaveText('Save audio');
-    await page.getByRole('button', { name: 'Deutsch' }).click();
+    await switchLang(page, 'de');
     await expect(page.locator('#fileInfo')).toContainText('Tonspur: AAC, Mono, 44,1 kHz');
     await expect(page.locator('#btnSave')).toHaveText('Audio speichern');
   });

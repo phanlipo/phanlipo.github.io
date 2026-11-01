@@ -404,13 +404,14 @@ window.Tools = (function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupDataUi);
   else setupDataUi();
 
-  /* ---------- Stage layout: the interaction fills the screen, everything else is in the menu ----------
-     <body class="stage">: the header (title, optional <div class="stage-actions"> with up to two quick actions
-     as <button class="head-btn">) and <main> fill exactly the screen, the page itself does not scroll.
-     The menu button (☰, added here) opens a modal <dialog> – a bottom sheet on phones, a side panel on wide
-     screens. It gets, in this order: every element with data-menu (app settings, history …), the data backup
-     section, the help and the footer. Without JavaScript they simply stay below <main>.
-     The back button/gesture closes the menu instead of leaving the app. Tools.menu.open() / .close(). */
+  /* ---------- App menu (every app) and stage layout ----------
+     Every app (page with <details class="help">) gets a menu button (☰) at the right of its header. It opens a
+     modal <dialog> – a bottom sheet on phones, a side panel on wide screens – with, in this order: every element
+     with data-menu (app settings, history …), the data backup section, the help and the footer.
+     Without JavaScript they simply stay at the end of the page.
+     The back button/gesture closes the menu instead of leaving the app. Tools.menu.open() / .close().
+     <body class="stage"> (stage layout): the header (title, optional <div class="stage-actions"> with up to two
+     quick actions as <button class="head-btn">) and <main> fill exactly the screen, the page does not scroll. */
   Object.assign(dict.de, { 'menu.open': 'Menü', 'menu.title': 'Menü', 'menu.close': 'Menü schließen' });
   Object.assign(dict.en, { 'menu.open': 'Menu', 'menu.title': 'Menu', 'menu.close': 'Close menu' });
   const svgIcon = d => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
@@ -423,14 +424,15 @@ window.Tools = (function () {
     if (!menuEl || menuEl.open) return;
     menuEl.showModal();
     menuBtn.setAttribute('aria-expanded', 'true');
-    // An own history entry, so "back" closes the menu (with CloseWatcher the dialog closes itself, see 'close')
-    try { history.pushState({ toolsMenu: true }, ''); menuPushed = true; } catch (_) {}
+    // An own history entry, so "back" closes the menu (with CloseWatcher the dialog closes itself, see 'close').
+    // It keeps the current state, so pages with their own entries (e.g. sensors: tool view) see the same state.
+    try { history.pushState(Object.assign({}, history.state, { toolsMenu: true }), ''); menuPushed = true; } catch (_) {}
     diagLog('menu opened');
   }
   function menuClose() { if (menuEl && menuEl.open) menuEl.close(); }
 
   function setupMenu() {
-    if (menuEl || !document.body.classList.contains('stage')) return;
+    if (menuEl || !document.querySelector('details.help')) return;
     const header = document.querySelector('body > header');
     if (!header) return;
     const parts = [...document.querySelectorAll('[data-menu]'), document.querySelector('details.data'),

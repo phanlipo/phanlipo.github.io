@@ -116,10 +116,11 @@ export async function openDetails(scope, summaryText) {
 
 /** Apps with the stage layout (<body class="stage">): help, data backup, footer and data-menu sections are in the menu */
 export function stageApps() {
-  return apps().filter(a => /<body class="[^"]*\bstage\b/.test(readFileSync(join(ROOT, a.folder, 'index.html'), 'utf8')));
+  // The body tag itself at the start of a line (not the hint in a comment, e.g. in the template)
+  return apps().filter(a => /^<body class="[^"]*\bstage\b/m.test(readFileSync(join(ROOT, a.folder, 'index.html'), 'utf8')));
 }
 
-/** Opens the menu (☰) of a stage app, so its sections can be used; does nothing on other pages */
+/** Opens the app menu (☰), so its sections (help, data backup, footer, data-menu) can be used; does nothing on pages without it */
 export async function openMenu(page) {
   const btn = page.locator('.menu-btn');
   if (!(await btn.count())) return;
@@ -135,4 +136,11 @@ export async function closeMenu(page) {
   await expect(page.locator('#appMenu')).toBeHidden();
   // Closing goes back over the menu's history entry (asynchronous) – wait for it before navigating
   await expect.poll(() => page.evaluate(() => !(history.state && history.state.toolsMenu))).toBe(true);
+}
+
+/** Switches the language with the switch in the app menu ('de' | 'en') and closes the menu again */
+export async function switchLang(page, lang) {
+  await openMenu(page);
+  await page.locator(`[data-set-lang="${lang}"]`).click();
+  await closeMenu(page);
 }

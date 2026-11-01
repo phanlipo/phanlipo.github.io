@@ -1,5 +1,5 @@
 // Würfel & Münze: value ranges, modes, holding, persistence and a rough fairness check.
-import { test, expect, openDetails } from './helpers.mjs';
+import { test, expect, openDetails, switchLang, openMenu } from './helpers.mjs';
 
 /** Values of all dice in board order (null = not rolled yet) */
 async function dice(page) {
@@ -132,6 +132,7 @@ test('backup round trip: roll, export, clear, import', async ({ page }) => {
   await page.click('#btnRoll');
   await page.click('#btnRoll');
   const rolled = await dice(page);
+  await openMenu(page);
   await page.locator('details.data summary').click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.click('[data-data="export"]')]);
   const path = await download.path();
@@ -141,6 +142,8 @@ test('backup round trip: roll, export, clear, import', async ({ page }) => {
   await page.waitForEvent('load');
   await expect(page.locator('#board .die')).toHaveCount(2);          // back to defaults
   await expect(page.locator('#histCount')).toHaveText('0');
+
+  await openMenu(page);
 
   await page.locator('details.data summary').click();
   page.once('dialog', d => d.accept());
@@ -174,11 +177,11 @@ test.describe('English', () => {
     await expect(page.locator('#coinHeads')).toHaveValue('Heads');
     await page.click('#btnRoll');
     expect(['Heads', 'Tails']).toContain(await page.locator('#board .coin').textContent());
-    await page.getByRole('button', { name: 'Deutsch' }).click();
+    await switchLang(page, 'de');
     expect(['Kopf', 'Zahl']).toContain(await page.locator('#board .coin').textContent());
     await expect(page.locator('#coinHeads')).toHaveValue('Kopf');
     await page.fill('#coinHeads', 'Ja');
-    await page.getByRole('button', { name: 'English' }).click();
+    await switchLang(page, 'en');
     await expect(page.locator('#coinHeads')).toHaveValue('Ja');
     await expect(page.locator('#coinTails')).toHaveValue('Tails');
   });
@@ -200,7 +203,7 @@ test('switching the language updates the generated texts at once', async ({ page
   await setStepper(page, 'dice.count', 3);
   await page.click('#segDiceMode [data-v="single"]');
   await expect(page.locator('#btnRoll')).toHaveText('Würfel 1 würfeln');
-  await page.getByRole('button', { name: 'English' }).click();
+  await switchLang(page, 'en');
   await expect(page.locator('#btnRoll')).toHaveText('Roll die 1');
   await expect(page.locator('#modeHelp')).toContainText('Each die is rolled on its own');
   await expect(page.locator('#segDiceMode [data-v="single"]')).toHaveText('One by one');

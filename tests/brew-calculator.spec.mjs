@@ -1,5 +1,5 @@
 // Brau-Rechner: results are checked against an independent re-implementation of the formulas.
-import { test, expect, openDetails } from './helpers.mjs';
+import { test, expect, openDetails, switchLang } from './helpers.mjs';
 
 // ---- reference formulas (independent from the page code) ----
 const rhoW = T => (999.83952 + 16.945176 * T - 7.9870401e-3 * T ** 2 - 46.170461e-6 * T ** 3
@@ -179,7 +179,7 @@ test.describe('English', () => {
     await expect(page.locator('#zChips .chip').first()).toContainText('Stout / Porter · 4.0 g/L');
     await openDetails(page.locator('#stammwuerze'), 'Formulas');
     await expect(page.locator('#sMath .legend', { hasText: 'ASBC' })).toContainText('−616.868');
-    await page.getByRole('button', { name: 'Deutsch' }).click();
+    await switchLang(page, 'de');
     await expect(main(page, 'vRes')).toContainText('25,45');
   });
 });
