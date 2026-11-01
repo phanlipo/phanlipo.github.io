@@ -87,6 +87,7 @@ function pageInfo({ folder, file }) {
     shareAccept: (meta(html, 'tool:share-target') || '').split(',').map(s => s.trim()).filter(Boolean),
     shareText: meta(html, 'tool:share-text') === 'true',
     webmcp: (meta(html, 'tool:webmcp') || '').split(',').map(s => s.trim()).filter(Boolean),
+    connect: (meta(html, 'tool:connect') || '').split(/\s+/).filter(Boolean),
     icon: existsSync(join(ROOT, folder, 'icon.svg')),
   };
 }
@@ -106,6 +107,10 @@ for (const t of tools) {
     throw new Error(`${t.file}: tool:webmcp is set – add "KI-Agent" to tool:features`);
   if (t.features.includes('KI-Agent') && !t.webmcp.length)
     throw new Error(`${t.file}: feature "KI-Agent" needs <meta name="tool:webmcp"> with the tool names`);
+  // Extra connect-src sources (only for apps whose purpose is talking to servers the user names, e.g. api-check)
+  for (const c of t.connect)
+    if (!/^(https:|https:\/\/[a-z0-9.*-]+(:\d+)?|http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\*|:\d+)?)$/.test(c))
+      throw new Error(`${t.file}: tool:connect "${c}" not allowed (https: / https://host / http://localhost:* only)`);
   if (!t.titleEn || !t.descriptionEn)
     throw new Error(`${t.file}: <meta name="tool:title-en"> and <meta name="tool:description-en"> are required (English start page and manifest)`);
 }
@@ -189,7 +194,7 @@ function csp(p) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "media-src 'self' blob: mediastream:",
-    "connect-src 'self'",
+    `connect-src 'self'${p.connect?.length ? ' ' + p.connect.join(' ') : ''}`,
     "font-src 'self'",
     "worker-src 'self'",
     "manifest-src 'self'",

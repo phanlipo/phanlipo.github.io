@@ -10,6 +10,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 <!-- tools:start -->
 | Seite | Ordner | Beschreibung |
 |---|---|---|
+| [API-Check](https://phanlipo.github.io/api-check/) | `api-check/` | REST-APIs ausprobieren: API-Adresse und OpenAPI/Swagger-Spezifikation (JSON oder YAML) angeben – daraus entsteht ein Formular für jede Anfrage. Konfigurationen bleiben gespeichert. |
 | [Brau-Rechner](https://phanlipo.github.io/brew-calculator/) | `brew-calculator/` | Rechner fürs Hobbybrauen: Volumen im zylindrischen Topf, Temperaturkorrektur der Stammwürze (Spindel) und Zuckermenge für die Nachgärung – jeweils mit Formeln und Erklärung. |
 | [Countdown – wie lange noch?](https://phanlipo.github.io/countdown/) | `countdown/` | Tage, Stunden, Minuten oder Sekunden bis zu einem Datum mit Uhrzeit – live ab jetzt oder ab einem eigenen Startdatum. |
 | [Datensammler – Messwerte erfassen & auswerten](https://phanlipo.github.io/data-logger/) | `data-logger/` | Eigene Profile mit Messwerten und Einheiten anlegen, Werte mit Zeitpunkt erfassen und als Kurven auswerten – Export als Bild, JSON oder CSV. |
