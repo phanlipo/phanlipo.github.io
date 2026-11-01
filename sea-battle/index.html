@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Schiffe versenken</title>
+<meta name="description" content="Zu zweit auf zwei Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server.">
+<meta name="tool:tags" content="Freizeit, Spiele">
+<meta name="tool:features" content="Kamera, KI-Agent">
+<meta name="tool:icon" content="ship">
+<meta name="tool:color" content="#0c5a74">
+<meta name="tool:short-name" content="Schiffe">
+<meta name="tool:title-en" content="Sea Battle">
+<meta name="tool:description-en" content="Two players on two phones – connected by QR code, directly device to device, without a server.">
+<meta name="tool:short-name-en" content="Sea Battle">
+<meta name="tool:storage" content="sea-battle.">
+<meta name="tool:webmcp" content="get_game, fire_shot">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-p02PROefKpt2aky9wOGPV3Tf1dCJaIMUMTpw6eHVXkQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Schiffe">
+<meta name="theme-color" content="#0c5a74">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0c5a74;--accent-text:#ffffff;--sea:#d6eaf2;--sea-line:#a9cddb}
+@media (prefers-color-scheme: dark){:root{--accent:#67c5e0;--accent-text:#04202a;--sea:#0f2a36;--sea-line:#24495a}}
+main{display:flex;flex-direction:column;padding:12px;padding-inline:max(12px,env(safe-area-inset-left)) max(12px,env(safe-area-inset-right))}
+.scr{flex:1 0 auto;display:flex;flex-direction:column;gap:12px;width:100%;max-width:1100px;margin-inline:auto}
+.scr[hidden]{display:none}
+#scrSetup,#scrPlay{flex:1 1 0;min-height:0}
+.narrow{max-width:520px}
+.lead{margin:0;font-size:16px}
+.big-btns{display:grid;gap:10px}
+.big-btns .btn{min-height:64px;font-size:18px;justify-content:center}
+.big-btns small{display:block;font-size:14px;font-weight:400;opacity:.9}
+.steps{margin:0;padding-inline-start:22px;display:grid;gap:4px}
+.stats{display:flex;gap:16px;justify-content:center;font-size:16px}
+.stats b{font-variant-numeric:tabular-nums}
+.status{margin:0;text-align:center;font-weight:600;min-height:1.5em}
+.status.err{color:var(--err)}
+.status.ok{color:var(--ok)}
+.qr-box{display:grid;justify-items:center;gap:8px}
+.qr-box canvas{width:min(78vw,300px);height:auto;aspect-ratio:1;image-rendering:pixelated;border-radius:8px;background:#fff}
+.step-h{font-size:17px;margin:0}
+textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;word-break:break-all}
+.row.center{justify-content:center}
+.check{display:flex;gap:10px;align-items:flex-start;min-height:44px;font-size:16px;cursor:pointer}
+.check input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--accent)}
+
+/* ---------- Scanner ---------- */
+.video-wrap{position:relative;flex:1;min-height:200px;border-radius:12px;overflow:hidden;background:#000}
+.video-wrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.video-wrap::after{content:"";position:absolute;inset:15%;border:3px solid rgba(255,255,255,.8);border-radius:12px;pointer-events:none}
+
+/* ---------- Boards ---------- */
+.board-area{flex:1;min-height:0;container-type:size;display:grid;place-items:center}
+.board{--n:11;display:grid;grid-template-columns:repeat(var(--n),1fr);gap:2px;width:min(100cqw,100cqh,560px);aspect-ratio:1;user-select:none;-webkit-user-select:none}
+.board .lbl{display:grid;place-items:center;font-size:clamp(9px,2.6cqmin,14px);color:var(--muted);font-weight:600}
+.cell{position:relative;display:grid;place-items:center;padding:0;border:1px solid var(--sea-line);border-radius:3px;background:var(--sea);color:var(--text);font:inherit;min-width:0;min-height:0;-webkit-tap-highlight-color:transparent}
+button.cell{cursor:pointer}
+button.cell:disabled{cursor:default;opacity:1}
+button.cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px;z-index:1}
+.cell.ship{background:var(--accent);border-color:var(--accent)}
+.cell.sel{box-shadow:inset 0 0 0 3px var(--text)}
+.cell.reveal{background:transparent;border:2px dashed var(--accent)}
+.cell.miss::after{content:"";width:22%;height:22%;border-radius:50%;background:var(--muted)}
+.cell.hit::before,.cell.hit::after{content:"";position:absolute;width:62%;height:14%;border-radius:2px;background:var(--err);transform:rotate(45deg)}
+.cell.hit::after{transform:rotate(-45deg)}
+.cell.sunk{background:color-mix(in srgb,var(--err) 28%,var(--sea));border-color:var(--err)}
+.cell.last{box-shadow:0 0 0 2px var(--text);z-index:1}
+.cell.pending{animation:blink .6s ease-in-out infinite alternate}
+@keyframes blink{to{background:var(--accent)}}
+@media (prefers-reduced-motion:reduce){.cell.pending{animation:none;background:var(--accent)}}
+.board.locked button.cell:not(:disabled){cursor:not-allowed}
+
+/* ---------- Setup ---------- */
+.fleet{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:0;padding:0;list-style:none;font-size:14px}
+.fleet li{display:flex;align-items:center;gap:4px;background:var(--surface-2);border-radius:999px;padding:2px 10px}
+.fleet li.down{text-decoration:line-through;color:var(--muted)}
+.fleet .bar{display:inline-flex;gap:1px}
+.fleet .bar i{width:8px;height:8px;border-radius:2px;background:var(--accent)}
+.fleet li.down .bar i{background:var(--err)}
+.fleet.compact{gap:4px;justify-content:flex-start}
+.fleet.compact li{padding:4px 6px}
+.fleet.compact .bar i{width:9px;height:9px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.toolbar .btn{flex:1 1 0;min-width:96px;justify-content:center}
+
+/* ---------- Play ---------- */
+.turn{margin:0;text-align:center;font-size:17px;font-weight:700;padding:8px;border-radius:10px;background:var(--surface-2)}
+.turn.mine{background:var(--accent);color:var(--accent-text)}
+.turn.won{background:var(--ok);color:#fff}
+.turn.lost{background:var(--err);color:#fff}
+.play-grid{flex:1;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:10px}
+.mine-row{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
+.mini{width:min(46vw,190px)}
+.mini .board{width:100%}
+.mini .lbl{font-size:8px}
+.side-info{display:grid;gap:6px}
+.side-info h2{font-size:14px;margin:0;color:var(--muted)}
+.over-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+@media (min-width:760px) and (min-height:521px) and (min-aspect-ratio:1/1){
+  .play-grid{grid-template-rows:minmax(0,1fr);grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+  .mine-row{grid-template-columns:1fr;align-content:center}
+  .mini{width:min(100%,360px);justify-self:center}
+  .mini .lbl{font-size:12px}
+}
+/* Landscape phone: board next to the controls */
+@media (max-height:520px) and (min-aspect-ratio:1/1){
+  .play-grid{grid-template-rows:minmax(0,1fr);grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .mine-row{grid-template-columns:auto 1fr;align-content:center}
+  .mini{width:min(40vw,120px)}
+  #scrSetup{flex-direction:row;flex-wrap:wrap}
+  #scrSetup .board-area{flex:1 1 50%;min-height:260px}
+  #scrSetup .setup-side{flex:1 1 40%}
+}
+.setup-side{display:grid;gap:10px;align-content:start}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Schiffe versenken</span></h1>
+  <p class="sub" data-i18n="sub">Zu zweit auf zwei Handys</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnLeave" hidden aria-label="Spiel verlassen" title="Spiel verlassen" data-i18n-attr="aria-label:leave; title:leave"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2"/><path d="M9 12h12l-3 -3"/><path d="M18 15l3 -3"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <!-- Start: create or join a game -->
+  <section class="scr narrow" id="scrLobby" aria-labelledby="h-lobby">
+    <h2 id="h-lobby" class="sr-only" data-i18n="lobby">Spiel starten</h2>
+    <p class="lead" data-i18n="lead">Zwei Handys, ein Spiel: Die Verbindung entsteht über zwei QR-Codes und läuft danach direkt von Gerät zu Gerät.</p>
+    <div class="big-btns">
+      <button type="button" class="btn primary" id="btnHost"><span><span data-i18n="host">Neues Spiel</span><small data-i18n="hostSub">zeigt einen QR-Code zum Scannen</small></span></button>
+      <button type="button" class="btn" id="btnJoin"><span><span data-i18n="join">Beitreten</span><small data-i18n="joinSub">QR-Code des anderen scannen</small></span></button>
+    </div>
+    <p class="status" id="lobbyStatus" role="status"></p>
+    <details class="card">
+      <summary data-i18n="pasteOffer">Spiel-Code von Hand eingeben</summary>
+      <label for="offerIn" data-i18n="pasteOfferLbl">Spiel-Code oder Link des anderen (z. B. per Nachricht geschickt):</label>
+      <textarea id="offerIn" class="code" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+      <div class="row"><button type="button" class="btn" id="btnOfferIn" data-i18n="connect">Verbinden</button></div>
+    </details>
+    <ol class="steps">
+      <li data-i18n="step1">Handy A tippt auf „Neues Spiel“.</li>
+      <li data-i18n="step2">Handy B tippt auf „Beitreten“ und scannt den Code von A.</li>
+      <li data-i18n="step3">Handy A scannt den Antwort-Code von B – fertig.</li>
+    </ol>
+    <p class="muted" data-i18n="sameWifi">Beide Geräte im selben WLAN oder ein Handy als Hotspot für das andere.</p>
+    <p class="stats" aria-live="polite"><span><span data-i18n="wins">Siege</span>: <b id="sWins">0</b></span><span><span data-i18n="losses">Niederlagen</span>: <b id="sLosses">0</b></span></p>
+  </section>
+
+  <!-- Host: show the offer, then scan the answer -->
+  <section class="scr narrow" id="scrHost" aria-labelledby="h-host" hidden>
+    <h2 id="h-host" class="step-h" data-i18n="hostH1">1. Das andere Handy scannt diesen Code</h2>
+    <div class="qr-box">
+      <canvas id="qrOffer" width="300" height="300" role="img" aria-label="QR-Code zum Beitreten" data-i18n-attr="aria-label:qrOffer"></canvas>
+      <div class="row center">
+        <button type="button" class="btn" id="btnCopyOffer" data-i18n="copyCode">Code kopieren</button>
+        <button type="button" class="btn" id="btnShareOffer" data-i18n="share" hidden>Teilen …</button>
+      </div>
+    </div>
+    <h2 class="step-h" data-i18n="hostH2">2. Dann den Antwort-Code scannen</h2>
+    <button type="button" class="btn primary" id="btnScanAnswer" data-i18n="scanAnswer">Antwort-Code scannen</button>
+    <details class="card">
+      <summary data-i18n="pasteAnswer">Antwort-Code von Hand eingeben</summary>
+      <label for="answerIn" data-i18n="pasteAnswerLbl">Antwort-Code des anderen:</label>
+      <textarea id="answerIn" class="code" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+      <div class="row"><button type="button" class="btn" id="btnAnswerIn" data-i18n="connect">Verbinden</button></div>
+    </details>
+    <p class="status" id="hostStatus" role="status"></p>
+  </section>
+
+  <!-- Guest: show the answer -->
+  <section class="scr narrow" id="scrGuest" aria-labelledby="h-guest" hidden>
+    <h2 id="h-guest" class="step-h" data-i18n="guestH">Jetzt scannt das andere Handy diesen Antwort-Code</h2>
+    <div class="qr-box">
+      <canvas id="qrAnswer" width="300" height="300" role="img" aria-label="QR-Code mit der Antwort" data-i18n-attr="aria-label:qrAnswer"></canvas>
+      <div class="row center">
+        <button type="button" class="btn" id="btnCopyAnswer" data-i18n="copyCode">Code kopieren</button>
+        <button type="button" class="btn" id="btnShareAnswer" data-i18n="share" hidden>Teilen …</button>
+      </div>
+    </div>
+    <p class="status" id="guestStatus" role="status"></p>
+  </section>
+
+  <!-- Camera -->
+  <section class="scr narrow" id="scrScan" aria-labelledby="h-scan" hidden>
+    <h2 id="h-scan" class="step-h"></h2>
+    <div class="video-wrap"><video id="video" playsinline muted></video></div>
+    <p class="status" id="scanStatus" role="status"></p>
+    <button type="button" class="btn" id="btnScanCancel" data-i18n="cancel">Abbrechen</button>
+  </section>
+
+  <!-- Place the ships -->
+  <section class="scr" id="scrSetup" aria-labelledby="h-setup" hidden>
+    <h2 id="h-setup" class="sr-only" data-i18n="setupH">Schiffe aufstellen</h2>
+    <div class="board-area"><div class="board" id="setupBoard" role="group" aria-label="Deine Flotte aufstellen" data-i18n-attr="aria-label:setupBoard"></div></div>
+    <div class="setup-side">
+      <p class="status" id="setupStatus" role="status"></p>
+      <div class="toolbar">
+        <button type="button" class="btn" id="btnRandom" data-i18n="random">Zufällig</button>
+        <button type="button" class="btn" id="btnRotate" data-i18n="rotate">Drehen</button>
+        <button type="button" class="btn primary" id="btnReady" data-i18n="ready">Fertig</button>
+      </div>
+      <ul class="fleet" id="setupFleet" aria-label="Flotte" data-i18n-attr="aria-label:fleet"></ul>
+    </div>
+  </section>
+
+  <!-- Game -->
+  <section class="scr" id="scrPlay" aria-labelledby="h-play" hidden>
+    <h2 id="h-play" class="sr-only" data-i18n="playH">Spiel</h2>
+    <p class="turn" id="turn" role="status"></p>
+    <div class="over-actions" id="overActions" hidden>
+      <button type="button" class="btn primary" id="btnAgain" data-i18n="again">Nochmal spielen</button>
+      <button type="button" class="btn" id="btnEnd" data-i18n="end">Beenden</button>
+    </div>
+    <div class="play-grid">
+      <div class="board-area"><div class="board" id="enemyBoard" role="group" aria-label="Meer des Gegners" data-i18n-attr="aria-label:enemyBoard"></div></div>
+      <div class="mine-row">
+        <div class="mini"><div class="board" id="ownBoard" role="img" aria-label="Deine Flotte"></div></div>
+        <div class="side-info">
+          <h2 id="h-ef" data-i18n="enemyFleet">Flotte des Gegners</h2>
+          <ul class="fleet compact" id="enemyFleet" aria-labelledby="h-ef"></ul>
+          <h2 id="h-of" data-i18n="yourFleet">Deine Flotte</h2>
+          <ul class="fleet compact" id="ownFleet" aria-labelledby="h-of"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-set">
+    <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <label class="check"><input type="checkbox" id="optStun"> <span data-i18n="optStun">Auch über das Internet verbinden (STUN-Server von Google)</span></label>
+    <p class="muted" data-i18n="optStunHelp">Nur nötig, wenn die Handys nicht im selben WLAN sind. Der Server erfährt dabei die öffentliche IP-Adresse – Spielzüge laufen trotzdem direkt. Klappt nicht in jedem Mobilfunknetz. Beide Geräte müssen es einschalten.</p>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Klassisches Schiffe versenken für zwei Spieler auf zwei Geräten. Jeder sieht nur seine eigene Flotte.</p>
+  <h3>Verbinden</h3>
+  <ol>
+    <li>Handy A: <strong>Neues Spiel</strong> – ein QR-Code erscheint.</li>
+    <li>Handy B: <strong>Beitreten</strong> und den Code von A scannen. Es geht auch mit der normalen Kamera-App: Der Code ist ein Link, der diese Seite öffnet. Danach zeigt B einen Antwort-Code.</li>
+    <li>Handy A: <strong>Antwort-Code scannen</strong>. Nach ein bis zwei Sekunden seid ihr verbunden.</li>
+  </ol>
+  <p>Ohne Kamera: Die Codes lassen sich kopieren und z. B. per Nachricht schicken („von Hand eingeben“).</p>
+  <h3>Spielen</h3>
+  <ul>
+    <li>Jeder hat 5 Schiffe: Schlachtschiff (5 Felder), Kreuzer (4), Zerstörer (3), U-Boot (3) und Schnellboot (2).</li>
+    <li>Aufstellen: <strong>Zufällig</strong> würfelt die Flotte neu. Ein Schiff antippen, dann ein freies Feld antippen, um es dorthin zu schieben, oder <strong>Drehen</strong>. Schiffe dürfen sich nicht berühren, auch nicht über Eck. Mit <strong>Fertig</strong> bist du bereit.</li>
+    <li>Wer anfängt, entscheidet beim ersten Spiel der Zufall, danach wird abgewechselt.</li>
+    <li>Tippe auf ein Feld im Meer des Gegners. Punkt = Wasser, Kreuz = Treffer, rot = versenkt. Nach einem Treffer darfst du gleich nochmal schießen.</li>
+    <li>Wer zuerst alle Schiffe des anderen versenkt, gewinnt. Danach zeigt das Spiel die übrigen Schiffe des Gewinners.</li>
+    <li>Über das Symbol oben rechts verlässt du das Spiel.</li>
+  </ul>
+  <h3>Verbindung &amp; Datenschutz</h3>
+  <ul>
+    <li>Die Verbindung nutzt <strong>WebRTC</strong>. Die QR-Codes enthalten nur die Angaben, wie die Geräte sich erreichen (zufälliger Gerätename im WLAN, Port, Schlüssel-Fingerabdruck) – keine persönlichen Daten. Danach laufen die Züge verschlüsselt direkt zwischen den Geräten, ohne Server.</li>
+    <li>Am einfachsten im selben WLAN. Ohne WLAN: Ein Handy macht einen Hotspot, das andere verbindet sich damit (mobile Daten braucht es nicht).</li>
+    <li>Klappt es nicht? Beide Seiten neu starten (Neues Spiel / Beitreten). Manche Gäste- oder Firmen-WLANs lassen Geräte nicht miteinander sprechen – dann den Hotspot nehmen. Für verschiedene Netze gibt es im Menü (☰) die Einstellung „Auch über das Internet verbinden“. Sie fragt einen STUN-Server von Google nach der öffentlichen Adresse; das klappt nicht in jedem Netz.</li>
+    <li>Die Kamera wird nur zum Scannen eingeschaltet; die Bilder bleiben auf dem Gerät.</li>
+    <li>Gespeichert werden nur Siege, Niederlagen und die Einstellung – im Browser dieses Geräts. Ein Spiel lässt sich nach dem Neuladen nicht fortsetzen.</li>
+    <li>Das Display bleibt während eines Spiels an, wenn der Browser das kann – sonst kann die Verbindung beim Sperren abbrechen.</li>
+  </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <ul>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser den Spielstand lesen (eigene Flotte und bekannte Felder des Gegners) und schießen, wenn du dran bist. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
+    <li>Verbinden, Kamera und Löschen sind für Agenten nicht zugänglich.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Classic sea battle for two players on two devices. Each player only sees their own fleet.</p>
+  <h3>Connecting</h3>
+  <ol>
+    <li>Phone A: <strong>New game</strong> – a QR code appears.</li>
+    <li>Phone B: <strong>Join</strong> and scan A's code. The normal camera app works too: the code is a link that opens this page. B then shows a reply code.</li>
+    <li>Phone A: <strong>Scan reply code</strong>. After a second or two you are connected.</li>
+  </ol>
+  <p>Without a camera: the codes can be copied and sent, e.g. by message (“enter manually”).</p>
+  <h3>Playing</h3>
+  <ul>
+    <li>Each player has 5 ships: battleship (5 cells), cruiser (4), destroyer (3), submarine (3) and patrol boat (2).</li>
+    <li>Placing: <strong>Random</strong> shuffles the fleet. Tap a ship, then tap a free cell to move it there, or <strong>Rotate</strong>. Ships must not touch, not even diagonally. <strong>Done</strong> means you are ready.</li>
+    <li>Chance decides who starts the first game, after that you take turns.</li>
+    <li>Tap a cell in your opponent's sea. Dot = water, cross = hit, red = sunk. After a hit you may shoot again.</li>
+    <li>Whoever sinks all of the other's ships first wins. Afterwards the game shows the winner's remaining ships.</li>
+    <li>The icon at the top right leaves the game.</li>
+  </ul>
+  <h3>Connection &amp; privacy</h3>
+  <ul>
+    <li>The connection uses <strong>WebRTC</strong>. The QR codes only contain how the devices reach each other (random device name in the Wi-Fi, port, key fingerprint) – no personal data. After that the moves travel encrypted directly between the devices, without a server.</li>
+    <li>Easiest in the same Wi-Fi. Without Wi-Fi: one phone opens a hotspot, the other joins it (no mobile data needed).</li>
+    <li>Not working? Start again on both sides (New game / Join). Some guest or company Wi-Fi networks do not let devices talk to each other – use the hotspot then. For different networks there is the setting “Also connect over the internet” in the menu (☰). It asks a Google STUN server for the public address; this does not work in every network.</li>
+    <li>The camera is only switched on for scanning; the images stay on the device.</li>
+    <li>Only wins, losses and the setting are saved – in this device's browser. A game cannot be continued after reloading.</li>
+    <li>The screen stays on during a game if the browser supports it – otherwise the connection may drop when the phone locks.</li>
+  </ul>
+  <h3>AI agents (WebMCP)</h3>
+  <ul>
+    <li>If the browser supports <strong>WebMCP</strong>, an AI assistant in the browser can read the game (your fleet and the known cells of the opponent) and shoot when it is your turn. A notice shows when an agent did something.</li>
+    <li>Connecting, the camera and deleting are not available to agents.</li>
+  </ul>
+  </div>
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 6644fbca151a</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/vendor/qrcode-generator/qrcode.js"></script>
+<script src="../assets/vendor/zxing-wasm/iife/reader/index.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  'ship.5':'Schlachtschiff','ship.4':'Kreuzer','ship.3a':'Zerstörer','ship.3b':'U-Boot','ship.2':'Schnellboot',
+  'c.water':'Wasser','c.ship':'Schiff','c.miss':'daneben','c.hit':'Treffer','c.sunk':'versenkt','c.unknown':'unbekannt','c.revealed':'Schiff (aufgedeckt)',
+  ownBoard:'Deine Flotte: {n} von {m} Schiffen schwimmen',
+  scanOfferH:'Spiel-Code des anderen scannen',scanAnswerH:'Antwort-Code des anderen scannen',
+  preparing:'Verbindung wird vorbereitet …',noRtc:'Dieser Browser kann keine Direktverbindung (WebRTC).',
+  noCandidates:'Keine Netzwerkverbindung gefunden. WLAN oder Hotspot einschalten.',
+  waitAnswer:'Warte auf den Antwort-Code …',waitHost:'Warte, bis das andere Handy den Code scannt …',
+  connecting:'Verbinde …',connected:'Verbunden!',connectFail:'Keine Verbindung. Beide im selben WLAN? Beide Seiten neu starten.',
+  badCode:'Das ist kein gültiger Code.',isAnswer:'Das ist ein Antwort-Code – den scannt das Handy, das das Spiel erstellt hat.',
+  isOffer:'Das ist ein Spiel-Code – hier wird der Antwort-Code gebraucht.',
+  noCam:'Keine Kamera verfügbar. Code von Hand eingeben.',camDenied:'Kamera nicht erlaubt. Code von Hand eingeben oder Kamera in den Browser-Einstellungen erlauben.',
+  camFail:'Kamera-Fehler: {e}',noDecoder:'Dieser Browser kann keine QR-Codes lesen. Code von Hand eingeben.',scanHint:'QR-Code in den Rahmen halten.',
+  copyFail:'Kopieren nicht möglich',
+  placeHint:'Schiff antippen, dann Zielfeld antippen. Oder „Zufällig“.',selHint:'{s} gewählt: freies Feld antippen oder „Drehen“.',
+  noFit:'Passt dort nicht – Schiffe dürfen sich nicht berühren.',noRotate:'Kein Platz zum Drehen.',
+  waitPeer:'Bereit! Warte auf den anderen …',peerReady:'Der andere ist bereit.',
+  yourTurn:'Du bist dran – tippe ins Meer des Gegners',theirTurn:'Der andere zielt …',
+  won:'Gewonnen! 🎉',lost:'Verloren – alle Schiffe versenkt.',
+  shotMiss:'{c}: Wasser',shotHit:'{c}: Treffer! Nochmal.',shotSunk:'{c}: {s} versenkt! Nochmal.',
+  gotMiss:'Der andere schoss auf {c}: Wasser',gotHit:'Treffer auf {c}!',gotSunk:'Dein {s} wurde versenkt!',
+  disconnected:'Verbindung getrennt.',peerLeft:'Der andere hat das Spiel verlassen.',newRound:'Neue Runde – Schiffe aufstellen.',
+  confirmLeave:'Spiel verlassen? Die Verbindung wird getrennt.',copiedOk:'Code kopiert',
+  shareTitle:'Schiffe versenken','mcp.state':'Spiel gelesen','mcp.shot':'geschossen'
+},
+en:{
+  title:'Sea Battle',sub:'Two players on two phones',leave:'Leave game',lobby:'Start a game',
+  lead:'Two phones, one game: the connection is made with two QR codes and then runs directly from device to device.',
+  host:'New game',hostSub:'shows a QR code to scan',join:'Join',joinSub:'scan the other player’s QR code',
+  pasteOffer:'Enter game code manually',pasteOfferLbl:'Game code or link of the other player (e.g. sent by message):',connect:'Connect',
+  step1:'Phone A taps “New game”.',step2:'Phone B taps “Join” and scans A’s code.',step3:'Phone A scans B’s reply code – done.',
+  sameWifi:'Both devices in the same Wi-Fi, or one phone as a hotspot for the other.',wins:'Wins',losses:'Losses',
+  hostH1:'1. The other phone scans this code',qrOffer:'QR code to join',copyCode:'Copy code',share:'Share …',
+  hostH2:'2. Then scan the reply code',scanAnswer:'Scan reply code',pasteAnswer:'Enter reply code manually',pasteAnswerLbl:'Reply code of the other player:',
+  guestH:'Now the other phone scans this reply code',qrAnswer:'QR code with the reply',cancel:'Cancel',
+  setupH:'Place your ships',setupBoard:'Place your fleet',random:'Random',rotate:'Rotate',ready:'Done',fleet:'Fleet',
+  playH:'Game',again:'Play again',end:'Finish',enemyBoard:'Opponent’s sea',enemyFleet:'Opponent’s fleet',yourFleet:'Your fleet',
+  settings:'Settings',optStun:'Also connect over the internet (Google STUN server)',
+  optStunHelp:'Only needed if the phones are not in the same Wi-Fi. The server learns the public IP address – moves still travel directly. Does not work in every mobile network. Both devices must switch it on.',
+  'ship.5':'Battleship','ship.4':'Cruiser','ship.3a':'Destroyer','ship.3b':'Submarine','ship.2':'Patrol boat',
+  'c.water':'water','c.ship':'ship','c.miss':'miss','c.hit':'hit','c.sunk':'sunk','c.unknown':'unknown','c.revealed':'ship (revealed)',
+  ownBoard:'Your fleet: {n} of {m} ships afloat',
+  scanOfferH:'Scan the other player’s game code',scanAnswerH:'Scan the other player’s reply code',
+  preparing:'Preparing the connection …',noRtc:'This browser cannot make direct connections (WebRTC).',
+  noCandidates:'No network connection found. Switch on Wi-Fi or a hotspot.',
+  waitAnswer:'Waiting for the reply code …',waitHost:'Waiting for the other phone to scan the code …',
+  connecting:'Connecting …',connected:'Connected!',connectFail:'No connection. Both in the same Wi-Fi? Start again on both sides.',
+  badCode:'This is not a valid code.',isAnswer:'This is a reply code – it is scanned by the phone that created the game.',
+  isOffer:'This is a game code – the reply code is needed here.',
+  noCam:'No camera available. Enter the code manually.',camDenied:'Camera not allowed. Enter the code manually or allow the camera in the browser settings.',
+  camFail:'Camera error: {e}',noDecoder:'This browser cannot read QR codes. Enter the code manually.',scanHint:'Hold the QR code inside the frame.',
+  copyFail:'Copying not possible',
+  placeHint:'Tap a ship, then tap the target cell. Or “Random”.',selHint:'{s} selected: tap a free cell or “Rotate”.',
+  noFit:'Does not fit there – ships must not touch.',noRotate:'No room to rotate.',
+  waitPeer:'Ready! Waiting for the other player …',peerReady:'The other player is ready.',
+  yourTurn:'Your turn – tap the opponent’s sea',theirTurn:'The other player is aiming …',
+  won:'You won! 🎉',lost:'You lost – all ships sunk.',
+  shotMiss:'{c}: water',shotHit:'{c}: hit! Again.',shotSunk:'{c}: {s} sunk! Again.',
+  gotMiss:'The other player shot at {c}: water',gotHit:'Hit on {c}!',gotSunk:'Your {s} was sunk!',
+  disconnected:'Connection lost.',peerLeft:'The other player left the game.',newRound:'New round – place your ships.',
+  confirmLeave:'Leave the game? The connection will be closed.',copiedOk:'Code copied',
+  shareTitle:'Sea Battle','mcp.state':'game read','mcp.shot':'shot fired'
+}});
+const t=Tools.t,$=Tools.$;
+const LS_STATS='sea-battle.stats.v1',LS_SET='sea-battle.settings.v1';
+const stats=Tools.load(LS_STATS,{wins:0,losses:0});
+const settings=Tools.load(LS_SET,{stun:false});
+const STUN='stun:stun.l.google.com:19302';
+const N=10,COLS='ABCDEFGHIJ';
+const FLEET=[{id:'5',len:5},{id:'4',len:4},{id:'3a',len:3},{id:'3b',len:3},{id:'2',len:2}];
+const cellName=i=>COLS[i%N]+(Math.floor(i/N)+1);
+const shipName=s=>t('ship.'+s.id);
+
+/* ================= Connection codes =================
+   The code holds only what a data-channel SDP needs (setup role, ICE user/password, DTLS fingerprint,
+   candidates); the full SDP is rebuilt from it. Game code = link to this page with #join=<code>. */
+const b64u=bytes=>btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unb64u=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+function encodeSdp(sdp,kind){
+  const lines=sdp.split(/\r?\n/).map(l=>l.trim());
+  const get=k=>{const l=lines.find(x=>x.startsWith('a='+k+':'));return l?l.slice(k.length+3).trim():'';};
+  const fp=get('fingerprint').split(' ');
+  if(!fp[1]||fp[0].toLowerCase()!=='sha-256')throw new Error('no sha-256 fingerprint');
+  const setup={actpass:'x',active:'a',passive:'p'}[get('setup')]||'x';
+  const cands=lines.filter(l=>l.startsWith('a=candidate:')).map(l=>{
+    const p=l.slice(12).split(' '),i=p.indexOf('raddr');
+    return p.slice(0,8).concat(i>0?['raddr',p[i+1],'rport',p[i+3]]:[]).join('_');
+  });
+  return {code:[kind+'1',setup,get('ice-ufrag'),get('ice-pwd'),b64u(fp[1].split(':').map(h=>parseInt(h,16))),...cands].join('~'),candidates:cands};
+}
+function decodeCode(code){
+  const p=code.trim().split('~');
+  if(p.length<6||!/^[OA]1$/.test(p[0])||!/^[xap]$/.test(p[1]))throw new Error('bad code');
+  const [,setup,ufrag,pwd,fp,...cands]=p;
+  if(!/^[A-Za-z0-9+/]{4,256}$/.test(ufrag)||!/^[A-Za-z0-9+/]{22,256}$/.test(pwd))throw new Error('bad credentials');
+  const bytes=unb64u(fp);if(bytes.length!==32)throw new Error('bad fingerprint');
+  const hex=[...bytes].map(b=>b.toString(16).padStart(2,'0').toUpperCase()).join(':');
+  for(const c of cands)if(!/^[A-Za-z0-9+/._:-]+$/.test(c))throw new Error('bad candidate');
+  const sdp=['v=0','o=- 0 2 IN IP4 127.0.0.1','s=-','t=0 0','a=group:BUNDLE 0',
+    'm=application 9 UDP/DTLS/SCTP webrtc-datachannel','c=IN IP4 0.0.0.0',
+    ...cands.map(c=>'a=candidate:'+c.replace(/_/g,' ')),'a=end-of-candidates',
+    'a=ice-ufrag:'+ufrag,'a=ice-pwd:'+pwd,'a=fingerprint:sha-256 '+hex,
+    'a=setup:'+{x:'actpass',a:'active',p:'passive'}[setup],'a=mid:0','a=sctp-port:5000','a=max-message-size:262144',''].join('\r\n');
+  return {type:p[0][0]==='O'?'offer':'answer',sdp};
+}
+/** Code from scanned/pasted text: the link (#join=…) or the bare code */
+function extractCode(text){
+  const s=String(text||'').trim(),m=s.match(/[#&?]join=([^&\s]+)/);
+  try{return m?decodeURIComponent(m[1]):s;}catch(_){return s;}
+}
+const kindOf=code=>/^O1~/.test(code)?'offer':/^A1~/.test(code)?'answer':null;
+const offerLink=code=>location.origin+location.pathname+'#join='+code;
+
+/* ================= QR ================= */
+function drawQr(canvas,text){
+  const qr=qrcode(0,'L');qr.addData(text,'Byte');qr.make();
+  const n=qr.getModuleCount(),Q=4,scale=Math.max(4,Math.floor(600/(n+2*Q))),size=(n+2*Q)*scale;
+  canvas.width=canvas.height=size;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#000';
+  for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(qr.isDark(r,c))ctx.fillRect((c+Q)*scale,(r+Q)*scale,scale,scale);
+  canvas.dataset.text=text;
+  Tools.diag.log('qr drawn',{modules:n,chars:text.length});
+}
+
+/* ================= Screens ================= */
+const SCREENS=['scrLobby','scrHost','scrGuest','scrScan','scrSetup','scrPlay'];
+let screen='scrLobby';
+function show(id){
+  screen=id;
+  for(const s of SCREENS)$(s).hidden=s!==id;
+  $('btnLeave').hidden=id==='scrLobby';
+  document.querySelector('main').scrollTop=0;
+}
+const setStatus=(id,msg,cls)=>{const el=$(id);el.textContent=msg||'';el.className='status'+(cls?' '+cls:'');};
+
+/* ================= WebRTC ================= */
+let pc=null,dc=null,role=null,myCode='',connectTimer=null,closing=false,wakeLock=null;
+const connected=()=>!!dc&&dc.readyState==='open';
+function closeConn(){
+  closing=true;
+  clearTimeout(connectTimer);
+  try{if(dc)dc.close();}catch(_){}
+  try{if(pc)pc.close();}catch(_){}
+  pc=dc=null;role=null;myCode='';
+  releaseWake();
+  closing=false;
+}
+function newPeer(r){
+  closeConn();
+  if(!window.RTCPeerConnection)throw new Error('noRtc');
+  role=r;
+  pc=new RTCPeerConnection({iceServers:settings.stun?[{urls:STUN}]:[]});
+  dc=pc.createDataChannel('sea-battle',{negotiated:true,id:0,ordered:true});
+  const myPc=pc,myDc=dc;
+  pc.addEventListener('connectionstatechange',()=>{
+    Tools.diag.log('pc state',myPc.connectionState);
+    if(myPc===pc&&myPc.connectionState==='failed')lostConnection('disconnected');
+  });
+  pc.addEventListener('iceconnectionstatechange',()=>Tools.diag.log('ice state',myPc.iceConnectionState));
+  dc.addEventListener('open',()=>{if(myDc===dc)onOpen();});
+  dc.addEventListener('close',()=>{Tools.diag.log('channel closed');if(myDc===dc&&!closing)lostConnection('disconnected');});
+  dc.addEventListener('message',e=>{if(myDc===dc)onMessage(e.data);});
+}
+function gathered(p){
+  return new Promise(res=>{
+    if(p.iceGatheringState==='complete')return res();
+    const done=()=>{if(p.iceGatheringState==='complete'){clearTimeout(to);res();}};
+    const to=setTimeout(res,settings.stun?5000:2500);
+    p.addEventListener('icegatheringstatechange',done);
+  });
+}
+async function localCode(kind){
+  await gathered(pc);
+  const {code,candidates}=encodeSdp(pc.localDescription.sdp,kind);
+  Tools.diag.log((kind==='O'?'offer':'answer')+' created',{chars:code.length,candidates:candidates.length,
+    types:candidates.map(c=>c.split('_')[7]).join(',')||'none',stun:settings.stun});
+  if(!candidates.length)throw new Error('noCandidates');
+  return code;
+}
+function errText(e){return e&&(e.message==='noRtc'||e.message==='noCandidates')?t(e.message):t('connectFail');}
+
+async function startHost(){
+  show('scrHost');setStatus('hostStatus',t('preparing'));
+  const ctx=$('qrOffer').getContext('2d');ctx.clearRect(0,0,9999,9999);$('answerIn').value='';
+  try{
+    newPeer('host');
+    const p=pc;
+    await pc.setLocalDescription(await pc.createOffer());
+    const code=await localCode('O');
+    if(p!==pc)return;
+    myCode=offerLink(code);
+    drawQr($('qrOffer'),myCode);
+    setStatus('hostStatus',t('waitAnswer'));
+  }catch(e){Tools.diag.log('host failed',e);setStatus('hostStatus',errText(e),'err');}
+}
+async function acceptOffer(code){
+  show('scrGuest');setStatus('guestStatus',t('preparing'));
+  const ctx=$('qrAnswer').getContext('2d');ctx.clearRect(0,0,9999,9999);
+  try{
+    const desc=decodeCode(code);
+    newPeer('guest');
+    const p=pc;
+    await pc.setRemoteDescription(desc);
+    await pc.setLocalDescription(await pc.createAnswer());
+    const answer=await localCode('A');
+    if(p!==pc)return;
+    myCode=answer;
+    drawQr($('qrAnswer'),answer);
+    if(!connected())setStatus('guestStatus',t('waitHost'));
+  }catch(e){Tools.diag.log('join failed',e);setStatus('guestStatus',errText(e),'err');}
+}
+async function acceptAnswer(code){
+  show('scrHost');
+  if(!pc||role!=='host'||pc.signalingState!=='have-local-offer'){setStatus('hostStatus',t('connectFail'),'err');return;}
+  try{
+    await pc.setRemoteDescription(decodeCode(code));
+    Tools.diag.log('answer set');
+    setStatus('hostStatus',t('connecting'));
+    clearTimeout(connectTimer);
+    connectTimer=setTimeout(()=>{if(!connected()){Tools.diag.log('connect timeout',{ice:pc&&pc.iceConnectionState});setStatus('hostStatus',t('connectFail'),'err');}},20000);
+  }catch(e){Tools.diag.log('answer failed',e);setStatus('hostStatus',t('connectFail'),'err');}
+}
+/** Scanned or pasted text: decides what to do with it */
+function useCode(text,expect){
+  const code=extractCode(text),kind=kindOf(code);
+  let valid=!!kind;
+  if(valid){try{decodeCode(code);}catch(_){valid=false;}}
+  if(!valid)return {ok:false,msg:t('badCode')};
+  if(expect==='offer'&&kind==='answer')return {ok:false,msg:t('isAnswer')};
+  if(expect==='answer'&&kind==='offer')return {ok:false,msg:t('isOffer')};
+  if(kind==='offer')acceptOffer(code);else acceptAnswer(code);
+  return {ok:true};
+}
+function lostConnection(reason){
+  if(closing)return;
+  Tools.diag.log('connection lost',reason);
+  const wasGame=['scrSetup','scrPlay'].includes(screen)||screen==='scrGuest'||screen==='scrHost';
+  closeConn();resetGame();
+  stopScan();show('scrLobby');
+  if(wasGame){setStatus('lobbyStatus',t(reason),'err');Tools.toast(t(reason),3000);}
+}
+function onOpen(){
+  clearTimeout(connectTimer);
+  Tools.diag.log('channel open',{role});
+  send({t:'hello',v:1});
+  keepAwake();
+  Tools.toast(t('connected'));
+  setStatus('lobbyStatus','');
+  game.games=0;game.starter=null;
+  startSetup();
+}
+function send(msg){if(connected())dc.send(JSON.stringify(msg));}
+
+/* ---------- Screen stays on while connected ---------- */
+async function keepAwake(){
+  try{if(navigator.wakeLock&&!wakeLock&&document.visibilityState==='visible'){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}
+  catch(e){Tools.diag.log('wake lock',e);}
+}
+function releaseWake(){if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null;}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&connected())keepAwake();});
+
+/* ================= Scanner (BarcodeDetector → zxing-wasm) ================= */
+let stream=null,scanTimer=null,scanExpect=null,detector=null,wasmReady=null,scanEngine='',lastHint=0,scanBusy=false;
+const scanCanvas=document.createElement('canvas');
+async function getDetector(){
+  if(detector!==null)return detector;
+  detector=false;
+  try{if('BarcodeDetector' in window&&(await window.BarcodeDetector.getSupportedFormats()).includes('qr_code'))detector=new window.BarcodeDetector({formats:['qr_code']});}catch(_){}
+  return detector;
+}
+function prepareWasm(){
+  if(wasmReady)return wasmReady;
+  wasmReady=Promise.resolve().then(()=>{
+    if(!window.ZXingWASM)return false;
+    return Promise.resolve(window.ZXingWASM.prepareZXingModule({fireImmediately:true,overrides:{locateFile:(path,prefix)=>path.endsWith('.wasm')?new URL('../assets/vendor/zxing-wasm/reader/'+path,location.href).href:prefix+path}})).then(()=>true);
+  }).catch(e=>{Tools.diag.log('zxing-wasm',e);return false;});
+  return wasmReady;
+}
+async function startScan(expect){
+  scanExpect=expect;
+  $('h-scan').textContent=t(expect==='offer'?'scanOfferH':'scanAnswerH');
+  show('scrScan');setStatus('scanStatus','');
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus('scanStatus',t('noCam'),'err');return;}
+  const det=await getDetector();
+  if(!det&&!(await prepareWasm())){setStatus('scanStatus',t('noDecoder'),'err');return;}
+  scanEngine=det?'BarcodeDetector':'zxing-wasm';
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+    if(screen!=='scrScan'){stopScan();return;}
+    const v=$('video');v.srcObject=stream;await v.play();
+    Tools.diag.log('camera on',{engine:scanEngine,w:v.videoWidth,h:v.videoHeight});
+    setStatus('scanStatus',t('scanHint'));
+    scanTimer=setTimeout(scanFrame,250);
+  }catch(e){
+    Tools.diag.log('camera failed',e);
+    setStatus('scanStatus',e&&e.name==='NotAllowedError'?t('camDenied'):t('camFail',{e:e&&e.name||String(e)}),'err');
+  }
+}
+function stopScan(){
+  clearTimeout(scanTimer);scanTimer=null;
+  if(stream){stream.getTracks().forEach(tr=>tr.stop());stream=null;}
+  $('video').srcObject=null;
+}
+async function decodeVideo(v){
+  if(detector){const r=await detector.detect(v);return r&&r[0]?r[0].rawValue:null;}
+  const W=v.videoWidth,H=v.videoHeight,sc=Math.min(1,960/Math.max(W,H));
+  scanCanvas.width=Math.round(W*sc);scanCanvas.height=Math.round(H*sc);
+  const ctx=scanCanvas.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(v,0,0,scanCanvas.width,scanCanvas.height);
+  const res=await window.ZXingWASM.readBarcodes(ctx.getImageData(0,0,scanCanvas.width,scanCanvas.height),{formats:['QRCode'],tryHarder:true,maxNumberOfSymbols:1});
+  const hit=res&&res.find(r=>r.isValid!==false&&r.text);return hit?hit.text:null;
+}
+async function scanFrame(){
+  if(!stream)return;
+  const v=$('video');
+  if(!scanBusy&&v.videoWidth){
+    scanBusy=true;
+    try{
+      const text=await decodeVideo(v);
+      if(text&&stream){
+        const r=useCode(text,scanExpect);
+        if(r.ok){Tools.diag.log('code scanned',{expect:scanExpect});if(navigator.vibrate)navigator.vibrate(60);stopScan();return;}
+        if(Date.now()-lastHint>1500){lastHint=Date.now();setStatus('scanStatus',r.msg,'err');}
+      }
+    }catch(e){Tools.diag.log('scan error',e);}
+    finally{scanBusy=false;}
+  }
+  if(stream)scanTimer=setTimeout(scanFrame,200);
+}
+function cancelScan(){stopScan();show(scanExpect==='answer'&&pc?'scrHost':'scrLobby');}
+
+/* ================= Game ================= */
+const game={ships:[],sel:null,myReady:false,peerReady:false,myTurn:false,busy:null,over:null,
+  own:new Array(N*N).fill(0),     // shots received: 0 none, 1 miss, 2 hit
+  enemy:new Array(N*N).fill(0),   // my shots: 0 unknown, 1 miss, 2 hit, 3 sunk
+  enemySunk:[],revealed:new Set(),lastOwn:-1,lastEnemy:-1,games:0,starter:null,msg:''};
+function shipCells(s){const a=[];for(let k=0;k<s.len;k++)a.push(s.dir==='h'?s.y*N+s.x+k:(s.y+k)*N+s.x);return a;}
+function fits(s,others){
+  if(s.x<0||s.y<0||(s.dir==='h'?s.x+s.len>N:s.y+s.len>N))return false;
+  const block=new Set();
+  for(const o of others)for(const i of shipCells(o)){const x=i%N,y=Math.floor(i/N);
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=x+dx,ny=y+dy;if(nx>=0&&ny>=0&&nx<N&&ny<N)block.add(ny*N+nx);}}
+  return shipCells(s).every(i=>!block.has(i));
+}
+function randomFleet(){
+  for(let attempt=0;attempt<200;attempt++){
+    const ships=[];let ok=true;
+    for(const f of FLEET){
+      let placed=false;
+      for(let k=0;k<300&&!placed;k++){
+        const s={id:f.id,len:f.len,dir:Math.random()<.5?'h':'v',x:Math.floor(Math.random()*N),y:Math.floor(Math.random()*N)};
+        if(fits(s,ships)){ships.push(s);placed=true;}
+      }
+      if(!placed){ok=false;break;}
+    }
+    if(ok)return ships;
+  }
+  throw new Error('fleet');
+}
+const shipAt=i=>game.ships.find(s=>shipCells(s).includes(i));
+const isSunk=s=>shipCells(s).every(i=>game.own[i]===2);
+const afloat=()=>game.ships.filter(s=>!isSunk(s)).length;
+function resetGame(){
+  pendingShot=null;
+  Object.assign(game,{sel:null,myReady:false,peerReady:false,myTurn:false,busy:null,over:null,
+    own:new Array(N*N).fill(0),enemy:new Array(N*N).fill(0),enemySunk:[],revealed:new Set(),lastOwn:-1,lastEnemy:-1,msg:''});
+}
+
+/* ---------- Boards: built once, updated in place ---------- */
+function buildBoard(el,tag){
+  el.innerHTML='';const cells=[];
+  const lbl=txt=>{const d=document.createElement('div');d.className='lbl';d.setAttribute('aria-hidden','true');d.textContent=txt;el.append(d);};
+  lbl('');for(let x=0;x<N;x++)lbl(COLS[x]);
+  for(let y=0;y<N;y++){
+    lbl(String(y+1));
+    for(let x=0;x<N;x++){
+      const c=document.createElement(tag);c.className='cell';c.dataset.i=y*N+x;
+      if(tag==='button')c.type='button';
+      el.append(c);cells.push(c);
+    }
+  }
+  return cells;
+}
+const setupCells=buildBoard($('setupBoard'),'button');
+const enemyCells=buildBoard($('enemyBoard'),'button');
+const ownCells=buildBoard($('ownBoard'),'div');
+
+function renderSetup(){
+  const sel=game.sel!=null?game.ships[game.sel]:null,selCells=sel?shipCells(sel):[];
+  setupCells.forEach((c,i)=>{
+    const s=shipAt(i);
+    c.className='cell'+(s?' ship':'')+(selCells.includes(i)?' sel':'');
+    c.disabled=game.myReady;
+    c.setAttribute('aria-label',cellName(i)+', '+(s?shipName(s):t('c.water')));
+    c.setAttribute('aria-pressed',String(selCells.includes(i)));
+  });
+  $('btnRandom').disabled=$('btnRotate').disabled=$('btnReady').disabled=game.myReady;
+  $('btnRotate').disabled=game.myReady||!sel;
+  renderFleet($('setupFleet'),game.ships.map(s=>({s,down:false})));
+  let msg=game.myReady?t('waitPeer'):sel?t('selHint',{s:shipName(sel)}):t('placeHint');
+  if(game.peerReady&&!game.myReady)msg=t('peerReady')+' '+msg;
+  setStatus('setupStatus',game.msg||msg);
+}
+function renderFleet(ul,items){
+  ul.innerHTML='';
+  // Compact lists (in the game) show only the bars; the names are for screen readers
+  const compact=ul.classList.contains('compact');
+  for(const {s,down} of items){
+    const li=document.createElement('li');if(down)li.className='down';
+    if(compact)li.title=shipName(s)+(down?' – '+t('c.sunk'):'');
+    li.innerHTML=`<span class="bar" aria-hidden="true">${'<i></i>'.repeat(s.len)}</span><span${compact?' class="sr-only"':''}>${Tools.esc(shipName(s))}</span>`+(down?`<span class="sr-only">, ${Tools.esc(t('c.sunk'))}</span>`:'');
+    ul.append(li);
+  }
+}
+function renderPlay(){
+  const turn=$('turn');
+  if(game.over){turn.className='turn '+(game.over==='won'?'won':'lost');turn.textContent=t(game.over);}
+  else{turn.className='turn'+(game.myTurn?' mine':'');turn.textContent=(game.msg?game.msg+' · ':'')+t(game.myTurn?'yourTurn':'theirTurn');}
+  $('overActions').hidden=!game.over;
+  const sunkCells=new Set(game.enemySunk.flatMap(s=>s.cells));
+  enemyCells.forEach((c,i)=>{
+    const v=game.enemy[i],rev=game.revealed.has(i);
+    const state=sunkCells.has(i)?'sunk':v===2?'hit':v===1?'miss':rev?'revealed':'unknown';
+    c.className='cell'+(state==='sunk'?' sunk hit':state==='hit'?' hit':state==='miss'?' miss':state==='revealed'?' reveal':'')+
+      (i===game.lastEnemy?' last':'')+(game.busy===i?' pending':'');
+    c.disabled=!!game.over||v!==0;
+    c.setAttribute('aria-label',cellName(i)+', '+t('c.'+state));
+  });
+  $('enemyBoard').classList.toggle('locked',!game.myTurn||game.busy!=null);
+  ownCells.forEach((c,i)=>{
+    const s=shipAt(i),v=game.own[i];
+    c.className='cell'+(s?' ship':'')+(v===1?' miss':'')+(v===2?' hit':'')+(s&&isSunk(s)?' sunk':'')+(i===game.lastOwn?' last':'');
+  });
+  $('ownBoard').setAttribute('aria-label',t('ownBoard',{n:afloat(),m:game.ships.length}));
+  const sunkIds=new Set(game.enemySunk.map(s=>s.id));
+  renderFleet($('enemyFleet'),FLEET.map(f=>({s:f,down:sunkIds.has(f.id)})));
+  renderFleet($('ownFleet'),game.ships.map(s=>({s,down:isSunk(s)})));
+}
+function render(){if(screen==='scrSetup')renderSetup();if(screen==='scrPlay')renderPlay();}
+
+function startSetup(){
+  const keep=game.ships.length===FLEET.length?game.ships:randomFleet();
+  resetGame();game.ships=keep;
+  show('scrSetup');renderSetup();
+}
+$('setupBoard').addEventListener('click',e=>{
+  const c=e.target.closest('.cell');if(!c||game.myReady)return;
+  game.msg='';
+  const i=+c.dataset.i,s=shipAt(i);
+  if(s){const k=game.ships.indexOf(s);game.sel=game.sel===k?null:k;renderSetup();return;}
+  if(game.sel==null){renderSetup();return;}
+  const cur=game.ships[game.sel],others=game.ships.filter((_,k)=>k!==game.sel);
+  const x=i%N,y=Math.floor(i/N);
+  const cand={...cur,x:cur.dir==='h'?Math.min(x,N-cur.len):x,y:cur.dir==='v'?Math.min(y,N-cur.len):y};
+  if(fits(cand,others)){game.ships[game.sel]=cand;}
+  else game.msg=t('noFit');
+  renderSetup();
+});
+$('btnRotate').addEventListener('click',()=>{
+  if(game.sel==null)return;
+  const cur=game.ships[game.sel],others=game.ships.filter((_,k)=>k!==game.sel);
+  const dir=cur.dir==='h'?'v':'h';
+  const cand={...cur,dir,x:dir==='h'?Math.min(cur.x,N-cur.len):cur.x,y:dir==='v'?Math.min(cur.y,N-cur.len):cur.y};
+  game.msg='';
+  if(fits(cand,others))game.ships[game.sel]=cand;else game.msg=t('noRotate');
+  renderSetup();
+});
+$('btnRandom').addEventListener('click',()=>{game.ships=randomFleet();game.sel=null;game.msg='';renderSetup();});
+$('btnReady').addEventListener('click',()=>{
+  game.myReady=true;game.sel=null;game.msg='';
+  send({t:'ready'});
+  Tools.diag.log('ready',{peerReady:game.peerReady});
+  renderSetup();maybeStart();
+});
+function maybeStart(){
+  if(role!=='host'||!game.myReady||!game.peerReady)return;
+  // First game: chance decides, then the players take turns starting
+  game.starter=game.starter==null?(Math.random()<.5?'host':'guest'):(game.starter==='host'?'guest':'host');
+  send({t:'start',first:game.starter});
+  beginPlay(game.starter);
+}
+function beginPlay(first){
+  game.games++;game.myTurn=first===role;game.msg='';
+  Tools.diag.log('game start',{first,role,game:game.games});
+  show('scrPlay');renderPlay();
+}
+
+/* ---------- Shooting ---------- */
+let pendingShot=null;   // {i, resolve} – also used by the WebMCP tool
+function fire(i){
+  return new Promise((resolve,reject)=>{
+    if(screen!=='scrPlay'||game.over)return reject(new Error('No game is running.'));
+    if(!game.myTurn||game.busy!=null)return reject(new Error('It is not your turn.'));
+    if(game.enemy[i]!==0)return reject(new Error(`${cellName(i)} has already been shot at.`));
+    game.busy=i;pendingShot={i,resolve};
+    send({t:'shot',i});
+    renderPlay();
+  });
+}
+$('enemyBoard').addEventListener('click',e=>{
+  const c=e.target.closest('.cell');if(!c)return;
+  fire(+c.dataset.i).catch(()=>{});
+});
+function onShot(i){
+  if(screen!=='scrPlay'||game.over||game.myTurn||!Number.isInteger(i)||i<0||i>=N*N){Tools.diag.log('unexpected shot',{myTurn:game.myTurn});return;}
+  const s=shipAt(i);let r='miss',cells;
+  if(game.own[i]===0)game.own[i]=s?2:1;
+  if(s&&game.own[i]===2){r=isSunk(s)?'sunk':'hit';if(r==='sunk')cells=shipCells(s);}
+  const over=afloat()===0;
+  game.lastOwn=i;
+  if(r==='miss'){game.myTurn=true;game.msg=t('gotMiss',{c:cellName(i)});}
+  else{game.msg=r==='sunk'?t('gotSunk',{s:shipName(s)}):t('gotHit',{c:cellName(i)});if(navigator.vibrate)navigator.vibrate(r==='sunk'?[80,60,160]:80);}
+  send({t:'res',i,r,id:s&&r==='sunk'?s.id:undefined,cells,over});
+  if(over)finish('lost');
+  renderPlay();
+}
+function onResult(m){
+  if(!pendingShot||m.i!==pendingShot.i){Tools.diag.log('unexpected result');return;}
+  const i=m.i,{resolve}=pendingShot;pendingShot=null;game.busy=null;game.lastEnemy=i;
+  game.enemy[i]=m.r==='miss'?1:2;
+  let sunkShip=null;
+  if(m.r==='sunk'&&Array.isArray(m.cells)){
+    const f=FLEET.find(x=>x.id===m.id)||{id:String(m.id),len:m.cells.length};
+    sunkShip={id:f.id,len:f.len,cells:m.cells.filter(Number.isInteger)};
+    game.enemySunk.push(sunkShip);
+    for(const c of sunkShip.cells)game.enemy[c]=3;
+  }
+  if(m.r==='miss'){game.myTurn=false;game.msg=t('shotMiss',{c:cellName(i)});}
+  else game.msg=m.r==='sunk'?t('shotSunk',{c:cellName(i),s:shipName(sunkShip)}):t('shotHit',{c:cellName(i)});
+  if(m.over){
+    finish('won');
+    // Show the winner's fleet to the other player
+    send({t:'reveal',cells:game.ships.flatMap(shipCells).filter(c=>game.own[c]!==2)});
+  }
+  renderPlay();
+  resolve({cell:cellName(i),result:m.r,sunk_ship:sunkShip?{name:EN_SHIP[sunkShip.id]||'ship',length:sunkShip.len}:null,game_over:!!m.over,you_won:!!m.over,your_turn:game.myTurn&&!m.over});
+}
+function finish(result){
+  game.over=result;game.myTurn=false;
+  if(result==='won')stats.wins++;else stats.losses++;
+  Tools.save(LS_STATS,stats);renderStats();
+  Tools.diag.log('game over',{result,games:game.games});
+  if(navigator.vibrate)navigator.vibrate(result==='won'?[60,40,60,40,200]:300);
+}
+function onMessage(raw){
+  let m;try{m=JSON.parse(raw);}catch(_){Tools.diag.log('bad message');return;}
+  if(!m||typeof m!=='object')return;
+  switch(m.t){
+    case 'hello':if(m.v!==1)Tools.diag.log('peer version',m.v);break;
+    case 'ready':game.peerReady=true;if(screen==='scrSetup')renderSetup();maybeStart();break;
+    case 'start':if(role==='guest'&&screen==='scrSetup'&&game.myReady){game.starter=m.first;beginPlay(m.first==='host'?'host':'guest');}break;
+    case 'shot':onShot(m.i);break;
+    case 'res':onResult(m);break;
+    case 'reveal':if(Array.isArray(m.cells))m.cells.filter(Number.isInteger).forEach(c=>game.revealed.add(c));renderPlay();break;
+    case 'again':if(game.over){startSetup();Tools.toast(t('newRound'),2500);}break;
+    case 'bye':lostConnection('peerLeft');break;
+    default:Tools.diag.log('unknown message',String(m.t).slice(0,20));
+  }
+}
+$('btnAgain').addEventListener('click',()=>{send({t:'again'});startSetup();});
+$('btnEnd').addEventListener('click',leave);
+function leave(){
+  if(connected()&&!(screen==='scrPlay'&&game.over)&&['scrSetup','scrPlay'].includes(screen)&&!confirm(t('confirmLeave')))return;
+  Tools.diag.log('leave',{screen});
+  send({t:'bye'});
+  stopScan();closeConn();resetGame();game.ships=[];
+  setStatus('lobbyStatus','');show('scrLobby');
+}
+
+/* ================= UI wiring ================= */
+function renderStats(){$('sWins').textContent=stats.wins;$('sLosses').textContent=stats.losses;}
+$('btnHost').addEventListener('click',startHost);
+$('btnJoin').addEventListener('click',()=>startScan('offer'));
+$('btnScanAnswer').addEventListener('click',()=>startScan('answer'));
+$('btnScanCancel').addEventListener('click',cancelScan);
+$('btnLeave').addEventListener('click',()=>{if(screen==='scrScan')cancelScan();else leave();});
+$('btnOfferIn').addEventListener('click',()=>{const r=useCode($('offerIn').value,'offer');if(!r.ok)setStatus('lobbyStatus',r.msg,'err');else $('offerIn').value='';});
+$('btnAnswerIn').addEventListener('click',()=>{const r=useCode($('answerIn').value,'answer');if(!r.ok)setStatus('hostStatus',r.msg,'err');});
+async function copyCode(){if(!myCode)return;Tools.toast(t((await Tools.copyText(myCode))?'copiedOk':'copyFail'));}
+$('btnCopyOffer').addEventListener('click',copyCode);
+$('btnCopyAnswer').addEventListener('click',copyCode);
+if(navigator.share){
+  for(const id of ['btnShareOffer','btnShareAnswer']){
+    $(id).hidden=false;
+    $(id).addEventListener('click',()=>{if(myCode)navigator.share({title:t('shareTitle'),text:myCode}).catch(()=>{});});
+  }
+}
+$('optStun').checked=!!settings.stun;
+$('optStun').addEventListener('change',()=>{settings.stun=$('optStun').checked;Tools.save(LS_SET,settings);Tools.diag.log('stun',settings.stun);});
+renderStats();
+Tools.onLang(()=>{render();if(screen==='scrScan')$('h-scan').textContent=t(scanExpect==='offer'?'scanOfferH':'scanAnswerH');});
+
+// Opened through the link in the game QR code (normal camera app): join right away
+function joinFromLink(){
+  const m=location.hash.match(/^#join=(.+)$/);
+  if(!m)return;
+  history.replaceState(history.state,'',location.pathname+location.search);
+  if(connected()&&['scrSetup','scrPlay'].includes(screen)){Tools.diag.log('game link ignored: in a game');return;}
+  Tools.diag.log('opened with game link');
+  stopScan();
+  const r=useCode('#join='+m[1],'offer');
+  if(!r.ok){show('scrLobby');setStatus('lobbyStatus',r.msg,'err');}
+}
+joinFromLink();
+window.addEventListener('hashchange',joinFromLink);
+
+/* ================= Diagnostics ================= */
+Tools.diag.info(()=>({screen,role:role||'-',pc:pc?pc.connectionState:'-',ice:pc?pc.iceConnectionState:'-',channel:dc?dc.readyState:'-',
+  stun:!!settings.stun,scanner:scanEngine||'-',camera:!!stream,webrtc:!!window.RTCPeerConnection,
+  barcodeDetector:'BarcodeDetector' in window,ships:game.ships.length,shotsFired:game.enemy.filter(Boolean).length,
+  shotsReceived:game.own.filter(Boolean).length,myTurn:game.myTurn,over:game.over||'-',games:game.games}));
+
+/* ================= WebMCP ================= */
+const EN_SHIP={'5':'battleship','4':'cruiser','3a':'destroyer','3b':'submarine','2':'patrol boat'};
+function rows(fn){const out=[];for(let y=0;y<N;y++){let r='';for(let x=0;x<N;x++)r+=fn(y*N+x);out.push(r);}return out;}
+Tools.mcp.register({
+  name:'get_game',title:'Read the game',label:'mcp.state',readOnly:true,
+  description:'Reads the current sea battle game: whether a connection to the other device exists, the phase (lobby, setup, playing, over), whose turn it is, your own board and what is known of the opponent\'s board (10 rows A-J, row 1 first), the ships left on both sides and the overall score. Legend - your board: "." water, "S" ship, "o" miss, "X" hit, "#" sunk. Opponent board: "?" unknown, "o" miss, "X" hit, "#" sunk, "S" revealed ship after the game.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    const phase=screen==='scrPlay'?(game.over?'over':'playing'):screen==='scrSetup'?'setup':connected()?'setup':'lobby';
+    const sunk=new Set(game.enemySunk.flatMap(s=>s.cells));
+    return {connected:connected(),role:role||null,phase,your_turn:phase==='playing'&&game.myTurn&&game.busy==null,
+      result:game.over?(game.over==='won'?'you_won':'you_lost'):null,
+      your_board:game.ships.length?rows(i=>{const s=shipAt(i),v=game.own[i];return s&&isSunk(s)?'#':v===2?'X':v===1?'o':s?'S':'.';}):null,
+      opponent_board:phase==='playing'||phase==='over'?rows(i=>sunk.has(i)?'#':game.enemy[i]===2?'X':game.enemy[i]===1?'o':game.revealed.has(i)?'S':'?'):null,
+      your_ships_left:game.ships.length?afloat():null,opponent_ships_left:phase==='playing'||phase==='over'?FLEET.length-game.enemySunk.length:null,
+      score:{wins:stats.wins,losses:stats.losses}};
+  }
+});
+Tools.mcp.register({
+  name:'fire_shot',title:'Fire a shot',label:'mcp.shot',
+  description:'Fires at one cell of the opponent\'s sea, only while a game is running and it is your turn. Waits for the other device\'s answer and returns the result (miss, hit or sunk, with the sunk ship), whether the game is over and whether it is still your turn (after a hit you shoot again).',
+  inputSchema:{type:'object',properties:{
+    column:{type:'string',enum:COLS.split(''),description:'Column A to J.'},
+    row:{type:'integer',minimum:1,maximum:10,description:'Row 1 to 10.'}
+  },required:['column','row'],additionalProperties:false},
+  execute:({column,row})=>{
+    const i=(row-1)*N+COLS.indexOf(column);
+    return Promise.race([fire(i),new Promise((_,rej)=>setTimeout(()=>rej(new Error('No answer from the other device.')),15000))]);
+  }
+});
+})();
+</script>
+</body>
+</html>
