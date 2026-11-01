@@ -2,7 +2,7 @@
 <html lang="de" dir="ltr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Plappertier</title>
@@ -30,11 +30,14 @@
 <style>
 :root{--accent:#6b21a8;--accent-text:#ffffff;--page-width:640px}
 @media (prefers-color-scheme: dark){:root{--accent:#c084fc;--accent-text:#1e0833}}
-main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;gap:12px}
+/* Stage layout: the pet fills the screen, voices and buttons below it; pet choice and options are in the menu */
+main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px}
 
 /* ---------- Stage ---------- */
-.stage{display:grid;place-items:center;padding-block:4px 0}
-.animal{width:min(80vw,300px);aspect-ratio:24/25;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:pointer}
+.stage{flex:1;min-height:120px;position:relative}
+/* Fills the free space; the SVG keeps its proportions inside */
+.animal{position:absolute;inset:0;margin:auto;width:100%;height:100%;max-width:400px;max-height:420px;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:pointer}
 .animal svg{width:100%;height:100%;display:block;overflow:hidden}
 .animal.poke svg{animation:poke .5s ease-out}
 @keyframes poke{0%{transform:scale(1)}30%{transform:scale(1.08,.9)}60%{transform:scale(.96,1.05)}100%{transform:scale(1)}}
@@ -44,11 +47,14 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
 .meter{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin:0 auto 10px;max-width:300px;visibility:hidden}
 .meter.on{visibility:visible}
 .meter span{display:block;height:100%;width:0;background:var(--accent);transition:width .08s linear}
-.actions{display:grid;grid-template-columns:3fr 2fr;gap:8px}
+.play .choices{margin-block-end:10px}
+.play .choices button{min-height:56px}
+.actions{flex:none;display:grid;grid-template-columns:3fr 2fr;gap:8px}
 .actions .btn{min-height:56px;font-size:17px;font-weight:600;white-space:nowrap;padding-inline:8px}
 .btn.rec{background:var(--err);border-color:var(--err);color:#fff}
 
 /* ---------- Choices ---------- */
+.card h2:not(.sr-only){margin-block-end:4px}
 .card h3{font-size:16px;margin:14px 0 8px}
 .card h3:first-child{margin-top:0}
 .choices{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
@@ -59,29 +65,29 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
 .check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 </style>
 </head>
-<body>
+<body class="stage">
 <header>
   <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Plappertier</span></h1>
   <p class="sub" data-i18n="sub">Sprich – das Tier plappert lustig nach</p>
 </header>
 
 <main>
-  <section class="card" aria-label="Plappertier" data-i18n-attr="aria-label:title">
+  <section class="card play" aria-label="Plappertier" data-i18n-attr="aria-label:title">
     <div class="stage">
       <div class="animal" id="animal" role="img" aria-label="Katze"></div>
     </div>
     <p class="status" id="status" role="status" aria-live="polite"></p>
     <div class="meter" id="meter" aria-hidden="true"><span id="meterBar"></span></div>
+    <h3 id="h-effect" class="sr-only" data-i18n="effect">Stimme</h3>
+    <div class="choices" id="effects" role="group" aria-labelledby="h-effect"></div>
     <div class="actions">
       <button type="button" class="btn primary" id="btnMain">🎤 Aufnehmen</button>
       <button type="button" class="btn" id="btnAgain" disabled><span aria-hidden="true">🔁 </span><span data-i18n="again">Nochmal</span></button>
     </div>
   </section>
 
-  <section class="card" aria-labelledby="h-settings">
-    <h2 id="h-settings" class="sr-only" data-i18n="settings">Einstellungen</h2>
-    <h3 id="h-effect" data-i18n="effect">Stimme</h3>
-    <div class="choices" id="effects" role="group" aria-labelledby="h-effect"></div>
+  <section class="card" aria-labelledby="h-settings" data-menu>
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
     <h3 id="h-animal" data-i18n="animal">Tier</h3>
     <div class="choices" id="animals" role="group" aria-labelledby="h-animal"></div>
     <label class="check"><input type="checkbox" id="optAuto"> <span data-i18n="auto">Automatisch zuhören – plappert nach, sobald du eine Pause machst</span></label>
@@ -108,9 +114,9 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
   <h3>Bedienung</h3>
   <ul>
     <li><b>Aufnehmen</b> tippen, etwas sagen, dann <b>Stopp</b> tippen: Das Tier wiederholt es sofort (höchstens 10 Sekunden).</li>
-    <li><b>Automatisch zuhören</b>: Nach <i>Zuhören starten</i> wartet das Tier, bis du sprichst, und plappert nach, sobald du kurz still bist – wie ein Papagei. Für leise Umgebungen am besten.</li>
+    <li><b>Automatisch zuhören</b> (im Menü unter <i>Einstellungen</i>): Nach <i>Zuhören starten</i> wartet das Tier, bis du sprichst, und plappert nach, sobald du kurz still bist – wie ein Papagei. Für leise Umgebungen am besten.</li>
     <li><b>Stimme</b> wählen: Normal, Piepsig, Brummbär, Roboter, Echo, Rückwärts oder Alien. Ein Tipp auf eine Stimme spielt die letzte Aufnahme gleich damit ab, ebenso <i>Nochmal</i>.</li>
-    <li><b>Tier</b> wählen: Katze, Hund, Frosch oder Panda. Antippen kitzelt es.</li>
+    <li><b>Tier</b> wählen (im Menü ☰ oben rechts unter <i>Einstellungen</i>): Katze, Hund, Frosch oder Panda. Antippen kitzelt es.</li>
   </ul>
   <h3>Kein Ton oder keine Aufnahme?</h3>
   <ul>
@@ -130,9 +136,9 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
   <h3>How to use</h3>
   <ul>
     <li>Tap <b>Record</b>, say something, then tap <b>Stop</b>: the pet repeats it right away (10 seconds at most).</li>
-    <li><b>Listen automatically</b>: after <i>Start listening</i> the pet waits until you speak and talks back as soon as you pause – like a parrot. Works best in quiet places.</li>
+    <li><b>Listen automatically</b> (in the menu under <i>Settings</i>): after <i>Start listening</i> the pet waits until you speak and talks back as soon as you pause – like a parrot. Works best in quiet places.</li>
     <li>Pick a <b>voice</b>: normal, squeaky, deep, robot, echo, backwards or alien. Tapping a voice plays the last recording with it right away, so does <i>Again</i>.</li>
-    <li>Pick a <b>pet</b>: cat, dog, frog or panda. Tap it to tickle it.</li>
+    <li>Pick a <b>pet</b> (in the menu ☰ at the top right under <i>Settings</i>): cat, dog, frog or panda. Tap it to tickle it.</li>
   </ul>
   <h3>No sound or no recording?</h3>
   <ul>
@@ -158,7 +164,7 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version b62add8c788e</p>
+  <p class="footer-version">Version 43911b501db4</p>
   <!-- footer:end -->
 </footer>
 

@@ -2,7 +2,7 @@
 <html lang="de" dir="ltr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>KI-Chat</title>
@@ -20,7 +20,7 @@
 <meta name="tool:webmcp" content="get_conversation, ask_model">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-shQ6aDBZesnZH3vzoQKsr0w4GOElUOn70LLPav2BXoc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-ZhnWluNPgqK2d2gH8bE+0eEkSb2IT5gtz+gCHMfVBgQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -32,7 +32,10 @@
 /* Accent = tool:color (light); a lighter shade of it for dark mode */
 :root{--accent:#4d7c0f;--accent-text:#ffffff;--page-width:900px}
 @media (prefers-color-scheme: dark){:root{--accent:#a3e635;--accent-text:#1a2e05}}
-main{max-width:900px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+/* Stage layout: the chat fills the screen (input stays above the keyboard), settings and history are in the menu */
+main{max-width:900px;margin-inline:auto;padding:8px;display:flex;flex-direction:column;gap:12px}
+.chat-card{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px}
+.chat-card h2{margin-block-end:8px}
 .field{display:flex;flex-direction:column;gap:4px;margin-block-end:10px}
 .field>span{font-size:13px;color:var(--muted);font-weight:600}
 select{min-height:44px;padding-inline:10px;width:100%}
@@ -56,10 +59,9 @@ progress{width:100%;height:10px;accent-color:var(--accent)}
 .icon-btn{display:inline-flex;align-items:center;justify-content:center;padding-inline:12px}
 .btn.small.icon-btn{min-width:44px;min-height:44px}
 .btn.small.icon-btn .ico{width:20px;height:20px}
-.tools-row{margin-block-start:8px}
 #modelBadge:empty{display:none}
 /* Chat */
-.chat{display:flex;flex-direction:column;gap:10px;max-height:min(65vh,640px);min-height:120px;overflow-y:auto;overscroll-behavior:contain;padding-block:4px}
+.chat{flex:1;display:flex;flex-direction:column;gap:10px;min-height:120px;overflow-y:auto;overscroll-behavior:contain;padding-block:4px}
 .empty{color:var(--muted);font-size:14px;text-align:center;margin:auto;padding:20px 8px}
 .msg{max-width:88%;padding:8px 12px;border-radius:14px;line-height:1.5;overflow-wrap:anywhere}
 .msg.user{align-self:flex-end;background:var(--accent);color:var(--accent-text);border-end-end-radius:4px;white-space:pre-wrap}
@@ -90,14 +92,18 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
 .hist .btn{min-width:44px;min-height:44px}
 </style>
 </head>
-<body>
+<body class="stage">
 <header>
   <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">KI-Chat</span></h1>
   <p class="sub" data-i18n="sub">Mit Gemma direkt auf dem Gerät chatten – offline, ohne Konto, nichts verlässt das Gerät.</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnNew" aria-label="Neuer Chat" title="Neuer Chat" data-i18n-attr="aria-label:newChat; title:newChat"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9h8"/><path d="M8 13h6"/><path d="M12.01 18.594l-4.01 2.406v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v5.5"/><path d="M16 19h6"/><path d="M19 16v6"/></svg></button>
+    <button type="button" class="head-btn" id="btnCopyChat" aria-label="Chat kopieren" title="Chat kopieren" data-i18n-attr="aria-label:copyChat; title:copyChat"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666"/><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"/></svg></button>
+  </div>
 </header>
 
 <main>
-  <section class="card" aria-labelledby="h-chat">
+  <section class="card chat-card" aria-labelledby="h-chat">
     <h2 id="h-chat"><span data-i18n="h.chat">Chat</span> <span class="badge" id="modelBadge"></span></h2>
     <div class="note warn" id="crashNote" role="alert" hidden><p id="crashText"></p></div>
     <div class="note warn" id="noGpu" hidden>
@@ -115,13 +121,9 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
       <textarea id="input" rows="1" maxlength="8000" placeholder="Nachricht …" data-i18n-attr="placeholder:inputPh" enterkeyhint="send"></textarea>
       <button type="submit" class="btn primary icon-btn" id="btnSend" aria-label="Senden" title="Senden"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14l11 -11"/><path d="M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5"/></svg></button>
     </form>
-    <div class="row tools-row">
-      <button type="button" class="btn small icon-btn" id="btnNew" aria-label="Neuer Chat" title="Neuer Chat" data-i18n-attr="aria-label:newChat; title:newChat"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9h8"/><path d="M8 13h6"/><path d="M12.01 18.594l-4.01 2.406v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v5.5"/><path d="M16 19h6"/><path d="M19 16v6"/></svg></button>
-      <button type="button" class="btn small icon-btn" id="btnCopyChat" aria-label="Chat kopieren" title="Chat kopieren" data-i18n-attr="aria-label:copyChat; title:copyChat"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666"/><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"/></svg></button>
-    </div>
   </section>
 
-  <details class="card settings" id="settingsBox">
+  <details class="card settings" id="settingsBox" data-menu>
     <summary data-i18n="settings">Einstellungen</summary>
     <label class="field"><span data-i18n="model">Sprachmodell</span>
       <select id="model">
@@ -145,7 +147,7 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
     </label>
   </details>
 
-  <section class="card" aria-labelledby="h-hist">
+  <section class="card" aria-labelledby="h-hist" data-menu>
     <h2 id="h-hist"><span data-i18n="history">Verlauf</span> <span class="badge" id="histCount">0</span></h2>
     <ul class="hist" id="hist"></ul>
     <div class="row" style="margin-block-start:8px">
@@ -173,11 +175,11 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
   <p>Ein Chat mit einem KI-Sprachmodell, das <strong>komplett auf diesem Gerät</strong> läuft. Nach dem einmaligen Download des Modells funktioniert er <strong>offline</strong>; Fragen und Antworten werden nirgends hingeschickt.</p>
   <h3>Bedienung</h3>
   <ul>
-    <li>Frage eintippen, <strong>Senden</strong> (Papierflieger). Beim ersten Mal wird das Modell heruntergeladen – am besten im WLAN. Danach startet es aus dem Speicher des Browsers. Welches Modell antwortet, steht neben „Chat“; ändern lässt es sich unter <em>Einstellungen</em>.</li>
+    <li>Frage eintippen, <strong>Senden</strong> (Papierflieger). Beim ersten Mal wird das Modell heruntergeladen – am besten im WLAN. Danach startet es aus dem Speicher des Browsers. Welches Modell antwortet, steht neben „Chat“; ändern lässt es sich unter <em>Einstellungen</em> im Menü (☰ oben rechts).</li>
     <li>Die Antwort erscheint Wort für Wort; <strong>Stopp</strong> (Quadrat) bricht sie ab.</li>
     <li><strong>Teilen (Android, installierte App):</strong> In einer anderen App Text oder Link teilen → „KI-Chat“ wählen. Der Text steht dann im Eingabefeld; darunter die eigene Frage schreiben (z. B. „Fasse das zusammen“) und senden.</li>
-    <li>Kopieren-Symbol unter einer Antwort kopiert sie; die Symbole unter dem Eingabefeld beginnen einen neuen Chat bzw. kopieren den ganzen Chat. Am PC sendet <span class="kbd">Enter</span>, <span class="kbd">Umschalt</span>+<span class="kbd">Enter</span> macht eine neue Zeile.</li>
-    <li>Das Modell kennt den bisherigen Chat. Wird er sehr lang, vergisst es die ältesten Nachrichten. <strong>Neuer Chat</strong> beginnt von vorn; frühere Chats stehen im <strong>Verlauf</strong> und lassen sich fortsetzen.</li>
+    <li>Kopieren-Symbol unter einer Antwort kopiert sie; die Symbole oben rechts beginnen einen neuen Chat bzw. kopieren den ganzen Chat. Am PC sendet <span class="kbd">Enter</span>, <span class="kbd">Umschalt</span>+<span class="kbd">Enter</span> macht eine neue Zeile.</li>
+    <li>Das Modell kennt den bisherigen Chat. Wird er sehr lang, vergisst es die ältesten Nachrichten. <strong>Neuer Chat</strong> beginnt von vorn; frühere Chats stehen im Menü unter <strong>Verlauf</strong> und lassen sich fortsetzen.</li>
     <li>Unter <em>Einstellungen</em> lässt sich dem Modell eine feste Anweisung geben (z. B. „Antworte immer in Stichpunkten“) und die Länge der Antworten begrenzen.</li>
   </ul>
   <h3>Modelle – woher sie kommen</h3>
@@ -214,11 +216,11 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
   <p>A chat with an AI language model that runs <strong>entirely on this device</strong>. After the model has been downloaded once it works <strong>offline</strong>; questions and answers are never sent anywhere.</p>
   <h3>How to use</h3>
   <ul>
-    <li>Type a question, press <strong>Send</strong> (paper plane). The first time, the model is downloaded – preferably over Wi-Fi. Afterwards it starts from the browser’s storage. The model that answers is shown next to “Chat”; change it under <em>Settings</em>.</li>
+    <li>Type a question, press <strong>Send</strong> (paper plane). The first time, the model is downloaded – preferably over Wi-Fi. Afterwards it starts from the browser’s storage. The model that answers is shown next to “Chat”; change it under <em>Settings</em> in the menu (☰ top right).</li>
     <li>The answer appears word by word; <strong>Stop</strong> (square) ends it.</li>
     <li><strong>Share (Android, installed app):</strong> share text or a link in another app → choose “AI Chat”. The text is put into the input field; write your own question below it (e.g. “Summarise this”) and send.</li>
-    <li>The copy icon below an answer copies it; the icons below the input field start a new chat or copy the whole chat. On a computer <span class="kbd">Enter</span> sends, <span class="kbd">Shift</span>+<span class="kbd">Enter</span> starts a new line.</li>
-    <li>The model knows the chat so far. If it gets very long, it forgets the oldest messages. <strong>New chat</strong> starts over; earlier chats are in the <strong>history</strong> and can be continued.</li>
+    <li>The copy icon below an answer copies it; the icons at the top right start a new chat or copy the whole chat. On a computer <span class="kbd">Enter</span> sends, <span class="kbd">Shift</span>+<span class="kbd">Enter</span> starts a new line.</li>
+    <li>The model knows the chat so far. If it gets very long, it forgets the oldest messages. <strong>New chat</strong> starts over; earlier chats are in the menu under <strong>History</strong> and can be continued.</li>
     <li>Under <em>Settings</em> you can give the model a fixed instruction (e.g. “Always answer in bullet points”) and limit the length of answers.</li>
   </ul>
   <h3>Models – where they come from</h3>
@@ -262,7 +264,7 @@ textarea#system{width:100%;min-height:72px;padding:10px;resize:vertical}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version fde14d17162a</p>
+  <p class="footer-version">Version e018eed3b850</p>
   <!-- footer:end -->
 </footer>
 
@@ -771,7 +773,7 @@ function renderHist() {
       if (busy) return toast(t('busy'));
       chat = JSON.parse(JSON.stringify(c));
       renderChat(); renderHist(); status('');
-      $('chat').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      Tools.menu.close();
     });
     const del = document.createElement('button');
     del.type = 'button'; del.className = 'btn small danger'; del.textContent = '✕';

@@ -2,7 +2,7 @@
 // German is the default and is covered by all other tests; here the English side.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, tools, apps, translatedApps, VIEWPORTS, expectNoHorizontalScroll } from './helpers.mjs';
+import { test, expect, tools, apps, translatedApps, VIEWPORTS, expectNoHorizontalScroll, openMenu } from './helpers.mjs';
 import { ROOT, meta } from '../scripts/lib.mjs';
 
 const translated = translatedApps().map(a => a.folder);
@@ -60,6 +60,7 @@ test.describe('browser language English', () => {
       // Help: only the English block, German summary translated
       const help = page.locator('details.help');
       await expect(help.locator('summary')).toHaveText('Instructions & notes');
+      await openMenu(page);
       await help.locator('summary').click();
       await expect(help.locator('[data-lang="en"]')).toBeVisible();
       await expect(help.locator('[data-lang="de"]')).toBeHidden();
@@ -93,6 +94,7 @@ test.describe('language switch', () => {
 
     await page.goto(`/${app}/`);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await openMenu(page); // stage apps: the language switch is in the menu
     await page.getByRole('button', { name: 'Deutsch' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
     await expect(page.locator('details.help summary')).toHaveText('Anleitung & Hinweise');
@@ -120,6 +122,7 @@ test.describe('language switch', () => {
   for (const folder of translated) {
     test(`${folder}: language is not part of the app backup and survives deleting the app data`, async ({ page }) => {
       await page.goto(`/${folder}/`);
+      await openMenu(page); // stage apps: the language switch is in the menu
       await page.getByRole('button', { name: 'English' }).click();
       const exported = await page.evaluate(() => Tools.data.exportData());
       expect(Object.keys(exported.data)).not.toContain('tools.lang.v1');

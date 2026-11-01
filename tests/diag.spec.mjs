@@ -3,7 +3,7 @@
 // never stored content.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, apps, clipboardText, privateClipboard } from './helpers.mjs';
+import { test, expect, apps, clipboardText, privateClipboard, openMenu } from './helpers.mjs';
 import { ROOT } from '../scripts/lib.mjs';
 
 const withDiag = apps().filter(a => readFileSync(join(ROOT, a.folder, 'index.html'), 'utf8').includes('data-diag="copy"'));
@@ -34,6 +34,7 @@ test('the template has the troubleshooting block', () => {
 });
 
 async function copyReport(page) {
+  await openMenu(page);
   await page.locator('details.help summary').click();
   await page.click('[data-diag="copy"]');
   await expect(page.locator('#toast')).toHaveText(/Diagnose kopiert|Diagnostics copied/);

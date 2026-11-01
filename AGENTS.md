@@ -10,7 +10,7 @@ Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/). Kein Server;
 index.html            Startseite – die Kartenliste ist generiert
 manifest.webmanifest  generiert: nur für das Home-Bildschirm-Icon der Startseite (Android), `display: browser`, ohne Service Worker
 assets/base.css       Design-Tokens, Dark Mode, Karten, Buttons, Toast, Hilfe-Bereich
-assets/common.js      window.Tools: $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, i18n, t, lang, setLang, locale, onLang, mcp, diag; registriert den Service Worker
+assets/common.js      window.Tools: $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, i18n, t, lang, setLang, locale, onLang, menu, mcp, diag; registriert den Service Worker
 assets/vendor/        Fremdbibliotheken mit LICENSE je Ordner (generiert, nicht von Hand ändern)
 template/             Vorlage für neue Seiten (wird nicht gelistet)
 scripts/build.mjs     erzeugt Seitenliste, Fußzeile (inkl. Version), <head>-Block (noindex, CSP, Icons, Manifest), manifest.webmanifest + sw.js je App
@@ -57,6 +57,13 @@ Seiten, die nicht gelistet werden sollen (z. B. Weiterleitungen), bekommen `<met
 - **Umbenennen:** Sobald eine Seite geteilt wurde, im alten Ordner eine kleine Weiterleitungsseite lassen (`<meta http-equiv="refresh">` + `<meta name="tool:hidden" content="true">`), damit Links weiter funktionieren.
 - **Gemeinsame Basis nutzen:** `../assets/base.css` zuerst einbinden, `../assets/common.js` vor dem Seiten-Script. Im Seiten-CSS nur seitenspezifische Regeln; eigene Akzentfarbe über `--accent` / `--accent-text` (hell und dunkel).
 - **Gemeinsames ändern = alle Seiten prüfen.** Eine Änderung in `assets/` wirkt sofort auf jedes Tool.
+- **Layout: Karten oder Bühne.** Standard sind Karten untereinander (Rechner, Formulare, Listen – die Seite scrollt). Apps, deren Bedienung den ganzen Bildschirm braucht (Malen, Chat, Spiele, Kamera …), nutzen die **Bühne**: `<body class="stage">` (Beispiele `paint`, `ai-chat`, `talking-animal`).
+  - Kopfleiste (Titel, rechts höchstens zwei Schnellaktionen als `<button class="head-btn">` in `<div class="stage-actions">`, dann der ☰-Knopf) und `<main>` füllen genau den Bildschirm (`100dvh`, Ränder für Notch/Gestenleiste). Die Seite scrollt nicht; passt etwas nicht hinein (Querformat), scrollt `main`. `main` selbst als Flex-Spalte anlegen und den Hauptbereich mit `flex:1; min-height:0` füllen lassen. `.sub` wird ausgeblendet.
+  - **Menü (☰)** baut `common.js` (`Tools.menu`): ein modaler `<dialog>`, auf dem Handy als Bottom-Sheet, ab 700 px als Seitenleiste. Hinein kommen in dieser Reihenfolge alle Elemente mit `data-menu` (Einstellungen, Verlauf …), „Daten sichern“, Hilfe und Fußzeile. Ohne JavaScript bleiben sie unter `main`.
+  - Die Zurück-Taste/-Geste schließt das Menü statt die App (eigener Verlaufseintrag). Aktionen im Menü, die zur Bühne zurückführen (z. B. Chat aus dem Verlauf öffnen), rufen `Tools.menu.close()`. Toasts erscheinen auch über dem offenen Menü.
+  - Bedienung, die man ständig braucht, bleibt auf der Bühne (Werkzeuge in `paint`, Stimmen in `talking-animal`); Einstellungen gehören ins Menü. In der Hilfe sagen, was im Menü liegt.
+  - Ziele unten am Bildschirm (Daumen) anordnen, Werkzeugleisten unten. Bei Tastatur-Eingabe `interactive-widget=resizes-content` und bei der Bühne `viewport-fit=cover` im Viewport-Meta.
+  - `tests/stage.spec.mjs` prüft jede Bühnen-App automatisch (füllt Hoch-/Querformat und Desktop ohne Scrollen, Menü-Inhalt, Schließen per Knopf/Escape/Hintergrund/Zurück, Seitenleiste, ohne JavaScript, Englisch); `a11y.spec.mjs` prüft sie auch mit offenem Menü. In fachlichen Tests Bereiche im Menü mit `openMenu(page)` / `closeMenu(page)` aus `tests/helpers.mjs` erreichen.
 - **Mobile-first:** muss bei 375 px Breite ohne seitliches Scrollen funktionieren. Touch-Ziele mindestens 44 px, Eingabefelder 16 px Schrift (sonst zoomt iOS).
 - **Dark Mode:** nur Farben aus den Tokens verwenden, keine festen Farben für Flächen und Text.
 - **Hilfe:** Anleitung als `<details class="help card">` am Ende der Seite, standardmäßig eingeklappt.

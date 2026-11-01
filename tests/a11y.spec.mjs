@@ -13,11 +13,21 @@ for (const p of pages) {
       await page.goto(`/${p.folder ? p.folder + '/' : ''}?lang=${lang}`);
       // Check the content of collapsible sections too
       await page.evaluate(() => document.querySelectorAll('details').forEach(d => { d.open = true; }));
-      const { violations } = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .analyze();
-      const summary = violations.map(v => `${v.id} (${v.impact}): ${v.help} → ${v.nodes.slice(0, 3).map(n => n.target.join(' ')).join(' | ')}`);
-      expect(summary).toEqual([]);
+      const check = async () => {
+        const { violations } = await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+          .analyze();
+        return violations.map(v => `${v.id} (${v.impact}): ${v.help} → ${v.nodes.slice(0, 3).map(n => n.target.join(' ')).join(' | ')}`);
+      };
+      expect(await check()).toEqual([]);
+      // Stage apps: once more with the menu open (help, data backup, settings and footer are in it)
+      if (await page.locator('.menu-btn').count()) {
+        await page.locator('.menu-btn').click();
+        await expect(page.locator('#appMenu')).toBeVisible();
+        // Wait for the opening animation (colours are measured with half opacity otherwise)
+        await page.locator('#appMenu').evaluate(d => Promise.all(d.getAnimations().map(a => a.finished)));
+        expect(await check(), 'menu open').toEqual([]);
+      }
     });
   }
 }
