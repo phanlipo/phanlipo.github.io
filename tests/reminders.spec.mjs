@@ -1,7 +1,7 @@
 // Erinnerungen: create, fire on time (notification via the service worker), late after the app was closed,
 // edit and schedule again from the history, validation, permission states, English.
 // Time is controlled with Playwright's clock; notifications are recorded by a stand-in Notification API.
-import { test, expect, clipboardText } from './helpers.mjs';
+import { test, expect, clipboardText, switchLang, openMenu } from './helpers.mjs';
 
 const KEY = 'reminders.list.v1';
 const START = new Date('2026-10-29T12:00:00+01:00'); // = 12:00 in Europe/Berlin (winter time)
@@ -263,6 +263,7 @@ test('diagnostics: copied from the help with permission state and the steps, wit
   await open(page, 'dismiss');
   await add(page, 'Geheimer Termin', '2026-10-29T13:00');
   await page.click('#btnPerm');
+  await openMenu(page);
   await page.locator('details.help summary').click();
   await page.click('[data-diag="copy"]');
   await expect(page.locator('#toast')).toHaveText('Diagnose kopiert');
@@ -311,6 +312,7 @@ test.describe('Android', () => {
     await open(page, 'default');
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.click('#btnPerm');
+    await openMenu(page);
     await page.locator('details.help summary').click();
     await page.click('[data-diag="copy"]');
     await expect(page.locator('#toast')).toHaveText('Diagnose kopiert');
@@ -466,7 +468,7 @@ test.describe('English', () => {
     await page.click('#upList [data-act="edit"]');
     await expect(page.locator('#h-form')).toHaveText('Edit reminder');
     // Switching the language while editing keeps the edit state
-    await page.click('[data-set-lang="de"]');
+    await switchLang(page, 'de');
     await expect(page.locator('#h-form')).toHaveText('Erinnerung bearbeiten');
     await expect(page.locator('#btnSave')).toHaveText('Änderungen speichern');
   });

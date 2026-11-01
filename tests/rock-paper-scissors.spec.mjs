@@ -1,6 +1,6 @@
 // Schere, Stein, Papier: rules of all three variants, computer independent of the player's choice,
 // "smart" computer learns from history, score and persistence.
-import { test, expect } from './helpers.mjs';
+import { test, expect, switchLang } from './helpers.mjs';
 
 // Rules written down independently of the page: winner → losers
 const BEATS = {
@@ -128,7 +128,7 @@ test.describe('English', () => {
     await expect(page.locator('#result .big')).toHaveText(big);
     await expect(page.locator('#result .why')).toHaveText(why);
     await expect(page.locator('#ruleDiagrams [data-variant="3"] li').first()).toContainText('Scissors beats');
-    await page.getByRole('button', { name: 'Deutsch' }).click();
+    await switchLang(page, 'de');
     await expect(page.locator('#result .why')).toHaveText(
       cpu === 'stein' ? 'Ihr habt beide Stein.' : cpu === 'schere' ? 'Stein macht Schere stumpf.' : 'Papier wickelt Stein ein.');
     await expect(page.locator('#choices .choice').first()).toHaveText('✂️Schere');

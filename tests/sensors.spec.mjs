@@ -1,7 +1,7 @@
 // Handy-Sensoren: sensor values are simulated with synthetic events (Chromium has no real sensors here).
 // Expected values are recomputed independently in the tests.
 import AxeBuilder from '@axe-core/playwright';
-import { test, expect, clipboardText } from './helpers.mjs';
+import { test, expect, clipboardText, switchLang } from './helpers.mjs';
 
 const num = s => Number(String(s).replace(/[^\d,.\-−+]/g, '').replace('−', '-').replace(/\./g, '').replace(',', '.'));
 const text = (page, id) => page.locator('#' + id).textContent();
@@ -766,7 +766,7 @@ test.describe('English', () => {
     expect(lines[0]).toBe('Time (s),X (m/s²),Y (m/s²),Z (m/s²),Magnitude (m/s²)');
     expect(lines[1]).toBe('0.017,0.3000,0.4000,0.0000,0.5000');
     // Switching back to German changes the texts at once
-    await page.getByRole('button', { name: 'Deutsch' }).click();
+    await switchLang(page, 'de');
     await expect(page.locator('#vRec')).toHaveText('Aufnahme starten');
   });
 });

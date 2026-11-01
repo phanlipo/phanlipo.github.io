@@ -1,7 +1,7 @@
 // PDF zu Word: paragraphs, hanging indents, hyphenation, columns, page breaks and page numbers
 // are rebuilt from a generated PDF; the expected Word values are computed from the PDF geometry.
 // Images: position, size and orientation; scanned pages: text recognition (Tesseract, local files).
-import { test, expect } from './helpers.mjs';
+import { test, expect, switchLang } from './helpers.mjs';
 import { readFileSync } from 'node:fs';
 import { makePdf, wrap, unzip, docxParagraphs } from './pdf-tools.mjs';
 
@@ -350,7 +350,7 @@ test.describe('English', () => {
     await expect(page.locator('#status')).toHaveText('Done.');
     await expect(page.locator('#resultMeta')).toContainText('2 pages · 2 paragraphs');
     await expect(page.locator('#preview .pb')).toHaveText('Page break');
-    await page.getByRole('button', { name: 'Deutsch' }).click();
+    await switchLang(page, 'de');
     await expect(page.locator('#resultMeta')).toContainText('2 Seiten · 2 Absätze');
   });
 });
