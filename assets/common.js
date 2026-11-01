@@ -26,6 +26,10 @@ window.Tools = (function () {
       t.id = 'toast'; t.className = 'toast'; t.setAttribute('role', 'status');
       document.body.append(t);
     }
+    // An open modal dialog (e.g. the menu) lies above the page – show the toast inside it so it stays visible
+    let host = document.body;
+    try { host = document.querySelector('dialog:modal') || document.body; } catch (_) {}
+    if (t.parentNode !== host) host.append(t);
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(toast._t);
@@ -400,6 +404,72 @@ window.Tools = (function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupDataUi);
   else setupDataUi();
 
+  /* ---------- Stage layout: the interaction fills the screen, everything else is in the menu ----------
+     <body class="stage">: the header (title, optional <div class="stage-actions"> with up to two quick actions
+     as <button class="head-btn">) and <main> fill exactly the screen, the page itself does not scroll.
+     The menu button (☰, added here) opens a modal <dialog> – a bottom sheet on phones, a side panel on wide
+     screens. It gets, in this order: every element with data-menu (app settings, history …), the data backup
+     section, the help and the footer. Without JavaScript they simply stay below <main>.
+     The back button/gesture closes the menu instead of leaving the app. Tools.menu.open() / .close(). */
+  Object.assign(dict.de, { 'menu.open': 'Menü', 'menu.title': 'Menü', 'menu.close': 'Menü schließen' });
+  Object.assign(dict.en, { 'menu.open': 'Menu', 'menu.title': 'Menu', 'menu.close': 'Close menu' });
+  const svgIcon = d => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  // Tabler Icons (MIT): menu-2, x
+  const ICON_MENU = svgIcon('<path d="M4 6l16 0"/><path d="M4 12l16 0"/><path d="M4 18l16 0"/>');
+  const ICON_CLOSE = svgIcon('<path d="M18 6l-12 12"/><path d="M6 6l12 12"/>');
+  let menuEl = null, menuBtn = null, menuPushed = false;
+
+  function menuOpen() {
+    if (!menuEl || menuEl.open) return;
+    menuEl.showModal();
+    menuBtn.setAttribute('aria-expanded', 'true');
+    // An own history entry, so "back" closes the menu (with CloseWatcher the dialog closes itself, see 'close')
+    try { history.pushState({ toolsMenu: true }, ''); menuPushed = true; } catch (_) {}
+    diagLog('menu opened');
+  }
+  function menuClose() { if (menuEl && menuEl.open) menuEl.close(); }
+
+  function setupMenu() {
+    if (menuEl || !document.body.classList.contains('stage')) return;
+    const header = document.querySelector('body > header');
+    if (!header) return;
+    const parts = [...document.querySelectorAll('[data-menu]'), document.querySelector('details.data'),
+      document.querySelector('details.help'), document.querySelector('body > footer')].filter(Boolean);
+    menuEl = document.createElement('dialog');
+    menuEl.className = 'menu-sheet'; menuEl.id = 'appMenu';
+    menuEl.setAttribute('aria-labelledby', 'appMenuTitle');
+    menuEl.innerHTML = `<div class="menu-head"><h2 id="appMenuTitle" data-i18n="menu.title">${esc(t('menu.title'))}</h2>`
+      + `<button type="button" class="head-btn menu-close" aria-label="${esc(t('menu.close'))}" title="${esc(t('menu.close'))}" data-i18n-attr="aria-label:menu.close; title:menu.close">${ICON_CLOSE}</button></div>`
+      + '<div class="menu-body"></div>';
+    menuEl.querySelector('.menu-body').append(...parts);
+    document.body.append(menuEl);
+
+    let actions = header.querySelector('.stage-actions');
+    if (!actions) { actions = document.createElement('div'); actions.className = 'stage-actions'; header.append(actions); }
+    menuBtn = document.createElement('button');
+    menuBtn.type = 'button'; menuBtn.className = 'head-btn menu-btn';
+    menuBtn.setAttribute('aria-haspopup', 'dialog'); menuBtn.setAttribute('aria-controls', 'appMenu'); menuBtn.setAttribute('aria-expanded', 'false');
+    menuBtn.setAttribute('aria-label', t('menu.open')); menuBtn.title = t('menu.open');
+    menuBtn.dataset.i18nAttr = 'aria-label:menu.open; title:menu.open';
+    menuBtn.innerHTML = ICON_MENU;
+    actions.append(menuBtn);
+    if (translated) { applyI18n(menuEl); applyI18n(actions); }
+
+    menuBtn.addEventListener('click', menuOpen);
+    menuEl.querySelector('.menu-close').addEventListener('click', menuClose);
+    // A tap on the backdrop (outside the sheet) closes it
+    menuEl.addEventListener('click', e => { if (e.target === menuEl) menuClose(); });
+    menuEl.addEventListener('close', () => {
+      menuBtn.setAttribute('aria-expanded', 'false');
+      if (menuPushed) { menuPushed = false; history.back(); }
+    });
+    window.addEventListener('popstate', () => { if (menuEl.open) { menuPushed = false; menuEl.close(); } });
+    document.body.classList.add('has-menu');
+  }
+  // common.js is loaded at the end of <body>: build the menu right away, before the first paint
+  if (document.querySelector('body > footer')) setupMenu();
+  else document.addEventListener('DOMContentLoaded', setupMenu);
+
   /* ---------- WebMCP: app functions as tools for AI agents in the browser ----------
      Draft standard (W3C Web Machine Learning CG): document.modelContext.registerTool(tool, { signal }).
      Older drafts and polyfills use navigator.modelContext – both are supported. Without it: nothing happens.
@@ -545,6 +615,7 @@ window.Tools = (function () {
     $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText,
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
+    menu: { open: menuOpen, close: menuClose, element: () => menuEl },
     data: { exportData, validateBackup, importData, clearData, keys: ownKeys, prefixes: storagePrefixes, appId },
     diag: { log: diagLog, info: fn => { diagInfos.push(fn); }, text: diagText },
   };

@@ -113,3 +113,26 @@ export async function openDetails(scope, summaryText) {
   const d = scope.locator('details').filter({ has: page.locator('summary', { hasText: summaryText }) }).first();
   if (!(await d.evaluate(el => el.open))) await d.locator('summary').click();
 }
+
+/** Apps with the stage layout (<body class="stage">): help, data backup, footer and data-menu sections are in the menu */
+export function stageApps() {
+  return apps().filter(a => /<body class="[^"]*\bstage\b/.test(readFileSync(join(ROOT, a.folder, 'index.html'), 'utf8')));
+}
+
+/** Opens the menu (☰) of a stage app, so its sections can be used; does nothing on other pages */
+export async function openMenu(page) {
+  const btn = page.locator('.menu-btn');
+  if (!(await btn.count())) return;
+  if (await page.locator('#appMenu').evaluate(d => d.open)) return;
+  await btn.click();
+  await expect(page.locator('#appMenu')).toBeVisible();
+}
+
+/** Closes the menu again (close button), so the stage can be used */
+export async function closeMenu(page) {
+  if (!(await page.locator('#appMenu[open]').count())) return;
+  await page.locator('#appMenu .menu-close').click();
+  await expect(page.locator('#appMenu')).toBeHidden();
+  // Closing goes back over the menu's history entry (asynchronous) – wait for it before navigating
+  await expect.poll(() => page.evaluate(() => !(history.state && history.state.toolsMenu))).toBe(true);
+}

@@ -1,5 +1,5 @@
 // Generic checks that run automatically for every page – a new tool is covered without extra work.
-import { test, expect, tools, apps, VIEWPORTS, expectNoHorizontalScroll } from './helpers.mjs';
+import { test, expect, tools, apps, VIEWPORTS, expectNoHorizontalScroll, openMenu } from './helpers.mjs';
 import { allPages } from '../scripts/lib.mjs';
 
 test('robots.txt allows crawling so search engines can see the noindex tag', async ({ request }) => {
@@ -211,6 +211,7 @@ for (const app of apps()) {
       expect(await help.evaluate(d => d.open)).toBe(false);
       await expect(help.locator('summary')).toHaveText('Anleitung & Hinweise');
       await expect(page.locator('footer .footer-common')).toContainText('KI-generiert');
+      await openMenu(page); // stage apps: the footer is in the menu
       // Licences of the bundled libraries (MIT/Apache-2.0 ask for the licence text to be available)
       await expect(page.locator('footer .footer-common').getByRole('link', { name: 'Open-Source-Lizenzen' }))
         .toHaveAttribute('href', 'https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md');
@@ -243,6 +244,7 @@ for (const app of apps()) {
       await context.setOffline(true);
       await page.reload();
       await expect(page.locator('h1')).toBeVisible();
+      await openMenu(page); // stage apps: the footer is in the menu
       await expect(page.locator('footer .footer-common')).toBeVisible();
       await context.setOffline(false);
     });
@@ -263,6 +265,7 @@ for (const app of apps()) {
       await page.evaluate(([own]) => {
         localStorage.setItem(own, JSON.stringify({ hello: 'Grüße', n: 1 }));
       }, [own]);
+      await openMenu(page);
       await page.locator('details.data summary').click();
       return { own };
     }

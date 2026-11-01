@@ -2,7 +2,7 @@
 // safe rendering of answers, deleting only our model files, offline, English.
 // The model itself is replaced by a stand-in worker (tests/fake-llm.mjs) – the real Gemma download is
 // far too big for `npm test`; see tests/manual/chat-e2e.mjs.
-import { test, expect, clipboardText } from './helpers.mjs';
+import { test, expect, clipboardText, openMenu, closeMenu } from './helpers.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 
 const URL_ = '/ai-chat/';
@@ -12,10 +12,12 @@ const GEMMA3_1B = { id: 'onnx-community/gemma-3-1b-it-ONNX', revision: 'a58439f4
 const posted = page => page.evaluate(() => window.__llm.posted);
 const setReply = (page, reply) => page.evaluate(r => { window.__llm.reply = r; }, reply);
 
-// The model choice is inside the (collapsed) settings
+// The model choice is inside the (collapsed) settings in the menu; afterwards the chat is usable again
 async function pickModel(page, key) {
+  await openMenu(page);
   if (!(await page.locator('#settingsBox').evaluate(d => d.open))) await page.locator('#settingsBox summary').click();
   await page.selectOption('#model', key);
+  await closeMenu(page);
 }
 
 async function send(page, text) {
@@ -106,7 +108,9 @@ test('chat: streams the answer, renders Markdown, saves and continues from the h
   // After a reload: open from the history and continue – the model sees the earlier turns
   await page.reload();
   await expect(page.locator('.msg')).toHaveCount(0);
+  await openMenu(page);
   await page.locator('#hist .open').click();
+  await expect(page.locator('#appMenu'), 'opening a chat closes the menu').toBeHidden();
   await expect(page.locator('.msg')).toHaveCount(2);
   await setReply(page, { tokens: ['Gern.'], delay: 5 });
   await send(page, 'Danke');
@@ -170,6 +174,7 @@ test('answers are shown as text, never as HTML', async ({ page }) => {
 test('settings: own system text and answer length go to the model and are remembered', async ({ page }) => {
   await fakeLlm(page, { gpu: 'f16' });
   await page.goto(URL_);
+  await openMenu(page);
   await page.locator('#settingsBox summary').click();
   await expect(page.locator('#system')).toHaveAttribute('placeholder', /^Leer = Standard: „Du bist ein hilfreicher Assistent/);
   await page.fill('#system', 'Antworte in Reimen.');
@@ -193,6 +198,7 @@ test('history: delete one chat, clear all', async ({ page }) => {
   await page.reload();
   await expect(page.locator('#histCount')).toHaveText('2');
   await expect(page.locator('#hist .snip')).toHaveText(['Erste Frage', 'Zweite Frage']);
+  await openMenu(page);
   await page.locator('#hist li').first().getByRole('button', { name: 'Chat löschen' }).click();
   await expect(page.locator('#hist .snip')).toHaveText(['Zweite Frage']);
   page.once('dialog', d => d.accept());
@@ -209,6 +215,7 @@ test('downloaded models: shown as downloaded, deleting keeps other apps\' models
   await page.evaluate(u => caches.open('transformers-cache').then(c => c.put(u, new Response('w'))), whisper);
   await page.reload();
   await expect(page.locator('#modelInfo')).toHaveText('✓ Heruntergeladen – startet ohne Internet.');
+  await openMenu(page);
   await page.locator('#settingsBox summary').click();
   await expect(page.locator('#modelList')).toContainText('Gemma 4 E2B');
   page.once('dialog', d => d.accept());

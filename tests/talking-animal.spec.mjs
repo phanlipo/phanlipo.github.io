@@ -1,5 +1,5 @@
 // Plappertier: records from the microphone, plays it back with effects, moves the mouth, listens automatically.
-import { test, expect } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu } from './helpers.mjs';
 
 const F = 440; // frequency of the fake microphone
 // Fake microphone: sine with known frequency; window.__mic.gain switches it on/off (speaking/silence)
@@ -79,7 +79,9 @@ test('every effect: expected length and pitch; tapping a voice replays the last 
 test('automatic listening: waits for a voice, talks back after a pause, listens again', async ({ page }) => {
   await fakeMic(page, 0);
   await page.goto('/talking-animal/');
+  await openMenu(page); // pet and automatic mode are in the menu
   await page.check('#optAuto');
+  await closeMenu(page);
   await expect(page.locator('#btnMain')).toHaveText('👂 Zuhören starten');
   await page.click('#btnMain');
   await expect(page.locator('#status')).toHaveText('👂 Ich höre zu … sag etwas!');
@@ -132,15 +134,18 @@ test('denied microphone shows a message', async ({ page }) => {
 test('pet, voice and automatic mode persist; the recording is not stored', async ({ page }) => {
   await fakeMic(page);
   await page.goto('/talking-animal/');
+  await openMenu(page);
   for (const a of ['dog', 'frog', 'panda', 'cat']) {
     await page.click(`#animals [data-a="${a}"]`);
     await expect(page.locator('#animal svg')).toBeVisible();
   }
   await page.click('#animals [data-a="panda"]');
   await expect(animal(page)).toHaveAttribute('aria-label', 'Panda');
+  await closeMenu(page);
   await page.click('#effects [data-e="echo"]');
   await record(page, 600);
   await done(page);
+  await openMenu(page);
   await page.check('#optAuto');
   const stored = await page.evaluate(() => Object.keys(localStorage));
   expect(stored).toEqual(['talking-animal.settings.v1']);
@@ -163,6 +168,7 @@ test.describe('English', () => {
     await page.waitForTimeout(600);
     await page.click('#btnMain');
     await expect(page.locator('#status')).toHaveText('🗣️ Squeaky!');
+    await openMenu(page);
     await page.click('#animals [data-a="dog"]');
     await expect(animal(page)).toHaveAttribute('aria-label', 'Dog');
   });
