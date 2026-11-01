@@ -898,7 +898,7 @@ test.describe('paint tools', () => {
     await expect(page.locator('#toast')).toHaveText('KI-Agent: Werkzeug gewählt');
     const empty = (await call(page, 'paint_get_canvas', {})).result;
     expect(empty).toMatchObject({ tool: 'spray', color: 'green', painted_percent: 0 });
-    expect(empty.tools).toEqual(['pencil', 'brush', 'marker', 'spray', 'eraser']);
+    expect(empty.tools).toEqual(['pencil', 'brush', 'marker', 'spray', 'fill', 'eraser']);
     expect(empty.colors).toHaveLength(6);
     // Fill the left half with the brush: independently ≈ 50 % painted
     await call(page, 'paint_select_tool', { tool: 'brush' });
