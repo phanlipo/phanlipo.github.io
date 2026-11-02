@@ -1091,3 +1091,64 @@ test.describe('api-check tools', () => {
     expect(await page.evaluate(() => localStorage.getItem('api-check.history.v1'))).not.toContain('TOPSECRET');
   });
 });
+
+test.describe('mind-map tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/mind-map/');
+  });
+
+  test('create_map, add_nodes and rename_node change the map in the app; get_map reads it', async ({ page }) => {
+    const created = await call(page, 'mind_map_create_map', { outline: 'Plan\n- Ideen\n  - Eins\n- Fragen' });
+    expect(created.ok).toBe(true);
+    expect(created.result).toMatchObject({ title: 'Plan', points: 4, outline: 'Plan\n- Ideen\n  - Eins\n- Fragen' });
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Mindmap angelegt');
+    await expect(page.getByRole('treeitem', { name: 'Eins', exact: true })).toBeVisible();
+
+    const map = (await call(page, 'mind_map_get_map', {})).result;
+    expect(map.points).toBe(4);
+    expect(map.root.text).toBe('Plan');
+    const ideen = map.root.children.find(c => c.text === 'Ideen');
+    expect(ideen.side).toBe('right');
+    expect(ideen.children.map(c => c.text)).toEqual(['Eins']);
+    // The untouched start map was not kept
+    expect(map.maps).toHaveLength(1);
+
+    const added = await call(page, 'mind_map_add_nodes', { parent_id: ideen.id, texts: ['Zwei', 'Drei\n  - Drei-a'] });
+    expect(added.ok).toBe(true);
+    expect(added.result.added_ids).toHaveLength(2);
+    expect(added.result.points).toBe(7);
+    expect(added.result.outline).toBe('Plan\n- Ideen\n  - Eins\n  - Zwei\n  - Drei\n    - Drei-a\n- Fragen');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Punkte hinzugefügt');
+    await expect(page.getByRole('treeitem', { name: 'Drei-a', exact: true })).toBeVisible();
+
+    const renamed = await call(page, 'mind_map_rename_node', { id: map.root.id, text: '  Neuer   Plan ' });
+    expect(renamed.result).toEqual({ id: map.root.id, text: 'Neuer Plan' });
+    await expect(page.getByRole('treeitem', { name: 'Neuer Plan', exact: true })).toBeVisible();
+
+    // Every change can be undone in the app
+    await page.click('#btnUndo');
+    await page.click('#btnUndo');
+    expect((await call(page, 'mind_map_get_map', {})).result.points).toBe(4);
+  });
+
+  test('add_nodes without parent_id adds to the selected point', async ({ page }) => {
+    const { result } = await call(page, 'mind_map_add_nodes', { texts: ['A', 'B'] });
+    const map = (await call(page, 'mind_map_get_map', {})).result;
+    expect(map.root.children.map(c => [c.text, c.side])).toEqual([['A', 'right'], ['B', 'left']]);
+    expect(map.selected_id).toBe(result.added_ids[1]);
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    expect((await call(page, 'mind_map_add_nodes', { parent_id: 'nope', texts: ['x'] })).ok).toBe(false);
+    expect((await call(page, 'mind_map_add_nodes', { texts: ['   '] })).ok).toBe(false);
+    expect((await call(page, 'mind_map_add_nodes', {})).ok).toBe(false);
+    expect((await call(page, 'mind_map_rename_node', { id: 'nope', text: 'x' })).ok).toBe(false);
+    expect((await call(page, 'mind_map_rename_node', { id: 'nope', text: 'x'.repeat(201) })).ok).toBe(false);
+    expect((await call(page, 'mind_map_create_map', { outline: '\n  \n' })).ok).toBe(false);
+    expect((await call(page, 'mind_map_get_map', { x: 1 })).ok).toBe(false);
+    const map = (await call(page, 'mind_map_get_map', {})).result;
+    expect(map).toMatchObject({ points: 1, title: '' });
+    expect(map.maps).toHaveLength(1);
+  });
+});
