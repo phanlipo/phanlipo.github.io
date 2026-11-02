@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "rock-paper-scissors";
-const VERSION = '64fdf4d27edf';
+const VERSION = '692804f7b7ca';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -14,7 +14,10 @@ const FILES = [
   "icon.svg",
   "manifest.webmanifest",
   "../assets/base.css",
-  "../assets/common.js"
+  "../assets/common.js",
+  "../assets/vendor/qrcode-generator/qrcode.js",
+  "../assets/vendor/zxing-wasm/iife/reader/index.js",
+  "../assets/vendor/zxing-wasm/reader/zxing_reader.wasm"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
 const RUNTIME = {};
