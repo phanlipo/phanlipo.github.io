@@ -1239,6 +1239,39 @@ test.describe('api-check tools', () => {
   });
 });
 
+test.describe('treasure-hunt tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/treasure-hunt/');
+  });
+
+  test('create_hunt adds a hunt (never replaces one), get_status reads the progress without coordinates', async ({ page }) => {
+    const hunt = { id: 'same', title: 'Agent hunt', characters: [{ id: 'a', name: 'Ally', side: 'ally', power: 2 }],
+      stations: [{ id: 's', name: 'Swing', lat: 48.1, lon: 11.5, scenes: [{ text: 'Hi', puzzle: { type: 'quiz', question: 'Q?', answers: ['a', 'b', 'c', 'd'], correct: 2 }, win: { ally: 'a', treasure: true } }] }] };
+    const first = await call(page, 'treasure_hunt_create_hunt', { hunt: JSON.stringify(hunt) });
+    expect(first.ok).toBe(true);
+    expect(first.result).toMatchObject({ title: 'Agent hunt', stations: 1, characters: 1, scenes: 1, problems: [] });
+    const second = await call(page, 'treasure_hunt_create_hunt', { hunt: JSON.stringify(hunt) });
+    expect(second.result.id).not.toBe(first.result.id);
+    await expect(page.locator('.hunt')).toHaveCount(2);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Schatzsuche angelegt');
+    // Problems are reported, broken JSON is an error
+    expect((await call(page, 'treasure_hunt_create_hunt', { hunt: '{"title":"x"}' })).result.problems).toEqual(['noStations', 'noTreasure']);
+    expect(await call(page, 'treasure_hunt_create_hunt', { hunt: '{nope' })).toMatchObject({ ok: false });
+    expect(await call(page, 'treasure_hunt_create_hunt', {})).toMatchObject({ ok: false, error: 'input.hunt is required' });
+
+    let status = await call(page, 'treasure_hunt_get_status', {});
+    expect(status.result.playing).toBeNull();
+    expect(status.result.hunts).toHaveLength(3);
+    await page.locator('.hunt').filter({ hasText: 'Agent hunt' }).first().getByRole('button', { name: 'Spielen' }).click();
+    await page.getByRole('button', { name: 'Los geht’s!' }).click();
+    await page.locator('[data-act="target"][data-id="s"]').click();
+    status = await call(page, 'treasure_hunt_get_status', {});
+    expect(status.result.playing).toMatchObject({ title: 'Agent hunt', target: 'Swing', team: [], energy: 0, finished: false, stations: 1 });
+    expect(JSON.stringify(status.result)).not.toMatch(/48\.1|11\.5|"lat"|"lon"/);
+  });
+});
+
 test.describe('mind-map tools', () => {
   test.beforeEach(async ({ page }) => {
     await fakeModelContext(page);

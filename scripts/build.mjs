@@ -36,7 +36,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
-import { ROOT, decode, meta, allPages, vendorProblems } from './lib.mjs';
+import { ROOT, decode, meta, allPages, vendorProblems, isPublished } from './lib.mjs';
 import { renderSbom, SBOM_FILE } from './sbom.mjs';
 
 const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules', 'tests']);
@@ -307,7 +307,8 @@ const appVendorProblems = p => vendorProblems(
 function precacheList(p) {
   // Every file of the app folder (page, manifest, icons, helper scripts) except the service worker itself
   // (the manifest is listed explicitly: on the very first build it does not exist on disk yet)
-  const own = new Set(filesIn(p.folder).filter(f => f !== p.file && !f.endsWith('/sw.js')));
+  // Only files that are published (no .md notes – they would 404 and break the installation)
+  const own = new Set(filesIn(p.folder).filter(f => f !== p.file && !f.endsWith('/sw.js') && (p.folder === 'template' || isPublished(f))));
   own.add(`${p.folder}/manifest.webmanifest`);
   const files = [p.file, ...[...own].sort()];
   files.push('assets/base.css', 'assets/common.js');
