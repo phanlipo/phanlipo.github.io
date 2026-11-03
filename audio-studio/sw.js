@@ -19,7 +19,7 @@ const FILES = [
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
 const RUNTIME = {
-  "../assets/vendor/mediabunny-mp3/": "vendor:mediabunny-mp3@1.62.1"
+  "../assets/vendor/mediabunny-mp3/": "vendor:mediabunny-mp3@1.65.1"
 };
 const RUNTIME_URLS = Object.entries(RUNTIME).map(([dir, cache]) => [new URL(dir, self.location).href, cache]);
 
