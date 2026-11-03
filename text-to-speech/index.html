@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Text zu Sprache</title>
+<meta name="description" content="Text vorlesen lassen – mit den Stimmen des Geräts oder KI-Stimmen (Supertonic, Piper, Kokoro), die direkt im Browser laufen. Stimmen vergleichen und als WAV speichern.">
+<meta name="tool:tags" content="Alltag, KI, Sprache">
+<meta name="tool:features" content="Download nötig, KI-Agent">
+<meta name="tool:icon" content="speakerphone">
+<meta name="tool:color" content="#2563eb">
+<meta name="tool:short-name" content="Vorlesen">
+<meta name="tool:title-en" content="Text to Speech">
+<meta name="tool:description-en" content="Have text read aloud – with the device's voices or AI voices (Supertonic, Piper, Kokoro) running right in the browser. Compare voices and save as WAV.">
+<meta name="tool:short-name-en" content="Read Aloud">
+<meta name="tool:storage" content="text-to-speech.">
+<meta name="tool:webmcp" content="set_text, list_voices, select_voice">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-LDjTx2bqIcsNC3CWFyzNTij6RHvU6v6WVlOVMpwYN6U='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Vorlesen">
+<meta name="theme-color" content="#2563eb">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#2563eb;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#93b4f8;--accent-text:#0b1a3a}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.full{grid-column:1/-1}
+textarea#text{width:100%;min-height:150px;padding:10px;font:inherit;font-size:16px;line-height:1.5;resize:vertical}
+.count{font-size:13px;color:var(--muted)}
+.engines{border:0;margin:0 0 12px;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.engines legend{font-size:13px;color:var(--muted);font-weight:600;margin-block-end:6px;padding:0}
+.engine{position:relative;display:flex;flex-direction:column;gap:2px;min-height:64px;padding:8px 10px;border:2px solid var(--border);border-radius:var(--radius);cursor:pointer;background:var(--surface)}
+.engine input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.engine strong{font-size:15px}
+.engine small{font-size:12.5px;color:var(--muted);line-height:1.3}
+.engine:has(input:checked){border-color:var(--accent);background:var(--surface-2)}
+.engine:has(input:focus-visible){outline:3px solid var(--accent);outline-offset:2px}
+.field{display:flex;flex-direction:column;gap:4px;margin-block-end:12px}
+.field>span{font-size:13px;color:var(--muted);font-weight:600}
+select{min-height:44px;padding-inline:10px;width:100%;font-size:16px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 10px}
+input[type=range]{width:100%;min-height:44px;accent-color:var(--accent)}
+.speed-val{font-family:var(--mono);font-size:13px;color:var(--text)}
+.btn.big{flex:1 1 auto;min-height:54px;font-size:18px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.engine-note{margin-block:0 12px}
+.engine-note:empty{display:none}
+progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10px}
+.status{font-size:14px;margin-block:6px 0;min-height:1.4em}
+.status.err{color:var(--err)}
+.status.ok{color:var(--ok)}
+.meta-line{font-size:13px;color:var(--muted);margin-block:4px 0}
+.clips{list-style:none;margin:0;padding:0}
+.clips li{display:flex;gap:8px;align-items:center;border-block-end:1px solid var(--border);padding-block:8px}
+.clips .info{flex:1;min-width:0}
+.clips .name{display:block;font-weight:600;font-size:14px}
+.clips .detail{display:block;font-size:12.5px;color:var(--muted)}
+.clips .snip{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clips .btn{min-width:44px;padding-inline:10px}
+.models{list-style:none;margin:0 0 8px;padding:0}
+.models li{display:flex;gap:8px;align-items:center;justify-content:space-between;border-block-end:1px solid var(--border);padding-block:6px;font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Text zu Sprache</span></h1>
+  <p class="sub" data-i18n="sub">Text vorlesen lassen – Gerätestimmen oder KI-Stimmen direkt im Browser.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-text">
+    <h2 id="h-text" data-i18n="h.text">Text</h2>
+    <label class="sr-only" for="text" data-i18n="textLabel">Text zum Vorlesen</label>
+    <textarea id="text" maxlength="20000" placeholder="Text eingeben oder einfügen …" data-i18n-attr="placeholder:textPh"></textarea>
+    <div class="row" style="justify-content:space-between;margin-block-start:6px">
+      <span class="count" id="count" aria-live="off"></span>
+      <div class="row">
+        <button type="button" class="btn" id="btnSample" data-i18n="sample">Beispieltext</button>
+        <button type="button" class="btn" id="btnClear" data-i18n="clear">Leeren</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-voice">
+    <h2 id="h-voice" data-i18n="h.voice">Stimme</h2>
+    <fieldset class="engines">
+      <legend data-i18n="engine">Sprachausgabe</legend>
+      <label class="engine"><input type="radio" name="engine" value="browser"><strong data-i18n="e.browser">Browser</strong><small data-i18n="e.browser.d">Stimmen des Geräts – sofort, ohne Download</small></label>
+      <label class="engine"><input type="radio" name="engine" value="supertonic"><strong>Supertonic 3</strong><small data-i18n="e.supertonic.d">Sehr natürlich, 31 Sprachen – ca. 400 MB</small></label>
+      <label class="engine"><input type="radio" name="engine" value="piper"><strong>Piper</strong><small data-i18n="e.piper.d">Viele deutsche Stimmen – je 20–115 MB</small></label>
+      <label class="engine"><input type="radio" name="engine" value="kokoro"><strong>Kokoro</strong><small data-i18n="e.kokoro.d">Sehr natürlich, nur Englisch – ca. 90 MB</small></label>
+    </fieldset>
+    <div class="two">
+      <label class="field"><span data-i18n="lang">Sprache des Textes</span>
+        <select id="lang">
+          <option value="de" data-i18n="lang.de">Deutsch</option>
+          <option value="en" data-i18n="lang.en">Englisch</option>
+        </select>
+      </label>
+      <label class="field" id="stepsField"><span data-i18n="steps">Qualität</span>
+        <select id="steps">
+          <option value="4" data-i18n="steps.4">Schnell</option>
+          <option value="8" data-i18n="steps.8">Normal</option>
+          <option value="16" data-i18n="steps.16">Hoch (langsam)</option>
+        </select>
+      </label>
+    </div>
+    <label class="field"><span data-i18n="voice">Stimme</span>
+      <select id="voice"></select>
+    </label>
+    <label class="field"><span><span data-i18n="speed">Tempo</span> · <output class="speed-val" id="speedVal" for="speed">1,0×</output></span>
+      <input type="range" id="speed" min="0.5" max="2" step="0.1" value="1">
+    </label>
+    <p class="note engine-note" id="engineNote"></p>
+    <div class="row">
+      <button type="button" class="btn primary big" id="btnSpeak" data-i18n="speak">Vorlesen</button>
+      <button type="button" class="btn big" id="btnStop" data-i18n="stop" disabled>Stopp</button>
+    </div>
+    <progress id="progress" max="100" hidden></progress>
+    <p class="status" id="status" role="status"></p>
+    <p class="meta-line" id="meta"></p>
+  </section>
+
+  <section class="card full" aria-labelledby="h-clips">
+    <h2 id="h-clips" data-i18n="h.clips">Zum Vergleichen</h2>
+    <p class="muted" id="clipsEmpty" data-i18n="clipsEmpty">Hier erscheint jede KI-Ausgabe mit Rechenzeit – zum Anhören, Vergleichen und Speichern als WAV. Die Liste wird nicht gespeichert.</p>
+    <ul class="clips" id="clips"></ul>
+  </section>
+
+  <section class="card" aria-labelledby="h-models" data-menu>
+    <h2 id="h-models" data-i18n="h.models">KI-Stimmen &amp; Speicher</h2>
+    <label class="field"><span data-i18n="device">Rechnen mit (Supertonic, Kokoro)</span>
+      <select id="device">
+        <option value="auto" data-i18n="dev.auto">Automatisch (empfohlen)</option>
+        <option value="webgpu" data-i18n="dev.gpu">Grafikkarte (WebGPU)</option>
+        <option value="wasm" data-i18n="dev.cpu">Prozessor</option>
+      </select>
+    </label>
+    <ul class="models" id="models"></ul>
+    <p class="muted" id="modelUsage"></p>
+    <button type="button" class="btn danger" id="btnDeleteModels" data-i18n="deleteModels">Alle Stimmen löschen</button>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Liest Text vor. Zur Wahl stehen die <strong>Stimmen des Geräts</strong> und drei <strong>KI-Stimmen</strong>, die direkt im Browser rechnen – der Text verlässt das Gerät dabei nicht.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Text eingeben oder einfügen, Sprachausgabe und Stimme wählen, <strong>Vorlesen</strong> tippen. Lange Texte werden Satz für Satz erzeugt – das Vorlesen beginnt schon nach dem ersten Satz.</li>
+    <li>Jede KI-Ausgabe landet unter <strong>Zum Vergleichen</strong> – mit Rechenzeit und „Echtzeit“-Faktor (über 1× = schneller erzeugt als gesprochen). Dort lässt sie sich erneut abspielen und als WAV speichern.</li>
+    <li>Im Menü (☰) unter <strong>KI-Stimmen &amp; Speicher</strong>: Grafikkarte oder Prozessor wählen, sehen, welche Stimmen heruntergeladen sind, und sie wieder löschen.</li>
+  </ul>
+  <h3>Die Sprachausgaben</h3>
+  <ul>
+    <li><strong>Browser</strong> (Web Speech API): nutzt die Stimmen von Android, iPhone oder Windows – sofort und ohne Download. Qualität und Auswahl hängen vom Gerät ab. Stimmen mit „☁ online“ schicken den Text an den Anbieter des Browsers (z. B. Google), die anderen arbeiten auf dem Gerät. Speichern als WAV geht hier nicht.</li>
+    <li><strong>Supertonic 3</strong> (Supertone): sehr natürlicher Klang, 31 Sprachen, 10 Stimmen. Einmalig ca. 400 MB; braucht viel Arbeitsspeicher – auf älteren Handys kann die Seite abstürzen. „Qualität“ legt die Rechenschritte fest (mehr = klarer, langsamer).</li>
+    <li><strong>Piper</strong> (Open Home Foundation): bewährte, schnelle Stimmen, viele davon deutsch (z. B. Thorsten, Kerstin, Ramona). Je Stimme 20–115 MB; „hoch“ klingt besser als „niedrig“.</li>
+    <li><strong>Kokoro</strong> (hexgrad): sehr natürlich, aber im Browser <strong>nur Englisch</strong> – deutscher Text wird mit englischer Aussprache gelesen. Einmalig ca. 90 MB (mit Grafikkarte ca. 330 MB).</li>
+  </ul>
+  <h3>Downloads &amp; Datenschutz</h3>
+  <ul>
+    <li>Die KI-Stimmen werden beim ersten Vorlesen einmalig von <strong>Hugging Face</strong> geladen (vorher fragt die App nach). Dabei wird kein Text übertragen. Danach liegen sie im Browser und funktionieren offline.</li>
+    <li>Supertonic steht unter der OpenRAIL-M-Lizenz (keine missbräuchliche Nutzung, z. B. Täuschung mit fremden Stimmen), Piper-Stimmen und Kokoro unter MIT bzw. Apache-2.0. Die Aussprache für Piper und Kokoro berechnet eSpeak NG (GPL).</li>
+  </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <ul>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser Text ins Textfeld schreiben, die Stimmen auflisten und eine Stimme wählen. Das Vorlesen startest du selbst. Ein Hinweis zeigt, wenn ein Agent etwas geändert hat.</li>
+  </ul>
+  <p class="note">Sprachausgabe macht Fehler – vor allem bei Namen, Abkürzungen und Zahlen. Tipp: schwierige Wörter so schreiben, wie man sie spricht.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Reads text aloud. You can choose the <strong>device's voices</strong> or three <strong>AI voices</strong> that run right in the browser – the text never leaves the device.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Type or paste text, choose the speech engine and voice, tap <strong>Read aloud</strong>. Long texts are generated sentence by sentence – playback starts after the first sentence.</li>
+    <li>Every AI output appears under <strong>Compare</strong> – with computing time and a “real time” factor (above 1× = generated faster than spoken). Play it again there or save it as WAV.</li>
+    <li>In the menu (☰) under <strong>AI voices &amp; storage</strong>: choose graphics card or processor, see which voices are downloaded and delete them again.</li>
+  </ul>
+  <h3>The engines</h3>
+  <ul>
+    <li><strong>Browser</strong> (Web Speech API): uses the voices of Android, iPhone or Windows – instantly, no download. Quality and choice depend on the device. Voices marked “☁ online” send the text to the browser vendor (e.g. Google); the others work on the device. Saving as WAV is not possible here.</li>
+    <li><strong>Supertonic 3</strong> (Supertone): very natural sound, 31 languages, 10 voices. One-time download of about 400 MB; needs a lot of memory – on older phones the page may crash. “Quality” sets the number of computing steps (more = clearer, slower).</li>
+    <li><strong>Piper</strong> (Open Home Foundation): proven, fast voices, many of them German (e.g. Thorsten, Kerstin, Ramona). 20–115 MB per voice; “high” sounds better than “low”.</li>
+    <li><strong>Kokoro</strong> (hexgrad): very natural, but in the browser <strong>English only</strong> – German text is read with English pronunciation. One-time download of about 90 MB (about 330 MB with graphics card).</li>
+  </ul>
+  <h3>Downloads &amp; privacy</h3>
+  <ul>
+    <li>The AI voices are downloaded once from <strong>Hugging Face</strong> the first time you use them (the app asks first). No text is sent. After that they are stored in the browser and work offline.</li>
+    <li>Supertonic is licensed under OpenRAIL-M (no misuse, e.g. deception with other people's voices), Piper voices and Kokoro under MIT and Apache-2.0. Pronunciation for Piper and Kokoro is computed by eSpeak NG (GPL).</li>
+  </ul>
+  <h3>AI agents (WebMCP)</h3>
+  <ul>
+    <li>If the browser supports <strong>WebMCP</strong>, an AI assistant in the browser can write text into the text field, list the voices and choose a voice. You start the reading yourself. A notice shows when an agent changed something.</li>
+  </ul>
+  <p class="note">Speech synthesis makes mistakes – especially with names, abbreviations and numbers. Tip: write difficult words the way they are spoken.</p>
+  </div>
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 6ed3a5e08a7c</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const { $, load, save, toast, fmt, esc } = Tools;
+
+Tools.i18n({
+  de: {
+    count: '{n} Zeichen', sampleText: 'Hallo! Das ist ein Test der Sprachausgabe. Am Montag, dem 3. November, um 14:30 Uhr waren es 12,5 Grad – ziemlich frisch für die Jahreszeit. Wie klingt diese Stimme für dich? Natürlich, oder eher wie ein Roboter?',
+    'v.female': 'Frau {n}', 'v.male': 'Mann {n}', 'q.low': 'niedrig', 'q.x_low': 'sehr niedrig', 'q.medium': 'mittel', 'q.high': 'hoch',
+    'emo.neutral': 'neutral', 'emo.amused': 'amüsiert', 'emo.angry': 'wütend', 'emo.sleepy': 'müde', 'emo.whisper': 'flüsternd', 'emo.surprised': 'überrascht', 'emo.disgusted': 'angewidert', 'emo.drunk': 'betrunken',
+    'g.us': 'US-Englisch', 'g.gb': 'Britisch', 'g.de': 'Deutsch', 'g.en': 'Englisch', 'g.emo': 'Thorsten emotional',
+    online: '☁ online', noVoices: 'Keine Stimme für diese Sprache auf dem Gerät', noSpeech: 'Dieser Browser kann nicht vorlesen (Web Speech API fehlt).',
+    'note.kokoroDe': 'Kokoro hat im Browser nur englische Stimmen – deutscher Text klingt mit englischer Aussprache.',
+    'note.online': 'Diese Stimme arbeitet online: Der Text geht an den Anbieter des Browsers.',
+    'note.browserNone': 'Für diese Sprache hat das Gerät keine Stimme. In den Einstellungen von Android/iOS lassen sich Stimmen nachladen.',
+    'note.dl': 'Einmaliger Download ca. {mb} MB, danach offline.', 'note.ready': 'Heruntergeladen – funktioniert offline.',
+    noText: 'Bitte zuerst einen Text eingeben.', confirmDl: '{name} einmalig herunterladen (ca. {mb} MB)? Am besten im WLAN.',
+    loading: 'Lade {name} …', loadingMb: 'Lade {name} … {a} von {b} MB', preparing: 'Bereite {name} vor …',
+    generating: 'Erzeuge Satz {i} von {n} …', playing: 'Liest vor … ({i} von {n})', done: 'Fertig.', stopped: 'Angehalten.',
+    gpu: 'Grafikkarte', cpu: 'Prozessor',
+    meta: '{name} · {dev} · Start nach {first} s · {synth} s Rechenzeit für {audio} s Audio ({rtf}× Echtzeit)',
+    metaLoad: ' · Laden {s} s',
+    loadFail: 'Die Stimme konnte nicht geladen werden. Für den ersten Download ist eine Internetverbindung nötig. ({m})',
+    speakFail: 'Fehler bei der Sprachausgabe: {m}', noStart: 'Die Sprachausgabe konnte nicht gestartet werden', speechErr: 'Fehler beim Vorlesen: {m}',
+    play: 'Abspielen', saveWav: 'WAV', playLabel: '{name} abspielen', saveLabel: '{name} als WAV speichern', removeLabel: '{name} entfernen',
+    clipDetail: '{dev} · {audio} s Audio · {synth} s gerechnet ({rtf}×)',
+    'm.none': 'nicht geladen', 'm.size': '{mb} MB', 'm.voices': '{mb} MB · Stimmen: {n}', del: 'Löschen', delLabel: '{name} löschen',
+    usage: 'Speicher der Seite insgesamt: {u}', confirmDel: 'Heruntergeladene Stimmen löschen? Beim nächsten Vorlesen werden sie neu geladen.', deleted: 'Gelöscht',
+    'mcp.text': 'Text eingetragen', 'mcp.voices': 'Stimmen gelesen', 'mcp.voice': 'Stimme gewählt',
+  },
+  en: {
+    title: 'Text to Speech', sub: 'Have text read aloud – device voices or AI voices right in the browser.',
+    'h.text': 'Text', textLabel: 'Text to read aloud', textPh: 'Type or paste text …', sample: 'Sample text', clear: 'Clear',
+    'h.voice': 'Voice', engine: 'Speech engine', 'e.browser': 'Browser', 'e.browser.d': 'Device voices – instant, no download',
+    'e.supertonic.d': 'Very natural, 31 languages – about 400 MB', 'e.piper.d': 'Many German voices – 20–115 MB each', 'e.kokoro.d': 'Very natural, English only – about 90 MB',
+    lang: 'Language of the text', 'lang.de': 'German', 'lang.en': 'English', steps: 'Quality', 'steps.4': 'Fast', 'steps.8': 'Normal', 'steps.16': 'High (slow)',
+    voice: 'Voice', speed: 'Speed', speak: 'Read aloud', stop: 'Stop',
+    'h.clips': 'Compare', clipsEmpty: 'Every AI output appears here with its computing time – to listen, compare and save as WAV. The list is not saved.',
+    'h.models': 'AI voices & storage', device: 'Compute with (Supertonic, Kokoro)', 'dev.auto': 'Automatic (recommended)', 'dev.gpu': 'Graphics card (WebGPU)', 'dev.cpu': 'Processor',
+    deleteModels: 'Delete all voices',
+    count: '{n} characters', sampleText: 'Hello! This is a test of the speech output. On Monday, November 3rd, at 2:30 pm it was 12.5 degrees – rather chilly for the season. How does this voice sound to you? Natural, or more like a robot?',
+    'v.female': 'Female {n}', 'v.male': 'Male {n}', 'q.low': 'low', 'q.x_low': 'very low', 'q.medium': 'medium', 'q.high': 'high',
+    'emo.neutral': 'neutral', 'emo.amused': 'amused', 'emo.angry': 'angry', 'emo.sleepy': 'sleepy', 'emo.whisper': 'whispering', 'emo.surprised': 'surprised', 'emo.disgusted': 'disgusted', 'emo.drunk': 'drunk',
+    'g.us': 'US English', 'g.gb': 'British', 'g.de': 'German', 'g.en': 'English', 'g.emo': 'Thorsten emotional',
+    online: '☁ online', noVoices: 'No voice for this language on the device', noSpeech: 'This browser cannot read aloud (Web Speech API missing).',
+    'note.kokoroDe': 'In the browser Kokoro only has English voices – German text sounds with English pronunciation.',
+    'note.online': 'This voice works online: the text is sent to the browser vendor.',
+    'note.browserNone': 'The device has no voice for this language. More voices can be installed in the Android/iOS settings.',
+    'note.dl': 'One-time download of about {mb} MB, then offline.', 'note.ready': 'Downloaded – works offline.',
+    noText: 'Please enter some text first.', confirmDl: 'Download {name} once (about {mb} MB)? Wi-Fi recommended.',
+    loading: 'Loading {name} …', loadingMb: 'Loading {name} … {a} of {b} MB', preparing: 'Preparing {name} …',
+    generating: 'Generating sentence {i} of {n} …', playing: 'Reading … ({i} of {n})', done: 'Done.', stopped: 'Stopped.',
+    gpu: 'graphics card', cpu: 'processor',
+    meta: '{name} · {dev} · started after {first} s · {synth} s computing for {audio} s of audio ({rtf}× real time)',
+    metaLoad: ' · loading {s} s',
+    loadFail: 'The voice could not be loaded. The first download needs an internet connection. ({m})',
+    speakFail: 'Speech synthesis error: {m}', noStart: 'The speech engine could not be started', speechErr: 'Error while reading aloud: {m}',
+    play: 'Play', saveWav: 'WAV', playLabel: 'Play {name}', saveLabel: 'Save {name} as WAV', removeLabel: 'Remove {name}',
+    clipDetail: '{dev} · {audio} s audio · {synth} s computing ({rtf}×)',
+    'm.none': 'not downloaded', 'm.size': '{mb} MB', 'm.voices': '{mb} MB · voices: {n}', del: 'Delete', delLabel: 'Delete {name}',
+    usage: 'Storage used by the site: {u}', confirmDel: 'Delete downloaded voices? They are downloaded again the next time you use them.', deleted: 'Deleted',
+    'mcp.text': 'Text entered', 'mcp.voices': 'Voices read', 'mcp.voice': 'Voice chosen',
+  }
+});
+const t = Tools.t;
+
+/* ---------- Engines and voices ---------- */
+const CACHE = 'text-to-speech-models';
+const PIPER_VOICES = {
+  de: [
+    ['de/de_DE/thorsten/high/de_DE-thorsten-high', 'Thorsten', 'high', 114],
+    ['de/de_DE/thorsten/medium/de_DE-thorsten-medium', 'Thorsten', 'medium', 63],
+    ['de/de_DE/kerstin/low/de_DE-kerstin-low', 'Kerstin', 'low', 63],
+    ['de/de_DE/ramona/low/de_DE-ramona-low', 'Ramona', 'low', 63],
+    ['de/de_DE/eva_k/x_low/de_DE-eva_k-x_low', 'Eva', 'x_low', 21],
+    ['de/de_DE/karlsson/low/de_DE-karlsson-low', 'Karlsson', 'low', 63],
+    ['de/de_DE/pavoque/low/de_DE-pavoque-low', 'Pavoque', 'low', 63],
+    ...['neutral', 'amused', 'angry', 'sleepy', 'whisper', 'surprised', 'disgusted', 'drunk']
+      .map(e => ['de/de_DE/thorsten_emotional/medium/de_DE-thorsten_emotional-medium#' + e, 'emo:' + e, 'medium', 77]),
+  ],
+  en: [
+    ['en/en_US/lessac/medium/en_US-lessac-medium', 'Lessac (US)', 'medium', 63],
+    ['en/en_US/amy/medium/en_US-amy-medium', 'Amy (US)', 'medium', 63],
+    ['en/en_US/ryan/high/en_US-ryan-high', 'Ryan (US)', 'high', 116],
+    ['en/en_US/hfc_female/medium/en_US-hfc_female-medium', 'HFC Female (US)', 'medium', 63],
+    ['en/en_US/joe/medium/en_US-joe-medium', 'Joe (US)', 'medium', 63],
+    ['en/en_GB/alba/medium/en_GB-alba-medium', 'Alba (GB)', 'medium', 63],
+    ['en/en_GB/alan/medium/en_GB-alan-medium', 'Alan (GB)', 'medium', 63],
+  ],
+};
+// Best-rated Kokoro voices (grades from the model card): American and British English
+const KOKORO_VOICES = [
+  ['af_heart', 'Heart', 'us'], ['af_bella', 'Bella', 'us'], ['af_nicole', 'Nicole', 'us'], ['af_aoede', 'Aoede', 'us'], ['af_kore', 'Kore', 'us'],
+  ['af_sarah', 'Sarah', 'us'], ['am_fenrir', 'Fenrir', 'us'], ['am_michael', 'Michael', 'us'], ['am_puck', 'Puck', 'us'],
+  ['bf_emma', 'Emma', 'gb'], ['bf_isabella', 'Isabella', 'gb'], ['bm_george', 'George', 'gb'], ['bm_fable', 'Fable', 'gb'],
+];
+const ENGINES = {
+  browser: { name: () => t('e.browser'), maxLen: 220 },
+  supertonic: { name: () => 'Supertonic 3', maxLen: 300, worker: 'onnx', mb: 398, cacheMatch: 'supertonic-3' },
+  piper: { name: () => 'Piper', maxLen: 400, worker: 'onnx', cacheMatch: 'piper-voices' },
+  kokoro: { name: () => 'Kokoro', maxLen: 300, worker: 'kokoro', mb: 90, cacheMatch: 'Kokoro-82M' },
+};
+
+/* ---------- Settings ---------- */
+const LS = 'text-to-speech.settings.v1';
+const LS_TEXT = 'text-to-speech.text.v1';
+const settings = Object.assign({ engine: 'browser', lang: null, voices: {}, speed: 1, steps: 8, device: 'auto' }, load(LS, {}));
+const saveSettings = () => save(LS, settings);
+// Language of the text: follows the app until the user chooses one
+const textLang = () => settings.lang || (Tools.lang() === 'en' ? 'en' : 'de');
+
+const textEl = $('text');
+textEl.value = load(LS_TEXT, '');
+let textTimer = null;
+function updateCount() { $('count').textContent = t('count', { n: fmt(textEl.value.length, 0) }); }
+textEl.addEventListener('input', () => { updateCount(); clearTimeout(textTimer); textTimer = setTimeout(() => save(LS_TEXT, textEl.value), 400); });
+$('btnSample').addEventListener('click', () => { textEl.value = t('sampleText'); save(LS_TEXT, textEl.value); updateCount(); });
+$('btnClear').addEventListener('click', () => { textEl.value = ''; save(LS_TEXT, ''); updateCount(); textEl.focus(); });
+
+/* ---------- Voice lists ---------- */
+let cached = { files: [], sizes: new Map() };   // URLs in the model cache
+
+function browserVoices() {
+  if (!('speechSynthesis' in window)) return [];
+  const lang = textLang();
+  return speechSynthesis.getVoices().filter(v => (v.lang || '').toLowerCase().replace('_', '-').startsWith(lang));
+}
+
+// [{ value, label, group? }]
+function voiceOptions(engine = settings.engine, lang = textLang()) {
+  if (engine === 'browser') {
+    return browserVoices().map(v => ({ value: v.voiceURI, label: `${v.name} (${v.lang})${v.localService ? '' : ' · ' + t('online')}` }));
+  }
+  if (engine === 'supertonic') {
+    return ['F1', 'F2', 'F3', 'F4', 'F5', 'M1', 'M2', 'M3', 'M4', 'M5'].map(v => ({ value: v, label: t(v[0] === 'F' ? 'v.female' : 'v.male', { n: v[1] }) }));
+  }
+  if (engine === 'piper') {
+    return PIPER_VOICES[lang].map(([value, name, q, mb]) => ({
+      value, group: name.startsWith('emo:') ? t('g.emo') : t('g.' + lang),
+      label: `${name.startsWith('emo:') ? t('emo.' + name.slice(4)) : name} · ${t('q.' + q)} · ${mb} MB`,
+    }));
+  }
+  return KOKORO_VOICES.map(([value, name, g]) => ({ value, label: name, group: t('g.' + g) }));
+}
+
+const voiceKey = () => settings.engine === 'piper' ? `piper.${textLang()}` : settings.engine === 'browser' ? `browser.${textLang()}` : settings.engine;
+function currentVoice() {
+  const opts = voiceOptions();
+  const saved = settings.voices[voiceKey()];
+  if (opts.some(o => o.value === saved)) return saved;
+  if (settings.engine === 'browser') {
+    // Prefer a voice that works on the device, then the browser's default
+    const vs = browserVoices();
+    const v = vs.find(x => x.localService && x.default) || vs.find(x => x.localService) || vs.find(x => x.default) || vs[0];
+    return v ? v.voiceURI : '';
+  }
+  return opts[0] ? opts[0].value : '';
+}
+
+function renderVoices() {
+  const sel = $('voice');
+  const opts = voiceOptions();
+  const cur = currentVoice();
+  sel.innerHTML = '';
+  if (!opts.length) {
+    sel.append(new Option(t('noVoices'), ''));
+    sel.disabled = true;
+  } else {
+    sel.disabled = false;
+    let group = null, parent = sel;
+    for (const o of opts) {
+      if (o.group && o.group !== group) { group = o.group; parent = document.createElement('optgroup'); parent.label = group; sel.append(parent); }
+      parent.append(new Option(o.label, o.value, false, o.value === cur));
+    }
+    sel.value = cur;
+  }
+  renderNote();
+}
+
+function piperModelMb(voice) { const v = PIPER_VOICES.de.concat(PIPER_VOICES.en).find(x => x[0] === voice); return v ? v[3] : 63; }
+function downloadMb() {
+  const e = settings.engine;
+  if (e === 'piper') return piperModelMb(currentVoice());
+  if (e === 'kokoro') return settings.device === 'webgpu' ? 330 : ENGINES.kokoro.mb;
+  return ENGINES[e].mb || 0;
+}
+// Is the model for the current choice in the cache already?
+function isDownloaded(engine = settings.engine, voice = currentVoice()) {
+  const has = s => cached.files.some(u => u.includes(s));
+  if (engine === 'supertonic') return has('supertonic-3') && has('vector_estimator.onnx') && has('vocoder.onnx');
+  if (engine === 'piper') { const f = '/' + voice.split('#')[0].split('/').pop() + '.onnx'; return cached.files.some(u => u.endsWith(f)); }
+  if (engine === 'kokoro') return has('Kokoro-82M') && has(settings.device === 'webgpu' ? '/model.onnx' : 'model_quantized.onnx');
+  return true;
+}
+
+function renderNote() {
+  const e = settings.engine, notes = [];
+  if (e === 'browser') {
+    if (!('speechSynthesis' in window)) notes.push(t('noSpeech'));
+    else if (!browserVoices().length) notes.push(t('note.browserNone'));
+    else { const v = browserVoices().find(x => x.voiceURI === currentVoice()); if (v && !v.localService) notes.push(t('note.online')); }
+  } else {
+    if (e === 'kokoro' && textLang() === 'de') notes.push(t('note.kokoroDe'));
+    notes.push(isDownloaded() ? t('note.ready') : t('note.dl', { mb: fmt(downloadMb(), 0) }));
+  }
+  $('engineNote').textContent = notes.join(' ');
+  $('stepsField').hidden = e !== 'supertonic';
+}
+
+function renderControls() {
+  for (const r of document.querySelectorAll('input[name=engine]')) r.checked = r.value === settings.engine;
+  $('lang').value = textLang();
+  $('steps').value = String(settings.steps);
+  $('speed').value = String(settings.speed);
+  $('speedVal').textContent = fmt(settings.speed, 1) + '×';
+  $('device').value = settings.device;
+  renderVoices();
+}
+
+for (const r of document.querySelectorAll('input[name=engine]')) r.addEventListener('change', () => {
+  if (!r.checked) return;
+  settings.engine = r.value; saveSettings(); renderVoices();
+  Tools.diag.log('engine', { engine: r.value });
+});
+$('lang').addEventListener('change', e => { settings.lang = e.target.value; saveSettings(); renderVoices(); });
+$('voice').addEventListener('change', e => { settings.voices[voiceKey()] = e.target.value; saveSettings(); renderNote(); });
+$('steps').addEventListener('change', e => { settings.steps = Number(e.target.value); saveSettings(); });
+$('speed').addEventListener('input', e => { settings.speed = Number(e.target.value); $('speedVal').textContent = fmt(settings.speed, 1) + '×'; saveSettings(); });
+$('device').addEventListener('change', e => { settings.device = e.target.value; saveSettings(); renderNote(); });
+if ('speechSynthesis' in window) speechSynthesis.addEventListener?.('voiceschanged', () => { if (settings.engine === 'browser') renderVoices(); });
+
+/* ---------- Splitting text into sentences ---------- */
+// A period after an ordinal number, a single letter or a common abbreviation does not end the sentence
+const NO_END = /(?:^|[\s(„"'])(?:\d{1,3}|[A-Za-zÄÖÜäöü]|Dr|Prof|Nr|Mr|Mrs|Ms|St|Str|ca|bzw|usw|vgl|ggf|evtl|inkl|etc|vs|Hr|Fr|Jh|Mio|Mrd|Tel|Abs|Abb|Kap|bspw)\.$/i;
+function sentences(flat) {
+  const out = [];
+  const re = /[.!?…]+["'“”»«)\]]*(?=\s|$)/g;
+  let start = 0, m;
+  while ((m = re.exec(flat))) {
+    const end = m.index + m[0].length;
+    const next = flat.slice(end).trimStart()[0];
+    if (next && /[a-zäöüß]/.test(next)) continue;                      // "… z. B. so" – continues in lower case
+    if (m[0] === '.' && NO_END.test(flat.slice(start, end))) continue;
+    out.push(flat.slice(start, end).trim());
+    start = end;
+  }
+  if (start < flat.length) out.push(flat.slice(start).trim());
+  return out.filter(Boolean);
+}
+// Sentences (short ones merged), each at most maxLen characters; a paragraph break gets a longer pause
+function splitText(text, maxLen) {
+  const out = [];
+  for (const para of text.split(/\n\s*\n/)) {
+    const flat = para.replace(/\s+/g, ' ').trim();
+    if (!flat) continue;
+    const pieces = [];
+    for (let s of sentences(flat)) {
+      while (s.length > maxLen) {
+        // Too long: cut at the last comma/semicolon, otherwise at the last space before the limit
+        let cut = Math.max(s.lastIndexOf(', ', maxLen - 1), s.lastIndexOf('; ', maxLen - 1));
+        if (cut < maxLen / 3) cut = s.lastIndexOf(' ', maxLen);
+        if (cut < 1) cut = maxLen - 1;
+        pieces.push(s.slice(0, cut + 1).trim());
+        s = s.slice(cut + 1).trim();
+      }
+      if (s) pieces.push(s);
+    }
+    // Merge very short pieces with the next one (better intonation, fewer pauses)
+    const merged = [];
+    for (const p of pieces) {
+      const last = merged[merged.length - 1];
+      if (last && last.length < 40 && last.length + p.length + 1 <= maxLen) merged[merged.length - 1] = last + ' ' + p;
+      else merged.push(p);
+    }
+    merged.forEach((p, i) => out.push({ text: p, pause: i === merged.length - 1 ? 0.45 : 0.15 }));
+  }
+  return out;
+}
+
+/* ---------- Audio output (Web Audio, sentences scheduled back to back) ---------- */
+let ctx = null, sources = [], nextAt = 0;
+function audioCtx() {
+  // Play through the media channel on iPhone (not muted by the silent switch)
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) {}
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  return ctx;
+}
+function schedule(samples, sampleRate, pause) {
+  const c = audioCtx();
+  const buf = c.createBuffer(1, samples.length, sampleRate);
+  buf.copyToChannel(samples, 0);
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  src.connect(c.destination);
+  const at = Math.max(c.currentTime + 0.05, nextAt);
+  src.start(at);
+  nextAt = at + buf.duration + pause;
+  sources.push(src);
+  return src;
+}
+function stopAudio() {
+  for (const s of sources) { try { s.stop(); } catch (_) {} }
+  sources = []; nextAt = 0;
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+}
+
+/* ---------- Workers ---------- */
+const workers = {};
+const pending = new Map();      // request id → { resolve, reject, onProgress, onStatus }
+let reqId = 0;
+function getWorker(kind) {
+  if (workers[kind]) return workers[kind];
+  const w = kind === 'kokoro' ? new Worker('kokoro-worker.js', { type: 'module' }) : new Worker('onnx-worker.js');
+  w.onmessage = ({ data }) => {
+    if (data.type === 'log') { Tools.diag.log(data.msg, data.data); return; }
+    const p = pending.get(data.id);
+    if (!p) return;
+    if (data.type === 'progress') p.onProgress?.(data);
+    else if (data.type === 'status') p.onStatus?.(data);
+    else if (data.type === 'audio' || data.type === 'loaded') { pending.delete(data.id); p.resolve(data); }
+    else if (data.type === 'error') { pending.delete(data.id); const e = new Error(data.message); e.stage = data.stage; p.reject(e); }
+  };
+  w.onerror = e => {
+    Tools.diag.log('worker error', { kind, message: e.message || '' });
+    for (const [id, p] of pending) { const err = new Error(e.message || t('noStart')); err.stage = 'load'; p.reject(err); pending.delete(id); }
+    delete workers[kind];
+  };
+  workers[kind] = w;
+  return w;
+}
+function ask(kind, msg, handlers = {}) {
+  const id = ++reqId;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject, ...handlers });
+    getWorker(kind).postMessage({ ...msg, id });
+  });
+}
+
+/* ---------- Reading aloud ---------- */
+let run = null;     // current run { id, stopped }
+let runCounter = 0, wakeLock = null;
+const status = (msg, cls) => { const s = $('status'); s.textContent = msg; s.className = 'status' + (cls ? ' ' + cls : ''); };
+const mbStr = b => fmt(b / 1048576, b < 10485760 ? 1 : 0);
+const sec = s => fmt(s, s < 10 ? 1 : 0);
+const devName = d => d === 'webgpu' ? t('gpu') : d === 'browser' ? t('e.browser') : t('cpu');
+
+function setBusy(busy) {
+  $('btnSpeak').disabled = busy;
+  $('btnStop').disabled = !busy;
+  if (!busy) $('progress').hidden = true;
+}
+async function finish(msg, cls) {
+  setBusy(false);
+  if (msg != null) status(msg, cls);
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+
+$('btnStop').addEventListener('click', () => {
+  if (run) run.stopped = true;
+  stopAudio();
+  Tools.diag.log('stop');
+  finish(t('stopped'));
+});
+
+$('btnSpeak').addEventListener('click', async () => {
+  const text = textEl.value.trim();
+  if (!text) { status(t('noText'), 'err'); textEl.focus(); return; }
+  stopAudio();
+  if (run) run.stopped = true;
+  const engine = settings.engine;
+  if (engine === 'browser') { speakBrowser(text); return; }
+  audioCtx();   // create the audio output inside the tap (autoplay rules)
+  if (!isDownloaded() && !confirm(t('confirmDl', { name: ENGINES[engine].name(), mb: fmt(downloadMb(), 0) }))) return;
+  try { wakeLock = navigator.wakeLock ? await navigator.wakeLock.request('screen') : null; } catch (_) { wakeLock = null; }
+  speakModel(engine, text);
+});
+
+function speakBrowser(text) {
+  if (!('speechSynthesis' in window)) { status(t('noSpeech'), 'err'); return; }
+  const r = run = { id: ++runCounter, stopped: false };
+  const voice = speechSynthesis.getVoices().find(v => v.voiceURI === currentVoice());
+  const parts = splitText(text, ENGINES.browser.maxLen);
+  setBusy(true);
+  Tools.diag.log('browser speak', { sentences: parts.length, voice: voice ? voice.name : null, local: voice ? voice.localService : null, rate: settings.speed });
+  parts.forEach((p, i) => {
+    const u = new SpeechSynthesisUtterance(p.text);
+    if (voice) u.voice = voice;
+    u.lang = voice ? voice.lang : textLang();
+    u.rate = settings.speed;
+    u.onstart = () => { if (run === r && !r.stopped) status(t('playing', { i: i + 1, n: parts.length })); };
+    u.onend = () => { if (i === parts.length - 1 && run === r && !r.stopped) { finish(t('done'), 'ok'); $('meta').textContent = `${t('e.browser')} · ${voice ? voice.name : ''}`; } };
+    u.onerror = e => {
+      if (e.error === 'interrupted' || e.error === 'canceled' || r.stopped) return;
+      Tools.diag.log('browser speech error', { error: e.error });
+      if (run === r) { r.stopped = true; speechSynthesis.cancel(); finish(t('speechErr', { m: e.error }), 'err'); }
+    };
+    speechSynthesis.speak(u);
+  });
+  // Chrome sometimes stays paused after cancel()
+  if (speechSynthesis.paused) speechSynthesis.resume();
+}
+
+async function speakModel(engine, text) {
+  const r = run = { id: ++runCounter, stopped: false };
+  const eng = ENGINES[engine];
+  const voice = currentVoice();
+  const parts = splitText(text, eng.maxLen);
+  const name = eng.name();
+  const label = `${name} · ${$('voice').selectedOptions[0]?.textContent.split(' · ')[0] || voice}`;
+  const base = { engine, lang: textLang(), voice, speed: settings.speed, steps: settings.steps, device: settings.device };
+  const prog = $('progress');
+  setBusy(true);
+  $('meta').textContent = '';
+  status(t('loading', { name }));
+  Tools.diag.log('model speak', { engine, voice, sentences: parts.length, chars: text.length, device: settings.device, steps: engine === 'supertonic' ? settings.steps : undefined });
+  const handlers = {
+    onProgress: d => {
+      if (run !== r || !d.total) return;
+      prog.hidden = false; prog.max = d.total; prog.value = d.loaded;
+      status(t('loadingMb', { name, a: mbStr(d.loaded), b: mbStr(d.total) }));
+    },
+  };
+  const t0 = performance.now();
+  let loadSec = 0, device = 'wasm';
+  try {
+    const l = await ask(eng.worker, { type: 'load', ...base }, handlers);
+    loadSec = (performance.now() - t0) / 1000;
+    device = l.device;
+    Tools.diag.log('model loaded', { engine, device, seconds: Math.round(loadSec * 10) / 10 });
+  } catch (e) {
+    Tools.diag.log('model load failed', { engine, error: e.message });
+    if (run === r) finish(t('loadFail', { m: e.message }), 'err');
+    refreshModels();
+    return;
+  }
+  refreshModels();
+  if (r.stopped) return;
+  prog.hidden = true;
+  const chunks = [];
+  let synth = 0, firstAt = 0, sampleRate = 0, last = null;
+  const startSpeak = performance.now();
+  for (let i = 0; i < parts.length; i++) {
+    if (r.stopped) return;
+    status(t('generating', { i: i + 1, n: parts.length }));
+    let out;
+    try { out = await ask(eng.worker, { type: 'speak', ...base, text: parts[i].text }, handlers); }
+    catch (e) {
+      Tools.diag.log('speak failed', { engine, sentence: i + 1, error: e.message });
+      if (run === r) { r.stopped = true; stopAudio(); finish(t(e.stage === 'load' ? 'loadFail' : 'speakFail', { m: e.message }), 'err'); }
+      return;
+    }
+    if (r.stopped) return;
+    synth += out.seconds;
+    sampleRate = out.sampleRate;
+    device = out.device || device;
+    if (!firstAt) firstAt = (performance.now() - startSpeak) / 1000;
+    chunks.push({ samples: out.samples, pause: parts[i].pause });
+    last = schedule(out.samples, out.sampleRate, parts[i].pause);
+    const n = i + 1;
+    last.addEventListener('ended', () => { if (run === r && !r.stopped && n < parts.length) status(t('playing', { i: n + 1, n: parts.length })); });
+    if (i === 0) status(t('playing', { i: 1, n: parts.length }));
+  }
+  // All sentences generated: keep the clip for comparing, finish when playback ends
+  const audioSec = chunks.reduce((s, c) => s + c.samples.length / sampleRate + c.pause, 0);
+  const rtf = synth > 0 ? audioSec / synth : 0;
+  const meta = t('meta', { name: label, dev: devName(device), first: sec(firstAt), synth: sec(synth), audio: sec(audioSec), rtf: fmt(rtf, rtf < 10 ? 1 : 0) }) + (loadSec >= 0.5 ? t('metaLoad', { s: sec(loadSec) }) : '');
+  $('meta').textContent = meta;
+  Tools.diag.log('model done', { engine, device, sentences: parts.length, synth: Math.round(synth * 10) / 10, audio: Math.round(audioSec * 10) / 10 });
+  addClip({ label, device, synth, audioSec, rtf, sampleRate, samples: joinChunks(chunks, sampleRate), snippet: text.slice(0, 80) });
+  last.addEventListener('ended', () => { if (run === r && !r.stopped) finish(t('done'), 'ok'); });
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+
+function joinChunks(chunks, sr) {
+  const total = chunks.reduce((s, c, i) => s + c.samples.length + (i < chunks.length - 1 ? Math.round(c.pause * sr) : 0), 0);
+  const out = new Float32Array(total);
+  let o = 0;
+  chunks.forEach((c, i) => { out.set(c.samples, o); o += c.samples.length + (i < chunks.length - 1 ? Math.round(c.pause * sr) : 0); });
+  return out;
+}
+
+function wav(samples, sampleRate) {
+  const v = new DataView(new ArrayBuffer(44 + samples.length * 2));
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) { const s = Math.max(-1, Math.min(1, samples[i])); v.setInt16(44 + i * 2, s < 0 ? s * 32768 : s * 32767, true); }
+  return new Blob([v.buffer], { type: 'audio/wav' });
+}
+
+/* ---------- Clips for comparing (memory only) ---------- */
+const clips = [];
+let clipId = 0;
+function addClip(c) {
+  clips.unshift({ ...c, id: ++clipId });
+  if (clips.length > 10) clips.pop();
+  renderClips();
+}
+function renderClips() {
+  const ul = $('clips');
+  $('clipsEmpty').hidden = clips.length > 0;
+  ul.innerHTML = clips.map(c => `<li data-id="${c.id}"><span class="info"><span class="name">${esc(c.label)}</span>`
+    + `<span class="detail">${esc(t('clipDetail', { dev: devName(c.device), audio: sec(c.audioSec), synth: sec(c.synth), rtf: fmt(c.rtf, c.rtf < 10 ? 1 : 0) }))}</span>`
+    + `<span class="snip">${esc(c.snippet)}</span></span>`
+    + `<button type="button" class="btn" data-act="play" aria-label="${esc(t('playLabel', { name: c.label }))}" title="${esc(t('play'))}">▶</button>`
+    + `<button type="button" class="btn" data-act="save" aria-label="${esc(t('saveLabel', { name: c.label }))}">${esc(t('saveWav'))}</button>`
+    + `<button type="button" class="btn" data-act="remove" aria-label="${esc(t('removeLabel', { name: c.label }))}">✕</button></li>`).join('');
+}
+$('clips').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  const c = clips.find(x => x.id === Number(b.closest('li').dataset.id));
+  if (!c) return;
+  if (b.dataset.act === 'play') {
+    if (run) run.stopped = true;
+    stopAudio(); setBusy(false);
+    schedule(c.samples, c.sampleRate, 0);
+  } else if (b.dataset.act === 'save') {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(wav(c.samples, c.sampleRate));
+    a.download = c.label.replace(/[^\wÀ-ɏ-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() + '.wav';
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } else {
+    clips.splice(clips.indexOf(c), 1);
+    renderClips();
+  }
+});
+
+/* ---------- Downloaded models ---------- */
+async function refreshModels() {
+  const files = [], sizes = new Map();
+  try {
+    if (await caches.has(CACHE)) {
+      const cache = await caches.open(CACHE);
+      for (const req of await cache.keys()) {
+        files.push(req.url);
+        const res = await cache.match(req);
+        let n = Number(res && res.headers.get('Content-Length'));
+        if (!n && res) n = (await res.blob()).size;
+        sizes.set(req.url, n || 0);
+      }
+    }
+  } catch (_) {}
+  cached = { files, sizes };
+  const rows = [];
+  for (const key of ['supertonic', 'piper', 'kokoro']) {
+    const mine = files.filter(u => u.includes(ENGINES[key].cacheMatch));
+    const bytes = mine.reduce((s, u) => s + (sizes.get(u) || 0), 0);
+    const nVoices = key === 'piper' ? mine.filter(u => u.endsWith('.onnx')).length : 0;
+    const info = !mine.length ? t('m.none') : key === 'piper' ? t('m.voices', { n: nVoices, mb: mbStr(bytes) }) : t('m.size', { mb: mbStr(bytes) });
+    const name = ENGINES[key].name();
+    rows.push(`<li><span><strong>${esc(name)}</strong> · ${esc(info)}</span>`
+      + (mine.length ? `<button type="button" class="btn" data-del="${key}" aria-label="${esc(t('delLabel', { name }))}">${esc(t('del'))}</button>` : '') + '</li>');
+  }
+  $('models').innerHTML = rows.join('');
+  let usage = '';
+  try { const est = await navigator.storage.estimate(); usage = t('usage', { u: mbStr(est.usage || 0) + ' MB' }); } catch (_) {}
+  $('modelUsage').textContent = usage;
+  $('btnDeleteModels').hidden = !files.length;
+  renderNote();
+}
+async function deleteModels(engine) {
+  if (!confirm(t('confirmDel'))) return;
+  try {
+    const cache = await caches.open(CACHE);
+    for (const req of await cache.keys()) if (!engine || req.url.includes(ENGINES[engine].cacheMatch)) await cache.delete(req);
+  } catch (_) {}
+  // Loaded models live in the workers: start fresh
+  for (const k of Object.keys(workers)) { workers[k].terminate(); delete workers[k]; }
+  Tools.diag.log('models deleted', { engine: engine || 'all' });
+  toast(t('deleted'));
+  refreshModels();
+}
+$('models').addEventListener('click', e => { const b = e.target.closest('button[data-del]'); if (b) deleteModels(b.dataset.del); });
+$('btnDeleteModels').addEventListener('click', () => deleteModels(null));
+
+/* ---------- WebMCP tools ---------- */
+const ENGINE_IDS = ['browser', 'supertonic', 'piper', 'kokoro'];
+Tools.mcp.register({
+  name: 'set_text', title: 'Set text to read aloud', label: 'mcp.text',
+  description: 'Writes text into the text field of the app (replacing or appending). The user then presses "Read aloud" to hear it. Returns the new length of the text.',
+  inputSchema: { type: 'object', properties: {
+    text: { type: 'string', minLength: 1, maxLength: 20000, description: 'Text to read aloud' },
+    mode: { type: 'string', enum: ['replace', 'append'], description: 'Replace the current text (default) or append to it' },
+  }, required: ['text'], additionalProperties: false },
+  execute: ({ text, mode }) => {
+    const value = mode === 'append' && textEl.value ? (textEl.value + '\n\n' + text).slice(0, 20000) : text;
+    textEl.value = value; save(LS_TEXT, value); updateCount();
+    return { length: value.length };
+  },
+});
+Tools.mcp.register({
+  name: 'list_voices', title: 'List voices', label: 'mcp.voices', readOnly: true,
+  description: 'Lists the speech engines and their voices for a language (default: the current one), and which engine, voice, language and speed are selected. "downloaded" tells whether an AI voice works offline already; "downloadMB" is the one-time download size.',
+  inputSchema: { type: 'object', properties: {
+    language: { type: 'string', enum: ['de', 'en'], description: 'Language of the text: de (German) or en (English)' },
+  }, additionalProperties: false },
+  execute: ({ language }) => {
+    const lang = language || textLang();
+    const engines = ENGINE_IDS.map(engine => ({
+      engine, name: engine === 'browser' ? 'Browser (Web Speech API)' : ENGINES[engine].name(),
+      voices: voiceOptions(engine, lang).map(o => ({ id: o.value, name: o.label, ...(o.group ? { group: o.group } : {}) })),
+      ...(engine === 'browser' ? {} : { downloaded: isDownloaded(engine, voiceOptions(engine, lang)[0]?.value || '') }),
+      ...(engine === 'kokoro' ? { note: 'English voices only' } : {}),
+    }));
+    return { selected: { engine: settings.engine, voice: currentVoice(), language: textLang(), speed: settings.speed }, language: lang, engines };
+  },
+});
+Tools.mcp.register({
+  name: 'select_voice', title: 'Choose voice', label: 'mcp.voice',
+  description: 'Selects the speech engine, and optionally the language, voice (id from list_voices) and speed. Returns the selection. Does not start reading or downloading.',
+  inputSchema: { type: 'object', properties: {
+    engine: { type: 'string', enum: ENGINE_IDS, description: 'Speech engine' },
+    language: { type: 'string', enum: ['de', 'en'], description: 'Language of the text' },
+    voice: { type: 'string', maxLength: 300, description: 'Voice id from list_voices' },
+    speed: { type: 'number', minimum: 0.5, maximum: 2, description: 'Speaking rate, 1 = normal' },
+  }, required: ['engine'], additionalProperties: false },
+  execute: ({ engine, language, voice, speed }) => {
+    // Check first, then change: a wrong voice changes nothing
+    const lang = language || textLang();
+    if (voice != null && !voiceOptions(engine, lang).some(o => o.value === voice)) throw new Error(`Unknown voice "${voice}" for ${engine} (${lang}) – see list_voices`);
+    if (language) settings.lang = language;
+    settings.engine = engine;
+    if (voice != null) settings.voices[voiceKey()] = voice;
+    if (speed != null) settings.speed = Math.round(speed * 10) / 10;
+    saveSettings(); renderControls();
+    return { engine: settings.engine, voice: currentVoice(), language: textLang(), speed: settings.speed, downloaded: engine === 'browser' ? true : isDownloaded() };
+  },
+});
+
+/* ---------- Diagnostics (no text content) ---------- */
+Tools.diag.info(() => ({
+  engine: settings.engine, language: textLang(), voice: settings.engine === 'browser' ? (browserVoices().find(v => v.voiceURI === currentVoice()) || {}).name || null : currentVoice(),
+  speed: settings.speed, steps: settings.steps, device: settings.device,
+  webSpeech: 'speechSynthesis' in window ? speechSynthesis.getVoices().length + ' voices' : 'missing',
+  webgpu: !!navigator.gpu, crossOriginIsolated: self.crossOriginIsolated === true,
+  cachedFiles: cached.files.length, cachedMB: Math.round([...cached.sizes.values()].reduce((a, b) => a + b, 0) / 1048576),
+  textLength: textEl.value.length, clips: clips.length,
+}));
+
+Tools.onLang(() => { renderControls(); renderClips(); refreshModels(); updateCount(); });
+renderControls();
+updateCount();
+refreshModels();
+})();
+</script>
+</body>
+</html>

@@ -33,6 +33,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | [Schere, Stein, Papier](https://phanlipo.github.io/rock-paper-scissors/) | `rock-paper-scissors/` | Gegen den Computer oder zu zweit auf zwei Handys – klassisch, mit Brunnen oder mit Echse und Spock. |
 | [Schiffe versenken](https://phanlipo.github.io/sea-battle/) | `sea-battle/` | Zu zweit auf zwei Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server. |
 | [Sprache zu Text](https://phanlipo.github.io/voice-transcriber/) | `voice-transcriber/` | Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht. |
+| [Text zu Sprache](https://phanlipo.github.io/text-to-speech/) | `text-to-speech/` | Text vorlesen lassen – mit den Stimmen des Geräts oder KI-Stimmen (Supertonic, Piper, Kokoro), die direkt im Browser laufen. Stimmen vergleichen und als WAV speichern. |
 | [Video zu Audio](https://phanlipo.github.io/video-to-audio/) | `video-to-audio/` | Die Tonspur aus einem Video speichern – als Original ohne Qualitätsverlust (z. B. .m4a) oder als WAV, direkt im Browser: das Video verlässt das Gerät nicht. |
 | [Würfel & Münze](https://phanlipo.github.io/dice-coin/) | `dice-coin/` | Würfel und Münzwurf für Spiele: Anzahl und Seiten frei wählbar, alle gleichzeitig oder einzeln würfeln, Würfel halten, Vorlagen. Einstellungen werden im Browser gespeichert. |
 <!-- tools:end -->

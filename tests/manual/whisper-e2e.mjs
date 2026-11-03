@@ -4,6 +4,7 @@
 // that must not be committed (privacy).
 //
 //   node tests/manual/whisper-e2e.mjs <audio-file> [model]     model default: onnx-community/whisper-base
+//   WHISPER_LANG=english|auto …                                  recognition language (default: german)
 //
 // Starts the local test server, opens the page in Chromium, transcribes and prints text and timing.
 import { chromium } from '@playwright/test';
@@ -16,11 +17,16 @@ if (!file) { console.error('Usage: node tests/manual/whisper-e2e.mjs <audio-file
 const PORT = 4179;
 const server = spawn(process.execPath, [fileURLToPath(new URL('../server.mjs', import.meta.url)), String(PORT)], { stdio: 'ignore' });
 await new Promise(r => setTimeout(r, 800));
-const browser = await chromium.launch();
+// Proxy (e.g. in cloud sessions) and an installed Chromium are taken from the environment
+const proxy = process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1' } : undefined;
+const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined, proxy });
 try {
   const page = await browser.newPage();
   await page.goto(`http://localhost:${PORT}/voice-transcriber/`);
   await page.selectOption('#model', model);
+  // Recognition language: WHISPER_LANG=german|english|auto (default german)
+  const lang = process.env.WHISPER_LANG || 'german';
+  await page.selectOption('#language', lang === 'auto' ? '' : lang);
   await page.setInputFiles('#file', file);
   await page.waitForFunction(() => document.getElementById('fileInfo').dataset.decoder);
   console.log('Audio:', await page.textContent('#fileInfo'));

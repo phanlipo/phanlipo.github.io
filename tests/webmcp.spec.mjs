@@ -1409,3 +1409,45 @@ test.describe('piano tools', () => {
     expect((await call(page, 'piano_control_playback', { action: 'play', speed_percent: 300 })).ok).toBe(false);
   });
 });
+
+test.describe('text-to-speech tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/text-to-speech/'));
+
+  test('set_text fills the text field (replace, append) and keeps it', async ({ page }) => {
+    let r = await call(page, 'text_to_speech_set_text', { text: 'Erster Satz.' });
+    expect(r).toEqual({ ok: true, result: { length: 12 } });
+    await expect(page.locator('#text')).toHaveValue('Erster Satz.');
+    r = await call(page, 'text_to_speech_set_text', { text: 'Zweiter Satz.', mode: 'append' });
+    expect(r.result.length).toBe('Erster Satz.\n\nZweiter Satz.'.length);
+    await expect(page.locator('#text')).toHaveValue('Erster Satz.\n\nZweiter Satz.');
+    await page.reload();
+    await expect(page.locator('#text')).toHaveValue('Erster Satz.\n\nZweiter Satz.');
+    expect((await call(page, 'text_to_speech_set_text', { text: '' })).ok).toBe(false);
+    expect((await call(page, 'text_to_speech_set_text', { text: 'x', mode: 'prepend' })).ok).toBe(false);
+  });
+
+  test('list_voices and select_voice: engines, voices per language, selection shown in the app', async ({ page }) => {
+    let { result } = await call(page, 'text_to_speech_list_voices', { language: 'de' });
+    expect(result.engines.map(e => e.engine)).toEqual(['browser', 'supertonic', 'piper', 'kokoro']);
+    const piper = result.engines.find(e => e.engine === 'piper');
+    expect(piper.voices[0]).toMatchObject({ id: 'de/de_DE/thorsten/high/de_DE-thorsten-high', name: 'Thorsten · hoch · 114 MB' });
+    expect(piper.downloaded).toBe(false);
+    expect(result.engines.find(e => e.engine === 'supertonic').voices).toHaveLength(10);
+    expect(result.engines.find(e => e.engine === 'kokoro').note).toBe('English voices only');
+
+    const r = await call(page, 'text_to_speech_select_voice', { engine: 'piper', language: 'de', voice: 'de/de_DE/kerstin/low/de_DE-kerstin-low', speed: 1.24 });
+    expect(r.result).toEqual({ engine: 'piper', voice: 'de/de_DE/kerstin/low/de_DE-kerstin-low', language: 'de', speed: 1.2, downloaded: false });
+    await expect(page.locator('input[name=engine][value=piper]')).toBeChecked();
+    await expect(page.locator('#voice')).toHaveValue('de/de_DE/kerstin/low/de_DE-kerstin-low');
+    await expect(page.locator('#speedVal')).toHaveText('1,2×');
+    ({ result } = await call(page, 'text_to_speech_list_voices', {}));
+    expect(result.selected).toEqual({ engine: 'piper', voice: 'de/de_DE/kerstin/low/de_DE-kerstin-low', language: 'de', speed: 1.2 });
+
+    // Unknown voice, wrong engine or speed: rejected, nothing changed
+    expect((await call(page, 'text_to_speech_select_voice', { engine: 'supertonic', voice: 'X9' })).error).toContain('Unknown voice');
+    expect((await call(page, 'text_to_speech_select_voice', { engine: 'google' })).ok).toBe(false);
+    expect((await call(page, 'text_to_speech_select_voice', { engine: 'piper', speed: 3 })).ok).toBe(false);
+    expect((await call(page, 'text_to_speech_list_voices', {})).result.selected.engine).toBe('piper');
+    await expect(page.locator('#voice')).toHaveValue('de/de_DE/kerstin/low/de_DE-kerstin-low');
+  });
+});
