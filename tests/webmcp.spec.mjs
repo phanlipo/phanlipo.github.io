@@ -7,6 +7,7 @@ import { makePdf } from './pdf-tools.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 import { CLIPS, clip, wavInfo, toneHz } from './audio-files.mjs';
 import { ORIGIN, API_PROBLEMS, mockApi, addYamlConfig } from './api-mock.mjs';
+import { testSong } from './midi-files.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -950,6 +951,87 @@ test.describe('talking-animal tools', () => {
   });
 });
 
+test.describe('loop-station tools', () => {
+  test.beforeEach(async ({ page }) => {
+    // Fake microphone: 440 Hz sine
+    await page.addInitScript(() => {
+      navigator.mediaDevices.getUserMedia = async () => {
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator(), gain = ctx.createGain(), dest = ctx.createMediaStreamDestination();
+        osc.frequency.value = 440; gain.gain.value = 0.5;
+        osc.connect(gain).connect(dest); osc.start();
+        return dest.stream;
+      };
+    });
+    await open(page, '/loop-station/');
+  });
+  const looper = page => page.locator('#looper');
+
+  test('without tracks: get_status reads the state, play explains what to do; set_tempo sets up the next loop', async ({ page }) => {
+    expect((await call(page, 'loop_station_get_status', {})).result).toEqual({
+      state: 'idle', playing: false, microphone_on: false, loop_ms: 0, loop_tempo: null, max_tracks: 8, tracks: [],
+      settings: { tempo_mode: false, bpm: 100, beats_per_bar: 4, bars: 2, count_in: true, metronome: true },
+    });
+    const p = await call(page, 'loop_station_play', {});
+    expect(p.ok).toBe(false);
+    expect(p.error).toMatch(/No tracks yet/);
+    const { result } = await call(page, 'loop_station_set_tempo', { tempo_mode: true, bpm: 240, beats_per_bar: 3, bars: 1, count_in: false });
+    expect(result).toEqual({ tempo_mode: true, bpm: 240, beats_per_bar: 3, bars: 1, count_in: false, metronome: true });
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Tempo eingestellt');
+    await expect(page.locator('#status')).toHaveText('Im Takt: 1 Takt bei 240 BPM. Tippe auf „Aufnehmen“.');
+    // The user records: 3 beats at 240 BPM = 750 ms
+    await page.click('#btnRec');
+    await expect(looper(page)).toHaveAttribute('data-state', 'playing', { timeout: 4000 });
+    const st = (await call(page, 'loop_station_get_status', {})).result;
+    expect(st).toMatchObject({ state: 'playing', playing: true, microphone_on: true, loop_ms: 750, loop_tempo: { bpm: 240, beats_per_bar: 3, bars: 1 } });
+    expect(st.tracks).toHaveLength(1);
+    expect(st.tracks[0]).toMatchObject({ track: 1, muted: false, volume: 100 });
+    expect(st.tracks[0].peak).toBeCloseTo(0.5, 1);
+    // Tempo is fixed now, the metronome is not
+    const fixed = await call(page, 'loop_station_set_tempo', { bpm: 120 });
+    expect(fixed.ok).toBe(false);
+    expect(fixed.error).toMatch(/fixed while there are tracks/);
+    expect((await call(page, 'loop_station_set_tempo', { metronome: false })).result).toMatchObject({ bpm: 240, metronome: false });
+  });
+
+  test('set_track, stop and play change the app', async ({ page }) => {
+    await page.click('#btnRec');
+    await expect(looper(page)).toHaveAttribute('data-state', 'recording');
+    await page.waitForTimeout(600);
+    await page.click('#btnRec');
+    await expect(looper(page)).toHaveAttribute('data-state', 'playing');
+    const r = await call(page, 'loop_station_set_track', { track: 1, muted: true, volume: 40 });
+    expect(r.result).toEqual({ track: 1, muted: true, volume: 40 });
+    await expect(page.locator('#tracks [aria-label="Spur 1 stumm"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#tracks [aria-label="Lautstärke Spur 1"]')).toHaveValue('40');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Spur geändert');
+    expect((await call(page, 'loop_station_stop', {})).result).toEqual({ playing: false, tracks: 1 });
+    await expect(looper(page)).toHaveAttribute('data-state', 'stopped');
+    expect((await call(page, 'loop_station_get_status', {})).result.microphone_on).toBe(false);
+    const p = (await call(page, 'loop_station_play', {})).result;
+    expect(p).toMatchObject({ playing: true, tracks: 1 });
+    expect(typeof p.audible).toBe('boolean');
+    await expect(looper(page)).toHaveAttribute('data-state', 'playing');
+    // Not while the user records
+    await page.click('#btnRec');
+    await expect(looper(page)).toHaveAttribute('data-state', 'overdub');
+    expect((await call(page, 'loop_station_stop', {})).error).toMatch(/recording right now/);
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    for (const [name, input, msg] of [
+      ['set_track', {}, 'input.track is required'],
+      ['set_track', { track: 0 }, 'input.track must be >= 1'],
+      ['set_track', { track: 1, volume: 101 }, 'input.volume must be <= 100'],
+      ['set_track', { track: 1 }, 'There is no track 1 - the loop has 0 track(s).'],
+      ['set_tempo', { bpm: 300 }, 'input.bpm must be <= 240'],
+      ['set_tempo', { bars: 3 }, 'input.bars must be one of: 1, 2, 4, 8'],
+      ['set_tempo', { swing: true }, 'input.swing is not allowed'],
+    ]) expect(await call(page, 'loop_station_' + name, input)).toEqual({ ok: false, error: msg });
+    expect((await call(page, 'loop_station_get_status', {})).result.settings).toMatchObject({ bpm: 100, bars: 2 });
+  });
+});
+
 test.describe('paint tools', () => {
   test.beforeEach(async ({ page }) => {
     await fakeModelContext(page);
@@ -1154,5 +1236,66 @@ test.describe('api-check tools', () => {
     expect(JSON.stringify(result)).not.toContain('TOPSECRET');
     // History in the menu keeps the masked URL too
     expect(await page.evaluate(() => localStorage.getItem('api-check.history.v1'))).not.toContain('TOPSECRET');
+  });
+});
+
+test.describe('piano tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install();
+    await fakeModelContext(page);
+    await page.goto('/piano/');
+  });
+
+  test('play_notes: note names and chords become MIDI numbers, keys light up in the app', async ({ page }) => {
+    const { ok, result } = await call(page, 'piano_play_notes', { notes: ['C4', 'F#3', 'Bb5', '-', 'C4+E4+G4', 'A0', 'C8'], step_ms: 200 });
+    expect(ok).toBe(true);
+    // C4 = 60 (middle C), F#3 = 54, Bb5 = 82, A0 = 21, C8 = 108
+    expect(result.steps).toEqual([[60], [54], [82], [], [60, 64, 67], [21], [108]]);
+    expect(result.total_ms).toBe(1400);
+    await expect(page.locator('#keys')).toHaveAttribute('data-lit', '60');
+    await page.clock.runFor(850);                         // step 5 (0.8–1.0 s): the chord
+    await expect(page.locator('#keys')).toHaveAttribute('data-lit', '60 64 67');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Noten gespielt');
+    for (const bad of [['H9'], ['C4+X'], ['G#8'], ['A-1']]) {
+      const r = await call(page, 'piano_play_notes', { notes: bad });
+      expect(r.ok, bad[0]).toBe(false);
+      expect(r.error).toMatch(/Unknown note/);
+    }
+    expect((await call(page, 'piano_play_notes', { notes: ['C4'], step_ms: 10 })).ok).toBe(false);
+  });
+
+  test('get_song and control_playback follow the loaded MIDI file', async ({ page }) => {
+    expect((await call(page, 'piano_get_song', {})).result).toEqual({ loaded: false });
+    const none = await call(page, 'piano_control_playback', { action: 'play' });
+    expect(none.ok).toBe(false);
+    expect(none.error).toMatch(/No song/);
+
+    await page.setInputFiles('#file', { name: 'test.mid', mimeType: 'audio/midi', buffer: testSong() });
+    const { result } = await call(page, 'piano_get_song', {});
+    expect(result).toEqual({
+      loaded: true, title: 'test', example: false, duration_seconds: 2, position_seconds: 0, playing: false,
+      speed_percent: 100, note_count: 4,
+      parts: [
+        { index: 1, name: 'Rechts', notes: 3, lowest: 'C4', highest: 'G4', muted: false },
+        { index: 2, name: 'Links', notes: 1, lowest: 'C3', highest: 'C3', muted: false },
+      ],
+    });
+    let r = await call(page, 'piano_control_playback', { action: 'play', speed_percent: 200 });
+    expect(r.result).toMatchObject({ playing: true, speed_percent: 200 });
+    await expect(page.locator('#btnPlay')).toHaveAttribute('data-state', 'playing');
+    await page.clock.runFor(500);                         // double speed: song at 1 s
+    r = await call(page, 'piano_control_playback', { action: 'pause' });
+    expect(r.result.playing).toBe(false);
+    expect(r.result.position_seconds).toBeGreaterThanOrEqual(0.95);
+    expect(r.result.position_seconds).toBeLessThanOrEqual(1.1);
+    r = await call(page, 'piano_control_playback', { action: 'seek', position_seconds: 1.5 });
+    expect(r.result.position_seconds).toBe(1.5);
+    await expect(page.locator('#time')).toHaveText('0:01 / 0:02');
+    r = await call(page, 'piano_control_playback', { action: 'seek', position_seconds: 99 });
+    expect(r.result.position_seconds).toBe(2);
+    expect((await call(page, 'piano_control_playback', { action: 'seek' })).ok).toBe(false);
+    r = await call(page, 'piano_control_playback', { action: 'stop' });
+    expect(r.result).toMatchObject({ playing: false, position_seconds: 0 });
+    expect((await call(page, 'piano_control_playback', { action: 'play', speed_percent: 300 })).ok).toBe(false);
   });
 });
