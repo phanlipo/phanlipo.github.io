@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Schatzsuche</title>
+<meta name="description" content="Schatzsuche für Kindergeburtstage: Stationen mit GPS, Rätseln, Figuren und eigener Story selbst erstellen und auf dem Handy spielen.">
+<meta name="tool:tags" content="Freizeit, Kinder, Spiele">
+<meta name="tool:features" content="Standort, Mikrofon, Bewegungssensor, Datei öffnen, KI-Agent">
+<meta name="tool:icon" content="map-2">
+<meta name="tool:color" content="#b45309">
+<meta name="tool:short-name" content="Schatzsuche">
+<meta name="tool:title-en" content="Treasure Hunt">
+<meta name="tool:description-en" content="Treasure hunt for kids’ parties: create stations with GPS, puzzles, characters and your own story, then play it on a phone.">
+<meta name="tool:short-name-en" content="Treasure">
+<meta name="tool:storage" content="treasure-hunt.">
+<meta name="tool:webmcp" content="get_status, create_hunt">
+<!-- Map tiles from OpenStreetMap – only after the user switched the map on (setting), see the help -->
+<meta name="tool:connect" content="https://tile.openstreetmap.org">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5huSZW/l0J/FllAtAqV7Fxj3vWo5EZkWk1l8SiQMaJg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://tile.openstreetmap.org; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Schatzsuche">
+<meta name="theme-color" content="#b45309">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#b45309;--accent-text:#ffffff;--gold:#f59e0b;--a0:#b91c1c;--a1:#1d4ed8;--a2:#7c3aed;--a3:#15803d;--hp:#dc2626}
+@media (prefers-color-scheme: dark){:root{--accent:#f2a65a;--accent-text:#2b1500;--a0:#c62828;--a1:#1e56d6;--a2:#7c3aed;--a3:#17803d;--hp:#f87171}}
+main{display:flex;flex-direction:column;padding:12px;padding-inline:max(12px,env(safe-area-inset-left)) max(12px,env(safe-area-inset-right))}
+.scr{flex:1 0 auto;display:flex;flex-direction:column;gap:12px;width:100%;max-width:760px;margin-inline:auto}
+.scr[hidden]{display:none}
+#scrPlay{flex:1 1 0;min-height:0}
+.huge{min-height:64px;font-size:20px;width:100%;border-radius:14px}
+.big-btns{display:grid;gap:10px}
+.big-btns .btn{min-height:56px;font-size:17px;text-align:start}
+.hero{text-align:center;padding:8px 0 0}
+.hero .big-emoji{font-size:56px;line-height:1}
+.hero p{margin:6px 0 0;color:var(--muted)}
+.empty{text-align:center;color:var(--muted)}
+.hunt h2{font-size:18px;margin-bottom:4px}
+.hunt .row{margin-top:8px}
+.row.center{justify-content:center}
+.big-emoji{font-size:44px;line-height:1.1}
+/* ---------- Editor ---------- */
+.ed-top{display:flex;align-items:center;gap:8px}
+.ed-top h2{margin:0;font-size:18px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fld{display:grid;gap:4px;margin-block:8px}
+.fld label,.fld .lbl{font-size:14px;font-weight:600}
+.fld input,.fld textarea,.fld select{width:100%;min-height:44px;padding:8px 10px;font-size:16px}
+.fld textarea{min-height:84px;resize:vertical}
+.chk{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.chk input{width:22px;height:22px;flex:none;accent-color:var(--accent)}
+.grp{border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;margin:12px 0 0;min-width:0}
+.grp legend{font-weight:700;padding:0 4px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.img-field{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.img-field img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+.items{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.item{display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px}
+.item>.open{flex:1;min-width:0;text-align:start;background:none;border:0;color:var(--text);padding:8px;min-height:44px;cursor:pointer;font:inherit}
+.item>.open small{display:block;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .head-btn{font-size:18px}
+.warn-list{margin:0;padding-inline-start:20px;color:var(--warn);font-size:14px}
+.mapbox{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border);min-height:220px}
+.mapbox canvas{display:block;width:100%;height:100%;min-height:220px;touch-action:none;cursor:crosshair}
+.ed-map{height:260px}
+.map-ctl{position:absolute;inset-block-start:8px;inset-inline-end:8px;display:grid;gap:6px}
+.map-ctl button{width:44px;height:44px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:20px;cursor:pointer}
+.map-attr{position:absolute;inset-block-end:0;inset-inline-end:0;margin:0;background:var(--surface);color:var(--text);font-size:12px;padding:2px 6px;border-start-start-radius:6px}
+.map-attr a{color:inherit}
+.map-off{position:absolute;inset:auto 8px 30px 8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:14px;display:grid;gap:6px}
+.map-off p{margin:0}
+#edJson{width:100%;min-height:220px;font:13px/1.35 var(--mono)}
+/* ---------- Play ---------- */
+.hud{display:flex;align-items:center;gap:10px;flex:none;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:4px 12px;min-height:44px;font-size:18px}
+.hud .team{flex:1;min-width:0;display:flex;gap:2px;overflow:hidden;white-space:nowrap}
+.hud .energy{font-weight:700;font-variant-numeric:tabular-nums}
+.hud .energy.ready{color:var(--accent)}
+.hud .prog{color:var(--muted);font-size:15px}
+.play-body{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-block-end:8px}
+.say{display:flex;gap:8px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:10px 10px 10px 14px}
+.say-text{flex:1;margin:0;font-size:19px;line-height:1.45;white-space:pre-line}
+.say-btn{flex:none;width:52px;height:52px;border-radius:50%;border:2px solid var(--accent);background:var(--surface-2);color:var(--text);font-size:24px;cursor:pointer}
+.say-btn.on{background:var(--accent);color:var(--accent-text)}
+.pic{max-width:100%;max-height:34vh;border-radius:12px;align-self:center;object-fit:contain}
+.portrait{display:flex;flex-direction:column;align-items:center;gap:2px}
+.portrait .face{font-size:72px;line-height:1.1}
+.portrait img{width:112px;height:112px;border-radius:50%;object-fit:cover;border:3px solid var(--accent)}
+.portrait b{font-size:18px}
+.portrait small{color:var(--muted);font-size:14px}
+.title-play{font-size:22px;text-align:center;margin:0}
+.stations{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.st-btn{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 8px;min-height:120px;border-radius:16px;border:2px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font:inherit;font-size:17px;font-weight:600}
+.st-btn.new{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.st-btn:disabled{opacity:.6;cursor:not-allowed}
+.st-btn .flag{position:absolute;inset-block-start:6px;inset-inline-end:8px;font-size:18px}
+.nav{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.nav-target{display:flex;align-items:center;gap:10px;justify-content:center}
+.nav-target h2{margin:0;font-size:22px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:0;flex:none}
+.seg button{min-height:48px;border:2px solid var(--accent);background:var(--surface);color:var(--text);font:inherit;font-weight:600;cursor:pointer}
+.seg button:first-child{border-radius:12px 0 0 12px}
+.seg button:last-child{border-radius:0 12px 12px 0;border-inline-start:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text)}
+.nav-view{flex:1 0 auto;min-height:240px;display:flex;flex-direction:column}
+.nav-view .mapbox{flex:1}
+.compass{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.arrow{width:min(30vh,200px);height:min(30vh,200px);flex:none;transition:transform .35s ease-out}
+.arrow .ring{fill:var(--surface);stroke:var(--border);stroke-width:3}
+.arrow .tip{fill:var(--accent)}
+.dist{font-size:40px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+.warm{font-size:22px;font-weight:700;min-height:1.4em}
+.dir,.gps{margin:0;color:var(--muted);font-size:15px;text-align:center}
+.gps.err{color:var(--err)}
+.btn.go{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--accent) 35%,transparent)}}
+.scene{display:flex;flex-direction:column;gap:12px}
+.pz-icon{font-size:56px;text-align:center;line-height:1}
+.answers{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ans{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:96px;padding:10px;border:0;border-radius:16px;color:#fff;font:inherit;font-size:19px;font-weight:700;cursor:pointer;text-align:center}
+.ans .shape{font-size:22px;opacity:.9}
+.ans-0{background:var(--a0)}.ans-1{background:var(--a1)}.ans-2{background:var(--a2)}.ans-3{background:var(--a3)}
+.ans.right{outline:6px solid var(--ok);outline-offset:2px}
+.ans.wrong{opacity:.45}
+.pz-riddle{display:grid;gap:10px}
+.pz-riddle input{min-height:56px;font-size:20px;padding:8px 14px;border-radius:12px;border:2px solid var(--border);background:var(--surface);color:var(--text)}
+.pz-msg{text-align:center;font-size:18px;font-weight:600;min-height:1.5em;margin:0}
+.pz-msg.err{color:var(--err)}
+.pz-buttons{display:grid;gap:10px}
+.pz-timer{text-align:center;font-size:26px;font-weight:800;margin:0;font-variant-numeric:tabular-nums}
+.pz-timer.up{color:var(--err)}
+.pz-count{text-align:center;font-size:34px;font-weight:800;margin:0}
+.pz-sensor{display:grid;gap:10px}
+.meter{height:28px;border-radius:14px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--muted);transition:width .1s}
+.meter.hot i,.progress .meter i{background:var(--accent)}
+.fallback{justify-self:center;align-self:center;margin-top:4px}
+.shake{animation:shake .4s}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.battle{display:flex;flex-direction:column;gap:12px}
+.hp-val{margin:0 0 -6px;text-align:center;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.hp{position:relative;height:22px;border-radius:11px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden;width:min(100%,360px);align-self:center}
+.hp i{position:absolute;inset:0 auto 0 0;background:var(--hp);transition:width .45s}
+.team-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.team-list li{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px 12px;font-size:17px;transition:transform .2s}
+.team-list li .e{font-size:30px}
+.team-list li .n{flex:1;min-width:0}
+.team-list li .n small{display:block;color:var(--muted);font-size:14px}
+.team-list li b{font-size:20px;font-variant-numeric:tabular-nums}
+.team-list li.hit{transform:scale(1.05);border-color:var(--accent)}
+.team-list.mega li .e{animation:grow .9s ease-in-out infinite}
+@keyframes grow{50%{transform:scale(1.35)}}
+.btn.mega[aria-pressed="true"]{background:var(--gold);color:#2b1500;border-color:var(--gold)}
+.result{display:flex;flex-direction:column;gap:12px;align-items:stretch;text-align:center}
+.result .big{font-size:80px;line-height:1}
+.gain{background:var(--surface);border:2px solid var(--accent);border-radius:14px;padding:10px;font-size:18px;font-weight:600}
+.finale .big{font-size:96px;animation:grow 1.4s ease-in-out infinite}
+.confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:5}
+.confetti span{position:absolute;top:-40px;font-size:28px;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
+@media (prefers-reduced-motion:reduce){.btn.go,.finale .big,.team-list.mega li .e,.arrow{animation:none;transition:none}.confetti{display:none}}
+/* ---------- Dialog (parents, code, PIN) ---------- */
+.th-dlg{border:0;border-radius:16px;padding:0;width:min(440px,calc(100% - 24px));background:var(--bg);color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,.35)}
+.th-dlg::backdrop{background:rgba(0,0,0,.5)}
+.dlg-head{display:flex;align-items:center;gap:8px;padding:4px 4px 4px 16px;background:var(--surface);border-block-end:1px solid var(--border)}
+.dlg-head h2{flex:1;margin:0;font-size:17px}
+.dlg-body{padding:12px 16px 16px;display:grid;gap:10px}
+.dlg-body .btn{min-height:48px;text-align:start}
+.code{font:700 22px/1.4 var(--mono);letter-spacing:1px;text-align:center;word-break:break-all;background:var(--surface);border:1px dashed var(--accent);border-radius:10px;padding:10px;margin:0}
+.dlg-body input{min-height:48px;font-size:18px;padding:8px 12px;width:100%}
+.set-card .chk{font-size:16px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Schatzsuche</span></h1>
+  <p class="sub" data-i18n="sub">Eigene Schatzsuchen mit Story, Rätseln und GPS – für Kindergeburtstage.</p>
+  <div class="stage-actions">
+    <!-- Tabler Icons (MIT): lock -->
+    <button type="button" class="head-btn" id="btnParent" hidden aria-label="Eltern-Bereich" title="Eltern-Bereich" data-i18n-attr="aria-label:parent.title; title:parent.title"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6z"/><path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0"/><path d="M8 11v-4a4 4 0 1 1 8 0v4"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="scr" id="scrHome" aria-labelledby="h-home">
+    <div class="hero">
+      <div class="big-emoji" aria-hidden="true">🗺️💎</div>
+      <h2 id="h-home" class="sr-only" data-i18n="home.h">Eure Schatzsuchen</h2>
+      <p data-i18n="home.intro">Erstellt eine Schatzsuche mit Stationen, Rätseln und Figuren – dann spielen die Kinder sie auf dem Handy.</p>
+    </div>
+    <div id="homeList" class="big-btns"></div>
+    <div class="big-btns">
+      <button type="button" class="btn primary" data-act="new"><span aria-hidden="true">➕ </span><span data-i18n="home.new">Neue Schatzsuche</span></button>
+      <button type="button" class="btn" data-act="example"><span aria-hidden="true">✨ </span><span data-i18n="home.example">Beispiel anlegen (Der Schattendrache)</span></button>
+      <button type="button" class="btn" data-act="import"><span aria-hidden="true">📂 </span><span data-i18n="home.import">Schatzsuche aus Datei öffnen</span></button>
+    </div>
+    <input type="file" id="fileHunt" accept=".json,application/json" hidden>
+    <input type="file" id="fileImg" accept="image/*" hidden>
+  </section>
+
+  <section class="scr" id="scrEdit" hidden aria-labelledby="edTitle">
+    <div class="ed-top">
+      <button type="button" class="btn" data-act="ed-back"><span aria-hidden="true">‹ </span><span data-i18n="back">Zurück</span></button>
+      <h2 id="edTitle"></h2>
+    </div>
+    <div id="edBody"></div>
+    <datalist id="flagList"></datalist>
+  </section>
+
+  <section class="scr" id="scrPlay" hidden aria-label="Spiel" data-i18n-attr="aria-label:play.label">
+    <div class="hud" id="hud"></div>
+    <div class="play-body" id="playBody"></div>
+  </section>
+</main>
+
+<section class="card set-card" data-menu aria-labelledby="h-set">
+  <h2 id="h-set" data-i18n="set.h">Einstellungen</h2>
+  <label class="chk"><input type="checkbox" id="setMap"><span data-i18n="set.map">OpenStreetMap-Karte verwenden</span></label>
+  <p class="muted" data-i18n="set.mapNote">Lädt Kartenbilder von openstreetmap.org – dabei erfährt der Kartendienst, welche Gegend ihr anseht. Ohne Karte gibt es Kompass und Radar.</p>
+  <label class="chk"><input type="checkbox" id="setRead"><span data-i18n="set.read">Texte automatisch vorlesen</span></label>
+  <label class="chk"><input type="checkbox" id="setSound"><span data-i18n="set.sound">Töne und Vibration</span></label>
+  <div class="row"><button type="button" class="btn small" id="btnTiles" data-i18n="set.tiles">Gespeicherte Kartenbilder löschen</button></div>
+</section>
+
+<dialog class="th-dlg" id="dlg" aria-labelledby="dlgTitle">
+  <div class="dlg-head"><h2 id="dlgTitle"></h2>
+    <button type="button" class="head-btn" data-act="dlg-close" aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close; title:close"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></svg></button>
+  </div>
+  <div class="dlg-body" id="dlgBody"></div>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Eltern bauen eine Schatzsuche mit Stationen, Rätseln, Figuren und Story. Die Kinder spielen sie dann auf einem Handy: Sie wählen ein Ziel, folgen Kompass oder Karte, lösen an der Station die Aufgabe, sammeln Verbündete und Energie und besiegen am Ende den Gegner.</p>
+  <h3>Schnellstart</h3>
+  <ol>
+    <li><b>Beispiel anlegen:</b> Legt die Geschichte „Der Schattendrache“ mit sechs Stationen 30–60 m rund um euren Standort an (ohne GPS: Stationen werden per Knopf geöffnet).</li>
+    <li><b>Bearbeiten:</b> Texte, Figuren, Rätsel und Orte anpassen. Am besten die Strecke vorher ablaufen und an jeder Station <b>📍 Hier</b> tippen.</li>
+    <li><b>Spielen:</b> Handy an die Kinder geben. Das Schloss oben rechts ist der <b>Eltern-Bereich</b>.</li>
+  </ol>
+  <h3>Stationen und Story</h3>
+  <ul>
+    <li>Jede Station hat eine Liste von <b>Szenen</b>. Beim Ankommen läuft die erste Szene, deren <b>Voraussetzungen</b> erfüllt sind und die noch nicht gewonnen wurde („wiederholbar“ bleibt verfügbar). So verändert sich eine Station bei späteren Besuchen.</li>
+    <li><b>Merker</b> (z. B. <code>drache-gesehen</code>) sind frei wählbare Wörter. Ein Ergebnis setzt oder löscht Merker; Szenen und Stationen verlangen Merker oder schließen sie aus. Dazu: Mindestgröße des Teams, Energie und frühere Besuche der Station.</li>
+    <li>Ein Ergebnis (geschafft / nicht geschafft) kann außerdem einen <b>Verbündeten</b> ins Team holen, <b>Energie</b> geben oder nehmen und den <b>Schatz</b> freischalten (Spielende).</li>
+    <li>Eine Station mit Voraussetzungen ist bis dahin <b>verschlossen</b> 🔒.</li>
+  </ul>
+  <h3>Kämpfe</h3>
+  <ul>
+    <li>Eine Szene mit einer Figur der Seite „Gegner“ und dem Haken „Kampf“ wird zum Kampf: Schaden = Kinder (1) + Stärke jedes Verbündeten + Bonus, wenn die Aufgabe der Szene gelöst wurde. Reicht er an die Lebenskraft des Gegners heran, ist er besiegt.</li>
+    <li><b>Mega-Entwicklung:</b> Mit mindestens einem Verbündeten und genug Energie verdoppelt sie den Schaden.</li>
+  </ul>
+  <h3>Rätsel</h3>
+  <ul>
+    <li>Quiz mit vier Antworten, Denkrätsel zum Eintippen, Aufgaben (Team, Suchen, Bilder, Bewegung, Denken – die Eltern bestätigen), Brüllen und Klatschen (Mikrofon), Rennen (GPS).</li>
+    <li>Das 🔊 liest Texte vor (Sprachausgabe des Geräts, geht auch offline, wenn eine Stimme installiert ist).</li>
+    <li>Mikrofon und GPS sind nicht überall zuverlässig: Bei jeder Sensor-Aufgabe gibt es „Eltern: als geschafft werten“, und im Eltern-Bereich lässt sich jede Aufgabe werten und jede Station öffnen.</li>
+  </ul>
+  <h3>GPS, Kompass und Karte</h3>
+  <ul>
+    <li>Eine Station öffnet sich, wenn ihr im Umkreis seid (Standard 20 m). Die gemeldete GPS-Ungenauigkeit (bis 30 m) zählt zu euren Gunsten. Ohne Koordinaten öffnet ihr die Station mit „Wir sind da!“.</li>
+    <li>Der Kompass zeigt Richtung, Entfernung und „wärmer/kälter“. Auf dem iPhone muss der Kompass einmal erlaubt werden.</li>
+    <li><b>Karte:</b> Nur wenn ihr sie in den Einstellungen (Menü ☰) einschaltet, lädt die App Kartenbilder von <b>openstreetmap.org</b> – der Dienst erfährt dabei die angezeigte Gegend. Angesehene Kartenbilder bleiben für offline gespeichert. Ohne Karte zeigt die App ein Radar mit Entfernungsringen. Im Editor setzt ein Tipp auf die Karte die Station.</li>
+  </ul>
+  <h3>Speichern, Übertragen, Weiterspielen</h3>
+  <ul>
+    <li>Schatzsuchen und Spielstand werden getrennt nur auf diesem Gerät gespeichert. <b>Exportieren</b> speichert eine Schatzsuche als Datei (mit Bildern); auf einem anderen Gerät öffnen mit „Schatzsuche aus Datei öffnen“.</li>
+    <li><b>Wiederaufnahme-Code:</b> im Eltern-Bereich. Auf dem anderen Gerät (mit derselben Schatzsuche) bei der Schatzsuche „Code eingeben“ – das Spiel geht an derselben Stelle weiter.</li>
+    <li><b>Eltern-PIN</b> (im Editor): schützt Eltern-Bereich und Freischalten vor neugierigen Kinderfingern. Kein Sicherheitsschutz – sie steht auch in der exportierten Datei.</li>
+    <li>Bilder werden verkleinert in die Schatzsuche eingebettet. Der Speicher des Browsers ist begrenzt (einige MB) – lieber wenige Bilder.</li>
+    <li><b>KI-Agent</b> (WebMCP): kann den Spielstand lesen und eine neue Schatzsuche aus JSON anlegen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Parents build a treasure hunt with stations, puzzles, characters and a story. The children then play it on a phone: they pick a target, follow the compass or map, solve the task at the station, gather allies and energy and finally defeat the opponent.</p>
+  <h3>Quick start</h3>
+  <ol>
+    <li><b>Create the example:</b> creates the story “The Shadow Dragon” with six stations 30–60 m around your position (without GPS the stations are opened with a button).</li>
+    <li><b>Edit:</b> change texts, characters, puzzles and places. Best walk the route beforehand and tap <b>📍 Here</b> at each station.</li>
+    <li><b>Play:</b> give the phone to the children. The lock at the top right is the <b>parents’ area</b>.</li>
+  </ol>
+  <h3>Stations and story</h3>
+  <ul>
+    <li>Each station has a list of <b>scenes</b>. On arrival the first scene whose <b>conditions</b> hold and that was not won yet plays (“repeatable” ones stay available). That is how a station changes on later visits.</li>
+    <li><b>Flags</b> (e.g. <code>dragon-seen</code>) are any words you like. A result sets or clears flags; scenes and stations require flags or exclude them. Also: minimum team size, energy and earlier visits to the station.</li>
+    <li>A result (done / not done) can also bring an <b>ally</b> into the team, give or take <b>energy</b> and unlock the <b>treasure</b> (end of the game).</li>
+    <li>A station with conditions stays <b>locked</b> 🔒 until they hold.</li>
+  </ul>
+  <h3>Battles</h3>
+  <ul>
+    <li>A scene with a character on the “opponent” side and the “battle” box ticked becomes a battle: damage = children (1) + strength of every ally + bonus if the scene’s task was solved. If it reaches the opponent’s life force, the opponent is defeated.</li>
+    <li><b>Mega evolution:</b> with at least one ally and enough energy it doubles the damage.</li>
+  </ul>
+  <h3>Puzzles</h3>
+  <ul>
+    <li>Quiz with four answers, riddle to type, tasks (team, search, picture, movement, thinking – the parents confirm), roaring and clapping (microphone), running (GPS).</li>
+    <li>The 🔊 reads texts aloud (the device’s speech output, also offline if a voice is installed).</li>
+    <li>Microphone and GPS are not reliable everywhere: every sensor task offers “Parents: count as done”, and the parents’ area can count any task and open any station.</li>
+  </ul>
+  <h3>GPS, compass and map</h3>
+  <ul>
+    <li>A station opens when you are within its radius (default 20 m). The reported GPS inaccuracy (up to 30 m) counts in your favour. Without coordinates you open the station with “We are here!”.</li>
+    <li>The compass shows direction, distance and “warmer/colder”. On an iPhone the compass has to be allowed once.</li>
+    <li><b>Map:</b> only if you switch it on in the settings (menu ☰) does the app load map images from <b>openstreetmap.org</b> – the service learns the area shown. Viewed map images stay saved for offline use. Without the map the app shows a radar with distance rings. In the editor a tap on the map places the station.</li>
+  </ul>
+  <h3>Saving, transferring, continuing</h3>
+  <ul>
+    <li>Treasure hunts and progress are stored separately, on this device only. <b>Export</b> saves a hunt as a file (with pictures); open it on another device with “Open treasure hunt from file”.</li>
+    <li><b>Resume code:</b> in the parents’ area. On the other device (with the same hunt) use “Enter code” on the hunt – the game continues at the same point.</li>
+    <li><b>Parent PIN</b> (in the editor): keeps curious children out of the parents’ area and unlocking. Not a security feature – it is also in the exported file.</li>
+    <li>Pictures are shrunk and embedded in the hunt. Browser storage is limited (a few MB) – better use few pictures.</li>
+    <li><b>AI agent</b> (WebMCP): can read the progress and create a new hunt from JSON.</li>
+  </ul>
+  </div>
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version ae67e8ca9f02</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="engine.js"></script>
+<script src="puzzles.js"></script>
+<script src="map.js"></script>
+<script>
+(function(){
+'use strict';
+const E = HuntEngine, P = HuntPuzzles, F = P.F, $ = Tools.$, esc = Tools.esc;
+
+Tools.i18n({
+  de: Object.assign({
+    untitled: 'Ohne Titel', next: 'Weiter', close: 'Schließen', yes: 'Ja', cancel: 'Abbrechen', ok: 'OK',
+    'home.play': 'Spielen', 'home.continue': 'Weiterspielen', 'home.edit': 'Bearbeiten', 'home.export': 'Exportieren', 'home.share': 'Teilen …',
+    'home.code': 'Code eingeben', 'home.delete': 'Löschen', 'home.meta': '{s} Stationen · {c} Figuren', 'home.progress': '{n} Szenen geschafft',
+    'home.finished': 'Schatz gefunden', 'home.empty': 'Noch keine Schatzsuche – legt das Beispiel an oder erstellt eine eigene.',
+    'home.confirmDel': 'Schatzsuche „{t}“ samt Spielstand löschen?', 'home.deleted': 'Gelöscht', 'home.exported': 'Datei gespeichert',
+    'home.exampleWhere': 'Beispiel rund um euren aktuellen Standort anlegen?\nDie Stationen liegen 30–60 m entfernt.\n„Abbrechen“ legt es ohne GPS-Punkte an.',
+    'home.exampleOk': 'Beispiel angelegt', 'home.exampleNoGps': 'Beispiel ohne GPS-Punkte angelegt – Stationen per Knopf öffnen.',
+    'imp.ok': 'Schatzsuche „{t}“ geöffnet', 'imp.json': 'Die Datei ist kein gültiges JSON.', 'imp.format': 'Das ist keine Schatzsuche-Datei.',
+    'imp.version': 'Die Datei stammt aus einer neueren Version – bitte die App aktualisieren.', 'imp.big': 'Die Datei ist zu groß.',
+    'imp.replace': '„{t}“ gibt es schon. Ersetzen?\n(„Abbrechen“ legt eine Kopie an.)', 'imp.copy': '(Kopie)',
+    'err.storage': 'Speichern nicht möglich – der Speicher ist voll. Bilder entfernen oder verkleinern.',
+    'ed.hunt': 'Schatzsuche', 'ed.general': 'Allgemein', 'ed.title': 'Titel', 'ed.intro': 'Story-Anfang (wird zu Beginn vorgelesen)',
+    'ed.finale': 'Text beim Schatz', 'ed.radius': 'Freischalt-Radius in Metern', 'ed.megaCost': 'Energie für die Mega-Entwicklung',
+    'ed.pin': 'Eltern-PIN (nur Ziffern, leer = ohne)', 'ed.chars': 'Figuren', 'ed.stations': 'Stationen', 'ed.addChar': 'Figur hinzufügen',
+    'ed.addStation': 'Station hinzufügen', 'ed.test': 'Jetzt spielen', 'ed.json': 'Als JSON bearbeiten (für Profis)', 'ed.jsonApply': 'JSON übernehmen',
+    'ed.jsonOk': 'Übernommen', 'ed.jsonErr': 'Fehler im JSON: {m}', 'ed.howto': 'So funktioniert die Story',
+    'ed.howtoText': 'Jede Station hat Szenen. Beim Ankommen läuft die erste Szene, deren Voraussetzungen erfüllt sind und die noch nicht gewonnen wurde. Ergebnisse setzen Merker, holen Verbündete, geben Energie oder öffnen den Schatz. Merker sind frei wählbare Wörter, z. B. „drache-gesehen“.',
+    'ed.check.noStations': 'Noch keine Station.', 'ed.check.noTreasure': 'Kein Ergebnis öffnet den Schatz – das Spiel hat kein Ende.',
+    'ed.check.noScenes': 'Station „{name}“ hat keine Szene.', 'ed.check.noEnemy': 'Kampf an „{name}“ braucht eine Figur der Seite „Gegner“.',
+    'ed.check.noAlly': 'An „{name}“ fehlt der Verbündete (gelöscht?).',
+    'ed.char': 'Figur', 'ed.name': 'Name', 'ed.emoji': 'Emoji', 'ed.side': 'Seite', 'ed.side.ally': 'Verbündeter', 'ed.side.enemy': 'Gegner', 'ed.side.other': 'Erzähler / sonstige',
+    'ed.power': 'Stärke im Kampf', 'ed.hp': 'Lebenskraft (Gegner)', 'ed.ability': 'Fähigkeit', 'ed.delChar': 'Figur löschen', 'ed.confirmDelChar': 'Figur „{n}“ löschen?',
+    'ed.station': 'Station', 'ed.hint': 'Hinweis zum Ort (wird vorgelesen)', 'ed.lat': 'Breite (Lat)', 'ed.lon': 'Länge (Lon)', 'ed.here': 'Hier (aktueller Standort)',
+    'ed.radiusSt': 'Eigener Radius in m (0 = Standard)', 'ed.noCoords': 'Ohne Koordinaten öffnen die Kinder die Station mit „Wir sind da!“.',
+    'ed.coordsOk': 'Standort übernommen (± {n} m)', 'ed.coordsErr': 'Standort nicht verfügbar.', 'ed.coordsWait': 'Suche Standort …',
+    'ed.mapTap': 'Tippt auf die Karte, um die Station dort zu setzen.', 'ed.mapOff': 'Mit der OpenStreetMap-Karte könnt ihr die Station auf der Karte setzen.',
+    'ed.mapOn': 'Karte einschalten', 'ed.scenes': 'Szenen (die erste passende läuft)', 'ed.addScene': 'Szene hinzufügen', 'ed.delStation': 'Station löschen',
+    'ed.confirmDelStation': 'Station „{n}“ mit allen Szenen löschen?', 'ed.stWhen': 'Verschlossen, bis …',
+    'ed.scene': 'Szene', 'ed.sceneTitle': 'Überschrift (optional)', 'ed.text': 'Story-Text', 'ed.character': 'Figur', 'ed.none': '– keine –',
+    'ed.battle': 'Kampf gegen diese Figur (nur bei Gegnern)', 'ed.repeat': 'Wiederholbar (bleibt nach dem Gewinnen verfügbar)',
+    'ed.puzzle': 'Rätsel / Aufgabe', 'ed.pzNone': '– keins –', 'ed.when': 'Voraussetzungen', 'ed.whenHelp': 'Alles muss erfüllt sein. Mehrere Merker mit Komma trennen.',
+    'ed.needFlags': 'Merker gesetzt', 'ed.notFlags': 'Merker NICHT gesetzt', 'ed.minTeam': 'Mindestens so viele Verbündete', 'ed.minEnergy': 'Mindestens so viel Energie',
+    'ed.minVisits': 'Station schon so oft besucht', 'ed.win': 'Wenn geschafft / gewonnen', 'ed.lose': 'Wenn nicht geschafft / verloren',
+    'ed.effText': 'Text', 'ed.setFlags': 'Merker setzen', 'ed.unFlags': 'Merker löschen', 'ed.ally': 'Verbündeter kommt ins Team', 'ed.energy': 'Energie (+/−)',
+    'ed.treasure': 'Schatz freischalten (Spielende)', 'ed.delScene': 'Szene löschen', 'ed.confirmDelScene': 'Diese Szene löschen?', 'ed.emptyScene': '(leere Szene)',
+    'ed.up': 'Nach oben', 'ed.down': 'Nach unten', 'ed.imgAdd': 'Bild wählen', 'ed.imgChange': 'Anderes Bild', 'ed.imgDel': 'Bild entfernen', 'ed.imgErr': 'Bild konnte nicht gelesen werden.',
+    'ed.newHunt': 'Neue Schatzsuche', 'ed.newStation': 'Station {n}', 'ed.newChar': 'Neue Figur',
+    'play.label': 'Spiel', 'hud.team': 'Team: {n}', 'hud.energy': 'Energie: {n}', 'hud.progress': '{n} von {m} Stationen besucht',
+    'intro.go': 'Los geht’s!', 'intro.default': 'Ein Abenteuer wartet auf euch!',
+    'ch.where': 'Wohin geht ihr?', 'ch.locked': 'verschlossen', 'ch.new': 'Neu', 'ch.visited': 'besucht', 'ch.nothing': 'Hier gibt es gerade nichts Neues. Probiert eine andere Station!',
+    'nav.compass': 'Kompass', 'nav.map': 'Karte', 'nav.view': 'Ansicht', 'nav.arrive': 'Wir sind da!', 'nav.other': 'Anderes Ziel', 'nav.unlock': 'Eltern: öffnen',
+    'nav.warm': 'Wärmer!', 'nav.cold': 'Kälter!', 'nav.dir': 'Richtung: {d}', 'nav.gpsWait': 'Suche GPS …', 'nav.gpsAcc': 'GPS ± {n} m',
+    'nav.gpsDenied': 'Standort nicht erlaubt – Eltern können die Station öffnen.', 'nav.gpsErr': 'Kein GPS – Eltern können die Station öffnen.',
+    'nav.here': 'Ihr seid da!', 'nav.heading': 'Kompass einschalten', 'nav.headingNo': 'Kein Kompass: Der Pfeil stimmt, wenn das Handy nach Norden zeigt.',
+    'nav.noCoords': 'Sucht den Ort mit dem Hinweis. Seid ihr da, tippt auf „Wir sind da!“.', 'nav.mapLabel': 'Karte mit eurem Standort und dem Ziel', 'nav.center': 'Zentrieren',
+    'nav.zoomIn': 'Vergrößern', 'nav.zoomOut': 'Verkleinern', 'nav.mapOffText': 'Karte ist aus – das Radar zeigt Entfernungen.',
+    'dir.N': 'Norden', 'dir.NO': 'Nordosten', 'dir.O': 'Osten', 'dir.SO': 'Südosten', 'dir.S': 'Süden', 'dir.SW': 'Südwesten', 'dir.W': 'Westen', 'dir.NW': 'Nordwesten',
+    'b.start': 'Zum Kampf!', 'b.hp': 'Lebenskraft', 'b.kids': 'Ihr', 'b.kidsSub': 'Mut', 'b.bonus': 'Aufgabe gelöst', 'b.puzzleFirst': 'Erst die Aufgabe! Gelöst gibt sie {n} Extra-Kraft.',
+    'b.mega': 'Mega-Entwicklung (−{n} Energie)', 'b.megaOn': 'MEGA-ENTWICKLUNG! Eure Freunde werden doppelt so stark!',
+    'b.attack': 'Angriff!', 'b.win': 'Besiegt!', 'b.lose': 'Der Gegner ist noch zu stark!',
+    'r.win': 'Super, geschafft!', 'r.lose': 'Leider nicht geschafft.', 'r.ally': '{e} {n} ist jetzt in eurem Team!', 'r.allyAbility': 'Fähigkeit: {a}',
+    'r.energy': '+{n} Energie ⚡', 'r.energyLost': '{n} Energie ⚡', 'r.again': 'Nochmal versuchen', 'r.treasure': 'Zum Schatz!',
+    'fin.default': 'Ihr habt den Schatz gefunden! Herzlichen Glückwunsch!', 'fin.home': 'Zur Übersicht', 'fin.team': 'Euer Team',
+    'parent.title': 'Eltern-Bereich', 'parent.pin': 'Eltern-PIN', 'parent.pinWrong': 'Falsche PIN', 'parent.arrive': 'Station jetzt öffnen',
+    'parent.solve': 'Aufgabe als geschafft werten', 'parent.fail': 'Aufgabe als nicht geschafft werten', 'parent.choose': 'Anderes Ziel wählen',
+    'parent.code': 'Wiederaufnahme-Code anzeigen', 'parent.restart': 'Spiel neu starten', 'parent.home': 'Zur Übersicht (Spiel bleibt gespeichert)',
+    'parent.confirmRestart': 'Spielstand dieser Schatzsuche löschen und neu beginnen?',
+    'code.title': 'Wiederaufnahme-Code', 'code.explain': 'Auf dem anderen Gerät dieselbe Schatzsuche öffnen (Datei), dort „Code eingeben“ und diesen Code eintippen.',
+    'code.copy': 'Code kopieren', 'code.copied': 'Code kopiert', 'code.enter': 'Code eingeben', 'code.label': 'Code', 'code.apply': 'Weiterspielen',
+    'code.bad': 'Der Code stimmt nicht – bitte genau prüfen.', 'code.hunt': 'Der Code gehört zu einer anderen oder geänderten Schatzsuche.',
+    'code.confirm': 'Der bisherige Spielstand dieser Schatzsuche wird ersetzt. Weiter?', 'code.ok': 'Spielstand übernommen',
+    'set.tilesDone': 'Kartenbilder gelöscht', 'set.mapAsk': 'OpenStreetMap-Karte einschalten?\nDie App lädt dann Kartenbilder von openstreetmap.org – der Dienst erfährt, welche Gegend ihr anseht.',
+    'speak': 'Vorlesen', 'noSpeech': 'Vorlesen geht in diesem Browser nicht.',
+    'mcp.status': 'Spielstand gelesen', 'mcp.created': 'Schatzsuche angelegt',
+  }, P.I18N.de),
+  en: Object.assign({
+    title: 'Treasure Hunt', sub: 'Your own treasure hunts with story, puzzles and GPS – for kids’ parties.',
+    'home.h': 'Your treasure hunts', 'home.intro': 'Create a treasure hunt with stations, puzzles and characters – then the children play it on the phone.',
+    'home.new': 'New treasure hunt', 'home.example': 'Create the example (The Shadow Dragon)', 'home.import': 'Open treasure hunt from file',
+    back: 'Back', 'set.h': 'Settings', 'set.map': 'Use the OpenStreetMap map',
+    'set.mapNote': 'Loads map images from openstreetmap.org – the map service learns which area you are looking at. Without the map there are compass and radar.',
+    'set.read': 'Read texts aloud automatically', 'set.sound': 'Sounds and vibration', 'set.tiles': 'Delete saved map images',
+    untitled: 'Untitled', next: 'Next', close: 'Close', yes: 'Yes', cancel: 'Cancel', ok: 'OK',
+    'home.play': 'Play', 'home.continue': 'Continue', 'home.edit': 'Edit', 'home.export': 'Export', 'home.share': 'Share …',
+    'home.code': 'Enter code', 'home.delete': 'Delete', 'home.meta': '{s} stations · {c} characters', 'home.progress': '{n} scenes done',
+    'home.finished': 'Treasure found', 'home.empty': 'No treasure hunt yet – create the example or your own.',
+    'home.confirmDel': 'Delete the treasure hunt “{t}” and its progress?', 'home.deleted': 'Deleted', 'home.exported': 'File saved',
+    'home.exampleWhere': 'Create the example around your current position?\nThe stations are 30–60 m away.\n“Cancel” creates it without GPS points.',
+    'home.exampleOk': 'Example created', 'home.exampleNoGps': 'Example created without GPS points – open stations with the button.',
+    'imp.ok': 'Treasure hunt “{t}” opened', 'imp.json': 'The file is not valid JSON.', 'imp.format': 'This is not a treasure hunt file.',
+    'imp.version': 'The file comes from a newer version – please update the app.', 'imp.big': 'The file is too large.',
+    'imp.replace': '“{t}” already exists. Replace it?\n(“Cancel” creates a copy.)', 'imp.copy': '(copy)',
+    'err.storage': 'Saving is not possible – storage is full. Remove or shrink pictures.',
+    'ed.hunt': 'Treasure hunt', 'ed.general': 'General', 'ed.title': 'Title', 'ed.intro': 'Story start (read aloud at the beginning)',
+    'ed.finale': 'Text at the treasure', 'ed.radius': 'Unlock radius in metres', 'ed.megaCost': 'Energy for the mega evolution',
+    'ed.pin': 'Parent PIN (digits only, empty = none)', 'ed.chars': 'Characters', 'ed.stations': 'Stations', 'ed.addChar': 'Add character',
+    'ed.addStation': 'Add station', 'ed.test': 'Play now', 'ed.json': 'Edit as JSON (for experts)', 'ed.jsonApply': 'Apply JSON',
+    'ed.jsonOk': 'Applied', 'ed.jsonErr': 'Error in the JSON: {m}', 'ed.howto': 'How the story works',
+    'ed.howtoText': 'Each station has scenes. On arrival the first scene whose conditions hold and that was not won yet plays. Results set flags, bring allies, give energy or open the treasure. Flags are any words you like, e.g. “dragon-seen”.',
+    'ed.check.noStations': 'No station yet.', 'ed.check.noTreasure': 'No result opens the treasure – the game has no end.',
+    'ed.check.noScenes': 'Station “{name}” has no scene.', 'ed.check.noEnemy': 'The battle at “{name}” needs a character on the “opponent” side.',
+    'ed.check.noAlly': 'The ally at “{name}” is missing (deleted?).',
+    'ed.char': 'Character', 'ed.name': 'Name', 'ed.emoji': 'Emoji', 'ed.side': 'Side', 'ed.side.ally': 'Ally', 'ed.side.enemy': 'Opponent', 'ed.side.other': 'Narrator / other',
+    'ed.power': 'Strength in battle', 'ed.hp': 'Life force (opponent)', 'ed.ability': 'Ability', 'ed.delChar': 'Delete character', 'ed.confirmDelChar': 'Delete the character “{n}”?',
+    'ed.station': 'Station', 'ed.hint': 'Hint about the place (read aloud)', 'ed.lat': 'Latitude', 'ed.lon': 'Longitude', 'ed.here': 'Here (current position)',
+    'ed.radiusSt': 'Own radius in m (0 = default)', 'ed.noCoords': 'Without coordinates the children open the station with “We are here!”.',
+    'ed.coordsOk': 'Position taken (± {n} m)', 'ed.coordsErr': 'Position not available.', 'ed.coordsWait': 'Finding position …',
+    'ed.mapTap': 'Tap the map to place the station there.', 'ed.mapOff': 'With the OpenStreetMap map you can place the station on the map.',
+    'ed.mapOn': 'Switch the map on', 'ed.scenes': 'Scenes (the first matching one plays)', 'ed.addScene': 'Add scene', 'ed.delStation': 'Delete station',
+    'ed.confirmDelStation': 'Delete the station “{n}” with all its scenes?', 'ed.stWhen': 'Locked until …',
+    'ed.scene': 'Scene', 'ed.sceneTitle': 'Heading (optional)', 'ed.text': 'Story text', 'ed.character': 'Character', 'ed.none': '– none –',
+    'ed.battle': 'Battle against this character (opponents only)', 'ed.repeat': 'Repeatable (stays available after winning)',
+    'ed.puzzle': 'Puzzle / task', 'ed.pzNone': '– none –', 'ed.when': 'Conditions', 'ed.whenHelp': 'All must hold. Separate several flags with commas.',
+    'ed.needFlags': 'Flags set', 'ed.notFlags': 'Flags NOT set', 'ed.minTeam': 'At least this many allies', 'ed.minEnergy': 'At least this much energy',
+    'ed.minVisits': 'Station visited at least this often', 'ed.win': 'When done / won', 'ed.lose': 'When not done / lost',
+    'ed.effText': 'Text', 'ed.setFlags': 'Set flags', 'ed.unFlags': 'Clear flags', 'ed.ally': 'Ally joins the team', 'ed.energy': 'Energy (+/−)',
+    'ed.treasure': 'Unlock the treasure (end of the game)', 'ed.delScene': 'Delete scene', 'ed.confirmDelScene': 'Delete this scene?', 'ed.emptyScene': '(empty scene)',
+    'ed.up': 'Move up', 'ed.down': 'Move down', 'ed.imgAdd': 'Choose picture', 'ed.imgChange': 'Other picture', 'ed.imgDel': 'Remove picture', 'ed.imgErr': 'The picture could not be read.',
+    'ed.newHunt': 'New treasure hunt', 'ed.newStation': 'Station {n}', 'ed.newChar': 'New character',
+    'play.label': 'Game', 'hud.team': 'Team: {n}', 'hud.energy': 'Energy: {n}', 'hud.progress': '{n} of {m} stations visited',
+    'intro.go': 'Let’s go!', 'intro.default': 'An adventure is waiting for you!',
+    'ch.where': 'Where are you going?', 'ch.locked': 'locked', 'ch.new': 'New', 'ch.visited': 'visited', 'ch.nothing': 'Nothing new here right now. Try another station!',
+    'nav.compass': 'Compass', 'nav.map': 'Map', 'nav.view': 'View', 'nav.arrive': 'We are here!', 'nav.other': 'Other target', 'nav.unlock': 'Parents: open',
+    'nav.warm': 'Warmer!', 'nav.cold': 'Colder!', 'nav.dir': 'Direction: {d}', 'nav.gpsWait': 'Finding GPS …', 'nav.gpsAcc': 'GPS ± {n} m',
+    'nav.gpsDenied': 'Location not allowed – parents can open the station.', 'nav.gpsErr': 'No GPS – parents can open the station.',
+    'nav.here': 'You are here!', 'nav.heading': 'Switch the compass on', 'nav.headingNo': 'No compass: the arrow is right when the phone points north.',
+    'nav.noCoords': 'Find the place with the hint. When you are there, tap “We are here!”.', 'nav.mapLabel': 'Map with your position and the target', 'nav.center': 'Centre',
+    'nav.zoomIn': 'Zoom in', 'nav.zoomOut': 'Zoom out', 'nav.mapOffText': 'The map is off – the radar shows distances.',
+    'dir.N': 'north', 'dir.NO': 'north-east', 'dir.O': 'east', 'dir.SO': 'south-east', 'dir.S': 'south', 'dir.SW': 'south-west', 'dir.W': 'west', 'dir.NW': 'north-west',
+    'b.start': 'To battle!', 'b.hp': 'Life force', 'b.kids': 'You', 'b.kidsSub': 'Courage', 'b.bonus': 'Task solved', 'b.puzzleFirst': 'First the task! Solved, it gives {n} extra power.',
+    'b.mega': 'Mega evolution (−{n} energy)', 'b.megaOn': 'MEGA EVOLUTION! Your friends become twice as strong!',
+    'b.attack': 'Attack!', 'b.win': 'Defeated!', 'b.lose': 'The opponent is still too strong!',
+    'r.win': 'Great, you did it!', 'r.lose': 'Not this time.', 'r.ally': '{e} {n} is now on your team!', 'r.allyAbility': 'Ability: {a}',
+    'r.energy': '+{n} energy ⚡', 'r.energyLost': '{n} energy ⚡', 'r.again': 'Try again', 'r.treasure': 'To the treasure!',
+    'fin.default': 'You found the treasure! Congratulations!', 'fin.home': 'Overview', 'fin.team': 'Your team',
+    'parent.title': 'Parents’ area', 'parent.pin': 'Parent PIN', 'parent.pinWrong': 'Wrong PIN', 'parent.arrive': 'Open station now',
+    'parent.solve': 'Count task as done', 'parent.fail': 'Count task as not done', 'parent.choose': 'Choose another target',
+    'parent.code': 'Show resume code', 'parent.restart': 'Restart game', 'parent.home': 'Overview (game stays saved)',
+    'parent.confirmRestart': 'Delete the progress of this hunt and start again?',
+    'code.title': 'Resume code', 'code.explain': 'On the other device open the same treasure hunt (file), use “Enter code” there and type this code.',
+    'code.copy': 'Copy code', 'code.copied': 'Code copied', 'code.enter': 'Enter code', 'code.label': 'Code', 'code.apply': 'Continue playing',
+    'code.bad': 'The code is not right – please check it carefully.', 'code.hunt': 'The code belongs to another or a changed treasure hunt.',
+    'code.confirm': 'The current progress of this hunt will be replaced. Continue?', 'code.ok': 'Progress taken over',
+    'set.tilesDone': 'Map images deleted', 'set.mapAsk': 'Switch the OpenStreetMap map on?\nThe app then loads map images from openstreetmap.org – the service learns which area you are looking at.',
+    speak: 'Read aloud', noSpeech: 'Reading aloud does not work in this browser.',
+    'mcp.status': 'progress read', 'mcp.created': 'treasure hunt created',
+  }, P.I18N.en),
+});
+const t = Tools.t;
+const log = Tools.diag.log;
+
+/* ---------- Storage: hunts (configuration) and games (progress) separately ---------- */
+const PFX = 'treasure-hunt.';
+const KEY_SET = PFX + 'settings.v1';
+const huntKey = id => `${PFX}hunt.${id}.v1`, gameKey = id => `${PFX}game.${id}.v1`;
+const settings = Object.assign({ map: false, autoRead: false, sound: true, playing: '', nav: 'compass' }, Tools.load(KEY_SET, {}));
+const saveSettings = () => Tools.save(KEY_SET, settings);
+HuntMap.setEnabled(settings.map);
+HuntMap.setLogger(log);
+
+function huntIds() {
+  const ids = [];
+  try { for (let i = 0; i < localStorage.length; i++) { const m = /^treasure-hunt\.hunt\.(.+)\.v1$/.exec(localStorage.key(i)); if (m) ids.push(m[1]); } } catch (_) {}
+  return ids;
+}
+function loadHunt(id) {
+  try { const h = E.normalize(Tools.load(huntKey(id), null), P.TYPES); h.id = id; return h; } catch (_) { return null; }
+}
+const loadHunts = () => huntIds().map(loadHunt).filter(Boolean).sort((a, b) => (a.title || '').localeCompare(b.title || '', Tools.locale()));
+function saveHunt(h) { if (!Tools.save(huntKey(h.id), h)) { Tools.toast(t('err.storage'), 4000); log('save hunt failed (storage full?)'); return false; } return true; }
+const loadGame = h => E.cleanGame(Tools.load(gameKey(h.id), null), h);
+function saveGame() { if (H && G) Tools.save(gameKey(H.id), G); }
+
+/* ---------- Small helpers ---------- */
+const emojiOf = (o, d) => esc(o && o.emoji ? o.emoji : d);
+function say(text, speech) {
+  return `<div class="say"><p class="say-text">${esc(text)}</p><button type="button" class="say-btn" data-say="${esc(speech || text)}" aria-label="${esc(t('speak'))}" title="${esc(t('speak'))}"><span aria-hidden="true">🔊</span></button></div>`;
+}
+const imgHtml = src => src ? `<img class="pic" src="${esc(src)}" alt="">` : '';
+function portrait(c, fallback) {
+  if (!c) return `<div class="portrait"><span class="face" aria-hidden="true">${esc(fallback || '📍')}</span></div>`;
+  return `<div class="portrait">${c.image ? `<img src="${esc(c.image)}" alt="">` : `<span class="face" aria-hidden="true">${emojiOf(c, '🙂')}</span>`}
+    <b>${esc(c.name)}</b>${c.ability ? `<small>${esc(c.ability)}</small>` : ''}</div>`;
+}
+function fmtDist(m) { return m >= 1000 ? Tools.fmt(m / 1000, m >= 10000 ? 0 : 1) + ' km' : Math.round(m) + ' m'; }
+function slug(s) { return (s || 'schatzsuche').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'schatzsuche'; }
+
+/* ---------- Speech and sounds ---------- */
+let speakingBtn = null;
+function speak(text, btn) {
+  if (!('speechSynthesis' in window)) { Tools.toast(t('noSpeech')); return; }
+  const synth = window.speechSynthesis;
+  if (speakingBtn && speakingBtn === btn && synth.speaking) { synth.cancel(); return; }
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = Tools.locale(); u.rate = 0.92; u.pitch = 1.05;
+  const voice = synth.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith(Tools.lang()));
+  if (voice) u.voice = voice;
+  if (speakingBtn) speakingBtn.classList.remove('on');
+  speakingBtn = btn || null;
+  if (btn) btn.classList.add('on');
+  u.onend = u.onerror = () => { if (btn) btn.classList.remove('on'); if (speakingBtn === btn) speakingBtn = null; };
+  synth.speak(u);
+}
+function stopSpeaking() { try { window.speechSynthesis.cancel(); } catch (_) {} }
+function autoRead(text) { if (settings.autoRead && text) speak(text); }
+let actx = null;
+function sfx(kind) {
+  if (!settings.sound) return;
+  const notes = { win: [523, 659, 784, 1047], lose: [392, 330, 262], arrive: [660, 880, 660, 1100], hit: [180], alarm: [880, 0, 880], mega: [262, 330, 392, 523, 659, 784, 1047], treasure: [523, 659, 784, 1047, 784, 1047, 1319] }[kind] || [440];
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    actx = actx || new AC();
+    if (actx.state === 'suspended') actx.resume().catch(() => {});
+    let at = actx.currentTime + 0.02;
+    for (const f of notes) {
+      if (f) {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = kind === 'hit' ? 'square' : 'triangle'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.18, at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.16);
+        o.connect(g).connect(actx.destination); o.start(at); o.stop(at + 0.18);
+      }
+      at += 0.12;
+    }
+  } catch (_) {}
+  // Vibration only after a tap (Chrome blocks it otherwise and warns)
+  const tapped = !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  if (tapped && navigator.vibrate && ['arrive', 'win', 'treasure', 'lose'].includes(kind)) try { navigator.vibrate(kind === 'lose' ? 120 : [120, 60, 120]); } catch (_) {}
+}
+
+/* ---------- Location and compass ---------- */
+const Geo = {
+  pos: null, err: '', id: null, subs: new Set(),
+  supported: () => 'geolocation' in navigator,
+  start() {
+    if (this.id != null) return;
+    if (!this.supported()) { this.err = 'unsupported'; this.emit(); return; }
+    log('gps watch start');
+    this.id = navigator.geolocation.watchPosition(p => {
+      if (!this.pos) log('gps first fix', { acc: Math.round(p.coords.accuracy) });
+      this.pos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy || 0, t: Date.now() };
+      this.err = ''; this.emit();
+    }, e => {
+      this.err = e.code === 1 ? 'denied' : 'unavailable';
+      log('gps error', { code: e.code, message: e.message });
+      this.emit();
+    }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 });
+  },
+  stop() { if (this.id != null) { navigator.geolocation.clearWatch(this.id); this.id = null; log('gps watch stop'); } },
+  emit() { this.subs.forEach(fn => { try { fn(); } catch (e) { console.warn(e); } }); },
+  on(fn) { this.subs.add(fn); return () => this.subs.delete(fn); },
+};
+const Heading = {
+  value: null, started: false, absolute: false, subs: new Set(),
+  screenAngle: () => (screen.orientation && typeof screen.orientation.angle === 'number' ? screen.orientation.angle : (window.orientation || 0)),
+  start() {
+    if (this.started) return;
+    this.started = true;
+    const set = h => { if (this.value == null) log('compass first heading'); this.value = (h + 360) % 360; this.subs.forEach(fn => fn()); };
+    window.addEventListener('deviceorientationabsolute', e => { if (e.alpha == null) return; this.absolute = true; set(360 - e.alpha + this.screenAngle()); });
+    window.addEventListener('deviceorientation', e => {
+      if (typeof e.webkitCompassHeading === 'number' && e.webkitCompassHeading >= 0) set(e.webkitCompassHeading + this.screenAngle());
+      else if (!this.absolute && e.absolute === true && e.alpha != null) set(360 - e.alpha + this.screenAngle());
+    });
+  },
+  needsPermission: () => typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function',
+  async ask() {
+    try { const r = await DeviceOrientationEvent.requestPermission(); log('compass permission', { result: r }); } catch (e) { log('compass permission failed', { error: e.message }); }
+  },
+};
+const DIRS = ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'];
+const dirName = deg => t('dir.' + DIRS[Math.round(((deg % 360) + 360) % 360 / 45) % 8]);
+
+let wake = null;
+async function keepAwake(on) {
+  try {
+    if (on && !wake && 'wakeLock' in navigator && document.visibilityState === 'visible') { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); }
+    if (!on && wake) { await wake.release(); wake = null; }
+  } catch (_) { wake = null; }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && screen_ === 'play') keepAwake(true); });
+
+/* ---------- Screens ---------- */
+let screen_ = 'home';
+let H = null, G = null;      // hunt and game being played
+function show(name) {
+  screen_ = name;
+  for (const s of ['Home', 'Edit', 'Play']) $('scr' + s).hidden = s.toLowerCase() !== name;
+  $('btnParent').hidden = name !== 'play';
+  if (name !== 'edit') { $('edBody').innerHTML = ''; if (ed) ed.map = null; }
+  if (name !== 'play') { stopPuzzle(); stopSpeaking(); keepAwake(false); navCtx = null; }
+  if (name !== 'play' && !(name === 'edit' && ed && ed.view === 'station')) Geo.stop();
+  $('scrPlay').closest('main').scrollTop = 0;
+}
+
+/* ---------- Home ---------- */
+const canShareFiles = (() => { try { return !!(navigator.canShare && navigator.canShare({ files: [new File(['{}'], 'x.json', { type: 'application/json' })] })); } catch (_) { return false; } })();
+function renderHome() {
+  const hunts = loadHunts();
+  $('homeList').innerHTML = hunts.length ? hunts.map(h => {
+    const g = loadGame(h);
+    const progress = g.finished ? '🏆 ' + t('home.finished') : g.started ? t('home.progress', { n: g.done.length }) : '';
+    const id = esc(h.id);
+    return `<article class="card hunt"><h2><span aria-hidden="true">🗺️</span> ${esc(h.title || t('untitled'))}</h2>
+      <p class="muted">${esc(t('home.meta', { s: h.stations.length, c: h.characters.length }))}${progress ? ' · ' + esc(progress) : ''}</p>
+      <div class="row">
+        <button type="button" class="btn primary" data-act="play" data-id="${id}"><span aria-hidden="true">▶ </span>${esc(t(g.started && !g.finished ? 'home.continue' : 'home.play'))}</button>
+        <button type="button" class="btn" data-act="edit" data-id="${id}"><span aria-hidden="true">✏️ </span>${esc(t('home.edit'))}</button>
+        <button type="button" class="btn" data-act="export" data-id="${id}">${esc(t('home.export'))}</button>
+        ${canShareFiles ? `<button type="button" class="btn" data-act="share" data-id="${id}">${esc(t('home.share'))}</button>` : ''}
+        <button type="button" class="btn" data-act="code-in" data-id="${id}">${esc(t('home.code'))}</button>
+        <button type="button" class="btn danger" data-act="del" data-id="${id}">${esc(t('home.delete'))}</button>
+      </div></article>`;
+  }).join('') : `<p class="empty">${esc(t('home.empty'))}</p>`;
+}
+function goHome() { H = null; G = null; settings.playing = ''; saveSettings(); show('home'); renderHome(); }
+
+function huntFile(h) {
+  return new File([JSON.stringify(h, null, 1) + '\n'], `${slug(h.title)}.schatzsuche.json`, { type: 'application/json' });
+}
+function download(file) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = file.name;
+  document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+const MAX_FILE = 15 * 1024 * 1024;
+async function importFile(file) {
+  try {
+    if (file.size > MAX_FILE) throw new Error('big');
+    const h = E.parse(await file.text(), P.TYPES);
+    if (huntIds().includes(h.id) && !confirm(t('imp.replace', { t: h.title || t('untitled') }))) {
+      h.id = E.uid('h'); h.title = `${h.title} ${t('imp.copy')}`.trim();
+    }
+    if (!saveHunt(h)) return;
+    log('hunt imported', { stations: h.stations.length, scenes: E.allScenes(h).length });
+    Tools.toast(t('imp.ok', { t: h.title || t('untitled') }), 2500);
+    renderHome();
+  } catch (e) {
+    log('import failed', { error: e.message });
+    Tools.toast(t({ json: 'imp.json', format: 'imp.format', version: 'imp.version', big: 'imp.big' }[e.message] || 'imp.format'), 4000);
+  }
+}
+$('fileHunt').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) importFile(f); });
+
+/* ---------- Example: "The Shadow Dragon" (texts in the current language) ---------- */
+function exampleHunt(pos) {
+  const en = Tools.lang() === 'en', L = (de, e) => en ? e : de;
+  const at = (d, deg) => pos ? E.offset(pos, d, deg) : { lat: null, lon: null };
+  const F_SEEN = L('drache-gesehen', 'dragon-seen'), F_WON = L('drache-besiegt', 'dragon-defeated');
+  const sc = (o) => Object.assign({ id: E.uid('sc'), title: '', text: '', character: '', battle: false, repeat: false, when: {}, puzzle: null, win: {}, lose: {} }, o);
+  const h = {
+    format: E.FORMAT, version: E.VERSION, id: E.uid('h'), title: L('Der Schattendrache', 'The Shadow Dragon'),
+    intro: L('Die Waldfee braucht eure Hilfe! Ein Schattendrache hat sich in der alten Burg eingenistet und bewacht einen Schatz. Geht zuerst zur Burg und schaut ihn euch an – wenn ihr euch traut!',
+      'The forest fairy needs your help! A shadow dragon has settled in the old castle and guards a treasure. Go to the castle first and have a look at it – if you dare!'),
+    finale: L('Hurra! Ihr habt den Schatz gefunden! Die Waldfee und alle eure Freunde feiern mit euch. Ihr seid echte Helden!',
+      'Hooray! You found the treasure! The forest fairy and all your friends celebrate with you. You are true heroes!'),
+    radius: 20, megaCost: 2, pin: '',
+    characters: [
+      { id: 'dragon', name: L('Schattendrache', 'Shadow Dragon'), emoji: '🐉', side: 'enemy', hp: 14, power: 0, ability: L('Schattenfeuer', 'Shadow fire') },
+      { id: 'fox', name: L('Flinker Fuchs', 'Swift Fox'), emoji: '🦊', side: 'ally', power: 3, ability: L('Blitzschnell', 'Lightning fast') },
+      { id: 'owl', name: L('Weise Eule', 'Wise Owl'), emoji: '🦉', side: 'ally', power: 3, ability: L('Kluge Ideen', 'Clever ideas') },
+      { id: 'bear', name: L('Starker Bär', 'Strong Bear'), emoji: '🐻', side: 'ally', power: 3, ability: L('Bärenkräfte', 'Bear strength') },
+      { id: 'mini', name: L('Mini-Drache', 'Mini Dragon'), emoji: '🐲', side: 'ally', power: 5, ability: L('Funkenregen', 'Spark shower') },
+      { id: 'fairy', name: L('Waldfee', 'Forest Fairy'), emoji: '🧚', side: 'other', power: 0, ability: '' },
+    ],
+    stations: [
+      { id: 'castle', name: L('Alte Burg', 'Old Castle'), emoji: '🏰', ...at(60, 0), hint: L('Die Burg liegt im Norden.', 'The castle is to the north.'), scenes: [
+        sc({ character: 'dragon', battle: true, when: { notFlags: [F_SEEN] },
+          text: L('ROOOAR! Da ist der Schattendrache! Er speit schwarzes Feuer. Versucht es – vielleicht schafft ihr es ja allein?', 'ROOOAR! There is the shadow dragon! It breathes black fire. Give it a try – maybe you can do it alone?'),
+          win: { flags: [F_SEEN, F_WON], text: L('Unglaublich, ihr habt ihn allein besiegt!', 'Incredible, you defeated it on your own!') },
+          lose: { flags: [F_SEEN], text: L('Der Drache ist viel zu stark! Die Waldfee flüstert: „Sucht euch Freunde im Wald – den Fuchs, die Eule und den Bären. Und sammelt Energie an der Zauberquelle!“', 'The dragon is far too strong! The forest fairy whispers: “Find friends in the forest – the fox, the owl and the bear. And gather energy at the magic spring!”') } }),
+        sc({ character: 'dragon', battle: true, repeat: true, when: { flags: [F_SEEN], notFlags: [F_WON] },
+          text: L('Der Schattendrache wartet schon. Diesmal seid ihr nicht allein!', 'The shadow dragon is waiting. This time you are not alone!'),
+          puzzle: { type: 'loud', task: L('Brüllt den Drachen an – so laut ihr könnt!', 'Roar at the dragon – as loud as you can!'), seconds: 2, level: 'medium', bonus: 3 },
+          win: { flags: [F_WON], text: L('Der Drache schrumpft und schrumpft … bis nur noch ein kleiner, freundlicher Mini-Drache übrig ist. Er verrät: „Der Schatz liegt beim alten Baum!“', 'The dragon shrinks and shrinks … until only a small, friendly mini dragon is left. It tells you: “The treasure is at the old tree!”') },
+          lose: { text: L('Der Drache ist noch zu stark! Holt mehr Freunde oder Energie für die Mega-Entwicklung.', 'The dragon is still too strong! Get more friends or energy for the mega evolution.') } }),
+        sc({ character: 'mini', when: { flags: [F_WON] }, text: L('Der Mini-Drache hüpft fröhlich herum. „Darf ich mitkommen?“', 'The mini dragon hops around happily. “May I come along?”'),
+          win: { ally: 'mini', text: L('Der Mini-Drache ist jetzt euer Freund!', 'The mini dragon is your friend now!') } }),
+        sc({ character: 'mini', repeat: true, text: L('Die Burg ist jetzt friedlich. Nur ein paar Rauchwölkchen sind übrig.', 'The castle is peaceful now. Only a few puffs of smoke are left.') }),
+      ] },
+      { id: 'fox', name: L('Fuchsbau', 'Fox Den'), emoji: '🦊', ...at(50, 75), hint: L('Im Osten, bei den Büschen.', 'To the east, by the bushes.'), scenes: [
+        sc({ repeat: true, when: { notFlags: [F_SEEN] }, text: L('Ein Fuchsbau – aber niemand ist zu Hause. Vielleicht später?', 'A fox den – but nobody is home. Maybe later?') }),
+        sc({ character: 'fox', text: L('Der Fuchs schnuppert: „Ihr wollt gegen den Drachen kämpfen? Dann zeigt mir, wie schnell ihr seid!“', 'The fox sniffs: “You want to fight the dragon? Then show me how fast you are!”'),
+          puzzle: { type: 'run', task: L('Rennt 30 Meter weit, so schnell ihr könnt!', 'Run 30 metres as fast as you can!'), meters: 30, seconds: 60, bonus: 3 },
+          win: { ally: 'fox', text: L('„Wow, ihr seid fast so schnell wie ich!“', '“Wow, you are almost as fast as me!”') },
+          lose: { text: L('„Zu langsam! Versucht es nochmal.“', '“Too slow! Try again.”') } }),
+        sc({ character: 'fox', repeat: true, text: L('Der Fuchs ist schon in eurem Team.', 'The fox is already on your team.') }),
+      ] },
+      { id: 'owl', name: L('Eulenbaum', 'Owl Tree'), emoji: '🦉', ...at(55, 150), hint: L('Im Südosten, bei einem großen Baum.', 'To the south-east, by a big tree.'), scenes: [
+        sc({ repeat: true, when: { notFlags: [F_SEEN] }, text: L('Oben im Baum schläft jemand. Psst!', 'Someone is sleeping up in the tree. Shh!') }),
+        sc({ character: 'owl', text: L('„Huhu! Ich helfe nur klugen Kindern. Beantwortet meine Frage!“', '“Hoo hoo! I only help clever children. Answer my question!”'),
+          puzzle: { type: 'quiz', question: L('Wie viele Beine hat eine Spinne?', 'How many legs does a spider have?'), answers: ['6', '8', '10', '4'], correct: 1, bonus: 3 },
+          win: { ally: 'owl', text: L('„Richtig! Ich komme mit.“', '“Right! I am coming with you.”') },
+          lose: { text: L('„Hmm, nicht ganz. Denkt nochmal nach!“', '“Hmm, not quite. Think again!”') } }),
+        sc({ character: 'owl', repeat: true, text: L('Die Eule zwinkert euch zu.', 'The owl winks at you.') }),
+      ] },
+      { id: 'bear', name: L('Bärenhöhle', 'Bear Cave'), emoji: '🐻', ...at(50, 220), hint: L('Im Südwesten, wo es dunkel ist.', 'To the south-west, where it is dark.'), scenes: [
+        sc({ repeat: true, when: { notFlags: [F_SEEN] }, text: L('Aus der Höhle kommt lautes Schnarchen …', 'Loud snoring comes out of the cave …') }),
+        sc({ character: 'bear', text: L('Der Bär gähnt: „Weckt mich richtig auf – mit lautem Klatschen!“', 'The bear yawns: “Wake me up properly – with loud clapping!”'),
+          puzzle: { type: 'clap', task: L('Klatscht 5-mal laut in die Hände!', 'Clap your hands loudly 5 times!'), count: 5, bonus: 3 },
+          win: { ally: 'bear', text: L('„Jetzt bin ich wach! Gemeinsam schaffen wir den Drachen!“', '“Now I am awake! Together we will beat the dragon!”') } }),
+        sc({ character: 'bear', repeat: true, text: L('Der Bär macht Liegestütze für den großen Kampf.', 'The bear does push-ups for the big battle.') }),
+      ] },
+      { id: 'spring', name: L('Zauberquelle', 'Magic Spring'), emoji: '✨', ...at(45, 290), hint: L('Im Westen glitzert etwas.', 'Something glitters to the west.'), scenes: [
+        sc({ character: 'fairy', text: L('Die Waldfee lächelt: „Löst mein Rätsel, dann schenkt euch die Quelle Energie!“', 'The forest fairy smiles: “Solve my riddle and the spring will give you energy!”'),
+          puzzle: { type: 'riddle', question: L('Was hat Zähne, kann aber nicht beißen?', 'What has teeth but cannot bite?'), answers: L('Kamm|ein Kamm|Säge|Reißverschluss', 'comb|a comb|saw|zipper'), hint: L('Man braucht es für die Haare.', 'You need it for your hair.'), bonus: 3 },
+          win: { energy: 1, text: L('Die Quelle sprudelt! Ihr bekommt Energie.', 'The spring bubbles! You get energy.') } }),
+        sc({ character: 'fairy', when: { visits: 1 }, text: L('„Schon wieder da? Sucht drei Tannenzapfen oder Steine und bringt sie zur Quelle!“', '“Back again? Find three pine cones or stones and bring them to the spring!”'),
+          puzzle: { type: 'task', variant: 'search', task: L('Sucht drei Tannenzapfen oder Steine!', 'Find three pine cones or stones!'), seconds: 120, bonus: 3 },
+          win: { energy: 1, text: L('Noch mehr Energie! Jetzt reicht es für die Mega-Entwicklung.', 'Even more energy! Now there is enough for the mega evolution.') } }),
+        sc({ character: 'fairy', repeat: true, text: L('Die Quelle ruht sich aus. Ihr habt alle Energie bekommen.', 'The spring is resting. You got all the energy.') }),
+      ] },
+      { id: 'tree', name: L('Alter Baum', 'Old Tree'), emoji: '🌳', ...at(30, 330), hint: L('Der Mini-Drache sagt: beim alten Baum!', 'The mini dragon says: at the old tree!'), when: { flags: [F_WON] }, scenes: [
+        sc({ character: 'fairy', text: L('Da ist er – der Schatz! Öffnet ihn mit einem Teamspruch: Alle fassen sich an den Händen und rufen „Wir sind Helden!“', 'There it is – the treasure! Open it with a team cheer: everybody holds hands and shouts “We are heroes!”'),
+          puzzle: { type: 'task', variant: 'team', task: L('Alle an den Händen fassen und rufen: „Wir sind Helden!“', 'Everybody hold hands and shout: “We are heroes!”'), seconds: 0, bonus: 0 },
+          win: { treasure: true, text: L('Die Schatzkiste springt auf!', 'The treasure chest springs open!') } }),
+      ] },
+    ],
+  };
+  return E.normalize(h, P.TYPES);
+}
+function currentPosition(timeout) {
+  return new Promise(resolve => {
+    if (!Geo.supported()) return resolve(null);
+    navigator.geolocation.getCurrentPosition(p => resolve({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy || 0 }),
+      e => { log('position failed', { code: e.code, message: e.message }); resolve(null); },
+      { enableHighAccuracy: true, timeout: timeout || 15000, maximumAge: 5000 });
+  });
+}
+async function createExample() {
+  let pos = null;
+  if (confirm(t('home.exampleWhere'))) pos = await currentPosition(15000);
+  const h = exampleHunt(pos);
+  if (!saveHunt(h)) return;
+  log('example created', { gps: !!pos });
+  Tools.toast(t(pos ? 'home.exampleOk' : 'home.exampleNoGps'), 3500);
+  renderHome();
+}
+
+/* ---------- Editor ---------- */
+let ed = null; // { h, view: 'hunt'|'char'|'station'|'scene', ci, si, xi, map }
+let saveTimer = 0;
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(() => ed && saveHunt(ed.h), 300); }
+function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; if (ed) saveHunt(ed.h); } }
+function edObj() {
+  if (!ed) return null;
+  if (ed.view === 'char') return ed.h.characters[ed.ci];
+  if (ed.view === 'station') return ed.h.stations[ed.si];
+  if (ed.view === 'scene') return ed.h.stations[ed.si].scenes[ed.xi];
+  return ed.h;
+}
+function openEditor(h) { ed = { h, view: 'hunt' }; show('edit'); renderEditor(); }
+const condSummary = w => [...w.flags.map(f => '✓' + f), ...w.notFlags.map(f => '✗' + f), w.team ? '👥≥' + w.team : '', w.energy ? '⚡≥' + w.energy : '', w.visits ? '↻≥' + w.visits : ''].filter(Boolean).join(' ');
+function sceneSummary(x) {
+  const ch = E.charOf(ed.h, x.character);
+  const icons = [ch ? ch.emoji || '🙂' : '', x.battle ? '⚔️' : '', x.puzzle ? P.TYPES[x.puzzle.type].icon : '', x.repeat ? '🔁' : '',
+    x.win.ally ? '+' + ((E.charOf(ed.h, x.win.ally) || {}).emoji || '🙂') : '', x.win.energy ? '⚡' + (x.win.energy > 0 ? '+' : '') + x.win.energy : '', x.win.treasure ? '🏆' : ''].filter(Boolean).join(' ');
+  return { main: x.title || x.text.slice(0, 60) || t('ed.emptyScene'), sub: [icons, condSummary(x.when)].filter(Boolean).join(' · ') };
+}
+function item(act, i, main, sub, n) {
+  return `<li class="item"><button type="button" class="open" data-act="${act}" data-i="${i}">${esc(main)}${sub ? `<small>${esc(sub)}</small>` : ''}</button>
+    <button type="button" class="head-btn" data-act="${act}-up" data-i="${i}" aria-label="${esc(t('ed.up'))}: ${esc(main)}" ${i === 0 ? 'disabled' : ''}>↑</button>
+    <button type="button" class="head-btn" data-act="${act}-down" data-i="${i}" aria-label="${esc(t('ed.down'))}: ${esc(main)}" ${i === n - 1 ? 'disabled' : ''}>↓</button></li>`;
+}
+function whenFields(o, withVisits, legend) {
+  return `<fieldset class="grp"><legend>${esc(legend || t('ed.when'))}</legend><p class="muted">${esc(t('ed.whenHelp'))}</p>
+    ${F.list(o, 'when.flags', t('ed.needFlags'), 'flagList')}${F.list(o, 'when.notFlags', t('ed.notFlags'), 'flagList')}
+    <div class="two">${F.num(o, 'when.team', t('ed.minTeam'), 0, 99, true)}${F.num(o, 'when.energy', t('ed.minEnergy'), 0, 999, true)}</div>
+    ${withVisits ? F.num(o, 'when.visits', t('ed.minVisits'), 0, 99, true) : ''}</fieldset>`;
+}
+function effectFields(o, key, legend) {
+  const allies = [['', t('ed.none')], ...ed.h.characters.filter(c => c.side === 'ally').map(c => [c.id, `${c.emoji} ${c.name}`])];
+  return `<fieldset class="grp"><legend>${esc(legend)}</legend>${F.area(o, key + '.text', t('ed.effText'))}
+    ${F.list(o, key + '.flags', t('ed.setFlags'), 'flagList')}${F.list(o, key + '.unflags', t('ed.unFlags'), 'flagList')}
+    ${F.select(o, key + '.ally', t('ed.ally'), allies)}${F.num(o, key + '.energy', t('ed.energy'), -99, 99, true)}
+    ${F.check(o, key + '.treasure', t('ed.treasure'))}</fieldset>`;
+}
+function renderEditor() {
+  const h = ed.h, o = edObj(), body = $('edBody');
+  if (ed.map) ed.map = null;
+  $('flagList').innerHTML = E.flagsOf(h).map(f => `<option value="${esc(f)}"></option>`).join('');
+  let title = h.title || t('untitled'), html = '';
+  if (ed.view === 'hunt') {
+    const warn = E.check(h);
+    html = `<div class="card"><h3>${esc(t('ed.general'))}</h3>
+      ${F.text(h, 'title', t('ed.title'))}${F.area(h, 'intro', t('ed.intro'))}${F.area(h, 'finale', t('ed.finale'))}
+      <div class="two">${F.num(h, 'radius', t('ed.radius'), 5, 500, true)}${F.num(h, 'megaCost', t('ed.megaCost'), 1, 99, true)}</div>
+      ${F.text(h, 'pin', t('ed.pin'), 'inputmode="numeric" autocomplete="off" maxlength="12"')}</div>
+      ${warn.length ? `<ul class="warn-list card">${warn.map(w => `<li>${esc(t('ed.check.' + w.k, w))}</li>`).join('')}</ul>` : ''}
+      <div class="card"><h3>${esc(t('ed.stations'))}</h3><ul class="items">${h.stations.map((s, i) => item('ed-st', i, `${s.emoji || '📍'} ${s.name || t('ed.station')}`,
+        `${E.hasCoords(s) ? '📍' : '✋'} ${s.scenes.length} × ${t('ed.scene')}${condSummary(s.when) ? ' · 🔒 ' + condSummary(s.when) : ''}`, h.stations.length)).join('')}</ul>
+        <div class="row" style="margin-top:8px"><button type="button" class="btn" data-act="ed-st-add">＋ ${esc(t('ed.addStation'))}</button></div></div>
+      <div class="card"><h3>${esc(t('ed.chars'))}</h3><ul class="items">${h.characters.map((c, i) => `<li class="item"><button type="button" class="open" data-act="ed-char" data-i="${i}">${esc(`${c.emoji || '🙂'} ${c.name || t('ed.char')}`)}<small>${esc(t('ed.side.' + c.side) + (c.side === 'enemy' ? ' · ❤️ ' + c.hp : c.side === 'ally' ? ' · 💪 ' + c.power : ''))}</small></button></li>`).join('')}</ul>
+        <div class="row" style="margin-top:8px"><button type="button" class="btn" data-act="ed-char-add">＋ ${esc(t('ed.addChar'))}</button></div></div>
+      <details class="card"><summary>${esc(t('ed.howto'))}</summary><p>${esc(t('ed.howtoText'))}</p></details>
+      <div class="big-btns"><button type="button" class="btn primary" data-act="ed-play">▶ ${esc(t('ed.test'))}</button></div>
+      <details class="card" id="edJsonBox"><summary>${esc(t('ed.json'))}</summary><label class="sr-only" for="edJson">JSON</label><textarea id="edJson" spellcheck="false"></textarea>
+        <div class="row"><button type="button" class="btn" data-act="ed-json">${esc(t('ed.jsonApply'))}</button></div></details>`;
+  } else if (ed.view === 'char') {
+    title = `${o.emoji || '🙂'} ${o.name || t('ed.char')}`;
+    html = `<div class="card">${F.text(o, 'name', t('ed.name'))}<div class="two">${F.text(o, 'emoji', t('ed.emoji'), 'maxlength="16"')}
+      ${F.select(o, 'side', t('ed.side'), ['ally', 'enemy', 'other'].map(s => [s, t('ed.side.' + s)]), 'data-re="1"')}</div>
+      ${o.side === 'ally' ? F.num(o, 'power', t('ed.power'), 0, 99, true) : ''}${o.side === 'enemy' ? F.num(o, 'hp', t('ed.hp'), 1, 999, true) : ''}
+      ${F.text(o, 'ability', t('ed.ability'))}${F.img(o, 'image', t('pz.image'))}</div>
+      <div class="row"><button type="button" class="btn danger" data-act="ed-char-del">${esc(t('ed.delChar'))}</button></div>`;
+  } else if (ed.view === 'station') {
+    title = `${o.emoji || '📍'} ${o.name || t('ed.station')}`;
+    html = `<div class="card">${F.text(o, 'name', t('ed.name'))}${F.text(o, 'emoji', t('ed.emoji'), 'maxlength="16"')}
+      ${F.area(o, 'hint', t('ed.hint'))}${F.img(o, 'image', t('pz.image'))}
+      <div class="two"><div class="fld"><label for="edLat">${esc(t('ed.lat'))}</label><input type="text" inputmode="decimal" id="edLat" data-f="lat" data-t="coord" value="${o.lat == null ? '' : o.lat}"></div>
+      <div class="fld"><label for="edLon">${esc(t('ed.lon'))}</label><input type="text" inputmode="decimal" id="edLon" data-f="lon" data-t="coord" value="${o.lon == null ? '' : o.lon}"></div></div>
+      <div class="row"><button type="button" class="btn" data-act="ed-here">📍 ${esc(t('ed.here'))}</button></div>
+      ${E.hasCoords(o) ? '' : `<p class="muted">${esc(t('ed.noCoords'))}</p>`}
+      ${settings.map ? `<p class="muted">${esc(t('ed.mapTap'))}</p>` : `<p class="muted">${esc(t('ed.mapOff'))}</p><div class="row"><button type="button" class="btn small" data-act="map-on">${esc(t('ed.mapOn'))}</button></div>`}
+      ${settings.map ? `<div class="mapbox ed-map"><canvas id="edMap" role="img" aria-label="${esc(t('nav.mapLabel'))}"></canvas>${mapControls()}</div>` : ''}
+      ${F.num(o, 'radius', t('ed.radiusSt'), 0, 500, true)}
+      ${whenFields(o, false, t('ed.stWhen'))}</div>
+      <div class="card"><h3>${esc(t('ed.scenes'))}</h3><ul class="items">${o.scenes.map((x, i) => { const s = sceneSummary(x); return item('ed-sc', i, `${i + 1}. ${s.main}`, s.sub, o.scenes.length); }).join('')}</ul>
+      <div class="row" style="margin-top:8px"><button type="button" class="btn" data-act="ed-sc-add">＋ ${esc(t('ed.addScene'))}</button></div></div>
+      <div class="row"><button type="button" class="btn danger" data-act="ed-st-del">${esc(t('ed.delStation'))}</button></div>`;
+  } else {
+    const st = h.stations[ed.si], pz = o.puzzle;
+    title = `${st.emoji || '📍'} ${st.name} · ${t('ed.scene')} ${ed.xi + 1}`;
+    const chars = [['', t('ed.none')], ...h.characters.map(c => [c.id, `${c.emoji} ${c.name}`])];
+    const ch = E.charOf(h, o.character);
+    html = `<div class="card">${F.text(o, 'title', t('ed.sceneTitle'))}${F.area(o, 'text', t('ed.text'))}
+      ${F.select(o, 'character', t('ed.character'), chars, 'data-re="1"')}
+      ${ch && ch.side === 'enemy' ? F.check(o, 'battle', t('ed.battle')) : ''}${F.check(o, 'repeat', t('ed.repeat'))}</div>
+      <div class="card"><div class="fld"><label for="edPz">${esc(t('ed.puzzle'))}</label><select id="edPz" data-pztype="1">
+        <option value="">${esc(t('ed.pzNone'))}</option>${Object.entries(P.TYPES).map(([k, v]) => `<option value="${k}"${pz && pz.type === k ? ' selected' : ''}>${v.icon} ${esc(t('pz.' + k))}</option>`).join('')}</select></div>
+        ${pz ? `${P.TYPES[pz.type].sensor ? `<p class="muted">${esc(t(P.TYPES[pz.type].sensor === 'mic' ? 'pz.needsMic' : 'pz.needsGps'))}</p>` : ''}${P.TYPES[pz.type].edit(o, F)}${o.battle ? P.bonusField(o, F) : ''}` : ''}</div>
+      <div class="card">${whenFields(o, true)}${effectFields(o, 'win', t('ed.win'))}${effectFields(o, 'lose', t('ed.lose'))}</div>
+      <div class="row"><button type="button" class="btn danger" data-act="ed-sc-del">${esc(t('ed.delScene'))}</button></div>`;
+  }
+  $('edTitle').textContent = title;
+  body.innerHTML = html;
+  if (ed.view === 'station') {
+    if (settings.map) {
+      Geo.start();
+      ed.map = new HuntMap.Map($('edMap'), { onTap: p => { o.lat = p.lat; o.lon = p.lon; $('edLat').value = p.lat; $('edLon').value = p.lon; saveSoon(); edMarkers(); } });
+      edMarkers(true);
+    }
+  }
+}
+function edMarkers(fit) {
+  if (!ed || !ed.map) return;
+  const o = edObj();
+  ed.map.markers = [...ed.h.stations.filter(s => s !== o && E.hasCoords(s)).map(s => ({ lat: s.lat, lon: s.lon, emoji: s.emoji || '📍', kind: 'dim' })),
+    ...(E.hasCoords(o) ? [{ lat: o.lat, lon: o.lon, emoji: o.emoji || '📍', kind: 'target', radius: o.radius || ed.h.radius }] : []),
+    ...(Geo.pos ? [{ lat: Geo.pos.lat, lon: Geo.pos.lon, acc: Geo.pos.acc, kind: 'me' }] : [])];
+  if (fit) {
+    const pts = E.hasCoords(o) ? [o] : ed.h.stations.filter(E.hasCoords).concat(Geo.pos ? [Geo.pos] : []);
+    if (pts.length) ed.map.fit(pts, 18); else ed.map.setView({ lat: 51.1657, lon: 10.4515 }, 5);
+  } else ed.map.draw();
+}
+Geo.on(() => { if (screen_ === 'edit' && ed && ed.map) { if (!ed.mapFitted && Geo.pos && !E.hasCoords(edObj())) { ed.mapFitted = true; edMarkers(true); } else edMarkers(); } });
+const mapControls = () => `<div class="map-ctl"><button type="button" data-act="zoom" data-z="1" aria-label="${esc(t('nav.zoomIn'))}">+</button><button type="button" data-act="zoom" data-z="-1" aria-label="${esc(t('nav.zoomOut'))}">−</button><button type="button" data-act="map-center" aria-label="${esc(t('nav.center'))}">◎</button></div><p class="map-attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></p>`;
+
+function setPath(o, path, v) {
+  const keys = path.split('.');
+  let x = o;
+  for (const k of keys.slice(0, -1)) { if (x[k] == null || typeof x[k] !== 'object') x[k] = {}; x = x[k]; }
+  x[keys[keys.length - 1]] = v;
+}
+function onEdit(e) {
+  const el = e.target;
+  if (!ed || !el.dataset) return;
+  const o = edObj();
+  if (el.dataset.pztype && e.type === 'change') {
+    o.puzzle = el.value ? Object.assign({ type: el.value }, P.TYPES[el.value].defaults()) : null;
+    saveSoon(); renderEditor(); return;
+  }
+  const path = el.dataset.f;
+  if (!path) return;
+  const tp = el.dataset.t;
+  if (e.type === 'input' && (el.tagName === 'SELECT' || tp === 'bool')) return;
+  let v = el.value;
+  if (tp === 'bool') v = el.checked;
+  else if (tp === 'int' || tp === 'num') {
+    const n = Tools.parseNum(v);
+    if (!Number.isFinite(n)) return;
+    const lim = (x, d) => (x == null || x === '' ? d : Number(x));
+    v = Math.min(lim(el.dataset.max, Infinity), Math.max(lim(el.dataset.min, -Infinity), tp === 'int' ? Math.round(n) : n));
+  } else if (tp === 'list') v = v.split(',').map(s => s.trim()).filter(Boolean);
+  else if (tp === 'coord') {
+    // "48.137, 11.575" pasted into one field fills both
+    const two = /^\s*(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)\s*$/.exec(v.replace(/(\d),(\d)(?=.*[,;\s]\s*-?\d)/, '$1.$2'));
+    if (two && path === 'lat') { o.lat = Tools.parseNum(two[1]); o.lon = Tools.parseNum(two[2]); $('edLat').value = o.lat; $('edLon').value = o.lon; saveSoon(); edMarkers(true); return; }
+    const n = Tools.parseNum(v);
+    v = v.trim() === '' ? null : Number.isFinite(n) && Math.abs(n) <= (path === 'lat' ? 90 : 180) ? n : undefined;
+    if (v === undefined) return;
+  } else if (path === 'pin') v = v.replace(/\D/g, '');
+  setPath(o, path, v);
+  saveSoon();
+  if (path === 'lat' || path === 'lon') edMarkers(e.type === 'change');
+  if (e.type === 'change' && (el.dataset.re || path === 'battle')) renderEditor();
+  else if (['name', 'emoji', 'title'].includes(path)) $('edTitle').textContent = ed.view === 'hunt' ? (ed.h.title || t('untitled')) : `${o.emoji || ''} ${o.name || o.title || ''}`;
+}
+$('edBody').addEventListener('input', onEdit);
+$('edBody').addEventListener('change', onEdit);
+$('edBody').addEventListener('toggle', e => {
+  if (e.target.id === 'edJsonBox' && e.target.open) $('edJson').value = JSON.stringify(ed.h, null, 2);
+}, true);
+
+// Pictures: shrunk to at most 640 px (JPEG) and embedded as data URL
+let imgPath = '';
+async function readImage(file) {
+  const bmp = await createImageBitmap(file);
+  const s = Math.min(1, 640 / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(bmp.width * s)); cv.height = Math.max(1, Math.round(bmp.height * s));
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+  if (bmp.close) bmp.close();
+  return cv.toDataURL('image/jpeg', 0.78);
+}
+$('fileImg').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f || !ed || !imgPath) return;
+  try { const url = await readImage(f); setPath(edObj(), imgPath, url); log('image added', { kb: Math.round(url.length / 1024) }); saveSoon(); renderEditor(); }
+  catch (err) { log('image failed', { error: err.message }); Tools.toast(t('ed.imgErr')); }
+});
+
+function edAction(act, i) {
+  const h = ed.h, o = edObj();
+  const move = (arr, from, to) => { if (to < 0 || to >= arr.length) return; arr.splice(to, 0, arr.splice(from, 1)[0]); };
+  switch (act) {
+    case 'ed-back':
+      flushSave();
+      if (ed.view === 'scene') ed.view = 'station';
+      else if (ed.view === 'station' || ed.view === 'char') ed.view = 'hunt';
+      else { ed = null; goHome(); return; }
+      break;
+    case 'ed-char': ed.view = 'char'; ed.ci = i; break;
+    case 'ed-char-add': h.characters.push(E.character({ name: t('ed.newChar'), emoji: '🦄', side: 'ally', power: 2 })); ed.view = 'char'; ed.ci = h.characters.length - 1; break;
+    case 'ed-char-del':
+      if (!confirm(t('ed.confirmDelChar', { n: o.name }))) return;
+      h.characters.splice(ed.ci, 1); ed.view = 'hunt'; break;
+    case 'ed-st': ed.view = 'station'; ed.si = i; ed.mapFitted = false; break;
+    case 'ed-st-up': move(h.stations, i, i - 1); break;
+    case 'ed-st-down': move(h.stations, i, i + 1); break;
+    case 'ed-st-add': {
+      const s = E.station({ name: t('ed.newStation', { n: h.stations.length + 1 }), emoji: '📍' });
+      s.scenes.push(E.scene({}, P.TYPES));
+      h.stations.push(s); ed.view = 'station'; ed.si = h.stations.length - 1; ed.mapFitted = false; break;
+    }
+    case 'ed-st-del':
+      if (!confirm(t('ed.confirmDelStation', { n: o.name }))) return;
+      h.stations.splice(ed.si, 1); ed.view = 'hunt'; break;
+    case 'ed-sc': ed.view = 'scene'; ed.xi = i; break;
+    case 'ed-sc-up': move(o.scenes, i, i - 1); break;
+    case 'ed-sc-down': move(o.scenes, i, i + 1); break;
+    case 'ed-sc-add': o.scenes.push(E.scene({}, P.TYPES)); ed.view = 'scene'; ed.xi = o.scenes.length - 1; break;
+    case 'ed-sc-del':
+      if (!confirm(t('ed.confirmDelScene'))) return;
+      h.stations[ed.si].scenes.splice(ed.xi, 1); ed.view = 'station'; break;
+    case 'ed-here': {
+      Tools.toast(t('ed.coordsWait'));
+      currentPosition(20000).then(p => {
+        if (!p || !ed || edObj() !== o) { if (!p) Tools.toast(t('ed.coordsErr')); return; }
+        o.lat = +p.lat.toFixed(6); o.lon = +p.lon.toFixed(6);
+        saveSoon(); renderEditor();
+        Tools.toast(t('ed.coordsOk', { n: Math.round(p.acc) }), 2500);
+      });
+      return;
+    }
+    case 'ed-play': flushSave(); startPlay(h.id); return;
+    case 'ed-json':
+      try {
+        const n = E.normalize(JSON.parse($('edJson').value), P.TYPES);
+        n.id = h.id; ed.h = n; saveHunt(n); Tools.toast(t('ed.jsonOk'));
+      } catch (e) { Tools.toast(t('ed.jsonErr', { m: e.message }), 4000); return; }
+      break;
+    default: return;
+  }
+  saveSoon();
+  renderEditor();
+  $('scrEdit').closest('main').scrollTop = 0;
+}
+
+/* ---------- Play ---------- */
+let navCtx = null, cur = null, curPuzzle = null;
+const body = () => $('playBody');
+function startPlay(id) {
+  const h = loadHunt(id);
+  if (!h) return goHome();
+  H = h; G = loadGame(h); ed = null;
+  settings.playing = id; saveSettings();
+  show('play');
+  keepAwake(true);
+  log('play', { stations: H.stations.length, started: G.started, finished: G.finished });
+  resume();
+}
+function resume() {
+  if (G.finished) return renderFinale();
+  if (!G.started) return renderIntro();
+  if (G.active) {
+    const st = H.stations.find(s => s.scenes.some(x => x.id === G.active));
+    const sc = st && st.scenes.find(x => x.id === G.active);
+    if (st && sc) return runScene(st, sc);
+  }
+  if (G.target && E.stationOf(H, G.target)) return renderNav();
+  renderChoose();
+}
+function renderHud() {
+  const team = G.team.map(id => E.charOf(H, id)).filter(Boolean);
+  const visited = H.stations.filter(s => G.visits[s.id]).length;
+  $('hud').innerHTML = `<span class="team" title="${esc(t('hud.team', { n: team.length }))}"><span class="sr-only">${esc(t('hud.team', { n: team.map(c => c.name).join(', ') || '0' }))}</span><span aria-hidden="true">🧒${team.map(c => esc(c.emoji || '🙂')).join('')}</span></span>
+    <span class="energy${E.canMega(H, G) ? ' ready' : ''}"><span class="sr-only">${esc(t('hud.energy', { n: G.energy }))}</span><span aria-hidden="true">⚡ ${G.energy}</span></span>
+    <span class="prog"><span class="sr-only">${esc(t('hud.progress', { n: visited, m: H.stations.length }))}</span><span aria-hidden="true">📍 ${visited}/${H.stations.length}</span></span>`;
+}
+function setBody(html) {
+  stopPuzzle(); stopSpeaking();
+  if (navCtx && navCtx.off) navCtx.off();
+  navCtx = null;
+  renderHud();
+  body().innerHTML = html;
+  body().scrollTop = 0;
+}
+
+function renderIntro() {
+  setBody(`<h2 class="title-play">${esc(H.title || t('untitled'))}</h2><div class="hero"><div class="big-emoji" aria-hidden="true">🗺️</div></div>
+    ${say(H.intro || t('intro.default'))}<button type="button" class="btn primary huge" data-act="intro-go">${esc(t('intro.go'))} <span aria-hidden="true">›</span></button>`);
+  autoRead(H.intro || t('intro.default'));
+}
+function renderChoose() {
+  G.target = ''; saveGame();
+  const list = H.stations.map(st => {
+    const state = E.stationState(H, G, st), visited = !!G.visits[st.id];
+    const label = state === 'locked' ? t('ch.locked') : state === 'new' ? t('ch.new') : visited ? t('ch.visited') : '';
+    return `<button type="button" class="st-btn ${state}" data-act="target" data-id="${esc(st.id)}" ${state === 'locked' ? 'disabled' : ''}>
+      <span class="big-emoji" aria-hidden="true">${state === 'locked' ? '🔒' : emojiOf(st, '📍')}</span><span>${esc(st.name)}</span>
+      ${label ? `<span class="sr-only">(${esc(label)})</span>` : ''}${state === 'new' ? '<span class="flag" aria-hidden="true">❗</span>' : visited ? '<span class="flag" aria-hidden="true">✓</span>' : ''}</button>`;
+  }).join('');
+  setBody(`${say(t('ch.where'))}<div class="stations">${list}</div>`);
+}
+
+function renderNav() {
+  const st = E.stationOf(H, G.target);
+  if (!st) return renderChoose();
+  const coords = E.hasCoords(st);
+  setBody(`<div class="nav">
+    <div class="nav-target"><span class="big-emoji" aria-hidden="true">${emojiOf(st, '📍')}</span><h2>${esc(st.name)}</h2></div>
+    ${st.hint ? say(st.hint) : ''}${imgHtml(st.image)}
+    ${coords ? `<div class="seg" role="group" aria-label="${esc(t('nav.view'))}">
+        <button type="button" data-act="nav-mode" data-mode="compass" aria-pressed="${settings.nav !== 'map'}"><span aria-hidden="true">🧭 </span>${esc(t('nav.compass'))}</button>
+        <button type="button" data-act="nav-mode" data-mode="map" aria-pressed="${settings.nav === 'map'}"><span aria-hidden="true">🗺️ </span>${esc(t('nav.map'))}</button></div>
+      <div class="nav-view">${settings.nav === 'map' ? `<div class="mapbox"><canvas id="navMap" role="img" aria-label="${esc(t('nav.mapLabel'))}"></canvas>${mapControls()}
+          ${settings.map ? '' : `<div class="map-off"><p>${esc(t('nav.mapOffText'))}</p><button type="button" class="btn small" data-act="map-on">${esc(t('ed.mapOn'))}</button></div>`}</div>`
+        : `<div class="compass"><svg class="arrow" id="navArrow" viewBox="0 0 200 200" aria-hidden="true"><circle class="ring" cx="100" cy="100" r="94"/><path class="tip" d="M100 18 L146 120 L100 98 L54 120 Z"/></svg>
+          <div class="dist" id="navDist">–</div><div class="warm" id="navWarm" aria-live="polite"></div><p class="dir" id="navDir"></p>
+          <button type="button" class="btn small" id="btnHeading" data-act="heading" hidden>🧭 ${esc(t('nav.heading'))}</button></div>`}</div>
+      <p class="gps" id="navGps" role="status"></p>` : `<p class="note">${esc(t('nav.noCoords'))}</p>`}
+    <button type="button" class="btn primary huge${coords ? '' : ' go'}" id="btnArrive" data-act="arrive" ${coords ? 'disabled' : ''}><span aria-hidden="true">🎉 </span>${esc(t('nav.arrive'))}</button>
+    <div class="row center"><button type="button" class="btn" data-act="choose"><span aria-hidden="true">‹ </span>${esc(t('nav.other'))}</button>
+      ${coords ? `<button type="button" class="btn" data-act="parent-arrive"><span aria-hidden="true">🔑 </span>${esc(t('nav.unlock'))}</button>` : ''}</div></div>`);
+  if (!coords) return;
+  navCtx = { st, hist: [], arrived: false, map: null, off: null };
+  Geo.start();
+  Heading.start();
+  if (settings.nav === 'map') {
+    navCtx.map = new HuntMap.Map($('navMap'));
+    navCtx.map.fit([st].concat(Geo.pos ? [Geo.pos] : []), 18);
+  }
+  const offGeo = Geo.on(updateNav), offHead = (() => { const fn = () => updateNav(); Heading.subs.add(fn); return () => Heading.subs.delete(fn); })();
+  navCtx.off = () => { offGeo(); offHead(); };
+  // iPhone: the compass needs a tap; elsewhere a hint if no heading arrives
+  setTimeout(() => { const b = $('btnHeading'); if (b && Heading.value == null) { b.hidden = !Heading.needsPermission(); if (!b.hidden) return; const d = $('navDir'); if (d && !d.dataset.no) { d.dataset.no = '1'; updateNav(); } } }, 2500);
+  updateNav();
+}
+function updateNav() {
+  const c = navCtx;
+  if (!c || screen_ !== 'play') return;
+  const st = c.st, pos = Geo.pos, gps = $('navGps');
+  if (gps) {
+    gps.className = 'gps' + (Geo.err ? ' err' : '');
+    gps.textContent = Geo.err ? t(Geo.err === 'denied' ? 'nav.gpsDenied' : 'nav.gpsErr') : pos ? t('nav.gpsAcc', { n: Math.round(pos.acc) }) : t('nav.gpsWait');
+  }
+  if (c.map) {
+    c.map.markers = [
+      ...H.stations.filter(s => s !== st && E.hasCoords(s) && E.stationState(H, G, s) !== 'locked').map(s => ({ lat: s.lat, lon: s.lon, emoji: s.emoji || '📍', kind: 'dim' })),
+      { lat: st.lat, lon: st.lon, emoji: st.emoji || '📍', kind: 'target', radius: st.radius || H.radius },
+      ...(pos ? [{ lat: pos.lat, lon: pos.lon, acc: pos.acc, kind: 'me' }] : [])];
+    if (c.map.follow && pos) c.map.fit([st, pos], 18); else c.map.draw();
+  }
+  if (!pos) return;
+  const d = E.distance(pos, st), br = E.bearing(pos, st);
+  const dist = $('navDist');
+  if (dist) dist.textContent = fmtDist(d);
+  const arrow = $('navArrow');
+  if (arrow) arrow.style.transform = `rotate(${(br - (Heading.value == null ? 0 : Heading.value)).toFixed(1)}deg)`;
+  const dir = $('navDir');
+  if (dir) dir.textContent = t('nav.dir', { d: dirName(br) }) + (Heading.value == null && dir.dataset.no ? ' · ' + t('nav.headingNo') : '');
+  if (Heading.value != null) { const b = $('btnHeading'); if (b) b.hidden = true; }
+  // Warmer / colder: compared with the distance about 5 seconds ago
+  const now = Date.now();
+  c.hist.push({ t: now, d });
+  while (c.hist.length > 2 && now - c.hist[1].t > 5000) c.hist.shift();
+  const warm = $('navWarm');
+  if (warm && now - c.hist[0].t >= 4000) {
+    const diff = d - c.hist[0].d;
+    warm.textContent = diff < -3 ? '🔥 ' + t('nav.warm') : diff > 3 ? '❄️ ' + t('nav.cold') : '';
+  }
+  const here = E.arrived(H, st, pos), btn = $('btnArrive');
+  if (btn) { btn.disabled = !here; btn.classList.toggle('go', here); }
+  if (here && !c.arrived) { c.arrived = true; sfx('arrive'); if (warm) warm.textContent = '🎉 ' + t('nav.here'); log('arrived', { acc: Math.round(pos.acc) }); }
+  if (!here) c.arrived = false;
+}
+
+function openStation(st, manual) {
+  log('station opened', { manual: !!manual, visits: G.visits[st.id] || 0 });
+  const sc = E.pickScene(H, G, st);
+  G.visits[st.id] = (G.visits[st.id] || 0) + 1;
+  G.target = '';
+  saveGame();
+  if (!sc) {
+    setBody(`${portrait(null, st.emoji || '📍')}<h2 class="title-play">${esc(st.name)}</h2>${say(t('ch.nothing'))}
+      <button type="button" class="btn primary huge" data-act="choose">${esc(t('next'))} <span aria-hidden="true">›</span></button>`);
+    return;
+  }
+  runScene(st, sc);
+}
+function runScene(st, sc) {
+  G.active = sc.id; saveGame();
+  const ch = E.charOf(H, sc.character);
+  const enemy = sc.battle && ch && ch.side === 'enemy' ? ch : null;
+  cur = { st, sc, enemy, bonus: null, mega: false };
+  setBody(`<article class="scene">${portrait(ch, st.emoji || '📍')}${sc.title ? `<h2 class="title-play">${esc(sc.title)}</h2>` : ''}
+    ${sc.text ? say(sc.text) : ''}<div id="sceneAct" class="scene"></div></article>`);
+  autoRead(sc.text);
+  const act = $('sceneAct');
+  if (enemy) act.innerHTML = `<button type="button" class="btn primary huge" data-act="battle"><span aria-hidden="true">⚔️ </span>${esc(t('b.start'))}</button>`;
+  else if (sc.puzzle) runPuzzle(act, sc.puzzle, ok => endScene(ok));
+  else act.innerHTML = `<button type="button" class="btn primary huge" data-act="scene-next">${esc(t('next'))} <span aria-hidden="true">›</span></button>`;
+}
+function stopPuzzle() { if (curPuzzle) { const c = curPuzzle; curPuzzle = null; c.abort(); } }
+function runPuzzle(box, p, onDone) {
+  stopPuzzle();
+  const cleanups = [];
+  let over = false;
+  const c = {
+    box, say, img: imgHtml, distance: E.distance, sound: sfx, log,
+    cleanup: fn => cleanups.push(fn),
+    mic: async () => { log('mic start'); try { const m = await P.openMic(); log('mic ok'); return m; } catch (e) { log('mic failed', { error: e.name || e.message }); throw e; } },
+    geo: () => ({ supported: Geo.supported, pos: () => { Geo.start(); return Geo.pos; } }),
+    abort() { over = true; cleanups.splice(0).forEach(f => { try { f(); } catch (_) {} }); },
+    done(ok) {
+      if (over) return;
+      c.abort();
+      if (curPuzzle === c) curPuzzle = null;
+      log('puzzle done', { type: p.type, ok });
+      onDone(ok);
+    },
+    fallback() {
+      box.insertAdjacentHTML('beforeend', `<button type="button" class="btn small fallback" data-pz="fallback"><span aria-hidden="true">🔑 </span>${esc(t('pz.fallback'))}</button>`);
+      box.querySelector('[data-pz="fallback"]').addEventListener('click', async () => { if (await parentGate()) c.done(true); });
+    },
+  };
+  curPuzzle = c;
+  P.TYPES[p.type].play(p, c);
+}
+function endScene(ok) {
+  const { st, sc } = cur;
+  const got = E.finish(H, G, sc, ok);
+  saveGame();
+  log('scene end', { ok, ally: !!got.ally, energy: got.energy, treasure: got.treasure });
+  // A pure story scene without any result goes straight back to choosing the next target
+  if (ok && !sc.puzzle && !cur.enemy && !sc.win.text && !got.ally && !got.energy && !got.treasure) return renderChoose();
+  renderResult(st, sc, ok, got);
+}
+function renderResult(st, sc, ok, got) {
+  const text = (ok ? sc.win.text : sc.lose.text) || t(ok ? 'r.win' : 'r.lose');
+  const again = !ok && !G.finished && E.pickScene(H, G, st) === sc;
+  const gains = [];
+  if (got.ally) gains.push(`<div class="gain">${portrait(got.ally)}<p>${esc(t('r.ally', { e: '', n: got.ally.name }).trim())}</p></div>`);
+  if (got.energy) gains.push(`<div class="gain">${esc(t(got.energy > 0 ? 'r.energy' : 'r.energyLost', { n: got.energy }))}</div>`);
+  setBody(`<div class="result"><div class="big" aria-hidden="true">${G.finished ? '💎' : ok ? '🎉' : '😮'}</div>${say(text)}${gains.join('')}
+    ${G.finished ? `<button type="button" class="btn primary huge" data-act="finale"><span aria-hidden="true">🏆 </span>${esc(t('r.treasure'))}</button>`
+      : `${again ? `<button type="button" class="btn huge" data-act="again"><span aria-hidden="true">↺ </span>${esc(t('r.again'))}</button>` : ''}
+      <button type="button" class="btn primary huge" data-act="choose">${esc(t('next'))} <span aria-hidden="true">›</span></button>`}</div>`);
+  sfx(ok ? 'win' : 'lose');
+  autoRead(text);
+  cur.again = again;
+}
+
+function renderBattle() {
+  const { sc, enemy } = cur;
+  const rows = [`<li data-k="0"><span class="e" aria-hidden="true">🧒</span><span class="n">${esc(t('b.kids'))}<small>${esc(t('b.kidsSub'))}</small></span><b>${E.KIDS_POWER}</b></li>`,
+    ...G.team.map((id, i) => { const c = E.charOf(H, id); return c ? `<li data-k="${i + 1}"><span class="e" aria-hidden="true">${emojiOf(c, '🙂')}</span><span class="n">${esc(c.name)}${c.ability ? `<small>${esc(c.ability)}</small>` : ''}</span><b>${c.power}</b></li>` : ''; })];
+  if (cur.bonus) rows.push(`<li data-k="bonus"><span class="e" aria-hidden="true">⭐</span><span class="n">${esc(t('b.bonus'))}</span><b>${cur.bonus}</b></li>`);
+  setBody(`<div class="battle">${portrait(enemy)}
+    <p class="hp-val"><span aria-hidden="true">❤️ </span><b id="hpVal">${enemy.hp}</b></p>
+    <div class="hp" role="meter" aria-label="${esc(t('b.hp'))}" aria-valuemin="0" aria-valuemax="${enemy.hp}" aria-valuenow="${enemy.hp}"><i style="width:100%"></i></div>
+    <ul class="team-list${cur.mega ? ' mega' : ''}" id="teamList">${rows.join('')}</ul><div id="battleAct" class="scene"></div></div>`);
+  const act = $('battleAct');
+  if (sc.puzzle && cur.bonus == null) {
+    act.innerHTML = `${say(t('b.puzzleFirst', { n: sc.puzzle.bonus }))}<div id="battlePz" class="scene"></div>`;
+    runPuzzle($('battlePz'), sc.puzzle, ok => { cur.bonus = ok ? sc.puzzle.bonus : 0; renderBattle(); });
+    return;
+  }
+  act.innerHTML = `${E.canMega(H, G) ? `<button type="button" class="btn huge mega" data-act="mega" aria-pressed="${cur.mega}"><span aria-hidden="true">⚡ </span>${esc(t('b.mega', { n: H.megaCost }))}</button>` : ''}
+    <button type="button" class="btn primary huge" data-act="attack"><span aria-hidden="true">⚔️ </span>${esc(t('b.attack'))}</button>`;
+}
+function attack() {
+  const { enemy } = cur;
+  const r = E.battle(H, G, enemy, cur.bonus || 0, cur.mega);
+  if (r.mega) { E.payMega(H, G); sfx('mega'); }
+  saveGame();
+  log('battle', { damage: r.damage, hp: r.hp, mega: r.mega, team: G.team.length, win: r.win });
+  $('battleAct').innerHTML = r.mega ? say(t('b.megaOn')) : '';
+  const items = [...$('teamList').children];
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let left = r.hp, i = 0;
+  const meter = document.querySelector('.hp'), bar = meter.querySelector('i');
+  const step = () => {
+    if (i > 0) items[i - 1] && items[i - 1].classList.remove('hit');
+    if (i >= items.length || left <= 0) {
+      const text = r.win ? t('b.win') : t('b.lose');
+      $('battleAct').insertAdjacentHTML('beforeend', `<p class="pz-count" role="status">${esc(text)}</p>`);
+      setTimeout(() => endScene(r.win), reduce ? 300 : 1300);
+      return;
+    }
+    const li = items[i];
+    li.classList.add('hit');
+    left = Math.max(0, left - r.hits[i].power * (r.mega ? 2 : 1));
+    $('hpVal').textContent = left;
+    bar.style.width = (left / r.hp * 100) + '%';
+    meter.setAttribute('aria-valuenow', String(left));
+    sfx('hit');
+    i++;
+    setTimeout(step, reduce ? 150 : 700);
+  };
+  setTimeout(step, r.mega ? (reduce ? 200 : 1200) : 300);
+}
+
+function renderFinale() {
+  const team = G.team.map(id => E.charOf(H, id)).filter(Boolean);
+  setBody(`<div class="result finale"><div class="big" aria-hidden="true">💰</div><h2 class="title-play">${esc(H.title || t('untitled'))}</h2>
+    ${say(H.finale || t('fin.default'))}
+    ${team.length ? `<p class="muted">${esc(t('fin.team'))}: ${team.map(c => esc(`${c.emoji} ${c.name}`)).join(', ')}</p>` : ''}
+    <button type="button" class="btn huge" data-act="home">${esc(t('fin.home'))}</button></div>`);
+  sfx('treasure');
+  autoRead(H.finale || t('fin.default'));
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const box = document.createElement('div');
+    box.className = 'confetti'; box.setAttribute('aria-hidden', 'true');
+    box.innerHTML = Array.from({ length: 36 }, (_, i) => `<span style="left:${Math.random() * 100}%;animation-duration:${2 + Math.random() * 3}s;animation-delay:${Math.random() * 1.5}s">${['🎉', '⭐', '💎', '🪙', '✨'][i % 5]}</span>`).join('');
+    document.body.append(box);
+    setTimeout(() => box.remove(), 7000);
+  }
+}
+
+/* ---------- Parents' area (PIN) ---------- */
+let parentUntil = 0;
+const dlg = $('dlg');
+function dialog(title, html) {
+  $('dlgTitle').textContent = title;
+  $('dlgBody').innerHTML = html;
+  if (!dlg.open) dlg.showModal();
+  return $('dlgBody');
+}
+function parentGate() {
+  if (!H || !H.pin || Date.now() < parentUntil) return Promise.resolve(true);
+  return new Promise(resolve => {
+    const b = dialog(t('parent.pin'), `<form id="pinForm" class="dlg-body" style="padding:0"><label for="pinIn">${esc(t('parent.pin'))}</label>
+      <input type="password" id="pinIn" inputmode="numeric" autocomplete="off"><p class="pz-msg err" role="status"></p>
+      <button class="btn primary" type="submit">${esc(t('ok'))}</button></form>`);
+    let done = false;
+    const finish = v => { if (done) return; done = true; dlg.removeEventListener('close', onClose); resolve(v); };
+    const onClose = () => finish(false);
+    dlg.addEventListener('close', onClose);
+    b.querySelector('form').addEventListener('submit', e => {
+      e.preventDefault();
+      if (b.querySelector('input').value === H.pin) { parentUntil = Date.now() + 5 * 60000; finish(true); dlg.close(); }
+      else { b.querySelector('.pz-msg').textContent = t('parent.pinWrong'); log('pin wrong'); }
+    });
+    setTimeout(() => b.querySelector('input').focus(), 50);
+  });
+}
+async function openParent() {
+  if (!(await parentGate())) return;
+  const nav = navCtx && navCtx.st, solving = !!curPuzzle;
+  const btn = (k, label, cls) => `<button type="button" class="btn${cls ? ' ' + cls : ''}" data-pa="${k}">${esc(label)}</button>`;
+  dialog(t('parent.title'), [
+    nav ? btn('arrive', '📍 ' + t('parent.arrive'), 'primary') : '',
+    solving ? btn('solve', '✓ ' + t('parent.solve'), 'primary') + btn('fail', '✗ ' + t('parent.fail')) : '',
+    btn('choose', '🗺️ ' + t('parent.choose')), btn('code', '🔢 ' + t('parent.code')),
+    btn('restart', '↺ ' + t('parent.restart'), 'danger'), btn('home', '🏠 ' + t('parent.home')),
+  ].join(''));
+}
+function showCode() {
+  const code = E.encode(H, G);
+  log('resume code shown', { length: code.length });
+  const b = dialog(t('code.title'), `<p class="code" id="codeOut">${esc(code)}</p><p class="muted">${esc(t('code.explain'))}</p>
+    <button type="button" class="btn primary" data-pa="copy">${esc(t('code.copy'))}</button>`);
+  b.querySelector('[data-pa="copy"]').dataset.code = code;
+}
+function enterCode(id) {
+  const h = loadHunt(id);
+  if (!h) return;
+  const b = dialog(t('code.enter'), `<p class="muted">${esc(h.title || t('untitled'))}</p><form id="codeForm" class="dlg-body" style="padding:0"><label for="codeIn">${esc(t('code.label'))}</label>
+    <input type="text" id="codeIn" autocomplete="off" autocapitalize="characters" spellcheck="false"><p class="pz-msg err" role="status"></p>
+    <button class="btn primary" type="submit">${esc(t('code.apply'))}</button></form>`);
+  b.querySelector('form').addEventListener('submit', e => {
+    e.preventDefault();
+    let g;
+    try { g = E.decode(h, b.querySelector('input').value); }
+    catch (err) { b.querySelector('.pz-msg').textContent = t(err.message === 'codeHunt' ? 'code.hunt' : 'code.bad'); log('resume code rejected', { reason: err.message }); return; }
+    const old = loadGame(h);
+    if ((old.started || old.done.length) && !confirm(t('code.confirm'))) return;
+    Tools.save(gameKey(h.id), g);
+    log('resume code applied');
+    dlg.close();
+    Tools.toast(t('code.ok'));
+    startPlay(h.id);
+  });
+  setTimeout(() => b.querySelector('input').focus(), 50);
+}
+$('dlgBody').addEventListener('click', async e => {
+  const b = e.target.closest('[data-pa]');
+  if (!b) return;
+  const k = b.dataset.pa;
+  if (k === 'copy') { Tools.toast(t((await Tools.copyText(b.dataset.code)) ? 'code.copied' : 'diag.fail')); return; }
+  dlg.close();
+  if (k === 'arrive' && navCtx) openStation(navCtx.st, true);
+  else if (k === 'solve' && curPuzzle) curPuzzle.done(true);
+  else if (k === 'fail' && curPuzzle) curPuzzle.done(false);
+  else if (k === 'choose') { G.active = ''; saveGame(); renderChoose(); }
+  else if (k === 'code') showCode();
+  else if (k === 'restart') { if (confirm(t('parent.confirmRestart'))) { G = E.newGame(H); saveGame(); log('game restarted'); resume(); } }
+  else if (k === 'home') goHome();
+});
+$('btnParent').addEventListener('click', openParent);
+
+/* ---------- Clicks (one handler for all screens) ---------- */
+document.addEventListener('click', async e => {
+  const sayBtn = e.target.closest('[data-say]');
+  if (sayBtn) { speak(sayBtn.dataset.say, sayBtn); return; }
+  const imgBtn = e.target.closest('[data-img], [data-img-del]');
+  if (imgBtn && ed) {
+    if (imgBtn.dataset.img) { imgPath = imgBtn.dataset.img; $('fileImg').click(); }
+    else { setPath(edObj(), imgBtn.dataset.imgDel, ''); saveSoon(); renderEditor(); }
+    return;
+  }
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const act = b.dataset.act, id = b.dataset.id, i = Number(b.dataset.i);
+  if (act.startsWith('ed-')) { if (ed) edAction(act, i); return; }
+  switch (act) {
+    case 'dlg-close': dlg.close(); break;
+    case 'new': { const h = E.normalize({ title: t('ed.newHunt') }, P.TYPES); if (saveHunt(h)) openEditor(h); break; }
+    case 'example': createExample(); break;
+    case 'import': $('fileHunt').click(); break;
+    case 'play': startPlay(id); break;
+    case 'edit': { const h = loadHunt(id); if (h) openEditor(h); break; }
+    case 'export': { const h = loadHunt(id); if (h) { download(huntFile(h)); Tools.toast(t('home.exported')); log('hunt exported'); } break; }
+    case 'share': {
+      const h = loadHunt(id);
+      if (h) try { await navigator.share({ files: [huntFile(h)], title: h.title }); } catch (err) { if (err.name !== 'AbortError') { log('share failed', { error: err.name }); download(huntFile(h)); } }
+      break;
+    }
+    case 'code-in': enterCode(id); break;
+    case 'del': {
+      const h = loadHunt(id);
+      if (h && confirm(t('home.confirmDel', { t: h.title || t('untitled') }))) { Tools.remove(huntKey(id)); Tools.remove(gameKey(id)); Tools.toast(t('home.deleted')); renderHome(); }
+      break;
+    }
+    case 'home': goHome(); break;
+    case 'intro-go': G.started = true; saveGame(); renderChoose(); break;
+    case 'target': G.target = id; saveGame(); renderNav(); break;
+    case 'choose': G.active = ''; saveGame(); renderChoose(); break;
+    case 'nav-mode': settings.nav = b.dataset.mode; saveSettings(); renderNav(); break;
+    case 'arrive': if (navCtx || !E.hasCoords(E.stationOf(H, G.target) || {})) openStation(E.stationOf(H, G.target)); break;
+    case 'parent-arrive': if (await parentGate()) openStation(E.stationOf(H, G.target), true); break;
+    case 'heading': await Heading.ask(); b.hidden = true; break;
+    case 'zoom': { const m = screen_ === 'edit' ? ed && ed.map : navCtx && navCtx.map; if (m) { m.follow = false; m.zoom(Number(b.dataset.z)); } break; }
+    case 'map-center': {
+      if (screen_ === 'edit') edMarkers(true);
+      else if (navCtx && navCtx.map) { navCtx.map.follow = true; updateNav(); if (!Geo.pos) navCtx.map.fit([navCtx.st], 18); }
+      break;
+    }
+    case 'map-on':
+      if (!confirm(t('set.mapAsk'))) return;
+      settings.map = true; saveSettings(); HuntMap.setEnabled(true); $('setMap').checked = true; log('map switched on');
+      if (screen_ === 'edit') renderEditor(); else renderNav();
+      break;
+    case 'scene-next': endScene(true); break;
+    case 'battle': renderBattle(); break;
+    case 'mega': cur.mega = !cur.mega; b.setAttribute('aria-pressed', String(cur.mega)); $('teamList').classList.toggle('mega', cur.mega); if (cur.mega) sfx('mega'); break;
+    case 'attack': { b.disabled = true; const m = document.querySelector('[data-act="mega"]'); if (m) m.disabled = true; attack(); break; }
+    case 'again': runScene(cur.st, cur.sc); break;
+    case 'finale': renderFinale(); break;
+  }
+});
+
+/* ---------- Settings (menu) ---------- */
+$('setMap').checked = settings.map;
+$('setRead').checked = settings.autoRead;
+$('setSound').checked = settings.sound;
+$('setMap').addEventListener('change', e => {
+  settings.map = e.target.checked; saveSettings(); HuntMap.setEnabled(settings.map); log('map setting', { on: settings.map });
+  if (screen_ === 'play' && navCtx) renderNav(); else if (screen_ === 'edit' && ed && ed.view === 'station') renderEditor();
+});
+$('setRead').addEventListener('change', e => { settings.autoRead = e.target.checked; saveSettings(); });
+$('setSound').addEventListener('change', e => { settings.sound = e.target.checked; saveSettings(); });
+$('btnTiles').addEventListener('click', async () => { await HuntMap.clearCache(); Tools.toast(t('set.tilesDone')); log('tile cache cleared'); });
+
+Tools.onLang(() => {
+  if (screen_ === 'home') renderHome();
+  else if (screen_ === 'edit') renderEditor();
+  else if (screen_ === 'play' && H) { if (cur && $('battleAct')) renderBattle(); else if (!curPuzzle) resume(); }
+});
+
+/* ---------- WebMCP: tools for AI agents ---------- */
+Tools.mcp.register({
+  name: 'get_status', title: 'Read treasure hunt status', label: 'mcp.status', readOnly: true,
+  description: 'Returns the saved treasure hunts (title, number of stations and characters) and, if a hunt is being played, its progress: current target station and distance in metres (if GPS is available), team members, energy, energy needed for the mega evolution, stations visited and whether the treasure was found. Never returns coordinates or answers.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  execute: () => {
+    const hunts = loadHunts().map(h => ({ id: h.id, title: h.title, stations: h.stations.length, characters: h.characters.length }));
+    if (screen_ !== 'play' || !H) return { hunts, playing: null };
+    const st = E.stationOf(H, G.target);
+    return { hunts, playing: {
+      title: H.title, started: G.started, finished: G.finished,
+      target: st ? st.name : null, distanceMeters: st && Geo.pos && E.hasCoords(st) ? Math.round(E.distance(Geo.pos, st)) : null,
+      team: G.team.map(id => (E.charOf(H, id) || {}).name).filter(Boolean), energy: G.energy, megaCost: H.megaCost,
+      stationsVisited: H.stations.filter(s => G.visits[s.id]).length, stations: H.stations.length,
+    } };
+  },
+});
+Tools.mcp.register({
+  name: 'create_hunt', title: 'Create a treasure hunt', label: 'mcp.created',
+  description: 'Creates a new treasure hunt from JSON (it is added, never replaces one). Shape: {title, intro, finale, radius (m), megaCost, characters:[{id, name, emoji, side: ally|enemy|other, power, hp, ability}], stations:[{id, name, emoji, hint, lat, lon, when:{flags, notFlags, team, energy}, scenes:[{title, text, character, battle, repeat, when:{flags, notFlags, team, energy, visits}, puzzle:{type: quiz (question, answers[4], correct 0-3) | riddle (question, answers "a|b", hint) | task (variant team|search|picture|move|think, task, seconds) | loud (task, seconds, level quiet|medium|loud) | clap (task, count) | run (task, meters, seconds), bonus}, win:{text, flags, unflags, ally, energy, treasure}, lose:{...}}]}]}. The first scene of a station whose conditions hold and that was not won yet plays. Returns the new id and any problems found.',
+  inputSchema: { type: 'object', properties: { hunt: { type: 'string', minLength: 2, maxLength: 200000, description: 'The treasure hunt as a JSON string.' } }, required: ['hunt'], additionalProperties: false },
+  execute: ({ hunt }) => {
+    let obj;
+    try { obj = JSON.parse(hunt); } catch (e) { throw new Error('hunt is not valid JSON: ' + e.message); }
+    const h = E.normalize(Object.assign({}, obj, { id: '' }), P.TYPES);
+    if (!saveHunt(h)) throw new Error('storage is full');
+    log('hunt created by agent', { stations: h.stations.length });
+    if (screen_ === 'home') renderHome();
+    return { id: h.id, title: h.title, stations: h.stations.length, characters: h.characters.length,
+      scenes: E.allScenes(h).length, problems: E.check(h).map(w => w.k + (w.name ? ': ' + w.name : '')) };
+  },
+});
+
+/* ---------- Diagnostics (states and counts only – no texts, no coordinates) ---------- */
+Tools.diag.info(() => ({
+  hunts: huntIds().length, screen: screen_, editorView: ed ? ed.view : '',
+  game: H ? { stations: H.stations.length, scenes: E.allScenes(H).length, started: G.started, finished: G.finished, done: G.done.length, team: G.team.length, energy: G.energy, target: !!G.target, active: !!G.active } : null,
+  gps: { supported: Geo.supported(), watching: Geo.id != null, error: Geo.err, accuracy: Geo.pos ? Math.round(Geo.pos.acc) : null },
+  compass: { heading: Heading.value != null, needsPermission: Heading.needsPermission() },
+  map: settings.map, nav: settings.nav, speech: 'speechSynthesis' in window, autoRead: settings.autoRead, puzzleRunning: !!curPuzzle,
+}));
+
+/* ---------- Start ---------- */
+if (settings.playing && loadHunt(settings.playing)) startPlay(settings.playing);
+else { settings.playing = ''; renderHome(); }
+})();
+</script>
+</body>
+</html>
