@@ -20,6 +20,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | [Furzkissen](https://phanlipo.github.io/whoopee-cushion/) | `whoopee-cushion/` | Drauftippen und pupsen lassen – sieben Geräusche, Zeitzünder für Streiche und Vibration. |
 | [Handy-Sensoren](https://phanlipo.github.io/sensors/) | `sensors/` | Kompass, Wasserwaage, Beschleunigung, Vibrometer, Schallpegel, Stimmgerät, Tacho, Schrittzähler, Tongenerator, Taschenlampe mit Morse, Puls und Klatsch-Stoppuhr – mit den Sensoren des Handys. |
 | [KI-Chat](https://phanlipo.github.io/ai-chat/) | `ai-chat/` | Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht. |
+| [Loop-Station](https://phanlipo.github.io/loop-station/) | `loop-station/` | Instrumente, Stimme, Klatschen … aufnehmen und als Schleifen übereinanderlegen – mit Metronom, Takt-Raster und WAV-Export. |
 | [Malen](https://phanlipo.github.io/paint/) | `paint/` | Weiße Leinwand zum Malen mit dem Finger: 6 Farben, Stift, Pinsel, Marker, Spray, Farbtopf und Radierer. |
 | [PDF bearbeiten](https://phanlipo.github.io/pdf-edit/) | `pdf-edit/` | PDF-Dateien zusammenführen, Seiten entfernen, drehen und neu sortieren – direkt im Browser, ohne Upload. |
 | [PDF zu Word](https://phanlipo.github.io/pdf2word/) | `pdf2word/` | PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – mit Bildern und Texterkennung für gescannte Seiten, ohne Upload: Die Datei verlässt das Gerät nicht. |

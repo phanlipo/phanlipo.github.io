@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Loop-Station</title>
+<meta name="description" content="Instrumente, Stimme, Klatschen … aufnehmen und als Schleifen übereinanderlegen – mit Metronom, Takt-Raster und WAV-Export.">
+<meta name="tool:tags" content="Freizeit, Musik">
+<meta name="tool:features" content="Mikrofon, KI-Agent">
+<meta name="tool:icon" content="repeat">
+<meta name="tool:color" content="#c2185b">
+<meta name="tool:short-name" content="Loop-Station">
+<meta name="tool:title-en" content="Loop Station">
+<meta name="tool:description-en" content="Record instruments, voice, clapping … and layer them as loops – with metronome, bar grid and WAV export.">
+<meta name="tool:short-name-en" content="Loop Station">
+<meta name="tool:storage" content="loop-station.">
+<meta name="tool:webmcp" content="get_status, play, stop, set_track, set_tempo">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-cCn3bCFoZLfzGWGnZpkCAGmtt5v/SIHMAJNk3EcgHbo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Loop-Station">
+<meta name="theme-color" content="#c2185b">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#c2185b;--accent-text:#ffffff;--page-width:720px;--rec:#c62828;--rec-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f48fb1;--accent-text:#2a0614;--rec:#ef5350;--rec-text:#1a0000}}
+/* Stage layout: tracks fill the screen, transport buttons at the bottom; settings and export are in the menu */
+main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.looper{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:12px}
+
+/* ---------- Position ---------- */
+.pos{flex:none;display:flex;align-items:center;gap:10px}
+.prog{flex:1;height:10px;border-radius:5px;background:var(--surface-2);overflow:hidden;border:1px solid var(--border)}
+.prog span{display:block;height:100%;width:0;background:var(--accent)}
+.looper[data-state="recording"] .prog span,.looper[data-state="overdub"] .prog span{background:var(--rec)}
+.time{font-variant-numeric:tabular-nums;font-size:14px;color:var(--muted);min-width:96px;text-align:end;white-space:nowrap}
+.beats{flex:none;display:flex;justify-content:center;gap:8px;min-height:16px}
+.beats i{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);background:var(--surface-2)}
+.beats i:first-child{border-color:var(--accent)}
+.beats i.on{background:var(--accent);border-color:var(--accent)}
+.looper[data-state="countin"] .beats i.on{background:var(--rec);border-color:var(--rec)}
+.status{flex:none;text-align:center;min-height:24px;margin:0;font-weight:600;font-size:15px}
+.status.err{color:var(--err)}
+
+/* ---------- Tracks ---------- */
+.tracks{flex:1;min-height:72px;overflow-y:auto;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;--pos:0}
+.empty{margin:auto;text-align:center;color:var(--muted);font-size:14px;padding:12px;max-width:340px}
+.empty .big{display:block;font-size:40px;line-height:1.2}
+.track{display:grid;grid-template-columns:28px 1fr 44px 44px;grid-template-areas:"num wave mute del" "num vol vol vol";gap:2px 6px;align-items:center;padding:4px 6px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}
+.track.muted .wave{opacity:.45}
+.tn{grid-area:num;align-self:stretch;display:grid;place-items:center;font-weight:700;border-radius:6px;background:var(--accent);color:var(--accent-text)}
+.wave{grid-area:wave;position:relative;height:44px;min-width:0}
+.wave canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.wave .head{position:absolute;top:0;bottom:0;width:2px;background:var(--text);left:calc(var(--pos) * 100%);opacity:.7}
+.looper:not([data-state="playing"]):not([data-state="overdub"]) .wave .head{display:none}
+.tb{width:44px;height:44px;display:grid;place-items:center;padding:0;border:0;border-radius:10px;background:none;color:var(--text);cursor:pointer}
+.tb:hover{background:var(--surface)}
+.tb:disabled{opacity:.45;cursor:not-allowed}
+.tb svg,.ib svg{width:22px;height:22px}
+.tb[data-act="mute"]{grid-area:mute}
+.tb[data-act="mute"][aria-pressed="true"]{color:var(--err)}
+.tb[data-act="del"]{grid-area:del}
+.vol{grid-area:vol;width:100%;height:28px;margin:0;accent-color:var(--accent)}
+.recrow{border-style:dashed;border-color:var(--rec)}
+.recrow .tn{background:var(--rec);color:var(--rec-text)}
+
+.meter{flex:none;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;visibility:hidden}
+.meter.on{visibility:visible}
+.meter span{display:block;height:100%;width:0;background:var(--ok)}
+
+/* ---------- Transport ---------- */
+.actions{flex:none;display:grid;grid-template-columns:48px 48px 3fr 2fr;gap:8px}
+.actions .btn{min-height:60px;font-size:17px;font-weight:600;white-space:nowrap;padding-inline:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.actions .btn:disabled{opacity:.5;cursor:not-allowed}
+.ib{display:grid;place-items:center;padding:0!important}
+.btn.rec{background:var(--rec);border-color:var(--rec);color:var(--rec-text)}
+.btn.rec.recording{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.75}}
+@media (prefers-reduced-motion:reduce){.btn.rec.recording{animation:none}}
+
+/* ---------- Settings ---------- */
+.card h3{font-size:15px;margin:16px 0 6px}
+.card h3:first-of-type{margin-top:4px}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.fields label,.field{display:flex;flex-direction:column;gap:2px;font-size:14px;color:var(--muted);min-width:0}
+.fields input,.fields select,.field input,.field select{min-height:44px;padding-inline:8px;font-size:16px;width:100%}
+.field{max-width:200px}
+.card fieldset{border:0;padding:0;margin:0;min-width:0}
+.card fieldset:disabled{opacity:.6}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Loop-Station</span></h1>
+  <p class="sub" data-i18n="sub">Aufnehmen und übereinanderlegen</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnSaveHead" aria-label="Als WAV speichern" data-i18n-attr="aria-label:saveWav" title="Als WAV speichern" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/></svg></button>
+    <button type="button" class="head-btn" id="btnClear" aria-label="Alle Spuren löschen" data-i18n-attr="aria-label:clearAll" title="Alle Spuren löschen" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card looper" id="looper" aria-label="Loop-Station" data-i18n-attr="aria-label:title" data-state="idle" data-tracks="0" data-loop-ms="0" data-loop-samples="0">
+    <div class="pos">
+      <div class="prog" aria-hidden="true"><span id="prog"></span></div>
+      <span class="time" id="time" aria-hidden="true">–</span>
+    </div>
+    <div class="beats" id="beatDots" aria-hidden="true"></div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <ul class="tracks" id="tracks" aria-label="Spuren" data-i18n-attr="aria-label:tracks"></ul>
+    <div class="meter" id="meter" aria-hidden="true"><span id="meterBar"></span></div>
+    <div class="actions">
+      <button type="button" class="btn ib" id="btnUndo" aria-label="Rückgängig" data-i18n-attr="aria-label:undo" title="Rückgängig" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14l-4 -4l4 -4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></svg></button>
+      <button type="button" class="btn ib" id="btnRedo" aria-label="Wiederholen" data-i18n-attr="aria-label:redo" title="Wiederholen" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14l4 -4l-4 -4"/><path d="M19 10h-11a4 4 0 1 0 0 8h1"/></svg></button>
+      <button type="button" class="btn rec" id="btnRec">🔴 Aufnehmen</button>
+      <button type="button" class="btn" id="btnPlay" disabled>▶️ Start</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu>
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <h3 data-i18n="h.tempo">Takt &amp; Metronom</h3>
+    <label class="check"><input type="checkbox" id="optTempo"> <span data-i18n="optTempo">Im Takt aufnehmen – Länge der Schleife in Takten statt frei</span></label>
+    <fieldset id="tempoBox">
+      <legend class="sr-only" data-i18n="h.tempo">Takt &amp; Metronom</legend>
+      <div class="fields">
+        <label><span data-i18n="bpm">Tempo (BPM)</span><input type="number" id="bpm" min="40" max="240" step="1" inputmode="numeric"></label>
+        <label><span data-i18n="beats">Schläge/Takt</span><select id="beats"></select></label>
+        <label><span data-i18n="bars">Takte</span><select id="bars"></select></label>
+      </div>
+      <label class="check"><input type="checkbox" id="optCount"> <span data-i18n="optCount">Einzählen (ein Takt vorweg)</span></label>
+    </fieldset>
+    <label class="check"><input type="checkbox" id="optClick"> <span data-i18n="optClick">Metronom beim Aufnehmen und Abspielen hören</span></label>
+    <p class="muted" id="tempoLock" hidden data-i18n="tempoLock">Solange Spuren da sind, bleiben Tempo und Länge fest.</p>
+    <h3 data-i18n="h.sound">Mikrofon &amp; Verzögerung</h3>
+    <label class="check"><input type="checkbox" id="optEcho"> <span data-i18n="optEcho">Echo-Unterdrückung (ohne Kopfhörer einschalten)</span></label>
+    <label class="check"><input type="checkbox" id="optLatAuto"> <span id="latAutoText">Verzögerung automatisch ausgleichen</span></label>
+    <label class="field"><span data-i18n="lat">Verzögerung (ms)</span><input type="number" id="lat" min="0" max="1000" step="5" inputmode="numeric"></label>
+  </section>
+
+  <section class="card" aria-labelledby="h-export" data-menu>
+    <h2 id="h-export" data-i18n="export">Speichern</h2>
+    <label class="field"><span data-i18n="repeats">Durchläufe in der Datei</span><select id="repeats"></select></label>
+    <div class="row" style="margin-top:10px">
+      <button type="button" class="btn primary" id="btnSave" disabled data-i18n="saveWav">Als WAV speichern</button>
+      <button type="button" class="btn" id="btnShare" hidden disabled data-i18n="share">Teilen …</button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Eine Loop-Station wie auf der Bühne: Du nimmst eine kurze Schleife auf – Gitarre, Gesang, Beatbox, Klatschen –, sie läuft endlos weiter, und du legst weitere Spuren darüber.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Aufnehmen</b> tippen und losspielen, am Ende der Phrase <b>Stopp</b> tippen: Die erste Aufnahme legt die Länge der Schleife fest und läuft sofort im Kreis.</li>
+    <li>Während die Schleife läuft, nimmt <b>Neue Spur</b> eine weitere Spur auf. Sie endet automatisch nach einer Runde – oder früher mit <b>Stopp</b>. Bis zu 8 Spuren.</li>
+    <li>Je Spur: <b>Stumm</b> schalten, <b>Lautstärke</b> mit dem Schieber, <b>löschen</b>. <i>Rückgängig</i> und <i>Wiederholen</i> (unten links) nehmen Aufnahmen und Löschen zurück.</li>
+    <li><b>Start/Pause</b> hält die Schleife an und spielt sie wieder von vorn.</li>
+    <li>Oben rechts: <b>Als WAV speichern</b> (Mischung aller hörbaren Spuren) und <b>Alle Spuren löschen</b>.</li>
+  </ul>
+  <h3>Im Takt aufnehmen</h3>
+  <ul>
+    <li>Im Menü ☰ unter <i>Einstellungen</i> <b>Im Takt aufnehmen</b> einschalten, Tempo, Schläge pro Takt und Anzahl Takte wählen. Dann zählt die App einen Takt ein, nimmt genau die gewählte Länge auf und hört von selbst auf.</li>
+    <li>Das <b>Metronom</b> klickt beim Aufnehmen und Abspielen (der erste Schlag jedes Takts klingt höher). Es landet nicht in der gespeicherten Datei.</li>
+  </ul>
+  <h3>Guter Klang</h3>
+  <ul>
+    <li>Am besten mit <b>Kopfhörern</b>: Dann nimmt das Mikrofon die laufende Schleife nicht noch einmal mit auf. Mit Kopfhörern die <i>Echo-Unterdrückung</i> ausschalten – sie verfälscht Musik.</li>
+    <li><b>Verzögerung:</b> Zwischen Lautsprecher und Mikrofon vergeht etwas Zeit. Die App gleicht das automatisch aus; klingen neue Spuren trotzdem zu spät, den Haken entfernen und den Wert erhöhen (zu früh: verringern). Bluetooth-Kopfhörer verzögern stark (oft 150–300 ms) – Kabel-Kopfhörer sind besser.</li>
+    <li>Rauschunterdrückung und automatische Lautstärke des Browsers sind aus, damit Instrumente natürlich klingen.</li>
+    <li>Während die Schleife läuft, bleibt das Mikrofon an, damit neue Spuren sofort starten. <i>Pause</i> schaltet es aus. Auf dem iPhone den Stummschalter ausschalten.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Die Aufnahmen bleiben nur im Arbeitsspeicher, werden nie verschickt und sind nach dem Schließen weg – zum Aufheben <i>Als WAV speichern</i>. Gespeichert werden nur die Einstellungen. Alles funktioniert offline.</li>
+    <li>Die Schleife kann frei höchstens 60 Sekunden lang sein.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann den Zustand lesen, abspielen und anhalten, Spuren stumm schalten oder leiser machen und Tempo und Metronom einstellen (WebMCP). Aufnehmen, Löschen und das Mikrofon kann er nicht; jeder Aufruf erscheint hier als Hinweis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A loop station like on stage: record a short loop – guitar, vocals, beatbox, clapping –, it keeps going round and round, and you layer more tracks on top.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Tap <b>Record</b> and start playing, tap <b>Stop</b> at the end of the phrase: the first recording sets the length of the loop and starts looping right away.</li>
+    <li>While the loop plays, <b>New track</b> records another track. It ends by itself after one round – or earlier with <b>Stop</b>. Up to 8 tracks.</li>
+    <li>For each track: <b>mute</b>, <b>volume</b> with the slider, <b>delete</b>. <i>Undo</i> and <i>Redo</i> (bottom left) take back recordings and deletions.</li>
+    <li><b>Start/Pause</b> stops the loop and plays it again from the beginning.</li>
+    <li>Top right: <b>Save as WAV</b> (mix of all audible tracks) and <b>Delete all tracks</b>.</li>
+  </ul>
+  <h3>Recording in time</h3>
+  <ul>
+    <li>In the menu ☰ under <i>Settings</i>, switch on <b>Record in time</b> and choose tempo, beats per bar and number of bars. The app then counts in one bar, records exactly that length and stops by itself.</li>
+    <li>The <b>metronome</b> clicks while recording and playing (the first beat of each bar is higher). It is not part of the saved file.</li>
+  </ul>
+  <h3>Good sound</h3>
+  <ul>
+    <li>Best with <b>headphones</b>: then the microphone does not record the playing loop again. With headphones, switch off <i>echo cancellation</i> – it distorts music.</li>
+    <li><b>Delay:</b> it takes a moment from the speaker to the microphone. The app makes up for it automatically; if new tracks still sound late, untick the box and raise the value (too early: lower it). Bluetooth headphones add a lot of delay (often 150–300 ms) – wired ones are better.</li>
+    <li>The browser's noise suppression and automatic gain are off, so instruments sound natural.</li>
+    <li>While the loop plays, the microphone stays on so new tracks start right away. <i>Pause</i> switches it off. On iPhone, switch off the silent switch.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Recordings only stay in memory, are never sent anywhere and are gone once you close the app – use <i>Save as WAV</i> to keep them. Only the settings are stored. Everything works offline.</li>
+    <li>A free loop can be up to 60 seconds long.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can read the state, play and pause, mute tracks or turn them down and set tempo and metronome (WebMCP). It cannot record, delete or use the microphone; each call shows a note here.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version c4d5edf4ce4c</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  record:'🔴 Aufnehmen',overdub:'🔴 Neue Spur',stop:'⏹️ Stopp',cancel:'✖️ Abbrechen',play:'▶️ Start',pause:'⏸️ Pause',
+  hintFree:'Tippe auf „Aufnehmen“ und spiel los – die erste Aufnahme legt die Länge der Schleife fest.',
+  hintTempo:'Im Takt: {bars} bei {bpm} BPM. Tippe auf „Aufnehmen“ – es wird ein Takt eingezählt.',
+  hintTempoNoCount:'Im Takt: {bars} bei {bpm} BPM. Tippe auf „Aufnehmen“.',
+  bars1:'1 Takt',barsN:'{n} Takte',beatsN:'{n} Schläge',repeatsN:'{n}×',
+  starting:'Mikrofon wird eingeschaltet …',countin:'🥁 Einzählen …',
+  recFree:'🔴 Aufnahme – tippe auf Stopp, um die Schleife zu schließen.',recTempo:'🔴 Aufnahme – endet von selbst nach {bars}.',
+  recOver:'🔴 Spur {n} – endet nach einer Runde oder mit Stopp.',finishing:'Aufnahme wird abgeschlossen …',
+  playing:'▶️ Läuft – „Neue Spur“ legt etwas darüber.',full:'▶️ Läuft – 8 Spuren voll. Lösche eine, um weiter aufzunehmen.',
+  stopped:'⏸️ Angehalten – Start spielt die Schleife wieder ab.',
+  tooShort:'Das war zu kurz – nochmal!',deleted:'Spur {n} gelöscht – Rückgängig holt sie zurück.',
+  empty:'Noch keine Spuren. Nimm etwas auf – Stimme, Instrument, Klatschen …',
+  track:'Spur {n}',mute:'Spur {n} stumm',del:'Spur {n} löschen',vol:'Lautstärke Spur {n}',recRow:'Spur {n} – Aufnahme …',
+  latAuto:'Verzögerung automatisch ausgleichen ({n} ms)',latAutoUnknown:'Verzögerung automatisch ausgleichen',
+  confirmClear:'Alle Spuren löschen? Das lässt sich nicht rückgängig machen.',cleared:'Alle Spuren gelöscht.',
+  saved:'Gespeichert: {name}',shareTitle:'Loop',shareFail:'Teilen hat nicht geklappt.',
+  'err.api':'Dieser Browser kann nicht auf das Mikrofon zugreifen.','err.denied':'Zugriff auf das Mikrofon wurde abgelehnt.',
+  'err.none':'Kein Mikrofon gefunden.','err.mic':'Mikrofon-Fehler: {m}','err.audio':'Dieser Browser kann keine Töne abspielen.',
+  'err.worklet':'Dieser Browser kann nicht aufnehmen (AudioWorklet fehlt). Bitte einen aktuellen Browser verwenden.',
+  'mcp.status':'Zustand gelesen','mcp.play':'abgespielt','mcp.stop':'angehalten','mcp.track':'Spur geändert','mcp.tempo':'Tempo eingestellt'
+},
+en:{
+  title:'Loop Station',sub:'Record and layer',saveWav:'Save as WAV',clearAll:'Delete all tracks',tracks:'Tracks',undo:'Undo',redo:'Redo',
+  settings:'Settings','h.tempo':'Bars & metronome',optTempo:'Record in time – loop length in bars instead of free',
+  bpm:'Tempo (BPM)',beats:'Beats/bar',bars:'Bars',optCount:'Count in (one bar ahead)',optClick:'Hear the metronome while recording and playing',
+  tempoLock:'While there are tracks, tempo and length stay fixed.','h.sound':'Microphone & delay',
+  optEcho:'Echo cancellation (switch on without headphones)',lat:'Delay (ms)',export:'Save',repeats:'Rounds in the file',share:'Share …',
+  record:'🔴 Record',overdub:'🔴 New track',stop:'⏹️ Stop',cancel:'✖️ Cancel',play:'▶️ Start',pause:'⏸️ Pause',
+  hintFree:'Tap “Record” and start playing – the first recording sets the length of the loop.',
+  hintTempo:'In time: {bars} at {bpm} BPM. Tap “Record” – one bar is counted in.',
+  hintTempoNoCount:'In time: {bars} at {bpm} BPM. Tap “Record”.',
+  bars1:'1 bar',barsN:'{n} bars',beatsN:'{n} beats',repeatsN:'{n}×',
+  starting:'Switching on the microphone …',countin:'🥁 Counting in …',
+  recFree:'🔴 Recording – tap Stop to close the loop.',recTempo:'🔴 Recording – stops by itself after {bars}.',
+  recOver:'🔴 Track {n} – ends after one round or with Stop.',finishing:'Finishing the recording …',
+  playing:'▶️ Playing – “New track” layers something on top.',full:'▶️ Playing – 8 tracks, that is the limit. Delete one to record more.',
+  stopped:'⏸️ Paused – Start plays the loop again.',
+  tooShort:'That was too short – try again!',deleted:'Track {n} deleted – Undo brings it back.',
+  empty:'No tracks yet. Record something – voice, instrument, clapping …',
+  track:'Track {n}',mute:'Mute track {n}',del:'Delete track {n}',vol:'Volume track {n}',recRow:'Track {n} – recording …',
+  latAuto:'Make up for the delay automatically ({n} ms)',latAutoUnknown:'Make up for the delay automatically',
+  confirmClear:'Delete all tracks? This cannot be undone.',cleared:'All tracks deleted.',
+  saved:'Saved: {name}',shareTitle:'Loop',shareFail:'Sharing did not work.',
+  'err.api':'This browser cannot access the microphone.','err.denied':'Access to the microphone was denied.',
+  'err.none':'No microphone found.','err.mic':'Microphone error: {m}','err.audio':'This browser cannot play sound.',
+  'err.worklet':'This browser cannot record (AudioWorklet missing). Please use an up-to-date browser.',
+  'mcp.status':'state read','mcp.play':'playing','mcp.stop':'paused','mcp.track':'track changed','mcp.tempo':'tempo set'
+}});
+const {$,t}=Tools;
+const LS='loop-station.settings.v1';
+const MAX_TRACKS=8,MAX_FREE_SEC=60,MIN_SEC=.3;
+const BEATS=[2,3,4,5,6,7],BARS=[1,2,4,8],REPEATS=[1,2,4,8];
+const DEF={tempo:false,bpm:100,beats:4,bars:2,countIn:true,click:true,echo:true,latAuto:true,lat:100,repeats:1};
+const s=Object.assign({},DEF,Tools.load(LS,{}));
+const intIn=(v,lo,hi)=>Number.isInteger(v)&&v>=lo&&v<=hi;
+if(!intIn(s.bpm,40,240))s.bpm=DEF.bpm;
+if(!BEATS.includes(s.beats))s.beats=DEF.beats;
+if(!BARS.includes(s.bars))s.bars=DEF.bars;
+if(!REPEATS.includes(s.repeats))s.repeats=DEF.repeats;
+if(!intIn(s.lat,0,1000))s.lat=DEF.lat;
+for(const k of ['tempo','countIn','click','echo','latAuto'])if(typeof s[k]!=='boolean')s[k]=DEF[k];
+const save=()=>Tools.save(LS,s);
+const mod=(a,n)=>((a%n)+n)%n;
+const barsText=n=>t(n===1?'bars1':'barsN',{n});
+
+/* ---------- Audio ---------- */
+let ctx=null,master=null;
+function audio(){
+  if(ctx)return ctx;
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(!C){Tools.diag.log('no AudioContext');return null;}
+  try{
+    ctx=new C({latencyHint:'interactive'});
+    master=ctx.createGain();master.connect(ctx.destination);
+    Tools.diag.log('audio context created',{state:ctx.state,rate:ctx.sampleRate,base:ctx.baseLatency,output:ctx.outputLatency});
+  }catch(e){ctx=null;Tools.diag.log('audio context failed',{error:String(e)});}
+  return ctx;
+}
+// Called in a tap: browsers (iPhone above all) only play sound after one
+function unlock(){const c=audio();if(c&&c.state!=='running')c.resume().catch(e=>Tools.diag.log('audio resume failed',{error:String(e)}));}
+const frameNow=()=>Math.round(ctx.currentTime*ctx.sampleRate);
+
+/* ---------- Microphone (AudioWorklet recorder.js: blocks with exact frame numbers) ---------- */
+let mic=null,workletReady=false,inLatency=0,level=0;
+async function openMic(){
+  if(mic)return;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error(t('err.api'));
+  const c=audio();if(!c)throw new Error(t('err.audio'));
+  if(!c.audioWorklet||!window.AudioWorkletNode)throw new Error(t('err.worklet'));
+  if(!workletReady){
+    try{await c.audioWorklet.addModule('recorder.js');workletReady=true;Tools.diag.log('recorder loaded');}
+    catch(e){Tools.diag.log('recorder failed',{error:String(e)});throw new Error(t('err.worklet'));}
+  }
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:s.echo,noiseSuppression:false,autoGainControl:false},video:false});}
+  catch(e){
+    Tools.diag.log('microphone failed',{name:e.name,error:e.message});
+    throw new Error(e.name==='NotAllowedError'?t('err.denied'):e.name==='NotFoundError'?t('err.none'):t('err.mic',{m:e.message}));
+  }
+  const src=c.createMediaStreamSource(stream);
+  const node=new AudioWorkletNode(c,'loop-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
+  const mute=c.createGain();mute.gain.value=0;
+  src.connect(node);node.connect(mute);mute.connect(c.destination);
+  node.port.onmessage=e=>onChunk(e.data.frame,e.data.data);
+  const tr=stream.getAudioTracks()[0],set=tr&&tr.getSettings?tr.getSettings():{};
+  inLatency=typeof set.latency==='number'&&set.latency>=0&&set.latency<1?set.latency:0;
+  mic={stream,src,node,mute};
+  $('meter').classList.add('on');
+  Tools.diag.log('microphone on',{state:c.state,rate:c.sampleRate,echo:set.echoCancellation,inputLatency:inLatency,autoLatencyMs:autoLatencyMs()});
+  renderLatency();
+}
+function closeMic(){
+  if(!mic)return;
+  mic.node.port.onmessage=null;
+  try{mic.src.disconnect();mic.node.disconnect();mic.mute.disconnect();}catch(_){}
+  mic.stream.getTracks().forEach(tr=>tr.stop());
+  mic=null;level=0;$('meter').classList.remove('on');
+  Tools.diag.log('microphone off');
+}
+// Time from the loop leaving the app to the player's sound arriving back in it
+function autoLatencyMs(){
+  if(!ctx)return null;
+  return Math.round(((ctx.baseLatency||0)+(ctx.outputLatency||0)+inLatency)*1000);
+}
+function latencySec(){return s.latAuto?(autoLatencyMs()||0)/1000:s.lat/1000;}
+
+/* ---------- Loop and tracks ---------- */
+// loop: {len (samples), start (context time of loop position 0), tempo:{bpm,beats,bars}|null}
+let loop=null,tracks=[],undoStack=[],redoStack=[],nextId=1,playing=false,rec=null,busy=false;
+function peaksOf(d,n){
+  const out=new Float32Array(n),step=d.length/n;
+  for(let b=0;b<n;b++){let m=0;const e=Math.min(d.length,Math.floor((b+1)*step));for(let i=Math.floor(b*step);i<e;i++){const v=Math.abs(d[i]);if(v>m)m=v;}out[b]=m;}
+  return out;
+}
+function makeTrack(data){
+  const c=ctx,buf=c.createBuffer(1,data.length,c.sampleRate);buf.getChannelData(0).set(data);
+  const gain=c.createGain();gain.connect(master);
+  const peaks=peaksOf(data,240);let peak=0;for(const v of peaks)if(v>peak)peak=v;
+  const tr={id:nextId++,data,buf,gain,src:null,vol:100,muted:false,peaks,peak};
+  applyGain(tr,true);
+  return tr;
+}
+function applyGain(tr,now){
+  const v=tr.muted?0:(tr.vol/100)**2; // squared: the slider feels even
+  if(now)tr.gain.gain.value=v;else tr.gain.gain.setTargetAtTime(v,ctx.currentTime,.015);
+}
+function startSource(tr){
+  stopSource(tr);
+  const c=ctx,dur=loop.len/c.sampleRate,when=c.currentTime+.03;
+  const src=c.createBufferSource();src.buffer=tr.buf;src.loop=true;src.connect(tr.gain);
+  if(when<loop.start)src.start(loop.start,0);else src.start(when,mod(when-loop.start,dur));
+  tr.src=src;
+}
+function stopSource(tr){if(!tr.src)return;try{tr.src.stop();tr.src.disconnect();}catch(_){}tr.src=null;}
+function startTransport(){
+  if(!loop||!tracks.length)return false;
+  unlock();
+  loop.start=ctx.currentTime+.08;
+  tracks.forEach(startSource);
+  playing=true;clicks(true);
+  Tools.diag.log('play',{tracks:tracks.length,loopMs:loopMs(),state:ctx.state});
+  render();
+  return true;
+}
+function stopTransport(){
+  tracks.forEach(stopSource);
+  const was=playing;playing=false;clicks();
+  if(!rec)closeMic();
+  if(was)Tools.diag.log('pause');
+  render();
+}
+const loopMs=()=>loop&&loop.len?Math.round(loop.len/ctx.sampleRate*1000):0;
+
+/* ---------- Metronome: clicks scheduled a little ahead ---------- */
+let clickTimer=null,nextBeat=0;
+const beatSec=()=>60/loop.tempo.bpm;
+function clicksWanted(){
+  if(!ctx||!loop||!loop.tempo)return false;
+  if(rec&&rec.kind==='first')return true; // count-in (and the click while recording, if on)
+  return playing&&s.click;
+}
+function clicks(reset){
+  if(reset&&clickTimer){clearInterval(clickTimer);clickTimer=null;}
+  const want=clicksWanted();
+  if(want&&!clickTimer){nextBeat=Math.ceil((ctx.currentTime+.01-loop.start)/beatSec());clickTimer=setInterval(tickClicks,25);tickClicks();}
+  else if(!want&&clickTimer){clearInterval(clickTimer);clickTimer=null;}
+}
+function tickClicks(){
+  if(!clicksWanted()){clicks();return;}
+  const b=beatSec(),horizon=ctx.currentTime+.15;
+  for(;;){
+    const tm=loop.start+nextBeat*b;
+    if(tm>horizon)break;
+    const countIn=tm<loop.start-1e-4;
+    if(tm>=ctx.currentTime-.005&&(countIn||s.click))click(tm,mod(nextBeat,loop.tempo.beats)===0);
+    nextBeat++;
+  }
+}
+function click(tm,accent){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.frequency.value=accent?1760:1100;
+  g.gain.setValueAtTime(.0001,tm);g.gain.exponentialRampToValueAtTime(accent?.5:.3,tm+.002);g.gain.exponentialRampToValueAtTime(.0001,tm+.05);
+  o.connect(g);g.connect(ctx.destination);o.start(tm);o.stop(tm+.06);
+}
+
+/* ---------- Recording ---------- */
+// rec: {kind:'first'|'over', from, to (frames, loop time; null = open end), latF, data, written}
+function startFirst(){
+  const c=ctx,sr=c.sampleRate,latF=Math.round(latencySec()*sr);
+  tracks=[];undoStack=[];redoStack=[];
+  if(s.tempo){
+    const tempo={bpm:s.bpm,beats:s.beats,bars:s.bars},beat=60/tempo.bpm;
+    const len=Math.round(tempo.bars*tempo.beats*beat*sr);
+    const from=Math.round((c.currentTime+.15+(s.countIn?tempo.beats*beat:0))*sr);
+    loop={len,tempo,start:from/sr};
+    rec={kind:'first',from,to:from+len,latF,data:new Float32Array(len),written:0};
+  }else{
+    const from=frameNow();
+    loop={len:0,tempo:null,start:from/sr};
+    rec={kind:'first',from,to:null,latF,data:new Float32Array(MAX_FREE_SEC*sr),written:0};
+  }
+  clicks(true);
+  Tools.diag.log('record loop',{tempo:loop.tempo,countIn:s.tempo&&s.countIn,latencyMs:Math.round(latF/sr*1000)});
+  render();
+}
+function startOverdub(){
+  if(!playing)startTransport();
+  const sr=ctx.sampleRate,from=Math.max(frameNow(),Math.round(loop.start*sr));
+  rec={kind:'over',from,to:from+loop.len,latF:Math.round(latencySec()*sr),data:new Float32Array(loop.len),written:0,first:-1,last:-1};
+  Tools.diag.log('record track',{n:tracks.length+1,latencyMs:Math.round(rec.latF/sr*1000)});
+  render();
+}
+function onChunk(frame,data){
+  let q=0;for(let i=0;i<data.length;i++)q+=data[i]*data[i];
+  level=Math.sqrt(q/data.length);
+  const r=rec;if(!r)return;
+  const L0=r.kind==='over'?Math.round(loop.start*ctx.sampleRate):0;
+  for(let i=0;i<data.length;i++){
+    // g: the loop time this sound was played at (it arrives latF frames later)
+    const g=frame+i-r.latF;
+    if(g<r.from)continue;
+    if(r.to!==null&&g>=r.to)break;
+    const k=g-r.from;
+    if(r.kind==='first'){
+      if(k>=r.data.length){r.to=r.from+r.data.length;break;}
+      r.data[k]=data[i];r.written=k+1;
+    }else{
+      const p=mod(g-L0,loop.len);
+      r.data[p]=data[i];if(r.first<0)r.first=p;r.last=p;r.written=k+1;
+    }
+  }
+  if(r.to!==null&&frame+data.length-r.latF>=r.to)finish();
+}
+function stopRec(thenPause){
+  const r=rec;if(!r||r.finishing)return;
+  if(r.kind==='first'&&ctx.currentTime<loop.start){
+    rec=null;loop=null;clicks();closeMic();Tools.diag.log('count-in cancelled');render();return;
+  }
+  const f=frameNow();
+  if(r.to===null||f<r.to)r.to=Math.max(r.from,f);
+  r.thenPause=!!thenPause;r.finishing=true;
+  // The last sounds arrive one delay later; finish even if the microphone stops delivering
+  r.timer=setTimeout(()=>{if(rec===r)finish();},r.latF/ctx.sampleRate*1000+500);
+  render();
+}
+// Short fades so a part does not start or end with a click
+function fade(d,start,n,dir){
+  const len=d.length;n=Math.min(n,len);
+  for(let i=0;i<n;i++){const p=mod(start+dir*i,len);d[p]*=i/n;}
+}
+function finish(){
+  const r=rec;if(!r)return;
+  rec=null;clearTimeout(r.timer);
+  const sr=ctx.sampleRate,F=Math.round(.004*sr);
+  if(r.kind==='first'){
+    const len=loop.tempo?loop.len:r.to-r.from;
+    if(len<MIN_SEC*sr||r.written<MIN_SEC*sr){
+      Tools.diag.log('recording too short',{ms:Math.round(r.written/sr*1000)});
+      loop=null;clicks();closeMic();render(false);status(t('tooShort'));return;
+    }
+    loop.len=len;
+    const data=r.data.slice(0,len);
+    fade(data,0,F,1);fade(data,Math.min(r.written,len)-1,F,-1);
+    const tr=makeTrack(data);
+    tracks=[tr];undoStack=[{op:'add',tr,index:0}];redoStack=[];
+    // The loop just carries on: same start, the first round was the recording
+    playing=true;startSource(tr);clicks(true);
+    Tools.diag.log('loop recorded',{ms:loopMs(),peak:+tr.peak.toFixed(3)});
+  }else{
+    if(r.written<MIN_SEC*sr){
+      Tools.diag.log('track too short',{ms:Math.round(r.written/sr*1000)});
+      if(r.thenPause)stopTransport();
+      render(false);status(t('tooShort'));return;
+    }
+    if(r.written<loop.len){fade(r.data,r.first,F,1);fade(r.data,r.last,F,-1);}
+    const tr=makeTrack(r.data);
+    const a={op:'add',tr,index:tracks.length};
+    tracks.push(tr);undoStack.push(a);redoStack=[];
+    if(playing)startSource(tr);
+    Tools.diag.log('track recorded',{n:tracks.length,ms:Math.round(r.written/sr*1000),peak:+tr.peak.toFixed(3)});
+    if(r.thenPause)stopTransport();
+  }
+  renderTracks();render();
+}
+
+/* ---------- Undo / redo / delete ---------- */
+function insertTrack(tr,i){tracks.splice(Math.min(i,tracks.length),0,tr);if(playing)startSource(tr);}
+function removeTrack(tr){const i=tracks.indexOf(tr);if(i<0)return -1;stopSource(tr);tracks.splice(i,1);return i;}
+function apply(a){if(a.op==='add')insertTrack(a.tr,a.index);else removeTrack(a.tr);}
+function revert(a){if(a.op==='add')removeTrack(a.tr);else insertTrack(a.tr,a.index);}
+function afterEdit(){if(!tracks.length&&playing)stopTransport();renderTracks();render();}
+function undo(){if(rec||busy)return;const a=undoStack.pop();if(!a)return;revert(a);redoStack.push(a);Tools.diag.log('undo',{op:a.op});afterEdit();}
+function redo(){if(rec||busy)return;const a=redoStack.pop();if(!a)return;apply(a);undoStack.push(a);Tools.diag.log('redo',{op:a.op});afterEdit();}
+function deleteTrack(tr){
+  if(rec||busy)return;
+  const n=tracks.indexOf(tr)+1,i=removeTrack(tr);if(i<0)return;
+  undoStack.push({op:'del',tr,index:i});redoStack=[];
+  Tools.toast(t('deleted',{n}));Tools.diag.log('track deleted',{n});
+  afterEdit();
+}
+function clearAll(){
+  if(!tracks.length&&!rec)return;
+  if(!confirm(t('confirmClear')))return;
+  if(rec){clearTimeout(rec.timer);rec=null;}
+  stopTransport();
+  tracks=[];undoStack=[];redoStack=[];loop=null;
+  closeMic();clicks();
+  Tools.diag.log('cleared');
+  renderTracks();render(false);status(t('cleared'));
+}
+
+/* ---------- Export: mix of the audible tracks as 16-bit mono WAV ---------- */
+function mixdown(repeats){
+  const len=loop.len,out=new Float32Array(len*repeats);
+  for(const tr of tracks){
+    if(tr.muted||!tr.vol)continue;
+    const g=(tr.vol/100)**2,d=tr.data;
+    for(let i=0;i<len;i++){const v=d[i]*g;if(v)for(let k=0;k<repeats;k++)out[k*len+i]+=v;}
+  }
+  let peak=0;for(let i=0;i<out.length;i++){const v=Math.abs(out[i]);if(v>peak)peak=v;}
+  if(peak>.99){const k=.99/peak;for(let i=0;i<out.length;i++)out[i]*=k;}
+  return out;
+}
+function wav(d,sr){
+  const n=d.length,b=new ArrayBuffer(44+n*2),v=new DataView(b);
+  const str=(o,x)=>{for(let i=0;i<x.length;i++)v.setUint8(o+i,x.charCodeAt(i));};
+  str(0,'RIFF');v.setUint32(4,36+n*2,true);str(8,'WAVE');str(12,'fmt ');v.setUint32(16,16,true);
+  v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);
+  str(36,'data');v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){const x=Math.max(-1,Math.min(1,d[i]));v.setInt16(44+i*2,Math.round(x<0?x*32768:x*32767),true);}
+  return b;
+}
+function exportFile(){
+  const p=n=>String(n).padStart(2,'0'),d=new Date();
+  const name=`loop-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.wav`;
+  const f=new File([wav(mixdown(s.repeats),ctx.sampleRate)],name,{type:'audio/wav'});
+  Tools.diag.log('export',{repeats:s.repeats,bytes:f.size,tracks:tracks.filter(tr=>!tr.muted&&tr.vol).length});
+  return f;
+}
+function saveWav(){
+  if(!tracks.length)return;
+  const f=exportFile(),a=document.createElement('a');
+  a.href=URL.createObjectURL(f);a.download=f.name;document.body.append(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  Tools.toast(t('saved',{name:f.name}));
+}
+const canShareFiles=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File([''],'x.wav',{type:'audio/wav'})]}));}catch(_){return false;}})();
+$('btnShare').hidden=!canShareFiles;
+$('btnShare').addEventListener('click',async()=>{
+  if(!tracks.length)return;
+  try{await navigator.share({files:[exportFile()],title:t('shareTitle')});}
+  catch(e){if(e.name!=='AbortError'){Tools.diag.log('share failed',{name:e.name});Tools.toast(t('shareFail'));}}
+});
+
+/* ---------- UI ---------- */
+const svg=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+const ICON={
+  vol:svg('<path d="M15 8a5 5 0 0 1 0 8"/><path d="M17.7 5a9 9 0 0 1 0 14"/><path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5"/>'),
+  off:svg('<path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5"/><path d="M16 10l4 4m0 -4l-4 4"/>'),
+  del:svg('<path d="M18 6l-12 12"/><path d="M6 6l12 12"/>')
+};
+const st=$('status');
+function status(text,err){st.textContent=text;st.classList.toggle('err',!!err);}
+function state(){
+  if(busy)return 'starting';
+  if(rec){if(rec.kind==='first')return ctx.currentTime<loop.start?'countin':'recording';return 'overdub';}
+  if(playing)return 'playing';
+  return tracks.length?'stopped':'idle';
+}
+let shown='';
+function render(updateStatus=true){
+  const S=state();shown=S;
+  const el=$('looper');
+  el.dataset.state=S;el.dataset.tracks=String(tracks.length);
+  el.dataset.loopMs=String(loopMs());el.dataset.loopSamples=String(loop&&loop.len||0);
+  const b=$('btnRec');
+  b.textContent=rec?(S==='countin'?t('cancel'):t('stop')):tracks.length?t('overdub'):t('record');
+  b.classList.toggle('recording',!!rec&&S!=='countin');
+  b.disabled=busy||!!(rec&&rec.finishing)||(!rec&&tracks.length>=MAX_TRACKS);
+  const p=$('btnPlay');
+  p.textContent=playing?t('pause'):t('play');
+  p.disabled=busy||!tracks.length||!!(rec&&rec.kind==='first')||!!(rec&&rec.finishing);
+  $('btnUndo').disabled=!!rec||busy||!undoStack.length;
+  $('btnRedo').disabled=!!rec||busy||!redoStack.length;
+  for(const id of ['btnSaveHead','btnSave','btnShare'])$(id).disabled=!tracks.length;
+  $('btnClear').disabled=!tracks.length&&!rec;
+  const locked=tracks.length>0||!!rec;
+  $('optTempo').disabled=locked;$('tempoBox').disabled=locked||!s.tempo;$('tempoLock').hidden=!locked;
+  renderBeats();renderRecRow();
+  if(!updateStatus)return;
+  if(S==='starting')status(t('starting'));
+  else if(S==='countin')status(t('countin'));
+  else if(rec&&rec.finishing)status(t('finishing'));
+  else if(S==='recording')status(loop.tempo?t('recTempo',{bars:barsText(loop.tempo.bars)}):t('recFree'));
+  else if(S==='overdub')status(t('recOver',{n:tracks.length+1}));
+  else if(S==='playing')status(tracks.length>=MAX_TRACKS?t('full'):t('playing'));
+  else if(S==='stopped')status(t('stopped'));
+  else status(s.tempo?t(s.countIn?'hintTempo':'hintTempoNoCount',{bars:barsText(s.bars),bpm:s.bpm}):t('hintFree'));
+}
+function renderBeats(){
+  const n=loop&&loop.tempo?loop.tempo.beats:(!tracks.length&&s.tempo?s.beats:0);
+  const box=$('beatDots');
+  if(box.childElementCount!==n)box.innerHTML='<i></i>'.repeat(n);
+}
+function renderRecRow(){
+  let row=$('recRow');
+  const want=rec&&rec.kind==='over';
+  if(!want){if(row)row.remove();return;}
+  if(!row){row=document.createElement('li');row.id='recRow';row.className='track recrow';$('tracks').append(row);}
+  row.innerHTML=`<span class="tn" aria-hidden="true">${tracks.length+1}</span><span class="wave" style="display:flex;align-items:center">${Tools.esc(t('recRow',{n:tracks.length+1}))}</span>`;
+  row.scrollIntoView({block:'nearest'});
+}
+function renderTracks(){
+  const ul=$('tracks');
+  if(!tracks.length){ul.innerHTML=`<li class="empty"><span class="big" aria-hidden="true">🎸🎤🥁</span>${Tools.esc(t('empty'))}</li>`;return;}
+  ul.innerHTML=tracks.map((tr,i)=>{const n=i+1;return `<li class="track${tr.muted?' muted':''}" data-id="${tr.id}" data-peak="${tr.peak.toFixed(3)}" aria-label="${Tools.esc(t('track',{n}))}">
+<span class="tn" aria-hidden="true">${n}</span>
+<span class="wave"><canvas aria-hidden="true"></canvas><span class="head"></span></span>
+<button type="button" class="tb" data-act="mute" aria-pressed="${tr.muted}" aria-label="${Tools.esc(t('mute',{n}))}">${tr.muted?ICON.off:ICON.vol}</button>
+<button type="button" class="tb" data-act="del" aria-label="${Tools.esc(t('del',{n}))}">${ICON.del}</button>
+<input type="range" class="vol" data-act="vol" min="0" max="100" step="5" value="${tr.vol}" aria-label="${Tools.esc(t('vol',{n}))}">
+</li>`;}).join('');
+  drawWaves();
+  renderRecRow();
+}
+function drawWaves(){
+  const cs=getComputedStyle(document.documentElement);
+  const color=cs.getPropertyValue('--accent').trim()||'#c2185b';
+  for(const li of $('tracks').querySelectorAll('li.track[data-id]')){
+    const tr=tracks.find(x=>x.id===+li.dataset.id),cv=li.querySelector('canvas');
+    if(!tr||!cv)continue;
+    const dpr=window.devicePixelRatio||1,w=Math.max(1,Math.round(cv.clientWidth*dpr)),h=Math.max(1,Math.round(cv.clientHeight*dpr));
+    if(cv.width!==w)cv.width=w;if(cv.height!==h)cv.height=h;
+    const g=cv.getContext('2d');g.clearRect(0,0,w,h);g.fillStyle=color;
+    const n=tr.peaks.length,bw=w/n,mid=h/2;
+    // Scaled to the loudest track so quiet parts stay quiet
+    let top=0;for(const x of tracks)if(x.peak>top)top=x.peak;
+    for(let i=0;i<n;i++){const a=Math.max(1,tr.peaks[i]/(top||1)*mid*.95);g.fillRect(i*bw,mid-a,Math.max(1,bw-.5),a*2);}
+  }
+}
+function renderSettings(){
+  $('optTempo').checked=s.tempo;$('bpm').value=s.bpm;
+  $('beats').innerHTML=BEATS.map(n=>`<option value="${n}"${n===s.beats?' selected':''}>${Tools.esc(t('beatsN',{n}))}</option>`).join('');
+  $('bars').innerHTML=BARS.map(n=>`<option value="${n}"${n===s.bars?' selected':''}>${Tools.esc(barsText(n))}</option>`).join('');
+  $('repeats').innerHTML=REPEATS.map(n=>`<option value="${n}"${n===s.repeats?' selected':''}>${Tools.esc(t('repeatsN',{n}))}</option>`).join('');
+  $('optCount').checked=s.countIn;$('optClick').checked=s.click;$('optEcho').checked=s.echo;
+  $('optLatAuto').checked=s.latAuto;
+  renderLatency();
+}
+function renderLatency(){
+  const ms=autoLatencyMs();
+  $('latAutoText').textContent=ms==null?t('latAutoUnknown'):t('latAuto',{n:Tools.fmt(ms,0)});
+  $('lat').disabled=s.latAuto;$('lat').value=s.latAuto&&ms!=null?ms:s.lat;
+}
+
+// Position, beat and level: every frame
+let lastTime='';
+function frame(){
+  requestAnimationFrame(frame);
+  if(!ctx)return;
+  const S=state();
+  if(S!==shown)render();
+  const sr=ctx.sampleRate,now=ctx.currentTime;
+  let pos=0,txt='–';
+  if(loop&&loop.len&&(playing||rec)){
+    const dur=loop.len/sr,x=Math.max(0,now-loop.start);
+    pos=mod(x,dur)/dur;txt=`${Tools.fmt(mod(x,dur),1)} / ${Tools.fmt(dur,1)} s`;
+  }else if(rec&&rec.kind==='first'&&now>=loop.start){
+    const x=now-loop.start;txt=`${Tools.fmt(x,1)} s`;pos=Math.min(1,x/MAX_FREE_SEC);
+  }else if(loop&&loop.len)txt=`${Tools.fmt(loop.len/sr,1)} s`;
+  $('prog').style.width=(pos*100).toFixed(2)+'%';
+  $('tracks').style.setProperty('--pos',pos.toFixed(4));
+  if(txt!==lastTime){$('time').textContent=txt;lastTime=txt;}
+  // Beat dots
+  const dots=$('beatDots').children;
+  if(dots.length&&loop&&loop.tempo&&(playing||rec)){
+    const k=mod(Math.floor((now-loop.start)/beatSec()+1e-6),loop.tempo.beats);
+    for(let i=0;i<dots.length;i++)dots[i].classList.toggle('on',i===k);
+  }else for(const d of dots)d.classList.remove('on');
+  $('meterBar').style.width=Math.min(100,Math.round(Math.sqrt(level)*160))+'%';
+}
+
+/* ---------- Events ---------- */
+$('btnRec').addEventListener('click',async()=>{
+  unlock();
+  if(busy)return;
+  if(rec){stopRec();return;}
+  if(tracks.length>=MAX_TRACKS){status(t('full'));return;}
+  busy=true;render();
+  try{await openMic();}
+  catch(e){busy=false;render(false);status(e.message,true);return;}
+  busy=false;
+  if(!tracks.length)startFirst();else startOverdub();
+});
+$('btnPlay').addEventListener('click',()=>{
+  unlock();
+  if(rec&&rec.kind==='over'){stopRec(true);return;}
+  if(playing)stopTransport();else startTransport();
+});
+$('btnUndo').addEventListener('click',undo);
+$('btnRedo').addEventListener('click',redo);
+$('btnClear').addEventListener('click',clearAll);
+$('btnSaveHead').addEventListener('click',saveWav);
+$('btnSave').addEventListener('click',saveWav);
+$('tracks').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-act]');if(!b)return;
+  const tr=tracks.find(x=>x.id===+b.closest('li').dataset.id);if(!tr)return;
+  if(b.dataset.act==='mute')setTrack(tr,{muted:!tr.muted});
+  else if(b.dataset.act==='del')deleteTrack(tr);
+});
+$('tracks').addEventListener('input',e=>{
+  if(e.target.dataset.act!=='vol')return;
+  const tr=tracks.find(x=>x.id===+e.target.closest('li').dataset.id);if(!tr)return;
+  tr.vol=+e.target.value;applyGain(tr);
+});
+function setTrack(tr,{muted,volume}){
+  if(typeof muted==='boolean')tr.muted=muted;
+  if(typeof volume==='number')tr.vol=volume;
+  applyGain(tr);
+  const li=$('tracks').querySelector(`li[data-id="${tr.id}"]`);
+  if(li){
+    li.classList.toggle('muted',tr.muted);
+    const m=li.querySelector('[data-act="mute"]');m.setAttribute('aria-pressed',String(tr.muted));m.innerHTML=tr.muted?ICON.off:ICON.vol;
+    li.querySelector('[data-act="vol"]').value=tr.vol;
+  }
+}
+$('optTempo').addEventListener('change',e=>{s.tempo=e.target.checked;save();render();Tools.diag.log('tempo mode',{on:s.tempo});});
+$('bpm').addEventListener('change',e=>{
+  const v=Math.round(Tools.parseNum(e.target.value));
+  if(Number.isFinite(v))s.bpm=Math.min(240,Math.max(40,v));
+  e.target.value=s.bpm;save();render();
+});
+$('beats').addEventListener('change',e=>{s.beats=+e.target.value;save();render();});
+$('bars').addEventListener('change',e=>{s.bars=+e.target.value;save();render();});
+$('repeats').addEventListener('change',e=>{s.repeats=+e.target.value;save();});
+$('optCount').addEventListener('change',e=>{s.countIn=e.target.checked;save();render();});
+$('optClick').addEventListener('change',e=>{s.click=e.target.checked;save();if(ctx)clicks();});
+$('optEcho').addEventListener('change',e=>{
+  s.echo=e.target.checked;save();
+  if(mic&&!rec){closeMic();if(playing)openMic().catch(err=>status(err.message,true));} // takes effect with the next microphone start
+  Tools.diag.log('echo cancellation',{on:s.echo});
+});
+$('optLatAuto').addEventListener('change',e=>{s.latAuto=e.target.checked;if(!s.latAuto&&autoLatencyMs()!=null)s.lat=Math.min(1000,autoLatencyMs());save();renderLatency();});
+$('lat').addEventListener('change',e=>{
+  const v=Math.round(Tools.parseNum(e.target.value));
+  if(Number.isFinite(v))s.lat=Math.min(1000,Math.max(0,v));
+  save();renderLatency();Tools.diag.log('latency',{ms:s.lat});
+});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&rec)stopRec();});
+let resizeTimer=0;
+window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(drawWaves,100);});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',drawWaves);
+
+renderSettings();renderTracks();render();
+if(!(window.AudioContext||window.webkitAudioContext))status(t('err.audio'),true);
+requestAnimationFrame(frame);
+Tools.onLang(()=>{renderSettings();renderTracks();render();});
+Tools.diag.info(()=>({state:state(),tracks:tracks.length,loopMs:ctx?loopMs():0,tempo:loop?loop.tempo:null,
+  settings:{tempo:s.tempo,bpm:s.bpm,beats:s.beats,bars:s.bars,countIn:s.countIn,click:s.click,echo:s.echo,latAuto:s.latAuto,lat:s.lat},
+  autoLatencyMs:autoLatencyMs(),microphone:!!mic,audio:ctx?ctx.state:'not created',rate:ctx?ctx.sampleRate:null,
+  worklet:typeof AudioWorkletNode!=='undefined',undo:undoStack.length,redo:redoStack.length}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const tempoOut=x=>x?{bpm:x.bpm,beats_per_bar:x.beats,bars:x.bars}:null;
+const statusOut=()=>({
+  state:state()==='starting'?'idle':state(),playing,microphone_on:!!mic,
+  loop_ms:ctx?loopMs():0,loop_tempo:loop?tempoOut(loop.tempo):null,max_tracks:MAX_TRACKS,
+  tracks:tracks.map((tr,i)=>({track:i+1,muted:tr.muted,volume:tr.vol,peak:+tr.peak.toFixed(3)})),
+  settings:{tempo_mode:s.tempo,bpm:s.bpm,beats_per_bar:s.beats,bars:s.bars,count_in:s.countIn,metronome:s.click}
+});
+Tools.mcp.register({
+  name:'get_status',title:'Read the state of the loop station',label:'mcp.status',readOnly:true,
+  description:'Reads the state of the loop station: what it is doing (idle, countin, recording, playing, overdub, stopped), whether the loop plays, whether the microphone is on, the loop length in milliseconds, its tempo (when recorded in time), every track with number, muted, volume (0-100) and peak level (0-1), and the tempo settings. Never returns the audio itself.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>statusOut()
+});
+Tools.mcp.register({
+  name:'play',title:'Play the loop',label:'mcp.play',
+  description:'Starts playing the recorded tracks as a loop from the beginning (does nothing if it already plays). The agent cannot record - the user has to record a track first. Browsers only play sound after the user has tapped the page once; audible says whether it could be heard. Returns playing, audible, loop_ms and the number of tracks.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    if(rec||busy)throw new Error('The app is recording right now - try again when the user has finished.');
+    if(!tracks.length)throw new Error('No tracks yet - the user has to record one in the app first.');
+    if(!playing)startTransport();
+    return {playing,audible:ctx.state==='running',loop_ms:loopMs(),tracks:tracks.length};
+  }
+});
+Tools.mcp.register({
+  name:'stop',title:'Pause the loop',label:'mcp.stop',
+  description:'Pauses the loop and switches off the microphone. Tracks are kept; play starts again from the beginning. Not possible while the user records. Returns playing (false) and the number of tracks.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    if(rec||busy)throw new Error('The app is recording right now - try again when the user has finished.');
+    stopTransport();
+    return {playing,tracks:tracks.length};
+  }
+});
+Tools.mcp.register({
+  name:'set_track',title:'Mute a track or change its volume',label:'mcp.track',
+  description:'Mutes or unmutes one track or sets its volume (0-100, like the slider in the app). Tracks are numbered from 1 as shown in the app. Returns the track with its new settings.',
+  inputSchema:{type:'object',properties:{
+    track:{type:'integer',minimum:1,maximum:MAX_TRACKS,description:'Track number as shown in the app (1 = first track).'},
+    muted:{type:'boolean',description:'true mutes the track, false makes it audible again.'},
+    volume:{type:'integer',minimum:0,maximum:100,description:'Volume from 0 to 100.'}
+  },required:['track'],additionalProperties:false},
+  execute:({track,muted,volume})=>{
+    const tr=tracks[track-1];
+    if(!tr)throw new Error(`There is no track ${track} - the loop has ${tracks.length} track(s).`);
+    setTrack(tr,{muted,volume});
+    return {track,muted:tr.muted,volume:tr.vol};
+  }
+});
+Tools.mcp.register({
+  name:'set_tempo',title:'Set tempo and metronome',label:'mcp.tempo',
+  description:'Sets how the next loop is recorded: tempo_mode (true = length in bars with count-in, false = free length set by the user), bpm, beats_per_bar, bars, count_in and metronome (click while recording and playing). Tempo, beats, bars and tempo_mode are fixed while there are tracks; only count_in and metronome can change then. Returns the settings now in use.',
+  inputSchema:{type:'object',properties:{
+    tempo_mode:{type:'boolean',description:'true: record in time (length in bars); false: free length.'},
+    bpm:{type:'integer',minimum:40,maximum:240,description:'Tempo in beats per minute.'},
+    beats_per_bar:{type:'integer',enum:BEATS,description:'Beats per bar.'},
+    bars:{type:'integer',enum:BARS,description:'Length of the loop in bars.'},
+    count_in:{type:'boolean',description:'Count in one bar before recording.'},
+    metronome:{type:'boolean',description:'Click while recording and playing.'}
+  },additionalProperties:false},
+  execute:({tempo_mode,bpm,beats_per_bar,bars,count_in,metronome})=>{
+    const fixed=[tempo_mode,bpm,beats_per_bar,bars].some(v=>v!==undefined);
+    if(fixed&&(tracks.length||rec))throw new Error('Tempo and loop length are fixed while there are tracks. Only count_in and metronome can change.');
+    if(tempo_mode!==undefined)s.tempo=tempo_mode;
+    if(bpm!==undefined)s.bpm=bpm;
+    if(beats_per_bar!==undefined)s.beats=beats_per_bar;
+    if(bars!==undefined)s.bars=bars;
+    if(count_in!==undefined)s.countIn=count_in;
+    if(metronome!==undefined)s.click=metronome;
+    save();renderSettings();render();if(ctx)clicks();
+    return statusOut().settings;
+  }
+});
+})();
+</script>
+</body>
+</html>
