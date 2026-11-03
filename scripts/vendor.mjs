@@ -22,6 +22,7 @@
 //        the version is dictated by another library's dependency (must match exactly);
 //        --check reports it with that library, --update sets it automatically
 //   "wasm": true       library compiles WebAssembly → build.mjs adds 'wasm-unsafe-eval' to the page's CSP
+//   "blobWorker": true library starts its worker from in-memory code (blob: URL) → build.mjs adds blob: to worker-src
 //   "precache": false  too large for the install-time offline cache → cached on first use instead
 //   "licenseFallback": { "copyright": "...", "source": "<url>" }
 //        for packages without a licence file: LICENSE is written from the standard MIT text

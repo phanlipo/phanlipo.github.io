@@ -188,6 +188,8 @@ function csp(p) {
   const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
     .map(m => `'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`);
   const wasm = isApp(p) && vendorsOf(p).some(v => VENDOR[v]?.wasm) ? " 'wasm-unsafe-eval'" : '';
+  // Libraries that start their worker from in-memory code (blob: URL, e.g. the MP3 encoder) – only in pages using them
+  const blobWorker = isApp(p) && vendorsOf(p).some(v => VENDOR[v]?.blobWorker) ? ' blob:' : '';
   return [
     "default-src 'self'",
     `script-src 'self'${wasm}${hashes.length ? ' ' + hashes.join(' ') : ''}`,
@@ -196,7 +198,7 @@ function csp(p) {
     "media-src 'self' blob: mediastream:",
     `connect-src 'self'${p.connect?.length ? ' ' + p.connect.join(' ') : ''}`,
     "font-src 'self'",
-    "worker-src 'self'",
+    `worker-src 'self'${blobWorker}`,
     "manifest-src 'self'",
     "object-src 'none'",
     "base-uri 'none'",
