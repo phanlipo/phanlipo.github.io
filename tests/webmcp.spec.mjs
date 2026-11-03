@@ -7,6 +7,7 @@ import { makePdf } from './pdf-tools.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 import { CLIPS, clip, wavInfo, toneHz } from './audio-files.mjs';
 import { ORIGIN, API_PROBLEMS, mockApi, addYamlConfig } from './api-mock.mjs';
+import { testSong } from './midi-files.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -1296,5 +1297,66 @@ test.describe('mind-map tools', () => {
     const map = (await call(page, 'mind_map_get_map', {})).result;
     expect(map).toMatchObject({ points: 1, title: '' });
     expect(map.maps).toHaveLength(1);
+  });
+});
+
+test.describe('piano tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install();
+    await fakeModelContext(page);
+    await page.goto('/piano/');
+  });
+
+  test('play_notes: note names and chords become MIDI numbers, keys light up in the app', async ({ page }) => {
+    const { ok, result } = await call(page, 'piano_play_notes', { notes: ['C4', 'F#3', 'Bb5', '-', 'C4+E4+G4', 'A0', 'C8'], step_ms: 200 });
+    expect(ok).toBe(true);
+    // C4 = 60 (middle C), F#3 = 54, Bb5 = 82, A0 = 21, C8 = 108
+    expect(result.steps).toEqual([[60], [54], [82], [], [60, 64, 67], [21], [108]]);
+    expect(result.total_ms).toBe(1400);
+    await expect(page.locator('#keys')).toHaveAttribute('data-lit', '60');
+    await page.clock.runFor(850);                         // step 5 (0.8–1.0 s): the chord
+    await expect(page.locator('#keys')).toHaveAttribute('data-lit', '60 64 67');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Noten gespielt');
+    for (const bad of [['H9'], ['C4+X'], ['G#8'], ['A-1']]) {
+      const r = await call(page, 'piano_play_notes', { notes: bad });
+      expect(r.ok, bad[0]).toBe(false);
+      expect(r.error).toMatch(/Unknown note/);
+    }
+    expect((await call(page, 'piano_play_notes', { notes: ['C4'], step_ms: 10 })).ok).toBe(false);
+  });
+
+  test('get_song and control_playback follow the loaded MIDI file', async ({ page }) => {
+    expect((await call(page, 'piano_get_song', {})).result).toEqual({ loaded: false });
+    const none = await call(page, 'piano_control_playback', { action: 'play' });
+    expect(none.ok).toBe(false);
+    expect(none.error).toMatch(/No song/);
+
+    await page.setInputFiles('#file', { name: 'test.mid', mimeType: 'audio/midi', buffer: testSong() });
+    const { result } = await call(page, 'piano_get_song', {});
+    expect(result).toEqual({
+      loaded: true, title: 'test', example: false, duration_seconds: 2, position_seconds: 0, playing: false,
+      speed_percent: 100, note_count: 4,
+      parts: [
+        { index: 1, name: 'Rechts', notes: 3, lowest: 'C4', highest: 'G4', muted: false },
+        { index: 2, name: 'Links', notes: 1, lowest: 'C3', highest: 'C3', muted: false },
+      ],
+    });
+    let r = await call(page, 'piano_control_playback', { action: 'play', speed_percent: 200 });
+    expect(r.result).toMatchObject({ playing: true, speed_percent: 200 });
+    await expect(page.locator('#btnPlay')).toHaveAttribute('data-state', 'playing');
+    await page.clock.runFor(500);                         // double speed: song at 1 s
+    r = await call(page, 'piano_control_playback', { action: 'pause' });
+    expect(r.result.playing).toBe(false);
+    expect(r.result.position_seconds).toBeGreaterThanOrEqual(0.95);
+    expect(r.result.position_seconds).toBeLessThanOrEqual(1.1);
+    r = await call(page, 'piano_control_playback', { action: 'seek', position_seconds: 1.5 });
+    expect(r.result.position_seconds).toBe(1.5);
+    await expect(page.locator('#time')).toHaveText('0:01 / 0:02');
+    r = await call(page, 'piano_control_playback', { action: 'seek', position_seconds: 99 });
+    expect(r.result.position_seconds).toBe(2);
+    expect((await call(page, 'piano_control_playback', { action: 'seek' })).ok).toBe(false);
+    r = await call(page, 'piano_control_playback', { action: 'stop' });
+    expect(r.result).toMatchObject({ playing: false, position_seconds: 0 });
+    expect((await call(page, 'piano_control_playback', { action: 'play', speed_percent: 300 })).ok).toBe(false);
   });
 });

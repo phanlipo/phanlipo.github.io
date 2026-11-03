@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Klavier</title>
+<meta name="description" content="Klavier zum Spielen mit den Fingern – MIDI-Dateien laden, die Noten fallen als Animation auf die Tasten. Spuren stummschalten und selbst mitspielen.">
+<meta name="tool:tags" content="Freizeit, Musik">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
+<meta name="tool:icon" content="piano">
+<meta name="tool:color" content="#4338ca">
+<meta name="tool:short-name" content="Klavier">
+<meta name="tool:title-en" content="Piano">
+<meta name="tool:description-en" content="Play the piano with your fingers – load MIDI files and watch the notes fall onto the keys. Mute parts and play along yourself.">
+<meta name="tool:short-name-en" content="Piano">
+<meta name="tool:storage" content="piano.">
+<meta name="tool:share-target" content="audio/midi, audio/x-midi, audio/mid, .mid, .midi">
+<meta name="tool:webmcp" content="play_notes, get_song, control_playback">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-SSaCTOB0HVNoDgAl2u0jnQw8s2DBky3Gaiy/ZcfVgz0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Klavier">
+<meta name="theme-color" content="#4338ca">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#4338ca;--accent-text:#ffffff;--roll-bg:#eef0fb;--key-white:#ffffff;--key-black:#1b2430;--key-edge:#b9c1cf}
+@media (prefers-color-scheme: dark){:root{--accent:#a5b4fc;--accent-text:#11143a;--roll-bg:#141829;--key-white:#e9ecf2;--key-black:#0b0e14;--key-edge:#5a6577}}
+/* Stage: falling notes fill the screen, transport and keyboard at the bottom (thumb) */
+main{display:flex;flex-direction:column}
+.roll{position:relative;flex:1;min-height:90px;background:var(--roll-bg);overflow:hidden}
+.roll canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.song-name{position:absolute;inset-block-start:6px;inset-inline:10px;margin:0;font-size:14px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px;text-align:center;overflow:auto}
+.empty p{margin:0;max-width:30em;color:var(--text)}
+.empty .row{justify-content:center}
+.bar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surface);border-block-start:1px solid var(--border)}
+.bar[hidden]{display:none}
+.ctl{width:44px;height:44px;display:grid;place-items:center;flex:none;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);cursor:pointer}
+.ctl.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.ctl:disabled{opacity:.45;cursor:not-allowed}
+.ctl:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.ctl svg{width:22px;height:22px;display:block}
+.seek{flex:1;min-width:60px;height:44px;accent-color:var(--accent);margin:0}
+.time{flex:none;font-variant-numeric:tabular-nums;font-size:14px;color:var(--muted);min-width:5.5em;text-align:end}
+.range-label{flex:1;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
+/* Keyboard */
+.keys{position:relative;flex:none;height:clamp(110px,28dvh,220px);background:var(--key-black);touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overflow:hidden}
+.key{position:absolute;inset-block-start:0;box-sizing:border-box;display:flex;align-items:flex-end;justify-content:center;font-size:12px;line-height:1;padding-block-end:6px;pointer-events:none}
+.key.w{height:100%;background:var(--key-white);border:1px solid var(--key-edge);border-block-start:0;border-radius:0 0 6px 6px;color:#3b4554;z-index:1}
+.key.b{height:62%;background:var(--key-black);border-radius:0 0 4px 4px;z-index:2;box-shadow:inset 0 -4px 0 rgba(255,255,255,.12)}
+.key.w.on{background:var(--hl,#6d7cf0);color:#ffffff}
+.key.b.on{background:var(--hl,#6d7cf0);box-shadow:none}
+.key .lbl{pointer-events:none;font-weight:600}
+.key.w.c .lbl{font-weight:700}
+/* Menu sections */
+.card h3{font-size:15px;margin:14px 0 6px}
+.card h3:first-of-type{margin-top:0}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.seg button{min-height:44px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;padding:4px;font:inherit;font-size:14px}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:700}
+.slider{display:flex;align-items:center;gap:10px;min-height:44px}
+.slider input{flex:1;accent-color:var(--accent);min-height:44px;margin:0}
+.slider output{min-width:3.5em;text-align:end;font-variant-numeric:tabular-nums}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.parts{list-style:none;margin:0;padding:0}
+.parts .sw{display:inline-block;width:14px;height:14px;border-radius:4px;flex:none;background:var(--c)}
+.parts .n{color:var(--muted);font-size:14px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Klavier</span></h1>
+  <p class="sub" data-i18n="sub">Spielen und MIDI-Dateien ansehen</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnOpen" aria-label="MIDI-Datei öffnen" title="MIDI-Datei öffnen" data-i18n-attr="aria-label:open; title:open"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19l2.757 -7.351a1 1 0 0 1 .936 -.649h12.307a1 1 0 0 1 .986 1.164l-.996 5.211a2 2 0 0 1 -1.964 1.625h-14.026a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2h4l3 3h7a2 2 0 0 1 2 2v2"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <div class="roll" id="roll">
+    <canvas id="canvas" aria-hidden="true"></canvas>
+    <p class="song-name" id="songName" hidden></p>
+    <div class="empty" id="empty">
+      <p data-i18n="emptyText">Spiel auf den Tasten – oder lade eine MIDI-Datei: Dann fallen die Noten auf die Tasten zu.</p>
+      <div class="row">
+        <button type="button" class="btn primary" id="btnOpen2" data-i18n="openFile">MIDI-Datei öffnen</button>
+      </div>
+      <div class="row" role="group" aria-label="Beispiele" data-i18n-attr="aria-label:demos">
+        <button type="button" class="btn" data-demo="ode" data-i18n="demo.ode">Ode an die Freude</button>
+        <button type="button" class="btn" data-demo="entchen" data-i18n="demo.entchen">Alle meine Entchen</button>
+      </div>
+    </div>
+  </div>
+  <!-- Free play: shift the visible octaves -->
+  <div class="bar" id="barFree">
+    <button type="button" class="ctl" id="btnDown" aria-label="Eine Oktave tiefer" title="Eine Oktave tiefer" data-i18n-attr="aria-label:down; title:down"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6l6 6"/></svg></button>
+    <span class="range-label" id="rangeLabel" aria-live="polite"></span>
+    <button type="button" class="ctl" id="btnUp" aria-label="Eine Oktave höher" title="Eine Oktave höher" data-i18n-attr="aria-label:up; title:up"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6l-6 6"/></svg></button>
+  </div>
+  <!-- Song loaded: transport -->
+  <div class="bar" id="barSong" hidden>
+    <button type="button" class="ctl primary" id="btnPlay" aria-label="Abspielen" title="Abspielen" data-i18n-attr="aria-label:play; title:play"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor" stroke="none"><path id="playIcon" d="M7 4v16l13 -8z"/></svg></button>
+    <button type="button" class="ctl" id="btnRestart" aria-label="Zum Anfang" title="Zum Anfang" data-i18n-attr="aria-label:restart; title:restart"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5v14l-12 -7z"/><path d="M4 5l0 14"/></svg></button>
+    <input type="range" class="seek" id="seek" min="0" max="1000" step="1" value="0" aria-label="Position im Stück" data-i18n-attr="aria-label:seek">
+    <span class="time" id="time">0:00 / 0:00</span>
+    <button type="button" class="ctl" id="btnClose" aria-label="Stück schließen" title="Stück schließen" data-i18n-attr="aria-label:close; title:close"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></svg></button>
+  </div>
+  <div class="keys" id="keys" role="group" aria-label="Klaviatur" aria-describedby="keysHint" data-i18n-attr="aria-label:keyboard"></div>
+  <p class="sr-only" id="keysHint" data-i18n="keysHint">Mit der Computertastatur spielen: Tasten A bis L für die weißen, W, E, T, Z, U, O, P für die schwarzen Tasten. Leertaste startet und stoppt das Stück.</p>
+  <input type="file" id="file" accept=".mid,.midi,audio/midi,audio/x-midi,audio/mid" hidden>
+</main>
+
+<section class="card" id="songCard" aria-labelledby="h-song" data-menu>
+  <h2 id="h-song" data-i18n="song">Stück</h2>
+  <p class="muted" id="songInfo" data-i18n="noSong">Kein Stück geladen.</p>
+  <div id="songDetails" hidden>
+    <h3 id="h-parts" data-i18n="parts">Spuren – hören</h3>
+    <ul class="parts" id="parts" aria-labelledby="h-parts"></ul>
+    <h3><label for="speed" data-i18n="speed">Tempo</label></h3>
+    <div class="slider"><input type="range" id="speed" min="25" max="200" step="5" value="100"><output id="speedOut" for="speed">100 %</output></div>
+  </div>
+  <h3 data-i18n="demos">Beispiele</h3>
+  <div class="row">
+    <button type="button" class="btn" data-demo="ode" data-i18n="demo.ode">Ode an die Freude</button>
+    <button type="button" class="btn" data-demo="entchen" data-i18n="demo.entchen">Alle meine Entchen</button>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="h-settings" data-menu>
+  <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+  <h3 id="h-sound" data-i18n="sound">Klang</h3>
+  <div class="seg" id="sounds" role="group" aria-labelledby="h-sound">
+    <button type="button" data-s="piano" data-i18n="s.piano">Klavier</button>
+    <button type="button" data-s="epiano" data-i18n="s.epiano">E-Piano</button>
+    <button type="button" data-s="organ" data-i18n="s.organ">Orgel</button>
+    <button type="button" data-s="synth" data-i18n="s.synth">Synth</button>
+  </div>
+  <h3><label for="volume" data-i18n="volume">Lautstärke</label></h3>
+  <div class="slider"><input type="range" id="volume" min="0" max="100" step="5" value="80"><output id="volumeOut" for="volume">80 %</output></div>
+  <label class="check"><input type="checkbox" id="optLabels"> <span data-i18n="labels">Notennamen auf den Tasten</span></label>
+</section>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Klavier für das Handy: Auf den Tasten spielen, MIDI-Dateien laden und zusehen, wie die Noten auf die Tasten fallen.</p>
+  <h3>Spielen</h3>
+  <ul>
+    <li>Auf die Tasten tippen – mit mehreren Fingern gleichzeitig. Wischen über die Tasten spielt eine Tonleiter.</li>
+    <li>Mit <b>‹</b> und <b>›</b> unter dem Notenbereich die Oktaven wechseln. Im Querformat passen mehr Tasten auf den Bildschirm.</li>
+    <li>Am Computer geht es auch mit der Tastatur: <span class="kbd">A</span> bis <span class="kbd">L</span> sind die weißen, <span class="kbd">W</span> <span class="kbd">E</span> <span class="kbd">T</span> <span class="kbd">Z</span> <span class="kbd">U</span> <span class="kbd">O</span> <span class="kbd">P</span> die schwarzen Tasten, die <span class="kbd">Leertaste</span> startet und stoppt das Stück.</li>
+    <li>Was du spielst, steigt als Balken nach oben.</li>
+  </ul>
+  <h3>MIDI-Dateien</h3>
+  <ul>
+    <li>Oben rechts eine <b>MIDI-Datei</b> (<code>.mid</code>, <code>.midi</code>) öffnen oder ein Beispiel wählen. Auf Android lassen sich MIDI-Dateien auch aus anderen Apps an die installierte App <b>teilen</b>.</li>
+    <li>Die Tastatur zeigt dann den Tonumfang des Stücks. Die Noten fallen von oben auf die Tasten und leuchten in der Farbe ihrer Spur, sobald sie erklingen.</li>
+    <li>▶ spielt ab, mit dem Regler springst du an eine Stelle, ✕ schließt das Stück.</li>
+    <li>Im Menü (☰) unter <b>Stück</b>: <b>Tempo</b> (25–200 %) und <b>Spuren</b>. Schalte z. B. die rechte Hand stumm – ihre Noten fallen weiter als Umriss, und du spielst sie selbst.</li>
+    <li>Schlagzeug-Spuren (MIDI-Kanal 10) werden weggelassen, das Haltepedal wird berücksichtigt.</li>
+  </ul>
+  <h3>Kein Ton?</h3>
+  <ul>
+    <li>Lautstärke aufdrehen. Auf dem iPhone den <b>Stummschalter</b> ausschalten – sonst bleibt der Browser still.</li>
+    <li>Klang und Lautstärke stellst du im Menü (☰) unter <b>Einstellungen</b> ein.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Die Töne sind keine Aufnahmen, sondern werden im Browser erzeugt. Alles funktioniert offline, die MIDI-Datei verlässt das Gerät nicht.</li>
+    <li>Gespeichert werden die Einstellungen und das zuletzt geladene Stück (bis 300 KB) – nur in diesem Browser.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann Noten spielen, das geladene Stück abspielen, anhalten oder Tempo und Position ändern und Angaben zum Stück lesen (WebMCP). Jeder Aufruf erscheint hier als Hinweis. Eine Datei öffnen kann er nicht.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A piano for your phone: play the keys, load MIDI files and watch the notes fall onto the keys.</p>
+  <h3>Playing</h3>
+  <ul>
+    <li>Tap the keys – with several fingers at once. Swiping across the keys plays a scale.</li>
+    <li>Use <b>‹</b> and <b>›</b> below the note area to change octaves. Landscape fits more keys on the screen.</li>
+    <li>On a computer you can use the keyboard: <span class="kbd">A</span> to <span class="kbd">L</span> are the white keys, <span class="kbd">W</span> <span class="kbd">E</span> <span class="kbd">T</span> <span class="kbd">Y</span> <span class="kbd">U</span> <span class="kbd">O</span> <span class="kbd">P</span> the black keys, <span class="kbd">Space</span> starts and stops the song.</li>
+    <li>What you play rises upwards as bars.</li>
+  </ul>
+  <h3>MIDI files</h3>
+  <ul>
+    <li>Open a <b>MIDI file</b> (<code>.mid</code>, <code>.midi</code>) at the top right or pick an example. On Android you can also <b>share</b> MIDI files from other apps to the installed app.</li>
+    <li>The keyboard then shows the range of the song. The notes fall from the top onto the keys and light up in the colour of their part as they sound.</li>
+    <li>▶ plays, the slider jumps to a position, ✕ closes the song.</li>
+    <li>In the menu (☰) under <b>Song</b>: <b>Tempo</b> (25–200 %) and <b>Parts</b>. Mute the right hand, for example – its notes keep falling as outlines and you play them yourself.</li>
+    <li>Drum parts (MIDI channel 10) are left out, the sustain pedal is taken into account.</li>
+  </ul>
+  <h3>No sound?</h3>
+  <ul>
+    <li>Turn up the volume. On iPhone switch off the <b>silent switch</b> – otherwise the browser stays quiet.</li>
+    <li>Sound and volume are in the menu (☰) under <b>Settings</b>.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>The sounds are not recordings – they are generated in the browser. Everything works offline, the MIDI file never leaves the device.</li>
+    <li>The settings and the last song loaded (up to 300 KB) are stored – only in this browser.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can play notes, play, pause or seek the loaded song, change its tempo and read details about it (WebMCP). Each call shows a note here. It cannot open a file.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 6c54ea53cf30</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  play:'Abspielen',pause:'Pause',range:'{a} – {b}',time:'{a} / {b}',
+  partName:'Spur {n}',partInfo:'{n} Noten',songInfo:'{d} · {n} Noten · {p} Spuren',
+  loaded:'„{name}“ geladen',errNotMidi:'Das ist keine MIDI-Datei.',errBroken:'Die MIDI-Datei ist beschädigt.',
+  errNoNotes:'Die MIDI-Datei enthält keine Klavier-Noten.',errTooBig:'Die Datei ist zu groß (höchstens 10 MB).',
+  noAudio:'Dieser Browser kann keine Töne erzeugen.',
+  'mcp.notes':'Noten gespielt','mcp.song':'Stück gelesen','mcp.control':'Wiedergabe gesteuert'
+},
+en:{
+  title:'Piano',sub:'Play and watch MIDI files',open:'Open MIDI file',openFile:'Open MIDI file',
+  emptyText:'Play the keys – or load a MIDI file: then the notes fall towards the keys.',
+  demos:'Examples','demo.ode':'Ode to Joy','demo.entchen':'All My Little Ducklings',
+  down:'One octave down',up:'One octave up',play:'Play',pause:'Pause',restart:'To the start',seek:'Position in the song',
+  close:'Close song',keyboard:'Keyboard',
+  keysHint:'Play with the computer keyboard: keys A to L for the white keys, W, E, T, Y, U, O, P for the black keys. Space starts and stops the song.',
+  song:'Song',noSong:'No song loaded.',parts:'Parts – audible',speed:'Tempo',
+  settings:'Settings',sound:'Sound','s.piano':'Piano','s.epiano':'E-piano','s.organ':'Organ','s.synth':'Synth',
+  volume:'Volume',labels:'Note names on the keys',
+  range:'{a} – {b}',time:'{a} / {b}',partName:'Part {n}',partInfo:'{n} notes',songInfo:'{d} · {n} notes · {p} parts',
+  loaded:'“{name}” loaded',errNotMidi:'This is not a MIDI file.',errBroken:'The MIDI file is damaged.',
+  errNoNotes:'The MIDI file contains no piano notes.',errTooBig:'The file is too large (10 MB at most).',
+  noAudio:'This browser cannot play generated sounds.',
+  'mcp.notes':'notes played','mcp.song':'song read','mcp.control':'playback controlled'
+}});
+const {$,t}=Tools;
+const LS='piano.settings.v1', LS_SONG='piano.song.v1';
+const SOUNDS=['piano','epiano','organ','synth'];
+const LOW=21, HIGH=108;               // A0 … C8
+const MAX_FILE=10*1024*1024, MAX_STORE=300*1024, MAX_NOTES=200000;
+const COLORS=['#6d7cf0','#f0883e','#2fb380','#e0559b','#d4b106','#3fa8d8','#a970e8','#e5534b'];
+
+const settings=Object.assign({sound:'piano',volume:80,speed:100,labels:true,start:60},Tools.load(LS,{}));
+if(!SOUNDS.includes(settings.sound))settings.sound='piano';
+const clampInt=(v,a,b,d)=>Number.isFinite(v)?Math.min(b,Math.max(a,Math.round(v))):d;
+settings.volume=clampInt(settings.volume,0,100,80);
+settings.speed=clampInt(settings.speed,25,200,100);
+settings.labels=settings.labels!==false;
+settings.start=Number.isInteger(settings.start)&&settings.start%12===0?Math.min(96,Math.max(24,settings.start)):60;
+const saveSettings=()=>Tools.save(LS,settings);
+
+/* ---------- Notes ---------- */
+const isBlack=n=>[1,3,6,8,10].includes(((n%12)+12)%12);
+const WPOS=[0,0,1,1,2,3,3,4,4,5,5,6];   // white key index within the octave (black keys: the white below)
+const whiteIndex=n=>Math.floor(n/12)*7+WPOS[n%12];
+const NAMES_DE=['C','Cis','D','Dis','E','F','Fis','G','Gis','A','B','H'];
+const NAMES_EN=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const noteName=n=>(Tools.lang()==='en'?NAMES_EN:NAMES_DE)[n%12]+(Math.floor(n/12)-1);
+const enName=n=>NAMES_EN[n%12]+(Math.floor(n/12)-1);
+// "C4", "F#3", "Bb5", "H3" (German B) → MIDI number, or null
+function parseNote(s){
+  const m=/^([A-Ha-h])([#b]?)(-?\d)$/.exec(String(s).trim());
+  if(!m)return null;
+  const base={c:0,d:2,e:4,f:5,g:7,a:9,b:11,h:11}[m[1].toLowerCase()];
+  const n=(Number(m[3])+1)*12+base+(m[2]==='#'?1:m[2]==='b'?-1:0);
+  return n>=LOW&&n<=HIGH?n:null;
+}
+const fmtTime=s=>{s=Math.max(0,Math.floor(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+
+/* ---------- MIDI file parser (Standard MIDI File, format 0/1/2) ----------
+   Returns { format, notes:[{n,t,d,v,p}], parts:[{name,count,low,high}], duration } – t/d in seconds.
+   Drum channel 10 is skipped; with the sustain pedal (CC 64) down, note-offs wait for the pedal. */
+class MidiError extends Error{constructor(code){super(code);this.code=code;}}
+function parseMidi(buf){
+  const b=new Uint8Array(buf);
+  const str=(o,l)=>String.fromCharCode(...b.subarray(o,o+l));
+  const u32=o=>(b[o]<<24|b[o+1]<<16|b[o+2]<<8|b[o+3])>>>0;
+  const u16=o=>b[o]<<8|b[o+1];
+  if(b.length<14||str(0,4)!=='MThd')throw new MidiError('notMidi');
+  const hl=u32(4);
+  if(hl<6||8+hl>b.length)throw new MidiError('broken');
+  const format=u16(8),ntrks=u16(10),div=u16(12);
+  let tpq=div,smpte=0;
+  if(div&0x8000){const fps=256-(div>>8);smpte=fps*(div&0xff);}
+  if(!smpte&&!tpq)throw new MidiError('broken');
+  const tempos=[];      // {tick,us}
+  const raw=[];         // {tick,track,ch,kind:'on'|'off'|'ped',n,v}
+  const names=[];
+  let pos=8+hl,trk=0;
+  while(pos+8<=b.length&&trk<ntrks+16){
+    const id=str(pos,4),len=u32(pos+4);pos+=8;
+    const end=Math.min(b.length,pos+len);
+    if(id!=='MTrk'){pos=end;continue;}
+    let p=pos,tick=0,status=0;
+    const vlq=()=>{let v=0,i=0,c;do{if(p>=end)throw new MidiError('broken');c=b[p++];v=v*128+(c&0x7f);}while(c&0x80&&++i<4);return v;};
+    while(p<end){
+      tick+=vlq();
+      if(p>=end)break;
+      let s=b[p];
+      if(s&0x80)p++;else if(status)s=status;else throw new MidiError('broken');
+      if(s===0xff){
+        const type=b[p++],l=vlq(),d=p;p+=l;
+        if(p>end)throw new MidiError('broken');
+        if(type===0x2f)break;
+        if(type===0x51&&l===3)tempos.push({tick:format===2?-1:tick,us:b[d]<<16|b[d+1]<<8|b[d+2]});
+        if(type===0x03&&!names[trk]){try{names[trk]=new TextDecoder().decode(b.subarray(d,d+l)).replace(/[\x00-\x1f]/g,'').trim().slice(0,60);}catch(_){}}
+        status=0;continue;
+      }
+      if(s===0xf0||s===0xf7){const l=vlq();p+=l;status=0;continue;}
+      if(s>=0xf8)continue;      // real-time bytes
+      if(s>=0xf1){p+=s===0xf2?2:(s===0xf1||s===0xf3)?1:0;status=0;continue;}
+      status=s;
+      const hi=s&0xf0,ch=s&0x0f;
+      const one=hi===0xc0||hi===0xd0;
+      const d1=b[p++],d2=one?0:b[p++];
+      if(p>end)throw new MidiError('broken');
+      if(ch===9)continue;       // drums
+      if(hi===0x90&&d2>0)raw.push({tick,track:trk,ch,kind:'on',n:d1,v:d2});
+      else if(hi===0x80||hi===0x90)raw.push({tick,track:trk,ch,kind:'off',n:d1});
+      else if(hi===0xb0&&d1===64)raw.push({tick,track:trk,ch,kind:'ped',v:d2});
+      if(raw.length>MAX_NOTES*3)throw new MidiError('tooBig');
+    }
+    pos=end;trk++;
+  }
+  if(!trk)throw new MidiError('broken');
+  // Ticks → seconds (tempo map from all tracks; format 2 tracks are independent – use the first tempo only)
+  const tmap=tempos.filter(x=>x.tick>=0).sort((a,b)=>a.tick-b.tick);
+  if(!tmap.length||tmap[0].tick>0)tmap.unshift({tick:0,us:tempos.length&&format===2?tempos[0].us:500000});
+  let acc=0;for(let i=0;i<tmap.length;i++){if(i)acc+=(tmap[i].tick-tmap[i-1].tick)*tmap[i-1].us/1e6/tpq;tmap[i].sec=acc;}
+  const toSec=smpte?(tk=>tk/smpte):(tk=>{let lo=0,hi=tmap.length-1;while(lo<hi){const m=(lo+hi+1)>>1;if(tmap[m].tick<=tk)lo=m;else hi=m-1;}const x=tmap[lo];return x.sec+(tk-x.tick)*x.us/1e6/tpq;});
+  // Stable sort by tick (file order kept at the same tick)
+  raw.forEach((e,i)=>e.i=i);
+  raw.sort((a,b)=>a.tick-b.tick||a.i-b.i);
+  // Part = track (format 1/2) or channel (format 0)
+  const partKey=e=>format===0?'c'+e.ch:'t'+e.track;
+  const partIdx=new Map(),parts=[];
+  const open=new Map();       // part|ch|note → [{t,v,p}]
+  const held=new Map();       // ch(+track) → Set of keys waiting for the pedal
+  const pedal=new Map();
+  const notes=[];
+  const close=(k,tEnd)=>{const st=open.get(k);if(!st||!st.length)return;const o=st.shift();notes.push({n:o.n,t:o.t,d:Math.max(.03,tEnd-o.t),v:o.v,p:o.p});};
+  for(const e of raw){
+    const tt=toSec(e.tick);
+    const chKey=e.track+'|'+e.ch;
+    if(e.kind==='ped'){
+      const down=e.v>=64;
+      if(!down&&pedal.get(chKey)){const h=held.get(chKey);if(h){for(const k of h)close(k,tt);h.clear();}}
+      pedal.set(chKey,down);continue;
+    }
+    if(e.n<LOW||e.n>HIGH)continue;
+    const k=chKey+'|'+e.n;
+    if(e.kind==='on'){
+      const pk=partKey(e);
+      if(!partIdx.has(pk)){partIdx.set(pk,parts.length);parts.push({key:pk,name:names[e.track]||'',ch:e.ch,track:e.track,count:0,low:127,high:0});}
+      const p=partIdx.get(pk);
+      // Same key struck again while held by the pedal: end the old one
+      const h=held.get(chKey);if(h&&h.has(k)){close(k,tt);h.delete(k);}
+      if(!open.has(k))open.set(k,[]);
+      open.get(k).push({n:e.n,t:tt,v:e.v/127,p});
+      if(notes.length+open.size>MAX_NOTES)throw new MidiError('tooBig');
+    }else{
+      if(!open.get(k)||!open.get(k).length)continue;
+      if(pedal.get(chKey)){if(!held.has(chKey))held.set(chKey,new Set());held.get(chKey).add(k);}
+      else close(k,tt);
+    }
+  }
+  // Notes never released: end with the last event
+  const last=raw.length?toSec(raw[raw.length-1].tick):0;
+  for(const k of open.keys())while(open.get(k).length)close(k,Math.max(last,open.get(k)[0].t+.5));
+  if(!notes.length)throw new MidiError('noNotes');
+  notes.sort((a,b)=>a.t-b.t||a.n-b.n);
+  for(const x of notes){const p=parts[x.p];p.count++;p.low=Math.min(p.low,x.n);p.high=Math.max(p.high,x.n);}
+  // Drop empty parts (only offs) and renumber
+  const used=parts.map((p,i)=>p.count?i:-1).filter(i=>i>=0);
+  const remap=new Map(used.map((o,i)=>[o,i]));
+  for(const x of notes)x.p=remap.get(x.p);
+  const duration=notes.reduce((m,x)=>Math.max(m,x.t+x.d),0);
+  return {format,tracks:trk,notes,parts:used.map(i=>parts[i]),duration};
+}
+
+/* ---------- Example songs (public domain melodies), written as note:beats ---------- */
+const DEMOS={
+  ode:{title:{de:'Ode an die Freude',en:'Ode to Joy'},bpm:100,parts:{
+    de:['Rechte Hand','Linke Hand'],en:['Right hand','Left hand']},voices:[
+    'E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 E4:1.5 D4:.5 D4:2 '+
+    'E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 D4:1.5 C4:.5 C4:2 '+
+    'D4 D4 E4 C4 D4 E4:.5 F4:.5 E4 C4 D4 E4:.5 F4:.5 E4 D4 C4 D4 G3:2 '+
+    'E4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 D4:1.5 C4:.5 C4:2',
+    'C3:4 G2:4 C3:4 G2:4 C3:4 G2:4 C3:4 G2:2 C3:2 '+
+    'G2:2 C3:2 G2:2 C3:2 G2:2 C3:2 C3:2 G2:2 '+
+    'C3:4 G2:4 C3:4 G2:2 C3:2']},
+  entchen:{title:{de:'Alle meine Entchen',en:'All My Little Ducklings'},bpm:120,parts:{
+    de:['Melodie','Begleitung'],en:['Melody','Accompaniment']},voices:[
+    'C4 D4 E4 F4 G4:2 G4:2 A4 A4 A4 A4 G4:4 A4 A4 A4 A4 G4:4 F4 F4 F4 F4 E4:2 E4:2 D4 D4 D4 D4 C4:4',
+    'C3:4 C3:4 F3:4 C3:4 F3:4 C3:4 F3:4 C3:4 G3:4 C3:4']}
+};
+function demoSong(id){
+  const d=DEMOS[id],beat=60/d.bpm,notes=[];
+  d.voices.forEach((v,p)=>{let at=0;for(const tok of v.trim().split(/\s+/)){const [nm,len]=tok.split(':');const l=Number(len||1)*beat;notes.push({n:parseNote(nm),t:at,d:l*.92,v:p?.55:.75,p});at+=l;}});
+  notes.sort((a,b)=>a.t-b.t||a.n-b.n);
+  const parts=d.voices.map((_,p)=>{const ns=notes.filter(x=>x.p===p).map(x=>x.n);return {name:'',demoPart:p,count:ns.length,low:Math.min(...ns),high:Math.max(...ns)};});
+  return {format:1,tracks:parts.length,notes,parts,duration:notes.reduce((m,x)=>Math.max(m,x.t+x.d),0)};
+}
+
+/* ---------- Sound (Web Audio, generated) ---------- */
+let ac=null,master=null;
+const waves={};
+function audio(){
+  if(ac)return ac;
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(!C){Tools.diag.log('no AudioContext');return null;}
+  try{
+    ac=new C();
+    const comp=ac.createDynamicsCompressor();comp.threshold.value=-12;comp.ratio.value=6;
+    master=ac.createGain();master.gain.value=settings.volume/100;
+    master.connect(comp);comp.connect(ac.destination);
+    const wave=h=>{const re=new Float32Array(h.length),im=new Float32Array(h);return ac.createPeriodicWave(re,im);};
+    waves.piano=wave([0,1,.55,.32,.22,.14,.1,.06,.045,.03,.02]);
+    waves.organ=wave([0,1,.8,.5,0,.3,0,.15,.2]);
+    Tools.diag.log('audio context created',{state:ac.state,rate:ac.sampleRate});
+  }catch(e){Tools.diag.log('audio context failed',{error:String(e)});ac=null;}
+  return ac;
+}
+function unlock(){const c=audio();if(c&&c.state!=='running')c.resume().then(()=>Tools.diag.log('audio resumed',{state:c.state}),e=>Tools.diag.log('audio resume failed',{error:String(e)}));}
+const freq=n=>440*Math.pow(2,(n-69)/12);
+// Starts a voice at `when` (AudioContext time); returns { stop(at) }. With dur the release is scheduled too.
+function voice(n,vel,when,dur){
+  const c=audio();if(!c)return null;
+  const f=freq(n),kind=settings.sound;
+  const out=c.createGain();out.gain.value=0;out.connect(master);
+  const g=out.gain,nodes=[];
+  const osc=(type,detune,dst)=>{const o=c.createOscillator();if(type==='piano'||type==='organ')o.setPeriodicWave(waves[type]);else o.type=type;o.frequency.value=f;o.detune.value=detune;o.connect(dst);nodes.push(o);return o;};
+  let rel=.15;
+  const peak=.28*(.35+.65*vel);
+  if(kind==='piano'||kind==='synth'){
+    const lp=c.createBiquadFilter();lp.type='lowpass';lp.Q.value=.7;lp.connect(out);
+    const tau=Math.min(2.4,Math.max(.25,.9*Math.sqrt(261.6/f)));
+    if(kind==='piano'){
+      osc('piano',-3,lp);osc('piano',3,lp);
+      lp.frequency.setValueAtTime(Math.min(16000,f*6+2500*vel),when);
+      lp.frequency.setTargetAtTime(f*2+400,when,tau*.7);
+      g.setValueAtTime(0,when);g.linearRampToValueAtTime(peak,when+.004);g.setTargetAtTime(0,when+.004,tau);
+      rel=.12;
+    }else{
+      osc('sawtooth',-8,lp);osc('sawtooth',8,lp);
+      lp.frequency.setValueAtTime(Math.min(14000,f*4+1500*vel),when);
+      lp.frequency.setTargetAtTime(f*2.5+500,when,.35);
+      g.setValueAtTime(0,when);g.linearRampToValueAtTime(peak*.55,when+.01);g.setTargetAtTime(peak*.35,when+.01,.3);
+      rel=.25;
+    }
+  }else if(kind==='epiano'){
+    const car=osc('sine',0,out);
+    const mod=c.createOscillator();mod.frequency.value=f;nodes.push(mod);
+    const mg=c.createGain();mod.connect(mg);mg.connect(car.frequency);
+    mg.gain.setValueAtTime(f*2.2*vel,when);mg.gain.setTargetAtTime(f*.2,when,.25);
+    const tau=Math.min(2,Math.max(.3,1.1*Math.sqrt(261.6/f)));
+    g.setValueAtTime(0,when);g.linearRampToValueAtTime(peak*1.1,when+.003);g.setTargetAtTime(0,when+.003,tau);
+    rel=.2;
+  }else{
+    osc('organ',0,out);
+    g.setValueAtTime(0,when);g.linearRampToValueAtTime(peak*.7,when+.012);
+    rel=.06;
+  }
+  for(const o of nodes)o.start(when);
+  let stopped=false;
+  const stop=at=>{
+    if(stopped)return;stopped=true;
+    at=Math.max(at,when+.02,c.currentTime);
+    g.cancelScheduledValues(at);g.setTargetAtTime(0,at,rel/3);
+    for(const o of nodes)try{o.stop(at+rel*2+.05);}catch(_){}
+  };
+  nodes[0].onended=()=>{try{out.disconnect();}catch(_){}};
+  if(dur!=null)stop(when+dur);
+  else for(const o of nodes)o.stop(when+30);   // safety: no endless voices
+  return {stop};
+}
+
+/* ---------- State ---------- */
+let song=null;           // {name, demo?, notes, parts (with .on), duration, maxDur}
+let playing=false,pos=0,anchorPerf=0,anchorPos=0,nextIdx=0,schedTimer=null,sounded=0;
+const songVoices=new Set();
+const lit=new Map();     // note → {src:'user'|'song', color}
+const userDown=new Map();// note → count of pointers/keys holding it
+const userVoices=new Map();
+const rising=[];         // notes played by hand: {n,t0,t1}
+const perf=()=>performance.now()/1000;
+const speed=()=>settings.speed/100;
+const songPos=()=>playing?anchorPos+(perf()-anchorPerf)*speed():pos;
+
+/* ---------- Keyboard view ---------- */
+const keysEl=$('keys'),roll=$('roll'),canvas=$('canvas'),ctx=canvas.getContext('2d');
+let view={lo:60,hi:72,W:40,first:0};   // lowest/highest MIDI note shown, white key width, white index of lo
+const MIN_KEY=40;
+function freeCount(width){return Math.max(7,Math.min(52,Math.floor(width/MIN_KEY)));}
+function computeView(){
+  const width=keysEl.clientWidth||window.innerWidth;
+  const count=freeCount(width);
+  let lo,hi;
+  if(song){
+    // Whole octaves around the song range, at least as many keys as in free play
+    const nlo=Math.min(...song.parts.map(p=>p.low)),nhi=Math.max(...song.parts.map(p=>p.high));
+    let a=whiteIndex(nlo-nlo%12),b=whiteIndex(nhi-nhi%12)+6;
+    while(b-a+1<count){if(a>whiteIndex(LOW))a--;if(b-a+1<count&&b<whiteIndex(HIGH))b++;if(a<=whiteIndex(LOW)&&b>=whiteIndex(HIGH))break;}
+    lo=whiteToNote(Math.max(a,whiteIndex(LOW)));hi=whiteToNote(Math.min(b,whiteIndex(HIGH)));
+  }else{
+    // The chosen C starts the view; wide screens show extra octaves below it too
+    let a=whiteIndex(settings.start)-7*Math.max(0,Math.floor((count/7-1)/2));
+    a=Math.min(a,whiteIndex(HIGH)-count+1);a=Math.max(a,whiteIndex(LOW));
+    lo=whiteToNote(a);hi=whiteToNote(Math.min(whiteIndex(HIGH),a+count-1));
+  }
+  const whites=whiteIndex(hi)-whiteIndex(lo)+1;
+  view={lo,hi,W:width/whites,first:whiteIndex(lo)};
+}
+function whiteToNote(w){const o=Math.floor(w/7),i=w%7;return o*12+[0,2,4,5,7,9,11][i];}
+// x position and width of a key in px (keyboard and canvas share the same width)
+function keyRect(n){
+  const W=view.W;
+  if(!isBlack(n))return {x:(whiteIndex(n)-view.first)*W,w:W};
+  const bw=W*.6;
+  const off={1:-.1,3:.1,6:-.12,8:0,10:.12}[n%12]*bw;
+  return {x:(whiteIndex(n)-view.first+1)*W-bw/2+off,w:bw};
+}
+function renderKeys(){
+  computeView();
+  let html='';
+  for(let n=view.lo;n<=view.hi;n++){
+    const r=keyRect(n),b=isBlack(n);
+    const label=!b&&(settings.labels||n%12===0)&&view.W>=22?`<span class="lbl">${Tools.esc(settings.labels?(n%12===0?noteName(n):noteName(n).replace(/-?\d+$/,'')):noteName(n))}</span>`:'';
+    html+=`<div class="key ${b?'b':'w'}${n%12===0?' c':''}" data-n="${n}" aria-hidden="true" style="left:${r.x.toFixed(2)}px;width:${r.w.toFixed(2)}px">${label}</div>`;
+  }
+  keysEl.innerHTML=html;
+  keysEl.dataset.lo=String(view.lo);keysEl.dataset.hi=String(view.hi);
+  applyLit();
+  $('rangeLabel').textContent=t('range',{a:noteName(view.lo),b:noteName(view.hi)});
+  $('btnDown').disabled=view.lo<=LOW;
+  $('btnUp').disabled=view.hi>=HIGH;
+}
+let litShown=new Map();
+function applyLit(){
+  for(const el of keysEl.children){
+    const n=Number(el.dataset.n),l=lit.get(n);
+    el.classList.toggle('on',!!l);
+    if(l)el.style.setProperty('--hl',l.color);else el.style.removeProperty('--hl');
+  }
+  litShown=new Map(lit);
+}
+function noteAt(clientX,clientY){
+  const r=keysEl.getBoundingClientRect();
+  const x=clientX-r.left,y=clientY-r.top;
+  if(x<0||x>r.width||y<0||y>r.height)return null;
+  if(y<r.height*.62){
+    for(let n=view.lo;n<=view.hi;n++)if(isBlack(n)){const k=keyRect(n);if(x>=k.x&&x<k.x+k.w)return n;}
+  }
+  const w=view.first+Math.floor(x/view.W);
+  const n=whiteToNote(w);
+  return n>=view.lo&&n<=view.hi?n:null;
+}
+
+/* ---------- Playing by hand ---------- */
+const USER_COLOR=()=>getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#4338ca';
+let userColor='#4338ca';
+function handDown(n,vel){
+  const k=userDown.get(n)||0;userDown.set(n,k+1);
+  if(k)return;
+  const c=audio();
+  const old=userVoices.get(n);if(old)old.stop(c?c.currentTime:0);
+  if(c)userVoices.set(n,voice(n,vel,c.currentTime,null));
+  rising.push({n,t0:perf(),t1:null});if(rising.length>400)rising.splice(0,rising.length-400);
+  keysEl.dataset.last=String(n);
+  keysEl.dataset.played=String(Number(keysEl.dataset.played||0)+1);
+  updateLit();
+}
+function handUp(n){
+  const k=userDown.get(n)||0;
+  if(k>1){userDown.set(n,k-1);return;}
+  userDown.delete(n);
+  const v=userVoices.get(n);if(v&&ac)v.stop(ac.currentTime);userVoices.delete(n);
+  for(let i=rising.length-1;i>=0;i--)if(rising[i].n===n&&rising[i].t1==null){rising[i].t1=perf();break;}
+  updateLit();
+}
+const pointers=new Map();   // pointerId → note
+keysEl.addEventListener('pointerdown',e=>{
+  if(e.button>0)return;
+  e.preventDefault();unlock();
+  try{keysEl.setPointerCapture(e.pointerId);}catch(_){}
+  const n=noteAt(e.clientX,e.clientY);
+  pointers.set(e.pointerId,n);
+  if(n!=null)handDown(n,.8);
+});
+keysEl.addEventListener('pointermove',e=>{
+  if(!pointers.has(e.pointerId))return;
+  const n=noteAt(e.clientX,e.clientY),old=pointers.get(e.pointerId);
+  if(n===old)return;
+  if(old!=null)handUp(old);
+  pointers.set(e.pointerId,n);
+  if(n!=null)handDown(n,.8);
+});
+const pointerEnd=e=>{if(!pointers.has(e.pointerId))return;const n=pointers.get(e.pointerId);pointers.delete(e.pointerId);if(n!=null)handUp(n);};
+keysEl.addEventListener('pointerup',pointerEnd);
+keysEl.addEventListener('pointercancel',pointerEnd);
+keysEl.addEventListener('lostpointercapture',pointerEnd);
+keysEl.addEventListener('contextmenu',e=>e.preventDefault());
+// Computer keyboard (physical positions, any layout)
+const KEYMAP={KeyA:0,KeyW:1,KeyS:2,KeyE:3,KeyD:4,KeyF:5,KeyT:6,KeyG:7,KeyY:8,KeyZ:8,KeyH:9,KeyU:10,KeyJ:11,KeyK:12,KeyO:13,KeyL:14,KeyP:15,Semicolon:16};
+const keysHeld=new Map();
+function kbBase(){if(!song&&settings.start>=view.lo&&settings.start<=view.hi)return settings.start;let c=view.lo+((12-view.lo%12)%12);if(c+16>view.hi&&c-12>=view.lo)c-=12;return c;}
+function typing(e){const el=e.target;return el&&(el.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)&&el.type!=='range'&&el.type!=='checkbox');}
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey||typing(e))return;
+  if(document.querySelector('dialog[open]'))return;
+  if(e.code==='Space'&&song){if(e.target.closest&&e.target.closest('button,input'))return;e.preventDefault();if(!e.repeat){unlock();togglePlay();}return;}
+  if(!(e.code in KEYMAP))return;
+  e.preventDefault();
+  if(e.repeat||keysHeld.has(e.code))return;
+  const n=kbBase()+KEYMAP[e.code];
+  if(n<LOW||n>HIGH)return;
+  unlock();keysHeld.set(e.code,n);handDown(n,.8);
+});
+document.addEventListener('keyup',e=>{if(keysHeld.has(e.code)){const n=keysHeld.get(e.code);keysHeld.delete(e.code);handUp(n);}});
+window.addEventListener('blur',()=>{for(const n of keysHeld.values())handUp(n);keysHeld.clear();});
+
+/* ---------- Song playback ---------- */
+function lowerBound(time){let lo=0,hi=song.notes.length;while(lo<hi){const m=(lo+hi)>>1;if(song.notes[m].t<time)lo=m+1;else hi=m;}return lo;}
+function silenceSong(){const at=ac?ac.currentTime:0;for(const v of songVoices)v.stop(at);songVoices.clear();}
+function schedule(){
+  if(!playing||!song)return;
+  const now=songPos();
+  if(now>=song.duration+.3){finish();return;}
+  const c=ac;
+  const horizon=now+.25*speed();
+  while(nextIdx<song.notes.length&&song.notes[nextIdx].t<horizon){
+    const x=song.notes[nextIdx++];
+    if(x.t<now-.05||!song.parts[x.p].on)continue;
+    sounded++;roll.dataset.sounded=String(sounded);
+    if(!c)continue;
+    const v=voice(x.n,x.v,c.currentTime+Math.max(0,(x.t-now)/speed()),x.d/speed());
+    if(v){songVoices.add(v);setTimeout(()=>songVoices.delete(v),((x.t-now+x.d)/speed()+1)*1000);}
+  }
+}
+function play(){
+  if(!song||playing)return;
+  if(pos>=song.duration)pos=0;
+  playing=true;anchorPerf=perf();anchorPos=pos;nextIdx=lowerBound(pos-.001);
+  schedule();schedTimer=setInterval(schedule,40);
+  renderTransport();
+  Tools.diag.log('play',{pos:+pos.toFixed(2),speed:settings.speed,audio:ac?ac.state:'none'});
+}
+function pause(){
+  if(!playing)return;
+  pos=songPos();playing=false;clearInterval(schedTimer);schedTimer=null;silenceSong();
+  renderTransport();updateLit();
+}
+function finish(){pause();pos=song.duration;renderTransport();Tools.diag.log('song ended');}
+function seek(s){
+  if(!song)return;
+  const was=playing;if(was)pause();
+  pos=Math.min(song.duration,Math.max(0,s));
+  if(was)play();else{renderTransport();updateLit();}
+}
+function togglePlay(){if(playing)pause();else play();}
+function setSpeed(p){
+  const was=playing;if(was)pause();
+  settings.speed=p;saveSettings();
+  $('speed').value=String(p);$('speedOut').textContent=Tools.fmt(p,0)+' %';
+  if(was)play();
+}
+
+/* ---------- Loading ---------- */
+function loadSong(data,name,opts={}){
+  if(playing)pause();
+  silenceSong();
+  data.parts.forEach((p,i)=>{p.on=true;p.color=COLORS[i%COLORS.length];});
+  data.maxDur=data.notes.reduce((m,x)=>Math.max(m,x.d),0);
+  song=Object.assign(data,{name});
+  pos=0;sounded=0;
+  renderAll();
+  if(!opts.quiet)Tools.toast(t('loaded',{name:songTitle()}));
+}
+function songTitle(){return song?(song.demo?DEMOS[song.demo].title[Tools.lang()]||DEMOS[song.demo].title.de:song.name):'';}
+function loadDemo(id,opts){
+  const d=demoSong(id);d.demo=id;
+  loadSong(d,'',opts);
+  Tools.save(LS_SONG,{demo:id});
+  Tools.diag.log('demo loaded',{demo:id,notes:d.notes.length});
+}
+const b64=buf=>{let s='';const u=new Uint8Array(buf);for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode(...u.subarray(i,i+0x8000));return btoa(s);};
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer;
+function loadBytes(buf,name,opts={}){
+  const t0=performance.now();
+  const d=parseMidi(buf);
+  Tools.diag.log('midi parsed',{bytes:buf.byteLength,format:d.format,tracks:d.tracks,notes:d.notes.length,parts:d.parts.length,
+    seconds:+d.duration.toFixed(1),ms:Math.round(performance.now()-t0)});
+  loadSong(d,name.replace(/\.(mid|midi|kar|smf)$/i,'')||'MIDI',opts);
+  if(!opts.restore){
+    if(buf.byteLength<=MAX_STORE)Tools.save(LS_SONG,{name:song.name,data:b64(buf)});
+    else Tools.remove(LS_SONG);
+  }
+}
+async function openFile(file){
+  if(!file)return;
+  Tools.diag.log('file chosen',{bytes:file.size,type:file.type||'?'});
+  if(file.size>MAX_FILE){Tools.toast(t('errTooBig'));return;}
+  try{loadBytes(await file.arrayBuffer(),file.name||'MIDI');}
+  catch(e){
+    const code=e instanceof MidiError?e.code:'broken';
+    Tools.diag.log('midi failed',{code,error:String(e)});
+    Tools.toast(t({notMidi:'errNotMidi',noNotes:'errNoNotes',tooBig:'errTooBig'}[code]||'errBroken'),4000);
+  }
+}
+function closeSong(){
+  if(playing)pause();silenceSong();
+  song=null;pos=0;Tools.remove(LS_SONG);
+  renderAll();
+  Tools.diag.log('song closed');
+}
+const fileInput=$('file');
+for(const id of ['btnOpen','btnOpen2'])$(id).addEventListener('click',()=>{unlock();fileInput.value='';fileInput.click();});
+fileInput.addEventListener('change',()=>openFile(fileInput.files[0]));
+document.addEventListener('click',e=>{const b=e.target.closest('[data-demo]');if(!b)return;unlock();loadDemo(b.dataset.demo);if(b.closest('dialog'))Tools.menu.close();});
+$('btnPlay').addEventListener('click',()=>{unlock();togglePlay();});
+$('btnRestart').addEventListener('click',()=>seek(0));
+$('btnClose').addEventListener('click',closeSong);
+let seeking=false;
+$('seek').addEventListener('input',e=>{seeking=true;if(song){const s=Number(e.target.value)/1000*song.duration;$('time').textContent=t('time',{a:fmtTime(s),b:fmtTime(song.duration)});}});
+$('seek').addEventListener('change',e=>{seeking=false;if(song)seek(Number(e.target.value)/1000*song.duration);});
+$('btnDown').addEventListener('click',()=>{if(view.lo>LOW){settings.start=Math.max(24,settings.start-12);saveSettings();renderKeys();}});
+$('btnUp').addEventListener('click',()=>{if(view.hi<HIGH){settings.start=Math.min(96,settings.start+12);saveSettings();renderKeys();}});
+
+/* ---------- Rendering ---------- */
+function renderTransport(){
+  const p=song?Math.min(songPos(),song.duration):0;
+  if(song&&!seeking)$('seek').value=String(Math.round(song.duration?p/song.duration*1000:0));
+  $('time').textContent=song?t('time',{a:fmtTime(p),b:fmtTime(song.duration)}):'';
+  const label=t(playing?'pause':'play');
+  const b=$('btnPlay');b.setAttribute('aria-label',label);b.title=label;b.dataset.state=playing?'playing':'paused';
+  $('playIcon').setAttribute('d',playing?'M6 4h4v16h-4zM14 4h4v16h-4z':'M7 4v16l13 -8z');
+}
+function partLabel(p,i){
+  if(song.demo)return DEMOS[song.demo].parts[Tools.lang()][p.demoPart]||t('partName',{n:i+1});
+  return p.name?`${t('partName',{n:i+1})} · ${p.name}`:t('partName',{n:i+1});
+}
+function renderParts(){
+  if(!song){$('parts').innerHTML='';return;}
+  $('parts').innerHTML=song.parts.map((p,i)=>`<li><label class="check"><input type="checkbox" data-part="${i}"${p.on?' checked':''}><span class="sw" style="--c:${p.color}" aria-hidden="true"></span><span>${Tools.esc(partLabel(p,i))} <span class="n">(${Tools.esc(t('partInfo',{n:Tools.fmt(p.count,0)}))})</span></span></label></li>`).join('');
+}
+$('parts').addEventListener('change',e=>{
+  const i=Number(e.target.dataset.part);if(!song||!song.parts[i])return;
+  song.parts[i].on=e.target.checked;
+  // Already scheduled notes of a muted part keep sounding for < 0.3 s – fine
+  updateLit();
+});
+function renderAll(){
+  const has=!!song;
+  $('empty').hidden=has;$('songName').hidden=!has;$('songName').textContent=songTitle();
+  $('barFree').hidden=has;$('barSong').hidden=!has;
+  $('songDetails').hidden=!has;
+  $('songInfo').textContent=has?t('songInfo',{d:fmtTime(song.duration),n:Tools.fmt(song.notes.length,0),p:Tools.fmt(song.parts.length,0)}):t('noSong');
+  roll.dataset.song=has?'1':'';
+  renderParts();renderKeys();renderTransport();updateLit();
+}
+// Keys lit by the song (at the current position) and by hand
+function updateLit(){
+  lit.clear();
+  if(song){
+    const now=songPos();
+    if(playing||now>0){
+      let i=lowerBound(now-song.maxDur);
+      for(;i<song.notes.length&&song.notes[i].t<=now;i++){
+        const x=song.notes[i];
+        if(x.t+x.d>now&&(playing||x.t<now))lit.set(x.n,{src:'song',color:song.parts[x.p].color,p:x.p});
+      }
+    }
+  }
+  for(const n of userDown.keys())lit.set(n,{src:'user',color:userColor});
+  let same=lit.size===litShown.size;
+  if(same)for(const [n,l] of lit){const o=litShown.get(n);if(!o||o.color!==l.color){same=false;break;}}
+  if(!same)applyLit();
+  keysEl.dataset.lit=[...lit.keys()].sort((a,b)=>a-b).join(' ');
+}
+let cssBg='#eef0fb',cssLine='#d6dde6',dpr=1;
+function readColors(){
+  const cs=getComputedStyle(document.documentElement);
+  cssBg=cs.getPropertyValue('--roll-bg').trim()||cssBg;
+  cssLine=cs.getPropertyValue('--border').trim()||cssLine;
+  userColor=USER_COLOR();
+}
+function resize(){
+  dpr=Math.min(2,window.devicePixelRatio||1);
+  canvas.width=Math.max(1,Math.round(roll.clientWidth*dpr));
+  canvas.height=Math.max(1,Math.round(roll.clientHeight*dpr));
+  renderKeys();
+}
+const LOOK=3;   // seconds of song visible above the keys
+function rrect(x,y,w,h,r){r=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function draw(){
+  const W=canvas.width/dpr,H=canvas.height/dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle=cssBg;ctx.fillRect(0,0,W,H);
+  // Octave lines at every C
+  ctx.fillStyle=cssLine;
+  for(let n=view.lo;n<=view.hi;n++)if(n%12===0)ctx.fillRect(Math.round(keyRect(n).x),0,1,H);
+  const pps=H/LOOK;
+  if(song){
+    const now=songPos();
+    let i=lowerBound(now-song.maxDur);
+    for(;i<song.notes.length;i++){
+      const x=song.notes[i];
+      if(x.t>now+LOOK)break;
+      if(x.t+x.d<now||x.n<view.lo||x.n>view.hi)continue;
+      const k=keyRect(x.n),part=song.parts[x.p];
+      const yb=H-(x.t-now)*pps,yt=H-(x.t+x.d-now)*pps;
+      const h=Math.max(3,yb-yt-1);
+      const pad=isBlack(x.n)?0:Math.max(1,k.w*.08);
+      rrect(k.x+pad,yb-h,k.w-pad*2,h,4);
+      if(part.on){ctx.globalAlpha=isBlack(x.n)?1:.88;ctx.fillStyle=part.color;ctx.fill();ctx.globalAlpha=1;}
+      else{ctx.lineWidth=2;ctx.strokeStyle=part.color;ctx.stroke();}
+    }
+  }
+  // Played by hand: bars rising from the keys
+  const tn=perf();
+  for(let i=rising.length-1;i>=0;i--){
+    const r=rising[i];
+    const yb=r.t1==null?H:H-(tn-r.t1)*pps,yt=H-(tn-r.t0)*pps;
+    if(yb<0){rising.splice(i,1);continue;}
+    if(r.n<view.lo||r.n>view.hi)continue;
+    const k=keyRect(r.n),pad=isBlack(r.n)?0:Math.max(1,k.w*.08);
+    rrect(k.x+pad,yt,k.w-pad*2,Math.max(3,yb-yt),4);
+    ctx.globalAlpha=.75;ctx.fillStyle=userColor;ctx.fill();ctx.globalAlpha=1;
+  }
+  // Glow above sounding keys
+  for(const [n,l] of lit){
+    if(n<view.lo||n>view.hi)continue;
+    const k=keyRect(n);
+    const g=ctx.createLinearGradient(0,H-24,0,H);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,l.color);
+    ctx.globalAlpha=.7;ctx.fillStyle=g;ctx.fillRect(k.x,H-24,k.w,24);ctx.globalAlpha=1;
+  }
+}
+let lastSec=-1;
+function frame(){
+  if(song&&playing){
+    if(songPos()>=song.duration+.3)finish();
+    const s=Math.floor(songPos()*4);
+    if(s!==lastSec){lastSec=s;renderTransport();}
+  }
+  updateLit();draw();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Settings UI ---------- */
+function renderSettings(){
+  for(const b of document.querySelectorAll('#sounds button'))b.setAttribute('aria-pressed',String(b.dataset.s===settings.sound));
+  $('volume').value=String(settings.volume);$('volumeOut').textContent=Tools.fmt(settings.volume,0)+' %';
+  $('speed').value=String(settings.speed);$('speedOut').textContent=Tools.fmt(settings.speed,0)+' %';
+  $('optLabels').checked=settings.labels;
+}
+$('sounds').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-s]');if(!b)return;
+  settings.sound=b.dataset.s;saveSettings();renderSettings();
+  unlock();const c=audio();if(c)voice(60,.7,c.currentTime,.4);
+});
+$('volume').addEventListener('input',e=>{settings.volume=Number(e.target.value);if(master)master.gain.value=settings.volume/100;$('volumeOut').textContent=Tools.fmt(settings.volume,0)+' %';});
+$('volume').addEventListener('change',saveSettings);
+$('speed').addEventListener('input',e=>{$('speedOut').textContent=Tools.fmt(Number(e.target.value),0)+' %';});
+$('speed').addEventListener('change',e=>setSpeed(Number(e.target.value)));
+$('optLabels').addEventListener('change',e=>{settings.labels=e.target.checked;saveSettings();renderKeys();});
+
+/* ---------- Start ---------- */
+readColors();
+const mq=window.matchMedia('(prefers-color-scheme: dark)');
+if(mq.addEventListener)mq.addEventListener('change',readColors);
+new ResizeObserver(resize).observe(roll);
+new ResizeObserver(()=>renderKeys()).observe(keysEl);
+renderSettings();
+const saved=Tools.load(LS_SONG,null);
+try{
+  if(saved&&saved.demo&&DEMOS[saved.demo])loadDemo(saved.demo,{quiet:true});
+  else if(saved&&typeof saved.data==='string')loadBytes(unb64(saved.data),String(saved.name||'MIDI'),{quiet:true,restore:true});
+  else renderAll();
+}catch(e){Tools.diag.log('saved song failed',{error:String(e)});Tools.remove(LS_SONG);song=null;renderAll();}
+resize();
+requestAnimationFrame(frame);
+if(!(window.AudioContext||window.webkitAudioContext))Tools.toast(t('noAudio'),4000);
+// MIDI files shared to the installed app (Android share menu)
+Tools.takeSharedFile().then(f=>{if(f){Tools.diag.log('shared file');openFile(f);}});
+Tools.onLang(()=>{renderAll();});
+Tools.diag.info(()=>({sound:settings.sound,volume:settings.volume,speed:settings.speed,labels:settings.labels,
+  view:`${view.lo}-${view.hi}`,song:song?{demo:song.demo||null,notes:song.notes.length,parts:song.parts.length,
+  muted:song.parts.filter(p=>!p.on).length,seconds:+song.duration.toFixed(1)}:null,playing,pos:+songPos().toFixed(2),
+  sounded,audio:ac?ac.state:'not created'}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+function songState(){
+  if(!song)return {loaded:false};
+  return {loaded:true,title:song.demo?DEMOS[song.demo].title.en:song.name,example:!!song.demo,
+    duration_seconds:+song.duration.toFixed(2),position_seconds:+Math.min(songPos(),song.duration).toFixed(2),
+    playing,speed_percent:settings.speed,note_count:song.notes.length,
+    parts:song.parts.map((p,i)=>({index:i+1,name:song.demo?DEMOS[song.demo].parts.en[p.demoPart]:p.name,notes:p.count,
+      lowest:enName(p.low),highest:enName(p.high),muted:!p.on}))};
+}
+Tools.mcp.register({
+  name:'play_notes',title:'Play notes on the piano',label:'mcp.notes',
+  description:'Plays notes on the piano in the app, one step after another; the keys light up. Each step is a note name like "C4", "F#3" or "Bb5" (middle C is C4, range A0 to C8), a chord joined with "+" like "C4+E4+G4", or "-" for a rest. Browsers only play sound after the user has touched the page once; audible says whether it could be heard. Returns the MIDI note numbers of each step, the total length in milliseconds and audible.',
+  inputSchema:{type:'object',properties:{
+    notes:{type:'array',maxItems:64,items:{type:'string',maxLength:40},description:'Steps to play, e.g. ["C4","E4","G4","C4+E4+G4"].'},
+    step_ms:{type:'integer',minimum:80,maximum:3000,description:'Length of each step in milliseconds. Default 400.'}
+  },required:['notes'],additionalProperties:false},
+  execute:async({notes,step_ms})=>{
+    const step=(step_ms||400)/1000;
+    const steps=notes.map(s=>{
+      if(s.trim()==='-')return [];
+      const ns=s.split('+').map(parseNote);
+      if(!ns.length||ns.some(n=>n==null))throw new Error(`Unknown note "${s}" – use names like C4, F#3, Bb5 between A0 and C8`);
+      return ns;
+    });
+    if(!steps.length)throw new Error('notes must contain at least one step');
+    const c=audio();
+    const audible=!!c&&c.state==='running';
+    steps.forEach((ns,i)=>{
+      setTimeout(()=>{for(const n of ns)handDown(n,.75);setTimeout(()=>{for(const n of ns)handUp(n);},step*900);},i*step*1000);
+    });
+    Tools.diag.log('agent notes',{steps:steps.length,step_ms:Math.round(step*1000)});
+    return {steps:steps,total_ms:Math.round(steps.length*step*1000),audible};
+  }
+});
+Tools.mcp.register({
+  name:'get_song',title:'Read the loaded song',label:'mcp.song',readOnly:true,untrusted:true,
+  description:'Reads the song loaded in the app (a MIDI file the user opened, or an example): title, length and position in seconds, whether it is playing, tempo in percent, number of notes and its parts with note count, lowest and highest note and whether they are muted. Returns {loaded:false} if no song is loaded.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>songState()
+});
+Tools.mcp.register({
+  name:'control_playback',title:'Control song playback',label:'mcp.control',
+  description:'Controls the song loaded in the app: play, pause, stop (pause and go back to the start) or seek to a position; optionally sets the tempo. The falling notes and keys in the app follow. Fails if no song is loaded. Returns the same state as get_song.',
+  inputSchema:{type:'object',properties:{
+    action:{type:'string',enum:['play','pause','stop','seek'],description:'What to do.'},
+    position_seconds:{type:'number',minimum:0,description:'For seek: the position in seconds.'},
+    speed_percent:{type:'integer',minimum:25,maximum:200,description:'Optional tempo in percent (100 = original).'}
+  },required:['action'],additionalProperties:false},
+  execute:({action,position_seconds,speed_percent})=>{
+    if(!song)throw new Error('No song is loaded – the user has to open a MIDI file or pick an example first');
+    if(speed_percent!=null)setSpeed(speed_percent);
+    if(action==='play')play();
+    else if(action==='pause')pause();
+    else if(action==='stop'){pause();seek(0);}
+    else{if(position_seconds==null)throw new Error('seek needs position_seconds');seek(position_seconds);}
+    return songState();
+  }
+});
+})();
+</script>
+</body>
+</html>
