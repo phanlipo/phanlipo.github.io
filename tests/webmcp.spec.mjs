@@ -443,6 +443,71 @@ test.describe('video-to-audio tools', () => {
   });
 });
 
+test.describe('audio-studio tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/audio-studio/'));
+  const P = 'audio_studio_';
+
+  test('info, selection, edits with undo and export work on the opened file', async ({ page }) => {
+    for (const name of ['get_audio_info', 'set_selection', 'export_audio'])
+      expect((await call(page, P + name, {})).error).toMatch(/No audio file opened/);
+    await page.setInputFiles('#file', clip('aac'));
+    await expect(page.locator('#editor')).toBeVisible();
+    const info = (await call(page, P + 'get_audio_info', {})).result;
+    expect(info).toMatchObject({ file_name: 'clip-aac.mp4', sample_rate_hz: 44100, channels: 1, edits: 0, undo_steps: 0,
+      selection: { start_seconds: 0, whole_file: true } });
+    expect(Math.abs(info.duration_seconds - 2)).toBeLessThan(0.05);
+    // Selection: shown in the app
+    const sel = (await call(page, P + 'set_selection', { start_seconds: 0.5, end_seconds: 1.5 })).result;
+    expect(sel.selection).toEqual({ start_seconds: 0.5, end_seconds: 1.5, whole_file: false });
+    await expect(page.locator('#selStart')).toHaveValue('0:00,50');
+    await expect(page.locator('#selEnd')).toHaveValue('0:01,50');
+    // Trim, then −6 dB: the peak drops by 6 dB
+    const kept = (await call(page, P + 'edit_audio', { action: 'keep_selection' })).result;
+    expect(kept.duration_seconds).toBe(1);
+    expect(kept.selection.whole_file).toBe(true);
+    await expect(page.locator('#selInfo')).toHaveText('Alles ausgewählt (1,0 s)');
+    const quieter = (await call(page, P + 'edit_audio', { action: 'gain', gain_db: -6 })).result;
+    expect(quieter).toMatchObject({ applied_gain_db: -6, clipping: false, edits: 2, undo_steps: 2 });
+    expect(Math.abs(quieter.peak_dbfs - (kept.peak_dbfs - 6))).toBeLessThan(0.15);
+    const norm = (await call(page, P + 'edit_audio', { action: 'normalize' })).result;
+    expect(norm.peak_dbfs).toBe(-1);
+    expect(Math.abs(norm.applied_gain_db - (-1 - quieter.peak_dbfs))).toBeLessThan(0.15);
+    expect((await call(page, P + 'edit_audio', { action: 'undo' })).result.peak_dbfs).toBe(quieter.peak_dbfs);
+    // Export: shown in the app, size matches the downloaded WAV
+    const out = (await call(page, P + 'export_audio', { format: 'wav' })).result;
+    expect(out).toMatchObject({ output_file_name: 'clip-aac-edit.wav', output_format: 'wav', output_mime_type: 'audio/wav', bitrate_kbps: null, duration_seconds: 1 });
+    await expect(page.locator('#result')).toHaveAttribute('data-format', 'wav');
+    const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+    const w = wavInfo(readFileSync(await download.path()));
+    expect(w.frames).toBe(44100);
+    expect(w.frames * 2 + 44).toBe(out.output_size_bytes);
+    expect(Math.abs(toneHz(w.samples, w.rate) - CLIPS.aac.hz)).toBeLessThan(5);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === P + 'get_audio_info').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+  });
+
+  test('wrong input is rejected and changes nothing', async ({ page }) => {
+    await page.setInputFiles('#file', clip('aac'));
+    await expect(page.locator('#editor')).toBeVisible();
+    for (const [input, msg] of [
+      [{ action: 'keep_selection' }, /Everything is selected/],
+      [{ action: 'cut_selection' }, /Everything is selected/],
+      [{ action: 'gain' }, /gain_db is required/],
+      [{ action: 'gain', gain_db: 31 }, /input.gain_db must be <= 30/],
+      [{ action: 'mono' }, /mono already/],
+      [{ action: 'undo' }, /Nothing to undo/],
+      [{ action: 'reverse' }, /input.action must be one of/],
+      [{}, /input.action is required/],
+    ]) expect((await call(page, P + 'edit_audio', input)).error).toMatch(msg);
+    expect((await call(page, P + 'set_selection', { start_seconds: 1.5, end_seconds: 1 })).error).toMatch(/greater than start_seconds/);
+    expect((await call(page, P + 'set_selection', { start_seconds: 5 })).error).toMatch(/beyond the end/);
+    expect((await call(page, P + 'export_audio', { format: 'mp3' })).ok).toBe(false);
+    expect((await call(page, P + 'export_audio', { bitrate_kbps: 100 })).ok).toBe(false);
+    expect((await call(page, P + 'get_audio_info', {})).result).toMatchObject({ edits: 0, undo_steps: 0, selection: { whole_file: true } });
+    await expect(page.locator('#result')).toBeHidden();
+  });
+});
+
 test.describe('voice-transcriber tools', () => {
   test('get_transcript and get_transcript_history', async ({ page }) => {
     await open(page, '/voice-transcriber/');
