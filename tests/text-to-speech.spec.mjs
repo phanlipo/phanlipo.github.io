@@ -330,17 +330,60 @@ test.describe('Piper pipeline', () => {
   });
 });
 
-test('Kokoro: warns that German text gets English pronunciation', async ({ page }) => {
+// German Kokoro voice with a tiny stand-in model (tests/fixtures/tiny-kokoro.onnx: audio = token IDs / 1000 × speed)
+const TINY_KOKORO = readFileSync(new URL('fixtures/tiny-kokoro.onnx', import.meta.url));
+// Kokoro's vocabulary (excerpt, same IDs as the model's tokenizer.json)
+const KOKORO_VOCAB = { $: 0, '.': 4, '!': 5, ' ': 16, 'ʦ': 20, I: 25, W: 39, a: 43, h: 50, l: 54, m: 55, n: 56, o: 57, s: 61, u: 63, 'ˈ': 156, 'ː': 158 };
+// "Hallo! Mein Haus zu." – eSpeak: hˈaloː!maɪn hˈaʊs tsˈuː. – in the training convention: a space after "!",
+// diphthongs aɪ → I, aʊ → W, affricate ts → ʦ; pad 0 at both ends
+const HALLO_KOKORO = [0, 50, 156, 43, 54, 57, 158, 5, 16, 55, 25, 56, 16, 50, 156, 39, 61, 16, 20, 156, 63, 158, 4, 0];
+
+test.describe('Kokoro German pipeline', () => {
+  test.use({ allowedProblems: HF_PROBLEMS });
+
+  test('eSpeak phonemes in the training convention reach the model', async ({ page, context }) => {
+    test.setTimeout(120000);
+    await context.route(HF, r => {
+      const u = r.request().url();
+      if (!u.includes('Kokoro-82M-v1.0-German-ONNX')) return r.abort();
+      if (u.endsWith('tokenizer.json')) return r.fulfill({ contentType: 'application/json', body: JSON.stringify({ model: { vocab: KOKORO_VOCAB } }) });
+      if (u.endsWith('.bin')) return r.fulfill({ contentType: 'application/octet-stream', body: Buffer.alloc(510 * 256 * 4) });
+      if (u.endsWith('.onnx')) return r.fulfill({ contentType: 'application/octet-stream', body: TINY_KOKORO });
+      return r.abort();
+    });
+    await page.goto(URL_);
+    page.on('dialog', d => d.accept());
+    await page.check('input[name=engine][value=kokoro]');
+    await expect(page.locator('#voice')).toHaveValue('de:kerstin');
+    await page.fill('#text', 'Hallo! Mein Haus zu.');
+    await page.click('#btnSpeak');
+    await expect(page.locator('#clips li')).toHaveCount(1, { timeout: 60000 });
+    const { wav } = await saveFirstClip(page);
+    expect(wav.sampleRate).toBe(24000);
+    expect(wav.samples.map(s => Math.round(s * 1000))).toEqual(HALLO_KOKORO);
+    await expect(page.locator('#engineNote')).toHaveText('Heruntergeladen – funktioniert offline.');
+  });
+});
+
+test('Kokoro: German voice for German text, a hint for the other combinations', async ({ page }) => {
   await page.goto(URL_);
   await page.check('input[name=engine][value=kokoro]');
-  await expect(page.locator('#engineNote')).toContainText('nur englische Stimmen');
+  // German text: the German voice comes first
+  await expect(page.locator('#voice')).toHaveValue('de:kerstin');
+  await expect(page.locator('#engineNote')).toHaveText('Einmaliger Download ca. 337 MB, danach offline.');
+  await page.selectOption('#voice', 'af_heart');
+  await expect(page.locator('#engineNote')).toContainText('Deutscher Text klingt mit englischer Aussprache');
   await expect(page.locator('#engineNote')).toContainText('ca. 90 MB');
-  await page.selectOption('#lang', 'en');
-  await expect(page.locator('#engineNote')).not.toContainText('englische Stimmen');
   await openMenu(page);
   await page.selectOption('#device', 'webgpu');
   await closeMenu(page);
   await expect(page.locator('#engineNote')).toContainText('ca. 330 MB');
+  // English text: English voices first, the German voice warns
+  await page.selectOption('#lang', 'en');
+  await expect(page.locator('#voice')).toHaveValue('af_heart');
+  await expect(page.locator('#engineNote')).not.toContainText('Aussprache');
+  await page.selectOption('#voice', 'de:kerstin');
+  await expect(page.locator('#engineNote')).toContainText('Englischer Text klingt mit deutscher Aussprache');
 });
 
 test.describe('English', () => {
@@ -361,6 +404,7 @@ test.describe('English', () => {
     await page.check('input[name=engine][value=piper]');
     expect(await page.locator('#voice option').first().textContent()).toBe('Lessac (US) · medium · 63 MB');
     await page.check('input[name=engine][value=kokoro]');
+    await expect(page.locator('#voice')).toHaveValue('af_heart');
     await expect(page.locator('#engineNote')).toHaveText('One-time download of about 90 MB, then offline.');
   });
 });

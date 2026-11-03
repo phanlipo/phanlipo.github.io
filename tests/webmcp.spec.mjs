@@ -1433,7 +1433,8 @@ test.describe('text-to-speech tools', () => {
     expect(piper.voices[0]).toMatchObject({ id: 'de/de_DE/thorsten/high/de_DE-thorsten-high', name: 'Thorsten · hoch · 114 MB' });
     expect(piper.downloaded).toBe(false);
     expect(result.engines.find(e => e.engine === 'supertonic').voices).toHaveLength(10);
-    expect(result.engines.find(e => e.engine === 'kokoro').note).toBe('English voices only');
+    expect(result.engines.find(e => e.engine === 'kokoro').note).toBe('English voices; for German use de:kerstin');
+    expect(result.engines.find(e => e.engine === 'kokoro').voices[0]).toMatchObject({ id: 'de:kerstin', group: 'Deutsch' });
 
     const r = await call(page, 'text_to_speech_select_voice', { engine: 'piper', language: 'de', voice: 'de/de_DE/kerstin/low/de_DE-kerstin-low', speed: 1.24 });
     expect(r.result).toEqual({ engine: 'piper', voice: 'de/de_DE/kerstin/low/de_DE-kerstin-low', language: 'de', speed: 1.2, downloaded: false });
