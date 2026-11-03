@@ -134,6 +134,15 @@ window.HuntPuzzles = (function () {
     c.fallback();
   }
 
+  // Quiz answers may start with an emoji; these get a matching tile colour (others keep the colour of their position)
+  const EMOJI_HEAD = /^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}|\p{Emoji_Modifier})*)\s*(.*)$/u;
+  const COLOR_OF = {};
+  for (const [color, list] of Object.entries({
+    red: '🔥❤🍎🍓🌹🔴🟥🍒🐞🌶🥊', orange: '🧡🟠🟧🍊🦊🎃🥕', yellow: '⚡💛🟡🟨🌟⭐☀🌞🍋🍌🐥🌻🧀',
+    green: '🌱🍃🌿💚🟢🟩🌳🌲🍀🥦🐸🐢🍏🥒🦎', blue: '💧🌊💙🔵🟦🐳🐟🫐🐬', ice: '❄🧊⛄🩵', purple: '👻💜🟣🟪🔮🍇☠🧪🐉',
+    pink: '🩷💗🌸🧚🎀🦄🐷', brown: '🪨🟤🟫⛰🐻🌰🪵🥔👊', black: '🖤⚫⬛🌑🦇🕷', white: '🤍⚪⬜☁🐑🦢🥛',
+  })) for (const e of list.match(/\p{Extended_Pictographic}/gu)) COLOR_OF[e] = color;
+
   const TYPES = {
     quiz: {
       icon: '❓', sensor: null,
@@ -148,10 +157,14 @@ window.HuntPuzzles = (function () {
         + F.select(p, 'puzzle.correct', t('pz.correct'), [0, 1, 2, 3].map(i => [String(i), t('pz.answer', { n: i + 1 })]), 'data-t="int"'),
       play(p, c) {
         const shapes = ['▲', '●', '■', '◆'];
-        const answers = p.answers.map((a, i) => [a, i]).filter(([a]) => a.trim());
-        const speech = p.question + '. ' + answers.map(([a]) => a).join('? ') + '?';
+        // "🔥 Feuer": a leading emoji replaces the shape and, if it has a clear colour, colours the tile
+        const answers = p.answers.map((a, i) => [a, i]).filter(([a]) => a.trim()).map(([a, i]) => {
+          const m = a.trim().match(EMOJI_HEAD);
+          return m && m[2] ? { i, icon: m[1], label: m[2], color: COLOR_OF[m[1].replace(/\uFE0F/g, '')] || '' } : { i, icon: '', label: a, color: '' };
+        });
+        const speech = p.question.trim() + (/[.!?…:]$/.test(p.question.trim()) ? ' ' : '. ') + answers.map(a => a.label).join('? ') + '?';
         c.box.innerHTML = `${c.say(p.question, speech)}${p.image ? c.img(p.image) : ''}
-          <div class="answers">${answers.map(([a, i]) => `<button type="button" class="ans ans-${i}" data-i="${i}"><span class="shape" aria-hidden="true">${shapes[i]}</span><span>${esc(a)}</span></button>`).join('')}</div>`;
+          <div class="answers">${answers.map(a => `<button type="button" class="ans ans-${a.i}${a.color ? ' c-' + a.color : ''}" data-i="${a.i}"><span class="shape${a.icon ? ' icon' : ''}" aria-hidden="true">${esc(a.icon || shapes[a.i])}</span><span>${esc(a.label)}</span></button>`).join('')}</div>`;
         let over = false;
         c.box.querySelector('.answers').addEventListener('click', e => {
           const b = e.target.closest('.ans');
