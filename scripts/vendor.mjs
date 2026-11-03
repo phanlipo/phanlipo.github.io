@@ -27,6 +27,9 @@
 //   "licenseFallback": { "copyright": "...", "source": "<url>" }
 //        for packages without a licence file: LICENSE is written from the standard MIT text
 //        (only allowed when package.json says "MIT")
+//   "licenseFile": "scripts/licenses/<name>.txt"
+//        for packages without a licence file whose real licence is not plain MIT (e.g. builds containing GPL code):
+//        this file from the repository is written as LICENSE
 //   "maintenanceException": { "reason": "...", "until": "JJJJ-MM" }
 //        accept a library that fails the maintenance check (e.g. data packages that rarely change);
 //        after "until" it is reported again
@@ -80,6 +83,7 @@ async function download(name, entry) {
   }
   const lic = LICENSE_NAMES.find(n => files.has(n));
   if (lic) writeFileSync(join(dir, 'LICENSE'), files.get(lic));
+  else if (entry.licenseFile) writeFileSync(join(dir, 'LICENSE'), readFileSync(join(ROOT, entry.licenseFile)));
   else if (entry.licenseFallback && entry.license === 'MIT') writeFileSync(join(dir, 'LICENSE'), mitLicense(entry));
   else throw new Error(`${name}: no licence file in package (add "licenseFallback" for MIT packages)`);
 

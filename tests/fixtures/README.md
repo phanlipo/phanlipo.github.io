@@ -14,3 +14,10 @@ Video zu Audio (`video-to-audio.spec.mjs`, read by `audio-files.mjs`):
   `ffmpeg -f lavfi -i "testsrc=size=64x48:rate=10:duration=2" -f lavfi -i "sine=frequency=880:sample_rate=48000:duration=2" -c:v libvpx -b:v 50k -c:a libopus -b:a 32k -ac 1 -shortest clip-opus.webm`
 - `silent.mp4` – 1 s test picture without sound track.
   `ffmpeg -f lavfi -i "testsrc=size=64x48:rate=10:duration=1" -c:v libx264 -pix_fmt yuv420p silent.mp4`
+
+Text zu Sprache (`text-to-speech.spec.mjs`):
+
+- `tiny-piper.onnx` – winziges Stand-in für eine Piper-Stimme (gleiche Ein- und Ausgänge: `input`, `input_lengths`,
+  `scales` → `output`), das statt Sprache die Phonem-IDs / 1000 × Längenfaktor ausgibt. So prüft der Test die echte
+  Pipeline (eSpeak NG → Phonem-IDs → onnxruntime) ohne 60-MB-Download. Erzeugt mit `tiny-piper.py`
+  (`pip install onnx`, dann `python tiny-piper.py tiny-piper.onnx`).
