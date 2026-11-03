@@ -144,3 +144,23 @@ export async function switchLang(page, lang) {
   await page.locator(`[data-set-lang="${lang}"]`).click();
   await closeMenu(page);
 }
+
+/** Web Share like Chrome on Android: share() only accepts files with a MIME type from Chrome's list
+ *  (components/browser_ui/webshare, e.g. .m4a only as "audio/x-m4a") and fails otherwise with
+ *  NotAllowedError – canShare() does not check the type. window.__shared collects what was shared. */
+export async function mockAndroidShare(page) {
+  await page.addInitScript(() => {
+    const OK = ['application/pdf', 'audio/flac', 'audio/mp3', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm',
+      'audio/x-m4a', 'image/avif', 'image/bmp', 'image/gif', 'image/jpeg', 'image/png', 'image/svg+xml', 'image/tiff',
+      'image/webp', 'image/x-icon', 'image/x-ms-bmp', 'image/x-xbitmap', 'text/comma-separated-values', 'text/css',
+      'text/csv', 'text/html', 'text/plain', 'text/x-csv', 'video/mp4', 'video/mpeg', 'video/ogg', 'video/webm'];
+    window.__shared = [];
+    navigator.canShare = data => !!data && (!data.files || data.files.length > 0);
+    navigator.share = async data => {
+      for (const f of data.files || []) {
+        if (!OK.includes(f.type)) throw new DOMException('Permission denied', 'NotAllowedError');
+      }
+      window.__shared.push((data.files || []).map(f => ({ name: f.name, type: f.type, size: f.size })));
+    };
+  });
+}

@@ -2,8 +2,8 @@
 // the saved files are checked with independent readers (audio-files.mjs), expected values computed here.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, openDetails, clipboardText, switchLang, openMenu } from './helpers.mjs';
-import { FIX, clip, oggInfo, mp4Info, wavInfo, toneHz, peak } from './audio-files.mjs';
+import { test, expect, openDetails, clipboardText, switchLang, openMenu, mockAndroidShare } from './helpers.mjs';
+import { FIX, clip, oggInfo, mp4Info, wavInfo, mp3Info, toneHz, peak } from './audio-files.mjs';
 
 const URL_ = '/audio-studio/';
 const RATE = 48000;
@@ -226,6 +226,107 @@ test('Opus input (voice message) to Opus and AAC output', async ({ page }) => {
   }
 });
 
+test('share on Android: .m4a goes out as audio/x-m4a (audio/mp4 is refused), .wav and .mp3 unchanged', async ({ page }) => {
+  await mockAndroidShare(page);
+  await page.goto(URL_);
+  await open(page);
+  const { buf } = await exportFile(page, 'wav');
+  await page.click('#btnShare');
+  await expect.poll(() => page.evaluate(() => window.__shared.length)).toBe(1);
+  expect((await page.evaluate(() => window.__shared))[0]).toEqual([{ name: 'aufnahme-edit.wav', type: 'audio/wav', size: buf.length }]);
+  const mp3 = await exportFile(page, 'mp3');
+  await page.click('#btnShare');
+  await expect.poll(() => page.evaluate(() => window.__shared.length)).toBe(2);
+  expect((await page.evaluate(() => window.__shared))[1]).toEqual([{ name: 'aufnahme-edit.mp3', type: 'audio/mpeg', size: mp3.buf.length }]);
+  await expect(page.getByText('Teilen nicht möglich')).toHaveCount(0);
+  test.skip(!(await canEncode(page, 'mp4a.40.2')), 'browser cannot encode AAC');
+  const aac = await exportFile(page, 'aac');
+  await page.click('#btnShare');
+  await expect.poll(() => page.evaluate(() => window.__shared.length)).toBe(3);
+  expect((await page.evaluate(() => window.__shared))[2]).toEqual([{ name: 'aufnahme-edit.m4a', type: 'audio/x-m4a', size: aac.buf.length }]);
+  await expect(page.getByText('Teilen nicht möglich')).toHaveCount(0);
+});
+
+/** Decodes an MP3 with the browser's own decoder (not LAME, which wrote it): channels as Float32Arrays */
+const browserDecode = async (page, buf) => {
+  const r = await page.evaluate(async b64 => {
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const a = await new OfflineAudioContext(1, 1, 48000).decodeAudioData(bytes.buffer);
+    return { rate: a.sampleRate, ch: [...Array(a.numberOfChannels)].map((_, i) => [...a.getChannelData(i)]) };
+  }, buf.toString('base64'));
+  return { rate: r.rate, ch: r.ch.map(c => Float32Array.from(c)) };
+};
+// LAME delays the sound by ~1100 samples; the windows stay well inside each 1 s part
+const part = (s, rate, i) => s.subarray(Math.round((i + 0.2) * rate), Math.round((i + 0.8) * rate));
+
+test('MP3: stereo at the chosen bitrate, parts with the right tone and level', async ({ page }) => {
+  await page.goto(URL_);
+  await open(page);
+  await expect(page.locator('input[value="mp3"]')).toBeEnabled();
+  await page.check('input[value="mp3"]');
+  await page.selectOption('#bitrate', '192');
+  const { name, buf } = await exportFile(page, 'mp3');
+  expect(name).toBe('aufnahme-edit.mp3');
+  await expect(page.locator('#result')).toHaveAttribute('data-format', 'mp3');
+  await expect(page.locator('#status')).toHaveText('Fertig.');
+  const mp3 = mp3Info(buf);
+  expect(mp3).toMatchObject({ rate: RATE, channels: 2, kbps: [192], complete: true });
+  expect(mp3.seconds).toBeGreaterThan(3 - 0.05);
+  expect(mp3.seconds).toBeLessThan(3 + 0.1);
+  const dec = await browserDecode(page, buf);
+  expect(dec.ch.length).toBe(2);
+  PARTS.forEach((p, i) => {
+    const l = part(dec.ch[0], dec.rate, i), r = part(dec.ch[1], dec.rate, i);
+    expect(Math.abs(toneHz(l, dec.rate) - p.hz)).toBeLessThan(5);
+    expect(Math.abs(peak(l) - p.amp)).toBeLessThan(0.05);
+    expect(Math.abs(peak(r) - p.amp / 2)).toBeLessThan(0.05);
+  });
+  // 64 kbit/s: smaller, still complete
+  await page.selectOption('#bitrate', '64');
+  const small = await exportFile(page, 'mp3');
+  expect(mp3Info(small.buf)).toMatchObject({ kbps: [64], complete: true });
+  expect(small.buf.length).toBeLessThan(buf.length / 2);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('audio-studio.settings.v1')))).toMatchObject({ format: 'mp3', kbps: 64 });
+});
+
+test('MP3 from 44.1 kHz mono keeps the rate (MP3 supports it)', async ({ page }) => {
+  await page.goto(URL_);
+  await open(page, testWav({ rate: 44100, channels: 1 }));
+  const mp3 = mp3Info((await exportFile(page, 'mp3')).buf);
+  expect(mp3).toMatchObject({ rate: 44100, channels: 1, kbps: [128], complete: true });
+  expect(Math.abs(mp3.seconds - 3)).toBeLessThan(0.1);
+});
+
+test('MP3 works offline once the encoder was loaded', async ({ page, context }) => {
+  await page.goto(URL_);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload(); // page now controlled → the encoder goes through the offline cache
+  await open(page);
+  await exportFile(page, 'mp3');
+  await context.setOffline(true);
+  await page.reload();
+  await open(page);
+  expect(mp3Info((await exportFile(page, 'mp3')).buf)).toMatchObject({ rate: RATE, channels: 2, complete: true });
+  await context.setOffline(false);
+});
+
+test.describe('MP3 offline before its first use', () => {
+  test.use({ allowedProblems: /mediabunny-mp3|Failed to load resource|ERR_FAILED|ERR_INTERNET_DISCONNECTED/ });
+  test('clear message, WAV still works', async ({ page, context }) => {
+    await page.goto(URL_);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await context.setOffline(true);
+    await page.reload();
+    await open(page);
+    await page.check('input[value="mp3"]');
+    await page.click('#btnExport');
+    await expect(page.locator('#status')).toHaveText('Der MP3-Encoder ließ sich nicht laden. Bitte einmal mit Internet öffnen – danach geht MP3 auch offline.');
+    await expect(page.locator('#result')).toBeHidden();
+    expect(wavInfo((await exportFile(page, 'wav')).buf).frames).toBe(3 * RATE);
+    await context.setOffline(false);
+  });
+});
+
 test('44.1 kHz to Opus is resampled to 48 kHz, length kept', async ({ page }) => {
   await page.goto(URL_);
   await open(page, testWav({ rate: 44100, channels: 1 }));
@@ -234,7 +335,7 @@ test('44.1 kHz to Opus is resampled to 48 kHz, length kept', async ({ page }) =>
   expect(Math.abs(ogg.seconds - 3)).toBeLessThan(0.05);
 });
 
-test('without WebCodecs: Opus/AAC greyed out, WAV still works', async ({ page }) => {
+test('without WebCodecs: Opus/AAC greyed out, WAV and MP3 still work', async ({ page }) => {
   await page.addInitScript(() => { delete window.AudioDecoder; delete window.AudioEncoder; });
   await page.goto(URL_);
   await open(page);
@@ -243,6 +344,9 @@ test('without WebCodecs: Opus/AAC greyed out, WAV still works', async ({ page })
   await expect(page.locator('#fmtNote')).toHaveText('In diesem Browser nicht verfügbar: M4A (AAC), Opus.');
   const w = wavInfo((await exportFile(page)).buf);
   expect(w.frames).toBe(3 * RATE);
+  // MP3 has its own encoder and stays available
+  await expect(page.locator('input[value="mp3"]')).toBeEnabled();
+  expect(mp3Info((await exportFile(page, 'mp3')).buf)).toMatchObject({ rate: RATE, channels: 2, complete: true });
 });
 
 test('the sound track of a video opens; files without sound or no audio are reported', async ({ page }) => {

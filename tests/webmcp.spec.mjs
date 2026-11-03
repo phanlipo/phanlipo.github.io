@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { test, expect, apps } from './helpers.mjs';
 import { makePdf } from './pdf-tools.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
-import { CLIPS, clip, wavInfo, toneHz } from './audio-files.mjs';
+import { CLIPS, clip, wavInfo, mp3Info, toneHz } from './audio-files.mjs';
 import { ORIGIN, API_PROBLEMS, mockApi, addYamlConfig } from './api-mock.mjs';
 import { testSong } from './midi-files.mjs';
 
@@ -427,6 +427,14 @@ test.describe('video-to-audio tools', () => {
     const w = wavInfo(readFileSync(await download.path()));
     expect(w.frames * 2 + 44).toBe(wav.output_size_bytes);
     expect(Math.abs(toneHz(w.samples, w.rate) - CLIPS.opus.hz)).toBeLessThan(5);
+    // MP3: re-encoded, the file is a complete MP3 at 192 kbit/s
+    const mp3 = (await call(page, P + 'extract_audio_from_selected_video', { format: 'mp3' })).result;
+    expect(mp3).toMatchObject({ output_file_name: 'clip-opus.mp3', output_format: 'mp3', output_mime_type: 'audio/mpeg', fell_back_to_wav: false });
+    await expect(page.locator('input[value="mp3"]')).toBeChecked();
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+    const m = readFileSync(await dl.path());
+    expect(m.length).toBe(mp3.output_size_bytes);
+    expect(mp3Info(m)).toMatchObject({ rate: CLIPS.opus.rate, kbps: [192], complete: true });
     const tools = await listTools(page);
     expect(tools.find(t => t.name === P + 'get_selected_video_info').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
   });
@@ -434,7 +442,7 @@ test.describe('video-to-audio tools', () => {
   test('wrong input and videos without sound are rejected', async ({ page }) => {
     await page.setInputFiles('#file', clip('aac'));
     await expect(page.locator('#btnRun')).toBeEnabled();
-    expect((await call(page, P + 'extract_audio_from_selected_video', { format: 'mp3' })).ok).toBe(false);
+    expect((await call(page, P + 'extract_audio_from_selected_video', { format: 'flac' })).ok).toBe(false);
     expect((await call(page, P + 'extract_audio_from_selected_video', { format: 'wav', x: 1 })).ok).toBe(false);
     await expect(page.locator('input[value="original"]')).toBeChecked();
     await page.setInputFiles('#file', clip('silent'));
@@ -482,6 +490,14 @@ test.describe('audio-studio tools', () => {
     expect(w.frames).toBe(44100);
     expect(w.frames * 2 + 44).toBe(out.output_size_bytes);
     expect(Math.abs(toneHz(w.samples, w.rate) - CLIPS.aac.hz)).toBeLessThan(5);
+    // MP3 at 96 kbit/s (own encoder, works in every browser)
+    const mp3 = (await call(page, P + 'export_audio', { format: 'mp3', bitrate_kbps: 96 })).result;
+    expect(mp3).toMatchObject({ output_file_name: 'clip-aac-edit.mp3', output_format: 'mp3', output_mime_type: 'audio/mpeg', bitrate_kbps: 96, duration_seconds: 1 });
+    await expect(page.locator('input[value="mp3"]')).toBeChecked();
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+    const m = readFileSync(await dl.path());
+    expect(m.length).toBe(mp3.output_size_bytes);
+    expect(mp3Info(m)).toMatchObject({ rate: 44100, channels: 1, kbps: [96], complete: true });
     const tools = await listTools(page);
     expect(tools.find(t => t.name === P + 'get_audio_info').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
   });
@@ -501,7 +517,7 @@ test.describe('audio-studio tools', () => {
     ]) expect((await call(page, P + 'edit_audio', input)).error).toMatch(msg);
     expect((await call(page, P + 'set_selection', { start_seconds: 1.5, end_seconds: 1 })).error).toMatch(/greater than start_seconds/);
     expect((await call(page, P + 'set_selection', { start_seconds: 5 })).error).toMatch(/beyond the end/);
-    expect((await call(page, P + 'export_audio', { format: 'mp3' })).ok).toBe(false);
+    expect((await call(page, P + 'export_audio', { format: 'flac' })).ok).toBe(false);
     expect((await call(page, P + 'export_audio', { bitrate_kbps: 100 })).ok).toBe(false);
     expect((await call(page, P + 'get_audio_info', {})).result).toMatchObject({ edits: 0, undo_steps: 0, selection: { whole_file: true } });
     await expect(page.locator('#result')).toBeHidden();

@@ -1,4 +1,4 @@
-// Small, independent readers for the audio files the video-to-audio and audio-studio apps write (MP4/M4A, Ogg, WAV).
+// Small, independent readers for the audio files the video-to-audio and audio-studio apps write (MP4/M4A, Ogg, WAV, MP3).
 // They do not use the app's library, so the tests check the files on their own.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -74,6 +74,32 @@ export function oggInfo(buf) {
   const head = buf.indexOf(Buffer.from('OpusHead'));
   const preSkip = codec === 'opus' ? buf.readUInt16LE(head + 10) : 0;
   return { codec, pages, complete: o === buf.length, seconds: codec === 'opus' ? (Number(granule) - preSkip) / 48000 : null };
+}
+
+/* ---------- MP3 ---------- */
+// MPEG audio frame headers (ISO 11172-3 / 13818-3): bitrate (kbit/s) by version and layer III, sample rates by version
+const MP3_KBPS = { 1: [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320], 2: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160] };
+const MP3_RATES = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
+/** Walks all frames (after an optional ID3v2 tag): rate, channels, bitrate(s), frame count, duration.
+ *  A Xing/Info frame (no audio) is not counted. complete = the frames fill the file exactly (ID3v1 at the end allowed). */
+export function mp3Info(buf) {
+  let o = 0;
+  if (buf.toString('latin1', 0, 3) === 'ID3') o = 10 + ((buf[6] << 21) | (buf[7] << 14) | (buf[8] << 7) | buf[9]);
+  let frames = 0, rate = 0, channels = 0, layer = 0, xing = false;
+  const kbps = new Set();
+  while (o + 4 <= buf.length && buf[o] === 0xff && (buf[o + 1] & 0xe0) === 0xe0) {
+    const ver = (buf[o + 1] >> 3) & 3, lay = (buf[o + 1] >> 1) & 3, bi = buf[o + 2] >> 4, ri = (buf[o + 2] >> 2) & 3, pad = (buf[o + 2] >> 1) & 1;
+    if (ver === 1 || lay !== 1 || bi === 0 || bi === 15 || ri === 3) break; // only layer III, no "free" bitrate
+    const r = MP3_RATES[ver][ri], b = MP3_KBPS[ver === 3 ? 1 : 2][bi], ch = (buf[o + 3] >> 6) === 3 ? 1 : 2;
+    const perFrame = ver === 3 ? 1152 : 576, len = Math.floor(perFrame / 8 * b * 1000 / r) + pad;
+    const sideInfo = ver === 3 ? (ch === 1 ? 17 : 32) : (ch === 1 ? 9 : 17), tag = buf.toString('latin1', o + 4 + sideInfo, o + 8 + sideInfo);
+    if (frames === 0 && !xing && (tag === 'Xing' || tag === 'Info')) xing = true;
+    else { frames++; kbps.add(b); }
+    rate = r; channels = ch; layer = perFrame;
+    o += len;
+  }
+  const end = buf.length - (buf.toString('latin1', buf.length - 128, buf.length - 125) === 'TAG' ? 128 : 0);
+  return { rate, channels, kbps: [...kbps].sort((a, b) => a - b), frames, xing, complete: frames > 0 && o === end, seconds: rate ? frames * layer / rate : 0 };
 }
 
 /* ---------- WAV ---------- */

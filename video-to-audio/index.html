@@ -20,7 +20,7 @@
 <meta name="tool:share-target" content="video/*, .mp4, .m4v, .mov, .webm, .mkv, .3gp">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-1G9tPoFtK7aMfHLP/3jCSxjtkCxkBSYewyG/+tFugq4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-n+bYzc97iJeO3tmYQzV4+U3cw1WFWSHW561WxvFeMQo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -79,6 +79,8 @@ audio{display:block;width:100%;margin-block:10px}
         <span data-i18n-html="f.original">Original<small>Die Tonspur wird unverändert übernommen – keine Qualitätsverluste, schnell. Meist .m4a (AAC), bei WebM-Videos .ogg.</small></span></label>
       <label class="choice"><input type="radio" name="format" value="wav">
         <span data-i18n-html="f.wav">WAV<small>Unkomprimiert, passt in jedes Schnitt- und Audioprogramm. Deutlich größere Datei.</small></span></label>
+      <label class="choice"><input type="radio" name="format" value="mp3">
+        <span data-i18n-html="f.mp3">MP3<small>Spielt wirklich jedes Gerät ab. Wird neu kodiert (192 kbit/s) – minimal schlechter als Original, dauert etwas länger.</small></span></label>
     </fieldset>
     <button type="button" class="btn primary big" id="btnRun" data-i18n="run" disabled>Audio herausziehen</button>
     <progress id="progress" max="100" value="0" hidden></progress>
@@ -123,14 +125,14 @@ audio{display:block;width:100%;margin-block:10px}
   <ul>
     <li><strong>Original</strong> übernimmt die Tonspur 1:1, ohne sie neu zu kodieren – gleiche Qualität, kleine Datei, auch bei langen Videos schnell. Handy-Videos (MP4/MOV) enthalten fast immer AAC → <code>.m4a</code>, das jedes Handy und jeder Computer abspielt. WebM-Videos enthalten meist Opus → <code>.ogg</code>; MP3 → <code>.mp3</code>, FLAC → <code>.flac</code>.</li>
     <li><strong>WAV</strong> ist unkomprimiert (16 Bit) und ca. 10 MB pro Minute in Stereo groß. Dafür muss der Browser den Ton dekodieren können; das klappt in aktuellen Browsern bei fast allen Videos.</li>
-    <li>MP3 wird nicht erzeugt: Ein MP3-Encoder lässt sich hier nicht offline und sicher einbinden. <code>.m4a</code> ist ähnlich klein und wird überall abgespielt.</li>
+    <li><strong>MP3</strong> kodiert den Ton neu (192 kbit/s, ca. 1,4 MB pro Minute) – für Geräte und Programme, die mit <code>.m4a</code> nichts anfangen. Der MP3-Encoder (LAME, ca. 300 KB) wird beim ersten Mal geladen und bleibt danach offline verfügbar.</li>
   </ul>
   <h3>Hinweise</h3>
   <ul>
     <li>Alles läuft im Browser, auch offline. Das Video wird nicht hochgeladen und nicht gespeichert; gespeichert wird nur das gewählte Format.</li>
     <li>Gelesen werden MP4, MOV, M4V, 3GP, WebM und MKV. Hat ein Video mehrere Tonspuren, wird die erste genommen.</li>
     <li>Sehr große Videos: Das Video wird nur stückweise gelesen, die Audiodatei aber im Arbeitsspeicher erstellt. Bei WAV aus sehr langen Videos (über ca. 1 Stunde) kann das Handy an seine Grenzen kommen – dann <em>Original</em> nehmen.</li>
-    <li>Bibliothek: <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) zum Lesen und Schreiben der Dateien.</li>
+    <li>Bibliotheken: <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) zum Lesen und Schreiben der Dateien, für MP3 dessen Erweiterung mit <a href="https://lame.sourceforge.io/">LAME</a> (LGPL).</li>
     <li>KI-Agenten im Browser (WebMCP) können Angaben zum gewählten Video lesen und die Tonspur herausziehen lassen – ein Video auswählen können sie nicht.</li>
   </ul>
   </div>
@@ -146,14 +148,14 @@ audio{display:block;width:100%;margin-block:10px}
   <ul>
     <li><strong>Original</strong> takes the sound track 1:1 without re-encoding it – same quality, small file, fast even for long videos. Phone videos (MP4/MOV) almost always contain AAC → <code>.m4a</code>, which every phone and computer plays. WebM videos usually contain Opus → <code>.ogg</code>; MP3 → <code>.mp3</code>, FLAC → <code>.flac</code>.</li>
     <li><strong>WAV</strong> is uncompressed (16 bit), about 10 MB per minute in stereo. The browser has to be able to decode the sound for this; current browsers manage that for almost every video.</li>
-    <li>MP3 is not offered: an MP3 encoder cannot be included here offline and safely. <code>.m4a</code> is similarly small and plays everywhere.</li>
+    <li><strong>MP3</strong> re-encodes the sound (192 kbit/s, about 1.4 MB per minute) – for devices and programs that cannot handle <code>.m4a</code>. The MP3 encoder (LAME, about 300 KB) is loaded the first time and is available offline after that.</li>
   </ul>
   <h3>Notes</h3>
   <ul>
     <li>Everything runs in the browser, offline too. The video is neither uploaded nor stored; only the chosen format is saved.</li>
     <li>Reads MP4, MOV, M4V, 3GP, WebM and MKV. If a video has several sound tracks, the first one is used.</li>
     <li>Very large videos: the video is read piece by piece, but the audio file is built in memory. WAV from very long videos (over about 1 hour) may be too much for a phone – use <em>Original</em> then.</li>
-    <li>Library: <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) to read and write the files.</li>
+    <li>Libraries: <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) to read and write the files, for MP3 its extension with <a href="https://lame.sourceforge.io/">LAME</a> (LGPL).</li>
     <li>AI agents in the browser (WebMCP) can read details of the chosen video and have its sound track extracted – they cannot choose a video.</li>
   </ul>
   </div>
@@ -168,7 +170,7 @@ audio{display:block;width:100%;margin-block:10px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version c2312f577f43</p>
+  <p class="footer-version">Version 2098a755b1a3</p>
   <!-- footer:end -->
 </footer>
 
@@ -186,6 +188,7 @@ Tools.i18n({
     'e.invalid': 'Das ist kein lesbares Video.', 'e.noaudio': 'Dieses Video hat keine Tonspur.',
     'e.decode': 'Dieser Browser kann den Ton dieses Videos ({codec}) nicht dekodieren – bitte „Original“ wählen.',
     failed: 'Fehlgeschlagen: {m}', shareFail: 'Teilen nicht möglich', saved: 'Gespeichert',
+    loadingMp3: 'Lade den MP3-Encoder …', 'e.mp3load': 'Der MP3-Encoder ließ sich nicht laden. Bitte einmal mit Internet öffnen – danach geht MP3 auch offline.',
     'mcp.info': 'Video gelesen', 'mcp.extract': 'Tonspur herausgezogen',
   },
   en: {
@@ -193,6 +196,7 @@ Tools.i18n({
     'h.file': '1 · Choose a video', drop: '<strong>Choose a video</strong><br>or drag it here', 'h.run': '2 · Save audio', format: 'Format',
     'f.original': 'Original<small>The sound track is taken over unchanged – no quality loss, fast. Usually .m4a (AAC), .ogg for WebM videos.</small>',
     'f.wav': 'WAV<small>Uncompressed, works in every editing and audio program. Much larger file.</small>',
+    'f.mp3': 'MP3<small>Plays on every device. Re-encoded (192 kbit/s) – slightly below the original, takes a little longer.</small>',
     run: 'Extract audio', 'h.result': '3 · Audio file', save: 'Save audio', share: 'Share …',
     fileInfo: '“{f}” · {mb} MB', reading: 'Reading the video …', info: 'Sound track: {codec}, {ch}, {rate} kHz · {dur}',
     mono: 'mono', stereo: 'stereo', channels: '{n} channels',
@@ -201,6 +205,7 @@ Tools.i18n({
     'e.invalid': 'This is not a readable video.', 'e.noaudio': 'This video has no sound track.',
     'e.decode': 'This browser cannot decode the sound of this video ({codec}) – please choose “Original”.',
     failed: 'Failed: {m}', shareFail: 'Sharing is not possible', saved: 'Saved',
+    loadingMp3: 'Loading the MP3 encoder …', 'e.mp3load': 'The MP3 encoder could not be loaded. Please open it once with internet – after that MP3 works offline too.',
     'mcp.info': 'video read', 'mcp.extract': 'sound track extracted',
   },
 });
@@ -210,7 +215,8 @@ const settings = Object.assign({ format: 'original' }, load(LS, {}));
 const radios = [...document.querySelectorAll('input[name="format"]')];
 const getFormat = () => (radios.find(r => r.checked) || radios[0]).value;
 const setFormat = f => { for (const r of radios) r.checked = r.value === f; };
-setFormat(settings.format === 'wav' ? 'wav' : 'original');
+const FORMATS = ['original', 'wav', 'mp3'];
+setFormat(FORMATS.includes(settings.format) ? settings.format : 'original');
 for (const r of radios) r.addEventListener('change', () => { settings.format = getFormat(); save(LS, settings); });
 
 let file = null, info = null, result = null, busy = false, playerUrl = null, lastError = null, lastNote = null;
@@ -327,6 +333,55 @@ function encodeWav(buf) {
   return new Uint8Array(out.buffer);
 }
 
+/* ---------- MP3 (browsers cannot encode it: LAME as WebAssembly, loaded on first use) ---------- */
+const MP3_KBPS = 192;
+const MP3_RATES = [48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000];
+let mp3Ready = null;
+function loadMp3() {
+  return mp3Ready ||= (async () => {
+    if (await MB.canEncodeAudio('mp3').catch(() => false)) return 'native';
+    window.Mediabunny = MB; // the encoder (IIFE build) takes Mediabunny from this global
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = '../assets/vendor/mediabunny-mp3/mediabunny-mp3-encoder.min.js';
+      s.onload = resolve; s.onerror = () => { s.remove(); reject(err('mp3load')); };
+      document.head.append(s);
+    });
+    window.MediabunnyMp3Encoder.registerMp3Encoder();
+    return 'lame';
+  })().then(how => { Tools.diag.log('mp3 encoder ready', { how }); return how; },
+    e => { mp3Ready = null; Tools.diag.log('mp3 encoder failed', { msg: String(e.message).slice(0, 200) }); throw e.code ? e : err('mp3load'); });
+}
+const mp3Options = () => ({
+  codec: 'mp3', bitrate: MP3_KBPS * 1000, forceTranscode: true,
+  ...(info.channels > 2 ? { numberOfChannels: 2 } : {}),
+  ...(MP3_RATES.includes(info.sampleRate) ? {} : { sampleRate: 48000 }),
+});
+// MP3 without WebCodecs: the browser decodes, Mediabunny encodes the AudioBuffer
+async function mp3FromWebAudio(onProgress) {
+  const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!Ctx) return null;
+  // decodeAudioData resamples to the context's rate: keep the video's rate if MP3 has it
+  const rate = MP3_RATES.includes(info.sampleRate) ? info.sampleRate : 48000;
+  let buf;
+  try { buf = await new Ctx(1, 1, rate).decodeAudioData(await file.arrayBuffer()); } catch (e) { Tools.diag.log('decodeAudioData failed', { msg: String(e.message || e).slice(0, 200) }); return null; }
+  if (buf.numberOfChannels > 2) {
+    const ch = 2;
+    const ctx = new Ctx(ch, buf.length, rate);
+    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
+    buf = await ctx.startRendering();
+  }
+  const output = new MB.Output({ format: new MB.Mp3OutputFormat(), target: new MB.BufferTarget() });
+  const source = new MB.AudioBufferSource({ codec: 'mp3', bitrate: MP3_KBPS * 1000 });
+  output.addAudioTrack(source);
+  await output.start();
+  await source.add(buf);
+  source.close();
+  onProgress(0.9);
+  await output.finalize();
+  return new Uint8Array(output.target.buffer);
+}
+
 async function run(format = getFormat()) {
   if (!file || !info || busy) return;
   busy = true; lastError = null; lastNote = null;
@@ -346,6 +401,14 @@ async function run(format = getFormat()) {
         ext = target.ext; mime = target.mime;
       }
       if (!bytes) { used = 'wav'; lastNote = 'fallback'; Tools.diag.log('copy not possible, trying wav', { codec: info.codec }); }
+    }
+    if (format === 'mp3') {
+      status(t('loadingMp3'));
+      await loadMp3();
+      ext = '.mp3'; mime = 'audio/mpeg';
+      bytes = await convert({ format: new MB.Mp3OutputFormat() }, mp3Options(), progress);
+      if (!bytes) { status(t('decoding')); bytes = await mp3FromWebAudio(progress); }
+      if (!bytes) throw err('decode');
     }
     if (!bytes) {
       ext = '.wav'; mime = 'audio/wav';
@@ -380,7 +443,7 @@ function showResult() {
   const r = $('result');
   r.dataset.format = result.format;
   r.hidden = false;
-  try { $('btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [result.file] })); } catch (_) { $('btnShare').hidden = true; }
+  try { $('btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [shareFile(result.file)] })); } catch (_) { $('btnShare').hidden = true; }
 }
 
 $('btnSave').addEventListener('click', () => {
@@ -390,10 +453,14 @@ $('btnSave').addEventListener('click', () => {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   Tools.diag.log('saved', { format: result.format });
 });
+// Chrome on Android only shares files with MIME types from its own list: .m4a must be "audio/x-m4a",
+// with "audio/mp4" share() fails with NotAllowedError (canShare() does not check this).
+const shareFile = f => f.type === 'audio/mp4' ? new File([f], f.name, { type: 'audio/x-m4a' }) : f;
 $('btnShare').addEventListener('click', async () => {
   if (!result) return;
-  try { await navigator.share({ files: [result.file], title: result.file.name }); Tools.diag.log('shared'); }
-  catch (e) { if (e.name !== 'AbortError') { Tools.diag.log('share failed', { name: e.name }); toast(t('shareFail')); } }
+  const f = shareFile(result.file);
+  try { await navigator.share({ files: [f], title: f.name }); Tools.diag.log('shared', { type: f.type }); }
+  catch (e) { if (e.name !== 'AbortError') { Tools.diag.log('share failed', { name: e.name, type: f.type }); toast(t('shareFail')); } }
 });
 
 const drop = $('drop');
@@ -416,6 +483,7 @@ const AGENT_ERRORS = {
   invalid: 'The chosen file is not a readable video.',
   noaudio: 'The chosen video has no sound track.',
   decode: 'This browser cannot decode the sound of the video – use format "original" instead.',
+  mp3load: 'The MP3 encoder could not be loaded (offline before its first use?) – use format "original" or "wav" instead.',
 };
 const needVideo = () => {
   if (!file) throw new Error('No video chosen – ask the user to choose a video in the app first.');
@@ -431,9 +499,9 @@ Tools.mcp.register({
 });
 Tools.mcp.register({
   name: 'extract_audio_from_selected_video', title: 'Extract the sound track of the chosen video', label: 'mcp.extract', untrusted: true,
-  description: 'Extracts the sound track of the video the user has chosen in the app, on the device. "original" copies it unchanged (usually .m4a/AAC, .ogg for Opus), "wav" decodes it to uncompressed 16-bit WAV. The user can then play, save or share the audio file in the app. Returns the file name, format and size.',
+  description: 'Extracts the sound track of the video the user has chosen in the app, on the device. "original" copies it unchanged (usually .m4a/AAC, .ogg for Opus), "wav" decodes it to uncompressed 16-bit WAV, "mp3" re-encodes it to MP3 at 192 kbit/s. The user can then play, save or share the audio file in the app. Returns the file name, format and size.',
   inputSchema: { type: 'object', properties: {
-    format: { type: 'string', enum: ['original', 'wav'], description: 'Output format. Default: the format chosen in the app.' },
+    format: { type: 'string', enum: FORMATS, description: 'Output format. Default: the format chosen in the app.' },
   }, additionalProperties: false },
   execute: async ({ format }) => {
     needVideo();
