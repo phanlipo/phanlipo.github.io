@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Mindmap</title>
+<meta name="description" content="Gedanken als Mindmap sammeln: Thema in die Mitte, Äste und Unterpunkte antippen, verschieben, einklappen – als Text kopieren oder als Bild speichern.">
+<meta name="tool:tags" content="Arbeit, Werkzeug">
+<meta name="tool:features" content="Kopieren, KI-Agent">
+<meta name="tool:webmcp" content="get_map, add_nodes, rename_node, create_map">
+<meta name="tool:icon" content="affiliate">
+<meta name="tool:color" content="#047857">
+<meta name="tool:short-name" content="Mindmap">
+<meta name="tool:title-en" content="Mind Map">
+<meta name="tool:description-en" content="Collect ideas as a mind map: topic in the middle, tap to add branches and sub-points, move, fold – copy as text or save as a picture.">
+<meta name="tool:short-name-en" content="Mind Map">
+<meta name="tool:storage" content="mind-map.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-AlYlFG/DWRK1kVZoJmpNEYsd0kzeOT5VRdMIqFYb4tQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Mindmap">
+<meta name="theme-color" content="#047857">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#047857;--accent-text:#ffffff;--sel:#1b2430}
+@media (prefers-color-scheme: dark){:root{--accent:#34d399;--accent-text:#022c22;--sel:#e6ebf1}}
+/* Stage: the map fills the screen, node actions at the bottom (thumb), maps and export in the menu */
+main{display:flex;flex-direction:column}
+.board{position:relative;flex:1;min-height:180px;overflow:hidden;background:var(--bg)}
+#svg{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+#svg .node:focus{outline:none}
+#svg .node:focus-visible rect.ring{display:block;stroke:var(--accent);stroke-width:3;stroke-dasharray:none}
+#svg.panning{cursor:grabbing}
+#svg .link{fill:none;stroke-width:2.5;stroke-linecap:round}
+#svg .node{cursor:pointer}
+#svg .node rect.box{fill:var(--surface);stroke-width:2}
+#svg .node.d1 rect.box{stroke-width:3}
+#svg .node text{fill:var(--text);font:15px var(--font)}
+#svg .node.root rect.box{fill:var(--accent);stroke:var(--accent)}
+#svg .node.root text{fill:var(--accent-text);font-weight:600;font-size:18px}
+#svg .node.empty text{font-style:italic}
+#svg .node rect.ring{fill:none;stroke:var(--sel);stroke-width:2;stroke-dasharray:5 4;display:none}
+#svg .node[aria-selected="true"] rect.ring{display:block}
+#svg .node.dragging{opacity:.7;pointer-events:none}
+#svg .node.drop-in rect.box{fill:var(--surface-2);stroke-width:4}
+#svg .drop-line{stroke:var(--sel);stroke-width:3;stroke-linecap:round}
+#svg .fold circle.dot{fill:var(--surface);stroke-width:2}
+#svg .fold text{fill:var(--text);font:600 12px var(--font)}
+#svg .fold circle.hit{fill:transparent}
+.hint{position:absolute;inset-inline:12px;inset-block-start:10px;margin:0;text-align:center;color:var(--muted);font-size:14px;pointer-events:none}
+/* Bottom bar: node actions, or the text field while editing */
+.bar{flex:none;display:flex;gap:6px;justify-content:center;padding:6px 8px;border-radius:0;border-inline:0;border-block-end:0;box-shadow:none}
+.act{flex:1 1 0;max-width:120px;min-width:0;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  padding:4px 2px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);cursor:pointer;font-size:12px;line-height:1.2}
+.act svg{width:22px;height:22px;flex:none}
+.act span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act:disabled{opacity:.45;cursor:not-allowed}
+.act.danger{color:var(--err)}
+.act:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.edit{align-items:center}
+.edit input{flex:1;min-width:0;min-height:44px;padding-inline:10px;font-size:16px}
+.edit .btn{min-height:44px}
+/* Menu sections */
+.maps{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:6px}
+.map-item{width:100%;min-height:48px;text-align:start;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:6px 12px;
+  border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);cursor:pointer}
+.map-item[aria-current="true"]{border-color:var(--accent);border-width:2px;font-weight:600}
+.map-item .muted{font-weight:400;font-size:13px}
+.map-item .ttl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#importText{width:100%;min-height:120px;padding:8px;resize:vertical;font-size:16px;margin-block:4px 8px}
+.card p.muted{margin:0 0 8px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Mindmap</span></h1>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnUndo" disabled aria-label="Rückgängig" title="Rückgängig" data-i18n-attr="aria-label:undo; title:undo"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-4 -4l4 -4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></svg></button>
+    <button type="button" class="head-btn" id="btnFit" aria-label="Alles zeigen" title="Alles zeigen" data-i18n-attr="aria-label:fit; title:fit"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/><path d="M4 8v-2a2 2 0 0 1 2 -2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2 -2v-2"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <div class="board" id="board">
+    <svg id="svg" role="tree" aria-label="Mindmap" data-i18n-attr="aria-label:map"><g id="view"></g></svg>
+    <p class="hint" id="hint" hidden></p>
+  </div>
+  <section class="card bar" id="bar" aria-label="Punkt bearbeiten" data-i18n-attr="aria-label:bar">
+    <button type="button" class="act" id="btnChild"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 0"/><path d="M4 5l4 0"/><path d="M6 5v11a1 1 0 0 0 1 1h5"/><path d="M12 8a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1l0 -2"/><path d="M12 16a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1l0 -2"/></svg><span data-i18n="child">Unterpunkt</span></button>
+    <button type="button" class="act" id="btnSibling"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6v4a1 1 0 0 1 -1 1h-14a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h14a1 1 0 0 1 1 1"/><path d="M12 15l0 4"/><path d="M14 17l-4 0"/></svg><span data-i18n="sibling">Nebenpunkt</span></button>
+    <button type="button" class="act" id="btnEdit"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"/><path d="M13.5 6.5l4 4"/></svg><span data-i18n="edit">Text</span></button>
+    <button type="button" class="act danger" id="btnDelete"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg><span data-i18n="delete">Löschen</span></button>
+  </section>
+  <div class="card bar edit" id="editRow" hidden>
+    <label class="sr-only" for="txt" data-i18n="textLabel">Text des Punkts</label>
+    <input type="text" id="txt" maxlength="200" autocomplete="off" enterkeyhint="done">
+    <button type="button" class="btn primary" id="btnOk">OK</button>
+  </div>
+
+  <section class="card" aria-labelledby="h-maps" data-menu>
+    <h2 id="h-maps" data-i18n="maps">Meine Mindmaps</h2>
+    <ul class="maps" id="mapList"></ul>
+    <div class="row">
+      <button type="button" class="btn" id="btnNew" data-i18n="newMap">Neue Mindmap</button>
+      <button type="button" class="btn danger" id="btnDelMap" data-i18n="delMap">Diese Mindmap löschen</button>
+    </div>
+  </section>
+  <section class="card" aria-labelledby="h-export" data-menu>
+    <h2 id="h-export" data-i18n="export">Exportieren &amp; Importieren</h2>
+    <div class="row">
+      <button type="button" class="btn" id="btnCopy" data-i18n="copy">Als Text kopieren</button>
+      <button type="button" class="btn" id="btnPng" data-i18n="png">Als Bild speichern</button>
+    </div>
+    <h3 data-i18n="importH">Aus Text erstellen</h3>
+    <p class="muted" data-i18n="importIntro">Eine Gliederung einfügen – je Zeile ein Punkt, Unterpunkte eingerückt (Leerzeichen, Tab oder Aufzählung mit „-“). Die erste Zeile wird zum Thema.</p>
+    <label class="sr-only" for="importText" data-i18n="importLabel">Gliederung</label>
+    <textarea id="importText" spellcheck="false"></textarea>
+    <button type="button" class="btn" id="btnImport" data-i18n="import">Als neue Mindmap anlegen</button>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Eine Mindmap zum Sammeln und Ordnen von Gedanken: In der Mitte steht das Thema, daran hängen Äste mit Unterpunkten. Die Anordnung macht die App selbst.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Antippen</b> wählt einen Punkt (gestrichelter Rahmen). Ein zweites Antippen öffnet den Text zum Bearbeiten.</li>
+    <li><b>Unterpunkt</b> hängt einen neuen Punkt an den gewählten, <b>Nebenpunkt</b> setzt einen daneben. Gleich lostippen, mit <b>OK</b> oder der Eingabetaste bestätigen. Ein leer gelassener neuer Punkt verschwindet wieder.</li>
+    <li><b>Löschen</b> entfernt den gewählten Punkt mit allen Unterpunkten (das Thema in der Mitte bleibt).</li>
+    <li><b>Einklappen:</b> Der kleine Kreis am gewählten Punkt klappt seine Unterpunkte ein und aus; eingeklappt zeigt er ihre Anzahl.</li>
+    <li><b>Verschieben:</b> Einen Punkt gedrückt halten, bis das Handy kurz vibriert, und auf einen anderen Punkt ziehen – er wird dessen Unterpunkt. Am oberen oder unteren Rand eines Punkts abgelegt, landet er davor bzw. dahinter. Auf das Thema in der Mitte gezogen, kommt er auf die Seite, auf der man loslässt. Mit der Maus einfach ziehen.</li>
+    <li><b>Ansicht:</b> Mit einem Finger verschieben, mit zwei Fingern zoomen (Maus: Mausrad). <b>Alles zeigen</b> (oben rechts) passt die ganze Mindmap ein.</li>
+    <li><b>Rückgängig</b> (oben rechts) nimmt die letzten Änderungen zurück.</li>
+    <li>Im <b>Menü</b> (☰): mehrere Mindmaps verwalten, die aktuelle <b>als Text kopieren</b> (eingerückte Liste, passt z. B. in Notizen) oder <b>als Bild speichern</b> (PNG), und aus einer eingefügten Gliederung eine neue Mindmap anlegen.</li>
+    <li>Tastatur: Pfeiltasten wählen, <span class="kbd">Tab</span> neuer Unterpunkt, <span class="kbd">Enter</span> neuer Nebenpunkt, <span class="kbd">F2</span> bearbeiten, <span class="kbd">Entf</span> löschen, <span class="kbd">Leertaste</span> ein-/ausklappen, <span class="kbd">Alt</span>+<span class="kbd">↑</span>/<span class="kbd">↓</span> verschieben, <span class="kbd">Strg</span>+<span class="kbd">Z</span> rückgängig.</li>
+    <li>Alles bleibt nur in diesem Browser gespeichert. Zum Übertragen auf ein anderes Gerät: „Daten sichern &amp; übertragen“ im Menü.</li>
+  </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Unterstützt der Browser WebMCP, kann ein KI-Agent die aktuelle Mindmap lesen, Punkte hinzufügen und umbenennen sowie aus einer Gliederung eine neue Mindmap anlegen. Löschen kann er nichts. Jede Änderung erscheint sofort hier und lässt sich mit <b>Rückgängig</b> zurücknehmen.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A mind map to collect and sort ideas: the topic sits in the middle, branches with sub-points hang off it. The app arranges everything itself.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Tap</b> selects a point (dashed frame). Tapping it again opens its text for editing.</li>
+    <li><b>Sub-point</b> adds a new point to the selected one, <b>Next point</b> puts one beside it. Start typing straight away and confirm with <b>OK</b> or the Enter key. A new point left empty disappears again.</li>
+    <li><b>Delete</b> removes the selected point with all its sub-points (the topic in the middle stays).</li>
+    <li><b>Fold:</b> the small circle at the selected point folds its sub-points in and out; when folded it shows how many there are.</li>
+    <li><b>Move:</b> press and hold a point until the phone vibrates briefly, then drag it onto another point – it becomes a sub-point there. Dropped on the top or bottom edge of a point, it goes before or after it. Dragged onto the topic in the middle, it goes to the side where you let go. With a mouse, just drag.</li>
+    <li><b>View:</b> move with one finger, zoom with two (mouse: wheel). <b>Show all</b> (top right) fits the whole map.</li>
+    <li><b>Undo</b> (top right) takes back the last changes.</li>
+    <li>In the <b>menu</b> (☰): manage several mind maps, <b>copy</b> the current one <b>as text</b> (indented list, e.g. for notes) or <b>save it as a picture</b> (PNG), and create a new mind map from a pasted outline.</li>
+    <li>Keyboard: arrow keys select, <span class="kbd">Tab</span> new sub-point, <span class="kbd">Enter</span> new next point, <span class="kbd">F2</span> edit, <span class="kbd">Del</span> delete, <span class="kbd">Space</span> fold/unfold, <span class="kbd">Alt</span>+<span class="kbd">↑</span>/<span class="kbd">↓</span> move, <span class="kbd">Ctrl</span>+<span class="kbd">Z</span> undo.</li>
+    <li>Everything is stored only in this browser. To move it to another device: “Back up &amp; transfer data” in the menu.</li>
+  </ul>
+  <h3>AI agents (WebMCP)</h3>
+  <p>If the browser supports WebMCP, an AI agent can read the current mind map, add and rename points and create a new mind map from an outline. It cannot delete anything. Every change shows up here right away and can be taken back with <b>Undo</b>.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 278d5f2159e0</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{central:'Zentrales Thema',hintEmpty:'Thema antippen und benennen, dann mit „Unterpunkt“ Ideen anhängen.',
+    confirmDel:'Diesen Punkt mit {n} Unterpunkten löschen?',confirmDelMap:'Die Mindmap „{t}“ löschen?',
+    count:'{n} Punkte',count1:'1 Punkt',copied:'Als Text kopiert',copyFail:'Kopieren nicht möglich',
+    saved:'Bild gespeichert',pngFail:'Bild konnte nicht erstellt werden',importEmpty:'Erst eine Gliederung einfügen',
+    imported:'Neue Mindmap mit {n} Punkten angelegt',mapDeleted:'Mindmap gelöscht',saveFail:'Speichern fehlgeschlagen – der Speicher des Browsers ist voll.',
+    tooMany:'Höchstens {n} Punkte je Mindmap',moved:'Verschoben',folded:'eingeklappt, {n} Unterpunkte',
+    'mcp.add':'Punkte hinzugefügt','mcp.rename':'Punkt umbenannt','mcp.create':'Mindmap angelegt'},
+  en:{title:'Mind Map',undo:'Undo',fit:'Show all',map:'Mind map',bar:'Edit point',child:'Sub-point',sibling:'Next point',edit:'Text',delete:'Delete',
+    textLabel:'Text of the point',maps:'My mind maps',newMap:'New mind map',delMap:'Delete this mind map',export:'Export & import',
+    copy:'Copy as text',png:'Save as picture',importH:'Create from text',
+    importIntro:'Paste an outline – one point per line, sub-points indented (spaces, tab or a list with “-”). The first line becomes the topic.',
+    importLabel:'Outline',import:'Create as new mind map',
+    central:'Central topic',hintEmpty:'Tap the topic to name it, then add ideas with “Sub-point”.',
+    confirmDel:'Delete this point with {n} sub-points?',confirmDelMap:'Delete the mind map “{t}”?',
+    count:'{n} points',count1:'1 point',copied:'Copied as text',copyFail:'Copying not possible',
+    saved:'Picture saved',pngFail:'Could not create the picture',importEmpty:'Paste an outline first',
+    imported:'New mind map with {n} points created',mapDeleted:'Mind map deleted',saveFail:'Saving failed – the browser storage is full.',
+    tooMany:'At most {n} points per mind map',moved:'Moved',folded:'folded, {n} sub-points',
+    'mcp.add':'points added','mcp.rename':'point renamed','mcp.create':'mind map created'}
+});
+const t=Tools.t,$=Tools.$;
+const LS='mind-map.maps.v1';
+const MAX_NODES=1000,MAX_TEXT=200,MAX_UNDO=50;
+// Branch colours (connectors and frames), readable on light and dark backgrounds
+const PALETTE=['#e0457b','#3b82f6','#16a34a','#d97706','#8b5cf6','#0891b2','#dc2626','#65a30d'];
+const HG=36,VG=10,PX=12,PY=8,LH=20,ROOT_LH=24,MAXW=200,ROOT_MAXW=220;
+
+/* ---------- Data ----------
+   Store: {cur:id, maps:[{id, at:ms, root:Node}]}; Node: {id, t:text, c:[Node], f:folded?, s:'l' (left side, level 1 only)} */
+const uid=()=>Date.now().toString(36).slice(-4)+Math.random().toString(36).slice(2,8);
+const newMap=root=>({id:uid(),at:Date.now(),root:root||{id:uid(),t:'',c:[]}});
+function sane(n,depth){
+  if(!n||typeof n!=='object'||depth>60)return null;
+  const o={id:typeof n.id==='string'&&n.id?n.id:uid(),t:typeof n.t==='string'?n.t.slice(0,MAX_TEXT):'',c:[]};
+  if(n.f)o.f=true;
+  if(n.s==='l')o.s='l';
+  if(Array.isArray(n.c))for(const c of n.c){const x=sane(c,depth+1);if(x)o.c.push(x);}
+  return o;
+}
+let store=Tools.load(LS,null);
+if(!store||!Array.isArray(store.maps))store={cur:null,maps:[]};
+store.maps=store.maps.map(m=>m&&m.root?{id:typeof m.id==='string'?m.id:uid(),at:+m.at||Date.now(),root:sane(m.root,0)}:null).filter(m=>m&&m.root);
+if(!store.maps.length)store.maps.push(newMap());
+if(!store.maps.some(m=>m.id===store.cur))store.cur=store.maps[0].id;
+
+let map=store.maps.find(m=>m.id===store.cur);
+let sel=map.root.id;
+let undo=[];
+let saveFailed=false,saveTimer=0;
+
+function persist(){
+  clearTimeout(saveTimer);saveTimer=0;
+  const ok=Tools.save(LS,store);
+  if(!ok&&!saveFailed){saveFailed=true;Tools.toast(t('saveFail'),4000);Tools.diag.log('save failed',{maps:store.maps.length});}
+  if(ok)saveFailed=false;
+}
+function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(persist,300);}
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&saveTimer)persist();});
+
+// Tree helpers
+function walk(n,fn,parent,depth){fn(n,parent||null,depth||0);for(const c of n.c)walk(c,fn,n,(depth||0)+1);}
+function find(id,root){
+  let r=null;walk(root||map.root,(n,p,d)=>{if(!r&&n.id===id)r={n,p,d};});return r;
+}
+const countAll=n=>{let k=0;walk(n,()=>k++);return k;};
+const isInside=(id,n)=>{let r=false;walk(n,x=>{if(x.id===id)r=true;});return r;};
+const label=(n,isRoot)=>n.t||(isRoot||n===map.root?t('central'):'…');
+const mapTitle=m=>m.root.t||t('central');
+
+// Undo: snapshots of the current map before each change
+function snapshot(){undo.push(JSON.stringify(map.root));if(undo.length>MAX_UNDO)undo.shift();Tools.$('btnUndo').disabled=false;}
+function changed(){map.at=Date.now();scheduleSave();render();}
+function doUndo(){
+  // Undo while typing a new point: just drop that point
+  if(editing&&editing.isNew){cancelEdit();return;}
+  if(editing)cancelEdit();
+  if(!undo.length)return;
+  map.root=JSON.parse(undo.pop());
+  if(!find(sel))sel=map.root.id;
+  $('btnUndo').disabled=!undo.length;
+  Tools.diag.log('undo',{left:undo.length});
+  changed();
+}
+
+/* ---------- Layout ----------
+   Root in the centre, level-1 branches on the right or left, each subtree stacked vertically. */
+const mctx=document.createElement('canvas').getContext('2d');
+const fontFamily=()=>getComputedStyle(document.body).fontFamily||'sans-serif';
+let FAM=fontFamily();
+function wrapText(text,font,maxW){
+  mctx.font=font;
+  const out=[];
+  for(const para of String(text).split(/\n/)){
+    let line='';
+    for(const word of para.split(/\s+/).filter(Boolean)){
+      let w=word;
+      // Break words that are too long on their own
+      while(mctx.measureText(w).width>maxW){
+        let i=w.length-1;while(i>1&&mctx.measureText(w.slice(0,i)).width>maxW)i--;
+        if(line){out.push(line);line='';}
+        out.push(w.slice(0,i));w=w.slice(i);
+      }
+      const tryLine=line?line+' '+w:w;
+      if(mctx.measureText(tryLine).width>maxW&&line){out.push(line);line=w;}else line=tryLine;
+    }
+    out.push(line);
+  }
+  return out.length?out:[''];
+}
+function layout(){
+  const P=new Map();
+  function measure(n,d,branch,side){
+    const root=d===0,font=root?`600 18px ${FAM}`:`15px ${FAM}`;
+    const lines=wrapText(label(n,root),font,root?ROOT_MAXW:MAXW);
+    mctx.font=font;
+    const tw=Math.max(...lines.map(l=>mctx.measureText(l).width));
+    const lh=root?ROOT_LH:LH;
+    const p={n,d,branch,side,lines,lh,w:Math.ceil(Math.max(root?90:44,tw+2*PX+(root?8:0))),h:lines.length*lh+2*PY+(root?6:0),x:0,y:0,H:0};
+    P.set(n.id,p);
+    const kids=n.f?[]:n.c;
+    const sum=kids.reduce((s,c)=>s+measure(c,d+1,branch,side).H,0)+VG*Math.max(0,kids.length-1);
+    p.H=Math.max(p.h,sum);
+    return p;
+  }
+  function place(n,edge,cy,side){
+    const p=P.get(n.id);
+    p.x=side==='r'?edge+p.w/2:edge-p.w/2;p.y=cy;
+    stack(n.f?[]:n.c,side==='r'?p.x+p.w/2+HG:p.x-p.w/2-HG,cy,side);
+  }
+  function stack(kids,edge,cy,side){
+    const total=kids.reduce((s,c)=>s+P.get(c.id).H,0)+VG*Math.max(0,kids.length-1);
+    let y=cy-total/2;
+    for(const c of kids){const H=P.get(c.id).H;place(c,edge,y+H/2,side);y+=H+VG;}
+  }
+  const r=map.root;
+  const rootP=measure({...r,c:[]},0,-1,'');
+  rootP.n=r;P.set(r.id,rootP);
+  const kids=r.c;
+  kids.forEach((c,i)=>measure(c,1,i,c.s==='l'?'l':'r'));
+  const right=kids.filter(c=>c.s!=='l'),left=kids.filter(c=>c.s==='l');
+  stack(right,rootP.w/2+HG*1.3,0,'r');
+  stack(left,-rootP.w/2-HG*1.3,0,'l');
+  return P;
+}
+let L=new Map();
+function bounds(P){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const p of P.values()){x0=Math.min(x0,p.x-p.w/2);x1=Math.max(x1,p.x+p.w/2+(p.n.c.length?24:0));y0=Math.min(y0,p.y-p.h/2);y1=Math.max(y1,p.y+p.h/2);}
+  x0-=24;// fold dot on the left side
+  return {x0,y0,x1,y1,w:x1-x0,h:y1-y0};
+}
+
+/* ---------- Rendering (screen and picture export share the markup) ---------- */
+const esc=Tools.esc;
+const colorOf=p=>p.d===0?'':PALETTE[p.branch%PALETTE.length];
+function linkPath(a,b){
+  const sx=b.side==='r'?a.x+a.w/2:a.x-a.w/2,ex=b.side==='r'?b.x-b.w/2:b.x+b.w/2;
+  const ax=a.d===0?a.x+(b.side==='r'?a.w/2-10:-a.w/2+10):sx;
+  const mx=(ax+ex)/2;
+  return `M${r1(ax)} ${r1(a.y)}C${r1(mx)} ${r1(a.y)} ${r1(mx)} ${r1(b.y)} ${r1(ex)} ${r1(b.y)}`;
+}
+const r1=v=>Math.round(v*10)/10;
+function foldPos(p){return {x:p.side==='l'?p.x-p.w/2-12:p.x+p.w/2+12,y:p.y};}
+function markup(P,forScreen){
+  let links='',nodes='';
+  for(const p of P.values()){
+    const n=p.n;
+    if(p.d>0){
+      // Connector from the parent
+      const par=P.get(parentId.get(n.id));
+      if(par)links+=`<path class="link" d="${linkPath(par,p)}" style="stroke:${colorOf(p)}"/>`;
+    }
+    const x=r1(p.x-p.w/2),y=r1(p.y-p.h/2);
+    const lines=p.lines.map((l,i)=>`<tspan x="${PX+(p.d===0?4:0)}" y="${r1(PY+(p.d===0?3:0)+i*p.lh+p.lh*0.73)}">${esc(l)}</tspan>`).join('');
+    const cls=`node d${Math.min(p.d,2)}${p.d===0?' root':''}${n.t?'':' empty'}`;
+    let a='';
+    if(forScreen){
+      const isSel=n.id===sel;
+      a=` data-id="${n.id}" role="treeitem" aria-level="${p.d+1}" aria-selected="${isSel}" tabindex="-1"`+
+        (n.c.length?` aria-expanded="${!n.f}"`:'')+` aria-label="${esc(label(n)+(n.f?' ('+t('folded',{n:countAll(n)-1})+')':''))}"`;
+    }
+    const stroke=p.d===0?'':` style="stroke:${colorOf(p)}"`;
+    let fold='';
+    if(n.c.length&&(n.f||(forScreen&&n.id===sel&&p.d>0))){
+      const f=foldPos(p),fx=r1(f.x-p.x+p.w/2),fy=r1(p.h/2);
+      const txt=n.f?String(countAll(n)-1):'−';
+      fold=`<g class="fold"${forScreen?` data-fold="${n.id}"`:''}><circle class="hit" cx="${fx}" cy="${fy}" r="22"/><circle class="dot" cx="${fx}" cy="${fy}" r="${txt.length>2?13:11}"${p.d===0?' style="stroke:var(--accent)"':stroke}/><text x="${fx}" y="${r1(fy+4)}" text-anchor="middle">${esc(txt)}</text></g>`;
+    }
+    nodes+=`<g class="${cls}" transform="translate(${x} ${y})"${a}><rect class="box" width="${p.w}" height="${p.h}" rx="${p.d===0?14:8}"${stroke}/>`+
+      (forScreen?`<rect class="ring" x="-5" y="-5" width="${p.w+10}" height="${p.h+10}" rx="${p.d===0?18:12}"/>`:'')+
+      `<text>${lines}</text>${fold}</g>`;
+  }
+  return `<g class="links">${links}</g><g class="nodes">${nodes}</g>`;
+}
+let parentId=new Map();
+
+const svg=$('svg'),viewG=$('view'),board=$('board');
+let view={x:0,y:0,k:1};
+const applyView=()=>viewG.setAttribute('transform',`translate(${r1(view.x)} ${r1(view.y)}) scale(${Math.round(view.k*1000)/1000})`);
+function render(){
+  FAM=fontFamily();
+  parentId=new Map();walk(map.root,(n,p)=>{if(p)parentId.set(n.id,p.id);});
+  if(!find(sel))sel=map.root.id;
+  L=layout();
+  // A selected node hidden inside a folded branch: select the visible ancestor
+  while(!L.has(sel))sel=parentId.get(sel);
+  viewG.innerHTML=markup(L,true);
+  applyView();
+  const selEl=nodeEl(sel);
+  if(selEl)selEl.tabIndex=0;
+  $('hint').hidden=map.root.c.length>0||editing;
+  $('hint').textContent=t('hintEmpty');
+  $('btnDelete').disabled=sel===map.root.id;
+  renderMaps();
+}
+const nodeEl=id=>viewG.querySelector(`[data-id="${CSS.escape(id)}"]`);
+
+// Whole map on screen. readable: on opening, don't shrink below a readable size – centre the topic instead
+function fit(readable){
+  const b=bounds(L),W=board.clientWidth,H=board.clientHeight;
+  if(!W||!H)return;
+  const m=16;
+  const k=Math.max(.2,Math.min(1.25,(W-2*m)/b.w,(H-2*m)/b.h));
+  if(readable&&k<.75){
+    const r=L.get(map.root.id),kk=.8;
+    view={k:kk,x:W/2-r.x*kk,y:H/2-r.y*kk};
+  }else view={k,x:W/2-(b.x0+b.w/2)*k,y:H/2-(b.y0+b.h/2)*k};
+  applyView();
+}
+// Keeps the selected node on screen (smallest shift)
+function reveal(id){
+  const p=L.get(id);if(!p)return;
+  const W=board.clientWidth,H=board.clientHeight,m=20;
+  const x0=(p.x-p.w/2)*view.k+view.x,x1=(p.x+p.w/2)*view.k+view.x,y0=(p.y-p.h/2)*view.k+view.y,y1=(p.y+p.h/2)*view.k+view.y;
+  let dx=0,dy=0;
+  if(x1-x0>W-2*m)dx=m-x0;else if(x0<m)dx=m-x0;else if(x1>W-m)dx=W-m-x1;
+  if(y1-y0>H-2*m)dy=m-y0;else if(y0<m)dy=m-y0;else if(y1>H-m)dy=H-m-y1;
+  if(dx||dy){view.x+=dx;view.y+=dy;applyView();}
+}
+function zoomAt(k,cx,cy){
+  k=Math.max(.15,Math.min(4,k));
+  const wx=(cx-view.x)/view.k,wy=(cy-view.y)/view.k;
+  view={k,x:cx-wx*k,y:cy-wy*k};applyView();
+}
+
+/* ---------- Selection & editing ---------- */
+function select(id,focus){
+  if(!L.has(id))return;
+  const changedSel=id!==sel;
+  sel=id;
+  if(changedSel)render();
+  reveal(id);
+  if(focus){const el=nodeEl(id);if(el)el.focus({preventScroll:true});}
+}
+let editing=null;// {id, isNew}
+const editRow=$('editRow'),txt=$('txt');
+function startEdit(id,isNew){
+  const f=find(id);if(!f)return;
+  sel=id;editing={id,isNew:!!isNew};
+  $('bar').hidden=true;editRow.hidden=false;
+  txt.value=f.n.t;
+  txt.placeholder=f.n===map.root?t('central'):'';
+  render();reveal(id);
+  txt.focus();
+  try{txt.select();}catch(_){}
+  // Keyboard may shrink the board: keep the node visible
+  setTimeout(()=>reveal(id),350);
+}
+function endEdit(){
+  editing=null;editRow.hidden=true;$('bar').hidden=false;
+}
+function commitEdit(){
+  if(!editing)return;
+  const {id,isNew}=editing;
+  const f=find(id);
+  const v=txt.value.replace(/\s+/g,' ').trim().slice(0,MAX_TEXT);
+  endEdit();
+  if(!f){render();return;}
+  if(!v&&isNew&&f.p){
+    // New point left empty: take it out again (and its undo step)
+    f.p.c.splice(f.p.c.indexOf(f.n),1);
+    undo.pop();$('btnUndo').disabled=!undo.length;
+    sel=f.p.id;
+    render();focusSel();return;
+  }
+  if(v===f.n.t){render();focusSel();return;}
+  if(!isNew)snapshot();
+  f.n.t=v;
+  Tools.diag.log(isNew?'point added':'point edited',{depth:f.d});
+  changed();focusSel();
+}
+function cancelEdit(){
+  if(!editing)return;
+  if(editing.isNew){txt.value='';commitEdit();return;}
+  endEdit();render();focusSel();
+}
+// Desktop: give the keyboard focus back to the map; phones: don't (no keyboard pops up for svg anyway)
+function focusSel(){if(matchMedia('(pointer:fine)').matches){const el=nodeEl(sel);if(el)el.focus({preventScroll:true});}}
+txt.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.isComposing){e.preventDefault();commitEdit();}
+  else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();cancelEdit();}
+});
+$('btnOk').addEventListener('pointerdown',e=>e.preventDefault());// keep focus in the field until click
+$('btnOk').addEventListener('click',commitEdit);
+txt.addEventListener('blur',()=>setTimeout(()=>{if(editing&&document.activeElement!==txt)commitEdit();},0));
+
+/* ---------- Actions ---------- */
+function sideForNew(){
+  // New level-1 branch: the side with fewer points
+  let r=0,l=0;for(const c of map.root.c){const k=countAll(c);if(c.s==='l')l+=k;else r+=k;}
+  return l<r?'l':'r';
+}
+function guardSize(){
+  if(countAll(map.root)>=MAX_NODES){Tools.toast(t('tooMany',{n:MAX_NODES}));return false;}
+  return true;
+}
+function addChild(parentIdArg){
+  if(editing)commitEdit();
+  const f=find(parentIdArg||sel);if(!f||!guardSize())return;
+  snapshot();
+  const n={id:uid(),t:'',c:[]};
+  if(f.n===map.root&&sideForNew()==='l')n.s='l';
+  if(f.n.f)delete f.n.f;
+  f.n.c.push(n);
+  map.at=Date.now();
+  startEdit(n.id,true);
+}
+function addSibling(){
+  if(editing)commitEdit();
+  const f=find(sel);if(!f)return;
+  if(!f.p){addChild(f.n.id);return;}
+  if(!guardSize())return;
+  snapshot();
+  const n={id:uid(),t:'',c:[]};
+  if(f.n.s==='l')n.s='l';
+  f.p.c.splice(f.p.c.indexOf(f.n)+1,0,n);
+  map.at=Date.now();
+  startEdit(n.id,true);
+}
+function delSel(){
+  if(editing)cancelEdit();
+  const f=find(sel);if(!f||!f.p)return;
+  const k=countAll(f.n)-1;
+  if(k>0&&!confirm(t('confirmDel',{n:k})))return;
+  snapshot();
+  // Afterwards select the next point on the same side, else the previous one, else the parent
+  const same=f.p.c.filter(c=>f.p!==map.root||(c.s==='l')===(f.n.s==='l'));
+  const i=same.indexOf(f.n);
+  sel=(same[i+1]||same[i-1]||f.p).id;
+  f.p.c.splice(f.p.c.indexOf(f.n),1);
+  Tools.diag.log('point deleted',{depth:f.d,sub:k});
+  changed();focusSel();
+}
+function toggleFold(id){
+  const f=find(id);if(!f||!f.p||!f.n.c.length)return;
+  snapshot();
+  if(f.n.f)delete f.n.f;else f.n.f=true;
+  sel=id;
+  changed();
+}
+// Moves node `id` into `target` (as last child), or before/after it (where: 'in'|'before'|'after'); side for root drops
+function moveNode(id,targetId,where,side){
+  const f=find(id),tg=find(targetId);
+  if(!f||!tg||!f.p||isInside(targetId,f.n))return false;
+  if(where!=='in'&&!tg.p)where='in';
+  snapshot();
+  f.p.c.splice(f.p.c.indexOf(f.n),1);
+  if(where==='in'){
+    if(tg.n.f)delete tg.n.f;
+    tg.n.c.push(f.n);
+  }else{
+    const arr=tg.p.c;arr.splice(arr.indexOf(tg.n)+(where==='after'?1:0),0,f.n);
+  }
+  const np=find(id).p;
+  if(np===map.root){
+    const s=where==='in'?side:(tg.n.s==='l'?'l':'r');
+    if(s==='l')f.n.s='l';else delete f.n.s;
+  }else delete f.n.s;
+  sel=id;
+  Tools.diag.log('point moved',{where});
+  changed();
+  return true;
+}
+
+$('btnChild').addEventListener('click',()=>addChild());
+$('btnSibling').addEventListener('click',addSibling);
+$('btnEdit').addEventListener('click',()=>startEdit(sel,false));
+$('btnDelete').addEventListener('click',delSel);
+$('btnUndo').addEventListener('click',doUndo);
+$('btnFit').addEventListener('click',()=>fit());
+
+/* ---------- Pointer: tap, pan, pinch, wheel, drag & drop ---------- */
+const ptrs=new Map();
+let g=null;// gesture
+const toBoard=e=>{const r=svg.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};};
+const toWorld=p=>({x:(p.x-view.x)/view.k,y:(p.y-view.y)/view.k});
+const LONG_PRESS=380,MOVE_TOL=8;
+function hitNode(w,exclude){
+  let best=null;
+  for(const p of L.values()){
+    if(exclude&&isInside(p.n.id,exclude))continue;
+    if(Math.abs(w.x-p.x)<=p.w/2+6&&Math.abs(w.y-p.y)<=p.h/2+6)best=p;
+  }
+  return best;
+}
+function dropSpot(w,dragNode){
+  const p=hitNode(w,dragNode);if(!p)return null;
+  if(p.d===0)return {id:p.n.id,where:'in',side:w.x<p.x?'l':'r'};
+  const rel=(w.y-(p.y-p.h/2))/p.h;
+  return {id:p.n.id,where:rel<.25?'before':rel>.75?'after':'in'};
+}
+function showDrop(spot){
+  viewG.querySelectorAll('.drop-in').forEach(el=>el.classList.remove('drop-in'));
+  const old=viewG.querySelector('.drop-line');if(old)old.remove();
+  if(!spot)return;
+  if(spot.where==='in'){const el=nodeEl(spot.id);if(el)el.classList.add('drop-in');return;}
+  const p=L.get(spot.id),y=spot.where==='before'?p.y-p.h/2-VG/2:p.y+p.h/2+VG/2;
+  const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+  ln.setAttribute('class','drop-line');
+  ln.setAttribute('x1',p.x-p.w/2);ln.setAttribute('x2',p.x+p.w/2);ln.setAttribute('y1',y);ln.setAttribute('y2',y);
+  viewG.append(ln);
+}
+function startDrag(){
+  const el=nodeEl(g.node);if(!el)return;
+  g.type='drag';g.el=el;g.base=el.getAttribute('transform');
+  el.classList.add('dragging');
+  if(navigator.vibrate)try{navigator.vibrate(15);}catch(_){}
+  Tools.diag.log('drag start');
+}
+svg.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  const pt=toBoard(e);
+  ptrs.set(e.pointerId,pt);
+  try{svg.setPointerCapture(e.pointerId);}catch(_){}
+  if(ptrs.size===1){
+    const foldEl=e.target.closest&&e.target.closest('[data-fold]');
+    const nodeG=e.target.closest&&e.target.closest('[data-id]');
+    g={type:'tap',start:pt,v0:{...view},fold:foldEl?foldEl.dataset.fold:null,node:nodeG?nodeG.dataset.id:null,mouse:e.pointerType==='mouse',timer:0};
+    if(g.node&&!g.fold&&g.node!==map.root.id&&!editing)g.timer=setTimeout(()=>{if(g&&g.type==='tap')startDrag();},LONG_PRESS);
+  }else if(ptrs.size===2){
+    if(g&&g.type==='drag'){g.el.classList.remove('dragging');g.el.setAttribute('transform',g.base);showDrop(null);}
+    if(g)clearTimeout(g.timer);
+    const [a,b]=[...ptrs.values()];
+    g={type:'pinch',d0:Math.hypot(a.x-b.x,a.y-b.y)||1,m0:{x:(a.x+b.x)/2,y:(a.y+b.y)/2},v0:{...view}};
+  }
+});
+svg.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId)||!g)return;
+  const pt=toBoard(e);ptrs.set(e.pointerId,pt);
+  if(g.type==='pinch'&&ptrs.size>=2){
+    const [a,b]=[...ptrs.values()];
+    const d=Math.hypot(a.x-b.x,a.y-b.y),m={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+    const k=Math.max(.15,Math.min(4,g.v0.k*d/g.d0));
+    const wx=(g.m0.x-g.v0.x)/g.v0.k,wy=(g.m0.y-g.v0.y)/g.v0.k;
+    view={k,x:m.x-wx*k,y:m.y-wy*k};applyView();
+    return;
+  }
+  const dx=pt.x-g.start.x,dy=pt.y-g.start.y;
+  if(g.type==='tap'&&Math.hypot(dx,dy)>MOVE_TOL){
+    clearTimeout(g.timer);
+    // Mouse on a node drags it right away; a finger pans (dragging needs a long press)
+    if(g.mouse&&g.node&&!g.fold&&g.node!==map.root.id&&!editing)startDrag();
+    else{g.type='pan';svg.classList.add('panning');}
+  }
+  if(g.type==='pan'){view.x=g.v0.x+dx;view.y=g.v0.y+dy;applyView();}
+  else if(g.type==='drag'){
+    g.el.setAttribute('transform',`${g.base} translate(${r1(dx/view.k)} ${r1(dy/view.k)})`);
+    g.spot=dropSpot(toWorld(pt),find(g.node).n);
+    showDrop(g.spot);
+  }
+});
+function pointerEnd(e){
+  if(!ptrs.has(e.pointerId))return;
+  ptrs.delete(e.pointerId);
+  if(!g)return;
+  clearTimeout(g.timer);
+  const cancelled=e.type==='pointercancel';
+  if(g.type==='pinch'){if(!ptrs.size)g=null;return;}
+  const gg=g;g=null;
+  svg.classList.remove('panning');
+  if(gg.type==='drag'){
+    showDrop(null);
+    gg.el.classList.remove('dragging');
+    if(!cancelled&&gg.spot&&moveNode(gg.node,gg.spot.id,gg.spot.where,gg.spot.side))Tools.toast(t('moved'));
+    else gg.el.setAttribute('transform',gg.base);
+    return;
+  }
+  if(gg.type!=='tap'||cancelled)return;
+  if(gg.fold){toggleFold(gg.fold);return;}
+  if(gg.node){
+    if(editing&&editing.id===gg.node)return;
+    if(editing)commitEdit();
+    if(gg.node===sel&&L.has(sel))startEdit(sel,false);
+    else select(gg.node,gg.mouse);
+    return;
+  }
+  if(editing)commitEdit();
+}
+svg.addEventListener('pointerup',pointerEnd);
+svg.addEventListener('pointercancel',pointerEnd);
+// iOS opens the keyboard only from a click: focus the field again there
+svg.addEventListener('click',()=>{if(editing&&document.activeElement!==txt)txt.focus();});
+svg.addEventListener('contextmenu',e=>e.preventDefault());
+svg.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const pt=toBoard(e);
+  // Mouse wheel and trackpad pinch (ctrl) zoom; sideways or shift scrolling pans
+  if(e.ctrlKey||(!e.shiftKey&&!e.deltaX)){
+    zoomAt(view.k*Math.exp(-e.deltaY*(e.deltaMode===1?.05:.0016)),pt.x,pt.y);
+  }else{view.x-=e.deltaX;view.y-=e.deltaY;applyView();}
+},{passive:false});
+
+/* ---------- Keyboard ---------- */
+function visibleKids(n){return n.f?[]:n.c;}
+function navigate(key){
+  const f=find(sel);if(!f)return;
+  const p=L.get(sel);
+  const side=f.p?p.side:null;
+  if(key==='ArrowUp'||key==='ArrowDown'){
+    if(!f.p)return;
+    const sibs=f.p.c.filter(c=>L.has(c.id)&&L.get(c.id).side===side);
+    const i=sibs.indexOf(f.n),j=i+(key==='ArrowUp'?-1:1);
+    if(sibs[j])select(sibs[j].id,true);
+    return;
+  }
+  const outward=f.p?(key==='ArrowRight'?side==='r':side==='l'):true;
+  if(outward){
+    let kids=visibleKids(f.n);
+    if(!f.p)kids=kids.filter(c=>(c.s==='l')===(key==='ArrowLeft'));
+    if(f.n.f&&f.n.c.length){toggleFold(f.n.id);focusSel();return;}
+    if(kids.length)select(kids[0].id,true);
+  }else if(f.p)select(f.p.id,true);
+}
+function moveSibling(dir){
+  const f=find(sel);if(!f||!f.p)return;
+  const sibs=f.p.c,i=sibs.indexOf(f.n);
+  // Same side only (level 1)
+  let j=i+dir;
+  while(sibs[j]&&f.p===map.root&&(sibs[j].s==='l')!==(f.n.s==='l'))j+=dir;
+  if(!sibs[j])return;
+  snapshot();
+  sibs.splice(i,1);sibs.splice(j,0,f.n);
+  changed();focusSel();
+}
+svg.addEventListener('keydown',e=>{
+  if(editing)return;
+  const k=e.key;
+  if((e.ctrlKey||e.metaKey)&&(k==='z'||k==='Z')){e.preventDefault();doUndo();focusSel();return;}
+  if(e.altKey&&(k==='ArrowUp'||k==='ArrowDown')){e.preventDefault();moveSibling(k==='ArrowUp'?-1:1);return;}
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  if(k.startsWith('Arrow')){e.preventDefault();navigate(k);}
+  else if(k==='Tab'&&!e.shiftKey){e.preventDefault();addChild();}
+  else if(k==='Enter'){e.preventDefault();addSibling();}
+  else if(k==='F2'){e.preventDefault();startEdit(sel,false);}
+  else if(k==='Delete'||k==='Backspace'){e.preventDefault();delSel();}
+  else if(k===' '){e.preventDefault();toggleFold(sel);focusSel();}
+});
+
+/* ---------- Maps (menu) ---------- */
+function renderMaps(){
+  const list=$('mapList');
+  const sorted=[...store.maps].sort((a,b)=>b.at-a.at);
+  list.innerHTML=sorted.map(m=>{
+    const n=countAll(m.root),when=new Date(m.at).toLocaleDateString(Tools.locale(),{day:'numeric',month:'short',year:'numeric'});
+    return `<li><button type="button" class="map-item" data-map="${esc(m.id)}" aria-current="${m.id===map.id}"><span class="ttl">${esc(mapTitle(m))}</span><span class="muted">${esc(n===1?t('count1'):t('count',{n:Tools.fmt(n,0)}))} · ${esc(when)}</span></button></li>`;
+  }).join('');
+}
+const pristine=m=>!m.root.t&&!m.root.c.length;
+function openMap(id){
+  const m=store.maps.find(x=>x.id===id);if(!m)return;
+  if(editing)commitEdit();
+  // An untouched empty map is not kept when switching to another one
+  if(map!==m&&pristine(map))store.maps=store.maps.filter(x=>x!==map);
+  map=m;store.cur=id;sel=m.root.id;undo=[];$('btnUndo').disabled=true;
+  persist();render();fit(true);
+  Tools.diag.log('map opened',{points:countAll(m.root)});
+}
+$('mapList').addEventListener('click',e=>{
+  const b=e.target.closest('[data-map]');if(!b)return;
+  openMap(b.dataset.map);Tools.menu.close();
+});
+$('btnNew').addEventListener('click',()=>{
+  const m=newMap();store.maps.push(m);openMap(m.id);Tools.menu.close();
+  startEdit(m.root.id,false);
+});
+$('btnDelMap').addEventListener('click',()=>{
+  if(!confirm(t('confirmDelMap',{t:mapTitle(map)})))return;
+  store.maps=store.maps.filter(m=>m!==map);
+  if(!store.maps.length)store.maps.push(newMap());
+  const next=[...store.maps].sort((a,b)=>b.at-a.at)[0];
+  Tools.diag.log('map deleted',{left:store.maps.length});
+  openMap(next.id);
+  Tools.toast(t('mapDeleted'));
+});
+
+/* ---------- Text export / import ---------- */
+function toOutline(root){
+  const out=[root.t||t('central')];
+  const rec=(n,d)=>{for(const c of n.c){out.push('  '.repeat(d)+'- '+(c.t||'…'));rec(c,d+1);}};
+  // Right side first, then left – the order you read the map in
+  rec({c:[...root.c.filter(c=>c.s!=='l'),...root.c.filter(c=>c.s==='l')]},0);
+  return out.join('\n');
+}
+// Parses an indented outline (spaces/tabs, "-", "*", "+", "•", "1.", Markdown headings) into a tree
+function parseOutline(text){
+  const items=[];
+  for(const raw of String(text).replace(/\r/g,'').split('\n')){
+    if(!raw.trim())continue;
+    const lead=raw.match(/^[ \t]*/)[0].replace(/\t/g,'    ').length;
+    let s=raw.trim(),indent=lead;
+    const h=s.match(/^(#{1,6})\s+(.*)$/);
+    if(h){indent=h[1].length-7;s=h[2];}
+    else{
+      // A list item counts as one step deeper than plain text at the same indent ("Topic" / "- Point")
+      const b=s.replace(/^([-*+•–]|\d+[.)])\s+/,'');
+      if(b!==s){s=b;indent+=.5;}
+    }
+    s=s.replace(/\s+/g,' ').trim().slice(0,MAX_TEXT);
+    if(s)items.push({indent,t:s});
+    if(items.length>=MAX_NODES)break;
+  }
+  if(!items.length)return null;
+  const min=Math.min(...items.map(i=>i.indent));
+  const tops=items.filter(i=>i.indent===min).length;
+  let root,rest;
+  if(tops===1&&items[0].indent===min){root={id:uid(),t:items[0].t,c:[]};rest=items.slice(1);}
+  else{root={id:uid(),t:'',c:[]};rest=items;}
+  const stack=[{indent:-Infinity,n:root}];
+  for(const it of rest){
+    while(stack.length>1&&stack[stack.length-1].indent>=it.indent)stack.pop();
+    const n={id:uid(),t:it.t,c:[]};
+    stack[stack.length-1].n.c.push(n);
+    stack.push({indent:it.indent,n});
+  }
+  balance(root);
+  return root;
+}
+// Spreads level-1 branches over both sides (by size)
+function balance(root){
+  let r=0,l=0;
+  for(const c of root.c){const k=countAll(c);if(l<r){c.s='l';l+=k;}else{delete c.s;r+=k;}}
+}
+$('btnCopy').addEventListener('click',async()=>{
+  const ok=await Tools.copyText(toOutline(map.root));
+  Tools.diag.log('copy text',{ok,points:countAll(map.root)});
+  Tools.toast(ok?t('copied'):t('copyFail'));
+});
+function createFromOutline(text){
+  const root=parseOutline(text);
+  if(!root)return null;
+  const m=newMap(root);store.maps.push(m);openMap(m.id);
+  return m;
+}
+$('btnImport').addEventListener('click',()=>{
+  const m=createFromOutline($('importText').value);
+  if(!m){Tools.toast(t('importEmpty'));return;}
+  $('importText').value='';
+  Tools.menu.close();
+  Tools.toast(t('imported',{n:Tools.fmt(countAll(m.root),0)}));
+});
+
+/* ---------- Picture export (PNG, light colours) ---------- */
+function exportSvg(){
+  // Everything unfolded as on screen; fixed light colours so the picture looks the same everywhere
+  const P=L,b=bounds(P),m=24;
+  const css=`.link{fill:none;stroke-width:2.5;stroke-linecap:round}.node rect.box{fill:#ffffff;stroke-width:2}.node.d1 rect.box{stroke-width:3}`+
+    `.node text{fill:#1b2430;font:15px ${FAM}}.node.root rect.box{fill:#047857;stroke:#047857}.node.root text{fill:#ffffff;font-weight:600;font-size:18px}`+
+    `.node.empty text{font-style:italic}.fold circle.dot{fill:#ffffff;stroke-width:2}.fold circle.hit{fill:none}.fold text{fill:#1b2430;font:600 12px ${FAM}}`;
+  const w=Math.ceil(b.w+2*m),h=Math.ceil(b.h+2*m);
+  return {w,h,svg:`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><style>${css.replace(/var\(--accent\)/g,'#047857')}</style>`+
+    `<rect width="100%" height="100%" fill="#f4f6f9"/><g transform="translate(${r1(m-b.x0)} ${r1(m-b.y0)})">${markup(P,false).replace(/var\(--accent\)/g,'#047857')}</g></svg>`};
+}
+function fileName(ext){
+  const base=(map.root.t||'mindmap').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'mindmap';
+  return `${base}-${new Date().toISOString().slice(0,10)}.${ext}`;
+}
+async function savePng(){
+  const t0=performance.now();
+  const {w,h,svg:src}=exportSvg();
+  const scale=Math.max(1,Math.min(2,Math.sqrt(16e6/(w*h))));
+  const img=new Image();
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(src);
+  await img.decode();
+  const c=document.createElement('canvas');
+  c.width=Math.round(w*scale);c.height=Math.round(h*scale);
+  const cx=c.getContext('2d');cx.scale(scale,scale);cx.drawImage(img,0,0,w,h);
+  const blob=await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('toBlob failed')),'image/png'));
+  const file=new File([blob],fileName('png'),{type:'image/png'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(file);a.download=file.name;document.body.append(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  Tools.diag.log('png saved',{w:c.width,h:c.height,kb:Math.round(blob.size/1024),ms:Math.round(performance.now()-t0)});
+  return file;
+}
+$('btnPng').addEventListener('click',()=>{
+  savePng().then(()=>Tools.toast(t('saved')),e=>{Tools.diag.log('png failed',{error:String(e&&e.message||e)});Tools.toast(t('pngFail'));});
+});
+
+/* ---------- Start ---------- */
+render();
+
+let lastSize='';
+if('ResizeObserver' in window)new ResizeObserver(()=>{
+  const s=board.clientWidth+'x'+board.clientHeight;
+  if(s===lastSize)return;
+  const first=!lastSize;lastSize=s;
+  if(first)fit(true);else reveal(sel);
+}).observe(board);
+Tools.onLang(()=>{render();});
+// Saved in another tab (or a backup restored elsewhere): nothing to merge, the next save wins.
+
+/* ---------- Diagnostics & WebMCP ---------- */
+Tools.diag.info(()=>({maps:store.maps.length,points:countAll(map.root),depth:Math.max(0,...[...L.values()].map(p=>p.d)),
+  selectedDepth:(find(sel)||{}).d,zoom:Math.round(view.k*100)/100,undo:undo.length,editing:!!editing,saveFailed}));
+
+const asTree=(n,d)=>({id:n.id,text:n.t,...(d===1?{side:n.s==='l'?'left':'right'}:{}),...(n.f?{folded:true}:{}),children:n.c.map(c=>asTree(c,d+1))});
+Tools.mcp.register({
+  name:'get_map',title:'Read the mind map',readOnly:true,
+  description:'Returns the mind map currently open in the app as a tree (id, text, children; level-1 branches with their side) plus an indented text outline, the id of the selected point and the list of all saved mind maps (id, title, number of points).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({id:map.id,title:map.root.t,points:countAll(map.root),selected_id:sel,root:asTree(map.root,0),outline:toOutline(map.root),
+    maps:store.maps.map(m=>({id:m.id,title:m.root.t,points:countAll(m.root),current:m===map}))})
+});
+Tools.mcp.register({
+  name:'add_nodes',title:'Add points',label:'mcp.add',
+  description:'Adds one or more points as children of a point in the open mind map (default: the selected point; use get_map for ids). Each text may contain an indented outline ("- " per line, two spaces per level) to add sub-points too. Returns the ids of the added top points. Can be undone in the app.',
+  inputSchema:{type:'object',properties:{
+    parent_id:{type:'string',maxLength:40,description:'Id of the parent point; the central topic is the root id from get_map. Default: the selected point.'},
+    texts:{type:'array',maxItems:50,items:{type:'string',minLength:1,maxLength:4000},description:'Texts of the new points (each at most 200 characters per line).'}
+  },required:['texts'],additionalProperties:false},
+  execute:({parent_id,texts})=>{
+    if(editing)commitEdit();
+    const f=find(parent_id||sel);
+    if(!f)throw new Error('No point with this parent_id. Call get_map for valid ids.');
+    const subs=texts.map(s=>parseOutline(s)).filter(Boolean);
+    if(!subs.length)throw new Error('texts must contain at least one non-empty text.');
+    const add=subs.reduce((k,r)=>k+(r.t?countAll(r):countAll(r)-1),0);
+    if(countAll(map.root)+add>MAX_NODES)throw new Error(`At most ${MAX_NODES} points per mind map.`);
+    snapshot();
+    if(f.n.f)delete f.n.f;
+    const ids=[];
+    for(const r of subs){
+      walk(r,n=>{delete n.s;});
+      for(const n of (r.t?[r]:r.c)){
+        if(f.n===map.root&&sideForNew()==='l')n.s='l';
+        f.n.c.push(n);ids.push(n.id);
+      }
+    }
+    sel=ids[ids.length-1];
+    Tools.diag.log('mcp add',{points:add});
+    changed();reveal(sel);
+    return {added_ids:ids,points:countAll(map.root),outline:toOutline(map.root)};
+  }
+});
+Tools.mcp.register({
+  name:'rename_node',title:'Rename a point',label:'mcp.rename',
+  description:'Changes the text of one point in the open mind map (also the central topic). Returns the point id and its new text. Can be undone in the app.',
+  inputSchema:{type:'object',properties:{
+    id:{type:'string',maxLength:40,description:'Id of the point (from get_map).'},
+    text:{type:'string',minLength:1,maxLength:MAX_TEXT,description:'New text.'}
+  },required:['id','text'],additionalProperties:false},
+  execute:({id,text})=>{
+    const f=find(id);
+    if(!f)throw new Error('No point with this id. Call get_map for valid ids.');
+    const v=text.replace(/\s+/g,' ').trim();
+    if(!v)throw new Error('text must not be empty.');
+    if(editing)cancelEdit();
+    snapshot();f.n.t=v;sel=id;
+    changed();reveal(id);
+    return {id,text:v};
+  }
+});
+Tools.mcp.register({
+  name:'create_map',title:'Create a mind map from an outline',label:'mcp.create',
+  description:'Creates a new mind map from an indented text outline and opens it; the current one stays saved. The first line is the central topic, each further line a point; indent sub-points by two spaces (or use "- " lists or Markdown headings). Returns the new map id, its number of points and its outline.',
+  inputSchema:{type:'object',properties:{
+    outline:{type:'string',minLength:1,maxLength:100000,description:'The outline, one point per line.'}
+  },required:['outline'],additionalProperties:false},
+  execute:({outline})=>{
+    const m=createFromOutline(outline);
+    if(!m)throw new Error('outline contains no text.');
+    return {id:m.id,title:m.root.t,points:countAll(m.root),outline:toOutline(m.root)};
+  }
+});
+})();
+</script>
+</body>
+</html>
