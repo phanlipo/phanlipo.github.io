@@ -2,7 +2,7 @@
 // the saved files are checked with independent readers (audio-files.mjs), expected values computed here.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, openDetails, clipboardText, switchLang, openMenu } from './helpers.mjs';
+import { test, expect, openDetails, clipboardText, switchLang, openMenu, mockAndroidShare } from './helpers.mjs';
 import { FIX, clip, oggInfo, mp4Info, wavInfo, toneHz, peak } from './audio-files.mjs';
 
 const URL_ = '/audio-studio/';
@@ -224,6 +224,22 @@ test('Opus input (voice message) to Opus and AAC output', async ({ page }) => {
     await expect(page.locator('input[value="aac"]')).toBeDisabled();
     await expect(page.locator('#fmtNote')).toHaveText('In diesem Browser nicht verfügbar: M4A (AAC).');
   }
+});
+
+test('share on Android: .m4a goes out as audio/x-m4a (audio/mp4 is refused), .wav unchanged', async ({ page }) => {
+  await mockAndroidShare(page);
+  await page.goto(URL_);
+  await open(page);
+  const { buf } = await exportFile(page, 'wav');
+  await page.click('#btnShare');
+  await expect.poll(() => page.evaluate(() => window.__shared.length)).toBe(1);
+  expect((await page.evaluate(() => window.__shared))[0]).toEqual([{ name: 'aufnahme-edit.wav', type: 'audio/wav', size: buf.length }]);
+  test.skip(!(await canEncode(page, 'mp4a.40.2')), 'browser cannot encode AAC');
+  const aac = await exportFile(page, 'aac');
+  await page.click('#btnShare');
+  await expect.poll(() => page.evaluate(() => window.__shared.length)).toBe(2);
+  expect((await page.evaluate(() => window.__shared))[1]).toEqual([{ name: 'aufnahme-edit.m4a', type: 'audio/x-m4a', size: aac.buf.length }]);
+  await expect(page.getByText('Teilen nicht möglich')).toHaveCount(0);
 });
 
 test('44.1 kHz to Opus is resampled to 48 kHz, length kept', async ({ page }) => {

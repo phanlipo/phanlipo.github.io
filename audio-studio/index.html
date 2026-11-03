@@ -20,7 +20,7 @@
 <meta name="tool:share-target" content="audio/*, video/*, .mp3, .m4a, .aac, .wav, .ogg, .opus, .oga, .flac, .webm, .mp4">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-B8lLZ5tn3qHVmKkhJhM0cHi9fjq1iVSJUpWMt7jCa4s='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-8VOgWrSwnrrGoRHWFU85Z0Ah4Zc52DfAsPri0TYKIWM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -254,7 +254,7 @@ audio{display:block;width:100%;margin-block:10px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version e2ad83fccfcc</p>
+  <p class="footer-version">Version b4df983ff953</p>
   <!-- footer:end -->
 </footer>
 
@@ -856,7 +856,7 @@ function showResult() {
   const r = $('result');
   r.dataset.format = result.format;
   r.hidden = false;
-  try { $('btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [result.file] })); } catch (_) { $('btnShare').hidden = true; }
+  try { $('btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [shareFile(result.file)] })); } catch (_) { $('btnShare').hidden = true; }
 }
 $('btnSave').addEventListener('click', () => {
   if (!result) return;
@@ -865,10 +865,14 @@ $('btnSave').addEventListener('click', () => {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   Tools.diag.log('saved', { format: result.format });
 });
+// Chrome on Android only shares files with MIME types from its own list: .m4a must be "audio/x-m4a",
+// with "audio/mp4" share() fails with NotAllowedError (canShare() does not check this).
+const shareFile = f => f.type === 'audio/mp4' ? new File([f], f.name, { type: 'audio/x-m4a' }) : f;
 $('btnShare').addEventListener('click', async () => {
   if (!result) return;
-  try { await navigator.share({ files: [result.file], title: result.file.name }); Tools.diag.log('shared'); }
-  catch (e) { if (e.name !== 'AbortError') { Tools.diag.log('share failed', { name: e.name }); toast(t('shareFail')); } }
+  const f = shareFile(result.file);
+  try { await navigator.share({ files: [f], title: f.name }); Tools.diag.log('shared', { type: f.type }); }
+  catch (e) { if (e.name !== 'AbortError') { Tools.diag.log('share failed', { name: e.name, type: f.type }); toast(t('shareFail')); } }
 });
 
 /* ---------- Choosing a file ---------- */

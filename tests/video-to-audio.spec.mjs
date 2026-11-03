@@ -2,7 +2,7 @@
 // unchanged or as WAV; the files are checked with independent readers (audio-files.mjs).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, openDetails, clipboardText, switchLang, openMenu } from './helpers.mjs';
+import { test, expect, openDetails, clipboardText, switchLang, openMenu, mockAndroidShare } from './helpers.mjs';
 import { CLIPS, FIX, clip, mp4Info, oggInfo, wavInfo, toneHz, peak } from './audio-files.mjs';
 
 const URL_ = '/video-to-audio/';
@@ -42,6 +42,25 @@ test('AAC from an MP4: copied unchanged into an .m4a without the picture', async
   // Plays in the page
   const dur = await page.locator('#player').evaluate(a => new Promise(r => a.readyState >= 1 ? r(a.duration) : a.addEventListener('loadedmetadata', () => r(a.duration))));
   expect(dur).toBeGreaterThan(1.8);
+});
+
+test('share on Android: .m4a goes out as audio/x-m4a (audio/mp4 is refused), .ogg and .wav unchanged', async ({ page }) => {
+  await mockAndroidShare(page);
+  await page.goto(URL_);
+  const cases = [['aac', 'original', 'clip-aac.m4a', 'audio/x-m4a'], ['opus', 'original', 'clip-opus.ogg', 'audio/ogg'], ['opus', 'wav', 'clip-opus.wav', 'audio/wav']];
+  for (const [key, format, name, type] of cases) {
+    const { buf } = await extract(page, key, format);
+    await expect(page.locator('#btnShare')).toBeVisible();
+    await page.click('#btnShare');
+    await expect.poll(() => page.evaluate(() => window.__shared.length)).toBe(cases.findIndex(c => c[2] === name) + 1);
+    const [f] = (await page.evaluate(() => window.__shared)).at(-1);
+    expect(f).toEqual({ name, type, size: buf.length });
+  }
+  await expect(page.getByText('Teilen nicht möglich')).toHaveCount(0);
+  await openMenu(page);
+  await openDetails(page, 'Anleitung & Hinweise');
+  await page.click('[data-diag="copy"]');
+  expect(await clipboardText(page)).toContain('shared {"type":"audio/x-m4a"}');
 });
 
 test('Opus from a WebM: copied unchanged into an .ogg', async ({ page }) => {
