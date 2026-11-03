@@ -33,7 +33,7 @@
 //   tool:title-en, tool:description-en, tool:short-name-en   English texts (start page, manifest, page title);
 //                                                        title and description required for every listed tool
 
-import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
 import { ROOT, decode, meta, allPages, vendorProblems, isPublished } from './lib.mjs';
@@ -474,7 +474,7 @@ function renderNotice() {
     const pkg = v.homepage ? `[${escMd(name)}](${v.homepage})` : escMd(name);
     rows.push(`| ${pkg} (\`${v.package}\`) | ${v.version} | [${v.license}](${dir}/LICENSE) | ${escMd(owners.join('; ') || 'siehe Lizenztext')} | ${escMd(v.purpose || '')} |`);
     const more = readdirSync(join(ROOT, dir), { recursive: true }).map(f => String(f).replace(/\\/g, '/'))
-      .filter(f => f !== 'LICENSE' && /(^|\/)(LICEN[CS]E|NOTICE)[^/]*$/i.test(f)).sort();
+      .filter(f => f !== 'LICENSE' && /(^|\/)(LICEN[CS]E|NOTICE|COPYING)[^/]*$/i.test(f) && statSync(join(ROOT, dir, f)).isFile()).sort();
     if (more.length) extra.push(`- **${name}:** ${more.map(f => `[${f}](${dir}/${f})`).join(', ')}`);
   }
   return `# Hinweise zu Fremdsoftware (Third-Party Notices)
