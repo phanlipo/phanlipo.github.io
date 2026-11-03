@@ -1,4 +1,4 @@
-// Small, independent readers for the audio files the video-to-audio app writes (MP4/M4A, Ogg, WAV).
+// Small, independent readers for the audio files the video-to-audio and audio-studio apps write (MP4/M4A, Ogg, WAV).
 // They do not use the app's library, so the tests check the files on their own.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

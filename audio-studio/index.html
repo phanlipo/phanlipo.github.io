@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Audio Studio</title>
+<meta name="description" content="Audiodateien kürzen und schneiden, Lautstärke anpassen, ein- und ausblenden und als WAV, Opus oder AAC speichern – direkt im Browser, die Datei verlässt das Gerät nicht.">
+<meta name="tool:tags" content="Alltag, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
+<meta name="tool:icon" content="wave-sine">
+<meta name="tool:color" content="#8b3a62">
+<meta name="tool:short-name" content="Audio Studio">
+<meta name="tool:title-en" content="Audio Studio">
+<meta name="tool:description-en" content="Trim and cut audio files, adjust the volume, fade in and out and save as WAV, Opus or AAC – right in the browser, the file never leaves the device.">
+<meta name="tool:short-name-en" content="Audio Studio">
+<meta name="tool:storage" content="audio-studio.">
+<meta name="tool:webmcp" content="get_audio_info, set_selection, edit_audio, export_audio">
+<meta name="tool:share-target" content="audio/*, video/*, .mp3, .m4a, .aac, .wav, .ogg, .opus, .oga, .flac, .webm, .mp4">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-B8lLZ5tn3qHVmKkhJhM0cHi9fjq1iVSJUpWMt7jCa4s='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Audio Studio">
+<meta name="theme-color" content="#8b3a62">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#8b3a62;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f0a6c8;--accent-text:#3b0a24}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.btn{min-height:44px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.big{width:100%;min-height:54px;font-size:18px}
+.drop{display:block;width:100%;border:2px dashed var(--border);border-radius:var(--radius);padding:22px 14px;text-align:center;color:var(--muted);background:transparent;cursor:pointer;font:inherit}
+.drop strong{color:var(--text)}
+.drop.over,.drop:hover{border-color:var(--accent);color:var(--text)}
+.fileinfo{margin-block:10px 0;font-size:14px;overflow-wrap:anywhere}
+.fileinfo:empty{display:none}
+.status{font-size:14px;margin-block:8px 0;min-height:1.4em}
+.status.err{color:var(--err)}
+.status.ok{color:var(--ok)}
+.status.warn{color:var(--warn)}
+.wave-box{position:relative;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);overflow:hidden}
+#wave{display:block;width:100%;height:140px;touch-action:pan-y;cursor:crosshair}
+.times{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-block:4px 8px;font-variant-numeric:tabular-nums}
+.sel-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:end;margin-block:8px}
+.sel-row label{display:flex;flex-direction:column;font-size:13px;color:var(--muted);font-weight:600;gap:2px}
+.sel-row input{font-size:16px;min-height:44px;padding-inline:10px;width:100%;box-sizing:border-box;font-variant-numeric:tabular-nums}
+.sel-info{font-size:13px;color:var(--muted);margin:0 0 8px;font-variant-numeric:tabular-nums}
+.tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.tools .btn{width:100%}
+.tools.more{margin-block-start:8px}
+h3.sub-h{font-size:14px;color:var(--muted);margin:16px 0 6px}
+.gain-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}
+.gain-row input[type=range]{width:100%;min-height:44px;accent-color:var(--accent);margin:0}
+.gain-val{min-width:4.5em;text-align:end;font-variant-numeric:tabular-nums}
+.choice{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding-block:6px;cursor:pointer}
+.choice input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--accent)}
+.choice small{display:block;color:var(--muted);font-size:13px}
+.choice.off{opacity:.6;cursor:not-allowed}
+fieldset{border:0;margin:0 0 8px;padding:0;min-width:0}
+legend{font-size:13px;color:var(--muted);font-weight:600;padding:0;margin-block-end:4px}
+.bitrate{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--muted);font-weight:600;margin-block-end:10px}
+.bitrate select{font-size:16px;min-height:44px;padding-inline:8px;max-width:220px}
+progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10px}
+audio{display:block;width:100%;margin-block:10px}
+.meta-line{font-size:13px;color:var(--muted);margin-block:8px 0;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Audio Studio</span></h1>
+  <p class="sub" data-i18n="sub">Audio kürzen, Lautstärke anpassen, umwandeln – die Datei verlässt das Gerät nicht.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-file">
+    <h2 id="h-file" data-i18n="h.file">1 · Audiodatei wählen</h2>
+    <button type="button" class="drop" id="drop">
+      <span data-i18n-html="drop"><strong>Audiodatei wählen</strong><br>oder hierher ziehen (auch Videos)</span>
+    </button>
+    <input type="file" id="file" accept="audio/*,video/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.oga,.flac,.webm,.mp4,.mov,.mkv" hidden>
+    <p class="fileinfo" id="fileInfo" aria-live="polite"></p>
+    <p class="status" id="loadStatus" role="status"></p>
+  </section>
+
+  <section class="card" aria-labelledby="h-edit" id="editor" hidden>
+    <h2 id="h-edit" data-i18n="h.edit">2 · Bearbeiten</h2>
+    <div class="wave-box">
+      <canvas id="wave" role="img" aria-label="Wellenform – ziehen, um einen Bereich auszuwählen" data-i18n-attr="aria-label:wave"></canvas>
+    </div>
+    <div class="times"><span id="zeroTime">0:00</span><span id="totalTime"></span></div>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnPlay" data-i18n="play">▶ Auswahl abspielen</button>
+      <button type="button" class="btn" id="btnAll" data-i18n="all">Alles auswählen</button>
+      <button type="button" class="btn" id="btnUndo" data-i18n="undo" disabled>↶ Rückgängig</button>
+    </div>
+    <div class="sel-row">
+      <label><span data-i18n="start">Start</span><input type="text" id="selStart" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+      <label><span data-i18n="end">Ende</span><input type="text" id="selEnd" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <p class="sel-info" id="selInfo" aria-live="polite"></p>
+
+    <h3 class="sub-h" data-i18n="h.cut">Schneiden</h3>
+    <div class="tools">
+      <button type="button" class="btn" id="btnKeep" data-i18n="keep">Auswahl behalten</button>
+      <button type="button" class="btn" id="btnCut" data-i18n="cut">Auswahl herausschneiden</button>
+    </div>
+
+    <h3 class="sub-h" data-i18n="h.vol">Lautstärke (Auswahl)</h3>
+    <div class="gain-row">
+      <input type="range" id="gain" min="-20" max="20" step="1" value="0" aria-label="Lautstärke in dB" data-i18n-attr="aria-label:gainLabel">
+      <output class="gain-val" id="gainVal" for="gain">0 dB</output>
+      <button type="button" class="btn" id="btnGain" data-i18n="apply">Anwenden</button>
+    </div>
+    <div class="tools more">
+      <button type="button" class="btn" id="btnNorm" data-i18n="normalize">Normalisieren</button>
+      <button type="button" class="btn" id="btnFadeIn" data-i18n="fadeIn">Einblenden</button>
+      <button type="button" class="btn" id="btnFadeOut" data-i18n="fadeOut">Ausblenden</button>
+      <button type="button" class="btn" id="btnMono" data-i18n="mono">In Mono umwandeln</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-save" id="exporter" hidden>
+    <h2 id="h-save" data-i18n="h.save">3 · Speichern</h2>
+    <fieldset>
+      <legend data-i18n="format">Format</legend>
+      <label class="choice" data-fmt="wav"><input type="radio" name="format" value="wav" checked>
+        <span data-i18n-html="f.wav">WAV<small>Unkomprimiert, verlustfrei, passt in jedes Programm. Große Datei (ca. 10 MB pro Minute in Stereo).</small></span></label>
+      <label class="choice" data-fmt="aac"><input type="radio" name="format" value="aac">
+        <span data-i18n-html="f.aac">M4A (AAC)<small>Klein, spielt auf jedem Handy und Computer.</small></span></label>
+      <label class="choice" data-fmt="opus"><input type="radio" name="format" value="opus">
+        <span data-i18n-html="f.opus">Opus (.ogg)<small>Sehr klein bei guter Qualität, ideal für Sprache. Nicht jedes ältere Gerät spielt es ab.</small></span></label>
+    </fieldset>
+    <p class="muted" id="fmtNote" hidden></p>
+    <label class="bitrate" id="bitrateBox"><span data-i18n="bitrate">Qualität (Bitrate)</span>
+      <select id="bitrate">
+        <option value="64">64 kbit/s</option>
+        <option value="96">96 kbit/s</option>
+        <option value="128" selected>128 kbit/s</option>
+        <option value="192">192 kbit/s</option>
+        <option value="256">256 kbit/s</option>
+      </select>
+    </label>
+    <button type="button" class="btn primary big" id="btnExport" data-i18n="export">Audiodatei erstellen</button>
+    <progress id="progress" max="100" value="0" hidden></progress>
+    <p class="status" id="status" role="status"></p>
+    <div id="result" hidden>
+      <audio id="player" controls preload="metadata"></audio>
+      <div class="row">
+        <button type="button" class="btn primary" id="btnSave" data-i18n="save">Speichern</button>
+        <button type="button" class="btn" id="btnShare" data-i18n="share" hidden>Teilen …</button>
+      </div>
+      <p class="meta-line" id="resultMeta"></p>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein kleines Audio-Studio für unterwegs: Klingeltöne zuschneiden, Sprachnachrichten kürzen, zu leise Aufnahmen lauter machen, Musik ein- und ausblenden oder eine Datei in ein anderes Format umwandeln.</p>
+  <h3>Bedienung</h3>
+  <ol>
+    <li>Audiodatei wählen (oder hierher ziehen). Videos gehen auch – dann wird ihre Tonspur bearbeitet. Auf Android lässt sich eine Datei auch an die installierte App <em>teilen</em>.</li>
+    <li>In der Wellenform einen Bereich mit dem Finger <strong>auswählen</strong>: Ziehen wählt einen neuen Bereich, Ziehen an einem Rand verschiebt nur diesen, kurzes Tippen setzt den näheren Rand. Genau geht es mit den Feldern <em>Start</em> und <em>Ende</em> (z. B. <code>1:23,5</code> oder <code>83,5</code> Sekunden).</li>
+    <li><em>Auswahl abspielen</em> zum Probehören.</li>
+    <li>Bearbeiten – alles außer <em>Mono</em> wirkt auf die Auswahl (ist alles ausgewählt, auf die ganze Datei):
+      <ul>
+        <li><strong>Auswahl behalten</strong> schneidet alles davor und danach weg (kürzen).</li>
+        <li><strong>Auswahl herausschneiden</strong> entfernt den Bereich, der Rest wird zusammengefügt.</li>
+        <li><strong>Lautstärke</strong>: Regler in Dezibel (+6 dB ≈ doppelt so laut, −6 dB ≈ halb so laut), dann <em>Anwenden</em>. Wird es zu laut, übersteuert die Datei (Hinweis erscheint).</li>
+        <li><strong>Normalisieren</strong> macht die Auswahl so laut wie möglich, ohne zu übersteuern (Spitze bei −1 dB).</li>
+        <li><strong>Einblenden / Ausblenden</strong>: die Lautstärke steigt über die Auswahl von 0 an bzw. fällt auf 0. Also z. B. die ersten 3 Sekunden auswählen und <em>Einblenden</em> tippen.</li>
+        <li><strong>In Mono umwandeln</strong> mischt alle Kanäle zu einem (halbe Dateigröße bei WAV).</li>
+      </ul>
+    </li>
+    <li><em>Rückgängig</em> nimmt die letzten Schritte zurück.</li>
+    <li>Format wählen, <em>Audiodatei erstellen</em>, probehören, dann <em>Speichern</em> oder <em>Teilen …</em>. Gespeichert wird immer die ganze bearbeitete Datei.</li>
+  </ol>
+  <h3>Formate</h3>
+  <ul>
+    <li><strong>Öffnen</strong> lässt sich, was der Browser abspielen kann: MP3, M4A/AAC, WAV, Ogg/Opus (auch WhatsApp-Sprachnachrichten), FLAC, WebM und die Tonspur von MP4-, MOV- und WebM-Videos.</li>
+    <li><strong>WAV</strong> (16 Bit) ist verlustfrei. <strong>M4A (AAC)</strong> und <strong>Opus</strong> sind klein; 128 kbit/s klingt für Musik gut, für Sprache reichen 64 kbit/s. Ob AAC und Opus angeboten werden, hängt vom Browser ab (nicht verfügbare Formate sind ausgegraut).</li>
+    <li>MP3 wird nicht erzeugt: Ein MP3-Encoder lässt sich hier nicht offline und sicher einbinden. M4A ist ähnlich klein und wird überall abgespielt.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Alles läuft im Browser, auch offline. Die Datei wird nicht hochgeladen und nicht gespeichert; gemerkt werden nur Format und Bitrate.</li>
+    <li>Die Datei wird zum Bearbeiten vollständig entpackt und im Arbeitsspeicher gehalten (Stereo: ca. 23 MB pro Minute, jeder Schritt zum Rückgängigmachen braucht noch einmal so viel). Für Aufnahmen bis etwa 30 Minuten reicht das auf jedem Handy; bei sehr langen Dateien kann der Browser abbrechen.</li>
+    <li>Bibliothek: <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) zum Lesen und Schreiben der Dateien.</li>
+    <li>KI-Agenten im Browser (WebMCP) können Angaben zur geöffneten Datei lesen, die Auswahl setzen, sie bearbeiten (rückgängig machbar) und eine Audiodatei erstellen lassen – eine Datei öffnen oder speichern können sie nicht.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A small audio studio on the go: trim ringtones, shorten voice messages, make quiet recordings louder, fade music in and out or convert a file into another format.</p>
+  <h3>How to use</h3>
+  <ol>
+    <li>Choose an audio file (or drag it here). Videos work too – their sound track is edited. On Android you can also <em>share</em> a file to the installed app.</li>
+    <li><strong>Select</strong> a range in the waveform with your finger: dragging selects a new range, dragging at an edge moves only that edge, a short tap moves the nearer edge. For precise values use the <em>Start</em> and <em>End</em> fields (e.g. <code>1:23.5</code> or <code>83.5</code> seconds).</li>
+    <li><em>Play selection</em> to listen.</li>
+    <li>Edit – everything except <em>mono</em> works on the selection (on the whole file if everything is selected):
+      <ul>
+        <li><strong>Keep selection</strong> removes everything before and after it (trim).</li>
+        <li><strong>Cut out selection</strong> removes the range and joins the rest.</li>
+        <li><strong>Volume</strong>: slider in decibels (+6 dB ≈ twice as loud, −6 dB ≈ half as loud), then <em>Apply</em>. If it gets too loud, the file clips (a hint appears).</li>
+        <li><strong>Normalize</strong> makes the selection as loud as possible without clipping (peak at −1 dB).</li>
+        <li><strong>Fade in / Fade out</strong>: the volume rises from 0 or falls to 0 across the selection. So e.g. select the first 3 seconds and tap <em>Fade in</em>.</li>
+        <li><strong>Convert to mono</strong> mixes all channels into one (half the file size for WAV).</li>
+      </ul>
+    </li>
+    <li><em>Undo</em> takes back the last steps.</li>
+    <li>Choose a format, <em>Create audio file</em>, listen, then <em>Save</em> or <em>Share …</em>. The whole edited file is always saved.</li>
+  </ol>
+  <h3>Formats</h3>
+  <ul>
+    <li><strong>Opens</strong> whatever the browser can play: MP3, M4A/AAC, WAV, Ogg/Opus (also WhatsApp voice messages), FLAC, WebM and the sound track of MP4, MOV and WebM videos.</li>
+    <li><strong>WAV</strong> (16 bit) is lossless. <strong>M4A (AAC)</strong> and <strong>Opus</strong> are small; 128 kbit/s sounds good for music, 64 kbit/s is enough for speech. Whether AAC and Opus are offered depends on the browser (unavailable formats are greyed out).</li>
+    <li>MP3 is not offered: an MP3 encoder cannot be included here offline and safely. M4A is similarly small and plays everywhere.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Everything runs in the browser, offline too. The file is neither uploaded nor stored; only format and bitrate are remembered.</li>
+    <li>For editing, the file is fully decoded and kept in memory (stereo: about 23 MB per minute, every undo step needs as much again). That is fine on any phone for recordings up to about 30 minutes; very long files may make the browser give up.</li>
+    <li>Library: <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) to read and write the files.</li>
+    <li>AI agents in the browser (WebMCP) can read details of the opened file, set the selection, edit it (can be undone) and have an audio file created – they cannot open or save a file.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version e2ad83fccfcc</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script type="module">
+import * as MB from '../assets/vendor/mediabunny/mediabunny.min.mjs';
+const { $, load, save, toast, fmt, takeSharedFile } = Tools;
+/* ---------- Texts (German in the HTML; dynamic texts here) ---------- */
+Tools.i18n({
+  de: {
+    fileInfo: '„{f}“ · {mb} MB', reading: 'Lese die Datei …', info: '{ch}, {rate} kHz · {dur}',
+    'ch.mono': 'Mono', 'ch.stereo': 'Stereo', 'ch.n': '{n} Kanäle',
+    selInfo: 'Auswahl: {len} s von {total} s', selAll: 'Alles ausgewählt ({total} s)',
+    play: '▶ Auswahl abspielen', stop: '■ Stopp',
+    'e.invalid': 'Diese Datei lässt sich nicht als Audio lesen.', 'e.noaudio': 'Diese Datei enthält keinen Ton.',
+    'e.decode': 'Dieser Browser kann den Ton dieser Datei nicht dekodieren.',
+    'e.memory': 'Die Datei ist zu groß für den Arbeitsspeicher dieses Geräts.',
+    'e.encode': 'Dieses Format kann der Browser nicht erzeugen – bitte WAV wählen.',
+    'e.all': 'Dann bliebe nichts übrig – erst einen Bereich auswählen.',
+    'e.silent': 'Die Auswahl ist stumm.', 'e.isMono': 'Die Datei ist schon Mono.', 'e.gain0': 'Erst den Regler verschieben.',
+    'e.badTime': 'Ungültige Zeit – z. B. 1:23,5 oder 83,5',
+    clipped: 'Achtung: übersteuert – lieber etwas leiser.',
+    'done.keep': 'Gekürzt', 'done.cut': 'Herausgeschnitten', 'done.gain': 'Lautstärke {db} dB', 'done.norm': 'Normalisiert ({db} dB)',
+    'done.fadeIn': 'Eingeblendet', 'done.fadeOut': 'Ausgeblendet', 'done.mono': 'In Mono umgewandelt', 'done.undo': 'Rückgängig gemacht',
+    working: 'Erstelle die Datei … {p} %', resampling: 'Rechne auf 48 kHz um …', done: 'Fertig.',
+    notAvail: 'In diesem Browser nicht verfügbar: {list}.',
+    failed: 'Fehlgeschlagen: {m}', shareFail: 'Teilen nicht möglich',
+    'mcp.info': 'Datei gelesen', 'mcp.sel': 'Auswahl gesetzt', 'mcp.edit': 'bearbeitet', 'mcp.export': 'Datei erstellt',
+  },
+  en: {
+    title: 'Audio Studio', sub: 'Trim audio, adjust the volume, convert – the file never leaves the device.',
+    'h.file': '1 · Choose an audio file', drop: '<strong>Choose an audio file</strong><br>or drag it here (videos too)',
+    'h.edit': '2 · Edit', wave: 'Waveform – drag to select a range', play: '▶ Play selection', all: 'Select all', undo: '↶ Undo',
+    start: 'Start', end: 'End', 'h.cut': 'Cut', keep: 'Keep selection', cut: 'Cut out selection',
+    'h.vol': 'Volume (selection)', gainLabel: 'Volume in dB', apply: 'Apply', normalize: 'Normalize', fadeIn: 'Fade in', fadeOut: 'Fade out', mono: 'Convert to mono',
+    'h.save': '3 · Save', format: 'Format',
+    'f.wav': 'WAV<small>Uncompressed, lossless, works in every program. Large file (about 10 MB per minute in stereo).</small>',
+    'f.aac': 'M4A (AAC)<small>Small, plays on every phone and computer.</small>',
+    'f.opus': 'Opus (.ogg)<small>Very small with good quality, ideal for speech. Not every older device plays it.</small>',
+    bitrate: 'Quality (bitrate)', export: 'Create audio file', save: 'Save', share: 'Share …',
+    fileInfo: '“{f}” · {mb} MB', reading: 'Reading the file …', info: '{ch}, {rate} kHz · {dur}',
+    'ch.mono': 'mono', 'ch.stereo': 'stereo', 'ch.n': '{n} channels',
+    selInfo: 'Selection: {len} s of {total} s', selAll: 'Everything selected ({total} s)', stop: '■ Stop',
+    'e.invalid': 'This file cannot be read as audio.', 'e.noaudio': 'This file contains no sound.',
+    'e.decode': 'This browser cannot decode the sound of this file.',
+    'e.memory': 'The file is too large for the memory of this device.',
+    'e.encode': 'The browser cannot create this format – please choose WAV.',
+    'e.all': 'Nothing would be left – select a range first.',
+    'e.silent': 'The selection is silent.', 'e.isMono': 'The file is mono already.', 'e.gain0': 'Move the slider first.',
+    'e.badTime': 'Invalid time – e.g. 1:23.5 or 83.5',
+    clipped: 'Careful: clipping – better a bit quieter.',
+    'done.keep': 'Trimmed', 'done.cut': 'Cut out', 'done.gain': 'Volume {db} dB', 'done.norm': 'Normalized ({db} dB)',
+    'done.fadeIn': 'Faded in', 'done.fadeOut': 'Faded out', 'done.mono': 'Converted to mono', 'done.undo': 'Undone',
+    working: 'Creating the file … {p} %', resampling: 'Resampling to 48 kHz …', done: 'Done.',
+    notAvail: 'Not available in this browser: {list}.',
+    failed: 'Failed: {m}', shareFail: 'Sharing is not possible',
+    'mcp.info': 'file read', 'mcp.sel': 'selection set', 'mcp.edit': 'edited', 'mcp.export': 'file created',
+  },
+});
+const t = Tools.t;
+
+/* ---------- Settings (format and bitrate only – never the audio) ---------- */
+const LS = 'audio-studio.settings.v1';
+const FORMATS = ['wav', 'aac', 'opus'];
+const BITRATES = [64, 96, 128, 192, 256];
+const settings = Object.assign({ format: 'wav', kbps: 128 }, load(LS, {}));
+if (!FORMATS.includes(settings.format)) settings.format = 'wav';
+if (!BITRATES.includes(settings.kbps)) settings.kbps = 128;
+const radios = [...document.querySelectorAll('input[name="format"]')];
+const getFormat = () => (radios.find(r => r.checked) || radios[0]).value;
+const setFormat = f => { for (const r of radios) r.checked = r.value === f; $('bitrateBox').hidden = f === 'wav'; };
+setFormat(settings.format);
+$('bitrate').value = String(settings.kbps);
+for (const r of radios) r.addEventListener('change', () => { settings.format = getFormat(); save(LS, settings); setFormat(settings.format); clearResult(); });
+$('bitrate').addEventListener('change', () => { settings.kbps = Number($('bitrate').value); save(LS, settings); clearResult(); });
+
+/* ---------- State ----------
+   audio = { rate, ch: [Float32Array, …] } – the decoded, edited sound; sel = { a, b } in samples (a < b) */
+let file = null, info = null, audio = null, sel = null, undoStack = [], result = null, busy = false, lastError = null;
+let playerUrl = null, edits = 0;
+const encodable = { wav: true, aac: null, opus: null };
+const MAX_UNDO = 10, UNDO_FLOATS = 60e6;   // up to 10 steps, but at most ~240 MB of copies
+const len = () => audio ? audio.ch[0].length : 0;
+const secs = n => n / audio.rate;
+const isAll = () => sel.a === 0 && sel.b === len();
+
+function setStatus(id, text, kind) {
+  $(id).textContent = text || '';
+  $(id).className = 'status' + (kind ? ' ' + kind : '');
+}
+const chName = n => n === 1 ? t('ch.mono') : n === 2 ? t('ch.stereo') : t('ch.n', { n });
+/** 83.5 → "1:23,5" (de) / "1:23.5" (en); digits = decimals of the seconds */
+function clock(s, digits = 1) {
+  s = Math.max(0, s);
+  const f = 10 ** digits, total = Math.round(s * f) / f;
+  const h = Math.floor(total / 3600), m = Math.floor(total / 60) % 60, sec = total - Math.floor(total / 60) * 60;
+  const ss = fmt(sec, digits).padStart(digits ? 3 + digits : 2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+/** "1:23,5", "1:23.5", "83,5", "0:01:02" → seconds; NaN if invalid */
+function parseClock(str) {
+  const parts = String(str).trim().replace(',', '.').split(':');
+  if (!parts.length || parts.length > 3 || parts.some(p => !/^\d*\.?\d*$/.test(p) || p === '' || p === '.')) return NaN;
+  return parts.reduce((acc, p) => acc * 60 + Number(p), 0);
+}
+
+/* ---------- Opening and decoding ---------- */
+const err = (code, extra) => Object.assign(new Error(code), { code }, extra);
+const openInput = f => new MB.Input({ source: new MB.BlobSource(f), formats: MB.ALL_FORMATS });
+
+function renderInfo() {
+  if (!file) { $('fileInfo').textContent = ''; return; }
+  let s = t('fileInfo', { f: file.name, mb: fmt(file.size / 1048576, 1) });
+  if (audio) s += ' · ' + t('info', { ch: chName(audio.ch.length), rate: fmt(audio.rate / 1000, 1), dur: clock(secs(len()), 0) });
+  $('fileInfo').textContent = s;
+}
+
+/** Reads codec and sample rate with Mediabunny (null if it does not know the container) */
+async function probe(f) {
+  const input = openInput(f);
+  try {
+    let track;
+    try { track = await input.getPrimaryAudioTrack(); } catch (_) { return null; }
+    if (!track) return { noAudio: true };
+    return { codec: track.codec, rate: track.sampleRate, channels: track.numberOfChannels };
+  } finally { input.dispose && input.dispose(); }
+}
+/** Browser decoder (Web Audio): handles almost every format; decodes at the file's own sample rate */
+async function decodeWebAudio(f, rate) {
+  const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!Ctx) return null;
+  try {
+    const buf = await new Ctx(1, 1, rate).decodeAudioData(await f.arrayBuffer());
+    const ch = [];
+    for (let c = 0; c < buf.numberOfChannels; c++) ch.push(buf.getChannelData(c).slice());
+    return { rate: buf.sampleRate, ch };
+  } catch (e) {
+    if (e instanceof RangeError) throw err('memory', { cause: e });
+    Tools.diag.log('decodeAudioData failed', { msg: String(e.message || e).slice(0, 200) });
+    return null;
+  }
+}
+/** WebCodecs decoder via Mediabunny (fallback, e.g. for codecs Web Audio does not take) */
+async function decodeWebCodecs(f) {
+  if (typeof AudioDecoder === 'undefined') return null;
+  const input = openInput(f);
+  try {
+    const track = await input.getPrimaryAudioTrack();
+    if (!track || !(await track.canDecode())) return null;
+    const parts = [], n = track.numberOfChannels;
+    let frames = 0;
+    for await (const s of new MB.AudioSampleSink(track).samples()) {
+      const chans = [];
+      for (let c = 0; c < n; c++) {
+        const a = new Float32Array(s.numberOfFrames);
+        s.copyTo(a, { planeIndex: c, format: 'f32-planar' });
+        chans.push(a);
+      }
+      parts.push(chans); frames += s.numberOfFrames;
+      s.close();
+    }
+    const ch = [];
+    for (let c = 0; c < n; c++) {
+      const out = new Float32Array(frames);
+      let o = 0;
+      for (const p of parts) { out.set(p[c], o); o += p[c].length; }
+      ch.push(out);
+    }
+    return frames ? { rate: track.sampleRate, ch } : null;
+  } catch (e) {
+    if (e instanceof RangeError) throw err('memory', { cause: e });
+    Tools.diag.log('webcodecs decode failed', { msg: String(e.message || e).slice(0, 200) });
+    return null;
+  } finally { input.dispose && input.dispose(); }
+}
+
+async function takeFile(f) {
+  if (!f || busy) return;
+  stopPlay();
+  busy = true; lastError = null;
+  file = f; info = null; audio = null; sel = null; undoStack = []; edits = 0;
+  clearResult();
+  $('editor').hidden = true; $('exporter').hidden = true;
+  renderInfo();
+  setStatus('loadStatus', t('reading'));
+  Tools.diag.log('file chosen', { mb: +(f.size / 1048576).toFixed(1), type: f.type || '?' });
+  const t0 = performance.now();
+  try {
+    info = await probe(f).catch(() => null);
+    Tools.diag.log('probe', info || { known: false });
+    let decoded = await decodeWebAudio(f, info && info.rate >= 3000 && info.rate <= 384000 ? info.rate : 48000);
+    if (!decoded) decoded = await decodeWebCodecs(f);
+    if (!decoded || !decoded.ch.length || !decoded.ch[0].length) throw err(info && info.noAudio ? 'noaudio' : info ? 'decode' : 'invalid');
+    audio = decoded;
+    sel = { a: 0, b: len() };
+    Tools.diag.log('decoded', { channels: audio.ch.length, rate: audio.rate, s: +secs(len()).toFixed(2), ms: Math.round(performance.now() - t0) });
+    renderInfo();
+    setStatus('loadStatus', '');
+    $('editor').hidden = false; $('exporter').hidden = false;
+    $('gain').value = '0'; renderGain();
+    updateUi();
+  } catch (e) {
+    lastError = e.code || 'failed';
+    audio = null;
+    Tools.diag.log('open failed', { code: lastError, msg: String(e.cause && e.cause.message || e.message).slice(0, 200) });
+    if (!e.code) console.warn(e);
+    setStatus('loadStatus', e.code ? t('e.' + e.code) : t('failed', { m: e.message }), 'err');
+  } finally { busy = false; }
+}
+
+/* ---------- Waveform ---------- */
+const canvas = $('wave');
+let peaks = null, peaksFor = null, playPos = null;
+function computePeaks(width) {
+  const n = len(), out = new Float32Array(width);
+  const step = n / width;
+  for (let x = 0; x < width; x++) {
+    const i0 = Math.floor(x * step), i1 = Math.max(i0 + 1, Math.floor((x + 1) * step));
+    let m = 0;
+    for (const c of audio.ch) {
+      // Long columns: look at every few samples only (fast enough, peaks still visible)
+      const inc = Math.max(1, Math.floor((i1 - i0) / 400));
+      for (let i = i0; i < i1 && i < n; i += inc) { const v = Math.abs(c[i]); if (v > m) m = v; }
+    }
+    out[x] = m;
+  }
+  return out;
+}
+function draw() {
+  if (!audio || $('editor').hidden) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  if (!peaks || peaksFor !== audio || peaks.length !== w) { peaks = computePeaks(w); peaksFor = audio; }
+  const css = getComputedStyle(document.documentElement);
+  const accent = css.getPropertyValue('--accent').trim(), muted = css.getPropertyValue('--muted').trim(), text = css.getPropertyValue('--text').trim();
+  const g = canvas.getContext('2d');
+  g.clearRect(0, 0, w, h);
+  const n = len(), xa = sel.a / n * w, xb = sel.b / n * w, mid = h / 2;
+  g.globalAlpha = .18; g.fillStyle = accent; g.fillRect(xa, 0, Math.max(1, xb - xa), h); g.globalAlpha = 1;
+  for (let x = 0; x < w; x++) {
+    const v = Math.min(1, peaks[x]) * (mid - 2);
+    g.fillStyle = x >= xa && x <= xb ? accent : muted;
+    g.fillRect(x, mid - v, 1, Math.max(1, 2 * v));
+  }
+  g.fillStyle = accent;
+  for (const x of [xa, xb]) {
+    const xx = Math.min(w - 2 * dpr, Math.max(0, x - dpr));
+    g.fillRect(xx, 0, 2 * dpr, h);
+    g.fillRect(Math.min(w - 10 * dpr, Math.max(0, x - 5 * dpr)), 0, 10 * dpr, 6 * dpr);
+    g.fillRect(Math.min(w - 10 * dpr, Math.max(0, x - 5 * dpr)), h - 6 * dpr, 10 * dpr, 6 * dpr);
+  }
+  if (playPos != null) { g.fillStyle = text; g.fillRect(playPos / n * w, 0, Math.max(1, dpr), h); }
+}
+new ResizeObserver(() => draw()).observe(canvas);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+
+// Selecting with finger or mouse: drag = new range, drag at an edge = move that edge, tap = move the nearer edge
+let drag = null;
+const sampleAt = ev => {
+  const r = canvas.getBoundingClientRect();
+  return Math.round(Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)) * len());
+};
+canvas.addEventListener('pointerdown', ev => {
+  if (!audio || busy) return;
+  const r = canvas.getBoundingClientRect(), px = ev.clientX - r.left;
+  const xa = sel.a / len() * r.width, xb = sel.b / len() * r.width;
+  const near = Math.min(Math.abs(px - xa), Math.abs(px - xb)) <= 22;
+  drag = { x0: ev.clientX, s0: sampleAt(ev), moved: false, edge: near ? (Math.abs(px - xa) <= Math.abs(px - xb) ? 'a' : 'b') : null };
+  canvas.setPointerCapture(ev.pointerId);
+});
+canvas.addEventListener('pointermove', ev => {
+  if (!drag) return;
+  if (!drag.moved && Math.abs(ev.clientX - drag.x0) < 6) return;
+  drag.moved = true;
+  const s = sampleAt(ev);
+  if (drag.edge === 'a') setSel(Math.min(s, sel.b - 1), sel.b);
+  else if (drag.edge === 'b') setSel(sel.a, Math.max(s, sel.a + 1));
+  else setSel(Math.min(s, drag.s0), Math.max(s, drag.s0));
+});
+const endDrag = ev => {
+  if (!drag) return;
+  if (!drag.moved && ev.type === 'pointerup') {
+    const s = drag.s0;
+    if (Math.abs(s - sel.a) <= Math.abs(s - sel.b)) setSel(Math.min(s, sel.b - 1), sel.b);
+    else setSel(sel.a, Math.max(s, sel.a + 1));
+  }
+  drag = null;
+  Tools.diag.log('selection', { a: +secs(sel.a).toFixed(2), b: +secs(sel.b).toFixed(2) });
+};
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+function setSel(a, b) {
+  const n = len();
+  a = Math.max(0, Math.min(n - 1, Math.round(a)));
+  b = Math.max(a + 1, Math.min(n, Math.round(b)));
+  sel = { a, b };
+  if (playing) stopPlay();
+  updateSel();
+}
+function updateSel() {
+  $('zeroTime').textContent = clock(0);
+  $('totalTime').textContent = clock(secs(len()));
+  const total = fmt(secs(len()), 1);
+  $('selInfo').textContent = isAll() ? t('selAll', { total }) : t('selInfo', { len: fmt(secs(sel.b - sel.a), 1), total });
+  for (const [id, v] of [['selStart', sel.a], ['selEnd', sel.b]]) if (document.activeElement !== $(id)) $(id).value = clock(secs(v), 2);
+  draw();
+}
+for (const id of ['selStart', 'selEnd']) {
+  $(id).addEventListener('change', () => {
+    const s = parseClock($(id).value);
+    if (!Number.isFinite(s)) { toast(t('e.badTime')); updateSel(); return; }
+    const v = Math.round(s * audio.rate);
+    // A start behind the end (or an end before the start) takes the other edge along to the file's end/start
+    if (id === 'selStart') setSel(v, v < sel.b ? sel.b : len()); else setSel(v > sel.a ? sel.a : 0, v);
+    $(id).value = clock(secs(id === 'selStart' ? sel.a : sel.b), 2);
+  });
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') $(id).blur(); });
+}
+$('btnAll').addEventListener('click', () => setSel(0, len()));
+
+/* ---------- Playback ---------- */
+let actx = null, source = null, playing = false, raf = 0;
+function stopPlay() {
+  if (source) { source.onended = null; try { source.stop(); } catch (_) {} source.disconnect(); source = null; }
+  playing = false; playPos = null;
+  cancelAnimationFrame(raf);
+  $('btnPlay').textContent = t('play');
+  draw();
+}
+async function play() {
+  if (!audio) return;
+  if (playing) { stopPlay(); return; }
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') await actx.resume();
+    const n = sel.b - sel.a;
+    const buf = actx.createBuffer(audio.ch.length, n, audio.rate);
+    audio.ch.forEach((c, i) => buf.copyToChannel(c.subarray(sel.a, sel.b), i));
+    source = actx.createBufferSource();
+    source.buffer = buf; source.connect(actx.destination);
+    const t0 = actx.currentTime, a = sel.a;
+    source.onended = () => stopPlay();
+    source.start();
+    playing = true;
+    $('btnPlay').textContent = t('stop');
+    const tick = () => { if (!playing) return; playPos = Math.min(sel.b, a + (actx.currentTime - t0) * audio.rate); draw(); raf = requestAnimationFrame(tick); };
+    tick();
+    Tools.diag.log('play', { s: +secs(n).toFixed(2), ctxRate: actx.sampleRate });
+  } catch (e) { Tools.diag.log('play failed', { name: e.name, msg: String(e.message).slice(0, 200) }); toast(t('failed', { m: e.message })); stopPlay(); }
+}
+$('btnPlay').addEventListener('click', play);
+
+/* ---------- Editing (each step can be undone) ---------- */
+function pushUndo() {
+  undoStack.push(audio);
+  const floats = () => undoStack.reduce((s, x) => s + x.ch.length * x.ch[0].length, 0);
+  while (undoStack.length > MAX_UNDO || (undoStack.length > 1 && floats() > UNDO_FLOATS)) undoStack.shift();
+}
+const copyAudio = () => ({ rate: audio.rate, ch: audio.ch.map(c => c.slice()) });
+function peakOf(x, a, b) {
+  let m = 0;
+  for (const c of x.ch) for (let i = a; i < b; i++) { const v = Math.abs(c[i]); if (v > m) m = v; }
+  return m;
+}
+const dbOf = f => Math.round(20 * Math.log10(f) * 10) / 10;
+
+/** Runs an edit; returns the message key (or throws an error with a code) */
+const EDITS = {
+  keep() {
+    if (isAll()) throw err('all');
+    pushUndo();
+    audio = { rate: audio.rate, ch: audio.ch.map(c => c.slice(sel.a, sel.b)) };
+    sel = { a: 0, b: len() };
+    return { msg: t('done.keep') };
+  },
+  cut() {
+    if (isAll()) throw err('all');
+    pushUndo();
+    const { a, b } = sel;
+    audio = { rate: audio.rate, ch: audio.ch.map(c => { const o = new Float32Array(c.length - (b - a)); o.set(c.subarray(0, a)); o.set(c.subarray(b), a); return o; }) };
+    sel = { a: 0, b: len() };
+    return { msg: t('done.cut') };
+  },
+  gain(db) {
+    if (!db) throw err('gain0');
+    const f = 10 ** (db / 20);
+    pushUndo(); audio = copyAudio();
+    for (const c of audio.ch) for (let i = sel.a; i < sel.b; i++) c[i] *= f;
+    return { msg: t('done.gain', { db: (db > 0 ? '+' : '') + fmt(db, 0) }), clipped: peakOf(audio, sel.a, sel.b) > 1 };
+  },
+  normalize() {
+    const p = peakOf(audio, sel.a, sel.b);
+    if (p < 1e-6) throw err('silent');
+    const f = 10 ** (-1 / 20) / p;
+    pushUndo(); audio = copyAudio();
+    for (const c of audio.ch) for (let i = sel.a; i < sel.b; i++) c[i] *= f;
+    const db = dbOf(f);
+    return { msg: t('done.norm', { db: (db > 0 ? '+' : '') + fmt(db, 1) }), gainDb: db };
+  },
+  fadeIn() { return fade(true); },
+  fadeOut() { return fade(false); },
+  mono() {
+    if (audio.ch.length === 1) throw err('isMono');
+    pushUndo();
+    const n = len(), k = audio.ch.length, out = new Float32Array(n);
+    for (const c of audio.ch) for (let i = 0; i < n; i++) out[i] += c[i] / k;
+    audio = { rate: audio.rate, ch: [out] };
+    return { msg: t('done.mono') };
+  },
+  undo() {
+    if (!undoStack.length) return null;
+    audio = undoStack.pop();
+    sel = { a: 0, b: len() };
+    return { msg: t('done.undo') };
+  },
+};
+function fade(up) {
+  pushUndo(); audio = copyAudio();
+  const n = sel.b - sel.a;
+  for (const c of audio.ch) for (let i = 0; i < n; i++) {
+    const x = n > 1 ? i / (n - 1) : 1;
+    c[sel.a + i] *= up ? x : 1 - x;
+  }
+  return { msg: t(up ? 'done.fadeIn' : 'done.fadeOut') };
+}
+function edit(name, arg) {
+  if (!audio || busy) return null;
+  stopPlay();
+  const r = EDITS[name](arg);
+  if (!r) return null;
+  if (name === 'undo') edits = Math.max(0, edits - 1); else edits++;
+  Tools.diag.log('edit', { op: name, s: +secs(len()).toFixed(2), channels: audio.ch.length, undo: undoStack.length });
+  clearResult();
+  renderInfo();
+  updateUi();
+  return r;
+}
+function uiEdit(name, arg) {
+  try {
+    const r = edit(name, arg);
+    if (r) toast(r.clipped ? r.msg + ' – ' + t('clipped') : r.msg, r.clipped ? 4000 : 2000);
+    if (name === 'gain' && r) { $('gain').value = '0'; renderGain(); }
+  } catch (e) {
+    if (!e.code) { console.warn(e); toast(t('failed', { m: e.message })); return; }
+    toast(t('e.' + e.code));
+  }
+}
+function updateUi() {
+  $('btnUndo').disabled = !undoStack.length;
+  $('btnMono').disabled = audio.ch.length === 1;
+  updateSel();
+}
+const renderGain = () => { const v = Number($('gain').value); $('gainVal').textContent = (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v), 0) + ' dB'; };
+$('gain').addEventListener('input', renderGain);
+$('btnGain').addEventListener('click', () => uiEdit('gain', Number($('gain').value)));
+$('btnKeep').addEventListener('click', () => uiEdit('keep'));
+$('btnCut').addEventListener('click', () => uiEdit('cut'));
+$('btnNorm').addEventListener('click', () => uiEdit('normalize'));
+$('btnFadeIn').addEventListener('click', () => uiEdit('fadeIn'));
+$('btnFadeOut').addEventListener('click', () => uiEdit('fadeOut'));
+$('btnMono').addEventListener('click', () => uiEdit('mono'));
+$('btnUndo').addEventListener('click', () => uiEdit('undo'));
+
+/* ---------- Export ---------- */
+const TARGETS = {
+  wav: { ext: '.wav', mime: 'audio/wav' },
+  aac: { ext: '.m4a', mime: 'audio/mp4', codec: 'aac', rates: [44100, 48000], format: () => new MB.Mp4OutputFormat({ fastStart: 'in-memory' }) },
+  opus: { ext: '.ogg', mime: 'audio/ogg', codec: 'opus', rates: [48000], format: () => new MB.OggOutputFormat() },
+};
+// Which compressed formats this browser can encode (WebCodecs); unavailable ones are greyed out
+async function checkEncoders() {
+  for (const f of ['aac', 'opus']) {
+    try { encodable[f] = typeof AudioEncoder !== 'undefined' && await MB.canEncodeAudio(TARGETS[f].codec, { numberOfChannels: 2, sampleRate: 48000, bitrate: 128000 }); }
+    catch (_) { encodable[f] = false; }
+  }
+  Tools.diag.log('encoders', { aac: encodable.aac, opus: encodable.opus });
+  renderFormats();
+}
+function renderFormats() {
+  const off = [];
+  for (const r of radios) {
+    const ok = encodable[r.value] !== false;
+    r.disabled = !ok;
+    r.closest('.choice').classList.toggle('off', !ok);
+    if (!ok) off.push(r.value === 'aac' ? 'M4A (AAC)' : 'Opus');
+  }
+  if (radios.find(r => r.checked).disabled) setFormat('wav');
+  $('fmtNote').hidden = !off.length;
+  $('fmtNote').textContent = off.length ? t('notAvail', { list: off.join(', ') }) : '';
+}
+checkEncoders();
+
+function encodeWav(x) {
+  const ch = x.ch.length, n = x.ch[0].length, rate = x.rate;
+  const out = new DataView(new ArrayBuffer(44 + n * ch * 2));
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); out.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, ch, true);
+  out.setUint32(24, rate, true); out.setUint32(28, rate * ch * 2, true); out.setUint16(32, ch * 2, true); out.setUint16(34, 16, true);
+  str(36, 'data'); out.setUint32(40, n * ch * 2, true);
+  let o = 44;
+  for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) {
+    const v = Math.max(-1, Math.min(1, x.ch[c][i]));
+    out.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7fff, true); o += 2;
+  }
+  return new Uint8Array(out.buffer);
+}
+async function resample(x, rate) {
+  const n = Math.ceil(x.ch[0].length * rate / x.rate);
+  const ctx = new OfflineAudioContext(x.ch.length, n, rate);
+  const buf = ctx.createBuffer(x.ch.length, x.ch[0].length, x.rate);
+  x.ch.forEach((c, i) => buf.copyToChannel(c, i));
+  const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
+  const out = await ctx.startRendering();
+  const ch = [];
+  for (let c = 0; c < out.numberOfChannels; c++) ch.push(out.getChannelData(c));
+  return { rate, ch };
+}
+async function encodeCompressed(x, target, kbps, onProgress) {
+  if (!target.rates.includes(x.rate)) {
+    setStatus('status', t('resampling'));
+    Tools.diag.log('resample', { from: x.rate, to: 48000 });
+    x = await resample(x, 48000);
+  }
+  const output = new MB.Output({ format: target.format(), target: new MB.BufferTarget() });
+  const src = new MB.AudioSampleSource({ codec: target.codec, bitrate: kbps * 1000 });
+  output.addAudioTrack(src);
+  await output.start();
+  const n = x.ch[0].length, k = x.ch.length, chunk = x.rate;   // one second per sample
+  for (let i = 0; i < n; i += chunk) {
+    const m = Math.min(chunk, n - i), data = new Float32Array(m * k);
+    for (let c = 0; c < k; c++) {
+      const s = x.ch[c];
+      for (let j = 0; j < m; j++) { const v = s[i + j]; data[c * m + j] = v > 1 ? 1 : v < -1 ? -1 : v; }
+    }
+    const sample = new MB.AudioSample({ data, format: 'f32-planar', numberOfChannels: k, sampleRate: x.rate, timestamp: i / x.rate });
+    await src.add(sample);
+    sample.close();
+    onProgress(Math.min(1, (i + m) / n));
+  }
+  src.close();
+  await output.finalize();
+  return new Uint8Array(output.target.buffer);
+}
+
+async function exportAudio(format = getFormat(), kbps = settings.kbps) {
+  if (!audio || busy) return null;
+  busy = true; lastError = null;
+  stopPlay();
+  $('btnExport').disabled = true;
+  clearResult();
+  const bar = $('progress');
+  bar.hidden = false; bar.value = 0;
+  const progress = p => { bar.value = Math.round(p * 100); setStatus('status', t('working', { p: Math.round(p * 100) })); };
+  progress(0);
+  const t0 = performance.now();
+  try {
+    const target = TARGETS[format];
+    let bytes;
+    if (format === 'wav') { bytes = encodeWav(audio); }
+    else {
+      if (encodable[format] === false) throw err('encode');
+      try { bytes = await encodeCompressed(audio, target, kbps, progress); }
+      catch (e) { if (e.code) throw e; Tools.diag.log('encode failed', { format, msg: String(e.message).slice(0, 200) }); throw err('encode', { cause: e }); }
+    }
+    bar.value = 100;
+    const base = (file.name.replace(/\.[^.]+$/, '') || 'audio') + '-edit';
+    result = { file: new File([bytes], base + target.ext, { type: target.mime }), format, kbps: format === 'wav' ? null : kbps };
+    Tools.diag.log('exported', { format, kbps: result.kbps, kb: Math.round(bytes.length / 1024), ms: Math.round(performance.now() - t0) });
+    showResult();
+    setStatus('status', t('done'), 'ok');
+    return result;
+  } catch (e) {
+    lastError = e.code || 'failed';
+    if (!e.code) { console.warn(e); Tools.diag.log('export failed', { msg: String(e.message).slice(0, 200) }); }
+    setStatus('status', e.code ? t('e.' + e.code) : t('failed', { m: e.message || e }), 'err');
+    return null;
+  } finally {
+    bar.hidden = true;
+    busy = false;
+    $('btnExport').disabled = false;
+  }
+}
+$('btnExport').addEventListener('click', () => exportAudio());
+
+function clearResult() {
+  result = null;
+  $('result').hidden = true;
+  setStatus('status', '');
+  if (playerUrl) { $('player').removeAttribute('src'); URL.revokeObjectURL(playerUrl); playerUrl = null; }
+}
+function showResult() {
+  if (playerUrl) URL.revokeObjectURL(playerUrl);
+  playerUrl = URL.createObjectURL(result.file);
+  $('player').src = playerUrl;
+  $('resultMeta').textContent = result.file.name + ' · ' + fmt(result.file.size / 1024, 0) + ' KB';
+  const r = $('result');
+  r.dataset.format = result.format;
+  r.hidden = false;
+  try { $('btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [result.file] })); } catch (_) { $('btnShare').hidden = true; }
+}
+$('btnSave').addEventListener('click', () => {
+  if (!result) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(result.file); a.download = result.file.name; document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  Tools.diag.log('saved', { format: result.format });
+});
+$('btnShare').addEventListener('click', async () => {
+  if (!result) return;
+  try { await navigator.share({ files: [result.file], title: result.file.name }); Tools.diag.log('shared'); }
+  catch (e) { if (e.name !== 'AbortError') { Tools.diag.log('share failed', { name: e.name }); toast(t('shareFail')); } }
+});
+
+/* ---------- Choosing a file ---------- */
+const drop = $('drop');
+drop.addEventListener('click', () => { $('file').value = ''; $('file').click(); });
+$('file').addEventListener('change', () => takeFile($('file').files[0]));
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); takeFile(e.dataTransfer.files[0]); });
+takeSharedFile().then(f => { if (f) { Tools.diag.log('shared file received'); takeFile(f); } });
+
+Tools.diag.info(() => ({
+  file: !!file, codec: info ? info.codec || null : null, channels: audio ? audio.ch.length : null, rate: audio ? audio.rate : null,
+  seconds: audio ? +secs(len()).toFixed(2) : null, edits, undo: undoStack.length, busy, format: getFormat(),
+  result: result ? result.format : null, lastError, encoders: encodable, webcodecs: typeof AudioDecoder !== 'undefined',
+}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   Work on the file the user has opened – agents cannot open or save files. Edits can be undone. */
+const AGENT_ERRORS = {
+  all: 'Everything is selected – select a range first (set_selection), otherwise nothing would be left.',
+  silent: 'The selection is silent, there is nothing to normalize.', isMono: 'The audio is mono already.',
+  gain0: 'gain_db must not be 0.', encode: 'This browser cannot encode this format – use "wav".',
+};
+const needAudio = () => {
+  if (busy) throw new Error('The app is busy (opening or exporting) – try again in a moment.');
+  if (!audio) throw new Error(file ? 'The chosen file could not be opened as audio.' : 'No audio file opened – ask the user to choose one in the app first.');
+};
+const r3 = x => Math.round(x * 1000) / 1000;
+const agentInfo = () => {
+  const p = peakOf(audio, 0, len());
+  return {
+    file_name: file.name, duration_seconds: r3(secs(len())), sample_rate_hz: audio.rate, channels: audio.ch.length,
+    selection: { start_seconds: r3(secs(sel.a)), end_seconds: r3(secs(sel.b)), whole_file: isAll() },
+    peak_dbfs: p > 0 ? Math.round(20 * Math.log10(p) * 10) / 10 : null, edits, undo_steps: undoStack.length,
+  };
+};
+Tools.mcp.register({
+  name: 'get_audio_info', title: 'Details of the opened audio', label: 'mcp.info', readOnly: true, untrusted: true,
+  description: 'Returns details of the audio file the user has opened in the app, including the current edits: file name, duration, sample rate, channels, current selection, peak level in dBFS and the number of edits and undo steps. Fails if no file is open.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  execute: () => { needAudio(); return agentInfo(); },
+});
+Tools.mcp.register({
+  name: 'set_selection', title: 'Select a time range', label: 'mcp.sel', untrusted: true,
+  description: 'Selects a time range of the opened audio, shown in the waveform. Edits (keep, cut, gain, normalize, fades) then work on this range. Omit both values to select the whole file. Returns the audio details with the selection as set (clamped to the duration).',
+  inputSchema: { type: 'object', properties: {
+    start_seconds: { type: 'number', minimum: 0, description: 'Start of the range in seconds. Default: 0.' },
+    end_seconds: { type: 'number', minimum: 0, description: 'End of the range in seconds. Default: end of the audio.' },
+  }, additionalProperties: false },
+  execute: ({ start_seconds = 0, end_seconds }) => {
+    needAudio();
+    const a = Math.round(start_seconds * audio.rate), b = end_seconds == null ? len() : Math.round(end_seconds * audio.rate);
+    if (a >= len()) throw new Error(`start_seconds is beyond the end of the audio (${r3(secs(len()))} s).`);
+    if (b <= a) throw new Error('end_seconds must be greater than start_seconds.');
+    setSel(a, b);
+    return agentInfo();
+  },
+});
+const ACTIONS = { keep_selection: 'keep', cut_selection: 'cut', gain: 'gain', normalize: 'normalize', fade_in: 'fadeIn', fade_out: 'fadeOut', mono: 'mono', undo: 'undo' };
+Tools.mcp.register({
+  name: 'edit_audio', title: 'Edit the opened audio', label: 'mcp.edit', untrusted: true,
+  description: 'Edits the opened audio in the app; every step can be undone with action "undo" (also by the user). "keep_selection" trims the audio to the selection, "cut_selection" cuts the selection out and joins the rest, "gain" changes the volume of the selection by gain_db, "normalize" sets the peak of the selection to -1 dBFS, "fade_in"/"fade_out" fade the selection in from or out to silence, "mono" mixes all channels to one (whole file). Afterwards the whole file is selected for keep/cut/undo. Returns the new audio details and whether the result clips.',
+  inputSchema: { type: 'object', properties: {
+    action: { type: 'string', enum: Object.keys(ACTIONS), description: 'What to do.' },
+    gain_db: { type: 'number', minimum: -30, maximum: 30, description: 'Volume change in decibels for action "gain" (+6 is about twice as loud).' },
+  }, required: ['action'], additionalProperties: false },
+  execute: ({ action, gain_db }) => {
+    needAudio();
+    if (action === 'gain' && gain_db == null) throw new Error('gain_db is required for action "gain".');
+    if (action === 'undo' && !undoStack.length) throw new Error('Nothing to undo.');
+    let r;
+    try { r = edit(ACTIONS[action], gain_db); } catch (e) { throw new Error(AGENT_ERRORS[e.code] || e.message); }
+    return { ...agentInfo(), clipping: !!(r && r.clipped), applied_gain_db: action === 'normalize' ? r.gainDb : action === 'gain' ? gain_db : undefined };
+  },
+});
+Tools.mcp.register({
+  name: 'export_audio', title: 'Create an audio file from the edited audio', label: 'mcp.export', untrusted: true,
+  description: 'Encodes the whole edited audio into a file on the device: "wav" (16-bit, lossless), "aac" (.m4a) or "opus" (.ogg) at the given bitrate. The user can then play, save or share it in the app. Returns file name, format, MIME type and size. "aac" and "opus" fail if the browser cannot encode them.',
+  inputSchema: { type: 'object', properties: {
+    format: { type: 'string', enum: FORMATS, description: 'Output format. Default: the format chosen in the app.' },
+    bitrate_kbps: { type: 'integer', enum: BITRATES, description: 'Bitrate for aac and opus. Default: the bitrate chosen in the app.' },
+  }, additionalProperties: false },
+  execute: async ({ format, bitrate_kbps }) => {
+    needAudio();
+    if (format && encodable[format] === false) throw new Error(AGENT_ERRORS.encode);
+    if (format) { setFormat(format); settings.format = format; }
+    if (bitrate_kbps) { settings.kbps = bitrate_kbps; $('bitrate').value = String(bitrate_kbps); }
+    save(LS, settings);
+    const r = await exportAudio(getFormat(), settings.kbps);
+    if (!r) throw new Error(AGENT_ERRORS[lastError] || 'Creating the file failed.');
+    return { output_file_name: r.file.name, output_format: r.format, output_mime_type: r.file.type, output_size_bytes: r.file.size,
+      bitrate_kbps: r.kbps, duration_seconds: r3(secs(len())) };
+  },
+});
+// Language switched: generated texts
+Tools.onLang(() => { renderInfo(); renderFormats(); if (audio) { updateSel(); renderGain(); $('btnPlay').textContent = t(playing ? 'stop' : 'play'); } if (result) showResult(); });
+</script>
+</body>
+</html>
