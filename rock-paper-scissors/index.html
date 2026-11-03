@@ -2,24 +2,24 @@
 <html lang="de" dir="ltr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Schere, Stein, Papier</title>
-<meta name="description" content="Spiel gegen den Computer – klassisch, mit Brunnen oder mit Echse und Spock.">
+<meta name="description" content="Gegen den Computer oder zu zweit auf zwei Handys – klassisch, mit Brunnen oder mit Echse und Spock.">
 <meta name="tool:tags" content="Freizeit, Spiele, Kinder">
-<meta name="tool:features" content="Verlauf, KI-Agent">
+<meta name="tool:features" content="Kamera, Verlauf, KI-Agent">
 <meta name="tool:icon" content="scissors">
 <meta name="tool:color" content="#c2410c">
 <meta name="tool:short-name" content="Schnick">
 <meta name="tool:title-en" content="Rock, Paper, Scissors">
-<meta name="tool:description-en" content="Play against the computer – classic, with well or with lizard and Spock.">
+<meta name="tool:description-en" content="Against the computer or two players on two phones – classic, with well or with lizard and Spock.">
 <meta name="tool:short-name-en" content="RPS">
 <meta name="tool:storage" content="rock-paper-scissors.">
 <meta name="tool:webmcp" content="play_round, get_score">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-7DW2wOCB0PDeM8sZlZxmdJVOd8Gts87vPEED1jkOQww='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-WPNP6LtFmJIT8gAx52EVrxuoEG7ga7EY4/uCkxxOnYM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -73,6 +73,31 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
 .last li.win{border-color:var(--ok)}
 .last li.lose{border-color:var(--err)}
 .btn.grow{flex:1 1 auto}
+.choice[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
+.choice:disabled{cursor:default;transform:none}
+.choice:disabled:not([aria-pressed="true"]){opacity:.55}
+.hand.ready{border-color:var(--accent);border-style:dashed}
+
+/* ---------- Two devices (connection like sea-battle) ---------- */
+.panel{display:grid;gap:10px;margin-block-start:12px}
+.big-btns{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+.big-btns .btn{min-height:64px;font-size:17px;justify-content:center}
+.big-btns small{display:block;font-size:13px;font-weight:400}
+.steps{margin:0;padding-inline-start:22px;display:grid;gap:4px}
+.net-status{margin:0;text-align:center;font-weight:600;min-height:1.5em}
+.net-status.err{color:var(--err)}
+.qr-box{display:grid;justify-items:center;gap:8px}
+.qr-box canvas{width:min(78vw,280px);height:auto;aspect-ratio:1;image-rendering:pixelated;border-radius:8px;background:#fff}
+.step-h{font-size:17px;margin:0}
+textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;word-break:break-all}
+.row.center{justify-content:center}
+.video-wrap{position:relative;width:100%;aspect-ratio:1;max-height:60vh;border-radius:12px;overflow:hidden;background:#000}
+.video-wrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.video-wrap::after{content:"";position:absolute;inset:15%;border:3px solid rgba(255,255,255,.8);border-radius:12px;pointer-events:none}
+.conn-on{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.conn-on p{margin:0;font-weight:600;color:var(--ok)}
+.check{display:flex;gap:10px;align-items:flex-start;min-height:44px;font-size:16px;cursor:pointer}
+.check input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--accent)}
 
 /* ---------- Diagrams in the help ---------- */
 .rules{display:grid;gap:4px 16px;grid-template-columns:minmax(0,1fr)}
@@ -88,11 +113,91 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
 <body>
 <header>
   <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Schere, Stein, Papier</span></h1>
-  <p class="sub" data-i18n="sub">Spiel gegen den Computer</p>
+  <p class="sub" data-i18n="sub">Gegen den Computer oder zu zweit</p>
 </header>
 
 <main>
-  <section class="card" aria-label="Spiel" data-i18n-attr="aria-label:game">
+  <section class="card" id="oppCard" aria-labelledby="h-opp">
+    <h2 id="h-opp" class="sr-only" data-i18n="opponent">Gegner</h2>
+    <div class="seg two" id="opp" role="group" aria-label="Gegner" data-i18n-attr="aria-label:opponent">
+      <button type="button" data-o="cpu" data-i18n="opp.cpu">🖥️ Computer</button>
+      <button type="button" data-o="online" data-i18n="opp.online">📱 Zu zweit</button>
+    </div>
+
+    <!-- Two devices: create or join a game -->
+    <div class="panel" id="connLobby" hidden>
+      <p data-i18n="lead">Zwei Handys, ein Spiel: Die Verbindung entsteht über zwei QR-Codes und läuft danach direkt von Gerät zu Gerät.</p>
+      <div class="big-btns">
+        <button type="button" class="btn primary" id="btnHost"><span><span data-i18n="host">Neues Spiel</span><small data-i18n="hostSub">zeigt QR-Code</small></span></button>
+        <button type="button" class="btn" id="btnJoin"><span><span data-i18n="join">Beitreten</span><small data-i18n="joinSub">QR-Code scannen</small></span></button>
+      </div>
+      <p class="net-status" id="lobbyStatus" role="status"></p>
+      <details>
+        <summary data-i18n="pasteOffer">Spiel-Code von Hand eingeben</summary>
+        <label for="offerIn" data-i18n="pasteOfferLbl">Spiel-Code oder Link des anderen (z. B. per Nachricht geschickt):</label>
+        <textarea id="offerIn" class="code" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+        <div class="row"><button type="button" class="btn" id="btnOfferIn" data-i18n="connect">Verbinden</button></div>
+      </details>
+      <ol class="steps">
+        <li data-i18n="step1">Handy A tippt auf „Neues Spiel“.</li>
+        <li data-i18n="step2">Handy B tippt auf „Beitreten“ und scannt den Code von A.</li>
+        <li data-i18n="step3">Handy A scannt den Antwort-Code von B – fertig.</li>
+      </ol>
+      <p class="muted" data-i18n="sameWifi">Beide Geräte im selben WLAN oder ein Handy als Hotspot für das andere.</p>
+    </div>
+
+    <!-- Host: show the offer, then scan the answer -->
+    <div class="panel" id="connHost" hidden>
+      <h3 class="step-h" data-i18n="hostH1">1. Das andere Handy scannt diesen Code</h3>
+      <div class="qr-box">
+        <canvas id="qrOffer" width="280" height="280" role="img" aria-label="QR-Code zum Beitreten" data-i18n-attr="aria-label:qrOffer"></canvas>
+        <div class="row center">
+          <button type="button" class="btn" id="btnCopyOffer" data-i18n="copyCode">Code kopieren</button>
+          <button type="button" class="btn" id="btnShareOffer" data-i18n="share" hidden>Teilen …</button>
+        </div>
+      </div>
+      <h3 class="step-h" data-i18n="hostH2">2. Dann den Antwort-Code scannen</h3>
+      <button type="button" class="btn primary" id="btnScanAnswer" data-i18n="scanAnswer">Antwort-Code scannen</button>
+      <details>
+        <summary data-i18n="pasteAnswer">Antwort-Code von Hand eingeben</summary>
+        <label for="answerIn" data-i18n="pasteAnswerLbl">Antwort-Code des anderen:</label>
+        <textarea id="answerIn" class="code" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+        <div class="row"><button type="button" class="btn" id="btnAnswerIn" data-i18n="connect">Verbinden</button></div>
+      </details>
+      <p class="net-status" id="hostStatus" role="status"></p>
+      <button type="button" class="btn" id="btnHostCancel" data-i18n="cancel">Abbrechen</button>
+    </div>
+
+    <!-- Guest: show the answer -->
+    <div class="panel" id="connGuest" hidden>
+      <h3 class="step-h" data-i18n="guestH">Jetzt scannt das andere Handy diesen Antwort-Code</h3>
+      <div class="qr-box">
+        <canvas id="qrAnswer" width="280" height="280" role="img" aria-label="QR-Code mit der Antwort" data-i18n-attr="aria-label:qrAnswer"></canvas>
+        <div class="row center">
+          <button type="button" class="btn" id="btnCopyAnswer" data-i18n="copyCode">Code kopieren</button>
+          <button type="button" class="btn" id="btnShareAnswer" data-i18n="share" hidden>Teilen …</button>
+        </div>
+      </div>
+      <p class="net-status" id="guestStatus" role="status"></p>
+      <button type="button" class="btn" id="btnGuestCancel" data-i18n="cancel">Abbrechen</button>
+    </div>
+
+    <!-- Camera -->
+    <div class="panel" id="connScan" hidden>
+      <h3 id="h-scan" class="step-h"></h3>
+      <div class="video-wrap"><video id="video" playsinline muted></video></div>
+      <p class="net-status" id="scanStatus" role="status"></p>
+      <button type="button" class="btn" id="btnScanCancel" data-i18n="cancel">Abbrechen</button>
+    </div>
+
+    <!-- Connected -->
+    <div class="panel conn-on" id="connOn" hidden>
+      <p data-i18n="connectedLine">📱 Verbunden mit dem anderen Handy</p>
+      <button type="button" class="btn" id="btnLeave" data-i18n="leave">Trennen</button>
+    </div>
+  </section>
+
+  <section class="card" id="gameCard" aria-label="Spiel" data-i18n-attr="aria-label:game">
     <div class="seg" id="variants" role="group" aria-label="Spielvariante" data-i18n-attr="aria-label:variant">
       <button type="button" data-v="3">3 <span data-i18n="var.3">Klassisch</span><small>✂️ 🪨 📄</small></button>
       <button type="button" data-v="4">4 <span data-i18n="var.4s">Brunnen</span><small>✂️ 🪨 📄 ⛲</small></button>
@@ -102,7 +207,7 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
     <div class="arena">
       <div class="side"><div class="who" data-i18n="you">Du</div><div class="hand" id="you" data-move="">❔</div></div>
       <div class="vs" aria-hidden="true" data-i18n="vs">gegen</div>
-      <div class="side"><div class="who">Computer</div><div class="hand" id="cpu" data-move="">❔</div></div>
+      <div class="side"><div class="who" id="whoOpp">Computer</div><div class="hand" id="cpu" data-move="">❔</div></div>
     </div>
     <div class="result" id="result" aria-live="polite"></div>
     <p class="status" id="status"></p>
@@ -112,7 +217,7 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
     <div class="score" aria-label="Punktestand" data-i18n-attr="aria-label:score">
       <div><b id="sWin">0</b><span data-i18n="you">Du</span></div>
       <div><b id="sDraw">0</b><span data-i18n="drawShort">Gleich</span></div>
-      <div><b id="sLose">0</b><span>Computer</span></div>
+      <div><b id="sLose">0</b><span id="scoreOpp">Computer</span></div>
     </div>
     <h2 id="h-last" class="sr-only" data-i18n="lastRounds">Letzte Runden</h2>
     <ul class="last" id="last" aria-labelledby="h-last"></ul>
@@ -121,13 +226,19 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
     </div>
   </section>
 
-  <section class="card" aria-labelledby="h-cpu">
+  <section class="card" id="cpuCard" aria-labelledby="h-cpu">
     <h2 id="h-cpu" data-i18n="howCpu">Wie spielt der Computer?</h2>
     <div class="seg two" id="modes" role="group" aria-label="Spielweise des Computers" data-i18n-attr="aria-label:cpuMode">
       <button type="button" data-m="random" data-i18n="mode.random">🎲 Zufall</button>
       <button type="button" data-m="smart" data-i18n="mode.smart">🧠 Schlau</button>
     </div>
     <p class="muted" id="modeHelp"></p>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-set">
+    <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <label class="check"><input type="checkbox" id="optStun"> <span data-i18n="optStun">Zu zweit auch über das Internet verbinden (STUN-Server von Google)</span></label>
+    <p class="muted" data-i18n="optStunHelp">Nur nötig, wenn die Handys nicht im selben WLAN sind. Der Server erfährt dabei die öffentliche IP-Adresse – die Züge laufen trotzdem direkt. Klappt nicht in jedem Mobilfunknetz. Beide Geräte müssen es einschalten.</p>
   </section>
 </main>
 
@@ -147,11 +258,27 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
 <details class="help card">
   <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
   <div data-lang="de">
-  <p>Wähle oben eine Variante und tippe auf ein Zeichen. Der Computer hat <strong>vorher</strong> gewählt – er sieht deine Wahl nicht. Er kennt nur die vorherigen Runden.</p>
+  <p>Spiele gegen den <strong>Computer</strong> oder <strong>zu zweit</strong> auf zwei Handys. Wähle eine Variante und tippe auf ein Zeichen. Der Computer hat <strong>vorher</strong> gewählt – er sieht deine Wahl nicht. Er kennt nur die vorherigen Runden.</p>
   <h3>Der Computer</h3>
   <ul>
     <li><strong>Zufall:</strong> Der Computer wählt ganz zufällig.</li>
     <li><strong>Schlau:</strong> Der Computer merkt sich, was du in den letzten Runden gewählt hast, und rät, was du als Nächstes nimmst. Ein bisschen Zufall ist immer dabei. Tipp: Wer immer dasselbe nimmt, verliert bald!</li>
+  </ul>
+  <h3>Zu zweit auf zwei Handys</h3>
+  <ol>
+    <li>Beide tippen oben auf <strong>Zu zweit</strong>.</li>
+    <li>Handy A: <strong>Neues Spiel</strong> – ein QR-Code erscheint.</li>
+    <li>Handy B: <strong>Beitreten</strong> und den Code von A scannen. Es geht auch mit der normalen Kamera-App: Der Code ist ein Link, der diese Seite öffnet. Danach zeigt B einen Antwort-Code.</li>
+    <li>Handy A: <strong>Antwort-Code scannen</strong>. Nach ein bis zwei Sekunden seid ihr verbunden.</li>
+  </ol>
+  <ul>
+    <li>Ohne Kamera: Die Codes lassen sich kopieren und z. B. per Nachricht schicken („von Hand eingeben“).</li>
+    <li>Jeder wählt sein Zeichen, wann er will. Das Ergebnis erscheint, sobald beide gewählt haben. Du siehst nur, <em>dass</em> der andere gewählt hat, nicht was: Jedes Handy schickt zuerst nur einen verschlüsselten Fingerabdruck seiner Wahl und deckt sie erst auf, wenn beide gewählt haben. Schummeln fällt so auf.</li>
+    <li>Die Variante bestimmt Handy A. Wählt Handy B eine andere, wechseln beide.</li>
+    <li>Der Punktestand zu zweit gilt nur, solange ihr verbunden seid, und wird nicht gespeichert.</li>
+    <li>Die Verbindung nutzt <strong>WebRTC</strong>, genau wie „Schiffe versenken“. Die QR-Codes enthalten nur die Angaben, wie die Geräte sich erreichen (zufälliger Gerätename im WLAN, Port, Schlüssel-Fingerabdruck) – keine persönlichen Daten. Danach laufen die Züge verschlüsselt direkt zwischen den Geräten, ohne Server.</li>
+    <li>Am einfachsten im selben WLAN. Ohne WLAN: Ein Handy macht einen Hotspot, das andere verbindet sich damit. Manche Gäste- oder Firmen-WLANs lassen Geräte nicht miteinander sprechen – dann den Hotspot nehmen. Für verschiedene Netze gibt es im Menü (☰) die Einstellung „Auch über das Internet verbinden“; sie fragt einen STUN-Server von Google nach der öffentlichen Adresse und klappt nicht in jedem Netz.</li>
+    <li>Die Kamera wird nur zum Scannen eingeschaltet; die Bilder bleiben auf dem Gerät. Das Display bleibt während der Verbindung an, wenn der Browser das kann.</li>
   </ul>
   <h3>Hinweise</h3>
   <ul>
@@ -161,16 +288,32 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
   </ul>
   <h3>KI-Agenten (WebMCP)</h3>
   <ul>
-    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser Runden spielen und den Punktestand lesen. Auch dann hat der Computer schon vorher gewählt. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
-    <li>Löschen und Sicherungen sind für Agenten nicht zugänglich. Es werden keine Daten an Server gesendet.</li>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser Runden spielen und den Punktestand lesen. Auch dann hat der Computer schon vorher gewählt. Zu zweit wählt der Agent dein Zeichen und wartet auf den anderen. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
+    <li>Verbinden, Kamera, Löschen und Sicherungen sind für Agenten nicht zugänglich. Es werden keine Daten an Server gesendet.</li>
   </ul>
   </div>
   <div data-lang="en" lang="en" hidden>
-  <p>Choose a variant at the top and tap a sign. The computer has chosen <strong>beforehand</strong> – it does not see your choice. It only knows the previous rounds.</p>
+  <p>Play against the <strong>computer</strong> or <strong>two players</strong> on two phones. Choose a variant and tap a sign. The computer has chosen <strong>beforehand</strong> – it does not see your choice. It only knows the previous rounds.</p>
   <h3>The computer</h3>
   <ul>
     <li><strong>Random:</strong> the computer chooses completely at random.</li>
     <li><strong>Smart:</strong> the computer remembers what you chose in the last rounds and guesses what you will pick next. There is always a bit of chance. Tip: whoever always picks the same will soon lose!</li>
+  </ul>
+  <h3>Two players on two phones</h3>
+  <ol>
+    <li>Both tap <strong>Two players</strong> at the top.</li>
+    <li>Phone A: <strong>New game</strong> – a QR code appears.</li>
+    <li>Phone B: <strong>Join</strong> and scan A's code. The normal camera app works too: the code is a link that opens this page. B then shows a reply code.</li>
+    <li>Phone A: <strong>Scan reply code</strong>. After a second or two you are connected.</li>
+  </ol>
+  <ul>
+    <li>Without a camera: the codes can be copied and sent, e.g. by message (“enter manually”).</li>
+    <li>Each player picks a sign whenever they like. The result appears as soon as both have chosen. You only see <em>that</em> the other player has chosen, not what: each phone first sends only an encrypted fingerprint of its choice and reveals it once both have chosen. Cheating is detected that way.</li>
+    <li>Phone A decides the variant. If phone B picks another one, both switch.</li>
+    <li>The score for two players only lasts while you are connected and is not saved.</li>
+    <li>The connection uses <strong>WebRTC</strong>, just like “Sea Battle”. The QR codes only contain how the devices reach each other (random device name in the Wi-Fi, port, key fingerprint) – no personal data. After that the moves travel encrypted directly between the devices, without a server.</li>
+    <li>Easiest in the same Wi-Fi. Without Wi-Fi: one phone opens a hotspot, the other joins it. Some guest or company Wi-Fi networks do not let devices talk to each other – use the hotspot then. For different networks there is the setting “Also connect over the internet” in the menu (☰); it asks a Google STUN server for the public address and does not work in every network.</li>
+    <li>The camera is only switched on for scanning; the images stay on the device. The screen stays on while connected if the browser supports it.</li>
   </ul>
   <h3>Notes</h3>
   <ul>
@@ -180,13 +323,16 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
   </ul>
   <h3>AI agents (WebMCP)</h3>
   <ul>
-    <li>If the browser supports <strong>WebMCP</strong>, an AI assistant in the browser can play rounds and read the score. Even then the computer has chosen beforehand. A notice shows when an agent did something.</li>
-    <li>Deleting and backups are not available to agents. No data is sent to any server.</li>
+    <li>If the browser supports <strong>WebMCP</strong>, an AI assistant in the browser can play rounds and read the score. Even then the computer has chosen beforehand. With two players the agent picks your sign and waits for the other player. A notice shows when an agent did something.</li>
+    <li>Connecting, the camera, deleting and backups are not available to agents. No data is sent to any server.</li>
   </ul>
   </div>
   <h3 data-i18n="help.who">Wer gewinnt?</h3>
   <p data-i18n="help.arrows">Jeder Pfeil zeigt vom Gewinner zum Verlierer. Gleiche Zeichen = unentschieden.</p>
   <div id="ruleDiagrams"></div>
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
 </details>
 
 <footer>
@@ -194,11 +340,13 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 64fdf4d27edf</p>
+  <p class="footer-version">Version 692804f7b7ca</p>
   <!-- footer:end -->
 </footer>
 
 <script src="../assets/common.js"></script>
+<script src="../assets/vendor/qrcode-generator/qrcode.js"></script>
+<script src="../assets/vendor/zxing-wasm/iife/reader/index.js"></script>
 <script>
 (function(){
 'use strict';
@@ -218,10 +366,27 @@ de:{
   srRound:'{p} gegen {c}: {o}','sr.win':'gewonnen','sr.lose':'verloren','sr.draw':'unentschieden',
   confirmReset:'Punkte und Verlauf dieser Variante zurücksetzen?',beats:'schlägt',
   diagram:'Pfeil-Bild: wer gegen wen gewinnt ({v})',
-  'mcp.play':'Runde gespielt','mcp.score':'Punkte gelesen'
+  'mcp.play':'Runde gespielt','mcp.score':'Punkte gelesen',
+  'opp.name':'Gegner','o.loseNet':'Der andere gewinnt!',
+  'net.pick':'📱 Wähle dein Zeichen – der andere sieht es erst, wenn ihr beide gewählt habt.',
+  'net.wait':'⏳ Warte auf den anderen …','net.peerChose':'✅ Der andere hat schon gewählt – jetzt du!',
+  'net.next':'📱 Nächste Runde – wähle dein Zeichen.','net.variantBy':'Variante gewechselt: {v}',
+  'net.cheat':'Der Zug des anderen passt nicht zu seiner Wahl – Runde ungültig.','net.busy':'Erst die Runde zu Ende spielen.',
+  'net.confirmLeave':'Verbindung zum anderen Handy trennen?',
+  scanOfferH:'Spiel-Code des anderen scannen',scanAnswerH:'Antwort-Code des anderen scannen',
+  preparing:'Verbindung wird vorbereitet …',noRtc:'Dieser Browser kann keine Direktverbindung (WebRTC).',
+  noCandidates:'Keine Netzwerkverbindung gefunden. WLAN oder Hotspot einschalten.',
+  waitAnswer:'Warte auf den Antwort-Code …',waitHost:'Warte, bis das andere Handy den Code scannt …',
+  connecting:'Verbinde …',connected:'Verbunden!',connectFail:'Keine Verbindung. Beide im selben WLAN? Beide Seiten neu starten.',
+  badCode:'Das ist kein gültiger Code.',isAnswer:'Das ist ein Antwort-Code – den scannt das Handy, das das Spiel erstellt hat.',
+  isOffer:'Das ist ein Spiel-Code – hier wird der Antwort-Code gebraucht.',
+  noCam:'Keine Kamera verfügbar. Code von Hand eingeben.',camDenied:'Kamera nicht erlaubt. Code von Hand eingeben oder Kamera in den Browser-Einstellungen erlauben.',
+  camFail:'Kamera-Fehler: {e}',noDecoder:'Dieser Browser kann keine QR-Codes lesen. Code von Hand eingeben.',scanHint:'QR-Code in den Rahmen halten.',
+  copiedOk:'Code kopiert',copyFail:'Kopieren nicht möglich',disconnected:'Verbindung getrennt.',peerLeft:'Der andere hat die Verbindung getrennt.',
+  shareTitle:'Schere, Stein, Papier'
 },
 en:{
-  title:'Rock, Paper, Scissors',sub:'Play against the computer',game:'Game',variant:'Game variant','var.3':'Classic','var.4s':'Well','var.5s':'Lizard & Spock',
+  title:'Rock, Paper, Scissors',sub:'Against the computer or two players',game:'Game',variant:'Game variant','var.3':'Classic','var.4s':'Well','var.5s':'Lizard & Spock',
   you:'You',vs:'vs',yourChoice:'Your choice',score:'Score',drawShort:'Draw',lastRounds:'Last rounds',reset:'Reset score',
   howCpu:'How does the computer play?',cpuMode:'How the computer plays','mode.random':'🎲 Random','mode.smart':'🧠 Smart',
   'help.who':'Who wins?','help.arrows':'Each arrow points from the winner to the loser. Same signs = draw.',
@@ -237,9 +402,37 @@ en:{
   srRound:'{p} vs {c}: {o}','sr.win':'won','sr.lose':'lost','sr.draw':'draw',
   confirmReset:'Reset the score and history of this variant?',beats:'beats',
   diagram:'Arrow diagram: who beats whom ({v})',
-  'mcp.play':'round played','mcp.score':'score read'
+  'mcp.play':'round played','mcp.score':'score read',
+  opponent:'Opponent','opp.cpu':'🖥️ Computer','opp.online':'📱 Two players','opp.name':'Opponent','o.loseNet':'The other player wins!',
+  lead:'Two phones, one game: the connection is made with two QR codes and then runs directly from device to device.',
+  host:'New game',hostSub:'shows QR code',join:'Join',joinSub:'scan a QR code',
+  pasteOffer:'Enter game code manually',pasteOfferLbl:'Game code or link of the other player (e.g. sent by message):',connect:'Connect',
+  step1:'Phone A taps “New game”.',step2:'Phone B taps “Join” and scans A’s code.',step3:'Phone A scans B’s reply code – done.',
+  sameWifi:'Both devices in the same Wi-Fi, or one phone as a hotspot for the other.',
+  hostH1:'1. The other phone scans this code',qrOffer:'QR code to join',copyCode:'Copy code',share:'Share …',
+  hostH2:'2. Then scan the reply code',scanAnswer:'Scan reply code',pasteAnswer:'Enter reply code manually',pasteAnswerLbl:'Reply code of the other player:',
+  guestH:'Now the other phone scans this reply code',qrAnswer:'QR code with the reply',cancel:'Cancel',
+  connectedLine:'📱 Connected to the other phone',leave:'Disconnect',
+  settings:'Settings',optStun:'Two players: also connect over the internet (Google STUN server)',
+  optStunHelp:'Only needed if the phones are not in the same Wi-Fi. The server learns the public IP address – moves still travel directly. Does not work in every mobile network. Both devices must switch it on.',
+  'net.pick':'📱 Pick your sign – the other player only sees it once you have both chosen.',
+  'net.wait':'⏳ Waiting for the other player …','net.peerChose':'✅ The other player has chosen – your turn!',
+  'net.next':'📱 Next round – pick your sign.','net.variantBy':'Variant changed: {v}',
+  'net.cheat':'The other player’s move does not match their choice – round void.','net.busy':'Finish the round first.',
+  'net.confirmLeave':'Disconnect from the other phone?',
+  scanOfferH:'Scan the other player’s game code',scanAnswerH:'Scan the other player’s reply code',
+  preparing:'Preparing the connection …',noRtc:'This browser cannot make direct connections (WebRTC).',
+  noCandidates:'No network connection found. Switch on Wi-Fi or a hotspot.',
+  waitAnswer:'Waiting for the reply code …',waitHost:'Waiting for the other phone to scan the code …',
+  connecting:'Connecting …',connected:'Connected!',connectFail:'No connection. Both in the same Wi-Fi? Start again on both sides.',
+  badCode:'This is not a valid code.',isAnswer:'This is a reply code – it is scanned by the phone that created the game.',
+  isOffer:'This is a game code – the reply code is needed here.',
+  noCam:'No camera available. Enter the code manually.',camDenied:'Camera not allowed. Enter the code manually or allow the camera in the browser settings.',
+  camFail:'Camera error: {e}',noDecoder:'This browser cannot read QR codes. Enter the code manually.',scanHint:'Hold the QR code inside the frame.',
+  copiedOk:'Code copied',copyFail:'Copying not possible',disconnected:'Connection lost.',peerLeft:'The other player disconnected.',
+  shareTitle:'Rock, Paper, Scissors'
 }});
-const t=Tools.t;
+const t=Tools.t,$=Tools.$;
 const MOVES={schere:{e:'✂️'},stein:{e:'🪨'},papier:{e:'📄'},brunnen:{e:'⛲'},echse:{e:'🦎'},spock:{e:'🖖'}};
 const N=m=>t('m.'+m);
 // [winner, loser] – the explanation is the text 'r.<winner>.<loser>'
@@ -253,8 +446,9 @@ const VARIANTS={
 const why=r=>t('r.'+r[0]+'.'+r[1]);
 const MAX_ROUNDS=100;
 
-const state=Tools.load(LS,{variant:'3',mode:'smart',v:{}});
+const state=Tools.load(LS,{variant:'3',mode:'smart',opp:'cpu',v:{}});
 if(!VARIANTS[state.variant])state.variant='3';
+if(state.opp!=='online')state.opp='cpu';
 if(state.mode!=='random'&&state.mode!=='smart')state.mode='smart';
 if(!state.v||typeof state.v!=='object')state.v={};
 const save=()=>Tools.save(LS,state);
@@ -299,7 +493,7 @@ function renderChoices(){
   }
 }
 function renderScore(){
-  const s=vs();
+  const s=cur();
   Tools.$('sWin').textContent=s.win;Tools.$('sDraw').textContent=s.draw;Tools.$('sLose').textContent=s.lose;
   const ul=Tools.$('last');ul.innerHTML='';
   s.rounds.slice(-8).reverse().forEach(([p,c,o])=>{
@@ -311,13 +505,16 @@ function renderScore(){
 function clearArena(){
   for(const id of ['you','cpu']){const h=Tools.$(id);h.textContent='❔';h.dataset.move='';h.className='hand'}
   lastRound=null;showRound();
-  Tools.$('status').textContent=t('status');
+  renderStatus();
+}
+function renderStatus(){
+  Tools.$('status').textContent=inNet()?netStatus():t(lastRound?'statusAgain':'status');
 }
 function renderAll(){
   document.querySelectorAll('#variants button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===state.variant)));
   document.querySelectorAll('#modes button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.m===state.mode)));
   Tools.$('modeHelp').textContent=t(state.mode==='smart'?'help.smart':'help.random');
-  renderChoices();renderScore();
+  renderChoices();renderScore();renderMode();
 }
 
 // Result of the last round (kept to show it again in the other language)
@@ -328,7 +525,7 @@ function showRound(){
   const [p,c,o]=lastRound;
   const text=o==='draw'?t('both',{m:N(p)}):why(o==='win'?rule(state.variant,p,c):rule(state.variant,c,p))+'.';
   r.dataset.outcome=o;
-  r.innerHTML=`<div class="big">${t('o.'+o)}</div><div class="why">${Tools.esc(text)}</div>`;
+  r.innerHTML=`<div class="big">${t(o==='lose'&&online()?'o.loseNet':'o.'+o)}</div><div class="why">${Tools.esc(text)}</div>`;
 }
 function play(p){
   const c=cpuNext,variant=state.variant,o=outcome(variant,p,c);
@@ -337,22 +534,28 @@ function play(p){
   if(s.rounds.length>MAX_ROUNDS)s.rounds.splice(0,s.rounds.length-MAX_ROUNDS);
   s[o]++;
   save();
+  showHands(p,c,o);
+  lastRound=[p,c,o];showRound();
+  renderScore();
+  cpuNext=computerMove();
+  renderStatus();
+}
+function showHands(p,c,o){
   const you=Tools.$('you'),cpu=Tools.$('cpu');
   for(const [el,m,cls] of [[you,p,o],[cpu,c,o==='win'?'lose':o==='lose'?'win':'draw']]){
     el.textContent=MOVES[m].e;el.dataset.move=m;
     el.className='hand '+cls;void el.offsetWidth;el.classList.add('pop');
   }
-  lastRound=[p,c,o];showRound();
-  renderScore();
-  cpuNext=computerMove();
-  Tools.$('status').textContent=t('statusAgain');
 }
 
 Tools.$('choices').addEventListener('click',e=>{
-  const b=e.target.closest('.choice');if(b)play(b.dataset.move);
+  const b=e.target.closest('.choice');if(!b)return;
+  if(online()){netPick(b.dataset.move);return;}
+  play(b.dataset.move);
 });
 Tools.$('variants').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||b.dataset.v===state.variant)return;
+  if(inNet()){requestVariant(b.dataset.v);return;}
   state.variant=b.dataset.v;save();cpuNext=computerMove();clearArena();renderAll();
 });
 Tools.$('modes').addEventListener('click',e=>{
@@ -361,6 +564,7 @@ Tools.$('modes').addEventListener('click',e=>{
 });
 Tools.$('btnReset').addEventListener('click',()=>{
   if(!confirm(t('confirmReset')))return;
+  if(online()){delete net.v[state.variant];renderScore();return;}
   delete state.v[state.variant];save();cpuNext=computerMove();clearArena();renderAll();
 });
 
@@ -393,10 +597,448 @@ function diagram(key){
 const renderDiagrams=()=>{Tools.$('ruleDiagrams').innerHTML=Object.keys(VARIANTS).map(diagram).join('');};
 renderDiagrams();
 
-Tools.$('status').textContent=t('status');
+/* ================= Two players on two devices (WebRTC) =================
+   Same serverless connection as sea-battle: two QR codes carry the minimal SDP (offer as a link with
+   #join=…, answer as a bare code), then a negotiated data channel runs directly between the devices.
+   Fair play by commit–reveal: each device first sends a SHA-256 of (round, variant, move, random salt),
+   reveals move and salt only after it has received the other commitment, and checks the other reveal
+   against its commitment. The host decides the variant; a change starts a new round number. */
+const LS_SET='rock-paper-scissors.settings.v1';
+const settings=Tools.load(LS_SET,{stun:false});
+const STUN='stun:stun.l.google.com:19302';
+const online=()=>state.opp==='online';
+const inNet=()=>online()&&connected();
+
+/* ---------- Connection codes (format shared with sea-battle) ---------- */
+const b64u=bytes=>btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unb64u=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+function encodeSdp(sdp,kind){
+  const lines=sdp.split(/\r?\n/).map(l=>l.trim());
+  const get=k=>{const l=lines.find(x=>x.startsWith('a='+k+':'));return l?l.slice(k.length+3).trim():'';};
+  const fp=get('fingerprint').split(' ');
+  if(!fp[1]||fp[0].toLowerCase()!=='sha-256')throw new Error('no sha-256 fingerprint');
+  const setup={actpass:'x',active:'a',passive:'p'}[get('setup')]||'x';
+  const cands=lines.filter(l=>l.startsWith('a=candidate:')).map(l=>{
+    const p=l.slice(12).split(' '),i=p.indexOf('raddr');
+    return p.slice(0,8).concat(i>0?['raddr',p[i+1],'rport',p[i+3]]:[]).join('_');
+  });
+  return {code:[kind+'1',setup,get('ice-ufrag'),get('ice-pwd'),b64u(fp[1].split(':').map(h=>parseInt(h,16))),...cands].join('~'),candidates:cands};
+}
+function decodeCode(code){
+  const p=code.trim().split('~');
+  if(p.length<6||!/^[OA]1$/.test(p[0])||!/^[xap]$/.test(p[1]))throw new Error('bad code');
+  const [,setup,ufrag,pwd,fp,...cands]=p;
+  if(!/^[A-Za-z0-9+/]{4,256}$/.test(ufrag)||!/^[A-Za-z0-9+/]{22,256}$/.test(pwd))throw new Error('bad credentials');
+  const bytes=unb64u(fp);if(bytes.length!==32)throw new Error('bad fingerprint');
+  const hex=[...bytes].map(b=>b.toString(16).padStart(2,'0').toUpperCase()).join(':');
+  for(const c of cands)if(!/^[A-Za-z0-9+/._:-]+$/.test(c))throw new Error('bad candidate');
+  const sdp=['v=0','o=- 0 2 IN IP4 127.0.0.1','s=-','t=0 0','a=group:BUNDLE 0',
+    'm=application 9 UDP/DTLS/SCTP webrtc-datachannel','c=IN IP4 0.0.0.0',
+    ...cands.map(c=>'a=candidate:'+c.replace(/_/g,' ')),'a=end-of-candidates',
+    'a=ice-ufrag:'+ufrag,'a=ice-pwd:'+pwd,'a=fingerprint:sha-256 '+hex,
+    'a=setup:'+{x:'actpass',a:'active',p:'passive'}[setup],'a=mid:0','a=sctp-port:5000','a=max-message-size:262144',''].join('\r\n');
+  return {type:p[0][0]==='O'?'offer':'answer',sdp};
+}
+function extractCode(text){
+  const s=String(text||'').trim(),m=s.match(/[#&?]join=([^&\s]+)/);
+  try{return m?decodeURIComponent(m[1]):s;}catch(_){return s;}
+}
+const kindOf=code=>/^O1~/.test(code)?'offer':/^A1~/.test(code)?'answer':null;
+const offerLink=code=>location.origin+location.pathname+'#join='+code;
+function drawQr(canvas,text){
+  const qr=qrcode(0,'L');qr.addData(text,'Byte');qr.make();
+  const n=qr.getModuleCount(),Q=4,scale=Math.max(4,Math.floor(600/(n+2*Q))),size=(n+2*Q)*scale;
+  canvas.width=canvas.height=size;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#000';
+  for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(qr.isDark(r,c))ctx.fillRect((c+Q)*scale,(r+Q)*scale,scale,scale);
+  canvas.dataset.text=text;
+  Tools.diag.log('qr drawn',{modules:n,chars:text.length});
+}
+
+/* ---------- Panels in the opponent card ---------- */
+const PANELS=['connLobby','connHost','connGuest','connScan','connOn'];
+let panel='connLobby';
+function showPanel(id){panel=id;renderMode();}
+function renderMode(){
+  const on=online(),live=inNet();
+  document.querySelectorAll('#opp button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.o===state.opp)));
+  const vis=!on?null:live?'connOn':panel==='connOn'?'connLobby':panel;
+  for(const p of PANELS)$(p).hidden=p!==vis;
+  $('gameCard').hidden=on&&!live;
+  $('cpuCard').hidden=on;
+  $('whoOpp').textContent=$('scoreOpp').textContent=on?t('opp.name'):'Computer';
+  // Choices: while waiting for the other player, the own pick stays marked
+  const mine=live&&net.my?net.my.m:null;
+  document.querySelectorAll('#choices .choice').forEach(b=>{
+    b.setAttribute('aria-pressed',String(b.dataset.move===mine));
+    b.disabled=!!mine;
+  });
+}
+const setStatus=(id,msg,cls)=>{const el=$(id);el.textContent=msg||'';el.className='net-status'+(cls?' '+cls:'');};
+
+/* ---------- WebRTC ---------- */
+let pc=null,dc=null,role=null,myCode='',connectTimer=null,closing=false,wakeLock=null;
+function connected(){return !!dc&&dc.readyState==='open';}
+function closeConn(){
+  closing=true;
+  clearTimeout(connectTimer);
+  try{if(dc)dc.close();}catch(_){}
+  try{if(pc)pc.close();}catch(_){}
+  pc=dc=null;role=null;myCode='';
+  releaseWake();
+  closing=false;
+}
+function newPeer(r){
+  closeConn();
+  if(!window.RTCPeerConnection)throw new Error('noRtc');
+  role=r;
+  pc=new RTCPeerConnection({iceServers:settings.stun?[{urls:STUN}]:[]});
+  dc=pc.createDataChannel('rock-paper-scissors',{negotiated:true,id:0,ordered:true});
+  const myPc=pc,myDc=dc;
+  pc.addEventListener('connectionstatechange',()=>{
+    Tools.diag.log('pc state',myPc.connectionState);
+    if(myPc===pc&&myPc.connectionState==='failed')lostConnection('disconnected');
+  });
+  pc.addEventListener('iceconnectionstatechange',()=>Tools.diag.log('ice state',myPc.iceConnectionState));
+  dc.addEventListener('open',()=>{if(myDc===dc)onOpen();});
+  dc.addEventListener('close',()=>{Tools.diag.log('channel closed');if(myDc===dc&&!closing)lostConnection('disconnected');});
+  dc.addEventListener('message',e=>{if(myDc===dc)onMessage(e.data);});
+}
+function gathered(p){
+  return new Promise(res=>{
+    if(p.iceGatheringState==='complete')return res();
+    const done=()=>{if(p.iceGatheringState==='complete'){clearTimeout(to);res();}};
+    const to=setTimeout(res,settings.stun?5000:2500);
+    p.addEventListener('icegatheringstatechange',done);
+  });
+}
+async function localCode(kind){
+  await gathered(pc);
+  const {code,candidates}=encodeSdp(pc.localDescription.sdp,kind);
+  Tools.diag.log((kind==='O'?'offer':'answer')+' created',{chars:code.length,candidates:candidates.length,
+    types:candidates.map(c=>c.split('_')[7]).join(',')||'none',stun:settings.stun});
+  if(!candidates.length)throw new Error('noCandidates');
+  return code;
+}
+const errText=e=>e&&(e.message==='noRtc'||e.message==='noCandidates')?t(e.message):t('connectFail');
+async function startHost(){
+  showPanel('connHost');setStatus('hostStatus',t('preparing'));
+  $('qrOffer').getContext('2d').clearRect(0,0,9999,9999);delete $('qrOffer').dataset.text;$('answerIn').value='';
+  try{
+    newPeer('host');
+    const p=pc;
+    await pc.setLocalDescription(await pc.createOffer());
+    const code=await localCode('O');
+    if(p!==pc)return;
+    myCode=offerLink(code);
+    drawQr($('qrOffer'),myCode);
+    setStatus('hostStatus',t('waitAnswer'));
+  }catch(e){Tools.diag.log('host failed',e);setStatus('hostStatus',errText(e),'err');}
+}
+async function acceptOffer(code){
+  showPanel('connGuest');setStatus('guestStatus',t('preparing'));
+  $('qrAnswer').getContext('2d').clearRect(0,0,9999,9999);delete $('qrAnswer').dataset.text;
+  try{
+    const desc=decodeCode(code);
+    newPeer('guest');
+    const p=pc;
+    await pc.setRemoteDescription(desc);
+    await pc.setLocalDescription(await pc.createAnswer());
+    const answer=await localCode('A');
+    if(p!==pc)return;
+    myCode=answer;
+    drawQr($('qrAnswer'),answer);
+    if(!connected())setStatus('guestStatus',t('waitHost'));
+  }catch(e){Tools.diag.log('join failed',e);setStatus('guestStatus',errText(e),'err');}
+}
+async function acceptAnswer(code){
+  showPanel('connHost');
+  if(!pc||role!=='host'||pc.signalingState!=='have-local-offer'){setStatus('hostStatus',t('connectFail'),'err');return;}
+  try{
+    await pc.setRemoteDescription(decodeCode(code));
+    Tools.diag.log('answer set');
+    setStatus('hostStatus',t('connecting'));
+    clearTimeout(connectTimer);
+    connectTimer=setTimeout(()=>{if(!connected()){Tools.diag.log('connect timeout',{ice:pc&&pc.iceConnectionState});setStatus('hostStatus',t('connectFail'),'err');}},20000);
+  }catch(e){Tools.diag.log('answer failed',e);setStatus('hostStatus',t('connectFail'),'err');}
+}
+/** Scanned or pasted text: decides what to do with it */
+function useCode(text,expect){
+  const code=extractCode(text),kind=kindOf(code);
+  let valid=!!kind;
+  if(valid){try{decodeCode(code);}catch(_){valid=false;}}
+  if(!valid)return {ok:false,msg:t('badCode')};
+  if(expect==='offer'&&kind==='answer')return {ok:false,msg:t('isAnswer')};
+  if(expect==='answer'&&kind==='offer')return {ok:false,msg:t('isOffer')};
+  if(kind==='offer')acceptOffer(code);else acceptAnswer(code);
+  return {ok:true};
+}
+function lostConnection(reason){
+  if(closing)return;
+  Tools.diag.log('connection lost',reason);
+  const was=inNet()||panel==='connHost'||panel==='connGuest';
+  closeConn();stopScan();endNet(reason);
+  showPanel('connLobby');clearArena();renderAll();
+  if(was){setStatus('lobbyStatus',t(reason),'err');Tools.toast(t(reason),3000);}
+}
+function onOpen(){
+  clearTimeout(connectTimer);
+  Tools.diag.log('channel open',{role});
+  send({t:'hello',v:1});
+  keepAwake();
+  Tools.toast(t('connected'));
+  setStatus('lobbyStatus','');
+  Object.assign(net,{round:0,v:{}});resetNetRound();
+  if(role==='host')send({t:'variant',v:state.variant,r:0});
+  showPanel('connOn');clearArena();renderAll();
+}
+function send(msg){if(connected())dc.send(JSON.stringify(msg));}
+function leave(){
+  Tools.diag.log('leave',{panel});
+  send({t:'bye'});
+  stopScan();closeConn();endNet('disconnected');
+  setStatus('lobbyStatus','');showPanel('connLobby');clearArena();renderAll();
+}
+async function keepAwake(){
+  try{if(navigator.wakeLock&&!wakeLock&&document.visibilityState==='visible'){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}
+  catch(e){Tools.diag.log('wake lock',e);}
+}
+function releaseWake(){if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null;}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&connected())keepAwake();});
+
+/* ---------- Scanner (BarcodeDetector → zxing-wasm) ---------- */
+let stream=null,scanTimer=null,scanExpect=null,detector=null,wasmReady=null,scanEngine='',lastHint=0,scanBusy=false;
+const scanCanvas=document.createElement('canvas');
+async function getDetector(){
+  if(detector!==null)return detector;
+  detector=false;
+  try{if('BarcodeDetector' in window&&(await window.BarcodeDetector.getSupportedFormats()).includes('qr_code'))detector=new window.BarcodeDetector({formats:['qr_code']});}catch(_){}
+  return detector;
+}
+function prepareWasm(){
+  if(wasmReady)return wasmReady;
+  wasmReady=Promise.resolve().then(()=>{
+    if(!window.ZXingWASM)return false;
+    return Promise.resolve(window.ZXingWASM.prepareZXingModule({fireImmediately:true,overrides:{locateFile:(path,prefix)=>path.endsWith('.wasm')?new URL('../assets/vendor/zxing-wasm/reader/'+path,location.href).href:prefix+path}})).then(()=>true);
+  }).catch(e=>{Tools.diag.log('zxing-wasm',e);return false;});
+  return wasmReady;
+}
+async function startScan(expect){
+  scanExpect=expect;
+  $('h-scan').textContent=t(expect==='offer'?'scanOfferH':'scanAnswerH');
+  showPanel('connScan');setStatus('scanStatus','');
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus('scanStatus',t('noCam'),'err');return;}
+  const det=await getDetector();
+  if(!det&&!(await prepareWasm())){setStatus('scanStatus',t('noDecoder'),'err');return;}
+  scanEngine=det?'BarcodeDetector':'zxing-wasm';
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+    if(panel!=='connScan'||!online()){stopScan();return;}
+    const v=$('video');v.srcObject=stream;await v.play();
+    Tools.diag.log('camera on',{engine:scanEngine,w:v.videoWidth,h:v.videoHeight});
+    setStatus('scanStatus',t('scanHint'));
+    scanTimer=setTimeout(scanFrame,250);
+  }catch(e){
+    Tools.diag.log('camera failed',e);
+    setStatus('scanStatus',e&&e.name==='NotAllowedError'?t('camDenied'):t('camFail',{e:e&&e.name||String(e)}),'err');
+  }
+}
+function stopScan(){
+  clearTimeout(scanTimer);scanTimer=null;
+  if(stream){stream.getTracks().forEach(tr=>tr.stop());stream=null;}
+  $('video').srcObject=null;
+}
+async function decodeVideo(v){
+  if(detector){const r=await detector.detect(v);return r&&r[0]?r[0].rawValue:null;}
+  const W=v.videoWidth,H=v.videoHeight,sc=Math.min(1,960/Math.max(W,H));
+  scanCanvas.width=Math.round(W*sc);scanCanvas.height=Math.round(H*sc);
+  const ctx=scanCanvas.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(v,0,0,scanCanvas.width,scanCanvas.height);
+  const res=await window.ZXingWASM.readBarcodes(ctx.getImageData(0,0,scanCanvas.width,scanCanvas.height),{formats:['QRCode'],tryHarder:true,maxNumberOfSymbols:1});
+  const hit=res&&res.find(r=>r.isValid!==false&&r.text);return hit?hit.text:null;
+}
+async function scanFrame(){
+  if(!stream)return;
+  const v=$('video');
+  if(!scanBusy&&v.videoWidth){
+    scanBusy=true;
+    try{
+      const text=await decodeVideo(v);
+      if(text&&stream){
+        const r=useCode(text,scanExpect);
+        if(r.ok){Tools.diag.log('code scanned',{expect:scanExpect});if(navigator.vibrate)navigator.vibrate(60);stopScan();return;}
+        if(Date.now()-lastHint>1500){lastHint=Date.now();setStatus('scanStatus',r.msg,'err');}
+      }
+    }catch(e){Tools.diag.log('scan error',e);}
+    finally{scanBusy=false;}
+  }
+  if(stream)scanTimer=setTimeout(scanFrame,200);
+}
+function cancelScan(){stopScan();showPanel(scanExpect==='answer'&&pc?'connHost':'connLobby');}
+
+/* ---------- Rounds between two devices (commit–reveal) ---------- */
+const net={round:0,v:{},my:null,peerHash:null,peer:null,waiter:null};
+function netScore(){const k=state.variant;if(!net.v[k])net.v[k]={rounds:[],win:0,lose:0,draw:0};return net.v[k];}
+function cur(){return online()?netScore():vs();}
+function resetNetRound(){net.my=null;net.peerHash=null;net.peer=null;}
+function endNet(reason){
+  resetNetRound();
+  if(net.waiter){net.waiter.reject(new Error(reason==='peerLeft'?'The other player disconnected.':'The connection to the other device was lost.'));net.waiter=null;}
+}
+function netStatus(){
+  if(net.my)return t('net.wait');
+  if(net.peerHash)return t('net.peerChose');
+  return t(lastRound?'net.next':'net.pick');
+}
+const digest=async text=>b64u(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))));
+const commitText=(r,v,m,salt)=>`rps1|${r}|${v}|${m}|${salt}`;
+async function netPick(m){
+  if(!inNet()||net.my||!VARIANTS[state.variant].moves.includes(m))return false;
+  const r=net.round,v=state.variant,salt=b64u(crypto.getRandomValues(new Uint8Array(16)));
+  const my={m,salt,h:null,revealed:false};
+  net.my=my;
+  lastRound=null;showRound();
+  const you=$('you'),opp=$('cpu');
+  you.textContent=MOVES[m].e;you.dataset.move=m;you.className='hand';
+  opp.textContent=net.peerHash?'✅':'❔';opp.dataset.move='';opp.className='hand'+(net.peerHash?' ready':'');
+  renderMode();renderStatus();
+  my.h=await digest(commitText(r,v,m,salt));
+  if(net.my!==my||r!==net.round)return false;
+  send({t:'commit',r,h:my.h});
+  Tools.diag.log('move committed',{round:r});
+  maybeReveal();
+  return true;
+}
+function maybeReveal(){
+  if(net.my&&net.my.h&&net.peerHash&&!net.my.revealed){
+    net.my.revealed=true;
+    send({t:'reveal',r:net.round,m:net.my.m,s:net.my.salt});
+    maybeResolve();
+  }
+}
+function onCommit(m){
+  if(m.r!==net.round||net.peerHash||typeof m.h!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(m.h)){Tools.diag.log('commit ignored',{r:m.r,round:net.round});return;}
+  net.peerHash=m.h;
+  if(net.my){const o=$('cpu');o.textContent='✅';o.className='hand ready';}
+  renderStatus();
+  maybeReveal();
+}
+async function onReveal(m){
+  const r=net.round,v=state.variant,ph=net.peerHash;
+  if(m.r!==r||!ph||net.peer){Tools.diag.log('reveal ignored',{r:m.r,round:r});return;}
+  const move=String(m.m),salt=String(m.s).slice(0,64);
+  const ok=VARIANTS[v].moves.includes(move)&&await digest(commitText(r,v,move,salt))===ph;
+  if(r!==net.round||ph!==net.peerHash)return;
+  if(!ok){
+    Tools.diag.log('reveal does not match commitment',{round:r});
+    Tools.toast(t('net.cheat'),3500);
+    net.round++;resetNetRound();clearArena();renderMode();
+    return;
+  }
+  net.peer=move;
+  maybeResolve();
+}
+function maybeResolve(){
+  if(!net.my||!net.my.revealed||!net.peer)return;
+  const p=net.my.m,c=net.peer,o=outcome(state.variant,p,c),s=netScore();
+  s.rounds.push([p,c,o]);
+  if(s.rounds.length>MAX_ROUNDS)s.rounds.splice(0,s.rounds.length-MAX_ROUNDS);
+  s[o]++;
+  Tools.diag.log('round done',{round:net.round,outcome:o});
+  net.round++;resetNetRound();
+  showHands(p,c,o);lastRound=[p,c,o];showRound();renderScore();renderMode();renderStatus();
+  if(navigator.vibrate)navigator.vibrate(o==='win'?[60,40,120]:o==='lose'?200:60);
+  if(net.waiter){const w=net.waiter;net.waiter=null;w.resolve([p,c,o]);}
+}
+/** Variant: the host decides; the guest asks for a change */
+function setNetVariant(v,r){
+  state.variant=v;save();net.round=r;resetNetRound();clearArena();renderAll();
+}
+function requestVariant(v){
+  if(!VARIANTS[v])return;
+  if(net.my&&net.my.revealed){Tools.toast(t('net.busy'));return;}
+  if(role==='host'){setNetVariant(v,net.round+1);send({t:'variant',v,r:net.round});}
+  else send({t:'wantVariant',v});
+}
+function onMessage(raw){
+  let m;try{m=JSON.parse(raw);}catch(_){Tools.diag.log('bad message');return;}
+  if(!m||typeof m!=='object')return;
+  switch(m.t){
+    case 'hello':if(m.v!==1)Tools.diag.log('peer version',m.v);break;
+    case 'variant':
+      if(role==='guest'&&VARIANTS[m.v]&&Number.isInteger(m.r)){
+        const changed=m.v!==state.variant;
+        setNetVariant(String(m.v),m.r);
+        if(changed)Tools.toast(t('net.variantBy',{v:t('vname.'+m.v)}),2500);
+      }
+      break;
+    case 'wantVariant':if(role==='host'&&VARIANTS[m.v]&&m.v!==state.variant)requestVariant(String(m.v));break;
+    case 'commit':onCommit(m);break;
+    case 'reveal':onReveal(m);break;
+    case 'bye':lostConnection('peerLeft');break;
+    default:Tools.diag.log('unknown message',String(m.t).slice(0,20));
+  }
+}
+
+/* ---------- Wiring ---------- */
+$('opp').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||b.dataset.o===state.opp)return;
+  if(b.dataset.o==='cpu'&&(pc||stream)){
+    if(connected()&&!confirm(t('net.confirmLeave')))return;
+    leave();
+  }
+  state.opp=b.dataset.o;save();
+  Tools.diag.log('opponent',state.opp);
+  if(online())panel='connLobby';
+  clearArena();renderAll();
+});
+$('btnHost').addEventListener('click',startHost);
+$('btnJoin').addEventListener('click',()=>startScan('offer'));
+$('btnScanAnswer').addEventListener('click',()=>startScan('answer'));
+$('btnScanCancel').addEventListener('click',cancelScan);
+for(const id of ['btnHostCancel','btnGuestCancel'])$(id).addEventListener('click',()=>{closeConn();showPanel('connLobby');});
+$('btnLeave').addEventListener('click',()=>{if(!confirm(t('net.confirmLeave')))return;leave();});
+$('btnOfferIn').addEventListener('click',()=>{const r=useCode($('offerIn').value,'offer');if(!r.ok)setStatus('lobbyStatus',r.msg,'err');else $('offerIn').value='';});
+$('btnAnswerIn').addEventListener('click',()=>{const r=useCode($('answerIn').value,'answer');if(!r.ok)setStatus('hostStatus',r.msg,'err');});
+async function copyCode(){if(!myCode)return;Tools.toast(t((await Tools.copyText(myCode))?'copiedOk':'copyFail'));}
+$('btnCopyOffer').addEventListener('click',copyCode);
+$('btnCopyAnswer').addEventListener('click',copyCode);
+if(navigator.share){
+  for(const id of ['btnShareOffer','btnShareAnswer']){
+    $(id).hidden=false;
+    $(id).addEventListener('click',()=>{if(myCode)navigator.share({title:t('shareTitle'),text:myCode}).catch(()=>{});});
+  }
+}
+$('optStun').checked=!!settings.stun;
+$('optStun').addEventListener('change',()=>{settings.stun=$('optStun').checked;Tools.save(LS_SET,settings);Tools.diag.log('stun',settings.stun);});
+
+// Opened through the link in the game QR code (normal camera app): join right away
+function joinFromLink(){
+  const m=location.hash.match(/^#join=(.+)$/);
+  if(!m)return;
+  history.replaceState(history.state,'',location.pathname+location.search);
+  if(inNet()){Tools.diag.log('game link ignored: connected');return;}
+  Tools.diag.log('opened with game link');
+  stopScan();
+  state.opp='online';save();
+  const r=useCode('#join='+m[1],'offer');
+  if(!r.ok){showPanel('connLobby');setStatus('lobbyStatus',r.msg,'err');}
+  clearArena();renderAll();
+}
+
+renderStatus();
 renderAll();
+joinFromLink();
+window.addEventListener('hashchange',joinFromLink);
 // Language switched: everything the script generated
-Tools.onLang(()=>{renderAll();renderDiagrams();showRound();Tools.$('status').textContent=t(lastRound?'statusAgain':'status');});
+Tools.onLang(()=>{renderAll();renderDiagrams();showRound();renderStatus();if(panel==='connScan')$('h-scan').textContent=t(scanExpect==='offer'?'scanOfferH':'scanAnswerH');});
+
+/* ---------- Diagnostics (states and counts only, no moves) ---------- */
+Tools.diag.info(()=>({opponent:state.opp,variant:state.variant,mode:state.mode,panel,role:role||'-',
+  pc:pc?pc.connectionState:'-',ice:pc?pc.iceConnectionState:'-',channel:dc?dc.readyState:'-',stun:!!settings.stun,
+  scanner:scanEngine||'-',camera:!!stream,webrtc:!!window.RTCPeerConnection,barcodeDetector:'BarcodeDetector' in window,
+  round:net.round,picked:!!net.my,peerPicked:!!net.peerHash,roundsTwoPlayers:Object.values(net.v).reduce((n,s)=>n+s.rounds.length,0)}));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
    English names; the computer has chosen before the move arrives, just like in the app. */
@@ -406,18 +1048,20 @@ const VAR_EN={3:'classic',4:'with_well',5:'lizard_spock'};
 const VAR_FROM_EN={classic:'3',with_well:'4',lizard_spock:'5'};
 const variantSchema={type:'string',enum:['classic','with_well','lizard_spock'],description:'classic (rock, paper, scissors), with_well (plus well) or lizard_spock (plus lizard and Spock). Default: the variant currently chosen in the app.'};
 function scoreOf(){const s=vs();return {you:s.win,draws:s.draw,computer:s.lose};}
+const OUT_NET={win:'you_win',lose:'opponent_wins',draw:'draw'};
 function useVariant(v){
   if(!v||VAR_FROM_EN[v]===state.variant)return;
   state.variant=VAR_FROM_EN[v];save();cpuNext=computerMove();clearArena();renderAll();
 }
 Tools.mcp.register({
   name:'play_round',title:'Play a round',label:'mcp.play',
-  description:'Plays one round against the computer in the app. The computer has already chosen before the move is made (it only knows earlier rounds). Shows the round in the app and returns both moves, who won and why, and the score of this variant.',
+  description:'Plays one round in the app. Against the computer: the computer has already chosen before the move is made (it only knows earlier rounds). In a game on two devices (opponent "two_players", connected): picks your move, waits until the other player has chosen (up to 2 minutes) and returns the round. Shows the round in the app and returns both moves, who won and why, and the score of this variant.',
   inputSchema:{type:'object',properties:{
     move:{type:'string',enum:['rock','paper','scissors','well','lizard','spock'],description:'Your move. well only in with_well, lizard and spock only in lizard_spock.'},
     variant:variantSchema
   },required:['move'],additionalProperties:false},
   execute:({move,variant})=>{
+    if(online())return playOnline(move,variant);
     const v=variant?VAR_FROM_EN[variant]:state.variant,p=FROM_EN[move];
     if(!VARIANTS[v].moves.includes(p))throw new Error(`${move} is not part of the variant ${VAR_EN[v]} – allowed: ${VARIANTS[v].moves.map(m=>EN[m]).join(', ')}.`);
     useVariant(variant);
@@ -429,13 +1073,37 @@ Tools.mcp.register({
       explanation:r?`${EN[r[0]]} beats ${EN[r[1]]}`:`both chose ${move}`,score:scoreOf()};
   }
 });
+function playOnline(move,variant){
+  if(!inNet())throw new Error('Two players mode is chosen but the other device is not connected. The user connects the devices in the app.');
+  if(variant&&VAR_FROM_EN[variant]!==state.variant)throw new Error(`The variant of a game on two devices is changed in the app – current: ${VAR_EN[state.variant]}.`);
+  const p=FROM_EN[move];
+  if(!VARIANTS[state.variant].moves.includes(p))throw new Error(`${move} is not part of the variant ${VAR_EN[state.variant]} – allowed: ${VARIANTS[state.variant].moves.map(m=>EN[m]).join(', ')}.`);
+  if(net.my)throw new Error('You have already chosen in this round – waiting for the other player.');
+  if(net.waiter)throw new Error('Another move is already waiting for the other player.');
+  const done=new Promise((resolve,reject)=>{net.waiter={resolve,reject};});
+  const timer=new Promise((_,rej)=>setTimeout(()=>rej(new Error('The other player has not chosen within 2 minutes. Your move stays chosen in the app.')),120000));
+  netPick(p);
+  return Promise.race([done,timer]).then(([pm,c,o])=>{
+    if(net.waiter)net.waiter=null;
+    const r=o==='win'?rule(state.variant,pm,c):o==='lose'?rule(state.variant,c,pm):null;
+    const s=netScore();
+    return {opponent:'two_players',variant:VAR_EN[state.variant],your_move:EN[pm],opponent_move:EN[c],outcome:OUT_NET[o],
+      explanation:r?`${EN[r[0]]} beats ${EN[r[1]]}`:`both chose ${EN[pm]}`,score:{you:s.win,draws:s.draw,opponent:s.lose}};
+  },e=>{net.waiter=null;throw e;});
+}
 Tools.mcp.register({
   name:'get_score',title:'Read the score',label:'mcp.score',readOnly:true,
-  description:'Reads the score of a variant (each variant has its own), how the computer plays (random or smart) and the last rounds, newest first.',
+  description:'Reads the score of a variant (each variant has its own), the opponent (computer or two_players on two devices, with connection state), how the computer plays (random or smart) and the last rounds, newest first. For two players the score of the current connection is returned.',
   inputSchema:{type:'object',properties:{variant:variantSchema},additionalProperties:false},
   execute:({variant})=>{
+    if(online()){
+      const k=variant?VAR_FROM_EN[variant]:state.variant,s=net.v[k]||{rounds:[],win:0,lose:0,draw:0};
+      return {opponent:'two_players',connected:connected(),variant:VAR_EN[k],score:{you:s.win,draws:s.draw,opponent:s.lose},
+        waiting_for_opponent:!!net.my&&k===state.variant,opponent_has_chosen:!!net.peerHash&&k===state.variant,
+        last_rounds:s.rounds.slice(-10).reverse().map(([p,c,o])=>({you:EN[p],opponent:EN[c],outcome:OUT_NET[o]}))};
+    }
     const k=variant?VAR_FROM_EN[variant]:state.variant,s=state.v[k]&&Array.isArray(state.v[k].rounds)?state.v[k]:{rounds:[],win:0,lose:0,draw:0};
-    return {variant:VAR_EN[k],computer_mode:state.mode,score:{you:s.win,draws:s.draw,computer:s.lose},
+    return {opponent:'computer',variant:VAR_EN[k],computer_mode:state.mode,score:{you:s.win,draws:s.draw,computer:s.lose},
       last_rounds:s.rounds.slice(-10).reverse().map(([p,c,o])=>({you:EN[p],computer:EN[c],outcome:o==='win'?'you_win':o==='lose'?'computer_wins':'draw'}))};
   }
 });
