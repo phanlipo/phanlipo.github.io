@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>PDF ansehen</title>
+<meta name="description" content="PDF-Dateien im Vollbild lesen – Leisten blenden sich aus, ein Tippen holt Menü und Teilen zurück. Ohne Upload.">
+<meta name="tool:tags" content="Arbeit, Dokumente">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, Vollbild, KI-Agent">
+<meta name="tool:icon" content="file-type-pdf">
+<meta name="tool:color" content="#b42318">
+<meta name="tool:short-name" content="PDF ansehen">
+<meta name="tool:title-en" content="PDF Viewer">
+<meta name="tool:description-en" content="Read PDF files full screen – the bars hide, one tap brings back the menu and sharing. No upload.">
+<meta name="tool:short-name-en" content="PDF Viewer">
+<meta name="tool:storage" content="pdf-viewer.">
+<meta name="tool:webmcp" content="get_document_info, go_to_page, get_page_text">
+<meta name="tool:share-target" content="application/pdf, .pdf">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-WgfIs10LaAns/MYkdurIacrxsvNeRD+nXmX3VXUoGsE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="PDF ansehen">
+<meta name="theme-color" content="#b42318">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#b42318;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#fda29b;--accent-text:#55160c}}
+/* Immersive layout: header and bottom bar float over the document and slide away (body.bars-hidden) */
+body.stage>header{position:fixed;inset-inline:0;inset-block-start:0;z-index:5;transition:transform .2s ease,opacity .2s ease}
+#docName{font-size:16px}
+body.stage>main{padding:0;overflow:auto;touch-action:pan-x pan-y;background:var(--surface-2);
+  padding-block:calc(60px + env(safe-area-inset-top)) calc(76px + env(safe-area-inset-bottom))}
+body.stage.empty>main{display:flex;flex-direction:column;justify-content:center}
+#pages{display:flex;flex-direction:column;gap:8px;padding:8px;transform-origin:0 0}
+.page{position:relative;margin-inline:auto;flex:none;background:#ffffff;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.page canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+body.night .page{filter:invert(1) hue-rotate(180deg)}
+#empty{display:grid;gap:12px;justify-items:center;text-align:center;padding:24px 16px;max-width:520px;margin-inline:auto}
+#empty .btn.primary{min-height:56px;font-size:18px;padding-inline:28px}
+#emptyMsg{min-height:1.4em;margin:0}
+#emptyMsg.err{color:var(--err)}
+#bar{position:fixed;inset-inline:0;inset-block-end:0;z-index:5;display:flex;align-items:center;gap:10px;background:var(--surface);
+  border-block-start:1px solid var(--border);padding-block:6px max(6px,env(safe-area-inset-bottom));
+  padding-inline:max(14px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right));transition:transform .2s ease,opacity .2s ease}
+#bar input[type=range]{flex:1;min-width:0;height:44px;accent-color:var(--accent);margin:0}
+#pageLabel{flex:none;min-width:5.5em;text-align:center;font-variant-numeric:tabular-nums}
+body.bars-hidden>header{transform:translateY(-110%);opacity:0;pointer-events:none}
+body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
+/* Page number while scrolling with hidden bars */
+#badge{position:fixed;inset-block-end:calc(16px + env(safe-area-inset-bottom));inset-inline-start:50%;transform:translateX(-50%);z-index:4;
+  background:var(--text);color:var(--bg);border-radius:999px;padding:4px 12px;font-size:14px;font-variant-numeric:tabular-nums;
+  opacity:0;transition:opacity .3s;pointer-events:none}
+#badge.on{opacity:.85}
+@media (prefers-reduced-motion: reduce){body.stage>header,#bar,#badge{transition:none}}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.goto{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-block-start:8px}
+.goto input{width:6em;min-height:44px;font-size:16px;padding-inline:10px}
+#docCard h3{margin-block:16px 4px;font-size:16px}
+dialog#pwDlg{border:0;padding:0;background:var(--surface);color:var(--text);width:min(420px,calc(100vw - 32px));border-radius:var(--radius)}
+dialog#pwDlg::backdrop{background:rgba(0,0,0,.6)}
+.pw{padding:16px;display:grid;gap:10px}
+.pw h2{font-size:17px;margin:0;overflow-wrap:anywhere}
+.pw .field{display:grid;gap:4px}
+.pw .field>span{font-size:13px;color:var(--muted);font-weight:600}
+.pw input{min-height:44px;font-size:16px;padding-inline:10px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px}
+.pw .err-text{color:var(--err);margin:0;min-height:1.2em;font-size:14px}
+.pw .row{justify-content:flex-end}
+.drop main{outline:3px dashed var(--accent);outline-offset:-6px}
+</style>
+</head>
+<body class="stage empty">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span id="appTitle" data-i18n="title">PDF ansehen</span><span id="docName" hidden></span></h1>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnShare" hidden aria-label="PDF teilen" title="PDF teilen" data-i18n-attr="aria-label:share; title:share"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M15 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M15 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M8.7 10.7l6.6 -3.4"/><path d="M8.7 13.3l6.6 3.4"/></svg></button>
+    <button type="button" class="head-btn" id="btnFs" hidden aria-pressed="false" aria-label="Vollbild" title="Vollbild" data-i18n-attr="aria-label:fs; title:fs"><svg id="icoFsOn" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8v-2a2 2 0 0 1 2 -2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2 -2v-2"/></svg><svg id="icoFsOff" hidden viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 19v-2a2 2 0 0 1 2 -2h2"/><path d="M15 5v2a2 2 0 0 0 2 2h2"/><path d="M5 15h2a2 2 0 0 1 2 2v2"/><path d="M5 9h2a2 2 0 0 0 2 -2v-2"/></svg></button>
+  </div>
+</header>
+
+<main id="view" aria-label="Dokument" data-i18n-attr="aria-label:view">
+  <div id="empty">
+    <p class="muted" data-i18n="intro">PDF öffnen oder aus einer anderen App hierher teilen. Die Datei bleibt auf diesem Gerät.</p>
+    <button type="button" class="btn primary" id="btnPick" data-i18n="open">PDF öffnen</button>
+    <p id="emptyMsg" role="status" aria-live="polite"></p>
+  </div>
+  <div id="pages" role="list" aria-label="Seiten" data-i18n-attr="aria-label:pagesLabel" hidden></div>
+</main>
+<div id="bar" hidden>
+  <input type="range" id="pageRange" min="1" max="1" value="1" aria-label="Seite" data-i18n-attr="aria-label:page">
+  <output id="pageLabel" for="pageRange" aria-live="off">1 / 1</output>
+  <button type="button" class="head-btn" id="btnFit" aria-label="Seitenbreite" title="Seitenbreite" data-i18n-attr="aria-label:fit; title:fit"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18"/><path d="M6 9l-3 3l3 3"/><path d="M18 9l3 3l-3 3"/></svg></button>
+</div>
+<div id="badge" aria-hidden="true"></div>
+<input type="file" id="inPick" accept="application/pdf,.pdf" hidden>
+
+<section class="card" id="docCard" data-menu aria-labelledby="h-doc">
+  <h2 id="h-doc" data-i18n="doc.h">Dokument</h2>
+  <p class="muted" id="docInfo"></p>
+  <div class="row">
+    <button type="button" class="btn" id="btnOpen" data-i18n="openOther">Andere PDF öffnen</button>
+    <button type="button" class="btn" id="btnDownload" data-i18n="download" disabled>Herunterladen</button>
+  </div>
+  <div class="goto">
+    <label for="gotoInput" data-i18n="goto">Zu Seite</label>
+    <input type="number" id="gotoInput" inputmode="numeric" min="1" step="1" disabled>
+    <button type="button" class="btn" id="btnGoto" data-i18n="go" disabled>Springen</button>
+  </div>
+  <h3 data-i18n="set.h">Anzeige</h3>
+  <label class="check"><input type="checkbox" id="optAutoHide"> <span data-i18n="set.autoHide">Leisten beim Lesen automatisch ausblenden</span></label>
+  <label class="check"><input type="checkbox" id="optSystem"> <span data-i18n="set.system">Beim Ausblenden auch Status- und Navigationsleiste verbergen (Vollbild)</span></label>
+  <label class="check"><input type="checkbox" id="optNight"> <span data-i18n="set.night">Nachtmodus (Farben umkehren)</span></label>
+</section>
+
+<dialog id="pwDlg" aria-labelledby="pwTitle">
+  <div class="pw">
+    <h2 id="pwTitle"></h2>
+    <label class="field"><span data-i18n="pw.label">Passwort</span><input type="password" id="pwInput" autocomplete="off" spellcheck="false" maxlength="200"></label>
+    <p class="err-text" id="pwErr" role="alert"></p>
+    <div class="row">
+      <button type="button" class="btn" id="pwCancel" data-i18n="pw.cancel">Abbrechen</button>
+      <button type="button" class="btn primary" id="pwOk" data-i18n="pw.open">Öffnen</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Zeigt PDF-Dateien bildschirmfüllend an – zum Lesen, ohne Ablenkung. Die Datei wird nur auf diesem Gerät geöffnet und nirgends hochgeladen.</p>
+  <h3>Öffnen</h3>
+  <ul>
+    <li><b>PDF öffnen</b> wählt eine Datei aus. Am Computer lässt sie sich auch auf die Seite ziehen.</li>
+    <li><b>Android:</b> Die App installieren (☰ → <i>Als App installieren</i>). Dann im Datei-Manager, in der Mail- oder Messenger-App die PDF <b>teilen</b> und <i>PDF ansehen</i> wählen – sie öffnet sich sofort. Das klappt auch offline.</li>
+    <li>Passwortgeschützte PDFs fragen nach dem Passwort. Es bleibt nur im Speicher und wird nie gespeichert.</li>
+  </ul>
+  <h3>Lesen</h3>
+  <ul>
+    <li>Nach dem Öffnen und beim Blättern blenden sich die Leisten aus – nur die PDF ist zu sehen. <b>Einmal tippen</b> holt sie zurück, nochmal tippen blendet sie wieder aus.</li>
+    <li>Oben: <b>Teilen</b> schickt die PDF an eine andere App (wenn das Gerät Dateien teilen kann), <b>Vollbild</b> verbirgt zusätzlich die Leisten von Browser und System, <b>☰</b> öffnet das Menü.</li>
+    <li>Unten: Mit dem Schieberegler springt man zu einer Seite; der Knopf daneben passt die Seite wieder an die Bildschirmbreite an.</li>
+    <li><b>Zoomen</b> mit zwei Fingern oder doppelt tippen (nochmal doppelt tippen = zurück). Am Computer Strg + Mausrad oder die Tasten + / − / 0.</li>
+    <li>Die App merkt sich, auf welcher Seite man in einem Dokument war, und springt beim nächsten Öffnen dorthin.</li>
+  </ul>
+  <h3>Vollbild und Systemleisten</h3>
+  <ul>
+    <li><b>Installierte App (Android):</b> startet ohne Status- und Navigationsleiste. Wischen vom oberen oder unteren Rand zeigt sie kurz an.</li>
+    <li><b>Im Browser:</b> Ein Tippen zum Ausblenden der Leisten schaltet auch das Vollbild ein und verbirgt Adressleiste, Statusleiste und Navigationsleiste (abschaltbar im Menü). Die Zurück-Geste oder der Knopf <i>Vollbild</i> beendet es. Ohne Tippen dürfen Webseiten das nicht.</li>
+    <li><b>iPhone:</b> Safari erlaubt kein Vollbild für Webseiten; die zum Home-Bildschirm hinzugefügte App zeigt aber keine Safari-Leisten.</li>
+  </ul>
+  <h3>Im Menü (☰)</h3>
+  <ul>
+    <li>Infos zum Dokument, <i>Andere PDF öffnen</i>, <i>Herunterladen</i> und <i>Zu Seite</i>.</li>
+    <li>Anzeige: automatisch ausblenden, Systemleisten mit ausblenden, Nachtmodus (dunkle Seiten mit heller Schrift).</li>
+  </ul>
+  <h3>Was wird gespeichert?</h3>
+  <p>Nur die Einstellungen und je Dokument die zuletzt gelesene Seite (unter einer Kennung aus der PDF, ohne Dateinamen; höchstens 50 Dokumente). Die PDF selbst wird nicht gespeichert. Angezeigt wird mit <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0).</p>
+  <h3>KI-Agent</h3>
+  <p>Ein KI-Agent im Browser (WebMCP) kann Seitenzahl und aktuelle Seite abfragen, zu einer Seite springen und den Text einer Seite lesen. Öffnen oder teilen kann er nichts.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Shows PDF files filling the screen – for reading without distraction. The file is opened on this device only and never uploaded.</p>
+  <h3>Opening</h3>
+  <ul>
+    <li><b>Open PDF</b> picks a file. On a computer you can also drop it onto the page.</li>
+    <li><b>Android:</b> install the app (☰ → <i>Install as app</i>). Then <b>share</b> the PDF from your file manager, mail or messenger app and pick <i>PDF Viewer</i> – it opens right away. This works offline too.</li>
+    <li>Password-protected PDFs ask for the password. It stays in memory only and is never stored.</li>
+  </ul>
+  <h3>Reading</h3>
+  <ul>
+    <li>After opening and while scrolling, the bars hide – only the PDF is visible. <b>Tap once</b> to bring them back, tap again to hide them.</li>
+    <li>At the top: <b>Share</b> sends the PDF to another app (if the device can share files), <b>Full screen</b> also hides the browser and system bars, <b>☰</b> opens the menu.</li>
+    <li>At the bottom: the slider jumps to a page; the button next to it fits the page to the screen width again.</li>
+    <li><b>Zoom</b> with two fingers or by double-tapping (double-tap again = back). On a computer Ctrl + mouse wheel or the keys + / − / 0.</li>
+    <li>The app remembers which page you were on in a document and goes there next time you open it.</li>
+  </ul>
+  <h3>Full screen and system bars</h3>
+  <ul>
+    <li><b>Installed app (Android):</b> starts without status and navigation bar. Swiping from the top or bottom edge shows them for a moment.</li>
+    <li><b>In the browser:</b> a tap that hides the bars also turns on full screen and hides the address bar, status bar and navigation bar (can be turned off in the menu). The back gesture or the <i>Full screen</i> button ends it. Web pages may not do this without a tap.</li>
+    <li><b>iPhone:</b> Safari allows no full screen for web pages; the app added to the home screen shows no Safari bars, though.</li>
+  </ul>
+  <h3>In the menu (☰)</h3>
+  <ul>
+    <li>Document info, <i>Open another PDF</i>, <i>Download</i> and <i>Go to page</i>.</li>
+    <li>Display: hide automatically, hide the system bars too, night mode (dark pages with light text).</li>
+  </ul>
+  <h3>What is stored?</h3>
+  <p>Only the settings and, per document, the page last read (under an ID taken from the PDF, without the file name; at most 50 documents). The PDF itself is not stored. Rendering by <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0).</p>
+  <h3>AI agent</h3>
+  <p>An AI agent in the browser (WebMCP) can ask for the page count and current page, go to a page and read the text of a page. It cannot open or share anything.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 29321f23570b</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'doc.none':'Keine PDF geöffnet.','doc.info':'{name} · {n} Seite(n) · {size}','label':'{n} / {total}',
+    'loading':'PDF wird geöffnet …','err.notPdf':'Das ist keine PDF-Datei.','err.broken':'Die PDF konnte nicht geöffnet werden – sie ist vielleicht beschädigt.',
+    'err.lib':'Der PDF-Anzeiger konnte nicht geladen werden. Bitte einmal mit Internet öffnen.','err.skipped':'Ohne Passwort lässt sich die PDF nicht öffnen.',
+    'pw.title':'„{name}“ ist passwortgeschützt','pw.wrong':'Falsches Passwort – bitte noch einmal versuchen.','pw.empty':'Bitte das Passwort eingeben.',
+    'resume':'Weiter auf Seite {n}','share.fail':'Teilen hat nicht geklappt.','fs.fail':'Vollbild ist hier nicht möglich.',
+    'goto.bad':'Seite 1 bis {n} eingeben.','pageAria':'Seite {n}','mcp.goto':'zu Seite gesprungen',
+  },
+  en:{
+    title:'PDF Viewer',share:'Share PDF',fs:'Full screen',view:'Document',intro:'Open a PDF or share it here from another app. The file stays on this device.',
+    open:'Open PDF',pagesLabel:'Pages',page:'Page',fit:'Page width','doc.h':'Document',openOther:'Open another PDF',download:'Download',
+    goto:'Go to page',go:'Go','set.h':'Display','set.autoHide':'Hide the bars automatically while reading',
+    'set.system':'When hiding, also hide the status and navigation bar (full screen)','set.night':'Night mode (invert colours)',
+    'pw.label':'Password','pw.cancel':'Cancel','pw.open':'Open',
+    'doc.none':'No PDF open.','doc.info':'{name} · {n} page(s) · {size}','label':'{n} / {total}',
+    'loading':'Opening PDF …','err.notPdf':'This is not a PDF file.','err.broken':'The PDF could not be opened – it may be damaged.',
+    'err.lib':'The PDF viewer could not be loaded. Please open it once with internet.','err.skipped':'The PDF cannot be opened without the password.',
+    'pw.title':'“{name}” is password-protected','pw.wrong':'Wrong password – please try again.','pw.empty':'Please enter the password.',
+    'resume':'Continuing on page {n}','share.fail':'Sharing did not work.','fs.fail':'Full screen is not possible here.',
+    'goto.bad':'Enter page 1 to {n}.','pageAria':'Page {n}','mcp.goto':'went to a page',
+  }
+});
+const t=Tools.t, $=Tools.$, body=document.body;
+const LS='pdf-viewer.settings.v1', LP='pdf-viewer.positions.v1';
+const settings=Object.assign({autoHide:true,systemBars:true,night:false},Tools.load(LS,{}));
+const saveSettings=()=>Tools.save(LS,settings);
+const view=$('view'), pagesEl=$('pages');
+const MIN_ZOOM=1, MAX_ZOOM=4, MAX_PIXELS=8e6, KEEP=2.5; // canvases further than KEEP screens away are dropped
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const fmtSize=b=>b<1048576?Tools.fmt(Math.max(1,Math.round(b/1024)),0)+' KB':Tools.fmt(b/1048576,1)+' MB';
+
+/* ================= pdf.js (loaded on first use, cached offline by sw.js) ================= */
+let jsP=null;
+function pdfjs(){
+  return jsP||(jsP=import('../assets/vendor/pdfjs/pdf.min.mjs').then(m=>{
+    // Worker from the app folder: a worker outside it would bypass the service worker (offline)
+    m.GlobalWorkerOptions.workerSrc=new URL('pdf-worker.mjs',location.href).href;
+    return m;
+  }).catch(e=>{jsP=null;throw e;}));
+}
+
+/* ================= State ================= */
+// doc: pdf.js document; file: the File as opened (for sharing/downloading); sizes: [w,h] per page at scale 1
+let doc=null, file=null, sizes=[], els=[], tops=[], zoom=1, cur=1, loadToken=0, encrypted=false;
+
+/* ================= Opening ================= */
+// pdf.js 6: a document is closed through its loading task
+const destroyDoc=d=>{try{Promise.resolve((d.loadingTask||d).destroy()).catch(()=>{});}catch(_){}};
+function message(text,err){
+  const m=$('emptyMsg'); m.textContent=text||''; m.classList.toggle('err',!!err);
+}
+async function isPdf(f){
+  // "%PDF-" within the first KB (some files have a few bytes before it)
+  const head=new Uint8Array(await f.slice(0,1024).arrayBuffer());
+  return new TextDecoder('latin1').decode(head).includes('%PDF-');
+}
+const pwDlg=$('pwDlg'), pwInput=$('pwInput');
+function askPassword(name,wrong){
+  return new Promise(resolve=>{
+    $('pwTitle').textContent=t('pw.title',{name});
+    $('pwErr').textContent=wrong?t('pw.wrong'):'';
+    pwInput.value='';
+    let done=false;
+    const finish=v=>{
+      if(done) return; done=true;
+      $('pwOk').removeEventListener('click',ok); $('pwCancel').removeEventListener('click',cancel);
+      pwInput.removeEventListener('keydown',key); pwDlg.removeEventListener('cancel',esc);
+      if(pwDlg.open) pwDlg.close();
+      pwInput.value='';
+      resolve(v);
+    };
+    const ok=()=>{if(!pwInput.value){$('pwErr').textContent=t('pw.empty');pwInput.focus();return;}finish(pwInput.value);};
+    const cancel=()=>finish(null);
+    const key=e=>{if(e.key==='Enter'){e.preventDefault();ok();}};
+    const esc=e=>{e.preventDefault();finish(null);};
+    $('pwOk').addEventListener('click',ok); $('pwCancel').addEventListener('click',cancel);
+    pwInput.addEventListener('keydown',key); pwDlg.addEventListener('cancel',esc);
+    pwDlg.showModal(); pwInput.focus();
+  });
+}
+async function openFile(f){
+  if(!f) return;
+  const token=++loadToken;
+  Tools.diag.log('open',{size:f.size,type:f.type||'-'});
+  if(!doc) message(t('loading'));
+  try{
+    if(!(await isPdf(f))){Tools.diag.log('not a pdf');fail(t('err.notPdf'));return;}
+    let lib;
+    try{lib=await pdfjs();}catch(e){Tools.diag.log('pdf.js failed',e);fail(t('err.lib'));return;}
+    const bytes=new Uint8Array(await f.arrayBuffer());
+    let password, tries=0, d;
+    for(;;){
+      const task=lib.getDocument({
+        data:bytes.slice(),   // pdf.js takes over the buffer – keep the original for the next try
+        ...(password!=null?{password}:{}),
+        isEvalSupported:false,
+        standardFontDataUrl:new URL('../assets/vendor/pdfjs/standard_fonts/',location.href).href,
+        wasmUrl:new URL('../assets/vendor/pdfjs/wasm/',location.href).href,
+        iccUrl:new URL('../assets/vendor/pdfjs/iccs/',location.href).href
+      });
+      try{d=await task.promise;break;}
+      catch(e){
+        if(e&&e.name==='PasswordException'){
+          const wrong=password!=null;
+          if(wrong) Tools.diag.log('wrong password',{tries});
+          const pw=await askPassword(f.name,wrong);
+          if(token!==loadToken) return;
+          if(pw==null){Tools.diag.log('password skipped',{tries});fail(t('err.skipped'));return;}
+          password=pw; tries++;
+          continue;
+        }
+        throw e;
+      }
+    }
+    if(token!==loadToken){destroyDoc(d);return;}
+    const sz=[];
+    for(let i=1;i<=d.numPages;i++){
+      const p=await d.getPage(i), vp=p.getViewport({scale:1});
+      sz.push([vp.width,vp.height]);
+    }
+    if(token!==loadToken){destroyDoc(d);return;}
+    closeDoc();
+    doc=d; sizes=sz; encrypted=password!=null;
+    file=f.type==='application/pdf'?f:new File([f],f.name||'dokument.pdf',{type:'application/pdf'});
+    Tools.diag.log('opened',{pages:d.numPages,encrypted});
+    show();
+  }catch(e){
+    Tools.diag.log('open failed',e);
+    if(token===loadToken) fail(t('err.broken'));
+  }
+}
+function fail(text){
+  if(doc){Tools.toast(text);return;}
+  message(text,true);
+}
+function closeDoc(){
+  if(doc) destroyDoc(doc);
+  doc=null; file=null; sizes=[]; els=[]; tops=[]; pagesEl.textContent='';
+  renderGen++;
+}
+
+/* ================= Showing ================= */
+function show(){
+  body.classList.remove('empty');
+  $('empty').hidden=true; message('');
+  pagesEl.hidden=false; $('bar').hidden=false;
+  zoom=1;
+  const frag=document.createDocumentFragment();
+  els=sizes.map((_,i)=>{
+    const el=document.createElement('div');
+    el.className='page'; el.setAttribute('role','listitem'); el.dataset.n=i+1;
+    el.setAttribute('aria-label',t('pageAria',{n:i+1}));
+    frag.append(el); return el;
+  });
+  pagesEl.append(frag);
+  $('pageRange').max=sizes.length; $('gotoInput').max=sizes.length;
+  layout();
+  const fp=fingerprint(), saved=fp&&positions[fp];
+  cur=1;
+  if(saved&&saved.p>1&&saved.p<=sizes.length){goTo(saved.p);Tools.toast(t('resume',{n:saved.p}));}
+  else{view.scrollTop=0;view.scrollLeft=0;}
+  updateCurrent(); renderInfo(); scheduleRender();
+  showBars(true);
+  clearTimeout(hideTimer);
+  if(settings.autoHide) hideTimer=setTimeout(()=>{if(!barsTouched) showBars(false);},2500);
+  barsTouched=false;
+}
+function baseWidth(){return clamp(view.clientWidth-16,100,1000);}
+function layout(){
+  if(!doc) return;
+  const w=baseWidth()*zoom;
+  els.forEach((el,i)=>{
+    const [pw,ph]=sizes[i];
+    el.style.width=w+'px'; el.style.height=(w*ph/pw)+'px';
+  });
+  pagesEl.style.width=Math.max(view.clientWidth,w+16)+'px';
+  tops=els.map(el=>el.offsetTop);
+}
+// Page under the middle of the screen
+function pageAt(y){
+  let lo=0, hi=tops.length-1;
+  while(lo<hi){const mid=(lo+hi+1)>>1; if(tops[mid]<=y) lo=mid; else hi=mid-1;}
+  return lo;
+}
+function updateCurrent(){
+  if(!doc) return;
+  const n=pageAt(view.scrollTop+view.clientHeight/2)+1;
+  const changed=n!==cur; cur=n;
+  $('pageRange').value=cur;
+  $('pageLabel').textContent=t('label',{n:cur,total:sizes.length});
+  if(changed) savePosition();
+  return changed;
+}
+let progScroll=0;
+function goTo(n){
+  n=clamp(Math.round(n),1,sizes.length);
+  progScroll=Date.now();
+  view.scrollTop=tops[n-1]-8;
+  updateCurrent(); scheduleRender();
+}
+
+/* ---------- Rendering: only pages near the screen, sharp for the current zoom ---------- */
+let renderGen=0, renderBusy=false, renderAgain=false;
+function wanted(){
+  const top=view.scrollTop, h=view.clientHeight, list=[];
+  els.forEach((el,i)=>{
+    const a=tops[i], b=a+el.offsetHeight;
+    const dist=b<top?(top-b)/h:a>top+h?(a-top-h)/h:0;
+    if(dist<=1) list.push([dist,i]);
+    else if(dist>KEEP&&el.firstChild){el.textContent='';delete el.dataset.key;}   // free memory
+  });
+  return list.sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
+}
+function scheduleRender(){
+  if(!doc||pinch) return;
+  if(renderBusy){renderAgain=true;return;}
+  renderBusy=true;
+  (async()=>{
+    const gen=renderGen;
+    do{
+      renderAgain=false;
+      for(const i of wanted()){
+        if(renderAgain||gen!==renderGen) break;
+        try{await renderPage(i);}catch(e){if(e&&e.name!=='RenderingCancelledException') Tools.diag.log('render failed',{page:i+1},e);}
+      }
+    }while(renderAgain&&gen===renderGen);
+    renderBusy=false;
+    if(gen!==renderGen&&doc) scheduleRender();
+  })();
+}
+async function renderPage(i){
+  const el=els[i], d=doc; if(!el||!d) return;
+  const [pw,ph]=sizes[i];
+  let scale=parseFloat(el.style.width)*Math.min(window.devicePixelRatio||1,3)/pw;
+  const px=pw*ph*scale*scale;
+  if(px>MAX_PIXELS) scale*=Math.sqrt(MAX_PIXELS/px);
+  const key=scale.toFixed(3);
+  if(el.dataset.key===key) return;
+  const page=await d.getPage(i+1);
+  const viewport=page.getViewport({scale});
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.floor(viewport.width)); c.height=Math.max(1,Math.floor(viewport.height));
+  c.setAttribute('aria-hidden','true');
+  await page.render({canvasContext:c.getContext('2d'),viewport,background:'white'}).promise;
+  if(d!==doc) return;
+  el.replaceChildren(c); el.dataset.key=key;
+}
+
+/* ---------- Zoom: two fingers, double tap, Ctrl + wheel, keys ---------- */
+function anchorAt(fx,fy){
+  const x=view.scrollLeft+fx, y=view.scrollTop+fy, i=pageAt(y), el=els[i];
+  return {i,ax:(x-el.offsetLeft)/el.offsetWidth,ay:(y-el.offsetTop)/el.offsetHeight};
+}
+function setZoom(z,fx=view.clientWidth/2,fy=view.clientHeight/2){
+  if(!doc) return;
+  z=clamp(z,MIN_ZOOM,MAX_ZOOM);
+  if(Math.abs(z-zoom)<0.001) return;
+  const a=anchorAt(fx,fy);
+  zoom=z; layout();
+  const el=els[a.i];
+  progScroll=Date.now();
+  view.scrollLeft=el.offsetLeft+a.ax*el.offsetWidth-fx;
+  view.scrollTop=el.offsetTop+a.ay*el.offsetHeight-fy;
+  updateCurrent(); scheduleRender();
+  Tools.diag.log('zoom',{zoom:Math.round(zoom*100)/100});
+}
+let pinch=null;
+const touchDist=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+view.addEventListener('touchstart',e=>{
+  if(!doc||e.touches.length!==2) return;
+  const [a,b]=e.touches, r=view.getBoundingClientRect();
+  const cx=(a.clientX+b.clientX)/2-r.left, cy=(a.clientY+b.clientY)/2-r.top;
+  pinch={d0:touchDist(a,b),cx,cy,s:1};
+  pagesEl.style.transformOrigin=`${view.scrollLeft+cx-pagesEl.offsetLeft}px ${view.scrollTop+cy-pagesEl.offsetTop}px`;
+  clearTimeout(tapTimer); lastTap=0;
+},{passive:true});
+view.addEventListener('touchmove',e=>{
+  if(!pinch||e.touches.length<2) return;
+  if(e.cancelable) e.preventDefault();
+  const [a,b]=e.touches;
+  pinch.s=clamp(touchDist(a,b)/pinch.d0,MIN_ZOOM/zoom,MAX_ZOOM/zoom);
+  pagesEl.style.transform=`scale(${pinch.s})`;
+},{passive:false});
+function pinchEnd(e){
+  if(!pinch||e.touches.length>=2) return;
+  const p=pinch; pinch=null;
+  pagesEl.style.transform='';
+  setZoom(zoom*p.s,p.cx,p.cy);
+  scheduleRender();
+}
+view.addEventListener('touchend',pinchEnd);
+view.addEventListener('touchcancel',pinchEnd);
+view.addEventListener('wheel',e=>{
+  if(!doc||!e.ctrlKey) return;
+  e.preventDefault();
+  const r=view.getBoundingClientRect();
+  setZoom(zoom*Math.exp(-e.deltaY/300),e.clientX-r.left,e.clientY-r.top);
+},{passive:false});
+$('btnFit').addEventListener('click',()=>{setZoom(1);view.scrollLeft=0;});
+
+/* ---------- Bars: tap shows/hides header and bottom bar (and, if wanted, the system bars) ---------- */
+let hideTimer=0, barsTouched=false, lastTap=0, lastXY=[0,0], tapTimer=0;
+const barsHidden=()=>body.classList.contains('bars-hidden');
+function showBars(on){
+  if(!doc) on=true;
+  if(on===!barsHidden()) return;
+  body.classList.toggle('bars-hidden',!on);
+  if(!on){
+    // keep keyboard focus out of the hidden bars
+    const a=document.activeElement;
+    if(a&&(a.closest('body>header')||a.closest('#bar'))) view.focus({preventScroll:true});
+  }
+}
+function toggleBars(){
+  barsTouched=true; clearTimeout(hideTimer);
+  const hide=!barsHidden();
+  showBars(!hide);
+  Tools.diag.log('bars',{hidden:hide});
+  // The tap counts as the user gesture full screen needs
+  if(hide&&settings.systemBars&&Tools.fullscreen.supported()&&!Tools.fullscreen.active()) Tools.fullscreen.enter();
+}
+view.tabIndex=-1;
+view.addEventListener('click',e=>{
+  if(!doc||e.target.closest('button,a,input,#empty')) return;
+  const r=view.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top, now=Date.now();
+  if(now-lastTap<300&&Math.hypot(x-lastXY[0],y-lastXY[1])<40){
+    clearTimeout(tapTimer); lastTap=0;
+    setZoom(zoom>1.05?1:2.5,x,y);
+    return;
+  }
+  lastTap=now; lastXY=[x,y];
+  clearTimeout(tapTimer);
+  tapTimer=setTimeout(toggleBars,280);
+});
+for(const el of [document.querySelector('body>header'),$('bar')]){
+  el.addEventListener('focusin',()=>{barsTouched=true;clearTimeout(hideTimer);showBars(true);});
+  el.addEventListener('pointerdown',()=>{barsTouched=true;clearTimeout(hideTimer);});
+}
+
+/* ---------- Scrolling ---------- */
+let lastTop=0, scrollRaf=0, badgeTimer=0;
+view.addEventListener('scroll',()=>{
+  if(scrollRaf) return;
+  scrollRaf=requestAnimationFrame(()=>{
+    scrollRaf=0;
+    if(!doc) return;
+    const changed=updateCurrent();
+    scheduleRender();
+    const moved=Math.abs(view.scrollTop-lastTop);
+    if(Date.now()-progScroll>250&&!pinch&&moved>30){
+      lastTop=view.scrollTop;
+      if(settings.autoHide&&!barsHidden()&&!$('bar').contains(document.activeElement)){clearTimeout(hideTimer);showBars(false);}
+    }else if(moved>30) lastTop=view.scrollTop;
+    if(barsHidden()&&changed){
+      const b=$('badge'); b.textContent=t('label',{n:cur,total:sizes.length}); b.classList.add('on');
+      clearTimeout(badgeTimer); badgeTimer=setTimeout(()=>b.classList.remove('on'),1200);
+    }
+  });
+},{passive:true});
+let lastW=0;
+new ResizeObserver(()=>{
+  if(!doc||view.clientWidth===lastW) return;
+  lastW=view.clientWidth;
+  const n=cur, a=anchorAt(view.clientWidth/2,view.clientHeight/2);
+  layout();
+  progScroll=Date.now();
+  const el=els[a.i]; view.scrollTop=el.offsetTop+a.ay*el.offsetHeight-view.clientHeight/2;
+  if(!els[n-1]) return;
+  updateCurrent(); scheduleRender();
+}).observe(view);
+
+$('pageRange').addEventListener('input',e=>goTo(Number(e.target.value)));
+
+/* ---------- Remembered page per document (pdf.js fingerprint, no file name) ---------- */
+let positions=Tools.load(LP,{});
+if(!positions||typeof positions!=='object'||Array.isArray(positions)) positions={};
+const fingerprint=()=>doc&&doc.fingerprints&&doc.fingerprints[0]||null;
+let posTimer=0;
+function savePosition(){
+  clearTimeout(posTimer);
+  posTimer=setTimeout(()=>{
+    const fp=fingerprint(); if(!fp) return;
+    positions[fp]={p:cur,t:Date.now()};
+    const keep=Object.entries(positions).sort((a,b)=>(b[1].t||0)-(a[1].t||0)).slice(0,50);
+    positions=Object.fromEntries(keep);
+    Tools.save(LP,positions);
+  },400);
+}
+
+/* ================= Menu, share, download, full screen ================= */
+function renderInfo(){
+  $('docInfo').textContent=doc?t('doc.info',{name:file.name,n:sizes.length,size:fmtSize(file.size)}):t('doc.none');
+  $('appTitle').hidden=!!doc; $('docName').hidden=!doc; $('docName').textContent=doc?file.name:'';
+  document.title=doc?file.name:t('title');
+  for(const id of ['btnDownload','gotoInput','btnGoto']) $(id).disabled=!doc;
+  $('btnShare').hidden=!doc||!canShareFiles;
+  if(doc) $('pageLabel').textContent=t('label',{n:cur,total:sizes.length});
+  els.forEach((el,i)=>el.setAttribute('aria-label',t('pageAria',{n:i+1})));
+}
+const pick=()=>{$('inPick').value='';$('inPick').click();};
+$('btnPick').addEventListener('click',pick);
+$('btnOpen').addEventListener('click',()=>{Tools.menu.close();pick();});
+$('inPick').addEventListener('change',e=>openFile(e.target.files[0]));
+const canShareFiles=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File([''],'x.pdf',{type:'application/pdf'})]}));}catch(_){return false;}})();
+$('btnShare').addEventListener('click',async()=>{
+  if(!file) return;
+  barsTouched=true; clearTimeout(hideTimer);
+  try{await navigator.share({files:[file],title:file.name});Tools.diag.log('shared');}
+  catch(e){Tools.diag.log('share',e);if(e.name!=='AbortError') Tools.toast(t('share.fail'));}
+});
+$('btnDownload').addEventListener('click',()=>{
+  if(!file) return;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(file); a.download=file.name||'dokument.pdf';
+  document.body.append(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  Tools.diag.log('download');
+});
+function gotoFromInput(){
+  const n=Number($('gotoInput').value);
+  if(!Number.isInteger(n)||n<1||n>sizes.length){Tools.toast(t('goto.bad',{n:sizes.length}));return;}
+  Tools.menu.close(); goTo(n);
+}
+$('btnGoto').addEventListener('click',gotoFromInput);
+$('gotoInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();gotoFromInput();}});
+
+const fs=Tools.fullscreen;
+function renderFs(){
+  const on=fs.active();
+  // Installed app in display mode "fullscreen": already without system bars, nothing to switch
+  $('btnFs').hidden=!fs.supported()||fs.system();
+  $('btnFs').setAttribute('aria-pressed',String(on));
+  $('icoFsOn').hidden=on; $('icoFsOff').hidden=!on;
+}
+$('btnFs').addEventListener('click',async()=>{
+  barsTouched=true; clearTimeout(hideTimer);
+  const wasOn=fs.active();
+  const on=await fs.toggle();
+  if(!wasOn&&!on) Tools.toast(t('fs.fail'));
+  else if(on&&doc&&settings.autoHide) showBars(false);
+  renderFs();
+});
+fs.onChange(renderFs);
+renderFs();
+
+function bindOpt(id,key,after){
+  const el=$(id); el.checked=!!settings[key];
+  el.addEventListener('change',()=>{settings[key]=el.checked;saveSettings();Tools.diag.log('setting',{[key]:el.checked});if(after)after();});
+}
+const applyNight=()=>body.classList.toggle('night',!!settings.night);
+bindOpt('optAutoHide','autoHide');
+bindOpt('optSystem','systemBars');
+bindOpt('optNight','night',applyNight);
+applyNight();
+
+/* ---------- Keys (computer) ---------- */
+document.addEventListener('keydown',e=>{
+  if(!doc||e.altKey||e.metaKey||document.querySelector('dialog[open]')) return;
+  if(e.target.closest&&e.target.closest('input,textarea,select')) return;
+  if(e.ctrlKey&&!['+','=','-','0'].includes(e.key)) return;
+  if(e.key==='+'||e.key==='='){e.preventDefault();setZoom(zoom*1.25);}
+  else if(e.key==='-'){e.preventDefault();setZoom(zoom/1.25);}
+  else if(e.key==='0'){e.preventDefault();setZoom(1);view.scrollLeft=0;}
+});
+
+/* ---------- Drag & drop (computer) ---------- */
+view.addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('Files')){e.preventDefault();body.classList.add('drop');}});
+view.addEventListener('dragleave',()=>body.classList.remove('drop'));
+view.addEventListener('drop',e=>{e.preventDefault();body.classList.remove('drop');openFile(e.dataTransfer.files[0]);});
+
+// PDF shared to the installed app (Android share menu)
+Tools.takeSharedFile().then(f=>{if(f){Tools.diag.log('shared file');openFile(f);}});
+
+Tools.onLang(renderInfo);
+renderInfo();
+
+Tools.diag.info(()=>({
+  open:!!doc, pages:sizes.length, current:doc?cur:0, zoom:Math.round(zoom*100)/100, encrypted,
+  barsHidden:barsHidden(), rendered:els.filter(el=>el.firstChild).length,
+  canShareFiles, fullscreenSupported:fs.supported(), settings, remembered:Object.keys(positions).length,
+}));
+
+/* ================= WebMCP ================= */
+const needDoc=()=>{if(!doc) throw new Error('no PDF is open');};
+Tools.mcp.register({
+  name:'get_document_info',title:'Get PDF info',readOnly:true,untrusted:true,
+  description:'Tells whether a PDF is open and returns its page count, the page currently shown (1 = first), the zoom factor (1 = page width) and the title from the PDF metadata if it has one.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:async()=>{
+    if(!doc) return {open:false};
+    let title='';
+    try{const m=await doc.getMetadata();title=(m&&m.info&&m.info.Title)||'';}catch(_){}
+    return {open:true,pages:sizes.length,currentPage:cur,zoom:Math.round(zoom*100)/100,title:String(title).slice(0,300)};
+  }
+});
+Tools.mcp.register({
+  name:'go_to_page',title:'Go to a PDF page',label:'mcp.goto',
+  description:'Scrolls the open PDF to the given page (1 = first page) so the user sees it. Returns the page now shown and the page count.',
+  inputSchema:{type:'object',properties:{page:{type:'integer',minimum:1,maximum:100000}},required:['page'],additionalProperties:false},
+  execute:({page})=>{
+    needDoc();
+    if(page>sizes.length) throw new Error(`page must be between 1 and ${sizes.length}`);
+    goTo(page);
+    return {currentPage:cur,pages:sizes.length};
+  }
+});
+Tools.mcp.register({
+  name:'get_page_text',title:'Read the text of a PDF page',readOnly:true,untrusted:true,
+  description:'Returns the text of one page of the open PDF (1 = first page; default: the page currently shown), at most 20000 characters. Scanned pages without a text layer return an empty text.',
+  inputSchema:{type:'object',properties:{page:{type:'integer',minimum:1,maximum:100000}},additionalProperties:false},
+  execute:async({page})=>{
+    needDoc();
+    const n=page==null?cur:page;
+    if(n>sizes.length) throw new Error(`page must be between 1 and ${sizes.length}`);
+    const p=await doc.getPage(n), tc=await p.getTextContent();
+    let text='';
+    for(const it of tc.items){if(typeof it.str==='string'){text+=it.str;if(it.hasEOL) text+='\n';else if(it.str&&!/\s$/.test(it.str)) text+=' ';}}
+    text=text.replace(/[ \t]{2,}/g,' ').replace(/[ \t]+\n/g,'\n').trim();
+    return {page:n,pages:sizes.length,truncated:text.length>20000,text:text.slice(0,20000)};
+  }
+});
+})();
+</script>
+</body>
+</html>

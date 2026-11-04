@@ -649,6 +649,44 @@ window.Tools = (function () {
     return tool;
   }
 
+  /* ---------- Full screen (feature "Vollbild", see AGENTS.md "Vollbild & ausblendende Leisten") ----------
+     Hides the browser and the system bars (Android: status and navigation bar) – requestFullscreen with
+     navigationUI 'hide'. Browsers allow it only right after a tap/key press. An installed app whose manifest
+     has display "fullscreen" (build.mjs, feature "Vollbild") starts without system bars: then system() is true.
+       Tools.fullscreen.supported()   the browser can do it (not on iPhone)
+       Tools.fullscreen.active()      full screen now (by the page or by the installed app)
+       Tools.fullscreen.system()      installed app in display mode "fullscreen" – nothing to switch
+       Tools.fullscreen.enter(el?) / exit() / toggle(el?)   resolve to true when full screen afterwards
+       Tools.fullscreen.onChange(fn)  fn(active) whenever it changes (also by the back gesture or Escape) */
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  const fsMq = (() => { try { return matchMedia('(display-mode: fullscreen)'); } catch (_) { return null; } })();
+  const fsSystem = () => !fsEl() && !!(fsMq && fsMq.matches);
+  const fsActive = () => !!fsEl() || fsSystem();
+  function fsSupported() {
+    const d = document.documentElement;
+    return !!(d.requestFullscreen || d.webkitRequestFullscreen) && document.fullscreenEnabled !== false;
+  }
+  async function fsEnter(el = document.documentElement) {
+    if (fsActive()) return true;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!fn) { diagLog('fullscreen: no api'); return false; }
+    try { await fn.call(el, { navigationUI: 'hide' }); diagLog('fullscreen on'); return true; }
+    catch (e) { diagLog('fullscreen failed', e); return false; }
+  }
+  async function fsExit() {
+    if (!fsEl()) return fsActive();
+    try { await (document.exitFullscreen || document.webkitExitFullscreen).call(document); diagLog('fullscreen off'); }
+    catch (e) { diagLog('fullscreen exit failed', e); }
+    return fsActive();
+  }
+  const fsToggle = el => fsEl() ? fsExit() : fsEnter(el);
+  function fsOnChange(fn) {
+    const run = () => { try { fn(fsActive()); } catch (e) { diagLog('fullscreen change handler', e); } };
+    document.addEventListener('fullscreenchange', run);
+    document.addEventListener('webkitfullscreenchange', run);
+    try { fsMq && fsMq.addEventListener('change', run); } catch (_) {}
+  }
+
   /* ---------- Diagnostics: "Diagnose kopieren" (block at the end of the help, see template/) ----------
      Tools.diag.log(...parts)  one line in the log: steps, results, errors – never user content (texts, passwords,
                                file contents). Strings as they are, Errors as "Name: message", the rest as JSON.
@@ -676,6 +714,7 @@ window.Tools = (function () {
     add('time', new Date().toString());
     add('userAgent', navigator.userAgent);
     add('standalone', matchMedia('(display-mode: standalone)').matches || navigator.standalone === true);
+    add('fullscreen', fsEl() ? 'page' : fsSystem() ? 'app' : false);
     add('language', lang);
     add('online', navigator.onLine);
     const sw = navigator.serviceWorker;
@@ -712,6 +751,7 @@ window.Tools = (function () {
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     menu: { open: menuOpen, close: menuClose, element: () => menuEl },
+    fullscreen: { supported: fsSupported, active: fsActive, system: fsSystem, enter: fsEnter, exit: fsExit, toggle: fsToggle, onChange: fsOnChange },
     data: { exportData, validateBackup, importData, clearData, keys: ownKeys, prefixes: storagePrefixes, appId },
     diag: { log: diagLog, info: fn => { diagInfos.push(fn); }, text: diagText },
   };
