@@ -292,9 +292,20 @@ function filesIn(dir) {
   return out;
 }
 
-// Vendor packages an app uses: referenced from its page or any script in its folder (e.g. a worker)
+// Scripts of the app itself: its page and every script in its folder (e.g. a worker)
+const ownScripts = p => [p.file, ...filesIn(p.folder).filter(f => /\.m?js$/.test(f) && !f.endsWith('/sw.js'))];
+// Shared scripts several apps use (assets/shared/<file>, e.g. the Piper voice engine): referenced literally
+// as '../assets/shared/<file>' from the app's scripts – cached offline like the app's own files
+function sharedOf(p) {
+  const names = new Set();
+  for (const f of ownScripts(p)) for (const m of read(f).matchAll(/\.\.\/assets\/shared\/([\w.-]+\.m?js)/g)) names.add(`assets/shared/${m[1]}`);
+  for (const f of names) if (!existsSync(join(ROOT, f))) throw new Error(`${p.folder}: ${f} not found`);
+  return [...names].sort();
+}
+
+// Vendor packages an app uses: referenced from its page, any script in its folder or a shared script it uses
 function vendorsOf(p) {
-  const texts = [read(p.file), ...filesIn(p.folder).filter(f => /\.m?js$/.test(f) && !f.endsWith('/sw.js')).map(read)];
+  const texts = [...ownScripts(p), ...sharedOf(p)].map(read);
   const names = new Set();
   for (const t of texts) for (const m of t.matchAll(/\.\.\/assets\/vendor\/([^/"'`]+)\//g)) names.add(m[1]);
   return [...names].sort();
@@ -302,7 +313,7 @@ function vendorsOf(p) {
 
 // Vendor references that would break offline use (rules: see vendorProblems in lib.mjs)
 const appVendorProblems = p => vendorProblems(
-  [p.file, ...filesIn(p.folder).filter(f => /\.m?js$/.test(f) && !f.endsWith('/sw.js'))].map(f => ({ file: f, text: read(f) })),
+  [...ownScripts(p), ...sharedOf(p)].map(f => ({ file: f, text: read(f) })),
   p.folder, Object.keys(VENDOR));
 
 // Everything the app needs offline, as repo-relative paths
@@ -313,7 +324,7 @@ function precacheList(p) {
   const own = new Set(filesIn(p.folder).filter(f => f !== p.file && !f.endsWith('/sw.js') && (p.folder === 'template' || isPublished(f))));
   own.add(`${p.folder}/manifest.webmanifest`);
   const files = [p.file, ...[...own].sort()];
-  files.push('assets/base.css', 'assets/common.js');
+  files.push('assets/base.css', 'assets/common.js', ...sharedOf(p));
   // Whole vendor package if the app uses any file of it (fonts, .wasm are loaded indirectly) –
   // except large ones marked "precache": false, which are cached on first use (see runtimeVendors)
   for (const v of vendorsOf(p)) if (VENDOR[v]?.precache !== false) files.push(...filesIn(`assets/vendor/${v}`).sort());
