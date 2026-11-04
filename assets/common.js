@@ -431,19 +431,81 @@ window.Tools = (function () {
   }
   function menuClose() { if (menuEl && menuEl.open) menuEl.close(); }
 
+  /* ---------- "Install as app" (top of the menu, every app) ----------
+     Chrome decides itself whether and when it shows its own install banner (engagement, a dismissal blocks it for
+     months). So the menu offers installing at any time: with Chrome's prompt (beforeinstallprompt) where the browser
+     offers it, otherwise the menu path of the browser (iPhone: Share → Add to Home Screen). Hidden in the installed
+     app. Chrome's own banner is not suppressed (no preventDefault). */
+  Object.assign(dict.de, {
+    'appInstall.h': '📲 Als App installieren',
+    'appInstall.text': 'Dann startet die App vom Startbildschirm wie eine normale App – auch offline.',
+    'appInstall.btn': 'App installieren',
+    'appInstall.ios': 'In Safari auf Teilen tippen → „Zum Home-Bildschirm“. Die installierte App hat eigenen Speicher – vorhandene Daten mit „Daten sichern & übertragen“ mitnehmen.',
+    'appInstall.manual': 'Im Browser-Menü ⋮ „App installieren“ bzw. „Zum Startbildschirm hinzufügen“ wählen. Schon installiert? Dann die App vom Startbildschirm öffnen.',
+    'appInstall.done': 'Installiert – die App jetzt vom Startbildschirm öffnen.',
+  });
+  Object.assign(dict.en, {
+    'appInstall.h': '📲 Install as an app',
+    'appInstall.text': 'The app then starts from your home screen like a normal app – offline too.',
+    'appInstall.btn': 'Install app',
+    'appInstall.ios': 'In Safari, tap Share → “Add to Home Screen”. The installed app has its own storage – take existing data along with “Back up & transfer data”.',
+    'appInstall.manual': 'In the browser menu ⋮, choose “Install app” or “Add to Home screen”. Already installed? Then open the app from the home screen.',
+    'appInstall.done': 'Installed – now open the app from the home screen.',
+  });
+  let installPrompt = null, installDone = false, installRender = () => {};
+  window.addEventListener('beforeinstallprompt', e => { installPrompt = e; diagLog('install: prompt available'); installRender(); });
+  window.addEventListener('appinstalled', () => { installPrompt = null; installDone = true; diagLog('install: installed'); installRender(); });
+  const isStandalone = () => navigator.standalone === true
+    || ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'].some(m => matchMedia(`(display-mode: ${m})`).matches);
+  const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+  function setupInstall() {
+    if (!document.querySelector('link[rel="manifest"]')) return null;
+    const el = document.createElement('section');
+    el.className = 'card menu-install'; el.id = 'menuInstall';
+    el.setAttribute('aria-labelledby', 'menuInstallTitle');
+    el.innerHTML = `<h3 id="menuInstallTitle" data-i18n="appInstall.h">${esc(t('appInstall.h'))}</h3>`
+      + `<p data-i18n="appInstall.text">${esc(t('appInstall.text'))}</p>`
+      + `<button type="button" class="btn primary" id="btnAppInstall" data-i18n="appInstall.btn" hidden>${esc(t('appInstall.btn'))}</button>`
+      + '<p class="muted" id="menuInstallInfo" role="status"></p>';
+    const btn = el.querySelector('#btnAppInstall'), info = el.querySelector('#menuInstallInfo');
+    installRender = () => {
+      el.hidden = isStandalone();
+      btn.hidden = !installPrompt || installDone;
+      const key = installDone ? 'appInstall.done' : installPrompt ? '' : isIOS() ? 'appInstall.ios' : 'appInstall.manual';
+      if (key) { info.dataset.i18n = key; info.textContent = t(key); }
+      else { delete info.dataset.i18n; info.textContent = ''; }
+    };
+    btn.addEventListener('click', async () => {
+      const e = installPrompt; if (!e) return;
+      installPrompt = null;
+      try {
+        await e.prompt();
+        const c = await e.userChoice;
+        diagLog('install: choice', c && c.outcome);
+        if (c && c.outcome === 'accepted') installDone = true;
+      } catch (err) { diagLog('install: prompt failed:', err); }
+      installRender();
+    });
+    try { matchMedia('(display-mode: standalone)').addEventListener('change', () => installRender()); } catch (_) {}
+    installRender();
+    return el;
+  }
+
   function setupMenu() {
     if (menuEl || !document.querySelector('details.help')) return;
     const header = document.querySelector('body > header');
     if (!header) return;
     const parts = [...document.querySelectorAll('[data-menu]'), document.querySelector('details.data'),
       document.querySelector('details.help'), document.querySelector('body > footer')].filter(Boolean);
+    const installEl = setupInstall();
     menuEl = document.createElement('dialog');
     menuEl.className = 'menu-sheet'; menuEl.id = 'appMenu';
     menuEl.setAttribute('aria-labelledby', 'appMenuTitle');
     menuEl.innerHTML = `<div class="menu-head"><h2 id="appMenuTitle" data-i18n="menu.title">${esc(t('menu.title'))}</h2>`
       + `<button type="button" class="head-btn menu-close" aria-label="${esc(t('menu.close'))}" title="${esc(t('menu.close'))}" data-i18n-attr="aria-label:menu.close; title:menu.close">${ICON_CLOSE}</button></div>`
       + '<div class="menu-body"></div>';
-    menuEl.querySelector('.menu-body').append(...parts);
+    menuEl.querySelector('.menu-body').append(...(installEl ? [installEl] : []), ...parts);
     document.body.append(menuEl);
 
     let actions = header.querySelector('.stage-actions');
