@@ -1,4 +1,4 @@
-// Anzeigetafel: scoring rules (table tennis, tennis, padel) worked out by hand, serve, football clock,
+// Anzeigetafel: scoring rules (table tennis, tennis, padel, darts) worked out by hand, serve, football clock,
 // names, swapping sides, keyboard, one score per sport, new match, English.
 import { test, expect, openMenu, closeMenu, switchLang } from './helpers.mjs';
 
@@ -336,6 +336,146 @@ test.describe('football', () => {
     await closeMenu(page);
     await page.click('#btnHalf');
     await expect(page.locator('#clock')).toHaveText('20:00');
+  });
+});
+
+test.describe('darts', () => {
+  const key = (page, k) => page.locator(`#pad [data-k="${k}"]`).click();
+  async function visit(page, v) {
+    for (const d of String(v)) await key(page, d);
+    await key(page, 'ok');
+  }
+
+  test('501 counting down by visits on the pad, turns alternate, last visit and average', async ({ page }) => {
+    await pickSport(page, 'darts');
+    await expect(page.locator('#pad')).toBeVisible();
+    await expect(page.locator('.side .minus')).toHaveCount(0);
+    await expect(pts(page, 0)).toHaveText('501');
+    await expect(page.locator('#info')).toHaveText('Leg 1 · Spieler 1 ist dran');
+    expect(await serving(page)).toBe(0);
+    await key(page, '6'); await key(page, '0');
+    await expect(page.locator('#padEntry')).toHaveText('60');
+    await key(page, 'del');
+    await expect(page.locator('#padEntry')).toHaveText('6');
+    await key(page, '0'); await key(page, 'ok');
+    await expect(pts(page, 0)).toHaveText('441');
+    expect(await serving(page)).toBe(1);
+    await visit(page, 100);
+    await visit(page, 140);
+    // Player 1: 60 + 140 in 2 visits → average 100; player 2: 100
+    await expect(pts(page, 0)).toHaveText('301');
+    await expect(side(page, 0).locator('.done')).toHaveText('Letzte 140 · Ø 100,0');
+    await expect(side(page, 1).locator('.done')).toHaveText('Letzte 100 · Ø 100,0');
+    // Taps on the score do nothing in darts
+    await side(page, 1).locator('.tile').click();
+    await expect(pts(page, 1)).toHaveText('401');
+    // Impossible score: message, nothing entered
+    await visit(page, 179);
+    await expect(page.locator('#toast')).toHaveText('179 ist mit 3 Pfeilen nicht möglich');
+    await expect(pts(page, 1)).toHaveText('401');
+    await expect(page.locator('#padEntry')).toHaveText('Punkte der Aufnahme');
+    // Undo takes back the last visit
+    await page.click('#btnUndo');
+    await expect(pts(page, 0)).toHaveText('441');
+    expect(await serving(page)).toBe(0);
+  });
+
+  test('rules: bust, double out, legs alternate the starter, winner', async ({ page }) => {
+    const cfg = { start: 301, legs: 2, doubleOut: true };
+    // 301 − 180 = 121 left; 140 is too much → bust, still 121
+    let s = await rules(page, 'darts', [180, 60, 140], cfg);
+    expect(s.points).toEqual(['121', '241']);
+    expect(s.bust).toBe(true);
+    expect(s.last).toEqual([-1, 60]);
+    expect(s.server).toBe(1);
+    // Leaving 1 is a bust with double out, fine without
+    s = await rules(page, 'darts', [180, 60, 120], cfg);
+    expect(s.points[0]).toBe('121');
+    s = await rules(page, 'darts', [180, 60, 120], { ...cfg, doubleOut: false });
+    expect(s.points[0]).toBe('1');
+    // 159 cannot be finished on a double: reaching zero from 159 is a bust
+    s = await rules(page, 'darts', [142, 0, 159], cfg);
+    expect(s.points[0]).toBe('159');
+    // An explicit bust (-1) keeps the score
+    s = await rules(page, 'darts', [180, -1], cfg);
+    expect(s.points).toEqual(['121', '301']);
+    expect(s.average).toEqual([180, 0]);
+    // Checkout 121: leg to player 1, leg 2 starts with player 2
+    s = await rules(page, 'darts', [180, 60, 121], cfg);
+    expect(s.sets).toEqual([1, 0]);
+    expect(s.points).toEqual(['301', '301']);
+    expect(s.leg).toBe(2);
+    expect(s.server).toBe(1);
+    // Second leg also to player 1 → first to 2 legs wins
+    s = await rules(page, 'darts', [180, 60, 121, 0, 180, 0, 121], cfg);
+    expect(s.winner).toBe(0);
+    expect(s.server).toBe(null);
+    // Player 2 starts the match
+    s = await rules(page, 'darts', [100], cfg, 1);
+    expect(s.points).toEqual(['301', '201']);
+  });
+
+  test('checkout routes add up and end on a double or bull', async ({ page }) => {
+    const value = d => d === 'Bull' ? 50 : d === '25' ? 25 : d[0] === 'T' ? 3 * d.slice(1) : d[0] === 'D' ? 2 * d.slice(1) : Number(d);
+    const routes = await page.evaluate(() => Array.from({ length: 171 }, (_, n) => ScoreRules.checkout(n)));
+    const none = [];
+    routes.forEach((r, n) => {
+      if (!r) { none.push(n); return; }
+      expect(r.length, String(n)).toBeLessThanOrEqual(3);
+      expect(r.reduce((a, d) => a + value(d), 0), String(n)).toBe(n);
+      expect(r[r.length - 1], String(n)).toMatch(/^(D([1-9]|1\d|20)|Bull)$/);
+      for (const d of r) expect(d).toMatch(/^(([1-9]|1\d|20)|[DT]([1-9]|1\d|20)|25|Bull)$/);
+    });
+    // The well-known numbers without a 3-dart finish
+    expect(none).toEqual([0, 1, 159, 162, 163, 165, 166, 168, 169]);
+    expect(routes[170]).toEqual(['T20', 'T20', 'Bull']);
+    expect(routes[100]).toEqual(['T20', 'D20']);
+    expect(routes[40]).toEqual(['D20']);
+    expect(await page.evaluate(() => ScoreRules.checkout(171))).toBe(null);
+  });
+
+  test('checkout hint, leg won, legs counter, bust key, keyboard, settings', async ({ page }) => {
+    await page.evaluate(k => localStorage.setItem(k, JSON.stringify({ sport: 'darts', m: { darts: { cfg: { start: 301, legs: 2 }, pts: [180, 60] } } })), LS);
+    await page.reload();
+    await setNames(page, 'Anna', 'Ben');
+    await expect(page.locator('#info')).toHaveText('Leg 1 · Anna ist dran · Finish Anna: T20 T7 D20');
+    // Bust key: score stays, Ben's turn (241 left: no 3-dart finish, no hint)
+    await key(page, 'bust');
+    await expect(page.locator('#info')).toHaveText('Leg 1 · ✕ Überworfen! · Ben ist dran');
+    await expect(side(page, 0).locator('.done')).toHaveText('Letzte ✕ · Ø 90,0');
+    // Keyboard: digits, Enter
+    await page.keyboard.type('41');
+    await page.keyboard.press('Enter');
+    await expect(pts(page, 1)).toHaveText('200');
+    await page.keyboard.type('121');
+    await page.keyboard.press('Enter');
+    await expect(mini(page, 0, 'Legs')).toHaveText('1');
+    await expect(pts(page, 0)).toHaveText('301');
+    await expect(page.locator('#info')).toContainText('Leg 2 · Ben ist dran');
+    // Backspace with an empty entry undoes the checkout
+    await page.keyboard.press('Backspace');
+    await expect(pts(page, 0)).toHaveText('121');
+    await expect(mini(page, 0, 'Legs')).toHaveText('0');
+    // Settings
+    await openMenu(page);
+    await expect(page.locator('#optDarts')).toBeVisible();
+    await expect(page.locator('#optBest')).toBeHidden();
+    await expect(page.locator('#h-first')).toHaveText('Wer beginnt');
+    await expect(page.locator('#dartStart [data-start="301"]')).toHaveAttribute('aria-pressed', 'true');
+    await page.click('#dartStart [data-start="701"]');
+    await page.uncheck('#doubleOut');
+    await closeMenu(page);
+    // Ben scored 60 + 41 → 701 − 101 = 600
+    await expect(pts(page, 1)).toHaveText('600');
+    await expect(page.locator('#info')).not.toContainText('Finish');
+    expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)).m.darts.cfg, LS)).toEqual({ start: 701, legs: 2, doubleOut: false });
+  });
+
+  test('winner disables the pad', async ({ page }) => {
+    await page.evaluate(k => localStorage.setItem(k, JSON.stringify({ sport: 'darts', m: { darts: { cfg: { start: 301, legs: 1 }, pts: [180, 0, 121] } } })), LS);
+    await page.reload();
+    await expect(page.locator('#info')).toHaveText('🏆 Spieler 1 gewinnt!');
+    await expect(page.locator('#pad [data-k="ok"]')).toBeDisabled();
   });
 });
 

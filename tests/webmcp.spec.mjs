@@ -1550,6 +1550,28 @@ test.describe('scoreboard tools', () => {
     await expect(page.locator('.side[data-p="1"] .pts')).toHaveText('1');
   });
 
+  test('darts: visit of the player whose turn it is, bust, checkout', async ({ page }) => {
+    await openMenu(page);
+    await page.click('#sports [data-sport="darts"]');
+    await closeMenu(page);
+    let r = await call(page, 'scoreboard_add_point', { player: 2, score: 60 });
+    expect(r).toEqual({ ok: false, error: 'It is the turn of player 1.' });
+    expect((await call(page, 'scoreboard_add_point', { player: 1 })).error).toContain('score');
+    expect((await call(page, 'scoreboard_add_point', { player: 1, score: 179 })).error).toContain('not possible');
+    expect((await call(page, 'scoreboard_add_point', { player: 1, score: 181 })).ok).toBe(false);
+    r = await call(page, 'scoreboard_add_point', { player: 1, score: 180 });
+    expect(r.result).toMatchObject({ sport: 'darts', remaining: [321, 501], points: ['321', '501'], legs: [0, 0], legs_to_win: 3,
+      starting_score: 501, double_out: true, to_throw: 2, last_visit: [180, null], average_per_visit: [180, 0], checkout: null, winner: null });
+    r = await call(page, 'scoreboard_add_point', { player: 2, bust: true });
+    expect(r.result).toMatchObject({ remaining: [321, 501], last_visit: [180, 'bust'], to_throw: 1 });
+    await expect(page.locator('.side[data-p="0"] .pts')).toHaveText('321');
+    // Other sports reject the darts fields
+    await openMenu(page);
+    await page.click('#sports [data-sport="tennis"]');
+    await closeMenu(page);
+    expect((await call(page, 'scoreboard_add_point', { player: 1, score: 3 })).error).toContain('only for darts');
+  });
+
   test('rejects bad input and points after the match is won', async ({ page }) => {
     expect(await call(page, 'scoreboard_add_point', { player: 3 })).toEqual({ ok: false, error: expect.stringContaining('input.player') });
     expect((await call(page, 'scoreboard_add_point', {})).ok).toBe(false);

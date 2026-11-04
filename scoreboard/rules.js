@@ -1,16 +1,20 @@
 /* Scoring rules of the scoreboard – no DOM, loaded by index.html (window.ScoreRules).
    A match is a list of points (0 = player/team 1, 1 = player/team 2); the score is always worked out
-   from that list again. So undo = drop the last point, and a correction cannot leave a wrong state. */
+   from that list again. So undo = drop the last point, and a correction cannot leave a wrong state.
+   Darts: the list holds the score of each visit (3 darts) instead, -1 = bust; whose turn it is follows from the order. */
 (function (root) {
   'use strict';
 
-  const SPORTS = ['football', 'tabletennis', 'tennis', 'padel'];
+  const SPORTS = ['football', 'tabletennis', 'tennis', 'padel', 'darts'];
   const DEFAULTS = {
     football: { halfMin: 45 },
     tabletennis: { bestOf: 5 },
     tennis: { bestOf: 3, goldenPoint: false, matchTiebreak: false },
     padel: { bestOf: 3, goldenPoint: true, matchTiebreak: false },
+    darts: { start: 501, doubleOut: true, legs: 3 },
   };
+  const DART_START = [301, 501, 701];
+  const DART_LEGS = [1, 2, 3, 5];
   const BEST_OF = { tabletennis: [3, 5, 7], tennis: [3, 5], padel: [3, 5] };
   const HALF_MIN = [5, 10, 15, 20, 25, 30, 35, 40, 45];
 
@@ -109,16 +113,76 @@
     return { sport: 'football', points: goals.map(String), raw: goals, winner: null, server: null };
   }
 
+  /* ---------- Darts: count down from 301/501/701, legs, optional double out ---------- */
+  // Scores 3 darts cannot make (largest is 180)
+  const NO_VISIT = [163, 166, 169, 172, 173, 175, 176, 178, 179];
+  const validVisit = v => Number.isInteger(v) && v >= 0 && v <= 180 && !NO_VISIT.includes(v);
+  // Single darts for checkout routes: finishing doubles in the usual order of preference, then the rest
+  const D = n => ({ v: n * 2, l: 'D' + n }), T = n => ({ v: n * 3, l: 'T' + n }), S = n => ({ v: n, l: String(n) });
+  const range = (a, b) => { const r = []; for (let i = a; i >= b; i--) r.push(i); return r; };
+  const FINISH = [20, 16, 18, 12, 10, 8, 4, 2, 1, 19, 17, 15, 14, 13, 11, 9, 7, 6, 5, 3].map(D).concat({ v: 50, l: 'Bull' });
+  const ONE = n => (n >= 1 && n <= 20 ? S(n) : n === 25 ? { v: 25, l: '25' } : n % 3 === 0 && n <= 60 ? T(n / 3)
+    : n % 2 === 0 && n <= 40 ? D(n / 2) : n === 50 ? { v: 50, l: 'Bull' } : null);
+  const FIRST = range(20, 1).map(T).concat({ v: 50, l: 'Bull' }, { v: 25, l: '25' }, range(20, 1).map(S));
+  // Shortest way to finish on a double (or bull) with up to 3 darts, e.g. 170 → T20 T20 Bull; null if there is none
+  function checkout(n) {
+    if (n < 2 || n > 170) return null;
+    // Two darts: a single, treble or bull to set up the double first, a double as set-up only if nothing else works
+    const two = r => {
+      for (const d of FINISH) if (r === d.v) return [d.l];
+      for (const setupDouble of [false, true]) {
+        for (const d of FINISH) {
+          const o = r > d.v ? ONE(r - d.v) : null;
+          if (o && (setupDouble || !/^D/.test(o.l))) return [o.l, d.l];
+        }
+      }
+      return null;
+    };
+    const r2 = two(n);
+    if (r2) return r2;
+    for (const f of FIRST) {
+      const r = n - f.v, t = r >= 2 ? two(r) : null;
+      if (t) return [f.l].concat(t);
+    }
+    return null;
+  }
+  function darts(visits, cfg, first) {
+    const need = cfg.legs, start = cfg.start, legs = [0, 0], done = [];
+    const stats = [{ scored: 0, visits: 0, last: null }, { scored: 0, visits: 0, last: null }];
+    let rem = [start, start], leg = 0, turn = first, winner = null, lastBust = false;
+    for (const v of visits) {
+      if (winner != null) break;
+      const r = rem[turn] - v;
+      // Bust: below zero, left on 1 or reaching zero without a possible double finish – the score stays
+      const bust = v < 0 || r < 0 || (cfg.doubleOut && (r === 1 || (r === 0 && !checkout(rem[turn]))));
+      const st = stats[turn];
+      st.visits++; st.last = bust ? -1 : v; lastBust = bust;
+      if (!bust) { st.scored += v; rem[turn] = r; }
+      if (!bust && r === 0) {
+        legs[turn]++; done.push({ games: legs.slice(), winner: turn, rest: rem.slice() });
+        if (legs[turn] === need) { winner = turn; break; }
+        leg++; rem = [start, start]; turn = leg % 2 ? other(first) : first;
+      } else turn = other(turn);
+    }
+    return {
+      sport: 'darts', points: rem.map(String), raw: rem, sets: legs, games: null, done, need, leg: leg + 1,
+      server: winner != null ? null : turn, winner, bust: lastBust && winner == null,
+      average: stats.map(x => (x.visits ? x.scored / x.visits : 0)), last: stats.map(x => x.last),
+      checkout: winner == null && cfg.doubleOut ? checkout(rem[turn]) : null,
+    };
+  }
+
   function score(match) {
     const cfg = Object.assign({}, DEFAULTS[match.sport], match.cfg);
     const pts = match.pts || [], first = match.first ? 1 : 0;
     let s;
     if (match.sport === 'tabletennis') s = tableTennis(pts, cfg, first);
     else if (match.sport === 'tennis' || match.sport === 'padel') s = tennis(pts, cfg, first, match.sport);
+    else if (match.sport === 'darts') s = darts(pts, cfg, first);
     else s = football(pts);
     // Game, set or match point: what one more point would win
     s.ball = null;
-    if (match.sport !== 'football' && s.winner == null) {
+    if (match.sport !== 'football' && match.sport !== 'darts' && s.winner == null) {
       for (const p of [0, 1]) {
         const next = score.raw(Object.assign({}, match, { pts: pts.concat(p) }));
         if (next.winner === p) s.ball = { p, kind: 'match' };
@@ -144,5 +208,5 @@
       minute: halfMin * half, plus: Math.floor(add / 60) + 1 };
   }
 
-  root.ScoreRules = { SPORTS, DEFAULTS, BEST_OF, HALF_MIN, score, clock };
+  root.ScoreRules = { SPORTS, DEFAULTS, BEST_OF, HALF_MIN, DART_START, DART_LEGS, validVisit, checkout, score, clock };
 })(typeof self !== 'undefined' ? self : globalThis);
