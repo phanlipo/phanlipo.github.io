@@ -2,7 +2,7 @@
 // Browsers do not ship it yet, so a stand-in modelContext records what the page registers;
 // the tests then call the tools like an agent would.
 import { readFileSync } from 'node:fs';
-import { test, expect, apps } from './helpers.mjs';
+import { test, expect, apps, openMenu, closeMenu } from './helpers.mjs';
 import { makePdf } from './pdf-tools.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 import { CLIPS, clip, wavInfo, mp3Info, toneHz } from './audio-files.mjs';
@@ -1550,6 +1550,75 @@ test.describe('markdown-editor tools', () => {
     expect((await call(page, 'markdown_editor_create_document', { markdown: 'x', other: 1 })).ok).toBe(false);
     expect((await call(page, 'markdown_editor_list_documents', {})).result.documents).toHaveLength(1);
     await expect(page.locator('#raw')).toHaveValue('');
+  });
+});
+
+test.describe('scoreboard tools', () => {
+  test.beforeEach(async ({ page }) => { await open(page, '/scoreboard/'); });
+
+  test('add_point follows the table tennis rules and shows up on the board, get_score reads it', async ({ page }) => {
+    let r;
+    for (let i = 0; i < 3; i++) r = await call(page, 'scoreboard_add_point', { player: 1 });
+    expect(r.ok).toBe(true);
+    // 3:0, after 2 points the serve went to player 2
+    expect(r.result).toMatchObject({ sport: 'table_tennis', points: ['3', '0'], sets: [0, 0], serving: 2, sets_to_win: 3, winner: null,
+      players: [{ number: 1, name: 'Spieler 1' }, { number: 2, name: 'Spieler 2' }] });
+    await expect(page.locator('.side[data-p="0"] .pts')).toHaveText('3');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Punkt eingetragen');
+    for (let i = 0; i < 8; i++) await call(page, 'scoreboard_add_point', { player: 1 });
+    const g = await call(page, 'scoreboard_get_score', {});
+    expect(g.result).toMatchObject({ points: ['0', '0'], sets: [1, 0], finished_sets: [{ games: [11, 0] }], serving: 2 });
+  });
+
+  test('tennis: points as shown, set point; football: goals with minute and clock', async ({ page }) => {
+    await openMenu(page);
+    await page.click('#sports [data-sport="tennis"]');
+    await page.fill('#name1', 'Anna');
+    await closeMenu(page);
+    for (let i = 0; i < 3; i++) await call(page, 'scoreboard_add_point', { player: 2 });
+    const r = (await call(page, 'scoreboard_add_point', { player: 1 })).result;
+    expect(r).toMatchObject({ sport: 'tennis', points: ['15', '40'], games: [0, 0], serving: 1, set_point: null, match_point: null, tiebreak: false });
+    expect(r.players[1].name).toBe('Anna');
+    await openMenu(page);
+    await page.click('#sports [data-sport="football"]');
+    await closeMenu(page);
+    const f = (await call(page, 'scoreboard_add_point', { player: 2 })).result;
+    expect(f).toMatchObject({ sport: 'football', goals: [0, 1], goal_log: [{ player: 2, minute: "1'" }],
+      clock: { half: 1, time: '00:00', stoppage_time: null, running: false }, winner: null });
+    await expect(page.locator('.side[data-p="1"] .pts')).toHaveText('1');
+  });
+
+  test('darts: visit of the player whose turn it is, bust, checkout', async ({ page }) => {
+    await openMenu(page);
+    await page.click('#sports [data-sport="darts"]');
+    await closeMenu(page);
+    let r = await call(page, 'scoreboard_add_point', { player: 2, score: 60 });
+    expect(r).toEqual({ ok: false, error: 'It is the turn of player 1.' });
+    expect((await call(page, 'scoreboard_add_point', { player: 1 })).error).toContain('score');
+    expect((await call(page, 'scoreboard_add_point', { player: 1, score: 179 })).error).toContain('not possible');
+    expect((await call(page, 'scoreboard_add_point', { player: 1, score: 181 })).ok).toBe(false);
+    r = await call(page, 'scoreboard_add_point', { player: 1, score: 180 });
+    expect(r.result).toMatchObject({ sport: 'darts', remaining: [321, 501], points: ['321', '501'], legs: [0, 0], legs_to_win: 3,
+      starting_score: 501, double_out: true, to_throw: 2, last_visit: [180, null], average_per_visit: [180, 0], checkout: null, winner: null });
+    r = await call(page, 'scoreboard_add_point', { player: 2, bust: true });
+    expect(r.result).toMatchObject({ remaining: [321, 501], last_visit: [180, 'bust'], to_throw: 1 });
+    await expect(page.locator('.side[data-p="0"] .pts')).toHaveText('321');
+    // Other sports reject the darts fields
+    await openMenu(page);
+    await page.click('#sports [data-sport="tennis"]');
+    await closeMenu(page);
+    expect((await call(page, 'scoreboard_add_point', { player: 1, score: 3 })).error).toContain('only for darts');
+  });
+
+  test('rejects bad input and points after the match is won', async ({ page }) => {
+    expect(await call(page, 'scoreboard_add_point', { player: 3 })).toEqual({ ok: false, error: expect.stringContaining('input.player') });
+    expect((await call(page, 'scoreboard_add_point', {})).ok).toBe(false);
+    await page.evaluate(() => localStorage.setItem('scoreboard.state.v1', JSON.stringify({ sport: 'tabletennis', m: { tabletennis: { cfg: { bestOf: 3 }, pts: Array(22).fill(1) } } })));
+    await page.reload();
+    expect((await call(page, 'scoreboard_get_score', {})).result).toMatchObject({ winner: 2, sets: [0, 2], serving: null });
+    const r = await call(page, 'scoreboard_add_point', { player: 1 });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('already won');
   });
 });
 

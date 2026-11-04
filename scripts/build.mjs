@@ -51,7 +51,7 @@ const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Standort', 'Datei ö
 const TAGS_EN = {
   Alltag: 'Everyday', Arbeit: 'Work', Freizeit: 'Leisure',
   Apotheke: 'Pharmacy', Barcode: 'Barcode', Bierbrauen: 'Homebrewing', Dokumente: 'Documents', KI: 'AI',
-  Kinder: 'Kids', Messen: 'Measuring', Musik: 'Music', Rechner: 'Calculators', Spiele: 'Games', Sprache: 'Speech',
+  Kinder: 'Kids', Messen: 'Measuring', Musik: 'Music', Rechner: 'Calculators', Spiele: 'Games', Sport: 'Sports', Sprache: 'Speech',
   Werkzeug: 'Tools', Zufall: 'Random',
   Kamera: 'Camera', Mikrofon: 'Microphone', Bewegungssensor: 'Motion sensor', Standort: 'Location',
   'Datei öffnen': 'Open file', 'Teilen an App': 'Share to app', Benachrichtigung: 'Notifications', Kopieren: 'Copy', Verlauf: 'History',
