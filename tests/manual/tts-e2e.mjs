@@ -38,6 +38,10 @@ try {
   page.on('pageerror', e => console.log('pageerror:', e.message));
   page.on('dialog', d => d.accept());
   await page.goto(`http://localhost:${PORT}/text-to-speech/`);
+  // A reused profile may start with an older cached version: wait for the update, then reload
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.waitForTimeout(1500);
+  await page.reload();
   if (process.env.TTS_LANG) await page.selectOption('#lang', process.env.TTS_LANG);
   if (process.env.TTS_TEXT) await page.fill('#text', process.env.TTS_TEXT);
   else await page.click('#btnSample');

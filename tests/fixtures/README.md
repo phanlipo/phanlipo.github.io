@@ -21,3 +21,5 @@ Text zu Sprache (`text-to-speech.spec.mjs`):
   `scales` → `output`), das statt Sprache die Phonem-IDs / 1000 × Längenfaktor ausgibt. So prüft der Test die echte
   Pipeline (eSpeak NG → Phonem-IDs → onnxruntime) ohne 60-MB-Download. Erzeugt mit `tiny-piper.py`
   (`pip install onnx`, dann `python tiny-piper.py tiny-piper.onnx`).
+- `tiny-kokoro.onnx` – dasselbe für die deutsche Kokoro-Stimme (`input_ids`, `style`, `speed` → `waveform`):
+  gibt die Token-IDs / 1000 × Tempo aus. Erzeugt mit `tiny-kokoro.py`.

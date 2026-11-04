@@ -1,7 +1,7 @@
-// Text-to-speech worker for the ONNX voices: Supertonic 3 and Piper (onnxruntime-web, off the main thread).
+// Text-to-speech worker for the ONNX voices: Supertonic 3, Piper and the German Kokoro voices (onnxruntime-web, off the main thread).
 // Classic worker: the Piper phonemizer is an Emscripten build loaded with importScripts.
 //
-// Messages in:  { type: 'speak', id, engine: 'supertonic' | 'piper', text, lang, voice, speed, steps, device }
+// Messages in:  { type: 'speak', id, engine: 'supertonic' | 'piper' | 'kokoro' (German voices "de:…"), text, lang, voice, speed, steps, device }
 //               { type: 'load', id, engine, voice, device }        download/prepare only
 // Messages out: { type: 'progress', id, loaded, total }            model download (bytes, all files so far)
 //               { type: 'status', id, status: 'loading' | 'speaking', device }
@@ -82,10 +82,10 @@ async function hasWebGPU() {
   try { return !!(self.navigator.gpu && await self.navigator.gpu.requestAdapter()); } catch { return false; }
 }
 
-async function createSessions(buffers, device) {
+async function createSessions(buffers, device, opt = 'all') {
   const tryWith = async providers => {
     const out = [];
-    for (const b of buffers) out.push(await ort.InferenceSession.create(b, { executionProviders: providers, graphOptimizationLevel: 'all' }));
+    for (const b of buffers) out.push(await ort.InferenceSession.create(b, { executionProviders: providers, graphOptimizationLevel: opt }));
     return out;
   };
   if (device === 'webgpu' || (device === 'auto' && await hasWebGPU())) {
@@ -266,6 +266,61 @@ async function speakPiper({ text, speed, speaker }) {
   return { samples: new Float32Array(output.data), sampleRate: config.audio.sample_rate };
 }
 
+/* ---------- Kokoro, German fine-tunes ----------
+   kikiri-tts (Apache-2.0) trained Kokoro-82M on German with eSpeak NG phonemes – the same phonemizer
+   Piper uses here. Text → IPA (eSpeak NG, German) → Kokoro's phoneme vocabulary → model (24 kHz). */
+const KOKORO_DE = {
+  kerstin: { base: 'https://huggingface.co/crane-local-ai/Kokoro-82M-v1.0-German-ONNX/resolve/eeccb15741604cdc894053e1f4c72bb56c1a59be/',
+    model: 'onnx/model.onnx', voice: 'voices/df_kerstin.bin', vocab: 'tokenizer.json' },
+};
+let kokoroDe = null;      // { name, session, vocab: Map, style: Float32Array, device }
+
+async function loadKokoroDe(name, device) {
+  if (kokoroDe && kokoroDe.name === name && (device === 'auto' || kokoroDe.device === device)) return kokoroDe;
+  const v = KOKORO_DE[name];
+  if (!v) throw new Error('unknown voice ' + name);
+  const vocabText = new TextDecoder().decode(await getFile(v.base + v.vocab));
+  const vocab = new Map();
+  if (v.vocab.endsWith('.json')) {
+    for (const [sym, id] of Object.entries(JSON.parse(vocabText).model.vocab)) vocab.set(sym, id);
+  } else {
+    // "symbol id" per line – the symbol can be a space
+    for (const line of vocabText.split('\n')) { const i = line.lastIndexOf(' '); if (i > 0) vocab.set(line.slice(0, i), Number(line.slice(i + 1))); }
+  }
+  const styleBuf = await getFile(v.base + v.voice);
+  const style = new Float32Array(styleBuf.buffer, styleBuf.byteOffset, styleBuf.byteLength / 4);
+  const { sessions, device: used } = await createSessions([await getFile(v.base + v.model)], device, 'all');
+  kokoroDe = { name, session: sessions[0], vocab, style, device: used };
+  return kokoroDe;
+}
+
+// eSpeak's IPA in the convention the voices were trained with (misaki's espeak post-processing, kikiri-tts fork):
+// diphthongs and affricates as single symbols, short ü as y (ʏ is missing in Kokoro's vocabulary),
+// a space after the end of a sentence (piper-phonemize returns the sentences without it)
+const KOKORO_MAP = [['aɪ', 'I'], ['aʊ', 'W'], ['ɔɪ', 'Y'], ['eɪ', 'A'], ['oʊ', 'O'], ['əʊ', 'Q'], ['dz', 'ʣ'], ['dʒ', 'ʤ'], ['ts', 'ʦ'], ['tʃ', 'ʧ'], ['ʏ', 'y']];
+function kokoroPhonemes(phonemes) {
+  let s = phonemes.join('').replace(/([.!?…])(?=\S)/g, '$1 ');
+  for (const [a, b] of KOKORO_MAP) s = s.replaceAll(a, b);
+  return s;
+}
+
+async function speakKokoroDe({ text, speed }) {
+  const { session, vocab, style } = kokoroDe;
+  const ph = await phonemeIds(text, 'de');
+  const ids = [];
+  for (const ch of kokoroPhonemes(ph.phonemes)) { const id = vocab.get(ch); if (id != null) ids.push(id); }
+  ids.splice(510);
+  const tokens = [0, ...ids, 0];
+  const row = Math.min(Math.max(ids.length - 1, 0), 509);
+  const [nTok, nStyle, nSpeed] = session.inputNames;
+  const out = await session.run({
+    [nTok]: new ort.Tensor('int64', BigInt64Array.from(tokens, BigInt), [1, tokens.length]),
+    [nStyle]: new ort.Tensor('float32', style.slice(row * 256, row * 256 + 256), [1, 256]),
+    [nSpeed]: new ort.Tensor('float32', Float32Array.from([speed]), [1]),
+  });
+  return { samples: new Float32Array(out[session.outputNames[0]].data), sampleRate: 24000 };
+}
+
 /* ---------- Messages (one at a time, in order) ---------- */
 let queue = Promise.resolve();
 self.onmessage = ({ data }) => { queue = queue.then(() => handle(data)); };
@@ -275,6 +330,7 @@ async function load(data) {
   progress.files = new Map();
   if (data.engine === 'supertonic') { await loadSupertonic(data.device || 'auto'); await stStyle(data.voice); return st.device; }
   if (data.engine === 'piper') { await loadPiper(data.voice.split('#')[0]); await loadPhonemizer(); return piper.device; }
+  if (data.engine === 'kokoro') { await loadKokoroDe(data.voice.replace(/^de:/, ''), data.device || 'auto'); await loadPhonemizer(); return kokoroDe.device; }
   throw new Error('unknown engine ' + data.engine);
 }
 
@@ -293,6 +349,7 @@ async function handle(data) {
     const speed = Math.min(2, Math.max(0.5, Number(data.speed) || 1));
     const out = data.engine === 'supertonic'
       ? await speakSupertonic({ text: data.text, lang: data.lang, voice: data.voice, speed, steps: Math.min(32, Math.max(1, data.steps | 0 || 8)) })
+      : data.engine === 'kokoro' ? await speakKokoroDe({ text: data.text, speed })
       : await speakPiper({ text: data.text, speed, speaker: data.voice.split('#')[1] });
     self.postMessage({ type: 'audio', id, device, samples: out.samples, sampleRate: out.sampleRate, seconds: (performance.now() - t0) / 1000 }, [out.samples.buffer]);
   } catch (e) {
