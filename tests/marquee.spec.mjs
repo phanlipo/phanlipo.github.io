@@ -169,6 +169,8 @@ test('history in the menu: newest first, no duplicates, reuse and clear', async 
   await page.locator('#hist button', { hasText: 'Zwei' }).click();
   await expect(page.locator('#appMenu')).toBeHidden();
   await expect(page.locator('#text')).toHaveValue('Zwei');
+  // Closing the menu goes back one history entry – a reload during that navigation is aborted
+  await expect.poll(() => page.evaluate(() => !(history.state && history.state.toolsMenu))).toBe(true);
   await page.reload();
   await openMenu(page);
   await expect(page.locator('#hist button')).toHaveText(['Eins', 'Zwei']);
