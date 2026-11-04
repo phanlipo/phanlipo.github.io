@@ -4,6 +4,7 @@
 // far too big for `npm test`; see tests/manual/chat-e2e.mjs.
 import { test, expect, clipboardText, openMenu, closeMenu } from './helpers.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
+import { samplingFilter } from '../ai-chat/sampling.mjs';
 
 const URL_ = '/ai-chat/';
 const GEMMA4 = { id: 'onnx-community/gemma-4-E2B-it-qat-mobile-ONNX', revision: 'a7f19b0ab28252b77cea830f52b8290b2479c87d' };
@@ -447,5 +448,43 @@ test.describe('English', () => {
     const gen = (await posted(page)).find(m => m.type === 'generate');
     expect(gen.messages[0].content).toMatch(/^You are a helpful assistant\. Answer in English/);
     expect(gen.model).toMatchObject({ ...GEMMA4, arch: 'gemma4', dtypes: { f16: 'q2f16' } });
+  });
+});
+
+test.describe('sampling filter (top_p / min_p, which transformers.js ignores)', () => {
+  // Logits = ln(probability), so the expected cut can be checked by hand
+  const run = (probs, opts, rows = 1) => {
+    const data = new Float32Array(Array.from({ length: rows }, () => probs.map(Math.log)).flat());
+    samplingFilter(opts)(null, { dims: [rows, probs.length], data });
+    return Array.from(data, v => v === -Infinity ? null : Math.round(Math.exp(v) * 100) / 100);
+  };
+
+  test('top_p keeps the most likely tokens until they reach the share', () => {
+    // 0.5 → 0.8 (below 0.9) → 0.95: three tokens
+    expect(run([0.15, 0.5, 0.05, 0.3], { top_k: 64, top_p: 0.9 })).toEqual([0.15, 0.5, null, 0.3]);
+    // 0.5 alone already reaches 0.5
+    expect(run([0.15, 0.5, 0.05, 0.3], { top_k: 64, top_p: 0.5 })).toEqual([null, 0.5, null, null]);
+    // the best token always stays
+    expect(run([0.15, 0.5, 0.05, 0.3], { top_k: 64, top_p: 0.01 })).toEqual([null, 0.5, null, null]);
+  });
+
+  test('min_p drops tokens far less likely than the best', () => {
+    // relative to 0.5: 0.6, 0.3, 0.1 → with 0.2 the last one goes
+    expect(run([0.15, 0.5, 0.05, 0.3], { top_k: 64, top_p: 1, min_p: 0.2 })).toEqual([0.15, 0.5, null, 0.3]);
+  });
+
+  test('top_k and several rows', () => {
+    expect(run([0.15, 0.5, 0.05, 0.3], { top_k: 2, top_p: 1 }, 2)).toEqual([null, 0.5, null, 0.3, null, 0.5, null, 0.3]);
+  });
+
+  test('Gemma vocabulary: only a few candidates are left from a flat tail', () => {
+    // 262,144 tokens: three clear favourites, the rest a flat tail of stray pieces
+    const vocab = 262144, data = new Float32Array(vocab).fill(-2);
+    data[10] = 12; data[20] = 11.5; data[30] = 11;
+    const started = performance.now();
+    samplingFilter({ top_k: 64, top_p: 0.95, min_p: 0.05 })(null, { dims: [1, vocab], data });
+    expect(performance.now() - started).toBeLessThan(200);
+    const kept = [...data.keys()].filter(i => data[i] !== -Infinity);
+    expect(kept).toEqual([10, 20, 30]);
   });
 });

@@ -12,6 +12,7 @@ import {
   AutoTokenizer, AutoModelForCausalLM, Gemma4Processor, Gemma4ForCausalLM,
   TextStreamer, InterruptableStoppingCriteria, env, ones,
 } from '../assets/vendor/transformers/transformers.min.js';
+import { samplingFilter } from './sampling.mjs';
 
 // Models come from the Hugging Face Hub and are kept by transformers.js in the
 // browser's Cache Storage ("transformers-cache") – after the first download they work offline.
@@ -195,6 +196,8 @@ self.onmessage = async ({ data }) => {
           max_new_tokens: data.maxTokens,
           do_sample: true,
           ...data.model.sampling,
+          // top_p / min_p: transformers.js ignores them, see sampling.mjs
+          logits_processor: [samplingFilter(data.model.sampling)],
           streamer,
           stopping_criteria: stopper,
         });
