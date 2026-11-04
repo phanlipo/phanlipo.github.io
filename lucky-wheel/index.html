@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Glücksrad</title>
+<meta name="description" content="Glücksrad zum Auslosen: eigene Einträge eintragen, Rad drehen, fair per Zufall. Gewinner auf Wunsch entfernen, Verlauf der Ergebnisse.">
+<meta name="tool:tags" content="Freizeit, Spiele, Zufall">
+<meta name="tool:features" content="Verlauf, KI-Agent">
+<meta name="tool:icon" content="wheel">
+<meta name="tool:color" content="#9a3412">
+<meta name="tool:short-name" content="Glücksrad">
+<meta name="tool:title-en" content="Wheel of Fortune">
+<meta name="tool:description-en" content="Spinning wheel for drawing lots: enter your own entries, spin the wheel, fair and random. Optionally remove winners, history of results.">
+<meta name="tool:short-name-en" content="Spin Wheel">
+<meta name="tool:storage" content="lucky-wheel.">
+<meta name="tool:webmcp" content="spin_wheel, get_entries, get_history">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Tq/YaZVKP4CKiMOqklNlB2o9lxjVyjWB2K3xGf8DtLk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Glücksrad">
+<meta name="theme-color" content="#9a3412">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#9a3412;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#fb923c;--accent-text:#1c0d03}}
+main{display:flex;flex-direction:column;gap:8px;padding:8px 12px 12px}
+.result{flex:none;min-height:56px;display:flex;align-items:center;justify-content:center;text-align:center;
+  font-size:24px;font-weight:700;line-height:1.2;overflow-wrap:anywhere;margin:0}
+.result.hint{font-size:16px;font-weight:400;color:var(--muted)}
+.result.win{animation:pop .4s ease-out}
+@keyframes pop{0%{transform:scale(.7);opacity:.3}70%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion: reduce){.result.win{animation:none}}
+.wheel-box{flex:1;min-height:180px;display:grid;place-items:center;overflow:hidden}
+#wheel{display:block;cursor:pointer;touch-action:manipulation;max-width:100%;max-height:100%}
+.bar{flex:none;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+.bar .btn{min-height:52px}
+#btnSpin{flex:1;max-width:420px;font-size:20px;font-weight:700}
+.count{color:var(--muted);font-size:14px;text-align:center;margin:0}
+#entries{width:100%;min-height:200px;padding:8px 10px;resize:vertical;line-height:1.5}
+.hist{list-style:none;margin:8px 0 0;padding:0;max-height:50vh;overflow:auto}
+.hist li{display:flex;gap:10px;justify-content:space-between;padding:6px 0;border-block-end:1px solid var(--border)}
+.hist time{color:var(--muted);font-size:14px;white-space:nowrap}
+.hist .who{overflow-wrap:anywhere}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Glücksrad</span></h1>
+  <p class="sub" data-i18n="sub">Drehen und auslosen</p>
+  <div class="stage-actions">
+    <!-- Tabler Icons (MIT): pencil -->
+    <button type="button" class="head-btn" id="btnEdit" aria-label="Einträge bearbeiten" title="Einträge bearbeiten" data-i18n-attr="aria-label:edit; title:edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"/><path d="M13.5 6.5l4 4"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <p class="result hint" id="result" role="status" aria-live="polite"></p>
+  <div class="wheel-box" id="wheelBox">
+    <canvas id="wheel" role="img" aria-label="Glücksrad"></canvas>
+  </div>
+  <div class="bar">
+    <button type="button" class="btn primary" id="btnSpin" data-i18n="spin">Drehen</button>
+    <button type="button" class="btn" id="btnRestore" data-i18n="restore" hidden>Alle zurück aufs Rad</button>
+  </div>
+  <p class="count" id="count"></p>
+
+  <section class="card" aria-labelledby="h-entries" data-menu>
+    <h2 id="h-entries" data-i18n="entries">Einträge</h2>
+    <label for="entries" class="muted" data-i18n="entriesHint">Ein Eintrag pro Zeile (2 bis 100). Doppelte Einträge zählen doppelt.</label>
+    <textarea id="entries" spellcheck="false" autocomplete="off"></textarea>
+    <div class="row">
+      <button type="button" class="btn" id="btnShuffle" data-i18n="shuffle">Reihenfolge mischen</button>
+      <button type="button" class="btn" id="btnDefaults" data-i18n="defaults">Beispiel einsetzen</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu>
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <label class="check"><input type="checkbox" id="optRemove"> <span data-i18n="optRemove">Gewinner vom Rad nehmen (jeder kommt nur einmal dran)</span></label>
+    <label class="check"><input type="checkbox" id="optAnim"> <span data-i18n="optAnim">Drehen animieren</span></label>
+    <label class="check"><input type="checkbox" id="optSound"> <span data-i18n="optSound">Ton</span></label>
+    <label class="check"><input type="checkbox" id="optVibrate"> <span data-i18n="optVibrate">Vibration</span></label>
+  </section>
+
+  <section class="card" aria-labelledby="h-hist" data-menu>
+    <h2 id="h-hist"><span data-i18n="history">Verlauf</span> (<span id="histCount">0</span>)</h2>
+    <ol class="hist" id="hist"></ol>
+    <div class="row"><button type="button" class="btn" id="btnClearHist" data-i18n="clearHist">Verlauf löschen</button></div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Glücksrad zum Auslosen – wer fängt an, wer spült ab, was gibt es zu essen.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Drehen</b> oder aufs Rad tippen. Der Pfeil oben zeigt das Ergebnis.</li>
+    <li>Die Einträge änderst du mit dem Stift oben rechts oder im Menü ☰ unter <b>Einträge</b>: ein Eintrag pro Zeile. Ein Eintrag, der zweimal dasteht, hat doppelte Chancen.</li>
+    <li><b>Gewinner vom Rad nehmen</b> (Menü → Einstellungen): Jeder gezogene Eintrag verschwindet beim nächsten Drehen vom Rad – gut für Reihenfolgen und Teams. <b>Alle zurück aufs Rad</b> setzt die Runde zurück; das passiert auch, wenn du die Einträge änderst.</li>
+    <li>Im Menü findest du außerdem Ton, Vibration, Animation und den <b>Verlauf</b> der letzten 100 Ergebnisse.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Fair: Der Gewinner wird mit <code>crypto.getRandomValues</code> gleichverteilt ausgelost, erst dann dreht sich das Rad an diese Stelle. Wie lange es dreht, ändert nichts am Ergebnis.</li>
+    <li>Einträge, Einstellungen und Verlauf bleiben nur in diesem Browser gespeichert. Die App funktioniert offline.</li>
+    <li>KI-Agenten im Browser (WebMCP) können das Rad drehen – auch mit eigenen Einträgen, die dann auf dem Rad stehen – sowie Einträge und Verlauf lesen. Du siehst jedes Ergebnis in der App.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A spinning wheel for drawing lots – who starts, who does the dishes, what's for dinner.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Spin</b> or tap the wheel. The pointer at the top shows the result.</li>
+    <li>Change the entries with the pencil at the top right or in the menu ☰ under <b>Entries</b>: one entry per line. An entry listed twice has twice the chance.</li>
+    <li><b>Take winners off the wheel</b> (menu → Settings): every drawn entry disappears from the wheel at the next spin – good for orders and teams. <b>Put all back on the wheel</b> starts the round over; so does changing the entries.</li>
+    <li>The menu also has sound, vibration, animation and the <b>history</b> of the last 100 results.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Fair: the winner is drawn uniformly with <code>crypto.getRandomValues</code>, only then the wheel turns to that spot. How long it spins does not change the result.</li>
+    <li>Entries, settings and history are only stored in this browser. The app works offline.</li>
+    <li>AI agents in the browser (WebMCP) can spin the wheel – also with their own entries, which then appear on the wheel – and read the entries and history. You see every result in the app.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 16a535b8f61c</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    wheelLabel:'Glücksrad mit {n} Einträgen',
+    countAll:'{n} Einträge auf dem Rad',
+    countLeft:'{n} von {total} Einträgen noch auf dem Rad',
+    tapToSpin:'Tippe auf „Drehen“',
+    spinning:'Dreht …',
+    tooFew:'Mindestens zwei Einträge nötig – Stift oben rechts',
+    allDrawn:'Alle Einträge wurden gezogen',
+    shuffled:'Reihenfolge gemischt',
+    confirmClearHist:'Verlauf wirklich löschen?',
+    histEmpty:'Noch keine Ergebnisse.',
+    defaultsList:'Pizza\nNudeln\nSushi\nBurger\nSalat\nCurry',
+    'mcp.spin':'Rad gedreht','mcp.entries':'Einträge gelesen','mcp.history':'Verlauf gelesen'
+  },
+  en:{
+    title:'Wheel of Fortune',sub:'Spin and draw lots',edit:'Edit entries',spin:'Spin',restore:'Put all back on the wheel',
+    entries:'Entries',entriesHint:'One entry per line (2 to 100). Duplicate entries count twice.',
+    shuffle:'Shuffle order',defaults:'Insert example',settings:'Settings',
+    optRemove:'Take winners off the wheel (everyone comes up only once)',optAnim:'Animate spinning',optSound:'Sound',optVibrate:'Vibration',
+    history:'History',clearHist:'Clear history',
+    wheelLabel:'Wheel of fortune with {n} entries',
+    countAll:'{n} entries on the wheel',
+    countLeft:'{n} of {total} entries still on the wheel',
+    tapToSpin:'Tap “Spin”',
+    spinning:'Spinning …',
+    tooFew:'At least two entries needed – pencil at the top right',
+    allDrawn:'All entries have been drawn',
+    shuffled:'Order shuffled',
+    confirmClearHist:'Really clear the history?',
+    histEmpty:'No results yet.',
+    defaultsList:'Pizza\nPasta\nSushi\nBurger\nSalad\nCurry',
+    'mcp.spin':'wheel spun','mcp.entries':'entries read','mcp.history':'history read'
+  }
+});
+const t=Tools.t,$=Tools.$;
+const MAX_ENTRIES=100,MAX_LEN=60,MAX_HIST=100;
+// Storage: entries (null = example list in the current language), round (indices already drawn), settings, history
+const LS_ENTRIES='lucky-wheel.entries.v1',LS_ROUND='lucky-wheel.round.v1',LS_CFG='lucky-wheel.settings.v1',LS_HIST='lucky-wheel.history.v1';
+let custom=Tools.load(LS_ENTRIES,null);
+if(!Array.isArray(custom))custom=null;
+const cfg=Object.assign({remove:false,anim:true,sound:true,vibrate:true},Tools.load(LS_CFG,{}));
+let out=Tools.load(LS_ROUND,[]);if(!Array.isArray(out))out=[];
+let hist=Tools.load(LS_HIST,[]);if(!Array.isArray(hist))hist=[];
+
+/* ---------- Entries ---------- */
+const parse=text=>text.split('\n').map(s=>s.trim()).filter(Boolean).slice(0,MAX_ENTRIES).map(s=>s.slice(0,MAX_LEN));
+const entries=()=>custom||parse(t('defaultsList'));
+const validOut=()=>{const n=entries().length;out=[...new Set(out)].filter(i=>Number.isInteger(i)&&i>=0&&i<n);};
+validOut();
+// Indices still on the wheel. "keep" = last winner in remove mode: stays visible until the next spin
+let keep=null;
+const onWheel=()=>entries().map((_,i)=>i).filter(i=>!out.includes(i)||i===keep);
+
+/* ---------- Random (unbiased, crypto) ---------- */
+function rnd(n){ // 0 … n-1
+  const a=new Uint32Array(1),lim=Math.floor(0x100000000/n)*n;
+  do{crypto.getRandomValues(a);}while(a[0]>=lim);
+  return a[0]%n;
+}
+const rndFloat=()=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]/0x100000000;};
+
+/* ---------- Drawing ---------- */
+const TAU=Math.PI*2;
+// Segment colours (content, like the faces of a die – the same in light and dark mode), each with readable text
+const COLORS=[['#e8590c','#fff'],['#1971c2','#fff'],['#2f9e44','#fff'],['#f59f00','#1b1b1b'],['#ae3ec9','#fff'],
+  ['#0c8599','#fff'],['#e03131','#fff'],['#66a80f','#1b1b1b'],['#5f3dc4','#fff'],['#d6336c','#fff']];
+const canvas=$('wheel'),box=$('wheelBox'),ctx=canvas.getContext('2d');
+let rot=0,size=0,busy=false;
+const norm=a=>((a%TAU)+TAU)%TAU;
+// Segment i covers [i·seg, (i+1)·seg) clockwise from the pointer (top) when rot = 0
+const pointerIndex=(r,n)=>Math.min(n-1,Math.floor(norm(-r)/(TAU/n)));
+function colorFor(k,n){
+  let c=k%COLORS.length;
+  if(n>1&&k===n-1&&c===0)c=Math.floor(COLORS.length/2); // last segment next to the first: other colour
+  return COLORS[c];
+}
+function fitText(s,max){
+  if(ctx.measureText(s).width<=max)return s;
+  let lo=0,hi=s.length;
+  while(lo<hi){const m=(lo+hi+1)>>1;if(ctx.measureText(s.slice(0,m)+'…').width<=max)lo=m;else hi=m-1;}
+  return s.slice(0,lo)+'…';
+}
+function draw(){
+  if(!size)return;
+  const dpr=window.devicePixelRatio||1,css=getComputedStyle(document.body);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,size,size);
+  const cx=size/2,cy=size/2+6,R=size/2-14;
+  const list=entries(),idx=onWheel(),n=idx.length;
+  ctx.save();ctx.translate(cx,cy);
+  // Outer ring
+  ctx.beginPath();ctx.arc(0,0,R+5,0,TAU);ctx.fillStyle=css.getPropertyValue('--border')||'#ccc';ctx.fill();
+  if(n){
+    const seg=TAU/n,fs=Math.max(11,Math.min(22,R*(n>24?.07:n>12?.09:.11)));
+    ctx.font=`600 ${fs}px ${css.fontFamily}`;ctx.textBaseline='middle';ctx.textAlign='right';
+    for(let k=0;k<n;k++){
+      const a0=rot+k*seg-Math.PI/2,[bg,fg]=colorFor(idx[k],list.length);
+      ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,a0,a0+seg);ctx.closePath();
+      ctx.fillStyle=bg;ctx.fill();
+      if(n>1){ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;ctx.stroke();}
+      ctx.save();ctx.rotate(a0+seg/2);ctx.fillStyle=fg;
+      ctx.fillText(fitText(list[idx[k]],R*.72),R-12,0);
+      ctx.restore();
+    }
+  }
+  // Hub
+  ctx.beginPath();ctx.arc(0,0,Math.max(14,R*.11),0,TAU);
+  ctx.fillStyle=css.getPropertyValue('--surface')||'#fff';ctx.fill();
+  ctx.lineWidth=3;ctx.strokeStyle=css.getPropertyValue('--text')||'#000';ctx.stroke();
+  ctx.restore();
+  // Pointer at the top
+  ctx.beginPath();ctx.moveTo(cx-13,2);ctx.lineTo(cx+13,2);ctx.lineTo(cx,30);ctx.closePath();
+  ctx.fillStyle=css.getPropertyValue('--text')||'#000';ctx.fill();
+  ctx.lineWidth=2;ctx.strokeStyle=css.getPropertyValue('--surface')||'#fff';ctx.stroke();
+  canvas.dataset.rot=String(rot);canvas.dataset.count=String(n);
+}
+function resize(){
+  const s=Math.floor(Math.min(box.clientWidth,box.clientHeight,640));
+  if(s<=0||s===size)return;
+  size=s;const dpr=window.devicePixelRatio||1;
+  canvas.style.width=canvas.style.height=s+'px';
+  canvas.width=canvas.height=Math.round(s*dpr);
+  draw();
+}
+new ResizeObserver(resize).observe(box);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
+
+/* ---------- Sound & vibration ---------- */
+let ac=null;
+function audio(){
+  if(!cfg.sound)return null;
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();}catch(e){Tools.diag.log('audio failed',e);ac=null;}
+  return ac;
+}
+function tick(){
+  const a=ac;if(!cfg.sound||!a)return;
+  const o=a.createOscillator(),g=a.createGain(),t0=a.currentTime;
+  o.type='square';o.frequency.value=1400;g.gain.setValueAtTime(.04,t0);g.gain.exponentialRampToValueAtTime(.0001,t0+.03);
+  o.connect(g);g.connect(a.destination);o.start(t0);o.stop(t0+.04);
+}
+function fanfare(){
+  const a=ac;if(!cfg.sound||!a)return;
+  [523,659,784,1047].forEach((f,i)=>{
+    const o=a.createOscillator(),g=a.createGain(),t0=a.currentTime+i*.09;
+    o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(.08,t0);g.gain.exponentialRampToValueAtTime(.0001,t0+.25);
+    o.connect(g);g.connect(a.destination);o.start(t0);o.stop(t0+.3);
+  });
+}
+const vibrate=p=>{if(cfg.vibrate&&navigator.vibrate)try{navigator.vibrate(p);}catch(_){}};
+
+/* ---------- Spin ---------- */
+const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Angle at which segment k (of n) is under the pointer, at a random spot inside it (not on the edges)
+const targetFor=(k,n)=>-((k+.1+.8*rndFloat())*TAU/n);
+/** Draws the winner (fair, before any animation), then turns the wheel to it. Returns the winner's index in entries(). */
+function spin(animate){
+  if(busy)return null;
+  keep=null;
+  const idx=onWheel(),n=idx.length;
+  if(entries().length<2||!n){render();return null;}
+  const k=rnd(n),win=idx[k];
+  const target=rot+norm(targetFor(k,n)-rot);
+  Tools.diag.log('spin',{n,animate});
+  if(!animate){rot=norm(target);finish(win);return win;}
+  busy=true;render();
+  const from=rot,to=target+TAU*(5+rnd(3)),dur=reduced()?1200:4200+rnd(800),t0=performance.now();
+  let last=pointerIndex(from,n);
+  const step=now=>{
+    const p=Math.min(1,(now-t0)/dur),e=1-Math.pow(1-p,4);
+    rot=from+(to-from)*e;draw();
+    const pi=pointerIndex(rot,n);if(pi!==last){last=pi;tick();}
+    if(p<1)requestAnimationFrame(step);
+    else{rot=norm(to);busy=false;finish(win);}
+  };
+  requestAnimationFrame(step);
+  return win;
+}
+let lastWin=null;
+function finish(win){
+  const name=entries()[win];
+  lastWin=name;
+  if(cfg.remove){out.push(win);keep=win;Tools.save(LS_ROUND,out);}
+  hist.unshift({t:Date.now(),text:name});hist=hist.slice(0,MAX_HIST);Tools.save(LS_HIST,hist);
+  draw();render();renderHist();
+  const r=$('result');void r.offsetWidth;r.classList.add('win');
+  fanfare();vibrate([40,40,80]);
+}
+
+/* ---------- Render ---------- */
+function render(){
+  const list=entries(),r=$('result');
+  const left=onWheel().filter(i=>i!==keep).length; // still to be drawn (the kept winner is already drawn)
+  const tooFew=list.length<2,allDrawn=!tooFew&&!left;
+  $('btnSpin').disabled=busy||tooFew||allDrawn;
+  $('btnRestore').hidden=busy||!out.length;
+  r.className='result hint';
+  if(busy)r.textContent=t('spinning');
+  else if(tooFew)r.textContent=t('tooFew');
+  else if(lastWin!==null){r.className='result';r.textContent='🎉 '+lastWin;}
+  else r.textContent=allDrawn?t('allDrawn'):t('tapToSpin');
+  $('count').textContent=allDrawn?t('allDrawn'):out.length?t('countLeft',{n:left,total:list.length}):t('countAll',{n:list.length});
+  canvas.setAttribute('aria-label',t('wheelLabel',{n:onWheel().length}));
+}
+function renderHist(){
+  $('histCount').textContent=String(hist.length);
+  const ol=$('hist');
+  ol.innerHTML=hist.length?hist.map(h=>`<li><span class="who">${Tools.esc(h.text)}</span><time datetime="${new Date(h.t).toISOString()}">${Tools.esc(new Date(h.t).toLocaleString(Tools.locale(),{dateStyle:'short',timeStyle:'short'}))}</time></li>`).join('')
+    :`<li class="muted">${Tools.esc(t('histEmpty'))}</li>`;
+  $('btnClearHist').hidden=!hist.length;
+}
+const ta=$('entries');
+const fillText=()=>{ta.value=entries().join('\n');};
+
+/* ---------- Events ---------- */
+function setEntries(list){
+  custom=list;Tools.save(LS_ENTRIES,custom);
+  out=[];keep=null;lastWin=null;Tools.save(LS_ROUND,out);
+  draw();render();
+}
+ta.addEventListener('input',()=>{if(!busy)setEntries(parse(ta.value));});
+ta.addEventListener('blur',()=>{if(custom)fillText();});
+$('btnShuffle').addEventListener('click',()=>{
+  if(busy)return;
+  const a=entries().slice();
+  for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]];}
+  setEntries(a);fillText();Tools.toast(t('shuffled'));
+});
+$('btnDefaults').addEventListener('click',()=>{
+  if(busy)return;
+  custom=null;Tools.remove(LS_ENTRIES);out=[];keep=null;lastWin=null;Tools.save(LS_ROUND,out);fillText();draw();render();
+});
+$('btnSpin').addEventListener('click',()=>{audio();spin(cfg.anim);});
+canvas.addEventListener('click',()=>{if(!$('btnSpin').disabled){audio();spin(cfg.anim);}});
+$('btnRestore').addEventListener('click',()=>{if(busy)return;out=[];keep=null;lastWin=null;Tools.save(LS_ROUND,out);draw();render();});
+$('btnEdit').addEventListener('click',()=>{Tools.menu.open();ta.focus();});
+for(const [id,key] of [['optRemove','remove'],['optAnim','anim'],['optSound','sound'],['optVibrate','vibrate']]){
+  const el=$(id);el.checked=!!cfg[key];
+  el.addEventListener('change',()=>{
+    cfg[key]=el.checked;Tools.save(LS_CFG,cfg);
+    if(key==='remove'&&!el.checked&&out.length){out=[];keep=null;Tools.save(LS_ROUND,out);draw();}
+    render();
+  });
+}
+$('btnClearHist').addEventListener('click',()=>{if(!hist.length||!confirm(t('confirmClearHist')))return;hist=[];Tools.save(LS_HIST,hist);renderHist();});
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const agentBusy=()=>{if(busy)throw new Error('The wheel is still spinning – try again in a moment.');};
+Tools.mcp.register({
+  name:'spin_wheel',title:'Spin the wheel',label:'mcp.spin',
+  description:'Spins the wheel of fortune once and draws one entry uniformly at random (cryptographically secure). Optionally pass entries to put them on the wheel first (they replace the list on the wheel and stay visible to the user). The result is shown in the app and added to its history. Returns the winner, its position in the entry list and the entries that were on the wheel.',
+  inputSchema:{type:'object',properties:{
+    entries:{type:'array',maxItems:MAX_ENTRIES,items:{type:'string',minLength:1,maxLength:MAX_LEN},description:'Entries to put on the wheel (2 to 100, each up to 60 characters). Default: the entries already on the wheel.'}
+  },additionalProperties:false},
+  execute:({entries:given})=>{
+    agentBusy();
+    if(given){
+      const list=given.map(s=>s.trim()).filter(Boolean);
+      if(list.length<2)throw new Error('At least two non-empty entries are needed.');
+      setEntries(list);fillText();
+    }
+    if(entries().length<2)throw new Error('The wheel has fewer than two entries – pass entries.');
+    keep=null;
+    const candidates=onWheel().map(i=>entries()[i]);
+    if(!candidates.length)throw new Error('All entries have already been drawn in this round.');
+    const win=spin(false);
+    return {winner:entries()[win],position:win+1,candidates,totalEntries:entries().length,removedFromWheel:cfg.remove};
+  }
+});
+Tools.mcp.register({
+  name:'get_entries',title:'Read wheel entries',label:'mcp.entries',readOnly:true,
+  description:'Reads the entries of the wheel of fortune in list order, which of them are still on the wheel in this round (when winners are taken off the wheel) and the settings for that.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    const list=entries(),onW=new Set(entries().map((_,i)=>i).filter(i=>!out.includes(i)));
+    return {entries:list,onWheel:list.filter((_,i)=>onW.has(i)),drawn:list.filter((_,i)=>!onW.has(i)),removeWinners:cfg.remove,isExample:!custom};
+  }
+});
+Tools.mcp.register({
+  name:'get_history',title:'Read result history',label:'mcp.history',readOnly:true,
+  description:'Reads the most recent results of the wheel of fortune, newest first, each with an ISO time and the drawn entry.',
+  inputSchema:{type:'object',properties:{
+    limit:{type:'integer',minimum:1,maximum:MAX_HIST,description:'Maximum number of results. Default 20.'}
+  },additionalProperties:false},
+  execute:({limit=20})=>({total:hist.length,results:hist.slice(0,limit).map(h=>({time:new Date(h.t).toISOString(),entry:h.text}))})
+});
+
+Tools.diag.info(()=>({entries:entries().length,custom:!!custom,drawn:out.length,history:hist.length,busy,size,settings:cfg}));
+fillText();resize();render();renderHist();
+Tools.onLang(()=>{if(!custom){lastWin=null;fillText();}draw();render();renderHist();});
+})();
+</script>
+</body>
+</html>

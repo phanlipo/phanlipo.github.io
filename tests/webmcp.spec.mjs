@@ -912,6 +912,44 @@ test.describe('whoopee-cushion tools', () => {
   });
 });
 
+test.describe('spin-the-bottle tools', () => {
+  const seed = state => ({ players: [], fair: true, sound: false, vibrate: true, angle: 0, last: -1, spins: 0, ...state });
+  test.beforeEach(async ({ page }) => page.emulateMedia({ reducedMotion: 'reduce' }));
+
+  test('spin_bottle waits for the stop and names the player the app shows', async ({ page }) => {
+    await page.addInitScript(v => localStorage.setItem('spin-the-bottle.state.v1', v),
+      JSON.stringify(seed({ players: ['Anna', 'Ben', 'Cem', 'Dora'] })));
+    await open(page, '/spin-the-bottle/');
+    const { ok, result } = await call(page, 'spin_the_bottle_spin_bottle', { direction: 'counterclockwise' });
+    expect(ok).toBe(true);
+    // Seat from the angle alone: seat i at i·90° clockwise from the top
+    const seat = Math.round(result.angle_degrees / 90) % 4;
+    expect(result).toEqual({ player: ['Anna', 'Ben', 'Cem', 'Dora'][seat], seat_index: seat,
+      angle_degrees: result.angle_degrees, total_spins: 1 });
+    await expect(page.locator('.name.hit')).toHaveText(result.player);
+    await expect(page.locator('#status')).toHaveText(`🍾 ${result.player} ist dran!`);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Flasche gedreht');
+    const { result: info } = await call(page, 'spin_the_bottle_get_players', {});
+    expect(info).toEqual({ players: ['Anna', 'Ben', 'Cem', 'Dora'], last_player: result.player, total_spins: 1, spinning: false,
+      settings: { nobody_twice_in_a_row: true, click_sound: false, vibration: true } });
+  });
+
+  test('free spin without names; a second spin while spinning is rejected; bad input is rejected', async ({ page }) => {
+    await open(page, '/spin-the-bottle/');
+    const first = page.evaluate(() => window.__webmcp.call('spin_the_bottle_spin_bottle', {}));
+    await expect(page.locator('#table')).toHaveAttribute('data-spinning', 'true');
+    expect((await call(page, 'spin_the_bottle_spin_bottle', {})).error).toMatch(/already spinning/);
+    const { result } = await first;
+    expect(result.player).toBeNull();
+    expect(result.seat_index).toBeNull();
+    expect(result.total_spins).toBe(1);
+    expect(result.angle_degrees).toBeGreaterThanOrEqual(0);
+    expect(result.angle_degrees).toBeLessThan(360);
+    expect((await call(page, 'spin_the_bottle_spin_bottle', { direction: 'up' })).ok).toBe(false);
+    expect((await call(page, 'spin_the_bottle_get_players', {})).result.players).toEqual([]);
+  });
+});
+
 test.describe('talking-animal tools', () => {
   test.beforeEach(async ({ page }) => {
     // Fake microphone: 440 Hz sine
@@ -1581,5 +1619,64 @@ test.describe('scoreboard tools', () => {
     const r = await call(page, 'scoreboard_add_point', { player: 1 });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('already won');
+  });
+});
+
+test.describe('lucky-wheel tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/lucky-wheel/');
+  });
+
+  test('spin_wheel with own entries: winner among them, on the wheel and in the history', async ({ page }) => {
+    const { ok, result } = await call(page, 'lucky_wheel_spin_wheel', { entries: ['Red', ' Green ', 'Blue'] });
+    expect(ok).toBe(true);
+    expect(result.candidates).toEqual(['Red', 'Green', 'Blue']);
+    expect(result.candidates).toContain(result.winner);
+    expect(result.candidates[result.position - 1]).toBe(result.winner);
+    expect(result).toMatchObject({ totalEntries: 3, removedFromWheel: false });
+    await expect(page.locator('#result')).toHaveText('🎉 ' + result.winner);
+    await expect(page.locator('#count')).toHaveText('3 Einträge auf dem Rad');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Rad gedreht');
+    // The pointer stands on the winner (segment i starts at i·360°/n clockwise from the top)
+    const rot = Number(await page.locator('#wheel').getAttribute('data-rot'));
+    const a = ((-rot % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    expect(Math.floor(a / (2 * Math.PI / 3))).toBe(result.position - 1);
+    const h = await call(page, 'lucky_wheel_get_history', {});
+    expect(h.result.total).toBe(1);
+    expect(h.result.results[0].entry).toBe(result.winner);
+  });
+
+  test('spin_wheel without input uses the entries on the wheel; get_entries reads them', async ({ page }) => {
+    const { result } = await call(page, 'lucky_wheel_spin_wheel', {});
+    expect(['Pizza', 'Nudeln', 'Sushi', 'Burger', 'Salat', 'Curry']).toContain(result.winner);
+    const e = await call(page, 'lucky_wheel_get_entries', {});
+    expect(e.result).toMatchObject({ entries: ['Pizza', 'Nudeln', 'Sushi', 'Burger', 'Salat', 'Curry'], drawn: [], removeWinners: false, isExample: true });
+  });
+
+  test('take winners off the wheel: every entry once, then a clear error', async ({ page }) => {
+    await page.evaluate(() => { const c = document.getElementById('optRemove'); c.checked = true; c.dispatchEvent(new Event('change')); });
+    await call(page, 'lucky_wheel_spin_wheel', { entries: ['A', 'B', 'C'] });
+    const wins = [];
+    for (let i = 0; i < 2; i++) wins.push((await call(page, 'lucky_wheel_spin_wheel', {})).result.winner);
+    const e = await call(page, 'lucky_wheel_get_entries', {});
+    expect(e.result.onWheel).toEqual([]);
+    expect([...e.result.drawn].sort()).toEqual(['A', 'B', 'C']);
+    expect(await call(page, 'lucky_wheel_spin_wheel', {})).toEqual({ ok: false, error: 'All entries have already been drawn in this round.' });
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    for (const [input, msg] of [
+      [{ entries: ['only'] }, 'At least two non-empty entries are needed.'],
+      // A blank entry passes the schema (one character), but is dropped
+      [{ entries: ['a', ' '] }, 'At least two non-empty entries are needed.'],
+      [{ entries: 'a,b' }, 'input.entries must be of type array'],
+      [{ entries: ['a', 'x'.repeat(61)] }, 'input.entries[1] must have at most 60 characters'],
+      [{ count: 2 }, 'input.count is not allowed'],
+    ]) {
+      expect(await call(page, 'lucky_wheel_spin_wheel', input)).toEqual({ ok: false, error: msg });
+    }
+    await expect(page.locator('#count')).toHaveText('6 Einträge auf dem Rad');
+    expect((await call(page, 'lucky_wheel_get_history', {})).result.total).toBe(0);
   });
 });
