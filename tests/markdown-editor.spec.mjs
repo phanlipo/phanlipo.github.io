@@ -143,7 +143,26 @@ test('scripts and images from servers are not run or loaded, image addresses are
   expect(md).toContain('![Katze](https://example.org/katze.png)');
   expect(md).toContain('![x](bild.png)');
   expect(md).not.toContain('onerror');
+  // No HTML parser ever sees an event handler: raw HTML is defanged before parsing
+  expect(await page.evaluate(() => marked.parse('<img src=x onerror="a()"><div/onclick=b() title="x"onmouseover=c()>t</div> und <b onload=d()>x</b>')))
+    .not.toMatch(/<[a-z][^<>]*[\s\/"']on[a-z]+\s*=/i);
   expect(requests).toEqual([]);
+});
+
+test('pasting HTML into the view keeps formatting, drops scripts and handlers', async ({ page }) => {
+  await page.locator('#views [data-v="render"]').click();
+  await view(page).click();
+  await view(page).evaluate(el => {
+    const dt = new DataTransfer();
+    dt.setData('text/html', '<h2>Kopiert</h2><p><b>fett</b> <img src="https://example.org/a.png" alt="A" onerror="window.__pwned=1"><script>window.__pwned=2</script></p>');
+    dt.setData('text/plain', 'Kopiert fett');
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  await expect(view(page).locator('h2')).toHaveText('Kopiert');
+  await expect(view(page).locator('b, strong')).toHaveText('fett');
+  expect(await view(page).evaluate(el => el.innerHTML)).not.toMatch(/onerror|<script|\ssrc=/);
+  expect(await page.evaluate(() => window.__pwned)).toBeUndefined();
+  expect(await rawText(page)).toBe('## Kopiert\n\n**fett** ![A](https://example.org/a.png)');
 });
 
 test('files: new, list in the menu, open, delete – kept after reload', async ({ page }) => {

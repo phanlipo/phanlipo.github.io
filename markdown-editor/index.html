@@ -20,7 +20,7 @@
 <meta name="tool:storage" content="markdown-editor.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-K4QKKlRUNsoK5a6CazYQtPzcDvr/fGOzugHtVtNLid4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Z8je1FPWIrgmA9vjl0LALuXM2jAW3PpnkeLd1wW1VT0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -190,7 +190,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 80f9d2e722fa</p>
+  <p class="footer-version">Version 9094ad7b9275</p>
   <!-- footer:end -->
 </footer>
 
@@ -274,13 +274,17 @@ DOMPurify.addHook('afterSanitizeAttributes',node=>{
   }
   if(node.nodeName==='A'&&/^\s*(javascript|vbscript|data):/i.test(node.getAttribute('href')||''))node.removeAttribute('href');
 });
-// First pass in a <template> (inert: nothing loads, no handler runs): drop event handlers and image
-// addresses before any other parser sees them, then DOMPurify does the full cleaning
+// Event handler attributes in raw HTML are renamed before any HTML parser sees them: newer Chromium
+// fires an image's error event while parsing, even in inert documents (DOMParser, <template>).
+// Only applied to raw HTML (from the Markdown or pasted), never to text or code.
+const defang=h=>h.replace(/([\s\/"'`])(on[a-z]+)(\s*=)/gi,'$1data-x-$2$3');
+marked.use({renderer:{html:tok=>defang(tok.text)}});
+// Then in a <template> (inert): drop those attributes and image addresses; DOMPurify does the full cleaning
 function defuse(html){
   const tpl=document.createElement('template');
   tpl.innerHTML=html;
   for(const el of tpl.content.querySelectorAll('*')){
-    for(const a of [...el.attributes])if(/^on/i.test(a.name))el.removeAttribute(a.name);
+    for(const a of [...el.attributes])if(/^(on|data-x-on)/i.test(a.name))el.removeAttribute(a.name);
     if(el.nodeName==='IMG'||el.nodeName==='SOURCE'){
       const src=el.getAttribute('src');
       if(src!=null&&!/^data:image\//i.test(src)){el.removeAttribute('src');el.setAttribute('data-md-src',src);}
@@ -421,7 +425,7 @@ view.addEventListener('paste',e=>{
   const cd=e.clipboardData;if(!cd)return;
   e.preventDefault();
   const html=cd.getData('text/html');
-  if(html){const clean=toHtml(toMd(sanitize(html)));document.execCommand('insertHTML',false,clean);prepView();}
+  if(html){const clean=toHtml(toMd(sanitize(defang(html))));document.execCommand('insertHTML',false,clean);prepView();}
   else document.execCommand('insertText',false,cd.getData('text/plain'));
 });
 view.addEventListener('drop',e=>e.preventDefault());
