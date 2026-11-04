@@ -1552,3 +1552,62 @@ test.describe('markdown-editor tools', () => {
     await expect(page.locator('#raw')).toHaveValue('');
   });
 });
+
+test.describe('lucky-wheel tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/lucky-wheel/');
+  });
+
+  test('spin_wheel with own entries: winner among them, on the wheel and in the history', async ({ page }) => {
+    const { ok, result } = await call(page, 'lucky_wheel_spin_wheel', { entries: ['Red', ' Green ', 'Blue'] });
+    expect(ok).toBe(true);
+    expect(result.candidates).toEqual(['Red', 'Green', 'Blue']);
+    expect(result.candidates).toContain(result.winner);
+    expect(result.candidates[result.position - 1]).toBe(result.winner);
+    expect(result).toMatchObject({ totalEntries: 3, removedFromWheel: false });
+    await expect(page.locator('#result')).toHaveText('🎉 ' + result.winner);
+    await expect(page.locator('#count')).toHaveText('3 Einträge auf dem Rad');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Rad gedreht');
+    // The pointer stands on the winner (segment i starts at i·360°/n clockwise from the top)
+    const rot = Number(await page.locator('#wheel').getAttribute('data-rot'));
+    const a = ((-rot % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    expect(Math.floor(a / (2 * Math.PI / 3))).toBe(result.position - 1);
+    const h = await call(page, 'lucky_wheel_get_history', {});
+    expect(h.result.total).toBe(1);
+    expect(h.result.results[0].entry).toBe(result.winner);
+  });
+
+  test('spin_wheel without input uses the entries on the wheel; get_entries reads them', async ({ page }) => {
+    const { result } = await call(page, 'lucky_wheel_spin_wheel', {});
+    expect(['Pizza', 'Nudeln', 'Sushi', 'Burger', 'Salat', 'Curry']).toContain(result.winner);
+    const e = await call(page, 'lucky_wheel_get_entries', {});
+    expect(e.result).toMatchObject({ entries: ['Pizza', 'Nudeln', 'Sushi', 'Burger', 'Salat', 'Curry'], drawn: [], removeWinners: false, isExample: true });
+  });
+
+  test('take winners off the wheel: every entry once, then a clear error', async ({ page }) => {
+    await page.evaluate(() => { const c = document.getElementById('optRemove'); c.checked = true; c.dispatchEvent(new Event('change')); });
+    await call(page, 'lucky_wheel_spin_wheel', { entries: ['A', 'B', 'C'] });
+    const wins = [];
+    for (let i = 0; i < 2; i++) wins.push((await call(page, 'lucky_wheel_spin_wheel', {})).result.winner);
+    const e = await call(page, 'lucky_wheel_get_entries', {});
+    expect(e.result.onWheel).toEqual([]);
+    expect([...e.result.drawn].sort()).toEqual(['A', 'B', 'C']);
+    expect(await call(page, 'lucky_wheel_spin_wheel', {})).toEqual({ ok: false, error: 'All entries have already been drawn in this round.' });
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    for (const [input, msg] of [
+      [{ entries: ['only'] }, 'At least two non-empty entries are needed.'],
+      // A blank entry passes the schema (one character), but is dropped
+      [{ entries: ['a', ' '] }, 'At least two non-empty entries are needed.'],
+      [{ entries: 'a,b' }, 'input.entries must be of type array'],
+      [{ entries: ['a', 'x'.repeat(61)] }, 'input.entries[1] must have at most 60 characters'],
+      [{ count: 2 }, 'input.count is not allowed'],
+    ]) {
+      expect(await call(page, 'lucky_wheel_spin_wheel', input)).toEqual({ ok: false, error: msg });
+    }
+    await expect(page.locator('#count')).toHaveText('6 Einträge auf dem Rad');
+    expect((await call(page, 'lucky_wheel_get_history', {})).result.total).toBe(0);
+  });
+});
