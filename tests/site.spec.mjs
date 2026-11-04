@@ -274,7 +274,9 @@ for (const app of apps()) {
         const href = document.querySelector('link[rel="manifest"]').href;
         return (await fetch(href)).json();
       });
-      expect(manifest).toMatchObject({ start_url: './', scope: './', display: 'standalone', lang: 'de' });
+      // Feature "Vollbild": installed app without status and navigation bar
+      const display = app.features.includes('Vollbild') ? 'fullscreen' : 'standalone';
+      expect(manifest).toMatchObject({ start_url: './', scope: './', display, lang: 'de' });
       expect(manifest.short_name.length, 'short_name length').toBeLessThanOrEqual(12);
       for (const size of ['192x192', '512x512']) expect(manifest.icons.map(i => i.sizes)).toContain(size);
       expect(manifest.icons.some(i => i.purpose === 'maskable')).toBe(true);

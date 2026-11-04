@@ -22,6 +22,7 @@
 //   <title>, <meta name="description">                  required for the tool list
 //   tool:tags ("a, b"), tool:hidden ("true" = not listed, no PWA)
 //   tool:features ("a, b")                               what sets the app apart, from FEATURES below
+//                                                        ("Vollbild": manifest display "fullscreen", see AGENTS.md)
 //   tool:icon, tool:color                                icons (see build-icons.mjs), theme colour
 //   tool:short-name                                      name under the home-screen icon (≤ 12 chars)
 //   tool:storage                                         localStorage key prefix(es) of the app, comma-separated
@@ -46,7 +47,7 @@ const VENDOR = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'
 
 // Features for the second filter row on the start page, in display order. Only what sets apps apart:
 // things every app has (offline, installable, data stays on the device) are stated once on the start page.
-const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Standort', 'Datei öffnen', 'Teilen an App', 'Benachrichtigung', 'Kopieren', 'Verlauf', 'Schütteln', 'KI-Agent', 'Download nötig'];
+const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Standort', 'Datei öffnen', 'Teilen an App', 'Vollbild', 'Benachrichtigung', 'Kopieren', 'Verlauf', 'Schütteln', 'KI-Agent', 'Download nötig'];
 // English names of all tags and features (start page filter). A new tag needs an entry here.
 const TAGS_EN = {
   Alltag: 'Everyday', Arbeit: 'Work', Freizeit: 'Leisure',
@@ -54,7 +55,7 @@ const TAGS_EN = {
   Kinder: 'Kids', Messen: 'Measuring', Musik: 'Music', Rechner: 'Calculators', Spiele: 'Games', Sport: 'Sports', Sprache: 'Speech',
   Werkzeug: 'Tools', Zufall: 'Random',
   Kamera: 'Camera', Mikrofon: 'Microphone', Bewegungssensor: 'Motion sensor', Standort: 'Location',
-  'Datei öffnen': 'Open file', 'Teilen an App': 'Share to app', Benachrichtigung: 'Notifications', Kopieren: 'Copy', Verlauf: 'History',
+  'Datei öffnen': 'Open file', 'Teilen an App': 'Share to app', Vollbild: 'Full screen', Benachrichtigung: 'Notifications', Kopieren: 'Copy', Verlauf: 'History',
   Schütteln: 'Shake', 'KI-Agent': 'AI agent', 'Download nötig': 'Download needed',
 };
 
@@ -250,7 +251,9 @@ function manifest(p) {
     ...(p.descriptionEn ? { description_localized: { en: p.descriptionEn } } : {}),
     start_url: './',
     scope: './',
-    display: 'standalone',
+    // Feature "Vollbild": the installed app starts without status and navigation bar (Android; swiping from
+    // the edge shows them for a moment). iPhone treats it like standalone. See Tools.fullscreen in common.js.
+    display: p.features.includes('Vollbild') ? 'fullscreen' : 'standalone',
     background_color: '#f4f6f9',
     theme_color: p.color,
     ...(p.shareAccept.length ? {

@@ -1683,3 +1683,44 @@ test.describe('lucky-wheel tools', () => {
     expect((await call(page, 'lucky_wheel_get_history', {})).result.total).toBe(0);
   });
 });
+
+test.describe('pdf-viewer tools', () => {
+  const pdf = labels => makePdf(labels.map(l => ({ texts: [{ x: 72, y: 700, size: 30, text: l }, { x: 72, y: 600, size: 12, text: `Zeile ${l}` }] })));
+  test.beforeEach(async ({ page }) => open(page, '/pdf-viewer/'));
+
+  test('without an open PDF the tools say so', async ({ page }) => {
+    expect((await call(page, 'pdf_viewer_get_document_info', {})).result).toEqual({ open: false });
+    expect((await call(page, 'pdf_viewer_go_to_page', { page: 1 })).error).toBe('no PDF is open');
+    expect((await call(page, 'pdf_viewer_get_page_text', {})).error).toBe('no PDF is open');
+  });
+
+  test('info, go to page, page text; shown in the app', async ({ page }) => {
+    await page.setInputFiles('#inPick', { name: 'a.pdf', mimeType: 'application/pdf', buffer: pdf(['EINS', 'ZWEI', 'DREI']) });
+    await expect(page.locator('#pages .page')).toHaveCount(3);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'pdf_viewer_get_page_text').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+    expect((await call(page, 'pdf_viewer_get_document_info', {})).result).toEqual({ open: true, pages: 3, currentPage: 1, zoom: 1, title: '' });
+    let r = await call(page, 'pdf_viewer_go_to_page', { page: 3 });
+    expect(r.result).toEqual({ currentPage: 3, pages: 3 });
+    await expect(page.locator('#pageLabel')).toHaveText('3 / 3');
+    await expect(page.locator('.toast')).toContainText('KI-Agent: zu Seite gesprungen');
+    r = await call(page, 'pdf_viewer_get_page_text', {});
+    expect(r.result).toMatchObject({ page: 3, pages: 3, truncated: false });
+    expect(r.result.text).toContain('DREI');
+    expect(r.result.text).toContain('Zeile DREI');
+    r = await call(page, 'pdf_viewer_get_page_text', { page: 1 });
+    expect(r.result.text).toContain('EINS');
+    expect(r.result.text).not.toContain('ZWEI');
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    await page.setInputFiles('#inPick', { name: 'a.pdf', mimeType: 'application/pdf', buffer: pdf(['A', 'B']) });
+    await expect(page.locator('#pages .page')).toHaveCount(2);
+    expect((await call(page, 'pdf_viewer_go_to_page', { page: 3 })).error).toBe('page must be between 1 and 2');
+    expect((await call(page, 'pdf_viewer_go_to_page', { page: 0 })).ok).toBe(false);
+    expect((await call(page, 'pdf_viewer_go_to_page', { page: 1.5 })).ok).toBe(false);
+    expect((await call(page, 'pdf_viewer_go_to_page', {})).ok).toBe(false);
+    expect((await call(page, 'pdf_viewer_get_page_text', { page: 9 })).error).toBe('page must be between 1 and 2');
+    await expect(page.locator('#pageLabel')).toHaveText('1 / 2');
+  });
+});
