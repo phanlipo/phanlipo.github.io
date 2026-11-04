@@ -128,8 +128,7 @@ test('formatting buttons work in the view', async ({ page }) => {
 
 test('scripts and images from servers are not run or loaded, image addresses are kept', async ({ page }) => {
   const requests = [];
-  page.on('request', r => { if (!r.url().startsWith('http://localhost') && !r.url().startsWith('data:')) requests.push(r.url()); });
-  await page.route('**/bild.png', r => { requests.push(r.request().url()); return r.abort(); });
+  page.on('request', r => { const u = r.url(); if ((!u.startsWith('http://localhost') && !u.startsWith('data:')) || /\/(x|bild\.png)$/.test(u)) requests.push(u); });
   await raw(page).fill('Bild: ![Katze](https://example.org/katze.png) ![x](bild.png)\n\n<img src=x onerror="window.__pwned=1"><script>window.__pwned=2</script>\n\n[böse](javascript:window.__pwned=3)');
   await page.locator('#views [data-v="render"]').click();
   await expect(view(page).locator('img')).toHaveCount(3);

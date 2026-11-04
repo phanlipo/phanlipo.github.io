@@ -20,7 +20,7 @@
 <meta name="tool:storage" content="markdown-editor.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-4vl1Awclm6JLyy4mlYbPvwGy4cEyzZjfzjUtNVuaKdw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-K4QKKlRUNsoK5a6CazYQtPzcDvr/fGOzugHtVtNLid4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -190,7 +190,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 54ec07aafd3c</p>
+  <p class="footer-version">Version 80f9d2e722fa</p>
   <!-- footer:end -->
 </footer>
 
@@ -264,7 +264,7 @@ DOMPurify.addHook('afterSanitizeAttributes',node=>{
     // No images from servers (privacy, offline, CSP): keep the address for the round trip, show the alt text
     const src=node.getAttribute('src')||'';
     if(!/^data:image\//i.test(src)){
-      node.removeAttribute('src');node.setAttribute('data-md-src',src);
+      node.removeAttribute('src');if(src||!node.hasAttribute('data-md-src'))node.setAttribute('data-md-src',src);
       if(!node.getAttribute('alt'))node.setAttribute('alt',t('img'));
     }
   }
@@ -274,7 +274,23 @@ DOMPurify.addHook('afterSanitizeAttributes',node=>{
   }
   if(node.nodeName==='A'&&/^\s*(javascript|vbscript|data):/i.test(node.getAttribute('href')||''))node.removeAttribute('href');
 });
-const toHtml=md=>DOMPurify.sanitize(marked.parse(md,{gfm:true,breaks:false,async:false}),purifyCfg);
+// First pass in a <template> (inert: nothing loads, no handler runs): drop event handlers and image
+// addresses before any other parser sees them, then DOMPurify does the full cleaning
+function defuse(html){
+  const tpl=document.createElement('template');
+  tpl.innerHTML=html;
+  for(const el of tpl.content.querySelectorAll('*')){
+    for(const a of [...el.attributes])if(/^on/i.test(a.name))el.removeAttribute(a.name);
+    if(el.nodeName==='IMG'||el.nodeName==='SOURCE'){
+      const src=el.getAttribute('src');
+      if(src!=null&&!/^data:image\//i.test(src)){el.removeAttribute('src');el.setAttribute('data-md-src',src);}
+      el.removeAttribute('srcset');
+    }
+  }
+  return tpl.innerHTML;
+}
+const sanitize=html=>DOMPurify.sanitize(defuse(html),purifyCfg);
+const toHtml=md=>sanitize(marked.parse(md,{gfm:true,breaks:false,async:false}));
 
 const td=new TurndownService({headingStyle:'atx',hr:'---',bulletListMarker:'-',codeBlockStyle:'fenced',emDelimiter:'*',strongDelimiter:'**',linkStyle:'inlined'});
 td.addRule('strike',{filter:['del','s','strike'],replacement:c=>c.trim()?'~~'+c+'~~':c});
@@ -405,7 +421,7 @@ view.addEventListener('paste',e=>{
   const cd=e.clipboardData;if(!cd)return;
   e.preventDefault();
   const html=cd.getData('text/html');
-  if(html){const clean=toHtml(toMd(DOMPurify.sanitize(html,purifyCfg)));document.execCommand('insertHTML',false,clean);prepView();}
+  if(html){const clean=toHtml(toMd(sanitize(html)));document.execCommand('insertHTML',false,clean);prepView();}
   else document.execCommand('insertText',false,cd.getData('text/plain'));
 });
 view.addEventListener('drop',e=>e.preventDefault());
