@@ -1,7 +1,6 @@
 // Handy-Sensoren: sensor values are simulated with synthetic events (Chromium has no real sensors here).
 // Expected values are recomputed independently in the tests.
-import AxeBuilder from '@axe-core/playwright';
-import { test, expect, clipboardText, switchLang } from './helpers.mjs';
+import { test, expect, axe, clipboardText, switchLang } from './helpers.mjs';
 
 const num = s => Number(String(s).replace(/[^\d,.\-−+]/g, '').replace('−', '-').replace(/\./g, '').replace(',', '.'));
 const text = (page, id) => page.locator('#' + id).textContent();
@@ -103,7 +102,7 @@ for (const scheme of ['light', 'dark']) {
     await page.emulateMedia({ colorScheme: scheme });
     for (const name of ['Kompass', 'Wasserwaage', 'Beschleunigung', 'Vibrometer', 'Schall', 'Stimmgerät', 'Tacho', 'Schritte', 'Tongenerator', 'Lampe & Morse', 'Puls', 'Klatsch-Stoppuhr']) {
       await tab(page, name);
-      const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+      const { violations } = await axe(page).analyze();
       expect(violations.map(v => `${name}: ${v.id} → ${v.nodes.map(n => n.target.join(' ')).join(' | ')}`)).toEqual([]);
     }
   });

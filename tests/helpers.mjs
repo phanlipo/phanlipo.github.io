@@ -1,5 +1,6 @@
 // Shared test helpers.
 import { test as base, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, allPages, meta } from '../scripts/lib.mjs';
@@ -164,3 +165,12 @@ export async function mockAndroidShare(page) {
     };
   });
 }
+
+/**
+ * Accessibility check with axe-core (WCAG 2.1 A/AA): `await axe(page).analyze()`, can be narrowed
+ * with `.exclude(…)`. Legacy mode runs axe directly in the page instead of opening an extra page
+ * to merge results from iframes – same results, 2–3 × faster. The pages have no iframes.
+ */
+export const axe = page => new AxeBuilder({ page })
+  .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+  .setLegacyMode(true);

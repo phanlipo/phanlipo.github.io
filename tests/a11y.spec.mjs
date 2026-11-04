@@ -1,6 +1,5 @@
 // Accessibility (WCAG 2.1 A/AA) with axe-core – every page, light and dark, with help and data sections open.
-import AxeBuilder from '@axe-core/playwright';
-import { test, expect, apps, translatedApps } from './helpers.mjs';
+import { test, expect, axe, apps, translatedApps } from './helpers.mjs';
 
 const pages = [{ folder: '', title: 'Startseite' }, ...apps()];
 // English too where a page is translated (texts of other length, lang attributes)
@@ -14,9 +13,7 @@ for (const p of pages) {
       // Check the content of collapsible sections too
       await page.evaluate(() => document.querySelectorAll('details').forEach(d => { d.open = true; }));
       const check = async () => {
-        const { violations } = await new AxeBuilder({ page })
-          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-          .analyze();
+        const { violations } = await axe(page).analyze();
         return violations.map(v => `${v.id} (${v.impact}): ${v.help} → ${v.nodes.slice(0, 3).map(n => n.target.join(' ')).join(' | ')}`);
       };
       expect(await check()).toEqual([]);
@@ -31,3 +28,18 @@ for (const p of pages) {
     });
   }
 }
+
+// The check itself must find problems (guards against a setting that silently checks nothing)
+test('the accessibility check finds planted violations', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    const p = document.createElement('p');
+    p.textContent = 'Kaum lesbar';
+    p.style.cssText = 'color:#ccc;background:#fff';
+    const b = document.createElement('button');
+    b.className = 'planted';
+    document.querySelector('main').append(p, b);
+  });
+  const { violations } = await axe(page).analyze();
+  expect(violations.map(v => v.id).sort()).toEqual(['button-name', 'color-contrast']);
+});
