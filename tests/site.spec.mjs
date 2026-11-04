@@ -275,7 +275,7 @@ for (const app of apps()) {
         return (await fetch(href)).json();
       });
       // Feature "Vollbild": installed app without status and navigation bar
-      const display = app.features.includes('Vollbild') ? 'fullscreen' : 'standalone';
+      const display = (app.features || []).includes('Vollbild') ? 'fullscreen' : 'standalone';
       expect(manifest).toMatchObject({ start_url: './', scope: './', display, lang: 'de' });
       expect(manifest.short_name.length, 'short_name length').toBeLessThanOrEqual(12);
       for (const size of ['192x192', '512x512']) expect(manifest.icons.map(i => i.sizes)).toContain(size);
