@@ -71,7 +71,8 @@ window.Tools = (function () {
 
   // Shared texts: footer, language switch, data backup section, service worker hint
   Object.assign(dict.de, {
-    'sw.updated': 'Update geladen – aktiv ab dem nächsten Öffnen',
+    'sw.updated': 'Neue Version geladen – oben ↻ tippen zum Aktualisieren',
+    'sw.reload': 'Neu laden – neue Version',
     'data.saved': 'Sicherung gespeichert', 'data.loaded': 'Sicherung geladen', 'data.cleared': 'Daten gelöscht',
     'data.none': 'Noch keine gespeicherten Daten.', 'data.one': 'gespeicherter Eintrag', 'data.many': 'gespeicherte Einträge',
     'data.lt1kb': 'unter 1 KB', 'data.kb': 'ca. {n} KB', 'data.file': 'sicherung',
@@ -89,7 +90,8 @@ window.Tools = (function () {
     'diag.copied': 'Diagnose kopiert', 'diag.fail': 'Kopieren nicht möglich',
   });
   Object.assign(dict.en, {
-    'sw.updated': 'Update loaded – active the next time you open the app',
+    'sw.updated': 'New version loaded – tap ↻ at the top to update',
+    'sw.reload': 'Reload – new version',
     'lang.label': 'Language',
     'help.summary': 'Instructions & notes',
     'footer.home': 'All tools on phanlipo.github.io', 'footer.ai': 'AI-generated · no warranty', 'footer.licenses': 'Open source licences',
@@ -223,14 +225,35 @@ window.Tools = (function () {
   /* ---------- PWA: offline cache + automatic updates ----------
      Pages with <link rel="manifest"> register their generated sw.js (see scripts/build.mjs) – not the start
      page (data-no-sw): its manifest only gives the home screen icon, a service worker there would sit above every app.
-     A new version downloads in the background; the hint appears once it has taken over. */
+     A new version downloads in the background and takes over at once (skipWaiting + clients.claim in sw.js).
+     The page itself still runs the old version: a hint appears and a reload button (↻) next to the menu button,
+     so an installed app does not have to be closed and opened again.
+     An installed app that comes back from the background does not navigate, so it checks for updates itself
+     (at most every 10 minutes). */
+  let updateReady = false, updateBtn = null;
+  function showUpdate() {
+    updateReady = true;
+    if (updateBtn) updateBtn.hidden = false;
+    document.body.classList.add('update-ready');
+  }
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || !document.querySelector('link[rel="manifest"]:not([data-no-sw])')) return;
     const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (hadController) toast(t('sw.updated'), 3500);
+      if (!hadController || updateReady) return;
+      diagLog('update: new version active, reload offered');
+      showUpdate();
+      toast(t('sw.updated'), 5000);
     });
     navigator.serviceWorker.register('sw.js', { scope: './' })
+      .then(reg => {
+        let lastCheck = Date.now();
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden || updateReady || Date.now() - lastCheck < 10 * 60e3) return;
+          lastCheck = Date.now();
+          reg.update().catch(() => {});
+        });
+      })
       .catch(e => console.warn('Service Worker nicht registriert:', e));
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', registerServiceWorker);
@@ -418,6 +441,8 @@ window.Tools = (function () {
   // Tabler Icons (MIT): menu-2, x
   const ICON_MENU = svgIcon('<path d="M4 6l16 0"/><path d="M4 12l16 0"/><path d="M4 18l16 0"/>');
   const ICON_CLOSE = svgIcon('<path d="M18 6l-12 12"/><path d="M6 6l12 12"/>');
+  // Tabler Icons (MIT): refresh
+  const ICON_RELOAD = svgIcon('<path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/>');
   let menuEl = null, menuBtn = null, menuPushed = false;
 
   function menuOpen() {
@@ -516,7 +541,14 @@ window.Tools = (function () {
     menuBtn.setAttribute('aria-label', t('menu.open')); menuBtn.title = t('menu.open');
     menuBtn.dataset.i18nAttr = 'aria-label:menu.open; title:menu.open';
     menuBtn.innerHTML = ICON_MENU;
-    actions.append(menuBtn);
+    // Reload button: only shown once a new version is ready (see registerServiceWorker)
+    updateBtn = document.createElement('button');
+    updateBtn.type = 'button'; updateBtn.className = 'head-btn update-btn'; updateBtn.hidden = !updateReady;
+    updateBtn.setAttribute('aria-label', t('sw.reload')); updateBtn.title = t('sw.reload');
+    updateBtn.dataset.i18nAttr = 'aria-label:sw.reload; title:sw.reload';
+    updateBtn.innerHTML = ICON_RELOAD;
+    updateBtn.addEventListener('click', () => { diagLog('update: reload'); location.reload(); });
+    actions.append(updateBtn, menuBtn);
     if (translated) { applyI18n(menuEl); applyI18n(actions); }
 
     menuBtn.addEventListener('click', menuOpen);
