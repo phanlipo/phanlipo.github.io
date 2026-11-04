@@ -135,6 +135,25 @@ for (const app of apps()) {
       expect(box.width).toBeLessThanOrEqual(460);
     });
 
+    test('phones: the menu is a bottom sheet with its content visible', async ({ page }) => {
+      await page.setViewportSize(PHONES.portrait);
+      await page.goto(url);
+      await page.locator('.menu-btn').click();
+      await page.waitForTimeout(300); // opening animation
+      const m = await page.evaluate(() => {
+        const sheet = document.querySelector('#appMenu'), body = sheet.querySelector('.menu-body');
+        const r = sheet.getBoundingClientRect();
+        return { bottom: r.bottom, height: r.height, inner: innerHeight, body: body.clientHeight,
+          content: body.scrollHeight, basis: getComputedStyle(body).flexBasis };
+      });
+      // Safari (iOS ≤ 16) shrinks a flex-basis of 0 to nothing (iPhone 8: only the menu title was left)
+      expect(m.basis).toBe('auto');
+      expect(Math.round(m.bottom)).toBe(m.inner);
+      // As tall as its content, up to 88 % of the screen; the rest scrolls
+      expect(m.height).toBeLessThanOrEqual(m.inner * 0.88 + 1);
+      expect(m.body).toBeGreaterThanOrEqual(Math.min(m.content, m.inner * 0.88 - 60) - 1);
+    });
+
     test.describe('without JavaScript', () => {
       test.use({ javaScriptEnabled: false });
       test('help, data backup and footer stay reachable at the end of the page', async ({ page }) => {
