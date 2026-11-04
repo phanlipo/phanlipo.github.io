@@ -30,7 +30,7 @@ tests/                Playwright-Tests (siehe tests/README.md); tests/live/ prü
 .github/workflows/codeql.yml        monatlich CodeQL (eigener Code + Workflows) → Security-Tab
 .github/workflows/scorecard.yml     monatlich OpenSSF Scorecard des Repos → Security-Tab
 .github/workflows/zizmor.yml        „Workflows prüfen“: Sicherheitsprüfung der Workflows bei jedem PR
-.github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus
+.github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus (3 Runner parallel, Sammel-Check „test“)
 .github/workflows/pages.yml         veröffentlicht main auf GitHub Pages (nur die Dateien aus scripts/site.mjs), danach Live-Test
 .github/workflows/live-test.yml     testet die veröffentlichte Seite (tests/live) – nach jeder Veröffentlichung und auf Knopfdruck
 .github/dependabot.yml              monatliche Update-PRs für GitHub Actions und Test-Werkzeuge (erst 7 Tage nach Release)

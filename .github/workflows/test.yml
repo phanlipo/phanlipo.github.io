@@ -15,9 +15,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  # The suite is split over 3 runners in parallel (Playwright --shard), each with 4 workers.
+  shard:
+    name: Tests ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,11 +39,25 @@ jobs:
       - name: Build generated files
         run: node scripts/build.mjs
       - name: Run tests
-        run: npm test
+        run: npx playwright test --shard=${{ matrix.shard }}/3
       - name: Upload report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 14
+
+  # The check "test" that the branch protection of main requires: green only when every part is green.
+  test:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All parts passed
+        env:
+          RESULT: ${{ needs.shard.result }}
+        run: |
+          echo "Tests: $RESULT"
+          test "$RESULT" = success

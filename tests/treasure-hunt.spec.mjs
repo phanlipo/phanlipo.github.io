@@ -2,7 +2,7 @@
 // resume code on a second "device" (browser context), editor, import/export, microphone task, map tiles.
 // Expected values (distances, battle damage) are recomputed independently here.
 import { readFileSync } from 'node:fs';
-import { test, expect, openMenu, closeMenu, switchLang } from './helpers.mjs';
+import { test, expect, axe, openMenu, closeMenu, switchLang } from './helpers.mjs';
 
 const URL_ = '/treasure-hunt/';
 const R = 6371008.8, rad = d => d * Math.PI / 180;
@@ -502,10 +502,9 @@ test.describe('English', () => {
 });
 
 test('accessible: editor and game screens, light and dark', async ({ page }) => {
-  const AxeBuilder = (await import('@axe-core/playwright')).default;
   const check = async name => {
     // The shared toast is checked elsewhere; here it would be measured while fading out
-    const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).exclude('#toast').analyze();
+    const { violations } = await axe(page).exclude('#toast').analyze();
     expect(violations.map(v => `${v.id}: ${v.help} → ${v.nodes.slice(0, 3).map(n => n.target.join(' ')).join(' | ')}`), name).toEqual([]);
   };
   await page.emulateMedia({ reducedMotion: 'reduce' });

@@ -1392,6 +1392,8 @@ test.describe('piano tools', () => {
     await page.clock.install();
     await fakeModelContext(page);
     await page.goto('/piano/');
+    // Stop the clock: only runFor moves notes and songs on (real time under load would add to it)
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
   });
 
   test('play_notes: note names and chords become MIDI numbers, keys light up in the app', async ({ page }) => {
@@ -1400,8 +1402,9 @@ test.describe('piano tools', () => {
     // C4 = 60 (middle C), F#3 = 54, Bb5 = 82, A0 = 21, C8 = 108
     expect(result.steps).toEqual([[60], [54], [82], [], [60, 64, 67], [21], [108]]);
     expect(result.total_ms).toBe(1400);
+    await page.clock.runFor(50);                          // step 1 (0–0.2 s): C4
     await expect(page.locator('#keys')).toHaveAttribute('data-lit', '60');
-    await page.clock.runFor(850);                         // step 5 (0.8–1.0 s): the chord
+    await page.clock.runFor(800);                         // 0.85 s, step 5 (0.8–1.0 s): the chord
     await expect(page.locator('#keys')).toHaveAttribute('data-lit', '60 64 67');
     await expect(page.locator('#toast')).toHaveText('KI-Agent: Noten gespielt');
     for (const bad of [['H9'], ['C4+X'], ['G#8'], ['A-1']]) {

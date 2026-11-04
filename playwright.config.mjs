@@ -9,6 +9,9 @@ export default defineConfig({
   // Live tests against the published site: npm run test:live (playwright.live.config.mjs)
   testIgnore: 'live/**',
   fullyParallel: true,
+  // GitHub runners have 4 cores; the tests mostly wait for the browser, so use all of them
+  // (Playwright's default is half). Locally the default stays.
+  workers: process.env.CI ? 4 : undefined,
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',

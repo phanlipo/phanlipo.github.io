@@ -1,7 +1,9 @@
 # Tests
 
 Browser-Tests mit [Playwright](https://playwright.dev/) – sie laufen automatisch bei jedem Pull Request
-und jedem Push auf `main` (`.github/workflows/test.yml`).
+und jedem Push auf `main` (`.github/workflows/test.yml`): aufgeteilt auf 3 Runner gleichzeitig
+(`--shard=1/3` …), je 4 Worker. Der Check **test** (Pflicht für den Merge) ist grün, wenn alle Teile grün sind.
+Einen Teil lokal nachstellen: `npx playwright test --shard=2/3`.
 
 ## Lokal ausführen
 
@@ -23,7 +25,7 @@ Passt der installierte Browser nicht zur Playwright-Version (z. B. in vorkonfigu
 |---|---|
 | `site.spec.mjs` | **jede Seite automatisch**: noindex, strenge CSP, Versionsanzeige = Cache-Version, lädt ohne Fehler, kein seitliches Scrollen (375 px / 1280 px), Dark Mode, Hilfe eingeklappt, Fußzeile, PWA installierbar und offline nutzbar, Daten-Sicherung (Export, Import, Ablehnung falscher Dateien, Löschen nur eigener Daten); Startseite listet alle Tools, Filterzeilen auf dem Handy ohne Scrollleiste (ausgeblendeter Rand zeigt, dass es weitergeht), Home-Bildschirm-Icon der Startseite (Manifest mit randlosem maskable Icon, kein Service Worker) |
 | `diag.spec.mjs` | **Diagnose kopieren** (`Tools.diag`): jede App mit dem Knopf (auch die Vorlage) kopiert einen Bericht mit App, Version, Browser, Service Worker, Speichergröße und Protokoll; Schritte, `console.warn` und Seiten-Infos landen darin, gespeicherte Inhalte nie; Englisch |
-| `a11y.spec.mjs` | **Barrierefreiheit** jeder Seite (WCAG 2.1 A/AA, axe-core), hell und dunkel, mit geöffneten Klapp-Bereichen und zusätzlich mit offenem Menü; übersetzte Seiten zusätzlich auf Englisch |
+| `a11y.spec.mjs` | **Barrierefreiheit** jeder Seite (WCAG 2.1 A/AA, axe-core), hell und dunkel, mit geöffneten Klapp-Bereichen und zusätzlich mit offenem Menü; übersetzte Seiten zusätzlich auf Englisch; ein Gegentest prüft, dass die Prüfung eingebaute Fehler findet. In eigenen Tests `axe(page)` aus `helpers.mjs` nutzen (gleiche Regeln, schneller Modus ohne iframe-Zusammenführung) |
 | `menu.spec.mjs` | **Menü (☰)** in jeder App: Knopf rechts in der Kopfleiste (44 px, überdeckt nichts, 375 px); Einstellungen (`data-menu`), Daten sichern, Hilfe und Fußzeile liegen im Menü; Schließen per Knopf, Escape, Tipp daneben und Zurück-Taste (ohne die App zu verlassen); Meldungen über dem Menü sichtbar; Seitenleiste auf breiten Bildschirmen; ohne JavaScript bleibt alles erreichbar; Englisch. **Bühne** (`<body class="stage">`): füllt Hochformat, Querformat und Desktop ohne Scrollen der Seite |
 | `webmcp.spec.mjs` | **WebMCP** (Werkzeuge für KI-Agenten) mit nachgebautem `document.modelContext`: jede App registriert genau die Werkzeuge aus `tool:webmcp` (englisch, Schema, nur für diese Herkunft, nichts Zerstörerisches), `navigator.modelContext` als Rückfall, ohne WebMCP keine Fehler; Werkzeuge jeder App fachlich: Würfel/Münze, Brau-Rechner (unabhängig nachgerechnet), QR-Code (WLAN-Passwort nie im Verlauf), Schere-Stein-Papier (Regeln unabhängig), SecurPharm (Zerlegung, Prüfziffer, Suche), Sensoren (Schritte, Kompass nur während er läuft), PDF zu Word (gewählte Datei umwandeln, Text), Sprache zu Text (Transkript, Verlauf), Erinnerungen (anlegen, ändern, auflisten, Ortszeit, falsche Zeiten), Datensammler (Datenpunkt eintragen, Werte mit Kennzahlen lesen, Profil wechseln, unbekannte Namen), Dokumentenscanner (Seiten lesen, Filter, Reihenfolge, Drehen), PDF bearbeiten (Seiten lesen, drehen, verschieben, Rückgängig), Audio Studio (Auswahl, Bearbeiten mit Rückgängig, Datei erstellen, falsche Eingaben), API-Check (Konfigurationen ohne Zugangsdaten, Formular ausfüllen ohne zu senden, letzte Antwort als nicht vertrauenswürdig, API-Schlüssel maskiert), Schatzsuche (Schatzsuche aus JSON anlegen ohne zu ersetzen, Spielstand ohne Koordinaten), Loop-Station (Zustand, Abspielen/Anhalten, Spur stumm/leiser, Tempo nur ohne Spuren); Anzeige in der App, falsche Eingaben, offline, gleich in jeder Sprache |
 | `i18n.spec.mjs` | **Deutsch/Englisch**: Startseite auf Englisch (Karten, Filter), jede übersetzte Seite ohne fehlende englische Texte, Hilfe nur in einer Sprache, nicht übersetzte Seiten bleiben deutsch, Sprachwahl gilt für alle Apps und bleibt nach Neuladen, `?lang=`, nicht in App-Sicherungen, englische Namen im Manifest |
@@ -90,3 +92,10 @@ Testdateien in `tests/fixtures/` sind künstlich erzeugt (siehe dortige README) 
 `site.spec.mjs` deckt eine neue Seite ohne weitere Arbeit ab. Für die Fachlogik eine Datei
 `tests/<tool-name>.spec.mjs` anlegen – die vorhandenen Dateien dienen als Beispiel.
 Erwartete Werte möglichst **unabhängig nachrechnen** (siehe `brew-calculator.spec.mjs`), statt Ausgaben der Seite abzuschreiben.
+
+## Laufzeit
+
+Die Tests laufen parallel und müssen unter Last stabil sein (CI: 4 Worker je Runner). Deshalb:
+
+- **Keine echte Wartezeit, wo es eine Uhr gibt:** Zeitabhängiges mit `page.clock` steuern. Läuft die Uhr nach `clock.install()` frei weiter, kommt unter Last echte Zeit hinzu – vor dem Messen anhalten (`clock.pauseAt(…)`) und nur mit `clock.runFor(…)` weiterdrehen (Beispiel: Klavier-Werkzeuge in `webmcp.spec.mjs`). Echte Zeit nur, wo sie zur Sache gehört (Audio-Aufnahmen in `talking-animal`).
+- **Barrierefreiheit:** `axe(page)` aus `helpers.mjs` statt `new AxeBuilder(…)`.

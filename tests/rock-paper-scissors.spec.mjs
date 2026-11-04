@@ -1,7 +1,6 @@
 // Schere, Stein, Papier: rules of all three variants, computer independent of the player's choice,
 // "smart" computer learns from history, score and persistence.
-import AxeBuilder from '@axe-core/playwright';
-import { test, expect, switchLang, clipboardText, privateClipboard, openDetails } from './helpers.mjs';
+import { test, expect, axe, switchLang, clipboardText, privateClipboard, openDetails } from './helpers.mjs';
 
 // Rules written down independently of the page: winner → losers
 const BEATS = {
@@ -208,7 +207,7 @@ test('two devices: connect, both choose, results match the rules on both sides',
   await expect(host.locator('#connLobby')).toBeVisible();
   await expect(host.locator('#gameCard')).toBeHidden();
   await expect(host.locator('#cpuCard')).toBeHidden();
-  const { violations } = await new AxeBuilder({ page: host }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  const { violations } = await axe(host).analyze();
   expect(violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(' | ')}`)).toEqual([]);
 
   await connect(host, guest, true);

@@ -1,6 +1,5 @@
 // Data logger: profiles, measurements, data points, charts and exports. Expected values worked out by hand.
-import AxeBuilder from '@axe-core/playwright';
-import { test, expect } from './helpers.mjs';
+import { test, expect, axe } from './helpers.mjs';
 
 test.use({ timezoneId: 'Europe/Berlin' });
 // Friday 30 Oct 2026, 12:00 CET
@@ -233,7 +232,7 @@ test('accessible with data, light and dark', async ({ page }) => {
   await page.clock.resume(); // axe-core needs running timers
   for (const scheme of ['light', 'dark']) {
     await page.emulateMedia({ colorScheme: scheme });
-    const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    const { violations } = await axe(page).analyze();
     expect(violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(' | ')}`)).toEqual([]);
   }
 });
