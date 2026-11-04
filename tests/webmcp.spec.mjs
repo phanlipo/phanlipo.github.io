@@ -912,6 +912,44 @@ test.describe('whoopee-cushion tools', () => {
   });
 });
 
+test.describe('spin-the-bottle tools', () => {
+  const seed = state => ({ players: [], fair: true, sound: false, vibrate: true, angle: 0, last: -1, spins: 0, ...state });
+  test.beforeEach(async ({ page }) => page.emulateMedia({ reducedMotion: 'reduce' }));
+
+  test('spin_bottle waits for the stop and names the player the app shows', async ({ page }) => {
+    await page.addInitScript(v => localStorage.setItem('spin-the-bottle.state.v1', v),
+      JSON.stringify(seed({ players: ['Anna', 'Ben', 'Cem', 'Dora'] })));
+    await open(page, '/spin-the-bottle/');
+    const { ok, result } = await call(page, 'spin_the_bottle_spin_bottle', { direction: 'counterclockwise' });
+    expect(ok).toBe(true);
+    // Seat from the angle alone: seat i at i·90° clockwise from the top
+    const seat = Math.round(result.angle_degrees / 90) % 4;
+    expect(result).toEqual({ player: ['Anna', 'Ben', 'Cem', 'Dora'][seat], seat_index: seat,
+      angle_degrees: result.angle_degrees, total_spins: 1 });
+    await expect(page.locator('.name.hit')).toHaveText(result.player);
+    await expect(page.locator('#status')).toHaveText(`🍾 ${result.player} ist dran!`);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Flasche gedreht');
+    const { result: info } = await call(page, 'spin_the_bottle_get_players', {});
+    expect(info).toEqual({ players: ['Anna', 'Ben', 'Cem', 'Dora'], last_player: result.player, total_spins: 1, spinning: false,
+      settings: { nobody_twice_in_a_row: true, click_sound: false, vibration: true } });
+  });
+
+  test('free spin without names; a second spin while spinning is rejected; bad input is rejected', async ({ page }) => {
+    await open(page, '/spin-the-bottle/');
+    const first = page.evaluate(() => window.__webmcp.call('spin_the_bottle_spin_bottle', {}));
+    await expect(page.locator('#table')).toHaveAttribute('data-spinning', 'true');
+    expect((await call(page, 'spin_the_bottle_spin_bottle', {})).error).toMatch(/already spinning/);
+    const { result } = await first;
+    expect(result.player).toBeNull();
+    expect(result.seat_index).toBeNull();
+    expect(result.total_spins).toBe(1);
+    expect(result.angle_degrees).toBeGreaterThanOrEqual(0);
+    expect(result.angle_degrees).toBeLessThan(360);
+    expect((await call(page, 'spin_the_bottle_spin_bottle', { direction: 'up' })).ok).toBe(false);
+    expect((await call(page, 'spin_the_bottle_get_players', {})).result.players).toEqual([]);
+  });
+});
+
 test.describe('talking-animal tools', () => {
   test.beforeEach(async ({ page }) => {
     // Fake microphone: 440 Hz sine
