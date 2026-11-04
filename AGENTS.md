@@ -7,7 +7,7 @@ Hinweise für alle, die an diesem Repository arbeiten – Menschen wie KI-Agente
 Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/). Kein Server; die veröffentlichten Seiten brauchen keine Pakete (`package.json` gibt es nur für die Tests). Jede Seite ist eine einzelne `index.html` in einem eigenen Ordner, wird hauptsächlich **auf dem Handy** benutzt und ist als **PWA** installierbar und offline nutzbar.
 
 ```
-index.html            Startseite – die Kartenliste ist generiert
+index.html            Startseite – Kartenliste mit Suche und Filtern ist generiert
 manifest.webmanifest  generiert: nur für das Home-Bildschirm-Icon der Startseite (Android), `display: browser`, ohne Service Worker
 assets/base.css       Design-Tokens, Dark Mode, Karten, Buttons, Toast, Hilfe-Bereich
 assets/common.js      window.Tools: $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, i18n, t, lang, setLang, locale, onLang, menu, mcp, diag; registriert den Service Worker
