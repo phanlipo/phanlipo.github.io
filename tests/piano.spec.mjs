@@ -147,6 +147,26 @@ test('example song: Ode to Joy starts with E4 over C3', async ({ page }) => {
   await expect.poll(() => lit(page)).toBe('48 64');
 });
 
+test('short landscape phone: the whole keyboard with its note names fits without scrolling', async ({ page }) => {
+  // Phone in landscape minus the browser bars – before, main scrolled and cut off the bottom of the keys
+  for (const viewport of [{ width: 780, height: 270 }, { width: 800, height: 300 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto(URL_);
+    for (const withSong of [false, true]) {
+      if (withSong) await page.click('[data-demo="ode"]');
+      const box = await page.locator('#keys').boundingBox();
+      expect(box.y + box.height, `keys inside ${viewport.height}px`).toBeLessThanOrEqual(viewport.height + 0.5);
+      expect(await page.locator('main').evaluate(m => m.scrollHeight - m.clientHeight)).toBeLessThanOrEqual(1);
+      const label = page.locator('#keys .key.c .lbl').first();
+      await expect(label).toBeVisible();
+      const lb = await label.boundingBox();
+      expect(lb.y + lb.height).toBeLessThanOrEqual(viewport.height);
+      expect(box.height).toBeGreaterThanOrEqual(80);
+    }
+    await page.click('#btnClose');   // the song would otherwise come back after the next reload
+  }
+});
+
 test('share target: a MIDI file shared to the installed app is opened', async ({ page, request }) => {
   const manifest = await (await request.get(`${URL_}manifest.webmanifest`)).json();
   expect(manifest.share_target.params.files[0].accept).toContain('audio/midi');
