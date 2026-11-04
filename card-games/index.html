@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Kartenspiele</title>
+<meta name="description" content="Mau Mau und Durak gegen den Computer oder mit mehreren Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server.">
+<meta name="tool:tags" content="Freizeit, Spiele">
+<meta name="tool:features" content="Kamera, KI-Agent">
+<meta name="tool:icon" content="cards">
+<meta name="tool:color" content="#166534">
+<meta name="tool:short-name" content="Karten">
+<meta name="tool:title-en" content="Card Games">
+<meta name="tool:description-en" content="Mau Mau and Durak against the computer or with several phones – connected by QR code, directly device to device, without a server.">
+<meta name="tool:short-name-en" content="Card Games">
+<meta name="tool:storage" content="card-games.">
+<meta name="tool:webmcp" content="get_game, play_move">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-Ji7H3RxrbWUDaeJoOEi2r5aG5U+VwHfjMgl+nrL82w0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Karten">
+<meta name="theme-color" content="#166534">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#166534;--accent-text:#ffffff;--felt:#e4efe7;--card-bg:#ffffff;--card-line:#c9d1da;--card-red:#c0161d;--card-black:#1b2430;--card-back:#166534;--card-back-2:#2f8a52}
+@media (prefers-color-scheme: dark){:root{--accent:#5fcf8a;--accent-text:#0b1f13;--felt:#142a1c;--card-bg:#f1f4f7;--card-line:#9aa8b8;--card-red:#b3121a;--card-black:#141b24;--card-back:#1f6b3d;--card-back-2:#2c8a52}}
+main{display:flex;flex-direction:column;padding:12px;padding-inline:max(12px,env(safe-area-inset-left)) max(12px,env(safe-area-inset-right))}
+.scr{flex:1 0 auto;display:flex;flex-direction:column;gap:12px;width:100%;max-width:1100px;margin-inline:auto}
+.scr[hidden]{display:none}
+.narrow{max-width:520px}
+.lead{margin:0;font-size:16px}
+.step-h{font-size:17px;margin:0}
+.status{margin:0;text-align:center;font-weight:600;min-height:1.5em}
+.status.err{color:var(--err)}
+.status.ok{color:var(--ok)}
+.big-btns{display:grid;gap:10px}
+.big-btns .btn{min-height:60px;font-size:17px;justify-content:center}
+.big-btns small{display:block;font-size:14px;font-weight:400;opacity:.9}
+.pick{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.pick .btn{min-height:52px;font-size:17px;font-weight:600}
+.pick .btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.cpu{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cpu label{font-weight:600}
+.cpu select{min-height:44px;font-size:16px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding-inline:8px}
+.cpu .btn{flex:1 1 180px;min-height:52px;font-size:17px}
+.stats{display:flex;flex-wrap:wrap;gap:4px 16px;justify-content:center;font-size:15px;margin:0}
+.stats b{font-variant-numeric:tabular-nums}
+.qr-box{display:grid;justify-items:center;gap:8px}
+.qr-box canvas{width:min(78vw,300px);height:auto;aspect-ratio:1;image-rendering:pixelated;border-radius:8px;background:#fff}
+textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;word-break:break-all}
+.row.center{justify-content:center}
+.check{display:flex;gap:10px;align-items:flex-start;min-height:44px;font-size:16px;cursor:pointer}
+.check input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--accent)}
+.field{display:grid;gap:4px;margin-block-end:12px}
+.field input,.field select{min-height:44px;font-size:16px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding-inline:10px}
+.video-wrap{position:relative;flex:1;min-height:200px;border-radius:12px;overflow:hidden;background:#000}
+.video-wrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.video-wrap::after{content:"";position:absolute;inset:15%;border:3px solid rgba(255,255,255,.8);border-radius:12px;pointer-events:none}
+
+/* ---------- Room ---------- */
+.players{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.players li{display:flex;align-items:center;gap:8px;min-height:48px;padding:4px 4px 4px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.players .pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.players .kind{color:var(--muted);font-size:14px}
+.players .btn{min-height:44px}
+.room-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.room-btns .btn{min-height:48px}
+#btnStart{min-height:56px;font-size:18px}
+
+/* ---------- Cards ---------- */
+.card-face,.card-back{--w:var(--cw,58px);width:var(--w);height:calc(var(--w)*1.42);flex:none;border-radius:calc(var(--w)*.1);position:relative}
+.card-face{background:var(--card-bg);border:1px solid var(--card-line);color:var(--card-black);box-shadow:0 1px 2px rgba(0,0,0,.25);padding:0;font:inherit;display:block;text-align:start}
+.card-face.red{color:var(--card-red)}
+.card-face .cr{position:absolute;inset-block-start:3px;inset-inline-start:4px;display:flex;flex-direction:column;align-items:center;line-height:1;font-weight:700;font-size:calc(var(--w)*.3)}
+.card-face .cr small{font-size:calc(var(--w)*.26);margin-top:1px}
+.card-face .cm{position:absolute;inset:0;display:grid;place-items:center;font-size:calc(var(--w)*.5);padding-block-start:calc(var(--w)*.28)}
+.card-back{background:repeating-linear-gradient(45deg,var(--card-back) 0 6px,var(--card-back-2) 6px 12px);border:3px solid var(--card-bg);box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.slot{--w:var(--cw,58px);width:var(--w);height:calc(var(--w)*1.42);border:2px dashed var(--muted);border-radius:calc(var(--w)*.1);display:grid;place-items:center;color:var(--muted);font-size:calc(var(--w)*.45)}
+.slot.wide{width:auto;min-width:var(--w);padding-inline:10px;font-size:15px;text-align:center}
+
+/* ---------- Play ---------- */
+#scrPlay{flex:1 1 0;min-height:0;gap:8px;max-width:none}
+.seats{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.seat{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--surface-2);border:2px solid transparent;font-size:14px;max-width:100%}
+.seat.active{border-color:var(--accent)}
+.seat .sname{font-weight:600;max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seat .scount{display:flex;align-items:center;gap:3px;font-variant-numeric:tabular-nums}
+.seat .scount i{width:10px;height:14px;border-radius:2px;background:var(--card-back);display:inline-block}
+.seat .sbadge{font-size:12px;font-weight:600;background:var(--accent);color:var(--accent-text);border-radius:999px;padding:0 6px}
+.table{flex:1;min-height:150px;border-radius:14px;background:var(--felt);display:grid;place-items:center;padding:10px;overflow:auto;--cw:62px}
+.pile{display:grid;justify-items:center;gap:4px}
+.pile-lbl{font-size:13px;color:var(--muted);text-align:center}
+.tag{display:inline-block;font-size:14px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--border)}
+.tag.red{color:var(--card-red)}
+.tag.pen{color:var(--err)}
+.mm-table{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:center}
+.mm-info{flex-basis:100%;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.dk-table{display:flex;gap:14px;align-items:center;justify-content:center;flex-wrap:wrap;width:100%}
+.dk-side{display:grid;justify-items:center;gap:4px}
+.dk-deck{position:relative;grid-template-columns:auto auto;align-items:center}
+.dk-deck .trump-card{transform:rotate(90deg);margin-inline-end:calc(var(--cw)*-.35)}
+.dk-deck .pile-lbl{grid-column:1/-1}
+.dk-pairs{display:flex;flex-wrap:wrap;gap:8px 12px;justify-content:center;flex:1 1 200px;max-width:520px}
+.pair{position:relative;padding-inline-end:calc(var(--cw)*.35);padding-block-end:calc(var(--cw)*.3)}
+.pair .def{position:absolute;inset-inline-start:calc(var(--cw)*.35);inset-block-start:calc(var(--cw)*.3)}
+.msg{margin:0;text-align:center;font-size:15px;min-height:1.5em;color:var(--muted)}
+.turn{margin:0;text-align:center;font-size:16px;font-weight:700;padding:6px 8px;border-radius:10px;background:var(--surface-2)}
+.turn.mine{background:var(--accent);color:var(--accent-text)}
+.over{display:grid;gap:8px;justify-items:center;padding:10px;border-radius:12px;background:var(--surface);border:2px solid var(--accent)}
+.over p{margin:0;font-size:18px;font-weight:700;text-align:center}
+.over .row{justify-content:center}
+.chooser{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.chooser .btn{min-height:44px;font-size:16px}
+.actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.actions:empty{display:none}
+.actions .btn{min-height:48px;min-width:120px;font-size:17px}
+.hand{display:flex;overflow-x:auto;overflow-y:hidden;padding:6px 8px 8px;--cw:62px;min-height:calc(62px*1.42 + 16px);scrollbar-width:thin}
+.hand .card-face{cursor:pointer;transition:transform .12s}
+.hand .card-face+.card-face{margin-inline-start:var(--ov,6px)}
+.hand .card-face:disabled{cursor:default}
+.hand .card-face.nope{filter:saturate(.55) brightness(.9)}
+.hand .card-face.can{transform:translateY(-6px);border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.hand .card-face.sel{transform:translateY(-12px)}
+.hand .card-face:focus-visible{outline:3px solid var(--accent);outline-offset:2px;z-index:1}
+.hand-empty{margin:auto;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.hand .card-face{transition:none}}
+@media (min-width:700px) and (min-height:700px){.table{--cw:80px}.hand{--cw:76px;min-height:calc(76px*1.42 + 16px)}}
+@media (max-height:520px){.table{--cw:46px;min-height:110px;padding:6px}.hand{--cw:50px;min-height:calc(50px*1.42 + 16px)}.seat{padding:2px 8px}}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Kartenspiele</span></h1>
+  <p class="sub" data-i18n="sub">Mau Mau und Durak – allein oder mit mehreren Handys</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnLeave" hidden aria-label="Spiel verlassen" title="Spiel verlassen" data-i18n-attr="aria-label:leave; title:leave"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2"/><path d="M9 12h12l-3 -3"/><path d="M18 15l3 -3"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <!-- Start: pick a game, play against the computer, host or join -->
+  <section class="scr narrow" id="scrLobby" aria-labelledby="h-lobby">
+    <h2 id="h-lobby" class="step-h" data-i18n="pickGame">Spiel wählen</h2>
+    <div class="pick" id="gamePick" role="group" aria-labelledby="h-lobby"></div>
+    <p class="lead" id="gameDesc"></p>
+    <div class="cpu">
+      <label for="cpuN" data-i18n="opponents">Gegner</label>
+      <select id="cpuN"></select>
+      <button type="button" class="btn primary" id="btnCpu" data-i18n="vsCpu">Gegen den Computer</button>
+    </div>
+    <div class="big-btns">
+      <button type="button" class="btn" id="btnHost"><span><span data-i18n="host">Mit anderen Handys</span><small data-i18n="hostSub">du lädst per QR-Code ein</small></span></button>
+      <button type="button" class="btn" id="btnJoin"><span><span data-i18n="join">Beitreten</span><small data-i18n="joinSub">QR-Code des Gastgebers scannen</small></span></button>
+    </div>
+    <p class="status" id="lobbyStatus" role="status"></p>
+    <details class="card">
+      <summary data-i18n="pasteOffer">Spiel-Code von Hand eingeben</summary>
+      <label for="offerIn" data-i18n="pasteOfferLbl">Spiel-Code oder Link des Gastgebers (z. B. per Nachricht geschickt):</label>
+      <textarea id="offerIn" class="code" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+      <div class="row"><button type="button" class="btn" id="btnOfferIn" data-i18n="connect">Verbinden</button></div>
+    </details>
+    <p class="stats" id="stats" aria-live="polite"></p>
+  </section>
+
+  <!-- Host: the round of players -->
+  <section class="scr narrow" id="scrRoom" aria-labelledby="h-room" hidden>
+    <h2 id="h-room" class="step-h" data-i18n="roomH">Spielrunde</h2>
+    <div class="pick" id="roomPick" role="group" aria-labelledby="h-room"></div>
+    <ul class="players" id="roomPlayers" aria-label="Mitspieler" data-i18n-attr="aria-label:playersLbl"></ul>
+    <div class="room-btns">
+      <button type="button" class="btn" id="btnInvite" data-i18n="invite">Handy einladen</button>
+      <button type="button" class="btn" id="btnAddBot" data-i18n="addBot">Computer dazu</button>
+    </div>
+    <p class="status" id="roomStatus" role="status"></p>
+    <button type="button" class="btn primary" id="btnStart" data-i18n="start">Spiel starten</button>
+    <p class="muted" data-i18n="sameWifi">Alle Geräte im selben WLAN oder ein Handy als Hotspot für die anderen. Jedes Handy wird einzeln eingeladen.</p>
+  </section>
+
+  <!-- Host: invite one phone (show the offer, scan the answer) -->
+  <section class="scr narrow" id="scrInvite" aria-labelledby="h-invite" hidden>
+    <h2 id="h-invite" class="step-h" data-i18n="inviteH1">1. Das andere Handy scannt diesen Code</h2>
+    <div class="qr-box">
+      <canvas id="qrOffer" width="300" height="300" role="img" aria-label="QR-Code zum Beitreten" data-i18n-attr="aria-label:qrOffer"></canvas>
+      <div class="row center">
+        <button type="button" class="btn" id="btnCopyOffer" data-i18n="copyCode">Code kopieren</button>
+        <button type="button" class="btn" id="btnShareOffer" data-i18n="share" hidden>Teilen …</button>
+      </div>
+    </div>
+    <h2 class="step-h" data-i18n="inviteH2">2. Dann den Antwort-Code scannen</h2>
+    <button type="button" class="btn primary" id="btnScanAnswer" data-i18n="scanAnswer">Antwort-Code scannen</button>
+    <details class="card">
+      <summary data-i18n="pasteAnswer">Antwort-Code von Hand eingeben</summary>
+      <label for="answerIn" data-i18n="pasteAnswerLbl">Antwort-Code des anderen:</label>
+      <textarea id="answerIn" class="code" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+      <div class="row"><button type="button" class="btn" id="btnAnswerIn" data-i18n="connect">Verbinden</button></div>
+    </details>
+    <p class="status" id="inviteStatus" role="status"></p>
+    <button type="button" class="btn" id="btnInviteBack" data-i18n="backRoom">Zurück zur Runde</button>
+  </section>
+
+  <!-- Guest: show the answer -->
+  <section class="scr narrow" id="scrAnswer" aria-labelledby="h-answer" hidden>
+    <h2 id="h-answer" class="step-h" data-i18n="answerH">Jetzt scannt der Gastgeber diesen Antwort-Code</h2>
+    <div class="qr-box">
+      <canvas id="qrAnswer" width="300" height="300" role="img" aria-label="QR-Code mit der Antwort" data-i18n-attr="aria-label:qrAnswer"></canvas>
+      <div class="row center">
+        <button type="button" class="btn" id="btnCopyAnswer" data-i18n="copyCode">Code kopieren</button>
+        <button type="button" class="btn" id="btnShareAnswer" data-i18n="share" hidden>Teilen …</button>
+      </div>
+    </div>
+    <p class="status" id="answerStatus" role="status"></p>
+  </section>
+
+  <!-- Guest: connected, waiting for the host to start -->
+  <section class="scr narrow" id="scrWait" aria-labelledby="h-wait" hidden>
+    <h2 id="h-wait" class="step-h" data-i18n="waitH">Verbunden</h2>
+    <p class="lead" id="waitGame"></p>
+    <ul class="players" id="waitPlayers" aria-label="Mitspieler" data-i18n-attr="aria-label:playersLbl"></ul>
+    <p class="status" id="waitStatus" role="status"></p>
+  </section>
+
+  <!-- Camera -->
+  <section class="scr narrow" id="scrScan" aria-labelledby="h-scan" hidden>
+    <h2 id="h-scan" class="step-h"></h2>
+    <div class="video-wrap"><video id="video" playsinline muted></video></div>
+    <p class="status" id="scanStatus" role="status"></p>
+    <button type="button" class="btn" id="btnScanCancel" data-i18n="cancel">Abbrechen</button>
+  </section>
+
+  <!-- Game -->
+  <section class="scr" id="scrPlay" aria-labelledby="h-play" hidden>
+    <h2 id="h-play" class="sr-only"></h2>
+    <ul class="seats" id="seats" aria-label="Mitspieler" data-i18n-attr="aria-label:playersLbl"></ul>
+    <div class="table" id="table"></div>
+    <p class="msg" id="lastMsg" aria-live="polite"></p>
+    <p class="turn" id="turn" role="status"></p>
+    <div class="over" id="over" hidden>
+      <p id="overText"></p>
+      <div class="row">
+        <button type="button" class="btn primary" id="btnAgain" data-i18n="again">Nochmal</button>
+        <button type="button" class="btn" id="btnToRoom" data-i18n="toRoom">Zur Runde</button>
+        <button type="button" class="btn" id="btnEnd" data-i18n="end">Beenden</button>
+      </div>
+    </div>
+    <div class="chooser" id="chooser" role="group" hidden></div>
+    <div class="actions" id="actions"></div>
+    <div class="hand" id="hand" role="group" aria-label="Deine Karten" data-i18n-attr="aria-label:yourCards"></div>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-set">
+    <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <div class="field">
+      <label for="optName" data-i18n="optName">Dein Name (sehen die anderen Handys)</label>
+      <input id="optName" type="text" maxlength="16" autocomplete="nickname" enterkeyhint="done">
+    </div>
+    <div class="field">
+      <label for="optSpeed" data-i18n="optSpeed">Tempo des Computers</label>
+      <select id="optSpeed">
+        <option value="slow" data-i18n="speed.slow">Gemütlich</option>
+        <option value="normal" data-i18n="speed.normal">Normal</option>
+        <option value="fast" data-i18n="speed.fast">Schnell</option>
+      </select>
+    </div>
+    <label class="check"><input type="checkbox" id="optStun"> <span data-i18n="optStun">Auch über das Internet verbinden (STUN-Server von Google)</span></label>
+    <p class="muted" data-i18n="optStunHelp">Nur nötig, wenn die Handys nicht im selben WLAN sind. Der Server erfährt dabei die öffentliche IP-Adresse – die Spielzüge laufen trotzdem direkt. Klappt nicht in jedem Mobilfunknetz. Alle Geräte müssen es einschalten.</p>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Kartenspiele für 2 bis 6 Spieler: gegen den Computer auf einem Handy oder mit mehreren Handys, die sich direkt miteinander verbinden. Fehlende Mitspieler übernimmt der Computer.</p>
+  <h3>Gegen den Computer</h3>
+  <p>Spiel wählen, Zahl der Gegner einstellen, <strong>Gegen den Computer</strong>. Läuft ohne Internet.</p>
+  <h3>Mit mehreren Handys</h3>
+  <ol>
+    <li>Ein Handy ist Gastgeber: <strong>Mit anderen Handys</strong>, dann <strong>Handy einladen</strong> – ein QR-Code erscheint.</li>
+    <li>Das andere Handy: <strong>Beitreten</strong> und den Code scannen (geht auch mit der normalen Kamera-App, der Code ist ein Link). Es zeigt dann einen Antwort-Code.</li>
+    <li>Der Gastgeber scannt den Antwort-Code. Für jedes weitere Handy wiederholen, mit <strong>Computer dazu</strong> Plätze auffüllen, dann <strong>Spiel starten</strong>.</li>
+  </ol>
+  <p>Ohne Kamera lassen sich die Codes kopieren und z. B. per Nachricht schicken („von Hand eingeben“). Den Namen, den die anderen sehen, stellst du im Menü (☰) ein.</p>
+  <h3>Mau Mau (2–5 Spieler)</h3>
+  <ul>
+    <li>32 Karten (7 bis Ass), jeder bekommt 5. Leg eine Karte gleicher Farbe oder gleichen Werts auf die Ablage.</li>
+    <li><strong>7</strong>: Der Nächste zieht 2 Karten – außer er legt auch eine 7, dann zieht der Übernächste 4 usw.</li>
+    <li><strong>8</strong>: Der Nächste setzt aus.</li>
+    <li><strong>Bube</strong>: passt auf jede Karte außer einen Buben; du wünschst dir eine Farbe.</li>
+    <li>Kannst oder willst du nicht legen, ziehst du eine Karte. Passt sie, darfst du sie gleich legen, sonst „Weiter“.</li>
+    <li>Wer zuerst keine Karten mehr hat, gewinnt.</li>
+  </ul>
+  <h3>Durak (2–6 Spieler)</h3>
+  <ul>
+    <li>36 Karten (6 bis Ass), jeder bekommt 6. Die unterste Karte des Stapels liegt offen: Ihre Farbe ist <strong>Trumpf</strong>.</li>
+    <li>Wer den niedrigsten Trumpf hat, greift zuerst an; der Nächste verteidigt.</li>
+    <li>Der Verteidiger schlägt jede Karte mit einer höheren derselben Farbe oder mit Trumpf (Trumpf nur mit höherem Trumpf): erst die eigene Karte antippen, bei mehreren offenen Karten dann wählen, auf welche.</li>
+    <li>Der Angreifer und der Spieler nach dem Verteidiger dürfen Karten nachlegen, deren Wert schon auf dem Tisch liegt – höchstens 6 und höchstens so viele, wie der Verteidiger zu Beginn hatte.</li>
+    <li>Kann oder will der Verteidiger nicht schlagen: <strong>Aufnehmen</strong>. Die Angreifer dürfen vorher noch nachlegen. Danach greift der Spieler nach ihm an.</li>
+    <li>Ist alles geschlagen und legt keiner mehr nach (<strong>Fertig</strong>), kommen die Karten weg und der Verteidiger greift als Nächster an. Wer nichts Passendes hat, muss nicht „Fertig“ sagen.</li>
+    <li>Nach jeder Runde ziehen alle auf 6 Karten nach. Wer bei leerem Stapel keine Karten mehr hat, ist raus. Wer als Letzter Karten hat, ist der <strong>Durak</strong>.</li>
+  </ul>
+  <h3>Verbindung &amp; Datenschutz</h3>
+  <ul>
+    <li>Die Verbindung nutzt <strong>WebRTC</strong>, wie bei „Schiffe versenken“. Die QR-Codes enthalten nur, wie die Geräte sich erreichen (zufälliger Gerätename im WLAN, Port, Schlüssel-Fingerabdruck). Danach laufen die Züge verschlüsselt direkt zwischen den Geräten, ohne Server.</li>
+    <li>Das Spiel läuft auf dem Handy des Gastgebers; die anderen sehen nur ihre eigenen Karten und wie viele die anderen haben.</li>
+    <li>Am einfachsten im selben WLAN. Ohne WLAN: Ein Handy macht einen Hotspot, die anderen verbinden sich damit.</li>
+    <li>Klappt es nicht? Neu einladen. Manche Gäste- oder Firmen-WLANs lassen Geräte nicht miteinander sprechen – dann den Hotspot nehmen. Für verschiedene Netze gibt es im Menü (☰) „Auch über das Internet verbinden“ (fragt einen STUN-Server von Google nach der öffentlichen Adresse; klappt nicht in jedem Netz).</li>
+    <li>Bricht ein Mitspieler ab, spielt der Computer für ihn weiter. Verlässt der Gastgeber das Spiel, endet es für alle.</li>
+    <li>Die Kamera wird nur zum Scannen eingeschaltet; die Bilder bleiben auf dem Gerät.</li>
+    <li>Gespeichert werden nur Name, Einstellungen und wie oft du gespielt und gewonnen hast – im Browser dieses Geräts.</li>
+  </ul>
+  <h3>KI-Agenten (WebMCP)</h3>
+  <ul>
+    <li>Unterstützt der Browser <strong>WebMCP</strong>, kann ein KI-Assistent im Browser das laufende Spiel aus deiner Sicht lesen (deine Karten, Tisch, erlaubte Züge) und für dich einen Zug machen. Ein Hinweis zeigt, wenn ein Agent etwas ausgelöst hat.</li>
+    <li>Verbinden, Kamera und Löschen sind für Agenten nicht zugänglich.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Card games for 2 to 6 players: against the computer on one phone or with several phones that connect directly. The computer fills empty seats.</p>
+  <h3>Against the computer</h3>
+  <p>Pick a game, set the number of opponents, <strong>Against the computer</strong>. Works without internet.</p>
+  <h3>With several phones</h3>
+  <ol>
+    <li>One phone is the host: <strong>With other phones</strong>, then <strong>Invite a phone</strong> – a QR code appears.</li>
+    <li>The other phone: <strong>Join</strong> and scan the code (the normal camera app works too, the code is a link). It then shows a reply code.</li>
+    <li>The host scans the reply code. Repeat for every other phone, fill seats with <strong>Add computer</strong>, then <strong>Start game</strong>.</li>
+  </ol>
+  <p>Without a camera the codes can be copied and sent, e.g. by message (“enter manually”). Set the name the others see in the menu (☰).</p>
+  <h3>Mau Mau (2–5 players)</h3>
+  <ul>
+    <li>32 cards (7 to ace), 5 for everyone. Play a card of the same suit or the same rank on the discard pile.</li>
+    <li><strong>7</strong>: the next player draws 2 cards – unless they play a 7 too, then the one after draws 4, and so on.</li>
+    <li><strong>8</strong>: the next player is skipped.</li>
+    <li><strong>Jack</strong>: fits on every card except a jack; you wish a suit.</li>
+    <li>If you cannot or will not play, draw a card. If it fits you may play it at once, otherwise “Pass”.</li>
+    <li>Whoever runs out of cards first wins.</li>
+  </ul>
+  <h3>Durak (2–6 players)</h3>
+  <ul>
+    <li>36 cards (6 to ace), 6 for everyone. The bottom card of the deck lies face up: its suit is <strong>trump</strong>.</li>
+    <li>Whoever has the lowest trump attacks first; the next player defends.</li>
+    <li>The defender beats every card with a higher one of the same suit or with a trump (a trump only with a higher trump): tap your card first; with several open cards then choose which one.</li>
+    <li>The attacker and the player after the defender may add cards of a rank already on the table – at most 6 and at most as many as the defender held at the start.</li>
+    <li>If the defender cannot or will not beat: <strong>Take</strong>. The attackers may still add cards first. Then the player after the defender attacks.</li>
+    <li>Everything beaten and nobody adds more (<strong>Done</strong>): the cards are discarded and the defender attacks next. Without a fitting card you need not say “Done”.</li>
+    <li>After each round everyone draws up to 6 cards. Without cards and with an empty deck you are out. The last one holding cards is the <strong>Durak</strong> (fool).</li>
+  </ul>
+  <h3>Connection &amp; privacy</h3>
+  <ul>
+    <li>The connection uses <strong>WebRTC</strong>, as in “Sea Battle”. The QR codes only contain how the devices reach each other (random device name in the Wi-Fi, port, key fingerprint). After that the moves travel encrypted directly between the devices, without a server.</li>
+    <li>The game runs on the host's phone; the others only see their own cards and how many the others hold.</li>
+    <li>Easiest in the same Wi-Fi. Without Wi-Fi: one phone opens a hotspot, the others join it.</li>
+    <li>Not working? Invite again. Some guest or company Wi-Fi networks do not let devices talk to each other – use the hotspot then. For different networks there is “Also connect over the internet” in the menu (☰) (asks a Google STUN server for the public address; does not work in every network).</li>
+    <li>If a player drops out, the computer plays on for them. If the host leaves, the game ends for everyone.</li>
+    <li>The camera is only switched on for scanning; the images stay on the device.</li>
+    <li>Only your name, the settings and how often you played and won are saved – in this device's browser.</li>
+  </ul>
+  <h3>AI agents (WebMCP)</h3>
+  <ul>
+    <li>If the browser supports <strong>WebMCP</strong>, an AI assistant in the browser can read the running game from your point of view (your cards, the table, allowed moves) and make a move for you. A notice shows when an agent did something.</li>
+    <li>Connecting, the camera and deleting are not available to agents.</li>
+  </ul>
+  </div>
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 6106e9dacc0a</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/vendor/qrcode-generator/qrcode.js"></script>
+<script src="../assets/vendor/zxing-wasm/iife/reader/index.js"></script>
+<script src="../assets/shared/p2p.js"></script>
+<script src="cards.js"></script>
+<script src="mau-mau.js"></script>
+<script src="durak.js"></script>
+<script>
+(function(){
+'use strict';
+const C=window.CardGames,GAMES=C.games,ORDER=['mau-mau','durak'];
+const strings={
+de:{
+  you:'Du',botName:'Computer {n}',botFor:'{p} (Computer)',playerN:'Spieler {n}',hostName:'Gastgeber',guest:'Handy',
+  cards:'{n} Karten',cardsSr:'Karten',
+  statsLine:'{g}: {w} von {p} gewonnen',noStats:'Noch kein Spiel gespielt.',
+  scanOfferH:'Spiel-Code des Gastgebers scannen',scanAnswerH:'Antwort-Code des anderen scannen',
+  preparing:'Verbindung wird vorbereitet …',noRtc:'Dieser Browser kann keine Direktverbindung (WebRTC).',
+  noCandidates:'Keine Netzwerkverbindung gefunden. WLAN oder Hotspot einschalten.',
+  waitAnswer:'Warte auf den Antwort-Code …',waitHost:'Warte, bis der Gastgeber den Code scannt …',
+  connecting:'Verbinde …',connected:'Verbunden!',connectFail:'Keine Verbindung. Alle im selben WLAN? Neu einladen.',
+  badCode:'Das ist kein gültiger Code.',isAnswer:'Das ist ein Antwort-Code – den scannt der Gastgeber.',
+  isOffer:'Das ist ein Spiel-Code – hier wird der Antwort-Code gebraucht.',wrongApp:'Das andere Handy ist nicht in den Kartenspielen.',
+  noCam:'Keine Kamera verfügbar. Code von Hand eingeben.',camDenied:'Kamera nicht erlaubt. Code von Hand eingeben oder Kamera in den Browser-Einstellungen erlauben.',
+  camFail:'Kamera-Fehler: {e}',noDecoder:'Dieser Browser kann keine QR-Codes lesen. Code von Hand eingeben.',scanHint:'QR-Code in den Rahmen halten.',
+  copiedOk:'Code kopiert',copyFail:'Kopieren nicht möglich',shareTitle:'Kartenspiele',
+  joined:'{p} ist dabei.',left:'{p} hat die Runde verlassen.',leftGame:'{p} ist weg – der Computer spielt weiter.',
+  remove:'Entfernen',removeLbl:'{p} entfernen',kindMe:'dieses Handy',kindBot:'Computer',kindPeer:'Handy',
+  tooFew:'Mindestens {n} Spieler – Handy einladen oder Computer dazu.',tooMany:'{g}: höchstens {n} Spieler.',full:'Die Runde ist voll.',
+  waitStart:'Warte, bis der Gastgeber das Spiel startet …',waitGame:'Spiel: {g}',
+  hostLeft:'Der Gastgeber hat das Spiel beendet.',disconnected:'Verbindung getrennt.',
+  confirmLeave:'Spiel verlassen?',confirmLeaveHost:'Spiel beenden? Die anderen Handys werden getrennt.',
+  waitAgain:'Warte auf den Gastgeber …',yourTurn:'Du bist dran!',chooseFor:'{c}:',cancel:'Abbrechen',
+  'mcp.read':'Spiel gelesen','mcp.move':'Zug gemacht'
+},
+en:{
+  title:'Card Games',sub:'Mau Mau and Durak – alone or with several phones',leave:'Leave game',pickGame:'Pick a game',
+  opponents:'Opponents',vsCpu:'Against the computer',host:'With other phones',hostSub:'you invite by QR code',
+  join:'Join',joinSub:'scan the host’s QR code',pasteOffer:'Enter game code manually',
+  pasteOfferLbl:'Game code or link of the host (e.g. sent by message):',connect:'Connect',
+  roomH:'Players',playersLbl:'Players',invite:'Invite a phone',addBot:'Add computer',start:'Start game',
+  sameWifi:'All devices in the same Wi-Fi, or one phone as a hotspot for the others. Each phone is invited on its own.',
+  inviteH1:'1. The other phone scans this code',qrOffer:'QR code to join',copyCode:'Copy code',share:'Share …',
+  inviteH2:'2. Then scan the reply code',scanAnswer:'Scan reply code',pasteAnswer:'Enter reply code manually',
+  pasteAnswerLbl:'Reply code of the other player:',backRoom:'Back to the players',
+  answerH:'Now the host scans this reply code',qrAnswer:'QR code with the reply',waitH:'Connected',
+  cancel:'Cancel',again:'Play again',toRoom:'Players',end:'Finish',yourCards:'Your cards',
+  settings:'Settings',optName:'Your name (shown on the other phones)',optSpeed:'Computer speed',
+  'speed.slow':'Relaxed','speed.normal':'Normal','speed.fast':'Fast',
+  optStun:'Also connect over the internet (Google STUN server)',
+  optStunHelp:'Only needed if the phones are not in the same Wi-Fi. The server learns the public IP address – the moves still travel directly. Does not work in every mobile network. All devices must switch it on.',
+  you:'You',botName:'Computer {n}',botFor:'{p} (computer)',playerN:'Player {n}',hostName:'Host',guest:'Phone',
+  cards:'{n} cards',cardsSr:'cards',
+  statsLine:'{g}: won {w} of {p}',noStats:'No game played yet.',
+  scanOfferH:'Scan the host’s game code',scanAnswerH:'Scan the other player’s reply code',
+  preparing:'Preparing the connection …',noRtc:'This browser cannot make direct connections (WebRTC).',
+  noCandidates:'No network connection found. Switch on Wi-Fi or a hotspot.',
+  waitAnswer:'Waiting for the reply code …',waitHost:'Waiting for the host to scan the code …',
+  connecting:'Connecting …',connected:'Connected!',connectFail:'No connection. All in the same Wi-Fi? Invite again.',
+  badCode:'This is not a valid code.',isAnswer:'This is a reply code – the host scans it.',
+  isOffer:'This is a game code – the reply code is needed here.',wrongApp:'The other phone is not in Card Games.',
+  noCam:'No camera available. Enter the code manually.',camDenied:'Camera not allowed. Enter the code manually or allow the camera in the browser settings.',
+  camFail:'Camera error: {e}',noDecoder:'This browser cannot read QR codes. Enter the code manually.',scanHint:'Hold the QR code inside the frame.',
+  copiedOk:'Code copied',copyFail:'Copying not possible',shareTitle:'Card Games',
+  joined:'{p} joined.',left:'{p} left.',leftGame:'{p} is gone – the computer plays on.',
+  remove:'Remove',removeLbl:'Remove {p}',kindMe:'this phone',kindBot:'computer',kindPeer:'phone',
+  tooFew:'At least {n} players – invite a phone or add the computer.',tooMany:'{g}: at most {n} players.',full:'No more seats.',
+  waitStart:'Waiting for the host to start the game …',waitGame:'Game: {g}',
+  hostLeft:'The host ended the game.',disconnected:'Connection lost.',
+  confirmLeave:'Leave the game?',confirmLeaveHost:'End the game? The other phones will be disconnected.',
+  waitAgain:'Waiting for the host …',yourTurn:'Your turn!',chooseFor:'{c}:',
+  'mcp.read':'game read','mcp.move':'move made'
+}};
+// Texts of the games (each game brings its own, see README.md)
+for(const g of C.list())for(const l of ['de','en'])Object.assign(strings[l],g.strings[l]);
+Tools.i18n(strings);
+const t=Tools.t,$=Tools.$;
+const LS_SET='card-games.settings.v1',LS_STATS='card-games.stats.v1';
+const settings=Object.assign({name:'',speed:'normal',stun:false,game:'mau-mau',bots:1},Tools.load(LS_SET,{}));
+if(!GAMES[settings.game])settings.game='mau-mau';
+const stats=Tools.load(LS_STATS,{});
+const SPEED={slow:1400,normal:800,fast:150};
+const saveSet=()=>Tools.save(LS_SET,settings);
+const gTitle=id=>t(({'mau-mau':'mm','durak':'dk'})[id]+'.title');
+const gDesc=id=>t(({'mau-mau':'mm','durak':'dk'})[id]+'.desc');
+const myName=()=>settings.name.trim().slice(0,16);
+
+/* ================= Screens ================= */
+const SCREENS=['scrLobby','scrRoom','scrInvite','scrAnswer','scrWait','scrScan','scrPlay'];
+let screen='scrLobby';
+function show(id){
+  screen=id;
+  for(const s of SCREENS)$(s).hidden=s!==id;
+  $('btnLeave').hidden=id==='scrLobby';
+  document.querySelector('main').scrollTop=0;
+}
+const setStatus=(id,msg,cls)=>{const el=$(id);el.textContent=msg||'';el.className='status'+(cls?' '+cls:'');};
+const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;};
+
+/* ================= Lobby ================= */
+function pickButtons(box,current,onPick){
+  box.innerHTML='';
+  for(const id of ORDER){
+    const b=el('button','btn',gTitle(id));b.type='button';b.dataset.game=id;
+    b.setAttribute('aria-pressed',String(id===current));
+    b.addEventListener('click',()=>onPick(id));
+    box.append(b);
+  }
+}
+function renderLobby(){
+  pickButtons($('gamePick'),settings.game,id=>{settings.game=id;saveSet();renderLobby();});
+  $('gameDesc').textContent=gDesc(settings.game);
+  const g=GAMES[settings.game],sel=$('cpuN');sel.innerHTML='';
+  for(let k=1;k<g.players.max;k++){const o=el('option','',String(k));o.value=k;sel.append(o);}
+  settings.bots=Math.min(Math.max(1,settings.bots|0),g.players.max-1);
+  sel.value=settings.bots;
+  renderStats();
+}
+$('cpuN').addEventListener('change',()=>{settings.bots=+$('cpuN').value;saveSet();});
+function renderStats(){
+  const box=$('stats');box.innerHTML='';
+  const ids=ORDER.filter(id=>stats[id]&&stats[id].played);
+  if(!ids.length){box.textContent=t('noStats');return;}
+  for(const id of ids){const s=el('span');s.textContent=t('statsLine',{g:gTitle(id),w:stats[id].won,p:stats[id].played});box.append(s);}
+}
+
+/* ================= Session (on this device: alone or as host) =================
+   The host runs the game: it checks every move (own page, computer, other phones) against the rules
+   and sends each phone only its own view (own cards, card counts of the others). */
+let S=null;        // {mode:'local'|'host', game, seats:[{kind:'me'|'bot'|'peer', name, bot, peer}], state, ver, round}
+let G=null;        // guest: {peer, view, room}
+let view=null;     // the view this page renders (own seat)
+let botTimer=null,invite=null,inviteCode='',answerCode='',lastActive=false,recorded=-1;
+
+function newSession(mode,gameId){
+  closeAll();
+  S={mode,game:gameId,seats:[{kind:'me',name:myName()}],state:null,ver:0,round:0};
+  Tools.diag.log('session',{mode,game:gameId});
+}
+function addBot(){const k=S.seats.filter(s=>s.kind==='bot'||s.bot).length+1;S.seats.push({kind:'bot',bot:k});}
+const players=()=>S.seats.map(s=>({name:s.name||'',bot:s.bot||0,peer:s.kind==='peer'}));
+function viewFor(seat){
+  const g=GAMES[S.game],st=S.state;
+  return Object.assign(g.view(st,seat),{game:S.game,you:seat,players:players(),
+    active:S.seats.map((_,i)=>g.moves(st,i).length>0),moves:g.moves(st,seat),over:g.result(st),
+    ver:S.ver,round:S.round,mode:S.mode});
+}
+function startGame(){
+  const g=GAMES[S.game],n=S.seats.length;
+  if(n<g.players.min||n>g.players.max)return false;
+  S.round++;S.ver++;
+  S.state=g.setup(n,C.seed());
+  Tools.diag.log('game start',{game:S.game,players:n,bots:S.seats.filter(s=>s.kind==='bot').length,round:S.round});
+  show('scrPlay');
+  changed();
+  return true;
+}
+function changed(){
+  S.ver++;
+  for(const [i,s] of S.seats.entries()){
+    if(s.kind==='me')render(viewFor(i));
+    else if(s.kind==='peer')s.peer.send({t:'state',v:viewFor(i)});
+  }
+  scheduleBots();
+}
+/** A move from a seat – applied only if the rules allow it */
+function act(seat,move){
+  const g=GAMES[S.game];
+  if(!S.state||!C.legal(g,S.state,seat,move)){Tools.diag.log('illegal move',{seat,a:move&&move.a});return false;}
+  g.apply(S.state,seat,move);
+  if(g.result(S.state))Tools.diag.log('game over',{game:S.game,moves:S.state.moves});
+  changed();
+  return true;
+}
+function scheduleBots(){
+  clearTimeout(botTimer);
+  if(!S||!S.state)return;
+  const g=GAMES[S.game];
+  if(g.result(S.state))return;
+  const bots=S.seats.map((s,i)=>s.kind==='bot'?i:-1).filter(i=>i>=0&&g.moves(S.state,i).length);
+  if(!bots.length)return;
+  botTimer=setTimeout(()=>{
+    if(!S||!S.state)return;
+    for(const i of bots){
+      const m=g.bot(S.state,i);
+      if(m&&act(i,m))return;
+    }
+  },SPEED[settings.speed]||SPEED.normal);
+}
+/** Own move: on the host directly, as a guest sent to the host */
+function myMove(move){
+  hideChooser();
+  if(G){if(G.peer.send({t:'move',m:move,ver:view&&view.ver}))Tools.diag.log('move sent',{a:move.a});return true;}
+  if(S&&view)return act(view.you,move);
+  return false;
+}
+
+/* ================= Rendering the game ================= */
+function ctx(v){
+  const lang=Tools.lang();
+  const cardName=c=>C.isCard(c)?C.name(c,lang):'?';
+  return {t,lang,you:v.you,el,cardName,
+    name:s=>{
+      if(s===v.you)return t('you');
+      const p=v.players[s]||{};
+      if(p.bot&&p.name)return t('botFor',{p:p.name});
+      if(p.bot)return t('botName',{n:p.bot});
+      return p.name||t('playerN',{n:s+1});
+    },
+    card:c=>cardEl(c,'div'),
+    back:()=>{const b=el('div','card-back');b.setAttribute('aria-hidden','true');return b;}};
+}
+function cardEl(c,tag){
+  const ok=C.isCard(c),e=el(tag,'card-face'+(ok&&C.red(c)?' red':''));
+  const lang=Tools.lang(),label=ok?C.name(c,lang):'?';
+  if(tag==='button')e.type='button';
+  else e.setAttribute('role','img');
+  e.setAttribute('aria-label',label);
+  e.dataset.card=ok?c:'';
+  if(ok){
+    const cr=el('span','cr');cr.setAttribute('aria-hidden','true');
+    cr.append(document.createTextNode(C.shortRank(c,lang)),el('small','',C.SYM[C.suit(c)]));
+    const cm=el('span','cm',C.SYM[C.suit(c)]);cm.setAttribute('aria-hidden','true');
+    e.append(cr,cm);
+  }
+  return e;
+}
+let chooserFor=null;
+function hideChooser(){chooserFor=null;$('chooser').hidden=true;$('chooser').innerHTML='';document.querySelectorAll('#hand .sel').forEach(b=>b.classList.remove('sel'));}
+function render(v){
+  view=v;
+  if(!v)return;
+  const g=GAMES[v.game];if(!g)return;
+  const x=ctx(v);
+  if(screen!=='scrPlay')show('scrPlay');
+  $('h-play').textContent=gTitle(v.game);
+  // Players around the table, starting after this seat
+  const seats=$('seats');seats.innerHTML='';
+  for(let k=1;k<v.players.length;k++){
+    const s=(v.you+k)%v.players.length;
+    const li=el('li','seat'+(v.active[s]&&!v.over?' active':''));
+    const n=v.counts[s];
+    li.append(el('span','sname',x.name(s)));
+    const cnt=el('span','scount');const ic=el('i');ic.setAttribute('aria-hidden','true');
+    cnt.append(ic,document.createTextNode(String(n)),el('span','sr-only',' '+t('cardsSr')));
+    li.append(cnt);
+    const b=g.ui.badge(v,s,x);if(b)li.append(el('span','sbadge',b));
+    seats.append(li);
+  }
+  const table=$('table');table.innerHTML='';table.append(g.ui.table(v,x));
+  $('lastMsg').textContent=g.ui.last(v,x);
+  // Status, result
+  const mine=v.moves.length>0&&!v.over;
+  const turn=$('turn');
+  turn.hidden=!!v.over;
+  turn.textContent=v.over?'':g.ui.status(v,x);
+  turn.classList.toggle('mine',mine);
+  const myBadge=!v.over&&g.ui.badge(v,v.you,x);
+  if(myBadge)turn.textContent=myBadge+' · '+turn.textContent;
+  $('over').hidden=!v.over;
+  if(v.over){
+    $('overText').textContent=g.ui.over(v,x);
+    const local=!G;
+    $('btnAgain').hidden=!local;
+    $('btnToRoom').hidden=!(S&&S.mode==='host');
+    $('btnEnd').hidden=false;
+    if(!local)$('overText').textContent+=' '+t('waitAgain');
+    record(v,g);
+  }
+  // Actions without a card (draw, pass, take, done)
+  const acts=$('actions');acts.innerHTML='';
+  if(!v.over)for(const m of v.moves.filter(m=>!m.c)){
+    const b=el('button','btn'+(m.a==='draw'||m.a==='take'?'':' primary'),g.ui.label(m,v,x));b.type='button';b.dataset.move=m.a;
+    b.addEventListener('click',()=>myMove(m));
+    acts.append(b);
+  }
+  // Own hand
+  const hand=$('hand');hand.innerHTML='';
+  const sorted=g.ui.sort(v.hand,v);
+  for(const c of sorted){
+    const b=cardEl(c,'button'),ms=v.moves.filter(m=>m.c===c);
+    if(v.over||!ms.length){b.disabled=true;if(mine)b.classList.add('nope');}
+    else b.classList.add('can');
+    b.addEventListener('click',()=>pickCard(c));
+    hand.append(b);
+  }
+  if(!sorted.length)hand.append(el('p','hand-empty',t('cards',{n:0})));
+  layoutHand();
+  if(chooserFor&&!v.moves.some(m=>m.c===chooserFor))hideChooser();
+  else if(chooserFor)showChooser(chooserFor);
+  // Vibrate when it becomes this player's turn (several phones)
+  if(mine&&!lastActive&&(G||(S&&S.mode==='host'))&&navigator.vibrate)navigator.vibrate(40);
+  lastActive=mine;
+}
+function pickCard(c){
+  if(!view)return;
+  const ms=view.moves.filter(m=>m.c===c);
+  if(!ms.length)return;
+  if(ms.length===1){myMove(ms[0]);return;}
+  showChooser(c);
+}
+/** Several moves with the same card (jack: which suit, Durak: which card to beat) */
+function showChooser(c){
+  const g=GAMES[view.game],x=ctx(view),box=$('chooser');
+  chooserFor=c;box.innerHTML='';box.hidden=false;
+  box.setAttribute('aria-label',x.cardName(c));
+  box.append(el('span','',t('chooseFor',{c:x.cardName(c)})));
+  for(const m of view.moves.filter(m=>m.c===c)){
+    const b=el('button','btn primary',g.ui.label(m,view,x));b.type='button';
+    b.addEventListener('click',()=>myMove(m));
+    box.append(b);
+  }
+  const cancel=el('button','btn',t('cancel'));cancel.type='button';cancel.addEventListener('click',hideChooser);
+  box.append(cancel);
+  document.querySelectorAll('#hand .card-face').forEach(b=>b.classList.toggle('sel',b.dataset.card===c));
+  box.querySelector('.btn').focus();
+}
+/** Cards overlap so that the hand fits the width (scrolls only when very many) */
+function layoutHand(){
+  const hand=$('hand'),cards=hand.querySelectorAll('.card-face'),n=cards.length;
+  if(n<2)return;
+  const w=cards[0].getBoundingClientRect().width,W=hand.clientWidth-16;
+  const gap=Math.min(6,(W-n*w)/(n-1));
+  hand.style.setProperty('--ov',Math.max(gap,-(w-28))+'px');
+}
+window.addEventListener('resize',()=>{if(screen==='scrPlay')layoutHand();});
+function record(v,g){
+  const id=v.game+'#'+v.round+'#'+(G?'g':'h');
+  if(recorded===id)return;
+  recorded=id;
+  const s=stats[v.game]||(stats[v.game]={played:0,won:0});
+  s.played++;if(g.ui.won(v.over,v.you))s.won++;
+  Tools.save(LS_STATS,stats);
+  if(navigator.vibrate)navigator.vibrate(g.ui.won(v.over,v.you)?[60,40,60,40,200]:300);
+}
+
+/* ================= Room (host) ================= */
+function openRoom(){
+  if(!S||S.mode!=='host')newSession('host',settings.game);
+  clearTimeout(botTimer);S.state=null;view=null;
+  show('scrRoom');renderRoom();
+}
+function renderRoom(){
+  if(!S)return;
+  const g=GAMES[S.game],n=S.seats.length;
+  pickButtons($('roomPick'),S.game,id=>{S.game=id;settings.game=id;saveSet();renderRoom();});
+  const ul=$('roomPlayers');ul.innerHTML='';
+  const x=ctx({you:0,players:players()});
+  S.seats.forEach((s,i)=>{
+    const li=el('li');
+    li.append(el('span','pname',i===0?(myName()||t('hostName')):x.name(i)),el('span','kind',t(s.kind==='me'?'kindMe':s.kind==='bot'?'kindBot':'kindPeer')));
+    if(i>0){
+      const b=el('button','btn small',t('remove'));b.type='button';
+      b.setAttribute('aria-label',t('removeLbl',{p:x.name(i)}));
+      b.addEventListener('click',()=>removeSeat(i));
+      li.append(b);
+    }
+    ul.append(li);
+  });
+  $('btnAddBot').disabled=n>=g.players.max;
+  $('btnInvite').disabled=n>=g.players.max;
+  const ok=n>=g.players.min&&n<=g.players.max;
+  $('btnStart').disabled=!ok;
+  setStatus('roomStatus',n<g.players.min?t('tooFew',{n:g.players.min}):n>g.players.max?t('tooMany',{g:gTitle(S.game),n:g.players.max}):n>=g.players.max?t('full'):'',n>g.players.max?'err':'');
+  sendRoom();
+}
+function sendRoom(){
+  if(!S)return;
+  S.seats.forEach((s,i)=>{if(s.kind==='peer')s.peer.send({t:'room',game:S.game,players:players(),you:i,host:myName()});});
+}
+function removeSeat(i){
+  const s=S.seats[i];if(!s||i===0)return;
+  if(s.kind==='peer'){s.peer.send({t:'bye'});s.peer.close();}
+  S.seats.splice(i,1);
+  // Renumber the computers
+  let k=0;for(const x of S.seats)if(x.kind==='bot')x.bot=++k;
+  renderRoom();
+}
+$('btnAddBot').addEventListener('click',()=>{addBot();renderRoom();});
+$('btnStart').addEventListener('click',()=>{if(S)startGame();});
+
+/* ---------- Invite one phone ---------- */
+async function startInvite(){
+  if(!S)return;
+  cancelInvite();
+  show('scrInvite');setStatus('inviteStatus',t('preparing'));
+  const ctx2=$('qrOffer').getContext('2d');ctx2.clearRect(0,0,9999,9999);delete $('qrOffer').dataset.text;$('answerIn').value='';inviteCode='';
+  let p;
+  try{p=P2P.peer({stun:settings.stun,label:'card-games'});}catch(e){setStatus('inviteStatus',errText(e),'err');return;}
+  invite=p;
+  p.on('open',()=>{if(invite===p)onGuestOpen(p);});
+  p.on('close',()=>{if(invite===p){invite=null;setStatus('inviteStatus',t('connectFail'),'err');}});
+  try{
+    const code=await p.offer();
+    if(invite!==p)return;
+    inviteCode=P2P.link(code);
+    P2P.drawQr($('qrOffer'),inviteCode);
+    setStatus('inviteStatus',t('waitAnswer'));
+  }catch(e){Tools.diag.log('invite failed',e);if(invite===p)setStatus('inviteStatus',errText(e),'err');}
+}
+function cancelInvite(){if(invite){invite.close();invite=null;}}
+let connectTimer=null;
+async function acceptAnswer(code){
+  show('scrInvite');
+  if(!invite){setStatus('inviteStatus',t('connectFail'),'err');return;}
+  const p=invite;
+  try{
+    await p.accept(code);
+    setStatus('inviteStatus',t('connecting'));
+    clearTimeout(connectTimer);
+    connectTimer=setTimeout(()=>{if(invite===p&&!p.isOpen()){Tools.diag.log('connect timeout',p.state());setStatus('inviteStatus',t('connectFail'),'err');}},20000);
+  }catch(e){Tools.diag.log('answer failed',e);setStatus('inviteStatus',t('connectFail'),'err');}
+}
+function onGuestOpen(p){
+  clearTimeout(connectTimer);
+  invite=null;
+  const g=GAMES[S.game];
+  if(S.seats.length>=g.players.max){p.send({t:'bye'});p.close();openRoom();Tools.toast(t('full'));return;}
+  const seat={kind:'peer',name:'',peer:p,hello:false};
+  S.seats.push(seat);
+  p.on('message',m=>onHostMessage(seat,m));
+  p.on('close',()=>peerGone(seat));
+  keepAwake();
+  Tools.diag.log('guest connected',{players:S.seats.length});
+  openRoom();
+}
+function onHostMessage(seat,m){
+  const i=S?S.seats.indexOf(seat):-1;
+  if(i<0)return;
+  switch(m.t){
+    case 'hello':
+      if(m.app!=='card-games'){Tools.diag.log('hello from other app');seat.peer.close();S.seats.splice(i,1);renderRoom();Tools.toast(t('wrongApp'),3000);return;}
+      seat.name=typeof m.name==='string'?m.name.trim().slice(0,16):'';
+      seat.hello=true;
+      Tools.toast(t('joined',{p:seat.name||t('guest')}));
+      if(screen==='scrRoom')renderRoom();else sendRoom();
+      if(S.state)seat.peer.send({t:'state',v:viewFor(i)});
+      break;
+    case 'move':
+      if(!S.state)return;
+      if(!act(i,m.m))seat.peer.send({t:'state',v:viewFor(i)});   // stale or illegal: send the current state again
+      break;
+    case 'bye':peerGone(seat);break;
+    default:Tools.diag.log('unknown message',String(m.t).slice(0,20));
+  }
+}
+/** A guest dropped out: in the room the seat goes, in a game the computer takes over */
+function peerGone(seat){
+  if(!S)return;
+  const i=S.seats.indexOf(seat);
+  if(i<0||seat.kind!=='peer')return;
+  try{seat.peer.close();}catch(_){}
+  const name=seat.name||t('guest');
+  if(S.state&&!GAMES[S.game].result(S.state)){
+    seat.kind='bot';seat.peer=null;seat.bot=S.seats.filter(s=>s.bot).length+1;
+    Tools.toast(t('leftGame',{p:name}),3000);
+    changed();
+  }else{
+    S.seats.splice(i,1);
+    let k=0;for(const x of S.seats)if(x.kind==='bot')x.bot=++k;
+    Tools.toast(t('left',{p:name}),3000);
+    if(screen==='scrRoom')renderRoom();
+  }
+  Tools.diag.log('guest gone',{inGame:!!S.state});
+}
+
+/* ================= Guest ================= */
+async function joinWith(code){
+  closeAll();
+  show('scrAnswer');setStatus('answerStatus',t('preparing'));
+  const ctx2=$('qrAnswer').getContext('2d');ctx2.clearRect(0,0,9999,9999);delete $('qrAnswer').dataset.text;answerCode='';
+  let p;
+  try{p=P2P.peer({stun:settings.stun,label:'card-games'});}catch(e){setStatus('answerStatus',errText(e),'err');return;}
+  G={peer:p,view:null,room:null};
+  const my=G;
+  p.on('open',()=>{
+    if(G!==my)return;
+    Tools.diag.log('connected to host');
+    p.send({t:'hello',app:'card-games',v:1,name:myName()});
+    keepAwake();Tools.toast(t('connected'));
+    show('scrWait');renderWait();
+  });
+  p.on('message',m=>{if(G===my)onGuestMessage(m);});
+  p.on('close',()=>{if(G===my)guestLost('disconnected');});
+  try{
+    const ans=await p.answer(code);
+    if(G!==my)return;
+    answerCode=ans;
+    P2P.drawQr($('qrAnswer'),ans);
+    if(!p.isOpen())setStatus('answerStatus',t('waitHost'));
+  }catch(e){Tools.diag.log('join failed',e);if(G===my)setStatus('answerStatus',errText(e),'err');}
+}
+function onGuestMessage(m){
+  switch(m.t){
+    case 'room':
+      G.room={game:GAMES[m.game]?m.game:'mau-mau',players:Array.isArray(m.players)?m.players.slice(0,6):[],you:m.you|0,host:typeof m.host==='string'?m.host.slice(0,16):''};
+      view=null;
+      show('scrWait');renderWait();
+      break;
+    case 'state':{
+      const v=m.v;
+      if(!v||!GAMES[v.game]||!Array.isArray(v.hand)||!Array.isArray(v.moves)||!Array.isArray(v.players))return;
+      if(view&&view.round===v.round&&v.ver<view.ver)return;   // older than what is shown
+      G.view=v;render(v);
+      break;
+    }
+    case 'bye':guestLost('hostLeft');break;
+    default:Tools.diag.log('unknown message',String(m.t).slice(0,20));
+  }
+}
+function renderWait(){
+  const r=G&&G.room;
+  $('waitGame').textContent=r?t('waitGame',{g:gTitle(r.game)}):'';
+  const ul=$('waitPlayers');ul.innerHTML='';
+  if(r){
+    const x=ctx({you:r.you,players:r.players});
+    r.players.forEach((p,i)=>{
+      const li=el('li');
+      li.append(el('span','pname',i===0&&!p.name?t('hostName'):x.name(i)),el('span','kind',t(i===r.you?'kindMe':p.bot?'kindBot':'kindPeer')));
+      ul.append(li);
+    });
+  }
+  setStatus('waitStatus',t('waitStart'));
+}
+function guestLost(reason){
+  Tools.diag.log('guest lost',reason);
+  closeAll();
+  show('scrLobby');renderLobby();
+  setStatus('lobbyStatus',t(reason),'err');Tools.toast(t(reason),3000);
+}
+
+/* ================= Leaving ================= */
+function closeAll(){
+  clearTimeout(botTimer);clearTimeout(connectTimer);
+  cancelInvite();
+  if(S)for(const s of S.seats)if(s.kind==='peer'&&s.peer){s.peer.send({t:'bye'});s.peer.close();}
+  if(G){G.peer.send({t:'bye'});G.peer.close();}
+  S=null;G=null;view=null;lastActive=false;
+  hideChooser();
+  releaseWake();
+}
+function leave(){
+  const running=view&&!view.over;
+  const peers=S&&S.seats.some(s=>s.kind==='peer');
+  if((running||peers||G)&&!confirm(t(peers?'confirmLeaveHost':'confirmLeave')))return;
+  Tools.diag.log('leave',{screen});
+  scanner.stop();
+  closeAll();
+  setStatus('lobbyStatus','');show('scrLobby');renderLobby();
+}
+$('btnLeave').addEventListener('click',()=>{
+  if(screen==='scrScan'){cancelScan();return;}
+  if(screen==='scrInvite'){cancelInvite();openRoom();return;}
+  if(screen==='scrRoom'&&S&&!S.seats.some(s=>s.kind==='peer')){closeAll();show('scrLobby');renderLobby();return;}
+  leave();
+});
+$('btnAgain').addEventListener('click',()=>{if(S)startGame();});
+$('btnToRoom').addEventListener('click',()=>{if(S&&S.mode==='host')openRoom();});
+$('btnEnd').addEventListener('click',()=>{
+  if(S&&S.mode==='local'){closeAll();show('scrLobby');renderLobby();return;}
+  leave();
+});
+
+/* ================= Codes, scanner ================= */
+function errText(e){return e&&(e.message==='noRtc'||e.message==='noCandidates')?t(e.message):t('connectFail');}
+/** Scanned or pasted text */
+function useCode(text,expect){
+  const r=P2P.check(text,expect);
+  if(!r.ok)return {ok:false,msg:t(r.why)};
+  if(r.kind==='offer')joinWith(r.code);else acceptAnswer(r.code);
+  return {ok:true};
+}
+let scanExpect=null,lastHint=0;
+const scanner=P2P.scanner($('video'),{
+  onText:text=>{
+    const r=useCode(text,scanExpect);
+    if(r.ok)return true;
+    if(Date.now()-lastHint>1500){lastHint=Date.now();setStatus('scanStatus',r.msg,'err');}
+    return false;
+  },
+  onStatus:(code,detail)=>setStatus('scanStatus',code==='camFail'?t('camFail',{e:detail}):t(code==='hint'?'scanHint':code),code==='hint'?'':'err')
+});
+function startScan(expect){
+  scanExpect=expect;
+  $('h-scan').textContent=t(expect==='offer'?'scanOfferH':'scanAnswerH');
+  show('scrScan');setStatus('scanStatus','');
+  scanner.start();
+}
+function cancelScan(){scanner.stop();if(scanExpect==='answer'&&invite)show('scrInvite');else if(scanExpect==='answer'&&S)openRoom();else show('scrLobby');}
+
+/* ---------- Screen stays on while connected ---------- */
+let wakeLock=null;
+async function keepAwake(){
+  try{if(navigator.wakeLock&&!wakeLock&&document.visibilityState==='visible'){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}
+  catch(e){Tools.diag.log('wake lock',e);}
+}
+function releaseWake(){if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null;}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&(G||(S&&S.seats.some(s=>s.kind==='peer'))))keepAwake();});
+
+/* ================= UI wiring ================= */
+$('btnCpu').addEventListener('click',()=>{
+  newSession('local',settings.game);
+  for(let k=0;k<settings.bots;k++)addBot();
+  startGame();
+});
+$('btnHost').addEventListener('click',()=>{newSession('host',settings.game);openRoom();});
+$('btnJoin').addEventListener('click',()=>startScan('offer'));
+$('btnInvite').addEventListener('click',startInvite);
+$('btnInviteBack').addEventListener('click',()=>{cancelInvite();openRoom();});
+$('btnScanAnswer').addEventListener('click',()=>startScan('answer'));
+$('btnScanCancel').addEventListener('click',cancelScan);
+$('btnOfferIn').addEventListener('click',()=>{const r=useCode($('offerIn').value,'offer');if(!r.ok)setStatus('lobbyStatus',r.msg,'err');else $('offerIn').value='';});
+$('btnAnswerIn').addEventListener('click',()=>{const r=useCode($('answerIn').value,'answer');if(!r.ok)setStatus('inviteStatus',r.msg,'err');});
+async function copy(text){if(!text)return;Tools.toast(t((await Tools.copyText(text))?'copiedOk':'copyFail'));}
+$('btnCopyOffer').addEventListener('click',()=>copy(inviteCode));
+$('btnCopyAnswer').addEventListener('click',()=>copy(answerCode));
+if(navigator.share){
+  for(const [id,get] of [['btnShareOffer',()=>inviteCode],['btnShareAnswer',()=>answerCode]]){
+    $(id).hidden=false;
+    $(id).addEventListener('click',()=>{const c=get();if(c)navigator.share({title:t('shareTitle'),text:c}).catch(()=>{});});
+  }
+}
+$('optName').value=settings.name;
+$('optName').addEventListener('change',()=>{settings.name=$('optName').value.trim().slice(0,16);saveSet();if(S)S.seats[0].name=myName();if(screen==='scrRoom')renderRoom();});
+$('optSpeed').value=settings.speed;
+$('optSpeed').addEventListener('change',()=>{settings.speed=$('optSpeed').value;saveSet();});
+$('optStun').checked=!!settings.stun;
+$('optStun').addEventListener('change',()=>{settings.stun=$('optStun').checked;saveSet();Tools.diag.log('stun',settings.stun);});
+Tools.onLang(()=>{
+  renderLobby();
+  if(screen==='scrRoom')renderRoom();
+  if(screen==='scrWait')renderWait();
+  if(screen==='scrPlay'&&view)render(view);
+  if(screen==='scrScan')$('h-scan').textContent=t(scanExpect==='offer'?'scanOfferH':'scanAnswerH');
+});
+renderLobby();
+// Opened through the link in the game QR code (normal camera app): join right away
+function joinFromLink(){
+  const m=location.hash.match(/^#join=(.+)$/);
+  if(!m)return;
+  history.replaceState(history.state,'',location.pathname+location.search);
+  if(view&&!view.over){Tools.diag.log('game link ignored: in a game');return;}
+  Tools.diag.log('opened with game link');
+  scanner.stop();
+  const r=useCode('#join='+m[1],'offer');
+  if(!r.ok){show('scrLobby');setStatus('lobbyStatus',r.msg,'err');}
+}
+joinFromLink();
+window.addEventListener('hashchange',joinFromLink);
+
+/* ================= Diagnostics (no names, no cards) ================= */
+Tools.diag.info(()=>({screen,mode:G?'guest':S?S.mode:'-',game:view?view.game:S?S.game:'-',
+  seats:S?S.seats.map(s=>s.kind).join(','):G&&G.room?G.room.players.length:'-',
+  peers:S?S.seats.filter(s=>s.kind==='peer').map(s=>s.peer.state().channel).join(',')||'-':G?G.peer.state().channel:'-',
+  inviting:!!invite,round:view?view.round:'-',ver:view?view.ver:'-',myMoves:view?view.moves.length:'-',over:!!(view&&view.over),
+  webrtc:!!window.RTCPeerConnection,scanner:scanner.engine()||'-',camera:scanner.active(),stun:!!settings.stun,speed:settings.speed}));
+
+/* ================= WebMCP ================= */
+function agentView(){
+  if(!view)return {phase:G?(G.room?'waiting':'connecting'):S&&S.mode==='host'?'room':'lobby',game:S?S.game:G&&G.room?G.room.game:settings.game};
+  const g=GAMES[view.game],x=ctx(view);
+  return {phase:view.over?'over':'playing',game:view.game,mode:G?'guest':view.mode,your_seat:view.you,
+    players:view.players.map((p,i)=>({seat:i,name:i===view.you?'you':x.name(i),computer:!!p.bot,cards:view.counts[i],
+      can_move:!!view.active[i]&&!view.over})),
+    your_cards:g.ui.sort(view.hand,view).map(c=>({code:c,name:C.name(c,'en')})),
+    table:g.summary(view),your_turn:view.moves.length>0&&!view.over,
+    legal_moves:view.over?[]:view.moves.map((m,i)=>({index:i,move:g.describe(m,view)})),
+    result:view.over?(g.ui.won(view.over,view.you)?'you_won':'you_lost'):null};
+}
+Tools.mcp.register({
+  name:'get_game',title:'Read the card game',label:'mcp.read',readOnly:true,untrusted:true,
+  description:'Reads the running card game (Mau Mau or Durak) from your point of view: phase (lobby, room, waiting, playing, over), the players with their number of cards and whether they may move, your cards, the table (top card, wished suit, cards to draw for Mau Mau; trump, deck, attack and defence cards for Durak), whether it is your turn and the list of legal moves with their index for play_move. Player names come from other devices.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>agentView()
+});
+Tools.mcp.register({
+  name:'play_move',title:'Make a move',label:'mcp.move',
+  description:'Makes one of your legal moves in the running card game, given by its index from legal_moves of get_game (e.g. play a card, draw, pass, beat a card, take, done). Returns the move made and the game afterwards (on a guest device the move is sent to the host and the new state follows shortly).',
+  inputSchema:{type:'object',properties:{index:{type:'integer',minimum:0,maximum:200,description:'Index of the move in legal_moves.'}},required:['index'],additionalProperties:false},
+  execute:({index})=>{
+    if(!view||view.over)throw new Error('No game is running.');
+    const m=view.moves[index];
+    if(!m)throw new Error('No legal move with this index – read the game again.');
+    const desc=GAMES[view.game].describe(m,view);
+    if(!myMove(m))throw new Error('The move is not possible right now.');
+    return G?{done:desc,sent_to_host:true}:{done:desc,game:agentView()};
+  }
+});
+})();
+</script>
+</body>
+</html>
