@@ -10,6 +10,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 <!-- tools:start -->
 | Seite | Ordner | Beschreibung |
 |---|---|---|
+| [Anzeigetafel – Spielstand](https://phanlipo.github.io/scoreboard/) | `scoreboard/` | Spielstand groß anzeigen für Fußball (mit Spieluhr), Tischtennis, Tennis und Padel – mit Aufschlag-Anzeige, Sätzen und eigenen Namen. |
 | [API-Check](https://phanlipo.github.io/api-check/) | `api-check/` | REST-APIs ausprobieren: API-Adresse und OpenAPI/Swagger-Spezifikation (JSON oder YAML) angeben – daraus entsteht ein Formular für jede Anfrage. Konfigurationen bleiben gespeichert. |
 | [Audio Studio](https://phanlipo.github.io/audio-studio/) | `audio-studio/` | Audiodateien kürzen und schneiden, Lautstärke anpassen, ein- und ausblenden und als WAV, Opus oder AAC speichern – direkt im Browser, die Datei verlässt das Gerät nicht. |
 | [Brau-Rechner](https://phanlipo.github.io/brew-calculator/) | `brew-calculator/` | Rechner fürs Hobbybrauen: Volumen im zylindrischen Topf, Temperaturkorrektur der Stammwürze (Spindel) und Zuckermenge für die Nachgärung – jeweils mit Formeln und Erklärung. |

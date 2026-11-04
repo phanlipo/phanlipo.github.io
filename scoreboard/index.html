@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Anzeigetafel – Spielstand</title>
+<meta name="description" content="Spielstand groß anzeigen für Fußball (mit Spieluhr), Tischtennis, Tennis und Padel – mit Aufschlag-Anzeige, Sätzen und eigenen Namen.">
+<meta name="tool:tags" content="Freizeit, Sport">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="get_score, add_point">
+<meta name="tool:icon" content="scoreboard">
+<meta name="tool:color" content="#1e3a8a">
+<meta name="tool:short-name" content="Anzeigetafel">
+<meta name="tool:title-en" content="Scoreboard">
+<meta name="tool:description-en" content="Show the score big for football (with match clock), table tennis, tennis and padel – with serve indicator, sets and your own names.">
+<meta name="tool:short-name-en" content="Scoreboard">
+<meta name="tool:storage" content="scoreboard.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-d3873fsUmLiOzRud6m0PI6CFFlvY2kKNRY5svT8SUJc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Anzeigetafel">
+<meta name="theme-color" content="#1e3a8a">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#1e3a8a;--accent-text:#ffffff;
+  /* The board looks like a real scoreboard in both themes: white on dark blue */
+  --board:#0b1d4a;--tile:#1f3f8f;--tile-hi:#2a50ad;--board-text:#ffffff;--board-muted:#c3cfee;--hot:#ffd166}
+@media (prefers-color-scheme: dark){:root{--accent:#93a9ec;--accent-text:#0b1533;
+  --board:#07142f;--tile:#1a3576;--tile-hi:#24479a}}
+
+body.stage>main{display:flex;flex-direction:column;padding:8px;padding-inline:max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right));padding-block-end:max(8px,env(safe-area-inset-bottom))}
+.board{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;background:var(--board);color:var(--board-text);border-radius:14px;padding:8px}
+.bar{flex:none;display:flex;align-items:center;gap:8px;min-height:44px}
+.sport-btn{flex:none;min-height:44px;display:flex;align-items:center;gap:6px;padding-inline:10px;border:1px solid var(--tile-hi);border-radius:10px;background:var(--tile);color:var(--board-text);cursor:pointer;font-weight:600;font-size:15px}
+.sport-btn:focus-visible,.board button:focus-visible{outline:3px solid var(--hot);outline-offset:2px}
+.info{flex:1;min-width:0;margin:0;font-weight:700;font-size:15px;text-align:end;color:var(--board-muted);line-height:1.25;overflow-wrap:anywhere}
+.info b{color:var(--hot)}
+.sides{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.board[data-sport="football"] .sides{grid-template-columns:1fr auto 1fr}
+.side{min-width:0;min-height:0;display:flex;flex-direction:column;gap:4px}
+.name-row{flex:none;display:flex;align-items:center;gap:6px;min-height:44px}
+.side.right .name-row{flex-direction:row-reverse}
+.name{min-width:0;font-size:clamp(18px,4.2vmin,34px);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side.right .name{text-align:end}
+.to{flex:none;width:44px;height:44px;border-radius:8px;border:2px solid var(--board-text);background:none;color:var(--board-text);font-weight:800;font-size:20px;cursor:pointer;padding:0}
+.to[aria-pressed="true"]{background:var(--board-text);color:var(--board)}
+.score{flex:1;min-height:0;display:flex;gap:8px;container-type:size}
+.side.right .score{flex-direction:row-reverse}
+.tile{position:relative;flex:1;min-width:0;border:0;border-radius:12px;background:var(--tile);color:var(--board-text);cursor:pointer;display:grid;place-items:center;padding:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+.tile:hover{background:var(--tile-hi)}
+.tile:active{transform:scale(.98)}
+.tile[aria-disabled="true"]{cursor:default;transform:none}
+.pts{font-size:min(80cqh,32cqw);font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.board[data-sport="tennis"] .pts,.board[data-sport="padel"] .pts{font-size:min(70cqh,26cqw)}
+.tile.won{outline:4px solid var(--hot);outline-offset:-4px}
+/* Serve: white ball at the inner lower corner of the server's tile */
+.serve{position:absolute;inset-block-end:8%;inset-inline-end:-6px;width:min(14cqh,6cqw,44px);aspect-ratio:1;border-radius:50%;background:var(--board-text);box-shadow:0 0 0 3px var(--board)}
+.side.right .serve{inset-inline-end:auto;inset-inline-start:-6px}
+.minis{flex:none;display:flex;flex-direction:column;gap:8px;width:min(24cqw,30cqh)}
+.mini{flex:1;max-height:50cqh;min-height:0;border-radius:10px;background:var(--tile);display:flex;flex-direction:column;align-items:center;justify-content:center;container-type:size}
+.mini .k{font-size:clamp(11px,14cqh,15px);color:var(--board-muted);font-weight:600;line-height:1.1}
+.mini .v{font-size:min(60cqh,70cqw);font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.foot{flex:none;display:flex;align-items:center;gap:8px}
+.side.right .foot{flex-direction:row-reverse}
+.minus{min-height:44px;min-width:56px;border:1px solid var(--tile-hi);border-radius:10px;background:none;color:var(--board-text);cursor:pointer;font-size:16px;font-weight:600;padding-inline:10px}
+.minus:disabled{opacity:.4;cursor:default}
+.done{flex:1;min-width:0;margin:0;font-size:14px;color:var(--board-muted);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side.right .done{text-align:end}
+.done sup{font-size:.7em}
+
+/* Football clock between the two teams */
+.mid{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center}
+.half{margin:0;font-weight:700;color:var(--board-muted);font-size:15px}
+.clock{margin:0;font-size:clamp(30px,9vmin,72px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.clock.over{color:var(--hot)}
+.extra{margin:0;font-size:clamp(18px,4.5vmin,32px);font-weight:700;color:var(--hot);font-variant-numeric:tabular-nums;min-height:1.2em}
+.mid .row{justify-content:center}
+.cbtn{min-height:48px;min-width:96px;border:0;border-radius:10px;background:var(--board-text);color:var(--board);font-weight:700;font-size:16px;cursor:pointer;padding-inline:14px}
+.cbtn.alt{background:none;color:var(--board-text);border:1px solid var(--tile-hi)}
+
+/* Portrait: the two sides above each other, so the digits get big */
+@media (orientation:portrait){
+  .sides,.board[data-sport="football"] .sides{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+  .board[data-sport="football"] .sides{grid-template-rows:1fr auto 1fr}
+  .side.right .name-row,.side.right .score,.side.right .foot{flex-direction:row}
+  .side.right .name,.side.right .done{text-align:start}
+  .side.right .serve{inset-inline-start:auto;inset-inline-end:-6px}
+  .pts{font-size:min(82cqh,36cqw)}
+  .board[data-sport="tennis"] .pts,.board[data-sport="padel"] .pts{font-size:min(78cqh,30cqw)}
+  .mid{flex-direction:row;flex-wrap:wrap;gap:4px 12px}
+  .clock{font-size:clamp(30px,11vw,56px)}
+}
+
+/* Settings in the menu */
+.card h3{font-size:15px;margin:16px 0 8px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{min-height:48px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit;font-size:15px;padding:4px 6px;line-height:1.2}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+.sports{grid-template-columns:repeat(2,1fr);grid-auto-flow:row}
+.sports button{border-block-end:1px solid var(--border)}
+.sports button:nth-child(odd){border-inline-start:0}
+.field{display:flex;flex-direction:column;gap:4px;margin-block-end:10px}
+.field>span{font-size:13px;color:var(--muted);font-weight:600}
+.field input,.field select{font:inherit;font-size:16px;min-height:46px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);width:100%;min-width:0}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.hint{font-size:13px;color:var(--muted);margin:4px 0 0}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Anzeigetafel</span></h1>
+  <p class="sub" data-i18n="sub">Spielstand groß anzeigen</p>
+  <div class="stage-actions">
+    <!-- Tabler Icons (MIT): arrow-back-up, arrows-left-right -->
+    <button type="button" class="head-btn" id="btnUndo" aria-label="Rückgängig" title="Rückgängig" data-i18n-attr="aria-label:undo; title:undo" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-4 -4l4 -4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></svg></button>
+    <button type="button" class="head-btn" id="btnSwap" aria-label="Seiten tauschen" title="Seiten tauschen" data-i18n-attr="aria-label:swap; title:swap"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 17l-18 0"/><path d="M6 10l-3 -3l3 -3"/><path d="M3 7l18 0"/><path d="M18 20l3 -3l-3 -3"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <div class="board" id="board" data-sport="tabletennis">
+    <div class="bar">
+      <button type="button" class="sport-btn" id="btnSport" aria-haspopup="dialog"><span id="sportName">Tischtennis</span> <span aria-hidden="true">▾</span></button>
+      <p class="info" id="info" aria-live="polite"></p>
+    </div>
+    <div class="sides" id="sides">
+      <section class="side" data-p="0"></section>
+      <div class="mid" id="mid" hidden>
+        <p class="half" id="half">1. Halbzeit</p>
+        <p class="clock" id="clock" role="timer">00:00</p>
+        <p class="extra" id="extra"></p>
+        <div class="row">
+          <button type="button" class="cbtn" id="btnClock" data-i18n="start">Start</button>
+          <button type="button" class="cbtn alt" id="btnHalf" data-i18n="nextHalf">2. Halbzeit</button>
+        </div>
+      </div>
+      <section class="side" data-p="1"></section>
+    </div>
+  </div>
+
+  <section class="card" data-menu aria-labelledby="h-game">
+    <h2 id="h-game" data-i18n="game">Spiel</h2>
+    <div class="seg sports" role="group" aria-labelledby="h-game" id="sports">
+      <button type="button" data-sport="football" aria-pressed="false"><span aria-hidden="true">⚽ </span><span data-i18n="sp.football">Fußball</span></button>
+      <button type="button" data-sport="tabletennis" aria-pressed="true"><span aria-hidden="true">🏓 </span><span data-i18n="sp.tabletennis">Tischtennis</span></button>
+      <button type="button" data-sport="tennis" aria-pressed="false"><span aria-hidden="true">🎾 </span><span data-i18n="sp.tennis">Tennis</span></button>
+      <button type="button" data-sport="padel" aria-pressed="false"><span aria-hidden="true">🥎 </span><span data-i18n="sp.padel">Padel</span></button>
+    </div>
+    <p class="hint" data-i18n="sportHint">Jede Sportart behält ihren eigenen Spielstand.</p>
+
+    <h3 data-i18n="names">Namen</h3>
+    <label class="field"><span id="lblName0">Spieler 1</span><input type="text" id="name0" maxlength="30" autocomplete="off" enterkeyhint="next"></label>
+    <label class="field"><span id="lblName1">Spieler 2</span><input type="text" id="name1" maxlength="30" autocomplete="off" enterkeyhint="done"></label>
+
+    <div id="optFirst">
+      <h3 id="h-first" data-i18n="firstServe">Erster Aufschlag</h3>
+      <div class="seg" role="group" aria-labelledby="h-first">
+        <button type="button" data-first="0" aria-pressed="true" id="first0">Spieler 1</button>
+        <button type="button" data-first="1" aria-pressed="false" id="first1">Spieler 2</button>
+      </div>
+      <p class="hint" data-i18n="firstHint">Danach wechselt der Aufschlag automatisch nach den Regeln.</p>
+    </div>
+
+    <div id="optBest">
+      <h3 id="h-best" data-i18n="bestOf">Gewinnsätze</h3>
+      <div class="seg" role="group" aria-labelledby="h-best" id="bestOf"></div>
+    </div>
+    <div id="optTennis">
+      <label class="check"><input type="checkbox" id="golden"><span data-i18n="golden">Golden Point (bei 40:40 entscheidet ein Punkt)</span></label>
+      <label class="check"><input type="checkbox" id="mtb"><span data-i18n="mtb">Entscheidungssatz als Match-Tiebreak bis 10</span></label>
+    </div>
+    <div id="optFootball">
+      <label class="field"><span data-i18n="halfMin">Länge einer Halbzeit</span><select id="halfMin"></select></label>
+    </div>
+
+    <h3 data-i18n="display">Anzeige</h3>
+    <label class="check"><input type="checkbox" id="wake" checked><span data-i18n="wake">Bildschirm anlassen</span></label>
+    <div class="row" style="margin-block-start:12px">
+      <button type="button" class="btn danger" id="btnNew" data-i18n="newGame">Neues Spiel</button>
+    </div>
+    <p class="hint" data-i18n="newHint">Setzt den Spielstand dieser Sportart auf null; Namen und Einstellungen bleiben.</p>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Zeigt den Spielstand groß an – zum Hinstellen neben das Spielfeld, am besten im Querformat.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Punkt / Tor:</b> auf die große Zahl einer Seite tippen. <b>−1</b> nimmt den letzten Punkt dieser Seite zurück, <b>↶</b> oben den zuletzt eingetragenen Punkt.</li>
+    <li><b>⇄</b> oben tauscht die Seiten, z. B. nach dem Seitenwechsel.</li>
+    <li><b>Sportart, Namen und Regeln</b> liegen im Menü (☰) – oder über den Knopf mit der Sportart oben links. Jede Sportart behält ihren eigenen Spielstand. <b>Neues Spiel</b> setzt ihn auf null.</li>
+    <li>Im Hochformat stehen die Seiten übereinander, im Querformat nebeneinander.</li>
+    <li><b>Fernbedienung / Tastatur:</b> ← bzw. Bild ↑ gibt der linken (oberen) Seite einen Punkt, → bzw. Bild ↓ der rechten (unteren), Rücktaste macht rückgängig – passt zu vielen Bluetooth-Präsentern.</li>
+    <li><b>Bildschirm anlassen</b> verhindert, dass das Display während des Spiels ausgeht (wenn der Browser das kann).</li>
+  </ul>
+  <h3>Sportarten</h3>
+  <ul>
+    <li><b>Fußball:</b> Tore zählen und Spieluhr mit <i>Start</i>/<i>Pause</i>. Nach Ablauf einer Halbzeit läuft die Nachspielzeit weiter (z. B. 45:00 +2:13), mit <i>2. Halbzeit</i> geht es weiter ab 45:00. Die Länge einer Halbzeit lässt sich im Menü einstellen. Die Uhr läuft weiter, auch wenn die App kurz geschlossen wird.</li>
+    <li><b>Tischtennis:</b> Sätze bis 11 mit 2 Punkten Abstand, 3, 5 oder 7 Sätze (Gewinnsätze 2, 3 oder 4). Der weiße Punkt zeigt, wer aufschlägt: Wechsel nach 2 Punkten, ab 10:10 nach jedem Punkt, jeder Satz beginnt mit dem anderen Spieler. <b>T</b> neben dem Namen markiert die Auszeit (eine pro Spiel). Im Entscheidungssatz erinnert die Anzeige bei 5 Punkten an den Seitenwechsel.</li>
+    <li><b>Tennis und Padel:</b> 0 – 15 – 30 – 40 – Spiel, bei 40:40 Einstand und Vorteil (AD) oder <i>Golden Point</i> (Padel voreingestellt). Sätze bis 6 Spiele mit 2 Abstand, bei 6:6 Tiebreak bis 7. Auf Wunsch wird der Entscheidungssatz als Match-Tiebreak bis 10 gespielt. Aufschlag wechselt jedes Spiel, im Tiebreak nach dem ersten und dann alle 2 Punkte. Die Anzeige erinnert an den Seitenwechsel (nach jedem ungeraden Spiel, im Tiebreak alle 6 Punkte).</li>
+    <li>Satzball und Matchball werden oben angezeigt, ebenso Einstand und Tiebreak. Unten stehen die Ergebnisse der fertigen Sätze.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Spielstände, Namen und Einstellungen bleiben in diesem Browser gespeichert. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  <h3>KI-Agent</h3>
+  <p>Ein KI-Agent im Browser (WebMCP) kann den Spielstand lesen und einer Seite einen Punkt bzw. ein Tor geben; das erscheint sofort auf der Tafel.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Shows the score big – to put next to the court or pitch, best in landscape.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Point / goal:</b> tap the big number of a side. <b>−1</b> takes back the last point of that side, <b>↶</b> at the top the point entered last.</li>
+    <li><b>⇄</b> at the top swaps the sides, e.g. when the players change ends.</li>
+    <li><b>Sport, names and rules</b> are in the menu (☰) – or via the sport button at the top left. Every sport keeps its own score. <b>New match</b> sets it back to zero.</li>
+    <li>In portrait the sides are above each other, in landscape side by side.</li>
+    <li><b>Remote / keyboard:</b> ← or Page Up gives the left (top) side a point, → or Page Down the right (bottom) one, Backspace undoes – works with many Bluetooth presenters.</li>
+    <li><b>Keep screen on</b> stops the display from turning off during the match (if the browser supports it).</li>
+  </ul>
+  <h3>Sports</h3>
+  <ul>
+    <li><b>Football:</b> count goals and run the match clock with <i>Start</i>/<i>Pause</i>. When a half is over, stoppage time keeps running (e.g. 45:00 +2:13); <i>2nd half</i> continues from 45:00. Set the length of a half in the menu. The clock keeps running even if the app is closed for a moment.</li>
+    <li><b>Table tennis:</b> games to 11 with a 2-point lead, best of 3, 5 or 7. The white dot shows who serves: change after 2 points, from 10:10 after every point, each game starts with the other player. <b>T</b> next to the name marks the time-out (one per match). In the deciding game the board reminds you to change ends at 5 points.</li>
+    <li><b>Tennis and padel:</b> 0 – 15 – 30 – 40 – game, at 40:40 deuce and advantage (AD) or <i>golden point</i> (default for padel). Sets to 6 games with a 2-game lead, tiebreak to 7 at 6:6. Optionally the deciding set is a match tiebreak to 10. The serve changes every game, in the tiebreak after the first point and then every 2 points. The board reminds you to change ends (after every odd game, in the tiebreak every 6 points).</li>
+    <li>Set point and match point are shown at the top, as are deuce and tiebreak. Below are the scores of the finished sets.</li>
+  </ul>
+  <h3>Saved</h3>
+  <p>Scores, names and settings stay saved in this browser. Nothing is sent to a server; the app also works offline.</p>
+  <h3>AI agent</h3>
+  <p>An AI agent in the browser (WebMCP) can read the score and give a side a point or goal; it shows up on the board right away.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 640c56122c49</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="rules.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    start:'Start',pause:'Pause',nextHalf:'2. Halbzeit',half1:'1. Halbzeit',half2:'2. Halbzeit',
+    'sp.football':'Fußball','sp.tabletennis':'Tischtennis','sp.tennis':'Tennis','sp.padel':'Padel',
+    home:'Heim',away:'Gast',player1:'Spieler 1',player2:'Spieler 2',team1:'Team 1',team2:'Team 2',
+    nameOf:'Name {n}',
+    sets:'Sätze',games:'Spiele',set:'Satz {n}',tiebreak:'Tiebreak',mtbShort:'Match-Tiebreak',deuce:'Einstand',
+    golden:'Golden Point (bei 40:40 entscheidet ein Punkt)',goldenShort:'Golden Point',
+    setBall:'Satzball {name}',matchBall:'Matchball {name}',winner:'{name} gewinnt!',changeEnds:'Seitenwechsel',
+    bestN:'{n} Sätze',bestSub:'{n} zum Sieg',min:'{n} Minuten',
+    addPoint:'Punkt für {name}',addGoal:'Tor für {name}',sub:'Letzten Punkt von {name} zurücknehmen',subGoal:'Letztes Tor von {name} zurücknehmen',
+    pointsSr:'{name}: {v}',serving:'Aufschlag',timeout:'Auszeit {name}',
+    halfOver:'Halbzeit vorbei – Nachspielzeit läuft',fullTime:'Spielzeit vorbei – Nachspielzeit läuft',
+    confirmNew:'Spielstand für {sport} auf null setzen?',
+    'mcp.point':'Punkt eingetragen',
+  },
+  en:{
+    title:'Scoreboard',sub:'Show the score big',undo:'Undo',swap:'Swap sides',start:'Start',pause:'Pause',
+    nextHalf:'2nd half',half1:'1st half',half2:'2nd half',
+    game:'Match','sp.football':'Football','sp.tabletennis':'Table tennis','sp.tennis':'Tennis','sp.padel':'Padel',
+    sportHint:'Every sport keeps its own score.',names:'Names',firstServe:'First serve',
+    firstHint:'After that the serve changes automatically by the rules.',bestOf:'Match length',
+    golden:'Golden point (one point decides at 40:40)',mtb:'Deciding set as match tiebreak to 10',
+    halfMin:'Length of a half',display:'Display',wake:'Keep screen on',newGame:'New match',
+    newHint:'Sets the score of this sport back to zero; names and settings stay.',
+    home:'Home',away:'Away',player1:'Player 1',player2:'Player 2',team1:'Team 1',team2:'Team 2',
+    nameOf:'Name {n}',
+    sets:'Sets',games:'Games',set:'Set {n}',tiebreak:'Tiebreak',mtbShort:'Match tiebreak',deuce:'Deuce',goldenShort:'Golden point',
+    setBall:'Set point {name}',matchBall:'Match point {name}',winner:'{name} wins!',changeEnds:'Change ends',
+    bestN:'Best of {n}',bestSub:'{n} to win',min:'{n} minutes',
+    addPoint:'Point for {name}',addGoal:'Goal for {name}',sub:'Take back the last point of {name}',subGoal:'Take back the last goal of {name}',
+    pointsSr:'{name}: {v}',serving:'Serving',timeout:'Time-out {name}',
+    halfOver:'Half time – stoppage time running',fullTime:'Full time – stoppage time running',
+    confirmNew:'Set the {sport} score back to zero?',
+    'mcp.point':'point added',
+  }
+});
+const t=Tools.t, $=Tools.$, R=window.ScoreRules;
+const LS='scoreboard.state.v1';
+const SPORT_EN={football:'football',tabletennis:'table_tennis',tennis:'tennis',padel:'padel'};
+
+/* ---------- State: one match per sport ---------- */
+function newMatch(sport){
+  return {cfg:Object.assign({},R.DEFAULTS[sport]),names:['',''],pts:[],at:[],first:0,swapped:false,to:[false,false],
+    clock:{half:1,acc:0,since:null,warned:0}};
+}
+function loadState(){
+  const s=Tools.load(LS,null)||{};
+  const out={sport:R.SPORTS.includes(s.sport)?s.sport:'tabletennis',wake:s.wake!==false,m:{}};
+  for(const sp of R.SPORTS){
+    const m=Object.assign(newMatch(sp),(s.m&&s.m[sp])||{});
+    m.cfg=Object.assign({},R.DEFAULTS[sp],m.cfg);
+    m.pts=(Array.isArray(m.pts)?m.pts:[]).filter(p=>p===0||p===1);
+    if(!Array.isArray(m.at))m.at=[];
+    out.m[sp]=m;
+  }
+  return out;
+}
+const S=loadState();
+const M=()=>S.m[S.sport];
+const save=()=>Tools.save(LS,S);
+
+const defName=(sp,p)=>sp==='football'?t(p?'away':'home'):t(p?'player2':'player1');
+const nameOf=(p,m=M(),sp=S.sport)=>(m.names[p]||'').trim()||defName(sp,p);
+
+/* ---------- Football clock ---------- */
+const elapsed=c=>c.acc+(c.since!=null?Math.max(0,Date.now()-c.since):0);
+let ticker=null;
+function clockState(){const m=M();return R.clock(elapsed(m.clock),m.clock.half,m.cfg.halfMin);}
+function renderClock(){
+  const m=M(),c=m.clock,k=clockState();
+  $('clock').textContent=k.main;
+  $('clock').classList.toggle('over',k.over);
+  $('extra').textContent=k.extra;
+  $('half').textContent=t(c.half===1?'half1':'half2');
+  $('btnClock').textContent=t(c.since!=null?'pause':'start');
+  $('btnHalf').hidden=c.half!==1;
+  // Announce once when the regular time of a half is over
+  if(k.over&&c.since!=null&&c.warned<c.half){
+    c.warned=c.half;save();
+    Tools.toast(t(c.half===1?'halfOver':'fullTime'));
+    if(navigator.vibrate)try{navigator.vibrate([300,150,300]);}catch(e){}
+    Tools.diag.log('half over',{half:c.half});
+  }
+}
+function syncTicker(){
+  const run=S.sport==='football'&&M().clock.since!=null;
+  if(run&&!ticker)ticker=setInterval(renderClock,250);
+  if(!run&&ticker){clearInterval(ticker);ticker=null;}
+}
+$('btnClock').addEventListener('click',()=>{
+  const c=M().clock;
+  if(c.since!=null){c.acc=elapsed(c);c.since=null;}else c.since=Date.now();
+  Tools.diag.log(c.since!=null?'clock start':'clock pause',{half:c.half});
+  save();renderClock();syncTicker();
+});
+$('btnHalf').addEventListener('click',()=>{
+  const c=M().clock;
+  c.half=2;c.acc=0;c.since=null;
+  Tools.diag.log('second half');
+  save();renderClock();syncTicker();
+});
+
+/* ---------- Board ---------- */
+const esc=Tools.esc;
+function sideHtml(p,s,right){
+  const m=M(),sp=S.sport,name=esc(nameOf(p)),foot=sp==='football';
+  const won=s.winner===p,serving=s.server===p;
+  let minis='';
+  if(sp==='tabletennis')minis=`<div class="mini"><span class="k">${esc(t('sets'))}</span><span class="v">${s.sets[p]}</span></div>`;
+  else if(sp!=='football')minis=`<div class="mini"><span class="k">${esc(t('sets'))}</span><span class="v">${s.sets[p]}</span></div>`
+    +`<div class="mini"><span class="k">${esc(t('games'))}</span><span class="v">${s.matchTiebreak?'–':s.games[p]}</span></div>`;
+  // Finished sets (racket sports) or the minutes of the team's goals (football)
+  const done=foot?m.pts.map((q,i)=>q===p?esc(m.at[i]||''):'').filter(Boolean).join(' '):(s.done||[]).map(d=>{
+    if(d.matchTiebreak)return `[${d.games[p]}]`;
+    return d.tiebreak&&d.games[p]<d.games[1-p]?`${d.games[p]}<sup>${d.tiebreak[p]}</sup>`:String(d.games[p]);
+  }).join(' ');
+  const to=sp==='tabletennis'?`<button type="button" class="to" data-to="${p}" aria-pressed="${m.to[p]}" title="${esc(t('timeout',{name:nameOf(p)}))}"><span aria-hidden="true">T</span><span class="sr-only">${esc(t('timeout',{name:nameOf(p)}))}</span></button>`:'';
+  return `<div class="name-row">${to}<span class="name">${name}</span></div>`
+    +`<div class="score"><button type="button" class="tile${won?' won':''}" data-add="${p}"${s.winner!=null?' aria-disabled="true"':''}>`
+    +`<span class="pts" aria-hidden="true">${esc(s.points[p])}</span>`
+    +`<span class="sr-only">${esc(t('pointsSr',{name:nameOf(p),v:s.points[p]}))}${serving?', '+esc(t('serving')):''}. ${esc(t(foot?'addGoal':'addPoint',{name:nameOf(p)}))}</span>`
+    +(serving?'<span class="serve" aria-hidden="true"></span>':'')+`</button>${minis?`<div class="minis">${minis}</div>`:''}</div>`
+    +`<div class="foot"><button type="button" class="minus" data-sub="${p}"${m.pts.includes(p)?'':' disabled'}><span aria-hidden="true">−1</span><span class="sr-only">${esc(t(foot?'subGoal':'sub',{name:nameOf(p)}))}</span></button><p class="done">${done}</p></div>`;
+}
+function infoText(s){
+  const m=M(),sp=S.sport,parts=[];
+  if(s.winner!=null)return `<b>🏆 ${esc(t('winner',{name:nameOf(s.winner)}))}</b>`;
+  if(sp==='football')return '';
+  if(sp==='tabletennis')parts.push(esc(t('set',{n:s.game})));
+  else parts.push(esc(t('set',{n:s.set})));
+  if(s.tiebreak)parts.push(esc(t('tiebreak')));
+  if(s.matchTiebreak)parts.push(esc(t('mtbShort')));
+  if(s.goldenPoint)parts.push(esc(t('goldenShort')));
+  else if(s.deuce)parts.push(esc(t('deuce')));
+  if(s.ball)parts.push(`<b>${esc(t(s.ball.kind==='match'?'matchBall':'setBall',{name:nameOf(s.ball.p)}))}</b>`);
+  if(s.changeEnds)parts.push(`<b>⇄ ${esc(t('changeEnds'))}</b>`);
+  return parts.join(' · ');
+}
+let last=null;
+function render(){
+  const m=M(),sp=S.sport,s=R.score(Object.assign({sport:sp},m));
+  last=s;
+  const board=$('board');
+  board.dataset.sport=sp;
+  $('sportName').textContent=t('sp.'+sp);
+  const order=m.swapped?[1,0]:[0,1];
+  const sides=board.querySelectorAll('.side');
+  sides.forEach((el,i)=>{el.dataset.p=order[i];el.classList.toggle('right',i===1);el.innerHTML=sideHtml(order[i],s,i===1);});
+  $('info').innerHTML=infoText(s);
+  $('mid').hidden=sp!=='football';
+  $('btnUndo').disabled=!m.pts.length;
+  if(sp==='football')renderClock();
+  syncTicker();
+  renderSettings();
+}
+
+/* ---------- Points ---------- */
+function addPoint(p,src){
+  const m=M();
+  if(last&&last.winner!=null)return false;
+  m.pts.push(p);
+  if(S.sport==='football'){const k=clockState();m.at.push(k.plus?`${k.minute}+${k.plus}'`:`${k.minute}'`);}
+  save();
+  const before=last;
+  render();
+  if(navigator.vibrate)try{navigator.vibrate(25);}catch(e){}
+  Tools.diag.log('point',{sport:S.sport,side:p,points:m.pts.length,src:src||'tap'});
+  if(last.winner!=null&&before.winner==null)Tools.diag.log('match over',{sport:S.sport});
+  return true;
+}
+function removeLast(p){
+  const m=M(),i=p==null?m.pts.length-1:m.pts.lastIndexOf(p);
+  if(i<0)return;
+  m.pts.splice(i,1);
+  if(S.sport==='football')m.at.splice(i,1);
+  save();render();
+  Tools.diag.log(p==null?'undo':'remove point',{sport:S.sport,points:m.pts.length});
+}
+$('sides').addEventListener('click',e=>{
+  const add=e.target.closest('[data-add]'),sub=e.target.closest('[data-sub]'),to=e.target.closest('[data-to]');
+  if(add)addPoint(Number(add.dataset.add));
+  else if(sub)removeLast(Number(sub.dataset.sub));
+  else if(to){const m=M(),p=Number(to.dataset.to);m.to[p]=!m.to[p];save();render();}
+});
+$('btnUndo').addEventListener('click',()=>removeLast(null));
+$('btnSwap').addEventListener('click',()=>{M().swapped=!M().swapped;save();render();Tools.diag.log('swap sides');});
+$('btnSport').addEventListener('click',()=>Tools.menu.open());
+// Remote controls and keyboards: left/up side, right/down side, undo
+document.addEventListener('keydown',e=>{
+  if(e.altKey||e.ctrlKey||e.metaKey||e.target.closest('input,select,textarea,dialog[open]'))return;
+  const order=M().swapped?[1,0]:[0,1];
+  let side=null;
+  if(e.key==='ArrowLeft'||e.key==='PageUp'||e.key==='ArrowUp')side=0;
+  else if(e.key==='ArrowRight'||e.key==='PageDown'||e.key==='ArrowDown')side=1;
+  if(side!=null){e.preventDefault();addPoint(order[side],'key');}
+  else if(e.key==='Backspace'){e.preventDefault();removeLast(null);}
+});
+
+/* ---------- Settings (menu) ---------- */
+function renderSettings(){
+  const m=M(),sp=S.sport;
+  for(const b of document.querySelectorAll('#sports [data-sport]'))b.setAttribute('aria-pressed',String(b.dataset.sport===sp));
+  for(const p of [0,1]){
+    const inp=$('name'+p);
+    if(document.activeElement!==inp)inp.value=m.names[p]||'';
+    inp.placeholder=defName(sp,p);
+    $('lblName'+p).textContent=t('nameOf',{n:p+1});
+    $('first'+p).textContent=nameOf(p);
+    $('first'+p).setAttribute('aria-pressed',String(m.first===p));
+  }
+  const racket=sp!=='football';
+  $('optFirst').hidden=!racket;$('optBest').hidden=!racket;
+  $('optTennis').hidden=sp!=='tennis'&&sp!=='padel';
+  $('optFootball').hidden=sp!=='football';
+  if(racket){
+    const opts=R.BEST_OF[sp];
+    $('bestOf').innerHTML=opts.map(n=>`<button type="button" data-best="${n}" aria-pressed="${m.cfg.bestOf===n}">${esc(t('bestN',{n}))}<br><small>${esc(t('bestSub',{n:Math.floor(n/2)+1}))}</small></button>`).join('');
+  }
+  $('golden').checked=!!m.cfg.goldenPoint;$('mtb').checked=!!m.cfg.matchTiebreak;
+  $('halfMin').innerHTML=R.HALF_MIN.map(n=>`<option value="${n}"${m.cfg.halfMin===n?' selected':''}>${esc(t('min',{n}))}</option>`).join('');
+  $('wake').checked=S.wake;
+}
+$('sports').addEventListener('click',e=>{
+  const b=e.target.closest('[data-sport]');if(!b)return;
+  S.sport=b.dataset.sport;save();render();
+  Tools.diag.log('sport',{sport:S.sport});
+});
+for(const p of [0,1])$('name'+p).addEventListener('input',e=>{M().names[p]=e.target.value.slice(0,30);save();render();});
+document.querySelector('#optFirst .seg').addEventListener('click',e=>{
+  const b=e.target.closest('[data-first]');if(!b)return;M().first=Number(b.dataset.first);save();render();
+});
+$('bestOf').addEventListener('click',e=>{
+  const b=e.target.closest('[data-best]');if(!b)return;M().cfg.bestOf=Number(b.dataset.best);save();render();
+});
+$('golden').addEventListener('change',e=>{M().cfg.goldenPoint=e.target.checked;save();render();});
+$('mtb').addEventListener('change',e=>{M().cfg.matchTiebreak=e.target.checked;save();render();});
+$('halfMin').addEventListener('change',e=>{const c=M().clock;M().cfg.halfMin=Number(e.target.value);c.warned=elapsed(c)>=M().cfg.halfMin*60000?c.half:c.half-1;save();render();});
+$('btnNew').addEventListener('click',()=>{
+  if(!confirm(t('confirmNew',{sport:t('sp.'+S.sport)})))return;
+  const m=M(),fresh=newMatch(S.sport);
+  fresh.names=m.names;fresh.cfg=m.cfg;fresh.first=m.first;
+  S.m[S.sport]=fresh;save();render();
+  Tools.diag.log('new match',{sport:S.sport});
+});
+
+/* ---------- Keep the screen on (Screen Wake Lock) ---------- */
+let lock=null;
+async function wake(){
+  if(!S.wake||document.visibilityState!=='visible'||lock||!('wakeLock' in navigator))return;
+  try{lock=await navigator.wakeLock.request('screen');lock.addEventListener('release',()=>{lock=null;});Tools.diag.log('wake lock on');}
+  catch(e){Tools.diag.log('wake lock failed',{error:e.name});}
+}
+$('wake').addEventListener('change',e=>{
+  S.wake=e.target.checked;save();
+  if(S.wake)wake();else if(lock){lock.release().catch(()=>{});lock=null;}
+});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){wake();if(S.sport==='football')renderClock();}});
+wake();
+
+Tools.onLang(render);
+render();
+
+Tools.diag.info(()=>({sport:S.sport,points:M().pts.length,swapped:M().swapped,clockRunning:M().clock.since!=null,
+  wakeLock:'wakeLock' in navigator?(lock?'on':'off'):'unsupported'}));
+
+/* ---------- WebMCP ---------- */
+function scoreJson(){
+  const m=M(),s=R.score(Object.assign({sport:S.sport},m)),out={sport:SPORT_EN[S.sport],
+    players:[0,1].map(p=>({number:p+1,name:nameOf(p)})),points:s.points.slice()};
+  if(S.sport==='football'){
+    const k=clockState();
+    out.goals=s.raw.slice();
+    out.clock={half:m.clock.half,time:k.main,stoppage_time:k.extra||null,running:m.clock.since!=null};
+    out.goal_log=m.pts.map((p,i)=>({player:p+1,minute:m.at[i]||null}));
+  }else{
+    out.sets=s.sets.slice();
+    if(s.games)out.games=s.games.slice();
+    out.finished_sets=s.done.map(d=>d.matchTiebreak?{points:d.games,match_tiebreak:true}:Object.assign({games:d.games},d.tiebreak?{tiebreak:d.tiebreak}:{}));
+    out.serving=s.server==null?null:s.server+1;
+    out.sets_to_win=s.need;
+    out.tiebreak=!!(s.tiebreak||s.matchTiebreak);
+    out.set_point=s.ball&&s.ball.kind==='set'?s.ball.p+1:null;
+    out.match_point=s.ball&&s.ball.kind==='match'?s.ball.p+1:null;
+  }
+  out.winner=s.winner==null?null:s.winner+1;
+  return out;
+}
+Tools.mcp.register({
+  name:'get_score',title:'Read the score',readOnly:true,
+  description:'Returns the current score of the sport shown on the scoreboard (football, table_tennis, tennis or padel): the two players or teams (number 1 and 2 with their names), the points as shown (tennis/padel: 0, 15, 30, 40, AD; in a tiebreak plain numbers), sets, games, finished sets, who serves, set or match point, the winner, and for football the goals, the goal minutes and the match clock.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>scoreJson()
+});
+Tools.mcp.register({
+  name:'add_point',title:'Add a point or goal',label:'mcp.point',
+  description:'Gives player or team 1 or 2 one point (football: one goal) in the sport shown on the scoreboard, following its rules (games, sets, tiebreak, serve change). Fails when the match is already won. Returns the new score in the same form as get_score.',
+  inputSchema:{type:'object',properties:{
+    player:{type:'integer',enum:[1,2],description:'1 = first player or team (home in football), 2 = second (away).'}
+  },required:['player'],additionalProperties:false},
+  execute:i=>{
+    if(!addPoint(i.player-1,'mcp'))throw new Error('The match is already won – start a new match in the app first.');
+    return scoreJson();
+  }
+});
+})();
+</script>
+</body>
+</html>
