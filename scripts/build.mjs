@@ -157,9 +157,16 @@ function renderCards() {
       </div>
     </div>
 `;
+  // Search field: matches titles, descriptions and tags in German and English (page script)
+  const search = `    <div class="search">
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="m21 21-6-6"/></svg>
+      <input type="search" id="q" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Apps durchsuchen" aria-label="Apps durchsuchen" data-i18n-attr="placeholder:search; aria-label:search">
+    </div>
+`;
   const filter = tags.length || features.length ? `  <div class="filter" hidden>
-${row('f-cat', 'Kategorie', [chip('Alle', '', true), ...tags.map(x => chip(x, x, false))])}${features.length ? row('f-feat', 'Funktion', features.map(x => chip(x, x, false))) : ''}  </div>
+${search}${row('f-cat', 'Kategorie', [chip('Alle', '', true), ...tags.map(x => chip(x, x, false))])}${features.length ? row('f-feat', 'Funktion', features.map(x => chip(x, x, false))) : ''}  </div>
   <p class="filter-status sr-only" aria-live="polite"></p>
+  <p class="filter-empty muted" data-i18n="search.none" hidden>Keine passende App gefunden.</p>
 ` : '';
   const tag = (x, cls) => `<span class="${cls}" data-tag="${escHtml(x)}" data-i18n="tag.${escHtml(x)}">${escHtml(x)}</span>`;
   const cards = tools.map(t => `    <article class="card tool" data-tags="${escHtml(JSON.stringify([...t.tags, ...t.features]))}">
@@ -168,7 +175,7 @@ ${row('f-cat', 'Kategorie', [chip('Alle', '', true), ...tags.map(x => chip(x, x,
       <div class="tags">${t.tags.map(x => tag(x, 'tag')).join('')}${t.features.map(x => tag(x, 'tag feat')).join('')}</div>
     </article>`).join('\n');
   // English texts of the cards and filters for the start page script (Tools.i18n)
-  const en = { 'filter.all': 'All', 'f-cat': 'Category', 'f-feat': 'Feature' };
+  const en = { 'filter.all': 'All', 'f-cat': 'Category', 'f-feat': 'Feature', search: 'Search apps', 'search.none': 'No matching app found.' };
   for (const x of [...tags, ...features]) en['tag.' + x] = TAGS_EN[x];
   for (const t of tools) { en[`card.${t.folder}.title`] = t.titleEn; en[`card.${t.folder}.desc`] = t.descriptionEn; }
   const json = JSON.stringify({ en }, null, 2).replace(/</g, '\\u003c').replace(/\n/g, '\n  ');

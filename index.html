@@ -12,7 +12,7 @@
 <meta name="tool:short-name-en" content="App Shelf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-xuIlc0pJyPgplegs08iRdFVrXYAPdtQj0kiC4UeO134=' 'sha256-jNMUfYR99w3p8ItNLfXMbJg5Kz0egKV2o4wbYjCb1uU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-4SpiihSyCSPP5DvfwCQOXDsnoOkBbarPSSD5RvRiU3w=' 'sha256-hU9uG4/4HOU9m6RCGSGbo9E2vcTiVqFdAWRB53CMeZY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest" data-no-sw>
@@ -56,6 +56,12 @@ main{padding-block:20px}
 .chip{flex:none;min-height:44px;padding-inline:16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:15px}
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
 .chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* Search field above the filter rows */
+.search{position:relative}
+.search svg{position:absolute;inset-inline-start:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.search input{box-sizing:border-box;width:100%;min-height:44px;padding-block:8px;padding-inline:42px 12px;font-size:16px;border-radius:999px}
+.search input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.filter-empty{text-align:center;padding-block:24px}
 </style>
 </head>
 <body>
@@ -72,6 +78,10 @@ main{padding-block:20px}
 <main class="wrap">
   <!-- tools:start -->
   <div class="filter" hidden>
+    <div class="search">
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="m21 21-6-6"/></svg>
+      <input type="search" id="q" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Apps durchsuchen" aria-label="Apps durchsuchen" data-i18n-attr="placeholder:search; aria-label:search">
+    </div>
     <div class="filter-row" role="group" aria-labelledby="f-cat">
       <span class="filter-label" id="f-cat" data-i18n="f-cat">Kategorie</span>
       <div class="chips">
@@ -114,6 +124,7 @@ main{padding-block:20px}
     </div>
   </div>
   <p class="filter-status sr-only" aria-live="polite"></p>
+  <p class="filter-empty muted" data-i18n="search.none" hidden>Keine passende App gefunden.</p>
   <div class="grid">
     <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Sport&quot;,&quot;KI-Agent&quot;]">
       <h2><img src="scoreboard/icon.svg" alt="" width="32" height="32"><a class="open" href="scoreboard/"><span data-i18n="card.scoreboard.title">Anzeigetafel – Spielstand</span></a><span class="chevron" aria-hidden="true">›</span></h2>
@@ -282,6 +293,8 @@ main{padding-block:20px}
       "filter.all": "All",
       "f-cat": "Category",
       "f-feat": "Feature",
+      "search": "Search apps",
+      "search.none": "No matching app found.",
       "tag.Alltag": "Everyday",
       "tag.Arbeit": "Work",
       "tag.Freizeit": "Leisure",
@@ -391,14 +404,22 @@ main{padding-block:20px}
 <script>
 (() => {
   const cards = JSON.parse(document.getElementById('i18n-cards').textContent);
+  // Search text of each card in both languages, so a word from either one finds the app.
+  // Taken before Tools.i18n translates the page (the HTML is German).
+  const norm = s => s.toLocaleLowerCase('de').replace(/ß/g, 'ss').normalize('NFD').replace(/\p{M}/gu, '');
+  const haystack = new Map([...document.querySelectorAll('.tool')].map(card => {
+    const keys = [...card.querySelectorAll('[data-i18n]')].map(el => el.dataset.i18n);
+    const href = card.querySelector('.open').getAttribute('href');
+    return [card, norm([card.textContent, href, ...keys.map(k => cards.en[k] || '')].join(' '))];
+  }));
   Tools.i18n({
-    de: { 'status.all': 'Alle {n} Seiten', 'status.tag': '{shown} von {n} Seiten: {tag}' },
+    de: { 'status.all': 'Alle {n} Seiten', 'status.tag': '{shown} von {n} Seiten: {tag}', 'status.some': '{shown} von {n} Seiten' },
     en: Object.assign({
       title: 'App Shelf',
       sub: 'Small web apps for your phone. Each app explains itself at the bottom of the page.',
       'c.offline': 'works offline', 'c.install': 'installable as an app', 'c.local': 'data stays on the device',
       'c.backup': 'backup as a file', hosted: 'phanlipo.github.io · hosted on GitHub Pages',
-      'status.all': 'All {n} pages', 'status.tag': '{shown} of {n} pages: {tag}',
+      'status.all': 'All {n} pages', 'status.tag': '{shown} of {n} pages: {tag}', 'status.some': '{shown} of {n} pages',
     }, cards.en),
   });
   // Cards in alphabetical order of the shown titles (German order comes from build.mjs)
@@ -414,20 +435,39 @@ main{padding-block:20px}
   const chips = [...bar.querySelectorAll('.chip')];
   const cardEls = [...document.querySelectorAll('.tool')];
   const status = document.querySelector('.filter-status');
+  const empty = document.querySelector('.filter-empty');
+  const input = document.getElementById('q');
   let current = '';
+  // Category and search work together: a card must have the tag and contain every search word
   function apply(tag) {
     current = tag;
+    const words = norm(input.value).split(/\s+/).filter(Boolean);
     let shown = 0;
     for (const c of chips) c.setAttribute('aria-pressed', String(c.dataset.tag === tag));
     for (const card of cardEls) {
-      const hit = !tag || JSON.parse(card.dataset.tags).includes(tag);
+      const text = haystack.get(card);
+      const hit = (!tag || JSON.parse(card.dataset.tags).includes(tag)) && words.every(w => text.includes(w));
       card.hidden = !hit;
       if (hit) shown++;
       for (const t of card.querySelectorAll('.tag')) t.classList.toggle('match', !!tag && t.dataset.tag === tag);
     }
     const n = cardEls.length;
-    status.textContent = tag ? Tools.t('status.tag', { shown, n, tag: Tools.t('tag.' + tag) }) : Tools.t('status.all', { n });
+    empty.hidden = shown > 0;
+    status.textContent = shown === 0 ? Tools.t('search.none')
+      : tag ? Tools.t('status.tag', { shown, n, tag: Tools.t('tag.' + tag) })
+      : words.length ? Tools.t('status.some', { shown, n }) : Tools.t('status.all', { n });
   }
+  input.addEventListener('input', () => apply(current));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') input.blur(); // hides the phone keyboard, the results stay
+    else if (e.key === 'Escape' && input.value) { e.preventDefault(); input.value = ''; apply(current); }
+  });
+  // Desktop: "/" jumps to the search field
+  document.addEventListener('keydown', e => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input, textarea, select, [contenteditable]')) return;
+    e.preventDefault();
+    input.focus();
+  });
   bar.addEventListener('click', e => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
@@ -446,6 +486,8 @@ main{padding-block:20px}
   window.addEventListener('resize', edges);
   Tools.onLang(() => { if (status.textContent) apply(current); edges(); });
   bar.hidden = false;
+  // The browser may restore the field after "back": filter right away
+  if (input.value) apply(current);
   edges();
 })();
 </script>

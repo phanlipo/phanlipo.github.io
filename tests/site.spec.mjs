@@ -106,6 +106,51 @@ test.describe('start page', () => {
     await expect(all).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('search finds apps by title, description and tag – in German and English, combined with the category', async ({ page }) => {
+    await page.goto('/');
+    const list = tools();
+    const search = page.getByRole('searchbox', { name: 'Apps durchsuchen' });
+    const visible = () => page.locator('.tool:visible .open').allTextContents().then(a => a.map(x => x.trim()).sort());
+    const titles = pred => list.filter(pred).map(t => t.title).sort();
+    const norm = s => s.toLowerCase().replace(/ß/g, 'ss').normalize('NFD').replace(/\p{M}/gu, '');
+    // Every app is found by its own title
+    for (const t of list) {
+      await search.fill(t.title);
+      expect(await visible()).toContain(t.title);
+    }
+    // Case and umlauts don't matter; several words must all appear
+    const dice = list.find(t => t.folder === 'dice-coin');
+    await search.fill('WURFEL munze');
+    expect(await visible()).toContain(dice.title);
+    // English words find the app too, independently of the language shown
+    await search.fill(dice.titleEn.split(' ')[0]);
+    expect(await visible()).toContain(dice.title);
+    // A word from a description
+    await search.fill('pdf');
+    const hay = t => norm([t.title, t.description, t.titleEn, t.descriptionEn, t.folder, ...t.tags, ...t.features].join(' '));
+    expect(await visible()).toEqual(titles(t => hay(t).includes('pdf')));
+    // Combined with a category
+    await page.getByRole('button', { name: 'Arbeit', exact: true }).click();
+    expect(await visible()).toEqual(titles(t => hay(t).includes('pdf') && t.tags.includes('Arbeit')));
+    await page.getByRole('button', { name: 'Alle', exact: true }).click();
+    // No match: a visible message
+    await search.fill('xyzqwv');
+    await expect(page.locator('.tool:visible')).toHaveCount(0);
+    await expect(page.locator('.filter-empty')).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    // Escape clears the search
+    await search.press('Escape');
+    await expect(search).toHaveValue('');
+    await expect(page.locator('.tool:visible')).toHaveCount(list.length);
+    await expect(page.locator('.filter-empty')).toBeHidden();
+    // "/" jumps to the search field; English labels
+    await page.locator('body').click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press('/');
+    await expect(search).toBeFocused();
+    await page.locator('[data-set-lang="en"]').click();
+    await expect(page.getByRole('searchbox', { name: 'Search apps' })).toHaveAttribute('placeholder', 'Search apps');
+  });
+
   test('phone: filter rows scroll sideways without a scroll bar, a faded edge shows there is more', async ({ page }) => {
     await page.setViewportSize(VIEWPORTS.mobile);
     await page.goto('/');
