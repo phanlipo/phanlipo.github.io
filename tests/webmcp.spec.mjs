@@ -1452,3 +1452,37 @@ test.describe('text-to-speech tools', () => {
     await expect(page.locator('#voice')).toHaveValue('de/de_DE/kerstin/low/de_DE-kerstin-low');
   });
 });
+
+test.describe('marquee tools', () => {
+  test.beforeEach(async ({ page }) => { await open(page, '/marquee/'); });
+
+  test('set_sign changes text and look in the app, get_sign reads it back', async ({ page }) => {
+    const { ok, result } = await call(page, 'marquee_set_sign', {
+      text: 'Willkommen', size_percent: 80, font: 'condensed', text_color: '#FF0000', background_color: '#ffffff', motion: 'none', blink: true,
+    });
+    expect(ok).toBe(true);
+    expect(result).toEqual({
+      text: 'Willkommen', size_percent: 80, font: 'condensed', bold: true, text_color: '#ff0000', background_color: '#ffffff',
+      motion: 'none', speed: 5, blink: true, rotate_on_upright_phone: true,
+    });
+    await expect(page.locator('#text')).toHaveValue('Willkommen');
+    await expect(page.locator('#size')).toHaveValue('80');
+    await expect(page.locator('#fonts [data-f="condensed"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#motions [data-m="none"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#preview .sign-text')).toHaveCSS('color', 'rgb(255, 0, 0)');
+    await expect(page.locator('#blink')).toBeChecked();
+    // Only the given fields change
+    expect((await call(page, 'marquee_set_sign', { speed: 9 })).result).toMatchObject({ text: 'Willkommen', speed: 9, font: 'condensed' });
+    const g = await call(page, 'marquee_get_sign', {});
+    expect(g.result).toMatchObject({ text: 'Willkommen', speed: 9, showing: false, recent: [] });
+  });
+
+  test('set_sign rejects bad input and changes nothing', async ({ page }) => {
+    expect((await call(page, 'marquee_set_sign', { text_color: 'red' })).ok).toBe(false);
+    expect((await call(page, 'marquee_set_sign', { text_color: '#12345g' })).error).toContain('#ffea00');
+    expect((await call(page, 'marquee_set_sign', { size_percent: 5 })).ok).toBe(false);
+    expect((await call(page, 'marquee_set_sign', { motion: 'up' })).ok).toBe(false);
+    expect((await call(page, 'marquee_set_sign', { text: 'x'.repeat(501) })).ok).toBe(false);
+    expect((await call(page, 'marquee_get_sign', {})).result).toMatchObject({ text: '', text_color: '#ffea00', size_percent: 60, motion: 'left' });
+  });
+});
