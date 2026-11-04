@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Flaschen drehen</title>
+<meta name="description" content="Die Flasche entscheidet, wer dran ist – antippen oder mit Schwung drehen, mit euren Namen am Tisch.">
+<meta name="tool:tags" content="Freizeit, Spiele, Zufall">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="bottle">
+<meta name="tool:color" content="#2f6b2f">
+<meta name="tool:short-name" content="Flasche">
+<meta name="tool:title-en" content="Spin the Bottle">
+<meta name="tool:description-en" content="The bottle decides whose turn it is – tap it or give it a spin, with your names around the table.">
+<meta name="tool:short-name-en" content="Bottle">
+<meta name="tool:storage" content="spin-the-bottle.">
+<meta name="tool:webmcp" content="spin_bottle, get_players">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-6ml+wVrH7Z1osGVdPaWyZJxs5ZqASJCdvp2Z86Ejlhs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Flasche">
+<meta name="theme-color" content="#2f6b2f">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#2f6b2f;--accent-text:#ffffff;--page-width:640px}
+@media (prefers-color-scheme: dark){:root{--accent:#86c98a;--accent-text:#0d1f0d}}
+/* Stage layout: the table with the bottle fills the screen, result and spin button below; players and options in the menu */
+main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px}
+
+/* ---------- Table ---------- */
+.table{flex:1;min-height:200px;position:relative;container-type:size;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:grab}
+.table.drag{cursor:grabbing}
+.ring{position:absolute;inset:0;margin:auto;width:min(100cqw,100cqh);height:min(100cqw,100cqh);border-radius:50%;
+  background:var(--surface-2);border:2px dashed var(--border)}
+.bottle{position:absolute;left:50%;top:50%;height:54%;aspect-ratio:60/200;translate:-50% -50%;transform-origin:50% 50%;pointer-events:none}
+.bottle svg{width:100%;height:100%;display:block;overflow:visible}
+.bottle .glass{fill:var(--accent)}
+.bottle .lip{fill:var(--accent);filter:brightness(.8)}
+.bottle .tag{fill:var(--surface);opacity:.9}
+.bottle .shine{fill:#fff;opacity:.3}
+.name{position:absolute;translate:-50% -50%;max-width:24%;padding:4px 8px;border-radius:999px;border:2px solid var(--border);
+  background:var(--surface);color:var(--text);font-size:14px;font-weight:600;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .2s,color .2s,border-color .2s}
+.name.hit{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.status{text-align:center;min-height:28px;margin:8px 0;font-weight:600;font-size:18px;overflow-wrap:anywhere}
+.actions{flex:none;display:grid}
+.actions .btn{min-height:56px;font-size:18px;font-weight:600}
+
+/* ---------- Settings ---------- */
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-child{margin-top:0}
+textarea#players{width:100%;min-height:9em;font:inherit;font-size:16px;resize:vertical}
+.info{color:var(--muted);margin:6px 0 0}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer;margin-top:8px}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Flaschen drehen</span></h1>
+  <p class="sub" data-i18n="sub">Die Flasche entscheidet, wer dran ist</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnPlayers" aria-label="Spieler" title="Spieler" data-i18n-attr="aria-label:players; title:players"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card play" aria-label="Flaschen drehen" data-i18n-attr="aria-label:title">
+    <div class="table" id="table">
+      <div class="ring" id="ring">
+        <div class="bottle" id="bottle" aria-hidden="true">
+          <svg viewBox="0 0 60 200">
+            <rect class="glass" x="24" y="6" width="12" height="52" rx="3"/>
+            <rect class="lip" x="21" y="1" width="18" height="9" rx="3"/>
+            <path class="glass" d="M24 54C24 70 8 74 8 96V186a10 10 0 0 0 10 10H42a10 10 0 0 0 10-10V96C52 74 36 70 36 54Z"/>
+            <rect class="tag" x="8" y="122" width="44" height="38"/>
+            <rect class="shine" x="13" y="98" width="6" height="84" rx="3"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="actions">
+      <button type="button" class="btn primary" id="btnSpin"><span aria-hidden="true">🍾 </span><span data-i18n="spin">Drehen</span></button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu>
+    <h2 id="h-settings" data-i18n="settings">Spieler &amp; Einstellungen</h2>
+    <h3><label for="players" data-i18n="playersLabel">Namen (einer pro Zeile)</label></h3>
+    <textarea id="players" rows="6" maxlength="400" autocomplete="off" spellcheck="false" aria-describedby="playersInfo" placeholder="Anna&#10;Ben&#10;Cem" data-i18n-attr="placeholder:playersPh"></textarea>
+    <p class="info" id="playersInfo" aria-live="polite"></p>
+    <label class="check"><input type="checkbox" id="optFair"> <span data-i18n="fair">Niemand zweimal hintereinander (ab 3 Spielern)</span></label>
+    <label class="check"><input type="checkbox" id="optSound"> <span data-i18n="sound">Klick-Geräusch</span></label>
+    <label class="check"><input type="checkbox" id="optVibrate"> <span data-i18n="vibrate">Vibration beim Anhalten (Handy)</span></label>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Flaschendrehen ohne Flasche: Das Handy kommt in die Mitte, die Flasche dreht sich und zeigt auf, wer dran ist – für Wahrheit oder Pflicht, Spielreihenfolge oder wer abwaschen muss.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Drehen</b> tippen oder auf den Tisch tippen: Die Flasche dreht sich ein paar Runden und bleibt zufällig stehen.</li>
+    <li><b>Wischen</b>: Mit dem Finger im Kreis über den Tisch wischen und loslassen – je schneller, desto mehr Schwung, in die Richtung, in die du wischst. Langsam ziehen dreht die Flasche nur von Hand.</li>
+    <li><b>Spieler</b> (Knopf oben oder im Menü ☰): Namen eintragen, einer pro Zeile, 2 bis 12. Sie sitzen dann im Kreis um die Flasche, und wer getroffen wird, leuchtet auf. Ohne Namen dreht die Flasche frei – dann zeigt sie einfach auf jemanden am echten Tisch.</li>
+    <li><b>Niemand zweimal hintereinander</b>: Wer gerade dran war, wird beim nächsten Mal übersprungen (ab 3 Spielern).</li>
+    <li>Tipp: Die Namen im Uhrzeigersinn so eintragen, wie ihr wirklich sitzt, und das Handy mit dem oberen Rand zur ersten Person legen.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Wo die Flasche stehen bleibt, entscheidet der Zufallsgenerator des Browsers – nicht die Wischbewegung. Wischen bestimmt nur Richtung und Schwung.</li>
+    <li>Das Klick-Geräusch wird im Browser erzeugt. Kein Ton? Lautstärke aufdrehen, auf dem iPhone den Stummschalter ausschalten. Vibration gibt es nur auf Android.</li>
+    <li>Gespeichert werden nur die Namen, die Einstellungen und wohin die Flasche zuletzt zeigte – in diesem Browser. Alles funktioniert offline.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann die Flasche drehen und die Spieler lesen (WebMCP). Jeder Aufruf erscheint hier als Hinweis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Spin the bottle without a bottle: put the phone in the middle, the bottle spins and points at whose turn it is – for truth or dare, who goes first or who does the dishes.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Tap <b>Spin</b> or tap the table: the bottle spins a few rounds and stops at random.</li>
+    <li><b>Swipe</b>: swipe around the table with your finger and let go – the faster, the more spin, in the direction you swipe. Dragging slowly just turns the bottle by hand.</li>
+    <li><b>Players</b> (button at the top or in the menu ☰): enter names, one per line, 2 to 12. They sit in a circle around the bottle, and whoever is picked lights up. Without names the bottle spins freely – it then simply points at someone at the real table.</li>
+    <li><b>Nobody twice in a row</b>: whoever was just picked is skipped next time (3 players or more).</li>
+    <li>Tip: enter the names clockwise the way you actually sit, and put the phone with its top edge towards the first person.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Where the bottle stops is decided by the browser's random number generator – not by your swipe. Swiping only sets direction and spin.</li>
+    <li>The click sound is generated in the browser. No sound? Turn up the volume; on iPhone switch off the silent switch. Vibration only works on Android.</li>
+    <li>Only the names, the settings and where the bottle last pointed are stored – in this browser. Everything works offline.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can spin the bottle and read the players (WebMCP). Each call shows a note here.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version a759b678a2a2</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  hint:'Tippen oder im Kreis wischen zum Drehen',spinning:'Dreht …',slow:'Mit mehr Schwung wischen!',
+  hit:'🍾 {name} ist dran!',free:'🍾 Gestoppt – wen trifft’s?',
+  'info.none':'Keine Namen – die Flasche dreht frei.','info.few':'Mindestens 2 Namen eintragen – sonst dreht die Flasche frei.',
+  'info.count':'{n} Spieler am Tisch.','info.many':'Höchstens 12 Spieler – weitere Namen werden ignoriert.',
+  'mcp.spin':'Flasche gedreht','mcp.players':'Spieler gelesen'
+},
+en:{
+  title:'Spin the Bottle',sub:'The bottle decides whose turn it is',players:'Players',spin:'Spin',
+  settings:'Players & settings',playersLabel:'Names (one per line)',playersPh:'Anna\nBen\nCem',
+  fair:'Nobody twice in a row (3 players or more)',sound:'Click sound',vibrate:'Vibration when it stops (phone)',
+  hint:'Tap or swipe around to spin',spinning:'Spinning …',slow:'Swipe with more swing!',
+  hit:'🍾 {name}’s turn!',free:'🍾 Stopped – who is it?',
+  'info.none':'No names – the bottle spins freely.','info.few':'Enter at least 2 names – otherwise the bottle spins freely.',
+  'info.count':'{n} players at the table.','info.many':'At most 12 players – further names are ignored.',
+  'mcp.spin':'bottle spun','mcp.players':'players read'
+}});
+const {$,t}=Tools;
+const LS='spin-the-bottle.state.v1';
+const MAX_PLAYERS=12,MAX_NAME=20;
+
+const state=Tools.load(LS,{players:[],fair:true,sound:true,vibrate:true,angle:0,last:-1,spins:0});
+const cleanNames=list=>list.map(s=>String(s).trim().slice(0,MAX_NAME)).filter(Boolean);
+if(!Array.isArray(state.players))state.players=[];
+state.players=cleanNames(state.players).slice(0,MAX_PLAYERS);
+for(const k of ['fair','sound','vibrate'])if(typeof state[k]!=='boolean')state[k]=true;
+if(!Number.isFinite(state.angle))state.angle=0;
+state.angle=((state.angle%360)+360)%360;
+if(!Number.isInteger(state.last))state.last=-1;
+if(!(Number.isInteger(state.spins)&&state.spins>=0))state.spins=0;
+const save=()=>Tools.save(LS,state);
+
+// Players around the table: only with at least 2 names, otherwise the bottle spins freely
+const seats=()=>state.players.length>=2?state.players:[];
+// Random number in [0, 1) from the browser's cryptographic generator
+const rnd=()=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]/4294967296;};
+const norm=a=>((a%360)+360)%360;
+
+/* ---------- Table ---------- */
+const table=$('table'),ring=$('ring'),bottle=$('bottle'),status=$('status'),btnSpin=$('btnSpin');
+let nameEls=[];
+function renderTable(){
+  for(const el of nameEls)el.remove();
+  const s=seats();
+  nameEls=s.map((name,i)=>{
+    const a=i*2*Math.PI/s.length;
+    const el=document.createElement('span');
+    el.className='name';el.textContent=name;el.title=name;
+    // Seat i sits at i·(360/n) degrees clockwise from the top, 38 % of the ring size from the centre
+    el.style.left=(50+38*Math.sin(a)).toFixed(2)+'%';
+    el.style.top=(50-38*Math.cos(a)).toFixed(2)+'%';
+    ring.appendChild(el);
+    return el;
+  });
+  markHit(state.last);
+}
+function markHit(i){nameEls.forEach((el,k)=>el.classList.toggle('hit',k===i));}
+function setAngle(a){
+  bottle.style.transform=`rotate(${a.toFixed(2)}deg)`;
+  bottle.dataset.angle=norm(a).toFixed(2);
+}
+function resultText(){
+  const s=seats();
+  if(state.spins===0||spinning)return spinning?t('spinning'):t('hint');
+  return s.length&&state.last>=0&&state.last<s.length?t('hit',{name:s[state.last]}):t('free');
+}
+
+/* ---------- Sound ---------- */
+let ac=null;
+function audio(){
+  if(ac||!state.sound)return ac;
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(!C)return null;
+  try{ac=new C();Tools.diag.log('audio context created',{state:ac.state});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});}
+  return ac;
+}
+// In a user gesture: browsers only play sound after one
+function unlock(){const c=audio();if(c&&c.state!=='running')c.resume().catch(e=>Tools.diag.log('audio resume failed',{error:String(e)}));}
+let lastClick=0;
+function click(){
+  if(!state.sound||!ac||ac.state!=='running')return;
+  const now=ac.currentTime;
+  if(now-lastClick<.03)return;
+  lastClick=now;
+  try{
+    const o=ac.createOscillator(),g=ac.createGain();
+    o.type='triangle';o.frequency.value=1500+rnd()*300;
+    g.gain.setValueAtTime(.25,now);g.gain.exponentialRampToValueAtTime(.001,now+.03);
+    o.connect(g);g.connect(ac.destination);o.start(now);o.stop(now+.04);
+  }catch(e){Tools.diag.log('click failed',{error:String(e)});}
+}
+
+/* ---------- Spinning ----------
+   The result is drawn first (seat, or a free angle), then the bottle turns 3–8 full rounds plus the
+   rest to that angle with an ease-out curve. Swiping only changes direction and number of rounds. */
+let spinning=null;
+function pick(){
+  const s=seats(),n=s.length;
+  if(!n)return {index:-1,final:rnd()*360};
+  let allowed=[...Array(n).keys()];
+  if(state.fair&&n>=3&&state.last>=0&&state.last<n)allowed=allowed.filter(i=>i!==state.last);
+  const index=allowed[Math.floor(rnd()*allowed.length)];
+  const sector=360/n;
+  // Somewhere inside the seat's sector, never right on the border to a neighbour
+  return {index,final:norm(index*sector+(rnd()-.5)*sector*.7)};
+}
+const reduced=()=>window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+function spin(dir=1,power=rnd()){
+  if(spinning)return spinning.done;
+  const p=pick();
+  const turns=3+Math.round(Math.max(0,Math.min(1,power))*5);
+  const from=state.angle;
+  const rest=dir>0?norm(p.final-from):-norm(from-p.final);
+  const total=dir*turns*360+rest;
+  const dur=reduced()?800:2400+turns*400;
+  const s=seats();
+  const step=s.length?360/s.length:30;
+  const t0=performance.now();
+  let resolve;
+  const done=new Promise(r=>{resolve=r;});
+  spinning={done,dir};
+  btnSpin.disabled=true;table.dataset.spinning='true';table.dataset.dir=dir>0?'cw':'ccw';
+  status.textContent=t('spinning');markHit(-1);
+  Tools.diag.log('spin',{dir,turns,seats:s.length,ms:dur});
+  let prevSlot=Math.floor(from/step);
+  const frame=now=>{
+    const k=Math.min(1,(now-t0)/dur);
+    const a=from+total*(1-Math.pow(1-k,4));
+    setAngle(a);
+    // Click whenever the neck passes a seat (or every 30° when spinning freely)
+    const slot=Math.floor(a/step);
+    if(slot!==prevSlot){prevSlot=slot;click();}
+    if(k<1){requestAnimationFrame(frame);return;}
+    state.angle=p.final;state.last=p.index;state.spins++;save();
+    setAngle(p.final);markHit(p.index);
+    spinning=null;btnSpin.disabled=false;table.dataset.spinning='false';
+    status.textContent=resultText();
+    if(state.vibrate&&navigator.vibrate)try{navigator.vibrate(60);}catch(_){}
+    Tools.diag.log('stopped',{seat:p.index,angle:Math.round(p.final)});
+    resolve({index:p.index,name:p.index>=0?s[p.index]:null,angle:p.final});
+  };
+  requestAnimationFrame(frame);
+  return done;
+}
+btnSpin.addEventListener('click',()=>{unlock();spin(1);});
+
+/* ---------- Tap and swipe on the table ---------- */
+let drag=null;
+function pointerAngle(e){
+  const r=ring.getBoundingClientRect();
+  return Math.atan2(e.clientX-(r.left+r.width/2),-(e.clientY-(r.top+r.height/2)))*180/Math.PI;
+}
+table.addEventListener('pointerdown',e=>{
+  if(spinning||(e.pointerType==='mouse'&&e.button!==0))return;
+  unlock();
+  const a=pointerAngle(e);
+  drag={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false,start:state.angle,prev:a,turned:0,samples:[{t:e.timeStamp,v:0}]};
+  try{table.setPointerCapture(e.pointerId);}catch(_){}
+});
+table.addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.id)return;
+  if(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<10)return;
+  drag.moved=true;table.classList.add('drag');
+  const a=pointerAngle(e);
+  let d=a-drag.prev;if(d>180)d-=360;if(d<-180)d+=360;
+  drag.prev=a;drag.turned+=d;
+  drag.samples.push({t:e.timeStamp,v:drag.turned});
+  if(drag.samples.length>20)drag.samples.shift();
+  setAngle(drag.start+drag.turned);
+});
+function endDrag(e,cancel){
+  if(!drag||e.pointerId!==drag.id)return;
+  const d=drag;drag=null;table.classList.remove('drag');
+  if(!d.moved){if(!cancel)spin(1);return;}
+  state.angle=norm(d.start+d.turned);
+  // Speed over the last 120 ms of the swipe, in degrees per millisecond
+  const last=d.samples[d.samples.length-1];
+  const first=d.samples.find(s=>last.t-s.t<=120)||last;
+  const v=last.t>first.t?(last.v-first.v)/(last.t-first.t):0;
+  Tools.diag.log('swipe',{speed:Number(v.toFixed(2))});
+  if(!cancel&&Math.abs(v)>=.4){spin(v>0?1:-1,(Math.abs(v)-.4)/2);return;}
+  save();setAngle(state.angle);
+  if(!cancel)status.textContent=t('slow');
+}
+table.addEventListener('pointerup',e=>endDrag(e,false));
+table.addEventListener('pointercancel',e=>endDrag(e,true));
+
+/* ---------- Settings ---------- */
+const playersEl=$('players');
+function renderInfo(){
+  const lines=cleanNames(playersEl.value.split('\n'));
+  const n=Math.min(lines.length,MAX_PLAYERS);
+  $('playersInfo').textContent=lines.length>MAX_PLAYERS?t('info.many'):n===0?t('info.none'):n<2?t('info.few'):t('info.count',{n:Tools.fmt(n,0)});
+}
+playersEl.value=state.players.join('\n');
+playersEl.addEventListener('input',()=>{
+  const list=cleanNames(playersEl.value.split('\n')).slice(0,MAX_PLAYERS);
+  if(list.join('\n')!==state.players.join('\n')){
+    state.players=list;state.last=-1;save();renderTable();
+    if(!spinning)status.textContent=t('hint');
+    Tools.diag.log('players changed',{n:list.length});
+  }
+  renderInfo();
+});
+for(const [id,key] of [['optFair','fair'],['optSound','sound'],['optVibrate','vibrate']]){
+  $(id).checked=state[key];
+  $(id).addEventListener('change',e=>{state[key]=e.target.checked;save();if(key==='sound'&&state[key])unlock();});
+}
+$('btnPlayers').addEventListener('click',()=>{
+  Tools.menu.open();
+  setTimeout(()=>{playersEl.focus();playersEl.scrollIntoView({block:'center'});},50);
+});
+
+setAngle(state.angle);renderTable();renderInfo();status.textContent=resultText();
+Tools.onLang(()=>{renderInfo();status.textContent=resultText();});
+Tools.diag.info(()=>({players:state.players.length,seats:seats().length,fair:state.fair,sound:state.sound,vibrate:state.vibrate,
+  spins:state.spins,spinning:!!spinning,audio:ac?ac.state:'not created',reducedMotion:reduced(),canVibrate:!!navigator.vibrate}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+Tools.mcp.register({
+  name:'spin_bottle',title:'Spin the bottle',label:'mcp.spin',
+  description:'Spins the bottle in the app and waits until it stops (a few seconds). The result is random; the "nobody twice in a row" setting is respected. Returns the player the bottle points at (null when no names are set and the bottle spins freely), their 0-based seat index (seat 0 is at the top, then clockwise), the final angle in degrees clockwise from the top, and the total number of spins.',
+  inputSchema:{type:'object',properties:{
+    direction:{type:'string',enum:['clockwise','counterclockwise'],description:'Spin direction. Default: clockwise.'}
+  },additionalProperties:false},
+  execute:async({direction})=>{
+    if(spinning)throw new Error('The bottle is already spinning – wait until it stops.');
+    const r=await spin(direction==='counterclockwise'?-1:1);
+    return {player:r.name,seat_index:r.index>=0?r.index:null,angle_degrees:Math.round(r.angle*10)/10,total_spins:state.spins};
+  }
+});
+Tools.mcp.register({
+  name:'get_players',title:'Read the players',label:'mcp.players',readOnly:true,
+  description:'Reads the players sitting around the table in seat order (seat 0 at the top, then clockwise; empty when fewer than 2 names are set, then the bottle spins freely), who was picked last, the total number of spins and the settings.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    const s=seats();
+    return {players:s.slice(),last_player:s.length&&state.last>=0&&state.last<s.length?s[state.last]:null,
+      total_spins:state.spins,spinning:!!spinning,settings:{nobody_twice_in_a_row:state.fair,click_sound:state.sound,vibration:state.vibrate}};
+  }
+});
+})();
+</script>
+</body>
+</html>
