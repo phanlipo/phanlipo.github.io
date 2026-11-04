@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "text-to-speech";
-const VERSION = '625a63c512b7';
+const VERSION = 'cec31c13f95e';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -16,7 +16,8 @@ const FILES = [
   "manifest.webmanifest",
   "onnx-worker.js",
   "../assets/base.css",
-  "../assets/common.js"
+  "../assets/common.js",
+  "../assets/shared/onnx-tts.js"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
 const RUNTIME = {

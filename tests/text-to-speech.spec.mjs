@@ -197,11 +197,37 @@ test('AI voice: asks before the download, shows progress, plays sentence by sent
   expect(wav.samples[first + 10]).toBe(0);                   // pause
   expect(wav.samples[first + pause]).toBeCloseTo(0.5, 3);
 
+  // Measurement kept on the device: audio length / computing time (3 × 0.1 s), numbers only
+  const rtf = (expected / 16000) / 0.3;
+  const row = page.locator('#stats tbody tr');
+  await expect(row).toHaveCount(1);
+  await expect(row.locator('td').nth(0)).toContainText('Supertonic 3 · Mann 2');
+  await expect(row.locator('td').nth(0)).toContainText('Prozessor · Tempo 1,0× · 16 Schritte');
+  await expect(row.locator('td').nth(1)).toHaveText(rtf.toFixed(1).replace('.', ',') + '×');
+  await expect(row.locator('td').nth(3)).toHaveText('1');
+  const stored = await page.evaluate(() => localStorage.getItem('text-to-speech.stats.v1'));
+  expect(JSON.parse(stored)[0]).toMatchObject({ engine: 'supertonic', voice: 'M2', device: 'wasm', speed: 1, steps: 16, synth: 0.3 });
+  expect(stored).not.toContain('Hallo');
+
   // Played again from the list, removed from the list
   await page.click('#clips li:first-child [data-act=play]');
   await page.click('#clips li:first-child [data-act=remove]');
   await expect(page.locator('#clips li')).toHaveCount(0);
   await expect(page.locator('#clipsEmpty')).toBeVisible();
+
+  // Second run of the same voice: one row, averaged over both; kept after reloading (the clips are not)
+  page.once('dialog', d => d.accept());
+  await page.click('#btnSpeak');
+  await expect(row.locator('td').nth(3)).toHaveText('2', { timeout: 15000 });
+  await expect(row.locator('td').nth(1)).toHaveText(rtf.toFixed(1).replace('.', ',') + '×');
+  await expect(page.locator('#status')).toHaveText('Fertig.');
+  await page.reload();
+  await expect(page.locator('#clips li')).toHaveCount(0);
+  await expect(page.locator('#stats tbody tr td').nth(3)).toHaveText('2');
+  page.once('dialog', d => d.accept());
+  await page.click('#btnClearStats');
+  await expect(page.locator('#statsEmpty')).toBeVisible();
+  await expect(page.locator('#stats')).toBeHidden();
 });
 
 test('AI voice: settings reach the model, stop ends playback', async ({ page }) => {

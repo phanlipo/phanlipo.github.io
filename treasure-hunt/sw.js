@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "treasure-hunt";
-const VERSION = '486b76ab6da6';
+const VERSION = 'dce8337147cf';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -16,11 +16,16 @@ const FILES = [
   "manifest.webmanifest",
   "map.js",
   "puzzles.js",
+  "tts-worker.js",
   "../assets/base.css",
-  "../assets/common.js"
+  "../assets/common.js",
+  "../assets/shared/onnx-tts.js"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
-const RUNTIME = {};
+const RUNTIME = {
+  "../assets/vendor/onnxruntime-web/": "vendor:onnxruntime-web@1.31.0-dev.20260914-8d85527a0",
+  "../assets/vendor/piper-wasm/": "vendor:piper-wasm@1.0.0"
+};
 const RUNTIME_URLS = Object.entries(RUNTIME).map(([dir, cache]) => [new URL(dir, self.location).href, cache]);
 
 self.addEventListener('install', event => {

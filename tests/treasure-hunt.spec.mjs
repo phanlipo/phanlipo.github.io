@@ -547,3 +547,92 @@ test('accessible: editor and game screens, light and dark', async ({ page }) => 
     await page.getByRole('button', { name: /Zur Übersicht/ }).click();
   }
 });
+
+// AI reading voice (Piper, engine shared with "Text zu Sprache") with the tiny stand-in model from
+// tests/fixtures/tiny-piper.onnx: its audio is the phoneme IDs / 1000 × length scale (= 1 / speed)
+test.describe('AI reading voice', () => {
+  test.use({ allowedProblems: /huggingface\.co|Failed to load resource|ERR_FAILED|ERR_INTERNET_DISCONNECTED|Failed to fetch/ });
+  const TINY = readFileSync(new URL('fixtures/tiny-piper.onnx', import.meta.url));
+  const CONFIG = JSON.stringify({ audio: { sample_rate: 16000 }, espeak: { voice: 'de' }, inference: { noise_scale: 0.667, length_scale: 1, noise_w: 0.8 }, num_speakers: 1 });
+  // "Hallo! So klinge …" starts with ^ _ h _ ˈ _ a (Piper's phoneme IDs 1, 0, 20, 0, 120, 0, 14)
+  const START = [1, 0, 20, 0, 120, 0, 14];
+
+  test('Kerstin: asks before the download, reads at the chosen speed instead of the device voice, works offline', async ({ page, context }) => {
+    test.setTimeout(120000);
+    const models = [];
+    await context.route(/huggingface\.co/, r => {
+      const u = r.request().url();
+      models.push(u.split('/').pop());
+      if (u.endsWith('.onnx.json')) return r.fulfill({ contentType: 'application/json', body: CONFIG });
+      if (u.endsWith('.onnx')) return r.fulfill({ contentType: 'application/octet-stream', body: TINY });
+      return r.abort();
+    });
+    await page.addInitScript(() => {
+      window.__audio = [];
+      const copy = AudioBuffer.prototype.copyToChannel;
+      AudioBuffer.prototype.copyToChannel = function (data, ...rest) {
+        window.__audio.push({ rate: this.sampleRate, length: data.length, start: Array.from(data.slice(0, 7)) });
+        return copy.call(this, data, ...rest);
+      };
+      window.__device = 0;
+      if (window.speechSynthesis) { const speak = speechSynthesis.speak.bind(speechSynthesis); speechSynthesis.speak = u => { window.__device++; return speak(u); }; }
+    });
+    await page.goto('/treasure-hunt/');
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload();                                   // controlled by the service worker → offline cache
+    await openMenu(page);
+    await expect(page.locator('#rateBox')).toBeHidden();
+    let asked = '';
+    page.once('dialog', d => { asked = d.message(); d.accept(); });
+    await page.selectOption('#setVoice', 'piper:de/de_DE/kerstin/low/de_DE-kerstin-low');
+    await expect.poll(() => asked).toContain('Kerstin einmalig herunterladen (ca. 63 MB)');
+    await expect(page.locator('#rateBox')).toBeVisible();
+    await expect(page.locator('#setRate')).toHaveValue('1.3');
+    await expect.poll(() => page.evaluate(() => window.__audio.length), { timeout: 60000 }).toBe(1);
+    let a = (await page.evaluate(() => window.__audio))[0];
+    expect(a.rate).toBe(16000);
+    expect(a.start.map(v => Math.round(v * 1000 * 1.3))).toEqual(START);
+    expect(models).toContain('de_DE-kerstin-low.onnx');
+
+    // Another speed: no second question, the length scale follows
+    page.on('dialog', d => { asked = 'again'; d.dismiss(); });
+    asked = '';
+    await page.selectOption('#setRate', '1.5');
+    await expect.poll(() => page.evaluate(() => window.__audio.length), { timeout: 30000 }).toBe(2);
+    a = (await page.evaluate(() => window.__audio))[1];
+    expect(a.start.map(v => Math.round(v * 1000 * 1.5))).toEqual(START);
+    expect(asked).toBe('');
+    expect(await page.evaluate(() => window.__device)).toBe(0);
+    await closeMenu(page);
+
+    // Offline after a reload: model from the shared cache, engine and libraries from the offline cache
+    await context.unroute(/huggingface\.co/);
+    await context.setOffline(true);
+    await page.reload();
+    await openMenu(page);
+    await expect(page.locator('#setVoice')).toHaveValue('piper:de/de_DE/kerstin/low/de_DE-kerstin-low');
+    await page.click('#btnVoice');
+    await expect.poll(() => page.evaluate(() => window.__audio.length), { timeout: 60000 }).toBe(1);
+    a = (await page.evaluate(() => window.__audio))[0];
+    expect(a.start.map(v => Math.round(v * 1000 * 1.5))).toEqual(START);
+    expect(await page.evaluate(() => window.__device)).toBe(0);
+    await context.setOffline(false);
+    const diag = await page.evaluate(() => Tools.diag.text());
+    expect(diag).toContain('aiVoice: Kerstin');
+  });
+
+  test('without the download the device voice reads', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__device = 0;
+      if (window.speechSynthesis) { const speak = speechSynthesis.speak.bind(speechSynthesis); speechSynthesis.speak = u => { window.__device++; return speak(u); }; }
+    });
+    await page.goto('/treasure-hunt/');
+    await openMenu(page);
+    page.on('dialog', d => d.dismiss());
+    await page.selectOption('#setVoice', 'piper:de/de_DE/kerstin/low/de_DE-kerstin-low');
+    // Declined: nothing is downloaded; switching back to the automatic voice reads with the device
+    await page.selectOption('#setVoice', '');
+    await expect(page.locator('#rateBox')).toBeHidden();
+    await expect.poll(() => page.evaluate(() => window.__device)).toBeGreaterThan(0);
+  });
+});

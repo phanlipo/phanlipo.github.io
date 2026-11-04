@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="set_text, list_voices, select_voice">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-R0OttqcPj94zImgjC2wwhLHDsMIkIXlR11q4tNswy6w='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-bGY9V2nPYzIy8bqxc4TOvqchOc+DdoO9qSzJnPEIfSs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -65,6 +65,13 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
 .clips .detail{display:block;font-size:12.5px;color:var(--muted)}
 .clips .snip{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .clips .btn{min-width:44px;padding-inline:10px}
+.stats-wrap{overflow-x:auto}
+.stats{width:100%;border-collapse:collapse;font-size:14px;margin-block:4px 10px}
+.stats th,.stats td{text-align:start;padding:6px 6px;border-block-end:1px solid var(--border);vertical-align:top}
+.stats th{font-size:12.5px;color:var(--muted);font-weight:600}
+.stats td.num{font-family:var(--mono);white-space:nowrap}
+.stats .sub2{display:block;font-size:12px;color:var(--muted)}
+.stats .slow{color:var(--warn)}
 .models{list-style:none;margin:0 0 8px;padding:0}
 .models li{display:flex;gap:8px;align-items:center;justify-content:space-between;border-block-end:1px solid var(--border);padding-block:6px;font-size:14px}
 </style>
@@ -135,6 +142,17 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
     <ul class="clips" id="clips"></ul>
   </section>
 
+  <section class="card full" aria-labelledby="h-stats">
+    <h2 id="h-stats" data-i18n="h.stats">Messungen auf diesem Gerät</h2>
+    <p class="muted" data-i18n="statsIntro">Wie schnell rechnet jede Stimme auf diesem Gerät? Über 1× Echtzeit heißt: schneller erzeugt als gesprochen – dann gibt es keine Pausen zwischen den Sätzen. Gespeichert werden nur die Zahlen, kein Text und kein Audio.</p>
+    <p class="muted" id="statsEmpty" data-i18n="statsEmpty">Noch keine Messung – einfach mit einer KI-Stimme vorlesen lassen.</p>
+    <div class="stats-wrap"><table class="stats" id="stats" hidden>
+      <thead><tr><th scope="col" data-i18n="st.voice">Stimme</th><th scope="col" data-i18n="st.rtf">Echtzeit</th><th scope="col" data-i18n="st.first">Start</th><th scope="col" data-i18n="st.n">Messungen</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <button type="button" class="btn" id="btnClearStats" data-i18n="clearStats" hidden>Messungen löschen</button>
+  </section>
+
   <section class="card" aria-labelledby="h-models" data-menu>
     <h2 id="h-models" data-i18n="h.models">KI-Stimmen &amp; Speicher</h2>
     <label class="field"><span data-i18n="device">Rechnen mit (Supertonic, Kokoro)</span>
@@ -171,6 +189,7 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
   <ul>
     <li>Text eingeben oder einfügen, Sprachausgabe und Stimme wählen, <strong>Vorlesen</strong> tippen. Lange Texte werden Satz für Satz erzeugt – das Vorlesen beginnt schon nach dem ersten Satz.</li>
     <li>Jede KI-Ausgabe landet unter <strong>Zum Vergleichen</strong> – mit Rechenzeit und „Echtzeit“-Faktor (über 1× = schneller erzeugt als gesprochen). Dort lässt sie sich erneut abspielen und als WAV speichern.</li>
+    <li><strong>Messungen auf diesem Gerät</strong> merkt sich für jede KI-Stimme (mit Tempo und Rechenart) den Echtzeit-Faktor und wie schnell das Vorlesen beginnt – gemittelt über alle Durchläufe. So seht ihr, welche Stimme auf dem Handy flüssig läuft. Gespeichert werden nur diese Zahlen.</li>
     <li>Im Menü (☰) unter <strong>KI-Stimmen &amp; Speicher</strong>: Grafikkarte oder Prozessor wählen, sehen, welche Stimmen heruntergeladen sind, und sie wieder löschen.</li>
   </ul>
   <h3>Die Sprachausgaben</h3>
@@ -182,7 +201,7 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
   </ul>
   <h3>Downloads &amp; Datenschutz</h3>
   <ul>
-    <li>Die KI-Stimmen werden beim ersten Vorlesen einmalig von <strong>Hugging Face</strong> geladen (vorher fragt die App nach). Dabei wird kein Text übertragen. Danach liegen sie im Browser und funktionieren offline.</li>
+    <li>Die KI-Stimmen werden beim ersten Vorlesen einmalig von <strong>Hugging Face</strong> geladen (vorher fragt die App nach). Die Piper-Stimmen gibt es auch in der Schatzsuche – einmal geladen, sind sie in beiden Apps da. Dabei wird kein Text übertragen. Danach liegen sie im Browser und funktionieren offline.</li>
     <li>Supertonic steht unter der OpenRAIL-M-Lizenz (keine missbräuchliche Nutzung, z. B. Täuschung mit fremden Stimmen), Piper-Stimmen und Kokoro unter MIT bzw. Apache-2.0. Die Aussprache für Piper und Kokoro berechnet eSpeak NG (GPL).</li>
   </ul>
   <h3>KI-Agenten (WebMCP)</h3>
@@ -197,6 +216,7 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
   <ul>
     <li>Type or paste text, choose the speech engine and voice, tap <strong>Read aloud</strong>. Long texts are generated sentence by sentence – playback starts after the first sentence.</li>
     <li>Every AI output appears under <strong>Compare</strong> – with computing time and a “real time” factor (above 1× = generated faster than spoken). Play it again there or save it as WAV.</li>
+    <li><strong>Measurements on this device</strong> remembers for every AI voice (with speed and compute mode) the real-time factor and how quickly reading starts – averaged over all runs. So you see which voice runs smoothly on the phone. Only these numbers are saved.</li>
     <li>In the menu (☰) under <strong>AI voices &amp; storage</strong>: choose graphics card or processor, see which voices are downloaded and delete them again.</li>
   </ul>
   <h3>The engines</h3>
@@ -208,7 +228,7 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
   </ul>
   <h3>Downloads &amp; privacy</h3>
   <ul>
-    <li>The AI voices are downloaded once from <strong>Hugging Face</strong> the first time you use them (the app asks first). No text is sent. After that they are stored in the browser and work offline.</li>
+    <li>The AI voices are downloaded once from <strong>Hugging Face</strong> the first time you use them (the app asks first). The Piper voices are also available in the Treasure Hunt – downloaded once, they are there in both apps. No text is sent. After that they are stored in the browser and work offline.</li>
     <li>Supertonic is licensed under OpenRAIL-M (no misuse, e.g. deception with other people's voices), Piper voices and Kokoro under MIT and Apache-2.0. Pronunciation for Piper and Kokoro is computed by eSpeak NG (GPL).</li>
   </ul>
   <h3>AI agents (WebMCP)</h3>
@@ -227,7 +247,7 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 625a63c512b7</p>
+  <p class="footer-version">Version cec31c13f95e</p>
   <!-- footer:end -->
 </footer>
 
@@ -262,6 +282,7 @@ Tools.i18n({
     'm.none': 'nicht geladen', 'm.size': '{mb} MB', 'm.voices': '{mb} MB · Stimmen: {n}', del: 'Löschen', delLabel: '{name} löschen',
     usage: 'Speicher der Seite insgesamt: {u}', confirmDel: 'Heruntergeladene Stimmen löschen? Beim nächsten Vorlesen werden sie neu geladen.', deleted: 'Gelöscht',
     'mcp.text': 'Text eingetragen', 'mcp.voices': 'Stimmen gelesen', 'mcp.voice': 'Stimme gewählt',
+    'st.detail': '{dev} · Tempo {speed}×{steps}', 'st.steps': ' · {n} Schritte', 'st.last': 'zuletzt {d}', confirmStats: 'Alle Messungen löschen?',
   },
   en: {
     title: 'Text to Speech', sub: 'Have text read aloud – device voices or AI voices right in the browser.',
@@ -296,6 +317,9 @@ Tools.i18n({
     'm.none': 'not downloaded', 'm.size': '{mb} MB', 'm.voices': '{mb} MB · voices: {n}', del: 'Delete', delLabel: 'Delete {name}',
     usage: 'Storage used by the site: {u}', confirmDel: 'Delete downloaded voices? They are downloaded again the next time you use them.', deleted: 'Deleted',
     'mcp.text': 'Text entered', 'mcp.voices': 'Voices read', 'mcp.voice': 'Voice chosen',
+    'h.stats': 'Measurements on this device', statsIntro: 'How fast does each voice compute on this device? Above 1× real time means generated faster than spoken – then there are no pauses between sentences. Only the numbers are saved, no text and no audio.',
+    statsEmpty: 'No measurement yet – just have a text read by an AI voice.', 'st.voice': 'Voice', 'st.rtf': 'Real time', 'st.first': 'Start', 'st.n': 'Runs', clearStats: 'Delete measurements',
+    'st.detail': '{dev} · speed {speed}×{steps}', 'st.steps': ' · {n} steps', 'st.last': 'last {d}', confirmStats: 'Delete all measurements?',
   }
 });
 const t = Tools.t;
@@ -342,6 +366,11 @@ const ENGINES = {
 /* ---------- Settings ---------- */
 const LS = 'text-to-speech.settings.v1';
 const LS_TEXT = 'text-to-speech.text.v1';
+// Speed measurements of the AI voices on this device (numbers only, newest first)
+const LS_STATS = 'text-to-speech.stats.v1';
+const STATS_MAX = 100;
+let stats = load(LS_STATS, []);
+if (!Array.isArray(stats)) stats = [];
 const settings = Object.assign({ engine: 'browser', lang: null, voices: {}, speed: 1, steps: 8, device: 'auto' }, load(LS, {}));
 const saveSettings = () => save(LS, settings);
 // Language of the text: follows the app until the user chooses one
@@ -709,12 +738,14 @@ async function speakModel(engine, text) {
     if (i === 0) status(t('playing', { i: 1, n: parts.length }));
   }
   // All sentences generated: keep the clip for comparing, finish when playback ends
-  const audioSec = chunks.reduce((s, c) => s + c.samples.length / sampleRate + c.pause, 0);
+  // Audio length as in the WAV: all sentences and the pauses between them (not the pause after the last one)
+  const audioSec = chunks.reduce((s, c, i) => s + c.samples.length / sampleRate + (i < chunks.length - 1 ? c.pause : 0), 0);
   const rtf = synth > 0 ? audioSec / synth : 0;
   const meta = t('meta', { name: label, dev: devName(device), first: sec(firstAt), synth: sec(synth), audio: sec(audioSec), rtf: fmt(rtf, rtf < 10 ? 1 : 0) }) + (loadSec >= 0.5 ? t('metaLoad', { s: sec(loadSec) }) : '');
   $('meta').textContent = meta;
   Tools.diag.log('model done', { engine, device, sentences: parts.length, synth: Math.round(synth * 10) / 10, audio: Math.round(audioSec * 10) / 10 });
   addClip({ label, device, synth, audioSec, rtf, sampleRate, samples: joinChunks(chunks, sampleRate), snippet: text.slice(0, 80) });
+  addStat({ engine, voice, label, device, speed: settings.speed, steps: engine === 'supertonic' ? settings.steps : undefined, rtf, synth, audio: audioSec, first: firstAt });
   last.addEventListener('ended', () => { if (run === r && !r.stopped) finish(t('done'), 'ok'); });
   if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
 }
@@ -774,6 +805,47 @@ $('clips').addEventListener('click', e => {
     clips.splice(clips.indexOf(c), 1);
     renderClips();
   }
+});
+
+/* ---------- Measurements (kept in localStorage) ---------- */
+const r2 = x => Math.round(x * 100) / 100;
+function addStat(m) {
+  stats.unshift({ at: Date.now(), engine: m.engine, voice: m.voice, label: m.label, device: m.device, speed: m.speed, ...(m.steps ? { steps: m.steps } : {}),
+    rtf: r2(m.rtf), synth: r2(m.synth), audio: r2(m.audio), first: r2(m.first) });
+  stats.splice(STATS_MAX);
+  save(LS_STATS, stats);
+  renderStats();
+}
+// One row per voice, device, speed (and quality steps): averages, the fastest voice first
+function statGroups() {
+  const groups = new Map();
+  for (const m of stats) {
+    const key = [m.engine, m.voice, m.device, m.speed, m.steps || ''].join('|');
+    if (!groups.has(key)) groups.set(key, { ...m, runs: [] });
+    groups.get(key).runs.push(m);
+  }
+  return [...groups.values()].map(g => {
+    // Real-time factor over all runs: total audio / total computing time (long texts weigh more)
+    const audio = g.runs.reduce((a, m) => a + m.audio, 0), synth = g.runs.reduce((a, m) => a + m.synth, 0);
+    return { ...g, n: g.runs.length, rtf: synth > 0 ? audio / synth : 0, first: g.runs.reduce((a, m) => a + m.first, 0) / g.runs.length, last: Math.max(...g.runs.map(m => m.at)) };
+  }).sort((a, b) => b.rtf - a.rtf);
+}
+function renderStats() {
+  const groups = statGroups();
+  $('stats').hidden = !groups.length;
+  $('statsEmpty').hidden = groups.length > 0;
+  $('btnClearStats').hidden = !groups.length;
+  $('stats').tBodies[0].innerHTML = groups.map(g => {
+    const detail = t('st.detail', { dev: devName(g.device), speed: fmt(g.speed, 1), steps: g.steps ? t('st.steps', { n: g.steps }) : '' })
+      + ' · ' + t('st.last', { d: new Date(g.last).toLocaleDateString(Tools.locale()) });
+    return `<tr><td>${esc(g.label)}<span class="sub2">${esc(detail)}</span></td>`
+      + `<td class="num${g.rtf < 1 ? ' slow' : ''}">${esc(fmt(g.rtf, g.rtf < 10 ? 1 : 0))}×</td>`
+      + `<td class="num">${esc(sec(g.first))} s</td><td class="num">${g.n}</td></tr>`;
+  }).join('');
+}
+$('btnClearStats').addEventListener('click', () => {
+  if (!confirm(t('confirmStats'))) return;
+  stats = []; save(LS_STATS, stats); renderStats();
 });
 
 /* ---------- Downloaded models ---------- */
@@ -886,10 +958,11 @@ Tools.diag.info(() => ({
   webSpeech: 'speechSynthesis' in window ? speechSynthesis.getVoices().length + ' voices' : 'missing',
   webgpu: !!navigator.gpu, crossOriginIsolated: self.crossOriginIsolated === true,
   cachedFiles: cached.files.length, cachedMB: Math.round([...cached.sizes.values()].reduce((a, b) => a + b, 0) / 1048576),
-  textLength: textEl.value.length, clips: clips.length,
+  textLength: textEl.value.length, clips: clips.length, measurements: stats.length,
 }));
 
-Tools.onLang(() => { renderControls(); renderClips(); refreshModels(); updateCount(); });
+Tools.onLang(() => { renderControls(); renderClips(); renderStats(); refreshModels(); updateCount(); });
+renderStats();
 renderControls();
 updateCount();
 refreshModels();
