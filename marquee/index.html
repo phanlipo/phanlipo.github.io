@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Lauftext – ganz groß anzeigen</title>
+<meta name="description" content="Text eingeben, Größe, Farben und Schrift wählen und bildschirmfüllend anzeigen – stehend, laufend oder blinkend.">
+<meta name="tool:tags" content="Alltag, Werkzeug">
+<meta name="tool:features" content="Verlauf, KI-Agent">
+<meta name="tool:webmcp" content="set_sign, get_sign">
+<meta name="tool:icon" content="typography">
+<meta name="tool:color" content="#6d28d9">
+<meta name="tool:short-name" content="Lauftext">
+<meta name="tool:title-en" content="Scrolling Text – show it big">
+<meta name="tool:description-en" content="Type a text, pick size, colours and font and show it full screen – still, scrolling or blinking.">
+<meta name="tool:short-name-en" content="Marquee">
+<meta name="tool:storage" content="marquee.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-f+JlchnmWvI3KGVhX64MTLjqrvaNEYQxPGu+2dtXXAM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Lauftext">
+<meta name="theme-color" content="#6d28d9">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#6d28d9;--accent-text:#ffffff;--page-width:720px}
+@media (prefers-color-scheme: dark){:root{--accent:#c4b5fd;--accent-text:#1e0b45}}
+main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;gap:12px}
+.card h3{font-size:15px;margin:16px 0 8px}
+.card h3:first-of-type{margin-top:0}
+label.lbl{display:block;font-weight:600;margin-bottom:6px}
+#text{width:100%;font-size:20px;padding:10px 12px;resize:vertical;min-height:76px;line-height:1.3}
+.count{font-size:13px;color:var(--muted);text-align:end;margin:2px 0 8px}
+.btn.big{width:100%;min-height:56px;font-size:18px}
+
+/* ---------- Sign: used for the preview and the full-screen display ---------- */
+.sign{position:relative;overflow:hidden}
+.sign-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;line-height:1.12;text-align:center;
+  white-space:pre-wrap;overflow-wrap:normal;word-break:normal}
+.sign.run .sign-text{left:0;white-space:pre;transform:translate(var(--x,0px),-50%);will-change:transform}
+.sign.blink .sign-text{animation:blink 1s steps(1,end) infinite}
+@keyframes blink{50%{opacity:0}}
+.preview{aspect-ratio:2/1;width:100%;border-radius:8px;border:1px solid var(--border);margin-top:12px;cursor:pointer;padding:0;display:block}
+
+/* ---------- Controls ---------- */
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.seg button{min-height:48px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;padding:4px 6px;font-size:16px}
+.seg button:not(:nth-child(3n+1)){border-inline-start:1px solid var(--border)}
+.seg button:nth-child(n+4){border-block-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:700}
+.range{display:flex;align-items:center;gap:12px}
+.range input{flex:1;min-height:44px;accent-color:var(--accent)}
+.range output{min-width:4.5em;text-align:end;font-variant-numeric:tabular-nums;font-weight:600}
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px}
+.swatches button{min-height:48px;border:2px solid var(--border);border-radius:10px;cursor:pointer;font-size:20px;font-weight:700;padding:0}
+.swatches button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.colors{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}
+.colors label{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+.colors input{width:48px;height:40px;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:2px;cursor:pointer}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+
+/* ---------- History (in the menu) ---------- */
+.hist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.hist button{width:100%;text-align:start;min-height:44px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);cursor:pointer;padding:8px 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- Full-screen display ---------- */
+.show{position:fixed;inset:0;z-index:2000;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.show .frame{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+.show.rot .frame{transform:translate(-50%,-50%) rotate(90deg)}
+.show-hint{position:absolute;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:var(--text);color:var(--bg);padding:6px 16px;border-radius:999px;font-size:14px;white-space:nowrap;transition:opacity .6s;pointer-events:none}
+.show-hint.gone{opacity:0}
+body.showing{overflow:hidden}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Lauftext</span></h1>
+  <p class="sub" data-i18n="sub">Text eingeben – ganz groß anzeigen</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-text">
+    <h2 id="h-text" class="sr-only" data-i18n="textH">Text</h2>
+    <label class="lbl" for="text" data-i18n="textLabel">Dein Text</label>
+    <textarea id="text" rows="2" maxlength="500" placeholder="Hallo!" data-i18n-attr="placeholder:sample" autocomplete="off"></textarea>
+    <p class="count" id="count" aria-live="off"></p>
+    <button type="button" class="btn primary big" id="btnShow" data-i18n="show">Ganz groß anzeigen</button>
+    <div class="preview sign" id="preview" aria-hidden="true"><span class="sign-text"></span></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-look">
+    <h2 id="h-look" data-i18n="look">Aussehen</h2>
+    <h3 id="h-size"><label for="size" data-i18n="size">Größe</label></h3>
+    <div class="range"><input type="range" id="size" min="10" max="100" step="5"><output id="sizeOut" for="size"></output></div>
+    <h3 id="h-font" data-i18n="font">Schriftart</h3>
+    <div class="seg" id="fonts" role="group" aria-labelledby="h-font"></div>
+    <label class="check" style="margin-top:6px"><input type="checkbox" id="bold"> <span data-i18n="bold">Fett</span></label>
+    <h3 id="h-colors" data-i18n="colors">Farben</h3>
+    <div class="swatches" id="swatches" role="group" aria-labelledby="h-colors"></div>
+    <div class="colors">
+      <label><input type="color" id="fg"> <span data-i18n="fg">Schrift</span></label>
+      <label><input type="color" id="bg"> <span data-i18n="bg">Hintergrund</span></label>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-motion">
+    <h2 id="h-motion" data-i18n="motion">Bewegung</h2>
+    <div class="seg" id="motions" role="group" aria-labelledby="h-motion">
+      <button type="button" data-m="none" data-i18n="m.none">Steht</button>
+      <button type="button" data-m="left" data-i18n="m.left">← Läuft</button>
+      <button type="button" data-m="right" data-i18n="m.right">Läuft →</button>
+    </div>
+    <h3 id="h-speed"><label for="speed" data-i18n="speed">Geschwindigkeit</label></h3>
+    <div class="range"><input type="range" id="speed" min="1" max="10" step="1"><output id="speedOut" for="speed"></output></div>
+    <label class="check"><input type="checkbox" id="blink"> <span data-i18n="blink">Blinken</span></label>
+    <label class="check"><input type="checkbox" id="rotate"> <span data-i18n="rotate">Handy quer: Text im Hochformat drehen</span></label>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-hist">
+    <h2 id="h-hist" data-i18n="hist">Zuletzt angezeigt</h2>
+    <p class="muted" id="histEmpty" data-i18n="histEmpty">Noch nichts angezeigt.</p>
+    <ul class="hist" id="hist"></ul>
+    <div class="row" style="margin-top:8px"><button type="button" class="btn" id="btnHistClear" data-i18n="histClear">Verlauf leeren</button></div>
+  </section>
+</main>
+
+<div class="show" id="show" role="dialog" aria-modal="true" aria-label="Lauftext" data-i18n-attr="aria-label:title" tabindex="-1" hidden>
+  <div class="frame sign" id="frame"><p class="sign-text" id="showText"></p></div>
+  <p class="show-hint" id="showHint" data-i18n="hint">Tippen zum Beenden</p>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Zeigt einen Text bildschirmfüllend an – als Schild am Flughafen, Gruß im Konzert, Nachricht durchs Fenster oder Anzeige auf dem Tisch.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Text</b> eingeben (bis 500 Zeichen, Zeilenumbrüche erlaubt) und auf <i>Ganz groß anzeigen</i> oder die Vorschau tippen.</li>
+    <li><b>Größe</b> = Schrifthöhe in Prozent der Bildschirmhöhe. Stehender Text wird verkleinert, falls er sonst nicht auf den Bildschirm passt.</li>
+    <li><b>Schriftart</b>, <b>Fett</b> und <b>Farben</b> wählen: fertige Farbpaare oder eigene Schrift- und Hintergrundfarbe.</li>
+    <li><b>Bewegung:</b> <i>Steht</i>, <i>← Läuft</i> (von rechts nach links) oder <i>Läuft →</i>; laufender Text steht in einer Zeile. Dazu Geschwindigkeit und <i>Blinken</i>.</li>
+    <li><b>Handy quer:</b> Hältst du das Handy im Hochformat, dreht die App den Text um 90°, damit er quer über die lange Seite läuft. Wo es geht (Android), schaltet sie das Bild auch selbst ins Querformat.</li>
+    <li><b>Beenden:</b> auf den Bildschirm tippen, Zurück-Taste oder Esc.</li>
+    <li>Im Menü ☰ liegt <b>Zuletzt angezeigt</b>: die letzten zehn Texte zum schnellen Wiederverwenden.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Während der Anzeige bleibt der Bildschirm an (wenn der Browser das erlaubt) und die App nutzt den Vollbildmodus. Auf dem iPhone gibt es im Browser keinen Vollbildmodus – als installierte App (Teilen → Zum Home-Bildschirm) ist die Anzeige trotzdem fast randlos.</li>
+    <li>Die Schriftarten sind die deines Geräts; sie sehen deshalb auf jedem Gerät etwas anders aus.</li>
+    <li>Gespeichert werden nur Text, Einstellungen und der Verlauf – in diesem Browser. Alles funktioniert offline.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann Text und Aussehen einstellen und auslesen (WebMCP). Jeder Aufruf erscheint als Hinweis; anzeigen musst du selbst.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Shows a text full screen – as a sign at the airport, a greeting at a concert, a message through the window or a display on the table.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Type your <b>text</b> (up to 500 characters, line breaks allowed) and tap <i>Show it big</i> or the preview.</li>
+    <li><b>Size</b> = letter height in percent of the screen height. Still text gets smaller if it would not fit on the screen otherwise.</li>
+    <li>Pick a <b>font</b>, <b>bold</b> and <b>colours</b>: ready-made pairs or your own text and background colour.</li>
+    <li><b>Motion:</b> <i>Still</i>, <i>← Scroll</i> (right to left) or <i>Scroll →</i>; scrolling text runs in one line. Plus speed and <i>blink</i>.</li>
+    <li><b>Phone sideways:</b> if you hold the phone upright, the app turns the text by 90° so it runs along the long side. Where possible (Android) it also switches the screen to landscape itself.</li>
+    <li><b>Stop:</b> tap the screen, press back or Esc.</li>
+    <li>The menu ☰ has <b>Recently shown</b>: your last ten texts for quick reuse.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>While showing, the screen stays on (if the browser allows it) and the app uses full screen. iPhone browsers have no full screen mode – as an installed app (Share → Add to Home Screen) the display is almost edge to edge anyway.</li>
+    <li>The fonts are your device's own, so they look a little different on every device.</li>
+    <li>Only the text, settings and history are stored – in this browser. Everything works offline.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can set and read the text and look (WebMCP). Each call shows a note; showing it full screen is up to you.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 641dc7867b26</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  sample:'Hallo!',chars:'{n} / 500 Zeichen',
+  'f.sans':'Klar','f.serif':'Serif','f.mono':'Schreibm.','f.round':'Rund','f.condensed':'Schmal','f.hand':'Hand',
+  'c.yellow':'Gelb auf Schwarz','c.white':'Weiß auf Schwarz','c.black':'Schwarz auf Weiß','c.red':'Rot auf Schwarz',
+  'c.green':'Grün auf Schwarz','c.onred':'Weiß auf Rot','c.onblue':'Weiß auf Blau','c.onyellow':'Schwarz auf Gelb',
+  'speed.n':'{n} / 10',histConfirm:'Verlauf leeren?',
+  'mcp.set':'Lauftext eingestellt','mcp.get':'Lauftext gelesen'
+},
+en:{
+  title:'Scrolling Text',sub:'Type a text – show it big',textH:'Text',textLabel:'Your text',sample:'Hello!',show:'Show it big',
+chars:'{n} / 500 characters',
+  look:'Look',size:'Size',font:'Font',bold:'Bold',colors:'Colours',fg:'Text',bg:'Background',
+  motion:'Motion','m.none':'Still','m.left':'← Scroll','m.right':'Scroll →',speed:'Speed',blink:'Blink',
+  rotate:'Phone upright: turn the text sideways',hist:'Recently shown',histEmpty:'Nothing shown yet.',histClear:'Clear history',
+  hint:'Tap to stop',
+  'f.sans':'Clear','f.serif':'Serif','f.mono':'Typewr.','f.round':'Round','f.condensed':'Narrow','f.hand':'Hand',
+  'c.yellow':'Yellow on black','c.white':'White on black','c.black':'Black on white','c.red':'Red on black',
+  'c.green':'Green on black','c.onred':'White on red','c.onblue':'White on blue','c.onyellow':'Black on yellow',
+  'speed.n':'{n} / 10',histConfirm:'Clear the history?',
+  'mcp.set':'sign set','mcp.get':'sign read'
+}});
+const {$,t}=Tools;
+const LS='marquee.settings.v1',LH='marquee.history.v1';
+const FONTS={
+  sans:'"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif',
+  serif:'Georgia,"Times New Roman","Noto Serif",serif',
+  mono:'ui-monospace,SFMono-Regular,Consolas,"Liberation Mono","Courier New",monospace',
+  round:'ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Varela Round",system-ui,sans-serif',
+  condensed:'Impact,"Arial Narrow","Roboto Condensed","sans-serif-condensed",sans-serif-condensed,sans-serif',
+  hand:'"Comic Sans MS","Chalkboard SE","Comic Neue","Segoe Print",cursive'
+};
+const FONT_IDS=Object.keys(FONTS);
+const PAIRS=[['yellow','#ffea00','#000000'],['white','#ffffff','#000000'],['black','#000000','#ffffff'],['red','#ff1744','#000000'],
+  ['green','#00e676','#000000'],['onred','#ffffff','#c62828'],['onblue','#ffffff','#1565c0'],['onyellow','#000000','#ffea00']];
+const MOTIONS=['none','left','right'];
+const HEX=/^#[0-9a-f]{6}$/;
+const DEF={text:'',size:60,font:'sans',bold:true,fg:'#ffea00',bg:'#000000',motion:'left',speed:5,blink:false,rotate:true};
+
+const s=Object.assign({},DEF,Tools.load(LS,{}));
+const clampInt=(v,lo,hi,d)=>Number.isFinite(v)?Math.min(hi,Math.max(lo,Math.round(v))):d;
+function sanitize(){
+  if(typeof s.text!=='string')s.text='';s.text=s.text.slice(0,500);
+  s.size=clampInt(s.size,10,100,DEF.size);s.speed=clampInt(s.speed,1,10,DEF.speed);
+  if(!FONT_IDS.includes(s.font))s.font=DEF.font;
+  if(!MOTIONS.includes(s.motion))s.motion=DEF.motion;
+  for(const k of ['fg','bg'])if(typeof s[k]!=='string'||!HEX.test(s[k].toLowerCase()))s[k]=DEF[k];else s[k]=s[k].toLowerCase();
+  for(const k of ['bold','blink','rotate'])if(typeof s[k]!=='boolean')s[k]=DEF[k];
+}
+sanitize();
+let hist=Tools.load(LH,[]);
+if(!Array.isArray(hist))hist=[];
+hist=hist.filter(x=>typeof x==='string'&&x).slice(0,10);
+const save=()=>Tools.save(LS,s);
+const shownText=()=>s.text.trim()?s.text:t('sample');
+
+/* ---------- Sign renderer: fits or scrolls the text inside a box ---------- */
+function Sign(box,el){
+  let raf=0,x=0,last=0,textW=0,W=0,H=0;
+  function stop(){if(raf)cancelAnimationFrame(raf);raf=0;}
+  function step(now){
+    const dt=last?Math.min(0.1,(now-last)/1000):0;last=now;
+    const v=H*s.speed*0.15; // px per second, relative to the box height
+    if(s.motion==='left'){x-=v*dt;if(x<-textW)x=W;}
+    else{x+=v*dt;if(x>W)x=-textW;}
+    el.style.setProperty('--x',x.toFixed(1)+'px');
+    raf=requestAnimationFrame(step);
+  }
+  function render(w,h){
+    stop();
+    W=w;H=h;
+    if(!W||!H)return;
+    box.style.background=s.bg;
+    el.style.color=s.fg;
+    el.style.fontFamily=FONTS[s.font];
+    el.style.fontWeight=s.bold?'700':'400';
+    box.classList.toggle('blink',s.blink);
+    const run=s.motion!=='none';
+    box.classList.toggle('run',run);
+    const text=shownText();
+    let fs=H*s.size/100;
+    if(run){
+      el.textContent=text.replace(/\s*\n\s*/g,'   ');
+      el.style.width='auto';
+      el.style.fontSize=fs+'px';
+      textW=el.offsetWidth;
+      x=s.motion==='left'?W:-textW;last=0;
+      el.style.setProperty('--x',x+'px');
+      el.dataset.fontSize=fs.toFixed(1);
+      raf=requestAnimationFrame(step);
+    }else{
+      el.textContent=text;
+      el.style.width=(W*0.94)+'px';
+      // Measure left-aligned: centred lines that are too wide overflow on both sides and scrollWidth misses half of it
+      el.style.textAlign='left';
+      const fits=f=>{el.style.fontSize=f+'px';return el.scrollHeight<=H*0.94&&el.scrollWidth<=el.clientWidth+1;};
+      if(!fits(fs)){let lo=2,hi=fs;for(let i=0;i<16;i++){const m=(lo+hi)/2;if(fits(m))lo=m;else hi=m;}fs=lo;fits(fs);}
+      el.style.textAlign='';
+      el.dataset.fontSize=fs.toFixed(1);
+    }
+  }
+  return {render,stop};
+}
+
+/* ---------- Preview ---------- */
+const preview=$('preview');
+const prevSign=Sign(preview,preview.querySelector('.sign-text'));
+const renderPreview=()=>{if(!showing)prevSign.render(preview.clientWidth,preview.clientHeight);};
+
+/* ---------- Full-screen display ---------- */
+const show=$('show'),frame=$('frame'),showText=$('showText'),hint=$('showHint');
+const showSign=Sign(frame,showText);
+let showing=false,wake=null,hintTimer=0,locked=false,fsSession=false,backPending=false,afterBack=null;
+function layoutShow(){
+  if(!showing)return;
+  const W=window.innerWidth,H=window.innerHeight;
+  const rot=s.rotate&&H>W*1.1;
+  show.classList.toggle('rot',rot);
+  show.style.background=s.bg;
+  const fw=rot?H:W,fh=rot?W:H;
+  frame.style.width=fw+'px';frame.style.height=fh+'px';
+  showSign.render(fw,fh);
+}
+async function requestWake(){
+  if(!('wakeLock' in navigator))return;
+  try{wake=await navigator.wakeLock.request('screen');Tools.diag.log('wake lock on');
+    wake.addEventListener('release',()=>{wake=null;});}
+  catch(e){Tools.diag.log('wake lock failed',e);}
+}
+function openShow(){
+  if(showing)return;
+  showing=true;prevSign.stop();
+  const t0=s.text.trim();
+  if(t0){hist=[t0,...hist.filter(x=>x!==t0)].slice(0,10);Tools.save(LH,hist);renderHist();}
+  show.hidden=false;document.body.classList.add('showing');
+  // Own history entry, so back closes the display. If the back from closing is still on its way, wait for it.
+  const push=()=>{if(showing)history.pushState(Object.assign({},history.state,{marqueeShow:true}),'');};
+  if(backPending)afterBack=push;else push();
+  layoutShow();show.focus();
+  hint.classList.remove('gone');clearTimeout(hintTimer);hintTimer=setTimeout(()=>hint.classList.add('gone'),2500);
+  const fs=show.requestFullscreen||show.webkitRequestFullscreen;
+  if(fs){
+    show.dataset.fs='pending';
+    Promise.resolve(fs.call(show,{navigationUI:'hide'})).then(()=>{
+      Tools.diag.log('fullscreen on');
+      show.dataset.fs='on';
+      // Already closed again before full screen started
+      if(!showing){exitFs();return;}
+      fsSession=true;
+      const portrait=window.innerHeight>window.innerWidth;
+      if(s.rotate&&portrait&&screen.orientation&&screen.orientation.lock)
+        screen.orientation.lock('landscape').then(()=>{locked=true;Tools.diag.log('orientation locked');},e=>Tools.diag.log('orientation lock failed',e));
+    },e=>{show.dataset.fs='failed';Tools.diag.log('fullscreen failed',e);});
+  }else Tools.diag.log('no fullscreen api');
+  requestWake();
+  Tools.diag.log('show',{motion:s.motion,size:s.size,font:s.font,blink:s.blink,len:s.text.length});
+}
+function exitFs(){
+  const fsEl=document.fullscreenElement||document.webkitFullscreenElement;
+  if(fsEl)Promise.resolve((document.exitFullscreen||document.webkitExitFullscreen).call(document)).catch(()=>{});
+}
+function closeShow(fromHistory){
+  if(!showing)return;
+  showing=false;showSign.stop();
+  show.hidden=true;document.body.classList.remove('showing');
+  if(locked&&screen.orientation&&screen.orientation.unlock)try{screen.orientation.unlock();}catch(_){}
+  locked=false;fsSession=false;
+  exitFs();
+  if(wake){wake.release().catch(()=>{});wake=null;}
+  afterBack=null;
+  if(!fromHistory&&history.state&&history.state.marqueeShow){backPending=true;history.back();}
+  Tools.diag.log('closed');
+  renderPreview();$('btnShow').focus();
+}
+show.addEventListener('click',()=>closeShow(false));
+show.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeShow(false);}});
+window.addEventListener('popstate',()=>{
+  if(backPending){backPending=false;const f=afterBack;afterBack=null;if(f)f();return;}
+  if(showing&&!(history.state&&history.state.marqueeShow))closeShow(true);
+});
+// Leaving full screen (browser gesture or key) ends the display – only for the current display, not a late event of the last one
+document.addEventListener('fullscreenchange',()=>{
+  const fsOn=!!document.fullscreenElement;
+  if(fsSession&&!fsOn&&showing)closeShow(false);
+  else if(!fsOn&&!showing&&document.activeElement===document.body)$('btnShow').focus();
+});
+document.addEventListener('visibilitychange',()=>{if(showing&&document.visibilityState==='visible'&&!wake)requestWake();});
+$('btnShow').addEventListener('click',openShow);
+preview.addEventListener('click',openShow);
+
+/* ---------- Controls ---------- */
+const text=$('text');
+function renderCount(){$('count').textContent=t('chars',{n:Tools.fmt(s.text.length,0)});}
+function renderControls(){
+  text.value=s.text;renderCount();
+  $('size').value=s.size;$('sizeOut').textContent=Tools.fmt(s.size,0)+' %';
+  $('speed').value=s.speed;$('speedOut').textContent=t('speed.n',{n:Tools.fmt(s.speed,0)});
+  $('fonts').innerHTML=FONT_IDS.map(f=>`<button type="button" data-f="${f}" aria-pressed="${f===s.font}" style="font-family:${Tools.esc(FONTS[f])}">${Tools.esc(t('f.'+f))}</button>`).join('');
+  $('swatches').innerHTML=PAIRS.map(([k,fg,bg])=>`<button type="button" data-c="${k}" aria-pressed="${s.fg===fg&&s.bg===bg}" style="color:${fg};background:${bg}"><span aria-hidden="true">Aa</span><span class="sr-only">${Tools.esc(t('c.'+k))}</span></button>`).join('');
+  $('fg').value=s.fg;$('bg').value=s.bg;
+  $('bold').checked=s.bold;$('blink').checked=s.blink;$('rotate').checked=s.rotate;
+  for(const b of document.querySelectorAll('#motions button'))b.setAttribute('aria-pressed',String(b.dataset.m===s.motion));
+  $('speed').disabled=s.motion==='none';
+}
+function update(){save();renderControls();renderPreview();layoutShow();}
+text.addEventListener('input',()=>{s.text=text.value.slice(0,500);save();renderCount();renderPreview();});
+$('size').addEventListener('input',e=>{s.size=Number(e.target.value);update();});
+$('speed').addEventListener('input',e=>{s.speed=Number(e.target.value);update();});
+$('fonts').addEventListener('click',e=>{const b=e.target.closest('button[data-f]');if(!b)return;s.font=b.dataset.f;update();});
+$('swatches').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-c]');if(!b)return;
+  const p=PAIRS.find(x=>x[0]===b.dataset.c);s.fg=p[1];s.bg=p[2];update();
+});
+$('fg').addEventListener('input',e=>{s.fg=e.target.value.toLowerCase();update();});
+$('bg').addEventListener('input',e=>{s.bg=e.target.value.toLowerCase();update();});
+$('motions').addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(!b)return;s.motion=b.dataset.m;update();});
+for(const k of ['bold','blink','rotate'])$(k).addEventListener('change',e=>{s[k]=e.target.checked;update();});
+
+/* ---------- History ---------- */
+function renderHist(){
+  $('hist').innerHTML=hist.map((x,i)=>`<li><button type="button" data-i="${i}">${Tools.esc(x.replace(/\s+/g,' '))}</button></li>`).join('');
+  $('histEmpty').hidden=hist.length>0;$('btnHistClear').hidden=!hist.length;
+}
+$('hist').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-i]');if(!b)return;
+  s.text=hist[Number(b.dataset.i)]||'';save();renderControls();
+  Tools.menu.close();renderPreview();text.focus();
+});
+$('btnHistClear').addEventListener('click',()=>{if(!confirm(t('histConfirm')))return;hist=[];Tools.save(LH,hist);renderHist();});
+
+renderControls();renderHist();
+requestAnimationFrame(renderPreview);
+if('ResizeObserver' in window)new ResizeObserver(renderPreview).observe(preview);
+window.addEventListener('resize',()=>{renderPreview();layoutShow();});
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(renderPreview);
+Tools.onLang(()=>{renderControls();renderPreview();layoutShow();});
+Tools.diag.info(()=>({motion:s.motion,size:s.size,speed:s.speed,font:s.font,bold:s.bold,blink:s.blink,rotate:s.rotate,
+  textLength:s.text.length,history:hist.length,showing,fullscreen:!!document.fullscreenElement,wakeLock:!!wake,
+  wakeLockApi:'wakeLock' in navigator,orientationLocked:locked,viewport:`${window.innerWidth}x${window.innerHeight}`}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const settingsOut=()=>({text:s.text,size_percent:s.size,font:s.font,bold:s.bold,text_color:s.fg,background_color:s.bg,
+  motion:s.motion,speed:s.speed,blink:s.blink,rotate_on_upright_phone:s.rotate});
+Tools.mcp.register({
+  name:'set_sign',title:'Set the sign text and look',label:'mcp.set',
+  description:'Sets the text and the look of the big display in the app; omitted fields stay as they are. The user then shows it full screen themselves. Returns all current settings.',
+  inputSchema:{type:'object',properties:{
+    text:{type:'string',maxLength:500,description:'The text to show; line breaks allowed (scrolling text runs in one line).'},
+    size_percent:{type:'integer',minimum:10,maximum:100,description:'Letter height in percent of the screen height. Still text shrinks if it would not fit.'},
+    font:{type:'string',enum:FONT_IDS,description:'Font style: sans, serif, mono, round, condensed or hand (handwriting). Uses the fonts of the device.'},
+    bold:{type:'boolean',description:'Bold letters.'},
+    text_color:{type:'string',minLength:7,maxLength:7,description:'Text colour as #rrggbb.'},
+    background_color:{type:'string',minLength:7,maxLength:7,description:'Background colour as #rrggbb.'},
+    motion:{type:'string',enum:MOTIONS,description:'none = still, left = scrolls from right to left, right = scrolls from left to right.'},
+    speed:{type:'integer',minimum:1,maximum:10,description:'Scrolling speed from 1 (slow) to 10 (fast).'},
+    blink:{type:'boolean',description:'Let the text blink once per second.'}
+  },additionalProperties:false},
+  execute:a=>{
+    for(const k of ['text_color','background_color'])if(a[k]!=null&&!HEX.test(a[k].toLowerCase()))throw new Error(`${k} must be a colour like #ffea00`);
+    if(a.text!=null)s.text=a.text;
+    if(a.size_percent!=null)s.size=a.size_percent;
+    if(a.font!=null)s.font=a.font;
+    if(a.bold!=null)s.bold=a.bold;
+    if(a.text_color!=null)s.fg=a.text_color.toLowerCase();
+    if(a.background_color!=null)s.bg=a.background_color.toLowerCase();
+    if(a.motion!=null)s.motion=a.motion;
+    if(a.speed!=null)s.speed=a.speed;
+    if(a.blink!=null)s.blink=a.blink;
+    update();
+    return settingsOut();
+  }
+});
+Tools.mcp.register({
+  name:'get_sign',title:'Read the sign text and look',label:'mcp.get',readOnly:true,
+  description:'Reads the text and the look of the big display as set in the app (size, font, colours, motion, speed, blink), whether it is being shown full screen right now, and the recently shown texts (newest first).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>Object.assign(settingsOut(),{showing,recent:hist.slice()})
+});
+})();
+</script>
+</body>
+</html>
