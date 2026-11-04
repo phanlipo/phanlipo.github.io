@@ -1486,3 +1486,31 @@ test.describe('marquee tools', () => {
     expect((await call(page, 'marquee_get_sign', {})).result).toMatchObject({ text: '', text_color: '#ffea00', size_percent: 60, motion: 'left' });
   });
 });
+
+test.describe('markdown-editor tools', () => {
+  test.beforeEach(async ({ page }) => { await open(page, '/markdown-editor/'); });
+
+  test('create_document opens a new file, list and read return it, other files stay', async ({ page }) => {
+    await page.fill('#raw', '# Eigene Notiz');
+    const c = await call(page, 'markdown_editor_create_document', { name: 'Agent', markdown: '## Plan\n\n- a' });
+    expect(c).toEqual({ ok: true, result: { id: expect.any(String), name: 'Agent' } });
+    await expect(page.locator('#raw')).toHaveValue('## Plan\n\n- a');
+    await expect(page.locator('#name')).toHaveValue('Agent');
+    const l = (await call(page, 'markdown_editor_list_documents', {})).result.documents;
+    expect(l.map(d => [d.name, d.characters, d.open])).toEqual([['Agent', 12, true], ['Eigene Notiz', 14, false]]);
+    const other = l[1].id;
+    expect((await call(page, 'markdown_editor_read_document', { id: other })).result).toMatchObject({ name: 'Eigene Notiz', markdown: '# Eigene Notiz', open: false });
+    expect((await call(page, 'markdown_editor_read_document', {})).result).toMatchObject({ id: c.result.id, markdown: '## Plan\n\n- a' });
+    // Without a name the first line is used
+    expect((await call(page, 'markdown_editor_create_document', { markdown: '# Liste\n\nx' })).result.name).toBe('Liste');
+  });
+
+  test('bad input is rejected and changes nothing', async ({ page }) => {
+    expect((await call(page, 'markdown_editor_read_document', { id: 'nope' })).error).toContain('list_documents');
+    expect((await call(page, 'markdown_editor_create_document', {})).ok).toBe(false);
+    expect((await call(page, 'markdown_editor_create_document', { markdown: 1 })).ok).toBe(false);
+    expect((await call(page, 'markdown_editor_create_document', { markdown: 'x', other: 1 })).ok).toBe(false);
+    expect((await call(page, 'markdown_editor_list_documents', {})).result.documents).toHaveLength(1);
+    await expect(page.locator('#raw')).toHaveValue('');
+  });
+});

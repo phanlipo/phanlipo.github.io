@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Markdown-Editor</title>
+<meta name="description" content="Markdown schreiben – als Text oder formatiert ansehen und bearbeiten, mit Knöpfen für Fett, Listen, Links und mehr. Dateien im Verlauf teilen, herunterladen oder löschen.">
+<meta name="tool:tags" content="Arbeit, Dokumente">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, Verlauf, KI-Agent">
+<meta name="tool:webmcp" content="list_documents, read_document, create_document">
+<meta name="tool:share-target" content="text/markdown, text/x-markdown, text/plain, .md, .markdown, .txt">
+<meta name="tool:icon" content="markdown">
+<meta name="tool:color" content="#475569">
+<meta name="tool:short-name" content="Markdown">
+<meta name="tool:title-en" content="Markdown Editor">
+<meta name="tool:description-en" content="Write Markdown – view and edit it as text or formatted, with buttons for bold, lists, links and more. Share, download or delete files from the history.">
+<meta name="tool:short-name-en" content="Markdown">
+<meta name="tool:storage" content="markdown-editor.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-4vl1Awclm6JLyy4mlYbPvwGy4cEyzZjfzjUtNVuaKdw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Markdown">
+<meta name="theme-color" content="#475569">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#475569;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#cbd5e1;--accent-text:#0f172a}}
+main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right))}
+.topbar{flex:none;display:flex;gap:8px;align-items:center}
+.topbar input{flex:1;min-width:0;min-height:44px;padding-inline:10px;font-size:16px}
+.seg{flex:none;display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.seg button{min-height:44px;min-width:56px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;padding-inline:10px;font:inherit;font-size:15px}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:700}
+.icon-btn{flex:none;width:44px;height:44px;display:grid;place-items:center;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);cursor:pointer}
+.icon-btn:hover{border-color:var(--accent)}
+.icon-btn:focus-visible,.seg button:focus-visible,.tb button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.icon-btn svg,.tb svg{width:22px;height:22px;display:block}
+.edit-box{flex:1;min-height:120px;display:flex;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.edit-box:focus-within{border-color:var(--accent)}
+#raw{flex:1;min-width:0;border:0;border-radius:var(--radius);resize:none;padding:12px;font:16px/1.5 var(--mono);outline:0;background:transparent;tab-size:4}
+#view{flex:1;min-width:0;overflow:auto;padding:4px 14px;outline:0;overflow-wrap:break-word;line-height:1.55}
+#view:empty::before{content:attr(data-placeholder);color:var(--muted);display:block;padding-block:10px}
+.tb{flex:none;display:flex;gap:4px;overflow-x:auto;scrollbar-width:thin;padding-block-end:2px}
+.tb button{flex:none;width:44px;height:44px;display:grid;place-items:center;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);cursor:pointer}
+.tb button:active{background:var(--surface-2)}
+.tb .sep{flex:none;width:1px;background:var(--border);margin-block:6px;margin-inline:2px}
+
+/* ---------- Rendered Markdown ---------- */
+.md h1,.md h2,.md h3,.md h4,.md h5,.md h6{line-height:1.25;margin:16px 0 8px}
+.md h1{font-size:1.7em}.md h2{font-size:1.4em}.md h3{font-size:1.2em}.md h4,.md h5,.md h6{font-size:1em}
+.md p,.md ul,.md ol,.md blockquote,.md pre,.md table{margin:10px 0}
+.md ul,.md ol{padding-inline-start:1.6em}
+.md li>ul,.md li>ol{margin:2px 0}
+.md li:has(>input[type=checkbox]){list-style:none;margin-inline-start:-1.4em}
+.md input[type=checkbox]{width:18px;height:18px;margin:0 6px 0 0;vertical-align:-3px;accent-color:var(--accent);cursor:pointer}
+.md blockquote{border-inline-start:4px solid var(--accent);margin-inline:0;padding:2px 12px;color:var(--muted);background:var(--surface-2);border-radius:4px}
+.md pre{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;overflow-x:auto;font-size:14px}
+.md pre code{background:none;border:0;padding:0;font-size:inherit}
+.md a{color:var(--text);text-decoration-color:var(--accent);text-decoration-thickness:2px}
+.md hr{border:0;border-block-start:2px solid var(--border);margin:18px 0}
+.md table{border-collapse:collapse;display:block;overflow-x:auto;max-width:100%}
+.md th,.md td{border:1px solid var(--border);padding:6px 10px;text-align:start}
+.md th{background:var(--surface-2)}
+.md img{max-width:100%}
+.md img[data-md-src]{display:inline-block;min-width:2em;min-height:1.5em;padding:2px 8px;border:1px dashed var(--border);border-radius:4px;color:var(--muted);font-size:14px}
+
+/* ---------- Files (in the menu) ---------- */
+.files{list-style:none;margin:0;padding:0}
+.files li{display:flex;gap:6px;align-items:center;border-block-end:1px solid var(--border);padding-block:6px}
+.files .open{flex:1;min-width:0;min-height:44px;text-align:start;background:none;border:0;color:var(--text);font:inherit;cursor:pointer;padding:0}
+.files .name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.files li.current .name{font-weight:700}
+.files .meta{display:block;font-size:12px;color:var(--muted)}
+.files .icon-btn svg{width:20px;height:20px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Markdown-Editor</span></h1>
+  <p class="sub" data-i18n="sub">Markdown schreiben, formatiert ansehen und bearbeiten.</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnNew" aria-label="Neue Datei" title="Neue Datei" data-i18n-attr="aria-label:new; title:new"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2"/><path d="M12 11l0 6"/><path d="M9 14l6 0"/></svg></button>
+    <button type="button" class="head-btn" id="btnShare" aria-label="Teilen" title="Teilen" data-i18n-attr="aria-label:share; title:share" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M15 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M15 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"/><path d="M8.7 10.7l6.6 -3.4"/><path d="M8.7 13.3l6.6 3.4"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <h2 class="sr-only" data-i18n="h.editor">Editor</h2>
+  <div class="topbar">
+    <input type="text" id="name" maxlength="120" autocomplete="off" spellcheck="false" aria-label="Dateiname" data-i18n-attr="aria-label:nameLabel" placeholder="Unbenannt">
+    <div class="seg" id="views" role="group" aria-label="Darstellung" data-i18n-attr="aria-label:viewsLabel">
+      <button type="button" data-v="raw" aria-pressed="true" data-i18n="v.raw">Text</button>
+      <button type="button" data-v="render" aria-pressed="false" data-i18n="v.render">Ansicht</button>
+    </div>
+    <button type="button" class="icon-btn" id="btnDownload" aria-label="Herunterladen" title="Herunterladen" data-i18n-attr="aria-label:download; title:download"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/></svg></button>
+  </div>
+  <div class="edit-box">
+    <textarea id="raw" spellcheck="true" autocapitalize="sentences" aria-label="Markdown-Text" data-i18n-attr="aria-label:rawLabel; placeholder:rawPh" placeholder="# Überschrift&#10;&#10;Text mit **fett** und *kursiv* …"></textarea>
+    <div id="view" class="md" role="textbox" aria-multiline="true" contenteditable="true" spellcheck="true" aria-label="Formatierte Ansicht" data-i18n-attr="aria-label:viewLabel; data-placeholder:viewPh" data-placeholder="Hier schreiben …" hidden></div>
+  </div>
+  <div class="tb" id="toolbar" role="toolbar" aria-label="Formatierung" data-i18n-attr="aria-label:tbLabel"></div>
+
+  <section class="card" data-menu aria-labelledby="h-files">
+    <h2 id="h-files" data-i18n="files">Dateien</h2>
+    <p class="muted" data-i18n="filesIntro">Alles wird automatisch gespeichert – nur in diesem Browser.</p>
+    <ul class="files" id="files"></ul>
+    <div class="row" style="margin-top:10px">
+      <button type="button" class="btn" id="btnOpen" data-i18n="openFile">Datei öffnen …</button>
+    </div>
+    <input type="file" id="fileInput" accept=".md,.markdown,.mdown,.txt,text/markdown,text/x-markdown,text/plain" hidden>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Editor für <b>Markdown</b> – einfach formatierten Text, wie ihn README-Dateien, Notiz-Apps, Chat-Programme und KIs benutzen.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Oben rechts wählst du die Darstellung: <b>Text</b> zeigt das Markdown, wie es ist (z.&nbsp;B. <code>**fett**</code>), <b>Ansicht</b> zeigt es formatiert. In <b>beiden</b> kannst du schreiben und bearbeiten.</li>
+    <li>Die <b>Knöpfe unten</b> formatieren den markierten Text oder die Zeile: Rückgängig/Wiederholen, Fett, Kursiv, Durchgestrichen, Überschrift (mehrmals tippen: Ebene 1, 2, 3, aus), Liste, nummerierte Liste, Aufgabenliste, Zitat, Code, Link, Tabelle und Trennlinie. Die Leiste lässt sich seitlich wischen.</li>
+    <li>In der Textdarstellung setzt <i>Enter</i> in einer Liste den nächsten Punkt; Enter auf einem leeren Punkt beendet die Liste.</li>
+    <li>In der Ansicht hakst du Aufgaben direkt per Tippen ab.</li>
+    <li>Oben links gibst du der Datei einen <b>Namen</b>. Ohne Namen gilt die erste Zeile.</li>
+    <li><b>Herunterladen</b> speichert die Datei als <code>.md</code>, <b>Teilen</b> (oben, wenn das Gerät es kann) schickt sie an andere Apps – als Datei, oder als Text, wenn das Gerät keine Markdown-Dateien teilen kann.</li>
+    <li><b>Neue Datei</b> (oben) beginnt eine leere Datei; die bisherige bleibt erhalten.</li>
+    <li>Im Menü ☰ liegen die <b>Dateien</b>: antippen zum Öffnen, daneben Teilen, Herunterladen und Löschen. Dort kannst du auch eine Datei vom Gerät <b>öffnen</b> (<code>.md</code> oder <code>.txt</code>). Als installierte App auf Android lassen sich Dateien auch direkt an die App teilen.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Bearbeitest du in der <b>Ansicht</b>, schreibt die App das Markdown neu und vereinheitlicht dabei die Schreibweise (z.&nbsp;B. Listen mit <code>-</code>, Fett mit <code>**</code>). Inhalte bleiben erhalten; selten genutzte HTML-Teile können verloren gehen. Wer die Schreibweise genau behalten will, bearbeitet in der Textdarstellung.</li>
+    <li>Unterstützt wird Markdown mit den GitHub-Erweiterungen: Tabellen, Aufgabenlisten, Durchgestrichen.</li>
+    <li><b>Bilder</b> aus dem Internet lädt die App nicht (Datenschutz, offline) – sie zeigt stattdessen den Bildtext. Eingebettete Bilder (<code>data:</code>) werden angezeigt.</li>
+    <li>Alles wird automatisch in diesem Browser gespeichert und funktioniert offline; nichts wird hochgeladen. Der Platz im Browser ist begrenzt (einige MB für alle Dateien zusammen) – große Dateien besser herunterladen.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann die Liste der Dateien und deren Inhalt lesen und eine neue Datei anlegen (WebMCP). Ändern oder löschen kann er bestehende Dateien nicht. Jeder Aufruf erscheint als Hinweis.</li>
+    <li>Bibliotheken: marked (MIT) wandelt Markdown in die Ansicht um, DOMPurify (Apache-2.0) entfernt dabei Skripte, turndown (MIT) macht aus der bearbeiteten Ansicht wieder Markdown.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>An editor for <b>Markdown</b> – plain text with simple formatting, as used by README files, note apps, chat apps and AIs.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>At the top right you pick the display: <b>Text</b> shows the Markdown as it is (e.g. <code>**bold**</code>), <b>View</b> shows it formatted. You can write and edit in <b>both</b>.</li>
+    <li>The <b>buttons at the bottom</b> format the selected text or the line: undo/redo, bold, italic, strikethrough, heading (tap again: level 1, 2, 3, off), list, numbered list, task list, quote, code, link, table and divider. Swipe the bar sideways for more.</li>
+    <li>In the text display, <i>Enter</i> in a list starts the next item; Enter on an empty item ends the list.</li>
+    <li>In the view you tick off tasks with a tap.</li>
+    <li>At the top left you give the file a <b>name</b>. Without a name the first line is used.</li>
+    <li><b>Download</b> saves the file as <code>.md</code>, <b>Share</b> (at the top, if the device can) sends it to other apps – as a file, or as text if the device cannot share Markdown files.</li>
+    <li><b>New file</b> (at the top) starts an empty file; the previous one is kept.</li>
+    <li>The menu ☰ holds the <b>files</b>: tap one to open it, next to it share, download and delete. There you can also <b>open</b> a file from the device (<code>.md</code> or <code>.txt</code>). As an installed app on Android you can also share files straight to the app.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>When you edit in the <b>view</b>, the app rewrites the Markdown and makes the notation uniform (e.g. lists with <code>-</code>, bold with <code>**</code>). The content is kept; rarely used HTML parts may get lost. To keep the notation exactly, edit in the text display.</li>
+    <li>Markdown with the GitHub extensions is supported: tables, task lists, strikethrough.</li>
+    <li><b>Images</b> from the internet are not loaded (privacy, offline) – the app shows the image text instead. Embedded images (<code>data:</code>) are shown.</li>
+    <li>Everything is saved automatically in this browser and works offline; nothing is uploaded. Browser storage is limited (a few MB for all files together) – better download large files.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can read the list of files and their content and create a new file (WebMCP). It cannot change or delete existing files. Each call shows a note.</li>
+    <li>Libraries: marked (MIT) turns Markdown into the view, DOMPurify (Apache-2.0) removes scripts from it, turndown (MIT) turns the edited view back into Markdown.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 54ec07aafd3c</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/vendor/marked/marked.umd.js"></script>
+<script src="../assets/vendor/dompurify/purify.min.js"></script>
+<script src="../assets/vendor/turndown/turndown.browser.umd.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  untitled:'Unbenannt',chars:'{n} Zeichen',char1:'1 Zeichen',current:'geöffnet',empty:'leer',noFiles:'Noch keine Dateien.',
+  delConfirm:'„{name}“ löschen?',deleted:'Gelöscht',downloaded:'Heruntergeladen',
+  shareFail:'Teilen hat nicht geklappt',saveFail:'Speichern fehlgeschlagen – der Speicher im Browser ist voll. Datei herunterladen und andere löschen.',
+  opened:'Geöffnet: {name}',tooBig:'Die Datei ist zu groß (höchstens 2 MB).',readFail:'Die Datei ließ sich nicht lesen.',
+  linkUrl:'Adresse des Links:',ph:'Text',phLink:'Linktext',phCode:'Code',col:'Spalte',
+  'b.undo':'Rückgängig','b.redo':'Wiederholen','b.bold':'Fett','b.italic':'Kursiv','b.strike':'Durchgestrichen',
+  'b.heading':'Überschrift','b.ul':'Liste','b.ol':'Nummerierte Liste','b.task':'Aufgabe','b.quote':'Zitat',
+  'b.code':'Code','b.link':'Link','b.table':'Tabelle','b.hr':'Trennlinie',
+  task:'Erledigt',img:'Bild',delete:'Löschen',shareN:'Teilen: {name}',downloadN:'Herunterladen: {name}',deleteN:'Löschen: {name}',
+  'mcp.list':'Dateien gelesen','mcp.read':'Datei gelesen','mcp.create':'Datei angelegt'
+},
+en:{
+  title:'Markdown Editor',sub:'Write Markdown, view and edit it formatted.',new:'New file',share:'Share','h.editor':'Editor',
+  nameLabel:'File name',viewsLabel:'Display','v.raw':'Text','v.render':'View',download:'Download',
+  rawLabel:'Markdown text',rawPh:'# Heading\n\nText with **bold** and *italic* …',viewLabel:'Formatted view',viewPh:'Write here …',
+  tbLabel:'Formatting',files:'Files',filesIntro:'Everything is saved automatically – only in this browser.',openFile:'Open file …',
+  untitled:'Untitled',chars:'{n} characters',char1:'1 character',current:'open',empty:'empty',noFiles:'No files yet.',
+  delConfirm:'Delete “{name}”?',deleted:'Deleted',downloaded:'Downloaded',
+  shareFail:'Sharing did not work',saveFail:'Saving failed – the browser storage is full. Download the file and delete others.',
+  opened:'Opened: {name}',tooBig:'The file is too big (2 MB at most).',readFail:'The file could not be read.',
+  linkUrl:'Link address:',ph:'text',phLink:'link text',phCode:'code',col:'Column',
+  'b.undo':'Undo','b.redo':'Redo','b.bold':'Bold','b.italic':'Italic','b.strike':'Strikethrough',
+  'b.heading':'Heading','b.ul':'List','b.ol':'Numbered list','b.task':'Task','b.quote':'Quote',
+  'b.code':'Code','b.link':'Link','b.table':'Table','b.hr':'Divider',
+  task:'Done',img:'Image',delete:'Delete',shareN:'Share: {name}',downloadN:'Download: {name}',deleteN:'Delete: {name}',
+  'mcp.list':'files read','mcp.read':'file read','mcp.create':'file created'
+}});
+const {$,t,esc}=Tools;
+const LF='markdown-editor.files.v1',LS='markdown-editor.state.v1';
+const MAX_FILE=2*1024*1024;
+
+/* ---------- Icons (Tabler Icons, MIT) ---------- */
+const svg=d=>`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d.split('|').map(p=>`<path d="${p}"/>`).join('')}</svg>`;
+const ICON={
+  undo:'M9 14l-4 -4l4 -4|M5 10h11a4 4 0 1 1 0 8h-1',
+  redo:'M15 14l4 -4l-4 -4|M19 10h-11a4 4 0 1 0 0 8h1',
+  bold:'M7 5h6a3.5 3.5 0 0 1 0 7h-6l0 -7|M13 12h1a3.5 3.5 0 0 1 0 7h-7v-7',
+  italic:'M11 5l6 0|M7 19l6 0|M14 5l-4 14',
+  strike:'M5 12l14 0|M16 6.5a4 2 0 0 0 -4 -1.5h-1a3.5 3.5 0 0 0 0 7h2a3.5 3.5 0 0 1 0 7h-1.5a4 2 0 0 1 -4 -1.5',
+  heading:'M7 12h10|M7 5v14|M17 5v14|M15 19h4|M15 5h4|M5 19h4|M5 5h4',
+  ul:'M9 6l11 0|M9 12l11 0|M9 18l11 0|M5 6l0 .01|M5 12l0 .01|M5 18l0 .01',
+  ol:'M11 6h9|M11 12h9|M12 18h8|M4 16a2 2 0 1 1 4 0c0 .591 -.5 1 -1 1.5l-3 2.5h4|M6 10v-6l-2 2',
+  task:'M3.5 5.5l1.5 1.5l2.5 -2.5|M3.5 11.5l1.5 1.5l2.5 -2.5|M3.5 17.5l1.5 1.5l2.5 -2.5|M11 6l9 0|M11 12l9 0|M11 18l9 0',
+  quote:'M6 15h15|M21 19h-15|M15 11h6|M21 7h-6|M9 9h1a1 1 0 1 1 -1 1v-2.5a2 2 0 0 1 2 -2|M3 9h1a1 1 0 1 1 -1 1v-2.5a2 2 0 0 1 2 -2',
+  code:'M7 8l-4 4l4 4|M17 8l4 4l-4 4|M14 4l-4 16',
+  link:'M9 15l6 -6|M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464|M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463',
+  table:'M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14|M3 10h18|M10 3v18',
+  hr:'M4 12l16 0|M8 8l4 -4l4 4|M16 16l-4 4l-4 -4',
+  share:'M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0|M15 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0|M15 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0|M8.7 10.7l6.6 -3.4|M8.7 13.3l6.6 3.4',
+  download:'M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2|M7 11l5 5l5 -5|M12 4l0 12',
+  trash:'M4 7l16 0|M10 11l0 6|M14 11l0 6|M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12|M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3'
+};
+const TOOLS=['undo','redo','|','bold','italic','strike','heading','|','ul','ol','task','quote','|','code','link','table','hr'];
+
+/* ---------- Markdown ⇄ HTML ---------- */
+const purifyCfg={FORBID_TAGS:['style','form','button','select','textarea','iframe','object','embed'],FORBID_ATTR:['style']};
+DOMPurify.addHook('afterSanitizeAttributes',node=>{
+  if(node.nodeName==='IMG'){
+    // No images from servers (privacy, offline, CSP): keep the address for the round trip, show the alt text
+    const src=node.getAttribute('src')||'';
+    if(!/^data:image\//i.test(src)){
+      node.removeAttribute('src');node.setAttribute('data-md-src',src);
+      if(!node.getAttribute('alt'))node.setAttribute('alt',t('img'));
+    }
+  }
+  if(node.nodeName==='INPUT'){
+    if((node.getAttribute('type')||'').toLowerCase()!=='checkbox'){node.remove();return;}
+    node.removeAttribute('disabled');node.removeAttribute('name');
+  }
+  if(node.nodeName==='A'&&/^\s*(javascript|vbscript|data):/i.test(node.getAttribute('href')||''))node.removeAttribute('href');
+});
+const toHtml=md=>DOMPurify.sanitize(marked.parse(md,{gfm:true,breaks:false,async:false}),purifyCfg);
+
+const td=new TurndownService({headingStyle:'atx',hr:'---',bulletListMarker:'-',codeBlockStyle:'fenced',emDelimiter:'*',strongDelimiter:'**',linkStyle:'inlined'});
+td.addRule('strike',{filter:['del','s','strike'],replacement:c=>c.trim()?'~~'+c+'~~':c});
+td.addRule('checkbox',{filter:n=>n.nodeName==='INPUT'&&n.type==='checkbox',replacement:(c,n)=>(n.checked?'[x]':'[ ]')+' '});
+td.addRule('listItem',{filter:'li',replacement(content,node,options){
+  // Like turndown's own rule, but with one space after the marker ("- item", "1. item")
+  const parent=node.parentNode;
+  let prefix=options.bulletListMarker+' ';
+  if(parent.nodeName==='OL'){
+    const start=parent.getAttribute('start'),index=Array.prototype.indexOf.call(parent.children,node);
+    prefix=(start?Number(start)+index:index+1)+'. ';
+  }
+  const isParagraph=/\n$/.test(content);
+  content=content.replace(/^\n+/,'').replace(/\n+$/,'')+(isParagraph?'\n':'');
+  content=content.replace(/^(\[[ x]\]) +/,'$1 ').replace(/\n/gm,'\n'+' '.repeat(prefix.length));
+  return prefix+content+(node.nextSibling?'\n':'');
+}});
+td.addRule('image',{filter:'img',replacement(c,node){
+  const src=node.getAttribute('data-md-src')||node.getAttribute('src')||'';
+  if(!src)return '';
+  const alt=(node.getAttribute('alt')||'').replace(/[\[\]]/g,'\\$&'),title=node.getAttribute('title');
+  return `![${alt}](${src}${title?` "${title.replace(/"/g,'\\"')}"`:''})`;
+}});
+const cellMd=cell=>td.turndown(cell.innerHTML).replace(/\n+/g,' ').replace(/\|/g,'\\|').trim();
+td.addRule('table',{filter:'table',replacement(c,node){
+  const rows=[...node.rows];
+  if(!rows.length)return '';
+  const width=Math.max(...rows.map(r=>r.cells.length));
+  const line=cells=>'| '+Array.from({length:width},(_,i)=>cells[i]!=null?cells[i]:'').join(' | ')+' |';
+  const head=[...rows[0].cells];
+  const align=Array.from({length:width},(_,i)=>{
+    const a=head[i]&&(head[i].getAttribute('align')||head[i].style.textAlign||'').toLowerCase();
+    return a==='center'?':---:':a==='right'?'---:':a==='left'?':---':'---';
+  });
+  const out=[line(head.map(cellMd)),'| '+align.join(' | ')+' |',...rows.slice(1).map(r=>line([...r.cells].map(cellMd)))];
+  return '\n\n'+out.join('\n')+'\n\n';
+}});
+const toMd=html=>td.turndown(html).replace(/\n{3,}/g,'\n\n');
+
+/* ---------- Files ---------- */
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const newFile=(name,text)=>{const now=Date.now();return {id:newId(),name:name||'',text:text||'',created:now,modified:now};};
+let files=Tools.load(LF,[]);
+if(!Array.isArray(files))files=[];
+files=files.filter(f=>f&&typeof f.id==='string'&&typeof f.text==='string').map(f=>({id:f.id,name:typeof f.name==='string'?f.name:'',text:f.text,
+  created:Number(f.created)||Date.now(),modified:Number(f.modified)||Date.now()}));
+const state=Object.assign({current:null,view:'raw'},Tools.load(LS,{}));
+if(!['raw','render'].includes(state.view))state.view='raw';
+let cur=files.find(f=>f.id===state.current);
+if(!cur){cur=files.slice().sort((a,b)=>b.modified-a.modified)[0];}
+if(!cur){cur=newFile();files.push(cur);}
+const isEmpty=f=>!f.text.trim()&&!f.name.trim();
+
+function derivedName(text){
+  const line=(text.split('\n').find(l=>l.trim())||'').trim();
+  return line.replace(/^(#{1,6}\s+|>\s*|[-*+]\s+(\[[ xX]\]\s+)?|\d+[.)]\s+)/,'').replace(/[*_`~#[\]]/g,'').replace(/\(\S*\)/g,'').trim().slice(0,60);
+}
+const displayName=f=>f.name.trim()||derivedName(f.text)||t('untitled');
+function fileName(f){
+  let n=displayName(f).replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'-').replace(/^[\s.]+|[\s.]+$/g,'').slice(0,80)||t('untitled');
+  if(!/\.(md|markdown|txt)$/i.test(n))n+='.md';
+  return n;
+}
+
+let saveWarned=false;
+function persist(){
+  const ok=Tools.save(LF,files)&&Tools.save(LS,{current:cur.id,view:state.view});
+  if(!ok){Tools.diag.log('save failed',{files:files.length,bytes:files.reduce((n,f)=>n+f.text.length,0)});
+    if(!saveWarned){saveWarned=true;Tools.toast(t('saveFail'),5000);}}
+  else saveWarned=false;
+  return ok;
+}
+let saveTimer=0;
+const scheduleSave=()=>{clearTimeout(saveTimer);saveTimer=setTimeout(persist,400);};
+
+/* ---------- Editor ---------- */
+const raw=$('raw'),view=$('view'),nameEl=$('name');
+let viewDirty=false,syncTimer=0;
+function syncFromView(){
+  clearTimeout(syncTimer);
+  if(!viewDirty)return;
+  viewDirty=false;
+  const md=toMd(view.innerHTML);
+  if(md!==cur.text){cur.text=md;cur.modified=Date.now();scheduleSave();renderFiles();updateNamePh();}
+}
+function flush(){syncFromView();if(saveTimer){clearTimeout(saveTimer);saveTimer=0;persist();}}
+function prepView(){
+  for(const cb of view.querySelectorAll('input[type=checkbox]')){cb.setAttribute('contenteditable','false');cb.setAttribute('aria-label',t('task'));}
+}
+function renderView(){view.innerHTML=cur.text.trim()?toHtml(cur.text):'';prepView();}
+function showDoc(){
+  raw.value=cur.text;nameEl.value=cur.name;updateNamePh();
+  if(state.view==='render')renderView();
+}
+function updateNamePh(){nameEl.placeholder=derivedName(cur.text)||t('untitled');}
+function setView(v){
+  if(v===state.view)return;
+  flush();
+  state.view=v;
+  if(v==='render'){renderView();raw.hidden=true;view.hidden=false;}
+  else{raw.value=cur.text;view.hidden=true;raw.hidden=false;view.innerHTML='';}
+  for(const b of $('views').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.v===v));
+  persist();
+  Tools.diag.log('view',v);
+}
+function applyView(){
+  raw.hidden=state.view!=='raw';view.hidden=state.view!=='render';
+  for(const b of $('views').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.v===state.view));
+}
+$('views').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(b)setView(b.dataset.v);});
+
+raw.addEventListener('input',()=>{cur.text=raw.value;cur.modified=Date.now();scheduleSave();updateNamePh();renderFilesSoon();});
+view.addEventListener('input',()=>{viewDirty=true;clearTimeout(syncTimer);syncTimer=setTimeout(syncFromView,300);});
+nameEl.addEventListener('input',()=>{cur.name=nameEl.value;cur.modified=Date.now();scheduleSave();renderFilesSoon();});
+let filesTimer=0;
+const renderFilesSoon=()=>{clearTimeout(filesTimer);filesTimer=setTimeout(renderFiles,500);};
+
+// Ticking a task in the view
+view.addEventListener('change',e=>{
+  const cb=e.target;
+  if(cb.matches&&cb.matches('input[type=checkbox]')){
+    if(cb.checked)cb.setAttribute('checked','');else cb.removeAttribute('checked');
+    viewDirty=true;syncFromView();
+  }
+});
+// Pasting into the view: clean HTML (no scripts, no images from servers), otherwise plain text
+view.addEventListener('paste',e=>{
+  const cd=e.clipboardData;if(!cd)return;
+  e.preventDefault();
+  const html=cd.getData('text/html');
+  if(html){const clean=toHtml(toMd(DOMPurify.sanitize(html,purifyCfg)));document.execCommand('insertHTML',false,clean);prepView();}
+  else document.execCommand('insertText',false,cd.getData('text/plain'));
+});
+view.addEventListener('drop',e=>e.preventDefault());
+try{document.execCommand('defaultParagraphSeparator',false,'p');}catch(_){}
+
+/* ---------- Text display: formatting in Markdown ---------- */
+function rawReplace(start,end,str,selStart,selEnd){
+  raw.focus();
+  raw.setSelectionRange(start,end);
+  let ok=false;
+  // insertText keeps the browser's own undo history
+  if(str)try{ok=document.execCommand('insertText',false,str);}catch(_){}
+  if(!ok){raw.setRangeText(str,start,end,'end');raw.dispatchEvent(new Event('input'));}
+  raw.setSelectionRange(start+selStart,start+selEnd);
+}
+function rawWrap(mark,ph){
+  const v=raw.value,s=raw.selectionStart,e=raw.selectionEnd,sel=v.slice(s,e),m=mark.length;
+  const single=mark==='*';
+  const around=v.slice(s-m,s)===mark&&v.slice(e,e+m)===mark&&!(single&&v[s-2]==='*'&&v[e+1]==='*'&&v.slice(s-3,s)!=='***');
+  if(around&&s>=m){rawReplace(s-m,e+m,sel,0,sel.length);return;}
+  if(sel.length>=2*m&&sel.startsWith(mark)&&sel.endsWith(mark)){const inner=sel.slice(m,-m);rawReplace(s,e,inner,0,inner.length);return;}
+  const lead=sel.match(/^\s*/)[0],trail=sel.match(/\s*$/)[0],body=sel.trim()||ph;
+  rawReplace(s,e,lead+mark+body+mark+trail,lead.length+m,lead.length+m+body.length);
+}
+function lineRange(){
+  const v=raw.value,s=raw.selectionStart;let e=raw.selectionEnd;
+  if(e>s&&v[e-1]==='\n')e--;
+  const ls=v.lastIndexOf('\n',s-1)+1;let le=v.indexOf('\n',e);if(le<0)le=v.length;
+  return [ls,le];
+}
+const MARK=/^(\s*)(?:[-*+] \[[ xX]\] |[-*+] |\d+[.)] )/;
+const KIND={ul:/^(\s*)[-*+] (?!\[[ xX]\] )/,ol:/^(\s*)\d+[.)] /,task:/^(\s*)[-*+] \[[ xX]\] /,quote:/^(\s*)> ?/};
+function rawLines(kind){
+  const [ls,le]=lineRange(),lines=raw.value.slice(ls,le).split('\n');
+  const re=KIND[kind];
+  const all=lines.some(l=>re.test(l))&&lines.every(l=>re.test(l)||!l.trim());
+  let n=0;
+  const out=lines.map(l=>{
+    if(all)return l.replace(re,'$1');
+    if(!l.trim()&&lines.length>1)return l;
+    if(kind==='quote')return '> '+l;
+    const ind=l.match(/^\s*/)[0],body=l.replace(MARK,'$1').slice(ind.length);
+    n++;
+    return ind+(kind==='ul'?'- ':kind==='ol'?n+'. ':'- [ ] ')+body;
+  }).join('\n');
+  const caret=raw.selectionStart===raw.selectionEnd;
+  rawReplace(ls,le,out,caret?out.length:0,out.length);
+}
+function rawHeading(){
+  const [ls,le]=lineRange(),v=raw.value;
+  const lineEnd=v.indexOf('\n',ls)<0?v.length:Math.min(v.indexOf('\n',ls),le);
+  const line=v.slice(ls,lineEnd),m=line.match(/^(#{1,6}) +/),level=m?m[1].length:0;
+  const body=m?line.slice(m[0].length):line.replace(MARK,'$1').replace(/^\s*>\s?/,'');
+  const next=level>=3?'':'#'.repeat(level+1)+' ';
+  const out=next+body;
+  rawReplace(ls,lineEnd,out,out.length,out.length);
+}
+function rawCode(){
+  const v=raw.value,s=raw.selectionStart,e=raw.selectionEnd,sel=v.slice(s,e);
+  if(sel.includes('\n')){
+    const pre=s>0&&v[s-1]!=='\n'?'\n':'',post=v[e]&&v[e]!=='\n'?'\n':'';
+    const out=pre+'```\n'+sel.replace(/\n$/,'')+'\n```'+post;
+    rawReplace(s,e,out,pre.length+4,pre.length+4+sel.replace(/\n$/,'').length);
+  }else rawWrap('`',t('phCode'));
+}
+function rawLink(){
+  const v=raw.value,s=raw.selectionStart,e=raw.selectionEnd,sel=v.slice(s,e).trim();
+  if(/^(https?:\/\/|mailto:|www\.)\S+$/i.test(sel)){const txt=t('phLink'),out=`[${txt}](${sel})`;rawReplace(s,e,out,1,1+txt.length);return;}
+  const txt=sel||t('phLink'),out=`[${txt}](https://)`;
+  rawReplace(s,e,out,txt.length+3,txt.length+11);
+}
+function rawBlock(block,selFrom,selTo){
+  // Inserts a block on its own lines (with a blank line before and after)
+  const v=raw.value,s=raw.selectionEnd;
+  const ls=v.indexOf('\n',s)<0?v.length:v.indexOf('\n',s);
+  const before=v.slice(0,ls);
+  const pre=!before?'':before.endsWith('\n\n')?'':before.endsWith('\n')?'\n':'\n\n';
+  const after=v.slice(ls);
+  const post=after.startsWith('\n\n')?'':after.startsWith('\n')?'\n':after?'\n\n':'\n';
+  const out=pre+block+post;
+  rawReplace(ls,ls,out,pre.length+(selFrom==null?block.length:selFrom),pre.length+(selTo==null?block.length:selTo));
+}
+const tableMd=()=>{const c=t('col');return `| ${c} 1 | ${c} 2 |\n| --- | --- |\n|  |  |`;};
+const RAW={
+  undo:()=>{raw.focus();document.execCommand('undo');},
+  redo:()=>{raw.focus();document.execCommand('redo');},
+  bold:()=>rawWrap('**',t('ph')),italic:()=>rawWrap('*',t('ph')),strike:()=>rawWrap('~~',t('ph')),
+  heading:rawHeading,ul:()=>rawLines('ul'),ol:()=>rawLines('ol'),task:()=>rawLines('task'),quote:()=>rawLines('quote'),
+  code:rawCode,link:rawLink,
+  table:()=>{const c=t('col');rawBlock(tableMd(),2,2+c.length+2);},
+  hr:()=>rawBlock('---')
+};
+// Enter in a list continues it; Enter on an empty item ends the list
+raw.addEventListener('beforeinput',e=>{
+  if(e.inputType!=='insertLineBreak'&&e.inputType!=='insertParagraph')return;
+  if(raw.selectionStart!==raw.selectionEnd)return;
+  const v=raw.value,s=raw.selectionStart,ls=v.lastIndexOf('\n',s-1)+1,line=v.slice(ls,s);
+  const m=line.match(/^(\s*)([-*+] \[[ xX]\] |[-*+] |(\d+)([.)]) |> )/);
+  if(!m)return;
+  e.preventDefault();
+  if(line.length===m[0].length){rawReplace(ls,s,m[1],m[1].length,m[1].length);return;}
+  let mark=m[2];
+  if(m[3])mark=(Number(m[3])+1)+m[4]+' ';
+  else if(/\[[ xX]\]/.test(mark))mark=mark[0]+' [ ] ';
+  const ins='\n'+m[1]+mark;
+  rawReplace(s,s,ins,ins.length,ins.length);
+});
+
+/* ---------- View: formatting with the browser's editing commands ---------- */
+function blockAtCaret(sel){
+  const sl=sel||getSelection();if(!sl.rangeCount)return null;
+  let n=sl.anchorNode;if(n&&n.nodeType===3)n=n.parentNode;
+  if(!n||!view.contains(n))return null;
+  return n.closest('h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,div:not(#view)')||null;
+}
+function ensureFocus(){
+  const sl=getSelection();
+  if(document.activeElement!==view||!sl.rangeCount||!view.contains(sl.anchorNode)){
+    view.focus();
+    const r=document.createRange();r.selectNodeContents(view);r.collapse(false);sl.removeAllRanges();sl.addRange(r);
+  }
+}
+const cmd=(c,v)=>{ensureFocus();document.execCommand(c,false,v);};
+function viewHeading(){
+  ensureFocus();
+  const b=blockAtCaret(),tag=b?b.nodeName:'P';
+  const next={H1:'<h2>',H2:'<h3>',H3:'<p>'}[tag]||'<h1>';
+  document.execCommand('formatBlock',false,next);
+}
+function viewTask(){
+  ensureFocus();
+  let b=blockAtCaret();
+  if(!b||b.nodeName!=='LI'){document.execCommand('insertUnorderedList');b=blockAtCaret();}
+  const li=b&&b.closest('li');if(!li)return;
+  const first=li.querySelector(':scope>input[type=checkbox]');
+  if(first){first.remove();}
+  else{
+    const cb=document.createElement('input');cb.type='checkbox';
+    li.insertBefore(document.createTextNode(' '),li.firstChild);li.insertBefore(cb,li.firstChild);prepView();
+  }
+  viewDirty=true;syncFromView();
+}
+function viewLink(){
+  ensureFocus();
+  const sl=getSelection(),range=sl.rangeCount?sl.getRangeAt(0).cloneRange():null;
+  const url=prompt(t('linkUrl'),'https://');
+  if(!url||!url.trim()||/^\s*(javascript|vbscript|data):/i.test(url))return;
+  view.focus();if(range){sl.removeAllRanges();sl.addRange(range);}
+  if(sl.isCollapsed)document.execCommand('insertHTML',false,`<a href="${esc(url.trim())}">${esc(url.trim())}</a>`);
+  else document.execCommand('createLink',false,url.trim());
+}
+function viewCode(){
+  ensureFocus();
+  const sl=getSelection(),txt=sl.toString();
+  if(txt.includes('\n'))document.execCommand('insertHTML',false,`<pre><code>${esc(txt)}</code></pre><p><br></p>`);
+  else document.execCommand('insertHTML',false,`<code>${esc(txt||t('phCode'))}</code>&#8203;`);
+}
+const VIEW={
+  undo:()=>cmd('undo'),redo:()=>cmd('redo'),bold:()=>cmd('bold'),italic:()=>cmd('italic'),strike:()=>cmd('strikeThrough'),
+  heading:viewHeading,ul:()=>cmd('insertUnorderedList'),ol:()=>cmd('insertOrderedList'),task:viewTask,
+  quote:()=>{ensureFocus();const b=blockAtCaret();document.execCommand('formatBlock',false,b&&b.closest('blockquote')?'<p>':'<blockquote>');},
+  code:viewCode,link:viewLink,
+  table:()=>cmd('insertHTML',toHtml('\n\n'+tableMd()+'\n\n')+'<p><br></p>'),
+  hr:()=>cmd('insertHorizontalRule')
+};
+
+/* ---------- Toolbar ---------- */
+const tb=$('toolbar');
+function renderToolbar(){
+  tb.innerHTML=TOOLS.map(k=>k==='|'?'<span class="sep" aria-hidden="true"></span>':
+    `<button type="button" data-tool="${k}" aria-label="${esc(t('b.'+k))}" title="${esc(t('b.'+k))}">${svg(ICON[k])}</button>`).join('');
+}
+// Keep the focus (and the keyboard on phones) in the editor
+tb.addEventListener('mousedown',e=>{if(e.target.closest('button'))e.preventDefault();});
+tb.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-tool]');if(!b)return;
+  const k=b.dataset.tool;
+  try{(state.view==='raw'?RAW:VIEW)[k]();}catch(err){Tools.diag.log('tool failed',k,err);}
+  Tools.diag.log('tool',k,state.view);
+});
+
+/* ---------- Files: list, open, new, delete, share, download ---------- */
+const sorted=()=>files.filter(f=>f===cur||!isEmpty(f)).sort((a,b)=>b.modified-a.modified);
+const byId=id=>files.find(f=>f.id===id);
+function renderFiles(){
+  clearTimeout(filesTimer);
+  const list=sorted(),canShare=!!navigator.share;
+  $('files').innerHTML=list.map(f=>{
+    const n=esc(displayName(f)),when=new Date(f.modified).toLocaleString(Tools.locale(),{dateStyle:'short',timeStyle:'short'});
+    const size=f.text.length===1?t('char1'):f.text.length?t('chars',{n:Tools.fmt(f.text.length,0)}):t('empty');
+    return `<li data-id="${esc(f.id)}"${f===cur?' class="current"':''}>
+      <button type="button" class="open"${f===cur?' aria-current="true"':''}><span class="name">${n}</span><span class="meta">${esc(when)} · ${esc(size)}${f===cur?' · '+esc(t('current')):''}</span></button>
+      ${canShare?`<button type="button" class="icon-btn" data-act="share" aria-label="${esc(t('shareN',{name:displayName(f)}))}" title="${esc(t('share'))}">${svg(ICON.share)}</button>`:''}
+      <button type="button" class="icon-btn" data-act="download" aria-label="${esc(t('downloadN',{name:displayName(f)}))}" title="${esc(t('download'))}">${svg(ICON.download)}</button>
+      <button type="button" class="icon-btn" data-act="delete" aria-label="${esc(t('deleteN',{name:displayName(f)}))}" title="${esc(t('delete'))}">${svg(ICON.trash)}</button>
+    </li>`;}).join('')||`<li class="muted">${esc(t('noFiles'))}</li>`;
+}
+function dropEmpty(except){files=files.filter(f=>f===except||!isEmpty(f));}
+function openDoc(f){
+  flush();
+  cur=f;dropEmpty(cur);showDoc();persist();renderFiles();
+}
+function newDoc(name,text){
+  flush();
+  let f=cur;
+  if(!isEmpty(cur)||name!=null){
+    if(isEmpty(cur)){cur.name=name||'';cur.text=text||'';cur.modified=Date.now();}
+    else{f=newFile(name,text);files.push(f);}
+  }
+  cur=f;dropEmpty(cur);showDoc();persist();renderFiles();
+  return f;
+}
+function deleteDoc(f){
+  if(!confirm(t('delConfirm',{name:displayName(f)})))return;
+  flush();
+  files=files.filter(x=>x!==f);
+  if(f===cur){cur=sorted()[0]||null;if(!cur){cur=newFile();files.push(cur);}showDoc();}
+  persist();renderFiles();Tools.toast(t('deleted'));
+  Tools.diag.log('deleted',{files:files.length});
+}
+function downloadDoc(f){
+  flush();
+  const file=new File([f.text],fileName(f),{type:'text/markdown'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(file);a.download=file.name;
+  document.body.append(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  Tools.toast(t('downloaded'));
+  Tools.diag.log('download',{chars:f.text.length});
+}
+async function shareDoc(f){
+  flush();
+  const title=displayName(f),name=fileName(f);
+  // Chrome on Android only shares files with MIME types from its own list (no text/markdown):
+  // the .md file goes out as text/plain; without file sharing the text itself is shared
+  const file=new File([f.text],name,{type:'text/plain'});
+  let canFiles=false;
+  try{canFiles=!!(navigator.canShare&&navigator.canShare({files:[file]}));}catch(_){}
+  try{
+    if(canFiles){Tools.diag.log('share file');await navigator.share({files:[file],title});}
+    else{Tools.diag.log('share text');await navigator.share({title,text:f.text});}
+  }catch(e){
+    if(e.name==='AbortError')return;
+    Tools.diag.log('share failed',e);Tools.toast(t('shareFail'));
+  }
+}
+$('files').addEventListener('click',e=>{
+  const li=e.target.closest('li[data-id]');if(!li)return;
+  const f=byId(li.dataset.id);if(!f)return;
+  const act=e.target.closest('[data-act]');
+  if(!act){if(e.target.closest('.open')){openDoc(f);Tools.menu.close();(state.view==='raw'?raw:view).focus();}return;}
+  if(act.dataset.act==='share')shareDoc(f);
+  else if(act.dataset.act==='download')downloadDoc(f);
+  else if(act.dataset.act==='delete')deleteDoc(f);
+});
+$('btnNew').addEventListener('click',()=>{newDoc();(state.view==='raw'?raw:view).focus();Tools.diag.log('new',{files:files.length});});
+$('btnShare').hidden=!navigator.share;
+$('btnShare').addEventListener('click',()=>shareDoc(cur));
+$('btnDownload').addEventListener('click',()=>downloadDoc(cur));
+
+async function openFile(file){
+  try{
+    if(file.size>MAX_FILE)throw new Error(t('tooBig'));
+    let text;
+    try{text=await file.text();}catch(_){throw new Error(t('readFail'));}
+    text=text.replace(/^﻿/,'').replace(/\r\n?/g,'\n');
+    const name=(file.name||'').replace(/\.(md|markdown|mdown|txt)$/i,'');
+    const f=newDoc(name,text);
+    Tools.toast(t('opened',{name:displayName(f)}));
+    Tools.diag.log('file opened',{bytes:file.size,type:file.type||'?'});
+  }catch(e){Tools.diag.log('open failed',e);Tools.toast(e.message,4000);}
+}
+$('btnOpen').addEventListener('click',()=>{const i=$('fileInput');i.value='';i.click();});
+$('fileInput').addEventListener('change',()=>{const f=$('fileInput').files[0];if(f){Tools.menu.close();openFile(f);}});
+Tools.takeSharedFile().then(f=>{if(f){Tools.diag.log('shared file received');openFile(f);}});
+
+window.addEventListener('pagehide',flush);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush();});
+
+/* ---------- Start ---------- */
+renderToolbar();applyView();showDoc();renderFiles();persist();
+Tools.onLang(()=>{renderToolbar();renderFiles();updateNamePh();if(state.view==='render')prepView();});
+Tools.diag.info(()=>({view:state.view,files:files.length,currentChars:cur.text.length,
+  storedChars:files.reduce((n,f)=>n+f.text.length,0),share:!!navigator.share,
+  canShareFiles:(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File(['x'],'x.md',{type:'text/markdown'})]}));}catch(_){return false;}})()}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const info=f=>({id:f.id,name:displayName(f),characters:f.text.length,modified:new Date(f.modified).toISOString(),open:f===cur});
+Tools.mcp.register({
+  name:'list_documents',title:'List the Markdown files',label:'mcp.list',readOnly:true,
+  description:'Lists the Markdown files stored in the app, newest first: id, name, number of characters, last change (ISO date) and whether it is open in the editor.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{flush();return {documents:sorted().filter(f=>!isEmpty(f)||f===cur).map(info)};}
+});
+Tools.mcp.register({
+  name:'read_document',title:'Read a Markdown file',label:'mcp.read',readOnly:true,untrusted:true,
+  description:'Returns the Markdown text of a file stored in the app, with its id and name. Without an id it reads the file open in the editor. The text was written or opened by the user and may contain anything.',
+  inputSchema:{type:'object',properties:{id:{type:'string',maxLength:40,description:'Id from list_documents; omit for the open file.'}},additionalProperties:false},
+  execute:a=>{
+    flush();
+    const f=a.id!=null?byId(a.id):cur;
+    if(!f)throw new Error('No file with this id – call list_documents first');
+    return Object.assign(info(f),{markdown:f.text});
+  }
+});
+Tools.mcp.register({
+  name:'create_document',title:'Create a Markdown file',label:'mcp.create',
+  description:'Creates a new Markdown file in the app and opens it in the editor; existing files stay unchanged. Returns the new file\'s id and name.',
+  inputSchema:{type:'object',properties:{
+    name:{type:'string',maxLength:120,description:'File name without .md; omit to use the first line.'},
+    markdown:{type:'string',maxLength:200000,description:'The Markdown text.'}
+  },required:['markdown'],additionalProperties:false},
+  execute:a=>{
+    flush();
+    if(!isEmpty(cur)){const f=newFile(a.name||'',a.markdown);files.push(f);cur=f;}
+    else{cur.name=a.name||'';cur.text=a.markdown;cur.modified=Date.now();}
+    showDoc();persist();renderFiles();
+    return {id:cur.id,name:displayName(cur)};
+  }
+});
+})();
+</script>
+</body>
+</html>
