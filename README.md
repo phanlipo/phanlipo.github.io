@@ -19,6 +19,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | [Erinnerungen](https://phanlipo.github.io/reminders/) | `reminders/` | Eigene Erinnerungen mit Zeitpunkt und Text – zur Zeit kommt eine Benachrichtigung, im Verlauf lassen sie sich anpassen. |
 | [Furzkissen](https://phanlipo.github.io/whoopee-cushion/) | `whoopee-cushion/` | Drauftippen und pupsen lassen – sieben Geräusche, Zeitzünder für Streiche und Vibration. |
 | [Handy-Sensoren](https://phanlipo.github.io/sensors/) | `sensors/` | Kompass, Wasserwaage, Beschleunigung, Vibrometer, Schallpegel, Stimmgerät, Tacho, Schrittzähler, Tongenerator, Taschenlampe mit Morse, Puls und Klatsch-Stoppuhr – mit den Sensoren des Handys. |
+| [Kartenspiele](https://phanlipo.github.io/card-games/) | `card-games/` | Mau Mau und Durak gegen den Computer oder mit mehreren Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server. |
 | [KI-Chat](https://phanlipo.github.io/ai-chat/) | `ai-chat/` | Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht. |
 | [Klavier](https://phanlipo.github.io/piano/) | `piano/` | Klavier zum Spielen mit den Fingern – MIDI-Dateien laden, die Noten fallen als Animation auf die Tasten. Spuren stummschalten und selbst mitspielen. |
 | [Lauftext – ganz groß anzeigen](https://phanlipo.github.io/marquee/) | `marquee/` | Text eingeben, Größe, Farben und Schrift wählen und bildschirmfüllend anzeigen – stehend, laufend oder blinkend. |
