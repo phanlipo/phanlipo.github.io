@@ -2,7 +2,7 @@
 // black mark in its top left corner) are drawn in the browser. Checked: corner detection against the
 // known corners, the PDF structure (parsed here, xref offsets verified) and the page images in it
 // (decoded separately): straightened, mark position, shadow removed, black & white, order, rotation.
-import { test, expect } from './helpers.mjs';
+import { test, expect, mockLaunchQueue } from './helpers.mjs';
 
 const URL_ = '/doc-scanner/';
 const W = 1200, H = 900;
@@ -370,6 +370,18 @@ test('share target: several photos shared to the installed app become pages in t
   await page.goto(`${URL_}?shared=1`);
   await expect(page.locator('#editor')).toBeVisible();
   await expect(page.locator('#pageCount')).toHaveText('1');
+});
+
+test('opened with the installed app (Windows "Open with"): several photos become pages in that order', async ({ page }) => {
+  const a = await photo(page, { mark: 'tl' }), b = await photo(page, { mark: 'br' });
+  await mockLaunchQueue(page, [{ name: 'b.png', mimeType: 'image/png', buffer: b.png }, { name: 'a.png', mimeType: 'image/png', buffer: a.png }]);
+  await page.goto(`${URL_}?opened=1`);
+  await expect(page).toHaveURL(/\/doc-scanner\/$/);
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(2);
+  await expect(page.locator('#editor')).toBeHidden();
+  const pdf = (await savePdf(page)).pdf;
+  expect((await measure(page, pdf.pages[0].jpeg, REGIONS)).markBR).toBeLessThan(80);   // b first
+  expect((await measure(page, pdf.pages[1].jpeg, REGIONS)).markTL).toBeLessThan(80);   // then a
 });
 
 test('works offline: add a photo and save the PDF', async ({ page, context }) => {

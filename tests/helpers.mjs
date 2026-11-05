@@ -166,6 +166,25 @@ export async function mockAndroidShare(page) {
   });
 }
 
+/** File handling like Chrome/Edge on the desktop ("Open with" an installed app, manifest file_handlers):
+ *  the page opens as ./?opened=1 and gets the files through window.launchQueue. files: [{ name, mimeType,
+ *  buffer }]; null = a launch without files. Call before page.goto(). window.__launchConsumers counts
+ *  setConsumer() calls. */
+export async function mockLaunchQueue(page, files) {
+  const list = files && files.map(f => ({ name: f.name, type: f.mimeType, b64: Buffer.from(f.buffer).toString('base64') }));
+  await page.addInitScript(list => {
+    window.__launchConsumers = 0;
+    const handles = (list || []).map(f => ({
+      kind: 'file', name: f.name,
+      getFile: async () => new File([Uint8Array.from(atob(f.b64), c => c.charCodeAt(0))], f.name, { type: f.type }),
+    }));
+    // Chromium has its own window.launchQueue (calls nothing outside an installed app) – replace it
+    Object.defineProperty(window, 'launchQueue', { configurable: true, value: {
+      setConsumer(fn) { window.__launchConsumers++; setTimeout(() => fn({ files: handles, targetURL: location.href })); },
+    } });
+  }, list);
+}
+
 /**
  * Accessibility check with axe-core (WCAG 2.1 A/AA): `await axe(page).analyze()`, can be narrowed
  * with `.exclude(…)`. Legacy mode runs axe directly in the page instead of opening an extra page

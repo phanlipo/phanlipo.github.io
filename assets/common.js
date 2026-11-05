@@ -389,11 +389,41 @@ window.Tools = (function () {
     });
   }
 
-  /* ---------- Share target (Android): files shared to the installed app ----------
-     sw.js parks them in the cache "share:<app>" ("shared-file", "shared-file-1", …) and opens the page with
-     ?shared=1. takeSharedFiles() returns them once, in the order shared (or []), and removes them from the
-     cache and the URL. takeSharedFile() returns only the first one (or null) – for apps that take one file. */
+  /* ---------- Files shared to or opened with the installed app ----------
+     Share target (Android, Edge on Windows): sw.js parks the files in the cache "share:<app>" ("shared-file",
+     "shared-file-1", …) and opens the page with ?shared=1.
+     File handling (Chrome/Edge on Windows and other desktops, "Open with"): the manifest's file_handlers open
+     the page with ?opened=1 and the browser hands the files over through window.launchQueue.
+     takeSharedFiles() returns them once, in the order given (or []), and removes them from the cache and the
+     URL. takeSharedFile() returns only the first one (or null) – for apps that take one file. */
+  const SHARE_MAX = 100;
+  let launchFiles = null;
+  const launched = /[?&]opened=1\b/.test(location.search);
+  if (launched && 'launchQueue' in window) {
+    launchFiles = new Promise(resolve => {
+      // The browser calls the consumer once per launch; without files (or never) the page gets none
+      setTimeout(() => resolve([]), 5000);
+      try {
+        window.launchQueue.setConsumer(async params => {
+          const handles = (params && params.files || []).slice(0, SHARE_MAX);
+          const files = [];
+          for (const h of handles) {
+            try { files.push(await h.getFile()); } catch (e) { diagLog('launch file: ' + (e && e.name || e)); }
+          }
+          diagLog('opened with app: ' + files.length + ' file(s)');
+          resolve(files);
+        });
+      } catch (e) { setTimeout(() => diagLog('launchQueue: ' + (e && e.message || e))); resolve([]); }
+    });
+  }
   async function takeSharedFiles() {
+    if (launched) {
+      history.replaceState(history.state, '', location.pathname + location.hash);
+      if (!launchFiles) return [];
+      const files = await launchFiles;
+      launchFiles = null;
+      return files;
+    }
     if (!/[?&]shared=1\b/.test(location.search) || !('caches' in window)) return [];
     history.replaceState(null, '', location.pathname + location.hash);
     try {

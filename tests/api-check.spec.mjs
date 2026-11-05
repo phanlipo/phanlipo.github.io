@@ -274,6 +274,8 @@ test.describe('API Check', () => {
     await openMenu(page);
     await page.locator('details.help summary').click();
     await page.click('[data-diag=copy]');
+    // Copying finishes asynchronously (the report is built first) – wait for the confirmation
+    await expect(page.locator('#toast')).toHaveText(/Diagnose kopiert|Diagnostics copied/);
     const report = await clipboardText(page);
     expect(report).toContain('app: api-check');
     expect(report).toContain('auth: bearer');

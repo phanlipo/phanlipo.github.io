@@ -1,5 +1,5 @@
 // Scan-Copy-SecurPharm: parsing of GS1 / IFA codes and image decoding with both decoders.
-import { test, expect } from './helpers.mjs';
+import { test, expect, mockLaunchQueue } from './helpers.mjs';
 import bwipjs from 'bwip-js';
 
 const GS = '\x1d', RS = '\x1e', EOT = '\x04';
@@ -93,6 +93,30 @@ test.describe('image decoding', () => {
     await page.setInputFiles('#file', await dataMatrixFile(code));
     await expect(page.locator('#status')).toContainText('Erfolgreich gelesen (GS1, Quelle: Bild)', { timeout: 15000 });
     expect(await fields(page)).toMatchObject(EXPECTED);
+  });
+
+  test('share target (Android): a shared photo is evaluated right away', async ({ page }) => {
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload();
+    const f = await dataMatrixFile(code);
+    expect(await page.evaluate(async b64 => {
+      const fd = new FormData();
+      fd.append('file', new File([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], 'foto.png', { type: 'image/png' }));
+      return (await fetch('share-target', { method: 'POST', body: fd })).ok;
+    }, f.buffer.toString('base64'))).toBe(true);
+    await page.goto('/securpharm-scanner/?shared=1');
+    await expect(page.locator('#status')).toContainText('Erfolgreich gelesen (GS1, Quelle: Bild)', { timeout: 15000 });
+    expect(await fields(page)).toMatchObject(EXPECTED);
+    expect(new URL(page.url()).search).toBe('');
+  });
+
+  test('opened with the installed app (Windows "Open with"): the photo is evaluated right away', async ({ page }) => {
+    await mockLaunchQueue(page, [await dataMatrixFile(code)]);
+    await page.goto('/securpharm-scanner/?opened=1');
+    await expect(page.locator('[data-tab=image]')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#status')).toContainText('Erfolgreich gelesen (GS1, Quelle: Bild)', { timeout: 15000 });
+    expect(await fields(page)).toMatchObject(EXPECTED);
+    expect(await page.evaluate(() => Tools.diag.text())).toContain('image: code found');
   });
 
   test.describe('without zxing-wasm', () => {

@@ -1,6 +1,6 @@
 // PDF ansehen: full-screen PDF viewer. Test PDFs are built by pdf-tools.mjs, so every page is recognised
 // by its own text; rendering is checked by reading pixels back from the canvas.
-import { test, expect, openMenu, closeMenu, switchLang, mockAndroidShare } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, mockAndroidShare, mockLaunchQueue } from './helpers.mjs';
 import { makePdf } from './pdf-tools.mjs';
 
 const URL_ = '/pdf-viewer/';
@@ -175,6 +175,14 @@ test('share target: a PDF shared to the installed app opens right away', async (
   await page.goto(`${URL_}?shared=1`);
   await expect(pages(page)).toHaveCount(2);
   await expect(page.locator('#docName')).toHaveText('geteilt.pdf');
+  expect(new URL(page.url()).search).toBe('');
+});
+
+test('opened with the installed app (Windows "Open with"): the PDF opens right away', async ({ page }) => {
+  await mockLaunchQueue(page, [P('doppelklick.pdf', ['D1', 'D2', 'D3'])]);
+  await page.goto(`${URL_}?opened=1`);
+  await expect(pages(page)).toHaveCount(3);
+  await expect(page.locator('#docName')).toHaveText('doppelklick.pdf');
   expect(new URL(page.url()).search).toBe('');
 });
 
