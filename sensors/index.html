@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="get_step_count, get_compass_heading">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gAQLRAPlxyBhh8KG8RXR8QWR7ARB8euTdHcmeDEaIso='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-r1CAchvIcg8IGE1NjlVmfTixVGhs0HxCct2u4rnHZBY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -758,7 +758,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 157389386484</p>
+  <p class="footer-version">Version 429f3c813e69</p>
   <!-- footer:end -->
 </footer>
 
@@ -1973,12 +1973,14 @@ async function rearCameras(){
   try { list = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); } catch (_) {}
   return list.filter(d => /back|rear|environment|rück|hinten/i.test(d.label));
 }
-// Lower = more likely the main lens: Android "camera2 0" is the main rear camera, iOS "Back Camera"
+// Lower = more likely the main lens: Android "camera2 0" / "camera 0" is the main rear camera, iOS "Back Camera"
 function camRank(label){
-  const m = /camera2 (\d+)/i.exec(label);
+  const m = /camera2? (\d+)/i.exec(label);
   if (m) return +m[1];
   return /ultra|tele|dual|triple|wide|weitwinkel|makro|macro|depth|tiefe/i.test(label) ? 100 : 0;
 }
+// Camera capabilities/settings for the diagnostics, without the device IDs
+const camInfo = o => { const r = {}; for (const k in o) if (k !== 'deviceId' && k !== 'groupId') r[k] = o[k]; return r; };
 const hasTorch = track => { try { return !!(track.getCapabilities && track.getCapabilities().torch === true); } catch (_) { return false; } };
 const pulse = {
   manual: true, label: 'measure', noData: 'nd.cam', cams: [], auto: '',
@@ -2037,6 +2039,10 @@ const pulse = {
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     this.torch = caps.torch === true || (isIOS && !('torch' in caps));
     Tools.diag.log('pulse: using', track.label, 'torch', this.torch);
+    // What the camera offers (zoom, focus …) – to find out how to keep phones from switching lenses
+    Tools.diag.log('pulse: capabilities', camInfo(caps));
+    Tools.diag.log('pulse: settings', camInfo(track.getSettings ? track.getSettings() : {}));
+    this.track = track; this.logged = 0;
     if (this.torch) {
       setTorch(track, true).catch(e => Tools.diag.log('pulse: torch failed', e));
       offs.push(() => setTorch(track, false).catch(() => {}));
@@ -2080,6 +2086,11 @@ const pulse = {
     }
     const s = this.samples;
     s.push({t, v: r});
+    // Settings once more with the finger on the lens (some phones switch lenses for close-ups)
+    if (!this.logged && t - s[0].t > 3000 && this.track) {
+      this.logged = 1;
+      Tools.diag.log('pulse: settings with finger', camInfo(this.track.getSettings ? this.track.getSettings() : {}), 'video', video.videoWidth + 'x' + video.videoHeight);
+    }
     while (s.length && s[0].t < t - 12000) s.shift();
     if (s.length > 2) {
       const prev = s.slice(-30), mean = prev.reduce((a, p) => a + p.v, 0) / prev.length;
