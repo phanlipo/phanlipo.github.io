@@ -52,9 +52,12 @@ jobs:
           retention-days: 14
 
   # Basic check of every page in WebKit (Safari, iPhone) and Firefox (tests/browsers.spec.mjs).
+  # On macOS: there both browsers run without extra system packages – on Ubuntu, WebKit needs GTK 4,
+  # GStreamer … via apt (--with-deps), and the Ubuntu mirror sometimes took over 15 minutes for that.
+  # WebKit on macOS is also closer to Safari.
   engines:
     name: WebKit & Firefox
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -65,8 +68,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      # WebKit needs system libraries the runner image does not have (GTK 4, GStreamer …)
-      - run: npx playwright install --with-deps webkit firefox
+      - run: npx playwright install webkit firefox
       - name: Build generated files
         run: node scripts/build.mjs
       - name: Run tests

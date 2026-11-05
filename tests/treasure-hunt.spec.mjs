@@ -335,6 +335,49 @@ test('import: other files are rejected, an existing hunt can be kept as a copy',
   await expect(page.locator('.hunt')).toHaveCount(1);
 });
 
+test('editor: HEIC photo (iPhone, Android) as picture with the libheif decoder, also offline', async ({ page, context }) => {
+  const HEIC = { name: 'IMG_0004.HEIC', mimeType: 'image/heic', buffer: readFileSync(new URL('fixtures/photo.heic', import.meta.url)) };
+  await page.goto(URL_);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();                                 // page now controlled → the decoder goes through the cache
+  const choose = async () => {
+    const [fc] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-img]').first().click()]);
+    await fc.setFiles(HEIC);
+    // embedded as JPEG data URL; 64×48 stays 64×48 (below 640 px)
+    await expect.poll(() => page.evaluate(() => {
+      const img = [...document.querySelectorAll('#edBody img')].find(i => i.src.startsWith('data:image/jpeg'));
+      return img && img.complete ? [img.naturalWidth, img.naturalHeight] : null;
+    })).toEqual([64, 48]);
+  };
+  await page.getByRole('button', { name: 'Neue Schatzsuche' }).click();
+  await page.getByRole('button', { name: /Figur hinzufügen/ }).click();
+  await choose();
+  expect(await page.evaluate(() => Heic.info())).toEqual({ native: false, worker: true });
+  // offline: the decoder was cached on first use
+  await page.locator('[data-img-del]').first().click();
+  await context.setOffline(true);
+  await page.reload();
+  await page.getByRole('button', { name: 'Neue Schatzsuche' }).click();
+  await page.getByRole('button', { name: /Figur hinzufügen/ }).click();
+  await choose();
+  await context.setOffline(false);
+});
+
+test.describe('editor: HEIC decoder cannot load', () => {
+  test.use({ allowedProblems: /libheif|Failed to load resource/ });
+  test('clear message', async ({ page, context }) => {
+    // context.route also catches requests of the service worker
+    await context.route('**/assets/vendor/libheif/**', r => r.abort());
+    await page.goto(URL_);
+    await page.getByRole('button', { name: 'Neue Schatzsuche' }).click();
+    await page.getByRole('button', { name: /Figur hinzufügen/ }).click();
+    const [fc] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-img]').first().click()]);
+    await fc.setFiles({ name: 'IMG_0005.HEIC', mimeType: 'image/heic', buffer: readFileSync(new URL('fixtures/photo.heic', import.meta.url)) });
+    await expect(page.locator('#toast')).toContainText('HEIC-Foto konnte nicht gelesen werden');
+    await expect(page.locator('[data-img-del]')).toHaveCount(0);
+  });
+});
+
 test('editor: own hunt with a quiz, conditions and effects; saved separately from the game', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(URL_);
