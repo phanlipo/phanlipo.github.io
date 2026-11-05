@@ -2,12 +2,13 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "treasure-hunt";
-const VERSION = '9776f0fb3a10';
+const VERSION = '6d8cb65b4954';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
   "index.html",
   "engine.js",
+  "heic-worker.js",
   "icon-180.png",
   "icon-192.png",
   "icon-512.png",
@@ -19,10 +20,13 @@ const FILES = [
   "tts-worker.js",
   "../assets/base.css",
   "../assets/common.js",
+  "../assets/shared/heic-decode.js",
+  "../assets/shared/heic.js",
   "../assets/shared/onnx-tts.js"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
 const RUNTIME = {
+  "../assets/vendor/libheif/": "vendor:libheif@1.23.5",
   "../assets/vendor/onnxruntime-web/": "vendor:onnxruntime-web@1.31.0-dev.20260914-8d85527a0",
   "../assets/vendor/piper-wasm/": "vendor:piper-wasm@1.0.0"
 };
