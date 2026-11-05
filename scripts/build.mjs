@@ -27,7 +27,8 @@
 //   tool:short-name                                      name under the home-screen icon (≤ 12 chars)
 //   tool:storage                                         localStorage key prefix(es) of the app, comma-separated
 //   tool:share-target                                    accepted file types for "share to this app" (Android, one or several files),
-//                                                        e.g. "audio/*, .opus" – see AGENTS.md
+//                                                        e.g. "audio/*, .opus" – see AGENTS.md. The file extensions in it
+//                                                        also become file_handlers ("Open with", Windows/desktop)
 //   tool:share-text ("true")                             receive shared links/text (Android) as ?title=&text=&url=
 //   tool:webmcp ("a, b")                                 WebMCP tools the page registers (names without app prefix);
 //                                                        needs the feature "KI-Agent", checked by tests/webmcp.spec.mjs
@@ -235,6 +236,32 @@ function renderHead(p) {
 }
 
 /* ---------- PWA ---------- */
+// File handling (Chrome/Edge on Windows, macOS, Linux, ChromeOS): the installed app is offered under
+// "Open with" for these extensions. The browser registers the extensions; the MIME type is only the key.
+const FILE_TYPES = {
+  '.pdf': 'application/pdf',
+  '.md': 'text/markdown', '.markdown': 'text/markdown', '.txt': 'text/plain',
+  '.mid': 'audio/midi', '.midi': 'audio/midi',
+  '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav', '.flac': 'audio/flac',
+  '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.opus': 'audio/ogg',
+  '.webm': 'video/webm', '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime',
+  '.mkv': 'video/x-matroska', '.3gp': 'video/3gpp',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+  '.heic': 'image/heic', '.heif': 'image/heif',
+};
+function fileHandlers(p) {
+  const exts = p.shareAccept.filter(a => a.startsWith('.')).map(a => a.toLowerCase());
+  if (!exts.length) return null;
+  const accept = {};
+  for (const ext of exts) {
+    const type = FILE_TYPES[ext];
+    if (!type) throw new Error(`${p.file}: tool:share-target – no MIME type for ${ext}, add it to FILE_TYPES in scripts/build.mjs`);
+    (accept[type] ||= []).includes(ext) || accept[type].push(ext);
+  }
+  // ?opened=1: Tools.takeSharedFiles() then waits for window.launchQueue. One launch gets all selected files.
+  return [{ action: './?opened=1', name: p.title, accept }];
+}
+
 function manifest(p) {
   if (p.shareAccept.length && p.shareText) throw new Error(`${p.file}: tool:share-target and tool:share-text together are not supported yet`);
   const icon = (src, sizes, extra) => existsSync(join(ROOT, p.folder, src)) ? [{ src, sizes, type: 'image/png', ...extra }] : [];
@@ -264,6 +291,11 @@ function manifest(p) {
         enctype: 'multipart/form-data',
         params: { files: [{ name: 'file', accept: p.shareAccept }] },
       },
+    } : {}),
+    ...(fileHandlers(p) ? {
+      file_handlers: fileHandlers(p),
+      // Each opened file starts its own window, so work open in another one is never replaced
+      launch_handler: { client_mode: 'navigate-new' },
     } : {}),
     ...(p.shareText ? {
       // Shared links/text (Android) open the start page as ./?title=…&text=…&url=… – Tools.takeSharedText().
