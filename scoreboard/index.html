@@ -19,7 +19,7 @@
 <meta name="tool:storage" content="scoreboard.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-6RTPzfC6Ei0C6pWSkuZndJ3uQ3EtiVktHXlCj3xbanU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-0/SClVeqvuGzregnKNdrzOq8sa9Nik3y3348WIT25rc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -111,6 +111,17 @@ body.stage>main{display:flex;flex-direction:column;padding:8px;padding-inline:ma
 .board[data-sport="darts"] .tile:active{transform:none}
 .board[data-sport="darts"] .side .tile:not(.turn){opacity:.7}
 .done .co{color:var(--hot);font-weight:700}
+/* Darts with 3–6 players: players in two columns, number pad beside them (landscape) or below (portrait) */
+.board[data-multi] .sides{grid-template-columns:repeat(2,minmax(0,1fr)) auto;grid-template-rows:repeat(var(--rows),minmax(0,1fr));gap:6px}
+.board[data-multi] .pad{grid-column:3;grid-row:1/-1;align-self:center}
+.board[data-multi] .side{gap:2px;border-radius:10px}
+.board[data-multi] .name-row{min-height:0}
+.board[data-multi] .name{font-size:clamp(15px,3.4vmin,24px)}
+.board[data-multi] .score{gap:4px}
+.board[data-multi] .pts{font-size:min(72cqh,24cqw)}
+.board[data-multi] .minis{width:min(22cqw,44px)}
+.board[data-multi] .mini .k{font-size:clamp(9px,12cqh,12px)}
+.board[data-multi] .done{font-size:12px}
 
 /* Portrait: the two sides above each other, so the digits get big */
 @media (orientation:portrait){
@@ -133,6 +144,12 @@ body.stage>main{display:flex;flex-direction:column;padding:8px;padding-inline:ma
   .board[data-sport="darts"] .mini{max-height:none}
   .board[data-sport="darts"] .pts{font-size:min(60cqh,26cqw)}
   .board[data-sport="darts"] .side.right .name-row{flex-direction:row}
+  .board[data-multi] .sides{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(var(--rows),minmax(0,1fr)) auto}
+  .board[data-multi] .side:first-child,.board[data-multi] .side:last-child{grid-area:auto}
+  .board[data-multi] .pad{grid-column:1/-1;grid-row:-2/-1}
+  .board[data-multi] .score{flex-direction:row}
+  .board[data-multi] .minis{flex-direction:column;width:min(22cqw,44px);height:auto}
+  .board[data-multi] .pts{font-size:min(70cqh,26cqw)}
 }
 
 /* Settings in the menu */
@@ -145,6 +162,9 @@ body.stage>main{display:flex;flex-direction:column;padding:8px;padding-inline:ma
 .sports button{border-block-end:1px solid var(--border)}
 .sports button:nth-child(odd){border-inline-start:0}
 .sports button:last-child:nth-child(odd){grid-column:1/-1;border-block-end:0}
+.seg.wrap{grid-auto-flow:row;grid-template-columns:repeat(3,1fr)}
+.seg.wrap button{border-block-end:1px solid var(--border)}
+.seg.wrap button:nth-child(3n+1){border-inline-start:0}
 .field{display:flex;flex-direction:column;gap:4px;margin-block-end:10px}
 .field>span{font-size:13px;color:var(--muted);font-weight:600}
 .field input,.field select{font:inherit;font-size:16px;min-height:46px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);width:100%;min-width:0}
@@ -207,10 +227,14 @@ body.stage>main{display:flex;flex-direction:column;padding:8px;padding-inline:ma
     <h3 data-i18n="names">Namen</h3>
     <label class="field"><span id="lblName0">Spieler 1</span><input type="text" id="name0" maxlength="30" autocomplete="off" enterkeyhint="next"></label>
     <label class="field"><span id="lblName1">Spieler 2</span><input type="text" id="name1" maxlength="30" autocomplete="off" enterkeyhint="done"></label>
+    <label class="field" hidden><span id="lblName2">Spieler 3</span><input type="text" id="name2" maxlength="30" autocomplete="off" enterkeyhint="next"></label>
+    <label class="field" hidden><span id="lblName3">Spieler 4</span><input type="text" id="name3" maxlength="30" autocomplete="off" enterkeyhint="next"></label>
+    <label class="field" hidden><span id="lblName4">Spieler 5</span><input type="text" id="name4" maxlength="30" autocomplete="off" enterkeyhint="next"></label>
+    <label class="field" hidden><span id="lblName5">Spieler 6</span><input type="text" id="name5" maxlength="30" autocomplete="off" enterkeyhint="done"></label>
 
     <div id="optFirst">
       <h3 id="h-first">Erster Aufschlag</h3>
-      <div class="seg" role="group" aria-labelledby="h-first">
+      <div class="seg" role="group" aria-labelledby="h-first" id="firstSeg">
         <button type="button" data-first="0" aria-pressed="true" id="first0">Spieler 1</button>
         <button type="button" data-first="1" aria-pressed="false" id="first1">Spieler 2</button>
       </div>
@@ -226,6 +250,8 @@ body.stage>main{display:flex;flex-direction:column;padding:8px;padding-inline:ma
       <label class="check"><input type="checkbox" id="mtb"><span data-i18n="mtb">Entscheidungssatz als Match-Tiebreak bis 10</span></label>
     </div>
     <div id="optDarts">
+      <h3 id="h-players" data-i18n="dartPlayers">Spieler</h3>
+      <div class="seg" role="group" aria-labelledby="h-players" id="dartPlayers"></div>
       <h3 id="h-start" data-i18n="dartStart">Startpunkte</h3>
       <div class="seg" role="group" aria-labelledby="h-start" id="dartStart"></div>
       <h3 id="h-legs" data-i18n="dartLegs">Legs zum Sieg</h3>
@@ -276,7 +302,7 @@ body.stage>main{display:flex;flex-direction:column;padding:8px;padding-inline:ma
     <li><b>Fußball:</b> Tore zählen und Spieluhr mit <i>Start</i>/<i>Pause</i>. Nach Ablauf einer Halbzeit läuft die Nachspielzeit weiter (z. B. 45:00 +2:13), mit <i>2. Halbzeit</i> geht es weiter ab 45:00. Die Länge einer Halbzeit lässt sich im Menü einstellen. Die Uhr läuft weiter, auch wenn die App kurz geschlossen wird.</li>
     <li><b>Tischtennis:</b> Sätze bis 11 mit 2 Punkten Abstand, 3, 5 oder 7 Sätze (Gewinnsätze 2, 3 oder 4). Der weiße Punkt zeigt, wer aufschlägt: Wechsel nach 2 Punkten, ab 10:10 nach jedem Punkt, jeder Satz beginnt mit dem anderen Spieler. <b>T</b> neben dem Namen markiert die Auszeit (eine pro Spiel). Im Entscheidungssatz erinnert die Anzeige bei 5 Punkten an den Seitenwechsel.</li>
     <li><b>Tennis und Padel:</b> 0 – 15 – 30 – 40 – Spiel, bei 40:40 Einstand und Vorteil (AD) oder <i>Golden Point</i> (Padel voreingestellt). Sätze bis 6 Spiele mit 2 Abstand, bei 6:6 Tiebreak bis 7. Auf Wunsch wird der Entscheidungssatz als Match-Tiebreak bis 10 gespielt. Aufschlag wechselt jedes Spiel, im Tiebreak nach dem ersten und dann alle 2 Punkte. Die Anzeige erinnert an den Seitenwechsel (nach jedem ungeraden Spiel, im Tiebreak alle 6 Punkte).</li>
-    <li><b>Darts:</b> 301, 501 oder 701 Punkte herunterspielen, Legs zum Sieg 1, 2, 3 oder 5. Nach jeder Aufnahme (3 Pfeile) die Summe auf dem Ziffernblock eintippen und <i>OK</i> – wer dran ist, ergibt sich von selbst, jedes Leg beginnt der andere Spieler. Liegt die Summe über dem Rest (oder bleibt mit Double-Out 1 übrig), zählt die Aufnahme als <i>überworfen</i>; endet ein Pfeil nicht wie nötig auf einem Doppel, <i>Überworfen</i> tippen. Mit Double-Out zeigt die Tafel ab 170 einen möglichen Finish-Weg (z. B. T20 T20 Bull). Unter dem Namen stehen die letzte Aufnahme und der Durchschnitt pro Aufnahme (3 Pfeile).</li>
+    <li><b>Darts:</b> 301, 501 oder 701 Punkte herunterspielen, Legs zum Sieg 1, 2, 3 oder 5. 2 bis 6 Spieler (im Menü unter <i>Spieler</i>; ab 3 stehen die Spieler in zwei Spalten). Nach jeder Aufnahme (3 Pfeile) die Summe auf dem Ziffernblock eintippen und <i>OK</i> – wer dran ist, ergibt sich von selbst, es wird reihum geworfen und jedes Leg beginnt der nächste Spieler. Liegt die Summe über dem Rest (oder bleibt mit Double-Out 1 übrig), zählt die Aufnahme als <i>überworfen</i>; endet ein Pfeil nicht wie nötig auf einem Doppel, <i>Überworfen</i> tippen. Mit Double-Out zeigt die Tafel ab 170 einen möglichen Finish-Weg (z. B. T20 T20 Bull). Unter dem Namen stehen die letzte Aufnahme und der Durchschnitt pro Aufnahme (3 Pfeile).</li>
     <li>Satzball und Matchball werden oben angezeigt, ebenso Einstand und Tiebreak. Unten stehen die Ergebnisse der fertigen Sätze.</li>
   </ul>
   <h3>Gespeichert</h3>
@@ -300,7 +326,7 @@ body.stage>main{display:flex;flex-direction:column;padding:8px;padding-inline:ma
     <li><b>Football:</b> count goals and run the match clock with <i>Start</i>/<i>Pause</i>. When a half is over, stoppage time keeps running (e.g. 45:00 +2:13); <i>2nd half</i> continues from 45:00. Set the length of a half in the menu. The clock keeps running even if the app is closed for a moment.</li>
     <li><b>Table tennis:</b> games to 11 with a 2-point lead, best of 3, 5 or 7. The white dot shows who serves: change after 2 points, from 10:10 after every point, each game starts with the other player. <b>T</b> next to the name marks the time-out (one per match). In the deciding game the board reminds you to change ends at 5 points.</li>
     <li><b>Tennis and padel:</b> 0 – 15 – 30 – 40 – game, at 40:40 deuce and advantage (AD) or <i>golden point</i> (default for padel). Sets to 6 games with a 2-game lead, tiebreak to 7 at 6:6. Optionally the deciding set is a match tiebreak to 10. The serve changes every game, in the tiebreak after the first point and then every 2 points. The board reminds you to change ends (after every odd game, in the tiebreak every 6 points).</li>
-    <li><b>Darts:</b> count down from 301, 501 or 701, first to 1, 2, 3 or 5 legs. After each visit (3 darts) type the total on the number pad and press <i>OK</i> – whose turn it is follows by itself, and each leg is started by the other player. If the total is more than what is left (or leaves 1 with double out), the visit is a <i>bust</i>; if the last dart did not land on a double as needed, tap <i>Bust</i>. With double out the board shows a possible checkout from 170 (e.g. T20 T20 Bull). Below the name are the last visit and the average per visit (3 darts).</li>
+    <li><b>Darts:</b> count down from 301, 501 or 701, first to 1, 2, 3 or 5 legs. 2 to 6 players (in the menu under <i>Players</i>; from 3 on the players are shown in two columns). After each visit (3 darts) type the total on the number pad and press <i>OK</i> – whose turn it is follows by itself, players throw in turn and each leg is started by the next player. If the total is more than what is left (or leaves 1 with double out), the visit is a <i>bust</i>; if the last dart did not land on a double as needed, tap <i>Bust</i>. With double out the board shows a possible checkout from 170 (e.g. T20 T20 Bull). Below the name are the last visit and the average per visit (3 darts).</li>
     <li>Set point and match point are shown at the top, as are deuce and tiebreak. Below are the scores of the finished sets.</li>
   </ul>
   <h3>Saved</h3>
@@ -319,7 +345,7 @@ body.stage>main{display:flex;flex-direction:column;padding:8px;padding-inline:ma
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version e550e0aac0b0</p>
+  <p class="footer-version">Version bf289b59b060</p>
   <!-- footer:end -->
 </footer>
 
@@ -346,8 +372,9 @@ Tools.i18n({
     'sp.darts':'Darts',legs:'Legs',leg:'Leg {n}',turn:'{name} ist dran',bust:'Überworfen!',lastVisit:'Letzte {v}',avg:'Ø {v}',
     finish:'Finish {name}: {route}',noVisit:'{v} ist mit 3 Pfeilen nicht möglich',padPh:'Punkte der Aufnahme',padSr:'Eingabe: {v}',
     remainSr:'{name}: noch {v}',firstServe:'Erster Aufschlag',firstThrow:'Wer beginnt',
-    firstHint:'Danach wechselt der Aufschlag automatisch nach den Regeln.',firstHintDarts:'Danach beginnt jedes Leg der andere Spieler.',
-    ptsN:'{n} Punkte',legsN:'{n}',
+    firstHint:'Danach wechselt der Aufschlag automatisch nach den Regeln.',firstHintDarts:'Danach beginnt jedes Leg der nächste Spieler.',
+    ptsN:'{n} Punkte',legsN:'{n}',playerN:'Spieler {n}',
+    confirmPlayers:'Spielerzahl ändern? Der laufende Spielstand im Darts wird auf null gesetzt.',
   },
   en:{
     title:'Scoreboard',sub:'Show the score big',undo:'Undo',swap:'Swap sides',start:'Start',pause:'Pause',
@@ -370,13 +397,16 @@ Tools.i18n({
     'sp.darts':'Darts',legs:'Legs',leg:'Leg {n}',turn:'{name} to throw',bust:'Bust!',lastVisit:'Last {v}',avg:'Avg {v}',
     finish:'Checkout {name}: {route}',noVisit:'{v} is not possible with 3 darts',padPh:'Score of the visit',padSr:'Entry: {v}',
     remainSr:'{name}: {v} left',firstServe:'First serve',firstThrow:'Who starts',
-    firstHint:'After that the serve changes automatically by the rules.',firstHintDarts:'After that each leg is started by the other player.',
+    firstHint:'After that the serve changes automatically by the rules.',firstHintDarts:'After that each leg is started by the next player.',
+    playerN:'Player {n}',dartPlayers:'Players',
+    confirmPlayers:'Change the number of players? The current darts score is set back to zero.',
     ptsN:'{n} points',legsN:'{n}',del:'Delete',ok:'OK',bustKey:'Bust',dartStart:'Starting score',dartLegs:'Legs to win',
     doubleOut:'Double out (finish on a double or bull)',
   }
 });
 const t=Tools.t, $=Tools.$, R=window.ScoreRules;
 const LS='scoreboard.state.v1';
+const MAXP=Math.max(...R.DART_PLAYERS);
 const SPORT_EN={football:'football',tabletennis:'table_tennis',tennis:'tennis',padel:'padel',darts:'darts'};
 
 /* ---------- State: one match per sport ---------- */
@@ -393,6 +423,9 @@ function loadState(){
     // Darts: scores of the visits (-1 = bust), otherwise who won each point
     m.pts=(Array.isArray(m.pts)?m.pts:[]).filter(sp==='darts'?(v=>v===-1||R.validVisit(v)):(p=>p===0||p===1));
     if(!Array.isArray(m.at))m.at=[];
+    if(!Array.isArray(m.names))m.names=['',''];
+    m.names=m.names.slice(0,sp==='darts'?MAXP:2).map(v=>typeof v==='string'?v:'');
+    if(!Number.isInteger(m.first)||m.first<0||m.first>=(sp==='darts'?R.dartPlayers(m.cfg):2))m.first=0;
     out.m[sp]=m;
   }
   return out;
@@ -401,7 +434,9 @@ const S=loadState();
 const M=()=>S.m[S.sport];
 const save=()=>Tools.save(LS,S);
 
-const defName=(sp,p)=>sp==='football'?t(p?'away':'home'):t(p?'player2':'player1');
+const defName=(sp,p)=>sp==='football'?t(p?'away':'home'):p>1?t('playerN',{n:p+1}):t(p?'player2':'player1');
+// Players on the board: 2, in darts up to 6
+const count=(m=M(),sp=S.sport)=>sp==='darts'?R.dartPlayers(m.cfg):2;
 const nameOf=(p,m=M(),sp=S.sport)=>(m.names[p]||'').trim()||defName(sp,p);
 
 /* ---------- Football clock ---------- */
@@ -506,9 +541,16 @@ function render(){
   const board=$('board');
   board.dataset.sport=sp;
   $('sportName').textContent=t('sp.'+sp);
-  const order=m.swapped?[1,0]:[0,1];
-  const sides=board.querySelectorAll('.side');
-  sides.forEach((el,i)=>{el.dataset.p=order[i];el.classList.toggle('right',i===1);el.innerHTML=sideHtml(order[i],s,i===1);});
+  // Darts with more than 2 players: one more .side per player after the second
+  const n=count(m,sp),multi=n>2,box=$('sides');
+  let sides=[...box.querySelectorAll('.side')];
+  for(;sides.length<n;sides.push(box.appendChild(Object.assign(document.createElement('section'),{className:'side'}))));
+  for(;sides.length>n;)sides.pop().remove();
+  board.toggleAttribute('data-multi',multi);
+  box.style.setProperty('--rows',Math.ceil(n/2));
+  const order=[...Array(n).keys()];
+  if(m.swapped)order.reverse();
+  sides.forEach((el,i)=>{el.dataset.p=order[i];el.classList.toggle('right',!multi&&i===1);el.innerHTML=sideHtml(order[i],s,!multi&&i===1);});
   $('info').innerHTML=infoText(s);
   $('mid').hidden=sp!=='football';
   $('pad').hidden=sp!=='darts';
@@ -604,14 +646,19 @@ document.addEventListener('keydown',e=>{
 function renderSettings(){
   const m=M(),sp=S.sport;
   for(const b of document.querySelectorAll('#sports [data-sport]'))b.setAttribute('aria-pressed',String(b.dataset.sport===sp));
-  for(const p of [0,1]){
+  const n=count(m,sp);
+  for(let p=0;p<MAXP;p++){
     const inp=$('name'+p);
+    inp.closest('label').hidden=p>=n;
+    inp.enterKeyHint=p===n-1?'done':'next';
     if(document.activeElement!==inp)inp.value=m.names[p]||'';
     inp.placeholder=defName(sp,p);
     $('lblName'+p).textContent=t('nameOf',{n:p+1});
-    $('first'+p).textContent=nameOf(p);
-    $('first'+p).setAttribute('aria-pressed',String(m.first===p));
   }
+  // Who starts: one button per player (wraps into rows of 3 from 4 players)
+  const seg=$('firstSeg');
+  seg.classList.toggle('wrap',n>3);
+  seg.innerHTML=[...Array(n).keys()].map(p=>`<button type="button" data-first="${p}" aria-pressed="${m.first===p}" id="first${p}">${esc(nameOf(p))}</button>`).join('');
   const racket=sp!=='football'&&sp!=='darts';
   $('optFirst').hidden=sp==='football';$('optBest').hidden=!racket;
   $('h-first').textContent=t(sp==='darts'?'firstThrow':'firstServe');
@@ -621,6 +668,7 @@ function renderSettings(){
     $('dartStart').innerHTML=R.DART_START.map(n=>`<button type="button" data-start="${n}" aria-pressed="${m.cfg.start===n}">${n}</button>`).join('');
     $('dartLegs').innerHTML=R.DART_LEGS.map(n=>`<button type="button" data-legs="${n}" aria-pressed="${m.cfg.legs===n}">${n}</button>`).join('');
     $('doubleOut').checked=!!m.cfg.doubleOut;
+    $('dartPlayers').innerHTML=R.DART_PLAYERS.map(k=>`<button type="button" data-players="${k}" aria-pressed="${n===k}">${k}</button>`).join('');
   }
   $('optTennis').hidden=sp!=='tennis'&&sp!=='padel';
   $('optFootball').hidden=sp!=='football';
@@ -637,7 +685,7 @@ $('sports').addEventListener('click',e=>{
   S.sport=b.dataset.sport;save();render();
   Tools.diag.log('sport',{sport:S.sport});
 });
-for(const p of [0,1])$('name'+p).addEventListener('input',e=>{M().names[p]=e.target.value.slice(0,30);save();render();});
+for(let p=0;p<MAXP;p++)$('name'+p).addEventListener('input',e=>{M().names[p]=e.target.value.slice(0,30);save();render();});
 document.querySelector('#optFirst .seg').addEventListener('click',e=>{
   const b=e.target.closest('[data-first]');if(!b)return;M().first=Number(b.dataset.first);save();render();
 });
@@ -646,6 +694,17 @@ $('bestOf').addEventListener('click',e=>{
 });
 $('dartStart').addEventListener('click',e=>{const b=e.target.closest('[data-start]');if(!b)return;M().cfg.start=Number(b.dataset.start);save();render();});
 $('dartLegs').addEventListener('click',e=>{const b=e.target.closest('[data-legs]');if(!b)return;M().cfg.legs=Number(b.dataset.legs);save();render();});
+$('dartPlayers').addEventListener('click',e=>{
+  const b=e.target.closest('[data-players]');if(!b)return;
+  const m=M(),k=Number(b.dataset.players);
+  if(k===count(m))return;
+  // The visits only make sense for the number of players they were thrown with
+  if(m.pts.length&&!confirm(t('confirmPlayers')))return;
+  m.cfg.players=k;m.pts=[];m.at=[];
+  if(m.first>=k)m.first=0;
+  save();render();
+  Tools.diag.log('darts players',{players:k});
+});
 $('doubleOut').addEventListener('change',e=>{M().cfg.doubleOut=e.target.checked;save();render();});
 $('golden').addEventListener('change',e=>{M().cfg.goldenPoint=e.target.checked;save();render();});
 $('mtb').addEventListener('change',e=>{M().cfg.matchTiebreak=e.target.checked;save();render();});
@@ -675,13 +734,13 @@ wake();
 Tools.onLang(render);
 render();
 
-Tools.diag.info(()=>({sport:S.sport,points:M().pts.length,swapped:M().swapped,clockRunning:M().clock.since!=null,
+Tools.diag.info(()=>({sport:S.sport,players:count(),points:M().pts.length,swapped:M().swapped,clockRunning:M().clock.since!=null,
   wakeLock:'wakeLock' in navigator?(lock?'on':'off'):'unsupported'}));
 
 /* ---------- WebMCP ---------- */
 function scoreJson(){
   const m=M(),s=R.score(Object.assign({sport:S.sport},m)),out={sport:SPORT_EN[S.sport],
-    players:[0,1].map(p=>({number:p+1,name:nameOf(p)})),points:s.points.slice()};
+    players:[...Array(count()).keys()].map(p=>({number:p+1,name:nameOf(p)})),points:s.points.slice()};
   if(S.sport==='football'){
     const k=clockState();
     out.goals=s.raw.slice();
@@ -693,6 +752,7 @@ function scoreJson(){
     out.legs_to_win=s.need;
     out.leg=s.leg;
     out.starting_score=m.cfg.start;
+    out.player_count=count();
     out.double_out=!!m.cfg.doubleOut;
     out.to_throw=s.server==null?null:s.server+1;
     out.last_visit=s.last.map(v=>(v==null?null:v<0?'bust':v));
@@ -713,15 +773,15 @@ function scoreJson(){
 }
 Tools.mcp.register({
   name:'get_score',title:'Read the score',readOnly:true,
-  description:'Returns the current score of the sport shown on the scoreboard (football, table_tennis, tennis, padel or darts): the two players or teams (number 1 and 2 with their names), the points as shown (tennis/padel: 0, 15, 30, 40, AD; in a tiebreak plain numbers; darts: the score left), sets, games, finished sets, who serves, set or match point, the winner, for football the goals, the goal minutes and the match clock, and for darts the legs, who is to throw, the last visits, the average per visit and a checkout suggestion.',
+  description:'Returns the current score of the sport shown on the scoreboard (football, table_tennis, tennis, padel or darts): the players or teams (number 1 and 2 with their names; darts: 2 to 6 players, number 1 to 6), the points as shown (tennis/padel: 0, 15, 30, 40, AD; in a tiebreak plain numbers; darts: the score left), sets, games, finished sets, who serves, set or match point, the winner, for football the goals, the goal minutes and the match clock, and for darts the legs, who is to throw, the last visits, the average per visit and a checkout suggestion.',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
   execute:()=>scoreJson()
 });
 Tools.mcp.register({
   name:'add_point',title:'Add a point or goal',label:'mcp.point',
-  description:'Gives player or team 1 or 2 one point (football: one goal) in the sport shown on the scoreboard, following its rules (games, sets, tiebreak, serve change). For darts it enters the visit (score of 3 darts) of the player whose turn it is: give player and score; a score above what is left is counted as bust. Fails when the match is already won. Returns the new score in the same form as get_score.',
+  description:'Gives player or team 1 or 2 one point (football: one goal) in the sport shown on the scoreboard, following its rules (games, sets, tiebreak, serve change). For darts (2 to 6 players) it enters the visit (score of 3 darts) of the player whose turn it is: give player and score; a score above what is left is counted as bust. Fails when the match is already won. Returns the new score in the same form as get_score.',
   inputSchema:{type:'object',properties:{
-    player:{type:'integer',enum:[1,2],description:'1 = first player or team (home in football), 2 = second (away).'},
+    player:{type:'integer',enum:[1,2,3,4,5,6],description:'1 = first player or team (home in football), 2 = second (away); darts with more players: 3 to 6.'},
     score:{type:'integer',minimum:0,maximum:180,description:'Darts only: the score of the visit (0-180).'},
     bust:{type:'boolean',description:'Darts only: the visit is a bust (e.g. the last dart was not a double), the score stays.'}
   },required:['player'],additionalProperties:false},
@@ -734,6 +794,7 @@ Tools.mcp.register({
       addVisit(i.bust===true?-1:i.score,'mcp');
       return scoreJson();
     }
+    if(i.player>2)throw new Error('input.player must be 1 or 2 in this sport.');
     if(i.score!=null||i.bust!=null)throw new Error('score and bust are only for darts.');
     if(!addPoint(i.player-1,'mcp'))throw new Error('The match is already won – start a new match in the app first.');
     return scoreJson();

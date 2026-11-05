@@ -1,7 +1,8 @@
 /* Scoring rules of the scoreboard – no DOM, loaded by index.html (window.ScoreRules).
    A match is a list of points (0 = player/team 1, 1 = player/team 2); the score is always worked out
    from that list again. So undo = drop the last point, and a correction cannot leave a wrong state.
-   Darts: the list holds the score of each visit (3 darts) instead, -1 = bust; whose turn it is follows from the order. */
+   Darts: the list holds the score of each visit (3 darts) instead, -1 = bust; whose turn it is follows from the order
+   (2 to 6 players in turn, cfg.players). */
 (function (root) {
   'use strict';
 
@@ -11,10 +12,12 @@
     tabletennis: { bestOf: 5 },
     tennis: { bestOf: 3, goldenPoint: false, matchTiebreak: false },
     padel: { bestOf: 3, goldenPoint: true, matchTiebreak: false },
-    darts: { start: 501, doubleOut: true, legs: 3 },
+    darts: { start: 501, doubleOut: true, legs: 3, players: 2 },
   };
   const DART_START = [301, 501, 701];
   const DART_LEGS = [1, 2, 3, 5];
+  const DART_PLAYERS = [2, 3, 4, 5, 6];
+  const dartPlayers = cfg => (DART_PLAYERS.includes(cfg && cfg.players) ? cfg.players : 2);
   const BEST_OF = { tabletennis: [3, 5, 7], tennis: [3, 5], padel: [3, 5] };
   const HALF_MIN = [5, 10, 15, 20, 25, 30, 35, 40, 45];
 
@@ -146,10 +149,12 @@
     }
     return null;
   }
+  // Players throw in turn; each leg is started by the next player (with 2: the other one)
   function darts(visits, cfg, first) {
-    const need = cfg.legs, start = cfg.start, legs = [0, 0], done = [];
-    const stats = [{ scored: 0, visits: 0, last: null }, { scored: 0, visits: 0, last: null }];
-    let rem = [start, start], leg = 0, turn = first, winner = null, lastBust = false;
+    const n = dartPlayers(cfg), need = cfg.legs, start = cfg.start, legs = Array(n).fill(0), done = [];
+    const stats = Array.from({ length: n }, () => ({ scored: 0, visits: 0, last: null }));
+    first = first >= 0 && first < n ? first : 0;
+    let rem = Array(n).fill(start), leg = 0, turn = first, winner = null, lastBust = false;
     for (const v of visits) {
       if (winner != null) break;
       const r = rem[turn] - v;
@@ -161,11 +166,11 @@
       if (!bust && r === 0) {
         legs[turn]++; done.push({ games: legs.slice(), winner: turn, rest: rem.slice() });
         if (legs[turn] === need) { winner = turn; break; }
-        leg++; rem = [start, start]; turn = leg % 2 ? other(first) : first;
-      } else turn = other(turn);
+        leg++; rem = Array(n).fill(start); turn = (first + leg) % n;
+      } else turn = (turn + 1) % n;
     }
     return {
-      sport: 'darts', points: rem.map(String), raw: rem, sets: legs, games: null, done, need, leg: leg + 1,
+      sport: 'darts', players: n, points: rem.map(String), raw: rem, sets: legs, games: null, done, need, leg: leg + 1,
       server: winner != null ? null : turn, winner, bust: lastBust && winner == null,
       average: stats.map(x => (x.visits ? x.scored / x.visits : 0)), last: stats.map(x => x.last),
       checkout: winner == null && cfg.doubleOut ? checkout(rem[turn]) : null,
@@ -174,7 +179,7 @@
 
   function score(match) {
     const cfg = Object.assign({}, DEFAULTS[match.sport], match.cfg);
-    const pts = match.pts || [], first = match.first ? 1 : 0;
+    const pts = match.pts || [], first = match.sport === 'darts' ? (Number.isInteger(match.first) ? match.first : 0) : match.first ? 1 : 0;
     let s;
     if (match.sport === 'tabletennis') s = tableTennis(pts, cfg, first);
     else if (match.sport === 'tennis' || match.sport === 'padel') s = tennis(pts, cfg, first, match.sport);
@@ -208,5 +213,5 @@
       minute: halfMin * half, plus: Math.floor(add / 60) + 1 };
   }
 
-  root.ScoreRules = { SPORTS, DEFAULTS, BEST_OF, HALF_MIN, DART_START, DART_LEGS, validVisit, checkout, score, clock };
+  root.ScoreRules = { SPORTS, DEFAULTS, BEST_OF, HALF_MIN, DART_START, DART_LEGS, DART_PLAYERS, dartPlayers, validVisit, checkout, score, clock };
 })(typeof self !== 'undefined' ? self : globalThis);

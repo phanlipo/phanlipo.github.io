@@ -468,7 +468,104 @@ test.describe('darts', () => {
     // Ben scored 60 + 41 → 701 − 101 = 600
     await expect(pts(page, 1)).toHaveText('600');
     await expect(page.locator('#info')).not.toContainText('Finish');
-    expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)).m.darts.cfg, LS)).toEqual({ start: 701, legs: 2, doubleOut: false });
+    expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)).m.darts.cfg, LS)).toEqual({ start: 701, legs: 2, doubleOut: false, players: 2 });
+  });
+
+  test('rules: 3 players throw in turn, each leg is started by the next player', async ({ page }) => {
+    const cfg = { start: 301, legs: 2, doubleOut: true, players: 3 };
+    // Visits go 1, 2, 3, 1 …: 301 − 100 = 201, 301 − 60 = 241, 301 − 45 = 256, then player 1 again
+    let s = await rules(page, 'darts', [100, 60, 45, 101], cfg);
+    expect(s.points).toEqual(['100', '241', '256']);
+    expect(s.server).toBe(1);
+    expect(s.sets).toEqual([0, 0, 0]);
+    expect(s.last).toEqual([101, 60, 45]);
+    // Player 3 checks out 121 in the second round → leg 2, started by player 2 (next after player 1)
+    s = await rules(page, 'darts', [100, 60, 180, 0, 0, 121], cfg);
+    expect(s.sets).toEqual([0, 0, 1]);
+    expect(s.points).toEqual(['301', '301', '301']);
+    expect(s.leg).toBe(2);
+    expect(s.server).toBe(1);
+    // Leg 3 is started by player 3; player 3 wins leg 2 as well → winner after 2 legs
+    s = await rules(page, 'darts', [100, 60, 180, 0, 0, 121, 0, 180, 0, 0, 121], cfg);
+    expect(s.winner).toBe(2);
+    // Player 3 starts the match; 6 players: player 6 → player 1
+    s = await rules(page, 'darts', [50], cfg, 2);
+    expect(s.points).toEqual(['301', '301', '251']);
+    expect(s.server).toBe(0);
+    s = await rules(page, 'darts', [1, 2, 3, 4, 5, 6, 7], { ...cfg, players: 6 });
+    expect(s.points).toEqual(['293', '299', '298', '297', '296', '295']);
+    expect(s.server).toBe(1);
+    // Unknown player count → 2
+    s = await rules(page, 'darts', [], { ...cfg, players: 9 });
+    expect(s.points).toEqual(['301', '301']);
+  });
+
+  test('more players: count in the menu, names, who starts, board, new match after asking', async ({ page }) => {
+    await pickSport(page, 'darts');
+    await visit(page, 60);
+    await openMenu(page);
+    await expect(page.locator('#name2')).toBeHidden();
+    await expect(page.locator('#dartPlayers [data-players="2"]')).toHaveAttribute('aria-pressed', 'true');
+    // Changing the count while a match runs asks first – cancelled, nothing changes
+    page.once('dialog', d => d.dismiss());
+    await page.click('#dartPlayers [data-players="4"]');
+    await expect(page.locator('#dartPlayers [data-players="2"]')).toHaveAttribute('aria-pressed', 'true');
+    page.once('dialog', d => { expect(d.message()).toContain('Spielerzahl'); d.accept(); });
+    await page.click('#dartPlayers [data-players="4"]');
+    await expect(page.locator('#name3')).toBeVisible();
+    await expect(page.locator('#name4')).toBeHidden();
+    await page.fill('#name2', 'Cem');
+    await expect(page.locator('#firstSeg [data-first]')).toHaveText(['Spieler 1', 'Spieler 2', 'Cem', 'Spieler 4']);
+    await page.click('#first2');
+    await closeMenu(page);
+    await expect(page.locator('.side')).toHaveCount(4);
+    expect(await page.locator('.side .name').allTextContents()).toEqual(['Spieler 1', 'Spieler 2', 'Cem', 'Spieler 4']);
+    // The visit from before is gone, Cem starts
+    await expect(pts(page, 0)).toHaveText('501');
+    await expect(page.locator('#info')).toHaveText('Leg 1 · Cem ist dran');
+    await visit(page, 100);
+    await visit(page, 26);
+    await expect(pts(page, 2)).toHaveText('401');
+    await expect(pts(page, 3)).toHaveText('475');
+    await expect(page.locator('#info')).toHaveText('Leg 1 · Spieler 1 ist dran');
+    expect(await serving(page)).toBe(0);
+    await page.click('#btnUndo');
+    expect(await serving(page)).toBe(3);
+    // Swap reverses the order on the board
+    await page.click('#btnSwap');
+    expect(await page.locator('.side .name').allTextContents()).toEqual(['Spieler 4', 'Cem', 'Spieler 2', 'Spieler 1']);
+    // Kept after reload; back to 2 players removes the extra sides
+    await page.reload();
+    await expect(page.locator('.side')).toHaveCount(4);
+    await openMenu(page);
+    page.once('dialog', d => d.accept());
+    await page.click('#dartPlayers [data-players="2"]');
+    await closeMenu(page);
+    await expect(page.locator('.side')).toHaveCount(2);
+    await expect(page.locator('#info')).toHaveText('Leg 1 · Spieler 1 ist dran');
+    // Other sports keep two sides and two names
+    await pickSport(page, 'tennis');
+    await expect(page.locator('.side')).toHaveCount(2);
+  });
+
+  test('6 players fit on the phone in portrait and landscape', async ({ page }) => {
+    await page.evaluate(k => localStorage.setItem(k, JSON.stringify({ sport: 'darts', m: { darts: { cfg: { players: 6 }, pts: [60, 100] } } })), LS);
+    for (const size of [{ width: 375, height: 667 }, { width: 667, height: 375 }]) {
+      await page.setViewportSize(size);
+      await page.reload();
+      await expect(page.locator('.side')).toHaveCount(6);
+      const boxes = await page.locator('.side .tile, #pad').evaluateAll(els => els.map(e => e.getBoundingClientRect().toJSON()));
+      for (const b of boxes) {
+        expect(b.bottom).toBeLessThanOrEqual(size.height);
+        expect(b.right).toBeLessThanOrEqual(size.width);
+        expect(b.height).toBeGreaterThan(30);
+      }
+      // No two players overlap
+      for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) {
+        const a = boxes[i], c = boxes[j];
+        expect(a.right <= c.left || c.right <= a.left || a.bottom <= c.top || c.bottom <= a.top).toBe(true);
+      }
+    }
   });
 
   test('winner disables the pad', async ({ page }) => {
