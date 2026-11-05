@@ -20,7 +20,7 @@
 <meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif, .avif, .gif, .bmp, .ico, .svg">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-gSNTClRVjCkMN3xrl3Z8LPrDOBPV8q9klCvh+oAscVE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-LAUeyyuhvPplt3/uFtq/9V2AltBcNDD5y7Ucj9lEl3E='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -213,11 +213,12 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 407367abb5b9</p>
+  <p class="footer-version">Version ee926d2e72f6</p>
   <!-- footer:end -->
 </footer>
 
 <script src="../assets/common.js"></script>
+<script src="../assets/shared/heic.js"></script>
 <script>
 (function(){
 'use strict';
@@ -339,23 +340,7 @@ function sniff(bytes,file){
   return ext?ext.toLowerCase().replace('jpeg','jpg'):((file.type||'').split('/')[1]||'?');
 }
 
-/* ---------- HEIC decoder (worker, loaded on first HEIC image) ---------- */
-let heicWorker=null, heicSeq=0;
-const heicWait=new Map();
-function heicDecode(buf){
-  if(!heicWorker){
-    Tools.diag.log('heic worker start');
-    heicWorker=new Worker('heic-worker.js');
-    heicWorker.onmessage=({data})=>{const w=heicWait.get(data.id);if(w){heicWait.delete(data.id);data.error?w.rej(new Error(data.error)):w.res(data);}};
-    heicWorker.onerror=e=>{
-      Tools.diag.log('heic worker error',e.message||'load failed');
-      for(const w of heicWait.values()) w.rej(new Error(e.message||'HEIC decoder failed to load'));
-      heicWait.clear(); heicWorker=null;
-    };
-  }
-  const id=++heicSeq;
-  return new Promise((res,rej)=>{heicWait.set(id,{res,rej});heicWorker.postMessage({id,buf},[buf]);});
-}
+/* HEIC decoder: assets/shared/heic.js (Safari natively, elsewhere libheif in heic-worker.js) */
 
 /* ---------- Decoding ---------- */
 const loadImg=url=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('image decode failed'));i.src=url;});
@@ -389,15 +374,7 @@ async function decode(item,w,h){
     return {src:img,w:item.w,h:item.h,close(){}};
   }
   if(item.fmt==='heic'){
-    // Safari decodes HEIC itself; elsewhere the libheif worker
-    if(item.heicNative!==false){
-      try{const b=await createImageBitmap(item.file);item.heicNative=true;return {src:b,w:b.width,h:b.height,close:()=>b.close()};}
-      catch(_){item.heicNative=false;}
-    }
-    const t0=performance.now();
-    const r=await heicDecode(await item.file.arrayBuffer());
-    const b=await createImageBitmap(new ImageData(new Uint8ClampedArray(r.data),r.width,r.height));
-    Tools.diag.log('heic decoded',{w:r.width,h:r.height,ms:Math.round(performance.now()-t0)});
+    const b=await Heic.decode(item.file);
     return {src:b,w:b.width,h:b.height,close:()=>b.close()};
   }
   try{
@@ -429,7 +406,7 @@ async function addFiles(files){
         const info=svgInfo(await f.text());
         item.svg=info; item.w=info.w; item.h=info.h;
       }
-      if(item.fmt==='heic'&&!heicWorker) status(t('in.heic'));
+      if(item.fmt==='heic'&&Heic.info().native!==true&&!Heic.info().worker) status(t('in.heic'));
       const t0=performance.now();
       const d=await decode(item,item.fmt==='svg'?Math.min(item.w,1024):0,item.fmt==='svg'?Math.min(item.h,1024):0);
       if(item.fmt!=='svg'){item.w=d.w;item.h=d.h;}
@@ -438,7 +415,7 @@ async function addFiles(files){
       const [c,g]=canvas(Math.max(1,Math.round(item.w*sc)),Math.max(1,Math.round(item.h*sc)));
       g.drawImage(d.src,0,0,c.width,c.height); d.close();
       item.thumb=URL.createObjectURL(await toBlob(c,'image/png'));
-      Tools.diag.log('image added',{fmt:item.fmt,w:item.w,h:item.h,bytes:f.size,heicNative:item.heicNative,ms:Math.round(performance.now()-t0)});
+      Tools.diag.log('image added',{fmt:item.fmt,w:item.w,h:item.h,bytes:f.size,heicNative:item.fmt==='heic'?Heic.info().native:undefined,ms:Math.round(performance.now()-t0)});
     }catch(e){
       item.error=item.fmt==='tiff'?t('in.failTiff'):t('in.fail',{name:item.name,fmt:item.fmt.toUpperCase()});
       Tools.diag.log('image add failed',{fmt:item.fmt,type:f.type||'?',bytes:f.size},e);
@@ -730,7 +707,7 @@ Tools.diag.info(()=>({
   results:results.length,
   settings:{format:settings.format,quality:settings.quality,resize:settings.resize,max:settings.max,percent:settings.percent},
   encoders:{webp:supported.webp,avif:supported.avif},
-  heicWorker:!!heicWorker,
+  heic:Heic.info(),
   canShareFiles:canShare([new File([''],'x.png',{type:'image/png'})])
 }));
 
