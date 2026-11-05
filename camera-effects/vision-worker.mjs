@@ -1,7 +1,8 @@
 // Person detection and person/background mask for Kamera-Effekte (MediaPipe Tasks Vision, runs on the CPU).
 // Messages from the page:
-//   { type: 'load', task: 'detect' | 'segment' }   load engine + model once → { type: 'loaded', task } or { type: 'error', task, code }
-//   { type: 'frame', bitmap, detect, segment }     → { type: 'result', persons: [{ x, y, w, h, score }] (0…1), mask, maskW, maskH, ms }
+//   { type: 'load', task: 'detect' | 'segment' | 'face' }   load engine + model once → { type: 'loaded', task } or { type: 'error', task, code }
+//   { type: 'frame', bitmap, detect, segment, face }
+//     → { type: 'result', persons: [{ x, y, w, h, score }] (0…1), mask, maskW, maskH, faces: [Float32Array x0,y0,x1,y1 … (478 points, 0…1)], ms }
 // While loading: { type: 'progress', task, loaded, total } (bytes). Notes for the diagnostics: { type: 'log', msg, data }.
 
 // Network guard – installed before the library is imported. MediaPipe 1.x sends usage statistics to Google
@@ -10,6 +11,7 @@
 const MODELS = {
   detect: { url: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite', size: 4602795 },
   segment: { url: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite', size: 249537 },
+  face: { url: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', size: 3758596 },
 };
 const ALLOWED = new Set(Object.values(MODELS).map(m => m.url));
 const ownFetch = self.fetch.bind(self);
@@ -65,11 +67,15 @@ async function model(task) {
   return buf;
 }
 
-let vision = null, fileset = null;
+let vision = null, fileset = null, factory = null, creating = Promise.resolve();
 const tasks = {}, loading = {};
 async function engine() {
   if (!vision) {
     vision = await import('../assets/vendor/mediapipe/vision_bundle.mjs');
+    // MediaPipe takes the engine from self.ModuleFactory and clears it after each task. A module is only
+    // executed on its first import, so a later task would find nothing ("ModuleFactory not set") –
+    // keep the factory and hand it over again before each task is created.
+    factory = (await import('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.js')).default;
     fileset = {
       wasmLoaderPath: new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.js', self.location.href).href,
       wasmBinaryPath: new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.wasm', self.location.href).href,
@@ -82,20 +88,26 @@ async function load(task) {
   const t0 = performance.now();
   const [v, buf] = await Promise.all([engine(), model(task)]);
   const base = { modelAssetBuffer: buf, delegate: 'CPU' };
-  tasks[task] = task === 'detect'
-    ? await v.ObjectDetector.createFromOptions(fileset, { baseOptions: base, runningMode: 'VIDEO', scoreThreshold: 0.45, maxResults: 10, categoryAllowlist: ['person'] })
-    : await v.ImageSegmenter.createFromOptions(fileset, { baseOptions: base, runningMode: 'VIDEO', outputConfidenceMasks: true, outputCategoryMask: false });
+  // One task at a time, each with the factory set right before (see engine())
+  const create = () => { self.ModuleFactory = factory; return task === 'detect'
+    ? v.ObjectDetector.createFromOptions(fileset, { baseOptions: base, runningMode: 'VIDEO', scoreThreshold: 0.45, maxResults: 10, categoryAllowlist: ['person'] })
+    : task === 'face'
+      ? v.FaceLandmarker.createFromOptions(fileset, { baseOptions: base, runningMode: 'VIDEO', numFaces: 3, minFaceDetectionConfidence: 0.5, minTrackingConfidence: 0.5 })
+      : v.ImageSegmenter.createFromOptions(fileset, { baseOptions: base, runningMode: 'VIDEO', outputConfidenceMasks: true, outputCategoryMask: false }); };
+  const made = creating.then(create);
+  creating = made.catch(() => {});
+  tasks[task] = await made;
   post({ type: 'log', msg: 'model ready', data: { task, ms: Math.round(performance.now() - t0) } });
   return tasks[task];
 }
 
 let lastTs = 0;
-function frame({ bitmap, detect, segment }) {
+function frame({ bitmap, detect, segment, face }) {
   const t0 = performance.now();
   // VIDEO mode needs strictly increasing timestamps
   const ts = lastTs = Math.max(lastTs + 1, Math.round(performance.now()));
   const W = bitmap.width, H = bitmap.height;
-  const out = { type: 'result', persons: [], mask: null, maskW: 0, maskH: 0 };
+  const out = { type: 'result', persons: [], mask: null, maskW: 0, maskH: 0, faces: [] };
   const transfer = [];
   try {
     if (detect && tasks.detect) {
@@ -117,6 +129,14 @@ function frame({ bitmap, detect, segment }) {
         out.mask = u; out.maskW = m.width; out.maskH = m.height; transfer.push(u.buffer);
       }
       r.close?.();
+    }
+    if (face && tasks.face) {
+      const r = tasks.face.detectForVideo(bitmap, ts);
+      for (const lm of r.faceLandmarks || []) {
+        const f = new Float32Array(lm.length * 2);
+        lm.forEach((p, i) => { f[2 * i] = p.x; f[2 * i + 1] = p.y; });
+        out.faces.push(f); transfer.push(f.buffer);
+      }
     }
   } finally { bitmap.close(); }
   out.ms = Math.round(performance.now() - t0);

@@ -2,7 +2,7 @@
 // people detection with a fake worker (boxes, count, effect only on people / background), download prompt,
 // photo, camera off in the background – and the real MediaPipe pipeline with the small selfie segmenter
 // (tests/fixtures/selfie_segmenter.tflite): network guard against the library's usage statistics, offline.
-import { test, expect, openMenu, closeMenu, switchLang } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, axe } from './helpers.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { fakeCamera, fakeWorker, pixel, URL_, LS } from './camera-fakes.mjs';
@@ -287,7 +287,7 @@ test.describe('people (fake detection worker)', () => {
 
 test.describe('real detection engine (MediaPipe, small segmenter model)', () => {
   const MODEL = readFileSync(fileURLToPath(new URL('fixtures/selfie_segmenter.tflite', import.meta.url)));
-  test.use({ allowedProblems: /storage\.googleapis\.com\/mediapipe-models\/image_segmenter|ERR_INTERNET_DISCONNECTED|Failed to fetch/ });
+  test.use({ allowedProblems: /storage\.googleapis\.com\/mediapipe-models\/(image_segmenter|object_detector)|ERR_INTERNET_DISCONNECTED|Failed to fetch|StartGraph failed: INVALID_ARGUMENT: Expected a model with 2 or 4 output tensors/ });
 
   test('mask from the real engine, usage statistics blocked, works offline, can be deleted', async ({ page, context }) => {
     test.setTimeout(90000);
@@ -295,7 +295,8 @@ test.describe('real detection engine (MediaPipe, small segmenter model)', () => 
     await context.route(/^https:\/\//, r => {
       const u = r.request().url();
       external.push(u);
-      if (u.endsWith('/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite'))
+      // The segmenter model also stands in for the people detector (see below)
+      if (u.endsWith('/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite') || u.endsWith('/efficientdet_lite0/int8/1/efficientdet_lite0.tflite'))
         return r.fulfill({ body: MODEL, headers: { 'access-control-allow-origin': '*', 'content-type': 'application/octet-stream' } });
       return r.abort();
     });
@@ -329,26 +330,163 @@ test.describe('real detection engine (MediaPipe, small segmenter model)', () => 
     expect(tries.fetch).toMatch(/blocked/);
     expect(tries.xhr).toMatch(/blocked/);
     expect(tries.own).toBe(true);
-    expect(external.filter(u => !u.includes('selfie_segmenter.tflite'))).toEqual([]);
+    expect(external.filter(u => !/selfie_segmenter\.tflite|efficientdet_lite0\.tflite/.test(u))).toEqual([]);
     expect(await page.evaluate(() => Tools.diag.text())).toContain('worker: blocked request {"host":"odml.pa.googleapis.com"}');
 
+    // A second part started later gets the engine again (MediaPipe clears it after each part – once it said
+    // "ModuleFactory not set"). With the stand-in model the detector then fails on the model itself.
+    await page.click('#btnDetect');
+    await expect.poll(() => page.evaluate(() => Tools.diag.text()), { timeout: 30000 }).toContain('model error {"task":"detect"');
+    const err = (await page.evaluate(() => Tools.diag.text())).split('\n').find(l => l.includes('model error'));
+    expect(err).not.toMatch(/ModuleFactory/);
+    await expect(page.locator('#btnDetect')).toHaveAttribute('aria-pressed', 'false');
+    expect(dialogs).toHaveLength(2);
     // Offline: engine (service worker cache) and model (own cache) come from the device, no new prompt
     await context.setOffline(true);
     await page.reload();
     await startCamera(page);
     await expect(page.locator('[data-scope="people"]')).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => page.evaluate(() => Tools.diag.text()), { timeout: 30000 }).toMatch(/mask: true/);
-    expect(dialogs).toHaveLength(1);
+    expect(dialogs).toHaveLength(2);
     await context.setOffline(false);
 
     // Menu: shows what was downloaded and deletes it
     await openMenu(page);
     await expect(page.locator('#modelsInfo')).toHaveText(/Person und Hintergrund trennen, Rechenprogramm/);
     await page.click('#btnDelModels');
-    expect(dialogs[1]).toContain('löschen');
+    expect(dialogs[2]).toContain('löschen');
     await expect(page.locator('#modelsInfo')).toHaveText('Noch nichts heruntergeladen.');
     expect(await page.evaluate(async () => (await caches.keys()).filter(k => k.startsWith('vendor:mediapipe') || k === 'camera-effects-models'))).toEqual([]);
     await closeMenu(page);
     await expect(page.locator('[data-scope="all"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+test.describe('face accessories and distortions (fake worker)', () => {
+  // Overlay colour (with alpha) at camera pixel x, y of the 320×240 picture
+  const overlay = (page, x, y) => page.evaluate(([x, y]) => [...document.getElementById('boxes').getContext('2d').getImageData(x, y, 1, 1).data], [x, y]);
+  const near = (a, b, tol = 12) => a.every((v, i) => Math.abs(v - b[i]) <= tol);
+  async function open(page, settings, mode) {
+    await fakeCamera(page);
+    await preset(page, { mirror: false, ...settings });
+    await fakeWorker(page, mode);
+    const dialogs = [];
+    page.on('dialog', d => { dialogs.push(d.message()); d.accept(); });
+    await page.goto(URL_);
+    await startCamera(page);
+    return dialogs;
+  }
+
+  test('asks once, accessories follow the face, also in the photo', async ({ page }) => {
+    const dialogs = await open(page, {});
+    await page.click('#tabs [data-tab="face"]');
+    await expect(page.locator('#paneFace')).toBeVisible();
+    await expect(page.locator('#paneFx')).toBeHidden();
+    await expect(page.locator('#acc button')).toHaveCount(12);
+    await expect(page.locator('#warp button')).toHaveCount(9);
+    await page.click('#acc [data-id="clown"]');
+    await expect(page.locator('#acc [data-id="clown"]')).toHaveAttribute('aria-pressed', 'true');
+    // Engine 14.5 MB + face model 3.8 MB, asked once
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]).toContain('Gesichtserkennung');
+    expect(dialogs[0]).toContain('ca. 18,3 MB');
+    // Red nose on the nose tip (80, 100), radius 0.22 × eye distance 80 = 17.6 px; nothing far from the face
+    await expect.poll(async () => near(await overlay(page, 80, 104), [225, 29, 42, 255])).toBe(true);
+    expect((await overlay(page, 300, 230))[3]).toBe(0);
+    // Sunglasses: dark lens on each eye (40, 80) and (120, 80), the nose stays free
+    await page.click('#acc [data-id="glasses"]');
+    await expect.poll(async () => { const p = await overlay(page, 40, 85); return p[0] < 40 && p[3] > 200; }).toBe(true);
+    const right = await overlay(page, 120, 85);
+    expect(right[0] < 40 && right[3] > 200).toBe(true);
+    expect((await overlay(page, 80, 104))[3]).toBe(0);
+    // Photo = picture + accessory
+    await page.click('#btnPhoto');
+    await expect(page.locator('#photo')).toBeVisible();
+    const px = await page.locator('#photoImg').evaluate(async img => {
+      await img.decode();
+      const cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+      const x = cv.getContext('2d'); x.drawImage(img, 0, 0);
+      return [...x.getImageData(40, 85, 1, 1).data.slice(0, 3)];
+    });
+    expect(Math.max(...px)).toBeLessThan(50);
+    await page.click('#btnClose');
+    // Kept after a reload: tab and accessory
+    await page.reload();
+    await expect(page.locator('#paneFace')).toBeVisible();
+    await expect(page.locator('#acc [data-id="glasses"]')).toHaveAttribute('aria-pressed', 'true');
+    // "None" removes it
+    await startCamera(page);
+    await page.click('#acc [data-id="none"]');
+    await expect.poll(async () => (await overlay(page, 40, 85))[3]).toBe(0);
+  });
+
+  test('mirrored selfie: the accessory sits on the mirrored face', async ({ page }) => {
+    await open(page, { mirror: true, tab: 'face', accessory: 'clown' });
+    await expect.poll(async () => near(await overlay(page, 320 - 80, 104), [225, 29, 42, 255])).toBe(true);
+    expect((await overlay(page, 80, 104))[3]).toBe(0);
+  });
+
+  test('dog sticks out its tongue only with the mouth open', async ({ page }) => {
+    await open(page, { tab: 'face', accessory: 'dog' }, 'open');
+    // Tongue below the lower lip (80, 140): pink at (85, 160)
+    await expect.poll(async () => near(await overlay(page, 85, 160), [251, 113, 133, 255])).toBe(true);
+    // Black dog nose on the nose tip
+    expect(near(await overlay(page, 85, 104), [17, 17, 17, 255])).toBe(true);
+  });
+
+  test('dog: no tongue with the mouth closed', async ({ page }) => {
+    await open(page, { tab: 'face', accessory: 'dog' });
+    await expect.poll(async () => near(await overlay(page, 85, 104), [17, 17, 17, 255])).toBe(true);
+    expect((await overlay(page, 85, 160))[3]).toBe(0);
+  });
+
+  test('fisheye magnifies the face, "Normal" restores it', async ({ page }) => {
+    await open(page, { tab: 'face' });
+    // Below the red/blue border (y = 120): blue without distortion
+    await expectColor(page, 80 / 320, 124 / 240, [0, 0, 255]);
+    await page.click('#warp [data-id="bulge"]');
+    // Face centre (80, 100), radius 0.62 × 180 = 111.6 px; at 24 px below the centre the picture is taken from
+    // 24 × (1 − 0.55 × (1 − 24/111.6)²) = 15.9 px below it, i.e. above the border: red
+    await expectColor(page, 80 / 320, 124 / 240, [255, 0, 0]);
+    // Far away from the face nothing changes
+    await expectColor(page, 300 / 320, 230 / 240, [255, 255, 255]);
+    await page.click('#warp [data-id="none"]');
+    await expectColor(page, 80 / 320, 124 / 240, [0, 0, 255]);
+  });
+
+  test('fisheye on the mirrored selfie', async ({ page }) => {
+    await open(page, { mirror: true, tab: 'face', warp: 'bulge' });
+    await expectColor(page, (320 - 80) / 320, 124 / 240, [255, 0, 0]);
+  });
+
+  test('declined download: nothing chosen', async ({ page }) => {
+    await fakeCamera(page);
+    await fakeWorker(page);
+    await page.goto(URL_);
+    await startCamera(page);
+    await page.click('#tabs [data-tab="face"]');
+    page.once('dialog', d => d.dismiss());
+    await page.click('#warp [data-id="swirl"]');
+    await expect(page.locator('#warp [data-id="none"]')).toHaveAttribute('aria-pressed', 'true');
+    expect(page.workers().filter(x => x.url().endsWith('vision-worker.mjs'))).toEqual([]);
+  });
+
+  test('face tab with accessory and distortion is accessible, light and dark', async ({ page }) => {
+    await open(page, { tab: 'face', accessory: 'crown', warp: 'swirl' });
+    for (const scheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const { violations } = await axe(page).analyze();
+      expect(violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(' | ')}`)).toEqual([]);
+    }
+  });
+
+  test.describe('English', () => {
+    test.use({ locale: 'en-US' });
+    test('face tab in English', async ({ page }) => {
+      await page.goto(URL_);
+      await page.click('#tabs [data-tab="face"]');
+      await expect(page.locator('#acc [data-id="crown"] .l')).toHaveText('Crown');
+      await expect(page.locator('#warp [data-id="bulge"] .l')).toHaveText('Fisheye');
+    });
   });
 });

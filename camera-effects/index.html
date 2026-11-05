@@ -6,20 +6,20 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Kamera-Effekte</title>
-<meta name="description" content="Das Kamerabild live durch Effekte: Comic, Wärmebild, Nachtsicht, Skizze, Pixel, Kaleidoskop und mehr. Erkennt Personen und legt Effekte nur auf Personen oder nur auf den Hintergrund.">
+<meta name="description" content="Das Kamerabild live durch Effekte: Comic, Wärmebild, Nachtsicht, Skizze, Pixel, Kaleidoskop und mehr. Accessoires und Verzerrungen im Gesicht (Sonnenbrille, Katzenohren, Fischauge …). Erkennt Personen und legt Effekte nur auf Personen oder den Hintergrund.">
 <meta name="tool:tags" content="Freizeit, KI">
 <meta name="tool:features" content="Kamera, KI-Agent, Download nötig">
 <meta name="tool:icon" content="camera-spark">
 <meta name="tool:color" content="#86198f">
 <meta name="tool:short-name" content="Kamera-FX">
 <meta name="tool:title-en" content="Camera Effects">
-<meta name="tool:description-en" content="Live camera through effects: comic, thermal, night vision, sketch, pixel, kaleidoscope and more. Detects people and applies effects to people only or to the background only.">
+<meta name="tool:description-en" content="Live camera through effects: comic, thermal, night vision, sketch, pixel, kaleidoscope and more. Face accessories and distortions (sunglasses, cat ears, fisheye …). Detects people and applies effects to people or the background only.">
 <meta name="tool:short-name-en" content="Camera FX">
 <meta name="tool:storage" content="camera-effects.">
-<meta name="tool:webmcp" content="list_effects, set_effect, get_people">
+<meta name="tool:webmcp" content="list_effects, set_effect, set_face, get_people">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-N0KPvv2xpNv/g8bbYiXAzNwpBAXDnxl/631HKsONkhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-S0s0myqaT0h81NoQB30HEboGR7ail8O3ZMEEAG23Pk4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -60,7 +60,12 @@ main{max-width:1100px;margin-inline:auto;padding:8px;display:flex;flex-direction
 .toggle{flex:none;min-height:44px;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);font:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:2px 8px;white-space:nowrap}
 @media (max-width:400px){.seg button,.toggle{font-size:13px}.seg button{padding-inline:4px}}
 .toggle[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
-.seg-label{font-size:13px;color:var(--muted);margin:0}
+.tabs .e{font-size:16px}
+.pane[hidden]{display:none}
+.pane{display:grid;gap:6px}
+/* Compact chips (distortions): emoji and text side by side */
+.fx.compact button{flex-direction:row;gap:4px;min-height:44px;min-width:0;padding:2px 10px;white-space:nowrap}
+.fx.compact button .e{font-size:18px}
 .card h2{margin-block-end:8px}
 .check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
 .check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
@@ -79,6 +84,8 @@ dialog#photo .row{margin-block-start:10px}
   .fx button{min-width:64px;flex:1 0 64px;min-height:44px;font-size:12px;padding-block:2px}
   .fx button .e{font-size:16px}
   .row2{flex-direction:column}
+  .fx.compact button{flex:1 0 auto}
+  .tabs{position:sticky;top:0;z-index:1;background:var(--bg)}
 }
 </style>
 </head>
@@ -110,6 +117,17 @@ dialog#photo .row{margin-block-start:10px}
   </div>
 
   <div class="controls">
+    <div class="seg tabs" id="tabs" role="group" aria-label="Bereich" data-i18n-attr="aria-label:tabs">
+      <button type="button" data-tab="fx" aria-pressed="true"><span class="e" aria-hidden="true">🎨 </span><span data-i18n="tab.fx">Effekte</span></button>
+      <button type="button" data-tab="face" aria-pressed="false"><span class="e" aria-hidden="true">🙂 </span><span data-i18n="tab.face">Gesicht</span></button>
+    </div>
+    <div class="pane" id="paneFace" hidden>
+      <h2 class="sr-only" id="h-acc" data-i18n="acc">Accessoire</h2>
+      <div class="fx" id="acc" role="group" aria-labelledby="h-acc"></div>
+      <h2 class="sr-only" id="h-warp" data-i18n="warp">Gesicht verzerren</h2>
+      <div class="fx compact" id="warp" role="group" aria-labelledby="h-warp"></div>
+    </div>
+    <div class="pane" id="paneFx">
     <h2 class="sr-only" id="h-fx" data-i18n="effect">Effekt</h2>
     <div class="fx" id="fx" role="group" aria-labelledby="h-fx"></div>
     <div class="row2">
@@ -119,6 +137,7 @@ dialog#photo .row{margin-block-start:10px}
         <button type="button" data-scope="background" aria-pressed="false" data-i18n="scope.background">Hintergrund</button>
       </div>
       <button type="button" class="toggle" id="btnDetect" aria-pressed="false"><span aria-hidden="true">👤 </span><span data-i18n="detect">Erkennen</span></button>
+    </div>
     </div>
   </div>
 
@@ -166,24 +185,26 @@ dialog#photo .row{margin-block-start:10px}
   <h3>Bedienung</h3>
   <ul>
     <li><b>Kamera starten</b> tippen und den Zugriff erlauben. Oben rechts wechselst du zwischen Front- und Rückkamera und nimmst ein <b>Foto</b> auf (mit Effekt, zum Speichern oder Teilen).</li>
-    <li>Unten einen <b>Effekt</b> wählen – die Reihe lässt sich seitlich wischen: Original, Schwarzweiß, Sepia, Negativ, Comic, Skizze, Wärmebild, Nachtsicht, Pixel, Retro, Pop-Art, Neon, Bunt, Weichzeichner, Spiegel und Kaleidoskop.</li>
+    <li>Im Reiter <b>🎨 Effekte</b> unten einen <b>Effekt</b> wählen – die Reihe lässt sich seitlich wischen: Original, Schwarzweiß, Sepia, Negativ, Comic, Skizze, Wärmebild, Nachtsicht, Pixel, Retro, Pop-Art, Neon, Bunt, Weichzeichner, Spiegel und Kaleidoskop.</li>
     <li><b>Wirkt auf:</b> <i>Alles</i>, nur auf <i>Personen</i> oder nur auf den <i>Hintergrund</i>. So wird z. B. mit <i>Weichzeichner</i> + <i>Hintergrund</i> der Hintergrund unscharf, mit <i>Schwarzweiß</i> + <i>Hintergrund</i> bleibt nur die Person farbig.</li>
     <li><b>👤 Erkennen</b> rahmt jede erkannte Person ein und zählt sie (oben links).</li>
+    <li>Reiter <b>🙂 Gesicht</b>: oben ein <b>Accessoire</b> – Sonnenbrille, Herzbrille, Partyhut, Krone, Katze, Hund (streckt die Zunge raus, wenn du den Mund öffnest), Hase, Teufel, Schnurrbart, Clownsnase, Heiligenschein; darunter eine <b>Verzerrung</b> – Fischauge, Große Augen, Großer Mund, Mini-Gesicht, Wirbel, Breit, Lang, Wackeln. Beides lässt sich kombinieren und mit jedem Effekt mischen, bis zu drei Gesichter gleichzeitig.</li>
     <li>Im Menü ☰ unter <i>Einstellungen</i>: Stärke des Effekts, Spiegeln der Selfie-Kamera, Sicherheit der Erkennung in %, heruntergeladene Erkennung löschen.</li>
   </ul>
   <h3>Personenerkennung</h3>
   <ul>
-    <li>Für <i>Erkennen</i> und für <i>Personen</i>/<i>Hintergrund</i> lädt die App beim ersten Mal nach Rückfrage die Erkennung herunter: das Rechenprogramm (MediaPipe, ca. 14 MB) von dieser Seite und das jeweilige Modell von Google (storage.googleapis.com): Personen erkennen ca. 4,6 MB, Person vom Hintergrund trennen ca. 0,3 MB. Danach funktioniert alles offline.</li>
+    <li>Für <i>Erkennen</i>, <i>Personen</i>/<i>Hintergrund</i> und den Reiter <i>Gesicht</i> lädt die App beim ersten Mal nach Rückfrage die Erkennung herunter: das Rechenprogramm (MediaPipe, ca. 14 MB) von dieser Seite und das jeweilige Modell von Google (storage.googleapis.com): Personen erkennen ca. 4,6 MB, Person vom Hintergrund trennen ca. 0,3 MB, Gesichter ca. 3,8 MB. Danach funktioniert alles offline.</li>
+    <li>Gesichter werden am besten erkannt, wenn sie gut beleuchtet und nicht weiter als etwa zwei Meter entfernt sind.</li>
     <li>Das Kamerabild wird nur auf dem Gerät ausgewertet und nie verschickt. Die Bibliothek MediaPipe würde von sich aus Nutzungsstatistiken an Google senden – die App sperrt das: Außer den beiden Modell-Dateien darf die Erkennung nichts aus dem Netz laden.</li>
     <li>Erkannt werden ganze Personen auch aus der Ferne (Rahmen); das Trennen vom Hintergrund klappt am besten mit ein bis zwei Personen nah vor der Kamera (Selfie, Videoanruf).</li>
     <li>Die Erkennung ist nicht perfekt: Teilweise verdeckte Personen, Dunkelheit oder sehr kleine Personen können fehlen, Figuren oder Bilder können als Person gelten.</li>
   </ul>
   <h3>Hinweise</h3>
   <ul>
-    <li>Gespeichert werden nur die Einstellungen (Effekt, Wirkt auf, Erkennen, Kamera, Stärke). Fotos landen nur dort, wo du sie speicherst oder teilst.</li>
+    <li>Gespeichert werden nur die Einstellungen (Effekt, Wirkt auf, Erkennen, Accessoire, Verzerrung, Kamera, Stärke). Fotos landen nur dort, wo du sie speicherst oder teilst.</li>
     <li>Wechselst du zu einer anderen App oder sperrst das Handy, schaltet sich die Kamera aus und beim Zurückkommen wieder ein.</li>
     <li>Kein Bild? Die Kamera-Berechtigung in den Website-Einstellungen des Browsers erlauben; eine andere App, die die Kamera nutzt, schließen. Die Effekte brauchen WebGL (alle aktuellen Browser).</li>
-    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann Effekt, Wirkt auf und Stärke wählen und die erkannten Personen lesen (Anzahl und Position, WebMCP). Die Kamera einschalten, Fotos aufnehmen oder etwas herunterladen kann er nicht; jeder Aufruf erscheint hier als Hinweis.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann Effekt, Wirkt auf, Stärke, Accessoire und Verzerrung wählen und die erkannten Personen lesen (Anzahl und Position, WebMCP). Die Kamera einschalten, Fotos aufnehmen oder etwas herunterladen kann er nicht; jeder Aufruf erscheint hier als Hinweis.</li>
   </ul>
   </div>
   <div data-lang="en" lang="en" hidden>
@@ -191,24 +212,26 @@ dialog#photo .row{margin-block-start:10px}
   <h3>How to use</h3>
   <ul>
     <li>Tap <b>Start camera</b> and allow access. At the top right you switch between front and rear camera and take a <b>photo</b> (with the effect, to save or share).</li>
-    <li>Pick an <b>effect</b> below – swipe the row sideways: original, black &amp; white, sepia, negative, comic, sketch, thermal, night vision, pixel, retro, pop art, neon, vivid, soft blur, mirror and kaleidoscope.</li>
+    <li>In the <b>🎨 Effects</b> tab pick an <b>effect</b> below – swipe the row sideways: original, black &amp; white, sepia, negative, comic, sketch, thermal, night vision, pixel, retro, pop art, neon, vivid, soft blur, mirror and kaleidoscope.</li>
     <li><b>Applies to:</b> <i>All</i>, only <i>People</i> or only the <i>Background</i>. For example <i>Soft blur</i> + <i>Background</i> blurs the background, <i>Black &amp; white</i> + <i>Background</i> keeps only the person in colour.</li>
     <li><b>👤 Detect</b> draws a frame around every person found and counts them (top left).</li>
+    <li><b>🙂 Face</b> tab: at the top an <b>accessory</b> – sunglasses, heart glasses, party hat, crown, cat, dog (sticks out its tongue when you open your mouth), bunny, devil, moustache, clown nose, halo; below it a <b>distortion</b> – fisheye, big eyes, big mouth, tiny face, swirl, wide, long, wobble. Both can be combined and mixed with any effect, up to three faces at once.</li>
     <li>In the menu ☰ under <i>Settings</i>: strength of the effect, mirroring the selfie camera, detection confidence in %, deleting the downloaded detection.</li>
   </ul>
   <h3>People detection</h3>
   <ul>
-    <li>For <i>Detect</i> and for <i>People</i>/<i>Background</i> the app asks once and then downloads the detection: the engine (MediaPipe, about 14 MB) from this site and the model from Google (storage.googleapis.com): detecting people about 4.6 MB, separating people from the background about 0.3 MB. After that everything works offline.</li>
+    <li>For <i>Detect</i>, <i>People</i>/<i>Background</i> and the <i>Face</i> tab the app asks once and then downloads the detection: the engine (MediaPipe, about 14 MB) from this site and the model from Google (storage.googleapis.com): detecting people about 4.6 MB, separating people from the background about 0.3 MB, faces about 3.8 MB. After that everything works offline.</li>
+    <li>Faces are found best when they are well lit and no more than about two metres away.</li>
     <li>The camera picture is only analysed on the device and never sent anywhere. The MediaPipe library would send usage statistics to Google on its own – the app blocks that: apart from the two model files the detection may not load anything from the internet.</li>
     <li>Whole people are found even from a distance (frames); separating them from the background works best with one or two people close to the camera (selfie, video call).</li>
     <li>Detection is not perfect: partly hidden people, darkness or very small people may be missed, figures or pictures may count as people.</li>
   </ul>
   <h3>Notes</h3>
   <ul>
-    <li>Only the settings are stored (effect, applies to, detect, camera, strength). Photos only end up where you save or share them.</li>
+    <li>Only the settings are stored (effect, applies to, detect, accessory, distortion, camera, strength). Photos only end up where you save or share them.</li>
     <li>When you switch to another app or lock the phone, the camera turns off, and on again when you come back.</li>
     <li>No picture? Allow camera access in the browser's site settings; close other apps using the camera. The effects need WebGL (all current browsers).</li>
-    <li><b>AI agent:</b> an AI agent in the browser can choose the effect, what it applies to and its strength, and read the people found (number and position, WebMCP). It cannot turn on the camera, take photos or download anything; every call shows up here as a notice.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can choose the effect, what it applies to, its strength, the accessory and the distortion, and read the people found (number and position, WebMCP). It cannot turn on the camera, take photos or download anything; every call shows up here as a notice.</li>
   </ul>
   </div>
   <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
@@ -222,11 +245,12 @@ dialog#photo .row{margin-block-start:10px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 1430fe97a90b</p>
+  <p class="footer-version">Version a44b53bc2e88</p>
   <!-- footer:end -->
 </footer>
 
 <script src="../assets/common.js"></script>
+<script src="face.js"></script>
 <script>
 (function(){
 'use strict';
@@ -235,6 +259,9 @@ const FX=[
   ['pixel','👾'],['retro','📼'],['popart','🎨'],['neon','✨'],['vivid','🌈'],['blur','💧'],['mirror','🪞'],['kaleido','🔯']
 ];
 const IDS=FX.map(f=>f[0]);
+const ACC=[['none','🚫'],['glasses','🕶️'],['hearts','😍'],['hat','🥳'],['crown','👑'],['cat','🐱'],['dog','🐶'],['bunny','🐰'],['devil','😈'],['mustache','🥸'],['clown','🤡'],['halo','😇']];
+const WARP=[['none','🙂'],['bulge','🐟'],['eyes','👀'],['mouth','👄'],['pinch','🤏'],['swirl','🌀'],['wide','↔️'],['long','↕️'],['wobble','〰️']];
+const ACC_IDS=ACC.map(a=>a[0]),WARP_IDS=WARP.map(w=>w[0]);
 const SCOPES=['all','people','background'];
 Tools.i18n({
   de:{
@@ -253,7 +280,13 @@ Tools.i18n({
     'models.none':'Noch nichts heruntergeladen.','models.have':'Heruntergeladen: {list} ({mb} MB).','models.detect':'Personen erkennen','models.segment':'Person und Hintergrund trennen','models.engine':'Rechenprogramm',
     confirmDel:'Heruntergeladene Erkennung löschen? Beim nächsten Gebrauch wird sie neu geladen.',deleted:'Gelöscht',
     photoName:'kamera-effekte',saved:'Gespeichert',photoFail:'Foto ließ sich nicht erstellen.',
-    'mcp.effect':'Effekt gewählt','mcp.people':'Personen gelesen','mcp.list':'Effekte gelesen'
+    'mcp.effect':'Effekt gewählt','mcp.people':'Personen gelesen','mcp.list':'Effekte gelesen','mcp.face':'Gesicht gewählt',
+    'acc.none':'Ohne','acc.glasses':'Sonnen­brille','acc.hearts':'Herz­brille','acc.hat':'Partyhut','acc.crown':'Krone','acc.cat':'Katze','acc.dog':'Hund','acc.bunny':'Hase',
+    'acc.devil':'Teufel','acc.mustache':'Schnurr­bart','acc.clown':'Clowns­nase','acc.halo':'Heiligen­schein',
+    'warp.none':'Normal','warp.bulge':'Fischauge','warp.eyes':'Große Augen','warp.mouth':'Großer Mund','warp.pinch':'Mini-Gesicht','warp.swirl':'Wirbel',
+    'warp.wide':'Breit','warp.long':'Lang','warp.wobble':'Wackeln',
+    'what.face':'die Gesichtserkennung','models.face':'Gesichter erkennen',
+    faces0:'Kein Gesicht erkannt',facesFace:'Gesicht: {acc}, {warp}'
   },
   en:{
     title:'Camera Effects',sub:'Live effects for the camera picture',flip:'Switch camera',photo:'Take photo',intro:'Tap “Start camera” and pick an effect below.',start:'Start camera',
@@ -275,26 +308,44 @@ Tools.i18n({
     'models.none':'Nothing downloaded yet.','models.have':'Downloaded: {list} ({mb} MB).','models.detect':'detecting people','models.segment':'separating people and background','models.engine':'engine',
     confirmDel:'Delete the downloaded detection? It is downloaded again the next time you use it.',deleted:'Deleted',
     photoName:'camera-effects',saved:'Saved',photoFail:'The photo could not be created.',
-    'mcp.effect':'effect chosen','mcp.people':'people read','mcp.list':'effects read'
+    'mcp.effect':'effect chosen','mcp.people':'people read','mcp.list':'effects read','mcp.face':'face chosen',
+    tabs:'Section','tab.fx':'Effects','tab.face':'Face',acc:'Accessory',warp:'Distort the face',
+    'acc.none':'None','acc.glasses':'Sun­glasses','acc.hearts':'Heart glasses','acc.hat':'Party hat','acc.crown':'Crown','acc.cat':'Cat','acc.dog':'Dog','acc.bunny':'Bunny',
+    'acc.devil':'Devil','acc.mustache':'Mous­tache','acc.clown':'Clown nose','acc.halo':'Halo',
+    'warp.none':'Normal','warp.bulge':'Fisheye','warp.eyes':'Big eyes','warp.mouth':'Big mouth','warp.pinch':'Tiny face','warp.swirl':'Swirl',
+    'warp.wide':'Wide','warp.long':'Long','warp.wobble':'Wobble',
+    'what.face':'face tracking','models.face':'detecting faces',
+    faces0:'No face found',facesFace:'Face: {acc}, {warp}'
   }
 });
 const t=Tools.t,$=Tools.$;
 const LS='camera-effects.settings.v1';
-const s=Object.assign({effect:'none',scope:'all',detect:false,facing:'user',mirror:true,strength:100,score:false},Tools.load(LS,{}));
+const s=Object.assign({effect:'none',scope:'all',detect:false,facing:'user',mirror:true,strength:100,score:false,tab:'fx',accessory:'none',warp:'none'},Tools.load(LS,{}));
 if(!IDS.includes(s.effect))s.effect='none';
+if(!ACC_IDS.includes(s.accessory))s.accessory='none';
+if(!WARP_IDS.includes(s.warp))s.warp='none';
+if(s.tab!=='face')s.tab='fx';
+const faceOn=()=>s.accessory!=='none'||s.warp!=='none';
 if(!SCOPES.includes(s.scope))s.scope='all';
 const save=()=>Tools.save(LS,s);
 
 /* ---------- WebGL effects ---------- */
 const out=$('out'),boxes=$('boxes'),video=$('video');
 const VS='attribute vec2 p;varying vec2 v;void main(){v=vec2(p.x+1.,1.-p.y)*.5;gl_Position=vec4(p,0.,1.);}';
-const FS=`precision mediump float;
+const FS=`#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
 varying vec2 v;
 uniform sampler2D T,M;
 uniform vec2 R;
 uniform float time,strength;
 uniform int fx,scope;
 uniform bool mirror,hasMask;
+uniform int warp,faces;
+uniform vec4 F[3],E[3];
+uniform vec3 Mo[3];
 vec3 src(vec2 u){return texture2D(T,clamp(u,0.,1.)).rgb;}
 float lum(vec3 c){return dot(c,vec3(.299,.587,.114));}
 float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
@@ -339,8 +390,28 @@ vec3 effect(vec2 u){
     a=mod(a,n);a=abs(a-n*.5);vec2 q=vec2(cos(a),sin(a))*r;return src(q*vec2(R.y/R.x,1.)+.5);}
   return c;
 }
+// Face distortions in camera pixels. Each one fades out smoothly towards its edge ((1-f)^2).
+vec2 scaleAround(vec2 p,vec2 c,float r,float a){vec2 d=p-c;float f=length(d)/r;if(f>=1.)return p;float k=(1.-f)*(1.-f);return c+d*(1.-a*k);}
+vec2 rot(vec2 d,float a){float c=cos(a),s=sin(a);return vec2(c*d.x-s*d.y,s*d.x+c*d.y);}
+vec2 warpFace(vec2 p,vec4 f,vec4 e,vec3 m){
+  vec2 c=f.xy;float r=f.z;
+  if(warp==1)return scaleAround(p,c,r,.55);
+  if(warp==2){float re=length(e.zw-e.xy)*.42;return scaleAround(scaleAround(p,e.xy,re,.6),e.zw,re,.6);}
+  if(warp==3)return scaleAround(p,m.xy,m.z,.6);
+  if(warp==4)return scaleAround(p,c,r*1.35,-.9);
+  vec2 d=p-c;float l=length(d)/r;if(l>=1.)return p;float k=(1.-l)*(1.-l);
+  if(warp==5)return c+rot(d,2.6*k);
+  if(warp==6||warp==7){vec2 q=rot(d,-f.w);if(warp==6)q.x*=1.-.45*k;else q.y*=1.-.45*k;return c+rot(q,f.w);}
+  if(warp==8)return p+vec2(sin(time*7.+d.y/r*6.),cos(time*5.+d.x/r*6.))*r*.07*k;
+  return p;
+}
 void main(){
   vec2 u=v;if(mirror)u.x=1.-u.x;
+  if(warp>0&&faces>0){
+    vec2 p=u*R;
+    for(int i=0;i<3;i++){if(i>=faces)break;p=warpFace(p,F[i],E[i],Mo[i]);}
+    u=p/R;
+  }
   vec3 o=src(u),e=effect(u);
   float w=strength;
   if(scope!=0){float m=hasMask?smoothstep(.3,.7,texture2D(M,u).r):(scope==1?0.:1.);w*=scope==1?m:1.-m;if(!hasMask)w=0.;}
@@ -359,7 +430,7 @@ function initGl(){
   const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
   const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
-  for(const n of ['T','M','R','time','strength','fx','scope','mirror','hasMask'])U[n]=gl.getUniformLocation(prog,n);
+  for(const n of ['T','M','R','time','strength','fx','scope','mirror','hasMask','warp','faces','F','E','Mo'])U[n]=gl.getUniformLocation(prog,n);
   const mk=unit=>{const x=gl.createTexture();gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,x);
     for(const [k,val] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,val);
     return x;};
@@ -436,6 +507,10 @@ function draw(W,H){
   gl.uniform1i(U.scope,SCOPES.indexOf(s.scope));
   gl.uniform1i(U.mirror,isMirrored()?1:0);
   gl.uniform1i(U.hasMask,hasMask&&s.scope!=='all'?1:0);
+  const wp=s.warp!=='none'&&ready.face&&faces.length?FaceFx.warpParams(faces,W,H):null;
+  gl.uniform1i(U.warp,wp?WARP_IDS.indexOf(s.warp):0);
+  gl.uniform1i(U.faces,wp?wp.n:0);
+  if(wp){gl.uniform4fv(U.F,wp.F);gl.uniform4fv(U.E,wp.E);gl.uniform3fv(U.Mo,wp.Mo);}
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
 }
 // The test hooks into this: the picture is drawn from the camera only while it runs
@@ -448,13 +523,14 @@ let resume=false;
 /* ---------- People: worker (MediaPipe) ---------- */
 const MODEL={
   detect:{url:'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite',mb:4.6},
-  segment:{url:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite',mb:0.25}
+  segment:{url:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite',mb:0.25},
+  face:{url:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',mb:3.8}
 };
 const ENGINE={url:new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.wasm',location.href).href,mb:14.5};
 const ENGINE_CACHE='vendor:mediapipe@',MODEL_CACHE='camera-effects-models';
-let worker=null,busy=false,persons=[],personsAt=0,inferMs=0;
-const ready={detect:false,segment:false},pending={};
-const needs=()=>({detect:s.detect,segment:s.scope!=='all'});
+let worker=null,busy=false,persons=[],personsAt=0,inferMs=0,faces=[],facesAt=0;
+const ready={detect:false,segment:false,face:false},pending={};
+const needs=()=>({detect:s.detect,segment:s.scope!=='all',face:faceOn()});
 function getWorker(){
   if(worker)return worker;
   worker=new Worker('vision-worker.mjs',{type:'module'});
@@ -464,6 +540,7 @@ function getWorker(){
       if(d.error)Tools.diag.log('inference error',{e:String(d.error).slice(0,200)});
       if(s.detect){persons=d.persons||[];personsAt=performance.now();updateBadge();}
       if(d.mask&&gl)uploadMask(d.mask,d.maskW,d.maskH);
+      if(faceOn()&&d.faces){faces=FaceFx.smooth(faces,d.faces);facesAt=performance.now();}
     }else if(d.type==='progress'){
       busyText(t('loading',{what:t('what.'+d.task),p:Math.round(d.loaded/d.total*100)}));
     }else if(d.type==='loaded'){
@@ -482,7 +559,7 @@ async function cachedMb(task){
   let mb=0;
   try{
     if(!await caches.match(MODEL[task].url))mb+=MODEL[task].mb;
-    if(!ready.detect&&!ready.segment&&!pending.detect&&!pending.segment&&!await caches.match(ENGINE.url))mb+=ENGINE.mb;
+    if(!Object.values(ready).some(Boolean)&&!Object.keys(pending).length&&!await caches.match(ENGINE.url))mb+=ENGINE.mb;
   }catch{mb=MODEL[task].mb+ENGINE.mb;}
   return mb;
 }
@@ -508,13 +585,15 @@ async function ensureModels(){
   const n=needs();
   if(n.detect&&!ready.detect&&!await loadTask('detect')){s.detect=false;save();render();}
   if(s.scope!=='all'&&!ready.segment&&!await loadTask('segment')){s.scope='all';save();render();}
+  if(faceOn()&&!ready.face&&!await loadTask('face')){s.accessory=s.warp='none';save();render();}
 }
 async function infer(){
   const n=needs();
-  const go={detect:n.detect&&ready.detect,segment:n.segment&&ready.segment};
-  if(busy||!worker||!(go.detect||go.segment))return;
+  const go={detect:n.detect&&ready.detect,segment:n.segment&&ready.segment,face:n.face&&ready.face};
+  if(busy||!worker||!(go.detect||go.segment||go.face))return;
   busy=true;
-  const W=video.videoWidth,H=video.videoHeight,k=Math.min(1,320/Math.max(W,H));
+  // Faces need a little more detail than people and masks
+  const W=video.videoWidth,H=video.videoHeight,k=Math.min(1,(go.face?480:320)/Math.max(W,H));
   try{
     const bitmap=await createImageBitmap(video,{resizeWidth:Math.round(W*k),resizeHeight:Math.round(H*k)});
     worker.postMessage({type:'frame',bitmap,...go},[bitmap]);
@@ -523,6 +602,10 @@ async function infer(){
 function drawBoxes(){
   const c=boxes.getContext('2d'),W=boxes.width,H=boxes.height;
   c.clearRect(0,0,W,H);
+  if(faceOn()&&ready.face){
+    if(performance.now()-facesAt>1000)faces=[];
+    if(s.accessory!=='none')FaceFx.draw(c,faces,W,H,isMirrored(),s.accessory);
+  }
   if(!s.detect||!ready.detect)return;
   if(performance.now()-personsAt>1500&&persons.length){persons=[];updateBadge();}
   const lw=Math.max(3,Math.round(Math.min(W,H)/150)),fs=Math.max(14,Math.round(Math.min(W,H)/24));
@@ -556,6 +639,15 @@ function render(){
     b.innerHTML=`<span class="e" aria-hidden="true">${e}</span><span class="l"></span>`;fx.append(b);
   }
   for(const b of fx.children){b.querySelector('.l').textContent=t('fx.'+b.dataset.fx);b.setAttribute('aria-pressed',String(b.dataset.fx===s.effect));}
+  for(const [box,list,key,cur] of [[$('acc'),ACC,'acc',s.accessory],[$('warp'),WARP,'warp',s.warp]]){
+    if(!box.children.length)for(const [id,e] of list){
+      const b=document.createElement('button');b.type='button';b.dataset.id=id;
+      b.innerHTML=`<span class="e" aria-hidden="true">${e}</span><span class="l"></span>`;box.append(b);
+    }
+    for(const b of box.children){b.querySelector('.l').textContent=t(key+'.'+b.dataset.id);b.setAttribute('aria-pressed',String(b.dataset.id===cur));}
+  }
+  for(const b of $('tabs').children)b.setAttribute('aria-pressed',String(b.dataset.tab===s.tab));
+  $('paneFx').hidden=s.tab!=='fx';$('paneFace').hidden=s.tab!=='face';
   for(const b of $('scope').children)b.setAttribute('aria-pressed',String(b.dataset.scope===s.scope));
   $('btnDetect').setAttribute('aria-pressed',String(s.detect));
   $('optMirror').checked=s.mirror;$('optScore').checked=s.score;
@@ -563,6 +655,14 @@ function render(){
   out.setAttribute('aria-label',s.scope==='all'?t('view',{fx:t('fx.'+s.effect).replace(/­/g,'')}):t('viewFx',{fx:t('fx.'+s.effect).replace(/­/g,''),scope:t('scope.'+s.scope)}));
   shownCount=-1;updateBadge();
 }
+$('tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(!b)return;s.tab=b.dataset.tab;save();render();});
+async function setFace(kind,id){
+  s[kind]=id;save();render();Tools.diag.log(kind,{id});
+  if(faceOn()&&!ready.face&&!await loadTask('face')){s.accessory=s.warp='none';save();render();}
+  if(!faceOn())faces=[];
+}
+$('acc').addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(b)setFace('accessory',b.dataset.id);});
+$('warp').addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(b)setFace('warp',b.dataset.id);});
 function setEffect(id){s.effect=id;save();render();Tools.diag.log('effect',{id});}
 $('fx').addEventListener('click',e=>{const b=e.target.closest('button[data-fx]');if(b)setEffect(b.dataset.fx);});
 $('scope').addEventListener('click',async e=>{
@@ -592,7 +692,7 @@ $('btnPhoto').addEventListener('click',async()=>{
   if(!running)return;
   draw(out.width,out.height);
   const c=document.createElement('canvas');c.width=out.width;c.height=out.height;
-  const x=c.getContext('2d');x.drawImage(out,0,0);if(s.detect)x.drawImage(boxes,0,0);
+  const x=c.getContext('2d');x.drawImage(out,0,0);x.drawImage(boxes,0,0);
   photoBlob=await new Promise(r=>c.toBlob(r,'image/jpeg',.92));
   if(!photoBlob){Tools.toast(t('photoFail'));return;}
   if(photoUrl)URL.revokeObjectURL(photoUrl);
@@ -617,7 +717,7 @@ $('btnClose').addEventListener('click',()=>$('photo').close());
 async function refreshModels(){
   const have=[];let mb=0;
   try{
-    for(const k of ['detect','segment'])if(await caches.match(MODEL[k].url)){have.push(t('models.'+k));mb+=MODEL[k].mb;}
+    for(const k of ['detect','segment','face'])if(await caches.match(MODEL[k].url)){have.push(t('models.'+k));mb+=MODEL[k].mb;}
     if(await caches.match(ENGINE.url)){have.push(t('models.engine'));mb+=ENGINE.mb;}
   }catch{}
   $('modelsInfo').textContent=have.length?t('models.have',{list:have.join(', '),mb:Tools.fmt(mb,1)}):t('models.none');
@@ -628,8 +728,8 @@ $('btnDelModels').addEventListener('click',async()=>{
   await caches.delete(MODEL_CACHE);
   for(const k of await caches.keys())if(k.startsWith(ENGINE_CACHE))await caches.delete(k);
   if(worker){worker.terminate();worker=null;}
-  ready.detect=ready.segment=false;busy=false;hasMask=false;persons=[];
-  if(s.detect||s.scope!=='all'){s.detect=false;s.scope='all';save();render();}
+  ready.detect=ready.segment=ready.face=false;busy=false;hasMask=false;persons=[];faces=[];
+  if(s.detect||s.scope!=='all'||faceOn()){s.detect=false;s.scope='all';s.accessory=s.warp='none';save();render();}
   Tools.diag.log('models deleted');Tools.toast(t('deleted'));refreshModels();
 });
 
@@ -639,17 +739,20 @@ navigator.permissions?.query({name:'camera'}).then(p=>{if(p.state==='granted'&&!
 
 Tools.diag.info(()=>({camera:running?'on':'off',facing:s.facing,video:video.videoWidth?video.videoWidth+'x'+video.videoHeight:'-',fps,
   webgl:gl?'ok':'not started',effect:s.effect,scope:s.scope,strength:s.strength,detect:s.detect,
-  models:Object.keys(ready).filter(k=>ready[k]).join(',')||'none',persons:persons.length,mask:hasMask,inferMs}));
+  models:Object.keys(ready).filter(k=>ready[k]).join(',')||'none',persons:persons.length,mask:hasMask,accessory:s.accessory,warp:s.warp,faces:faces.length,inferMs}));
 
 /* ---------- WebMCP ---------- */
 Tools.mcp.register({
   name:'list_effects',title:'List the effects',label:'mcp.list',readOnly:true,
-  description:'Lists the camera effects of the app with their id and English name, which effect is chosen, what it applies to (all, people, background) and its strength in percent.',
+  description:'Lists the camera effects, face accessories and face distortions of the app with their id and English name, what is chosen, what the effect applies to (all, people, background), its strength in percent and whether face tracking and the separation of people and background are loaded.',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
   execute:()=>{
     const en={none:'Original',gray:'Black & white',sepia:'Sepia',invert:'Negative',comic:'Comic',sketch:'Sketch',thermal:'Thermal',night:'Night vision',pixel:'Pixel',retro:'Retro',popart:'Pop art',neon:'Neon',vivid:'Vivid',blur:'Soft blur',mirror:'Mirror',kaleido:'Kaleidoscope'};
-    return {effects:IDS.map(id=>({id,name:en[id]})),effect:s.effect,applies_to:s.scope,strength:s.strength,
-      people_separation_ready:ready.segment};
+    const acc={none:'None',glasses:'Sunglasses',hearts:'Heart glasses',hat:'Party hat',crown:'Crown',cat:'Cat ears, nose and whiskers',dog:'Dog ears and nose (tongue when the mouth opens)',bunny:'Bunny ears',devil:'Devil horns',mustache:'Moustache',clown:'Clown nose',halo:'Halo'};
+    const wp={none:'Normal',bulge:'Fisheye',eyes:'Big eyes',mouth:'Big mouth',pinch:'Tiny face',swirl:'Swirl',wide:'Wide',long:'Long',wobble:'Wobble'};
+    return {effects:IDS.map(id=>({id,name:en[id]})),accessories:ACC_IDS.map(id=>({id,name:acc[id]})),distortions:WARP_IDS.map(id=>({id,name:wp[id]})),
+      effect:s.effect,applies_to:s.scope,strength:s.strength,accessory:s.accessory,distortion:s.warp,
+      people_separation_ready:ready.segment,face_tracking_ready:ready.face};
   }
 });
 Tools.mcp.register({
@@ -671,14 +774,31 @@ Tools.mcp.register({
   }
 });
 Tools.mcp.register({
+  name:'set_face',title:'Choose face accessory and distortion',label:'mcp.face',
+  description:'Puts an accessory on every face in the live camera picture (sunglasses, party hat, cat ears …) and/or distorts the faces (fisheye, big eyes, swirl …); "none" removes it. Only works once the user has chosen something in the "Face" section of the app (one-time download the agent cannot start). Nothing is recorded or saved. Returns the settings now in use and the number of faces found.',
+  inputSchema:{type:'object',properties:{
+    accessory:{type:'string',enum:ACC_IDS,description:'Accessory id, see list_effects.'},
+    distortion:{type:'string',enum:WARP_IDS,description:'Distortion id, see list_effects.'}
+  },additionalProperties:false},
+  execute:({accessory,distortion})=>{
+    if(!ready.face&&((accessory&&accessory!=='none')||(distortion&&distortion!=='none')))
+      throw new Error('Face tracking is not loaded yet – the user has to choose an accessory or distortion in the "Face" section of the app first.');
+    if(accessory)s.accessory=accessory;
+    if(distortion)s.warp=distortion;
+    if(!faceOn())faces=[];
+    save();render();
+    return {accessory:s.accessory,distortion:s.warp,camera_on:running,faces:running&&faceOn()?faces.length:0};
+  }
+});
+Tools.mcp.register({
   name:'get_people',title:'Read the people found',label:'mcp.people',readOnly:true,
-  description:'Reads the people currently detected in the live camera picture: their number and for each a box (x, y, width, height as fractions 0–1 of the picture as shown, origin top left) and the confidence 0–1. Needs the camera running and "Detect" turned on in the app; otherwise detecting is false and the list is empty. Never returns the picture itself.',
+  description:'Reads the people currently detected in the live camera picture: their number and for each a box (x, y, width, height as fractions 0–1 of the picture as shown, origin top left) and the confidence 0–1. Needs the camera running and "Detect" turned on in the app; otherwise detecting is false and the list is empty. faces = number of faces tracked for accessories/distortions (0 when none is chosen). Never returns the picture itself.',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
   execute:()=>{
     const on=running&&s.detect&&ready.detect;
     const r=v=>Math.round(v*1000)/1000;
     const list=on?persons.map(p=>({x:r(isMirrored()?1-p.x-p.w:p.x),y:r(p.y),width:r(p.w),height:r(p.h),confidence:r(p.score)})):[];
-    return {camera_on:running,detecting:on,count:list.length,people:list};
+    return {camera_on:running,detecting:on,count:list.length,people:list,faces:running&&faceOn()&&ready.face?faces.length:0};
   }
 });
 })();
