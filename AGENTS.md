@@ -24,13 +24,13 @@ scripts/partials/data.html    Bereich „Daten sichern & übertragen“ (in jede
 tests/                Playwright-Tests (siehe tests/README.md); tests/live/ prüft die veröffentlichte Seite (npm run test:live)
 <tool-name>/          index.html + generiert: manifest.webmanifest, sw.js, icon-*
 .githooks/pre-commit  ruft build.mjs vor jedem Commit auf
-.claude/hooks/session-start.sh  richtet Cloud-Sessions von Claude Code ein (Git-Hook, npm install, Browser für Playwright)
+.claude/hooks/session-start.sh  richtet Cloud-Sessions von Claude Code ein (Git-Hook, npm install, Browser für Playwright inkl. WebKit/Firefox)
 .github/workflows/build.yml         dasselbe bei jedem Push auf GitHub
 .github/workflows/vendor-check.yml  „Bibliotheken prüfen“: monatlich Updates, Pflege, Schwachstellen → ein Issue; bei jedem PR als Sperre für neue/geänderte Bibliotheken
 .github/workflows/codeql.yml        monatlich CodeQL (eigener Code + Workflows) → Security-Tab
 .github/workflows/scorecard.yml     monatlich OpenSSF Scorecard des Repos → Security-Tab
 .github/workflows/zizmor.yml        „Workflows prüfen“: Sicherheitsprüfung der Workflows bei jedem PR
-.github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus (3 Runner parallel, Sammel-Check „test“)
+.github/workflows/test.yml          führt die Tests bei jedem PR und Push auf main aus (Chromium auf 3 Runnern parallel, dazu der Grundcheck in WebKit & Firefox; Sammel-Check „test“)
 .github/workflows/pages.yml         veröffentlicht main auf GitHub Pages (nur die Dateien aus scripts/site.mjs), danach Live-Test
 .github/workflows/live-test.yml     testet die veröffentlichte Seite (tests/live) – nach jeder Veröffentlichung und auf Knopfdruck
 .github/dependabot.yml              monatliche Update-PRs für GitHub Actions und Test-Werkzeuge (erst 7 Tage nach Release)
@@ -187,13 +187,15 @@ Jede App bietet im Menü (☰) den einklappbaren Bereich **„Daten sichern & ü
 
 ## Prüfen vor dem Commit
 
-`npm test` muss grün sein (einmalig vorher `npm install` und `npx playwright install chromium`). Die Tests prüfen das Folgende größtenteils automatisch:
+`npm test` muss grün sein (einmalig vorher `npm install` und `npx playwright install chromium`, für den Grundcheck zusätzlich `npx playwright install --with-deps webkit firefox`). Die Tests prüfen das Folgende größtenteils automatisch:
 
 - Seite lädt ohne JavaScript-Fehler.
 - Bei 375 px und bei Desktop-Breite kein horizontales Scrollen.
 - Hell und dunkel ansehen.
 - `node scripts/build.mjs --check` meldet „Up to date“.
 - Offline: Seite einmal laden, Netz trennen, neu laden – muss vollständig funktionieren.
+
+**Andere Browser:** Alle fachlichen Tests laufen in Chromium. `tests/browsers.spec.mjs` prüft zusätzlich jede Seite in **WebKit** (Engine von Safari und jedem Browser auf dem iPhone) und **Firefox**: lädt ohne Fehler, kein seitliches Scrollen auf dem Handy, Menü, offline. In CI immer; lokal nur, wenn die Browser installiert sind (sonst Hinweis beim Start). Playwrights WebKit ist nicht Safari selbst, findet aber die meisten Unterschiede. Neue Browser-Funktionen deshalb immer mit Ausweichweg bauen (`'x' in window` prüfen), nicht nur in Chrome ausprobieren. Bekannte, erlaubte Meldung: Safari ignoriert `interactive-widget` im Viewport-Meta.
 
 Nach dem Merge prüft die Action „Live-Seite testen“ die veröffentlichte Seite (jede Datei gleich dem Repo, Apps laden und laufen offline). Ist sie rot, die Ursache beheben wie bei roten Tests. Von Hand: auf dem aktuellen `main` `node scripts/build.mjs && npm run test:live`.
 
