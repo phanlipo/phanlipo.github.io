@@ -401,6 +401,7 @@ test.describe('face accessories and distortions (fake worker)', () => {
     expect((await overlay(page, 80, 104))[3]).toBe(0);
     // Photo = picture + accessory
     await page.click('#btnPhoto');
+    await expect(page.locator('#photo')).toBeVisible();
     const px = await page.locator('#photoImg').evaluate(async img => {
       await img.decode();
       const cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
