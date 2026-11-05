@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Bildkonverter</title>
+<meta name="description" content="Bilder umwandeln zwischen JPG, PNG, WebP, HEIC (iPhone), AVIF, GIF, BMP, ICO und SVG – auch mehrere auf einmal, mit Qualität und Größe, ganz ohne Upload.">
+<meta name="tool:tags" content="Alltag, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
+<meta name="tool:icon" content="photo-cog">
+<meta name="tool:color" content="#7e22ce">
+<meta name="tool:short-name" content="Konverter">
+<meta name="tool:title-en" content="Image Converter">
+<meta name="tool:description-en" content="Convert images between JPG, PNG, WebP, HEIC (iPhone), AVIF, GIF, BMP, ICO and SVG – several at once, with quality and size, without any upload.">
+<meta name="tool:short-name-en" content="Converter">
+<meta name="tool:storage" content="image-converter.">
+<meta name="tool:webmcp" content="list_images, set_options, convert_images">
+<meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif, .avif, .gif, .bmp, .ico, .svg">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-gSNTClRVjCkMN3xrl3Z8LPrDOBPV8q9klCvh+oAscVE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Konverter">
+<meta name="theme-color" content="#7e22ce">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#7e22ce;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#d8b4fe;--accent-text:#1e0836}}
+main{max-width:900px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.drop{border:2px dashed var(--border);border-radius:var(--radius);padding:16px;display:grid;gap:8px;justify-items:start}
+.drop.over{border-color:var(--accent);background:var(--surface-2)}
+.drop p{margin:0}
+.files{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+.files li{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}
+.files img{width:56px;height:56px;object-fit:contain;border-radius:4px;background:repeating-conic-gradient(var(--border) 0 25%,transparent 0 50%) 0 0/12px 12px}
+.files .name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.files .meta{font-size:13px;color:var(--muted)}
+.files .err{color:var(--err)}
+.files .btn{min-width:44px;padding-inline:10px}
+.formats{display:flex;flex-wrap:wrap;gap:6px;border:0;margin:0;padding:0}
+.formats legend{padding:0;margin-bottom:6px;font-weight:600}
+.formats label{position:relative}
+.formats input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.formats span{display:inline-flex;align-items:center;min-height:44px;padding-inline:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);font-weight:600}
+.formats input:checked+span{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.formats input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.formats input:disabled+span{opacity:.45;text-decoration:line-through}
+.opts{display:grid;gap:12px;margin-top:12px}
+.opts label{display:grid;gap:4px;font-weight:600}
+.opts .inline{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+.opts .inline label{flex:1 1 160px}
+input[type=range]{width:100%;min-height:44px;accent-color:var(--accent)}
+input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+#status{margin:8px 0 0;min-height:1.3em}
+#status.err{color:var(--err)}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Bildkonverter</span></h1>
+  <p class="sub" data-i18n="sub">JPG, PNG, WebP, HEIC, SVG und mehr umwandeln – alles bleibt auf dem Gerät.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-in">
+    <h2 id="h-in" data-i18n="in.h">1. Bilder wählen</h2>
+    <div class="drop" id="drop">
+      <button type="button" class="btn primary" id="btnPick" data-i18n="in.pick">Bilder wählen</button>
+      <p class="muted" data-i18n="in.hint">Oder hierher ziehen bzw. einfügen. Möglich: JPG, PNG, HEIC/HEIF, WebP, AVIF, GIF, BMP, ICO, SVG (TIFF nur in Safari).</p>
+    </div>
+    <input type="file" id="inPick" multiple accept="image/*,.heic,.heif,.avif,.svg,.ico,.bmp,.gif,.tif,.tiff" hidden>
+    <ul class="files" id="inList" aria-labelledby="h-in"></ul>
+    <div class="row" id="inActions" hidden>
+      <button type="button" class="btn" id="btnAdd" data-i18n="in.add">Weitere hinzufügen</button>
+      <button type="button" class="btn" id="btnClear" data-i18n="in.clear">Alle entfernen</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-out">
+    <h2 id="h-out" data-i18n="out.h">2. Zielformat</h2>
+    <fieldset class="formats" id="formats">
+      <legend class="sr-only" data-i18n="out.h">2. Zielformat</legend>
+    </fieldset>
+    <p class="muted" id="fmtHint"></p>
+    <div class="opts">
+      <label id="qRow"><span><span data-i18n="out.quality">Qualität</span>: <output id="qOut" for="quality"></output></span>
+        <input type="range" id="quality" min="10" max="100" step="5">
+      </label>
+      <div class="inline" id="sizeRow">
+        <label><span data-i18n="out.size">Größe</span>
+          <select id="resize">
+            <option value="original" data-i18n="out.original">Originalgröße</option>
+            <option value="max" data-i18n="out.max">Längste Seite in Pixel</option>
+            <option value="percent" data-i18n="out.percent">Prozent</option>
+          </select>
+        </label>
+        <label id="valRow"><span id="valLabel">Pixel</span>
+          <input type="number" id="resizeVal" inputmode="numeric">
+        </label>
+      </div>
+      <label id="bgRow"><span data-i18n="out.bg">Hintergrund für transparente Bereiche</span>
+        <input type="color" id="bg">
+      </label>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="btn primary" id="btnConvert" disabled data-i18n="out.convert">Umwandeln</button>
+    </div>
+    <p id="status" role="status"></p>
+  </section>
+
+  <section class="card" id="results" aria-labelledby="h-res" hidden>
+    <h2 id="h-res" data-i18n="res.h">3. Ergebnis</h2>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnZip" data-i18n="res.zip">Alle als ZIP speichern</button>
+      <button type="button" class="btn" id="btnShare" data-i18n="res.share" hidden>Teilen …</button>
+    </div>
+    <ul class="files" id="outList" aria-labelledby="h-res"></ul>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Wandelt Bilder in ein anderes Format um – zum Beispiel iPhone-Fotos (HEIC) in JPG, Screenshots in kleine WebP-Dateien oder ein Logo in ein Favicon (ICO). Die Bilder werden <strong>nicht hochgeladen</strong>: Alles passiert im Browser, auch offline.</p>
+  <h3>Bedienung</h3>
+  <ol>
+    <li><strong>Bilder wählen</strong> (mehrere möglich), hierher ziehen oder mit Strg+V einfügen.</li>
+    <li><strong>Zielformat</strong> wählen, bei JPG, WebP und AVIF die Qualität, bei Bedarf die Größe.</li>
+    <li><strong>Umwandeln</strong> – dann jedes Bild einzeln speichern, alle als ZIP-Datei oder (Handy) teilen.</li>
+  </ol>
+  <h3>Formate</h3>
+  <ul>
+    <li><strong>Lesen:</strong> JPG, PNG, WebP, GIF (erstes Bild), BMP, ICO, AVIF, SVG und HEIC/HEIF. HEIC öffnet der Browser meist nicht selbst; dann lädt die App beim ersten HEIC-Bild einen Decoder (libheif, ca. 1,5 MB) aus ihren eigenen Dateien – danach geht es auch offline. TIFF öffnet nur Safari.</li>
+    <li><strong>Schreiben:</strong> JPG, PNG, WebP, BMP, ICO (Favicon mit 16 bis 256 Pixel, quadratisch eingepasst) und SVG. AVIF nur, wenn der Browser es kann – sonst ist die Schaltfläche durchgestrichen. HEIC und GIF kann ein Browser nicht schreiben.</li>
+    <li><strong>SVG als Ziel</strong> bettet das Bild als Pixelbild in eine SVG-Datei ein (für Programme, die SVG verlangen). Es wird dabei nicht in Vektoren umgewandelt.</li>
+    <li><strong>SVG als Quelle</strong> wird in der gewählten Größe gezeichnet und bleibt dabei scharf – auch vergrößert.</li>
+    <li>JPG und BMP haben keine Transparenz: Durchsichtige Stellen bekommen die gewählte Hintergrundfarbe.</li>
+  </ul>
+  <h3>Größe</h3>
+  <ul>
+    <li><strong>Längste Seite in Pixel:</strong> Fotos werden nur verkleinert, nie vergrößert; SVG wird genau auf diese Größe gebracht.</li>
+    <li><strong>Prozent:</strong> 1 bis 400 %.</li>
+    <li>Sehr große Bilder verkleinert die App, wenn der Browser sie nicht in voller Größe bearbeiten kann (vor allem auf dem iPhone ab ca. 16 Megapixel) – das steht dann beim Ergebnis.</li>
+  </ul>
+  <h3>Gut zu wissen</h3>
+  <ul>
+    <li><strong>Metadaten werden entfernt:</strong> Das neue Bild enthält keine EXIF-Daten (Kamera, Aufnahmezeit, GPS-Standort). Die Drehung des Fotos wird vorher übernommen.</li>
+    <li>Farbprofile werden in sRGB umgerechnet.</li>
+    <li>Die Bilder liegen nur im Arbeitsspeicher und sind nach dem Schließen weg. Gespeichert werden nur die Einstellungen.</li>
+    <li><strong>Teilen an die App (Android):</strong> Ist die App installiert, erscheint sie im Teilen-Menü der Galerie. <strong>Windows/Mac:</strong> In der installierten App lassen sich Bilder per „Öffnen mit“ öffnen. Das iPhone unterstützt beides nicht.</li>
+    <li><strong>KI-Agent:</strong> Ein KI-Agent im Browser (WebMCP) kann die gewählten Bilder auflisten, Format und Größe einstellen und umwandeln – Bilder auswählen und speichern kann nur man selbst.</li>
+    <li>HEIC-Decoder: <a href="https://github.com/strukturag/libheif">libheif</a> und libde265 (LGPL-3.0) über <a href="https://github.com/catdad-experiments/libheif-js">libheif-js</a>.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Converts images to another format – for example iPhone photos (HEIC) to JPG, screenshots to small WebP files or a logo to a favicon (ICO). The images are <strong>not uploaded</strong>: everything happens in the browser, offline too.</p>
+  <h3>How to use</h3>
+  <ol>
+    <li><strong>Choose images</strong> (several at once), drag them here or paste them with Ctrl+V.</li>
+    <li>Choose the <strong>target format</strong>, the quality for JPG, WebP and AVIF and the size if needed.</li>
+    <li><strong>Convert</strong> – then save each image, all of them as a ZIP file or share them (phone).</li>
+  </ol>
+  <h3>Formats</h3>
+  <ul>
+    <li><strong>Read:</strong> JPG, PNG, WebP, GIF (first frame), BMP, ICO, AVIF, SVG and HEIC/HEIF. Most browsers cannot open HEIC themselves; then the app loads a decoder (libheif, about 1.5 MB) from its own files for the first HEIC image – after that it works offline too. Only Safari opens TIFF.</li>
+    <li><strong>Write:</strong> JPG, PNG, WebP, BMP, ICO (favicon with 16 to 256 pixels, fitted into a square) and SVG. AVIF only if the browser can – otherwise the button is crossed out. Browsers cannot write HEIC or GIF.</li>
+    <li><strong>SVG as target</strong> embeds the image as a pixel image in an SVG file (for programs that require SVG). It is not traced into vectors.</li>
+    <li><strong>SVG as source</strong> is drawn at the chosen size and stays sharp – even when enlarged.</li>
+    <li>JPG and BMP have no transparency: transparent areas get the chosen background colour.</li>
+  </ul>
+  <h3>Size</h3>
+  <ul>
+    <li><strong>Longest side in pixels:</strong> photos are only scaled down, never up; SVG is brought to exactly this size.</li>
+    <li><strong>Percent:</strong> 1 to 400%.</li>
+    <li>The app scales very large images down if the browser cannot handle them at full size (mainly on iPhone from about 16 megapixels) – the result then says so.</li>
+  </ul>
+  <h3>Good to know</h3>
+  <ul>
+    <li><strong>Metadata is removed:</strong> the new image contains no EXIF data (camera, time taken, GPS location). The photo's rotation is applied first.</li>
+    <li>Colour profiles are converted to sRGB.</li>
+    <li>The images stay in memory only and are gone when you close the app. Only the settings are saved.</li>
+    <li><strong>Share to the app (Android):</strong> once installed, the app appears in the gallery's share menu. <strong>Windows/Mac:</strong> the installed app can open images via “Open with”. iPhone supports neither.</li>
+    <li><strong>AI agent:</strong> an AI agent in the browser (WebMCP) can list the chosen images, set format and size and convert them – only you can choose and save images.</li>
+    <li>HEIC decoder: <a href="https://github.com/strukturag/libheif">libheif</a> and libde265 (LGPL-3.0) via <a href="https://github.com/catdad-experiments/libheif-js">libheif-js</a>.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 407367abb5b9</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'fmt.jpg':'Fotos, klein, keine Transparenz. Überall lesbar.',
+    'fmt.png':'Verlustfrei, mit Transparenz – für Grafiken, Screenshots und Logos.',
+    'fmt.webp':'Kleiner als JPG und PNG, mit Transparenz. Für Webseiten und Messenger.',
+    'fmt.avif':'Noch kleiner als WebP, mit Transparenz. Ältere Programme kennen es nicht.',
+    'fmt.bmp':'Unkomprimiert (groß), keine Transparenz – für alte Programme.',
+    'fmt.ico':'Favicon / Windows-Icon mit 16, 32, 48, 64, 128 und 256 Pixel, quadratisch.',
+    'fmt.svg':'Das Bild als PNG in einer SVG-Datei – keine Vektorisierung.',
+    'fmt.unsupported':'Dieser Browser kann {f} nicht schreiben.',
+    'val.max':'Pixel','val.percent':'Prozent',
+    'in.loading':'Lese Bild {i} von {n} …','in.heic':'Lade HEIC-Decoder …',
+    'in.fail':'„{name}“ lässt sich nicht öffnen ({fmt}).','in.failTiff':'TIFF öffnet nur Safari.',
+    'in.remove':'Entfernen: {name}',
+    'conv.run':'Wandle Bild {i} von {n} um …','conv.done':'{n} Bilder umgewandelt.','conv.done1':'1 Bild umgewandelt.',
+    'conv.fail':'{n} Bilder ließen sich nicht umwandeln.','conv.none':'Erst Bilder wählen.',
+    'res.reduced':'verkleinert (Browser-Grenze)','res.save':'Speichern','res.saveName':'Speichern: {name}',
+    'res.zipDone':'ZIP gespeichert ({size}).','res.shareFail':'Teilen hat nicht geklappt.',
+    'res.shareAgain':'Bitte noch einmal auf „Teilen“ tippen.',
+    'mcp.options':'Einstellungen geändert','mcp.convert':'Bilder umgewandelt'
+  },
+  en:{
+    title:'Image Converter',sub:'Convert JPG, PNG, WebP, HEIC, SVG and more – everything stays on your device.',
+    'in.h':'1. Choose images','in.pick':'Choose images',
+    'in.hint':'Or drag them here or paste them. Supported: JPG, PNG, HEIC/HEIF, WebP, AVIF, GIF, BMP, ICO, SVG (TIFF in Safari only).',
+    'in.add':'Add more','in.clear':'Remove all',
+    'out.h':'2. Target format','out.quality':'Quality','out.size':'Size','out.original':'Original size',
+    'out.max':'Longest side in pixels','out.percent':'Percent','out.bg':'Background for transparent areas',
+    'out.convert':'Convert',
+    'res.h':'3. Result','res.zip':'Save all as ZIP','res.share':'Share …',
+    'fmt.jpg':'Photos, small, no transparency. Readable everywhere.',
+    'fmt.png':'Lossless, with transparency – for graphics, screenshots and logos.',
+    'fmt.webp':'Smaller than JPG and PNG, with transparency. For websites and messengers.',
+    'fmt.avif':'Even smaller than WebP, with transparency. Older programs do not know it.',
+    'fmt.bmp':'Uncompressed (large), no transparency – for old programs.',
+    'fmt.ico':'Favicon / Windows icon with 16, 32, 48, 64, 128 and 256 pixels, square.',
+    'fmt.svg':'The image as PNG inside an SVG file – not traced into vectors.',
+    'fmt.unsupported':'This browser cannot write {f}.',
+    'val.max':'Pixels','val.percent':'Percent',
+    'in.loading':'Reading image {i} of {n} …','in.heic':'Loading HEIC decoder …',
+    'in.fail':'“{name}” cannot be opened ({fmt}).','in.failTiff':'Only Safari opens TIFF.',
+    'in.remove':'Remove: {name}',
+    'conv.run':'Converting image {i} of {n} …','conv.done':'{n} images converted.','conv.done1':'1 image converted.',
+    'conv.fail':'{n} images could not be converted.','conv.none':'Choose images first.',
+    'res.reduced':'scaled down (browser limit)','res.save':'Save','res.saveName':'Save: {name}',
+    'res.zipDone':'ZIP saved ({size}).','res.shareFail':'Sharing did not work.',
+    'res.shareAgain':'Please tap “Share” once more.',
+    'mcp.options':'Settings changed','mcp.convert':'Images converted'
+  }
+});
+const t=Tools.t, $=Tools.$;
+
+/* ---------- Formats ---------- */
+// Output formats; mime = canvas.toBlob type (bmp, ico, svg are written by this page)
+const OUT={
+  jpg:{label:'JPG',mime:'image/jpeg',quality:true,alpha:false},
+  png:{label:'PNG',mime:'image/png'},
+  webp:{label:'WebP',mime:'image/webp',quality:true},
+  avif:{label:'AVIF',mime:'image/avif',quality:true},
+  bmp:{label:'BMP',mime:'image/bmp',alpha:false},
+  ico:{label:'ICO',mime:'image/x-icon',fixedSize:true},
+  svg:{label:'SVG',mime:'image/svg+xml'}
+};
+const FORMATS=Object.keys(OUT);
+const ICO_SIZES=[16,32,48,64,128,256];
+// Browsers may ignore an unknown type in toBlob and return PNG – check what really comes out
+const supported={jpg:true,png:true,bmp:true,ico:true,svg:true,webp:false,avif:false};
+const probe=mime=>new Promise(res=>{
+  const c=document.createElement('canvas');c.width=c.height=2;
+  try{c.toBlob(b=>res(!!b&&b.type===mime),mime,0.8);}catch(_){res(false);}
+});
+
+/* ---------- Settings ---------- */
+const LS='image-converter.settings.v1';
+const DEF={format:'jpg',quality:85,resize:'original',max:1920,percent:50,bg:'#ffffff'};
+const settings=Object.assign({},DEF,Tools.load(LS,{}));
+if(!OUT[settings.format]) settings.format=DEF.format;
+const saveSettings=()=>Tools.save(LS,settings);
+const clamp=(v,a,b,d)=>Number.isFinite(v)?Math.min(b,Math.max(a,Math.round(v))):d;
+
+/* ---------- Helpers ---------- */
+function fmtSize(b){
+  return b<1024?b+' B':b<1048576?Tools.fmt(b/1024,0)+' KB':Tools.fmt(b/1048576,1)+' MB';
+}
+const baseName=n=>(n||'bild').replace(/\.[a-z0-9]{1,5}$/i,'')||'bild';
+const toBlob=(c,type,q)=>new Promise((res,rej)=>{
+  try{c.toBlob(b=>b?res(b):rej(new Error('toBlob returned null')),type,q);}catch(e){rej(e);}
+});
+function canvas(w,h){
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  const g=c.getContext('2d');
+  if(!g) throw new Error('no 2d context for '+w+'x'+h);
+  return [c,g];
+}
+
+// Format from the first bytes – file names and MIME types are often wrong (HEIC as .jpg …)
+function sniff(bytes,file){
+  const s=String.fromCharCode(...bytes.slice(0,32));
+  if(bytes[0]===0xFF&&bytes[1]===0xD8) return 'jpg';
+  if(s.startsWith('\x89PNG')) return 'png';
+  if(s.startsWith('GIF8')) return 'gif';
+  if(s.startsWith('RIFF')&&s.slice(8,12)==='WEBP') return 'webp';
+  if(s.startsWith('BM')) return 'bmp';
+  if(s.startsWith('\0\0\x01\0')) return 'ico';
+  if(s.startsWith('II*\0')||s.startsWith('MM\0*')) return 'tiff';
+  if(s.slice(4,8)==='ftyp'){
+    const size=(bytes[0]<<24|bytes[1]<<16|bytes[2]<<8|bytes[3])>>>0;
+    const box=String.fromCharCode(...bytes.slice(8,Math.min(size,64)));
+    const brands=[];for(let i=0;i+4<=box.length;i+=4) if(i!==4) brands.push(box.slice(i,i+4));
+    if(brands.some(b=>b==='avif'||b==='avis')) return 'avif';
+    if(brands.some(b=>/^(heic|heix|hevc|hevx|heim|heis|mif1|msf1)$/.test(b))) return 'heic';
+  }
+  const head=new TextDecoder().decode(bytes).replace(/^﻿/,'').trimStart();
+  if(/^<(\?xml|svg|!--|!DOCTYPE svg)/i.test(head)&&/<svg[\s>]/i.test(head)) return 'svg';
+  const ext=((file.name||'').match(/\.([a-z0-9]+)$/i)||[])[1];
+  return ext?ext.toLowerCase().replace('jpeg','jpg'):((file.type||'').split('/')[1]||'?');
+}
+
+/* ---------- HEIC decoder (worker, loaded on first HEIC image) ---------- */
+let heicWorker=null, heicSeq=0;
+const heicWait=new Map();
+function heicDecode(buf){
+  if(!heicWorker){
+    Tools.diag.log('heic worker start');
+    heicWorker=new Worker('heic-worker.js');
+    heicWorker.onmessage=({data})=>{const w=heicWait.get(data.id);if(w){heicWait.delete(data.id);data.error?w.rej(new Error(data.error)):w.res(data);}};
+    heicWorker.onerror=e=>{
+      Tools.diag.log('heic worker error',e.message||'load failed');
+      for(const w of heicWait.values()) w.rej(new Error(e.message||'HEIC decoder failed to load'));
+      heicWait.clear(); heicWorker=null;
+    };
+  }
+  const id=++heicSeq;
+  return new Promise((res,rej)=>{heicWait.set(id,{res,rej});heicWorker.postMessage({id,buf},[buf]);});
+}
+
+/* ---------- Decoding ---------- */
+const loadImg=url=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('image decode failed'));i.src=url;});
+
+// SVG: read its size, then draw it with explicit width/height (sharp at any size)
+function svgInfo(text){
+  const doc=new DOMParser().parseFromString(text,'image/svg+xml');
+  const svg=doc.documentElement;
+  if(!svg||svg.nodeName.toLowerCase()!=='svg'||doc.querySelector('parsererror')) throw new Error('invalid SVG');
+  const len=a=>{const m=/^\s*([\d.]+)\s*(px)?\s*$/.exec(svg.getAttribute(a)||'');return m?Number(m[1]):0;};
+  const vb=(svg.getAttribute('viewBox')||'').trim().split(/[\s,]+/).map(Number);
+  const hasVb=vb.length===4&&vb[2]>0&&vb[3]>0;
+  let w=len('width'), h=len('height');
+  if(!w&&!h){ if(hasVb){w=vb[2];h=vb[3];} else {w=300;h=150;} }
+  else if(!w) w=hasVb?h*vb[2]/vb[3]:h;
+  else if(!h) h=hasVb?w*vb[3]/vb[2]:w;
+  if(!hasVb) svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  if(!svg.getAttribute('preserveAspectRatio')) svg.setAttribute('preserveAspectRatio','none');
+  return {doc,svg,w:Math.max(1,Math.round(w)),h:Math.max(1,Math.round(h))};
+}
+async function svgImage(item,w,h){
+  item.svg.svg.setAttribute('width',w); item.svg.svg.setAttribute('height',h);
+  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(item.svg.doc)],{type:'image/svg+xml'}));
+  try{return await loadImg(url);}finally{URL.revokeObjectURL(url);}
+}
+
+// Returns { src (drawable), w, h, close() }; for SVG drawn at the requested size
+async function decode(item,w,h){
+  if(item.fmt==='svg'){
+    const img=await svgImage(item,w||item.w,h||item.h);
+    return {src:img,w:item.w,h:item.h,close(){}};
+  }
+  if(item.fmt==='heic'){
+    // Safari decodes HEIC itself; elsewhere the libheif worker
+    if(item.heicNative!==false){
+      try{const b=await createImageBitmap(item.file);item.heicNative=true;return {src:b,w:b.width,h:b.height,close:()=>b.close()};}
+      catch(_){item.heicNative=false;}
+    }
+    const t0=performance.now();
+    const r=await heicDecode(await item.file.arrayBuffer());
+    const b=await createImageBitmap(new ImageData(new Uint8ClampedArray(r.data),r.width,r.height));
+    Tools.diag.log('heic decoded',{w:r.width,h:r.height,ms:Math.round(performance.now()-t0)});
+    return {src:b,w:b.width,h:b.height,close:()=>b.close()};
+  }
+  try{
+    const b=await createImageBitmap(item.file,{imageOrientation:'from-image'});
+    return {src:b,w:b.width,h:b.height,close:()=>b.close()};
+  }catch(e){
+    const url=URL.createObjectURL(item.file);
+    try{const i=await loadImg(url);return {src:i,w:i.naturalWidth,h:i.naturalHeight,close(){}};}
+    finally{URL.revokeObjectURL(url);}
+  }
+}
+
+/* ---------- Images ---------- */
+let items=[], nextId=1, results=[];
+const inList=$('inList'), outList=$('outList');
+const THUMB=112;
+
+async function addFiles(files){
+  files=[...files].filter(f=>f&&f.size>=0); if(!files.length) return;
+  clearResults();
+  for(let i=0;i<files.length;i++){
+    const f=files[i];
+    status(t('in.loading',{i:i+1,n:files.length}));
+    const item={id:nextId++,file:f,name:f.name||'bild',bytes:f.size,fmt:'?',w:0,h:0,thumb:null,error:null};
+    try{
+      const head=new Uint8Array(await f.slice(0,512).arrayBuffer());
+      item.fmt=sniff(head,f);
+      if(item.fmt==='svg'){
+        const info=svgInfo(await f.text());
+        item.svg=info; item.w=info.w; item.h=info.h;
+      }
+      if(item.fmt==='heic'&&!heicWorker) status(t('in.heic'));
+      const t0=performance.now();
+      const d=await decode(item,item.fmt==='svg'?Math.min(item.w,1024):0,item.fmt==='svg'?Math.min(item.h,1024):0);
+      if(item.fmt!=='svg'){item.w=d.w;item.h=d.h;}
+      if(!item.w||!item.h) throw new Error('image has no size');
+      const sc=Math.min(1,THUMB/Math.max(item.w,item.h));
+      const [c,g]=canvas(Math.max(1,Math.round(item.w*sc)),Math.max(1,Math.round(item.h*sc)));
+      g.drawImage(d.src,0,0,c.width,c.height); d.close();
+      item.thumb=URL.createObjectURL(await toBlob(c,'image/png'));
+      Tools.diag.log('image added',{fmt:item.fmt,w:item.w,h:item.h,bytes:f.size,heicNative:item.heicNative,ms:Math.round(performance.now()-t0)});
+    }catch(e){
+      item.error=item.fmt==='tiff'?t('in.failTiff'):t('in.fail',{name:item.name,fmt:item.fmt.toUpperCase()});
+      Tools.diag.log('image add failed',{fmt:item.fmt,type:f.type||'?',bytes:f.size},e);
+    }
+    items.push(item); renderItems();
+  }
+  status('');
+}
+function removeItem(id){
+  const i=items.findIndex(x=>x.id===id); if(i<0) return;
+  if(items[i].thumb) URL.revokeObjectURL(items[i].thumb);
+  items.splice(i,1); clearResults(); renderItems();
+}
+function renderItems(){
+  inList.replaceChildren(...items.map(it=>{
+    const li=document.createElement('li');
+    const img=document.createElement('img'); img.alt=''; if(it.thumb) img.src=it.thumb;
+    const txt=document.createElement('div');
+    const n=document.createElement('div'); n.className='name'; n.textContent=it.name;
+    const m=document.createElement('div'); m.className='meta'+(it.error?' err':'');
+    m.textContent=it.error||`${it.fmt.toUpperCase()} · ${it.w}×${it.h} · ${fmtSize(it.bytes)}`;
+    txt.append(n,m);
+    const b=document.createElement('button'); b.type='button'; b.className='btn'; b.textContent='✕';
+    b.setAttribute('aria-label',t('in.remove',{name:it.name}));
+    b.addEventListener('click',()=>removeItem(it.id));
+    li.append(img,txt,b); return li;
+  }));
+  $('inActions').hidden=!items.length;
+  $('drop').hidden=!!items.length;
+  $('btnConvert').disabled=!items.some(i=>!i.error);
+}
+
+/* ---------- Target size ---------- */
+function targetSize(item){
+  if(OUT[settings.format].fixedSize) return {w:item.w,h:item.h};
+  let s=1;
+  if(settings.resize==='percent') s=settings.percent/100;
+  else if(settings.resize==='max'){
+    s=settings.max/Math.max(item.w,item.h);
+    if(item.fmt!=='svg') s=Math.min(1,s);   // photos only get smaller
+  }
+  return {w:Math.max(1,Math.round(item.w*s)),h:Math.max(1,Math.round(item.h*s))};
+}
+const MAX_AREA=16777216; // canvas limit of iOS Safari; tried only after the full size failed
+
+/* ---------- Encoders ---------- */
+function bmp(g,w,h){
+  const row=(w*3+3)&~3, size=54+row*h, buf=new ArrayBuffer(size), v=new DataView(buf), u=new Uint8Array(buf);
+  v.setUint16(0,0x424D); v.setUint32(2,size,true); v.setUint32(10,54,true);
+  v.setUint32(14,40,true); v.setInt32(18,w,true); v.setInt32(22,h,true); v.setUint16(26,1,true); v.setUint16(28,24,true);
+  v.setUint32(34,row*h,true); v.setInt32(38,2835,true); v.setInt32(42,2835,true);
+  const px=g.getImageData(0,0,w,h).data;
+  for(let y=0;y<h;y++){
+    let o=54+(h-1-y)*row, p=y*w*4;
+    for(let x=0;x<w;x++,p+=4){u[o++]=px[p+2];u[o++]=px[p+1];u[o++]=px[p];}
+  }
+  return new Blob([buf],{type:'image/bmp'});
+}
+async function ico(src,w,h){
+  const pngs=[];
+  for(const s of ICO_SIZES){
+    const [c,g]=canvas(s,s);
+    const k=Math.min(s/w,s/h), dw=Math.max(1,Math.round(w*k)), dh=Math.max(1,Math.round(h*k));
+    g.imageSmoothingQuality='high';
+    g.drawImage(src,Math.floor((s-dw)/2),Math.floor((s-dh)/2),dw,dh);
+    pngs.push(new Uint8Array(await (await toBlob(c,'image/png')).arrayBuffer()));
+  }
+  const head=new Uint8Array(6+16*pngs.length), v=new DataView(head.buffer);
+  v.setUint16(2,1,true); v.setUint16(4,pngs.length,true);
+  let off=head.length;
+  pngs.forEach((p,i)=>{
+    const s=ICO_SIZES[i], e=6+16*i;
+    head[e]=s>=256?0:s; head[e+1]=s>=256?0:s;
+    v.setUint16(e+4,1,true); v.setUint16(e+6,32,true); v.setUint32(e+8,p.length,true); v.setUint32(e+12,off,true);
+    off+=p.length;
+  });
+  return new Blob([head,...pngs],{type:'image/x-icon'});
+}
+async function svgOut(c,w,h){
+  const png=await toBlob(c,'image/png');
+  const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(png);});
+  return new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><image width="${w}" height="${h}" xlink:href="${b64}" href="${b64}"/></svg>\n`],{type:'image/svg+xml'});
+}
+
+async function convertOne(item){
+  const f=settings.format, o=OUT[f];
+  let {w,h}=targetSize(item), reduced=false;
+  const d=await decode(item,w,h);
+  try{
+    if(f==='ico') return {blob:await ico(d.src,item.w,item.h),w:256,h:256,reduced};
+    for(let attempt=0;;attempt++){
+      try{
+        const [c,g]=canvas(w,h);
+        if(o.alpha===false){g.fillStyle=settings.bg;g.fillRect(0,0,w,h);}
+        g.imageSmoothingQuality='high';
+        g.drawImage(d.src,0,0,w,h);
+        let blob;
+        if(f==='bmp') blob=bmp(g,w,h);
+        else if(f==='svg') blob=await svgOut(c,w,h);
+        else blob=await toBlob(c,o.mime,o.quality?settings.quality/100:undefined);
+        c.width=c.height=0;
+        return {blob,w,h,reduced};
+      }catch(e){
+        if(attempt||w*h<=MAX_AREA) throw e;
+        const k=Math.sqrt(MAX_AREA/(w*h))*0.999;
+        Tools.diag.log('canvas too large, scaling down',{w,h},e);
+        w=Math.max(1,Math.floor(w*k)); h=Math.max(1,Math.floor(h*k)); reduced=true;
+      }
+    }
+  }finally{d.close();}
+}
+
+let busy=false;
+async function convertAll(){
+  const todo=items.filter(i=>!i.error);
+  if(!todo.length){status(t('conv.none'),true);return [];}
+  busy=true; $('btnConvert').disabled=true; clearResults();
+  const used=new Set(); let failed=0; const t0=performance.now();
+  try{
+    for(let i=0;i<todo.length;i++){
+      const it=todo[i];
+      status(t('conv.run',{i:i+1,n:todo.length}));
+      try{
+        const r=await convertOne(it);
+        let name=baseName(it.name)+'.'+settings.format, k=2;
+        while(used.has(name.toLowerCase())) name=baseName(it.name)+'-'+(k++)+'.'+settings.format;
+        used.add(name.toLowerCase());
+        results.push({item:it,name,file:new File([r.blob],name,{type:OUT[settings.format].mime}),w:r.w,h:r.h,reduced:r.reduced,url:URL.createObjectURL(r.blob)});
+      }catch(e){failed++;Tools.diag.log('convert failed',{fmt:it.fmt,to:settings.format,w:it.w,h:it.h},e);}
+    }
+  }finally{busy=false;$('btnConvert').disabled=!items.some(i=>!i.error);}
+  Tools.diag.log('converted',{n:results.length,failed,to:settings.format,quality:settings.quality,resize:settings.resize,ms:Math.round(performance.now()-t0)});
+  const ok=results.length===1?t('conv.done1'):t('conv.done',{n:results.length});
+  status(failed?(results.length?ok+' ':'')+t('conv.fail',{n:failed}):ok,!!failed);
+  renderResults();
+  if(results.length) $('results').scrollIntoView({behavior:'smooth',block:'start'});
+  return results;
+}
+function clearResults(){
+  results.forEach(r=>URL.revokeObjectURL(r.url)); results=[]; zipCache=null;
+  outList.replaceChildren(); $('results').hidden=true;
+}
+function renderResults(){
+  outList.replaceChildren(...results.map(r=>{
+    const li=document.createElement('li');
+    const img=document.createElement('img'); img.alt='';
+    img.src=r.name.endsWith('.ico')||r.name.endsWith('.bmp')?r.item.thumb||'':r.url;
+    const txt=document.createElement('div');
+    const n=document.createElement('div'); n.className='name'; n.textContent=r.name;
+    const m=document.createElement('div'); m.className='meta';
+    const pct=Math.round((r.file.size/r.item.bytes-1)*100);
+    m.textContent=`${r.w}×${r.h} · ${fmtSize(r.file.size)} (${pct>0?'+':pct<0?'−':'±'}${Math.abs(pct)}\u00a0%)`+(r.reduced?' · '+t('res.reduced'):'');
+    txt.append(n,m);
+    const a=document.createElement('a'); a.className='btn'; a.href=r.url; a.download=r.name;
+    a.style.display='inline-flex'; a.style.alignItems='center'; a.style.textDecoration='none';
+    a.textContent=t('res.save'); a.setAttribute('aria-label',t('res.saveName',{name:r.name}));
+    li.append(img,txt,a); return li;
+  }));
+  $('results').hidden=!results.length;
+  $('btnShare').hidden=!(results.length&&canShare(results.map(r=>r.file)));
+}
+
+/* ---------- ZIP (stored, no compression – images are compressed already) ---------- */
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u){let c=~0;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return ~c>>>0;}
+async function zip(files){
+  const enc=new TextEncoder(), parts=[], central=[]; let off=0;
+  const d=new Date(), time=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1), date=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  for(const f of files){
+    const data=new Uint8Array(await f.arrayBuffer()), name=enc.encode(f.name), crc=crc32(data);
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true);
+    h.setUint16(10,time,true); h.setUint16(12,date,true); h.setUint32(14,crc,true);
+    h.setUint32(18,data.length,true); h.setUint32(22,data.length,true); h.setUint16(26,name.length,true);
+    parts.push(h.buffer,name,data);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true);
+    c.setUint16(12,time,true); c.setUint16(14,date,true); c.setUint32(16,crc,true);
+    c.setUint32(20,data.length,true); c.setUint32(24,data.length,true); c.setUint16(28,name.length,true); c.setUint32(42,off,true);
+    central.push(c.buffer,name);
+    off+=30+name.length+data.length;
+  }
+  const size=central.reduce((s,b)=>s+b.byteLength,0);
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true);
+  e.setUint32(12,size,true); e.setUint32(16,off,true);
+  return new Blob([...parts,...central,e.buffer],{type:'application/zip'});
+}
+let zipCache=null;
+function zipName(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `bilder-${settings.format}-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}.zip`;}
+$('btnZip').addEventListener('click',async()=>{
+  if(!results.length) return;
+  zipCache ??= await zip(results.map(r=>r.file));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(zipCache); a.download=zipName();
+  document.body.append(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  status(t('res.zipDone',{size:fmtSize(zipCache.size)}));
+  Tools.diag.log('zip saved',{files:results.length,bytes:zipCache.size});
+});
+
+/* ---------- Share ---------- */
+function canShare(files){try{return !!(navigator.canShare&&navigator.canShare({files}));}catch(_){return false;}}
+$('btnShare').addEventListener('click',async()=>{
+  try{await navigator.share({files:results.map(r=>r.file)});Tools.diag.log('shared',{files:results.length});}
+  catch(e){
+    Tools.diag.log('share',e);
+    if(e.name==='NotAllowedError') status(t('res.shareAgain'));
+    else if(e.name!=='AbortError') status(t('res.shareFail'),true);
+  }
+});
+
+/* ---------- Options UI ---------- */
+const fs=$('formats');
+for(const f of FORMATS){
+  const l=document.createElement('label');
+  l.innerHTML=`<input type="radio" name="format" value="${f}"><span>${OUT[f].label}</span>`;
+  fs.append(l);
+}
+function renderOptions(){
+  const o=OUT[settings.format];
+  for(const r of fs.querySelectorAll('input')){r.checked=r.value===settings.format;r.disabled=!supported[r.value];}
+  $('fmtHint').textContent=t('fmt.'+settings.format);
+  $('qRow').hidden=!o.quality;
+  $('quality').value=settings.quality; $('qOut').textContent=settings.quality+'\u00a0%';
+  $('sizeRow').hidden=!!o.fixedSize;
+  $('resize').value=settings.resize;
+  const v=$('resizeVal');
+  $('valRow').hidden=settings.resize==='original';
+  if(settings.resize==='percent'){v.min=1;v.max=400;v.value=settings.percent;$('valLabel').textContent=t('val.percent');}
+  else {v.min=1;v.max=16384;v.value=settings.max;$('valLabel').textContent=t('val.max');}
+  $('bgRow').hidden=o.alpha!==false;
+  $('bg').value=settings.bg;
+}
+function changed(){saveSettings();clearResults();renderOptions();}
+fs.addEventListener('change',e=>{settings.format=e.target.value;changed();Tools.diag.log('format',settings.format);});
+$('quality').addEventListener('input',e=>{settings.quality=clamp(Number(e.target.value),10,100,85);$('qOut').textContent=settings.quality+'\u00a0%';});
+$('quality').addEventListener('change',()=>changed());
+$('resize').addEventListener('change',e=>{settings.resize=e.target.value;changed();});
+$('resizeVal').addEventListener('change',e=>{
+  const n=Tools.parseNum(e.target.value);
+  if(settings.resize==='percent') settings.percent=clamp(n,1,400,settings.percent);
+  else settings.max=clamp(n,1,16384,settings.max);
+  changed();
+});
+$('bg').addEventListener('change',e=>{settings.bg=e.target.value;changed();});
+
+function status(msg,err){const s=$('status');s.textContent=msg||'';s.classList.toggle('err',!!err);}
+
+/* ---------- Input: picker, drag & drop, paste, share target / "open with" ---------- */
+const pick=()=>{$('inPick').value='';$('inPick').click();};
+$('btnPick').addEventListener('click',pick);
+$('btnAdd').addEventListener('click',pick);
+$('inPick').addEventListener('change',e=>addFiles(e.target.files));
+$('btnClear').addEventListener('click',()=>{items.forEach(i=>i.thumb&&URL.revokeObjectURL(i.thumb));items=[];clearResults();renderItems();status('');});
+$('btnConvert').addEventListener('click',()=>{if(!busy)convertAll();});
+const drop=$('drop');
+document.addEventListener('dragover',e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){e.preventDefault();drop.classList.add('over');}});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget)drop.classList.remove('over');});
+document.addEventListener('drop',e=>{
+  drop.classList.remove('over');
+  if(!e.dataTransfer?.files?.length) return;
+  e.preventDefault(); addFiles(e.dataTransfer.files);
+});
+document.addEventListener('paste',e=>{
+  if(e.target.closest&&e.target.closest('input,textarea')) return;
+  const files=[...(e.clipboardData?.files||[])];
+  if(files.length){e.preventDefault();addFiles(files);}
+});
+Tools.takeSharedFiles().then(files=>{
+  if(!files.length) return;
+  Tools.diag.log('shared files',{count:files.length});
+  addFiles(files);
+});
+
+Tools.onLang(()=>{renderOptions();renderItems();renderResults();});
+renderOptions(); renderItems();
+Promise.all([probe('image/webp'),probe('image/avif')]).then(([w,a])=>{
+  supported.webp=w; supported.avif=a;
+  if(!supported[settings.format]) settings.format='jpg';
+  renderOptions();
+  Tools.diag.log('encoders',{webp:w,avif:a});
+});
+
+/* ---------- Diagnostics ---------- */
+Tools.diag.info(()=>({
+  images:items.length,
+  inputFormats:items.map(i=>i.fmt).join(',')||'-',
+  failed:items.filter(i=>i.error).length,
+  results:results.length,
+  settings:{format:settings.format,quality:settings.quality,resize:settings.resize,max:settings.max,percent:settings.percent},
+  encoders:{webp:supported.webp,avif:supported.avif},
+  heicWorker:!!heicWorker,
+  canShareFiles:canShare([new File([''],'x.png',{type:'image/png'})])
+}));
+
+/* ---------- WebMCP tools ---------- */
+const optionsOut=()=>({format:settings.format,quality:settings.quality,resize:settings.resize,max_side:settings.max,percent:settings.percent,background:settings.bg,
+  supported_formats:FORMATS.filter(f=>supported[f])});
+Tools.mcp.register({
+  name:'list_images',title:'List chosen images',readOnly:true,
+  description:'Lists the images the user has chosen (input format, width, height, file size in bytes, whether it could be opened) and the results of the last conversion (format, width, height, bytes). Also returns the current conversion options. Returns no image data or file names.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({
+    images:items.map((i,n)=>({image:n+1,format:i.fmt,width:i.w,height:i.h,bytes:i.bytes,ok:!i.error})),
+    results:results.map(r=>({image:items.indexOf(r.item)+1,format:settings.format,width:r.w,height:r.h,bytes:r.file.size,scaled_down:r.reduced})),
+    options:optionsOut()
+  })
+});
+Tools.mcp.register({
+  name:'set_options',title:'Set conversion options',label:'mcp.options',
+  description:'Sets the target format and options for converting the chosen images. format: jpg, png, webp, avif, bmp, ico (favicon 16–256 px) or svg (pixel image embedded in SVG). quality 10–100 applies to jpg, webp and avif. resize: original, max (longest side in pixels, max_side; photos are only scaled down) or percent (1–400). background (#rrggbb) fills transparent areas for jpg and bmp. Omitted fields stay unchanged. Returns the current options.',
+  inputSchema:{type:'object',properties:{
+    format:{type:'string',enum:FORMATS},
+    quality:{type:'integer',minimum:10,maximum:100},
+    resize:{type:'string',enum:['original','max','percent']},
+    max_side:{type:'integer',minimum:1,maximum:16384},
+    percent:{type:'integer',minimum:1,maximum:400},
+    background:{type:'string',minLength:7,maxLength:7}
+  },additionalProperties:false},
+  execute:a=>{
+    if(a.format&&!supported[a.format]) throw new Error(`this browser cannot write ${a.format}`);
+    if(a.background!=null&&!/^#[0-9a-f]{6}$/i.test(a.background)) throw new Error('background must be #rrggbb');
+    if(a.format) settings.format=a.format;
+    if(a.quality!=null) settings.quality=a.quality;
+    if(a.resize) settings.resize=a.resize;
+    if(a.max_side!=null) settings.max=a.max_side;
+    if(a.percent!=null) settings.percent=a.percent;
+    if(a.background) settings.bg=a.background.toLowerCase();
+    changed();
+    return optionsOut();
+  }
+});
+Tools.mcp.register({
+  name:'convert_images',title:'Convert the chosen images',label:'mcp.convert',
+  description:'Converts all chosen images with the current options (see set_options). The results appear in the app, where the user can save or share them. Returns per image the format, width, height and size in bytes before and after.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:async()=>{
+    if(busy) throw new Error('a conversion is already running');
+    if(!items.some(i=>!i.error)) throw new Error('no images chosen – the user has to choose images first');
+    const res=await convertAll();
+    return {format:settings.format,converted:res.length,failed:items.filter(i=>!i.error).length-res.length,
+      results:res.map(r=>({image:items.indexOf(r.item)+1,width:r.w,height:r.h,bytes_before:r.item.bytes,bytes_after:r.file.size,scaled_down:r.reduced}))};
+  }
+});
+})();
+</script>
+</body>
+</html>

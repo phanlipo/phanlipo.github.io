@@ -247,7 +247,8 @@ const FILE_TYPES = {
   '.webm': 'video/webm', '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime',
   '.mkv': 'video/x-matroska', '.3gp': 'video/3gpp',
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
-  '.heic': 'image/heic', '.heif': 'image/heif',
+  '.heic': 'image/heic', '.heif': 'image/heif', '.avif': 'image/avif', '.gif': 'image/gif', '.bmp': 'image/bmp',
+  '.ico': 'image/x-icon', '.svg': 'image/svg+xml',
 };
 function fileHandlers(p) {
   const exts = p.shareAccept.filter(a => a.startsWith('.')).map(a => a.toLowerCase());
