@@ -384,6 +384,37 @@ test('opened with the installed app (Windows "Open with"): several photos become
   expect((await measure(page, pdf.pages[1].jpeg, REGIONS)).markTL).toBeLessThan(80);   // then a
 });
 
+test('HEIC photo (iPhone, Android) becomes a page with the libheif decoder, also offline', async ({ page, context }) => {
+  const { readFileSync } = await import('node:fs');
+  const heic = { name: 'IMG_0001.HEIC', mimeType: 'image/heic', buffer: readFileSync(new URL('./fixtures/photo.heic', import.meta.url)) };
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();                                 // page now controlled → the decoder goes through the cache
+  await page.setInputFiles('#inPick', heic);
+  await expect(page.locator('#addInfo')).toHaveText(/^1 Seite\(n\) hinzugefügt\./);
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(1);
+  expect(await page.evaluate(() => Heic.info())).toEqual({ native: false, worker: true });
+  expect((await savePdf(page)).pdf.pages).toHaveLength(1);
+  // offline: the decoder was cached on first use
+  await context.setOffline(true);
+  await page.reload();
+  await page.setInputFiles('#inPick', heic);
+  await expect(page.locator('#addInfo')).toHaveText(/^1 Seite\(n\) hinzugefügt\./);
+  expect((await savePdf(page)).pdf.pages).toHaveLength(1);
+  await context.setOffline(false);
+});
+
+test.describe('HEIC decoder cannot load', () => {
+  test.use({ allowedProblems: /libheif|Failed to load resource/ });
+  test('first time offline: clear message', async ({ page, context }) => {
+  const { readFileSync } = await import('node:fs');
+  // context.route also catches requests of the service worker
+  await context.route('**/assets/vendor/libheif/**', r => r.abort());
+  await page.setInputFiles('#inPick', { name: 'IMG_0002.HEIC', mimeType: 'image/heic', buffer: readFileSync(new URL('./fixtures/photo.heic', import.meta.url)) });
+  await expect(page.locator('#toast')).toContainText('HEIC-Foto „IMG_0002.HEIC“ konnte nicht gelesen werden');
+  await expect(page.locator('#pageCount')).toHaveText('0');
+  });
+});
+
 test('works offline: add a photo and save the PDF', async ({ page, context }) => {
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();

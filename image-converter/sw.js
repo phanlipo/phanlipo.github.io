@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "image-converter";
-const VERSION = '407367abb5b9';
+const VERSION = 'ee926d2e72f6';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -15,7 +15,9 @@ const FILES = [
   "icon.svg",
   "manifest.webmanifest",
   "../assets/base.css",
-  "../assets/common.js"
+  "../assets/common.js",
+  "../assets/shared/heic-decode.js",
+  "../assets/shared/heic.js"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
 const RUNTIME = {

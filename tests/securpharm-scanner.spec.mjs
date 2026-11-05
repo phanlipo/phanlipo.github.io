@@ -119,6 +119,39 @@ test.describe('image decoding', () => {
     expect(await page.evaluate(() => Tools.diag.text())).toContain('image: code found');
   });
 
+  test('HEIC photo (iPhone, Android) with the libheif decoder, also offline', async ({ page, context }) => {
+    const { readFileSync } = await import('node:fs');
+    const heic = { name: 'IMG_0003.HEIC', mimeType: 'image/heic', buffer: readFileSync(new URL('./fixtures/code.heic', import.meta.url)) };
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload();
+    await page.click('[data-tab=image]');
+    await page.setInputFiles('#file', heic);
+    await expect(page.locator('#status')).toContainText('Erfolgreich gelesen (GS1, Quelle: Bild)', { timeout: 15000 });
+    expect(await fields(page)).toMatchObject(EXPECTED);
+    await expect(page.locator('#preview img')).toHaveAttribute('src', /^blob:/);
+    expect(await page.evaluate(() => Heic.info())).toEqual({ native: false, worker: true });
+    await context.setOffline(true);
+    await page.reload();
+    await page.click('[data-tab=image]');
+    await page.setInputFiles('#file', { ...heic, mimeType: '' });   // Windows without HEIF codec: no MIME type
+    // read again offline: the same pack is recognised as scanned before
+    await expect(page.locator('#status')).toContainText('bereits 1× gescannt', { timeout: 15000 });
+    expect(await fields(page)).toMatchObject(EXPECTED);
+    await context.setOffline(false);
+  });
+
+  test.describe('HEIC decoder cannot load', () => {
+    test.use({ allowedProblems: /libheif|Failed to load resource/ });
+    test('clear message', async ({ page, context }) => {
+    const { readFileSync } = await import('node:fs');
+    // context.route also catches requests of the service worker
+    await context.route('**/assets/vendor/libheif/**', r => r.abort());
+    await page.click('[data-tab=image]');
+    await page.setInputFiles('#file', { name: 'IMG_0003.HEIC', mimeType: 'image/heic', buffer: readFileSync(new URL('./fixtures/code.heic', import.meta.url)) });
+    await expect(page.locator('#status')).toContainText('HEIC-Foto konnte nicht gelesen werden');
+    });
+  });
+
   test.describe('without zxing-wasm', () => {
     test.use({ allowedProblems: /zxing-wasm|Failed to load resource/ });
 
