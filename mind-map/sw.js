@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "mind-map";
-const VERSION = '0bd1c0d6310f';
+const VERSION = '6868256ba65d';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

@@ -29,6 +29,17 @@ test('repository files are not published, only what the pages need', async ({ re
   }
 });
 
+test('apps show no subtitle in the header, the start page does', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.mobile);
+  for (const app of apps()) {
+    await page.goto(`/${app.folder}/`);
+    const sub = page.locator('header .sub');
+    if (await sub.count()) await expect(sub, app.folder).toBeHidden();
+  }
+  await page.goto('/');
+  await expect(page.locator('header .sub')).toBeVisible();
+});
+
 test.describe('start page', () => {
   test('is not indexed and has a strict Content Security Policy', async ({ page }) => {
     await page.goto('/');
@@ -149,6 +160,21 @@ test.describe('start page', () => {
     await expect(search).toBeFocused();
     await page.locator('[data-set-lang="en"]').click();
     await expect(page.getByRole('searchbox', { name: 'Search apps' })).toHaveAttribute('placeholder', 'Search apps');
+  });
+
+  test('phone: tapping the search field moves it to the top, also when nothing matches', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.mobile);
+    await page.goto('/');
+    const search = page.getByRole('searchbox', { name: 'Apps durchsuchen' });
+    const top = () => search.evaluate(el => Math.round(el.getBoundingClientRect().top));
+    expect(await top()).toBeGreaterThan(100); // below the header at first
+    await search.click();
+    await expect.poll(top).toBeLessThan(30);
+    await search.fill('xyzqwv');
+    await expect(page.locator('.tool:visible')).toHaveCount(0);
+    expect(await top()).toBeLessThan(30);
+    await search.press('Enter'); // keyboard closes, results and field stay
+    expect(await top()).toBeLessThan(30);
   });
 
   test('phone: filter rows scroll sideways without a scroll bar, a faded edge shows there is more', async ({ page }) => {
