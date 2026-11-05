@@ -61,12 +61,16 @@ else
   fi
 fi
 
-# 4. WebKit and Firefox for the basic check (tests/browsers.spec.mjs) – best effort: without them
-#    playwright.config.mjs skips those two projects locally (CI always runs them).
+# 4. WebKit and Firefox for the basic check (tests/browsers.spec.mjs) – in the background, because
+#    --with-deps installs system packages via apt, which can take many minutes. Until it is done
+#    (log: node_modules/.session-start-engines.log), playwright.config.mjs skips those two projects
+#    locally; CI always runs them.
 if ! timeout 30 node --input-type=module -e "
   import { webkit, firefox } from '@playwright/test';
   import { existsSync } from 'node:fs';
   process.exit(existsSync(webkit.executablePath()) && existsSync(firefox.executablePath()) ? 0 : 1);" 2>/dev/null; then
-  timeout 600 npx playwright install --with-deps webkit firefox >/dev/null 2>&1 \
-    || echo "session-start: WebKit/Firefox not installed – npm test checks only Chromium" >&2
+  setsid nohup bash -c 'timeout 1200 npx playwright install --with-deps webkit firefox \
+    || echo "WebKit/Firefox not installed – npm test checks only Chromium"' \
+    > node_modules/.session-start-engines.log 2>&1 < /dev/null &
+  echo "session-start: installing WebKit/Firefox in the background (node_modules/.session-start-engines.log)" >&2
 fi
