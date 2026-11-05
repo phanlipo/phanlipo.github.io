@@ -727,6 +727,9 @@ test('pulse: camera steps are in the diagnostics report', async ({ page }) => {
   expect(report).toMatch(/pulse: main camera camera2 0, facing back/);
   expect(report).toMatch(/^pulseCams: 2$/m);
   expect(report).toMatch(/^pulseTorch: true$/m);
+  expect(report).toMatch(/pulse: capabilities \{"torch":true\}/);
+  expect(report).toMatch(/pulse: settings \{\}/);
+  expect(report).not.toMatch(/"deviceId"/);
 });
 
 test('clap stopwatch: a clap starts, the next one stops', async ({ page }) => {
