@@ -32,9 +32,21 @@ export const pixel = (page, fx, fy, id = 'out') => page.evaluate(([fx, fy, id]) 
   return [...x.getImageData(Math.floor(fx * c.width), Math.floor(fy * c.height), 1, 1).data.slice(0, 3)];
 }, [fx, fy, id]);
 
-// Fake detection worker: two people, mask = left half of the picture is a person
+// Fake detection worker: two people, mask = left half of the picture is a person, one face (FACE below).
+// Modes: 'ok', 'fail' (download fails), 'open' (the face opens its mouth)
+// Face in camera pixels of the 320×240 fake picture: eyes (40, 80) and (120, 80) → 80 px apart, nose tip (80, 100),
+// mouth (80, 120), forehead top (80, 20), chin (80, 190), cheeks (−10, 100) and (170, 100) → 180 px wide.
+export const FACE = { eyeA: [40, 80], eyeB: [120, 80], nose: [80, 100], mouth: [80, 120], top: [80, 20], width: 180 };
 const FAKE_WORKER = `
 const MODE = %MODE%;
+function face() {
+  const f = new Float32Array(478 * 2), set = (i, x, y) => { f[2 * i] = x / 320; f[2 * i + 1] = y / 240; };
+  for (let i = 0; i < 478; i++) set(i, 80, 100);
+  set(468, 40, 80); set(473, 120, 80); set(33, 25, 80); set(133, 55, 80); set(362, 105, 80); set(263, 135, 80);
+  set(1, 80, 100); set(2, 80, 108); set(0, 80, 114); set(13, 80, 119); set(14, 80, MODE === 'open' ? 140 : 121);
+  set(61, 55, 120); set(291, 105, 120); set(10, 80, 20); set(152, 80, 190); set(234, -10, 100); set(454, 170, 100);
+  return f;
+}
 self.onmessage = ({ data }) => {
   if (data.type === 'load') {
     if (MODE === 'fail') return setTimeout(() => self.postMessage({ type: 'error', task: data.task, code: 'download', message: 'offline' }), 50);
@@ -45,7 +57,8 @@ self.onmessage = ({ data }) => {
     for (let y = 0; y < H; y++) for (let x = 0; x < W / 2; x++) mask[y * W + x] = 255;
     data.bitmap.close();
     const persons = data.detect ? [{ x: 0.1, y: 0.2, w: 0.3, h: 0.6, score: 0.91 }, { x: 0.6, y: 0.1, w: 0.2, h: 0.5, score: 0.72 }] : [];
-    setTimeout(() => self.postMessage(data.segment ? { type: 'result', persons, mask, maskW: W, maskH: H, ms: 5 } : { type: 'result', persons, mask: null, ms: 5 }, data.segment ? [mask.buffer] : []), 20);
+    const faces = data.face ? [face()] : [];
+    setTimeout(() => self.postMessage(data.segment ? { type: 'result', persons, mask, maskW: W, maskH: H, faces, ms: 5 } : { type: 'result', persons, mask: null, faces, ms: 5 }, data.segment ? [mask.buffer] : []), 20);
   }
 };`;
 export async function fakeWorker(page, mode = 'ok') {

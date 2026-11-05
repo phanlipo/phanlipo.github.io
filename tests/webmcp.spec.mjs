@@ -1022,7 +1022,11 @@ test.describe('camera-effects tools', () => {
     const l = (await call(page, 'camera_effects_list_effects', {})).result;
     expect(l.effects).toHaveLength(16);
     expect(l.effects[6]).toEqual({ id: 'thermal', name: 'Thermal' });
-    expect(l).toMatchObject({ effect: 'none', applies_to: 'all', strength: 100, people_separation_ready: false });
+    expect(l).toMatchObject({ effect: 'none', applies_to: 'all', strength: 100, accessory: 'none', distortion: 'none', people_separation_ready: false, face_tracking_ready: false });
+    expect(l.accessories).toHaveLength(12);
+    expect(l.accessories[1]).toEqual({ id: 'glasses', name: 'Sunglasses' });
+    expect(l.distortions).toHaveLength(9);
+    expect(l.distortions[1]).toEqual({ id: 'bulge', name: 'Fisheye' });
     const r = await call(page, 'camera_effects_set_effect', { effect: 'comic', strength: 60 });
     expect(r.result).toEqual({ effect: 'comic', applies_to: 'all', strength: 60, camera_on: false });
     await expect(page.locator('#fx button[data-fx="comic"]')).toHaveAttribute('aria-pressed', 'true');
@@ -1047,7 +1051,7 @@ test.describe('camera-effects tools', () => {
   });
 
   test('get_people: only while the camera runs and detection is on; boxes as shown (mirrored)', async ({ page }) => {
-    expect((await call(page, 'camera_effects_get_people', {})).result).toEqual({ camera_on: false, detecting: false, count: 0, people: [] });
+    expect((await call(page, 'camera_effects_get_people', {})).result).toEqual({ camera_on: false, detecting: false, count: 0, people: [], faces: 0 });
     await startCamera(page);
     expect((await call(page, 'camera_effects_get_people', {})).result).toMatchObject({ camera_on: true, detecting: false, count: 0 });
     await page.click('#btnDetect');
@@ -1059,7 +1063,31 @@ test.describe('camera-effects tools', () => {
     expect(r.people[1]).toEqual({ x: 0.2, y: 0.1, width: 0.2, height: 0.5, confidence: 0.72 });
   });
 
+  test('set_face only after the user loaded face tracking; then accessory and distortion show up in the app', async ({ page }) => {
+    const dialogs = [];
+    page.on('dialog', d => dialogs.push(d.message()));
+    const r = await call(page, 'camera_effects_set_face', { accessory: 'crown' });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/choose an accessory or distortion in the "Face" section/);
+    expect(dialogs).toEqual([]);
+    // Removing works without face tracking
+    expect((await call(page, 'camera_effects_set_face', { accessory: 'none' })).result).toMatchObject({ accessory: 'none', distortion: 'none' });
+    await startCamera(page);
+    await page.click('#tabs [data-tab="face"]');
+    await page.click('#acc [data-id="glasses"]');
+    await expect.poll(async () => (await call(page, 'camera_effects_list_effects', {})).result.face_tracking_ready).toBe(true);
+    await expect.poll(async () => (await call(page, 'camera_effects_get_people', {})).result.faces).toBe(1);
+    const f = await call(page, 'camera_effects_set_face', { accessory: 'crown', distortion: 'eyes' });
+    expect(f.result).toEqual({ accessory: 'crown', distortion: 'eyes', camera_on: true, faces: 1 });
+    await expect(page.locator('#acc [data-id="crown"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#warp [data-id="eyes"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Gesicht gewählt');
+    expect((await call(page, 'camera_effects_set_face', { accessory: 'none', distortion: 'none' })).result.faces).toBe(0);
+  });
+
   test('invalid input is rejected and changes nothing', async ({ page }) => {
+    expect((await call(page, 'camera_effects_set_face', { accessory: 'wig' })).ok).toBe(false);
+    expect((await call(page, 'camera_effects_set_face', { distortion: 'melt' })).ok).toBe(false);
     expect((await call(page, 'camera_effects_set_effect', { effect: 'sparkle' })).ok).toBe(false);
     expect((await call(page, 'camera_effects_set_effect', { strength: 5 })).ok).toBe(false);
     expect((await call(page, 'camera_effects_set_effect', { strength: 101 })).ok).toBe(false);
