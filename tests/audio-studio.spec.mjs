@@ -422,6 +422,7 @@ test('diagnostics: steps, never the file name', async ({ page }) => {
   await openMenu(page);
   await openDetails(page, 'Anleitung & Hinweise');
   await page.click('[data-diag="copy"]');
+  await expect(page.locator('#toast')).toHaveText(/Diagnose kopiert|Diagnostics copied/);
   const text = await clipboardText(page);
   expect(text).toContain('decoded');
   expect(text).toContain('"op":"keep"');
