@@ -31,7 +31,12 @@ Kamera-Effekte (`camera-effects.spec.mjs`):
   Der Test liefert es statt des Downloads aus und prüft damit die echte Engine (MediaPipe-WebAssembly im Worker).
   Das Personen-Modell (4,6 MB) liegt bewusst nicht im Repository – Test mit echten Fotos: `tests/manual/camera-e2e.mjs`.
 
-Bildkonverter (`image-converter.spec.mjs`):
+Bildkonverter und Dokumentenscanner (`image-converter.spec.mjs`, `doc-scanner.spec.mjs`):
 
 - `photo.heic` – 64×48 HEIC (HEVC) mit vier Farbfeldern (rot | grün / blau | weiß), Stand-in für ein iPhone-Foto.
   Erzeugt mit `photo-heic.py` (`pip install pillow pillow-heif`, dann `python photo-heic.py photo.heic`).
+
+SecurPharm-Scanner (`securpharm-scanner.spec.mjs`):
+
+- `code.heic` – securPharm-DataMatrix (derselbe Code wie im Test) als HEIC, Stand-in für ein iPhone-Foto einer Packung.
+  Erzeugt mit `node tests/fixtures/code-heic.mjs` (braucht Python mit `pillow-heif`).

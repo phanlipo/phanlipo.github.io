@@ -2,11 +2,12 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "securpharm-scanner";
-const VERSION = 'f75c683021d5';
+const VERSION = 'c19275ab994a';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
   "index.html",
+  "heic-worker.js",
   "icon-180.png",
   "icon-192.png",
   "icon-512.png",
@@ -15,12 +16,16 @@ const FILES = [
   "manifest.webmanifest",
   "../assets/base.css",
   "../assets/common.js",
+  "../assets/shared/heic-decode.js",
+  "../assets/shared/heic.js",
   "../assets/vendor/zxing-library/index.min.js",
   "../assets/vendor/zxing-wasm/iife/reader/index.js",
   "../assets/vendor/zxing-wasm/reader/zxing_reader.wasm"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
-const RUNTIME = {};
+const RUNTIME = {
+  "../assets/vendor/libheif/": "vendor:libheif@1.23.5"
+};
 const RUNTIME_URLS = Object.entries(RUNTIME).map(([dir, cache]) => [new URL(dir, self.location).href, cache]);
 
 self.addEventListener('install', event => {
