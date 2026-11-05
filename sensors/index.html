@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="get_step_count, get_compass_heading">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-NGgR64sKNRu+X6wKyLep/EE0S5RI323pJ3dRtsxHQkg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-+lzggEx4vfWfVHYW0zon3F4AMJ1k159jrOf7nl6MXuY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -760,7 +760,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version b31a177c7dd6</p>
+  <p class="footer-version">Version 961fe62eabe3</p>
   <!-- footer:end -->
 </footer>
 
@@ -2044,7 +2044,7 @@ const pulse = {
     // What the camera offers (zoom, focus …) – to find out how to keep phones from switching lenses
     Tools.diag.log('pulse: capabilities', camInfo(caps));
     Tools.diag.log('pulse: settings', camInfo(track.getSettings ? track.getSettings() : {}));
-    this.track = track; this.caps = caps; this.logged = 0; this.locked = false; this.fingerSince = 0; this.state = null; this.quality = null; this.colors = 0; this.lastColor = -Infinity; this.bright = 0; this.ec = 0;
+    this.track = track; this.caps = caps; this.logged = 0; this.state = null; this.quality = null; this.colors = 0; this.lastColor = -Infinity; this.bright = 0; this.ec = 0;
     if (this.torch) {
       setTorch(track, true).catch(e => Tools.diag.log('pulse: torch failed', e));
       offs.push(() => setTorch(track, false).catch(() => {}));
@@ -2063,24 +2063,6 @@ const pulse = {
     this.samples = []; this.graph = ring(180); this.lastCalc = 0; this.bpm = null;
     $('pBpm').textContent = '–';
     loop(t => this.frame(t, video, c));
-  },
-  // Automatic exposure/white balance follow every brightness change and flatten the pulse: lock them
-  // 1 s after the finger is on the lens, release them when it leaves
-  lock(finger, t){
-    const caps = this.caps || {}, tr0 = this.track;
-    if (!tr0 || !tr0.applyConstraints) return;
-    const can = k => Array.isArray(caps[k]) && caps[k].includes('manual') && caps[k].includes('continuous');
-    if (!can('exposureMode') && !can('whiteBalanceMode')) return;
-    if (finger) { if (!this.fingerSince) this.fingerSince = t; } else this.fingerSince = 0;
-    const want = !!(finger && t - this.fingerSince > 1000);
-    if (want === !!this.locked) return;
-    this.locked = want;
-    const mode = want ? 'manual' : 'continuous', c = {};
-    if (can('exposureMode')) c.exposureMode = mode;
-    if (can('whiteBalanceMode')) c.whiteBalanceMode = mode;
-    tr0.applyConstraints({advanced: [c]})
-      .then(() => Tools.diag.log('pulse: exposure/white balance', mode))
-      .catch(e => Tools.diag.log('pulse: lock failed', e));
   },
   showCam(){
     const n = this.cams.length, i = this.cams.findIndex(d => d.deviceId === this.cur);
@@ -2109,7 +2091,7 @@ const pulse = {
     // Mean colour for the diagnostics (numbers only): every 3 s, at most 20 times
     if (this.colors < 20 && t - this.lastColor >= 3000) {
       this.colors++; this.lastColor = t;
-      Tools.diag.log('pulse: colour', {r: Math.round(r), g: Math.round(g), b: Math.round(b), finger, ec: this.ec, state: this.state || null, quality: this.quality == null ? null : Math.round(this.quality * 100) / 100, locked: !!this.locked});
+      Tools.diag.log('pulse: colour', {r: Math.round(r), g: Math.round(g), b: Math.round(b), finger, ec: this.ec, state: this.state || null, quality: this.quality == null ? null : Math.round(this.quality * 100) / 100});
     }
     // Overexposed (red at the limit): no pulse visible – turn the exposure down step by step
     this.bright = r > 245 ? this.bright + 1 : 0;
@@ -2123,7 +2105,6 @@ const pulse = {
         .catch(e => Tools.diag.log('pulse: exposure failed', e));
     }
     // Finger on the lens with light behind it: bright and clearly red
-    this.lock(finger, t);
     if (!finger) {
       this.samples = []; this.bpm = null;
       $('pInfo').textContent = tr('finger'); this.state = 'finger'; this.quality = null;
