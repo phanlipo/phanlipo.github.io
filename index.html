@@ -12,7 +12,7 @@
 <meta name="tool:short-name-en" content="App Shelf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-XKkFuhW56l/fzL+JfL4uCcZ8BAeNhJzi9pleyulvWBs=' 'sha256-hU9uG4/4HOU9m6RCGSGbo9E2vcTiVqFdAWRB53CMeZY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-XKkFuhW56l/fzL+JfL4uCcZ8BAeNhJzi9pleyulvWBs=' 'sha256-+ON/VTyut6MPfRAmX7gR31y8L5jy8rN/V/O9TTpe1LU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest" data-no-sw>
@@ -43,7 +43,9 @@ main{padding-block:20px}
 .common{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;color:var(--muted)}
 .common li::before{content:"✓ ";color:var(--ok);font-weight:700}
 /* Filter: each row scrolls sideways on phones and wraps on wider screens */
-.filter{display:grid;gap:10px;margin-block-end:16px}
+.filter{display:grid;gap:10px;margin-block-end:16px;scroll-margin-block-start:8px}
+/* While searching, the page stays tall enough for the search field to sit at the top (also with few results) */
+body.searching main{min-height:100vh;min-height:100lvh}
 .filter-row{display:grid;gap:4px}
 .filter-label{font-size:13px;font-weight:600;color:var(--muted)}
 .chips{display:flex;gap:8px;overflow-x:auto;padding-block-end:4px;scrollbar-width:none;--fade:linear-gradient(to right,#000 calc(100% - 48px),transparent)}
@@ -481,6 +483,13 @@ main{padding-block:20px}
       : words.length ? Tools.t('status.some', { shown, n }) : Tools.t('status.all', { n });
   }
   input.addEventListener('input', () => apply(current));
+  // Phones: on focus the search field moves to the top, so field and results stay visible above the keyboard
+  const toTop = () => {
+    document.body.classList.add('searching');
+    bar.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  };
+  input.addEventListener('focus', toTop);
+  input.addEventListener('blur', () => { if (!input.value) document.body.classList.remove('searching'); });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') input.blur(); // hides the phone keyboard, the results stay
     else if (e.key === 'Escape' && input.value) { e.preventDefault(); input.value = ''; apply(current); }
