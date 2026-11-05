@@ -354,9 +354,10 @@ async function fakeMic(page, freq = 1000, amp = 0.5) {
 }
 // Fake camera: a canvas stream (optionally pulsing red) with a switchable torch
 // cams: several rear cameras [{ id, label, torch }], the first one is what "environment" hands out
-async function fakeCamera(page, { pulseHz = 0, cams = null } = {}) {
-  await page.addInitScript(({ pulseHz, cams }) => {
-    window.__torch = []; window.__opened = [];
+// caps: extra capabilities (focus, exposure); bright: red at the limit (overexposed)
+async function fakeCamera(page, { pulseHz = 0, cams = null, caps = {}, bright = false } = {}) {
+  await page.addInitScript(({ pulseHz, cams, caps, bright }) => {
+    window.__torch = []; window.__opened = []; window.__constraints = [];
     if (cams) navigator.mediaDevices.enumerateDevices = async () => cams.map(c => ({ kind: 'videoinput', deviceId: c.id, label: c.label, groupId: '' }));
     navigator.mediaDevices.getUserMedia = async constraints => {
       const want = constraints.video && constraints.video.deviceId && constraints.video.deviceId.exact;
@@ -367,17 +368,17 @@ async function fakeCamera(page, { pulseHz = 0, cams = null } = {}) {
       cv.width = cv.height = 32;
       const c = cv.getContext('2d'), t0 = performance.now();
       const paint = () => {
-        const r = pulseHz ? Math.round(170 + 40 * Math.sin(2 * Math.PI * pulseHz * (performance.now() - t0) / 1000)) : 90;
+        const r = bright ? 255 : pulseHz ? Math.round(170 + 40 * Math.sin(2 * Math.PI * pulseHz * (performance.now() - t0) / 1000)) : 90;
         c.fillStyle = `rgb(${r},30,30)`; c.fillRect(0, 0, 32, 32);
       };
       paint(); setInterval(paint, 15);
       const stream = cv.captureStream(30), track = stream.getVideoTracks()[0];
-      track.getCapabilities = () => (window.__noTorch || (cam && !cam.torch) ? {} : { torch: true });
+      track.getCapabilities = () => Object.assign({}, caps, window.__noTorch || (cam && !cam.torch) ? {} : { torch: true });
       if (cam) { Object.defineProperty(track, 'label', { value: cam.label }); track.getSettings = () => ({ deviceId: cam.id }); }
-      track.applyConstraints = async c => { window.__torch.push(c.advanced[0].torch); };
+      track.applyConstraints = async c => { window.__constraints.push(c.advanced[0]); if ('torch' in c.advanced[0]) window.__torch.push(c.advanced[0].torch); };
       return stream;
     };
-  }, { pulseHz, cams });
+  }, { pulseHz, cams, caps, bright });
   await page.reload();
 }
 async function download(page, click) {
@@ -713,6 +714,21 @@ test('pulse: picks the main rear camera next to the flash, other cameras selecta
   await page.locator('[data-start="pulse"]').click();
   await expect(page.locator('#pCamInfo')).toHaveText('Rückkamera 1 von 3 · von dir gewählt');
   expect(await page.evaluate(() => window.__opened)).toEqual(['uw']);
+});
+
+test('pulse: focus fixed to far, exposure turned down when overexposed', async ({ page }) => {
+  await fakeCamera(page, { bright: true, caps: {
+    focusMode: ['manual', 'continuous'], focusDistance: { min: 0.05, max: 3.7, step: 0.01 },
+    exposureCompensation: { min: -2, max: 2, step: 0.5 },
+  } });
+  await tab(page, 'Puls');
+  await page.locator('[data-start="pulse"]').click();
+  await expect.poll(() => page.evaluate(() => window.__constraints.filter(c => 'exposureCompensation' in c).map(c => c.exposureCompensation)), { timeout: 8000 }).toEqual([-1, -2]);
+  expect(await page.evaluate(() => window.__constraints)).toContainEqual({ focusMode: 'manual', focusDistance: 3.7 });
+  const report = await page.evaluate(() => Tools.diag.text());
+  expect(report).toMatch(/pulse: focus fixed 3\.7/);
+  expect(report).toMatch(/pulse: colour \{"r":25\d,"g":[23]\d,"b":[23]\d,"finger":true,"ec":0\}/);
+  expect(report).toMatch(/pulse: exposure -2/);
 });
 
 test('pulse: camera steps are in the diagnostics report', async ({ page }) => {

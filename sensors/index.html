@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="get_step_count, get_compass_heading">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-r1CAchvIcg8IGE1NjlVmfTixVGhs0HxCct2u4rnHZBY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JnfrCCp1LtQmKdHswucqXacbjCYmWZbE8hDq4eDpQLo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -628,6 +628,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <ul>
     <li>Die Kamera sieht, wie sich die Rötung der Fingerkuppe mit jedem Herzschlag ändert. Nach etwa 5–10 Sekunden ruhiger Messung erscheint der Puls.</li>
     <li>Der Finger gehört auf die <b>Linse neben dem Blitz</b>. Hat das Handy mehrere Rückkameras, wählt die App automatisch die Hauptkamera (die mit Blitz). Leuchtet die falsche Linse rot bzw. geht der Blitz nicht an, mit <b>Andere Kamera</b> durchschalten – die Wahl bleibt gespeichert.</li>
+    <li>Viele Handys zeigen dem Browser nur <b>eine</b> Rückkamera und wechseln die Linse selbst. Die App stellt den Fokus deshalb fest auf „weit“ (verhindert bei vielen Handys den Wechsel zur Makro-Linse) und regelt die Belichtung herunter, wenn das Bild überstrahlt. Hilft das nicht: Fingerkuppe flach über Blitz und alle Linsen legen.</li>
     <li>Nur eine Spielerei: Licht, Druck und Bewegung verfälschen das Ergebnis. Für gesundheitliche Fragen ein Messgerät oder einen Arzt fragen.</li>
   </ul>
   <h3>Klatsch-Stoppuhr</h3>
@@ -733,6 +734,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <ul>
     <li>The camera sees how the redness of the fingertip changes with each heartbeat. After about 5–10 seconds of steady measuring the pulse appears.</li>
     <li>Put your finger on the <b>lens next to the flash</b>. If the phone has several rear cameras, the app picks the main camera (the one with the flash) automatically. If the wrong lens is used or the flash stays off, step through them with <b>Other camera</b> – the choice is remembered.</li>
+    <li>Many phones show the browser only <b>one</b> rear camera and switch lenses themselves. The app therefore fixes the focus to “far” (keeps many phones from switching to the macro lens) and turns the exposure down when the image is overexposed. If that does not help: lay your fingertip flat over the flash and all lenses.</li>
     <li>Just for fun: light, pressure and movement distort the result. For health questions ask a measuring device or a doctor.</li>
   </ul>
   <h3>Clap stopwatch</h3>
@@ -758,7 +760,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 429f3c813e69</p>
+  <p class="footer-version">Version 1440eea15d39</p>
   <!-- footer:end -->
 </footer>
 
@@ -2042,10 +2044,18 @@ const pulse = {
     // What the camera offers (zoom, focus …) – to find out how to keep phones from switching lenses
     Tools.diag.log('pulse: capabilities', camInfo(caps));
     Tools.diag.log('pulse: settings', camInfo(track.getSettings ? track.getSettings() : {}));
-    this.track = track; this.logged = 0;
+    this.track = track; this.caps = caps; this.logged = 0; this.colors = 0; this.lastColor = -Infinity; this.bright = 0; this.ec = 0;
     if (this.torch) {
       setTorch(track, true).catch(e => Tools.diag.log('pulse: torch failed', e));
       offs.push(() => setTorch(track, false).catch(() => {}));
+    }
+    // Focus fixed to far: a finger right on the lens otherwise makes many phones switch to the macro or
+    // wide-angle lens (away from the flash). Blur does not matter for the pulse.
+    const fd = caps.focusDistance;
+    if (Array.isArray(caps.focusMode) && caps.focusMode.includes('manual') && fd && fd.max > 0) {
+      track.applyConstraints({advanced: [{focusMode: 'manual', focusDistance: fd.max}]})
+        .then(() => Tools.diag.log('pulse: focus fixed', fd.max))
+        .catch(e => Tools.diag.log('pulse: focus failed', e));
     }
     const cv = document.createElement('canvas');
     cv.width = cv.height = 24;
@@ -2074,11 +2084,28 @@ const pulse = {
     seen('pulse');
     c.drawImage(video, 0, 0, 24, 24);
     const d = c.getImageData(0, 0, 24, 24).data;
-    let r = 0, g = 0;
-    for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; }
-    r /= d.length / 4; g /= d.length / 4;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+    r /= d.length / 4; g /= d.length / 4; b /= d.length / 4;
+    const finger = r >= 60 && r >= g * 1.6;
+    // Mean colour for the diagnostics (numbers only): every 3 s, at most 12 times
+    if (this.colors < 12 && t - this.lastColor >= 3000) {
+      this.colors++; this.lastColor = t;
+      Tools.diag.log('pulse: colour', {r: Math.round(r), g: Math.round(g), b: Math.round(b), finger, ec: this.ec});
+    }
+    // Overexposed (red at the limit): no pulse visible – turn the exposure down step by step
+    this.bright = r > 245 ? this.bright + 1 : 0;
+    const ecCap = this.caps && this.caps.exposureCompensation;
+    if (this.bright > 20 && ecCap && this.ec > ecCap.min && this.track) {
+      this.bright = 0;
+      this.ec = Math.max(ecCap.min, this.ec - 1);
+      const ec = this.ec;
+      this.track.applyConstraints({advanced: [{exposureCompensation: ec}]})
+        .then(() => Tools.diag.log('pulse: exposure', ec))
+        .catch(e => Tools.diag.log('pulse: exposure failed', e));
+    }
     // Finger on the lens with light behind it: bright and clearly red
-    if (r < 60 || r < g * 1.6) {
+    if (!finger) {
       this.samples = []; this.bpm = null;
       $('pInfo').textContent = tr('finger');
       $('pBpm').textContent = '–';
