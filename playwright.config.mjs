@@ -1,5 +1,6 @@
 // Browser tests for all pages – run with `npm test`. See tests/README.md.
-import { defineConfig } from '@playwright/test';
+import { defineConfig, webkit, firefox } from '@playwright/test';
+import { existsSync } from 'node:fs';
 
 const PORT = 4173;
 
@@ -27,11 +28,25 @@ export default defineConfig({
   },
   projects: [{
     name: 'chromium',
+    // browsers.spec.mjs is the basic check for the other engines
+    testIgnore: ['live/**', 'browsers.spec.mjs'],
     use: {
       browserName: 'chromium',
       // Optional: use an already installed Chromium (e.g. when the Playwright version and the
       // installed browser differ). CI installs the matching browser and does not set this.
       ...(process.env.PW_CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH } } : {}),
     },
-  }],
+  },
+  // Basic check of every page in WebKit (Safari, iPhone) and Firefox: tests/browsers.spec.mjs.
+  // Always in CI; locally only when the browser is installed (npx playwright install --with-deps webkit firefox).
+  ...otherEngines()],
 });
+
+function otherEngines() {
+  const engines = [['webkit', webkit], ['firefox', firefox]].filter(([name, type]) => {
+    if (process.env.CI || existsSync(type.executablePath())) return true;
+    console.warn(`playwright.config: ${name} is not installed – tests/browsers.spec.mjs skips it (npx playwright install --with-deps ${name})`);
+    return false;
+  });
+  return engines.map(([name]) => ({ name, testMatch: 'browsers.spec.mjs', use: { browserName: name } }));
+}
