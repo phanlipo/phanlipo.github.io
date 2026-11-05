@@ -30,6 +30,8 @@
 //   "licenseFile": "scripts/licenses/<name>.txt"
 //        for packages without a licence file whose real licence is not plain MIT (e.g. builds containing GPL code):
 //        this file from the repository is written as LICENSE
+//   "repository": "github.com/<owner>/<name>"
+//        source repository for the maintenance check when the npm package does not name one (deps.dev knows none)
 //   "maintenanceException": { "reason": "...", "until": "JJJJ-MM" }
 //        accept a library that fails the maintenance check (e.g. data packages that rarely change);
 //        after "until" it is reported again
@@ -183,7 +185,7 @@ async function healthFacts(e) {
   };
   const ver = await getJson(`${DEPSDEV}/systems/npm/packages/${enc(e.package)}/versions/${enc(e.version)}`);
   const projects = ver?.relatedProjects || [];
-  f.repo = (projects.find(p => p.relationType === 'SOURCE_REPO') || projects[0])?.projectKey.id || null;
+  f.repo = (projects.find(p => p.relationType === 'SOURCE_REPO') || projects[0])?.projectKey.id || e.repository || null;
   if (f.repo) {
     const project = await getJson(`${DEPSDEV}/projects/${enc(f.repo.toLowerCase())}`);
     const m = project?.scorecard?.checks?.find(c => c.name === 'Maintained');

@@ -23,3 +23,10 @@ Text zu Sprache (`text-to-speech.spec.mjs`):
   (`pip install onnx`, dann `python tiny-piper.py tiny-piper.onnx`).
 - `tiny-kokoro.onnx` – dasselbe für die deutsche Kokoro-Stimme (`input_ids`, `style`, `speed` → `waveform`):
   gibt die Token-IDs / 1000 × Tempo aus. Erzeugt mit `tiny-kokoro.py`.
+
+Kamera-Effekte (`camera-effects.spec.mjs`):
+
+- `selfie_segmenter.tflite` – MediaPipe Selfie Segmenter (float16, 250 KB, Apache-2.0), unverändert von
+  `https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite`.
+  Der Test liefert es statt des Downloads aus und prüft damit die echte Engine (MediaPipe-WebAssembly im Worker).
+  Das Personen-Modell (4,6 MB) liegt bewusst nicht im Repository – Test mit echten Fotos: `tests/manual/camera-e2e.mjs`.

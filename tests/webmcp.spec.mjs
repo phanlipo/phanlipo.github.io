@@ -8,6 +8,7 @@ import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 import { CLIPS, clip, wavInfo, mp3Info, toneHz } from './audio-files.mjs';
 import { ORIGIN, API_PROBLEMS, mockApi, addYamlConfig } from './api-mock.mjs';
 import { testSong } from './midi-files.mjs';
+import { fakeCamera, fakeWorker } from './camera-fakes.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -1002,6 +1003,68 @@ test.describe('talking-animal tools', () => {
     expect((await call(page, 'talking_animal_set_options', { volume: 3 })).ok).toBe(false);
     expect((await call(page, 'talking_animal_play_last_recording', { effect: 'loud' })).ok).toBe(false);
     await expect(page.locator('#animals [data-a="cat"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+test.describe('camera-effects tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeCamera(page);
+    await fakeWorker(page);
+    page.on('dialog', d => d.accept());
+    await open(page, '/camera-effects/');
+  });
+  const startCamera = async page => {
+    await page.click('#btnStart');
+    await expect(page.locator('#overlay')).toBeHidden();
+  };
+
+  test('list_effects and set_effect: effect and strength show up in the app', async ({ page }) => {
+    const l = (await call(page, 'camera_effects_list_effects', {})).result;
+    expect(l.effects).toHaveLength(16);
+    expect(l.effects[6]).toEqual({ id: 'thermal', name: 'Thermal' });
+    expect(l).toMatchObject({ effect: 'none', applies_to: 'all', strength: 100, people_separation_ready: false });
+    const r = await call(page, 'camera_effects_set_effect', { effect: 'comic', strength: 60 });
+    expect(r.result).toEqual({ effect: 'comic', applies_to: 'all', strength: 60, camera_on: false });
+    await expect(page.locator('#fx button[data-fx="comic"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Effekt gewählt');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('camera-effects.settings.v1')))).toMatchObject({ effect: 'comic', strength: 60 });
+  });
+
+  test('people/background only after the user loaded the separation; the agent cannot start the download', async ({ page }) => {
+    const dialogs = [];
+    page.on('dialog', d => dialogs.push(d.message()));
+    const r = await call(page, 'camera_effects_set_effect', { effect: 'blur', applies_to: 'background' });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/has to choose "People" or "Background" in the app first/);
+    expect(dialogs).toEqual([]);
+    await expect(page.locator('#fx button[data-fx="none"]')).toHaveAttribute('aria-pressed', 'true');
+    await startCamera(page);
+    await page.click('[data-scope="people"]');
+    await expect.poll(async () => (await call(page, 'camera_effects_list_effects', {})).result.people_separation_ready).toBe(true);
+    expect((await call(page, 'camera_effects_set_effect', { effect: 'blur', applies_to: 'background' })).result)
+      .toEqual({ effect: 'blur', applies_to: 'background', strength: 100, camera_on: true });
+    await expect(page.locator('[data-scope="background"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('get_people: only while the camera runs and detection is on; boxes as shown (mirrored)', async ({ page }) => {
+    expect((await call(page, 'camera_effects_get_people', {})).result).toEqual({ camera_on: false, detecting: false, count: 0, people: [] });
+    await startCamera(page);
+    expect((await call(page, 'camera_effects_get_people', {})).result).toMatchObject({ camera_on: true, detecting: false, count: 0 });
+    await page.click('#btnDetect');
+    await expect(page.locator('#badge')).toHaveText('👤 2 Personen');
+    const r = (await call(page, 'camera_effects_get_people', {})).result;
+    expect(r).toMatchObject({ camera_on: true, detecting: true, count: 2 });
+    // Fake worker: camera x 0.1, width 0.3 → mirrored selfie shows it at 1 − 0.1 − 0.3 = 0.6
+    expect(r.people[0]).toEqual({ x: 0.6, y: 0.2, width: 0.3, height: 0.6, confidence: 0.91 });
+    expect(r.people[1]).toEqual({ x: 0.2, y: 0.1, width: 0.2, height: 0.5, confidence: 0.72 });
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    expect((await call(page, 'camera_effects_set_effect', { effect: 'sparkle' })).ok).toBe(false);
+    expect((await call(page, 'camera_effects_set_effect', { strength: 5 })).ok).toBe(false);
+    expect((await call(page, 'camera_effects_set_effect', { strength: 101 })).ok).toBe(false);
+    expect((await call(page, 'camera_effects_set_effect', { camera: 'on' })).ok).toBe(false);
+    await expect(page.locator('#fx button[data-fx="none"]')).toHaveAttribute('aria-pressed', 'true');
   });
 });
 
