@@ -31,6 +31,7 @@ neben jeder Bibliothek in `assets/vendor/<name>/LICENSE` und wird mit ihr ausgel
 | [marked](https://marked.js.org) (`marked`) | 18.1.2 | [MIT](assets/vendor/marked/LICENSE) | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/); Copyright (c) 2011-2018, Christopher Jeffrey (https://github.com/chjj/); Copyright © 2004, John Gruber | Markdown in HTML umwandeln im Markdown-Editor |
 | [dompurify](https://github.com/cure53/DOMPurify) (`dompurify`) | 3.4.17 | [(MPL-2.0 OR Apache-2.0)](assets/vendor/dompurify/LICENSE) | siehe Lizenztext | Gerendertes Markdown von Skripten säubern im Markdown-Editor |
 | [turndown](https://github.com/mixmark-io/turndown) (`turndown`) | 7.2.4 | [MIT](assets/vendor/turndown/LICENSE) | Copyright (c) 2017 Dom Christie | Bearbeitete Ansicht zurück in Markdown umwandeln im Markdown-Editor |
+| [mediapipe](https://ai.google.dev/edge/mediapipe/solutions/guide) (`@mediapipe/tasks-vision`) | 1.2.0 | [Apache-2.0](assets/vendor/mediapipe/LICENSE) | siehe Lizenztext | Personen erkennen (Objekterkennung) und vom Hintergrund trennen (Segmentierung) in Kamera-Effekte – läuft im Worker, dessen Netzsperre die eingebaute Nutzungsstatistik der Bibliothek blockiert |
 
 ## Weitere Lizenzdateien
 

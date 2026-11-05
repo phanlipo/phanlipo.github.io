@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Kamera-Effekte</title>
+<meta name="description" content="Das Kamerabild live durch Effekte: Comic, Wärmebild, Nachtsicht, Skizze, Pixel, Kaleidoskop und mehr. Erkennt Personen und legt Effekte nur auf Personen oder nur auf den Hintergrund.">
+<meta name="tool:tags" content="Freizeit, KI">
+<meta name="tool:features" content="Kamera, KI-Agent, Download nötig">
+<meta name="tool:icon" content="camera-spark">
+<meta name="tool:color" content="#86198f">
+<meta name="tool:short-name" content="Kamera-FX">
+<meta name="tool:title-en" content="Camera Effects">
+<meta name="tool:description-en" content="Live camera through effects: comic, thermal, night vision, sketch, pixel, kaleidoscope and more. Detects people and applies effects to people only or to the background only.">
+<meta name="tool:short-name-en" content="Camera FX">
+<meta name="tool:storage" content="camera-effects.">
+<meta name="tool:webmcp" content="list_effects, set_effect, get_people">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-N0KPvv2xpNv/g8bbYiXAzNwpBAXDnxl/631HKsONkhk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Kamera-FX">
+<meta name="theme-color" content="#86198f">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#86198f;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f0abfc;--accent-text:#3b0640}}
+/* Stage layout: camera picture fills the screen, effect choice below it (thumb reach); settings in the menu */
+main{max-width:1100px;margin-inline:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
+.view{flex:1;min-height:160px;position:relative;border-radius:var(--radius);overflow:hidden;background:#000}
+.view canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+#video{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;color:#fff;background:rgba(0,0,0,.55)}
+.overlay[hidden]{display:none}
+.overlay p{margin:0;max-width:34em}
+.overlay .btn{min-height:52px;font-size:17px;font-weight:600}
+.badge{position:absolute;inset-block-start:8px;inset-inline-start:8px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font-weight:600;font-size:15px}
+.badge[hidden]{display:none}
+.busy{position:absolute;inset-block-end:8px;inset-inline:8px;margin:0;padding:6px 10px;border-radius:10px;background:rgba(0,0,0,.65);color:#fff;font-size:14px;text-align:center}
+.busy[hidden]{display:none}
+.controls{flex:none;display:grid;gap:6px}
+/* Effects: one row that scrolls sideways (fade at the edge shows there is more) */
+.fx{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-block:2px;scroll-snap-type:x proximity;
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 24px),transparent)}
+.fx::-webkit-scrollbar{display:none}
+.fx button{flex:none;scroll-snap-align:start;min-width:72px;min-height:60px;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);
+  font:inherit;font-size:13px;font-weight:600;line-height:1.15;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 8px;cursor:pointer}
+.fx button .e{font-size:22px;line-height:1.2}
+.fx button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
+.row2{display:flex;gap:6px;align-items:stretch}
+.seg{flex:1;display:flex;min-width:0;border:2px solid var(--border);border-radius:12px;overflow:hidden}
+.seg button{flex:1 1 auto;min-width:0;min-height:44px;border:0;background:var(--surface-2);color:var(--text);font:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:2px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text)}
+.toggle{flex:none;min-height:44px;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);font:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:2px 8px;white-space:nowrap}
+@media (max-width:400px){.seg button,.toggle{font-size:13px}.seg button{padding-inline:4px}}
+.toggle[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
+.seg-label{font-size:13px;color:var(--muted);margin:0}
+.card h2{margin-block-end:8px}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.range{display:grid;gap:4px;margin-block:8px}
+.range input{width:100%;accent-color:var(--accent);min-height:44px}
+dialog#photo{border:0;padding:12px;border-radius:var(--radius);background:var(--surface);color:var(--text);width:min(640px,calc(100vw - 24px));max-height:calc(100dvh - 24px)}
+dialog#photo::backdrop{background:rgba(0,0,0,.6)}
+dialog#photo img{display:block;width:100%;max-height:60dvh;object-fit:contain;border-radius:8px;background:#000}
+dialog#photo .row{margin-block-start:10px}
+@media (orientation:landscape) and (max-height:500px){
+  main{flex-direction:row}
+  .view{min-height:0}
+  .controls{width:min(300px,42vw);overflow-y:auto;align-content:start}
+  .fx{flex-wrap:wrap;overflow:visible;-webkit-mask-image:none;mask-image:none}
+  .fx{gap:4px}
+  .fx button{min-width:64px;flex:1 0 64px;min-height:44px;font-size:12px;padding-block:2px}
+  .fx button .e{font-size:16px}
+  .row2{flex-direction:column}
+}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Kamera-Effekte</span></h1>
+  <p class="sub" data-i18n="sub">Live-Effekte für das Kamerabild</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnFlip" aria-label="Kamera wechseln" data-i18n-attr="aria-label:flip; title:flip" title="Kamera wechseln" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2"/><path d="M11.245 15.904a3 3 0 0 0 3.755 -2.904m-2.25 -2.905a3 3 0 0 0 -3.75 2.905"/><path d="M14 13h2v2"/><path d="M10 13h-2v-2"/></svg>
+    </button>
+    <button type="button" class="head-btn" id="btnPhoto" aria-label="Foto aufnehmen" data-i18n-attr="aria-label:photo; title:photo" title="Foto aufnehmen" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2"/><path d="M9 13a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="view" id="view">
+    <video id="video" playsinline muted autoplay aria-hidden="true" tabindex="-1"></video>
+    <canvas id="out" role="img" aria-label="Kamerabild"></canvas>
+    <canvas id="boxes" aria-hidden="true"></canvas>
+    <p class="badge" id="badge" role="status" hidden></p>
+    <p class="busy" id="busy" role="status" hidden></p>
+    <div class="overlay" id="overlay">
+      <p id="ovText" data-i18n="intro">Tippe auf „Kamera starten“ und wähle unten einen Effekt.</p>
+      <button type="button" class="btn primary" id="btnStart" data-i18n="start">Kamera starten</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <h2 class="sr-only" id="h-fx" data-i18n="effect">Effekt</h2>
+    <div class="fx" id="fx" role="group" aria-labelledby="h-fx"></div>
+    <div class="row2">
+      <div class="seg" id="scope" role="group" aria-label="Effekt wirkt auf" data-i18n-attr="aria-label:scope">
+        <button type="button" data-scope="all" aria-pressed="true" data-i18n="scope.all">Alles</button>
+        <button type="button" data-scope="people" aria-pressed="false" data-i18n="scope.people">Personen</button>
+        <button type="button" data-scope="background" aria-pressed="false" data-i18n="scope.background">Hintergrund</button>
+      </div>
+      <button type="button" class="toggle" id="btnDetect" aria-pressed="false"><span aria-hidden="true">👤 </span><span data-i18n="detect">Erkennen</span></button>
+    </div>
+  </div>
+
+  <section class="card" aria-labelledby="h-settings" data-menu>
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <div class="range">
+      <label for="optStrength"><span data-i18n="strength">Stärke des Effekts</span>: <output id="strengthOut" for="optStrength">100 %</output></label>
+      <input type="range" id="optStrength" min="10" max="100" step="5" value="100">
+    </div>
+    <label class="check"><input type="checkbox" id="optMirror" checked> <span data-i18n="mirror">Selfie-Kamera spiegeln (wie ein Spiegel)</span></label>
+    <label class="check"><input type="checkbox" id="optScore"> <span data-i18n="score">Bei erkannten Personen die Sicherheit in % zeigen</span></label>
+    <h3 data-i18n="models.h">Personenerkennung</h3>
+    <p class="muted" id="modelsInfo" data-i18n="models.none">Noch nichts heruntergeladen.</p>
+    <div class="row"><button type="button" class="btn" id="btnDelModels" data-i18n="models.delete" disabled>Heruntergeladene Erkennung löschen</button></div>
+  </section>
+</main>
+
+<dialog id="photo" aria-labelledby="photoTitle">
+  <h2 id="photoTitle" data-i18n="photo.title">Foto</h2>
+  <img id="photoImg" alt="Aufgenommenes Foto" data-i18n-attr="alt:photo.alt">
+  <div class="row">
+    <button type="button" class="btn primary" id="btnSave" data-i18n="photo.save">Speichern</button>
+    <button type="button" class="btn" id="btnShare" data-i18n="photo.share" hidden>Teilen …</button>
+    <button type="button" class="btn" id="btnClose" data-i18n="photo.close">Schließen</button>
+  </div>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Zeigt das Bild der Kamera live mit einem Effekt – und erkennt auf Wunsch Personen im Bild.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Kamera starten</b> tippen und den Zugriff erlauben. Oben rechts wechselst du zwischen Front- und Rückkamera und nimmst ein <b>Foto</b> auf (mit Effekt, zum Speichern oder Teilen).</li>
+    <li>Unten einen <b>Effekt</b> wählen – die Reihe lässt sich seitlich wischen: Original, Schwarzweiß, Sepia, Negativ, Comic, Skizze, Wärmebild, Nachtsicht, Pixel, Retro, Pop-Art, Neon, Bunt, Weichzeichner, Spiegel und Kaleidoskop.</li>
+    <li><b>Wirkt auf:</b> <i>Alles</i>, nur auf <i>Personen</i> oder nur auf den <i>Hintergrund</i>. So wird z. B. mit <i>Weichzeichner</i> + <i>Hintergrund</i> der Hintergrund unscharf, mit <i>Schwarzweiß</i> + <i>Hintergrund</i> bleibt nur die Person farbig.</li>
+    <li><b>👤 Erkennen</b> rahmt jede erkannte Person ein und zählt sie (oben links).</li>
+    <li>Im Menü ☰ unter <i>Einstellungen</i>: Stärke des Effekts, Spiegeln der Selfie-Kamera, Sicherheit der Erkennung in %, heruntergeladene Erkennung löschen.</li>
+  </ul>
+  <h3>Personenerkennung</h3>
+  <ul>
+    <li>Für <i>Erkennen</i> und für <i>Personen</i>/<i>Hintergrund</i> lädt die App beim ersten Mal nach Rückfrage die Erkennung herunter: das Rechenprogramm (MediaPipe, ca. 14 MB) von dieser Seite und das jeweilige Modell von Google (storage.googleapis.com): Personen erkennen ca. 4,6 MB, Person vom Hintergrund trennen ca. 0,3 MB. Danach funktioniert alles offline.</li>
+    <li>Das Kamerabild wird nur auf dem Gerät ausgewertet und nie verschickt. Die Bibliothek MediaPipe würde von sich aus Nutzungsstatistiken an Google senden – die App sperrt das: Außer den beiden Modell-Dateien darf die Erkennung nichts aus dem Netz laden.</li>
+    <li>Erkannt werden ganze Personen auch aus der Ferne (Rahmen); das Trennen vom Hintergrund klappt am besten mit ein bis zwei Personen nah vor der Kamera (Selfie, Videoanruf).</li>
+    <li>Die Erkennung ist nicht perfekt: Teilweise verdeckte Personen, Dunkelheit oder sehr kleine Personen können fehlen, Figuren oder Bilder können als Person gelten.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Gespeichert werden nur die Einstellungen (Effekt, Wirkt auf, Erkennen, Kamera, Stärke). Fotos landen nur dort, wo du sie speicherst oder teilst.</li>
+    <li>Wechselst du zu einer anderen App oder sperrst das Handy, schaltet sich die Kamera aus und beim Zurückkommen wieder ein.</li>
+    <li>Kein Bild? Die Kamera-Berechtigung in den Website-Einstellungen des Browsers erlauben; eine andere App, die die Kamera nutzt, schließen. Die Effekte brauchen WebGL (alle aktuellen Browser).</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann Effekt, Wirkt auf und Stärke wählen und die erkannten Personen lesen (Anzahl und Position, WebMCP). Die Kamera einschalten, Fotos aufnehmen oder etwas herunterladen kann er nicht; jeder Aufruf erscheint hier als Hinweis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Shows the camera picture live through an effect – and detects people in it if you like.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Tap <b>Start camera</b> and allow access. At the top right you switch between front and rear camera and take a <b>photo</b> (with the effect, to save or share).</li>
+    <li>Pick an <b>effect</b> below – swipe the row sideways: original, black &amp; white, sepia, negative, comic, sketch, thermal, night vision, pixel, retro, pop art, neon, vivid, soft blur, mirror and kaleidoscope.</li>
+    <li><b>Applies to:</b> <i>All</i>, only <i>People</i> or only the <i>Background</i>. For example <i>Soft blur</i> + <i>Background</i> blurs the background, <i>Black &amp; white</i> + <i>Background</i> keeps only the person in colour.</li>
+    <li><b>👤 Detect</b> draws a frame around every person found and counts them (top left).</li>
+    <li>In the menu ☰ under <i>Settings</i>: strength of the effect, mirroring the selfie camera, detection confidence in %, deleting the downloaded detection.</li>
+  </ul>
+  <h3>People detection</h3>
+  <ul>
+    <li>For <i>Detect</i> and for <i>People</i>/<i>Background</i> the app asks once and then downloads the detection: the engine (MediaPipe, about 14 MB) from this site and the model from Google (storage.googleapis.com): detecting people about 4.6 MB, separating people from the background about 0.3 MB. After that everything works offline.</li>
+    <li>The camera picture is only analysed on the device and never sent anywhere. The MediaPipe library would send usage statistics to Google on its own – the app blocks that: apart from the two model files the detection may not load anything from the internet.</li>
+    <li>Whole people are found even from a distance (frames); separating them from the background works best with one or two people close to the camera (selfie, video call).</li>
+    <li>Detection is not perfect: partly hidden people, darkness or very small people may be missed, figures or pictures may count as people.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Only the settings are stored (effect, applies to, detect, camera, strength). Photos only end up where you save or share them.</li>
+    <li>When you switch to another app or lock the phone, the camera turns off, and on again when you come back.</li>
+    <li>No picture? Allow camera access in the browser's site settings; close other apps using the camera. The effects need WebGL (all current browsers).</li>
+    <li><b>AI agent:</b> an AI agent in the browser can choose the effect, what it applies to and its strength, and read the people found (number and position, WebMCP). It cannot turn on the camera, take photos or download anything; every call shows up here as a notice.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 1430fe97a90b</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const FX=[
+  ['none','🎥'],['gray','⚫'],['sepia','🟤'],['invert','🔄'],['comic','💥'],['sketch','✏️'],['thermal','🌡️'],['night','🌙'],
+  ['pixel','👾'],['retro','📼'],['popart','🎨'],['neon','✨'],['vivid','🌈'],['blur','💧'],['mirror','🪞'],['kaleido','🔯']
+];
+const IDS=FX.map(f=>f[0]);
+const SCOPES=['all','people','background'];
+Tools.i18n({
+  de:{
+    'fx.none':'Original','fx.gray':'Schwarz­weiß','fx.sepia':'Sepia','fx.invert':'Negativ','fx.comic':'Comic','fx.sketch':'Skizze','fx.thermal':'Wärmebild','fx.night':'Nachtsicht',
+    'fx.pixel':'Pixel','fx.retro':'Retro','fx.popart':'Pop-Art','fx.neon':'Neon','fx.vivid':'Bunt','fx.blur':'Weich­zeichner','fx.mirror':'Spiegel','fx.kaleido':'Kaleido­skop',
+    view:'Kamerabild mit Effekt {fx}',viewFx:'Kamerabild mit Effekt {fx} auf {scope}',
+    people:'{n} Personen',people1:'1 Person',people0:'Keine Person',
+    noCam:'Dieser Browser kann nicht auf die Kamera zugreifen. Die Seite muss über https geöffnet sein.',
+    denied:'Kamera-Zugriff abgelehnt. In den Website-Einstellungen des Browsers erlauben und neu laden.',
+    notFound:'Keine Kamera gefunden.',busyCam:'Die Kamera wird gerade von einer anderen App benutzt.',camErr:'Kamera ließ sich nicht starten ({e}).',
+    noGl:'Dieser Browser kann die Effekte nicht zeichnen (WebGL fehlt).',retry:'Nochmal versuchen',starting:'Kamera wird gestartet …',
+    confirmDl:'Für {what} lädt die App einmalig ca. {mb} MB herunter (Rechenprogramm von dieser Seite, Modell von Google). Das Kamerabild bleibt auf dem Gerät. Jetzt laden? Am besten im WLAN.',
+    'what.detect':'die Personenerkennung','what.segment':'das Trennen von Person und Hintergrund',
+    loading:'Lade {what} … {p} %',loadingEngine:'Starte {what} …',
+    dlFail:'Download fehlgeschlagen – Internetverbindung prüfen.',engineFail:'Die Erkennung ließ sich auf diesem Gerät nicht starten.',
+    'models.none':'Noch nichts heruntergeladen.','models.have':'Heruntergeladen: {list} ({mb} MB).','models.detect':'Personen erkennen','models.segment':'Person und Hintergrund trennen','models.engine':'Rechenprogramm',
+    confirmDel:'Heruntergeladene Erkennung löschen? Beim nächsten Gebrauch wird sie neu geladen.',deleted:'Gelöscht',
+    photoName:'kamera-effekte',saved:'Gespeichert',photoFail:'Foto ließ sich nicht erstellen.',
+    'mcp.effect':'Effekt gewählt','mcp.people':'Personen gelesen','mcp.list':'Effekte gelesen'
+  },
+  en:{
+    title:'Camera Effects',sub:'Live effects for the camera picture',flip:'Switch camera',photo:'Take photo',intro:'Tap “Start camera” and pick an effect below.',start:'Start camera',
+    effect:'Effect',scope:'Effect applies to','scope.all':'All','scope.people':'People','scope.background':'Background',detect:'Detect',
+    settings:'Settings',strength:'Strength of the effect',mirror:'Mirror the selfie camera (like a mirror)',score:'Show the confidence in % for people found',
+    'models.h':'People detection','models.delete':'Delete downloaded detection','photo.title':'Photo','photo.alt':'Photo taken','photo.save':'Save','photo.share':'Share …','photo.close':'Close',
+    'fx.none':'Original','fx.gray':'Black & white','fx.sepia':'Sepia','fx.invert':'Negative','fx.comic':'Comic','fx.sketch':'Sketch','fx.thermal':'Thermal','fx.night':'Night vision',
+    'fx.pixel':'Pixel','fx.retro':'Retro','fx.popart':'Pop art','fx.neon':'Neon','fx.vivid':'Vivid','fx.blur':'Soft blur','fx.mirror':'Mirror','fx.kaleido':'Kaleido­scope',
+    view:'Camera picture with effect {fx}',viewFx:'Camera picture with effect {fx} on {scope}',
+    people:'{n} people',people1:'1 person',people0:'No person',
+    noCam:'This browser cannot access the camera. The page has to be opened via https.',
+    denied:'Camera access denied. Allow it in the browser’s site settings and reload.',
+    notFound:'No camera found.',busyCam:'The camera is being used by another app.',camErr:'The camera could not be started ({e}).',
+    noGl:'This browser cannot draw the effects (WebGL missing).',retry:'Try again',starting:'Starting camera …',
+    confirmDl:'For {what} the app downloads about {mb} MB once (engine from this site, model from Google). The camera picture stays on the device. Download now? Wi-Fi recommended.',
+    'what.detect':'detecting people','what.segment':'separating people from the background',
+    loading:'Loading {what} … {p} %',loadingEngine:'Starting {what} …',
+    dlFail:'Download failed – check the internet connection.',engineFail:'The detection could not be started on this device.',
+    'models.none':'Nothing downloaded yet.','models.have':'Downloaded: {list} ({mb} MB).','models.detect':'detecting people','models.segment':'separating people and background','models.engine':'engine',
+    confirmDel:'Delete the downloaded detection? It is downloaded again the next time you use it.',deleted:'Deleted',
+    photoName:'camera-effects',saved:'Saved',photoFail:'The photo could not be created.',
+    'mcp.effect':'effect chosen','mcp.people':'people read','mcp.list':'effects read'
+  }
+});
+const t=Tools.t,$=Tools.$;
+const LS='camera-effects.settings.v1';
+const s=Object.assign({effect:'none',scope:'all',detect:false,facing:'user',mirror:true,strength:100,score:false},Tools.load(LS,{}));
+if(!IDS.includes(s.effect))s.effect='none';
+if(!SCOPES.includes(s.scope))s.scope='all';
+const save=()=>Tools.save(LS,s);
+
+/* ---------- WebGL effects ---------- */
+const out=$('out'),boxes=$('boxes'),video=$('video');
+const VS='attribute vec2 p;varying vec2 v;void main(){v=vec2(p.x+1.,1.-p.y)*.5;gl_Position=vec4(p,0.,1.);}';
+const FS=`precision mediump float;
+varying vec2 v;
+uniform sampler2D T,M;
+uniform vec2 R;
+uniform float time,strength;
+uniform int fx,scope;
+uniform bool mirror,hasMask;
+vec3 src(vec2 u){return texture2D(T,clamp(u,0.,1.)).rgb;}
+float lum(vec3 c){return dot(c,vec3(.299,.587,.114));}
+float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+float edge(vec2 u){
+  vec2 d=1.5/R;
+  float tl=lum(src(u+vec2(-d.x,-d.y))),t=lum(src(u+vec2(0.,-d.y))),tr=lum(src(u+vec2(d.x,-d.y)));
+  float l=lum(src(u+vec2(-d.x,0.))),r=lum(src(u+vec2(d.x,0.)));
+  float bl=lum(src(u+vec2(-d.x,d.y))),b=lum(src(u+vec2(0.,d.y))),br=lum(src(u+vec2(d.x,d.y)));
+  float gx=tr+2.*r+br-tl-2.*l-bl,gy=bl+2.*b+br-tl-2.*t-tr;
+  return length(vec2(gx,gy));
+}
+vec3 hsv(float h){return clamp(abs(mod(h*6.+vec3(0.,4.,2.),6.)-3.)-1.,0.,1.);}
+vec3 thermal(float x){
+  vec3 c=mix(vec3(0.,0.,.1),vec3(.2,0.,.8),smoothstep(0.,.25,x));
+  c=mix(c,vec3(.9,0.,.6),smoothstep(.2,.45,x));
+  c=mix(c,vec3(1.,.35,0.),smoothstep(.4,.65,x));
+  c=mix(c,vec3(1.,.95,.1),smoothstep(.6,.85,x));
+  return mix(c,vec3(1.),smoothstep(.85,1.,x));
+}
+vec3 effect(vec2 u){
+  vec3 c=src(u);
+  if(fx==1)return vec3(lum(c));
+  if(fx==2)return clamp(vec3(dot(c,vec3(.393,.769,.189)),dot(c,vec3(.349,.686,.168)),dot(c,vec3(.272,.534,.131))),0.,1.);
+  if(fx==3)return 1.-c;
+  if(fx==4){vec3 q=floor(clamp(c*1.15,0.,1.)*4.+.5)/4.;return q*(1.-smoothstep(.35,.6,edge(u)));}
+  if(fx==5){float e=smoothstep(.08,.5,edge(u));return vec3(mix(.97,.75+.25*lum(c),.35)*(1.-e*.9));}
+  if(fx==6)return thermal(lum(c));
+  if(fx==7){float l=clamp(lum(c)*1.8+(hash(u*R+time)-.5)*.15,0.,1.);vec2 w=u-.5;return vec3(.15,1.,.25)*l*(1.-dot(w,w)*1.6);}
+  if(fx==8){vec2 b=vec2(max(min(R.x,R.y)/40.,4.))/R;return src((floor(u/b)+.5)*b);}
+  if(fx==9){vec2 o=vec2(3./R.x,0.);vec3 k=vec3(src(u+o).r,c.g,src(u-o).b);
+    k*=.85+.15*sin(u.y*R.y*1.6);k+=(hash(u*R+time)-.5)*.08;return clamp(mix(vec3(lum(k)),k,.75)*vec3(1.08,1.,.88),0.,1.);}
+  if(fx==10){vec2 g=floor(u*2.);vec3 k=src(fract(u*2.));float l=floor(lum(k)*3.)/2.;
+    float i=g.x+g.y*2.;vec3 a=i<.5?vec3(1.,.9,0.):i<1.5?vec3(0.,.8,1.):i<2.5?vec3(1.,.2,.6):vec3(.4,1.,.3);
+    vec3 d=i<.5?vec3(.85,0.,.4):i<1.5?vec3(.25,0.,.6):i<2.5?vec3(0.,.3,.8):vec3(.9,.3,0.);return mix(d,a,l);}
+  if(fx==11){float e=smoothstep(.12,.55,edge(u));return hsv(u.y*.8+u.x*.3+time*.08)*e*1.4;}
+  if(fx==12){float l=lum(c);vec3 k=clamp(mix(vec3(l),c,2.)*1.1-.05,0.,1.);return k;}
+  if(fx==13){vec3 a=vec3(0.);float r=max(R.x,R.y)/90.;
+    for(int i=0;i<12;i++){float an=float(i)*.5236;vec2 o=vec2(cos(an),sin(an))/R*r;a+=src(u+o)+src(u+o*.5);}
+    return a/24.;}
+  if(fx==14)return src(vec2(u.x<.5?u.x:1.-u.x,u.y));
+  if(fx==15){vec2 w=(u-.5)*vec2(R.x/R.y,1.);float a=atan(w.y,w.x),r=length(w),n=1.0472;
+    a=mod(a,n);a=abs(a-n*.5);vec2 q=vec2(cos(a),sin(a))*r;return src(q*vec2(R.y/R.x,1.)+.5);}
+  return c;
+}
+void main(){
+  vec2 u=v;if(mirror)u.x=1.-u.x;
+  vec3 o=src(u),e=effect(u);
+  float w=strength;
+  if(scope!=0){float m=hasMask?smoothstep(.3,.7,texture2D(M,u).r):(scope==1?0.:1.);w*=scope==1?m:1.-m;if(!hasMask)w=0.;}
+  gl_FragColor=vec4(mix(o,e,w),1.);
+}`;
+let gl=null,prog=null,U={},tex=null,maskTex=null;
+function initGl(){
+  gl=out.getContext('webgl',{preserveDrawingBuffer:true,alpha:false,antialias:false});
+  if(!gl)return false;
+  const sh=(type,src)=>{const x=gl.createShader(type);gl.shaderSource(x,src);gl.compileShader(x);
+    if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x;};
+  prog=gl.createProgram();
+  gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  for(const n of ['T','M','R','time','strength','fx','scope','mirror','hasMask'])U[n]=gl.getUniformLocation(prog,n);
+  const mk=unit=>{const x=gl.createTexture();gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,x);
+    for(const [k,val] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,val);
+    return x;};
+  tex=mk(0);maskTex=mk(1);
+  gl.uniform1i(U.T,0);gl.uniform1i(U.M,1);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
+  return true;
+}
+let hasMask=false;
+function uploadMask(m,w,h){
+  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,maskTex);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.LUMINANCE,w,h,0,gl.LUMINANCE,gl.UNSIGNED_BYTE,m);
+  hasMask=true;
+}
+
+/* ---------- Camera ---------- */
+let stream=null,running=false,starting=false,raf=0,frames=0,fpsT=0,fps=0;
+const isMirrored=()=>s.mirror&&s.facing==='user';
+function overlay(text,btn){
+  $('overlay').hidden=!text;
+  if(text){$('ovText').textContent=text;$('btnStart').textContent=btn||t('start');$('btnStart').hidden=btn===false;}
+}
+async function start(){
+  if(starting)return;
+  if(!navigator.mediaDevices?.getUserMedia){overlay(t('noCam'),false);Tools.diag.log('camera: no getUserMedia');return;}
+  if(!gl){
+    try{if(!initGl()){overlay(t('noGl'),false);Tools.diag.log('webgl: missing');return;}}
+    catch(e){overlay(t('noGl'),false);Tools.diag.log('webgl: error',{e:String(e.message||e).slice(0,200)});return;}
+  }
+  starting=true;overlay(t('starting'),false);
+  stop();
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:s.facing},width:{ideal:1280},height:{ideal:720}}});
+    video.srcObject=stream;
+    await video.play().catch(()=>{});
+    if(!video.videoWidth)await new Promise(r=>video.addEventListener('loadedmetadata',r,{once:true}));
+    running=true;overlay('');
+    $('btnPhoto').disabled=false;$('btnFlip').disabled=false;
+    const st=stream.getVideoTracks()[0]?.getSettings?.()||{};
+    Tools.diag.log('camera started',{facing:st.facingMode||s.facing,w:video.videoWidth,h:video.videoHeight});
+    loop();
+    ensureModels();
+  }catch(e){
+    const n=e?.name||'Error';
+    Tools.diag.log('camera error',{name:n});
+    overlay(n==='NotAllowedError'||n==='SecurityError'?t('denied'):n==='NotFoundError'||n==='OverconstrainedError'?t('notFound'):n==='NotReadableError'?t('busyCam'):t('camErr',{e:n}),t('retry'));
+  }finally{starting=false;}
+}
+function stop(){
+  cancelAnimationFrame(raf);raf=0;running=false;
+  if(stream){for(const tr of stream.getTracks())tr.stop();stream=null;}
+  video.srcObject=null;
+}
+function loop(){
+  raf=requestAnimationFrame(loop);
+  if(!running||video.readyState<2)return;
+  const W=video.videoWidth,H=video.videoHeight;
+  if(!W||!H)return;
+  if(out.width!==W||out.height!==H){out.width=boxes.width=W;out.height=boxes.height=H;}
+  draw(W,H);
+  infer();
+  drawBoxes();
+  frames++;const now=performance.now();
+  if(now-fpsT>1000){fps=Math.round(frames*1000/(now-fpsT));frames=0;fpsT=now;}
+}
+function draw(W,H){
+  gl.viewport(0,0,W,H);
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,video);
+  gl.uniform2f(U.R,W,H);
+  gl.uniform1f(U.time,(performance.now()/1000)%1000);
+  gl.uniform1f(U.strength,s.strength/100);
+  gl.uniform1i(U.fx,IDS.indexOf(s.effect));
+  gl.uniform1i(U.scope,SCOPES.indexOf(s.scope));
+  gl.uniform1i(U.mirror,isMirrored()?1:0);
+  gl.uniform1i(U.hasMask,hasMask&&s.scope!=='all'?1:0);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+}
+// The test hooks into this: the picture is drawn from the camera only while it runs
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){if(running){stop();resume=true;Tools.diag.log('camera paused (hidden)');}}
+  else if(resume){resume=false;start();}
+});
+let resume=false;
+
+/* ---------- People: worker (MediaPipe) ---------- */
+const MODEL={
+  detect:{url:'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite',mb:4.6},
+  segment:{url:'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite',mb:0.25}
+};
+const ENGINE={url:new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.wasm',location.href).href,mb:14.5};
+const ENGINE_CACHE='vendor:mediapipe@',MODEL_CACHE='camera-effects-models';
+let worker=null,busy=false,persons=[],personsAt=0,inferMs=0;
+const ready={detect:false,segment:false},pending={};
+const needs=()=>({detect:s.detect,segment:s.scope!=='all'});
+function getWorker(){
+  if(worker)return worker;
+  worker=new Worker('vision-worker.mjs',{type:'module'});
+  worker.onmessage=({data:d})=>{
+    if(d.type==='result'){
+      busy=false;inferMs=d.ms??inferMs;
+      if(d.error)Tools.diag.log('inference error',{e:String(d.error).slice(0,200)});
+      if(s.detect){persons=d.persons||[];personsAt=performance.now();updateBadge();}
+      if(d.mask&&gl)uploadMask(d.mask,d.maskW,d.maskH);
+    }else if(d.type==='progress'){
+      busyText(t('loading',{what:t('what.'+d.task),p:Math.round(d.loaded/d.total*100)}));
+    }else if(d.type==='loaded'){
+      ready[d.task]=true;pending[d.task]?.res();delete pending[d.task];busyText('');refreshModels();
+    }else if(d.type==='error'){
+      Tools.diag.log('model error',{task:d.task,code:d.code,e:String(d.message||'').slice(0,200)});
+      pending[d.task]?.rej(d.code);delete pending[d.task];busyText('');
+    }else if(d.type==='log')Tools.diag.log('worker: '+d.msg,d.data);
+  };
+  worker.onerror=e=>{Tools.diag.log('worker error',{e:String(e.message||'').slice(0,200)});e.preventDefault?.();
+    for(const k in pending){pending[k].rej('engine');delete pending[k];}busyText('');};
+  return worker;
+}
+function busyText(x){$('busy').hidden=!x;$('busy').textContent=x||'';}
+async function cachedMb(task){
+  let mb=0;
+  try{
+    if(!await caches.match(MODEL[task].url))mb+=MODEL[task].mb;
+    if(!ready.detect&&!ready.segment&&!pending.detect&&!pending.segment&&!await caches.match(ENGINE.url))mb+=ENGINE.mb;
+  }catch{mb=MODEL[task].mb+ENGINE.mb;}
+  return mb;
+}
+// Loads a task once; asks before the first download. Resolves false if declined or failed.
+async function loadTask(task){
+  if(ready[task])return true;
+  if(!pending[task]){
+    const mb=await cachedMb(task);
+    if(mb>0.01&&!confirm(t('confirmDl',{what:t('what.'+task),mb:Tools.fmt(Math.max(.3,mb),1)}))){Tools.diag.log('download declined',{task});return false;}
+    if(ready[task])return true;
+    if(!pending[task]){
+      busyText(t('loadingEngine',{what:t('what.'+task)}));
+      Tools.diag.log('loading model',{task,mb:Math.round(mb*10)/10});
+      const p=new Promise((res,rej)=>{pending[task]={res,rej};});
+      pending[task].p=p;
+      getWorker().postMessage({type:'load',task});
+    }
+  }
+  try{await pending[task]?.p;return ready[task];}
+  catch(code){Tools.toast(code==='download'?t('dlFail'):t('engineFail'));return false;}
+}
+async function ensureModels(){
+  const n=needs();
+  if(n.detect&&!ready.detect&&!await loadTask('detect')){s.detect=false;save();render();}
+  if(s.scope!=='all'&&!ready.segment&&!await loadTask('segment')){s.scope='all';save();render();}
+}
+async function infer(){
+  const n=needs();
+  const go={detect:n.detect&&ready.detect,segment:n.segment&&ready.segment};
+  if(busy||!worker||!(go.detect||go.segment))return;
+  busy=true;
+  const W=video.videoWidth,H=video.videoHeight,k=Math.min(1,320/Math.max(W,H));
+  try{
+    const bitmap=await createImageBitmap(video,{resizeWidth:Math.round(W*k),resizeHeight:Math.round(H*k)});
+    worker.postMessage({type:'frame',bitmap,...go},[bitmap]);
+  }catch(e){busy=false;}
+}
+function drawBoxes(){
+  const c=boxes.getContext('2d'),W=boxes.width,H=boxes.height;
+  c.clearRect(0,0,W,H);
+  if(!s.detect||!ready.detect)return;
+  if(performance.now()-personsAt>1500&&persons.length){persons=[];updateBadge();}
+  const lw=Math.max(3,Math.round(Math.min(W,H)/150)),fs=Math.max(14,Math.round(Math.min(W,H)/24));
+  c.lineWidth=lw;c.font=`600 ${fs}px system-ui,sans-serif`;c.textBaseline='top';
+  persons.forEach((p,i)=>{
+    const x=(isMirrored()?1-p.x-p.w:p.x)*W,y=p.y*H,w=p.w*W,h=p.h*H;
+    c.strokeStyle='#ff2bd6';c.shadowColor='rgba(0,0,0,.6)';c.shadowBlur=lw*2;
+    c.strokeRect(x,y,w,h);c.shadowBlur=0;
+    const label=(i+1)+(s.score?' · '+Math.round(p.score*100)+' %':'');
+    const tw=c.measureText(label).width+fs*.6;
+    c.fillStyle='#ff2bd6';c.fillRect(x-lw/2,Math.max(0,y-fs*1.3),tw,fs*1.3);
+    c.fillStyle='#fff';c.fillText(label,x+fs*.3-lw/2,Math.max(0,y-fs*1.3)+fs*.15);
+  });
+}
+let shownCount=-1;
+function updateBadge(){
+  const on=s.detect&&ready.detect&&running;
+  $('badge').hidden=!on;
+  if(!on){shownCount=-1;return;}
+  const n=persons.length;
+  if(n===shownCount)return;
+  shownCount=n;
+  $('badge').textContent='👤 '+(n===0?t('people0'):n===1?t('people1'):t('people',{n}));
+}
+
+/* ---------- Controls ---------- */
+function render(){
+  const fx=$('fx');
+  if(!fx.children.length)for(const [id,e] of FX){
+    const b=document.createElement('button');b.type='button';b.dataset.fx=id;
+    b.innerHTML=`<span class="e" aria-hidden="true">${e}</span><span class="l"></span>`;fx.append(b);
+  }
+  for(const b of fx.children){b.querySelector('.l').textContent=t('fx.'+b.dataset.fx);b.setAttribute('aria-pressed',String(b.dataset.fx===s.effect));}
+  for(const b of $('scope').children)b.setAttribute('aria-pressed',String(b.dataset.scope===s.scope));
+  $('btnDetect').setAttribute('aria-pressed',String(s.detect));
+  $('optMirror').checked=s.mirror;$('optScore').checked=s.score;
+  $('optStrength').value=s.strength;$('strengthOut').textContent=Tools.fmt(s.strength,0)+' %';
+  out.setAttribute('aria-label',s.scope==='all'?t('view',{fx:t('fx.'+s.effect).replace(/­/g,'')}):t('viewFx',{fx:t('fx.'+s.effect).replace(/­/g,''),scope:t('scope.'+s.scope)}));
+  shownCount=-1;updateBadge();
+}
+function setEffect(id){s.effect=id;save();render();Tools.diag.log('effect',{id});}
+$('fx').addEventListener('click',e=>{const b=e.target.closest('button[data-fx]');if(b)setEffect(b.dataset.fx);});
+$('scope').addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-scope]');if(!b)return;
+  s.scope=b.dataset.scope;save();render();Tools.diag.log('scope',{scope:s.scope});
+  if(s.scope!=='all'&&!ready.segment&&!await loadTask('segment')){s.scope='all';save();render();}
+});
+$('btnDetect').addEventListener('click',async()=>{
+  s.detect=!s.detect;save();render();Tools.diag.log('detect',{on:s.detect});
+  if(!s.detect){persons=[];return;}
+  if(!ready.detect&&!await loadTask('detect')){s.detect=false;save();render();}
+});
+$('btnStart').addEventListener('click',start);
+$('btnFlip').addEventListener('click',()=>{s.facing=s.facing==='user'?'environment':'user';save();hasMask=false;persons=[];start();});
+$('optMirror').addEventListener('change',e=>{s.mirror=e.target.checked;save();});
+$('optScore').addEventListener('change',e=>{s.score=e.target.checked;save();});
+$('optStrength').addEventListener('input',e=>{s.strength=Number(e.target.value);$('strengthOut').textContent=Tools.fmt(s.strength,0)+' %';save();});
+Tools.onLang(()=>{render();refreshModels();});
+
+/* ---------- Photo ---------- */
+let photoBlob=null,photoUrl='';
+function photoName(){
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  return `${t('photoName')}-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.jpg`;
+}
+$('btnPhoto').addEventListener('click',async()=>{
+  if(!running)return;
+  draw(out.width,out.height);
+  const c=document.createElement('canvas');c.width=out.width;c.height=out.height;
+  const x=c.getContext('2d');x.drawImage(out,0,0);if(s.detect)x.drawImage(boxes,0,0);
+  photoBlob=await new Promise(r=>c.toBlob(r,'image/jpeg',.92));
+  if(!photoBlob){Tools.toast(t('photoFail'));return;}
+  if(photoUrl)URL.revokeObjectURL(photoUrl);
+  photoUrl=URL.createObjectURL(photoBlob);
+  $('photoImg').src=photoUrl;
+  const f=new File([photoBlob],photoName(),{type:'image/jpeg'});
+  $('btnShare').hidden=!(navigator.canShare&&navigator.canShare({files:[f]}));
+  Tools.diag.log('photo',{w:c.width,h:c.height,kb:Math.round(photoBlob.size/1024)});
+  $('photo').showModal();
+});
+$('btnSave').addEventListener('click',()=>{
+  const a=document.createElement('a');a.href=photoUrl;a.download=photoName();document.body.append(a);a.click();a.remove();
+  Tools.toast(t('saved'));
+});
+$('btnShare').addEventListener('click',async()=>{
+  try{await navigator.share({files:[new File([photoBlob],photoName(),{type:'image/jpeg'})]});}
+  catch(e){if(e?.name!=='AbortError')Tools.diag.log('share error',{name:e?.name});}
+});
+$('btnClose').addEventListener('click',()=>$('photo').close());
+
+/* ---------- Downloaded models (menu) ---------- */
+async function refreshModels(){
+  const have=[];let mb=0;
+  try{
+    for(const k of ['detect','segment'])if(await caches.match(MODEL[k].url)){have.push(t('models.'+k));mb+=MODEL[k].mb;}
+    if(await caches.match(ENGINE.url)){have.push(t('models.engine'));mb+=ENGINE.mb;}
+  }catch{}
+  $('modelsInfo').textContent=have.length?t('models.have',{list:have.join(', '),mb:Tools.fmt(mb,1)}):t('models.none');
+  $('btnDelModels').disabled=!have.length;
+}
+$('btnDelModels').addEventListener('click',async()=>{
+  if(!confirm(t('confirmDel')))return;
+  await caches.delete(MODEL_CACHE);
+  for(const k of await caches.keys())if(k.startsWith(ENGINE_CACHE))await caches.delete(k);
+  if(worker){worker.terminate();worker=null;}
+  ready.detect=ready.segment=false;busy=false;hasMask=false;persons=[];
+  if(s.detect||s.scope!=='all'){s.detect=false;s.scope='all';save();render();}
+  Tools.diag.log('models deleted');Tools.toast(t('deleted'));refreshModels();
+});
+
+render();refreshModels();
+// Starts right away when the camera was allowed before (no extra tap)
+navigator.permissions?.query({name:'camera'}).then(p=>{if(p.state==='granted'&&!running)start();}).catch(()=>{});
+
+Tools.diag.info(()=>({camera:running?'on':'off',facing:s.facing,video:video.videoWidth?video.videoWidth+'x'+video.videoHeight:'-',fps,
+  webgl:gl?'ok':'not started',effect:s.effect,scope:s.scope,strength:s.strength,detect:s.detect,
+  models:Object.keys(ready).filter(k=>ready[k]).join(',')||'none',persons:persons.length,mask:hasMask,inferMs}));
+
+/* ---------- WebMCP ---------- */
+Tools.mcp.register({
+  name:'list_effects',title:'List the effects',label:'mcp.list',readOnly:true,
+  description:'Lists the camera effects of the app with their id and English name, which effect is chosen, what it applies to (all, people, background) and its strength in percent.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    const en={none:'Original',gray:'Black & white',sepia:'Sepia',invert:'Negative',comic:'Comic',sketch:'Sketch',thermal:'Thermal',night:'Night vision',pixel:'Pixel',retro:'Retro',popart:'Pop art',neon:'Neon',vivid:'Vivid',blur:'Soft blur',mirror:'Mirror',kaleido:'Kaleidoscope'};
+    return {effects:IDS.map(id=>({id,name:en[id]})),effect:s.effect,applies_to:s.scope,strength:s.strength,
+      people_separation_ready:ready.segment};
+  }
+});
+Tools.mcp.register({
+  name:'set_effect',title:'Choose the effect',label:'mcp.effect',
+  description:'Chooses the live camera effect, what it applies to and its strength. applies_to "people" or "background" only works once the user has turned on the separation of people and background in the app (one-time download the agent cannot start). Nothing is recorded or saved. Returns the settings now in use.',
+  inputSchema:{type:'object',properties:{
+    effect:{type:'string',enum:IDS,description:'Effect id, see list_effects.'},
+    applies_to:{type:'string',enum:SCOPES,description:'all = whole picture, people = only people, background = everything except people.'},
+    strength:{type:'integer',minimum:10,maximum:100,description:'Strength of the effect in percent.'}
+  },additionalProperties:false},
+  execute:({effect,applies_to,strength})=>{
+    if(applies_to&&applies_to!=='all'&&!ready.segment)
+      throw new Error('Separating people from the background is not loaded yet – the user has to choose "People" or "Background" in the app first.');
+    if(effect)s.effect=effect;
+    if(applies_to)s.scope=applies_to;
+    if(strength!=null)s.strength=strength;
+    save();render();
+    return {effect:s.effect,applies_to:s.scope,strength:s.strength,camera_on:running};
+  }
+});
+Tools.mcp.register({
+  name:'get_people',title:'Read the people found',label:'mcp.people',readOnly:true,
+  description:'Reads the people currently detected in the live camera picture: their number and for each a box (x, y, width, height as fractions 0–1 of the picture as shown, origin top left) and the confidence 0–1. Needs the camera running and "Detect" turned on in the app; otherwise detecting is false and the list is empty. Never returns the picture itself.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    const on=running&&s.detect&&ready.detect;
+    const r=v=>Math.round(v*1000)/1000;
+    const list=on?persons.map(p=>({x:r(isMirrored()?1-p.x-p.w:p.x),y:r(p.y),width:r(p.w),height:r(p.h),confidence:r(p.score)})):[];
+    return {camera_on:running,detecting:on,count:list.length,people:list};
+  }
+});
+})();
+</script>
+</body>
+</html>
