@@ -731,22 +731,16 @@ test('pulse: focus fixed to far, exposure turned down when overexposed', async (
   expect(report).toMatch(/pulse: exposure -2/);
 });
 
-test('pulse: exposure and white balance locked while the finger is on the lens; state in the report', async ({ page }) => {
+test('pulse: exposure is never locked (on the Pixel the image jumped and the finger got lost); state in the report', async ({ page }) => {
   test.slow();
   await fakeCamera(page, { pulseHz: 1.2, caps: { exposureMode: ['continuous', 'manual'], whiteBalanceMode: ['continuous', 'manual'] } });
   await tab(page, 'Puls');
   await page.locator('[data-start="pulse"]').click();
-  await expect.poll(() => page.evaluate(() => window.__constraints), { timeout: 5000 })
-    .toContainEqual({ exposureMode: 'manual', whiteBalanceMode: 'manual' });
   await expect.poll(async () => num(await text(page, 'pBpm')), { timeout: 20000 }).toBeGreaterThan(68);
-  await expect.poll(() => page.evaluate(() => Tools.diag.text()), { timeout: 8000 }).toMatch(/pulse: colour \{[^}]*"state":"pulse","quality":[\d.]+,"locked":true\}/);
+  expect(await page.evaluate(() => window.__constraints.filter(c => 'exposureMode' in c || 'whiteBalanceMode' in c))).toEqual([]);
+  await expect.poll(() => page.evaluate(() => Tools.diag.text()), { timeout: 8000 }).toMatch(/pulse: colour \{[^}]*"state":"pulse","quality":[\d.]+\}/);
   // The heart rate itself (health data) stays out of the report
-  const report = await page.evaluate(() => Tools.diag.text());
-  expect(report).not.toMatch(/bpm/i);
-  // Finger off the lens: automatic again
-  await page.evaluate(() => { window.__noFinger = true; });
-  await expect.poll(() => page.evaluate(() => window.__constraints.at(-1)), { timeout: 5000 })
-    .toEqual({ exposureMode: 'continuous', whiteBalanceMode: 'continuous' });
+  expect(await page.evaluate(() => Tools.diag.text())).not.toMatch(/bpm/i);
 });
 
 test('pulse: camera steps are in the diagnostics report', async ({ page }) => {
