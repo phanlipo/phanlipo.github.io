@@ -369,7 +369,7 @@ async function fakeCamera(page, { pulseHz = 0, cams = null, caps = {}, bright = 
       const c = cv.getContext('2d'), t0 = performance.now();
       const paint = () => {
         const r = bright ? 255 : pulseHz ? Math.round(170 + 40 * Math.sin(2 * Math.PI * pulseHz * (performance.now() - t0) / 1000)) : 90;
-        c.fillStyle = `rgb(${r},30,30)`; c.fillRect(0, 0, 32, 32);
+        c.fillStyle = window.__noFinger ? 'rgb(20,20,20)' : `rgb(${r},30,30)`; c.fillRect(0, 0, 32, 32);
       };
       paint(); setInterval(paint, 15);
       const stream = cv.captureStream(30), track = stream.getVideoTracks()[0];
@@ -727,8 +727,26 @@ test('pulse: focus fixed to far, exposure turned down when overexposed', async (
   expect(await page.evaluate(() => window.__constraints)).toContainEqual({ focusMode: 'manual', focusDistance: 3.7 });
   const report = await page.evaluate(() => Tools.diag.text());
   expect(report).toMatch(/pulse: focus fixed 3\.7/);
-  expect(report).toMatch(/pulse: colour \{"r":25\d,"g":[23]\d,"b":[23]\d,"finger":true,"ec":0\}/);
+  expect(report).toMatch(/pulse: colour \{"r":25\d,"g":[23]\d,"b":[23]\d,"finger":true,"ec":0,/);
   expect(report).toMatch(/pulse: exposure -2/);
+});
+
+test('pulse: exposure and white balance locked while the finger is on the lens; state in the report', async ({ page }) => {
+  test.slow();
+  await fakeCamera(page, { pulseHz: 1.2, caps: { exposureMode: ['continuous', 'manual'], whiteBalanceMode: ['continuous', 'manual'] } });
+  await tab(page, 'Puls');
+  await page.locator('[data-start="pulse"]').click();
+  await expect.poll(() => page.evaluate(() => window.__constraints), { timeout: 5000 })
+    .toContainEqual({ exposureMode: 'manual', whiteBalanceMode: 'manual' });
+  await expect.poll(async () => num(await text(page, 'pBpm')), { timeout: 20000 }).toBeGreaterThan(68);
+  await expect.poll(() => page.evaluate(() => Tools.diag.text()), { timeout: 8000 }).toMatch(/pulse: colour \{[^}]*"state":"pulse","quality":[\d.]+,"locked":true\}/);
+  // The heart rate itself (health data) stays out of the report
+  const report = await page.evaluate(() => Tools.diag.text());
+  expect(report).not.toMatch(/bpm/i);
+  // Finger off the lens: automatic again
+  await page.evaluate(() => { window.__noFinger = true; });
+  await expect.poll(() => page.evaluate(() => window.__constraints.at(-1)), { timeout: 5000 })
+    .toEqual({ exposureMode: 'continuous', whiteBalanceMode: 'continuous' });
 });
 
 test('pulse: camera steps are in the diagnostics report', async ({ page }) => {
