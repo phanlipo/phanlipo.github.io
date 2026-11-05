@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "dice-coin";
-const VERSION = '12671ff5de5c';
+const VERSION = '46335201391b';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

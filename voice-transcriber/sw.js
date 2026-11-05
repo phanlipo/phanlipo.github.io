@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "voice-transcriber";
-const VERSION = '5e1954f88894';
+const VERSION = '711f30d1236d';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

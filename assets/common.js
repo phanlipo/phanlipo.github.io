@@ -44,9 +44,10 @@ window.Tools = (function () {
   async function copyText(txt) {
     try { await navigator.clipboard.writeText(txt); return true; } catch (_) {
       // Fallback for http:// or browsers without async clipboard
+      // Inside an open modal dialog (menu) the rest of the page is inert – the textarea must go into the dialog
       const ta = document.createElement('textarea');
-      ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta); ta.select();
+      ta.value = txt; ta.readOnly = true; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      (document.querySelector('dialog[open]') || document.body).appendChild(ta); ta.focus(); ta.select();
       let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
       ta.remove(); return ok;
     }
@@ -740,7 +741,20 @@ window.Tools = (function () {
   }
   function setupDiagUi() {
     document.querySelectorAll('[data-diag="copy"]').forEach(b => b.addEventListener('click', async () => {
-      toast(t((await copyText(await diagText())) ? 'diag.copied' : 'diag.fail'));
+      // The report is built asynchronously. Safari (and others) only allow copying right in the tap, so the
+      // clipboard write starts at once with a promise for the text; copyText() is the fallback.
+      const text = diagText();
+      let ok = false;
+      const cb = navigator.clipboard;
+      if (cb && cb.write && window.ClipboardItem) {
+        try {
+          await cb.write([new ClipboardItem({ 'text/plain': text.then(s => new Blob([s], { type: 'text/plain' })) })]);
+          ok = true;
+        } catch (e) { diagLog('diag: clipboard.write failed:', e); }
+      }
+      if (!ok) ok = await copyText(await text);
+      if (!ok) diagLog('diag: copy failed');
+      toast(t(ok ? 'diag.copied' : 'diag.fail'));
     }));
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupDiagUi);

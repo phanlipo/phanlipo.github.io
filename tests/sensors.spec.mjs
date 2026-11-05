@@ -353,10 +353,16 @@ async function fakeMic(page, freq = 1000, amp = 0.5) {
   await page.reload();
 }
 // Fake camera: a canvas stream (optionally pulsing red) with a switchable torch
-async function fakeCamera(page, { pulseHz = 0 } = {}) {
-  await page.addInitScript(({ pulseHz }) => {
-    window.__torch = [];
-    navigator.mediaDevices.getUserMedia = async () => {
+// cams: several rear cameras [{ id, label, torch }], the first one is what "environment" hands out
+async function fakeCamera(page, { pulseHz = 0, cams = null } = {}) {
+  await page.addInitScript(({ pulseHz, cams }) => {
+    window.__torch = []; window.__opened = [];
+    if (cams) navigator.mediaDevices.enumerateDevices = async () => cams.map(c => ({ kind: 'videoinput', deviceId: c.id, label: c.label, groupId: '' }));
+    navigator.mediaDevices.getUserMedia = async constraints => {
+      const want = constraints.video && constraints.video.deviceId && constraints.video.deviceId.exact;
+      const cam = cams && (want ? cams.find(c => c.id === want) : cams[0]);
+      if (want && !cam) throw new DOMException('no such camera', 'OverconstrainedError');
+      if (cam) window.__opened.push(cam.id);
       const cv = document.createElement('canvas');
       cv.width = cv.height = 32;
       const c = cv.getContext('2d'), t0 = performance.now();
@@ -366,11 +372,12 @@ async function fakeCamera(page, { pulseHz = 0 } = {}) {
       };
       paint(); setInterval(paint, 15);
       const stream = cv.captureStream(30), track = stream.getVideoTracks()[0];
-      track.getCapabilities = () => (window.__noTorch ? {} : { torch: true });
+      track.getCapabilities = () => (window.__noTorch || (cam && !cam.torch) ? {} : { torch: true });
+      if (cam) { Object.defineProperty(track, 'label', { value: cam.label }); track.getSettings = () => ({ deviceId: cam.id }); }
       track.applyConstraints = async c => { window.__torch.push(c.advanced[0].torch); };
       return stream;
     };
-  }, { pulseHz });
+  }, { pulseHz, cams });
   await page.reload();
 }
 async function download(page, click) {
@@ -679,6 +686,47 @@ test('pulse: heart rate from a pulsing red camera image', async ({ page }) => {
   await expect.poll(async () => num(await text(page, 'pBpm')), { timeout: 20000 }).toBeGreaterThan(68);
   expect(num(await text(page, 'pBpm'))).toBeLessThan(76);
   expect(await page.evaluate(() => window.__torch)).toContain(true);
+});
+
+test('pulse: picks the main rear camera next to the flash, other cameras selectable', async ({ page }) => {
+  test.slow();
+  const cams = [
+    { id: 'uw', label: 'camera2 2, facing back', torch: false }, // what "environment" hands out
+    { id: 'front', label: 'camera2 1, facing front', torch: false },
+    { id: 'tele', label: 'camera2 3, facing back', torch: false },
+    { id: 'main', label: 'camera2 0, facing back', torch: true },
+  ];
+  await fakeCamera(page, { pulseHz: 1.2, cams });
+  await tab(page, 'Puls');
+  await page.locator('[data-start="pulse"]').click();
+  await expect(page.locator('#pInfo')).toHaveText(/Messung läuft/, { timeout: 5000 });
+  expect(await page.evaluate(() => window.__opened.at(-1))).toBe('main');
+  expect(await page.evaluate(() => window.__opened)).not.toContain('front');
+  expect(await page.evaluate(() => window.__torch)).toContain(true);
+  await expect(page.locator('#pCamInfo')).toHaveText('Rückkamera 3 von 3 · automatisch gewählt');
+  // Step to the next rear camera; the choice is stored and used again after a reload
+  await page.getByRole('button', { name: 'Andere Kamera' }).click();
+  await expect(page.locator('#pCamInfo')).toHaveText('Rückkamera 1 von 3 · von dir gewählt');
+  expect(await page.evaluate(() => window.__opened.at(-1))).toBe('uw');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sensors.settings.v1')).pulseCam)).toBe('uw');
+  await page.reload();
+  await page.locator('[data-start="pulse"]').click();
+  await expect(page.locator('#pCamInfo')).toHaveText('Rückkamera 1 von 3 · von dir gewählt');
+  expect(await page.evaluate(() => window.__opened)).toEqual(['uw']);
+});
+
+test('pulse: camera steps are in the diagnostics report', async ({ page }) => {
+  await fakeCamera(page, { pulseHz: 1.2, cams: [
+    { id: 'uw', label: 'camera2 2, facing back', torch: false },
+    { id: 'main', label: 'camera2 0, facing back', torch: true },
+  ] });
+  await tab(page, 'Puls');
+  await page.locator('[data-start="pulse"]').click();
+  await expect(page.locator('#pInfo')).toHaveText(/Messung läuft/, { timeout: 5000 });
+  const report = await page.evaluate(() => Tools.diag.text());
+  expect(report).toMatch(/pulse: main camera camera2 0, facing back/);
+  expect(report).toMatch(/^pulseCams: 2$/m);
+  expect(report).toMatch(/^pulseTorch: true$/m);
 });
 
 test('clap stopwatch: a clap starts, the next one stops', async ({ page }) => {

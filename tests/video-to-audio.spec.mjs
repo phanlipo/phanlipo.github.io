@@ -79,6 +79,7 @@ test('share on Android: .m4a goes out as audio/x-m4a (audio/mp4 is refused), .og
   await openMenu(page);
   await openDetails(page, 'Anleitung & Hinweise');
   await page.click('[data-diag="copy"]');
+  await expect(page.locator('#toast')).toHaveText(/Diagnose kopiert|Diagnostics copied/);
   expect(await clipboardText(page)).toContain('shared {"type":"audio/x-m4a"}');
 });
 
@@ -255,6 +256,7 @@ test('diagnostics: steps and codec, never the file name', async ({ page }) => {
   await openMenu(page);
   await openDetails(page, 'Anleitung & Hinweise');
   await page.click('[data-diag="copy"]');
+  await expect(page.locator('#toast')).toHaveText(/Diagnose kopiert|Diagnostics copied/);
   const text = await clipboardText(page);
   expect(text).toContain('audio track');
   expect(text).toContain('extracted');
