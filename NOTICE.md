@@ -32,6 +32,7 @@ neben jeder Bibliothek in `assets/vendor/<name>/LICENSE` und wird mit ihr ausgel
 | [dompurify](https://github.com/cure53/DOMPurify) (`dompurify`) | 3.4.17 | [(MPL-2.0 OR Apache-2.0)](assets/vendor/dompurify/LICENSE) | siehe Lizenztext | Gerendertes Markdown von Skripten säubern im Markdown-Editor |
 | [turndown](https://github.com/mixmark-io/turndown) (`turndown`) | 7.2.4 | [MIT](assets/vendor/turndown/LICENSE) | Copyright (c) 2017 Dom Christie | Bearbeitete Ansicht zurück in Markdown umwandeln im Markdown-Editor |
 | [mediapipe](https://ai.google.dev/edge/mediapipe/solutions/guide) (`@mediapipe/tasks-vision`) | 1.2.0 | [Apache-2.0](assets/vendor/mediapipe/LICENSE) | siehe Lizenztext | Personen erkennen (Objekterkennung) und vom Hintergrund trennen (Segmentierung) in Kamera-Effekte – läuft im Worker, dessen Netzsperre die eingebaute Nutzungsstatistik der Bibliothek blockiert |
+| [libheif](https://github.com/catdad-experiments/libheif-js) (`libheif-js`) | 1.23.5 | [LGPL-3.0](assets/vendor/libheif/LICENSE) | siehe Lizenztext | HEIC/HEIF-Fotos (iPhone) dekodieren (libheif mit libde265 als WebAssembly) im Bildkonverter |
 
 ## Weitere Lizenzdateien
 

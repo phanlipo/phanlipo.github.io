@@ -1815,3 +1815,51 @@ test.describe('pdf-viewer tools', () => {
     await expect(page.locator('#pageLabel')).toHaveText('1 / 2');
   });
 });
+
+test.describe('image-converter tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await open(page, '/image-converter/');
+    // 200×100 PNG: left half red, right half transparent
+    const b64 = await page.evaluate(() => {
+      const c = document.createElement('canvas'); c.width = 200; c.height = 100;
+      const g = c.getContext('2d'); g.fillStyle = '#f00'; g.fillRect(0, 0, 100, 100);
+      return c.toDataURL('image/png').split(',')[1];
+    });
+    await page.setInputFiles('#inPick', [{ name: 'a.png', mimeType: 'image/png', buffer: Buffer.from(b64, 'base64') }]);
+    await expect(page.locator('#inList li img[src^="blob:"]')).toHaveCount(1);
+  });
+
+  test('list_images, set_options and convert_images; results appear in the app', async ({ page }) => {
+    let r = await call(page, 'image_converter_list_images', {});
+    expect(r.result.images).toEqual([{ image: 1, format: 'png', width: 200, height: 100, bytes: expect.any(Number), ok: true }]);
+    expect(r.result.results).toEqual([]);
+    expect(r.result.options).toMatchObject({ format: 'jpg', quality: 85, resize: 'original' });
+    expect(JSON.stringify(r.result)).not.toContain('a.png');   // no file names
+
+    r = await call(page, 'image_converter_set_options', { format: 'png', resize: 'max', max_side: 50 });
+    expect(r.result).toMatchObject({ format: 'png', resize: 'max', max_side: 50 });
+    await expect(page.locator('.toast')).toContainText('KI-Agent: Einstellungen geändert');
+    await expect(page.locator('#formats input[value="png"]')).toBeChecked();
+    await expect(page.locator('#resize')).toHaveValue('max');
+
+    r = await call(page, 'image_converter_convert_images', {});
+    expect(r.result).toMatchObject({ format: 'png', converted: 1, failed: 0 });
+    expect(r.result.results[0]).toMatchObject({ image: 1, width: 50, height: 25, scaled_down: false });
+    await expect(page.locator('#outList li')).toHaveCount(1);
+    await expect(page.locator('#outList .name')).toHaveText('a.png');
+    r = await call(page, 'image_converter_list_images', {});
+    expect(r.result.results).toEqual([{ image: 1, format: 'png', width: 50, height: 25, bytes: expect.any(Number), scaled_down: false }]);
+  });
+
+  test('wrong input is rejected; nothing to convert without images', async ({ page }) => {
+    let r = await call(page, 'image_converter_set_options', { format: 'heic' });
+    expect(r.ok).toBe(false);
+    r = await call(page, 'image_converter_set_options', { quality: 5 });
+    expect(r.ok).toBe(false);
+    r = await call(page, 'image_converter_set_options', { background: 'red!!!!' });
+    expect(r.error).toContain('#rrggbb');
+    await page.click('#btnClear');
+    r = await call(page, 'image_converter_convert_images', {});
+    expect(r.error).toContain('no images chosen');
+  });
+});

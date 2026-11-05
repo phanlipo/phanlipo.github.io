@@ -30,3 +30,8 @@ Kamera-Effekte (`camera-effects.spec.mjs`):
   `https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite`.
   Der Test liefert es statt des Downloads aus und prüft damit die echte Engine (MediaPipe-WebAssembly im Worker).
   Das Personen-Modell (4,6 MB) liegt bewusst nicht im Repository – Test mit echten Fotos: `tests/manual/camera-e2e.mjs`.
+
+Bildkonverter (`image-converter.spec.mjs`):
+
+- `photo.heic` – 64×48 HEIC (HEVC) mit vier Farbfeldern (rot | grün / blau | weiß), Stand-in für ein iPhone-Foto.
+  Erzeugt mit `photo-heic.py` (`pip install pillow pillow-heif`, dann `python photo-heic.py photo.heic`).
