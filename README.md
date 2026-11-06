@@ -44,6 +44,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | [Sprache zu Text](https://phanlipo.github.io/voice-transcriber/) | `voice-transcriber/` | Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht. |
 | [Text zu Sprache](https://phanlipo.github.io/text-to-speech/) | `text-to-speech/` | Text vorlesen lassen – mit den Stimmen des Geräts oder KI-Stimmen (Supertonic, Piper, Kokoro), die direkt im Browser laufen. Stimmen vergleichen und als WAV speichern. |
 | [Video zu Audio](https://phanlipo.github.io/video-to-audio/) | `video-to-audio/` | Die Tonspur aus einem Video speichern – als Original ohne Qualitätsverlust (z. B. .m4a) oder als WAV, direkt im Browser: das Video verlässt das Gerät nicht. |
+| [Wichteln](https://phanlipo.github.io/secret-santa/) | `secret-santa/` | Wichtel-Partner fair auslosen: Namen eintragen, Paare ausschließen, dann das Handy herumreichen oder jedem einen geheimen Link schicken. |
 | [Würfel & Münze](https://phanlipo.github.io/dice-coin/) | `dice-coin/` | Würfel und Münzwurf für Spiele: Anzahl und Seiten frei wählbar, alle gleichzeitig oder einzeln würfeln, Würfel halten, Vorlagen. Einstellungen werden im Browser gespeichert. |
 <!-- tools:end -->
 

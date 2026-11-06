@@ -1877,3 +1877,61 @@ test.describe('image-converter tools', () => {
     expect(r.error).toContain('no images chosen');
   });
 });
+
+test.describe('secret-santa tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/secret-santa/');
+  });
+
+  test('set_participants and draw_partners: shown in the app, the assignment is never returned', async ({ page }) => {
+    const set = await call(page, 'secret_santa_set_participants', {
+      participants: [' Ann ', 'Bob', 'Cy', 'Dee'], exclusions: [['ann', 'BOB']], noMutualPairs: true, note: 'Budget 20',
+    });
+    expect(set).toEqual({ ok: true, result: {
+      participants: ['Ann', 'Bob', 'Cy', 'Dee'], exclusions: [['Ann', 'Bob']], noMutualPairs: true, note: 'Budget 20', drawn: false,
+    } });
+    await expect(page.locator('#names .who')).toHaveText(['Ann', 'Bob', 'Cy', 'Dee']);
+    await expect(page.locator('#excl .who')).toHaveText(['Ann ↔ Bob']);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Teilnehmer eingetragen');
+
+    const { ok, result } = await call(page, 'secret_santa_draw_partners', {});
+    expect(ok).toBe(true);
+    expect(result).toMatchObject({ drawn: true, drawnParticipants: ['Ann', 'Bob', 'Cy', 'Dee'], looked: [], notLookedYet: ['Ann', 'Bob', 'Cy', 'Dee'], linkShared: [] });
+    // Nothing in the result says who gives to whom
+    expect(Object.keys(result).sort()).toEqual(['drawn', 'drawnAt', 'drawnParticipants', 'exclusions', 'linkShared', 'looked', 'note', 'noMutualPairs', 'notLookedYet', 'participants'].sort());
+    await expect(page.locator('#result')).toBeVisible();
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Partner ausgelost');
+
+    // Someone looks: the status says so
+    await page.locator('#people .person', { hasText: 'Cy' }).click();
+    await page.click('#btnShow');
+    await page.click('#btnHide');
+    const s = await call(page, 'secret_santa_get_status', {});
+    expect(s.result).toMatchObject({ looked: ['Cy'], notLookedYet: ['Ann', 'Bob', 'Dee'] });
+
+    // While a draw exists, agents can change nothing
+    for (const [name, input] of [['secret_santa_draw_partners', {}], ['secret_santa_set_participants', { participants: ['X', 'Y', 'Z'] }]])
+      expect(await call(page, name, input)).toEqual({ ok: false, error: 'A draw already exists. The user has to discard it in the app (“Change participants”) first.' });
+    await expect(page.locator('#seenCount')).toHaveText('1 von 4 haben nachgesehen');
+  });
+
+  test('invalid input and impossible draws are rejected and change nothing', async ({ page }) => {
+    expect(await call(page, 'secret_santa_draw_partners', {})).toEqual({ ok: false, error: 'At least 3 participants are needed.' });
+    for (const [input, msg] of [
+      [{ participants: ['Ann', 'ann'] }, 'Duplicate participant: ann'],
+      [{ participants: [' '] }, 'At least one non-empty name is needed.'],
+      [{ participants: ['Ann', 'Bob'], exclusions: [['Ann', 'Zed']] }, 'Exclusion names must be participants: Ann / Zed'],
+      [{ participants: ['Ann', 'Bob'], exclusions: [['Ann', 'ann']] }, 'An exclusion needs two different people.'],
+      [{ participants: ['x'.repeat(41)] }, 'input.participants[0] must have at most 40 characters'],
+      [{}, 'input.participants is required'],
+      [{ participants: ['Ann'], extra: 1 }, 'input.extra is not allowed'],
+    ]) {
+      expect(await call(page, 'secret_santa_set_participants', input)).toEqual({ ok: false, error: msg });
+    }
+    await expect(page.locator('#names .who')).toHaveCount(0);
+    await call(page, 'secret_santa_set_participants', { participants: ['Ann', 'Bob', 'Cy'], exclusions: [['Ann', 'Bob'], ['Ann', 'Cy']] });
+    expect(await call(page, 'secret_santa_draw_partners', {})).toEqual({ ok: false, error: 'No assignment meets these exclusions – remove some exclusions or the no-mutual-pairs option.' });
+    expect((await call(page, 'secret_santa_get_status', {})).result.drawn).toBe(false);
+  });
+});
