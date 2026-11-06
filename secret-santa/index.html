@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Wichteln</title>
+<meta name="description" content="Wichtel-Partner fair auslosen: Namen eintragen, Paare ausschließen, dann das Handy herumreichen oder jedem einen geheimen Link schicken.">
+<meta name="tool:tags" content="Freizeit, Zufall">
+<meta name="tool:features" content="Kopieren, KI-Agent">
+<meta name="tool:icon" content="gift">
+<meta name="tool:color" content="#1f7a4d">
+<meta name="tool:short-name" content="Wichteln">
+<meta name="tool:title-en" content="Secret Santa">
+<meta name="tool:description-en" content="Draw Secret Santa partners fairly: enter names, exclude couples, then pass the phone around or send everyone a secret link.">
+<meta name="tool:short-name-en" content="Secret Santa">
+<meta name="tool:storage" content="secret-santa.">
+<meta name="tool:webmcp" content="get_status, set_participants, draw_partners">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HMdZgTXoTrghIVefY3DCr1zV64kIuKxv2+KsNeCX3rk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Wichteln">
+<meta name="theme-color" content="#1f7a4d">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#1f7a4d;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#6fcf9c;--accent-text:#0c1f15}}
+main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+main>div{display:grid;gap:12px;min-width:0}
+.add{display:flex;gap:8px}
+.add input{flex:1;min-width:0;min-height:44px;padding-inline:10px}
+.field{display:grid;gap:4px;margin-block-start:12px}
+.field label{font-size:14px;color:var(--muted)}
+.field input{min-height:44px;padding-inline:10px;width:100%}
+.list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:6px}
+.list li{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding-block:2px;padding-inline:12px 2px;min-height:48px}
+.list li .who{flex:1;min-width:0;overflow-wrap:anywhere}
+.list li.muted{background:none;border-style:dashed;padding-inline:12px}
+.x{flex:none;width:44px;height:44px;border:0;background:none;color:var(--muted);border-radius:8px;cursor:pointer;font-size:20px;line-height:1}
+.x:hover{color:var(--err)}
+.ex{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.ex select{min-height:44px;padding-inline:8px;min-width:0;width:100%}
+.ex span{color:var(--muted)}
+.check{display:flex;align-items:center;gap:8px;min-height:44px;font-size:15px;margin-block-start:8px}
+.check input{width:20px;height:20px;flex:none;accent-color:var(--accent)}
+.draw{display:grid;gap:8px}
+.draw .btn.primary{min-height:52px;font-size:18px}
+.msg{margin:0;font-size:14px;color:var(--muted)}
+.msg.err{color:var(--err)}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-block-start:12px}
+.person{min-height:56px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:10px;cursor:pointer;font:inherit;font-weight:600;padding:8px;overflow-wrap:anywhere}
+.person:hover{border-color:var(--accent)}
+.person.seen{background:var(--surface);color:var(--muted);font-weight:400}
+.person.seen::before{content:'✓ ';color:var(--ok);font-weight:700}
+.links li .who{font-weight:600}
+.links li .badge{flex:none}
+.links .btn.small{flex:none}
+.links li{padding-inline-end:6px}
+/* Reveal dialog (pass the phone) and the reveal card behind a secret link */
+#reveal{border:0;border-radius:16px;padding:0;width:min(440px,calc(100vw - 24px));background:var(--surface);color:var(--text);box-shadow:0 10px 40px rgba(0,0,0,.35)}
+#reveal::backdrop{background:rgba(0,0,0,.9)}
+.reveal{padding:24px 20px;display:grid;gap:14px;text-align:center}
+.reveal h2{margin:0;font-size:20px;justify-content:center}
+.reveal p{margin:0}
+.gift{font-size:56px;line-height:1}
+.target{font-size:30px;font-weight:700;color:var(--accent);overflow-wrap:anywhere}
+.note-box{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:15px;overflow-wrap:anywhere;white-space:pre-wrap}
+.warn-box{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:8px 10px;font-size:14px}
+.reveal .btn{min-height:48px}
+.cover{min-height:140px;border:2px dashed var(--accent);border-radius:12px;background:var(--surface-2);color:var(--text);font:inherit;font-size:18px;font-weight:600;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Wichteln</span></h1>
+  <p class="sub" data-i18n="sub">Wichtel-Partner geheim auslosen</p>
+</header>
+
+<main>
+  <!-- Opened from a secret link (#g=…): only this card -->
+  <section class="card" id="linkView" aria-labelledby="h-link" hidden>
+    <div class="reveal">
+      <h2 id="h-link" data-i18n="linkTitle">Dein Wichtel-Los</h2>
+      <p id="linkHello"></p>
+      <button type="button" class="cover" id="btnLinkShow" data-i18n="linkShow">🎁 Tippen zum Aufdecken</button>
+      <div id="linkResult" hidden>
+        <p class="gift" aria-hidden="true">🎁</p>
+        <p data-i18n="youGive">Du beschenkst</p>
+        <p class="target" id="linkTarget"></p>
+        <p class="note-box" id="linkNote" hidden></p>
+      </div>
+      <p class="msg err" id="linkError" hidden data-i18n="linkBad">Dieser Link ist unvollständig oder beschädigt. Bitte frag nach einem neuen Link.</p>
+      <p class="muted" data-i18n="linkPrivate">Das Los steht nur im Link – es wurde nirgends gespeichert oder verschickt.</p>
+      <button type="button" class="btn" id="btnOwn" data-i18n="ownDraw">Eigene Auslosung starten</button>
+    </div>
+  </section>
+
+  <div id="setup">
+    <section class="card" aria-labelledby="h-names">
+      <h2 id="h-names"><span data-i18n="people">Teilnehmer</span> <span class="badge" id="nameCount">0</span></h2>
+      <form class="add" id="addForm">
+        <label class="sr-only" for="nameIn" data-i18n="nameLabel">Name</label>
+        <input type="text" id="nameIn" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Name" data-i18n-attr="placeholder:nameLabel">
+        <button type="submit" class="btn primary" id="btnAdd" data-i18n="add">Hinzufügen</button>
+      </form>
+      <ul class="list" id="names"></ul>
+    </section>
+
+    <section class="card" aria-labelledby="h-rules">
+      <h2 id="h-rules" data-i18n="rules">Regeln</h2>
+      <p class="muted" data-i18n="exIntro">Wer soll sich nicht gegenseitig ziehen (z. B. Paare)?</p>
+      <div class="ex">
+        <label class="sr-only" for="exA" data-i18n="exA">Erste Person</label>
+        <select id="exA"></select>
+        <span aria-hidden="true">↔</span>
+        <label class="sr-only" for="exB" data-i18n="exB">Zweite Person</label>
+        <select id="exB"></select>
+      </div>
+      <div class="row" style="margin-block-start:8px"><button type="button" class="btn" id="btnExAdd" data-i18n="exAdd">Ausschluss hinzufügen</button></div>
+      <ul class="list" id="excl"></ul>
+      <label class="check"><input type="checkbox" id="optMutual"> <span data-i18n="optMutual">Keine Paare, die sich gegenseitig beschenken</span></label>
+      <div class="field">
+        <label for="noteIn" data-i18n="noteLabel">Hinweis für alle (optional)</label>
+        <input type="text" id="noteIn" maxlength="200" autocomplete="off" placeholder="z. B. Budget 20 €, Bescherung am 20.12." data-i18n-attr="placeholder:notePh">
+      </div>
+    </section>
+
+    <section class="card draw">
+      <button type="button" class="btn primary" id="btnDraw" data-i18n="draw">Partner ziehen</button>
+      <p class="msg" id="drawMsg" role="status"></p>
+    </section>
+  </div>
+
+  <div id="result" hidden>
+    <section class="card" aria-labelledby="h-pass">
+      <h2 id="h-pass"><span data-i18n="pass">Handy herumreichen</span> <span class="badge" id="seenCount"></span></h2>
+      <p class="muted" data-i18n="passIntro">Ausgelost! Jede Person tippt auf ihren Namen und sieht allein nach, wen sie beschenkt.</p>
+      <div class="people" id="people"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-links">
+      <h2 id="h-links" data-i18n="links">Oder per Link verschicken</h2>
+      <p class="muted" data-i18n="linksIntro">Jede Person bekommt ihren eigenen Link, z. B. per Messenger. Das Los steht verschleiert im Link – nicht anklicken, sonst siehst du es selbst.</p>
+      <ul class="list links" id="links"></ul>
+    </section>
+
+    <section class="card" aria-labelledby="h-again">
+      <h2 id="h-again" data-i18n="again">Neue Runde</h2>
+      <p class="muted" id="drawnAt"></p>
+      <div class="row">
+        <button type="button" class="btn" id="btnRedraw" data-i18n="redraw">Neu auslosen</button>
+        <button type="button" class="btn" id="btnEdit" data-i18n="edit">Teilnehmer ändern</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<dialog id="reveal" aria-labelledby="revealH">
+  <div class="reveal" id="step1">
+    <h2 id="revealH"></h2>
+    <p data-i18n="onlyYou">Nur diese Person darf jetzt aufs Display schauen.</p>
+    <p class="warn-box" id="seenWarn" hidden></p>
+    <button type="button" class="btn primary" id="btnShow"></button>
+    <button type="button" class="btn" id="btnCancel" data-i18n="cancel">Abbrechen</button>
+  </div>
+  <div class="reveal" id="step2" hidden>
+    <p class="gift" aria-hidden="true">🎁</p>
+    <p data-i18n="youGive">Du beschenkst</p>
+    <p class="target" id="revealName"></p>
+    <p class="note-box" id="revealNote" hidden></p>
+    <button type="button" class="btn primary" id="btnHide" data-i18n="hide">Verstanden – verbergen</button>
+  </div>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Wichteln (Secret Santa): Jede Person beschenkt genau eine andere – und weiß nur, wen sie selbst beschenkt.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Teilnehmer</b> eintragen (mindestens 3). Namen dürfen nicht doppelt vorkommen.</li>
+    <li><b>Regeln</b> (optional): Paare oder Geschwister ausschließen – die beiden ziehen sich dann nicht gegenseitig. <b>Keine Paare, die sich gegenseitig beschenken</b> verhindert, dass A B beschenkt und B zugleich A. Der <b>Hinweis für alle</b> (Budget, Termin) erscheint bei jedem Los.</li>
+    <li><b>Partner ziehen</b> lost aus. Danach gibt es zwei Wege:
+      <ul>
+        <li><b>Handy herumreichen:</b> Jede Person tippt auf ihren Namen, bestätigt, sieht ihr Los und verbirgt es wieder. Ein ✓ zeigt, wer schon nachgesehen hat. Erneutes Nachsehen geht, die App warnt aber davor.</li>
+        <li><b>Per Link:</b> Für jede Person <b>Teilen</b> oder <b>Kopieren</b> und den Link nur an sie schicken. Wer ihn öffnet, tippt aufs Geschenk und sieht sein Los – auch ohne die App installiert zu haben.</li>
+      </ul>
+    </li>
+    <li><b>Neu auslosen</b> verwirft die Auslosung und zieht neu. <b>Teilnehmer ändern</b> verwirft sie ebenfalls – schon verschickte Links gelten dann nicht mehr.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Fair: Die App mischt mit <code>crypto.getRandomValues</code> und probiert so lange, bis alle Regeln erfüllt sind – jede erlaubte Zuteilung ist gleich wahrscheinlich. Nur wenn die Regeln sehr eng sind, sucht sie gezielt eine passende Zuteilung. Gibt es keine, sagt sie es.</li>
+    <li>Geheim: Die App zeigt die Zuteilung nie als Liste. Sie ist aber in diesem Browser gespeichert (auch in der Sicherung), damit das Herumreichen nach einem Neuladen weitergeht – wer das Handy hat, könnte mit Aufwand nachsehen.</li>
+    <li>Links: Das Los steht verschleiert hinter <code>#</code> im Link. Dieser Teil wird beim Öffnen nicht an den Server geschickt; geöffnete Links werden nicht gespeichert. Wer einen fremden Link öffnet, sieht natürlich dessen Los.</li>
+    <li>Alles bleibt in diesem Browser, die App funktioniert offline.</li>
+    <li>KI-Agenten im Browser (WebMCP) können Teilnehmer und Regeln eintragen, auslosen und den Stand lesen (wer schon nachgesehen hat) – die Zuteilung selbst bekommen sie nie.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Secret Santa: everyone gives a present to exactly one other person – and only knows whom they give to.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Enter the <b>participants</b> (at least 3). Names must not appear twice.</li>
+    <li><b>Rules</b> (optional): exclude couples or siblings – the two will not draw each other. <b>No pairs giving to each other</b> prevents A giving to B while B gives to A. The <b>note for everyone</b> (budget, date) appears with every draw.</li>
+    <li><b>Draw partners</b> does the draw. Then there are two ways:
+      <ul>
+        <li><b>Pass the phone around:</b> everyone taps their name, confirms, sees whom they give to and hides it again. A ✓ shows who has already looked. Looking again is possible, but the app warns about it.</li>
+        <li><b>By link:</b> for each person tap <b>Share</b> or <b>Copy</b> and send the link to them only. Whoever opens it taps the present and sees their match – no need to install the app.</li>
+      </ul>
+    </li>
+    <li><b>Draw again</b> discards the draw and draws anew. <b>Change participants</b> discards it too – links already sent are then no longer valid.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Fair: the app shuffles with <code>crypto.getRandomValues</code> and retries until all rules are met – every allowed assignment is equally likely. Only when the rules are very tight does it search for a fitting assignment directly. If there is none, it says so.</li>
+    <li>Secret: the app never shows the assignment as a list. It is stored in this browser though (also in the backup), so passing the phone around continues after a reload – whoever holds the phone could look it up with some effort.</li>
+    <li>Links: the match is obfuscated after the <code>#</code> in the link. That part is not sent to the server when it is opened; opened links are not stored. Of course, whoever opens someone else's link sees that match.</li>
+    <li>Everything stays in this browser, the app works offline.</li>
+    <li>AI agents in the browser (WebMCP) can enter participants and rules, do the draw and read the status (who has already looked) – they never get the assignment itself.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 2d65b1fa7846</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    remove:'{name} entfernen',removeEx:'Ausschluss {a} ↔ {b} entfernen',
+    noNames:'Noch niemand eingetragen.',noEx:'Keine Ausschlüsse.',
+    dup:'„{name}“ ist schon dabei',full:'Höchstens {n} Teilnehmer',exSame:'Bitte zwei verschiedene Personen wählen',exDup:'Diesen Ausschluss gibt es schon',
+    needMore:'Mindestens 3 Teilnehmer nötig',ready:'{n} Teilnehmer – bereit zum Auslosen',
+    impossible:'Mit diesen Regeln ist keine Auslosung möglich – bitte Ausschlüsse lockern.',
+    drawn:'Ausgelost!',seen:'{n} von {total} haben nachgesehen',drawnAt:'Ausgelost am {d}.',
+    revealH:'Gib das Handy an {name}',showBtn:'Ich bin {name} – zeigen',seenWarn:'{name} hat schon nachgesehen. Nur zeigen, wenn {name} es vergessen hat.',
+    share:'Teilen',copy:'Kopieren',copied:'Link kopiert',copyFail:'Kopieren nicht möglich',sent:'verschickt',
+    shareText:'Hallo {name}, hier ist dein Wichtel-Los – nur du darfst es öffnen:',shareTitle:'Wichtel-Los für {name}',
+    linkHello:'Hallo {name}!',
+    confirmRedraw:'Wirklich neu auslosen? Wer schon nachgesehen hat oder einen Link bekommen hat, hat dann ein falsches Los.',
+    confirmEdit:'Die Auslosung wird dabei verworfen. Schon verschickte Links gelten dann nicht mehr. Fortfahren?',
+    'mcp.status':'Stand gelesen','mcp.set':'Teilnehmer eingetragen','mcp.draw':'Partner ausgelost'
+  },
+  en:{
+    title:'Secret Santa',sub:'Draw Secret Santa partners in secret',
+    linkTitle:'Your Secret Santa match',linkShow:'🎁 Tap to reveal',youGive:'You give a present to',
+    linkBad:'This link is incomplete or damaged. Please ask for a new link.',
+    linkPrivate:'The match is only in the link – it was not stored or sent anywhere.',ownDraw:'Start your own draw',
+    people:'Participants',nameLabel:'Name',add:'Add',rules:'Rules',
+    exIntro:'Who should not draw each other (e.g. couples)?',exA:'First person',exB:'Second person',exAdd:'Add exclusion',
+    optMutual:'No pairs giving to each other',noteLabel:'Note for everyone (optional)',notePh:'e.g. budget €20, gifts on Dec 20',
+    draw:'Draw partners',pass:'Pass the phone around',
+    passIntro:'Done! Everyone taps their own name and looks alone to see whom they give to.',
+    links:'Or send by link',
+    linksIntro:'Everyone gets their own link, e.g. by messenger. The match is obfuscated in the link – don’t open it, or you’ll see it yourself.',
+    again:'New round',redraw:'Draw again',edit:'Change participants',
+    onlyYou:'Only this person may look at the screen now.',cancel:'Cancel',hide:'Got it – hide',
+    remove:'Remove {name}',removeEx:'Remove exclusion {a} ↔ {b}',
+    noNames:'Nobody added yet.',noEx:'No exclusions.',
+    dup:'“{name}” is already in',full:'At most {n} participants',exSame:'Please choose two different people',exDup:'This exclusion already exists',
+    needMore:'At least 3 participants needed',ready:'{n} participants – ready to draw',
+    impossible:'No draw is possible with these rules – please relax the exclusions.',
+    drawn:'Done!',seen:'{n} of {total} have looked',drawnAt:'Drawn on {d}.',
+    revealH:'Hand the phone to {name}',showBtn:'I am {name} – show',seenWarn:'{name} has already looked. Only show it if {name} forgot.',
+    share:'Share',copy:'Copy',copied:'Link copied',copyFail:'Copying is not possible',sent:'sent',
+    shareText:'Hi {name}, here is your Secret Santa match – only you may open it:',shareTitle:'Secret Santa match for {name}',
+    linkHello:'Hi {name}!',
+    confirmRedraw:'Really draw again? Anyone who has already looked or received a link will then have a wrong match.',
+    confirmEdit:'This discards the draw. Links already sent will no longer be valid. Continue?',
+    'mcp.status':'status read','mcp.set':'participants entered','mcp.draw':'partners drawn'
+  }
+});
+const t=Tools.t,$=Tools.$,esc=Tools.esc;
+const MAX_NAMES=100,MAX_LEN=40,MAX_NOTE=200;
+// One key for the whole state: names, exclusions (pairs of names), options, note, draw (or null)
+const LS='secret-santa.state.v1';
+const st=Object.assign({names:[],excl:[],noMutual:false,note:'',draw:null},Tools.load(LS,{}));
+const save=()=>Tools.save(LS,st);
+const clean=s=>String(s||'').replace(/\s+/g,' ').trim();
+const same=(a,b)=>a.toLocaleLowerCase()===b.toLocaleLowerCase();
+// Sanitise what was loaded (old or damaged data)
+st.names=(Array.isArray(st.names)?st.names:[]).map(clean).filter(Boolean).slice(0,MAX_NAMES);
+function validExcl(){
+  st.excl=(Array.isArray(st.excl)?st.excl:[]).filter(p=>Array.isArray(p)&&p.length===2&&p.every(n=>st.names.includes(n))&&p[0]!==p[1]);
+}
+validExcl();
+function validDraw(){
+  const d=st.draw;
+  if(!d||!Array.isArray(d.names)||!Array.isArray(d.to)||d.names.length<3||d.to.length!==d.names.length){st.draw=null;return;}
+  if(!Array.isArray(d.seen))d.seen=[];
+  if(!Array.isArray(d.sent))d.sent=[];
+}
+validDraw();
+
+/* ---------- Random (unbiased, crypto) ---------- */
+function rnd(n){ // 0 … n-1
+  const a=new Uint32Array(1),lim=Math.floor(0x100000000/n)*n;
+  do{crypto.getRandomValues(a);}while(a[0]>=lim);
+  return a[0]%n;
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+/* ---------- Draw ----------
+   to[i] = index of the person i gives to. Allowed: not oneself, not an excluded pair, and with noMutual no to[to[i]] === i.
+   1) Rejection sampling: shuffle, keep the first permutation meeting all rules – uniform over all allowed assignments.
+   2) Tight rules: randomised backtracking (finds one if any exists; not exactly uniform). None → null. */
+function solve(n,banned,noMutual){
+  const ok=(i,j)=>i!==j&&!banned.has(i*n+j);
+  const base=[...Array(n).keys()];
+  for(let k=0;k<20000;k++){
+    const p=shuffle(base.slice());
+    let good=true;
+    for(let i=0;i<n&&good;i++)if(!ok(i,p[i])||(noMutual&&p[p[i]]===i))good=false;
+    if(good)return {to:p,method:'uniform',tries:k+1};
+  }
+  const to=Array(n).fill(-1),used=Array(n).fill(false);let steps=0;
+  const order=shuffle(base.slice());
+  const rec=d=>{
+    if(d===n)return true;
+    if(++steps>2e6)return false;
+    const i=order[d];
+    for(const j of shuffle(base.slice())){
+      if(used[j]||!ok(i,j)||(noMutual&&to[j]===i))continue;
+      to[i]=j;used[j]=true;
+      if(rec(d+1))return true;
+      to[i]=-1;used[j]=false;
+    }
+    return false;
+  };
+  return rec(0)?{to,method:'search',steps}:null;
+}
+function draw(){
+  const n=st.names.length;
+  if(n<3)return {error:'needMore'};
+  const banned=new Set();
+  for(const [a,b] of st.excl){const i=st.names.indexOf(a),j=st.names.indexOf(b);banned.add(i*n+j);banned.add(j*n+i);}
+  const r=solve(n,banned,!!st.noMutual);
+  Tools.diag.log('draw',{n,excl:st.excl.length,noMutual:!!st.noMutual,ok:!!r,method:r&&r.method,tries:r&&(r.tries||r.steps)});
+  if(!r)return {error:'impossible'};
+  st.draw={names:st.names.slice(),to:r.to,note:st.note,at:Date.now(),seen:[],sent:[]};
+  save();
+  return {ok:true};
+}
+
+/* ---------- Secret links: #g=<code> ----------
+   Code = base64url of the UTF-8 JSON {f: giver, t: receiver, n: note}, XORed with a fixed pattern so the
+   name is not readable at a glance. Obfuscation, not encryption – the help says so in plain words. */
+const KEY=[0x57,0x69,0x63,0x68,0x74,0x65,0x6c,0x21];
+const xor=b=>b.map((v,i)=>v^KEY[i%KEY.length]^(i*31&255));
+function encode(obj){
+  const b=xor(Array.from(new TextEncoder().encode(JSON.stringify(obj))));
+  return btoa(String.fromCharCode(...b)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function decode(code){
+  const s=atob(code.replace(/-/g,'+').replace(/_/g,'/'));
+  const o=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(new Uint8Array(xor(Array.from(s,c=>c.charCodeAt(0))))));
+  if(!o||typeof o.f!=='string'||typeof o.t!=='string'||!o.f||!o.t)throw new Error('bad content');
+  return {f:o.f.slice(0,MAX_LEN),t:o.t.slice(0,MAX_LEN),n:typeof o.n==='string'?o.n.slice(0,MAX_NOTE):''};
+}
+const linkFor=i=>{
+  const d=st.draw;
+  return location.origin+location.pathname+'#g='+encode({f:d.names[i],t:d.names[d.to[i]],n:d.note||''});
+};
+
+/* ---------- Render ---------- */
+function renderSetup(){
+  const n=st.names.length;
+  $('nameCount').textContent=String(n);
+  $('names').innerHTML=n?st.names.map((name,i)=>`<li><span class="who">${esc(name)}</span><button type="button" class="x" data-del="${i}" aria-label="${esc(t('remove',{name}))}">✕</button></li>`).join('')
+    :`<li class="muted">${esc(t('noNames'))}</li>`;
+  const opts=st.names.map(name=>`<option>${esc(name)}</option>`).join('');
+  for(const [id,k] of [['exA',0],['exB',1]]){
+    const sel=$(id),old=sel.value;sel.innerHTML=opts;
+    sel.value=st.names.includes(old)?old:(st.names[k]||'');
+  }
+  $('btnExAdd').disabled=n<2;
+  $('excl').innerHTML=st.excl.length?st.excl.map(([a,b],i)=>`<li><span class="who">${esc(a)} ↔ ${esc(b)}</span><button type="button" class="x" data-delex="${i}" aria-label="${esc(t('removeEx',{a,b}))}">✕</button></li>`).join('')
+    :`<li class="muted">${esc(t('noEx'))}</li>`;
+  $('optMutual').checked=!!st.noMutual;
+  if(document.activeElement!==$('noteIn'))$('noteIn').value=st.note||'';
+  $('btnDraw').disabled=n<3;
+  const m=$('drawMsg');
+  if(!m.classList.contains('err'))m.textContent=n<3?t('needMore'):t('ready',{n});
+}
+function renderResult(){
+  const d=st.draw;if(!d)return;
+  const seen=d.names.filter((_,i)=>d.seen[i]).length;
+  $('seenCount').textContent=t('seen',{n:seen,total:d.names.length});
+  $('people').innerHTML=d.names.map((name,i)=>`<button type="button" class="person${d.seen[i]?' seen':''}" data-person="${i}">${esc(name)}</button>`).join('');
+  $('links').innerHTML=d.names.map((name,i)=>`<li><span class="who">${esc(name)}</span>${d.sent[i]?`<span class="badge ok">${esc(t('sent'))}</span>`:''}`
+    +(navigator.share?`<button type="button" class="btn small" data-share="${i}" aria-label="${esc(t('share')+': '+name)}">${esc(t('share'))}</button>`:'')
+    +`<button type="button" class="btn small" data-copy="${i}" aria-label="${esc(t('copy')+': '+name)}">${esc(t('copy'))}</button></li>`).join('');
+  $('drawnAt').textContent=t('drawnAt',{d:new Date(d.at).toLocaleString(Tools.locale(),{dateStyle:'medium',timeStyle:'short'})});
+}
+function render(){
+  const linkMode=!$('linkView').hidden;
+  $('setup').hidden=linkMode||!!st.draw;
+  $('result').hidden=linkMode||!st.draw;
+  renderSetup();renderResult();
+}
+
+/* ---------- Setup events ---------- */
+const msg=(text,err)=>{const m=$('drawMsg');m.textContent=text;m.classList.toggle('err',!!err);};
+function addName(raw){
+  const name=clean(raw).slice(0,MAX_LEN);
+  if(!name)return false;
+  if(st.names.some(x=>same(x,name))){Tools.toast(t('dup',{name}));return false;}
+  if(st.names.length>=MAX_NAMES){Tools.toast(t('full',{n:MAX_NAMES}));return false;}
+  st.names.push(name);return true;
+}
+$('addForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const inp=$('nameIn');
+  if(addName(inp.value)){inp.value='';msg('');save();render();}
+  inp.focus();
+});
+$('names').addEventListener('click',e=>{
+  const b=e.target.closest('[data-del]');if(!b)return;
+  st.names.splice(Number(b.dataset.del),1);validExcl();msg('');save();render();
+  $('nameIn').focus();
+});
+$('btnExAdd').addEventListener('click',()=>{
+  const a=$('exA').value,b=$('exB').value;
+  if(!a||!b||a===b){Tools.toast(t('exSame'));return;}
+  if(st.excl.some(([x,y])=>(x===a&&y===b)||(x===b&&y===a))){Tools.toast(t('exDup'));return;}
+  st.excl.push([a,b]);msg('');save();render();
+});
+$('excl').addEventListener('click',e=>{
+  const b=e.target.closest('[data-delex]');if(!b)return;
+  st.excl.splice(Number(b.dataset.delex),1);msg('');save();render();
+});
+$('optMutual').addEventListener('change',e=>{st.noMutual=e.target.checked;msg('');save();render();});
+$('noteIn').addEventListener('input',e=>{st.note=e.target.value.slice(0,MAX_NOTE);save();});
+$('btnDraw').addEventListener('click',()=>{
+  const r=draw();
+  if(r.error){msg(t(r.error),true);return;}
+  msg('');render();Tools.toast(t('drawn'));
+  $('h-pass').scrollIntoView({block:'start'});
+});
+
+/* ---------- Result events ---------- */
+const dlg=$('reveal');let current=-1;
+function openReveal(i){
+  const d=st.draw;current=i;
+  const name=d.names[i];
+  $('revealH').textContent=t('revealH',{name});
+  $('btnShow').textContent=t('showBtn',{name});
+  const w=$('seenWarn');w.hidden=!d.seen[i];w.textContent=t('seenWarn',{name});
+  $('step1').hidden=false;$('step2').hidden=true;
+  $('revealName').textContent='';
+  dlg.showModal();
+  Tools.diag.log('reveal open',{again:!!d.seen[i]});
+}
+function closeReveal(){
+  $('revealName').textContent='';$('revealNote').textContent='';
+  if(dlg.open)dlg.close();
+}
+$('people').addEventListener('click',e=>{const b=e.target.closest('[data-person]');if(b)openReveal(Number(b.dataset.person));});
+$('btnShow').addEventListener('click',()=>{
+  const d=st.draw;if(!d||current<0)return;
+  $('revealName').textContent=d.names[d.to[current]];
+  const note=$('revealNote');note.textContent=d.note||'';note.hidden=!d.note;
+  $('step1').hidden=true;$('step2').hidden=false;
+  d.seen[current]=true;save();
+  $('btnHide').focus();
+});
+$('btnHide').addEventListener('click',closeReveal);
+$('btnCancel').addEventListener('click',closeReveal);
+// Closed with Escape / back: never leave the match on the screen
+dlg.addEventListener('close',()=>{$('revealName').textContent='';$('step1').hidden=false;$('step2').hidden=true;current=-1;renderResult();});
+dlg.addEventListener('click',e=>{if(e.target===dlg)closeReveal();});
+
+$('links').addEventListener('click',async e=>{
+  const s=e.target.closest('[data-share]'),c=e.target.closest('[data-copy]');
+  if(!s&&!c)return;
+  const d=st.draw,i=Number((s||c).dataset.share??(s||c).dataset.copy),name=d.names[i],url=linkFor(i);
+  if(s){
+    try{await navigator.share({title:t('shareTitle',{name}),text:t('shareText',{name}),url});}
+    catch(err){if(err.name!=='AbortError')Tools.diag.log('share failed',err);return;}
+    Tools.diag.log('link shared');
+  }else{
+    if(!await Tools.copyText(t('shareText',{name})+' '+url)){Tools.toast(t('copyFail'));return;}
+    Tools.toast(t('copied'));Tools.diag.log('link copied');
+  }
+  d.sent[i]=true;save();renderResult();
+});
+$('btnRedraw').addEventListener('click',()=>{
+  if(!confirm(t('confirmRedraw')))return;
+  // Draw again with the same participants and rules as the current draw
+  const r=draw();
+  if(r.error){Tools.toast(t(r.error));return;}
+  render();Tools.toast(t('drawn'));
+});
+$('btnEdit').addEventListener('click',()=>{
+  if(!confirm(t('confirmEdit')))return;
+  st.draw=null;save();msg('');render();
+  Tools.diag.log('draw discarded');
+});
+
+/* ---------- Opened from a secret link ---------- */
+function checkLink(){
+  const m=/^#g=([A-Za-z0-9_-]+)$/.exec(location.hash);
+  const view=$('linkView');
+  if(!m&&!location.hash.startsWith('#g=')){view.hidden=true;render();return;}
+  view.hidden=false;
+  $('linkResult').hidden=true;$('btnLinkShow').hidden=false;$('linkError').hidden=true;$('linkHello').textContent='';
+  let g=null;
+  try{if(m)g=decode(m[1]);}catch(err){Tools.diag.log('link invalid',err.message);}
+  if(!g){$('btnLinkShow').hidden=true;$('linkError').hidden=false;}
+  else{
+    $('linkHello').textContent=t('linkHello',{name:g.f});
+    $('linkTarget').textContent=g.t;
+    const note=$('linkNote');note.textContent=g.n;note.hidden=!g.n;
+  }
+  view.dataset.from=g?g.f:'';
+  Tools.diag.log('link opened',{valid:!!g});
+  render();
+}
+$('btnLinkShow').addEventListener('click',()=>{$('btnLinkShow').hidden=true;$('linkResult').hidden=false;});
+$('btnOwn').addEventListener('click',()=>{
+  history.replaceState(history.state,'',location.pathname+location.search);
+  checkLink();
+});
+window.addEventListener('hashchange',checkLink);
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   Agents never get the assignment – it is secret even from whoever runs the draw. */
+const status=()=>{
+  const d=st.draw;
+  return {
+    participants:st.names.slice(),
+    exclusions:st.excl.map(([a,b])=>[a,b]),
+    noMutualPairs:!!st.noMutual,note:st.note||'',
+    drawn:!!d,
+    ...(d?{drawnAt:new Date(d.at).toISOString(),drawnParticipants:d.names.slice(),
+      looked:d.names.filter((_,i)=>d.seen[i]),notLookedYet:d.names.filter((_,i)=>!d.seen[i]),linkShared:d.names.filter((_,i)=>d.sent[i])}:{})
+  };
+};
+const noDraw=()=>{if(st.draw)throw new Error('A draw already exists. The user has to discard it in the app (“Change participants”) first.');};
+Tools.mcp.register({
+  name:'get_status',title:'Read Secret Santa status',label:'mcp.status',readOnly:true,
+  description:'Reads the Secret Santa participants, exclusions (pairs who must not draw each other), the option against mutual pairs, the note for everyone and whether partners have been drawn. After a draw it also lists who has already looked at their match and whose link was shared. Never returns who gives to whom.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:status
+});
+Tools.mcp.register({
+  name:'set_participants',title:'Set Secret Santa participants',label:'mcp.set',
+  description:'Replaces the Secret Santa participants and rules shown in the app. Only possible while no draw exists. Names are trimmed and must be unique (case-insensitive); exclusions are pairs of participant names who must not draw each other. Returns the new status.',
+  inputSchema:{type:'object',properties:{
+    participants:{type:'array',minItems:1,maxItems:MAX_NAMES,items:{type:'string',minLength:1,maxLength:MAX_LEN},description:'Participant names (up to 100, each up to 40 characters).'},
+    exclusions:{type:'array',maxItems:200,items:{type:'array',minItems:2,maxItems:2,items:{type:'string',minLength:1,maxLength:MAX_LEN}},description:'Pairs of names who must not draw each other, e.g. couples. Default: none.'},
+    noMutualPairs:{type:'boolean',description:'If true, no two people give to each other. Default: keep the current setting.'},
+    note:{type:'string',maxLength:MAX_NOTE,description:'Note shown to everyone with their match, e.g. budget and date. Default: keep the current note.'}
+  },required:['participants'],additionalProperties:false},
+  execute:({participants,exclusions=[],noMutualPairs,note})=>{
+    noDraw();
+    const names=[];
+    for(const raw of participants){
+      const n=clean(raw).slice(0,MAX_LEN);
+      if(!n)continue;
+      if(names.some(x=>same(x,n)))throw new Error(`Duplicate participant: ${n}`);
+      names.push(n);
+    }
+    if(!names.length)throw new Error('At least one non-empty name is needed.');
+    const find=s=>names.find(x=>same(x,clean(s)));
+    const excl=[];
+    for(const [a,b] of exclusions){
+      const x=find(a),y=find(b);
+      if(!x||!y)throw new Error(`Exclusion names must be participants: ${a} / ${b}`);
+      if(x===y)throw new Error('An exclusion needs two different people.');
+      if(!excl.some(([p,q])=>(p===x&&q===y)||(p===y&&q===x)))excl.push([x,y]);
+    }
+    st.names=names;st.excl=excl;
+    if(typeof noMutualPairs==='boolean')st.noMutual=noMutualPairs;
+    if(typeof note==='string')st.note=note;
+    msg('');save();render();
+    return status();
+  }
+});
+Tools.mcp.register({
+  name:'draw_partners',title:'Draw Secret Santa partners',label:'mcp.draw',
+  description:'Draws the Secret Santa partners for the current participants and rules (cryptographically secure, uniform over all allowed assignments). Only possible while no draw exists. The participants then look up their match in the app or via their link. Returns whether it worked and the status – never who gives to whom.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    noDraw();
+    const r=draw();
+    if(r.error==='needMore')throw new Error('At least 3 participants are needed.');
+    if(r.error)throw new Error('No assignment meets these exclusions – remove some exclusions or the no-mutual-pairs option.');
+    render();
+    return status();
+  }
+});
+
+Tools.diag.info(()=>({names:st.names.length,exclusions:st.excl.length,noMutual:!!st.noMutual,note:!!st.note,
+  drawn:!!st.draw,seen:st.draw?st.draw.seen.filter(Boolean).length:0,sent:st.draw?st.draw.sent.filter(Boolean).length:0,
+  linkView:!$('linkView').hidden,share:!!navigator.share}));
+checkLink();
+Tools.onLang(render);
+})();
+</script>
+</body>
+</html>
