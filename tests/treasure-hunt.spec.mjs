@@ -430,8 +430,8 @@ test('editor: HEIC photo (iPhone, Android) as picture with the libheif decoder, 
   await page.locator('[data-img-del]').first().click();
   await context.setOffline(true);
   await page.reload();
-  await page.getByRole('button', { name: 'Neue Schatzsuche' }).click();
-  await page.getByRole('button', { name: /Figur hinzufügen/ }).click();
+  // the reload comes back to the character being edited (see "a reload … comes back to the same screen")
+  await expect(page.locator('[data-img]').first()).toBeVisible();
   await choose();
   await context.setOffline(false);
 });
