@@ -395,7 +395,10 @@ test.describe('save into the file (File System Access)', () => {
     await page.evaluate(() => { window.__pick = 'a.md'; });
     await openMenu(page);
     await page.click('#btnOpen');
+    await expect(raw(page)).toHaveValue('x');
+    await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Speichern in a.md');
     await raw(page).fill('y');
+    await expect(saveBtn(page)).toHaveClass(/unsaved/);
     await saveBtn(page).click();
     await expect(page.locator('.toast').last()).toContainText('nicht erlaubt');
     expect(await written(page)).toEqual([]);
