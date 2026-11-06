@@ -913,6 +913,42 @@ test.describe('whoopee-cushion tools', () => {
   });
 });
 
+test.describe('whip tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/whip/'));
+
+  test('crack_whip cracks the chosen whip, counts it and shows it in the app', async ({ page }) => {
+    const { ok, result } = await call(page, 'whip_crack_whip', { sound: 'bull' });
+    expect(ok).toBe(true);
+    expect(result).toMatchObject({ sound: 'bull', total: 1 });
+    expect(result.duration_ms).toBeGreaterThanOrEqual(700);
+    expect(result.duration_ms).toBeLessThanOrEqual(850);
+    expect(typeof result.audible).toBe('boolean');
+    await expect(page.locator('#count')).toHaveText('1');
+    await expect(page.locator('#whip')).toHaveAttribute('data-sound', 'bull');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Peitsche geknallt');
+    const random = (await call(page, 'whip_crack_whip', {})).result;
+    expect(['classic', 'bull', 'coach', 'double', 'circus']).toContain(random.sound);
+  });
+
+  test('get_stats counts per crack and reports the settings', async ({ page }) => {
+    await page.click('#sounds [data-s="double"]');
+    await page.click('#sens [data-v="high"]');
+    await page.click('#whip');
+    await page.click('#whip');
+    await call(page, 'whip_crack_whip', { sound: 'coach' });
+    const { result } = await call(page, 'whip_get_stats', {});
+    expect(result).toEqual({
+      total: 3, per_sound: { classic: 0, bull: 0, coach: 1, double: 2, circus: 0 },
+      settings: { sound: 'double', swing_detection: false, sensitivity: 'light', vibration: true },
+    });
+  });
+
+  test('invalid crack is rejected and nothing is counted', async ({ page }) => {
+    expect((await call(page, 'whip_crack_whip', { sound: 'laser' })).ok).toBe(false);
+    await expect(page.locator('#count')).toHaveText('0');
+  });
+});
+
 test.describe('spin-the-bottle tools', () => {
   const seed = state => ({ players: [], fair: true, sound: false, vibrate: true, angle: 0, last: -1, spins: 0, ...state });
   test.beforeEach(async ({ page }) => page.emulateMedia({ reducedMotion: 'reduce' }));
