@@ -20,7 +20,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-T4Q9ldLK3vaLFPMi9UudvGrfYlN1rHYHWWjXGxugEUk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rGrlEMIgkpcX/ekbWeV5dNDQyZP05MBxfRGJiqy2Zt0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -224,7 +224,7 @@ dialog#pwDlg::backdrop{background:rgba(0,0,0,.6)}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 8241efcbcb66</p>
+  <p class="footer-version">Version ec95cce5efd5</p>
   <!-- footer:end -->
 </footer>
 
@@ -318,27 +318,18 @@ function askPassword(name,wrong){
 /* ---------- Kept PDF: the last opened file stays on the device (Cache Storage "file:pdf-viewer") and opens
    again at the next start – also after an app update reloads the page. Not in the data backup (too big);
    "PDF schließen", turning the setting off and "Alle Daten löschen" remove it. ---------- */
-const KEEP_CACHE='file:'+Tools.data.appId(), KEEP_KEY='kept-file', KEEP_MAX=200*1024*1024;
+const KEEP_KEY='kept-file', KEEP_MAX=200*1024*1024;
 async function keepFile(f){
-  if(!settings.keep||!('caches' in window)) return;
+  if(!settings.keep||!Tools.keep.supported()) return;
   if(f.size>KEEP_MAX){Tools.diag.log('keep: too big',{size:f.size});await forgetFile();return;}
-  try{
-    const c=await caches.open(KEEP_CACHE);
-    await c.put(KEEP_KEY,new Response(f,{headers:{'Content-Type':'application/pdf','X-File-Name':encodeURIComponent(f.name||'dokument.pdf')}}));
-    Tools.diag.log('kept',{size:f.size});
-  }catch(e){Tools.diag.log('keep failed',e);}
+  if(await Tools.keep.put(KEEP_KEY,f)) Tools.diag.log('kept',{size:f.size});
 }
 async function keptFile(){
-  if(!('caches' in window)) return null;
-  try{
-    const res=await (await caches.open(KEEP_CACHE)).match(KEEP_KEY);
-    if(!res) return null;
-    return new File([await res.blob()],decodeURIComponent(res.headers.get('X-File-Name')||'dokument.pdf'),{type:'application/pdf'});
-  }catch(e){Tools.diag.log('kept file unreadable',e);return null;}
+  const f=await Tools.keep.get(KEEP_KEY);
+  return f&&new File([f],f.name||'dokument.pdf',{type:'application/pdf'});
 }
 async function forgetFile(){
-  if(!('caches' in window)) return;
-  try{if(await caches.delete(KEEP_CACHE)) Tools.diag.log('kept file removed');}catch(_){}
+  await Tools.keep.remove(KEEP_KEY);
 }
 
 async function openFile(f,restored){
@@ -762,7 +753,7 @@ Tools.diag.info(async()=>({
   open:!!doc, pages:sizes.length, current:doc?cur:0, zoom:Math.round(zoom*100)/100, encrypted,
   barsHidden:barsHidden(), rendered:els.filter(el=>el.firstChild).length,
   canShareFiles, fullscreenSupported:fs.supported(), settings, remembered:Object.keys(positions).length,
-  kept:'caches' in window?await caches.open(KEEP_CACHE).then(c=>c.match(KEEP_KEY)).then(r=>!!r,()=>'?'):false,
+  kept:(await Tools.keep.names()).includes(KEEP_KEY),
 }));
 
 /* ================= WebMCP ================= */

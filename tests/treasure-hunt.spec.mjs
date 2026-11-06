@@ -222,6 +222,79 @@ test('whole example game without GPS: allies, energy, lost battle, mega evolutio
   await expect(page.locator('.hunt')).toContainText('Schatz gefunden');
 });
 
+test('a reload (app update, phone ending the app) comes back to the same screen', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(URL_);
+  await createExample(page, false);
+  // Editor: back in the scene that was open, the last change is not lost
+  await page.getByRole('button', { name: 'Bearbeiten' }).click();
+  await page.locator('[data-act="ed-st"]').last().click();             // the treasure tree (not used below)
+  await page.locator('[data-act="ed-sc"]').first().click();
+  await page.getByLabel('Story-Text').fill('Geänderter Text nach dem Neuladen');
+  await page.reload();
+  await expect(page.getByLabel('Story-Text')).toHaveValue('Geänderter Text nach dem Neuladen');
+  await page.getByRole('button', { name: 'Zurück' }).click();
+  await expect(page.locator('[data-act="ed-sc"]').first()).toContainText('Geänderter Text');
+  await page.reload();
+  await expect(page.locator('[data-act="ed-sc"]').first()).toContainText('Geänderter Text');
+  await page.getByRole('button', { name: 'Zurück' }).click();
+  await page.getByRole('button', { name: 'Zurück' }).click();
+  await expect(page.locator('.hunt')).toHaveCount(1);
+  await page.reload();
+  await expect(page.locator('.hunt')).toHaveCount(1);              // home stays home
+
+  await page.getByRole('button', { name: 'Spielen' }).click();
+  await page.getByRole('button', { name: 'Los geht’s!' }).click();
+  // Lost battle first (the fox only shows up afterwards, as in the example game)
+  await station(page, 'castle');
+  await page.getByRole('button', { name: 'Zum Kampf!' }).click();
+  await page.getByRole('button', { name: 'Angriff!' }).click();
+  await expect(page.getByText('Der Drache ist viel zu stark!')).toBeVisible();
+  await next(page);
+  // Result screen: what was won stays on the screen until "Weiter"
+  await station(page, 'fox');
+  await fallback(page);
+  await expect(page.getByText('Flinker Fuchs ist jetzt in eurem Team!')).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Flinker Fuchs ist jetzt in eurem Team!')).toBeVisible();
+  await next(page);
+  await page.reload();
+  await expect(page.locator('[data-act="target"][data-id="castle"]')).toBeVisible();   // choosing the next target
+
+  // Energy for the mega evolution: spring twice
+  await station(page, 'spring');
+  await page.getByLabel('Eure Antwort').fill('Kamm');
+  await page.getByRole('button', { name: 'Prüfen' }).click();
+  await next(page);
+  await station(page, 'spring');
+  await page.getByRole('button', { name: 'Geschafft!' }).click();
+  await next(page);
+  await expect(energy(page)).toHaveText('⚡ 2');
+
+  // Battle: the bonus task already solved stays solved, the mega choice too
+  await station(page, 'castle');
+  await page.getByRole('button', { name: 'Zum Kampf!' }).click();
+  await fallback(page);
+  await expect(page.locator('#teamList li[data-k="bonus"]')).toHaveCount(1);
+  const mega = page.getByRole('button', { name: /Mega-Entwicklung/ });
+  await mega.click();
+  await page.reload();
+  await expect(page.locator('#teamList li[data-k="bonus"]')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Mega-Entwicklung/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(energy(page)).toHaveText('⚡ 2');
+  // Reload during the attack: paid once, the scene ends with the result already decided (1 + 3 + 3 = 7, ×2 = 14 ≥ 14)
+  await page.getByRole('button', { name: 'Angriff!' }).click();
+  await page.reload();
+  await expect(energy(page)).toHaveText('⚡ 0');
+  await expect(page.getByText('Der Drache schrumpft')).toBeVisible();
+  const game = await page.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('treasure-hunt.game.')))));
+  expect(game.mega).toBe(1);
+  expect(game.active).toBe('');
+  const text = await page.evaluate(() => Tools.diag.text());
+  expect(text).toContain('resume');
+  expect(text).not.toContain('Geänderter');
+});
+
 test.describe('GPS', () => {
   test.use({ geolocation: HOME, permissions: ['geolocation'] });
 

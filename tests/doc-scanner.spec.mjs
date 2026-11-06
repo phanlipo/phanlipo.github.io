@@ -242,6 +242,49 @@ test('sort, rotate and delete pages; order is kept in the PDF', async ({ page })
   await expect(page.locator('#btnPdf')).toBeDisabled();
 });
 
+test('pages survive a reload (app update, phone ending the app) with order, rotation and file name; remove all', async ({ page }) => {
+  const a = await photo(page, { mark: 'tl' }), b = await photo(page, { mark: 'br', angle: -5 });
+  await addPhotos(page, [file(a.png, 'a.png'), file(b.png, 'b.png')]);
+  await page.getByRole('button', { name: 'Seite 2 nach vorne' }).click();          // b, a
+  await page.getByRole('button', { name: 'Seite 2 zuschneiden' }).click();
+  await page.click('#edRotR');
+  await page.click('#edDone');
+  await page.fill('#fileName', 'Vertrag');
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).name)).toBe('Vertrag');
+  await page.reload();
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(2);
+  await expect(page.locator('#addInfo')).toHaveText('2 Seite(n) vom letzten Mal wieder da.');
+  await expect(page.locator('#fileName')).toHaveValue('Vertrag');
+  const { name, pdf } = await savePdf(page);
+  expect(name).toBe('Vertrag.pdf');
+  expect(pdf.pages).toHaveLength(2);
+  expect((await measure(page, pdf.pages[0].jpeg, REGIONS)).markBR).toBeLessThan(80);   // b first
+  expect(pdf.pages[1].width).toBeCloseTo(841.89, 1);                                    // a still turned
+  // a new photo is added after the kept ones and kept, too
+  const c = await photo(page, { mark: 'tl', angle: 3 });
+  await addPhotos(page, [file(c.png, 'c.png')]);
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.names()).filter(n => n.startsWith('page-')).length)).toBe(3);
+  await page.reload();
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(3);
+  // a deleted page is gone after a reload
+  await page.getByRole('button', { name: 'Seite 3 löschen' }).click();
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.names()).filter(n => n.startsWith('page-')).length)).toBe(2);
+  await page.reload();
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(2);
+  const text = await page.evaluate(() => Tools.diag.text());
+  expect(text).toContain('pages restored');
+  expect(text).toContain('kept files: 3');                        // two photos and the state
+  expect(text).not.toContain('Vertrag');
+  // remove all: nothing comes back
+  await page.click('#btnClear');
+  await expect(page.locator('#empty')).toBeVisible();
+  await expect(page.locator('#btnClear')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => Tools.keep.names())).toEqual([]);
+  await page.reload();
+  await page.waitForTimeout(500);
+  await expect(page.locator('#pages li')).toHaveCount(0);
+});
+
 test('corners can be moved by dragging and with the keyboard', async ({ page }) => {
   const { png } = await photo(page);
   await addPhotos(page, [file(png)]);
