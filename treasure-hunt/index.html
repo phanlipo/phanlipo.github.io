@@ -21,7 +21,7 @@
 <meta name="tool:connect" content="https://tile.openstreetmap.org">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-UY5qxY+WaEIZcTbEpzPsuSP2GxJWFIewquJrVJn35rE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://tile.openstreetmap.org; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-raxHOqy0jNfdkV6+4/fvh3A9ob0Coy1uebQOHA2wsOI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://tile.openstreetmap.org; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -354,7 +354,7 @@ main{display:flex;flex-direction:column;padding:12px;padding-inline:max(12px,env
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version e8e55148b3f3</p>
+  <p class="footer-version">Version ca4d6f525117</p>
   <!-- footer:end -->
 </footer>
 
@@ -540,6 +540,11 @@ const loadHunts = () => huntIds().map(loadHunt).filter(Boolean).sort((a, b) => (
 function saveHunt(h) { if (!Tools.save(huntKey(h.id), h)) { Tools.toast(t('err.storage'), 4000); log('save hunt failed (storage full?)'); return false; } return true; }
 const loadGame = h => E.cleanGame(Tools.load(gameKey(h.id), null), h);
 function saveGame() { if (H && G) Tools.save(gameKey(H.id), G); }
+// What is on the screen, so a reload (app update, phone ending the app in the background) comes back to it:
+// { edit: { id, view, ci, si, xi } } or { play: { result | battle } } – the game itself is in gameKey.
+const KEY_VIEW = PFX + 'view.v1';
+let view = Tools.load(KEY_VIEW, {}) || {};
+function saveView(v) { view = v || {}; if (v) Tools.save(KEY_VIEW, view); else Tools.remove(KEY_VIEW); }
 
 /* ---------- Small helpers ---------- */
 const emojiOf = (o, d) => esc(o && o.emoji ? o.emoji : d);
@@ -817,7 +822,7 @@ function renderHome() {
       </div></article>`;
   }).join('') : `<p class="empty">${esc(t('home.empty'))}</p>`;
 }
-function goHome() { H = null; G = null; settings.playing = ''; saveSettings(); show('home'); renderHome(); }
+function goHome() { H = null; G = null; settings.playing = ''; saveSettings(); saveView(null); show('home'); renderHome(); }
 
 function huntFile(h) {
   return new File([JSON.stringify(h, null, 1) + '\n'], `${slug(h.title)}.schatzsuche.json`, { type: 'application/json' });
@@ -947,6 +952,9 @@ let ed = null; // { h, view: 'hunt'|'char'|'station'|'scene', ci, si, xi, map }
 let saveTimer = 0;
 function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(() => ed && saveHunt(ed.h), 300); }
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; if (ed) saveHunt(ed.h); } }
+// The last change of the editor must not get lost when the page goes away (reload, app in the background)
+addEventListener('pagehide', flushSave);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 function edObj() {
   if (!ed) return null;
   if (ed.view === 'char') return ed.h.characters[ed.ci];
@@ -982,6 +990,7 @@ function effectFields(o, key, legend) {
 }
 function renderEditor() {
   const h = ed.h, o = edObj(), body = $('edBody');
+  saveView({ edit: { id: h.id, view: ed.view, ci: ed.ci, si: ed.si, xi: ed.xi } });
   if (ed.map) ed.map = null;
   $('flagList').innerHTML = E.flagsOf(h).map(f => `<option value="${esc(f)}"></option>`).join('');
   let title = h.title || t('untitled'), html = '';
@@ -1197,19 +1206,42 @@ function startPlay(id) {
   const h = loadHunt(id);
   if (!h) return goHome();
   H = h; G = loadGame(h); ed = null;
+  if (!view.play || view.play.id !== id) saveView({ play: { id } });
   settings.playing = id; saveSettings();
   show('play');
   keepAwake(true);
   log('play', { stations: H.stations.length, started: G.started, finished: G.finished });
   resume();
 }
+const sceneOf = id => { const st = H.stations.find(s => s.scenes.some(x => x.id === id)); return st ? [st, st.scenes.find(x => x.id === id)] : []; };
 function resume() {
+  const v = view.play && view.play.id === H.id ? view.play : null;
+  // Result of the last scene (what was won), not yet confirmed with "Weiter"
+  if (v && v.result) {
+    const [st, sc] = sceneOf(v.result.sc);
+    if (st) {
+      const r = v.result;
+      cur = { st, sc, enemy: null, bonus: null, mega: false };
+      log('resume', { screen: 'result' });
+      return renderResult(st, sc, r.ok, { ally: r.ally ? E.charOf(H, r.ally) : null, energy: r.energy || 0, treasure: !!r.treasure });
+    }
+  }
   if (G.finished) return renderFinale();
   if (!G.started) return renderIntro();
   if (G.active) {
-    const st = H.stations.find(s => s.scenes.some(x => x.id === G.active));
-    const sc = st && st.scenes.find(x => x.id === G.active);
-    if (st && sc) return runScene(st, sc);
+    const [st, sc] = sceneOf(G.active);
+    if (st && sc) {
+      // A battle that had started: keep the bonus already won; an attack already paid for ends the scene
+      const b = v && v.battle && v.battle.sc === sc.id ? v.battle : null;
+      const ch = E.charOf(H, sc.character);
+      if (b && sc.battle && ch && ch.side === 'enemy') {
+        cur = { st, sc, enemy: ch, bonus: b.bonus == null ? null : b.bonus, mega: !!b.mega };
+        log('resume', { screen: 'battle', attack: b.win != null });
+        if (b.win != null) return endScene(b.win);
+        return renderBattle();
+      }
+      return runScene(st, sc);
+    }
   }
   if (G.target && E.stationOf(H, G.target)) return renderNav();
   renderChoose();
@@ -1223,6 +1255,7 @@ function renderHud() {
 }
 function setBody(html) {
   stopPuzzle(); stopSpeaking();
+  if (view.play && (view.play.result || view.play.battle)) saveView({ play: { id: H.id } });
   if (navCtx && navCtx.off) navCtx.off();
   navCtx = null;
   renderHud();
@@ -1393,6 +1426,7 @@ function renderResult(st, sc, ok, got) {
   sfx(ok ? 'win' : 'lose');
   autoRead(text);
   cur.again = again;
+  saveView({ play: { id: H.id, result: { sc: sc.id, ok, ally: got.ally ? got.ally.id : '', energy: got.energy || 0, treasure: !!got.treasure } } });
 }
 
 function renderBattle() {
@@ -1405,6 +1439,7 @@ function renderBattle() {
     <div class="hp" role="meter" aria-label="${esc(t('b.hp'))}" aria-valuemin="0" aria-valuemax="${enemy.hp}" aria-valuenow="${enemy.hp}"><i style="width:100%"></i></div>
     <ul class="team-list${cur.mega ? ' mega' : ''}" id="teamList">${rows.join('')}</ul><div id="battleAct" class="scene"></div></div>`);
   const act = $('battleAct');
+  saveView({ play: { id: H.id, battle: { sc: sc.id, bonus: cur.bonus, mega: cur.mega } } });
   if (sc.puzzle && cur.bonus == null) {
     act.innerHTML = `${say(t('b.puzzleFirst', { n: sc.puzzle.bonus }))}<div id="battlePz" class="scene"></div>`;
     runPuzzle($('battlePz'), sc.puzzle, ok => { cur.bonus = ok ? sc.puzzle.bonus : 0; renderBattle(); });
@@ -1419,6 +1454,8 @@ function attack() {
   const r = E.battle(H, G, enemy, cur.bonus || 0, cur.mega);
   if (r.mega) { E.payMega(H, G); sfx('mega'); }
   saveGame();
+  // Paid and decided: after a reload during the animation the scene ends with this result (no second payment)
+  saveView({ play: { id: H.id, battle: { sc: cur.sc.id, bonus: cur.bonus, mega: cur.mega, win: r.win } } });
   log('battle', { damage: r.damage, hp: r.hp, mega: r.mega, team: G.team.length, win: r.win });
   $('battleAct').innerHTML = r.mega ? say(t('b.megaOn')) : '';
   const items = [...$('teamList').children];
@@ -1599,7 +1636,7 @@ document.addEventListener('click', async e => {
       break;
     case 'scene-next': endScene(true); break;
     case 'battle': renderBattle(); break;
-    case 'mega': cur.mega = !cur.mega; b.setAttribute('aria-pressed', String(cur.mega)); $('teamList').classList.toggle('mega', cur.mega); if (cur.mega) sfx('mega'); break;
+    case 'mega': cur.mega = !cur.mega; b.setAttribute('aria-pressed', String(cur.mega)); $('teamList').classList.toggle('mega', cur.mega); if (cur.mega) sfx('mega'); saveView({ play: { id: H.id, battle: { sc: cur.sc.id, bonus: cur.bonus, mega: cur.mega } } }); break;
     case 'attack': { b.disabled = true; const m = document.querySelector('[data-act="mega"]'); if (m) m.disabled = true; attack(); break; }
     case 'again': runScene(cur.st, cur.sc); break;
     case 'finale': renderFinale(); break;
@@ -1693,8 +1730,19 @@ Tools.diag.info(() => ({
 }));
 
 /* ---------- Start ---------- */
+const editAt = view.edit && loadHunt(view.edit.id);
 if (settings.playing && loadHunt(settings.playing)) startPlay(settings.playing);
-else { settings.playing = ''; renderHome(); }
+else if (editAt) {
+  // Back in the editor where it was: hunt, character, station or scene (indices checked against the hunt)
+  const e = view.edit, okIdx = (i, arr) => Number.isInteger(i) && i >= 0 && i < arr.length;
+  let v = 'hunt';
+  if (e.view === 'char' && okIdx(e.ci, editAt.characters)) v = 'char';
+  else if ((e.view === 'station' || e.view === 'scene') && okIdx(e.si, editAt.stations)) v = e.view === 'scene' && okIdx(e.xi, editAt.stations[e.si].scenes) ? 'scene' : 'station';
+  ed = { h: editAt, view: v, ci: e.ci, si: e.si, xi: e.xi };
+  log('resume', { screen: 'edit', view: v });
+  show('edit'); renderEditor();
+}
+else { settings.playing = ''; saveView(null); renderHome(); }
 })();
 </script>
 </body>
