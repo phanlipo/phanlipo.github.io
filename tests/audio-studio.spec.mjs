@@ -339,9 +339,11 @@ test('MP3 works offline once the encoder was loaded', async ({ page, context }) 
   await page.reload(); // page now controlled → the encoder goes through the offline cache
   await open(page);
   await exportFile(page, 'mp3');
+  await expect.poll(() => page.evaluate(() => Tools.keep.names())).toContain('audio');
   await context.setOffline(true);
   await page.reload();
-  await open(page);
+  // the kept file opens again by itself (offline, too)
+  await expect(page.locator('#loadStatus')).toHaveText('Datei und 0 Bearbeitungsschritt(e) vom letzten Mal wieder da.');
   expect(mp3Info((await exportFile(page, 'mp3')).buf)).toMatchObject({ rate: RATE, channels: 2, complete: true });
   await context.setOffline(false);
 });

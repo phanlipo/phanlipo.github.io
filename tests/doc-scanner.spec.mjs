@@ -439,12 +439,15 @@ test('HEIC photo (iPhone, Android) becomes a page with the libheif decoder, also
   await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(1);
   expect(await page.evaluate(() => Heic.info())).toEqual({ native: false, worker: true });
   expect((await savePdf(page)).pdf.pages).toHaveLength(1);
-  // offline: the decoder was cached on first use
+  // offline: the decoder was cached on first use – the kept HEIC page is decoded again, a second one is added
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).pages?.length)).toBe(1);
   await context.setOffline(true);
   await page.reload();
+  await expect(page.locator('#addInfo')).toHaveText('1 Seite(n) vom letzten Mal wieder da.');
   await page.setInputFiles('#inPick', heic);
   await expect(page.locator('#addInfo')).toHaveText(/^1 Seite\(n\) hinzugefügt\./);
-  expect((await savePdf(page)).pdf.pages).toHaveLength(1);
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(2);
+  expect((await savePdf(page)).pdf.pages).toHaveLength(2);
   await context.setOffline(false);
 });
 
