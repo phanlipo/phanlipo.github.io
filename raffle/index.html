@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Tombola</title>
+<meta name="description" content="Tombola-Lose ziehen: Losnummern und Preise eintragen, unverkaufte Lose ausnehmen, Gewinnnummern fair per Zufall ziehen, jede Nummer nur einmal. Lose prüfen, nachziehen, Liste kopieren.">
+<meta name="tool:tags" content="Freizeit, Zufall">
+<meta name="tool:features" content="Kopieren, KI-Agent">
+<meta name="tool:icon" content="ticket">
+<meta name="tool:color" content="#9f1239">
+<meta name="tool:short-name" content="Tombola">
+<meta name="tool:title-en" content="Raffle">
+<meta name="tool:description-en" content="Draw raffle tickets: enter ticket numbers and prizes, leave out unsold tickets, draw winning numbers fair and at random, each number only once. Check tickets, redraw, copy the list.">
+<meta name="tool:short-name-en" content="Raffle">
+<meta name="tool:storage" content="raffle.">
+<meta name="tool:webmcp" content="draw_ticket, get_results, check_ticket">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-rLwuX+FxE0balpe02OYf80WxEvlczsCmkVJu5lHA5/E='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Tombola">
+<meta name="theme-color" content="#9f1239">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#9f1239;--accent-text:#ffffff;--page-width:744px}
+@media (prefers-color-scheme: dark){:root{--accent:#fb7185;--accent-text:#2a0510}}
+main{display:flex;flex-direction:column;gap:8px;padding:8px max(12px,calc((100% - 720px) / 2)) 12px}
+.prize{flex:none;margin:0;min-height:28px;text-align:center;font-size:18px;font-weight:600;overflow-wrap:anywhere}
+.prize.hint{font-weight:400;color:var(--muted);font-size:16px}
+/* The drawn ticket: a raffle ticket with a dashed edge */
+.ticket{flex:none;align-self:center;width:min(100%,420px);min-height:clamp(110px,26vh,200px);display:grid;place-items:center;
+  border:3px dashed var(--accent);border-radius:16px;background:var(--surface-2);padding:8px 16px}
+.num{font-size:clamp(56px,18vw,120px);font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--accent);overflow-wrap:anywhere;text-align:center}
+.num.idle{color:var(--muted)}
+.num.rolling{opacity:.75}
+.num.win{animation:pop .4s ease-out}
+@keyframes pop{0%{transform:scale(.7);opacity:.3}70%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion: reduce){.num.win{animation:none}}
+@media (max-height:500px){.ticket{min-height:90px}.num{font-size:64px}}
+.bar{flex:none;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+.bar .btn{min-height:52px}
+.bar .btn.primary{font-size:18px;min-width:180px}
+.count{color:var(--muted);font-size:14px;text-align:center;margin:0}
+.winners{flex:1;min-height:180px;display:flex;flex-direction:column;margin:0}
+.winners h2{justify-content:space-between;margin-block-end:8px}
+.check-row{display:flex;gap:8px;align-items:center}
+.check-row input{flex:1;min-width:0;min-height:44px;padding-inline:10px}
+.check-out{margin:6px 0 0;min-height:1.3em;font-size:15px;overflow-wrap:anywhere}
+.check-out.won{color:var(--ok);font-weight:600}
+.list{list-style:none;margin:8px 0 0;padding:0;flex:1;min-height:60px;overflow:auto}
+.list li{display:flex;gap:10px;align-items:center;padding:6px 0;border-block-end:1px solid var(--border)}
+.list .no{flex:none;min-width:4.5ch;font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;color:var(--accent)}
+.list .what{flex:1;min-width:0;overflow-wrap:anywhere}
+.list time{display:block;color:var(--muted);font-size:13px}
+.list li.void .no,.list li.void .what>span{text-decoration:line-through;color:var(--muted)}
+.list .btn.small{flex:none}
+.field{display:grid;gap:4px;margin-block-start:12px}
+.field:first-of-type{margin-block-start:0}
+.field label{font-size:14px;color:var(--muted)}
+.field input{min-height:44px;padding-inline:10px;width:100%}
+.field textarea{width:100%;min-height:120px;padding:8px 10px;resize:vertical}
+.info{margin:8px 0 0;font-size:14px;color:var(--muted)}
+.info.err{color:var(--err)}
+.check{display:flex;align-items:center;gap:8px;min-height:44px;font-size:15px;margin-block-start:8px}
+.check input{width:20px;height:20px;flex:none;accent-color:var(--accent)}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Tombola</span></h1>
+  <p class="sub" data-i18n="sub">Lose ziehen</p>
+  <div class="stage-actions">
+    <!-- Tabler Icons (MIT): pencil -->
+    <button type="button" class="head-btn" id="btnEdit" aria-label="Lose und Preise bearbeiten" title="Lose und Preise bearbeiten" data-i18n-attr="aria-label:edit; title:edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"/><path d="M13.5 6.5l4 4"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <p class="prize hint" id="prize" role="status" aria-live="polite"></p>
+  <div class="ticket" aria-hidden="true"><span class="num idle" id="num">?</span></div>
+  <div class="bar">
+    <button type="button" class="btn primary" id="btnDraw" data-i18n="draw">Los ziehen</button>
+    <button type="button" class="btn" id="btnUndo" data-i18n="undo" hidden>Rückgängig</button>
+  </div>
+  <p class="count" id="count"></p>
+
+  <section class="card winners" aria-labelledby="h-win">
+    <h2 id="h-win"><span><span data-i18n="winners">Gezogene Lose</span> (<span id="winCount">0</span>)</span>
+      <button type="button" class="btn small" id="btnCopy" data-i18n="copy">Liste kopieren</button></h2>
+    <div class="check-row">
+      <label for="checkIn" class="sr-only" data-i18n="checkLabel">Losnummer prüfen</label>
+      <input type="text" id="checkIn" inputmode="numeric" autocomplete="off" placeholder="Losnummer prüfen" data-i18n-attr="placeholder:checkLabel">
+    </div>
+    <p class="check-out" id="checkOut" role="status" aria-live="polite"></p>
+    <ol class="list" id="list"></ol>
+  </section>
+
+  <section class="card" aria-labelledby="h-setup" data-menu>
+    <h2 id="h-setup" data-i18n="setup">Lose &amp; Preise</h2>
+    <div class="field">
+      <label for="tickets" data-i18n="tickets">Losnummern (Bereiche oder einzelne Nummern, mit Komma getrennt)</label>
+      <input type="text" id="tickets" autocomplete="off" spellcheck="false" placeholder="1-200, 301-350">
+    </div>
+    <div class="field">
+      <label for="exclude" data-i18n="exclude">Nicht verkaufte Lose ausnehmen (optional)</label>
+      <input type="text" id="exclude" autocomplete="off" spellcheck="false" placeholder="17, 40-49">
+    </div>
+    <p class="info" id="poolInfo" role="status"></p>
+    <div class="field">
+      <label for="prizes" data-i18n="prizes">Preise – einer pro Zeile, Hauptpreis zuerst (leer = nur Nummern ziehen)</label>
+      <textarea id="prizes" spellcheck="false" autocomplete="off"></textarea>
+    </div>
+    <label class="check"><input type="checkbox" id="optMainLast"> <span data-i18n="optMainLast">Hauptpreis zum Schluss ziehen (von unten nach oben)</span></label>
+    <div class="row" style="margin-block-start:8px"><button type="button" class="btn danger" id="btnReset" data-i18n="reset">Neue Ziehung starten</button></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu>
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <label class="check"><input type="checkbox" id="optAnim"> <span data-i18n="optAnim">Ziehen animieren</span></label>
+    <label class="check"><input type="checkbox" id="optSound"> <span data-i18n="optSound">Ton</span></label>
+    <label class="check"><input type="checkbox" id="optVibrate"> <span data-i18n="optVibrate">Vibration</span></label>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Für die Tombola auf dem Vereinsfest, Schulfest oder der Weihnachtsfeier: Die App zieht die Gewinnnummern der verkauften Lose – fair und ohne dass eine Nummer zweimal kommt.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Mit dem Stift oben rechts (oder im Menü ☰ unter <b>Lose &amp; Preise</b>) die <b>Losnummern</b> eintragen, z. B. <code>1-200</code> oder <code>1-200, 301-350</code>. Mit führenden Nullen (<code>001-200</code>) werden die Nummern ebenso angezeigt.</li>
+    <li>Lose, die <b>nicht verkauft</b> wurden, unter „ausnehmen“ eintragen – sie werden nie gezogen.</li>
+    <li><b>Preise</b>: einer pro Zeile, der Hauptpreis zuerst. Jedes gezogene Los bekommt den nächsten Preis. Üblich ist, den Hauptpreis zum Schluss zu ziehen – dann geht es von unten nach oben (abschaltbar). Ohne Preise zieht die App einfach Nummern, bis alle Lose dran waren.</li>
+    <li><b>Los ziehen</b> zeigt die Nummer groß an. <b>Rückgängig</b> nimmt die letzte Ziehung zurück (z. B. nach versehentlichem Tippen).</li>
+    <li>Holt niemand den Preis ab, bei dem Los auf <b>Neu ziehen</b> tippen: Das Los verfällt, für denselben Preis wird ein neues gezogen.</li>
+    <li><b>Losnummer prüfen</b>: Nummer eintippen – die App sagt, ob das Los gewonnen hat und was. Praktisch an der Preisausgabe.</li>
+    <li><b>Liste kopieren</b> kopiert alle Gewinnnummern mit Preisen, z. B. zum Aushängen oder für den Gruppenchat. <b>Neue Ziehung starten</b> (Menü) löscht die gezogenen Lose.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Fair: Jedes noch nicht gezogene Los hat dieselbe Chance (<code>crypto.getRandomValues</code>). Das Ergebnis steht vor der Animation fest; sie ändert nichts daran.</li>
+    <li>Bis zu 100.000 Lose. Lose, Preise und gezogene Nummern bleiben nur in diesem Browser gespeichert – auch wenn die Seite neu lädt. Die App funktioniert offline.</li>
+    <li>Im Menü findest du außerdem Animation, Ton und Vibration.</li>
+    <li>KI-Agenten im Browser (WebMCP) können ein Los ziehen, die gezogenen Lose lesen und eine Losnummer prüfen. Du siehst jede Ziehung in der App. Lose und Preise ändern oder die Ziehung zurücksetzen können sie nicht.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>For the raffle at a club party, school fair or office party: the app draws the winning numbers of the sold tickets – fair, and no number comes up twice.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>With the pencil at the top right (or in the menu ☰ under <b>Tickets &amp; prizes</b>) enter the <b>ticket numbers</b>, e.g. <code>1-200</code> or <code>1-200, 301-350</code>. With leading zeros (<code>001-200</code>) the numbers are shown that way too.</li>
+    <li>Enter tickets that were <b>not sold</b> under “leave out” – they are never drawn.</li>
+    <li><b>Prizes</b>: one per line, the main prize first. Every drawn ticket gets the next prize. Usually the main prize is drawn last – then it goes from the bottom up (can be switched off). Without prizes the app simply draws numbers until every ticket has come up.</li>
+    <li><b>Draw ticket</b> shows the number in large type. <b>Undo</b> takes back the last draw (e.g. after an accidental tap).</li>
+    <li>If nobody collects a prize, tap <b>Redraw</b> at that ticket: the ticket is forfeited and a new one is drawn for the same prize.</li>
+    <li><b>Check ticket number</b>: type a number – the app tells you whether that ticket has won and what. Handy at the prize table.</li>
+    <li><b>Copy list</b> copies all winning numbers with prizes, e.g. to put up a notice or for the group chat. <b>Start a new draw</b> (menu) clears the drawn tickets.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Fair: every ticket not yet drawn has the same chance (<code>crypto.getRandomValues</code>). The result is fixed before the animation; it changes nothing.</li>
+    <li>Up to 100,000 tickets. Tickets, prizes and drawn numbers are only stored in this browser – even if the page reloads. The app works offline.</li>
+    <li>The menu also has animation, sound and vibration.</li>
+    <li>AI agents in the browser (WebMCP) can draw a ticket, read the drawn tickets and check a ticket number. You see every draw in the app. They cannot change tickets or prizes or reset the draw.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 7409dc0eb889</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    prizeLine:'{rank}. Preis: {name}',
+    prizeRank:'{rank}. Preis',
+    nextPrize:'Als Nächstes: {prize}',
+    tapToDraw:'Tippe auf „Los ziehen“',
+    drawing:'Wird gezogen …',
+    drawn:'Gezogen',
+    noTickets:'Keine Lose – Stift oben rechts',
+    allPrizes:'Alle Preise sind vergeben',
+    allDrawn:'Alle Lose wurden gezogen',
+    countLine:'{drawn} von {total} Losen gezogen',
+    prizesLeft:'{n} Preise übrig',
+    prizeLeft1:'1 Preis übrig',
+    poolOk:'{n} Lose im Spiel',
+    poolErr:'Nicht verstanden: „{s}“ – z. B. 1-200, 301-350',
+    poolMax:'Höchstens {n} Lose',
+    ticket:'Los {n}',
+    void:'verfallen',
+    redraw:'Neu ziehen',
+    redrawLabel:'Los {n} neu ziehen',
+    confirmRedraw:'Los {n} verfällt und für {prize} wird ein neues Los gezogen. Fortfahren?',
+    confirmReset:'Alle gezogenen Lose löschen und neu anfangen?',
+    undone:'Letzte Ziehung zurückgenommen',
+    resetDone:'Neue Ziehung gestartet',
+    listEmpty:'Noch keine Lose gezogen.',
+    copied:'Liste kopiert',
+    copyFail:'Kopieren nicht möglich',
+    copyHead:'Tombola – Gewinnnummern',
+    chkWon:'🎉 Los {n} hat gewonnen: {prize}',
+    chkDrawn:'🎉 Los {n} wurde gezogen',
+    chkVoid:'Los {n} wurde gezogen, ist aber verfallen',
+    chkNot:'Los {n}: leider kein Gewinn',
+    chkOpen:'Los {n} wurde noch nicht gezogen',
+    chkOut:'Los {n} ist nicht im Spiel',
+    'mcp.draw':'Los gezogen','mcp.results':'Ergebnisse gelesen','mcp.check':'Los geprüft'
+  },
+  en:{
+    title:'Raffle',sub:'Draw tickets',edit:'Edit tickets and prizes',draw:'Draw ticket',undo:'Undo',
+    winners:'Drawn tickets',copy:'Copy list',checkLabel:'Check ticket number',
+    setup:'Tickets & prizes',tickets:'Ticket numbers (ranges or single numbers, separated by commas)',
+    exclude:'Leave out unsold tickets (optional)',prizes:'Prizes – one per line, main prize first (empty = draw numbers only)',
+    optMainLast:'Draw the main prize last (bottom up)',reset:'Start a new draw',
+    settings:'Settings',optAnim:'Animate drawing',optSound:'Sound',optVibrate:'Vibration',
+    prizeLine:'Prize {rank}: {name}',
+    prizeRank:'Prize {rank}',
+    nextPrize:'Next: {prize}',
+    tapToDraw:'Tap “Draw ticket”',
+    drawing:'Drawing …',
+    drawn:'Drawn',
+    noTickets:'No tickets – pencil at the top right',
+    allPrizes:'All prizes have been given out',
+    allDrawn:'All tickets have been drawn',
+    countLine:'{drawn} of {total} tickets drawn',
+    prizesLeft:'{n} prizes left',
+    prizeLeft1:'1 prize left',
+    poolOk:'{n} tickets in the draw',
+    poolErr:'Not understood: “{s}” – e.g. 1-200, 301-350',
+    poolMax:'At most {n} tickets',
+    ticket:'Ticket {n}',
+    void:'forfeited',
+    redraw:'Redraw',
+    redrawLabel:'Redraw ticket {n}',
+    confirmRedraw:'Ticket {n} is forfeited and a new ticket is drawn for {prize}. Continue?',
+    confirmReset:'Clear all drawn tickets and start over?',
+    undone:'Last draw taken back',
+    resetDone:'New draw started',
+    listEmpty:'No tickets drawn yet.',
+    copied:'List copied',
+    copyFail:'Copying not possible',
+    copyHead:'Raffle – winning numbers',
+    chkWon:'🎉 Ticket {n} has won: {prize}',
+    chkDrawn:'🎉 Ticket {n} has been drawn',
+    chkVoid:'Ticket {n} was drawn but is forfeited',
+    chkNot:'Ticket {n}: sorry, no prize',
+    chkOpen:'Ticket {n} has not been drawn yet',
+    chkOut:'Ticket {n} is not in the draw',
+    'mcp.draw':'ticket drawn','mcp.results':'results read','mcp.check':'ticket checked'
+  }
+});
+const t=Tools.t,$=Tools.$;
+const MAX_TICKETS=100000,MAX_NUM=999999,MAX_PRIZES=500,MAX_PRIZE_LEN=80;
+// Storage: settings (tickets, prizes, options) and the draws in order: {n: number, r: prize rank (0 = main prize) or -1, t: time, v: forfeited, re: redraw}
+const LS_CFG='raffle.settings.v1',LS_DRAWS='raffle.draws.v1';
+const cfg=Object.assign({tickets:'1-100',exclude:'',prizes:'',mainLast:true,anim:true,sound:true,vibrate:true},Tools.load(LS_CFG,{}));
+let draws=Tools.load(LS_DRAWS,[]);
+if(!Array.isArray(draws))draws=[];
+draws=draws.filter(d=>d&&Number.isInteger(d.n)&&Number.isInteger(d.r));
+const saveCfg=()=>Tools.save(LS_CFG,cfg),saveDraws=()=>Tools.save(LS_DRAWS,draws);
+const fmtN=n=>Tools.fmt(n,0);
+
+/* ---------- Parsing tickets: "1-200, 301-350, 17" ---------- */
+// Returns {list: sorted numbers, set, pad: digits with leading zeros} or {err}
+function parseSpec(s,limit){
+  const tokens=String(s||'').replace(/\s*[-–]\s*/g,'-').split(/[\s,;]+/).filter(Boolean);
+  const set=new Set();let pad=0;
+  for(const tok of tokens){
+    const m=/^(\d+)(?:-(\d+))?$/.exec(tok);
+    if(!m)return {err:'parse',tok};
+    for(const g of [m[1],m[2]])if(g&&g.length>1&&g[0]==='0')pad=Math.max(pad,g.length);
+    let a=Number(m[1]),b=m[2]!=null?Number(m[2]):a;
+    if(a>b)[a,b]=[b,a];
+    if(b>MAX_NUM)return {err:'parse',tok};
+    if(limit&&b-a+1>limit)return {err:'max'};
+    for(let i=a;i<=b;i++){set.add(i);if(limit&&set.size>limit)return {err:'max'};}
+  }
+  return {set,pad};
+}
+let spec=null; // cached {all: sorted numbers in the draw, inDraw: Set, pad} or {err}
+function computeSpec(){
+  const a=parseSpec(cfg.tickets,MAX_TICKETS);
+  if(a.err){spec=a;return;}
+  const ex=parseSpec(cfg.exclude,MAX_NUM+1);
+  if(ex.err){spec={err:ex.err,tok:ex.tok,field:'exclude'};return;}
+  const all=[...a.set].filter(n=>!ex.set.has(n)).sort((x,y)=>x-y);
+  spec={all,inDraw:new Set(all),pad:Math.max(a.pad,ex.pad)};
+}
+computeSpec();
+const show=n=>spec&&spec.pad?String(n).padStart(spec.pad,'0'):String(n);
+const prizes=()=>String(cfg.prizes||'').split('\n').map(s=>s.trim()).filter(Boolean).slice(0,MAX_PRIZES).map(s=>s.slice(0,MAX_PRIZE_LEN));
+const prizeText=r=>{const p=prizes()[r];return p!=null?t('prizeLine',{rank:r+1,name:p}):t('prizeRank',{rank:r+1});};
+const used=()=>new Set(draws.map(d=>d.n));
+// Tickets that can still be drawn (forfeited tickets do not come back)
+const pool=()=>{if(!spec||spec.err)return [];const u=used();return spec.all.filter(n=>!u.has(n));};
+// Next prize rank to draw, -1 without prizes, null when all prizes are given out
+function nextRank(){
+  const p=prizes();if(!p.length)return -1;
+  const held=new Set(draws.filter(d=>!d.v&&d.r>=0).map(d=>d.r));
+  for(let k=0;k<p.length;k++){const r=cfg.mainLast?p.length-1-k:k;if(!held.has(r))return r;}
+  return null;
+}
+
+/* ---------- Random (unbiased, crypto) ---------- */
+function rnd(n){ // 0 … n-1
+  const a=new Uint32Array(1),lim=Math.floor(0x100000000/n)*n;
+  do{crypto.getRandomValues(a);}while(a[0]>=lim);
+  return a[0]%n;
+}
+
+/* ---------- Sound & vibration ---------- */
+let ac=null;
+function audio(){
+  if(!cfg.sound)return null;
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();}catch(e){Tools.diag.log('audio failed',e);ac=null;}
+  return ac;
+}
+function tick(){
+  const a=ac;if(!cfg.sound||!a)return;
+  const o=a.createOscillator(),g=a.createGain(),t0=a.currentTime;
+  o.type='square';o.frequency.value=1200;g.gain.setValueAtTime(.03,t0);g.gain.exponentialRampToValueAtTime(.0001,t0+.03);
+  o.connect(g);g.connect(a.destination);o.start(t0);o.stop(t0+.04);
+}
+function fanfare(){
+  const a=ac;if(!cfg.sound||!a)return;
+  [523,659,784,1047].forEach((f,i)=>{
+    const o=a.createOscillator(),g=a.createGain(),t0=a.currentTime+i*.09;
+    o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(.08,t0);g.gain.exponentialRampToValueAtTime(.0001,t0+.25);
+    o.connect(g);g.connect(a.destination);o.start(t0);o.stop(t0+.3);
+  });
+}
+const vibrate=p=>{if(cfg.vibrate&&navigator.vibrate)try{navigator.vibrate(p);}catch(_){}};
+
+/* ---------- Draw ---------- */
+let busy=false,last=null; // last = the record shown big (null = nothing yet in this session)
+const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** Draws one ticket (fair, before any animation). rank: prize for a redraw. Returns the new record or null. */
+function draw(animate,rank,extra){
+  if(busy)return null;
+  const p=pool(),r=rank!=null?rank:nextRank();
+  if(r===null||!p.length){render();return null;}
+  const n=p[rnd(p.length)];
+  const rec=Object.assign({n,r,t:Date.now()},extra||{});
+  Tools.diag.log('draw',{pool:p.length,prize:r>=0,animate:!!animate});
+  if(!animate){finish(rec);return rec;}
+  busy=true;render();
+  const el=$('num'),dur=reduced()?400:1600,t0=performance.now();let lastStep=-1;
+  el.className='num rolling';
+  const step=now=>{
+    const k=Math.floor((now-t0)/70);
+    if(k!==lastStep){lastStep=k;el.textContent=show(p[rnd(p.length)]);tick();}
+    if(now-t0<dur)requestAnimationFrame(step);else{busy=false;finish(rec);}
+  };
+  requestAnimationFrame(step);
+  return rec;
+}
+function finish(rec){
+  draws.push(rec);saveDraws();last=rec;
+  render();renderList();renderCheck();
+  const el=$('num');void el.offsetWidth;el.classList.add('win');
+  fanfare();vibrate([40,40,80]);
+}
+function undo(){
+  if(busy||!draws.length)return;
+  const rec=draws.pop();
+  // A redraw brings the forfeited ticket for the same prize back
+  if(rec.re){for(let i=draws.length-1;i>=0;i--)if(draws[i].v&&draws[i].r===rec.r){delete draws[i].v;break;}}
+  saveDraws();last=null;Tools.diag.log('undo',{redraw:!!rec.re});
+  render();renderList();renderCheck();Tools.toast(t('undone'));
+}
+function redraw(i){
+  const d=draws[i];
+  if(busy||!d||d.v||d.r<0||!pool().length)return;
+  if(!confirm(t('confirmRedraw',{n:show(d.n),prize:prizeText(d.r)})))return;
+  d.v=true;audio();
+  draw(cfg.anim,d.r,{re:true});
+}
+
+/* ---------- Render ---------- */
+function render(){
+  const p=prizes(),r=nextRank(),left=pool().length,el=$('prize'),num=$('num');
+  const none=!spec||spec.err||!spec.all.length;
+  const done=!none&&(r===null||!left);
+  $('btnDraw').disabled=busy||none||done;
+  $('btnUndo').hidden=busy||!draws.length;
+  el.className='prize';
+  if(busy){el.textContent=t('drawing');}
+  else{
+    if(last){num.className='num';num.textContent=show(last.n);}
+    else{num.className='num idle';num.textContent='?';}
+    if(none){el.className='prize hint';el.textContent=t('noTickets');}
+    else if(last&&last.r>=0)el.textContent='🎉 '+prizeText(last.r);
+    else if(last)el.textContent='🎉 '+t('drawn');
+    else if(done){el.className='prize hint';el.textContent=r===null?t('allPrizes'):t('allDrawn');}
+    else if(r>=0){el.className='prize hint';el.textContent=t('nextPrize',{prize:prizeText(r)});}
+    else{el.className='prize hint';el.textContent=t('tapToDraw');}
+  }
+  const total=none?0:spec.all.length+draws.filter(d=>!spec.inDraw.has(d.n)).length;
+  let line=t('countLine',{drawn:fmtN(draws.length),total:fmtN(total)});
+  if(p.length&&r!==null&&!none){
+    const held=new Set(draws.filter(d=>!d.v&&d.r>=0&&d.r<p.length).map(d=>d.r));
+    const k=p.length-held.size;line+=' · '+(k===1?t('prizeLeft1'):t('prizesLeft',{n:fmtN(k)}));
+  }
+  if(done)line=r===null?t('allPrizes'):t('allDrawn');
+  $('count').textContent=line;
+  // Settings card: how many tickets are in the draw
+  const info=$('poolInfo');
+  if(spec.err){info.className='info err';info.textContent=spec.err==='max'?t('poolMax',{n:fmtN(MAX_TICKETS)}):t('poolErr',{s:spec.tok});}
+  else{info.className='info';info.textContent=t('poolOk',{n:fmtN(spec.all.length)});}
+}
+function renderList(){
+  $('winCount').textContent=String(draws.filter(d=>!d.v).length);
+  $('btnCopy').hidden=!draws.length;
+  const ol=$('list');
+  if(!draws.length){ol.innerHTML=`<li class="muted">${Tools.esc(t('listEmpty'))}</li>`;return;}
+  const canRedraw=pool().length>0&&!busy;
+  ol.innerHTML=draws.map((d,i)=>({d,i})).reverse().map(({d,i})=>{
+    const what=d.r>=0?prizeText(d.r):t('drawn');
+    const time=new Date(d.t);
+    return `<li${d.v?' class="void"':''}><span class="no">${Tools.esc(show(d.n))}</span>`+
+      `<span class="what"><span>${Tools.esc(what)}</span>${d.v?' · '+Tools.esc(t('void')):''}`+
+      `<time datetime="${time.toISOString()}">${Tools.esc(time.toLocaleTimeString(Tools.locale(),{timeStyle:'short'}))}</time></span>`+
+      (!d.v&&d.r>=0&&canRedraw?`<button type="button" class="btn small" data-redraw="${i}" aria-label="${Tools.esc(t('redrawLabel',{n:show(d.n)}))}">${Tools.esc(t('redraw'))}</button>`:'')+
+      `</li>`;
+  }).join('');
+}
+function renderCheck(){
+  const out=$('checkOut'),s=$('checkIn').value.trim();
+  out.className='check-out';
+  if(!/^\d{1,7}$/.test(s)){out.textContent='';return;}
+  const r=checkTicket(Number(s));
+  out.textContent=r.text;
+  if(r.status==='won')out.classList.add('won');
+}
+/** Status of a ticket number: won (with prize), void, no-prize, open, not-in-draw */
+function checkTicket(n){
+  const hits=draws.filter(d=>d.n===n),win=hits.find(d=>!d.v),N=show(n);
+  if(win)return {status:'won',prizeRank:win.r>=0?win.r+1:null,prize:win.r>=0?(prizes()[win.r]??null):null,
+    text:win.r>=0?t('chkWon',{n:N,prize:prizeText(win.r)}):t('chkDrawn',{n:N})};
+  if(hits.length)return {status:'forfeited',text:t('chkVoid',{n:N})};
+  if(spec.err||!spec.inDraw.has(n))return {status:'not_in_draw',text:t('chkOut',{n:N})};
+  if(nextRank()===null)return {status:'no_prize',text:t('chkNot',{n:N})};
+  return {status:'not_drawn_yet',text:t('chkOpen',{n:N})};
+}
+
+/* ---------- Events ---------- */
+const fTickets=$('tickets'),fExclude=$('exclude'),fPrizes=$('prizes');
+const fill=()=>{fTickets.value=cfg.tickets;fExclude.value=cfg.exclude;fPrizes.value=cfg.prizes;};
+const onSetup=()=>{
+  cfg.tickets=fTickets.value.slice(0,2000);cfg.exclude=fExclude.value.slice(0,5000);cfg.prizes=fPrizes.value.slice(0,50000);
+  saveCfg();computeSpec();render();renderList();renderCheck();
+};
+for(const f of [fTickets,fExclude,fPrizes])f.addEventListener('input',onSetup);
+$('btnDraw').addEventListener('click',()=>{audio();draw(cfg.anim);});
+$('btnUndo').addEventListener('click',undo);
+$('list').addEventListener('click',e=>{const b=e.target.closest('[data-redraw]');if(b)redraw(Number(b.dataset.redraw));});
+$('checkIn').addEventListener('input',renderCheck);
+$('btnEdit').addEventListener('click',()=>{Tools.menu.open();fTickets.focus();});
+$('btnReset').addEventListener('click',()=>{
+  if(busy||!draws.length||!confirm(t('confirmReset')))return;
+  draws=[];last=null;saveDraws();Tools.diag.log('reset');
+  render();renderList();renderCheck();Tools.toast(t('resetDone'));
+});
+function listText(){
+  const lines=draws.map(d=>(d.r>=0?prizeText(d.r)+' – ':'')+t('ticket',{n:show(d.n)})+(d.v?' ('+t('void')+')':''));
+  return t('copyHead')+'\n\n'+lines.join('\n');
+}
+$('btnCopy').addEventListener('click',async()=>{
+  const ok=await Tools.copyText(listText());
+  Tools.toast(t(ok?'copied':'copyFail'));Tools.diag.log('copy',{ok,lines:draws.length});
+});
+for(const [id,key] of [['optMainLast','mainLast'],['optAnim','anim'],['optSound','sound'],['optVibrate','vibrate']]){
+  const el=$(id);el.checked=!!cfg[key];
+  el.addEventListener('change',()=>{cfg[key]=el.checked;saveCfg();render();renderList();renderCheck();});
+}
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const recOut=d=>({ticket:show(d.n),number:d.n,prizeRank:d.r>=0?d.r+1:null,prize:d.r>=0?(prizes()[d.r]??null):null,forfeited:!!d.v,time:new Date(d.t).toISOString()});
+Tools.mcp.register({
+  name:'draw_ticket',title:'Draw a raffle ticket',label:'mcp.draw',
+  description:'Draws the next winning ticket uniformly at random (cryptographically secure) from the tickets not drawn yet, using the ticket numbers and prizes set up in the app. With prizes, the ticket gets the next prize in drawing order. The result is shown in the app and added to its list. Returns the ticket, its prize (rank 1 = main prize) and how many tickets and prizes are left.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    if(busy)throw new Error('A ticket is being drawn – try again in a moment.');
+    if(spec.err||!spec.all.length)throw new Error('No valid ticket numbers are set up in the app.');
+    if(nextRank()===null)throw new Error('All prizes have been given out.');
+    if(!pool().length)throw new Error('All tickets have been drawn.');
+    const rec=draw(false);
+    const r=nextRank();
+    return Object.assign(recOut(rec),{ticketsLeft:pool().length,prizesLeft:prizes().length?(r===null?0:prizes().length-new Set(draws.filter(d=>!d.v&&d.r>=0&&d.r<prizes().length).map(d=>d.r)).size):null});
+  }
+});
+Tools.mcp.register({
+  name:'get_results',title:'Read raffle results',label:'mcp.results',readOnly:true,
+  description:'Reads the raffle: the drawn tickets in drawing order (with prize and whether forfeited), the prize list (rank 1 = main prize), whether the main prize is drawn last, and how many tickets are in the draw and still left.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({
+    draws:draws.map(recOut),prizes:prizes(),mainPrizeLast:!!cfg.mainLast,
+    ticketsInDraw:spec.err?0:spec.all.length,ticketsLeft:pool().length,
+    nextPrizeRank:(r=>r===null||r<0?null:r+1)(nextRank()),validSetup:!spec.err
+  })
+});
+Tools.mcp.register({
+  name:'check_ticket',title:'Check a ticket number',label:'mcp.check',readOnly:true,
+  description:'Checks whether a ticket number has won. Returns status won, forfeited, not_drawn_yet, no_prize (all prizes given out) or not_in_draw, and for a win the prize and its rank.',
+  inputSchema:{type:'object',properties:{number:{type:'integer',minimum:0,maximum:MAX_NUM,description:'The ticket number, without leading zeros.'}},required:['number'],additionalProperties:false},
+  execute:({number})=>{const r=checkTicket(number);return {ticket:show(number),status:r.status,prizeRank:r.prizeRank??null,prize:r.prize??null};}
+});
+
+Tools.diag.info(()=>({tickets:spec.err?'invalid:'+spec.err:spec.all.length,prizes:prizes().length,draws:draws.length,forfeited:draws.filter(d=>d.v).length,left:pool().length,busy,settings:{mainLast:cfg.mainLast,anim:cfg.anim,sound:cfg.sound,vibrate:cfg.vibrate}}));
+fill();render();renderList();
+Tools.onLang(()=>{render();renderList();renderCheck();});
+})();
+</script>
+</body>
+</html>

@@ -1935,3 +1935,51 @@ test.describe('secret-santa tools', () => {
     expect((await call(page, 'secret_santa_get_status', {})).result.drawn).toBe(false);
   });
 });
+
+test.describe('raffle tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/raffle/');
+  });
+
+  test('draw_ticket: next prize, shown in the app; get_results and check_ticket agree', async ({ page }) => {
+    await page.evaluate(() => {
+      const set = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('input')); };
+      set('tickets', '1-10'); set('exclude', '5'); set('prizes', 'Bike\nMug');
+    });
+    const { ok, result } = await call(page, 'raffle_draw_ticket', {});
+    expect(ok).toBe(true);
+    expect(result).toMatchObject({ prizeRank: 2, prize: 'Mug', forfeited: false, ticketsLeft: 8, prizesLeft: 1 });
+    expect([1, 2, 3, 4, 6, 7, 8, 9, 10]).toContain(result.number);
+    expect(result.ticket).toBe(String(result.number));
+    await expect(page.locator('#num')).toHaveText(result.ticket);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Los gezogen');
+    const r = await call(page, 'raffle_get_results', {});
+    expect(r.result).toMatchObject({ prizes: ['Bike', 'Mug'], mainPrizeLast: true, ticketsInDraw: 9, ticketsLeft: 8, nextPrizeRank: 1, validSetup: true });
+    expect(r.result.draws.map(d => d.number)).toEqual([result.number]);
+    expect((await call(page, 'raffle_check_ticket', { number: result.number })).result).toEqual({ ticket: result.ticket, status: 'won', prizeRank: 2, prize: 'Mug' });
+    expect((await call(page, 'raffle_check_ticket', { number: 5 })).result.status).toBe('not_in_draw');
+    const second = (await call(page, 'raffle_draw_ticket', {})).result;
+    expect(second).toMatchObject({ prizeRank: 1, prize: 'Bike', prizesLeft: 0 });
+    expect(second.number).not.toBe(result.number);
+    expect(await call(page, 'raffle_draw_ticket', {})).toEqual({ ok: false, error: 'All prizes have been given out.' });
+    const other = [1, 2, 3, 4, 6].find(n => n !== result.number && n !== second.number);
+    expect((await call(page, 'raffle_check_ticket', { number: other })).result.status).toBe('no_prize');
+  });
+
+  test('invalid input and setup are rejected and change nothing', async ({ page }) => {
+    for (const [input, msg] of [
+      [{}, 'input.number is required'],
+      [{ number: 1.5 }, 'input.number must be of type integer'],
+      [{ number: -1 }, 'input.number must be at least 0'],
+    ]) {
+      const res = await call(page, 'raffle_check_ticket', input);
+      expect(res.ok).toBe(false);
+      expect(res.error).toContain(msg.split(' must')[0]);
+    }
+    expect((await call(page, 'raffle_draw_ticket', { count: 2 })).ok).toBe(false);
+    await page.evaluate(() => { const el = document.getElementById('tickets'); el.value = 'x'; el.dispatchEvent(new Event('input')); });
+    expect(await call(page, 'raffle_draw_ticket', {})).toEqual({ ok: false, error: 'No valid ticket numbers are set up in the app.' });
+    expect((await call(page, 'raffle_get_results', {})).result.draws).toEqual([]);
+  });
+});
