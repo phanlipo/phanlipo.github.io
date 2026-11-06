@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Blasinstrumente</title>
+<meta name="description" content="Ins Mikrofon pusten und spielen: Flöte, Blockflöte, Okarina, Panflöte und Trompete – mit echten Griffen, Überblasen und Grifftabelle.">
+<meta name="tool:tags" content="Freizeit, Musik">
+<meta name="tool:features" content="Mikrofon, KI-Agent">
+<meta name="tool:icon" content="music">
+<meta name="tool:color" content="#8a5a2b">
+<meta name="tool:short-name" content="Flöte &amp; Co">
+<meta name="tool:title-en" content="Wind Instruments">
+<meta name="tool:description-en" content="Blow into the microphone and play: flute, recorder, ocarina, pan flute and trumpet – with real fingerings, overblowing and a fingering chart.">
+<meta name="tool:short-name-en" content="Flute &amp; Co">
+<meta name="tool:storage" content="wind-instruments.">
+<meta name="tool:webmcp" content="get_status, set_instrument, play_melody">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-QrjsXPj1yZa9r3gY2vgqSuZb7CpirSKZ+1BDxzrqkCQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Flöte &amp; Co">
+<meta name="theme-color" content="#8a5a2b">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#8a5a2b;--accent-text:#ffffff;
+  --wood:#dcb889;--wood-edge:#a8794a;--hole:#3b2814;--hole-text:#f6e7d2;--finger:#fff8ee;--finger-text:#3b2814;
+  --brass:#e0b740;--brass-edge:#a8811c;--bamboo:#dcc581;--bamboo-edge:#a89148;--bamboo-text:#3b2b06}
+@media (prefers-color-scheme: dark){:root{--accent:#e0b27c;--accent-text:#2a1a08;
+  --wood:#6e4c2c;--wood-edge:#94693f;--hole:#140c05;--hole-text:#f1dcc0;--finger:#f1dcc0;--finger-text:#2a1a08;
+  --brass:#8f7019;--brass-edge:#c39c2c;--bamboo:#5f5020;--bamboo-edge:#8e7a3a;--bamboo-text:#f5ecd0}}
+main{max-width:900px;margin-inline:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
+/* Instrument chooser */
+.insts{flex:none;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-block:2px}
+.insts::-webkit-scrollbar{display:none}
+.insts button{flex:none;min-height:44px;padding:0 14px;border-radius:22px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font:inherit;font-size:15px;cursor:pointer}
+.insts button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-text);font-weight:700}
+.insts button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+/* Note and breath meter */
+.display{flex:none;display:flex;align-items:center;gap:12px;min-height:52px}
+.cur{margin:0;font-size:clamp(28px,8vw,40px);font-weight:800;line-height:1;min-width:3.4em;font-variant-numeric:tabular-nums}
+.cur.silent{color:var(--muted)}
+.breath{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.meter{position:relative;height:14px;border-radius:7px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden}
+.meter span{position:absolute;inset-block:0;inset-inline-start:0;width:0;background:var(--accent)}
+.meter i{position:absolute;inset-block:0;width:2px;background:var(--text);opacity:.55}
+.status{margin:0;font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status.err{color:var(--err)}
+.ladder{display:flex;gap:3px}
+.ladder[hidden]{display:none}
+.ladder b{flex:1;height:6px;border-radius:3px;background:var(--surface-2);border:1px solid var(--border)}
+.ladder b.on{background:var(--accent);border-color:var(--accent)}
+/* Playing area */
+.play{position:relative;flex:1;min-height:200px;display:flex;flex-direction:column;gap:8px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.inst{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.hole{position:relative;flex:none;width:var(--hs);height:var(--hs);display:grid;place-items:center}
+.pit{width:var(--ps,78%);aspect-ratio:1;border-radius:50%;background:var(--hole);color:var(--hole-text);display:grid;place-items:center;font-size:14px;font-weight:700;box-shadow:inset 0 3px 6px rgba(0,0,0,.45);transition:background .05s}
+.hole.on>.pit{background:var(--finger);color:var(--finger-text);box-shadow:0 0 0 3px var(--accent)}
+/* Tube (flute, recorder): mouthpiece next to the microphone at the bottom */
+.tube{--hs:clamp(44px,7.4dvh,62px);position:relative;height:100%;max-height:620px;width:calc(var(--hs) + 30px);display:flex;flex-direction:column-reverse;align-items:center;justify-content:space-between;padding-block:8px;background:var(--wood);border:2px solid var(--wood-edge);border-radius:18px 18px 10px 10px}
+.tube .mouth{flex:none;width:60%;height:min(60px,8dvh);background:var(--wood-edge);border-radius:4px 4px 40% 40%;margin-block-end:-8px;position:relative}
+.tube .mouth::after{content:"";position:absolute;inset-inline:30%;inset-block-start:-14px;height:10px;border-radius:3px;background:var(--hole)}
+.tube .gap{flex:none;height:6px}
+/* Recorder: thumb hole (on the back) next to hole 1, sticking out to the left */
+.tube .pair{flex:none;display:flex;align-items:center;gap:6px;margin-inline-start:calc(-1 * (var(--hs) + 6px))}
+.tube .thumb .pit{border-radius:40%}
+@media (orientation:landscape) and (max-height:560px){
+  .tube{--hs:clamp(44px,7vw,58px);height:calc(var(--hs) + 26px);width:100%;max-width:820px;max-height:none;flex-direction:row;padding-block:0;padding-inline:8px;border-radius:10px 18px 18px 10px}
+  .tube .mouth{height:60%;width:min(70px,11vw);border-radius:40% 4px 4px 40%;margin-block-end:0;margin-inline-start:-8px}
+  .tube .mouth::after{inset-inline:auto -14px;inset-block:30%;width:10px;height:auto}
+  .tube .gap{height:auto;width:6px}
+  .tube .pair{margin-inline-start:0}
+}
+/* Ocarina: four holes, the size of the open holes sets the pitch */
+.ocarina{--hs:min(30vw,22dvh,112px);position:relative;width:min(86vw,58dvh,420px);aspect-ratio:1.45;background:var(--wood);border:2px solid var(--wood-edge);border-radius:50%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;place-items:center;padding:6% 12%}
+.ocarina .mouth{position:absolute;inset-block-end:-16px;inset-inline-start:50%;width:22%;height:24px;transform:translateX(-50%);background:var(--wood-edge);border-radius:0 0 8px 8px}
+/* Pan flute: pipe openings at the bottom, next to the microphone */
+.pipes{display:flex;align-items:flex-end;justify-content:center;gap:4px;height:100%;width:100%;max-height:560px}
+.pipe{flex:1;max-width:58px;min-width:40px;display:flex;align-items:flex-end;justify-content:center;padding-block-end:10px;border-radius:6px 6px 14px 14px;background:var(--bamboo);border:2px solid var(--bamboo-edge);color:var(--bamboo-text);font-weight:700;font-size:15px}
+.pipe.on{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+/* Trumpet: three valves, breath picks the natural tone */
+.trumpet{position:relative;display:flex;gap:clamp(10px,4vw,28px);padding:28px clamp(14px,5vw,36px);background:var(--brass);border:2px solid var(--brass-edge);border-radius:40px}
+.trumpet .hole{--hs:clamp(72px,22vw,104px)}
+.trumpet .pit{--ps:86%;background:var(--surface);color:var(--text);border:3px solid var(--brass-edge);box-shadow:0 5px 0 var(--brass-edge);font-size:24px}
+.trumpet .hole.on>.pit{background:var(--accent);color:var(--accent-text);box-shadow:0 1px 0 var(--brass-edge);transform:translateY(4px)}
+/* Blow pad when playing without microphone */
+.blowpad{flex:none;min-height:64px;display:grid;place-items:center;text-align:center;padding:6px 10px;border-radius:14px;border:2px dashed var(--accent);background:var(--surface-2);color:var(--text);font-weight:600;font-size:15px}
+.blowpad.on{background:var(--accent);color:var(--accent-text);border-style:solid}
+.blowpad[hidden]{display:none}
+/* Start overlay */
+.intro{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:color-mix(in srgb,var(--bg) 96%,transparent);border-radius:14px;overflow:auto}
+.intro[hidden]{display:none}
+.intro p{margin:0;max-width:30em}
+.intro .big{font-size:44px;line-height:1}
+.intro .btn{min-height:52px;font-size:17px;min-width:min(260px,80vw)}
+.intro .err{color:var(--err);font-weight:600}
+/* Menu */
+.card h3{font-size:15px;margin:14px 0 6px}
+.card h3:first-of-type{margin-top:0}
+.slider{display:flex;align-items:center;gap:10px;min-height:44px}
+.slider input{flex:1;accent-color:var(--accent);min-height:44px;margin:0}
+.slider output{min-width:3.5em;text-align:end;font-variant-numeric:tabular-nums}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.chart{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:6px}
+.chart button{width:100%;min-height:44px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.dots{display:flex;gap:3px;align-items:center;font-weight:400;font-size:12px}
+.dots i{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--text);flex:none}
+.dots i.c{background:var(--text)}
+.dots i.t{border-radius:30%}
+.dots .sep{width:5px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Blasinstrumente</span></h1>
+  <p class="sub" data-i18n="sub">Ins Mikrofon pusten und spielen</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnMic" aria-pressed="false" aria-label="Mikrofon" title="Mikrofon" data-i18n-attr="aria-label:mic; title:mic"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2m0 3a3 3 0 0 1 3 -3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3z"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M8 21l8 0"/><path d="M12 17l0 4"/><path id="micOff" d="M3 3l18 18"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <div class="insts" id="insts" role="group" aria-label="Instrument" data-i18n-attr="aria-label:instrument">
+    <button type="button" data-inst="whistle" data-i18n="i.whistle">Flöte</button>
+    <button type="button" data-inst="recorder" data-i18n="i.recorder">Blockflöte</button>
+    <button type="button" data-inst="ocarina" data-i18n="i.ocarina">Okarina</button>
+    <button type="button" data-inst="panflute" data-i18n="i.panflute">Panflöte</button>
+    <button type="button" data-inst="trumpet" data-i18n="i.trumpet">Trompete</button>
+  </div>
+  <div class="display">
+    <p class="cur silent" id="note" aria-live="off">–</p>
+    <div class="breath">
+      <div class="meter" id="meter" role="meter" aria-label="Atem" data-i18n-attr="aria-label:breath" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="meterBar"></span><i id="meterThr"></i></div>
+      <div class="ladder" id="ladder" hidden aria-hidden="true"><b></b><b></b><b></b><b></b><b></b></div>
+      <p class="status" id="status" role="status"></p>
+    </div>
+  </div>
+  <div class="play" id="play" data-mode="idle" data-blowing="0" data-note="" role="group" aria-label="Instrument zum Greifen" aria-describedby="playHint" data-i18n-attr="aria-label:playArea">
+    <div class="inst" id="inst" aria-hidden="true"></div>
+    <div class="blowpad" id="blowpad" data-blow="1" aria-hidden="true" hidden data-i18n="blowpad">Hier halten = pusten · weiter oben = kräftiger</div>
+    <div class="intro" id="intro">
+      <span class="big" aria-hidden="true">🌬️</span>
+      <p data-i18n="intro">Puste ins Mikrofon wie in ein echtes Instrument – es sitzt meist unten am Handy. Mit den Fingern greifst du die Töne.</p>
+      <button type="button" class="btn primary" id="btnStart" data-i18n="start">Mikrofon starten</button>
+      <button type="button" class="btn" id="btnTouch" data-i18n="touch">Ohne Mikrofon spielen</button>
+      <p class="err" id="introErr" role="alert"></p>
+    </div>
+  </div>
+  <p class="sr-only" id="playHint" data-i18n="playHint">Mit der Tastatur: Ziffern 1 bis 9 und 0 schließen die Löcher vom Mundstück aus (Blockflöte: 1 ist der Daumen) bzw. wählen Pfeife oder Ventil. Leertaste gedrückt halten = pusten, mit Umschalt kräftig.</p>
+</main>
+
+<section class="card" aria-labelledby="h-chart" data-menu>
+  <h2 id="h-chart" data-i18n="chart">Grifftabelle</h2>
+  <p class="muted" id="chartInfo"></p>
+  <ul class="chart" id="chart"></ul>
+</section>
+
+<section class="card" aria-labelledby="h-settings" data-menu>
+  <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+  <h3><label for="sens" data-i18n="sens">Empfindlichkeit des Mikrofons</label></h3>
+  <div class="slider"><input type="range" id="sens" min="1" max="10" step="1" value="5"><output id="sensOut" for="sens">5</output></div>
+  <h3><label for="volume" data-i18n="volume">Lautstärke</label></h3>
+  <div class="slider"><input type="range" id="volume" min="0" max="100" step="5" value="80"><output id="volumeOut" for="volume">80 %</output></div>
+  <label class="check"><input type="checkbox" id="optOverblow" checked> <span data-i18n="overblow">Überblasen: kräftig pusten = eine Oktave höher (Flöte)</span></label>
+  <label class="check"><input type="checkbox" id="optEcho" checked> <span data-i18n="echo">Eigenen Ton aus dem Mikrofon herausfiltern</span></label>
+</section>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Dein Handy wird zum Blasinstrument: Du pustest ins Mikrofon, und die Finger auf dem Bildschirm greifen die Töne – wie bei einem echten Instrument.</p>
+  <h3>Spielen</h3>
+  <ul>
+    <li><b>Mikrofon starten</b> und erlauben. Halte das Handy quer vor den Mund, das Mikrofon (meist unten am Handy) nah an den Lippen, und puste sanft dagegen. Das Mundstück auf dem Bildschirm zeigt, wo es ist.</li>
+    <li>Je stärker du pustest, desto lauter – und ein bisschen höher, wie bei echten Flöten. Der Balken oben zeigt deinen Atem, der Strich die Schwelle, ab der es klingt.</li>
+    <li>Klingt es schon beim Sprechen oder gar nicht? Im Menü (☰) unter <b>Einstellungen</b> die <b>Empfindlichkeit</b> anpassen. Die App gewöhnt sich außerdem selbst an Hintergrundgeräusche.</li>
+    <li><b>Ohne Mikrofon</b> (oder am Computer) hältst du die Fläche <b>„Hier halten = pusten“</b> gedrückt – weiter oben gedrückt ist kräftiger. Das Mikrofon schaltest du oben rechts ein und aus.</li>
+  </ul>
+  <h3>Die Instrumente</h3>
+  <ul>
+    <li><b>Flöte</b> (Tin Whistle in D): sechs Löcher, alle zu = D. Von unten nach oben öffnen spielt die Tonleiter. <b>Kräftig pusten</b> springt eine Oktave höher (Überblasen, im Menü abschaltbar).</li>
+    <li><b>Blockflöte</b> (Sopran, barocke Griffe): Daumenloch links neben dem ersten Loch und sieben Löcher, alle zu = C. Daumen offen bei geschlossenen Löchern 1–3 wirkt wie der halb geöffnete Daumen und spielt die höhere Oktave.</li>
+    <li><b>Okarina</b> mit vier Löchern: Wie bei einer echten Gefäßflöte zählt nur, <b>wie viel</b> offen ist – große Löcher heben den Ton mehr als kleine. Alle zu = C, alle offen = D eine Oktave höher.</li>
+    <li><b>Panflöte</b>: eine Pfeife antippen oder mit dem Finger über die Pfeifen streichen, dabei pusten. Im Querformat gibt es mehr Pfeifen.</li>
+    <li><b>Trompete</b>: Die drei Ventile senken den Ton (1 = zwei Halbtöne, 2 = einen, 3 = drei). Welcher Naturton erklingt, bestimmt <b>wie kräftig</b> du pustest – die Stufen unter dem Balken zeigen ihn.</li>
+    <li>Die <b>Grifftabelle</b> im Menü (☰) zeigt alle Griffe des gewählten Instruments; Antippen spielt den Ton vor. ● = zu, ○ = offen.</li>
+    <li>Am Computer: Ziffern <span class="kbd">1</span>–<span class="kbd">0</span> schließen die Löcher vom Mundstück aus (Blockflöte: 1 = Daumen), wählen Pfeife oder Ventil; <span class="kbd">Leertaste</span> halten = pusten, mit <span class="kbd">Umschalt</span> kräftig.</li>
+  </ul>
+  <h3>Kein Ton?</h3>
+  <ul>
+    <li>Lautstärke aufdrehen. Auf dem iPhone den <b>Stummschalter</b> ausschalten.</li>
+    <li>Mit Kopfhörern klingt es am besten – dann hört das Mikrofon den eigenen Ton nicht. Ohne Kopfhörer filtert die Echo-Unterdrückung ihn heraus (im Menü abschaltbar, falls dein Pusten dadurch schwächer ankommt).</li>
+    <li>Mikrofon abgelehnt? In den Website-Einstellungen des Browsers wieder erlauben – oder ohne Mikrofon spielen.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Das Mikrofon misst nur, <b>wie stark</b> du pustest (das Rauschen tiefer Töne). Es wird nichts aufgenommen oder gespeichert, nichts verlässt das Gerät. Die Töne werden im Browser erzeugt, alles funktioniert offline.</li>
+    <li>Gespeichert werden nur Instrument und Einstellungen – in diesem Browser.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann das Instrument wechseln, eine Melodie vorspielen (die Griffe erscheinen dabei auf dem Bildschirm) und den Zustand lesen (WebMCP). Jeder Aufruf erscheint hier als Hinweis. Das Mikrofon kann er nicht einschalten.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Your phone becomes a wind instrument: you blow into the microphone, and your fingers on the screen pick the notes – just like a real instrument.</p>
+  <h3>Playing</h3>
+  <ul>
+    <li><b>Start microphone</b> and allow it. Hold the phone sideways in front of your mouth with the microphone (usually at the bottom of the phone) close to your lips and blow gently at it. The mouthpiece on the screen shows where it is.</li>
+    <li>The harder you blow, the louder – and slightly higher, like real flutes. The bar at the top shows your breath, the line the threshold where the sound starts.</li>
+    <li>Sounds while you talk, or not at all? Adjust the <b>sensitivity</b> in the menu (☰) under <b>Settings</b>. The app also gets used to background noise by itself.</li>
+    <li><b>Without microphone</b> (or on a computer) hold down the area <b>“Hold here = blow”</b> – pressing higher up blows harder. Switch the microphone on and off at the top right.</li>
+  </ul>
+  <h3>The instruments</h3>
+  <ul>
+    <li><b>Flute</b> (tin whistle in D): six holes, all closed = D. Opening them from the bottom up plays the scale. <b>Blowing hard</b> jumps an octave up (overblowing, can be switched off in the menu).</li>
+    <li><b>Recorder</b> (soprano, baroque fingering): thumb hole to the left of the first hole and seven holes, all closed = C. Thumb open with holes 1–3 closed acts like the half-open thumb and plays the upper octave.</li>
+    <li><b>Ocarina</b> with four holes: as on a real vessel flute only <b>how much</b> is open counts – large holes raise the pitch more than small ones. All closed = C, all open = D an octave higher.</li>
+    <li><b>Pan flute</b>: tap a pipe or slide your finger across the pipes while blowing. Landscape gives you more pipes.</li>
+    <li><b>Trumpet</b>: the three valves lower the pitch (1 = two semitones, 2 = one, 3 = three). <b>How hard</b> you blow picks the natural tone – the steps below the bar show it.</li>
+    <li>The <b>fingering chart</b> in the menu (☰) shows every fingering of the chosen instrument; tap one to hear it. ● = closed, ○ = open.</li>
+    <li>On a computer: digits <span class="kbd">1</span>–<span class="kbd">0</span> close the holes counting from the mouthpiece (recorder: 1 = thumb) or pick a pipe or valve; hold <span class="kbd">Space</span> = blow, with <span class="kbd">Shift</span> hard.</li>
+  </ul>
+  <h3>No sound?</h3>
+  <ul>
+    <li>Turn the volume up. On an iPhone switch off the <b>silent switch</b>.</li>
+    <li>Headphones sound best – then the microphone does not hear the instrument itself. Without them echo cancellation filters it out (can be switched off in the menu if it makes your blowing weaker).</li>
+    <li>Microphone denied? Allow it again in the browser's site settings – or play without microphone.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>The microphone only measures <b>how hard</b> you blow (the rumble of low frequencies). Nothing is recorded or stored, nothing leaves the device. The sounds are generated in the browser, everything works offline.</li>
+    <li>Only the instrument and the settings are saved – in this browser.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can switch the instrument, play a melody (the fingerings appear on the screen) and read the state (WebMCP). Every call shows up here as a notice. It cannot switch on the microphone.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version bfc21cb93bf0</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'n.0':'C','n.1':'Cis','n.2':'D','n.3':'Es','n.4':'E','n.5':'F','n.6':'Fis','n.7':'G','n.8':'Gis','n.9':'A','n.10':'B','n.11':'H',
+    'st.blow':'Puste ins Mikrofon','st.blowing':'Pustest du – super!','st.pad':'Fläche unten halten = pusten','st.pipe':'Pfeife antippen und pusten',
+    'st.agent':'KI-Agent spielt vor …','st.idle':'Mikrofon aus',
+    'err.api':'Dieser Browser kann das Mikrofon nicht nutzen.','err.audio':'Dieser Browser kann keine Töne erzeugen.',
+    'err.denied':'Mikrofon nicht erlaubt. In den Website-Einstellungen erlauben – oder ohne Mikrofon spielen.',
+    'err.none':'Kein Mikrofon gefunden.','err.mic':'Mikrofon-Fehler: {m}',
+    'mic.on':'Mikrofon an','mic.off':'Mikrofon aus',
+    'chart.holes':'● = Loch zu, ○ = offen – vom Mundstück aus gezählt. Antippen spielt den Ton.',
+    'chart.recorder':'Erstes Zeichen = Daumen. ● = zu, ○ = offen, vom Mundstück aus gezählt. Antippen spielt den Ton.',
+    'chart.ocarina':'Oben links, oben rechts | unten links, unten rechts. ● = zu, ○ = offen. Antippen spielt den Ton.',
+    'chart.pan':'Jede Pfeife spielt einen Ton der C-Dur-Tonleiter, links tief, rechts hoch.',
+    'chart.trumpet':'● = Ventil gedrückt (1 2 3). Die Striche zeigen, wie kräftig du pusten musst.',
+    'strong':'kräftig','thumb':'D',
+    'mcp.status':'Zustand gelesen','mcp.inst':'Instrument gewechselt','mcp.melody':'Melodie vorgespielt'
+  },
+  en:{
+    title:'Wind Instruments',sub:'Blow into the microphone and play',mic:'Microphone',instrument:'Instrument',
+    'i.whistle':'Flute','i.recorder':'Recorder','i.ocarina':'Ocarina','i.panflute':'Pan flute','i.trumpet':'Trumpet',
+    breath:'Breath',playArea:'Instrument to finger',blowpad:'Hold here = blow · higher up = harder',
+    intro:'Blow into the microphone like into a real instrument – it is usually at the bottom of the phone. Your fingers pick the notes.',
+    start:'Start microphone',touch:'Play without microphone',
+    playHint:'With the keyboard: digits 1 to 9 and 0 close the holes counting from the mouthpiece (recorder: 1 is the thumb) or pick a pipe or valve. Hold Space = blow, with Shift hard.',
+    chart:'Fingering chart',settings:'Settings',sens:'Microphone sensitivity',volume:'Volume',
+    overblow:'Overblowing: blow hard = one octave higher (flute)',echo:'Filter the instrument’s own sound out of the microphone',
+    'n.0':'C','n.1':'C♯','n.2':'D','n.3':'E♭','n.4':'E','n.5':'F','n.6':'F♯','n.7':'G','n.8':'G♯','n.9':'A','n.10':'B♭','n.11':'B',
+    'st.blow':'Blow into the microphone','st.blowing':'You’re blowing – great!','st.pad':'Hold the area below = blow','st.pipe':'Tap a pipe and blow',
+    'st.agent':'AI agent is playing …','st.idle':'Microphone off',
+    'err.api':'This browser cannot use the microphone.','err.audio':'This browser cannot generate sounds.',
+    'err.denied':'Microphone not allowed. Allow it in the site settings – or play without microphone.',
+    'err.none':'No microphone found.','err.mic':'Microphone error: {m}',
+    'mic.on':'Microphone on','mic.off':'Microphone off',
+    'chart.holes':'● = hole closed, ○ = open – counted from the mouthpiece. Tap to hear the note.',
+    'chart.recorder':'First sign = thumb. ● = closed, ○ = open, counted from the mouthpiece. Tap to hear the note.',
+    'chart.ocarina':'Top left, top right | bottom left, bottom right. ● = closed, ○ = open. Tap to hear the note.',
+    'chart.pan':'Each pipe plays one note of the C major scale, low on the left, high on the right.',
+    'chart.trumpet':'● = valve pressed (1 2 3). The bars show how hard to blow.',
+    strong:'hard',thumb:'T',
+    'mcp.status':'state read','mcp.inst':'instrument switched','mcp.melody':'melody played'
+  }
+});
+const t=Tools.t, $=Tools.$;
+const LS='wind-instruments.settings.v1';
+const s=Object.assign({inst:'whistle',volume:80,sens:5,overblow:true,echo:true},Tools.load(LS,{}));
+const save=()=>Tools.save(LS,s);
+
+/* ---------- Notes ---------- */
+const hz=m=>440*Math.pow(2,(m-69)/12);
+const noteName=m=>t('n.'+(((m%12)+12)%12))+(Math.floor(m/12)-1);
+// Agent input: English names like C5, F#5, Bb4 (H = B is accepted too)
+const PC={c:0,d:2,e:4,f:5,g:7,a:9,b:11,h:11};
+function parseNote(str){
+  const m=/^\s*([A-Ha-h])([#♯b♭]?)(-?\d)\s*$/.exec(str);
+  if(!m)return null;
+  return (Number(m[3])+1)*12+PC[m[1].toLowerCase()]+(m[2]==='#'||m[2]==='♯'?1:m[2]?-1:0);
+}
+const enName=m=>['C','C#','D','Eb','E','F','F#','G','G#','A','Bb','B'][((m%12)+12)%12]+(Math.floor(m/12)-1);
+const bits=c=>c.map(x=>x?'1':'0').join('');
+const fromBits=k=>[...k].map(ch=>ch==='1');
+
+/* ---------- Instruments ----------
+   resolve(closed, breath, last) → MIDI note (or null = silent); closed = state of the touch elements.
+   chart() → [{midi, closed, level}] for the fingering chart and agent playback. */
+const STRONG=0.9, NORMAL=0.5;
+// Tin whistle in D: number of closed holes from the mouthpiece, C natural as cross fingering
+const WHISTLE_N=[85,83,81,79,78,76,74];
+// Recorder (soprano C, baroque fingering), order: thumb, holes 1–7
+const RECORDER={'11111111':72,'11111110':74,'11111100':76,'11111011':77,'11111000':77,'11110110':78,'11110000':79,
+  '11100000':81,'11011000':82,'11000000':83,'10100000':84,'00100000':86,'00000000':85};
+const RECORDER_N=[84,83,81,79,77,76,74,72];
+function recorderNote(c){
+  const k=bits(c);
+  if(RECORDER[k]!==undefined)return RECORDER[k];
+  // Thumb open with 1–3 closed acts like the pinched (half-open) thumb: upper octave
+  if(!c[0]&&c[1]&&c[2]&&c[3])return recorderNote([true,...c.slice(1)])+12;
+  let n=0;while(n<7&&c[n+1])n++;
+  return RECORDER_N[n];
+}
+// Ocarina: Helmholtz resonator, f ~ sqrt(1 + open area); holes: top left, top right, bottom left, bottom right
+const OC_AREA=[1.25,0.5625,1.75,0.27];
+const ocarinaNote=c=>{let a=0;c.forEach((x,i)=>{if(!x)a+=OC_AREA[i];});return 72+Math.round(6*Math.log2(1+a));};
+// Trumpet in C: natural tones 2–6 above C3, valves lower by 2, 1 and 3 semitones
+const PARTIAL=[12,19,24,28,31], CUTS=[0.3,0.5,0.68,0.84], LEVELS=[0.18,0.4,0.59,0.76,0.95];
+const VALVES=[[0,0,0],[0,1,0],[1,0,0],[1,1,0],[0,1,1],[1,0,1],[1,1,1]];
+const lower=c=>(c[0]?2:0)+(c[1]?1:0)+(c[2]?3:0);
+const SCALE=[0,2,4,5,7,9,11];
+const panNote=i=>72+12*Math.floor(i/7)+SCALE[i%7];
+
+let overblown=false, partial=0;
+const INST={
+  whistle:{kind:'tube',count:6,hand:3,
+    timbre:{h:[1,.32,.1,.04,.02],noise:.1,chiff:.5,q:5,lp:5200,bright:0,bend:30,vib:8},
+    resolve(c,L){
+      if(L<=0)overblown=false;
+      else if(s.overblow){if(!overblown&&L>0.74)overblown=true;else if(overblown&&L<0.6)overblown=false;}
+      else overblown=false;
+      let m;
+      if(!c[0]&&c[1]&&c[2])m=84; // C natural: ○●●
+      else{let n=0;while(n<6&&c[n])n++;m=WHISTLE_N[n];}
+      return m+(overblown?12:0);
+    },
+    chart(){
+      const base=[...['111111','111110','111100','111000','110000','100000','011000','000000']].map(k=>({midi:this.resolveRaw(k),closed:fromBits(k),level:NORMAL}));
+      return s.overblow?base.concat(base.slice(0,6).map(e=>({midi:e.midi+12,closed:e.closed,level:STRONG}))):base;
+    },
+    resolveRaw(k){const c=fromBits(k);if(!c[0]&&c[1]&&c[2])return 84;let n=0;while(n<6&&c[n])n++;return WHISTLE_N[n];}
+  },
+  recorder:{kind:'tube',count:8,hand:4,thumb:true,
+    timbre:{h:[1,.22,.18,.05,.03],noise:.07,chiff:.4,q:6,lp:4200,bright:0,bend:30,vib:6},
+    resolve:c=>recorderNote(c),
+    chart(){
+      const seen=new Set(), out=[];
+      const add=(k,m)=>{if(!seen.has(m)){seen.add(m);out.push({midi:m,closed:fromBits(k),level:NORMAL});}};
+      ['11111111','11111110','11111100','11111011','11110110','11110000','11100000','11011000','11000000','10100000','00000000','00100000']
+        .forEach(k=>add(k,RECORDER[k]));
+      ['11111100','11111011','11110110','11110000'].forEach(k=>add('0'+k.slice(1),RECORDER[k]+12));
+      return out.sort((a,b)=>a.midi-b.midi);
+    }
+  },
+  ocarina:{kind:'ocarina',count:4,
+    timbre:{h:[1,.06,.02],noise:.05,chiff:.25,q:8,lp:3000,bright:0,bend:40,vib:5},
+    resolve:c=>ocarinaNote(c),
+    chart(){
+      // For every note the fingering with the most closed holes
+      const best=new Map();
+      for(let v=15;v>=0;v--){
+        const c=[8,4,2,1].map(b=>!!(v&b)), m=ocarinaNote(c), n=c.filter(Boolean).length;
+        if(!best.has(m)||best.get(m).n<n)best.set(m,{midi:m,closed:c,level:NORMAL,n});
+      }
+      return [...best.values()].sort((a,b)=>a.midi-b.midi);
+    }
+  },
+  panflute:{kind:'pan',
+    get count(){return pipeCount();},
+    timbre:{h:[1,.14,.05],noise:.28,chiff:.7,q:2.5,lp:4000,bright:0,bend:20,vib:4},
+    resolve:(c,L,last)=>last==null?null:panNote(last),
+    chart(){const n=pipeCount();return Array.from({length:n},(_,i)=>({midi:panNote(i),closed:Array.from({length:n},(_,j)=>j===i),level:NORMAL}));}
+  },
+  trumpet:{kind:'trumpet',count:3,
+    timbre:{h:[1,.85,.72,.6,.5,.42,.34,.26,.2,.15,.11,.08,.06,.04],noise:.02,chiff:.15,q:4,lp:700,bright:4200,bend:10,vib:5},
+    resolve(c,L){
+      if(L>0){
+        // Hysteresis so the natural tone does not flicker at a border
+        const up=CUTS.filter(x=>L>=x+0.03).length, down=CUTS.filter(x=>L>=x-0.03).length;
+        if(up>partial)partial=up;else if(down<partial)partial=down;
+      }
+      return 48+PARTIAL[partial]-lower(c);
+    },
+    chart(){
+      const seen=new Map();
+      PARTIAL.forEach((p,pi)=>VALVES.forEach(v=>{
+        const m=48+p-lower(v);
+        if(!seen.has(m))seen.set(m,{midi:m,closed:v.map(Boolean),level:LEVELS[pi],partial:pi});
+      }));
+      return [...seen.values()].sort((a,b)=>a.midi-b.midi);
+    }
+  }
+};
+const play=$('play'), instEl=$('inst');
+function pipeCount(){const w=instEl.clientWidth||play.clientWidth||360;return Math.max(8,Math.min(15,Math.floor((w+4)/46)));}
+let cur=INST[s.inst]?s.inst:'whistle';
+
+/* ---------- Sound: one voice, breath drives volume, brightness and pitch ---------- */
+let ctx=null, nodes=null;
+function audio(){
+  if(!ctx){
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC)return null;
+    try{ctx=new AC();}catch(e){Tools.diag.log('audio failed',{error:String(e)});return null;}
+    const osc=ctx.createOscillator(), tone=ctx.createGain(), lp=ctx.createBiquadFilter(), env=ctx.createGain(), vol=ctx.createGain();
+    const len=ctx.sampleRate*2, buf=ctx.createBuffer(1,len,ctx.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+    const noise=ctx.createBufferSource();noise.buffer=buf;noise.loop=true;
+    const bp=ctx.createBiquadFilter();bp.type='bandpass';
+    const ng=ctx.createGain();
+    const lfo=ctx.createOscillator(), lfoGain=ctx.createGain();lfo.frequency.value=5.2;
+    lfo.connect(lfoGain).connect(osc.detune);
+    lp.type='lowpass';env.gain.value=0;
+    osc.connect(tone).connect(lp).connect(env);
+    noise.connect(bp).connect(ng).connect(env);
+    env.connect(vol).connect(ctx.destination);
+    osc.start();noise.start();lfo.start();
+    nodes={osc,tone,lp,env,vol,bp,ng,lfoGain};
+    setTimbre();setVolume();
+    Tools.diag.log('audio ready',{sampleRate:ctx.sampleRate});
+  }
+  if(ctx.state==='suspended')ctx.resume().catch(()=>{});
+  return ctx;
+}
+function setTimbre(){
+  if(!nodes)return;
+  const tb=INST[cur].timbre, real=new Float32Array(tb.h.length+1), imag=new Float32Array(tb.h.length+1);
+  tb.h.forEach((a,i)=>{imag[i+1]=a;});
+  nodes.osc.setPeriodicWave(ctx.createPeriodicWave(real,imag));
+  nodes.bp.Q.value=tb.q;nodes.ng.gain.value=tb.noise;nodes.lfoGain.gain.value=tb.vib;
+}
+function setVolume(){if(nodes)nodes.vol.gain.setTargetAtTime(Math.pow(s.volume/100,2)*0.9,ctx.currentTime,0.02);}
+let sounding=false, lastMidi=null;
+function sound(midi,L){
+  if(!nodes)return;
+  const now=ctx.currentTime, tb=INST[cur].timbre, on=midi!=null&&L>0;
+  if(!on){if(sounding)nodes.env.gain.setTargetAtTime(0,now,0.035);sounding=false;return;}
+  const f=hz(midi)*Math.pow(2,(L-0.5)*tb.bend/1200);
+  if(!sounding||midi!==lastMidi){
+    // Note start: a short puff of air ("chiff")
+    nodes.ng.gain.cancelScheduledValues(now);
+    nodes.ng.gain.setValueAtTime(tb.noise+tb.chiff,now);
+    nodes.ng.gain.setTargetAtTime(tb.noise,now+0.01,0.03);
+  }
+  if(!sounding){nodes.osc.frequency.setValueAtTime(f,now);nodes.bp.frequency.setValueAtTime(f,now);}
+  else{nodes.osc.frequency.setTargetAtTime(f,now,0.012);nodes.bp.frequency.setTargetAtTime(f,now,0.012);}
+  nodes.lp.frequency.setTargetAtTime(Math.min(15000,tb.lp+tb.bright*L),now,0.03);
+  nodes.env.gain.setTargetAtTime(Math.pow(L,0.7)*0.6,now,0.02);
+  sounding=true;lastMidi=midi;
+}
+
+/* ---------- Microphone: breath = rumble below 250 Hz above the noise floor ---------- */
+let mode='idle', mic=null, floorDb=null, smooth=0, blowing=false, micWanted=false;
+const THR_ON=0.08, THR_OFF=0.03;
+async function startMic(){
+  const errEl=$('introErr');errEl.textContent='';
+  const c=audio();
+  if(!c){errEl.textContent=t('err.audio');return false;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){errEl.textContent=t('err.api');Tools.diag.log('microphone api missing');return false;}
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:s.echo,noiseSuppression:false,autoGainControl:false},video:false});}
+  catch(e){
+    Tools.diag.log('microphone failed',{name:e.name,error:e.message});
+    errEl.textContent=e.name==='NotAllowedError'?t('err.denied'):e.name==='NotFoundError'?t('err.none'):t('err.mic',{m:e.message});
+    if(mode!=='idle')setMode('idle');
+    return false;
+  }
+  const src=c.createMediaStreamSource(stream), an=c.createAnalyser();
+  an.fftSize=2048;an.smoothingTimeConstant=0.2;src.connect(an);
+  const bin=c.sampleRate/an.fftSize;
+  mic={stream,src,an,buf:new Float32Array(an.frequencyBinCount),lo:Math.max(1,Math.ceil(40/bin)),hi:Math.floor(250/bin)};
+  floorDb=null;smooth=0;micWanted=true;
+  const tr=stream.getAudioTracks()[0], st=tr&&tr.getSettings?tr.getSettings():{};
+  Tools.diag.log('microphone on',{echoCancellation:st.echoCancellation,noiseSuppression:st.noiseSuppression,autoGainControl:st.autoGainControl});
+  setMode('mic');
+  return true;
+}
+function stopMic(keep){
+  if(!mic)return;
+  mic.stream.getTracks().forEach(tr=>tr.stop());
+  try{mic.src.disconnect();}catch(e){}
+  mic=null;if(!keep)micWanted=false;
+  Tools.diag.log('microphone off');
+}
+function micBreath(){
+  if(!mic)return 0;
+  mic.an.getFloatFrequencyData(mic.buf);
+  let p=0;for(let i=mic.lo;i<=mic.hi;i++){const v=mic.buf[i];if(v>-200)p+=Math.pow(10,v/10);}
+  const db=Math.max(-100,10*Math.log10(p+1e-12));
+  // Noise floor: falls quickly, rises slowly (only while not blowing)
+  if(floorDb==null)floorDb=Math.min(db,-40);
+  else if(db<floorDb)floorDb+=(db-floorDb)*0.3;
+  else if(!blowing)floorDb+=Math.min(db-floorDb,0.05);
+  floorDb=Math.max(-90,floorDb);
+  const range=48-s.sens*4;
+  const raw=Math.max(0,Math.min(1,(db-floorDb-6)/range));
+  smooth+=(raw-smooth)*(raw>smooth?0.5:0.25);
+  return smooth;
+}
+function setMode(m){
+  mode=m;play.dataset.mode=m;
+  $('intro').hidden=m!=='idle';
+  $('blowpad').hidden=m!=='touch';
+  const on=m==='mic';
+  $('btnMic').setAttribute('aria-pressed',String(on));
+  $('micOff').style.display=on?'none':'';
+  $('meterThr').style.insetInlineStart=(THR_ON*100)+'%';
+}
+
+/* ---------- Fingers: every pointer closes the element under it (slide to change) ---------- */
+const pointers=new Map();  // pointerId → index | 'blow'
+const keys=new Map();      // key code → index
+let blowTouch=0, keyBlow=0;
+function targetAt(x,y){
+  const el=document.elementFromPoint(x,y);
+  if(!el||!play.contains(el))return null;
+  if(el.closest('[data-blow]'))return 'blow';
+  const h=el.closest('[data-i]');
+  return h?Number(h.dataset.i):null;
+}
+function track(e){
+  const tg=targetAt(e.clientX,e.clientY);
+  pointers.delete(e.pointerId);  // re-insert: the latest touch counts for the pan flute
+  if(tg!=null)pointers.set(e.pointerId,tg);
+  if(tg==='blow'){const r=$('blowpad').getBoundingClientRect();blowTouch=0.25+0.75*Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height));}
+}
+play.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.intro'))return;
+  audio();cancelAuto();
+  e.preventDefault();
+  try{play.setPointerCapture(e.pointerId);}catch(err){}
+  track(e);
+});
+play.addEventListener('pointermove',e=>{if(pointers.has(e.pointerId)||e.buttons)track(e);});
+const lift=e=>{pointers.delete(e.pointerId);};
+['pointerup','pointercancel','lostpointercapture'].forEach(n=>play.addEventListener(n,lift));
+play.addEventListener('contextmenu',e=>e.preventDefault());
+function closedState(){
+  const n=INST[cur].count, c=new Array(n).fill(false);
+  let last=null, padBlow=false;
+  const mark=i=>{if(i<n){c[i]=true;last=i;}};
+  for(const v of pointers.values()){if(v==='blow')padBlow=true;else mark(v);}
+  for(const v of keys.values())mark(v);
+  if(auto){auto.closed.forEach((x,i)=>{if(x)mark(i);});}
+  return {c,last,padBlow};
+}
+const KEYS=['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0'];
+const typing=el=>el&&(el.closest('input,textarea,select,dialog,details')!=null);
+document.addEventListener('keydown',e=>{
+  if(typing(e.target)||e.ctrlKey||e.metaKey||e.altKey)return;
+  const i=KEYS.indexOf(e.code);
+  if(i>=0){e.preventDefault();audio();cancelAuto();keys.delete(e.code);keys.set(e.code,i);return;}
+  if(e.code==='Space'){e.preventDefault();if(!e.repeat){audio();cancelAuto();}keyBlow=e.shiftKey?STRONG:NORMAL;}
+});
+document.addEventListener('keyup',e=>{
+  keys.delete(e.code);
+  if(e.code==='Space')keyBlow=0;
+  if(e.key==='Shift'&&keyBlow)keyBlow=NORMAL;
+});
+window.addEventListener('blur',()=>{keys.clear();keyBlow=0;pointers.clear();});
+
+/* ---------- Draw the instrument ---------- */
+function holeHtml(i,cls,label,size){
+  return `<div class="hole${cls?' '+cls:''}" data-i="${i}"${size?` style="--ps:${size}%"`:''}><span class="pit">${label}</span></div>`;
+}
+let builtCount=0;
+function build(){
+  const ins=INST[cur], k=ins.kind;
+  let h='';
+  if(k==='tube'){
+    h='<div class="tube"><div class="mouth"></div>';
+    const start=ins.thumb?1:0;
+    for(let i=start;i<ins.count;i++){
+      if(i-start===3)h+='<div class="gap"></div>';
+      const hole=holeHtml(i,'',String(i-start+1));
+      h+=ins.thumb&&i===1?`<div class="pair">${holeHtml(0,'thumb',Tools.esc(t('thumb')))}${hole}</div>`:hole;
+    }
+    h+='</div>';
+  }else if(k==='ocarina'){
+    // Grid order: top left, top right, bottom left, bottom right; pit size follows the hole area
+    h='<div class="ocarina">'+OC_AREA.map((a,i)=>holeHtml(i,'','',Math.round(34+40*Math.sqrt(a/1.75)))).join('')+'<div class="mouth"></div></div>';
+  }else if(k==='pan'){
+    const n=pipeCount();
+    h='<div class="pipes">'+Array.from({length:n},(_,i)=>`<div class="pipe" data-i="${i}" style="height:${Math.round(100-55*i/(n-1))}%">${Tools.esc(noteName(panNote(i)))}</div>`).join('')+'</div>';
+  }else{
+    h='<div class="trumpet">'+[0,1,2].map(i=>holeHtml(i,'',String(i+1))).join('')+'</div>';
+  }
+  instEl.innerHTML=h;
+  builtCount=ins.count;
+  $('ladder').hidden=k!=='trumpet';
+  document.querySelectorAll('#insts button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.inst===cur)));
+  lastRender='';
+  renderChart();
+}
+function setInstrument(id){
+  if(!INST[id])return;
+  cur=id;s.inst=id;save();
+  overblown=false;partial=0;pointers.clear();keys.clear();cancelAuto();
+  build();setTimbre();
+  Tools.diag.log('instrument',{id});
+}
+$('insts').addEventListener('click',e=>{const b=e.target.closest('[data-inst]');if(b)setInstrument(b.dataset.inst);});
+window.addEventListener('resize',()=>{if(INST[cur].kind==='pan'&&pipeCount()!==builtCount)build();});
+
+/* ---------- Fingering chart ---------- */
+function dotsHtml(e){
+  const ins=INST[cur];
+  if(ins.kind==='pan')return '';
+  const c=e.closed;
+  let h='<span class="dots" aria-hidden="true">';
+  c.forEach((x,i)=>{
+    if(ins.kind==='tube'&&i===(ins.thumb?4:3))h+='<span class="sep"></span>';
+    if(ins.kind==='ocarina'&&i===2)h+='<span class="sep">|</span>';
+    h+=`<i class="${x?'c':''}${ins.thumb&&i===0?' t':''}"></i>`;
+  });
+  if(ins.kind==='trumpet')h+='<span class="sep"></span>'+'▮'.repeat(e.partial+1);
+  h+='</span>';
+  // Read out as ●/○; the visible word "hard" stays part of the name
+  h+=`<span class="sr-only"> ${e.closed.map(x=>x?'●':'○').join('')}</span>`;
+  if(e.level===STRONG)h+=`<span class="dots"> ${Tools.esc(t('strong'))}</span>`;
+  return h;
+}
+function renderChart(){
+  const ins=INST[cur], key={tube:ins.thumb?'chart.recorder':'chart.holes',ocarina:'chart.ocarina',pan:'chart.pan',trumpet:'chart.trumpet'}[ins.kind];
+  $('chartInfo').textContent=t(key);
+  $('chart').innerHTML=ins.chart().map((e,i)=>`<li><button type="button" data-c="${i}">${Tools.esc(noteName(e.midi))}${dotsHtml(e)}</button></li>`).join('');
+}
+$('chart').addEventListener('click',e=>{
+  const b=e.target.closest('[data-c]');if(!b)return;
+  audio();
+  const en=INST[cur].chart()[Number(b.dataset.c)];
+  if(en)playSeq([{entry:en,ms:700}]);
+});
+
+/* ---------- Automatic playback (chart, agent): shows the fingering and blows ---------- */
+let auto=null, autoTimer=0, autoSeq=null;
+function cancelAuto(){clearTimeout(autoTimer);auto=null;autoSeq=null;}
+function playSeq(seq){
+  cancelAuto();autoSeq=seq;let i=0;
+  const step=()=>{
+    if(autoSeq!==seq)return;
+    if(i>=seq.length){auto=null;autoSeq=null;return;}
+    const it=seq[i++];
+    if(!it.entry){auto={closed:[],level:0};autoTimer=setTimeout(step,it.ms);return;}
+    auto={closed:it.entry.closed,level:it.entry.level};
+    // Short gap before the next note (tonguing)
+    const gap=Math.min(60,it.ms*0.12);
+    autoTimer=setTimeout(()=>{if(autoSeq!==seq)return;auto={closed:it.entry.closed,level:0};autoTimer=setTimeout(step,gap);},it.ms-gap);
+  };
+  step();
+}
+
+/* ---------- Main loop ---------- */
+let lastRender='';
+function frame(){
+  const {c,last,padBlow}=closedState();
+  let L=0;
+  if(mode==='mic'){
+    const b=micBreath();
+    if(!blowing&&b>THR_ON)blowing=true;else if(blowing&&b<THR_OFF)blowing=false;
+    if(blowing)L=b;
+  }else blowing=false;
+  if(padBlow)L=Math.max(L,blowTouch);
+  if(keyBlow)L=Math.max(L,keyBlow);
+  if(auto&&auto.level)L=Math.max(L,auto.level);
+  const ins=INST[cur], midi=ins.resolve(c,L,last), on=L>0&&midi!=null;
+  sound(on?midi:null,L);
+  // Meter shows the raw breath in microphone mode, otherwise what is played
+  const meter=mode==='mic'?smooth:L;
+  $('meterBar').style.width=Math.round(meter*100)+'%';
+  const st=auto?t('st.agent'):on?(mode==='mic'?t('st.blowing'):''):ins.kind==='pan'&&last==null?t('st.pipe'):mode==='mic'?t('st.blow'):mode==='touch'?t('st.pad'):t('st.idle');
+  const r=[bits(c),midi,on,st,Math.round(meter*20),partial,padBlow,Tools.lang()].join('|');
+  if(r!==lastRender){
+    lastRender=r;
+    instEl.querySelectorAll('[data-i]').forEach(el=>el.classList.toggle('on',!!c[Number(el.dataset.i)]));
+    $('blowpad').classList.toggle('on',padBlow);
+    const n=$('note');n.textContent=midi==null?'–':noteName(midi);n.classList.toggle('silent',!on);
+    play.dataset.note=midi==null?'':String(midi);play.dataset.blowing=on?'1':'0';
+    $('status').textContent=st;
+    $('meter').setAttribute('aria-valuenow',String(Math.round(meter*100)));
+    if(ins.kind==='trumpet')$('ladder').querySelectorAll('b').forEach((b,i)=>b.classList.toggle('on',i<=partial));
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Buttons, settings ---------- */
+$('btnStart').addEventListener('click',()=>startMic());
+$('btnTouch').addEventListener('click',()=>{if(!audio()){$('introErr').textContent=t('err.audio');return;}setMode('touch');});
+$('btnMic').addEventListener('click',async()=>{
+  if(mode==='mic'){stopMic();setMode('touch');Tools.toast(t('mic.off'));}
+  else if(await startMic())Tools.toast(t('mic.on'));
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){if(mic){stopMic(true);setMode('touch');}}
+  else if(micWanted&&!mic)startMic();
+});
+const sens=$('sens'), vol=$('volume'), ob=$('optOverblow'), echo=$('optEcho');
+function showSettings(){
+  sens.value=s.sens;$('sensOut').textContent=Tools.fmt(s.sens,0);
+  vol.value=s.volume;$('volumeOut').textContent=Tools.fmt(s.volume,0)+' %';
+  ob.checked=s.overblow;echo.checked=s.echo;
+}
+sens.addEventListener('input',()=>{s.sens=Number(sens.value);save();showSettings();});
+vol.addEventListener('input',()=>{s.volume=Number(vol.value);save();showSettings();setVolume();});
+ob.addEventListener('change',()=>{s.overblow=ob.checked;save();renderChart();});
+echo.addEventListener('change',async()=>{
+  s.echo=echo.checked;save();
+  if(mic){stopMic();await startMic();}  // constraint only applies to a new stream
+});
+Tools.onLang(()=>{build();lastRender='';});
+
+/* ---------- WebMCP ---------- */
+const IDS=Object.keys(INST);
+const status=()=>({instrument:cur,microphone:mode==='mic',blowing:play.dataset.blowing==='1',
+  note:play.dataset.note?enName(Number(play.dataset.note)):null,
+  range:(()=>{const ch=INST[cur].chart();return {lowest:enName(ch[0].midi),highest:enName(ch[ch.length-1].midi)};})(),
+  playable_notes:INST[cur].chart().map(e=>enName(e.midi))});
+Tools.mcp.register({
+  name:'get_status',title:'Read the instrument state',label:'mcp.status',readOnly:true,
+  description:'Reads which wind instrument is chosen (whistle, recorder, ocarina, panflute, trumpet), whether the microphone is on, whether the user is blowing and which note sounds right now, plus the range and all notes the instrument can play (English note names like F#5, Bb4).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:status
+});
+Tools.mcp.register({
+  name:'set_instrument',title:'Choose the instrument',label:'mcp.inst',
+  description:'Switches the app to another wind instrument: whistle (tin whistle in D), recorder (soprano, baroque fingering), ocarina (4 holes), panflute or trumpet (3 valves). Returns the new state with range and playable notes.',
+  inputSchema:{type:'object',properties:{instrument:{type:'string',enum:IDS,description:'The instrument to choose.'}},required:['instrument'],additionalProperties:false},
+  execute:({instrument})=>{setInstrument(instrument);return status();}
+});
+Tools.mcp.register({
+  name:'play_melody',title:'Play a melody',label:'mcp.melody',
+  description:'Plays a melody on the chosen instrument; the fingering of every note is shown on the screen so the user can learn it. Notes are English names with octave (C5, F#5, Bb4) or "rest". Only notes of the instrument can be played (see get_status). Browsers only play sound after the user has tapped the page once; audible says whether it can be heard. Returns the number of notes and the length in milliseconds.',
+  inputSchema:{type:'object',properties:{
+    notes:{type:'array',maxItems:64,description:'The melody in order.',items:{type:'object',properties:{
+      note:{type:'string',maxLength:4,description:'Note name with octave like G5, F#5, Bb4, or "rest".'},
+      beats:{type:'number',minimum:0.25,maximum:8,description:'Length in beats. Default 1.'}
+    },required:['note'],additionalProperties:false}},
+    tempo:{type:'integer',minimum:40,maximum:240,description:'Beats per minute. Default 100.'}
+  },required:['notes'],additionalProperties:false},
+  execute:({notes,tempo})=>{
+    if(!notes.length)throw new Error('notes must have at least 1 item');
+    const beat=60000/(tempo||100), ch=INST[cur].chart(), seq=[], bad=[];
+    for(const n of notes){
+      const ms=Math.round((n.beats||1)*beat);
+      if(/^\s*rest\s*$/i.test(n.note)){seq.push({entry:null,ms});continue;}
+      const m=parseNote(n.note), en=m==null?null:ch.find(e=>e.midi===m);
+      if(!en)bad.push(n.note);else seq.push({entry:en,ms});
+    }
+    if(bad.length)throw new Error(`Not playable on the ${cur}: ${bad.join(', ')}. Playable: ${ch.map(e=>enName(e.midi)).join(', ')}`);
+    const c=audio();
+    playSeq(seq);
+    return {instrument:cur,notes:seq.length,duration_ms:seq.reduce((a,b)=>a+b.ms,0),audible:!!c&&c.state==='running'};
+  }
+});
+
+Tools.diag.info(()=>({mode,instrument:cur,microphone:!!mic,blowing,floorDb:floorDb==null?null:Math.round(floorDb),
+  audio:ctx?ctx.state:'none',sampleRate:ctx?ctx.sampleRate:null,sensitivity:s.sens,overblow:s.overblow,echo:s.echo}));
+
+showSettings();setMode('idle');build();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
