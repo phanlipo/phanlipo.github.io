@@ -403,16 +403,18 @@ test('share target: several photos shared to the installed app become pages in t
   const pdf = (await savePdf(page)).pdf;
   expect((await measure(page, pdf.pages[0].jpeg, REGIONS)).markBR).toBeLessThan(80);   // b first
   expect((await measure(page, pdf.pages[1].jpeg, REGIONS)).markTL).toBeLessThan(80);   // then a
-  // picked up once: nothing left in the cache, a reload adds nothing
+  // picked up once: nothing left in the cache, a reload adds nothing (only the two kept pages come back)
   expect(await page.evaluate(async () => (await (await caches.open('share:doc-scanner')).keys()).length)).toBe(0);
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).pages?.length)).toBe(2);
   await page.goto(`${URL_}?shared=1`);
-  await expect(page.locator('#pageCount')).toHaveText('0');
+  await expect(page.locator('#addInfo')).toHaveText('2 Seite(n) vom letzten Mal wieder da.');
+  await expect(page.locator('#pageCount')).toHaveText('2');
 
-  // a single shared photo opens the crop view
+  // a single shared photo is added after the kept pages and opens the crop view
   expect(await share([['a.png', a.png]])).toBe(true);
   await page.goto(`${URL_}?shared=1`);
   await expect(page.locator('#editor')).toBeVisible();
-  await expect(page.locator('#pageCount')).toHaveText('1');
+  await expect(page.locator('#pageCount')).toHaveText('3');
 });
 
 test('opened with the installed app (Windows "Open with"): several photos become pages in that order', async ({ page }) => {
