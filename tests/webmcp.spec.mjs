@@ -2019,3 +2019,56 @@ test.describe('raffle tools', () => {
     expect((await call(page, 'raffle_get_results', {})).result.draws).toEqual([]);
   });
 });
+
+test.describe('wind-instruments tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await open(page, '/wind-instruments/');
+  });
+
+  test('get_status and set_instrument: range and playable notes, switched in the app', async ({ page }) => {
+    let r = await call(page, 'wind_instruments_get_status', {});
+    expect(r.ok).toBe(true);
+    expect(r.result).toMatchObject({ instrument: 'whistle', microphone: false, blowing: false, range: { lowest: 'D5', highest: 'B6' } });
+    expect(r.result.playable_notes).toContain('F#5');
+    r = await call(page, 'wind_instruments_set_instrument', { instrument: 'ocarina' });
+    expect(r.ok).toBe(true);
+    expect(r.result).toMatchObject({ instrument: 'ocarina', range: { lowest: 'C5', highest: 'D6' } });
+    await expect(page.locator('[data-inst="ocarina"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#inst .hole')).toHaveCount(4);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Instrument gewechselt');
+    r = await call(page, 'wind_instruments_set_instrument', { instrument: 'tuba' });
+    expect(r.ok).toBe(false);
+  });
+
+  test('play_melody: shows each fingering in turn, length from the tempo', async ({ page }) => {
+    // Tin whistle: G5 = 3 holes closed, A5 = 2, B5 = 1; 120 BPM → 500 ms per beat
+    const r = await call(page, 'wind_instruments_play_melody', { tempo: 120, notes: [
+      { note: 'G5', beats: 2 }, { note: 'rest' }, { note: 'A5', beats: 2 }, { note: 'B5', beats: 2 }] });
+    expect(r.ok).toBe(true);
+    expect(r.result).toMatchObject({ instrument: 'whistle', notes: 4, duration_ms: 3500 });
+    const play = page.locator('#play');
+    await expect(play).toHaveAttribute('data-note', '79');
+    await expect(page.locator('#inst .hole.on')).toHaveCount(3);
+    await expect(page.locator('#status')).toHaveText('KI-Agent spielt vor …');
+    await expect(play).toHaveAttribute('data-note', '81', { timeout: 3000 });
+    await expect(page.locator('#inst .hole.on')).toHaveCount(2);
+    await expect(play).toHaveAttribute('data-note', '83', { timeout: 3000 });
+    // Done: silent again
+    await expect(play).toHaveAttribute('data-blowing', '0', { timeout: 3000 });
+    await expect(page.locator('#inst .hole.on')).toHaveCount(0);
+  });
+
+  test('play_melody: overblown notes and H are understood, unplayable notes are rejected', async ({ page }) => {
+    let r = await call(page, 'wind_instruments_play_melody', { notes: [{ note: 'D6' }] });
+    expect(r.ok).toBe(true);
+    await expect(page.locator('#play')).toHaveAttribute('data-note', '86');
+    r = await call(page, 'wind_instruments_play_melody', { notes: [{ note: 'H5' }, { note: 'C5' }, { note: 'Eb5' }] });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Not playable on the whistle: C5, Eb5');
+    r = await call(page, 'wind_instruments_play_melody', { notes: [{ note: 'G5', beats: 9 }] });
+    expect(r.ok).toBe(false);
+    r = await call(page, 'wind_instruments_play_melody', { notes: [] });
+    expect(r.ok).toBe(false);
+  });
+});
