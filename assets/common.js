@@ -329,6 +329,8 @@ window.Tools = (function () {
   }
   function clearData() {
     for (const k of ownKeys()) remove(k);
+    // Files an app keeps on the device (Cache Storage "file:<app>", e.g. the PDF open in pdf-viewer)
+    try { if ('caches' in window) caches.delete('file:' + appId()).catch(() => {}); } catch (_) {}
   }
 
   function downloadFile(file) {

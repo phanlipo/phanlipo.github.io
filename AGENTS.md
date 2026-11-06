@@ -165,6 +165,7 @@ Jede App bietet im Menü (☰) den einklappbaren Bereich **„Daten sichern & ü
 **Regeln für Apps**
 
 - Alles, was dauerhaft gespeichert wird, liegt im `localStorage` unter einem eigenen Präfix, angegeben in `<meta name="tool:storage" content="<präfix>.">` (mehrere kommagetrennt). Für neue Tools: `<tool-name>.`. Kein IndexedDB/Cookies ohne Erweiterung dieses Standards.
+- **Ausnahme Dateien:** Eine geöffnete Datei, die eine App bis zum nächsten Start behält (Beispiel `pdf-viewer`: die zuletzt geöffnete PDF, damit sie auch ein Update-Neuladen übersteht), liegt im Cache Storage unter `file:<app>` – zu groß für `localStorage` und die Sicherung. Nur mit Schalter im Menü (Standard an), Knopf zum Schließen, in der Hilfe erklärt; *Alle Daten löschen* entfernt den Cache mit (`Tools.data.clearData`). Eine beschädigte Datei wird beim Start verworfen statt jedes Mal zu scheitern.
 - Die Tests schlagen fehl, wenn eine Seite einen Schlüssel außerhalb ihrer Präfixe schreibt – sonst fehlte er in der Sicherung.
 - Ändert sich das Format gespeicherter Daten: Schlüssel-Version erhöhen (`…v2`) **und** beim Laden alte Versionen (`…v1`) übernehmen. So lassen sich auch ältere Sicherungen weiter laden.
 
