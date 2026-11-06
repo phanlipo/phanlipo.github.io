@@ -1,4 +1,5 @@
-// Markdown-Editor: formatting buttons (text and view), editing in both displays, files (history), download, share, open.
+// Markdown-Editor: formatting buttons (text and view), editing in both displays, files (history), download, share, open,
+// saving straight into the file (File System Access API, with a fake picker and file handles).
 import { readFileSync } from 'node:fs';
 import { test, expect, openMenu, closeMenu, mockAndroidShare } from './helpers.mjs';
 
@@ -248,7 +249,11 @@ test('no share button without Web Share', async ({ page }) => {
   await expect(page.locator('#btnShare')).toBeHidden();
 });
 
-test('open a file from the device', async ({ page }) => {
+test('open a file from the device (without File System Access: file input)', async ({ page }) => {
+  // Firefox, Safari, iPhone: no showOpenFilePicker – the app uses <input type=file>
+  await page.addInitScript(() => { delete window.showOpenFilePicker; delete window.showSaveFilePicker; });
+  await page.goto('/markdown-editor/');
+  await expect(page.locator('#btnSaveAs')).toBeHidden();
   await raw(page).fill('vorher');
   await openMenu(page);
   const chooser = page.waitForEvent('filechooser');
@@ -258,6 +263,174 @@ test('open a file from the device', async ({ page }) => {
   await expect(page.locator('#name')).toHaveValue('Plan');
   await openMenu(page);
   await expect(page.locator('#files li .name')).toHaveText(['Plan', 'vorher']);
+});
+
+/* Fake File System Access API: files on the "disk" are handles in window.__handles; written contents land
+   in window.__written. Handles from the open picker start without write permission, like in Chrome. */
+async function mockFileAccess(page, { files = {}, saveName = 'Neu.md', permission = 'granted' } = {}) {
+  await page.addInitScript(([files, saveName, permission]) => {
+    window.__written = [];
+    window.__asked = 0;
+    const handle = (name, text, perm) => {
+      const h = {
+        kind: 'file', name, text, perm,
+        getFile: async () => new File([h.text], name, { type: 'text/markdown' }),
+        queryPermission: async () => h.perm,
+        requestPermission: async () => { window.__asked++; return (h.perm = permission); },
+        isSameEntry: async o => o === h,
+        createWritable: async () => {
+          if (h.perm !== 'granted') throw new DOMException('no permission', 'NotAllowedError');
+          let buf = '';
+          return { write: async d => { buf += d; }, close: async () => { h.text = buf; window.__written.push({ name, text: buf }); }, abort: async () => {} };
+        },
+      };
+      return h;
+    };
+    window.__handles = Object.fromEntries(Object.entries(files).map(([n, t]) => [n, handle(n, t, 'prompt')]));
+    window.showOpenFilePicker = async () => {
+      const h = window.__handles[window.__pick];
+      if (!h) throw new DOMException('cancelled', 'AbortError');
+      return [h];
+    };
+    window.showSaveFilePicker = async o => {
+      window.__suggested = o.suggestedName;
+      if (!saveName) throw new DOMException('cancelled', 'AbortError');
+      return (window.__handles[saveName] = handle(saveName, '', 'granted'));
+    };
+  }, [files, saveName, permission]);
+}
+const written = page => page.evaluate(() => window.__written);
+const saveBtn = page => page.locator('#btnDownload');
+
+test.describe('save into the file (File System Access)', () => {
+  test('opened file is linked: the button saves back into it, a dot shows unsaved changes', async ({ page }) => {
+    await mockFileAccess(page, { files: { 'Plan.md': '# Plan\r\n\r\n- eins\r\n' } });
+    await page.goto('/markdown-editor/');
+    await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Herunterladen');
+    await page.evaluate(() => { window.__pick = 'Plan.md'; });
+    await openMenu(page);
+    await page.click('#btnOpen');
+    await expect(raw(page)).toHaveValue('# Plan\n\n- eins\n');
+    await expect(page.locator('#name')).toHaveValue('Plan');
+    await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Speichern in Plan.md');
+    await expect(saveBtn(page)).not.toHaveClass(/unsaved/);
+    await raw(page).fill('# Plan\n\n- eins\n- zwei\n');
+    await expect(saveBtn(page)).toHaveClass(/unsaved/);
+    await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Speichern in Plan.md (ungespeicherte Änderungen)');
+    // No download: the text goes into the same file, after asking for permission once
+    let downloads = 0;
+    page.on('download', () => downloads++);
+    await saveBtn(page).click();
+    await expect.poll(() => written(page)).toEqual([{ name: 'Plan.md', text: '# Plan\n\n- eins\n- zwei\n' }]);
+    await expect(page.locator('.toast').last()).toContainText('Gespeichert: Plan.md');
+    await expect(saveBtn(page)).not.toHaveClass(/unsaved/);
+    expect(await page.evaluate(() => window.__asked)).toBe(1);
+    // Edits in the view are saved as Markdown, too
+    await page.locator('#views [data-v="render"]').click();
+    await view(page).locator('li').last().click();
+    await page.keyboard.press('End');
+    await page.keyboard.type(' drei');
+    await expect(saveBtn(page)).toHaveClass(/unsaved/);
+    await saveBtn(page).click();
+    await expect.poll(async () => (await written(page)).length).toBe(2);
+    expect((await written(page))[1].text).toBe('# Plan\n\n- eins\n- zwei drei');
+    expect(await page.evaluate(() => window.__asked)).toBe(1);
+    expect(downloads).toBe(0);
+    // Another document is not linked: the button downloads again
+    await page.click('#btnNew');
+    await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Herunterladen');
+  });
+
+  test('opening the same file again switches to its document', async ({ page }) => {
+    await mockFileAccess(page, { files: { 'Plan.md': 'eins' } });
+    await page.goto('/markdown-editor/');
+    await page.evaluate(() => { window.__pick = 'Plan.md'; });
+    await openMenu(page);
+    await page.click('#btnOpen');
+    await expect(raw(page)).toHaveValue('eins');
+    await page.click('#btnNew');
+    await raw(page).fill('andere');
+    // Changed on the disk in the meantime: the document takes the new text (nothing unsaved)
+    await page.evaluate(() => { window.__handles['Plan.md'].text = 'eins, geändert'; });
+    await openMenu(page);
+    await page.click('#btnOpen');
+    await expect(raw(page)).toHaveValue('eins, geändert');
+    await openMenu(page);
+    await expect(page.locator('#files li .name')).toHaveText(['Plan', 'andere']);
+  });
+
+  test('save as: picks a new file, the document takes its name and stays linked; Ctrl+S saves', async ({ page }) => {
+    await mockFileAccess(page, { saveName: 'Bericht final.md' });
+    await page.goto('/markdown-editor/');
+    await raw(page).fill('# Bericht\n\nText');
+    await openMenu(page);
+    await expect(page.locator('#btnSaveAs')).toBeVisible();
+    await page.click('#btnSaveAs');
+    await expect.poll(() => written(page)).toEqual([{ name: 'Bericht final.md', text: '# Bericht\n\nText' }]);
+    expect(await page.evaluate(() => window.__suggested)).toBe('Bericht.md');
+    await expect(page.locator('#name')).toHaveValue('Bericht final');
+    await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Speichern in Bericht final.md');
+    expect(await page.evaluate(() => window.__asked)).toBe(0);
+    await raw(page).fill('# Bericht\n\nText 2');
+    await page.keyboard.press('Control+s');
+    await expect.poll(async () => (await written(page)).at(-1)).toEqual({ name: 'Bericht final.md', text: '# Bericht\n\nText 2' });
+    await openMenu(page);
+    await expect(page.locator('#files li .name')).toHaveText(['Bericht final']);
+  });
+
+  test('Ctrl+S on an unlinked document asks where to save; cancelling changes nothing', async ({ page }) => {
+    await mockFileAccess(page, { saveName: '' });
+    await page.goto('/markdown-editor/');
+    await raw(page).fill('Notiz');
+    await raw(page).press('Control+s');
+    await expect.poll(() => page.evaluate(() => window.__suggested)).toBe('Notiz.md');
+    expect(await written(page)).toEqual([]);
+    await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Herunterladen');
+    await expect(page.locator('.toast')).toHaveCount(0);
+  });
+
+  test('permission refused: a message, nothing written, the file stays linked', async ({ page }) => {
+    await mockFileAccess(page, { files: { 'a.md': 'x' }, permission: 'denied' });
+    await page.goto('/markdown-editor/');
+    await page.evaluate(() => { window.__pick = 'a.md'; });
+    await openMenu(page);
+    await page.click('#btnOpen');
+    await raw(page).fill('y');
+    await saveBtn(page).click();
+    await expect(page.locator('.toast').last()).toContainText('nicht erlaubt');
+    expect(await written(page)).toEqual([]);
+    await expect(saveBtn(page)).toHaveClass(/unsaved/);
+  });
+
+  test('a file opened with the installed app ("Open with") is saved back into it', async ({ page }) => {
+    await mockFileAccess(page, { files: { 'Brief.md': 'Hallo' } });
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'launchQueue', { configurable: true, value: {
+        setConsumer(fn) { setTimeout(() => fn({ files: [window.__handles['Brief.md']], targetURL: location.href })); },
+      } });
+    });
+    await page.goto('/markdown-editor/?opened=1');
+    await expect(raw(page)).toHaveValue('Hallo');
+    await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Speichern in Brief.md');
+    await raw(page).fill('Hallo Welt');
+    await saveBtn(page).click();
+    await expect.poll(() => written(page)).toEqual([{ name: 'Brief.md', text: 'Hallo Welt' }]);
+  });
+
+  test.describe('English', () => {
+    test.use({ locale: 'en-US' });
+    test('labels and messages are English', async ({ page }) => {
+      await mockFileAccess(page, { saveName: 'notes.md' });
+      await page.goto('/markdown-editor/');
+      await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Download');
+      await raw(page).fill('x');
+      await openMenu(page);
+      await expect(page.locator('#btnSaveAs')).toHaveText('Save as …');
+      await page.click('#btnSaveAs');
+      await expect(page.locator('.toast').last()).toContainText('Saved: notes.md');
+      await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Save to notes.md');
+    });
+  });
 });
 
 test('works offline after the first visit', async ({ page, context }) => {

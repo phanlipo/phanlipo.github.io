@@ -395,9 +395,13 @@ window.Tools = (function () {
      File handling (Chrome/Edge on Windows and other desktops, "Open with"): the manifest's file_handlers open
      the page with ?opened=1 and the browser hands the files over through window.launchQueue.
      takeSharedFiles() returns them once, in the order given (or []), and removes them from the cache and the
-     URL. takeSharedFile() returns only the first one (or null) – for apps that take one file. */
+     URL. takeSharedFile() returns only the first one (or null) – for apps that take one file.
+     fileHandle(file) returns the FileSystemFileHandle a file opened with the app came from (or null) – with it
+     the app can write back into the same file (File System Access API, see markdown-editor). */
   const SHARE_MAX = 100;
   let launchFiles = null;
+  const launchHandles = new WeakMap();
+  const fileHandle = file => (file && launchHandles.get(file)) || null;
   const launched = /[?&]opened=1\b/.test(location.search);
   if (launched && 'launchQueue' in window) {
     launchFiles = new Promise(resolve => {
@@ -408,7 +412,7 @@ window.Tools = (function () {
           const handles = (params && params.files || []).slice(0, SHARE_MAX);
           const files = [];
           for (const h of handles) {
-            try { files.push(await h.getFile()); } catch (e) { diagLog('launch file: ' + (e && e.name || e)); }
+            try { const f = await h.getFile(); launchHandles.set(f, h); files.push(f); } catch (e) { diagLog('launch file: ' + (e && e.name || e)); }
           }
           diagLog('opened with app: ' + files.length + ' file(s)');
           resolve(files);
@@ -791,7 +795,7 @@ window.Tools = (function () {
   else setupDiagUi();
 
   return {
-    $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText,
+    $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle,
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     menu: { open: menuOpen, close: menuClose, element: () => menuEl },
