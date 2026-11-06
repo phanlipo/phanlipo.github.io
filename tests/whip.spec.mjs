@@ -145,6 +145,44 @@ test('iPhone: asks for motion access; denied keeps swinging off', async ({ page 
   await expect(page.locator('#count')).toHaveText('1');
 });
 
+test('vibration: started in the tap, one jolt at each crack, off when unchecked', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__vib = [];
+    // Records each call and whether it happened inside the click (same task as the tap)
+    Object.defineProperty(Navigator.prototype, 'vibrate', { configurable: true, value: p => { window.__vib.push({ p, inTap: !!window.__inTap }); return true; } });
+    addEventListener('click', () => { window.__inTap = true; setTimeout(() => { window.__inTap = false; }); }, true);
+  });
+  await page.goto('/whip/');
+  const calls = () => page.evaluate(() => window.__vib);
+  for (const kind of ['classic', 'double']) {
+    await page.click(`#sounds [data-s="${kind}"]`);
+    await whip(page).click();
+    const crack = await attr(page, 'data-crack');
+    const c = (await calls()).at(-1);
+    expect(c.inTap, kind).toBe(true);
+    // Vibration API pattern: on, off, on, … – starts with 0 ms on, then the pause until the crack
+    const p = c.p;
+    expect(p[0]).toBe(0);
+    expect(p[1]).toBe(crack);
+    for (let i = 2; i < p.length; i += 2) {
+      expect(p[i], 'long enough to be felt').toBeGreaterThanOrEqual(80);
+      expect(p[i]).toBeLessThanOrEqual(200);
+    }
+    expect(p.length, kind).toBe(kind === 'double' ? 5 : 3);
+    if (kind === 'double') {
+      // second jolt starts with the second crack: within the double crack's gap of 90–140 ms after the first
+      const second = p[1] + p[2] + p[3];
+      expect(second - crack).toBeGreaterThanOrEqual(90);
+      expect(second - crack).toBeLessThanOrEqual(140);
+    }
+  }
+  const n = (await calls()).length;
+  await page.uncheck('#optVibrate');
+  await whip(page).click();
+  await expect(page.locator('#count')).toHaveText('3');
+  expect((await calls()).length).toBe(n);
+});
+
 test('settings and counter persist; reset sets the counter to 0', async ({ page }) => {
   await page.goto('/whip/');
   await page.click('#sounds [data-s="bull"]');
