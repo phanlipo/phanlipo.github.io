@@ -1702,6 +1702,20 @@ test.describe('scoreboard tools', () => {
     await page.click('#sports [data-sport="tennis"]');
     await closeMenu(page);
     expect((await call(page, 'scoreboard_add_point', { player: 1, score: 3 })).error).toContain('only for darts');
+    expect((await call(page, 'scoreboard_add_point', { player: 3 })).error).toContain('1 or 2');
+  });
+
+  test('darts with 3 players: turn order, players and score of each', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('scoreboard.state.v1', JSON.stringify({ sport: 'darts', m: { darts: { cfg: { players: 3, start: 301 }, names: ['', '', 'Cem'] } } })));
+    await page.reload();
+    await call(page, 'scoreboard_add_point', { player: 1, score: 100 });
+    let r = await call(page, 'scoreboard_add_point', { player: 2, score: 60 });
+    expect(r.result).toMatchObject({ player_count: 3, to_throw: 3, remaining: [201, 241, 301],
+      players: [{ number: 1, name: 'Spieler 1' }, { number: 2, name: 'Spieler 2' }, { number: 3, name: 'Cem' }] });
+    expect((await call(page, 'scoreboard_add_point', { player: 1, score: 20 })).error).toBe('It is the turn of player 3.');
+    r = await call(page, 'scoreboard_add_point', { player: 3, score: 1 });
+    expect(r.result).toMatchObject({ to_throw: 1, remaining: [201, 241, 300], last_visit: [100, 60, 1] });
+    await expect(page.locator('.side[data-p="2"] .pts')).toHaveText('300');
   });
 
   test('rejects bad input and points after the match is won', async ({ page }) => {
