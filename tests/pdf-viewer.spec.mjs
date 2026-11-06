@@ -215,6 +215,87 @@ test('page slider, go to page in the menu, remembered page when opened again', a
   await expect(page.locator('#pageLabel')).toHaveText('1 / 3');
 });
 
+const kept = page => page.evaluate(async () => {
+  const r = await (await caches.open('file:pdf-viewer')).match('kept-file');
+  return r ? { name: decodeURIComponent(r.headers.get('X-File-Name')), size: (await r.blob()).size } : null;
+});
+
+test('the open PDF is kept: after a reload (app update) it opens again at the remembered page', async ({ page }) => {
+  await page.goto(URL_);
+  const f = P();
+  await openPdf(page, f);
+  await expect.poll(() => kept(page)).toEqual({ name: 'bericht.pdf', size: f.buffer.length });
+  await page.locator('#pageRange').fill('3');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('pdf-viewer.positions.v1'))).toMatch(/"p":3/);
+  await page.reload();
+  await expect(pages(page)).toHaveCount(5);
+  await expect(page.locator('#docName')).toHaveText('bericht.pdf');
+  await expect(page.locator('#pageLabel')).toHaveText('3 / 5');
+  await expect(page.locator('.toast')).toContainText('Weiter auf Seite 3');
+  await expect(pages(page).nth(2).locator('canvas')).toHaveCount(1);
+  expect((await inked(page, 3)).dark).toBeGreaterThan(50);
+  // a newly opened PDF replaces the kept one
+  await page.setInputFiles('#inPick', P('neu.pdf', ['N1', 'N2']));
+  await expect(pages(page)).toHaveCount(2);
+  await expect.poll(() => kept(page).then(k => k && k.name)).toBe('neu.pdf');
+  const text = await page.evaluate(() => Tools.diag.text());
+  expect(text).toContain('kept: true');
+  expect(text).toContain('restore kept file');
+  expect(text).not.toContain('bericht');
+});
+
+test('closing the PDF, turning keeping off and deleting all data remove the kept file', async ({ page }) => {
+  await page.goto(URL_);
+  await openPdf(page);
+  await expect.poll(() => kept(page)).not.toBeNull();
+  // close: back to the start screen, nothing reopens
+  await openMenu(page);
+  await page.click('#btnClose');
+  await expect(page.locator('#appMenu')).toBeHidden();
+  await expect(page.locator('#btnPick')).toBeVisible();
+  await expect(page.locator('#pages')).toBeHidden();
+  await expect(page.locator('#bar')).toBeHidden();
+  await expect(page).toHaveTitle('PDF ansehen');
+  await expect.poll(() => kept(page)).toBeNull();
+  await page.reload();
+  await page.waitForTimeout(500);
+  await expect(page.locator('#btnPick')).toBeVisible();
+  await expect(pages(page)).toHaveCount(0);
+  // the setting off: not kept
+  await openMenu(page);
+  await page.locator('#optKeep').uncheck();
+  await closeMenu(page);
+  await openPdf(page);
+  await page.waitForTimeout(300);
+  expect(await kept(page)).toBeNull();
+  await page.reload();
+  await page.waitForTimeout(500);
+  await expect(pages(page)).toHaveCount(0);
+  // on again: the open PDF is kept right away
+  await openPdf(page);
+  await openMenu(page);
+  await page.locator('#optKeep').check();
+  await expect.poll(() => kept(page)).not.toBeNull();
+  // "Alle Daten löschen" removes it too
+  page.once('dialog', d => d.accept());
+  await page.locator('#appMenu details.data summary').click();
+  await page.locator('[data-data="clear"]').click();
+  await page.waitForURL(/pdf-viewer/);
+  await expect.poll(() => kept(page)).toBeNull();
+  await expect(page.locator('#btnPick')).toBeVisible();
+});
+
+test('a damaged kept file is dropped instead of failing on every start', async ({ page }) => {
+  await page.goto(URL_);
+  await page.evaluate(async () => {
+    const c = await caches.open('file:pdf-viewer');
+    await c.put('kept-file', new Response('%PDF-1.4\nnonsense', { headers: { 'Content-Type': 'application/pdf', 'X-File-Name': 'x.pdf' } }));
+  });
+  await page.reload();
+  await expect(page.locator('#emptyMsg')).toHaveText('Die PDF konnte nicht geöffnet werden – sie ist vielleicht beschädigt.');
+  await expect.poll(() => kept(page)).toBeNull();
+});
+
 test('zoom: double tap, keys, page width button; sharper canvas when zoomed', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 });
   await page.goto(URL_);
@@ -301,6 +382,10 @@ test('works offline: pdf.js and its worker come from the offline cache', async (
   await page.reload();
   await openPdf(page);
   expect((await inked(page, 1)).dark).toBeGreaterThan(50);
+  // the kept PDF opens again offline
+  await page.reload();
+  await expect(pages(page)).toHaveCount(5);
+  await expect(pages(page).first().locator('canvas')).toHaveCount(1);
   await context.setOffline(false);
 });
 
