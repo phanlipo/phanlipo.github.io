@@ -357,11 +357,14 @@ test('settings are kept; file name, page size and quality reach the PDF', async 
   await page.fill('#fileName', 'Kinderärztin');
   expect((await savePdf(page)).pdf.info).toContain('/Title <FEFF004B0069006E00640065007200E4');
 
+  // the page is kept (Tools.keep, written shortly after each change): wait for it, so the reload is not a race
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).name)).toBe('Kinderärztin');
   await page.reload();
   await expect(page.locator('input[name="filterAll"][value="gray"]')).toBeChecked();
   await expect(page.locator('#pageSize')).toHaveValue('fit');
   await expect(page.locator('#quality')).toHaveValue('150');
-  await expect(page.locator('#pageCount')).toHaveText('0');
+  await expect(page.locator('#pageCount')).toHaveText('1');
+  await expect(page.locator('#fileName')).toHaveValue('Kinderärztin');
 });
 
 test('the camera button opens the crop view after the photo', async ({ page }) => {
