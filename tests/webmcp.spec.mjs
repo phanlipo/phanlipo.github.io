@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { test, expect, apps, openMenu, closeMenu } from './helpers.mjs';
 import { makePdf } from './pdf-tools.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
-import { CLIPS, clip, wavInfo, mp3Info, toneHz } from './audio-files.mjs';
+import { CLIPS, clip, wavInfo, mp3Info, toneHz, id3Tags, oggTags } from './audio-files.mjs';
 import { ORIGIN, API_PROBLEMS, mockApi, addYamlConfig } from './api-mock.mjs';
 import { testSong } from './midi-files.mjs';
 import { fakeCamera, fakeWorker } from './camera-fakes.mjs';
@@ -413,7 +413,8 @@ test.describe('video-to-audio tools', () => {
     await page.setInputFiles('#file', clip('opus'));
     await expect(page.locator('#btnRun')).toBeEnabled();
     const info = (await call(page, P + 'get_selected_video_info', {})).result;
-    expect(info).toMatchObject({ file_name: 'clip-opus.webm', audio_codec: 'opus', channels: 1, sample_rate_hz: CLIPS.opus.rate });
+    expect(info).toMatchObject({ file_name: 'clip-opus.webm', audio_codec: 'opus', channels: 1, sample_rate_hz: CLIPS.opus.rate,
+      title: 'clip-opus', artist: '', album: '', recording_date: null });
     expect(Math.abs(info.duration_seconds - CLIPS.opus.seconds)).toBeLessThan(0.1);
     // Default: the format chosen in the app (original)
     const orig = (await call(page, P + 'extract_audio_from_selected_video', {})).result;
@@ -425,8 +426,9 @@ test.describe('video-to-audio tools', () => {
     await expect(page.locator('input[value="wav"]')).toBeChecked();
     await expect(page.locator('#result')).toHaveAttribute('data-format', 'wav');
     const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
-    const w = wavInfo(readFileSync(await download.path()));
-    expect(w.frames * 2 + 44).toBe(wav.output_size_bytes);
+    const wbuf = readFileSync(await download.path());
+    expect(wbuf.length).toBe(wav.output_size_bytes);
+    const w = wavInfo(wbuf);
     expect(Math.abs(toneHz(w.samples, w.rate) - CLIPS.opus.hz)).toBeLessThan(5);
     // MP3: re-encoded, the file is a complete MP3 at 192 kbit/s
     const mp3 = (await call(page, P + 'extract_audio_from_selected_video', { format: 'mp3' })).result;
@@ -436,6 +438,15 @@ test.describe('video-to-audio tools', () => {
     const m = readFileSync(await dl.path());
     expect(m.length).toBe(mp3.output_size_bytes);
     expect(mp3Info(m)).toMatchObject({ rate: CLIPS.opus.rate, kbps: [192], complete: true });
+    expect(id3Tags(m)).toMatchObject({ TIT2: 'clip-opus' });
+    // Tags set by the agent: shown in the app and written into the file
+    const tagged = (await call(page, P + 'extract_audio_from_selected_video', { format: 'original', title: 'Probe', artist: 'Chor' })).result;
+    expect(tagged).toMatchObject({ output_file_name: 'clip-opus.ogg', title: 'Probe', artist: 'Chor', cover_added: true });
+    await expect(page.locator('#tagTitle')).toHaveValue('Probe');
+    await expect(page.locator('#resultTags')).toContainText('Probe – Chor');
+    const [dl2] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+    expect(oggTags(readFileSync(await dl2.path()))).toMatchObject({ TITLE: ['Probe'], ARTIST: ['Chor'] });
+    expect((await call(page, P + 'extract_audio_from_selected_video', { title: 'x'.repeat(201) })).ok).toBe(false);
     const tools = await listTools(page);
     expect(tools.find(t => t.name === P + 'get_selected_video_info').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
   });

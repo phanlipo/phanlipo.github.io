@@ -9,6 +9,7 @@ export const CLIPS = {
   aac: { file: 'clip-aac.mp4', mime: 'video/mp4', hz: 440, rate: 44100, seconds: 2 },
   opus: { file: 'clip-opus.webm', mime: 'video/webm', hz: 880, rate: 48000, seconds: 2 },
   silent: { file: 'silent.mp4', mime: 'video/mp4' },
+  tagged: { file: 'clip-tagged.mp4', mime: 'video/mp4' },
 };
 export const clip = key => ({ name: CLIPS[key].file, mimeType: CLIPS[key].mime, buffer: readFileSync(join(FIX, CLIPS[key].file)) });
 
@@ -57,7 +58,71 @@ export function mp4Info(buf) {
   return { brand: ftyp ? ftyp.data.toString('latin1', 0, 4) : null, tracks };
 }
 
+/** iTunes-style tags of an M4A (moov › udta › meta › ilst): { '©nam': 'text', covr: { mime, data } … } */
+export function mp4Tags(buf) {
+  const moov = find(boxes(buf), 'moov');
+  const udta = find(moov.children, 'udta');
+  const meta = (udta && find(udta.children, 'meta')) || find(moov.children, 'meta');
+  if (!meta) return {};
+  const metaKids = boxes(buf, meta.start + 12, meta.start + meta.size); // full box: version + flags
+  const ilst = find(metaKids, 'ilst');
+  if (!ilst) return {};
+  const out = {};
+  for (const item of boxes(buf, ilst.start + 8, ilst.start + ilst.size)) {
+    const data = find(boxes(buf, item.start + 8, item.start + item.size), 'data');
+    if (!data) continue;
+    const type = data.data.readUInt32BE(0) & 0xffffff, value = data.data.subarray(8);
+    out[item.type] = item.type === 'covr' ? { mime: type === 14 ? 'image/png' : type === 13 ? 'image/jpeg' : '?', data: value }
+      : type === 1 ? value.toString('utf8') : value;
+  }
+  return out;
+}
+
 /* ---------- Ogg ---------- */
+/** The packets of the first logical stream (pages joined, lacing resolved) */
+function oggPackets(buf) {
+  const packets = [];
+  let o = 0, cur = [];
+  while (o + 27 <= buf.length && buf.toString('latin1', o, o + 4) === 'OggS') {
+    const segs = buf[o + 26];
+    let p = o + 27 + segs;
+    for (let i = 0; i < segs; i++) {
+      const len = buf[o + 27 + i];
+      cur.push(buf.subarray(p, p + len)); p += len;
+      if (len < 255) { packets.push(Buffer.concat(cur)); cur = []; }
+    }
+    o = p;
+  }
+  return packets;
+}
+/** Vorbis comments of an Ogg Opus file: { TITLE: […], METADATA_BLOCK_PICTURE: […] }, picture decoded as { mime, type, data } */
+export function oggTags(buf) {
+  const pkt = oggPackets(buf).find(p => p.toString('latin1', 0, 8) === 'OpusTags');
+  if (!pkt) return null;
+  let o = 8;
+  o += 4 + pkt.readUInt32LE(o); // vendor
+  const n = pkt.readUInt32LE(o); o += 4;
+  const out = {};
+  for (let i = 0; i < n; i++) {
+    const len = pkt.readUInt32LE(o), s = pkt.toString('utf8', o + 4, o + 4 + len); o += 4 + len;
+    const eq = s.indexOf('='), key = s.slice(0, eq).toUpperCase();
+    let value = s.slice(eq + 1);
+    if (key === 'METADATA_BLOCK_PICTURE') value = flacPicture(Buffer.from(value, 'base64'));
+    (out[key] ||= []).push(value);
+  }
+  return out;
+}
+// FLAC PICTURE block (also used base64-encoded in Vorbis comments)
+function flacPicture(b) {
+  let o = 0;
+  const type = b.readUInt32BE(o); o += 4;
+  const ml = b.readUInt32BE(o), mime = b.toString('latin1', o + 4, o + 4 + ml); o += 4 + ml;
+  o += 4 + b.readUInt32BE(o); // description
+  o += 16; // width, height, depth, colours
+  const dl = b.readUInt32BE(o);
+  return { type, mime, data: b.subarray(o + 4, o + 4 + dl) };
+}
+
 /** Codec from the first packet and the duration from the last granule position (Opus: 48 kHz minus pre-skip) */
 export function oggInfo(buf) {
   if (buf.toString('latin1', 0, 4) !== 'OggS') return null;
@@ -102,7 +167,50 @@ export function mp3Info(buf) {
   return { rate, channels, kbps: [...kbps].sort((a, b) => a - b), frames, xing, complete: frames > 0 && o === end, seconds: rate ? frames * layer / rate : 0 };
 }
 
+/** ID3v2.3/2.4 frames at the start of an MP3: { TIT2: 'text', APIC: { mime, type, data } … }, size = tag bytes */
+export function id3Tags(buf) {
+  if (buf.toString('latin1', 0, 3) !== 'ID3') return null;
+  const ver = buf[3], syncsafe = b => (b[0] << 21) | (b[1] << 14) | (b[2] << 7) | b[3];
+  const size = 10 + syncsafe(buf.subarray(6, 10));
+  const text = (enc, b) => enc === 3 ? b.toString('utf8') : enc === 1 || enc === 2 ? (enc === 1 && b[0] === 0xfe ? Buffer.from(b.subarray(2)).swap16().toString('utf16le') : b.subarray(enc === 1 ? 2 : 0).toString('utf16le')) : b.toString('latin1');
+  const out = { size };
+  let o = 10;
+  while (o + 10 <= size && buf[o] !== 0) {
+    const id = buf.toString('latin1', o, o + 4);
+    const len = ver === 4 ? syncsafe(buf.subarray(o + 4, o + 8)) : buf.readUInt32BE(o + 4);
+    const b = buf.subarray(o + 10, o + 10 + len), enc = b[0];
+    if (id === 'APIC') {
+      const mEnd = b.indexOf(0, 1), mime = b.toString('latin1', 1, mEnd), type = b[mEnd + 1];
+      let d = mEnd + 2;
+      if (enc === 1 || enc === 2) { while (d + 1 < b.length && (b[d] || b[d + 1])) d += 2; d += 2; } else { d = b.indexOf(0, d) + 1; }
+      out.APIC = { mime, type, data: b.subarray(d) };
+    } else if (id[0] === 'T') out[id] = text(enc, b.subarray(1)).replace(/\0+$/, '');
+    o += 10 + len;
+  }
+  return out;
+}
+
 /* ---------- WAV ---------- */
+/** Chunks of a WAV and its LIST/INFO texts (ISO 8859-1): { chunks: ['fmt ', 'LIST', 'data'], info: { INAM: 'text' … } } */
+export function wavTags(buf) {
+  const chunks = [], info = {};
+  let o = 12;
+  while (o + 8 <= buf.length) {
+    const id = buf.toString('latin1', o, o + 4), size = buf.readUInt32LE(o + 4);
+    chunks.push(id);
+    if (id === 'LIST' && buf.toString('latin1', o + 8, o + 12) === 'INFO') {
+      let p = o + 12;
+      while (p + 8 <= o + 8 + size) {
+        const k = buf.toString('latin1', p, p + 4), l = buf.readUInt32LE(p + 4);
+        info[k] = buf.toString('latin1', p + 8, p + 8 + l).replace(/\0+$/, '');
+        p += 8 + l + (l & 1);
+      }
+    }
+    o += 8 + size + (size & 1);
+  }
+  return { chunks, info };
+}
+
 /** Header fields and the samples of the first channel (as -1…1) */
 export function wavInfo(buf) {
   if (buf.toString('latin1', 0, 4) !== 'RIFF' || buf.toString('latin1', 8, 12) !== 'WAVE') return null;

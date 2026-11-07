@@ -12,6 +12,8 @@ Video zu Audio (`video-to-audio.spec.mjs`, read by `audio-files.mjs`):
   `ffmpeg -f lavfi -i "testsrc=size=64x48:rate=10:duration=2" -f lavfi -i "sine=frequency=440:sample_rate=44100:duration=2" -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 64k -ac 1 -shortest clip-aac.mp4`
 - `clip-opus.webm` – 2 s, test picture (VP8) + 880 Hz sine, Opus mono 48 kHz.
   `ffmpeg -f lavfi -i "testsrc=size=64x48:rate=10:duration=2" -f lavfi -i "sine=frequency=880:sample_rate=48000:duration=2" -c:v libvpx -b:v 50k -c:a libopus -b:a 32k -ac 1 -shortest clip-opus.webm`
+- `clip-tagged.mp4` – `clip-aac.mp4` with tags (title, artist, album) and recording time (`mvhd`).
+  `ffmpeg -i clip-aac.mp4 -c copy -metadata title="Konzert im Park" -metadata artist="Die Band" -metadata album="Live 2024" -metadata creation_time=2024-05-01T12:34:56Z clip-tagged.mp4`
 - `silent.mp4` – 1 s test picture without sound track.
   `ffmpeg -f lavfi -i "testsrc=size=64x48:rate=10:duration=1" -c:v libx264 -pix_fmt yuv420p silent.mp4`
 
