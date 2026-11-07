@@ -28,6 +28,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | [Kartenspiele](https://phanlipo.github.io/card-games/) | `card-games/` | Mau Mau und Durak gegen den Computer oder mit mehreren Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server. |
 | [KI-Chat](https://phanlipo.github.io/ai-chat/) | `ai-chat/` | Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht. |
 | [Klavier](https://phanlipo.github.io/piano/) | `piano/` | Klavier zum Spielen mit den Fingern – MIDI-Dateien laden, die Noten fallen als Animation auf die Tasten. Spuren stummschalten und selbst mitspielen. |
+| [Kuscheltier-Puzzle](https://phanlipo.github.io/plush-puzzle/) | `plush-puzzle/` | Kuscheltiere aus Teilen zusammenbauen: Teile auf den Schatten ziehen, bis sie einrasten – mit Konfetti am Ende. |
 | [Lauftext – ganz groß anzeigen](https://phanlipo.github.io/marquee/) | `marquee/` | Text eingeben, Größe, Farben und Schrift wählen und bildschirmfüllend anzeigen – stehend, laufend oder blinkend. |
 | [Loop-Station](https://phanlipo.github.io/loop-station/) | `loop-station/` | Instrumente, Stimme, Klatschen … aufnehmen und als Schleifen übereinanderlegen – mit Metronom, Takt-Raster und WAV-Export. |
 | [Malen](https://phanlipo.github.io/paint/) | `paint/` | Weiße Leinwand zum Malen mit dem Finger: 6 Farben, Stift, Pinsel, Marker, Spray, Farbtopf und Radierer. |

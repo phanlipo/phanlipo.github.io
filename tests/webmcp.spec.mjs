@@ -2072,3 +2072,57 @@ test.describe('wind-instruments tools', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+test.describe('plush-puzzle tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await fakeModelContext(page);
+    await page.goto('/plush-puzzle/');
+  });
+
+  test('list_animals and get_progress read without changing anything', async ({ page }) => {
+    let r = await call(page, 'plush_puzzle_list_animals', {});
+    expect(r.ok).toBe(true);
+    expect(r.result.animals.map(a => a.id)).toEqual(['teddy', 'bunny', 'panda', 'dolphin', 'cat', 'elephant']);
+    expect(r.result.animals[0]).toEqual({ id: 'teddy', name: 'Teddy bear', parts: 8, times_finished: 0 });
+    expect(await page.locator('.animal').count()).toBe(6);
+    r = await call(page, 'plush_puzzle_get_progress', {});
+    expect(r.result).toEqual({ animal: null, phase: 'choosing', parts_total: 0, parts_placed: 0, loose_parts: [] });
+    await expect(page.locator('#pick')).toBeVisible();
+  });
+
+  test('start_puzzle shows the solution or scatters the parts; place_piece snaps parts in until done', async ({ page }) => {
+    let r = await call(page, 'plush_puzzle_start_puzzle', { animal: 'dolphin' });
+    expect(r.result).toMatchObject({ animal: 'dolphin', phase: 'solution', parts_total: 5, parts_placed: 0 });
+    await expect(page.locator('#board')).toHaveAttribute('data-phase', 'solution');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Puzzle gestartet');
+    r = await call(page, 'plush_puzzle_start_puzzle', { animal: 'teddy', show_solution: false });
+    expect(r.result).toMatchObject({ animal: 'teddy', phase: 'play', parts_total: 8 });
+    expect(r.result.loose_parts.sort()).toEqual(['arm', 'arm', 'body', 'ear', 'ear', 'head', 'leg', 'leg']);
+    await expect(page.locator('#loose .piece')).toHaveCount(8);
+    r = await call(page, 'plush_puzzle_place_piece', { part: 'head' });
+    expect(r.result).toMatchObject({ placed: 'head', parts_placed: 1 });
+    await expect(page.locator('.piece[data-i="7"]')).toHaveAttribute('data-slot', '7');
+    await expect(page.locator('.piece[data-i="7"]')).toHaveClass(/snap/);
+    expect(await call(page, 'plush_puzzle_place_piece', { part: 'head' })).toEqual({ ok: false, error: 'No loose part of kind "head".' });
+    for (let n = 2; n <= 8; n++) {
+      r = await call(page, 'plush_puzzle_place_piece', {});
+      expect(r.result.parts_placed).toBe(n);
+    }
+    expect(r.result).toMatchObject({ phase: 'done', loose_parts: [] });
+    await expect(page.locator('#confetti')).toHaveAttribute('data-active', 'true');
+    // Every part sits on a spot of the same drawing, each spot once
+    const slots = await page.locator('.piece').evaluateAll(els => els.map(e => Number(e.dataset.slot)));
+    expect([...slots].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(await call(page, 'plush_puzzle_place_piece', {})).toEqual({ ok: false, error: 'The puzzle is already finished.' });
+    r = await call(page, 'plush_puzzle_list_animals', {});
+    expect(r.result.animals[0].times_finished).toBe(1);
+  });
+
+  test('invalid input is rejected', async ({ page }) => {
+    expect(await call(page, 'plush_puzzle_place_piece', {})).toEqual({ ok: false, error: 'No puzzle is open – start one with start_puzzle.' });
+    expect((await call(page, 'plush_puzzle_start_puzzle', {})).ok).toBe(false);
+    expect((await call(page, 'plush_puzzle_start_puzzle', { animal: 'unicorn' })).ok).toBe(false);
+    await expect(page.locator('#pick')).toBeVisible();
+  });
+});
