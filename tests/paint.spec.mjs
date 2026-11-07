@@ -143,6 +143,41 @@ test('rotating to a narrower screen keeps the picture', async ({ page }) => {
   expect(await pixel(page, 600, 60)).not.toEqual(WHITE);
 });
 
+test('turning portrait → landscape → portrait shows the whole picture and keeps it unchanged', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.reload();
+  await page.click('[data-tool="brush"]');
+  const box = await page.locator('#paper').boundingBox();
+  // A stroke near the bottom right corner – the part that used to be cut off in landscape
+  const bx = box.width - 40, by = box.height - 30;
+  await stroke(page, bx - 100, by, bx, by);
+  const size = await page.evaluate(() => { const c = document.getElementById('paper'); return [c.width, c.height]; });
+
+  await page.setViewportSize({ width: 800, height: 390 });
+  await page.waitForTimeout(150);
+  // Same picture (no resize), shown whole inside the visible area
+  expect(await page.evaluate(() => { const c = document.getElementById('paper'); return [c.width, c.height]; })).toEqual(size);
+  const [wrap, paper] = await page.evaluate(() => ['wrap', 'paper'].map(id => {
+    const r = document.getElementById(id).getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom];
+  }));
+  expect(paper[0]).toBeGreaterThanOrEqual(wrap[0] - 0.5);
+  expect(paper[1]).toBeGreaterThanOrEqual(wrap[1] - 0.5);
+  expect(paper[2]).toBeLessThanOrEqual(wrap[2] + 0.5);
+  expect(paper[3]).toBeLessThanOrEqual(wrap[3] + 0.5);
+
+  // Painting on the smaller view lands at the right place of the picture
+  const small = await page.locator('#paper').boundingBox();
+  const k = small.width / box.width;
+  await page.click('[data-color="red"]');
+  await stroke(page, 60 * k, 60 * k, 160 * k, 60 * k);
+
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => { const c = document.getElementById('paper'); return [c.width, c.height]; })).toEqual(size);
+  expect(near(await pixel(page, bx - 50, by), [0x1b, 0x1b, 0x1b])).toBe(true);
+  expect(near(await pixel(page, 110, 60), [0xe5, 0x39, 0x35], 20)).toBe(true);
+});
+
 test('the page does not scroll when painting on the canvas', async ({ page }) => {
   const style = await page.locator('#paper').evaluate(el => getComputedStyle(el).touchAction);
   expect(style).toBe('none');
