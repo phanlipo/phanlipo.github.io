@@ -2137,3 +2137,52 @@ test.describe('plush-puzzle tools', () => {
     await expect(page.locator('#pick')).toBeVisible();
   });
 });
+
+test.describe('reaction-game tools', () => {
+  test('get_scores reads settings, last game and best scores; set_game sets up the next game', async ({ page }) => {
+    const last = { mode: 'lamp', dur: 15, size: 3, points: 7, hits: 8, wrong: 1, missed: 0, avg: 412, fastest: 250, at: '2026-05-01T09:00:00.000Z' };
+    await page.addInitScript(v => localStorage.setItem('reaction-game.state.v1', v), JSON.stringify({
+      mode: 'mole', dur: 30, size: 3, sound: true, vibrate: false, rounds: 4, last,
+      best: { 'lamp-15-3': { points: 7, avg: 412, at: last.at }, 'mole-30-4': { points: 21, avg: 530, at: last.at } } }));
+    await open(page, '/reaction-game/');
+    let r = await call(page, 'reaction_game_get_scores', {});
+    expect(r.ok).toBe(true);
+    expect(r.result).toEqual({
+      settings: { mode: 'mole', duration_seconds: 30, grid_size: 3, sounds: true, vibration: false },
+      phase: 'idle', current_points: null, rounds_played: 4,
+      last_game: { mode: 'lamp', duration_seconds: 15, grid_size: 3, points: 7, hits: 8, misses: 1, moles_got_away: null, average_reaction_ms: 412, fastest_reaction_ms: 250 },
+      best: [
+        { mode: 'mole', duration_seconds: 30, grid_size: 4, points: 21, average_reaction_ms: 530 },
+        { mode: 'lamp', duration_seconds: 15, grid_size: 3, points: 7, average_reaction_ms: 412 },
+      ],
+    });
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Bestwerte gelesen');
+
+    r = await call(page, 'reaction_game_set_game', { mode: 'lamp', duration_seconds: 15 });
+    expect(r).toEqual({ ok: true, result: { mode: 'lamp', duration_seconds: 15, grid_size: 3, best_points: 7 } });
+    await expect(page.locator('#modes [data-mode="lamp"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#time')).toHaveText('15');
+    await expect(page.locator('#bestNow')).toHaveText('7');
+    r = await call(page, 'reaction_game_set_game', { grid_size: 4 });
+    expect(r.result).toEqual({ mode: 'lamp', duration_seconds: 15, grid_size: 4, best_points: null });
+    await expect(page.locator('#grid .cell')).toHaveCount(16);
+
+    expect((await call(page, 'reaction_game_set_game', { duration_seconds: 45 })).ok).toBe(false);
+    expect((await call(page, 'reaction_game_set_game', { mode: 'snake' })).ok).toBe(false);
+    expect((await call(page, 'reaction_game_set_game', { speed: 2 })).ok).toBe(false);
+  });
+
+  test('set_game is refused while a game runs; get_scores shows the running points', async ({ page }) => {
+    await open(page, '/reaction-game/');
+    await page.click('#modes [data-mode="lamp"]');
+    await page.click('#btnStart');
+    await expect(page.locator('#board')).toHaveAttribute('data-phase', 'running', { timeout: 5000 });
+    await page.locator('#grid .cell.on').click();
+    expect(await call(page, 'reaction_game_set_game', { mode: 'mole' }))
+      .toEqual({ ok: false, error: 'A game is running – wait until it is over.' });
+    const r = await call(page, 'reaction_game_get_scores', {});
+    expect(r.result.phase).toBe('running');
+    expect(r.result.current_points).toBe(1);
+    await expect(page.locator('#modes [data-mode="lamp"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+});

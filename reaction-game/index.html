@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Reaktionsspiel</title>
+<meta name="description" content="Schnell sein: Maulwürfe hauen, bevor sie verschwinden, oder aufleuchtende Lampen antippen – mit Punkten, Reaktionszeit und Bestwerten.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="hammer">
+<meta name="tool:color" content="#3a5a99">
+<meta name="tool:short-name" content="Reaktion">
+<meta name="tool:title-en" content="Reaction Game">
+<meta name="tool:description-en" content="Be quick: whack the moles before they disappear or tap the lamps as they light up – with points, reaction time and best scores.">
+<meta name="tool:short-name-en" content="Reaction">
+<meta name="tool:storage" content="reaction-game.">
+<meta name="tool:webmcp" content="get_scores, set_game">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-s4vNYjW73ycPdzfJEL3i6Oesh0Kci+MGZmP2y+lr4cg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Reaktion">
+<meta name="theme-color" content="#3a5a99">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#3a5a99;--accent-text:#ffffff;--page-width:640px;
+  --hole:#3b2a1e;--mole:#8d5a3b;--mole-belly:#d9b48f;--mole-nose:#e07a8a;--ink:#1d1d1d;
+  --lamp-on:#ffc21a;--lamp-glow:rgba(255,194,26,.75);--good:#1f8a4c;--bad:#c62828}
+@media (prefers-color-scheme: dark){:root{--accent:#9fb6e6;--accent-text:#0e1a33;
+  --hole:#0b0806;--mole:#a8714d;--mole-belly:#e3c29f;--lamp-on:#ffd24d;--lamp-glow:rgba(255,210,77,.6);--good:#4cc27e;--bad:#ff6b6b}}
+/* Stage layout: score bar, the field (square, as large as fits), mode and start button at the bottom (thumb) */
+main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px;gap:10px}
+.bar{flex:none;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stat{background:var(--surface-2);border-radius:10px;padding:4px 6px}
+.stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums;line-height:1.2}
+.stat span{font-size:13px;color:var(--muted)}
+
+/* ---------- Field ---------- */
+.board{flex:1;min-height:180px;position:relative;container-type:size}
+.grid{position:absolute;inset:0;margin:auto;width:min(100cqw,100cqh);height:min(100cqw,100cqh);
+  display:grid;grid-template-columns:repeat(var(--n,3),1fr);grid-template-rows:repeat(var(--n,3),1fr);gap:min(2.5cqw,2.5cqh);
+  touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.cell{position:relative;border:0;padding:0;margin:0;border-radius:16px;background:var(--surface-2);cursor:pointer;overflow:hidden;color:inherit;font:inherit}
+.cell:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.cell.miss{animation:shake .25s}
+@keyframes shake{25%{translate:-4px 0}75%{translate:4px 0}}
+/* Mole: a hole at the bottom, the mole slides up out of it */
+.hole{position:absolute;left:12%;right:12%;bottom:10%;height:26%;border-radius:50%;background:var(--hole)}
+.pit{position:absolute;left:14%;right:14%;top:4%;bottom:23%;overflow:hidden;pointer-events:none}
+.mole{position:absolute;left:0;right:0;bottom:0;width:100%;height:100%;translate:0 105%;transition:translate .09s ease-out}
+.cell.on .mole{translate:0 6%}
+.cell.hit .mole{transform-origin:50% 100%;animation:bonk .26s ease-in forwards}
+@keyframes bonk{0%{translate:0 6%;scale:1.08 .82}45%{translate:0 6%;scale:1}100%{translate:0 105%}}
+.mole .body{fill:var(--mole)}.mole .belly{fill:var(--mole-belly)}.mole .eye{fill:var(--ink)}.mole .nose{fill:var(--mole-nose)}
+.mole .x{stroke:var(--ink);stroke-width:4;stroke-linecap:round;opacity:0}
+.cell.hit .mole .x{opacity:1}.cell.hit .mole .eye{opacity:0}
+/* Lamp: a round light in the middle of the cell */
+.lamp{display:none;position:absolute;inset:16%;border-radius:50%;background:var(--surface);border:3px solid var(--border);transition:background .06s,box-shadow .06s}
+.board[data-mode="lamp"] .lamp{display:block}
+.board[data-mode="lamp"] .hole,.board[data-mode="lamp"] .pit{display:none}
+.board[data-mode="lamp"] .cell.on .lamp{background:var(--lamp-on);border-color:var(--lamp-on);box-shadow:0 0 18px 6px var(--lamp-glow)}
+.board[data-mode="lamp"] .cell.hit .lamp{background:var(--accent);border-color:var(--accent)}
+/* Countdown and result on top of the field */
+.overlay{position:absolute;inset:0;margin:auto;width:min(100cqw,100cqh);height:min(100cqw,100cqh);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:6px;text-align:center;padding:16px;border-radius:16px;
+  background:color-mix(in srgb,var(--surface) 95%,transparent);overflow:auto;pointer-events:none}
+.overlay[hidden]{display:none}
+.count{font-size:min(30cqw,30cqh);font-weight:800;line-height:1;color:var(--accent)}
+.res-score{font-size:56px;font-weight:800;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+.res-title{font-size:20px;font-weight:700;margin:0}
+.res-best{font-weight:700;color:var(--good);margin:0}
+.res-list{margin:4px 0 0;padding:0;list-style:none;display:grid;gap:2px;font-variant-numeric:tabular-nums}
+.intro{margin:0;font-size:17px;max-width:30ch}
+.status{text-align:center;min-height:24px;margin:0;font-weight:600}
+.actions{flex:none;display:grid;gap:8px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.seg button{min-height:44px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit;font-size:16px;padding-inline:6px}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+.seg button:disabled{cursor:default;opacity:.6}
+.actions .start{min-height:56px;font-size:18px;font-weight:600}
+@media (prefers-reduced-motion: reduce){.mole,.lamp{transition:none}.cell.miss,.cell.hit .mole{animation:none}}
+
+/* ---------- Menu: settings and best scores ---------- */
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-child{margin-top:0}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer;margin-top:4px}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.best{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.best th,.best td{text-align:start;padding:6px 4px;border-bottom:1px solid var(--border)}
+.best td.num,.best th.num{text-align:end}
+.info{color:var(--muted);margin:6px 0 0}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Reaktionsspiel</span></h1>
+  <p class="sub" data-i18n="sub">Maulwürfe hauen oder Lampen antippen</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnBest" aria-label="Bestwerte" title="Bestwerte" data-i18n-attr="aria-label:bestH; title:bestH"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21l8 0"/><path d="M12 17l0 4"/><path d="M7 4l10 0"/><path d="M17 4v8a5 5 0 0 1 -10 0v-8"/><path d="M5 9m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M19 9m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card play" aria-label="Reaktionsspiel" data-i18n-attr="aria-label:title">
+    <div class="bar">
+      <div class="stat"><b id="time">30</b><span data-i18n="time">Sekunden</span></div>
+      <div class="stat"><b id="score">0</b><span data-i18n="points">Punkte</span></div>
+      <div class="stat"><b id="bestNow">–</b><span data-i18n="best">Rekord</span></div>
+    </div>
+    <div class="board" id="board" data-mode="mole" data-phase="idle">
+      <div class="grid" id="grid"></div>
+      <div class="overlay" id="overlay" aria-live="polite"></div>
+    </div>
+    <p class="status" id="status" role="status"></p>
+    <div class="actions">
+      <div class="seg" role="group" aria-label="Spielart" data-i18n-attr="aria-label:modeLabel" id="modes">
+        <button type="button" data-mode="mole" aria-pressed="true"><span aria-hidden="true">🔨 </span><span data-i18n="mole">Maulwurf</span></button>
+        <button type="button" data-mode="lamp" aria-pressed="false"><span aria-hidden="true">💡 </span><span data-i18n="lamp">Lampen</span></button>
+      </div>
+      <button type="button" class="btn primary start" id="btnStart" data-i18n="start">Start</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu>
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <h3 id="h-dur" data-i18n="duration">Spieldauer</h3>
+    <div class="seg" role="group" aria-labelledby="h-dur" id="durations">
+      <button type="button" data-dur="15" aria-pressed="false"><span data-i18n="s15">15 s</span></button>
+      <button type="button" data-dur="30" aria-pressed="true"><span data-i18n="s30">30 s</span></button>
+      <button type="button" data-dur="60" aria-pressed="false"><span data-i18n="s60">60 s</span></button>
+    </div>
+    <h3 id="h-size" data-i18n="size">Spielfeld</h3>
+    <div class="seg" role="group" aria-labelledby="h-size" id="sizes">
+      <button type="button" data-size="3" aria-pressed="true"><span data-i18n="g3">3 × 3</span></button>
+      <button type="button" data-size="4" aria-pressed="false"><span data-i18n="g4">4 × 4</span></button>
+    </div>
+    <label class="check"><input type="checkbox" id="optSound"> <span data-i18n="sound">Töne</span></label>
+    <label class="check"><input type="checkbox" id="optVibrate"> <span data-i18n="vibrate">Vibration bei Treffern (Handy)</span></label>
+  </section>
+
+  <section class="card" aria-labelledby="h-best" data-menu id="bestCard">
+    <h2 id="h-best" data-i18n="bestH">Bestwerte</h2>
+    <div id="bestList"></div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Reaktionsspiel für zwischendurch, allein oder abwechselnd mit anderen: Wer schafft in der Zeit die meisten Punkte?</p>
+  <h3>Spielarten</h3>
+  <ul>
+    <li><b>🔨 Maulwurf:</b> Maulwürfe schauen kurz aus ihren Löchern. Tippe sie an, bevor sie wieder verschwinden. Mit der Zeit kommen sie schneller und manchmal mehrere auf einmal.</li>
+    <li><b>💡 Lampen:</b> Immer eine Lampe leuchtet auf. Tippe sie so schnell wie möglich an – dann geht sofort die nächste an.</li>
+  </ul>
+  <h3>Punkte</h3>
+  <ul>
+    <li>Jeder Treffer gibt <b>+1</b>, jedes Tippen daneben (leeres Loch, dunkle Lampe) <b>−1</b> – wild herumtippen lohnt sich also nicht. Unter 0 geht es nicht.</li>
+    <li>Nach dem Spiel siehst du Treffer, Fehlgriffe, entwischte Maulwürfe, die mittlere und die schnellste Reaktionszeit (vom Erscheinen bis zum Antippen).</li>
+    <li><b>Bestwerte</b> (Pokal oben oder im Menü ☰) werden je Spielart, Dauer und Feldgröße gemerkt. Bei gleicher Punktzahl zählt die schnellere mittlere Reaktionszeit.</li>
+  </ul>
+  <h3>Einstellungen (Menü ☰)</h3>
+  <ul>
+    <li>Spieldauer 15, 30 oder 60 Sekunden, Spielfeld 3 × 3 oder 4 × 4, Töne und Vibration.</li>
+    <li><b>Stopp</b> bricht ein Spiel ab; es zählt dann nicht. Wechselst du während des Spiels in eine andere App, wird es ebenfalls abgebrochen.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Die Töne werden im Browser erzeugt. Kein Ton? Lautstärke aufdrehen, auf dem iPhone den Stummschalter ausschalten. Vibration gibt es nur auf Android.</li>
+    <li>Gespeichert werden nur Einstellungen und Bestwerte – in diesem Browser. Alles funktioniert offline.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann Bestwerte und das letzte Ergebnis lesen und Spielart, Dauer und Feldgröße einstellen (WebMCP). Spielen muss man selbst. Jeder Aufruf erscheint hier als Hinweis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A reaction game for a quick break, alone or taking turns with others: who scores the most points in time?</p>
+  <h3>Game modes</h3>
+  <ul>
+    <li><b>🔨 Mole:</b> moles peek out of their holes for a moment. Tap them before they disappear again. Over time they come faster and sometimes several at once.</li>
+    <li><b>💡 Lamps:</b> one lamp at a time lights up. Tap it as fast as you can – the next one lights up right away.</li>
+  </ul>
+  <h3>Points</h3>
+  <ul>
+    <li>Each hit gives <b>+1</b>, each tap that misses (empty hole, dark lamp) <b>−1</b> – so tapping wildly doesn't pay. The score never goes below 0.</li>
+    <li>After the game you see hits, misses, moles that got away, the average and the fastest reaction time (from appearing to your tap).</li>
+    <li><b>Best scores</b> (trophy at the top or in the menu ☰) are kept per mode, duration and field size. With equal points the faster average reaction time wins.</li>
+  </ul>
+  <h3>Settings (menu ☰)</h3>
+  <ul>
+    <li>Game length 15, 30 or 60 seconds, field 3 × 3 or 4 × 4, sounds and vibration.</li>
+    <li><b>Stop</b> ends a game early; it then doesn't count. Switching to another app during a game ends it as well.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>The sounds are generated in the browser. No sound? Turn up the volume; on iPhone switch off the silent switch. Vibration only works on Android.</li>
+    <li>Only settings and best scores are stored – in this browser. Everything works offline.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can read the best scores and the last result and set mode, duration and field size (WebMCP). Playing is up to you. Each call shows a note here.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version de41778d9b0a</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  intro:'Tippe auf Start und dann so schnell du kannst auf die Maulwürfe!',introLamp:'Tippe auf Start und dann so schnell du kannst auf die Lampe, die leuchtet!',
+  go:'Los!',stop:'Stopp',again:'Nochmal',
+  playing:'Hau die Maulwürfe!',playingLamp:'Tipp die leuchtende Lampe!',aborted:'Abgebrochen – das Spiel zählt nicht.',
+  over:'Zeit um!',record:'🏆 Neuer Rekord!',recordWas:'Rekord: {n}',
+  'r.hits':'Treffer: {n}','r.wrong':'Daneben: {n}','r.missed':'Entwischt: {n}',
+  'r.avg':'Ø Reaktion: {n} ms','r.fast':'Schnellste: {n} ms',
+  cell:'Feld {n}',
+  'b.mode':'Spielart','b.game':'Spiel','b.points':'Punkte','b.avg':'Ø ms',
+  'b.none':'Noch keine Bestwerte – spiel eine Runde!','b.rounds':'Gespielte Runden: {n}',
+  'mcp.scores':'Bestwerte gelesen','mcp.set':'Spiel eingestellt'
+},
+en:{
+  title:'Reaction Game',sub:'Whack moles or tap lamps',bestH:'Best scores',time:'Seconds',points:'Points',best:'Record',
+  modeLabel:'Game mode',mole:'Mole',lamp:'Lamps',start:'Start',
+  settings:'Settings',duration:'Game length',size:'Field',s15:'15 s',s30:'30 s',s60:'60 s',g3:'3 × 3',g4:'4 × 4',
+  sound:'Sounds',vibrate:'Vibration on hits (phone)',
+  intro:'Tap Start, then tap the moles as fast as you can!',introLamp:'Tap Start, then tap the lamp that lights up as fast as you can!',
+  go:'Go!',stop:'Stop',again:'Play again',
+  playing:'Whack the moles!',playingLamp:'Tap the lamp that lights up!',aborted:'Stopped – this game doesn’t count.',
+  over:'Time’s up!',record:'🏆 New record!',recordWas:'Record: {n}',
+  'r.hits':'Hits: {n}','r.wrong':'Misses: {n}','r.missed':'Got away: {n}',
+  'r.avg':'Avg. reaction: {n} ms','r.fast':'Fastest: {n} ms',
+  cell:'Field {n}',
+  'b.mode':'Mode','b.game':'Game','b.points':'Points','b.avg':'Avg. ms',
+  'b.none':'No best scores yet – play a round!','b.rounds':'Rounds played: {n}',
+  'mcp.scores':'best scores read','mcp.set':'game set up'
+}});
+const {$,t}=Tools;
+const LS='reaction-game.state.v1';
+const MODES=['mole','lamp'],DURS=[15,30,60],SIZES=[3,4];
+
+const state=Tools.load(LS,{mode:'mole',dur:30,size:3,sound:true,vibrate:true,best:{},rounds:0,last:null});
+if(!MODES.includes(state.mode))state.mode='mole';
+if(!DURS.includes(state.dur))state.dur=30;
+if(!SIZES.includes(state.size))state.size=3;
+for(const k of ['sound','vibrate'])if(typeof state[k]!=='boolean')state[k]=true;
+if(!state.best||typeof state.best!=='object'||Array.isArray(state.best))state.best={};
+if(!(Number.isInteger(state.rounds)&&state.rounds>=0))state.rounds=0;
+if(!state.last||typeof state.last!=='object')state.last=null;
+const save=()=>Tools.save(LS,state);
+const key=(m=state.mode,d=state.dur,s=state.size)=>`${m}-${d}-${s}`;
+// Random integer in [0, n) from the browser's cryptographic generator
+const rnd=n=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return Math.floor(a[0]/4294967296*n);};
+const now=()=>performance.now();
+
+const board=$('board'),grid=$('grid'),overlay=$('overlay'),status=$('status'),btnStart=$('btnStart');
+let cells=[];
+
+/* ---------- Field ---------- */
+const MOLE='<svg class="mole" viewBox="0 0 100 100" aria-hidden="true" focusable="false">'+
+  '<path class="body" d="M14 100V52C14 28 30 12 50 12S86 28 86 52V100Z"/>'+
+  '<ellipse class="belly" cx="50" cy="82" rx="22" ry="20"/>'+
+  '<circle class="eye" cx="38" cy="44" r="5"/><circle class="eye" cx="62" cy="44" r="5"/>'+
+  '<path class="x" d="M33 39l10 10M43 39l-10 10M57 39l10 10M67 39l-10 10"/>'+
+  '<ellipse class="nose" cx="50" cy="58" rx="8" ry="6"/></svg>';
+function buildGrid(){
+  const n=state.size;
+  grid.style.setProperty('--n',n);
+  grid.textContent='';
+  cells=[];
+  for(let i=0;i<n*n;i++){
+    const b=document.createElement('button');
+    b.type='button';b.className='cell';b.dataset.i=i;
+    b.setAttribute('aria-label',t('cell',{n:i+1}));
+    b.innerHTML='<span class="hole"></span><span class="pit">'+MOLE+'</span><span class="lamp"></span>';
+    grid.appendChild(b);cells.push(b);
+  }
+}
+// Touch and mouse react on pointerdown (no delay); the click that follows is ignored.
+// Keyboard (Enter/Space) only fires click, with detail 0.
+grid.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  const c=e.target.closest('.cell');
+  if(c)tap(Number(c.dataset.i));
+});
+grid.addEventListener('click',e=>{
+  const c=e.target.closest('.cell');
+  if(c&&e.detail===0)tap(Number(c.dataset.i));
+});
+
+/* ---------- Sound ---------- */
+let ac=null;
+function audio(){
+  if(ac||!state.sound)return ac;
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(!C)return null;
+  try{ac=new C();Tools.diag.log('audio context created',{state:ac.state});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});}
+  return ac;
+}
+function unlock(){const c=audio();if(c&&c.state!=='running')c.resume().catch(e=>Tools.diag.log('audio resume failed',{error:String(e)}));}
+function tone(f1,f2,ms,type='sine',vol=.25){
+  if(!state.sound||!ac||ac.state!=='running')return;
+  try{
+    const t0=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();
+    o.type=type;o.frequency.setValueAtTime(f1,t0);o.frequency.exponentialRampToValueAtTime(f2,t0+ms/1000);
+    g.gain.setValueAtTime(vol,t0);g.gain.exponentialRampToValueAtTime(.001,t0+ms/1000);
+    o.connect(g);g.connect(ac.destination);o.start(t0);o.stop(t0+ms/1000+.02);
+  }catch(e){Tools.diag.log('tone failed',{error:String(e)});}
+}
+const sfx={
+  hit:()=>state.mode==='mole'?tone(300,900,90,'triangle'):tone(1320,1320,110),
+  wrong:()=>tone(160,110,140,'square',.12),
+  beep:()=>tone(660,660,120),go:()=>tone(990,990,220),
+  end:()=>{tone(880,440,350,'triangle');}
+};
+const buzz=ms=>{if(state.vibrate&&navigator.vibrate)try{navigator.vibrate(ms);}catch(_){}};
+
+/* ---------- Game ----------
+   phase: idle → countdown (3, 2, 1) → running → over (result) or idle (stopped).
+   Mole: moles appear at random free holes and hide again after `life` ms (shorter over time);
+   from half time on, more than one can be up at once. Lamp: exactly one lamp is lit until tapped,
+   the next one lights up 120 ms later (never the same twice in a row).
+   Points: hit +1, tap on an empty hole / dark lamp −1, never below 0. Reaction time = appear → tap. */
+let game=null,phase='idle';
+const timers=new Set();
+const later=(fn,ms)=>{const id=setTimeout(()=>{timers.delete(id);fn();},ms);timers.add(id);return id;};
+const cancel=id=>{clearTimeout(id);timers.delete(id);};
+function clearTimers(){for(const id of timers)clearTimeout(id);timers.clear();}
+function setPhase(p){phase=p;board.dataset.phase=p;renderControls();}
+
+function start(){
+  if(phase==='countdown'||phase==='running')return;
+  unlock();clearTimers();
+  for(const c of cells)c.classList.remove('on','hit','miss');
+  game={mode:state.mode,dur:state.dur,size:state.size,hits:0,wrong:0,missed:0,times:[],up:new Map(),lastCell:-1,t0:0,left:state.dur*1000};
+  setPhase('countdown');
+  status.textContent='';
+  $('score').textContent='0';$('time').textContent=Tools.fmt(game.dur,0);
+  Tools.diag.log('countdown',{mode:game.mode,dur:game.dur,size:game.size});
+  let n=3;
+  const step=()=>{
+    if(n>0){overlay.innerHTML=`<span class="count" data-count="${n}">${n}</span>`;sfx.beep();n--;later(step,700);return;}
+    overlay.innerHTML=`<span class="count">${Tools.esc(t('go'))}</span>`;sfx.go();
+    later(()=>{overlay.hidden=true;},400);
+    run();
+  };
+  overlay.hidden=false;
+  step();
+}
+function run(){
+  setPhase('running');
+  game.t0=now();
+  status.textContent=game.mode==='mole'?t('playing'):t('playingLamp');
+  Tools.diag.log('running',{mode:game.mode});
+  if(game.mode==='mole')spawnLoop();else lightNext();
+  const tick=()=>{
+    if(phase!=='running')return;
+    const left=Math.max(0,game.dur*1000-(now()-game.t0));
+    game.left=left;
+    $('time').textContent=Tools.fmt(Math.ceil(left/1000),0);
+    if(left<=0){finish();return;}
+    later(tick,Math.min(100,left));
+  };
+  tick();
+}
+const free=()=>cells.map((_,i)=>i).filter(i=>!game.up.has(i));
+function show(i,life){
+  const c=cells[i];
+  c.classList.remove('hit');
+  c.classList.add('on');
+  const entry={at:now(),timer:life?later(()=>escape(i),life):null};
+  game.up.set(i,entry);game.lastCell=i;
+}
+function hide(i){
+  const e=game.up.get(i);
+  if(!e)return;
+  if(e.timer)cancel(e.timer);
+  game.up.delete(i);
+  cells[i].classList.remove('on');
+}
+function escape(i){
+  if(phase!=='running'||!game.up.has(i))return;
+  game.up.get(i).timer=null;hide(i);game.missed++;
+}
+function spawnLoop(){
+  if(phase!=='running')return;
+  const p=Math.min(1,(now()-game.t0)/(game.dur*1000));
+  const life=Math.round(1100-500*p),gap=Math.round(850-400*p);
+  const max=(game.size===3?1:2)+(p>=.5?1:0);
+  if(game.up.size<max){
+    let options=free().filter(i=>i!==game.lastCell);
+    if(options.length)show(options[rnd(options.length)],life);
+  }
+  later(spawnLoop,Math.round(gap*(.7+rnd(61)/100)));
+}
+function lightNext(){
+  if(phase!=='running')return;
+  const options=cells.map((_,i)=>i).filter(i=>i!==game.lastCell);
+  show(options[rnd(options.length)],0);
+}
+const points=()=>Math.max(0,game.hits-game.wrong);
+function tap(i){
+  if(phase!=='running'||!game)return;
+  const c=cells[i];
+  if(game.up.has(i)){
+    const rt=now()-game.up.get(i).at;
+    game.times.push(rt);game.hits++;
+    hide(i);
+    c.classList.add('hit');
+    later(()=>c.classList.remove('hit'),game.mode==='mole'?260:140);
+    sfx.hit();buzz(15);
+    if(game.mode==='lamp')later(lightNext,120);
+  }else{
+    game.wrong++;
+    c.classList.remove('miss');void c.offsetWidth;c.classList.add('miss');
+    later(()=>c.classList.remove('miss'),260);
+    sfx.wrong();
+  }
+  $('score').textContent=Tools.fmt(points(),0);
+}
+function summary(g=game){
+  const n=g.times.length;
+  return {mode:g.mode,dur:g.dur,size:g.size,points:Math.max(0,g.hits-g.wrong),hits:g.hits,wrong:g.wrong,missed:g.missed,
+    avg:n?Math.round(g.times.reduce((a,b)=>a+b,0)/n):null,fastest:n?Math.round(Math.min(...g.times)):null};
+}
+// Better = more points; with equal points the faster average reaction time
+const better=(a,b)=>!b||a.points>b.points||(a.points===b.points&&a.avg!=null&&(b.avg==null||a.avg<b.avg));
+function finish(){
+  clearTimers();
+  for(const i of [...game.up.keys()])hide(i);
+  const r=summary();
+  const k=key(r.mode,r.dur,r.size),prev=state.best[k]||null;
+  r.record=r.points>0&&better(r,prev);
+  if(r.record)state.best[k]={points:r.points,avg:r.avg,at:new Date().toISOString()};
+  state.rounds++;state.last={...r,at:new Date().toISOString()};save();
+  setPhase('over');
+  status.textContent=t('over');
+  sfx.end();buzz([40,60,40]);
+  renderResult(r,prev);renderBest();
+  Tools.diag.log('finished',{mode:r.mode,dur:r.dur,size:r.size,points:r.points,hits:r.hits,wrong:r.wrong,missed:r.missed,avg:r.avg,record:r.record});
+}
+function renderResult(r,prev){
+  const li=s=>`<li>${Tools.esc(s)}</li>`;
+  const items=[li(t('r.hits',{n:Tools.fmt(r.hits,0)})),li(t('r.wrong',{n:Tools.fmt(r.wrong,0)}))];
+  if(r.mode==='mole')items.push(li(t('r.missed',{n:Tools.fmt(r.missed,0)})));
+  if(r.avg!=null)items.push(li(t('r.avg',{n:Tools.fmt(r.avg,0)})),li(t('r.fast',{n:Tools.fmt(r.fastest,0)})));
+  overlay.innerHTML=`<p class="res-title">${Tools.esc(t('over'))}</p><span class="res-score" id="resScore">${Tools.fmt(r.points,0)}</span>`+
+    `<span>${Tools.esc(t('points'))}</span>`+
+    (r.record?`<p class="res-best" id="resRecord">${Tools.esc(t('record'))}</p>`:prev?`<p>${Tools.esc(t('recordWas',{n:Tools.fmt(prev.points,0)}))}</p>`:'')+
+    `<ul class="res-list" id="resList">${items.join('')}</ul>`;
+  overlay.hidden=false;
+}
+function stop(reason){
+  if(phase!=='countdown'&&phase!=='running')return;
+  clearTimers();
+  for(const i of [...game.up.keys()])hide(i);
+  game=null;setPhase('idle');
+  renderIdle();
+  status.textContent=t('aborted');
+  Tools.diag.log('stopped',{reason});
+}
+btnStart.addEventListener('click',()=>{phase==='countdown'||phase==='running'?stop('button'):start();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stop('hidden');});
+
+/* ---------- Rendering ---------- */
+function renderIdle(){
+  overlay.innerHTML=`<p class="intro">${Tools.esc(state.mode==='mole'?t('intro'):t('introLamp'))}</p>`;
+  overlay.hidden=false;
+  $('time').textContent=Tools.fmt(state.dur,0);$('score').textContent='0';
+}
+function renderControls(){
+  const busy=phase==='countdown'||phase==='running';
+  btnStart.textContent=busy?t('stop'):phase==='over'?t('again'):t('start');
+  btnStart.classList.toggle('danger',busy);btnStart.classList.toggle('primary',!busy);
+  for(const b of document.querySelectorAll('#modes button,#durations button,#sizes button'))b.disabled=busy;
+  board.dataset.mode=game&&busy?game.mode:state.mode;
+  for(const b of document.querySelectorAll('#modes button'))b.setAttribute('aria-pressed',String(b.dataset.mode===state.mode));
+  for(const b of document.querySelectorAll('#durations button'))b.setAttribute('aria-pressed',String(Number(b.dataset.dur)===state.dur));
+  for(const b of document.querySelectorAll('#sizes button'))b.setAttribute('aria-pressed',String(Number(b.dataset.size)===state.size));
+  const b=state.best[key()];
+  $('bestNow').textContent=b?Tools.fmt(b.points,0):'–';
+}
+function renderBest(){
+  const rows=[];
+  for(const m of MODES)for(const d of DURS)for(const s of SIZES){
+    const b=state.best[key(m,d,s)];
+    if(b&&Number.isFinite(b.points))rows.push(`<tr><td>${Tools.esc(t(m))}</td><td>${Tools.esc(t('s'+d))} · ${Tools.esc(t('g'+s))}</td>`+
+      `<td class="num">${Tools.fmt(b.points,0)}</td><td class="num">${b.avg!=null?Tools.fmt(b.avg,0):'–'}</td></tr>`);
+  }
+  $('bestList').innerHTML=(rows.length
+    ?`<table class="best"><thead><tr><th scope="col">${Tools.esc(t('b.mode'))}</th><th scope="col">${Tools.esc(t('b.game'))}</th>`+
+      `<th scope="col" class="num">${Tools.esc(t('b.points'))}</th><th scope="col" class="num">${Tools.esc(t('b.avg'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
+    :`<p class="info">${Tools.esc(t('b.none'))}</p>`)+
+    (state.rounds?`<p class="info">${Tools.esc(t('b.rounds',{n:Tools.fmt(state.rounds,0)}))}</p>`:'');
+}
+// Changing mode, duration or size while not playing: back to the start screen
+function change(patch){
+  if(phase==='countdown'||phase==='running')return false;
+  let changed=false;
+  for(const [k,v] of Object.entries(patch))if(v!==undefined&&state[k]!==v){state[k]=v;changed=true;}
+  if(!changed)return true;
+  save();
+  if('size' in patch)buildGrid();
+  setPhase('idle');renderIdle();status.textContent='';
+  Tools.diag.log('settings',{mode:state.mode,dur:state.dur,size:state.size});
+  return true;
+}
+$('modes').addEventListener('click',e=>{const b=e.target.closest('button');if(b)change({mode:b.dataset.mode});});
+$('durations').addEventListener('click',e=>{const b=e.target.closest('button');if(b)change({dur:Number(b.dataset.dur)});});
+$('sizes').addEventListener('click',e=>{const b=e.target.closest('button');if(b)change({size:Number(b.dataset.size)});});
+for(const [id,k] of [['optSound','sound'],['optVibrate','vibrate']]){
+  $(id).checked=state[k];
+  $(id).addEventListener('change',e=>{state[k]=e.target.checked;save();if(k==='sound'&&state[k])unlock();});
+}
+$('btnBest').addEventListener('click',()=>{
+  Tools.menu.open();
+  setTimeout(()=>$('bestCard').scrollIntoView({block:'start'}),50);
+});
+
+buildGrid();setPhase('idle');renderIdle();renderBest();
+Tools.onLang(()=>{
+  cells.forEach((c,i)=>c.setAttribute('aria-label',t('cell',{n:i+1})));
+  renderControls();renderBest();
+  if(phase==='idle'){renderIdle();if(status.textContent)status.textContent=t('aborted');}
+  else if(phase==='over'&&state.last){renderResult(state.last,null);status.textContent=t('over');}
+  else if(phase==='running')status.textContent=game.mode==='mole'?t('playing'):t('playingLamp');
+});
+Tools.diag.info(()=>({mode:state.mode,dur:state.dur,size:state.size,phase,sound:state.sound,vibrate:state.vibrate,
+  rounds:state.rounds,bestEntries:Object.keys(state.best).length,audio:ac?ac.state:'not created',canVibrate:!!navigator.vibrate}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const pub=r=>r&&{mode:r.mode,duration_seconds:r.dur,grid_size:r.size,points:r.points,hits:r.hits,misses:r.wrong,
+  moles_got_away:r.mode==='mole'?r.missed:null,average_reaction_ms:r.avg,fastest_reaction_ms:r.fastest};
+Tools.mcp.register({
+  name:'get_scores',title:'Read scores',label:'mcp.scores',readOnly:true,
+  description:'Reads the reaction game: current settings (mode "mole" = whack-a-mole or "lamp" = tap the lit lamp, game length in seconds, grid size), the game phase (idle, countdown, running, over), the result of the last finished game (points = hits minus misses, never below 0; reaction times in milliseconds) and the best score per mode, length and grid size.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    const best=[];
+    for(const m of MODES)for(const d of DURS)for(const s of SIZES){
+      const b=state.best[key(m,d,s)];
+      if(b)best.push({mode:m,duration_seconds:d,grid_size:s,points:b.points,average_reaction_ms:b.avg});
+    }
+    return {settings:{mode:state.mode,duration_seconds:state.dur,grid_size:state.size,sounds:state.sound,vibration:state.vibrate},
+      phase,current_points:game&&phase==='running'?points():null,last_game:pub(state.last),best,rounds_played:state.rounds};
+  }
+});
+Tools.mcp.register({
+  name:'set_game',title:'Set up the game',label:'mcp.set',
+  description:'Chooses the game mode, length and/or grid size for the next game (the player starts it themselves). Not possible while a game is running. Returns the new settings and the best score for them (null if none yet).',
+  inputSchema:{type:'object',properties:{
+    mode:{type:'string',enum:MODES,description:'"mole" = whack-a-mole, "lamp" = tap the lamp that lights up.'},
+    duration_seconds:{type:'integer',enum:DURS,description:'Game length in seconds.'},
+    grid_size:{type:'integer',enum:SIZES,description:'Grid of 3 × 3 or 4 × 4 fields.'}
+  },additionalProperties:false},
+  execute:({mode,duration_seconds,grid_size})=>{
+    if(!change({mode,dur:duration_seconds,size:grid_size}))throw new Error('A game is running – wait until it is over.');
+    const b=state.best[key()];
+    return {mode:state.mode,duration_seconds:state.dur,grid_size:state.size,best_points:b?b.points:null};
+  }
+});
+})();
+</script>
+</body>
+</html>
