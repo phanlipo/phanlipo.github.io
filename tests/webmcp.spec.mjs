@@ -2143,17 +2143,19 @@ test.describe('reaction-game tools', () => {
     const last = { mode: 'lamp', dur: 15, size: 3, points: 7, hits: 8, wrong: 1, missed: 0, avg: 412, fastest: 250, at: '2026-05-01T09:00:00.000Z' };
     await page.addInitScript(v => localStorage.setItem('reaction-game.state.v1', v), JSON.stringify({
       mode: 'mole', dur: 30, size: 3, sound: true, vibrate: false, rounds: 4, last,
-      best: { 'lamp-15-3': { points: 7, avg: 412, at: last.at }, 'mole-30-4': { points: 21, avg: 530, at: last.at } } }));
+      best: { 'lamp-15-3': { points: 7, avg: 412, at: last.at }, 'mole-30-4': { points: 21, avg: 530, at: last.at }, 'fly-15-0': { points: 9, avg: 600, at: last.at } } }));
     await open(page, '/reaction-game/');
     let r = await call(page, 'reaction_game_get_scores', {});
     expect(r.ok).toBe(true);
     expect(r.result).toEqual({
       settings: { mode: 'mole', duration_seconds: 30, grid_size: 3, sounds: true, vibration: false },
       phase: 'idle', current_points: null, rounds_played: 4,
-      last_game: { mode: 'lamp', duration_seconds: 15, grid_size: 3, points: 7, hits: 8, misses: 1, moles_got_away: null, average_reaction_ms: 412, fastest_reaction_ms: 250 },
+      last_game: { mode: 'lamp', duration_seconds: 15, grid_size: 3, points: 7, hits: 8, misses: 1, got_away: null, average_reaction_ms: 412, fastest_reaction_ms: 250 },
       best: [
         { mode: 'mole', duration_seconds: 30, grid_size: 4, points: 21, average_reaction_ms: 530 },
         { mode: 'lamp', duration_seconds: 15, grid_size: 3, points: 7, average_reaction_ms: 412 },
+        // Gnats have no grid
+        { mode: 'fly', duration_seconds: 15, grid_size: null, points: 9, average_reaction_ms: 600 },
       ],
     });
     await expect(page.locator('#toast')).toHaveText('KI-Agent: Bestwerte gelesen');
@@ -2170,6 +2172,10 @@ test.describe('reaction-game tools', () => {
     expect((await call(page, 'reaction_game_set_game', { duration_seconds: 45 })).ok).toBe(false);
     expect((await call(page, 'reaction_game_set_game', { mode: 'snake' })).ok).toBe(false);
     expect((await call(page, 'reaction_game_set_game', { speed: 2 })).ok).toBe(false);
+    r = await call(page, 'reaction_game_set_game', { mode: 'fly' });
+    expect(r.result).toEqual({ mode: 'fly', duration_seconds: 15, grid_size: 4, best_points: 9 });
+    await expect(page.locator('#sizes [data-size="4"]')).toBeDisabled();
+    await expect(page.locator('#grid')).toBeHidden();
   });
 
   test('set_game is refused while a game runs; get_scores shows the running points', async ({ page }) => {

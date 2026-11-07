@@ -141,6 +141,92 @@ test('lamps: one at a time, never the same twice, reaction times measured exactl
   expect(s.best['lamp-15-3']).toMatchObject({ points: waits.length - 1, avg });
 });
 
+test('mosquitoes: random spots without a grid, they drift and fly off; taps beside them count as misses', async ({ page }) => {
+  // Without motion the mosquitoes hold still, so the clicks can aim; the drift is checked below
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openPaused(page);
+  await page.click('#modes [data-mode="fly"]');
+  await expect(page.locator('#board')).toHaveAttribute('data-mode', 'fly');
+  await expect(page.locator('#grid')).toBeHidden();
+  await expect(page.locator('#overlay')).toHaveText('Tippe auf Start und erwisch die Mücken, bevor sie davonfliegen!');
+  await openMenu(page);
+  await expect(page.locator('#sizes [data-size="4"]')).toBeDisabled();
+  await expect(page.locator('#sizeInfo')).toBeVisible();
+  await page.click('#durations [data-dur="15"]');
+  await closeMenu(page);
+  await page.click('#btnStart');
+  await page.clock.runFor(COUNTDOWN);
+  await expect(page.locator('#status')).toHaveText('Erwisch die Mücken!');
+  const bugs = page.locator('#swarm .bug:not(.hit)');
+  const field = await page.locator('#swarm').boundingBox();
+  const spots = new Set();
+  let hits = 0, wrong = 0, maxUp = 0;
+  for (let step = 0; step < 150; step++) {
+    const n = await bugs.count();
+    maxUp = Math.max(maxUp, n);
+    if (step < 70) expect(n).toBeLessThanOrEqual(1);
+    if (n) {
+      const box = await bugs.first().boundingBox();
+      // Inside the field, about 15 % of its width
+      expect(box.x).toBeGreaterThanOrEqual(field.x - 1);
+      expect(box.y).toBeGreaterThanOrEqual(field.y - 1);
+      expect(box.x + box.width).toBeLessThanOrEqual(field.x + field.width + 1);
+      expect(box.y + box.height).toBeLessThanOrEqual(field.y + field.height + 1);
+      expect(box.width / field.width).toBeCloseTo(0.15, 2);
+      spots.add(await bugs.first().evaluate(b => b.style.left + '/' + b.style.top));
+      // Drift: a direction is set and keeps the mosquito inside the field
+      const d = await bugs.first().evaluate(b => ({ x: parseFloat(b.style.left), y: parseFloat(b.style.top),
+        dx: parseFloat(b.style.getPropertyValue('--dx')), dy: parseFloat(b.style.getPropertyValue('--dy')), w: b.parentElement.clientWidth }));
+      expect(Math.hypot(d.dx, d.dy)).toBeGreaterThan(0);
+      expect(d.x + d.dx / d.w * 100).toBeGreaterThanOrEqual(-0.1);
+      expect(d.x + d.dx / d.w * 100).toBeLessThanOrEqual(85.1);
+      expect(d.y + d.dy / d.w * 100).toBeGreaterThanOrEqual(-0.1);
+      expect(d.y + d.dy / d.w * 100).toBeLessThanOrEqual(85.1);
+    }
+    if (n && step % 4 === 0) {
+      await bugs.first().click();
+      hits++;
+    } else if (!n && step % 20 === 5) {
+      // A tap on an empty spot of the field
+      await page.mouse.click(field.x + field.width / 2, field.y + field.height / 2);
+      wrong++;
+    }
+    await expect(page.locator('#score')).toHaveText(String(Math.max(0, hits - wrong)));
+    await page.clock.runFor(100);
+  }
+  // Positions are free, not 9 or 16 fixed places
+  expect(spots.size).toBeGreaterThan(12);
+  expect(maxUp).toBeLessThanOrEqual(2);
+  await page.clock.runFor(1000);
+  await expect(page.locator('#board')).toHaveAttribute('data-phase', 'over');
+  await expect(page.locator('#swarm .bug')).toHaveCount(0);
+  await expect(page.locator('#resScore')).toHaveText(String(Math.max(0, hits - wrong)));
+  await expect(page.locator('#resList li').nth(0)).toHaveText(`Treffer: ${hits}`);
+  await expect(page.locator('#resList li').nth(1)).toHaveText(`Daneben: ${wrong}`);
+  await expect(page.locator('#resList li').nth(2)).toHaveText(/^Entwischt: \d+$/);
+  const s = await state(page);
+  expect(s.best['fly-15-0'].points).toBe(Math.max(0, hits - wrong));
+  await openMenu(page);
+  await expect(page.locator('#bestList tbody td').nth(0)).toHaveText('Mücken');
+  await expect(page.locator('#bestList tbody td').nth(1)).toHaveText('15 s · freies Feld');
+});
+
+test('a mosquito flies off after at most 1.3 s; keyboard catches it once', async ({ page }) => {
+  await openPaused(page);
+  await page.click('#modes [data-mode="fly"]');
+  await page.click('#btnStart');
+  await page.clock.runFor(COUNTDOWN);
+  await expect(page.locator('#swarm .bug')).toHaveCount(1);
+  const id = await page.locator('#swarm .bug').getAttribute('data-id');
+  await page.clock.runFor(1350);
+  await expect(page.locator(`#swarm .bug[data-id="${id}"]`)).toHaveCount(0);
+  await expect.poll(() => page.locator('#swarm .bug').count()).toBe(0);
+  for (let k = 0; k < 20 && !(await page.locator('#swarm .bug').count()); k++) await page.clock.runFor(100);
+  await page.locator('#swarm .bug').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#score')).toHaveText('1');
+});
+
 test('equal points: the faster average reaction wins the record', async ({ page }) => {
   const best = { 'lamp-15-3': { points: 2, avg: 300, at: '2026-01-01T00:00:00.000Z' } };
   await page.addInitScript(([k, v]) => { if (!sessionStorage.getItem('seeded')) { localStorage.setItem(k, v); sessionStorage.setItem('seeded', '1'); } },
