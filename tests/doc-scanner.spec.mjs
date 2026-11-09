@@ -242,6 +242,49 @@ test('sort, rotate and delete pages; order is kept in the PDF', async ({ page })
   await expect(page.locator('#btnPdf')).toBeDisabled();
 });
 
+test('pages survive a reload (app update, phone ending the app) with order, rotation and file name; remove all', async ({ page }) => {
+  const a = await photo(page, { mark: 'tl' }), b = await photo(page, { mark: 'br', angle: -5 });
+  await addPhotos(page, [file(a.png, 'a.png'), file(b.png, 'b.png')]);
+  await page.getByRole('button', { name: 'Seite 2 nach vorne' }).click();          // b, a
+  await page.getByRole('button', { name: 'Seite 2 zuschneiden' }).click();
+  await page.click('#edRotR');
+  await page.click('#edDone');
+  await page.fill('#fileName', 'Vertrag');
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).name)).toBe('Vertrag');
+  await page.reload();
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(2);
+  await expect(page.locator('#addInfo')).toHaveText('2 Seite(n) vom letzten Mal wieder da.');
+  await expect(page.locator('#fileName')).toHaveValue('Vertrag');
+  const { name, pdf } = await savePdf(page);
+  expect(name).toBe('Vertrag.pdf');
+  expect(pdf.pages).toHaveLength(2);
+  expect((await measure(page, pdf.pages[0].jpeg, REGIONS)).markBR).toBeLessThan(80);   // b first
+  expect(pdf.pages[1].width).toBeCloseTo(841.89, 1);                                    // a still turned
+  // a new photo is added after the kept ones and kept, too
+  const c = await photo(page, { mark: 'tl', angle: 3 });
+  await addPhotos(page, [file(c.png, 'c.png')]);
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.names()).filter(n => n.startsWith('page-')).length)).toBe(3);
+  await page.reload();
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(3);
+  // a deleted page is gone after a reload
+  await page.getByRole('button', { name: 'Seite 3 löschen' }).click();
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.names()).filter(n => n.startsWith('page-')).length)).toBe(2);
+  await page.reload();
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(2);
+  const text = await page.evaluate(() => Tools.diag.text());
+  expect(text).toContain('pages restored');
+  expect(text).toContain('kept files: 3');                        // two photos and the state
+  expect(text).not.toContain('Vertrag');
+  // remove all: nothing comes back
+  await page.click('#btnClear');
+  await expect(page.locator('#empty')).toBeVisible();
+  await expect(page.locator('#btnClear')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => Tools.keep.names())).toEqual([]);
+  await page.reload();
+  await page.waitForTimeout(500);
+  await expect(page.locator('#pages li')).toHaveCount(0);
+});
+
 test('corners can be moved by dragging and with the keyboard', async ({ page }) => {
   const { png } = await photo(page);
   await addPhotos(page, [file(png)]);
@@ -314,11 +357,14 @@ test('settings are kept; file name, page size and quality reach the PDF', async 
   await page.fill('#fileName', 'Kinderärztin');
   expect((await savePdf(page)).pdf.info).toContain('/Title <FEFF004B0069006E00640065007200E4');
 
+  // the page is kept (Tools.keep, written shortly after each change): wait for it, so the reload is not a race
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).name)).toBe('Kinderärztin');
   await page.reload();
   await expect(page.locator('input[name="filterAll"][value="gray"]')).toBeChecked();
   await expect(page.locator('#pageSize')).toHaveValue('fit');
   await expect(page.locator('#quality')).toHaveValue('150');
-  await expect(page.locator('#pageCount')).toHaveText('0');
+  await expect(page.locator('#pageCount')).toHaveText('1');
+  await expect(page.locator('#fileName')).toHaveValue('Kinderärztin');
 });
 
 test('the camera button opens the crop view after the photo', async ({ page }) => {
@@ -360,16 +406,18 @@ test('share target: several photos shared to the installed app become pages in t
   const pdf = (await savePdf(page)).pdf;
   expect((await measure(page, pdf.pages[0].jpeg, REGIONS)).markBR).toBeLessThan(80);   // b first
   expect((await measure(page, pdf.pages[1].jpeg, REGIONS)).markTL).toBeLessThan(80);   // then a
-  // picked up once: nothing left in the cache, a reload adds nothing
+  // picked up once: nothing left in the cache, a reload adds nothing (only the two kept pages come back)
   expect(await page.evaluate(async () => (await (await caches.open('share:doc-scanner')).keys()).length)).toBe(0);
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).pages?.length)).toBe(2);
   await page.goto(`${URL_}?shared=1`);
-  await expect(page.locator('#pageCount')).toHaveText('0');
+  await expect(page.locator('#addInfo')).toHaveText('2 Seite(n) vom letzten Mal wieder da.');
+  await expect(page.locator('#pageCount')).toHaveText('2');
 
-  // a single shared photo opens the crop view
+  // a single shared photo is added after the kept pages and opens the crop view
   expect(await share([['a.png', a.png]])).toBe(true);
   await page.goto(`${URL_}?shared=1`);
   await expect(page.locator('#editor')).toBeVisible();
-  await expect(page.locator('#pageCount')).toHaveText('1');
+  await expect(page.locator('#pageCount')).toHaveText('3');
 });
 
 test('opened with the installed app (Windows "Open with"): several photos become pages in that order', async ({ page }) => {
@@ -394,12 +442,15 @@ test('HEIC photo (iPhone, Android) becomes a page with the libheif decoder, also
   await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(1);
   expect(await page.evaluate(() => Heic.info())).toEqual({ native: false, worker: true });
   expect((await savePdf(page)).pdf.pages).toHaveLength(1);
-  // offline: the decoder was cached on first use
+  // offline: the decoder was cached on first use – the kept HEIC page is decoded again, a second one is added
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).pages?.length)).toBe(1);
   await context.setOffline(true);
   await page.reload();
+  await expect(page.locator('#addInfo')).toHaveText('1 Seite(n) vom letzten Mal wieder da.');
   await page.setInputFiles('#inPick', heic);
   await expect(page.locator('#addInfo')).toHaveText(/^1 Seite\(n\) hinzugefügt\./);
-  expect((await savePdf(page)).pdf.pages).toHaveLength(1);
+  await expect(page.locator('#pages li img[src^="blob:"]')).toHaveCount(2);
+  expect((await savePdf(page)).pdf.pages).toHaveLength(2);
   await context.setOffline(false);
 });
 

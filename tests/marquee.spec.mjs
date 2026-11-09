@@ -79,6 +79,33 @@ test.describe('landscape screen', () => {
     await expect(page.locator('#btnShow')).toBeFocused();
   });
 
+  test('scrolling text at 100 % stays fully on screen, descenders included', async ({ page }) => {
+    await page.locator('#size').fill('100');
+    await page.fill('#text', 'Krieg gypsy');
+    for (const f of ['sans', 'serif', 'mono', 'condensed']) {
+      await page.locator(`#fonts [data-f="${f}"]`).click();
+      await page.click('#btnShow');
+      await expect(show(page)).toBeVisible();
+      // Ink of the glyphs (canvas measures g/y/p descenders) must lie inside the 400 px high screen
+      const ink = await showText(page).evaluate(el => {
+        const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+        const c = document.createElement('canvas').getContext('2d');
+        c.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const m = c.measureText(el.textContent);
+        // Baseline position inside the line box, as the browser lays it out
+        const half = (r.height - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2;
+        const base = r.top + half + m.fontBoundingBoxAscent;
+        return { top: base - m.actualBoundingBoxAscent, bottom: base + m.actualBoundingBoxDescent };
+      });
+      expect(ink.top, f).toBeGreaterThanOrEqual(0);
+      expect(ink.bottom, f).toBeLessThanOrEqual(400);
+      const fs = parseFloat(await showText(page).getAttribute('data-font-size'));
+      expect(fs, f).toBeGreaterThan(400 * 0.7); // still big
+      await show(page).click();
+      await expect(show(page)).toBeHidden();
+    }
+  });
+
   test('scrolling to the right moves the other way', async ({ page }) => {
     await page.locator('#motions [data-m="right"]').click();
     await page.click('#btnShow');

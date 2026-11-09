@@ -51,6 +51,12 @@ for (const app of withDiag) {
     for (const key of ['time', 'userAgent', 'standalone', 'language', 'online', 'serviceWorker.controller', 'registration', 'storage'])
       expect(text, key).toMatch(new RegExp(`^${key.replace('.', '\\.')}: `, 'm'));
     expect(text).toMatch(/\n\nlog:\n/);
+    // The toast stays a small pill at the bottom: page CSS must not restyle .toast or .show (marquee once
+    // had its own full-screen .show class, which turned the toast into a huge panel).
+    const box = await page.locator('#toast').boundingBox();
+    const vp = page.viewportSize();
+    expect(box.height, 'toast height').toBeLessThan(120);
+    expect(box.y + box.height, 'toast at the bottom').toBeGreaterThan(vp.height - 80);
   });
 }
 

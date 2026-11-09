@@ -329,6 +329,8 @@ window.Tools = (function () {
   }
   function clearData() {
     for (const k of ownKeys()) remove(k);
+    // Files an app keeps on the device (Tools.keep, Cache Storage "file:<app>")
+    keepClear();
   }
 
   function downloadFile(file) {
@@ -684,6 +686,60 @@ window.Tools = (function () {
     return tool;
   }
 
+  /* ---------- Keep files until the next start (see AGENTS.md "Daten sichern", Ausnahme Dateien) ----------
+     Work that lives only in memory (opened files, scanned pages …) is lost when the page reloads – after an app
+     update (↻) or when the phone ends the app in the background. Tools.keep stores files on the device in the
+     Cache Storage "file:<app>": too big for localStorage and not part of the backup; "Alle Daten löschen" removes
+     it (clearData). Names are short keys chosen by the app ("doc", "page-3", "state"). All calls catch errors.
+       Tools.keep.supported()            Cache Storage available
+       Tools.keep.put(name, blob)        File/Blob (name and type are kept) → true/false
+       Tools.keep.putJson(name, value)   small JSON state next to the files → true/false
+       Tools.keep.get(name)              → File or null
+       Tools.keep.json(name, fallback)   → parsed value or fallback
+       Tools.keep.remove(name) / clear() / names() → [names] */
+  const KEEP_CACHE = () => 'file:' + appId();
+  const keepSupported = () => { try { return 'caches' in window; } catch (_) { return false; } };
+  async function keepPut(name, blob) {
+    if (!keepSupported()) return false;
+    try {
+      const headers = { 'Content-Type': blob.type || 'application/octet-stream' };
+      if (blob.name) headers['X-File-Name'] = encodeURIComponent(blob.name);
+      await (await caches.open(KEEP_CACHE())).put(name, new Response(blob, { headers }));
+      return true;
+    } catch (e) { diagLog('keep failed', name, e); return false; }
+  }
+  const keepPutJson = (name, value) => keepPut(name, new Blob([JSON.stringify(value)], { type: 'application/json' }));
+  async function keepGet(name) {
+    if (!keepSupported()) return null;
+    try {
+      const res = await (await caches.open(KEEP_CACHE())).match(name);
+      if (!res) return null;
+      const type = res.headers.get('Content-Type') || '';
+      return new File([await res.blob()], decodeURIComponent(res.headers.get('X-File-Name') || name), { type });
+    } catch (e) { diagLog('keep read failed', name, e); return null; }
+  }
+  async function keepJson(name, fallback = null) {
+    const f = await keepGet(name);
+    if (!f) return fallback;
+    try { return JSON.parse(await f.text()); } catch (_) { return fallback; }
+  }
+  async function keepRemove(name) {
+    if (!keepSupported()) return;
+    try { await (await caches.open(KEEP_CACHE())).delete(name); } catch (_) {}
+  }
+  async function keepClear() {
+    if (!keepSupported()) return;
+    try { await caches.delete(KEEP_CACHE()); } catch (_) {}
+  }
+  async function keepNames() {
+    if (!keepSupported()) return [];
+    try {
+      if (!(await caches.has(KEEP_CACHE()))) return [];
+      const base = new URL('.', location.href).href;
+      return (await (await caches.open(KEEP_CACHE())).keys()).map(r => decodeURIComponent(r.url.startsWith(base) ? r.url.slice(base.length) : r.url));
+    } catch (_) { return []; }
+  }
+
   /* ---------- Full screen (feature "Vollbild", see AGENTS.md "Vollbild & ausblendende Leisten") ----------
      Hides the browser and the system bars (Android: status and navigation bar) – requestFullscreen with
      navigationUI 'hide'. Browsers allow it only right after a tap/key press. An installed app whose manifest
@@ -762,6 +818,7 @@ window.Tools = (function () {
     let bytes = 0;
     try { bytes = keys.reduce((n, k) => n + k.length + (localStorage.getItem(k) || '').length, 0) * 2; } catch (_) {}
     add('storage', { keys: keys.length, bytes });
+    add('kept files', (await keepNames()).length);
     for (const fn of diagInfos) {
       try { for (const [k, v] of Object.entries((await fn()) || {})) add(k, v); } catch (e) { add('info failed', e); }
     }
@@ -799,6 +856,7 @@ window.Tools = (function () {
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     menu: { open: menuOpen, close: menuClose, element: () => menuEl },
+    keep: { supported: keepSupported, put: keepPut, putJson: keepPutJson, get: keepGet, json: keepJson, remove: keepRemove, clear: keepClear, names: keepNames },
     fullscreen: { supported: fsSupported, active: fsActive, system: fsSystem, enter: fsEnter, exit: fsExit, toggle: fsToggle, onChange: fsOnChange },
     data: { exportData, validateBackup, importData, clearData, keys: ownKeys, prefixes: storagePrefixes, appId },
     diag: { log: diagLog, info: fn => { diagInfos.push(fn); }, text: diagText },

@@ -19,7 +19,7 @@
 <meta name="tool:storage" content="paint.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Ipym85X4HS6dc7Wr+AlBJ3j9D9z2NWQECD2bMbRUCwQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-sb+6kRBD83IsNNTE8Ca0qAvA+JeSXKkhKQIUgLoBMqg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -44,9 +44,10 @@ main{display:flex;flex-direction:column}
 .tool.danger{color:var(--err)}
 .tool:focus-visible,.sw:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .tool svg{width:24px;height:24px}
-/* The canvas fills the rest of the screen; the drawing surface may be larger (kept when rotating) */
-.wrap{position:relative;overflow:hidden;flex:1;min-height:200px;background:#ffffff;touch-action:none}
-.wrap canvas{position:absolute;inset-block-start:0;inset-inline-start:0;display:block;touch-action:none}
+/* The canvas fills the rest of the screen. After rotating, the picture keeps its size and is shown
+   whole (scaled down and centred); the free space around it is not part of the picture. */
+.wrap{position:relative;overflow:hidden;flex:1;min-height:200px;background:var(--surface-2);touch-action:none}
+.wrap canvas{position:absolute;top:0;left:0;display:block;touch-action:none;background:#ffffff}
 #layer{pointer-events:none;opacity:.45}
 #paper{cursor:crosshair}
 </style>
@@ -99,7 +100,7 @@ main{display:flex;flex-direction:column}
     <li><b>Farbtopf</b>: Antippen füllt die ganze Fläche in der gewählten Farbe – bis zu den gemalten Linien oder bis zum Rand der Leinwand. Ist eine Form nicht ganz geschlossen, läuft die Farbe durch die Lücke hinaus.</li>
     <li><b>Radierer</b> malt weiß und entfernt so, was darunter ist. Wer danach eine Farbe antippt, malt wieder mit dem letzten Werkzeug.</li>
     <li><b>Papierkorb</b> leert die ganze Leinwand (nach Rückfrage).</li>
-    <li>Das Bild bleibt nach dem Schließen erhalten und wird nur in diesem Browser gespeichert. Beim Drehen des Handys geht nichts verloren.</li>
+    <li>Das Bild bleibt nach dem Schließen erhalten und wird nur in diesem Browser gespeichert. Beim Drehen des Handys geht nichts verloren: Passt das Bild nicht ganz auf den Bildschirm, wird es verkleinert ganz gezeigt – zurückgedreht ist es wieder groß.</li>
   </ul>
   <h3>KI-Agenten (WebMCP)</h3>
   <p>Unterstützt der Browser WebMCP, kann ein KI-Agent Farbe und Werkzeug wählen und abfragen, wie viel der Leinwand bemalt ist. Das Bild selbst bekommt er nicht.</p>
@@ -113,7 +114,7 @@ main{display:flex;flex-direction:column}
     <li><b>Paint bucket</b>: a tap fills the whole area in the chosen colour – up to the painted lines or the edge of the canvas. If a shape is not quite closed, the paint runs out through the gap.</li>
     <li>The <b>eraser</b> paints white and so removes what is underneath. Tapping a colour afterwards switches back to the last tool.</li>
     <li>The <b>bin</b> clears the whole canvas (after asking).</li>
-    <li>The picture is kept after closing and stored only in this browser. Rotating the phone loses nothing.</li>
+    <li>The picture is kept after closing and stored only in this browser. Rotating the phone loses nothing: if the picture does not fit the screen, it is shown whole and smaller – turn back and it is full size again.</li>
   </ul>
   <h3>AI agents (WebMCP)</h3>
   <p>If the browser supports WebMCP, an AI agent can pick colour and tool and ask how much of the canvas is painted. It does not get the picture itself.</p>
@@ -129,7 +130,7 @@ main{display:flex;flex-direction:column}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version c4dc750af53c</p>
+  <p class="footer-version">Version 5c3f42ab3fc7</p>
   <!-- footer:end -->
 </footer>
 
@@ -163,7 +164,7 @@ const saveSettings=()=>Tools.save(LS_SET,{color:S.color,tool:S.tool,last:S.last}
 const wrap=Tools.$('wrap'),paper=Tools.$('paper'),layer=Tools.$('layer');
 const ctx=paper.getContext('2d'),lctx=layer.getContext('2d');
 const dpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));
-let W=0,H=0;// drawing surface in CSS px (only grows, so rotating keeps the picture)
+let W=0,H=0;// picture size in CSS px (bitmap = W*dpr × H*dpr)
 let strokes=0,saveFailed=false;
 
 // ---------- UI ----------
@@ -184,6 +185,7 @@ Tools.$('btnReset').addEventListener('click',()=>{
   if(!confirm(t('confirmReset')))return;
   ctx.fillStyle=WHITE;ctx.fillRect(0,0,paper.width,paper.height);
   strokes=0;Tools.remove(LS_IMG);saveFailed=false;
+  fit();// an empty canvas takes the current screen size again
   Tools.diag.log('canvas cleared');
   Tools.toast(t('cleared'));
 });
@@ -191,19 +193,34 @@ renderLabels();renderSel();
 Tools.onLang(renderLabels);
 
 // ---------- Surface ----------
-// Grows the drawing surface to at least w×h CSS px and keeps the picture
-function grow(w,h){
-  w=Math.max(w,W);h=Math.max(h,H);
+// The picture keeps its size when the screen turns. It is shown whole: scaled down and centred
+// when it does not fit, so rotating neither cuts off nor changes anything.
+// size(w,h): sets the picture to w×h CSS px; keep=true keeps the picture (top left, rest white)
+function size(w,h,keep){
   if(w===W&&h===H)return;
   let old=null;
-  if(W&&H){old=document.createElement('canvas');old.width=paper.width;old.height=paper.height;old.getContext('2d').drawImage(paper,0,0);}
-  for(const c of [paper,layer]){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);c.style.width=w+'px';c.style.height=h+'px';}
+  if(keep&&W&&H){old=document.createElement('canvas');old.width=paper.width;old.height=paper.height;old.getContext('2d').drawImage(paper,0,0);}
+  for(const c of [paper,layer]){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);}
   ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=WHITE;ctx.fillRect(0,0,paper.width,paper.height);
-  if(old)ctx.drawImage(old,0,0);
+  if(old){ctx.drawImage(old,0,0);old.width=old.height=0;}// free memory right away (iPhone limit)
   W=w;H=h;
   Tools.diag.log('surface',{w:W,h:H,dpr});
 }
-const fit=()=>grow(Math.ceil(wrap.clientWidth),Math.ceil(wrap.clientHeight));
+let view={w:0,h:0,k:1};
+function fit(){
+  const ww=Math.floor(wrap.clientWidth),wh=Math.floor(wrap.clientHeight);
+  if(!ww||!wh)return;
+  // Empty canvas: always exactly the visible area. A picture only grows (white) where it fits
+  // in both directions – never wider than it is, which would shrink it on the screen.
+  if(!strokes||!W||!H)size(ww,wh,false);
+  else if(ww>=W&&wh>=H)size(ww,wh,true);
+  const k=Math.min(1,ww/W,wh/H),cw=W*k,ch=H*k;
+  for(const c of [paper,layer]){
+    c.style.width=cw+'px';c.style.height=ch+'px';
+    c.style.left=Math.round((ww-cw)/2)+'px';c.style.top=Math.round((wh-ch)/2)+'px';
+  }
+  if(k!==view.k||ww!==view.w||wh!==view.h){view={w:ww,h:wh,k};if(k<1)Tools.diag.log('view scaled',{w:ww,h:wh,k:Math.round(k*100)/100});}
+}
 fit();
 if('ResizeObserver' in window)new ResizeObserver(fit).observe(wrap);else window.addEventListener('resize',fit);
 
@@ -213,9 +230,10 @@ if(saved&&typeof saved.png==='string'&&saved.png.startsWith('data:image/png')){
   const img=new Image();
   img.onload=()=>{
     const w=+saved.w||img.width/dpr,h=+saved.h||img.height/dpr;
-    grow(Math.ceil(w),Math.ceil(h));
+    size(Math.ceil(w),Math.ceil(h),false);
     ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(img,0,0,w*dpr,h*dpr);
     strokes=+saved.strokes||1;
+    fit();
     Tools.diag.log('picture restored',{w,h});
   };
   img.onerror=()=>Tools.diag.log('restore failed');
@@ -236,7 +254,8 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&saveTimer)
 
 // ---------- Drawing ----------
 let cur=null;// {id, tool, color, x, y, raf}
-function pos(e){const r=paper.getBoundingClientRect();return {x:(e.clientX-r.left)*dpr,y:(e.clientY-r.top)*dpr};}
+// Pointer position in bitmap pixels (the canvas may be shown scaled down)
+function pos(e){const r=paper.getBoundingClientRect();return {x:(e.clientX-r.left)*paper.width/r.width,y:(e.clientY-r.top)*paper.height/r.height};}
 function lineCtx(c,tool,color){
   c.setTransform(1,0,0,1,0,0);
   c.lineCap='round';c.lineJoin='round';

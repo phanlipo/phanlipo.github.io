@@ -20,7 +20,7 @@
 <meta name="tool:share-target" content="video/*, .mp4, .m4v, .mov, .webm, .mkv, .3gp">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-n+bYzc97iJeO3tmYQzV4+U3cw1WFWSHW561WxvFeMQo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-UiZsXts5o/sVsHtDwwHutzbq771QCB+il1z3MYmlHOE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -53,6 +53,20 @@ progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10
 .status.warn{color:var(--warn)}
 audio{display:block;width:100%;margin-block:10px}
 .meta-line{font-size:13px;color:var(--muted);margin-block:8px 0;overflow-wrap:anywhere}
+.tags{margin-block:4px 12px}
+.tags>summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center;gap:8px;list-style:none}
+.tags>summary::-webkit-details-marker{display:none}
+.tags>summary::before{content:"▸";color:var(--muted);transition:transform .15s}
+.tags[open]>summary::before{transform:rotate(90deg)}
+.tags>summary>span:first-child{flex:none;white-space:nowrap}
+.tags-sum{font-weight:400;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.field{display:flex;flex-direction:column;gap:4px;margin-block-end:10px}
+.field>span{font-size:13px;color:var(--muted);font-weight:600}
+.field input{min-height:44px;padding:8px 10px}
+.cover-row{align-items:center}
+.cover-row img{width:56px;height:56px;border-radius:6px;object-fit:cover;flex:none;margin-inline-start:auto}
+.cover-row img:not([src]){display:none}
+.hint{font-size:13px;color:var(--muted);margin:0}
 </style>
 </head>
 <body>
@@ -82,6 +96,15 @@ audio{display:block;width:100%;margin-block:10px}
       <label class="choice"><input type="radio" name="format" value="mp3">
         <span data-i18n-html="f.mp3">MP3<small>Spielt wirklich jedes Gerät ab. Wird neu kodiert (192 kbit/s) – minimal schlechter als Original, dauert etwas länger.</small></span></label>
     </fieldset>
+    <details class="tags" id="tags" hidden>
+      <summary><span data-i18n="tags.summary">Titel, Interpret &amp; Cover</span><span class="tags-sum" id="tagsSum"></span></summary>
+      <label class="field"><span data-i18n="tags.title">Titel</span><input type="text" id="tagTitle" maxlength="200" autocomplete="off"></label>
+      <label class="field"><span data-i18n="tags.artist">Interpret</span><input type="text" id="tagArtist" maxlength="200" autocomplete="off"></label>
+      <label class="field"><span data-i18n="tags.album">Album</span><input type="text" id="tagAlbum" maxlength="200" autocomplete="off"></label>
+      <label class="choice cover-row"><input type="checkbox" id="tagCover" checked>
+        <span><span data-i18n="tags.cover">Bild aus dem Video als Cover</span><small id="coverNote"></small></span><img id="coverImg" alt=""></label>
+      <p class="hint" data-i18n="tags.hint">Wird automatisch aus dem Video gefüllt: Titel (sonst der Dateiname), Aufnahmedatum, vorhandene Angaben und ein Standbild. Musik-Apps zeigen das an. WAV speichert kein Cover.</p>
+    </details>
     <button type="button" class="btn primary big" id="btnRun" data-i18n="run" disabled>Audio herausziehen</button>
     <progress id="progress" max="100" value="0" hidden></progress>
     <p class="status" id="status" role="status"></p>
@@ -95,6 +118,7 @@ audio{display:block;width:100%;margin-block:10px}
       <button type="button" class="btn" id="btnShare" data-i18n="share" hidden>Teilen …</button>
     </div>
     <p class="meta-line" id="resultMeta"></p>
+    <p class="meta-line" id="resultTags"></p>
   </section>
 </main>
 
@@ -130,11 +154,12 @@ audio{display:block;width:100%;margin-block:10px}
   </ul>
   <h3>Hinweise</h3>
   <ul>
-    <li>Alles läuft im Browser, auch offline. Das Video wird nicht hochgeladen und nicht gespeichert; gespeichert wird nur das gewählte Format.</li>
+    <li>Alles läuft im Browser, auch offline. Das Video wird nicht hochgeladen und nicht gespeichert; gespeichert werden nur das gewählte Format und ob ein Cover dazukommt.</li>
+    <li><strong>Titel, Interpret &amp; Cover:</strong> Die Audiodatei bekommt automatisch einen Titel (aus dem Video, sonst der Dateiname), das Aufnahmedatum (aus dem Video oder einem Dateinamen wie <code>VID_20240501_123456</code>), alle Angaben, die schon im Video stehen, und ein Standbild aus dem Video als Cover. Unter <em>Titel, Interpret &amp; Cover</em> lässt sich das vorher ändern. WAV-Dateien speichern Titel und Datum, aber kein Cover.</li>
     <li>Gelesen werden MP4, MOV, M4V, 3GP, WebM und MKV. Hat ein Video mehrere Tonspuren, wird die erste genommen.</li>
     <li>Sehr große Videos: Das Video wird nur stückweise gelesen, die Audiodatei aber im Arbeitsspeicher erstellt. Bei WAV aus sehr langen Videos (über ca. 1 Stunde) kann das Handy an seine Grenzen kommen – dann <em>Original</em> nehmen.</li>
     <li>Bibliotheken: <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) zum Lesen und Schreiben der Dateien, für MP3 dessen Erweiterung mit <a href="https://lame.sourceforge.io/">LAME</a> (LGPL).</li>
-    <li>KI-Agenten im Browser (WebMCP) können Angaben zum gewählten Video lesen und die Tonspur herausziehen lassen – ein Video auswählen können sie nicht.</li>
+    <li>KI-Agenten im Browser (WebMCP) können Angaben zum gewählten Video lesen und die Tonspur herausziehen lassen, dabei auch Titel, Interpret und Album setzen – ein Video auswählen können sie nicht.</li>
   </ul>
   </div>
   <div data-lang="en" lang="en" hidden>
@@ -154,11 +179,12 @@ audio{display:block;width:100%;margin-block:10px}
   </ul>
   <h3>Notes</h3>
   <ul>
-    <li>Everything runs in the browser, offline too. The video is neither uploaded nor stored; only the chosen format is saved.</li>
+    <li>Everything runs in the browser, offline too. The video is neither uploaded nor stored; only the chosen format and whether to add a cover are saved.</li>
+    <li><strong>Title, artist &amp; cover:</strong> the audio file automatically gets a title (from the video, otherwise the file name), the recording date (from the video or a file name like <code>VID_20240501_123456</code>), all details already in the video and a still from the video as cover. Change them beforehand under <em>Title, artist &amp; cover</em>. WAV files keep title and date, but no cover.</li>
     <li>Reads MP4, MOV, M4V, 3GP, WebM and MKV. If a video has several sound tracks, the first one is used.</li>
     <li>Very large videos: the video is read piece by piece, but the audio file is built in memory. WAV from very long videos (over about 1 hour) may be too much for a phone – use <em>Original</em> then.</li>
     <li>Libraries: <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) to read and write the files, for MP3 its extension with <a href="https://lame.sourceforge.io/">LAME</a> (LGPL).</li>
-    <li>AI agents in the browser (WebMCP) can read details of the chosen video and have its sound track extracted – they cannot choose a video.</li>
+    <li>AI agents in the browser (WebMCP) can read details of the chosen video and have its sound track extracted, setting title, artist and album too – they cannot choose a video.</li>
   </ul>
   </div>
   <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
@@ -172,7 +198,7 @@ audio{display:block;width:100%;margin-block:10px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 6c9fad037e6d</p>
+  <p class="footer-version">Version eecc65ee1b80</p>
   <!-- footer:end -->
 </footer>
 
@@ -192,6 +218,8 @@ Tools.i18n({
     failed: 'Fehlgeschlagen: {m}', shareFail: 'Teilen nicht möglich', saved: 'Gespeichert',
     loadingMp3: 'Lade den MP3-Encoder …', 'e.mp3load': 'Der MP3-Encoder ließ sich nicht laden. Bitte einmal mit Internet öffnen – danach geht MP3 auch offline.',
     'mcp.info': 'Video gelesen', 'mcp.extract': 'Tonspur herausgezogen',
+    coverFrame: 'Standbild nach {s} s', coverVideo: 'Cover aus dem Video', coverMaking: 'Erstelle das Standbild …', coverNone: 'Kein Bild verfügbar',
+    tagCover: 'mit Cover', recorded: 'aufgenommen {d}',
   },
   en: {
     title: 'Video to Audio', sub: 'Save the sound track of a video – the video never leaves the device.',
@@ -209,17 +237,25 @@ Tools.i18n({
     failed: 'Failed: {m}', shareFail: 'Sharing is not possible', saved: 'Saved',
     loadingMp3: 'Loading the MP3 encoder …', 'e.mp3load': 'The MP3 encoder could not be loaded. Please open it once with internet – after that MP3 works offline too.',
     'mcp.info': 'video read', 'mcp.extract': 'sound track extracted',
+    'tags.summary': 'Title, artist & cover', 'tags.title': 'Title', 'tags.artist': 'Artist', 'tags.album': 'Album',
+    'tags.cover': 'Still from the video as cover',
+    'tags.hint': 'Filled in automatically from the video: title (otherwise the file name), recording date, existing details and a still. Music apps show them. WAV stores no cover.',
+    coverFrame: 'Still at {s} s', coverVideo: 'Cover from the video', coverMaking: 'Making the still …', coverNone: 'No picture available',
+    tagCover: 'with cover', recorded: 'recorded {d}',
   },
 });
 const t = Tools.t;
 const LS = 'video-to-audio.settings.v1';
-const settings = Object.assign({ format: 'original' }, load(LS, {}));
+const settings = Object.assign({ format: 'original', cover: true }, load(LS, {}));
 const radios = [...document.querySelectorAll('input[name="format"]')];
 const getFormat = () => (radios.find(r => r.checked) || radios[0]).value;
 const setFormat = f => { for (const r of radios) r.checked = r.value === f; };
 const FORMATS = ['original', 'wav', 'mp3'];
 setFormat(FORMATS.includes(settings.format) ? settings.format : 'original');
 for (const r of radios) r.addEventListener('change', () => { settings.format = getFormat(); save(LS, settings); });
+
+$('tagCover').checked = settings.cover !== false;
+$('tagCover').addEventListener('change', () => { settings.cover = $('tagCover').checked; save(LS, settings); });
 
 let file = null, info = null, result = null, busy = false, playerUrl = null, lastError = null, lastNote = null;
 
@@ -252,14 +288,16 @@ async function readInfo(f) {
     try { track = await input.getPrimaryAudioTrack(); } catch (e) { throw err('invalid', { cause: e }); }
     if (!track) throw err('noaudio');
     const dur = await input.computeDuration([track]).catch(() => 0);
-    return { codec: track.codec, channels: track.numberOfChannels, sampleRate: track.sampleRate, duration: dur, container: (await input.getMimeType().catch(() => '')) };
+    const tags = await input.getMetadataTags().catch(() => ({}));
+    return { codec: track.codec, channels: track.numberOfChannels, sampleRate: track.sampleRate, duration: dur, container: (await input.getMimeType().catch(() => '')), tags };
   } finally { input.dispose && input.dispose(); }
 }
 
 async function takeFile(f) {
   if (!f || busy) return;
-  file = f; info = null; result = null; lastError = null;
+  file = f; info = null; result = null; lastError = null; cover = null;
   $('result').hidden = true;
+  $('tags').hidden = true;
   $('btnRun').disabled = true;
   renderInfo();
   status(t('reading'));
@@ -268,6 +306,8 @@ async function takeFile(f) {
     info = await readInfo(f);
     Tools.diag.log('audio track', { codec: info.codec, channels: info.channels, rate: info.sampleRate, s: +info.duration.toFixed(1), container: info.container });
     renderInfo();
+    fillTags(f, info.tags);
+    coverReady.then(() => { if (info && file === f) { info.coverDone = true; renderCover(); } });
     status('');
     $('btnRun').disabled = false;
   } catch (e) {
@@ -275,6 +315,89 @@ async function takeFile(f) {
     Tools.diag.log('read failed', { code: lastError, msg: String(e.cause && e.cause.message || e.message).slice(0, 200) });
     status(e.code ? t('e.' + e.code) : t('failed', { m: e.message }), 'err');
   }
+}
+
+/* ---------- Tags of the audio file (title, artist, album, date, cover) – filled in from the video ---------- */
+const COVER_PX = 600;
+let cover = null, coverReady = Promise.resolve(null), coverUrl = null;
+const validDate = d => d instanceof Date && !isNaN(d) && d.getFullYear() >= 1971 && d <= new Date(Date.now() + 864e5) ? d : null;
+// Camera file names: VID_20240501_123456, PXL_20240501_123456789, 20240501_123456, Screen_Recording_20240501-123456 …
+function dateFromName(name) {
+  const m = /(?:^|\D)((?:19|20)\d\d)(\d\d)(\d\d)[_\-T ]?(\d\d)(\d\d)(\d\d)/.exec(name);
+  if (!m) return null;
+  const [y, mo, d, h, mi, se] = m.slice(1).map(Number);
+  const date = new Date(y, mo - 1, d, h, mi, se);
+  return date.getMonth() === mo - 1 && date.getDate() === d && h < 24 && mi < 60 && se < 60 ? validDate(date) : null;
+}
+const baseName = f => f.name.replace(/\.[^.]+$/, '').trim() || 'audio';
+function fillTags(f, tags) {
+  $('tagTitle').value = (tags.title || baseName(f)).slice(0, 200);
+  $('tagArtist').value = (tags.artist || '').slice(0, 200);
+  $('tagAlbum').value = (tags.album || '').slice(0, 200);
+  info.date = validDate(tags.date) || validDate(tags.creationTime) || dateFromName(f.name);
+  info.dateFrom = validDate(tags.date) ? 'date' : validDate(tags.creationTime) ? 'creation' : info.date ? 'name' : null;
+  const img = (tags.images || []).find(i => i.kind === 'coverFront') || (tags.images || [])[0];
+  const token = f;
+  coverReady = (img ? Promise.resolve({ data: img.data, mimeType: img.mimeType, from: 'video' }) : frameCover(f, info.duration))
+    .catch(e => { Tools.diag.log('cover failed', { msg: String(e.message || e).slice(0, 200) }); return null; })
+    .then(c => {
+      if (file !== token) return null;
+      cover = c;
+      Tools.diag.log('tags', { title: !!tags.title, artist: !!tags.artist, album: !!tags.album, date: info.dateFrom, cover: c ? c.from : null, kb: c ? Math.round(c.data.length / 1024) : 0 });
+      renderCover();
+      return c;
+    });
+  $('tags').hidden = false;
+  renderCover();
+  renderTagsSum();
+}
+// A still from the video (10 % in, at most 5 s), square like an album cover
+async function frameCover(f, dur) {
+  const input = openInput(f);
+  try {
+    const vt = await input.getPrimaryVideoTrack();
+    if (!vt || !(await vt.canDecode())) return null;
+    const start = await vt.getFirstTimestamp().catch(() => 0);
+    const at = Math.round(Math.min((dur || 0) * 0.1, 5) * 10) / 10;
+    const frame = await new MB.CanvasSink(vt, { width: COVER_PX, height: COVER_PX, fit: 'cover' }).getCanvas(start + at);
+    if (!frame) return null;
+    const c = frame.canvas;
+    const blob = c.convertToBlob ? await c.convertToBlob({ type: 'image/jpeg', quality: 0.85 })
+      : await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+    if (!blob) return null;
+    return { data: new Uint8Array(await blob.arrayBuffer()), mimeType: 'image/jpeg', from: 'frame', at };
+  } finally { input.dispose && input.dispose(); }
+}
+function renderCover() {
+  const img = $('coverImg');
+  if (coverUrl) { URL.revokeObjectURL(coverUrl); coverUrl = null; }
+  if (cover) { coverUrl = URL.createObjectURL(new Blob([cover.data], { type: cover.mimeType })); img.src = coverUrl; }
+  else img.removeAttribute('src');
+  $('coverNote').textContent = !file ? '' : cover ? (cover.from === 'video' ? t('coverVideo') : t('coverFrame', { s: fmt(cover.at, 1) }))
+    : info && info.coverDone ? t('coverNone') : t('coverMaking');
+}
+const tagValue = id => $(id).value.trim().slice(0, 200);
+function renderTagsSum() {
+  $('tagsSum').textContent = [tagValue('tagTitle'), tagValue('tagArtist')].filter(Boolean).join(' – ');
+}
+for (const id of ['tagTitle', 'tagArtist', 'tagAlbum']) $(id).addEventListener('input', renderTagsSum);
+/** Tags for the audio file: those of the video, with the fields of the app, date and cover */
+// WAV (RIFF INFO) only holds ISO 8859-1: typographic characters become their plain form, others are dropped
+const latin1 = v => v.replace(/[‐-―−]/g, '-').replace(/[‘’‚‹›]/g, "'").replace(/[“”„]/g, '"').replace(/…/g, '...')
+  .replace(/[^\x00-\xff]/gu, '').replace(/\s+/g, ' ').trim();
+function outTags(videoTags, opts) {
+  const tags = { ...videoTags };
+  delete tags.creationTime;
+  for (const [key, id] of [['title', 'tagTitle'], ['artist', 'tagArtist'], ['album', 'tagAlbum']]) {
+    const v = opts.latin1 ? latin1(tagValue(id)) : tagValue(id);
+    if (v) tags[key] = v; else delete tags[key];
+  }
+  if (opts.latin1) for (const key of ['description', 'albumArtist', 'genre', 'comment', 'lyrics'])
+    if (typeof tags[key] === 'string') { tags[key] = latin1(tags[key]); if (!tags[key]) delete tags[key]; }
+  if (info.date) tags.date = info.date;
+  if (opts.cover) tags.images = [{ data: cover.data, mimeType: cover.mimeType, kind: 'coverFront' }];
+  else delete tags.images;
+  return tags;
 }
 
 /* ---------- Extracting ---------- */
@@ -288,7 +411,7 @@ function copyTarget(codec) {
   return null;
 }
 
-async function convert(target, audio, onProgress) {
+async function convert(target, audio, onProgress, tags) {
   const input = openInput(file);
   try {
     const primary = await input.getPrimaryAudioTrack();
@@ -297,6 +420,7 @@ async function convert(target, audio, onProgress) {
       input, output, showWarnings: false,
       video: { discard: true },
       audio: track => track.id === primary.id ? audio : { discard: true },
+      tags: videoTags => outTags(videoTags, tags),
     });
     if (!conversion.isValid) {
       const reasons = conversion.discardedTracks.filter(d => d.reason !== 'discarded_by_user').map(d => d.reason);
@@ -310,29 +434,30 @@ async function convert(target, audio, onProgress) {
 }
 
 // WAV without WebCodecs: let the browser decode the whole file (works for most videos, needs more memory)
-async function wavFromWebAudio() {
+async function wavFromWebAudio(tags) {
   const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   if (!Ctx) return null;
-  const ctx = new Ctx(1, 1, 44100);
   let buf;
-  try { buf = await ctx.decodeAudioData(await file.arrayBuffer()); } catch (e) { Tools.diag.log('decodeAudioData failed', { msg: String(e.message || e).slice(0, 200) }); return null; }
-  return encodeWav(buf);
+  try { buf = await new Ctx(1, 1, info.sampleRate || 44100).decodeAudioData(await file.arrayBuffer()); } catch (e) { Tools.diag.log('decodeAudioData failed', { msg: String(e.message || e).slice(0, 200) }); return null; }
+  return encodeBuffer(buf, new MB.WavOutputFormat(), { codec: 'pcm-s16' }, tags);
 }
-function encodeWav(buf) {
-  const ch = buf.numberOfChannels, n = buf.length, rate = buf.sampleRate;
-  const out = new DataView(new ArrayBuffer(44 + n * ch * 2));
-  const str = (o, s) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); };
-  str(0, 'RIFF'); out.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVE');
-  str(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, ch, true);
-  out.setUint32(24, rate, true); out.setUint32(28, rate * ch * 2, true); out.setUint16(32, ch * 2, true); out.setUint16(34, 16, true);
-  str(36, 'data'); out.setUint32(40, n * ch * 2, true);
-  const data = []; for (let c = 0; c < ch; c++) data.push(buf.getChannelData(c));
-  let o = 44;
-  for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) {
-    const v = Math.max(-1, Math.min(1, data[c][i]));
-    out.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7fff, true); o += 2;
-  }
-  return new Uint8Array(out.buffer);
+// Writes a decoded AudioBuffer with Mediabunny (PCM needs no WebCodecs; MP3 uses LAME if the browser has no encoder)
+async function encodeBuffer(buf, format, encoding, tags) {
+  const output = new MB.Output({ format, target: new MB.BufferTarget() });
+  const source = new MB.AudioBufferSource(encoding);
+  output.addAudioTrack(source);
+  output.setMetadataTags(fallbackTags(tags));
+  await output.start();
+  await source.add(buf);
+  source.close();
+  await output.finalize();
+  return new Uint8Array(output.target.buffer);
+}
+// Without a conversion: the tags of the video without the container-specific raw ones
+function fallbackTags(tags) {
+  const out = outTags(info.tags, tags);
+  delete out.raw;
+  return out;
 }
 
 /* ---------- MP3 (browsers cannot encode it: LAME as WebAssembly, loaded on first use) ---------- */
@@ -360,7 +485,7 @@ const mp3Options = () => ({
   ...(MP3_RATES.includes(info.sampleRate) ? {} : { sampleRate: 48000 }),
 });
 // MP3 without WebCodecs: the browser decodes, Mediabunny encodes the AudioBuffer
-async function mp3FromWebAudio(onProgress) {
+async function mp3FromWebAudio(onProgress, tags) {
   const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   if (!Ctx) return null;
   // decodeAudioData resamples to the context's rate: keep the video's rate if MP3 has it
@@ -373,15 +498,8 @@ async function mp3FromWebAudio(onProgress) {
     const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
     buf = await ctx.startRendering();
   }
-  const output = new MB.Output({ format: new MB.Mp3OutputFormat(), target: new MB.BufferTarget() });
-  const source = new MB.AudioBufferSource({ codec: 'mp3', bitrate: MP3_KBPS * 1000 });
-  output.addAudioTrack(source);
-  await output.start();
-  await source.add(buf);
-  source.close();
-  onProgress(0.9);
-  await output.finalize();
-  return new Uint8Array(output.target.buffer);
+  onProgress(0.5);
+  return encodeBuffer(buf, new MB.Mp3OutputFormat(), { codec: 'mp3', bitrate: MP3_KBPS * 1000 }, tags);
 }
 
 async function run(format = getFormat()) {
@@ -396,10 +514,14 @@ async function run(format = getFormat()) {
   const t0 = performance.now();
   try {
     let bytes = null, ext, mime, used = format;
+    // The still is usually ready long before; never let a stuck decoder block the extraction
+    const wantCover = $('tagCover').checked && !!(await Promise.race([coverReady, new Promise(r => setTimeout(r, 10000, null))])) && !!cover;
+    const tags = { cover: wantCover };
     if (format === 'original') {
       const target = copyTarget(info.codec);
       if (target) {
-        bytes = await convert(target, { forceTranscode: false }, progress);
+        const wav = target.ext === '.wav';
+        bytes = await convert(target, { forceTranscode: false }, progress, { cover: wantCover && !wav, latin1: wav });
         ext = target.ext; mime = target.mime;
       }
       if (!bytes) { used = 'wav'; lastNote = 'fallback'; Tools.diag.log('copy not possible, trying wav', { codec: info.codec }); }
@@ -408,20 +530,22 @@ async function run(format = getFormat()) {
       status(t('loadingMp3'));
       await loadMp3();
       ext = '.mp3'; mime = 'audio/mpeg';
-      bytes = await convert({ format: new MB.Mp3OutputFormat() }, mp3Options(), progress);
-      if (!bytes) { status(t('decoding')); bytes = await mp3FromWebAudio(progress); }
+      bytes = await convert({ format: new MB.Mp3OutputFormat() }, mp3Options(), progress, tags);
+      if (!bytes) { status(t('decoding')); bytes = await mp3FromWebAudio(progress, tags); }
       if (!bytes) throw err('decode');
     }
     if (!bytes) {
       ext = '.wav'; mime = 'audio/wav';
-      bytes = await convert({ format: new MB.WavOutputFormat() }, { codec: 'pcm-s16', forceTranscode: true }, progress);
-      if (!bytes) { status(t('decoding')); bytes = await wavFromWebAudio(); }
+      tags.cover = false; tags.latin1 = true; // WAV: no pictures, only ISO 8859-1 text
+      bytes = await convert({ format: new MB.WavOutputFormat() }, { codec: 'pcm-s16', forceTranscode: true }, progress, tags);
+      if (!bytes) { status(t('decoding')); bytes = await wavFromWebAudio(tags); }
       if (!bytes) throw err('decode');
     }
     bar.value = 100;
-    const base = file.name.replace(/\.[^.]+$/, '') || 'audio';
-    result = { file: new File([bytes], base + ext, { type: mime }), format: used };
-    Tools.diag.log('extracted', { format: used, ext, kb: Math.round(bytes.length / 1024), ms: Math.round(performance.now() - t0) });
+    const base = baseName(file);
+    result = { file: new File([bytes], base + ext, { type: mime }), format: used,
+      tags: { title: tagValue('tagTitle'), artist: tagValue('tagArtist'), album: tagValue('tagAlbum'), date: info.date, cover: tags.cover && ext !== '.wav' } };
+    Tools.diag.log('extracted', { format: used, ext, kb: Math.round(bytes.length / 1024), cover: result.tags.cover, ms: Math.round(performance.now() - t0) });
     showResult();
     status(lastNote === 'fallback' ? t('doneFallback') : t('done'), lastNote ? 'warn' : 'ok');
   } catch (e) {
@@ -442,6 +566,9 @@ function showResult() {
   playerUrl = URL.createObjectURL(result.file);
   $('player').src = playerUrl;
   $('resultMeta').textContent = result.file.name + ' · ' + fmt(result.file.size / 1024, 0) + ' KB';
+  const tg = result.tags;
+  $('resultTags').textContent = [[tg.title, tg.artist].filter(Boolean).join(' – '), tg.album,
+    tg.date && t('recorded', { d: tg.date.toLocaleDateString(Tools.locale()) }), tg.cover && t('tagCover')].filter(Boolean).join(' · ');
   const r = $('result');
   r.dataset.format = result.format;
   r.hidden = false;
@@ -476,6 +603,7 @@ takeSharedFile().then(f => { if (f) { Tools.diag.log('shared file received'); ta
 
 Tools.diag.info(() => ({
   file: !!file, codec: info ? info.codec : null, format: getFormat(), busy, result: result ? result.format : null, lastError,
+  cover: $('tagCover').checked ? (cover ? cover.from : 'none') : 'off', date: info ? info.dateFrom : null,
   webcodecs: typeof AudioDecoder !== 'undefined',
 }));
 
@@ -492,32 +620,39 @@ const needVideo = () => {
   if (!info) throw new Error(AGENT_ERRORS[lastError] || 'The chosen video is still being read – try again in a moment.');
 };
 const agentInfo = () => ({ file_name: file.name, size_bytes: file.size, audio_codec: info.codec, channels: info.channels,
-  sample_rate_hz: info.sampleRate, duration_seconds: Math.round(info.duration * 100) / 100 });
+  sample_rate_hz: info.sampleRate, duration_seconds: Math.round(info.duration * 100) / 100,
+  title: tagValue('tagTitle'), artist: tagValue('tagArtist'), album: tagValue('tagAlbum'),
+  recording_date: info.date ? info.date.toISOString() : null, cover: $('tagCover').checked && !!cover });
 Tools.mcp.register({
   name: 'get_selected_video_info', title: 'Details of the chosen video', label: 'mcp.info', readOnly: true, untrusted: true,
-  description: 'Returns details of the video the user has chosen in the app: file name, size, codec, channels, sample rate and duration of its sound track. Fails if no video is chosen.',
+  description: 'Returns details of the video the user has chosen in the app: file name, size, codec, channels, sample rate and duration of its sound track, and the tags the audio file will get (title, artist, album, recording date, whether a still of the video becomes the cover). Fails if no video is chosen.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   execute: () => { needVideo(); return agentInfo(); },
 });
 Tools.mcp.register({
   name: 'extract_audio_from_selected_video', title: 'Extract the sound track of the chosen video', label: 'mcp.extract', untrusted: true,
-  description: 'Extracts the sound track of the video the user has chosen in the app, on the device. "original" copies it unchanged (usually .m4a/AAC, .ogg for Opus), "wav" decodes it to uncompressed 16-bit WAV, "mp3" re-encodes it to MP3 at 192 kbit/s. The user can then play, save or share the audio file in the app. Returns the file name, format and size.',
+  description: 'Extracts the sound track of the video the user has chosen in the app, on the device. "original" copies it unchanged (usually .m4a/AAC, .ogg for Opus), "wav" decodes it to uncompressed 16-bit WAV, "mp3" re-encodes it to MP3 at 192 kbit/s. The audio file gets title, artist, album, the recording date and (except WAV) a still of the video as cover; title, artist and album can be set here, otherwise those shown in the app are used. The user can then play, save or share the audio file in the app. Returns the file name, format, size and tags.',
   inputSchema: { type: 'object', properties: {
     format: { type: 'string', enum: FORMATS, description: 'Output format. Default: the format chosen in the app.' },
+    title: { type: 'string', maxLength: 200, description: 'Title tag. Default: the title shown in the app (from the video or its file name).' },
+    artist: { type: 'string', maxLength: 200, description: 'Artist tag. Default: the artist shown in the app.' },
+    album: { type: 'string', maxLength: 200, description: 'Album tag. Default: the album shown in the app.' },
   }, additionalProperties: false },
-  execute: async ({ format }) => {
+  execute: async ({ format, title, artist, album }) => {
     needVideo();
     if (busy) throw new Error('An extraction is already running – try again when it is done.');
     if (format) { setFormat(format); settings.format = format; save(LS, settings); }
+    for (const [v, id] of [[title, 'tagTitle'], [artist, 'tagArtist'], [album, 'tagAlbum']]) if (v !== undefined) $(id).value = v;
+    renderTagsSum();
     result = null;
     await run(getFormat());
     if (!result) throw new Error(AGENT_ERRORS[lastError] || 'The extraction failed.');
     return { ...agentInfo(), output_file_name: result.file.name, output_format: result.format, output_mime_type: result.file.type,
-      output_size_bytes: result.file.size, fell_back_to_wav: lastNote === 'fallback' };
+      output_size_bytes: result.file.size, fell_back_to_wav: lastNote === 'fallback', cover_added: result.tags.cover };
   },
 });
 // Language switched: generated texts
-Tools.onLang(() => { renderInfo(); if (result) showResult(); });
+Tools.onLang(() => { renderInfo(); renderCover(); if (result) showResult(); });
 </script>
 </body>
 </html>

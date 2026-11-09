@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test, expect, openDetails, clipboardText, switchLang, openMenu, mockAndroidShare } from './helpers.mjs';
-import { CLIPS, FIX, clip, mp4Info, oggInfo, wavInfo, mp3Info, toneHz, peak } from './audio-files.mjs';
+import { CLIPS, FIX, clip, mp4Info, oggInfo, wavInfo, mp3Info, toneHz, peak, mp4Tags, id3Tags, oggTags, wavTags } from './audio-files.mjs';
 
 const URL_ = '/video-to-audio/';
 
@@ -114,9 +114,10 @@ test('MP3 from AAC (44.1 kHz) and Opus (48 kHz): re-encoded at 192 kbit/s, right
   await expect(page.locator('#result')).toHaveAttribute('data-format', 'mp3');
   await expect(page.locator('#resultMeta')).toContainText('clip-aac.mp3 · ' + Math.round(aac.buf.length / 1024) + ' KB');
   await expectMp3(page, aac.buf, CLIPS.aac);
-  // 192 kbit/s × ~2 s ≈ 48 KB
-  expect(aac.buf.length).toBeGreaterThan(192000 / 8 * CLIPS.aac.seconds * 0.95);
-  expect(aac.buf.length).toBeLessThan(192000 / 8 * (CLIPS.aac.seconds + 0.1) + 2000);
+  // 192 kbit/s × ~2 s ≈ 48 KB of audio after the ID3 tag (title, cover)
+  const audioBytes = aac.buf.length - id3Tags(aac.buf).size;
+  expect(audioBytes).toBeGreaterThan(192000 / 8 * CLIPS.aac.seconds * 0.95);
+  expect(audioBytes).toBeLessThan(192000 / 8 * (CLIPS.aac.seconds + 0.1) + 2000);
   const opus = await extract(page, 'opus', 'mp3');
   expect(opus.name).toBe('clip-opus.mp3');
   await expectMp3(page, opus.buf, CLIPS.opus);
@@ -193,6 +194,152 @@ test('original without WebCodecs still works (just copying)', async ({ page }) =
   expect(mp4Info(buf).tracks.map(t => t.entry)).toEqual(['mp4a']);
 });
 
+/** Size and number of distinct colours of an image, decoded by the browser */
+const imageInfo = (page, data, mime) => page.evaluate(async ([b64, mime]) => {
+  const bm = await createImageBitmap(new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: mime }));
+  const ctx = new OffscreenCanvas(bm.width, bm.height).getContext('2d');
+  ctx.drawImage(bm, 0, 0);
+  const d = ctx.getImageData(0, 0, bm.width, bm.height).data, colours = new Set();
+  for (let i = 0; i < d.length; i += 4 * 37) colours.add((d[i] >> 5) << 6 | (d[i + 1] >> 5) << 3 | d[i + 2] >> 5);
+  return { width: bm.width, height: bm.height, colours: colours.size };
+}, [data.toString('base64'), mime]);
+const renamed = (key, name) => ({ ...clip(key), name });
+const isJpeg = b => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+
+test('tags: title from the file name and a still of the video as cover, filled in automatically', async ({ page }) => {
+  await page.goto(URL_);
+  await choose(page, 'aac');
+  await expect(page.locator('#tags')).toBeVisible();
+  await expect(page.locator('#tagTitle')).toHaveValue('clip-aac');
+  await expect(page.locator('#tagArtist')).toHaveValue('');
+  await expect(page.locator('#tagsSum')).toHaveText('clip-aac');
+  await expect(page.locator('#tagCover')).toBeChecked();
+  // 10 % of 2 s
+  await expect(page.locator('#coverNote')).toHaveText('Standbild nach 0,2 s');
+  await expect(page.locator('#coverImg')).toHaveAttribute('src', /^blob:/);
+  const { buf } = await extract(page, 'aac', 'original');
+  const tags = mp4Tags(buf);
+  expect(tags['©nam']).toBe('clip-aac');
+  expect(tags['©day']).toBeUndefined(); // the test video has no recording time
+  expect(tags.covr.mime).toBe('image/jpeg');
+  expect(isJpeg(tags.covr.data)).toBe(true);
+  const img = await imageInfo(page, tags.covr.data, 'image/jpeg');
+  expect(img).toMatchObject({ width: 600, height: 600 });
+  expect(img.colours).toBeGreaterThan(4); // the colour bars of the test picture, not a black frame
+  await expect(page.locator('#resultTags')).toHaveText('clip-aac · mit Cover');
+  // Still the same audio frames as in the video
+  const src = mp4Info(readFileSync(join(FIX, CLIPS.aac.file))).tracks.find(t => t.handler === 'soun');
+  expect(mp4Info(buf).tracks[0].bytes).toBe(src.bytes);
+});
+
+test('tags already in the video are taken over: title, artist, album and the recording time', async ({ page }) => {
+  await page.goto(URL_);
+  await choose(page, 'tagged');
+  await expect(page.locator('#tagTitle')).toHaveValue('Konzert im Park');
+  await expect(page.locator('#tagArtist')).toHaveValue('Die Band');
+  await expect(page.locator('#tagAlbum')).toHaveValue('Live 2024');
+  await expect(page.locator('#tagsSum')).toHaveText('Konzert im Park – Die Band');
+  const { name, buf } = await extract(page, 'tagged', 'original');
+  expect(name).toBe('clip-tagged.m4a');
+  const tags = mp4Tags(buf);
+  expect(tags).toMatchObject({ '©nam': 'Konzert im Park', '©ART': 'Die Band', '©alb': 'Live 2024' });
+  expect(tags['©day']).toMatch(/^2024-05-01/);
+  await expect(page.locator('#resultTags')).toHaveText('Konzert im Park – Die Band · Live 2024 · aufgenommen 1.5.2024 · mit Cover');
+});
+
+test('edited tags and the date from a camera file name end up in M4A, MP3, Ogg and WAV', async ({ page }) => {
+  await page.goto(URL_);
+  const fill = async () => {
+    await openDetails(page, 'Titel, Interpret & Cover');
+    await page.fill('#tagTitle', 'Mein Lied – Ä');
+    await page.fill('#tagArtist', 'Die Band');
+    await page.fill('#tagAlbum', '');
+  };
+  const run = async format => {
+    await page.check(`input[name="format"][value="${format}"]`);
+    await page.click('#btnRun');
+    await expect(page.locator('#status')).toHaveText('Fertig.', { timeout: 30000 });
+    const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+    return { name: download.suggestedFilename(), buf: readFileSync(await download.path()) };
+  };
+  await page.setInputFiles('#file', renamed('aac', 'VID_20240501_123456.mp4'));
+  await expect(page.locator('#btnRun')).toBeEnabled();
+  await expect(page.locator('#tagTitle')).toHaveValue('VID_20240501_123456');
+  await fill();
+  const m4a = mp4Tags((await run('original')).buf);
+  expect(m4a).toMatchObject({ '©nam': 'Mein Lied – Ä', '©ART': 'Die Band' });
+  expect(m4a['©alb']).toBeUndefined();
+  expect(m4a['©day']).toMatch(/^2024-05-01/);
+  await expect(page.locator('#resultTags')).toHaveText('Mein Lied – Ä – Die Band · aufgenommen 1.5.2024 · mit Cover');
+
+  const mp3 = await run('mp3');
+  expect(mp3.name).toBe('VID_20240501_123456.mp3');
+  const id3 = id3Tags(mp3.buf);
+  expect(id3).toMatchObject({ TIT2: 'Mein Lied – Ä', TPE1: 'Die Band' });
+  expect(id3.TDRC || id3.TYER).toMatch(/^2024/);
+  expect(id3.APIC).toMatchObject({ mime: 'image/jpeg', type: 3 }); // 3 = front cover
+  expect(isJpeg(id3.APIC.data)).toBe(true);
+  expect(mp3Info(mp3.buf).complete).toBe(true);
+
+  const wav = await run('wav');
+  const w = wavTags(wav.buf);
+  // RIFF INFO only holds ISO 8859-1: the dash becomes "-", the umlaut stays
+  expect(w.info).toMatchObject({ INAM: 'Mein Lied - Ä', IART: 'Die Band', ICRD: '2024-05-01' });
+  expect(wavInfo(wav.buf)).toMatchObject({ format: 1, bits: 16 });
+  await expect(page.locator('#resultTags')).toHaveText('Mein Lied – Ä – Die Band · aufgenommen 1.5.2024'); // WAV: no cover
+
+  // Opus → Ogg: Vorbis comments with the picture
+  await page.setInputFiles('#file', renamed('opus', 'PXL_20231224_183000123.webm'));
+  await expect(page.locator('#tagTitle')).toHaveValue('PXL_20231224_183000123');
+  await expect(page.locator('#coverImg')).toHaveAttribute('src', /^blob:/);
+  const ogg = await run('original');
+  expect(ogg.name).toBe('PXL_20231224_183000123.ogg');
+  const vc = oggTags(ogg.buf);
+  expect(vc.TITLE).toEqual(['PXL_20231224_183000123']);
+  expect(vc.DATE[0]).toMatch(/^2023-12-24/);
+  expect(vc.METADATA_BLOCK_PICTURE[0]).toMatchObject({ type: 3, mime: 'image/jpeg' });
+  expect(await imageInfo(page, vc.METADATA_BLOCK_PICTURE[0].data, 'image/jpeg')).toMatchObject({ width: 600, height: 600 });
+  expect(oggInfo(ogg.buf)).toMatchObject({ codec: 'opus', complete: true });
+});
+
+test('cover can be switched off, the choice is remembered', async ({ page }) => {
+  await page.goto(URL_);
+  await choose(page, 'aac');
+  await openDetails(page, 'Titel, Interpret & Cover');
+  await page.uncheck('#tagCover');
+  const { buf } = await extract(page, 'aac', 'original');
+  const tags = mp4Tags(buf);
+  expect(tags['©nam']).toBe('clip-aac');
+  expect(tags.covr).toBeUndefined();
+  await expect(page.locator('#resultTags')).toHaveText('clip-aac');
+  await page.reload();
+  await expect(page.locator('#tagCover')).not.toBeChecked();
+});
+
+test('without WebCodecs for audio, WAV and MP3 still get title, date and cover', async ({ page }) => {
+  await page.addInitScript(() => { delete window.AudioDecoder; delete window.AudioEncoder; });
+  await page.goto(URL_);
+  await page.setInputFiles('#file', renamed('aac', '20240501_123456.mp4'));
+  await expect(page.locator('#btnRun')).toBeEnabled();
+  await page.check('input[value="wav"]');
+  await page.click('#btnRun');
+  await expect(page.locator('#status')).toHaveText('Fertig.', { timeout: 30000 });
+  let [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+  const wav = readFileSync(await download.path());
+  expect(wavTags(wav).info).toMatchObject({ INAM: '20240501_123456', ICRD: '2024-05-01' });
+  expect(Math.abs(toneHz(wavInfo(wav).samples, wavInfo(wav).rate) - CLIPS.aac.hz)).toBeLessThan(5);
+  await page.check('input[value="mp3"]');
+  await page.click('#btnRun');
+  await expect(page.locator('#status')).toHaveText('Fertig.', { timeout: 30000 });
+  [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+  const mp3 = readFileSync(await download.path());
+  const id3 = id3Tags(mp3);
+  expect(id3.TIT2).toBe('20240501_123456');
+  expect(id3.TDRC || id3.TYER).toMatch(/^2024/);
+  expect(isJpeg(id3.APIC.data)).toBe(true);
+  expect(mp3Info(mp3).complete).toBe(true);
+});
+
 test('video without sound and files that are no video are reported', async ({ page }) => {
   await page.goto(URL_);
   await choose(page, 'silent');
@@ -214,7 +361,7 @@ test('chosen format is remembered', async ({ page }) => {
   await page.check('input[value="wav"]');
   await page.reload();
   await expect(page.locator('input[value="wav"]')).toBeChecked();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('video-to-audio.settings.v1')))).toEqual({ format: 'wav' });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('video-to-audio.settings.v1')))).toEqual({ format: 'wav', cover: true });
   await page.check('input[value="mp3"]');
   await page.reload();
   await expect(page.locator('input[value="mp3"]')).toBeChecked();
@@ -262,6 +409,7 @@ test('diagnostics: steps and codec, never the file name', async ({ page }) => {
   expect(text).toContain('extracted');
   expect(text).toContain('"codec":"aac"');
   expect(text).not.toContain('clip-aac');
+  expect(text).toContain('"cover":"frame"');
 });
 
 test.describe('English', () => {
@@ -275,6 +423,9 @@ test.describe('English', () => {
     await page.click('#btnRun');
     await expect(page.locator('#status')).toHaveText('Done.');
     await expect(page.locator('#btnSave')).toHaveText('Save audio');
+    await expect(page.locator('#coverNote')).toHaveText('Still at 0.2 s');
+    await expect(page.locator('#resultTags')).toHaveText('clip-aac · with cover');
+    await expect(page.locator('#tags summary')).toContainText('Title, artist & cover');
     await switchLang(page, 'de');
     await expect(page.locator('#fileInfo')).toContainText('Tonspur: AAC, Mono, 44,1 kHz');
     await expect(page.locator('#btnSave')).toHaveText('Audio speichern');

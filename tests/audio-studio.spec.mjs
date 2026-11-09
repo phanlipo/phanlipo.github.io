@@ -104,6 +104,42 @@ test('cut selection out, then undo restores it', async ({ page }) => {
   expect(w.frames).toBe(3 * RATE);
 });
 
+test('the work survives a reload (app update, phone ending the app): file, edits and undo; "Close file" removes it', async ({ page }) => {
+  await page.goto(URL_);
+  await open(page);
+  await select(page, '1,0', '2.0');
+  await page.click('#btnCut');                         // 440 Hz 0.5 | 440 Hz 0.25, 2 s
+  await select(page, '0', '0,5');
+  await page.click('#btnKeep');                        // 0.5 s
+  await page.click('#btnUndo');                        // back to 2 s
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).ops?.length)).toBe(1);
+  await page.reload();
+  await expect(page.locator('#editor')).toBeVisible();
+  await expect(page.locator('#loadStatus')).toHaveText('Datei und 1 Bearbeitungsschritt(e) vom letzten Mal wieder da.');
+  await expect(page.locator('#fileInfo')).toContainText('„aufnahme.wav“');
+  await expect(page.locator('#selInfo')).toHaveText('Alles ausgewählt (2,0 s)');
+  let w = wavInfo((await exportFile(page)).buf);
+  expect(w.frames).toBe(2 * RATE);
+  expect(Math.abs(peakOf(w.samples, RATE) - 0.25)).toBeLessThan(0.01);
+  // the undo step came back with the edits
+  await expect(page.locator('#btnUndo')).toBeEnabled();
+  await page.click('#btnUndo');
+  await expect(page.locator('#selInfo')).toHaveText('Alles ausgewählt (3,0 s)');
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).ops?.length)).toBe(0);
+  await page.reload();
+  await expect(page.locator('#selInfo')).toHaveText('Alles ausgewählt (3,0 s)');
+  // close: nothing comes back
+  await page.click('#btnClose');
+  await expect(page.locator('#editor')).toBeHidden();
+  await expect(page.locator('#fileInfo')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => Tools.keep.names())).toEqual([]);
+  await page.reload();
+  await page.waitForTimeout(500);
+  await expect(page.locator('#editor')).toBeHidden();
+  const text = await page.evaluate(() => Tools.diag.text());
+  expect(text).not.toContain('aufnahme');
+});
+
 test('volume: −6 dB on a selection, normalize, clipping warning', async ({ page }) => {
   await page.goto(URL_);
   await open(page);
@@ -303,9 +339,11 @@ test('MP3 works offline once the encoder was loaded', async ({ page, context }) 
   await page.reload(); // page now controlled → the encoder goes through the offline cache
   await open(page);
   await exportFile(page, 'mp3');
+  await expect.poll(() => page.evaluate(() => Tools.keep.names())).toContain('audio');
   await context.setOffline(true);
   await page.reload();
-  await open(page);
+  // the kept file opens again by itself (offline, too)
+  await expect(page.locator('#loadStatus')).toHaveText('Datei und 0 Bearbeitungsschritt(e) vom letzten Mal wieder da.');
   expect(mp3Info((await exportFile(page, 'mp3')).buf)).toMatchObject({ rate: RATE, channels: 2, complete: true });
   await context.setOffline(false);
 });

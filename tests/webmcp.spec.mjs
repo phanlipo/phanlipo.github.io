@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { test, expect, apps, openMenu, closeMenu } from './helpers.mjs';
 import { makePdf } from './pdf-tools.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
-import { CLIPS, clip, wavInfo, mp3Info, toneHz } from './audio-files.mjs';
+import { CLIPS, clip, wavInfo, mp3Info, toneHz, id3Tags, oggTags } from './audio-files.mjs';
 import { ORIGIN, API_PROBLEMS, mockApi, addYamlConfig } from './api-mock.mjs';
 import { testSong } from './midi-files.mjs';
 import { fakeCamera, fakeWorker } from './camera-fakes.mjs';
@@ -413,7 +413,8 @@ test.describe('video-to-audio tools', () => {
     await page.setInputFiles('#file', clip('opus'));
     await expect(page.locator('#btnRun')).toBeEnabled();
     const info = (await call(page, P + 'get_selected_video_info', {})).result;
-    expect(info).toMatchObject({ file_name: 'clip-opus.webm', audio_codec: 'opus', channels: 1, sample_rate_hz: CLIPS.opus.rate });
+    expect(info).toMatchObject({ file_name: 'clip-opus.webm', audio_codec: 'opus', channels: 1, sample_rate_hz: CLIPS.opus.rate,
+      title: 'clip-opus', artist: '', album: '', recording_date: null });
     expect(Math.abs(info.duration_seconds - CLIPS.opus.seconds)).toBeLessThan(0.1);
     // Default: the format chosen in the app (original)
     const orig = (await call(page, P + 'extract_audio_from_selected_video', {})).result;
@@ -425,8 +426,9 @@ test.describe('video-to-audio tools', () => {
     await expect(page.locator('input[value="wav"]')).toBeChecked();
     await expect(page.locator('#result')).toHaveAttribute('data-format', 'wav');
     const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
-    const w = wavInfo(readFileSync(await download.path()));
-    expect(w.frames * 2 + 44).toBe(wav.output_size_bytes);
+    const wbuf = readFileSync(await download.path());
+    expect(wbuf.length).toBe(wav.output_size_bytes);
+    const w = wavInfo(wbuf);
     expect(Math.abs(toneHz(w.samples, w.rate) - CLIPS.opus.hz)).toBeLessThan(5);
     // MP3: re-encoded, the file is a complete MP3 at 192 kbit/s
     const mp3 = (await call(page, P + 'extract_audio_from_selected_video', { format: 'mp3' })).result;
@@ -436,6 +438,15 @@ test.describe('video-to-audio tools', () => {
     const m = readFileSync(await dl.path());
     expect(m.length).toBe(mp3.output_size_bytes);
     expect(mp3Info(m)).toMatchObject({ rate: CLIPS.opus.rate, kbps: [192], complete: true });
+    expect(id3Tags(m)).toMatchObject({ TIT2: 'clip-opus' });
+    // Tags set by the agent: shown in the app and written into the file
+    const tagged = (await call(page, P + 'extract_audio_from_selected_video', { format: 'original', title: 'Probe', artist: 'Chor' })).result;
+    expect(tagged).toMatchObject({ output_file_name: 'clip-opus.ogg', title: 'Probe', artist: 'Chor', cover_added: true });
+    await expect(page.locator('#tagTitle')).toHaveValue('Probe');
+    await expect(page.locator('#resultTags')).toContainText('Probe – Chor');
+    const [dl2] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+    expect(oggTags(readFileSync(await dl2.path()))).toMatchObject({ TITLE: ['Probe'], ARTIST: ['Chor'] });
+    expect((await call(page, P + 'extract_audio_from_selected_video', { title: 'x'.repeat(201) })).ok).toBe(false);
     const tools = await listTools(page);
     expect(tools.find(t => t.name === P + 'get_selected_video_info').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
   });
@@ -909,6 +920,42 @@ test.describe('whoopee-cushion tools', () => {
 
   test('invalid sound is rejected and nothing is counted', async ({ page }) => {
     expect((await call(page, 'whoopee_cushion_play_sound', { sound: 'burp' })).ok).toBe(false);
+    await expect(page.locator('#count')).toHaveText('0');
+  });
+});
+
+test.describe('whip tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/whip/'));
+
+  test('crack_whip cracks the chosen whip, counts it and shows it in the app', async ({ page }) => {
+    const { ok, result } = await call(page, 'whip_crack_whip', { sound: 'bull' });
+    expect(ok).toBe(true);
+    expect(result).toMatchObject({ sound: 'bull', total: 1 });
+    expect(result.duration_ms).toBeGreaterThanOrEqual(700);
+    expect(result.duration_ms).toBeLessThanOrEqual(850);
+    expect(typeof result.audible).toBe('boolean');
+    await expect(page.locator('#count')).toHaveText('1');
+    await expect(page.locator('#whip')).toHaveAttribute('data-sound', 'bull');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Peitsche geknallt');
+    const random = (await call(page, 'whip_crack_whip', {})).result;
+    expect(['classic', 'bull', 'coach', 'double', 'circus']).toContain(random.sound);
+  });
+
+  test('get_stats counts per crack and reports the settings', async ({ page }) => {
+    await page.click('#sounds [data-s="double"]');
+    await page.click('#sens [data-v="high"]');
+    await page.click('#whip');
+    await page.click('#whip');
+    await call(page, 'whip_crack_whip', { sound: 'coach' });
+    const { result } = await call(page, 'whip_get_stats', {});
+    expect(result).toEqual({
+      total: 3, per_sound: { classic: 0, bull: 0, coach: 1, double: 2, circus: 0 },
+      settings: { sound: 'double', swing_detection: false, sensitivity: 'light', vibration: true },
+    });
+  });
+
+  test('invalid crack is rejected and nothing is counted', async ({ page }) => {
+    expect((await call(page, 'whip_crack_whip', { sound: 'laser' })).ok).toBe(false);
     await expect(page.locator('#count')).toHaveText('0');
   });
 });
@@ -1981,5 +2028,167 @@ test.describe('raffle tools', () => {
     await page.evaluate(() => { const el = document.getElementById('tickets'); el.value = 'x'; el.dispatchEvent(new Event('input')); });
     expect(await call(page, 'raffle_draw_ticket', {})).toEqual({ ok: false, error: 'No valid ticket numbers are set up in the app.' });
     expect((await call(page, 'raffle_get_results', {})).result.draws).toEqual([]);
+  });
+});
+
+test.describe('wind-instruments tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await open(page, '/wind-instruments/');
+  });
+
+  test('get_status and set_instrument: range and playable notes, switched in the app', async ({ page }) => {
+    let r = await call(page, 'wind_instruments_get_status', {});
+    expect(r.ok).toBe(true);
+    expect(r.result).toMatchObject({ instrument: 'whistle', microphone: false, blowing: false, range: { lowest: 'D5', highest: 'B6' } });
+    expect(r.result.playable_notes).toContain('F#5');
+    r = await call(page, 'wind_instruments_set_instrument', { instrument: 'ocarina' });
+    expect(r.ok).toBe(true);
+    expect(r.result).toMatchObject({ instrument: 'ocarina', range: { lowest: 'C5', highest: 'D6' } });
+    await expect(page.locator('[data-inst="ocarina"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#inst .hole')).toHaveCount(4);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Instrument gewechselt');
+    r = await call(page, 'wind_instruments_set_instrument', { instrument: 'tuba' });
+    expect(r.ok).toBe(false);
+  });
+
+  test('play_melody: shows each fingering in turn, length from the tempo', async ({ page }) => {
+    // Tin whistle: G5 = 3 holes closed, A5 = 2, B5 = 1; 120 BPM → 500 ms per beat
+    const r = await call(page, 'wind_instruments_play_melody', { tempo: 120, notes: [
+      { note: 'G5', beats: 2 }, { note: 'rest' }, { note: 'A5', beats: 2 }, { note: 'B5', beats: 2 }] });
+    expect(r.ok).toBe(true);
+    expect(r.result).toMatchObject({ instrument: 'whistle', notes: 4, duration_ms: 3500 });
+    const play = page.locator('#play');
+    await expect(play).toHaveAttribute('data-note', '79');
+    await expect(page.locator('#inst .hole.on')).toHaveCount(3);
+    await expect(page.locator('#status')).toHaveText('KI-Agent spielt vor …');
+    await expect(play).toHaveAttribute('data-note', '81', { timeout: 3000 });
+    await expect(page.locator('#inst .hole.on')).toHaveCount(2);
+    await expect(play).toHaveAttribute('data-note', '83', { timeout: 3000 });
+    // Done: silent again
+    await expect(play).toHaveAttribute('data-blowing', '0', { timeout: 3000 });
+    await expect(page.locator('#inst .hole.on')).toHaveCount(0);
+  });
+
+  test('play_melody: overblown notes and H are understood, unplayable notes are rejected', async ({ page }) => {
+    let r = await call(page, 'wind_instruments_play_melody', { notes: [{ note: 'D6' }] });
+    expect(r.ok).toBe(true);
+    await expect(page.locator('#play')).toHaveAttribute('data-note', '86');
+    r = await call(page, 'wind_instruments_play_melody', { notes: [{ note: 'H5' }, { note: 'C5' }, { note: 'Eb5' }] });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('Not playable on the whistle: C5, Eb5');
+    r = await call(page, 'wind_instruments_play_melody', { notes: [{ note: 'G5', beats: 9 }] });
+    expect(r.ok).toBe(false);
+    r = await call(page, 'wind_instruments_play_melody', { notes: [] });
+    expect(r.ok).toBe(false);
+  });
+});
+
+test.describe('plush-puzzle tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await fakeModelContext(page);
+    await page.goto('/plush-puzzle/');
+  });
+
+  test('list_animals and get_progress read without changing anything', async ({ page }) => {
+    let r = await call(page, 'plush_puzzle_list_animals', {});
+    expect(r.ok).toBe(true);
+    expect(r.result.animals.map(a => a.id)).toEqual(['teddy', 'bunny', 'panda', 'dolphin', 'cat', 'elephant']);
+    expect(r.result.animals[0]).toEqual({ id: 'teddy', name: 'Teddy bear', parts: 8, times_finished: 0 });
+    expect(await page.locator('.animal').count()).toBe(6);
+    r = await call(page, 'plush_puzzle_get_progress', {});
+    expect(r.result).toEqual({ animal: null, phase: 'choosing', parts_total: 0, parts_placed: 0, loose_parts: [] });
+    await expect(page.locator('#pick')).toBeVisible();
+  });
+
+  test('start_puzzle shows the solution or scatters the parts; place_piece snaps parts in until done', async ({ page }) => {
+    let r = await call(page, 'plush_puzzle_start_puzzle', { animal: 'dolphin' });
+    expect(r.result).toMatchObject({ animal: 'dolphin', phase: 'solution', parts_total: 5, parts_placed: 0 });
+    await expect(page.locator('#board')).toHaveAttribute('data-phase', 'solution');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Puzzle gestartet');
+    r = await call(page, 'plush_puzzle_start_puzzle', { animal: 'teddy', show_solution: false });
+    expect(r.result).toMatchObject({ animal: 'teddy', phase: 'play', parts_total: 8 });
+    expect(r.result.loose_parts.sort()).toEqual(['arm', 'arm', 'body', 'ear', 'ear', 'head', 'leg', 'leg']);
+    await expect(page.locator('#loose .piece')).toHaveCount(8);
+    r = await call(page, 'plush_puzzle_place_piece', { part: 'head' });
+    expect(r.result).toMatchObject({ placed: 'head', parts_placed: 1 });
+    await expect(page.locator('.piece[data-i="7"]')).toHaveAttribute('data-slot', '7');
+    await expect(page.locator('.piece[data-i="7"]')).toHaveClass(/snap/);
+    expect(await call(page, 'plush_puzzle_place_piece', { part: 'head' })).toEqual({ ok: false, error: 'No loose part of kind "head".' });
+    for (let n = 2; n <= 8; n++) {
+      r = await call(page, 'plush_puzzle_place_piece', {});
+      expect(r.result.parts_placed).toBe(n);
+    }
+    expect(r.result).toMatchObject({ phase: 'done', loose_parts: [] });
+    await expect(page.locator('#confetti')).toHaveAttribute('data-active', 'true');
+    // Every part sits on a spot of the same drawing, each spot once
+    const slots = await page.locator('.piece').evaluateAll(els => els.map(e => Number(e.dataset.slot)));
+    expect([...slots].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(await call(page, 'plush_puzzle_place_piece', {})).toEqual({ ok: false, error: 'The puzzle is already finished.' });
+    r = await call(page, 'plush_puzzle_list_animals', {});
+    expect(r.result.animals[0].times_finished).toBe(1);
+  });
+
+  test('invalid input is rejected', async ({ page }) => {
+    expect(await call(page, 'plush_puzzle_place_piece', {})).toEqual({ ok: false, error: 'No puzzle is open – start one with start_puzzle.' });
+    expect((await call(page, 'plush_puzzle_start_puzzle', {})).ok).toBe(false);
+    expect((await call(page, 'plush_puzzle_start_puzzle', { animal: 'unicorn' })).ok).toBe(false);
+    await expect(page.locator('#pick')).toBeVisible();
+  });
+});
+
+test.describe('reaction-game tools', () => {
+  test('get_scores reads settings, last game and best scores; set_game sets up the next game', async ({ page }) => {
+    const last = { mode: 'lamp', dur: 15, size: 3, points: 7, hits: 8, wrong: 1, missed: 0, avg: 412, fastest: 250, at: '2026-05-01T09:00:00.000Z' };
+    await page.addInitScript(v => localStorage.setItem('reaction-game.state.v1', v), JSON.stringify({
+      mode: 'mole', dur: 30, size: 3, sound: true, vibrate: false, rounds: 4, last,
+      best: { 'lamp-15-3': { points: 7, avg: 412, at: last.at }, 'mole-30-4': { points: 21, avg: 530, at: last.at }, 'fly-15-0': { points: 9, avg: 600, at: last.at } } }));
+    await open(page, '/reaction-game/');
+    let r = await call(page, 'reaction_game_get_scores', {});
+    expect(r.ok).toBe(true);
+    expect(r.result).toEqual({
+      settings: { mode: 'mole', duration_seconds: 30, grid_size: 3, sounds: true, vibration: false },
+      phase: 'idle', current_points: null, rounds_played: 4,
+      last_game: { mode: 'lamp', duration_seconds: 15, grid_size: 3, points: 7, hits: 8, misses: 1, got_away: null, average_reaction_ms: 412, fastest_reaction_ms: 250 },
+      best: [
+        { mode: 'mole', duration_seconds: 30, grid_size: 4, points: 21, average_reaction_ms: 530 },
+        { mode: 'lamp', duration_seconds: 15, grid_size: 3, points: 7, average_reaction_ms: 412 },
+        // Gnats have no grid
+        { mode: 'fly', duration_seconds: 15, grid_size: null, points: 9, average_reaction_ms: 600 },
+      ],
+    });
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Bestwerte gelesen');
+
+    r = await call(page, 'reaction_game_set_game', { mode: 'lamp', duration_seconds: 15 });
+    expect(r).toEqual({ ok: true, result: { mode: 'lamp', duration_seconds: 15, grid_size: 3, best_points: 7 } });
+    await expect(page.locator('#modes [data-mode="lamp"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#time')).toHaveText('15');
+    await expect(page.locator('#bestNow')).toHaveText('7');
+    r = await call(page, 'reaction_game_set_game', { grid_size: 4 });
+    expect(r.result).toEqual({ mode: 'lamp', duration_seconds: 15, grid_size: 4, best_points: null });
+    await expect(page.locator('#grid .cell')).toHaveCount(16);
+
+    expect((await call(page, 'reaction_game_set_game', { duration_seconds: 45 })).ok).toBe(false);
+    expect((await call(page, 'reaction_game_set_game', { mode: 'snake' })).ok).toBe(false);
+    expect((await call(page, 'reaction_game_set_game', { speed: 2 })).ok).toBe(false);
+    r = await call(page, 'reaction_game_set_game', { mode: 'fly' });
+    expect(r.result).toEqual({ mode: 'fly', duration_seconds: 15, grid_size: 4, best_points: 9 });
+    await expect(page.locator('#sizes [data-size="4"]')).toBeDisabled();
+    await expect(page.locator('#grid')).toBeHidden();
+  });
+
+  test('set_game is refused while a game runs; get_scores shows the running points', async ({ page }) => {
+    await open(page, '/reaction-game/');
+    await page.click('#modes [data-mode="lamp"]');
+    await page.click('#btnStart');
+    await expect(page.locator('#board')).toHaveAttribute('data-phase', 'running', { timeout: 5000 });
+    await page.locator('#grid .cell.on').click();
+    expect(await call(page, 'reaction_game_set_game', { mode: 'mole' }))
+      .toEqual({ ok: false, error: 'A game is running – wait until it is over.' });
+    const r = await call(page, 'reaction_game_get_scores', {});
+    expect(r.result.phase).toBe('running');
+    expect(r.result.current_points).toBe(1);
+    await expect(page.locator('#modes [data-mode="lamp"]')).toHaveAttribute('aria-pressed', 'true');
   });
 });

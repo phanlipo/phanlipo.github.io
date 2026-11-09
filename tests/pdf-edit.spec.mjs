@@ -294,6 +294,46 @@ test('share target: several PDFs shared to the installed app are merged in order
   expect(r.pages).toEqual(['B1@0', 'B2@90', 'A1@0', 'A2@0', 'A3@0']);
 });
 
+test('the work survives a reload (app update, phone ending the app); "Start over" removes it', async ({ page }) => {
+  page.on('dialog', d => d.accept());
+  await page.goto(URL_);
+  await openFiles(page, [A(), B()], 5);
+  await pageBtn(page, 1, 'rot').click();                 // A1 turned
+  await pageBtn(page, 5, 'up').click();                  // B2 before B1
+  await page.fill('#fileName', 'Mappe');
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).name)).toBe('Mappe');
+  await page.reload();
+  await expect(thumbs(page)).toHaveCount(5);
+  await expect(page.locator('#addInfo')).toHaveText('2 Datei(en) mit 5 Seite(n) vom letzten Mal wieder da.');
+  await expect(page.locator('#fileName')).toHaveValue('Mappe');
+  await expect(thumbs(page).nth(4).locator('img')).toHaveAttribute('src', /^blob:/);
+  const r = await save(page);
+  expect(r.name).toBe('Mappe.pdf');
+  expect(r.pages).toEqual(['A1@90', 'A2@0', 'A3@0', 'B2@90', 'B1@0']);
+  // a password-protected file asks again after the reload; skipping it keeps the others
+  await page.setInputFiles('#inPick', S());
+  await page.fill('#pwInput', 'Sesam 1');
+  await page.click('#pwOk');
+  await expect(thumbs(page)).toHaveCount(7);
+  await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', {})).pages?.length)).toBe(7);
+  await page.reload();
+  await expect(page.locator('#pwTitle')).toHaveText('„geheim.pdf“ ist passwortgeschützt');
+  await page.click('#pwCancel');
+  await expect(thumbs(page)).toHaveCount(5);
+  await expect(page.locator('#addInfo')).toContainText('„geheim.pdf“ wurde ohne Passwort nicht geöffnet.');
+  // the password is never stored
+  const kept = await page.evaluate(async () => JSON.stringify(await Tools.keep.json('state')) + Object.values(localStorage).join());
+  expect(kept).not.toContain('Sesam');
+  // start over: nothing comes back
+  await page.click('#btnReset');
+  await expect(thumbs(page)).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => Tools.keep.names())).toEqual([]);
+  await page.reload();
+  await page.waitForTimeout(500);
+  await expect(thumbs(page)).toHaveCount(0);
+  await expect(page.locator('#addInfo')).toHaveText('');
+});
+
 test('works offline: editing library, pdf.js and its worker come from the offline cache', async ({ page, context }) => {
   await page.goto(URL_);
   await page.evaluate(() => navigator.serviceWorker.ready);

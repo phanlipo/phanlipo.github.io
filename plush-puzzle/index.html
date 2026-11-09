@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Kuscheltier-Puzzle</title>
+<meta name="description" content="Kuscheltiere aus Teilen zusammenbauen: Teile auf den Schatten ziehen, bis sie einrasten – mit Konfetti am Ende.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="puzzle">
+<meta name="tool:color" content="#b4436c">
+<meta name="tool:short-name" content="Kuscheltier">
+<meta name="tool:title-en" content="Cuddly Toy Puzzle">
+<meta name="tool:description-en" content="Build cuddly toys from their parts: drag each part onto the shadow until it snaps in – with confetti at the end.">
+<meta name="tool:short-name-en" content="Toy Puzzle">
+<meta name="tool:storage" content="plush-puzzle.">
+<meta name="tool:webmcp" content="list_animals, start_puzzle, get_progress, place_piece">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-apmInyx27ICVhkVarcwIoTJOjyHkvUTGN72x+9xebPA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Kuscheltier">
+<meta name="theme-color" content="#b4436c">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#b4436c;--accent-text:#ffffff;--page-width:1100px;
+  --board:color-mix(in srgb,var(--accent) 14%,var(--surface));--silhouette:#1d1a1c}
+@media (prefers-color-scheme: dark){:root{--accent:#f0a3bf;--accent-text:#2a0f1a;
+  --board:color-mix(in srgb,var(--accent) 34%,var(--surface-2));--silhouette:#0b0a0b}}
+/* Stage layout: animal choice or the puzzle board fills the screen, status and buttons below; settings in the menu */
+main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;padding:10px}
+
+/* ---------- Animal choice ---------- */
+.pick{flex:1;min-height:0;display:flex;flex-direction:column}
+.pick h2{justify-content:center;font-size:18px;margin-bottom:10px}
+.animals{flex:1;min-height:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;align-content:start;overflow-y:auto}
+.animal{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;min-height:44px;
+  border:2px solid var(--border);border-radius:14px;background:var(--board);color:var(--text);cursor:pointer;font:inherit;font-weight:600;font-size:17px}
+.animal:hover,.animal:focus-visible{border-color:var(--accent)}
+.animal:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.animal svg{width:100%;height:110px;display:block}
+.animal .done{position:absolute;inset-block-start:6px;inset-inline-end:8px;font-size:13px;font-weight:600;color:var(--muted)}
+
+/* ---------- Board ---------- */
+.game{flex:1;min-height:0;display:flex;flex-direction:column}
+.board{flex:1;min-height:220px;position:relative;border-radius:12px;background:var(--board);overflow:hidden}
+.board svg{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.shadow{transition:opacity .5s}
+.board[data-phase="solution"] .shadow{opacity:0}
+/* The shadow: every part drawn in one dark colour. "Lösung" (peek) shows it in colour instead */
+.board:not(.peek) .shadow *{fill:var(--silhouette)!important;stroke:var(--silhouette)!important}
+.board.peek .shadow{opacity:.75}
+.piece{transform-box:view-box;transform-origin:0 0}
+.piece.loose{cursor:grab}
+.piece.loose:focus{outline:none}
+.piece.loose:focus-visible .art{stroke:var(--accent);stroke-width:3}
+.piece.dragging{cursor:grabbing}
+.anim .piece{transition:transform .6s cubic-bezier(.3,1.3,.5,1)}
+.piece.glide{transition:transform .15s ease-out}
+/* Snapped in: blinks a few times (2.5 per second – below the flash limit) */
+.piece.snap{animation:blink .4s ease-in-out 3}
+@keyframes blink{50%{opacity:.2}}
+@media (prefers-reduced-motion: reduce){.anim .piece,.piece.glide{transition:none}}
+.status{text-align:center;min-height:28px;margin:8px 0 6px;font-weight:600;font-size:18px;overflow-wrap:anywhere}
+.actions{flex:none;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.actions .btn{min-height:52px;font-size:18px;font-weight:600;flex:1;max-width:320px}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
+/* Hidden SVG to measure the parts */
+#measure{position:absolute;width:0;height:0;overflow:hidden;visibility:hidden}
+
+/* ---------- Settings ---------- */
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.info{color:var(--muted);margin:6px 0 0}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Kuscheltier-Puzzle</span></h1>
+  <p class="sub" data-i18n="sub">Kuscheltiere aus Teilen zusammenbauen</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnPeek" aria-pressed="false" aria-label="Lösung zeigen" title="Lösung zeigen" data-i18n-attr="aria-label:peek; title:peek" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg></button>
+    <button type="button" class="head-btn" id="btnAnimals" aria-label="Anderes Tier" title="Anderes Tier" data-i18n-attr="aria-label:other; title:other" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6v6h-6z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6h-6z"/><path d="M14 14h6v6h-6z"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card play" aria-label="Kuscheltier-Puzzle" data-i18n-attr="aria-label:title">
+    <div class="pick" id="pick">
+      <h2 id="h-pick" data-i18n="pickH">Welches Kuscheltier baust du?</h2>
+      <div class="animals" id="animals" role="list" aria-labelledby="h-pick"></div>
+    </div>
+    <div class="game" id="game" hidden>
+      <div class="board" id="board" data-phase="solution">
+        <svg id="svg" role="group" aria-label="Spielfeld" data-i18n-attr="aria-label:boardLabel">
+          <g class="shadow" id="shadow"></g>
+          <g id="placed"></g>
+          <g id="loose"></g>
+        </svg>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <div class="actions">
+        <button type="button" class="btn primary" id="btnGo"><span aria-hidden="true">▶ </span><span data-i18n="go">Los geht’s!</span></button>
+        <button type="button" class="btn primary" id="btnAgain" hidden><span aria-hidden="true">↺ </span><span data-i18n="again">Nochmal</span></button>
+        <button type="button" class="btn" id="btnOther" hidden data-i18n="other">Anderes Tier</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu>
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <label class="check"><input type="checkbox" id="optEasy"> <span data-i18n="easy">Leicht einrasten (für die Kleinsten)</span></label>
+    <label class="check"><input type="checkbox" id="optSound"> <span data-i18n="sound">Töne</span></label>
+    <label class="check"><input type="checkbox" id="optVibrate"> <span data-i18n="vibrate">Vibration beim Einrasten (Handy)</span></label>
+    <p class="info" id="solvedInfo"></p>
+  </section>
+</main>
+<canvas id="confetti" aria-hidden="true" hidden></canvas>
+<svg id="measure" aria-hidden="true" focusable="false"></svg>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Puzzle für Kinder: Ein Kuscheltier ist in seine Teile zerfallen – Kopf, Ohren, Arme, Beine … Zieh jedes Teil auf seinen Platz im Schatten, bis das Tier wieder ganz ist.</p>
+  <h3>So geht’s</h3>
+  <ul>
+    <li><b>Tier wählen</b>: Teddy, Hase, Panda, Delfin, Katze oder Elefant antippen.</li>
+    <li><b>Lösung ansehen</b>: Zuerst siehst du das fertige Tier. Mit <b>Los geht’s!</b> fallen die Teile an den Rand, in der Mitte bleibt ein schwarzer Schatten.</li>
+    <li><b>Teile ziehen</b>: Ein Teil mit dem Finger (oder der Maus) auf die passende Stelle im Schatten ziehen. Ist es nah genug dran, rastet es ein, blinkt und bleibt fest. Gleiche Teile (z. B. zwei gleiche Füße) passen an beide Stellen.</li>
+    <li><b>Fertig</b>: Sitzt das letzte Teil, regnet es Konfetti. Dann <b>Nochmal</b> oder <b>Anderes Tier</b>.</li>
+    <li><b>Lösung zeigen</b> (Auge oben): zeigt das fertige Tier im Schatten ein paar Sekunden lang in Farbe. <b>Anderes Tier</b> (Kacheln oben) führt zurück zur Auswahl.</li>
+    <li>Mit der Tastatur: Teil mit der Tab-Taste wählen und mit den Pfeiltasten verschieben (mit Umschalt in großen Schritten).</li>
+  </ul>
+  <h3>Im Menü ☰</h3>
+  <ul>
+    <li><b>Leicht einrasten</b>: Teile rasten schon weiter entfernt ein – gut für kleine Kinder.</li>
+    <li><b>Töne</b> und <b>Vibration</b> (nur Android) beim Einrasten und am Ende.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Gespeichert werden nur die Einstellungen, wie oft jedes Tier fertig gebaut wurde und welches Puzzle gerade offen ist – in diesem Browser. Alles funktioniert offline.</li>
+    <li>Dreht man das Handy, werden die noch losen Teile neu am Rand verteilt; eingerastete Teile bleiben fest.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann die Tiere auflisten, ein Puzzle starten, den Stand lesen und als Tipp ein Teil einsetzen (WebMCP). Jeder Aufruf erscheint hier als Hinweis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A puzzle for kids: a cuddly toy has fallen apart – head, ears, arms, legs … Drag each part to its place in the shadow until the animal is whole again.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li><b>Choose an animal</b>: tap the teddy, bunny, panda, dolphin, cat or elephant.</li>
+    <li><b>Look at the solution</b>: first you see the finished animal. With <b>Let’s go!</b> the parts tumble to the edge, and a black shadow stays in the middle.</li>
+    <li><b>Drag the parts</b>: drag a part with your finger (or the mouse) onto the matching spot in the shadow. Once it is close enough it snaps in, blinks and stays put. Identical parts (e.g. two identical feet) fit either spot.</li>
+    <li><b>Done</b>: when the last part is in, it rains confetti. Then <b>Again</b> or <b>Other animal</b>.</li>
+    <li><b>Show solution</b> (eye at the top): shows the finished animal in colour in the shadow for a few seconds. <b>Other animal</b> (tiles at the top) takes you back to the choice.</li>
+    <li>With a keyboard: pick a part with Tab and move it with the arrow keys (with Shift in big steps).</li>
+  </ul>
+  <h3>In the menu ☰</h3>
+  <ul>
+    <li><b>Easy snapping</b>: parts snap in from further away – good for little ones.</li>
+    <li><b>Sounds</b> and <b>vibration</b> (Android only) when a part snaps in and at the end.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Only the settings, how often each animal was finished and which puzzle is open are stored – in this browser. Everything works offline.</li>
+    <li>When you turn the phone, the loose parts are spread around the edge again; parts that snapped in stay put.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can list the animals, start a puzzle, read the progress and put in one part as a hint (WebMCP). Each call shows a note here.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version aa540430f7cc</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  'a.teddy':'Teddy','a.bunny':'Hase','a.panda':'Panda','a.dolphin':'Delfin','a.cat':'Katze','a.elephant':'Elefant',
+  'p.head':'Kopf','p.body':'Körper','p.ear':'Ohr','p.arm':'Arm','p.leg':'Bein','p.foot':'Fuß','p.paw':'Pfote','p.tail':'Schwanz',
+  'p.fin':'Rückenflosse','p.flipper':'Seitenflosse','p.fluke':'Schwanzflosse','p.trunk':'Rüssel',
+  pieceLabel:'{part} – ziehen oder mit den Pfeiltasten verschieben',
+  solution:'So sieht {animal} aus. Schau gut hin!',
+  playing:'Zieh die Teile auf den Schatten. Noch {n} Teile.',playing1:'Noch ein Teil!',
+  snapped:'Super! Noch {n} Teile.',
+  done:'🎉 Geschafft! {animal} ist fertig!',
+  solved:'{n}× fertig',solvedNone:'Noch kein Tier fertig gebaut.',solvedSum:'Schon {n}× ein Tier fertig gebaut.',
+  'mcp.list':'Tiere gelesen','mcp.start':'Puzzle gestartet','mcp.progress':'Stand gelesen','mcp.place':'Teil eingesetzt'
+},
+en:{
+  title:'Cuddly Toy Puzzle',sub:'Build cuddly toys from their parts',peek:'Show solution',other:'Other animal',
+  pickH:'Which cuddly toy will you build?',boardLabel:'Puzzle board',go:'Let’s go!',again:'Again',
+  settings:'Settings',easy:'Easy snapping (for little ones)',sound:'Sounds',vibrate:'Vibration when a part snaps in (phone)',
+  'a.teddy':'Teddy','a.bunny':'Bunny','a.panda':'Panda','a.dolphin':'Dolphin','a.cat':'Cat','a.elephant':'Elephant',
+  'p.head':'Head','p.body':'Body','p.ear':'Ear','p.arm':'Arm','p.leg':'Leg','p.foot':'Foot','p.paw':'Paw','p.tail':'Tail',
+  'p.fin':'Dorsal fin','p.flipper':'Flipper','p.fluke':'Tail fin','p.trunk':'Trunk',
+  pieceLabel:'{part} – drag it or move it with the arrow keys',
+  solution:'This is what the {animal} looks like. Look closely!',
+  playing:'Drag the parts onto the shadow. {n} parts to go.',playing1:'One more part!',
+  snapped:'Great! {n} parts to go.',
+  done:'🎉 You did it! The {animal} is finished!',
+  solved:'finished {n}×',solvedNone:'No animal finished yet.',solvedSum:'Finished an animal {n}× so far.',
+  'mcp.list':'animals read','mcp.start':'puzzle started','mcp.progress':'progress read','mcp.place':'part put in'
+}});
+const {$,t}=Tools;
+// German texts name the animal with its article ("So sieht der Teddy aus")
+const ARTICLE={teddy:'der',bunny:'der',panda:'der',dolphin:'der',cat:'die',elephant:'der'};
+const animalName=(id,inSentence)=>{
+  const n=t('a.'+id);
+  if(!inSentence||Tools.lang()!=='de')return n;
+  return ARTICLE[id]+' '+n;
+};
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+
+/* ---------- Animals ----------
+   Each part is drawn around its own origin and sits at `at` in the animal's coordinates (about 200 × 200).
+   Parts are listed back to front. Parts with the very same drawing (e.g. two feet) fit either spot. */
+const ANIMALS=[
+  {id:'teddy',line:'#4a3121',parts:(()=>{
+    const F='#bd8550',L='#efd6b0',D='#3a2618';
+    const ear=`<circle r="15" fill="${F}"/><circle r="8" fill="${L}" stroke="none"/>`;
+    const leg=`<ellipse rx="22" ry="17" fill="${F}"/><ellipse cy="2" rx="12" ry="9" fill="${L}" stroke="none"/>`;
+    return [
+      {k:'ear',at:[70,36],art:ear},{k:'ear',at:[130,36],art:ear},
+      {k:'body',at:[100,132],art:`<ellipse rx="40" ry="44" fill="${F}"/><ellipse cy="6" rx="25" ry="30" fill="${L}" stroke="none"/>`},
+      {k:'leg',at:[74,172],art:leg},{k:'leg',at:[126,172],art:leg},
+      {k:'arm',at:[62,118],art:`<ellipse rx="12" ry="25" transform="rotate(40)" fill="${F}"/>`},
+      {k:'arm',at:[138,118],art:`<ellipse rx="12" ry="25" transform="rotate(-40)" fill="${F}"/>`},
+      {k:'head',at:[100,66],art:`<circle r="38" fill="${F}"/><ellipse cy="14" rx="17" ry="13" fill="${L}" stroke="none"/>`+
+        `<ellipse cy="8" rx="6.5" ry="4.5" fill="${D}" stroke="none"/><path d="M-6 17Q0 23 6 17" fill="none" stroke="${D}"/>`+
+        `<circle cx="-14" cy="-7" r="4.5" fill="${D}" stroke="none"/><circle cx="14" cy="-7" r="4.5" fill="${D}" stroke="none"/>`+
+        `<circle cx="-12.5" cy="-8.5" r="1.4" fill="#fff" stroke="none"/><circle cx="15.5" cy="-8.5" r="1.4" fill="#fff" stroke="none"/>`}
+    ];})()},
+  {id:'bunny',line:'#4b4038',parts:(()=>{
+    const F='#ddd3c6',P='#f2a3b6',W='#fffaf2',D='#3a3330';
+    const foot=`<ellipse rx="20" ry="11" fill="${F}"/><ellipse cy="1" rx="9" ry="5" fill="${P}" stroke="none"/>`;
+    return [
+      {k:'tail',at:[138,166],art:`<circle r="13" fill="${W}"/>`},
+      {k:'ear',at:[82,30],art:`<g transform="rotate(-10)"><ellipse rx="12" ry="34" fill="${F}"/><ellipse rx="6" ry="25" fill="${P}" stroke="none"/></g>`},
+      {k:'ear',at:[118,30],art:`<g transform="rotate(10)"><ellipse rx="12" ry="34" fill="${F}"/><ellipse rx="6" ry="25" fill="${P}" stroke="none"/></g>`},
+      {k:'body',at:[100,140],art:`<ellipse rx="36" ry="40" fill="${F}"/><ellipse cy="6" rx="22" ry="27" fill="${W}" stroke="none"/>`},
+      {k:'foot',at:[78,180],art:foot},{k:'foot',at:[122,180],art:foot},
+      {k:'arm',at:[70,132],art:`<ellipse rx="10" ry="20" transform="rotate(30)" fill="${F}"/>`},
+      {k:'arm',at:[130,132],art:`<ellipse rx="10" ry="20" transform="rotate(-30)" fill="${F}"/>`},
+      {k:'head',at:[100,86],art:`<ellipse rx="36" ry="32" fill="${F}"/>`+
+        `<circle cx="-22" cy="10" r="5.5" fill="${P}" stroke="none" opacity=".7"/><circle cx="22" cy="10" r="5.5" fill="${P}" stroke="none" opacity=".7"/>`+
+        `<circle cx="-13" cy="-4" r="4.5" fill="${D}" stroke="none"/><circle cx="13" cy="-4" r="4.5" fill="${D}" stroke="none"/>`+
+        `<circle cx="-11.5" cy="-5.5" r="1.4" fill="#fff" stroke="none"/><circle cx="14.5" cy="-5.5" r="1.4" fill="#fff" stroke="none"/>`+
+        `<path d="M-5 6H5L0 11Z" fill="${P}" stroke="none"/><path d="M0 11Q-3 17-8 15M0 11Q3 17 8 15" fill="none" stroke="${D}"/>`}
+    ];})()},
+  {id:'panda',line:'#232325',parts:(()=>{
+    const W='#fbfbf7',B='#2d2d30',G='#6d6d73';
+    const ear=`<circle r="14" fill="${B}"/>`;
+    const leg=`<ellipse rx="20" ry="18" fill="${B}"/><circle cy="2" r="8" fill="${G}" stroke="none"/>`;
+    return [
+      {k:'ear',at:[70,38],art:ear},{k:'ear',at:[130,38],art:ear},
+      {k:'body',at:[100,140],art:`<ellipse rx="40" ry="42" fill="${W}"/>`},
+      {k:'leg',at:[76,176],art:leg},{k:'leg',at:[124,176],art:leg},
+      {k:'arm',at:[64,126],art:`<ellipse rx="13" ry="25" transform="rotate(40)" fill="${B}"/>`},
+      {k:'arm',at:[136,126],art:`<ellipse rx="13" ry="25" transform="rotate(-40)" fill="${B}"/>`},
+      {k:'head',at:[100,72],art:`<circle r="38" fill="${W}"/>`+
+        `<ellipse cx="-15" cy="-2" rx="9" ry="12" transform="rotate(35 -15 -2)" fill="${B}" stroke="none"/>`+
+        `<ellipse cx="15" cy="-2" rx="9" ry="12" transform="rotate(-35 15 -2)" fill="${B}" stroke="none"/>`+
+        `<circle cx="-14" cy="-3" r="3.5" fill="#fff" stroke="none"/><circle cx="14" cy="-3" r="3.5" fill="#fff" stroke="none"/>`+
+        `<circle cx="-13.5" cy="-3" r="1.8" fill="${B}" stroke="none"/><circle cx="14.5" cy="-3" r="1.8" fill="${B}" stroke="none"/>`+
+        `<ellipse cy="13" rx="6" ry="4.5" fill="${B}" stroke="none"/><path d="M-6 21Q0 26 6 21" fill="none" stroke="${B}"/>`}
+    ];})()},
+  {id:'dolphin',line:'#1d3a56',parts:(()=>{
+    const B='#62aae8',B2='#4a92d4',L='#e4f3fd',D='#1d3a56';
+    return [
+      {k:'fluke',at:[172,106],art:`<path d="M0-6C8-22 20-30 32-30C26-18 20-8 14 0C20 8 26 18 32 30C20 30 8 22 0 6Z" fill="${B2}"/>`},
+      {k:'fin',at:[112,88],art:`<path d="M0 0C2-16 12-28 26-32C22-20 22-8 30 2Z" fill="${B2}"/>`},
+      {k:'body',at:[100,108],art:`<path d="M-4-26C30-28 60-18 78-4V8C58 18 30 26-4 24Z" fill="${B}"/>`+
+        `<path d="M-4 12C26 14 52 10 77 4L78 8C58 18 30 26-4 24Z" fill="${L}" stroke="none"/>`},
+      {k:'head',at:[100,108],art:`<path d="M8-30C-14-30-30-18-36-6L-58-2C-66 0-66 10-58 12L-34 14C-26 26-8 30 8 26C16 14 16-18 8-30Z" fill="${B}"/>`+
+        `<path d="M-59 9L-34 12C-24 21-6 24 13 20C11 23 10 25 8 26C-8 30-26 26-34 14L-58 12Z" fill="${L}" stroke="none"/>`+
+        `<circle cx="-14" cy="-9" r="4.5" fill="${D}" stroke="none"/><circle cx="-12.5" cy="-10.5" r="1.4" fill="#fff" stroke="none"/>`+
+        `<path d="M-44 6Q-34 11-26 5" fill="none" stroke="${D}"/><circle cx="-20" cy="4" r="4" fill="#f4a3b8" stroke="none" opacity=".7"/>`},
+      {k:'flipper',at:[104,122],art:`<path d="M0 0C12 4 20 14 22 30C10 28 0 18-6 4Z" fill="${B2}"/>`}
+    ];})()},
+  {id:'cat',line:'#5a3416',parts:(()=>{
+    const O='#f2a45c',L='#fde8cf',P='#f5a3b5',G='#7cc35f',D='#4a2a12';
+    const leg=`<ellipse rx="18" ry="11" fill="${O}"/>`;
+    const paw=`<ellipse rx="10" ry="22" fill="${O}"/><ellipse cy="15" rx="8" ry="6" fill="${L}" stroke="none"/>`;
+    return [
+      {k:'tail',at:[126,160],art:`<path d="M0 0C20-2 34-14 34-36C34-46 44-48 46-38C48-10 30 8 2 10Z" fill="${O}"/>`},
+      {k:'ear',at:[74,46],art:`<path d="M-14 12L-8-16L16 4Z" fill="${O}"/><path d="M-8 6L-5-8L7 2Z" fill="${P}" stroke="none"/>`},
+      {k:'ear',at:[126,46],art:`<path d="M14 12L8-16L-16 4Z" fill="${O}"/><path d="M8 6L5-8L-7 2Z" fill="${P}" stroke="none"/>`},
+      {k:'body',at:[100,142],art:`<ellipse rx="34" ry="40" fill="${O}"/><ellipse cy="8" rx="20" ry="26" fill="${L}" stroke="none"/>`},
+      {k:'leg',at:[74,178],art:leg},{k:'leg',at:[126,178],art:leg},
+      {k:'head',at:[100,76],art:`<circle r="36" fill="${O}"/>`+
+        `<path d="M-6-35L0-25L6-35M-16-31L-10-23M16-31L10-23" fill="none" stroke="${D}" stroke-width="2.4" stroke-linecap="round"/>`+
+        `<ellipse cx="-13" cy="-4" rx="5.5" ry="6.5" fill="${G}" stroke="none"/><ellipse cx="13" cy="-4" rx="5.5" ry="6.5" fill="${G}" stroke="none"/>`+
+        `<ellipse cx="-13" cy="-4" rx="1.8" ry="4.6" fill="${D}" stroke="none"/><ellipse cx="13" cy="-4" rx="1.8" ry="4.6" fill="${D}" stroke="none"/>`+
+        `<path d="M-4.5 7H4.5L0 12Z" fill="${P}" stroke="none"/><path d="M0 12Q-3 17-8 15M0 12Q3 17 8 15" fill="none" stroke="${D}"/>`+
+        `<path d="M-14 11L-32 7M-14 15L-32 17M14 11L32 7M14 15L32 17" fill="none" stroke="${D}" stroke-width="1"/>`},
+      {k:'paw',at:[86,160],art:paw},{k:'paw',at:[114,160],art:paw}
+    ];})()},
+  {id:'elephant',line:'#2e3a47',parts:(()=>{
+    const G='#a9b7c6',P='#f2b3c2',D='#2e3a47';
+    const leg=`<rect x="-15" y="-20" width="30" height="40" rx="12" fill="${G}"/><path d="M-10 18A4.5 4.5 0 0 1-1 18ZM1 18A4.5 4.5 0 0 1 10 18Z" fill="#fff" stroke="none"/>`;
+    return [
+      {k:'ear',at:[60,74],art:`<g transform="rotate(-15)"><ellipse rx="26" ry="32" fill="${G}"/><ellipse rx="16" ry="22" fill="${P}" stroke="none"/></g>`},
+      {k:'ear',at:[140,74],art:`<g transform="rotate(15)"><ellipse rx="26" ry="32" fill="${G}"/><ellipse rx="16" ry="22" fill="${P}" stroke="none"/></g>`},
+      {k:'body',at:[100,140],art:`<ellipse rx="40" ry="40" fill="${G}"/>`},
+      {k:'leg',at:[78,168],art:leg},{k:'leg',at:[122,168],art:leg},
+      {k:'head',at:[100,74],art:`<circle r="34" fill="${G}"/>`+
+        `<circle cx="-13" cy="-7" r="4.5" fill="${D}" stroke="none"/><circle cx="13" cy="-7" r="4.5" fill="${D}" stroke="none"/>`+
+        `<circle cx="-11.5" cy="-8.5" r="1.4" fill="#fff" stroke="none"/><circle cx="14.5" cy="-8.5" r="1.4" fill="#fff" stroke="none"/>`+
+        `<circle cx="-21" cy="8" r="5" fill="${P}" stroke="none" opacity=".8"/><circle cx="21" cy="8" r="5" fill="${P}" stroke="none" opacity=".8"/>`},
+      {k:'trunk',at:[100,90],art:`<path d="M-11 0C-11 22-6 40 8 46C16 49 24 44 24 36L18 34C18 38 14 40 10 38C4 34 4 20 11 0Z" fill="${G}"/>`+
+        `<path d="M-5 14H4M-3 24H5M0 33H7" fill="none" stroke="${D}" stroke-width="1.2" opacity=".6"/>`}
+    ];})()}
+];
+const byId=Object.fromEntries(ANIMALS.map(a=>[a.id,a]));
+
+/* ---------- Measuring: bounding box of every part (art coordinates, around its origin) ---------- */
+const NS='http://www.w3.org/2000/svg';
+const measureSvg=$('measure');
+function measure(a){
+  if(a.bbox)return;
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  a.parts.forEach((p,i)=>{
+    const g=document.createElementNS(NS,'g');
+    g.innerHTML=p.art;measureSvg.appendChild(g);
+    const b=g.getBBox();g.remove();
+    // 2 units extra for the outline
+    p.bb={x:b.x-2,y:b.y-2,w:b.width+4,h:b.height+4};
+    x0=Math.min(x0,p.at[0]+p.bb.x);y0=Math.min(y0,p.at[1]+p.bb.y);
+    x1=Math.max(x1,p.at[0]+p.bb.x+p.bb.w);y1=Math.max(y1,p.at[1]+p.bb.y+p.bb.h);
+    // Same drawing = same group: such parts fit either spot
+    p.grp=a.parts.findIndex(q=>q.art===p.art);
+    p.i=i;
+  });
+  a.bbox={x:x0,y:y0,w:x1-x0,h:y1-y0};
+}
+function artGroup(a,p,cls){
+  const g=document.createElementNS(NS,'g');
+  g.setAttribute('class',cls);
+  g.setAttribute('stroke',a.line);g.setAttribute('stroke-width','1.6');g.setAttribute('stroke-linejoin','round');
+  g.innerHTML=p.art;
+  return g;
+}
+
+/* ---------- State ---------- */
+const LS='plush-puzzle.state.v1';
+const state=Tools.load(LS,{easy:true,sound:true,vibrate:true,solved:{},game:null});
+for(const k of ['easy','sound','vibrate'])if(typeof state[k]!=='boolean')state[k]=true;
+if(!state.solved||typeof state.solved!=='object'||Array.isArray(state.solved))state.solved={};
+for(const k of Object.keys(state.solved))if(!byId[k]||!(Number.isInteger(state.solved[k])&&state.solved[k]>0))delete state.solved[k];
+const save=()=>Tools.save(LS,state);
+
+/* ---------- Animal choice ---------- */
+const pickEl=$('pick'),gameEl=$('game'),animalsEl=$('animals');
+function renderPick(){
+  animalsEl.textContent='';
+  for(const a of ANIMALS){
+    measure(a);
+    const b=document.createElement('button');
+    b.type='button';b.className='animal';b.dataset.animal=a.id;b.setAttribute('role','listitem');
+    const svg=document.createElementNS(NS,'svg');
+    svg.setAttribute('viewBox',`${a.bbox.x-4} ${a.bbox.y-4} ${a.bbox.w+8} ${a.bbox.h+8}`);
+    svg.setAttribute('aria-hidden','true');svg.setAttribute('focusable','false');
+    for(const p of a.parts){const g=artGroup(a,p,'');g.setAttribute('transform',`translate(${p.at[0]} ${p.at[1]})`);svg.appendChild(g);}
+    const name=document.createElement('span');name.textContent=t('a.'+a.id);
+    b.append(svg,name);
+    const n=state.solved[a.id]||0;
+    if(n){const d=document.createElement('span');d.className='done';d.textContent='⭐ '+t('solved',{n:Tools.fmt(n,0)});b.appendChild(d);}
+    b.addEventListener('click',()=>{unlock();start(a.id);});
+    animalsEl.appendChild(b);
+  }
+  const total=Object.values(state.solved).reduce((s,n)=>s+n,0);
+  $('solvedInfo').textContent=total?t('solvedSum',{n:Tools.fmt(total,0)}):t('solvedNone');
+}
+
+/* ---------- Game ----------
+   game.pieces[i]: part i of the animal; slot = spot it snapped into (-1 = loose); x, y = position of its origin
+   on the board in screen pixels (the SVG's viewBox is the board size, so 1 unit = 1 CSS pixel). */
+const board=$('board'),svgEl=$('svg'),shadowEl=$('shadow'),placedEl=$('placed'),looseEl=$('loose'),statusEl=$('status');
+let game=null;   // {a, phase:'solution'|'play'|'done', pieces:[{p, el, slot, x, y}], s, ox, oy, W, H}
+const slotPos=j=>({x:game.ox+game.a.parts[j].at[0]*game.s,y:game.oy+game.a.parts[j].at[1]*game.s});
+const placedCount=()=>game?game.pieces.filter(q=>q.slot>=0).length:0;
+const saveGame=()=>{
+  state.game=game?{animal:game.a.id,phase:game.phase,slots:game.pieces.map(q=>q.slot)}:null;
+  save();
+};
+function setPos(q){
+  q.el.style.transform=`translate(${q.x.toFixed(1)}px,${q.y.toFixed(1)}px) scale(${game.s.toFixed(4)})`;
+}
+function start(id,restore){
+  const a=byId[id];measure(a);
+  closePeek();stopConfetti();
+  game={a,phase:restore?restore.phase:'solution',pieces:[],s:1,ox:0,oy:0,W:0,H:0};
+  shadowEl.textContent='';placedEl.textContent='';looseEl.textContent='';
+  a.parts.forEach((p,j)=>{
+    const sh=artGroup(a,p,'slot');sh.dataset.j=j;shadowEl.appendChild(sh);
+  });
+  a.parts.forEach((p,i)=>{
+    const el=artGroup(a,p,'art');
+    const g=document.createElementNS(NS,'g');
+    g.setAttribute('class','piece');g.dataset.i=i;g.dataset.k=p.k;g.appendChild(el);
+    game.pieces.push({p,el:g,slot:-1,x:0,y:0});
+  });
+  if(restore){
+    // Restore which part sits in which spot – only if it still fits the drawing
+    const used=new Set();
+    restore.slots.forEach((j,i)=>{
+      if(Number.isInteger(j)&&j>=0&&j<a.parts.length&&!used.has(j)&&a.parts[j].grp===a.parts[i].grp){game.pieces[i].slot=j;used.add(j);}
+    });
+    if(game.phase==='done'&&used.size<a.parts.length)game.phase='play';
+  }
+  pickEl.hidden=true;gameEl.hidden=false;
+  $('btnAnimals').hidden=false;
+  Tools.diag.log('start',{animal:id,parts:a.parts.length,phase:game.phase,restored:!!restore});
+  layout(true);
+  render();saveGame();
+}
+function render(){
+  if(!game)return;
+  const ph=game.phase;
+  board.dataset.phase=ph;board.dataset.animal=game.a.id;
+  for(const q of game.pieces){
+    const loose=ph==='play'&&q.slot<0;
+    q.el.classList.toggle('loose',loose);
+    q.el.dataset.slot=q.slot;
+    if(loose){
+      q.el.setAttribute('tabindex','0');q.el.setAttribute('role','button');
+      q.el.setAttribute('aria-label',t('pieceLabel',{part:t('p.'+q.p.k)}));
+      if(q.el.parentNode!==looseEl)looseEl.appendChild(q.el);
+    }else{
+      q.el.removeAttribute('tabindex');q.el.removeAttribute('role');q.el.removeAttribute('aria-label');
+      insertPlaced(q);
+    }
+  }
+  $('btnGo').hidden=ph!=='solution';
+  $('btnAgain').hidden=$('btnOther').hidden=ph!=='done';
+  $('btnPeek').hidden=ph!=='play';
+  statusEl.textContent=statusText();
+}
+// Placed parts (and all parts in the solution) are drawn back to front in the order of their spots
+function insertPlaced(q){
+  const z=q.slot>=0?q.slot:q.p.i;
+  q.el.dataset.z=z;
+  const after=[...placedEl.children].find(e=>e!==q.el&&Number(e.dataset.z)>z);
+  if(after)placedEl.insertBefore(q.el,after);
+  else if(q.el.parentNode!==placedEl||q.el.nextSibling)placedEl.appendChild(q.el);
+}
+function statusText(){
+  if(!game)return '';
+  const left=game.pieces.length-placedCount();
+  if(game.phase==='solution')return cap(t('solution',{animal:animalName(game.a.id,true)}));
+  if(game.phase==='done')return t('done',{animal:cap(animalName(game.a.id,true))});
+  return left===1?t('playing1'):t('playing',{n:Tools.fmt(left,0)});
+}
+
+/* ---------- Layout: animal in the middle, loose parts spread around it without overlapping ---------- */
+const rnd=()=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]/4294967296;};
+const hit=(r,o,m)=>r.x<o.x+o.w+m&&o.x<r.x+r.w+m&&r.y<o.y+o.h+m&&o.y<r.y+r.h+m;
+function scatter(list,s,W,H,center){
+  const pad=6,taken=[],out=new Map();
+  const sorted=list.slice().sort((a,b)=>b.p.bb.w*b.p.bb.h-a.p.bb.w*a.p.bb.h);
+  for(const q of sorted){
+    const w=q.p.bb.w*s,h=q.p.bb.h*s;
+    if(w>W-2*pad||h>H-2*pad)return null;
+    let found=null;
+    for(let k=0;k<400&&!found;k++){
+      const r={x:pad+rnd()*(W-2*pad-w),y:pad+rnd()*(H-2*pad-h),w,h};
+      if(!hit(r,center,6)&&!taken.some(o=>hit(r,o,4)))found=r;
+    }
+    if(!found)return null;
+    taken.push(found);out.set(q,found);
+  }
+  return out;
+}
+function layout(force){
+  if(!game)return;
+  const W=board.clientWidth,H=board.clientHeight;
+  if(W<40||H<40)return;
+  if(!force&&Math.abs(W-game.W)<2&&Math.abs(H-game.H)<2)return;
+  game.W=W;game.H=H;
+  svgEl.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const bb=game.a.bbox,loose=game.pieces.filter(q=>q.slot<0);
+  const fit=Math.min(W/bb.w,H/bb.h);
+  let res=null,f;
+  // As big as possible: shrink the animal until all loose parts fit around it
+  for(f=.85;f>=.3&&!res;f-=.05){
+    const s=fit*f;
+    const center={x:(W-bb.w*s)/2,y:(H-bb.h*s)/2,w:bb.w*s,h:bb.h*s};
+    const pos=scatter(loose,s,W,H,center);
+    if(pos)res={s,center,pos};
+  }
+  if(!res){
+    // Very small board: parts may overlap the shadow
+    const s=fit*.5,center={x:(W-bb.w*s)/2,y:(H-bb.h*s)/2,w:bb.w*s,h:bb.h*s};
+    res={s,center,pos:scatter(loose,s,W,H,{x:0,y:0,w:0,h:0})||new Map()};
+    Tools.diag.log('layout fallback',{W,H});
+  }
+  game.s=res.s;game.ox=res.center.x-bb.x*res.s;game.oy=res.center.y-bb.y*res.s;
+  game.spots=new Map([...res.pos].map(([q,r])=>[q,{x:r.x-q.p.bb.x*res.s,y:r.y-q.p.bb.y*res.s}]));
+  for(const sh of shadowEl.children){
+    const P=slotPos(Number(sh.dataset.j));
+    sh.setAttribute('transform',`translate(${P.x.toFixed(1)} ${P.y.toFixed(1)}) scale(${res.s.toFixed(4)})`);
+  }
+  for(const q of game.pieces){
+    // In the solution every part sits in its own spot; in the game loose parts go to their spot at the edge
+    let P;
+    if(q.slot>=0)P=slotPos(q.slot);
+    else if(game.phase==='solution')P=slotPos(q.p.i);
+    else P=game.spots.get(q)||slotPos(q.p.i);
+    q.x=P.x;q.y=P.y;setPos(q);
+  }
+  Tools.diag.log('layout',{W,H,scale:Number(res.s.toFixed(2)),loose:loose.length});
+}
+new ResizeObserver(()=>{if(!drag)layout(false);}).observe(board);
+
+function go(){
+  if(!game||game.phase!=='solution')return;
+  game.phase='play';
+  svgEl.classList.add('anim');
+  for(const q of game.pieces){
+    if(q.slot>=0)continue;
+    const P=game.spots.get(q);
+    if(P){q.x=P.x;q.y=P.y;}
+  }
+  // Next frame: the transition starts from the solution
+  requestAnimationFrame(()=>{for(const q of game.pieces)setPos(q);});
+  setTimeout(()=>svgEl.classList.remove('anim'),700);
+  Tools.diag.log('play',{animal:game.a.id});
+  render();saveGame();
+  // Moving parts to the loose layer resets their style: flush it so the transition starts from the solution
+  for(const q of game.pieces)getComputedStyle(q.el).transform;
+}
+$('btnGo').addEventListener('click',()=>{unlock();go();});
+
+/* ---------- Snapping ---------- */
+const tolerance=()=>{
+  const size=Math.min(game.a.bbox.w,game.a.bbox.h)*game.s;
+  return state.easy?Math.max(44,size*.2):Math.max(26,size*.1);
+};
+// Nearest free spot for this part (or one with the very same drawing) within reach
+function nearestSlot(q){
+  let best=-1,bestD=Infinity;
+  game.a.parts.forEach((p,j)=>{
+    if(p.grp!==q.p.grp||game.pieces.some(o=>o.slot===j))return;
+    const P=slotPos(j),d=Math.hypot(P.x-q.x,P.y-q.y);
+    if(d<bestD){bestD=d;best=j;}
+  });
+  return {j:best,d:bestD};
+}
+function tryPlace(q){
+  const {j,d}=nearestSlot(q);
+  if(j<0||d>tolerance())return false;
+  place(q,j);
+  return true;
+}
+function place(q,j){
+  q.slot=j;
+  const P=slotPos(j);q.x=P.x;q.y=P.y;
+  q.el.classList.add('glide');setPos(q);
+  setTimeout(()=>q.el.classList.remove('glide'),200);
+  const had=document.activeElement===q.el;
+  render();
+  q.el.classList.remove('snap');void q.el.getBoundingClientRect();q.el.classList.add('snap');
+  setTimeout(()=>q.el.classList.remove('snap'),1300);
+  const left=game.pieces.length-placedCount();
+  Tools.diag.log('snapped',{part:q.p.k,slot:j,left});
+  if(state.vibrate&&navigator.vibrate)try{navigator.vibrate(30);}catch(_){}
+  if(left===0){finish();return;}
+  tone([660,990],.09);
+  statusEl.textContent=left===1?t('playing1'):t('snapped',{n:Tools.fmt(left,0)});
+  saveGame();
+  // Keyboard: go on with the next loose part
+  if(had){const next=looseEl.querySelector('.piece');if(next)next.focus();}
+}
+function finish(){
+  game.phase='done';
+  state.solved[game.a.id]=(state.solved[game.a.id]||0)+1;
+  render();saveGame();renderPick();
+  tone([523,659,784,1047],.13);
+  if(state.vibrate&&navigator.vibrate)try{navigator.vibrate([60,60,120]);}catch(_){}
+  confetti();
+  Tools.diag.log('done',{animal:game.a.id,times:state.solved[game.a.id]});
+  $('btnAgain').focus();
+}
+
+/* ---------- Dragging ---------- */
+let drag=null;
+function boardPoint(e){
+  const r=svgEl.getBoundingClientRect();
+  return {x:e.clientX-r.left,y:e.clientY-r.top};
+}
+// Keep a part on the board
+function clamp(q){
+  const s=game.s,b=q.p.bb;
+  q.x=Math.min(Math.max(q.x,-b.x*s),game.W-(b.x+b.w)*s);
+  q.y=Math.min(Math.max(q.y,-b.y*s),game.H-(b.y+b.h)*s);
+}
+svgEl.addEventListener('pointerdown',e=>{
+  if(drag||!game||game.phase!=='play'||(e.pointerType==='mouse'&&e.button!==0))return;
+  const el=e.target.closest('.piece.loose');
+  if(!el)return;
+  unlock();
+  const q=game.pieces[Number(el.dataset.i)];
+  const P=boardPoint(e);
+  drag={q,id:e.pointerId,dx:P.x-q.x,dy:P.y-q.y};
+  looseEl.appendChild(el);   // on top of the other loose parts
+  el.classList.add('dragging');
+  try{svgEl.setPointerCapture(e.pointerId);}catch(_){}
+  e.preventDefault();
+});
+svgEl.addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.id)return;
+  const P=boardPoint(e),q=drag.q;
+  q.x=P.x-drag.dx;q.y=P.y-drag.dy;clamp(q);setPos(q);
+});
+function endDrag(e){
+  if(!drag||e.pointerId!==drag.id)return;
+  const q=drag.q;drag=null;
+  q.el.classList.remove('dragging');
+  if(!tryPlace(q))saveGame();
+  // The board may have changed size while dragging
+  layout(false);
+}
+svgEl.addEventListener('pointerup',endDrag);
+svgEl.addEventListener('pointercancel',endDrag);
+// Keyboard: arrow keys move the focused part, it snaps in as soon as it is close enough
+svgEl.addEventListener('keydown',e=>{
+  const el=e.target.closest&&e.target.closest('.piece.loose');
+  if(!el||!game||game.phase!=='play')return;
+  const step=e.shiftKey?40:10;
+  const d={ArrowLeft:[-step,0],ArrowRight:[step,0],ArrowUp:[0,-step],ArrowDown:[0,step]}[e.key];
+  if(!d)return;
+  e.preventDefault();
+  const q=game.pieces[Number(el.dataset.i)];
+  q.x+=d[0];q.y+=d[1];clamp(q);setPos(q);
+  tryPlace(q);
+});
+
+/* ---------- Peek at the solution ---------- */
+let peekTimer=0;
+function closePeek(){clearTimeout(peekTimer);board.classList.remove('peek');$('btnPeek').setAttribute('aria-pressed','false');}
+$('btnPeek').addEventListener('click',()=>{
+  if(board.classList.contains('peek')){closePeek();return;}
+  board.classList.add('peek');$('btnPeek').setAttribute('aria-pressed','true');
+  peekTimer=setTimeout(closePeek,3000);
+  Tools.diag.log('peek');
+});
+
+/* ---------- Buttons ---------- */
+function toPick(){
+  closePeek();stopConfetti();
+  game=null;saveGame();
+  gameEl.hidden=true;pickEl.hidden=false;
+  $('btnAnimals').hidden=$('btnPeek').hidden=true;
+  renderPick();
+  const first=animalsEl.querySelector('.animal');if(first)first.focus();
+}
+$('btnAnimals').addEventListener('click',toPick);
+$('btnOther').addEventListener('click',toPick);
+$('btnAgain').addEventListener('click',()=>{if(game)start(game.a.id);});
+
+/* ---------- Sound ---------- */
+let ac=null;
+function unlock(){
+  if(!state.sound)return;
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(!ac&&C){try{ac=new C();Tools.diag.log('audio context created',{state:ac.state});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});}}
+  if(ac&&ac.state!=='running')ac.resume().catch(e=>Tools.diag.log('audio resume failed',{error:String(e)}));
+}
+function tone(freqs,len){
+  if(!state.sound||!ac||ac.state!=='running')return;
+  try{
+    const now=ac.currentTime;
+    freqs.forEach((f,i)=>{
+      const o=ac.createOscillator(),g=ac.createGain(),t0=now+i*len;
+      o.type='sine';o.frequency.value=f;
+      g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.25,t0+.01);g.gain.exponentialRampToValueAtTime(.0001,t0+len*1.6);
+      o.connect(g);g.connect(ac.destination);o.start(t0);o.stop(t0+len*1.7);
+    });
+  }catch(e){Tools.diag.log('tone failed',{error:String(e)});}
+}
+
+/* ---------- Confetti rain ---------- */
+const canvas=$('confetti');
+let confettiRun=0;
+const reduced=()=>window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+function stopConfetti(){confettiRun++;canvas.hidden=true;delete canvas.dataset.active;}
+function confetti(){
+  const run=++confettiRun;
+  const dpr=Math.min(2,window.devicePixelRatio||1),W=innerWidth,H=innerHeight;
+  canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);
+  canvas.hidden=false;canvas.dataset.active='true';
+  const ctx=canvas.getContext('2d');
+  if(!ctx){stopConfetti();return;}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const colors=['#e63946','#f4a261','#ffd23f','#2ec4b6','#3a86ff','#8338ec','#ff5fa2','#52b788'];
+  const calm=reduced(),spawnFor=calm?900:2600,count=calm?50:Math.round(Math.min(260,W*H/2500));
+  const parts=[];
+  const add=()=>parts.push({x:rnd()*W,y:-20-rnd()*40,vx:(rnd()-.5)*1.6,vy:(calm?1:2)+rnd()*2,
+    r:rnd()*6.3,vr:(rnd()-.5)*.25,w:6+rnd()*6,h:4+rnd()*5,c:colors[Math.floor(rnd()*colors.length)],sw:rnd()*6.3});
+  const t0=performance.now();let last=t0,spawned=0;
+  const frame=now=>{
+    if(run!==confettiRun)return;
+    const dt=Math.min(3,(now-last)/16.7);last=now;
+    const want=Math.min(count,Math.round(count*(now-t0)/spawnFor));
+    while(spawned<want){add();spawned++;}
+    ctx.clearRect(0,0,W,H);
+    for(const p of parts){
+      p.sw+=.08*dt;p.x+=(p.vx+Math.sin(p.sw)*.8)*dt;p.y+=p.vy*dt;p.r+=p.vr*dt;
+      ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r);ctx.scale(1,Math.abs(Math.cos(p.sw*1.3))+.2);
+      ctx.fillStyle=p.c;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();
+    }
+    for(let i=parts.length-1;i>=0;i--)if(parts[i].y>H+20)parts.splice(i,1);
+    if(spawned>=count&&!parts.length){stopConfetti();return;}
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  Tools.diag.log('confetti',{count,reducedMotion:calm});
+}
+
+/* ---------- Settings ---------- */
+for(const [id,key] of [['optEasy','easy'],['optSound','sound'],['optVibrate','vibrate']]){
+  $(id).checked=state[key];
+  $(id).addEventListener('change',e=>{state[key]=e.target.checked;save();if(key==='sound')unlock();});
+}
+
+/* ---------- Start ---------- */
+renderPick();
+const g0=state.game;
+if(g0&&byId[g0.animal]&&['solution','play','done'].includes(g0.phase)&&Array.isArray(g0.slots)&&g0.slots.length===byId[g0.animal].parts.length){
+  start(g0.animal,{phase:g0.phase,slots:g0.slots});
+}else if(g0){state.game=null;save();}
+Tools.onLang(()=>{renderPick();render();});
+Tools.diag.info(()=>({phase:game?game.phase:'pick',animal:game?game.a.id:null,parts:game?game.pieces.length:0,placed:placedCount(),
+  board:game?`${Math.round(game.W)}x${Math.round(game.H)}`:null,scale:game?Number(game.s.toFixed(2)):null,
+  easy:state.easy,sound:state.sound,vibrate:state.vibrate,solved:Object.values(state.solved).reduce((s,n)=>s+n,0),
+  audio:ac?ac.state:'not created',reducedMotion:reduced(),canVibrate:!!navigator.vibrate}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const NAME_EN={teddy:'Teddy bear',bunny:'Bunny',panda:'Panda',dolphin:'Dolphin',cat:'Cat',elephant:'Elephant'};
+const progress=()=>({
+  animal:game?game.a.id:null,phase:game?game.phase:'choosing',
+  parts_total:game?game.pieces.length:0,parts_placed:placedCount(),
+  loose_parts:game?game.pieces.filter(q=>q.slot<0).map(q=>q.p.k):[]
+});
+Tools.mcp.register({
+  name:'list_animals',title:'List the animals',label:'mcp.list',readOnly:true,
+  description:'Lists the cuddly toys that can be built, with their id, English name, number of parts and how often each was finished in this browser.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({animals:ANIMALS.map(a=>({id:a.id,name:NAME_EN[a.id],parts:a.parts.length,times_finished:state.solved[a.id]||0}))})
+});
+Tools.mcp.register({
+  name:'start_puzzle',title:'Start a puzzle',label:'mcp.start',
+  description:'Starts the puzzle for one animal in the app, replacing the open one. By default the finished animal is shown first and the child taps "Let\'s go" to scatter the parts; with show_solution false the parts are scattered right away. Returns the progress: animal, phase, total and placed parts, the loose parts.',
+  inputSchema:{type:'object',properties:{
+    animal:{type:'string',enum:ANIMALS.map(a=>a.id),description:'Animal id from list_animals.'},
+    show_solution:{type:'boolean',description:'Show the finished animal first. Default: true.'}
+  },required:['animal'],additionalProperties:false},
+  execute:({animal,show_solution})=>{
+    start(animal);
+    if(show_solution===false)go();
+    return progress();
+  }
+});
+Tools.mcp.register({
+  name:'get_progress',title:'Read the progress',label:'mcp.progress',readOnly:true,
+  description:'Reads the open puzzle: animal id (null while choosing), phase (choosing, solution, play or done), total and placed parts, and the kinds of the loose parts (head, ear, leg ...).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:progress
+});
+Tools.mcp.register({
+  name:'place_piece',title:'Put in one part (hint)',label:'mcp.place',
+  description:'Gives a hint in the running puzzle: one loose part (of the given kind, otherwise a random one) moves into its spot, snaps in and blinks; after the last part the confetti starts. Returns the placed part kind and the progress.',
+  inputSchema:{type:'object',properties:{
+    part:{type:'string',maxLength:20,description:'Part kind, e.g. head, ear, leg (see loose_parts in get_progress). Default: any.'}
+  },additionalProperties:false},
+  execute:({part})=>{
+    if(!game)throw new Error('No puzzle is open – start one with start_puzzle.');
+    if(game.phase==='solution')go();
+    if(game.phase!=='play')throw new Error('The puzzle is already finished.');
+    const loose=game.pieces.filter(q=>q.slot<0&&(!part||q.p.k===part));
+    if(!loose.length)throw new Error(`No loose part of kind "${part}".`);
+    const q=loose[Math.floor(rnd()*loose.length)];
+    const j=game.a.parts.findIndex((p,k)=>p.grp===q.p.grp&&!game.pieces.some(o=>o.slot===k));
+    place(q,j);
+    return {placed:q.p.k,...progress()};
+  }
+});
+})();
+</script>
+</body>
+</html>

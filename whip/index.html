@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Peitsche</title>
+<meta name="description" content="Handy schwingen oder tippen – und die Peitsche knallt. Fünf Knall-Arten, Empfindlichkeit einstellbar, Vibration.">
+<meta name="tool:tags" content="Freizeit, Spiele">
+<meta name="tool:features" content="Schütteln, KI-Agent">
+<meta name="tool:icon" content="lasso">
+<meta name="tool:color" content="#7c2d12">
+<meta name="tool:short-name" content="Peitsche">
+<meta name="tool:title-en" content="Whip">
+<meta name="tool:description-en" content="Swing your phone or tap – and the whip cracks. Five kinds of crack, adjustable sensitivity, vibration.">
+<meta name="tool:short-name-en" content="Whip">
+<meta name="tool:storage" content="whip.">
+<meta name="tool:webmcp" content="crack_whip, get_stats">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-5rMUMVFZj/iUcdwsb8eb1vJHAOLIrCMNLgK27l0j3p8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Peitsche">
+<meta name="theme-color" content="#7c2d12">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#7c2d12;--accent-text:#ffffff;--page-width:640px}
+@media (prefers-color-scheme: dark){:root{--accent:#f0a273;--accent-text:#2a0e04}}
+main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;gap:12px}
+
+/* ---------- Whip ---------- */
+.arena{position:relative;display:grid;place-items:center;padding-block:4px}
+.whip{position:relative;width:min(80vw,300px);display:flex;flex-direction:column;align-items:center;gap:2px;border:0;border-radius:24px;background:none;padding:0;cursor:pointer;color:var(--text);-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.whip:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+.whip svg{width:min(70vw,260px);aspect-ratio:1;display:block;overflow:visible}
+.whip .handle{fill:var(--accent)}
+.whip .grip{stroke:var(--accent-text);stroke-width:2;opacity:.5}
+.whip .lash{fill:none;stroke:var(--text);stroke-linecap:round}
+.whip .lash-g{transform-origin:46px 168px}
+.whip.swing .lash-g{animation:swing var(--swing,.3s) cubic-bezier(.5,0,.9,.4) forwards}
+@keyframes swing{0%{transform:rotate(0)}55%{transform:rotate(-38deg)}100%{transform:rotate(14deg)}}
+.whip .label{text-align:center;font-size:20px;font-weight:700;color:var(--text);pointer-events:none}
+.bang{position:absolute;inset-inline-end:6%;top:2%;font-size:54px;pointer-events:none;opacity:0}
+.bang.go{animation:bang .5s ease-out var(--delay,0s)}
+@keyframes bang{0%{opacity:0;transform:scale(.3)}15%{opacity:1;transform:scale(1.25)}100%{opacity:0;transform:scale(1.6)}}
+@media (prefers-reduced-motion:reduce){.whip.swing .lash-g,.bang.go{animation:none}}
+.status{text-align:center;min-height:28px;margin:4px 0 0;font-weight:600}
+.count{text-align:center;color:var(--muted);margin:0}
+.count b{color:var(--text);font-variant-numeric:tabular-nums}
+.btn.grow{flex:1 1 auto}
+.btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+/* ---------- Choices ---------- */
+.sounds{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px}
+.sounds button{min-height:64px;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:600;padding:4px;line-height:1.2}
+.sounds button .e{font-size:26px;line-height:1.2}
+.sounds button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.seg button{min-height:48px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;padding:4px 6px}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:700}
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-child{margin-top:0}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Peitsche</span></h1>
+  <p class="sub" data-i18n="sub">Schwingen und knallen lassen</p>
+</header>
+
+<main>
+  <section class="card" aria-label="Peitsche" data-i18n-attr="aria-label:title">
+    <div class="arena">
+      <button type="button" class="whip" id="whip" aria-describedby="status">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <g class="lash-g">
+            <path class="lash" stroke-width="7" d="M58 152 C 90 120, 70 70, 110 60"/>
+            <path class="lash" stroke-width="4" d="M110 60 C 140 52, 150 80, 172 40"/>
+            <path class="lash" stroke-width="2" d="M172 40 L 186 22"/>
+          </g>
+          <rect class="handle" x="30" y="146" width="18" height="48" rx="7" transform="rotate(42 39 170)"/>
+          <path class="grip" d="M30 172 l14 -10 M35 179 l14 -10 M40 186 l14 -10"/>
+        </svg>
+        <span class="label" id="whipLabel" data-i18n="press">Tippen zum Knallen!</span>
+      </button>
+      <span class="bang" id="bang" aria-hidden="true">💥</span>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="row">
+      <button type="button" class="btn grow" id="btnSwing" aria-pressed="false"><span aria-hidden="true">📳 </span><span data-i18n="swing">Schwingen erkennen</span></button>
+    </div>
+    <p class="count"><span data-i18n="countLabel">Geknallt:</span> <b id="count">0</b>×</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings">
+    <h2 id="h-settings" class="sr-only" data-i18n="settings">Einstellungen</h2>
+    <h3 id="h-sound" data-i18n="sound">Knall</h3>
+    <div class="sounds" id="sounds" role="group" aria-labelledby="h-sound"></div>
+    <h3 id="h-sens" data-i18n="sens">Empfindlichkeit beim Schwingen</h3>
+    <div class="seg" id="sens" role="group" aria-labelledby="h-sens">
+      <button type="button" data-v="low" data-i18n="sens.low">Kräftig</button>
+      <button type="button" data-v="mid" data-i18n="sens.mid">Mittel</button>
+      <button type="button" data-v="high" data-i18n="sens.high">Leicht</button>
+    </div>
+    <label class="check" style="margin-top:8px"><input type="checkbox" id="optVibrate"> <span data-i18n="vibrate">Vibration (Handy)</span></label>
+    <div class="row" style="margin-top:8px">
+      <button type="button" class="btn grow" id="btnReset" data-i18n="reset">Zähler zurücksetzen</button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Eine Peitsche für die Hosentasche: Handy schwungvoll schwingen – es knallt.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Tippen</b> auf die Peitsche lässt sie sofort knallen.</li>
+    <li><b>Schwingen erkennen</b> einschalten, das Handy gut festhalten und kurz und kräftig nach vorn schnellen lassen – wie beim Peitschenhieb. Auf dem iPhone fragt der Browser dafür nach dem Zugriff auf die Bewegungssensoren.</li>
+    <li><b>Knall</b> wählen: Klassisch, Bullwhip (lang und tief), Kutscher (kurz und hell), Doppelknall, Manege (mit Hall) – oder <b>Zufall</b>. Jeder Knall klingt ein bisschen anders.</li>
+    <li><b>Empfindlichkeit:</b> Bei <i>Leicht</i> reicht ein kleiner Schwung, bei <i>Kräftig</i> knallt es nur bei einem richtigen Hieb.</li>
+    <li><b>Vibration</b> gibt beim Knall einen kurzen Ruck (nur Android; iPhone kann das im Browser nicht). Vibriert nichts, in den Android-Einstellungen unter <i>Töne &amp; Vibration</i> prüfen, ob Vibration eingeschaltet ist – bei manchen Handys schaltet <i>Lautlos</i> oder <i>Nicht stören</i> sie ab.</li>
+  </ul>
+  <h3>Kein Ton?</h3>
+  <ul>
+    <li>Lautstärke aufdrehen. Auf dem iPhone den <b>Stummschalter</b> ausschalten – sonst bleibt der Browser still.</li>
+    <li>Browser spielen erst Töne, wenn du einmal auf die Seite getippt hast. Nach dem Öffnen also einmal tippen, dann schwingen.</li>
+    <li>Schwingen funktioniert nur auf Geräten mit Bewegungssensor (Handy, Tablet) und nur, solange die App offen ist.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li><b>Handy gut festhalten!</b> Nicht in der Nähe von Menschen, Tieren oder Gegenständen schwingen. Am besten eine Handschlaufe benutzen.</li>
+    <li>Der Knall ist keine Aufnahme, sondern wird bei jedem Hieb im Browser berechnet: erst das Sausen durch die Luft, dann der Überschallknall der Spitze. Alles funktioniert offline.</li>
+    <li>Gespeichert werden nur deine Einstellungen und der Zähler – in diesem Browser. Die Bewegungsdaten verlassen das Gerät nicht.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann die Peitsche knallen lassen und den Zähler lesen (WebMCP). Jeder Aufruf erscheint hier als Hinweis. Ton gibt es erst, wenn du einmal selbst getippt hast.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A whip for your pocket: swing your phone briskly – it cracks.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Tap</b> the whip to crack it right away.</li>
+    <li>Turn on <b>Detect swings</b>, hold the phone tight and flick it forward, short and hard – like cracking a whip. On iPhone the browser asks for access to the motion sensors.</li>
+    <li>Pick a <b>crack</b>: classic, bullwhip (long and deep), coachman (short and bright), double crack, circus ring (with reverb) – or <b>random</b>. Every crack sounds a little different.</li>
+    <li><b>Sensitivity:</b> with <i>Light</i> a small swing is enough, with <i>Strong</i> it only cracks on a real lash.</li>
+    <li><b>Vibration</b> gives a short jolt with the crack (Android only; iPhone cannot do this in the browser). If nothing vibrates, check in the Android settings under <i>Sound &amp; vibration</i> that vibration is on – on some phones <i>Silent</i> or <i>Do not disturb</i> turns it off.</li>
+  </ul>
+  <h3>No sound?</h3>
+  <ul>
+    <li>Turn up the volume. On iPhone switch off the <b>silent switch</b> – otherwise the browser stays quiet.</li>
+    <li>Browsers only play sound after you have tapped the page once. So after opening, tap once, then swing.</li>
+    <li>Swinging only works on devices with a motion sensor (phone, tablet) and only while the app is open.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li><b>Hold on to your phone!</b> Do not swing it near people, animals or things. A wrist strap is best.</li>
+    <li>The crack is not a recording – it is computed in the browser on every lash: first the whoosh through the air, then the sonic boom of the tip. Everything works offline.</li>
+    <li>Only your settings and the counter are stored – in this browser. Motion data never leaves the device.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can crack the whip and read the counter (WebMCP). Each call shows a note here. There is only sound once you have tapped yourself.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version d77550dcff58</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  's.random':'Zufall','s.classic':'Klassisch','s.bull':'Bullwhip','s.coach':'Kutscher','s.double':'Doppelknall','s.circus':'Manege',
+  cracked:'💥 {s}!',swingOn:'Schwingen an – Handy festhalten und schwingen!',swingOff:'Schwingen aus',
+  tapFirst:'Einmal tippen, dann gibt es Ton.',swingTap:'Zum Schwingen auf „Schwingen erkennen“ tippen.',noMotion:'Zugriff auf die Bewegungssensoren nicht erlaubt.',
+  noSensor:'Dieses Gerät hat keinen Bewegungssensor.',noAudio:'Dieser Browser kann keine Töne erzeugen.',
+  confirmReset:'Zähler auf 0 zurücksetzen?','mcp.crack':'Peitsche geknallt','mcp.stats':'Zähler gelesen'
+},
+en:{
+  title:'Whip',sub:'Swing it and let it crack',press:'Tap to crack!',swing:'Detect swings',countLabel:'Cracks:',
+  settings:'Settings',sound:'Crack',sens:'Swing sensitivity','sens.low':'Strong','sens.mid':'Medium','sens.high':'Light',
+  vibrate:'Vibration (phone)',reset:'Reset counter',
+  's.random':'Random','s.classic':'Classic','s.bull':'Bullwhip','s.coach':'Coachman','s.double':'Double crack','s.circus':'Circus ring',
+  cracked:'💥 {s}!',swingOn:'Swinging on – hold the phone tight and swing!',swingOff:'Swinging off',
+  tapFirst:'Tap once to get sound.',swingTap:'Tap “Detect swings” to swing.',noMotion:'Access to the motion sensors was not allowed.',
+  noSensor:'This device has no motion sensor.',noAudio:'This browser cannot play generated sounds.',
+  confirmReset:'Reset the counter to 0?','mcp.crack':'whip cracked','mcp.stats':'counter read'
+}});
+const {$,t}=Tools;
+const LS='whip.state.v1';
+const SOUNDS=['random','classic','bull','coach','double','circus'];
+const KINDS=SOUNDS.slice(1);
+const EMOJI={random:'🎲',classic:'💥',bull:'🐂',coach:'🐴',double:'✌️',circus:'🎪'};
+// Linear acceleration (without gravity, m/s²) that counts as a lash
+const SENS={low:30,mid:20,high:12};
+const state=Tools.load(LS,{sound:'random',sens:'mid',vibrate:true,swing:false,total:0,counts:{}});
+if(!SOUNDS.includes(state.sound))state.sound='random';
+if(!(state.sens in SENS))state.sens='mid';
+if(typeof state.vibrate!=='boolean')state.vibrate=true;
+if(typeof state.swing!=='boolean')state.swing=false;
+if(!(Number.isInteger(state.total)&&state.total>=0))state.total=0;
+if(!state.counts||typeof state.counts!=='object')state.counts={};
+const save=()=>Tools.save(LS,state);
+
+/* ---------- Sound synthesis ----------
+   A whip crack: first the lash whooshes through the air (noise through a band-pass whose
+   centre rises as the tip speeds up), then the tip breaks the sound barrier – a sonic boom:
+   a very short N-shaped pressure wave plus a sharp, fast-decaying burst of bright noise. */
+const rr=(a,b)=>a+Math.random()*(b-a);
+function whoosh(out,sr,start,dur,o){
+  const s0=Math.floor(start*sr),n=Math.min(Math.floor(dur*sr),out.length-s0);
+  let low=0,band=0;
+  for(let i=0;i<n;i++){
+    const x=i/n,fc=o.f0*Math.pow(o.f1/o.f0,x);
+    const f=2*Math.sin(Math.PI*Math.min(fc,sr/6)/sr),q=.7;
+    const inp=Math.random()*2-1;
+    low+=f*band;const high=inp-low-q*band;band+=f*high;
+    const env=x*x*Math.min(1,(n-i)/(.004*sr));
+    out[s0+i]+=band*env*o.gain;
+  }
+}
+function boom(out,sr,start,o){
+  const s0=Math.floor(start*sr);
+  const nw=Math.max(2,Math.round(o.width*sr));       // N-wave: up, then down
+  for(let i=0;i<nw*2&&s0+i<out.length;i++)out[s0+i]+=(i<nw?1:-1)*(1-(i%nw)/nw)*o.gain;
+  const n=Math.min(Math.floor(o.tau*8*sr),out.length-s0);
+  let prev=0,hp=0;const a=Math.exp(-2*Math.PI*o.hp/sr);
+  for(let i=0;i<n;i++){
+    const w=Math.random()*2-1;hp=a*(hp+w-prev);prev=w;   // one-pole high-pass
+    out[s0+i]+=hp*Math.exp(-i/(o.tau*sr))*o.gain*o.noise;
+  }
+}
+const PRESETS={
+  classic:()=>{const w=rr(.15,.3);return {dur:w+.25,whoosh:[[0,w,{f0:300,f1:3500,gain:.25}]],booms:[[w,{width:.0008,tau:.012,hp:1200,noise:1.2,gain:1}]]};},
+  bull:()=>{const w=rr(.35,.5);return {dur:w+.35,whoosh:[[0,w,{f0:150,f1:2200,gain:.35}]],booms:[[w,{width:.0016,tau:.022,hp:500,noise:1,gain:1}]]};},
+  coach:()=>{const w=rr(.06,.12);return {dur:w+.15,whoosh:[[0,w,{f0:600,f1:5000,gain:.18}]],booms:[[w,{width:.0005,tau:.006,hp:2500,noise:1.4,gain:1}]]};},
+  double:()=>{const w=rr(.12,.2),g=rr(.09,.14);return {dur:w+g+.25,whoosh:[[0,w,{f0:300,f1:3500,gain:.25}],[w+.01,g-.01,{f0:800,f1:3000,gain:.12}]],
+    booms:[[w,{width:.0008,tau:.01,hp:1200,noise:1.2,gain:.85}],[w+g,{width:.0008,tau:.012,hp:1200,noise:1.2,gain:1}]]};},
+  circus:()=>{const w=rr(.15,.25);return {dur:w+.6,whoosh:[[0,w,{f0:300,f1:3500,gain:.25}]],booms:[[w,{width:.0009,tau:.012,hp:1000,noise:1.2,gain:1}]],echo:[[.11,.32],[.23,.16],[.37,.08]]};}
+};
+// Returns { data, duration (s), crack (s, first boom), booms (s), peakAt (s), peak } – samples in [-1, 1]
+function synth(kind,sr){
+  const p=PRESETS[kind]();
+  const data=new Float32Array(Math.ceil(p.dur*sr)+1);
+  for(const [at,d,o] of p.whoosh)whoosh(data,sr,at,d,o);
+  for(const [at,o] of p.booms)boom(data,sr,at,o);
+  if(p.echo){
+    const dry=data.slice();
+    for(const [d,g] of p.echo){
+      const off=Math.round(d*sr);let lp=0;
+      for(let i=0;i+off<data.length;i++){lp+=.25*(dry[i]-lp);data[i+off]+=lp*g;}
+    }
+  }
+  let m=0;for(let i=0;i<data.length;i++){const v=Math.tanh(data[i]*1.5);data[i]=v;if(Math.abs(v)>m)m=Math.abs(v);}
+  const g=m>0?.9/m:0;let peak=0,at=0;
+  for(let i=0;i<data.length;i++){data[i]*=g;if(!Number.isFinite(data[i]))data[i]=0;const v=Math.abs(data[i]);if(v>peak){peak=v;at=i;}}
+  return {data,duration:p.dur,crack:p.booms[0][0],booms:p.booms.map(b=>b[0]),peakAt:at/sr,peak};
+}
+
+let ac=null;
+function audio(){
+  if(ac)return ac;
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(!C){Tools.diag.log('no AudioContext');return null;}
+  try{ac=new C();Tools.diag.log('audio context created',{state:ac.state,rate:ac.sampleRate});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});ac=null;}
+  return ac;
+}
+// Called in a user gesture: browsers only allow sound after one
+function unlock(){const c=audio();if(c&&c.state!=='running')c.resume().then(()=>Tools.diag.log('audio resumed',{state:c.state}),e=>Tools.diag.log('audio resume failed',{error:String(e)}));}
+
+/* ---------- Vibration ----------
+   One jolt per boom, started right away as a pattern (pause until the boom, then vibrate) –
+   still inside the tap, where Chrome reliably allows it, and long enough for the motor to spin
+   up (very short pulses of ~40 ms are not felt on many phones). */
+let lastVibrate=null;
+function vibrate(booms){
+  if(!navigator.vibrate){lastVibrate='unsupported';return;}
+  const ON=100,pattern=[];let at=0;
+  for(const b of booms){const ms=Math.round(b*1000);pattern.push(Math.max(1,ms-at),ON);at=ms+ON;}
+  // The Vibration API starts with "on": a 0 ms buzz first, then the pause until the boom
+  pattern.unshift(0);
+  let ok=false;
+  try{ok=navigator.vibrate(pattern);}catch(e){Tools.diag.log('vibrate failed',{error:String(e)});}
+  if(ok!==lastVibrate)Tools.diag.log('vibrate',{ok,pattern});
+  lastVibrate=ok;
+  return pattern;
+}
+
+/* ---------- Cracking ---------- */
+const whip=$('whip'),bang=$('bang'),status=$('status');
+let lastKind=null;
+function crack(sound,source){
+  const kind=sound==='random'?KINDS[Math.floor(Math.random()*KINDS.length)]:sound;
+  const c=audio();
+  const s=synth(kind,c?c.sampleRate:44100);
+  let audible=false;
+  if(c){
+    try{
+      const buf=c.createBuffer(1,s.data.length,c.sampleRate);
+      buf.getChannelData(0).set(s.data);
+      const src=c.createBufferSource();src.buffer=buf;src.connect(c.destination);src.start();
+      audible=c.state==='running';
+    }catch(e){Tools.diag.log('play failed',{error:String(e)});}
+  }
+  if(state.vibrate)vibrate(s.booms);
+  state.total++;state.counts[kind]=(state.counts[kind]||0)+1;save();
+  lastKind=kind;
+  const ms=Math.round(s.duration*1000);
+  Object.assign(whip.dataset,{sound:kind,duration:String(ms),crack:String(Math.round(s.crack*1000)),
+    peakAt:String(Math.round(s.peakAt*1000)),peak:s.peak.toFixed(3)});
+  whip.style.setProperty('--swing',s.crack.toFixed(3)+'s');bang.style.setProperty('--delay',s.crack.toFixed(3)+'s');
+  for(const [el,cls] of [[whip,'swing'],[bang,'go']]){el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls);}
+  status.textContent=c&&!audible&&source==='swing'?t('tapFirst'):t('cracked',{s:t('s.'+kind)});
+  renderCount();
+  Tools.diag.log('crack',{kind,ms,source,audible,state:c?c.state:'none'});
+  return {kind,ms,audible};
+}
+whip.addEventListener('click',()=>{unlock();crack(state.sound,'tap');});
+
+/* ---------- Swing detection ----------
+   A lash is a short, hard acceleration of the phone. Uses the acceleration without gravity when
+   the device reports it, otherwise how far the total deviates from 1 g. One crack per lash:
+   after a crack, wait until the phone has calmed down (and at least 350 ms). */
+const G=9.81;
+let active=false,listening=false,lastCrack=-1e9,armed=true,motionSeen=false,peakAcc=0;
+function linear(e){
+  const a=e.acceleration;
+  if(a&&a.x!=null)return Math.hypot(a.x||0,a.y||0,a.z||0);
+  const b=e.accelerationIncludingGravity;
+  if(b&&b.x!=null)return Math.abs(Math.hypot(b.x||0,b.y||0,b.z||0)-G);
+  return null;
+}
+function onMotion(e){
+  const v=linear(e);if(v==null)return;
+  if(!motionSeen){motionSeen=true;Tools.diag.log('motion data received');}
+  if(v>peakAcc)peakAcc=v;
+  const lim=SENS[state.sens],now=performance.now();
+  if(armed&&v>=lim&&now-lastCrack>350){armed=false;lastCrack=now;crack(state.sound,'swing');}
+  else if(!armed&&v<lim*.4)armed=true;
+}
+function listen(on){
+  if(on&&!listening){window.addEventListener('devicemotion',onMotion);listening=true;}
+  if(!on&&listening){window.removeEventListener('devicemotion',onMotion);listening=false;}
+  Tools.diag.log('swing listening',{on});
+}
+const needsPermission=()=>typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function';
+async function setSwing(on){
+  unlock();
+  if(on&&typeof DeviceMotionEvent==='undefined'){Tools.toast(t('noSensor'));Tools.diag.log('no DeviceMotionEvent');on=false;}
+  else if(on&&needsPermission()){
+    let r='error';
+    try{r=await DeviceMotionEvent.requestPermission();}catch(e){Tools.diag.log('motion permission failed',{error:String(e)});}
+    Tools.diag.log('motion permission',{result:r});
+    // Chromium answers "prompt" when it does not ask – data then simply arrives; only "denied" is a no
+    if(r==='denied'){Tools.toast(t('noMotion'));on=false;}
+  }
+  state.swing=on;active=on;save();listen(on);renderSwing();
+  status.textContent=t(on?'swingOn':'swingOff');
+}
+$('btnSwing').addEventListener('click',()=>setSwing(!active));
+// Switched on last time: listen right away. iPhone needs a fresh permission per page load (only
+// in a tap) – if no data arrives, show swinging as off until the user taps the button again.
+if(state.swing&&typeof DeviceMotionEvent!=='undefined'){
+  active=true;listen(true);
+  if(needsPermission())setTimeout(()=>{
+    if(!active||motionSeen)return;
+    active=false;listen(false);renderSwing();status.textContent=t('swingTap');
+    Tools.diag.log('no motion data after reload');
+  },1500);
+}
+
+/* ---------- Settings ---------- */
+function renderSounds(){
+  $('sounds').innerHTML=SOUNDS.map(s=>`<button type="button" data-s="${s}" aria-pressed="${s===state.sound}"><span class="e" aria-hidden="true">${EMOJI[s]}</span><span>${Tools.esc(t('s.'+s))}</span></button>`).join('');
+}
+function renderSwing(){$('btnSwing').setAttribute('aria-pressed',String(active));}
+function renderSettings(){
+  renderSounds();renderSwing();
+  for(const b of document.querySelectorAll('#sens button'))b.setAttribute('aria-pressed',String(b.dataset.v===state.sens));
+  $('optVibrate').checked=state.vibrate;
+}
+function renderCount(){$('count').textContent=Tools.fmt(state.total,0);}
+$('sounds').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-s]');if(!b)return;
+  state.sound=b.dataset.s;save();renderSounds();
+});
+$('sens').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-v]');if(!b)return;
+  state.sens=b.dataset.v;save();renderSettings();
+});
+$('optVibrate').addEventListener('change',e=>{state.vibrate=e.target.checked;save();});
+$('btnReset').addEventListener('click',()=>{
+  if(!confirm(t('confirmReset')))return;
+  state.total=0;state.counts={};save();renderCount();
+});
+renderSettings();renderCount();
+if(!(window.AudioContext||window.webkitAudioContext))status.textContent=t('noAudio');
+Tools.onLang(()=>{renderSounds();if(lastKind)status.textContent=t('cracked',{s:t('s.'+lastKind)});});
+Tools.diag.info(()=>({sound:state.sound,sens:state.sens,vibrate:state.vibrate,swing:state.swing,active,listening,motionSeen,
+  peakAcc:Math.round(peakAcc*10)/10,needsPermission:needsPermission(),total:state.total,
+  audio:ac?ac.state:'not created',canVibrate:!!navigator.vibrate,lastVibrate}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+Tools.mcp.register({
+  name:'crack_whip',title:'Crack the whip',label:'mcp.crack',
+  description:'Cracks the whip in the app right now and counts it. Browsers only play sound after the user has tapped the page once; audible says whether it could be heard. Returns the crack played, its length in milliseconds, whether it was audible and the new total count.',
+  inputSchema:{type:'object',properties:{
+    sound:{type:'string',enum:SOUNDS,description:'Which crack: classic, bull (bullwhip), coach (coachman), double, circus (with reverb), or random. Default: the crack chosen in the app.'}
+  },additionalProperties:false},
+  execute:({sound})=>{
+    const r=crack(sound||state.sound,'agent');
+    return {sound:r.kind,duration_ms:r.ms,audible:r.audible,total:state.total};
+  }
+});
+Tools.mcp.register({
+  name:'get_stats',title:'Read the counter',label:'mcp.stats',readOnly:true,
+  description:'Reads how often the whip has cracked in total and per crack, plus the settings chosen in the app (crack, swing detection on or off, swing sensitivity, vibration).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({total:state.total,per_sound:Object.fromEntries(KINDS.map(k=>[k,state.counts[k]||0])),
+    settings:{sound:state.sound,swing_detection:active,sensitivity:{low:'strong',mid:'medium',high:'light'}[state.sens],vibration:state.vibrate}})
+});
+})();
+</script>
+</body>
+</html>
