@@ -220,9 +220,11 @@ test('a mosquito flies off after at most 1.3 s; keyboard catches it once', async
   const id = await page.locator('#swarm .bug').getAttribute('data-id');
   await page.clock.runFor(1350);
   await expect(page.locator(`#swarm .bug[data-id="${id}"]`)).toHaveCount(0);
-  await expect.poll(() => page.locator('#swarm .bug').count()).toBe(0);
-  for (let k = 0; k < 20 && !(await page.locator('#swarm .bug').count()); k++) await page.clock.runFor(100);
-  await page.locator('#swarm .bug').focus();
+  // The next mosquito may already be there (spawn ticks are random) – wait for a new one
+  const next = page.locator(`#swarm .bug:not([data-id="${id}"])`);
+  for (let k = 0; k < 20 && !(await next.count()); k++) await page.clock.runFor(100);
+  await expect(page.locator('#swarm .bug')).toHaveCount(1);
+  await next.focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('#score')).toHaveText('1');
 });
