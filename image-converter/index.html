@@ -6,21 +6,21 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Bildkonverter</title>
-<meta name="description" content="Bilder umwandeln zwischen JPG, PNG, WebP, HEIC (iPhone), AVIF, GIF, BMP, ICO und SVG – auch mehrere auf einmal, mit Qualität und Größe, ganz ohne Upload.">
+<meta name="description" content="Bilder umwandeln und komprimieren – JPG, PNG, WebP, HEIC (iPhone), AVIF, GIF, BMP, ICO und SVG, auch mehrere auf einmal, mit Qualität, Größe und maximaler Dateigröße, ganz ohne Upload.">
 <meta name="tool:tags" content="Alltag, Werkzeug">
 <meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
 <meta name="tool:icon" content="photo-cog">
 <meta name="tool:color" content="#7e22ce">
 <meta name="tool:short-name" content="Konverter">
 <meta name="tool:title-en" content="Image Converter">
-<meta name="tool:description-en" content="Convert images between JPG, PNG, WebP, HEIC (iPhone), AVIF, GIF, BMP, ICO and SVG – several at once, with quality and size, without any upload.">
+<meta name="tool:description-en" content="Convert and compress images – JPG, PNG, WebP, HEIC (iPhone), AVIF, GIF, BMP, ICO and SVG, several at once, with quality, size and a maximum file size, without any upload.">
 <meta name="tool:short-name-en" content="Converter">
 <meta name="tool:storage" content="image-converter.">
 <meta name="tool:webmcp" content="list_images, set_options, convert_images">
 <meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif, .avif, .gif, .bmp, .ico, .svg">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-LAUeyyuhvPplt3/uFtq/9V2AltBcNDD5y7Ucj9lEl3E='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-j8ANMg2NwnMPMrTXqwx90PQvQXmMOBd46EJgrxVZ2Bw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -56,6 +56,9 @@ main{max-width:900px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .opts .inline label{flex:1 1 160px}
 input[type=range]{width:100%;min-height:44px;accent-color:var(--accent)}
 input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+.opts label.check{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:600}
+.opts label.check input{width:22px;height:22px;margin:0;accent-color:var(--accent)}
+.files .ok{color:var(--ok,inherit)}
 #status{margin:8px 0 0;min-height:1.3em}
 #status.err{color:var(--err)}
 </style>
@@ -103,6 +106,15 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
           <input type="number" id="resizeVal" inputmode="numeric">
         </label>
       </div>
+      <div id="limitRow">
+        <label class="check"><input type="checkbox" id="limitOn"><span data-i18n="out.limit">Dateigröße begrenzen</span></label>
+        <div class="inline" id="limitValRow">
+          <label><span data-i18n="out.limitVal">Höchstens (KB)</span>
+            <input type="number" id="limitVal" inputmode="numeric" min="1" max="100000">
+          </label>
+        </div>
+        <p class="muted" id="limitHint"></p>
+      </div>
       <label id="bgRow"><span data-i18n="out.bg">Hintergrund für transparente Bereiche</span>
         <input type="color" id="bg">
       </label>
@@ -143,7 +155,7 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
   <h3>Bedienung</h3>
   <ol>
     <li><strong>Bilder wählen</strong> (mehrere möglich), hierher ziehen oder mit Strg+V einfügen.</li>
-    <li><strong>Zielformat</strong> wählen, bei JPG, WebP und AVIF die Qualität, bei Bedarf die Größe.</li>
+    <li><strong>Zielformat</strong> wählen, bei JPG, WebP und AVIF die Qualität, bei Bedarf die Größe und die höchste Dateigröße.</li>
     <li><strong>Umwandeln</strong> – dann jedes Bild einzeln speichern, alle als ZIP-Datei oder (Handy) teilen.</li>
   </ol>
   <h3>Formate</h3>
@@ -153,6 +165,13 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
     <li><strong>SVG als Ziel</strong> bettet das Bild als Pixelbild in eine SVG-Datei ein (für Programme, die SVG verlangen). Es wird dabei nicht in Vektoren umgewandelt.</li>
     <li><strong>SVG als Quelle</strong> wird in der gewählten Größe gezeichnet und bleibt dabei scharf – auch vergrößert.</li>
     <li>JPG und BMP haben keine Transparenz: Durchsichtige Stellen bekommen die gewählte Hintergrundfarbe.</li>
+  </ul>
+  <h3>Komprimieren (Datei verkleinern)</h3>
+  <ul>
+    <li><strong>Wie Original</strong> lässt jedem Bild sein Format – JPG bleibt JPG, PNG bleibt PNG. Nur HEIC und TIFF werden JPG, GIF und SVG werden PNG, weil der Browser diese Formate nicht schreiben kann.</li>
+    <li><strong>Dateigröße begrenzen</strong>, z. B. höchstens 100 KB (1 KB = 1000 Byte): Bei JPG, WebP und AVIF senkt die App zuerst die Qualität (bis 40 %), reicht das nicht, verkleinert sie die Pixelgröße. PNG und BMP sind verlustfrei und werden nur in der Pixelgröße verkleinert – mit JPG oder WebP wird die Datei meist viel kleiner.</li>
+    <li>Beim Ergebnis stehen die neue Dateigröße, wie viel kleiner sie ist, ob die Grenze erreicht wurde und welche Qualität verwendet wurde.</li>
+    <li>Ohne Grenze kann ein schon stark komprimiertes Bild beim erneuten Speichern auch größer werden – dann die Qualität senken oder die Grenze setzen.</li>
   </ul>
   <h3>Größe</h3>
   <ul>
@@ -166,7 +185,7 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
     <li>Farbprofile werden in sRGB umgerechnet.</li>
     <li>Die Bilder liegen nur im Arbeitsspeicher und sind nach dem Schließen weg. Gespeichert werden nur die Einstellungen.</li>
     <li><strong>Teilen an die App (Android):</strong> Ist die App installiert, erscheint sie im Teilen-Menü der Galerie. <strong>Windows/Mac:</strong> In der installierten App lassen sich Bilder per „Öffnen mit“ öffnen. Das iPhone unterstützt beides nicht.</li>
-    <li><strong>KI-Agent:</strong> Ein KI-Agent im Browser (WebMCP) kann die gewählten Bilder auflisten, Format und Größe einstellen und umwandeln – Bilder auswählen und speichern kann nur man selbst.</li>
+    <li><strong>KI-Agent:</strong> Ein KI-Agent im Browser (WebMCP) kann die gewählten Bilder auflisten, Format, Größe und höchste Dateigröße einstellen und umwandeln – Bilder auswählen und speichern kann nur man selbst.</li>
     <li>HEIC-Decoder: <a href="https://github.com/strukturag/libheif">libheif</a> und libde265 (LGPL-3.0) über <a href="https://github.com/catdad-experiments/libheif-js">libheif-js</a>.</li>
   </ul>
   </div>
@@ -175,7 +194,7 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
   <h3>How to use</h3>
   <ol>
     <li><strong>Choose images</strong> (several at once), drag them here or paste them with Ctrl+V.</li>
-    <li>Choose the <strong>target format</strong>, the quality for JPG, WebP and AVIF and the size if needed.</li>
+    <li>Choose the <strong>target format</strong>, the quality for JPG, WebP and AVIF and, if needed, the size and the maximum file size.</li>
     <li><strong>Convert</strong> – then save each image, all of them as a ZIP file or share them (phone).</li>
   </ol>
   <h3>Formats</h3>
@@ -185,6 +204,13 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
     <li><strong>SVG as target</strong> embeds the image as a pixel image in an SVG file (for programs that require SVG). It is not traced into vectors.</li>
     <li><strong>SVG as source</strong> is drawn at the chosen size and stays sharp – even when enlarged.</li>
     <li>JPG and BMP have no transparency: transparent areas get the chosen background colour.</li>
+  </ul>
+  <h3>Compressing (smaller files)</h3>
+  <ul>
+    <li><strong>Same as original</strong> keeps each image's format – JPG stays JPG, PNG stays PNG. Only HEIC and TIFF become JPG, GIF and SVG become PNG, because browsers cannot write them.</li>
+    <li><strong>Limit file size</strong>, e.g. at most 100 KB (1 KB = 1000 bytes): for JPG, WebP and AVIF the app first lowers the quality (down to 40%); if that is not enough, it reduces the pixel size. PNG and BMP are lossless and are only reduced in pixel size – JPG or WebP usually get much smaller.</li>
+    <li>The result shows the new file size, how much smaller it is, whether the limit was met and which quality was used.</li>
+    <li>Without a limit, an image that is already highly compressed can even get larger when saved again – then lower the quality or set a limit.</li>
   </ul>
   <h3>Size</h3>
   <ul>
@@ -198,7 +224,7 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
     <li>Colour profiles are converted to sRGB.</li>
     <li>The images stay in memory only and are gone when you close the app. Only the settings are saved.</li>
     <li><strong>Share to the app (Android):</strong> once installed, the app appears in the gallery's share menu. <strong>Windows/Mac:</strong> the installed app can open images via “Open with”. iPhone supports neither.</li>
-    <li><strong>AI agent:</strong> an AI agent in the browser (WebMCP) can list the chosen images, set format and size and convert them – only you can choose and save images.</li>
+    <li><strong>AI agent:</strong> an AI agent in the browser (WebMCP) can list the chosen images, set format, size and maximum file size and convert them – only you can choose and save images.</li>
     <li>HEIC decoder: <a href="https://github.com/strukturag/libheif">libheif</a> and libde265 (LGPL-3.0) via <a href="https://github.com/catdad-experiments/libheif-js">libheif-js</a>.</li>
   </ul>
   </div>
@@ -213,7 +239,7 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 63b9279c22a1</p>
+  <p class="footer-version">Version 96f20401b2fd</p>
   <!-- footer:end -->
 </footer>
 
@@ -232,6 +258,13 @@ Tools.i18n({
     'fmt.ico':'Favicon / Windows-Icon mit 16, 32, 48, 64, 128 und 256 Pixel, quadratisch.',
     'fmt.svg':'Das Bild als PNG in einer SVG-Datei – keine Vektorisierung.',
     'fmt.unsupported':'Dieser Browser kann {f} nicht schreiben.',
+    'fmt.keepLabel':'Wie Original',
+    'fmt.keep':'Jedes Bild behält sein Format – zum Verkleinern. HEIC und TIFF werden JPG, GIF und SVG werden PNG (die kann der Browser nicht schreiben).',
+    'limit.lossy':'Die App senkt die Qualität (bis 40 %) und verkleinert das Bild erst, wenn das nicht reicht.',
+    'limit.lossless':'{f} ist verlustfrei: Die App verkleinert die Pixelgröße, bis die Datei passt. Kleiner wird es mit JPG oder WebP.',
+    'limit.keep':'JPG, WebP und AVIF: Die App senkt die Qualität (bis 40 %) und verkleinert erst, wenn das nicht reicht. PNG und BMP werden nur in der Pixelgröße verkleinert.',
+    'res.fits':'≤ {kb} KB','res.miss':'{kb} KB nicht erreicht','res.quality':'Qualität {q}\u00a0%',
+    'conv.miss':'{n} Bilder sind größer als {kb} KB.','conv.miss1':'1 Bild ist größer als {kb} KB.',
     'val.max':'Pixel','val.percent':'Prozent',
     'in.loading':'Lese Bild {i} von {n} …','in.heic':'Lade HEIC-Decoder …',
     'in.fail':'„{name}“ lässt sich nicht öffnen ({fmt}).','in.failTiff':'TIFF öffnet nur Safari.',
@@ -260,6 +293,14 @@ Tools.i18n({
     'fmt.ico':'Favicon / Windows icon with 16, 32, 48, 64, 128 and 256 pixels, square.',
     'fmt.svg':'The image as PNG inside an SVG file – not traced into vectors.',
     'fmt.unsupported':'This browser cannot write {f}.',
+    'out.limit':'Limit file size','out.limitVal':'At most (KB)',
+    'fmt.keepLabel':'Same as original',
+    'fmt.keep':'Each image keeps its format – for making files smaller. HEIC and TIFF become JPG, GIF and SVG become PNG (browsers cannot write them).',
+    'limit.lossy':'The app lowers the quality (down to 40%) and only scales the image down if that is not enough.',
+    'limit.lossless':'{f} is lossless: the app reduces the pixel size until the file fits. JPG or WebP get smaller.',
+    'limit.keep':'JPG, WebP and AVIF: the app lowers the quality (down to 40%) and only scales down if that is not enough. PNG and BMP are only reduced in pixel size.',
+    'res.fits':'≤ {kb} KB','res.miss':'{kb} KB not reached','res.quality':'Quality {q}%',
+    'conv.miss':'{n} images are larger than {kb} KB.','conv.miss1':'1 image is larger than {kb} KB.',
     'val.max':'Pixels','val.percent':'Percent',
     'in.loading':'Reading image {i} of {n} …','in.heic':'Loading HEIC decoder …',
     'in.fail':'“{name}” cannot be opened ({fmt}).','in.failTiff':'Only Safari opens TIFF.',
@@ -277,6 +318,7 @@ const t=Tools.t, $=Tools.$;
 /* ---------- Formats ---------- */
 // Output formats; mime = canvas.toBlob type (bmp, ico, svg are written by this page)
 const OUT={
+  keep:{label:'',quality:true},   // each image in its own format (KEEP), for compressing
   jpg:{label:'JPG',mime:'image/jpeg',quality:true,alpha:false},
   png:{label:'PNG',mime:'image/png'},
   webp:{label:'WebP',mime:'image/webp',quality:true},
@@ -288,15 +330,22 @@ const OUT={
 const FORMATS=Object.keys(OUT);
 const ICO_SIZES=[16,32,48,64,128,256];
 // Browsers may ignore an unknown type in toBlob and return PNG – check what really comes out
-const supported={jpg:true,png:true,bmp:true,ico:true,svg:true,webp:false,avif:false};
+const supported={keep:true,jpg:true,png:true,bmp:true,ico:true,svg:true,webp:false,avif:false};
 const probe=mime=>new Promise(res=>{
   const c=document.createElement('canvas');c.width=c.height=2;
   try{c.toBlob(b=>res(!!b&&b.type===mime),mime,0.8);}catch(_){res(false);}
 });
 
+// "Same as original": formats a browser cannot write get the closest one
+const KEEP={jpg:'jpg',png:'png',webp:'webp',avif:'avif',bmp:'bmp',ico:'ico',svg:'png',gif:'png',heic:'jpg',tiff:'jpg'};
+function outFormat(item){
+  if(settings.format!=='keep') return settings.format;
+  const f=KEEP[item.fmt]||'jpg';
+  return supported[f]?f:'jpg';
+}
 /* ---------- Settings ---------- */
 const LS='image-converter.settings.v1';
-const DEF={format:'jpg',quality:85,resize:'original',max:1920,percent:50,bg:'#ffffff'};
+const DEF={format:'jpg',quality:85,resize:'original',max:1920,percent:50,bg:'#ffffff',limit:false,limitKb:100};
 const settings=Object.assign({},DEF,Tools.load(LS,{}));
 if(!OUT[settings.format]) settings.format=DEF.format;
 const saveSettings=()=>Tools.save(LS,settings);
@@ -449,8 +498,8 @@ function renderItems(){
 }
 
 /* ---------- Target size ---------- */
-function targetSize(item){
-  if(OUT[settings.format].fixedSize) return {w:item.w,h:item.h};
+function targetSize(item,f){
+  if(OUT[f].fixedSize) return {w:item.w,h:item.h};
   let s=1;
   if(settings.resize==='percent') s=settings.percent/100;
   else if(settings.resize==='max'){
@@ -500,34 +549,66 @@ async function svgOut(c,w,h){
   return new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><image width="${w}" height="${h}" xlink:href="${b64}" href="${b64}"/></svg>\n`],{type:'image/svg+xml'});
 }
 
+const MIN_Q=0.4;   // lowest quality the size limit uses before it reduces the pixels
+const KB=1000;    // limit in kB of 1000 bytes – then it also holds for "100 KB" meant as 102 400 bytes
 async function convertOne(item){
-  const f=settings.format, o=OUT[f];
-  let {w,h}=targetSize(item), reduced=false;
+  const f=outFormat(item), o=OUT[f];
+  let {w,h}=targetSize(item,f), reduced=false;
   const d=await decode(item,w,h);
+  let c=null;
   try{
-    if(f==='ico') return {blob:await ico(d.src,item.w,item.h),w:256,h:256,reduced};
+    if(f==='ico') return {blob:await ico(d.src,item.w,item.h),f,w:256,h:256,reduced,quality:null,fits:null};
+    const draw=()=>{
+      if(c) c.width=c.height=0;
+      let g;[c,g]=canvas(w,h);
+      if(o.alpha===false){g.fillStyle=settings.bg;g.fillRect(0,0,w,h);}
+      g.imageSmoothingQuality='high';
+      g.drawImage(d.src,0,0,w,h);
+      return g;
+    };
+    let g, blob;
+    const enc=async q=>f==='bmp'?bmp(g,w,h):f==='svg'?await svgOut(c,w,h):await toBlob(c,o.mime,q);
+    const q0=o.quality?settings.quality/100:undefined;
     for(let attempt=0;;attempt++){
-      try{
-        const [c,g]=canvas(w,h);
-        if(o.alpha===false){g.fillStyle=settings.bg;g.fillRect(0,0,w,h);}
-        g.imageSmoothingQuality='high';
-        g.drawImage(d.src,0,0,w,h);
-        let blob;
-        if(f==='bmp') blob=bmp(g,w,h);
-        else if(f==='svg') blob=await svgOut(c,w,h);
-        else blob=await toBlob(c,o.mime,o.quality?settings.quality/100:undefined);
-        c.width=c.height=0;
-        return {blob,w,h,reduced};
-      }catch(e){
+      try{g=draw();blob=await enc(q0);break;}
+      catch(e){
         if(attempt||w*h<=MAX_AREA) throw e;
         const k=Math.sqrt(MAX_AREA/(w*h))*0.999;
         Tools.diag.log('canvas too large, scaling down',{w,h},e);
         w=Math.max(1,Math.floor(w*k)); h=Math.max(1,Math.floor(h*k)); reduced=true;
       }
     }
-  }finally{d.close();}
+    let q=q0, fits=null;
+    const limit=settings.limit?settings.limitKb*KB:0;
+    if(limit){
+      fits=blob.size<=limit;
+      for(let round=0;!fits&&round<12;round++){
+        if(o.quality){
+          // highest quality between MIN_Q and the chosen one that fits (bisection)
+          let lo=Math.min(MIN_Q,q0), hi=q0;
+          const low=await enc(lo);
+          if(low.size<=limit){
+            blob=low;q=lo;fits=true;
+            for(let i=0;i<6&&hi-lo>0.01;i++){
+              const mid=(lo+hi)/2, b=await enc(mid);
+              if(b.size<=limit){blob=b;q=mid;lo=mid;} else hi=mid;
+            }
+            break;
+          }
+          blob=low;q=lo;
+        }
+        // still too large: fewer pixels (file size grows roughly with the pixel count)
+        const k=Math.min(0.9,Math.sqrt(limit/blob.size)*0.95);
+        const nw=Math.max(1,Math.floor(w*k)), nh=Math.max(1,Math.floor(h*k));
+        if(Math.max(nw,nh)<8) break;
+        w=nw;h=nh;g=draw();q=q0;blob=await enc(q0);
+        fits=blob.size<=limit;
+      }
+      Tools.diag.log('size limit',{to:f,limit,bytes:blob.size,fits,w,h,quality:q==null?null:Math.round(q*100)});
+    }
+    return {blob,f,w,h,reduced,quality:o.quality?Math.round(q*100):null,fits};
+  }finally{if(c)c.width=c.height=0;d.close();}
 }
-
 let busy=false;
 async function convertAll(){
   const todo=items.filter(i=>!i.error);
@@ -540,16 +621,18 @@ async function convertAll(){
       status(t('conv.run',{i:i+1,n:todo.length}));
       try{
         const r=await convertOne(it);
-        let name=baseName(it.name)+'.'+settings.format, k=2;
-        while(used.has(name.toLowerCase())) name=baseName(it.name)+'-'+(k++)+'.'+settings.format;
+        let name=baseName(it.name)+'.'+r.f, k=2;
+        while(used.has(name.toLowerCase())) name=baseName(it.name)+'-'+(k++)+'.'+r.f;
         used.add(name.toLowerCase());
-        results.push({item:it,name,file:new File([r.blob],name,{type:OUT[settings.format].mime}),w:r.w,h:r.h,reduced:r.reduced,url:URL.createObjectURL(r.blob)});
+        results.push({item:it,name,f:r.f,file:new File([r.blob],name,{type:OUT[r.f].mime}),w:r.w,h:r.h,reduced:r.reduced,quality:r.quality,fits:r.fits,url:URL.createObjectURL(r.blob)});
       }catch(e){failed++;Tools.diag.log('convert failed',{fmt:it.fmt,to:settings.format,w:it.w,h:it.h},e);}
     }
   }finally{busy=false;$('btnConvert').disabled=!items.some(i=>!i.error);}
-  Tools.diag.log('converted',{n:results.length,failed,to:settings.format,quality:settings.quality,resize:settings.resize,ms:Math.round(performance.now()-t0)});
-  const ok=results.length===1?t('conv.done1'):t('conv.done',{n:results.length});
-  status(failed?(results.length?ok+' ':'')+t('conv.fail',{n:failed}):ok,!!failed);
+  const miss=results.filter(r=>r.fits===false).length;
+  Tools.diag.log('converted',{n:results.length,failed,miss,to:settings.format,quality:settings.quality,resize:settings.resize,limitKb:settings.limit?settings.limitKb:0,ms:Math.round(performance.now()-t0)});
+  let ok=results.length===1?t('conv.done1'):t('conv.done',{n:results.length});
+  if(miss) ok+=' '+t(miss===1?'conv.miss1':'conv.miss',{n:miss,kb:settings.limitKb});
+  status(failed?(results.length?ok+' ':'')+t('conv.fail',{n:failed}):ok,!!(failed||miss));
   renderResults();
   if(results.length) $('results').scrollIntoView({behavior:'smooth',block:'start'});
   return results;
@@ -568,7 +651,12 @@ function renderResults(){
     const m=document.createElement('div'); m.className='meta';
     const pct=Math.round((r.file.size/r.item.bytes-1)*100);
     m.textContent=`${r.w}×${r.h} · ${fmtSize(r.file.size)} (${pct>0?'+':pct<0?'−':'±'}${Math.abs(pct)}\u00a0%)`+(r.reduced?' · '+t('res.reduced'):'');
-    txt.append(n,m);
+    if(r.fits!=null){
+      const lim=document.createElement('div'); lim.className='meta '+(r.fits?'ok':'err');
+      const kb=Tools.fmt(settings.limitKb,0);
+      lim.textContent=(r.fits?'✓ '+t('res.fits',{kb}):'✕ '+t('res.miss',{kb}))+(r.quality!=null?' · '+t('res.quality',{q:r.quality}):'');
+      txt.append(n,m,lim);
+    } else txt.append(n,m);
     const a=document.createElement('a'); a.className='btn'; a.href=r.url; a.download=r.name;
     a.style.display='inline-flex'; a.style.alignItems='center'; a.style.textDecoration='none';
     a.textContent=t('res.save'); a.setAttribute('aria-label',t('res.saveName',{name:r.name}));
@@ -636,6 +724,7 @@ for(const f of FORMATS){
 }
 function renderOptions(){
   const o=OUT[settings.format];
+  fs.querySelector('input[value="keep"]+span').textContent=t('fmt.keepLabel');
   for(const r of fs.querySelectorAll('input')){r.checked=r.value===settings.format;r.disabled=!supported[r.value];}
   $('fmtHint').textContent=t('fmt.'+settings.format);
   $('qRow').hidden=!o.quality;
@@ -646,6 +735,10 @@ function renderOptions(){
   $('valRow').hidden=settings.resize==='original';
   if(settings.resize==='percent'){v.min=1;v.max=400;v.value=settings.percent;$('valLabel').textContent=t('val.percent');}
   else {v.min=1;v.max=16384;v.value=settings.max;$('valLabel').textContent=t('val.max');}
+  $('limitRow').hidden=!!o.fixedSize;
+  $('limitOn').checked=settings.limit; $('limitValRow').hidden=!settings.limit; $('limitHint').hidden=!settings.limit;
+  $('limitVal').value=settings.limitKb;
+  $('limitHint').textContent=settings.format==='keep'?t('limit.keep'):o.quality?t('limit.lossy'):t('limit.lossless',{f:o.label});
   $('bgRow').hidden=o.alpha!==false;
   $('bg').value=settings.bg;
 }
@@ -661,6 +754,8 @@ $('resizeVal').addEventListener('change',e=>{
   changed();
 });
 $('bg').addEventListener('change',e=>{settings.bg=e.target.value;changed();});
+$('limitOn').addEventListener('change',e=>{settings.limit=e.target.checked;changed();Tools.diag.log('size limit',settings.limit?settings.limitKb:'off');});
+$('limitVal').addEventListener('change',e=>{settings.limitKb=clamp(Tools.parseNum(e.target.value),1,100000,settings.limitKb);changed();});
 
 function status(msg,err){const s=$('status');s.textContent=msg||'';s.classList.toggle('err',!!err);}
 
@@ -705,7 +800,7 @@ Tools.diag.info(()=>({
   inputFormats:items.map(i=>i.fmt).join(',')||'-',
   failed:items.filter(i=>i.error).length,
   results:results.length,
-  settings:{format:settings.format,quality:settings.quality,resize:settings.resize,max:settings.max,percent:settings.percent},
+  settings:{format:settings.format,quality:settings.quality,resize:settings.resize,max:settings.max,percent:settings.percent,limitKb:settings.limit?settings.limitKb:0},
   encoders:{webp:supported.webp,avif:supported.avif},
   heic:Heic.info(),
   canShareFiles:canShare([new File([''],'x.png',{type:'image/png'})])
@@ -713,6 +808,7 @@ Tools.diag.info(()=>({
 
 /* ---------- WebMCP tools ---------- */
 const optionsOut=()=>({format:settings.format,quality:settings.quality,resize:settings.resize,max_side:settings.max,percent:settings.percent,background:settings.bg,
+  max_kb:settings.limit?settings.limitKb:0,
   supported_formats:FORMATS.filter(f=>supported[f])});
 Tools.mcp.register({
   name:'list_images',title:'List chosen images',readOnly:true,
@@ -720,20 +816,21 @@ Tools.mcp.register({
   inputSchema:{type:'object',properties:{},additionalProperties:false},
   execute:()=>({
     images:items.map((i,n)=>({image:n+1,format:i.fmt,width:i.w,height:i.h,bytes:i.bytes,ok:!i.error})),
-    results:results.map(r=>({image:items.indexOf(r.item)+1,format:settings.format,width:r.w,height:r.h,bytes:r.file.size,scaled_down:r.reduced})),
+    results:results.map(r=>({image:items.indexOf(r.item)+1,format:r.f,width:r.w,height:r.h,bytes:r.file.size,scaled_down:r.reduced,quality:r.quality,fits_limit:r.fits})),
     options:optionsOut()
   })
 });
 Tools.mcp.register({
   name:'set_options',title:'Set conversion options',label:'mcp.options',
-  description:'Sets the target format and options for converting the chosen images. format: jpg, png, webp, avif, bmp, ico (favicon 16–256 px) or svg (pixel image embedded in SVG). quality 10–100 applies to jpg, webp and avif. resize: original, max (longest side in pixels, max_side; photos are only scaled down) or percent (1–400). background (#rrggbb) fills transparent areas for jpg and bmp. Omitted fields stay unchanged. Returns the current options.',
+  description:'Sets the target format and options for converting the chosen images. format: keep (each image stays in its own format, for compressing; HEIC/TIFF become jpg, GIF/SVG become png), jpg, png, webp, avif, bmp, ico (favicon 16–256 px) or svg (pixel image embedded in SVG). quality 10–100 applies to jpg, webp and avif. resize: original, max (longest side in pixels, max_side; photos are only scaled down) or percent (1–400). background (#rrggbb) fills transparent areas for jpg and bmp. max_kb limits each file to at most this many kB (1000 bytes): first the quality is lowered (down to 40), then the image is scaled down; 0 turns the limit off (not used for ico). Omitted fields stay unchanged. Returns the current options.',
   inputSchema:{type:'object',properties:{
     format:{type:'string',enum:FORMATS},
     quality:{type:'integer',minimum:10,maximum:100},
     resize:{type:'string',enum:['original','max','percent']},
     max_side:{type:'integer',minimum:1,maximum:16384},
     percent:{type:'integer',minimum:1,maximum:400},
-    background:{type:'string',minLength:7,maxLength:7}
+    background:{type:'string',minLength:7,maxLength:7},
+    max_kb:{type:'integer',minimum:0,maximum:100000}
   },additionalProperties:false},
   execute:a=>{
     if(a.format&&!supported[a.format]) throw new Error(`this browser cannot write ${a.format}`);
@@ -744,20 +841,21 @@ Tools.mcp.register({
     if(a.max_side!=null) settings.max=a.max_side;
     if(a.percent!=null) settings.percent=a.percent;
     if(a.background) settings.bg=a.background.toLowerCase();
+    if(a.max_kb!=null){settings.limit=a.max_kb>0;if(a.max_kb>0)settings.limitKb=a.max_kb;}
     changed();
     return optionsOut();
   }
 });
 Tools.mcp.register({
   name:'convert_images',title:'Convert the chosen images',label:'mcp.convert',
-  description:'Converts all chosen images with the current options (see set_options). The results appear in the app, where the user can save or share them. Returns per image the format, width, height and size in bytes before and after.',
+  description:'Converts all chosen images with the current options (see set_options). The results appear in the app, where the user can save or share them. Returns per image the format, width, height, size in bytes before and after, the quality used and whether the size limit was met (null without limit).',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
   execute:async()=>{
     if(busy) throw new Error('a conversion is already running');
     if(!items.some(i=>!i.error)) throw new Error('no images chosen – the user has to choose images first');
     const res=await convertAll();
     return {format:settings.format,converted:res.length,failed:items.filter(i=>!i.error).length-res.length,
-      results:res.map(r=>({image:items.indexOf(r.item)+1,width:r.w,height:r.h,bytes_before:r.item.bytes,bytes_after:r.file.size,scaled_down:r.reduced}))};
+      results:res.map(r=>({image:items.indexOf(r.item)+1,format:r.f,width:r.w,height:r.h,bytes_before:r.item.bytes,bytes_after:r.file.size,scaled_down:r.reduced,quality:r.quality,fits_limit:r.fits}))};
   }
 });
 })();
