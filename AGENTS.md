@@ -36,11 +36,13 @@ tests/                Playwright-Tests (siehe tests/README.md); tests/live/ prü
 .github/dependabot.yml              monatliche Update-PRs für GitHub Actions und Test-Werkzeuge (erst 7 Tage nach Release)
 NOTICE.md             Hinweise zu Fremdsoftware (Lizenzen der Bibliotheken) – generiert von build.mjs, verlinkt in der Fußzeile
 sbom.cdx.json         SBOM (CycloneDX) der ausgelieferten Bibliotheken – generiert von build.mjs, nicht veröffentlicht
+IDEAS.md              geplante, zurückgestellte und verworfene Ideen mit Begründung (vor neuen Seiten lesen, nicht veröffentlicht)
 robots.txt            erlaubt Crawlen – damit Suchmaschinen das noindex jeder Seite sehen
 ```
 
 ## Neue Seite
 
+0. Vorher in `IDEAS.md` nachsehen, ob die Idee schon geprüft oder verworfen wurde. Passt eine Idee nicht (z. B. braucht einen Server), dort mit Begründung eintragen statt umsetzen.
 1. `template/` nach `<tool-name>/` kopieren.
 2. `<title>`, `<meta name="description">`, `tool:tags` (Filter-Kategorien der Startseite; die erste ist der Bereich: `Alltag`, `Arbeit` oder `Freizeit`, danach 1–2 Themen wie `Rechner`, `Spiele`, `KI`), optional `tool:features` (zweite Filterreihe „Funktion“, nur Werte aus `FEATURES` in `scripts/build.mjs`, z. B. `Kamera`, `Verlauf`; was alle Apps können – offline, installierbar, lokal speichern – steht fest auf der Startseite und gehört nicht hinein), `tool:short-name` (Name unter dem Home-Bildschirm-Icon, max. ca. 12 Zeichen), die englischen Fassungen `tool:title-en`, `tool:description-en` (Pflicht – sonst bricht `build.mjs` ab) und `tool:short-name-en` (max. 12 Zeichen) sowie `tool:storage` (Präfix der Speicher-Schlüssel, siehe „Daten sichern“) setzen. Aus diesen Angaben entstehen Karte, README-Eintrag und App-Manifest.
 3. Icon wählen: `tool:icon` = Name eines [Tabler Icons](https://tabler.io/icons) (Outline), `tool:color` = Hintergrund- und Theme-Farbe. Dann `node scripts/build-icons.mjs <tool-name>` ausführen.
