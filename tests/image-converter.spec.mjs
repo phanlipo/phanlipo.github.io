@@ -252,6 +252,150 @@ test.describe('Bildkonverter', () => {
   });
 });
 
+/** Photo-like JPG/PNG of w×h: smooth gradients with noise (compresses like a photo) */
+async function photo(page, w, h, mime = 'image/jpeg') {
+  const b64 = await page.evaluate(({ w, h, mime }) => {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'), d = g.createImageData(w, h);
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let y = 0, p = 0; y < h; y++) for (let x = 0; x < w; x++, p += 4) {
+      const n = rnd() * 60 - 30;
+      d.data[p] = 128 + 100 * Math.sin(x / 37) + n; d.data[p + 1] = 128 + 100 * Math.cos(y / 23) + n;
+      d.data[p + 2] = (x + y) % 256; d.data[p + 3] = 255;
+    }
+    g.putImageData(d, 0, 0);
+    return c.toDataURL(mime, 0.95).split(',')[1];
+  }, { w, h, mime });
+  return Buffer.from(b64, 'base64');
+}
+const jpgSize = buf => {   // width/height from the SOF marker, parsed here
+  for (let i = 2; i < buf.length;) {
+    const m = buf[i + 1], len = buf.readUInt16BE(i + 2);
+    if (m >= 0xC0 && m <= 0xC3) return [buf.readUInt16BE(i + 7), buf.readUInt16BE(i + 5)];
+    i += 2 + len;
+  }
+};
+async function setLimit(page, kb) {
+  await page.locator('#limitOn').check();
+  await page.locator('#limitVal').fill(String(kb));
+  await page.locator('#limitVal').dispatchEvent('change');
+}
+
+test.describe('Compressing', () => {
+  test.beforeEach(async ({ page }) => { await page.goto(URL_); });
+
+  test('"same as original" keeps JPG and PNG, HEIC becomes JPG', async ({ page }) => {
+    await add(page, [
+      { name: 'foto.jpeg', mimeType: 'image/jpeg', buffer: await photo(page, 300, 200) },
+      { name: 'grafik.png', mimeType: 'image/png', buffer: await png(page) },
+      heic()
+    ]);
+    await pickFormat(page, 'keep');
+    await expect(page.locator('#formats input[value="keep"] + span')).toHaveText('Wie Original');
+    await expect(page.locator('#fmtHint')).toContainText('behält sein Format');
+    await expect(page.locator('#qRow')).toBeVisible();
+    await convert(page, 3);
+    await expect(page.locator('#status')).toHaveText('3 Bilder umgewandelt.');
+    const a = await save(page, 0), b = await save(page, 1), c = await save(page, 2);
+    expect(a.name).toBe('foto.jpg'); expect([a.buf[0], a.buf[1]]).toEqual([0xFF, 0xD8]);
+    expect(b.name).toBe('grafik.png'); expect(b.buf.subarray(1, 4).toString()).toBe('PNG');
+    expect(c.name).toBe('IMG_0001.jpg'); expect([c.buf[0], c.buf[1]]).toEqual([0xFF, 0xD8]);
+    // transparency of the PNG survives
+    const r = await pixels(page, b.buf, 'image/png', [[180, 50]]);
+    expect(r.px[0][3]).toBe(0);
+    await page.reload();
+    await expect(page.locator('#formats input[value="keep"]')).toBeChecked();
+  });
+
+  test('size limit: JPG gets a lower quality first, same pixel size', async ({ page }) => {
+    const src = await photo(page, 800, 600);
+    // sizes at quality 85 and 40, measured with the browser's encoder; the limit lies in between
+    const [hi, lo] = await page.evaluate(async b64 => {
+      const img = new Image(); img.src = 'data:image/jpeg;base64,' + b64; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      const size = q => new Promise(r => c.toBlob(b => r(b.size), 'image/jpeg', q));
+      return [await size(0.85), await size(0.4)];
+    }, src.toString('base64'));
+    expect(lo).toBeLessThan(hi);
+    const kb = Math.floor((hi + lo) / 2 / 1000);
+    await add(page, [{ name: 'foto.jpg', mimeType: 'image/jpeg', buffer: src }]);
+    await pickFormat(page, 'keep');
+    await setLimit(page, kb);
+    await expect(page.locator('#limitHint')).toContainText('senkt die Qualität');
+    await convert(page);
+    const meta = page.locator('#outList .meta.ok');
+    await expect(meta).toContainText(`✓ ≤ ${kb} KB`);
+    const q = Number((await meta.textContent()).match(/Qualität (\d+)/)[1]);
+    expect(q).toBeGreaterThanOrEqual(40); expect(q).toBeLessThan(85);
+    const { name, buf } = await save(page);
+    expect(name).toBe('foto.jpg');
+    expect(buf.length).toBeLessThanOrEqual(kb * 1000);
+    expect(jpgSize(buf)).toEqual([800, 600]);
+    await expect(page.locator('#outList .meta').first()).toContainText('800×600');
+  });
+
+  test('size limit: when quality is not enough, the image gets fewer pixels', async ({ page }) => {
+    await add(page, [{ name: 'foto.jpg', mimeType: 'image/jpeg', buffer: await photo(page, 1200, 900) }]);
+    await setLimit(page, 15);
+    await convert(page);
+    await expect(page.locator('#outList .meta.ok')).toContainText('≤ 15 KB');
+    await expect(page.locator('#outList .meta.ok')).toContainText(/Qualität \d+/);
+    const { buf } = await save(page);
+    expect(buf.length).toBeLessThanOrEqual(15000);
+    const [w, h] = jpgSize(buf);
+    expect(w).toBeLessThan(1200);
+    expect(Math.abs(w / h - 4 / 3)).toBeLessThan(0.02);   // aspect ratio kept
+    // limit is remembered
+    await page.reload();
+    await expect(page.locator('#limitOn')).toBeChecked();
+    await expect(page.locator('#limitVal')).toHaveValue('15');
+  });
+
+  test('size limit for PNG (lossless) reduces the pixel size; unreachable limit is reported', async ({ page }) => {
+    await add(page, [{ name: 'bild.png', mimeType: 'image/png', buffer: await photo(page, 400, 300, 'image/png') }]);
+    await pickFormat(page, 'png');
+    await setLimit(page, 60);
+    await expect(page.locator('#limitHint')).toContainText('PNG ist verlustfrei');
+    await convert(page);
+    await expect(page.locator('#outList .meta.ok')).toHaveText('✓ ≤ 60 KB');
+    const { buf } = await save(page);
+    expect(buf.length).toBeLessThanOrEqual(60000);
+    const r = await pixels(page, buf, 'image/png', [[0, 0]]);
+    expect(r.w).toBeLessThan(400);
+    expect(Math.abs(r.w / r.h - 4 / 3)).toBeLessThan(0.05);
+    await setLimit(page, 0.1);   // clamped to 1 KB
+    await expect(page.locator('#limitVal')).toHaveValue('1');
+  });
+
+  test('a limit that cannot be reached is reported, the smallest result is kept', async ({ page }) => {
+    // encoder that always adds 5 kB: no pixel size reaches 1 KB
+    await page.addInitScript(() => {
+      const orig = HTMLCanvasElement.prototype.toBlob;
+      HTMLCanvasElement.prototype.toBlob = function (cb, type, q) {
+        orig.call(this, b => cb(b && new Blob([b, new Uint8Array(5000)], { type: b.type })), type, q);
+      };
+    });
+    await page.reload();
+    await add(page, [{ name: 'foto.jpg', mimeType: 'image/jpeg', buffer: await photo(page, 400, 300) }]);
+    await setLimit(page, 1);
+    await page.click('#btnConvert');
+    await expect(page.locator('#outList .meta.err')).toContainText('✕ 1 KB nicht erreicht · Qualität 40');
+    await expect(page.locator('#status')).toHaveText('1 Bild umgewandelt. 1 Bild ist größer als 1 KB.');
+    await expect(page.locator('#status')).toHaveClass(/err/);
+    const { buf } = await save(page);
+    expect(Math.max(...jpgSize(buf))).toBeLessThan(16);
+  });
+
+  test('ICO has a fixed size: no size limit', async ({ page }) => {
+    await pickFormat(page, 'ico');
+    await expect(page.locator('#limitRow')).toBeHidden();
+    await pickFormat(page, 'webp');
+    await expect(page.locator('#limitRow')).toBeVisible();
+    await expect(page.locator('#limitValRow')).toBeHidden();
+  });
+});
+
 test('opened with the installed app ("Open with", Windows/Mac): files arrive from the launch queue', async ({ page }) => {
   await mockLaunchQueue(page, [heic()]);
   await page.goto(URL_ + '?opened=1');
@@ -267,5 +411,9 @@ test.describe('English', () => {
     await expect(page.locator('#fmtHint')).toContainText('Lossless');
     await page.setInputFiles('#inPick', [{ name: 'a.txt', mimeType: 'text/plain', buffer: Buffer.from('x') }]);
     await expect(page.locator('#inList .meta.err')).toContainText('cannot be opened');
+    await page.locator('#formats input[value="keep"]').check({ force: true });
+    await expect(page.locator('#formats input[value="keep"] + span')).toHaveText('Same as original');
+    await page.locator('#limitOn').check();
+    await expect(page.locator('#limitHint')).toContainText('lowers the quality');
   });
 });

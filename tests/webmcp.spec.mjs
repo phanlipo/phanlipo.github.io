@@ -1909,7 +1909,24 @@ test.describe('image-converter tools', () => {
     await expect(page.locator('#outList li')).toHaveCount(1);
     await expect(page.locator('#outList .name')).toHaveText('a.png');
     r = await call(page, 'image_converter_list_images', {});
-    expect(r.result.results).toEqual([{ image: 1, format: 'png', width: 50, height: 25, bytes: expect.any(Number), scaled_down: false }]);
+    expect(r.result.results).toEqual([{ image: 1, format: 'png', width: 50, height: 25, bytes: expect.any(Number), scaled_down: false, quality: null, fits_limit: null }]);
+  });
+
+  test('compress: keep the format with a maximum file size', async ({ page }) => {
+    let r = await call(page, 'image_converter_set_options', { format: 'keep', max_kb: 2, resize: 'original' });
+    expect(r.result).toMatchObject({ format: 'keep', max_kb: 2 });
+    await expect(page.locator('#formats input[value="keep"]')).toBeChecked();
+    await expect(page.locator('#limitOn')).toBeChecked();
+    await expect(page.locator('#limitVal')).toHaveValue('2');
+    r = await call(page, 'image_converter_convert_images', {});
+    expect(r.result.results[0]).toMatchObject({ format: 'png', quality: null, fits_limit: true });
+    expect(r.result.results[0].bytes_after).toBeLessThanOrEqual(2000);
+    await expect(page.locator('#outList .name')).toHaveText('a.png');
+    r = await call(page, 'image_converter_set_options', { max_kb: 0 });
+    expect(r.result.max_kb).toBe(0);
+    await expect(page.locator('#limitOn')).not.toBeChecked();
+    r = await call(page, 'image_converter_set_options', { max_kb: -1 });
+    expect(r.ok).toBe(false);
   });
 
   test('wrong input is rejected; nothing to convert without images', async ({ page }) => {
