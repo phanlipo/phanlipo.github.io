@@ -21,7 +21,7 @@
 <meta name="tool:connect" content="https://tile.openstreetmap.org">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-raxHOqy0jNfdkV6+4/fvh3A9ob0Coy1uebQOHA2wsOI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://tile.openstreetmap.org; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-gUci1jN/otK5ST+8DEzSFEmBOSnbYWmW2dNpAU8Vg1I='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://tile.openstreetmap.org; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -145,6 +145,11 @@ main{display:flex;flex-direction:column;padding:12px;padding-inline:max(12px,env
 .meter{height:28px;border-radius:14px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden}
 .meter i{display:block;height:100%;width:0;background:var(--muted);transition:width .1s}
 .meter.hot i,.progress .meter i{background:var(--accent)}
+/* Download of an AI voice: text and bar at the bottom, stays until the voice is loaded */
+.ai-dl{position:fixed;inset-block-end:calc(16px + env(safe-area-inset-bottom));inset-inline:16px;max-width:420px;margin-inline:auto;z-index:21;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:14px;padding:10px 14px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.ai-dl[hidden]{display:none}
+.ai-dl p{margin:0 0 8px;font-size:14px;font-weight:600}
+.ai-dl progress{display:block;width:100%;height:10px;accent-color:var(--accent)}
 .fallback{justify-self:center;align-self:center;margin-top:4px}
 .shake{animation:shake .4s}
 @keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
@@ -239,6 +244,8 @@ main{display:flex;flex-direction:column;padding:12px;padding-inline:max(12px,env
   <label class="chk"><input type="checkbox" id="setSound"><span data-i18n="set.sound">Töne und Vibration</span></label>
   <div class="row"><button type="button" class="btn small" id="btnTiles" data-i18n="set.tiles">Gespeicherte Kartenbilder löschen</button></div>
 </section>
+
+<div class="ai-dl" id="aiDl" role="status" hidden><p id="aiDlText"></p><progress id="aiDlBar" max="100" value="0" aria-labelledby="aiDlText"></progress></div>
 
 <dialog class="th-dlg" id="dlg" aria-labelledby="dlgTitle">
   <div class="dlg-head"><h2 id="dlgTitle"></h2>
@@ -354,7 +361,7 @@ main{display:flex;flex-direction:column;padding:12px;padding-inline:max(12px,env
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version ca4d6f525117</p>
+  <p class="footer-version">Version 1faa8f594df1</p>
   <!-- footer:end -->
 </footer>
 
@@ -434,7 +441,7 @@ Tools.i18n({
     'set.tilesDone': 'Kartenbilder gelöscht', 'set.mapAsk': 'OpenStreetMap-Karte einschalten?\nDie App lädt dann Kartenbilder von openstreetmap.org – der Dienst erfährt, welche Gegend ihr anseht.',
     'speak': 'Vorlesen', 'noSpeech': 'Vorlesen geht in diesem Browser nicht.', 'set.voiceSample': 'Hallo! So klinge ich beim Vorlesen eurer Schatzsuche.',
     'set.voiceDevice': 'Stimmen des Geräts', 'set.voiceAi': 'KI-Stimmen (einmaliger Download)', 'set.aiConfirm': 'Die KI-Stimme {name} einmalig herunterladen (ca. {mb} MB)? Danach funktioniert sie offline. Am besten im WLAN.',
-    'set.aiLoading': 'KI-Stimme wird geladen … {p} %', 'set.aiFail': 'Die KI-Stimme konnte nicht geladen werden – es liest die Gerätestimme.',
+    'set.aiLoading': 'KI-Stimme {name} wird geladen … {a} von {b} MB ({p} %)', 'set.aiStart': 'KI-Stimme {name} wird geladen …', 'set.aiFail': 'Die KI-Stimme konnte nicht geladen werden – es liest die Gerätestimme.',
     'mcp.status': 'Spielstand gelesen', 'mcp.created': 'Schatzsuche angelegt',
   }, P.I18N.de),
   en: Object.assign({
@@ -448,7 +455,7 @@ Tools.i18n({
     'set.voiceSample': 'Hello! This is how I sound when I read your treasure hunt aloud.',
     'set.rate': 'Speed of the AI voice', 'set.aiNote': 'AI voices (e.g. Kerstin) sound more natural: download once (about 60 MB), after that they work offline. They are the same voices as in the “Text to Speech” app – downloaded there, they are ready here too.',
     'set.voiceDevice': 'Voices of the device', 'set.voiceAi': 'AI voices (one-time download)', 'set.aiConfirm': 'Download the AI voice {name} once (about {mb} MB)? After that it works offline. Wi-Fi recommended.',
-    'set.aiLoading': 'Loading the AI voice … {p} %', 'set.aiFail': 'The AI voice could not be loaded – reading with the device voice.',
+    'set.aiLoading': 'Loading the AI voice {name} … {a} of {b} MB ({p} %)', 'set.aiStart': 'Loading the AI voice {name} …', 'set.aiFail': 'The AI voice could not be loaded – reading with the device voice.',
     'set.read': 'Read texts aloud automatically', 'set.sound': 'Sounds and vibration', 'set.tiles': 'Delete saved map images',
     untitled: 'Untitled', next: 'Next', close: 'Close', yes: 'Yes', cancel: 'Cancel', ok: 'OK',
     'home.play': 'Play', 'home.continue': 'Continue', 'home.edit': 'Edit', 'home.export': 'Export', 'home.share': 'Share …',
@@ -632,20 +639,41 @@ function stopAi() {
   for (const s of ttsSources) { try { s.stop(); } catch (_) {} }
   ttsSources = []; ttsNext = 0;
 }
+// Progress of a voice download (instead of toasts): text and bar stay until the voice is loaded.
+// dlProgress(name) starts (bar without value until bytes arrive), dlProgress(name, { loaded, total }) updates,
+// dlProgress(null) hides. Inside an open modal dialog (menu) so it stays visible above it.
+function dlProgress(name, d) {
+  const box = $('aiDl'), bar = $('aiDlBar');
+  if (!name) { box.hidden = true; return; }
+  if (!d) {
+    let host = document.body;
+    try { host = document.querySelector('dialog:modal') || document.body; } catch (_) {}
+    if (box.parentNode !== host) host.append(box);
+    $('aiDlText').textContent = t('set.aiStart', { name });
+    bar.removeAttribute('value');
+    box.hidden = false;
+    log('ai voice download', { voice: name });
+    return;
+  }
+  // The small config file comes first – only the model itself (tens of MB) gets a percentage
+  if (box.hidden || d.total < 1e6) return;
+  const mb = n => Tools.fmt(n / 1e6, 1);
+  const p = Math.min(100, Math.floor(d.loaded / d.total * 100));
+  $('aiDlText').textContent = t('set.aiLoading', { name, a: mb(d.loaded), b: mb(d.total), p });
+  bar.value = p;
+}
 // Sentence by sentence: the next one is computed while the previous one plays
 async function speakAi([value, name, mb], parts, btn, off) {
   const run = ++ttsRun;
   ttsBusy = true;
   const ctx = audioCtx();
   const voice = value.slice(6);
-  if (!(await aiDownloaded(voice)) && !confirm(t('set.aiConfirm', { name, mb }))) { ttsBusy = false; off(); return; }
+  const have = await aiDownloaded(voice);
+  if (!have && !confirm(t('set.aiConfirm', { name, mb }))) { ttsBusy = false; off(); return; }
   try {
-    let shown = -1;
-    await ttsAsk({ type: 'load', engine: 'piper', voice }, d => {
-      if (!d.total) return;
-      const p = Math.floor(d.loaded / d.total * 10) * 10;
-      if (p !== shown) { shown = p; Tools.toast(t('set.aiLoading', { p }), 2000); }
-    });
+    if (!have) dlProgress(name);
+    try { await ttsAsk({ type: 'load', engine: 'piper', voice }, d => { if (!have) dlProgress(name, d); }); }
+    finally { dlProgress(null); }
     for (let i = 0; i < parts.length; i++) {
       if (run !== ttsRun) return;
       const out = await ttsAsk({ type: 'speak', engine: 'piper', voice, text: parts[i], speed: settings.rate || 1.3 });

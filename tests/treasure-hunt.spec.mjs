@@ -675,11 +675,13 @@ test.describe('AI reading voice', () => {
   test('Kerstin: asks before the download, reads at the chosen speed instead of the device voice, works offline', async ({ page, context }) => {
     test.setTimeout(120000);
     const models = [];
-    await context.route(/huggingface\.co/, r => {
+    let release;
+    const held = new Promise(r => { release = r; });   // the model waits until the progress box was checked
+    await context.route(/huggingface\.co/, async r => {
       const u = r.request().url();
       models.push(u.split('/').pop());
       if (u.endsWith('.onnx.json')) return r.fulfill({ contentType: 'application/json', body: CONFIG });
-      if (u.endsWith('.onnx')) return r.fulfill({ contentType: 'application/octet-stream', body: TINY });
+      if (u.endsWith('.onnx')) { await held; return r.fulfill({ contentType: 'application/octet-stream', body: TINY }); }
       return r.abort();
     });
     await page.addInitScript(() => {
@@ -701,6 +703,14 @@ test.describe('AI reading voice', () => {
     page.once('dialog', d => { asked = d.message(); d.accept(); });
     await page.selectOption('#setVoice', 'piper:de/de_DE/kerstin/low/de_DE-kerstin-low');
     await expect.poll(() => asked).toContain('Kerstin einmalig herunterladen (ca. 63 MB)');
+    // Progress with text instead of toasts, visible above the open menu, gone once the voice is loaded
+    const box = page.locator('#aiDl');
+    await expect(box).toBeVisible();
+    await expect(box).toContainText('KI-Stimme Kerstin wird geladen');
+    await expect(page.locator('dialog:modal #aiDl')).toHaveCount(1);
+    await expect(page.locator('#toast')).toHaveCount(0);
+    release();
+    await expect(box).toBeHidden({ timeout: 60000 });
     await expect(page.locator('#rateBox')).toBeVisible();
     await expect(page.locator('#setRate')).toHaveValue('1.3');
     await expect.poll(() => page.evaluate(() => window.__audio.length), { timeout: 60000 }).toBe(1);
@@ -734,6 +744,36 @@ test.describe('AI reading voice', () => {
     await context.setOffline(false);
     const diag = await page.evaluate(() => Tools.diag.text());
     expect(diag).toContain('aiVoice: Kerstin');
+  });
+
+  test('download progress: text with MB and percent, bar, in English too', async ({ page }) => {
+    // Stand-in for tts-worker.js: reports the download step by step, controlled from the test
+    await page.addInitScript(() => {
+      const Real = window.Worker;
+      window.Worker = function (url, opts) {
+        if (!String(url).includes('tts-worker')) return new Real(url, opts);
+        const w = { postMessage(m) { if (m.type === 'load') window.__load = m.id; }, terminate() {} };
+        window.__send = d => w.onmessage({ data: { id: window.__load, ...d } });
+        return w;
+      };
+    });
+    await page.goto('/treasure-hunt/');
+    await openMenu(page);
+    page.on('dialog', d => d.accept());
+    await page.selectOption('#setVoice', 'piper:de/de_DE/kerstin/low/de_DE-kerstin-low');
+    const box = page.locator('#aiDl'), bar = page.locator('#aiDlBar');
+    await expect(box).toHaveText('KI-Stimme Kerstin wird geladen …');
+    await page.evaluate(() => window.__send({ type: 'progress', loaded: 12000, total: 12000 }));   // config file: no percentage
+    await expect(box).toHaveText('KI-Stimme Kerstin wird geladen …');
+    expect(await bar.getAttribute('value')).toBeNull();
+    await page.evaluate(() => window.__send({ type: 'progress', loaded: 25e6, total: 63e6 }));
+    await expect(box).toHaveText('KI-Stimme Kerstin wird geladen … 25,0 von 63,0 MB (39 %)');
+    await expect(bar).toHaveJSProperty('value', 39);
+    await switchLang(page, 'en');
+    await page.evaluate(() => window.__send({ type: 'progress', loaded: 63e6, total: 63e6 }));
+    await expect(box).toHaveText('Loading the AI voice Kerstin … 63.0 of 63.0 MB (100 %)');
+    await page.evaluate(() => window.__send({ type: 'error', message: 'test' }));               // ends the download
+    await expect(box).toBeHidden();
   });
 
   test('without the download the device voice reads', async ({ page }) => {
