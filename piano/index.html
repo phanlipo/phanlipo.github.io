@@ -20,7 +20,7 @@
 <meta name="tool:webmcp" content="play_notes, get_song, control_playback">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-RW4/8VGAlIC1+UikYNVYe6vhvbovHu2zjLUeAqI1uvY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dUTpnsprTTacHjrymoK7DX18tLqCXtlPER2OfY+81ZY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -237,7 +237,7 @@ main{display:flex;flex-direction:column}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 2263ddf26725</p>
+  <p class="footer-version">Version 781a0166b924</p>
   <!-- footer:end -->
 </footer>
 
@@ -253,7 +253,7 @@ de:{
   partName:'Spur {n}',partInfo:'{n} Noten',songInfo:'{d} · {n} Noten · {p} Spuren',
   loaded:'„{name}“ geladen',errNotMidi:'Das ist keine MIDI-Datei.',errBroken:'Die MIDI-Datei ist beschädigt.',
   errNoNotes:'Die MIDI-Datei enthält keine Klavier-Noten.',errTooBig:'Die Datei ist zu groß (höchstens 10 MB).',
-  noAudio:'Dieser Browser kann keine Töne erzeugen.',
+  noAudio:'Dieser Browser kann keine Töne erzeugen.',errLink:'Das Lied aus dem Link lässt sich nicht öffnen.',
   'mcp.notes':'Noten gespielt','mcp.song':'Stück gelesen','mcp.control':'Wiedergabe gesteuert'
 },
 en:{
@@ -269,7 +269,7 @@ en:{
   range:'{a} – {b}',time:'{a} / {b}',partName:'Part {n}',partInfo:'{n} notes',songInfo:'{d} · {n} notes · {p} parts',
   loaded:'“{name}” loaded',errNotMidi:'This is not a MIDI file.',errBroken:'The MIDI file is damaged.',
   errNoNotes:'The MIDI file contains no piano notes.',errTooBig:'The file is too large (10 MB at most).',
-  noAudio:'This browser cannot play generated sounds.',
+  noAudio:'This browser cannot play generated sounds.',errLink:'The song from the link cannot be opened.',
   'mcp.notes':'notes played','mcp.song':'song read','mcp.control':'playback controlled'
 }});
 const {$,t}=Tools;
@@ -419,8 +419,9 @@ function parseMidi(buf){
 
 /* ---------- Songs from the Liederbuch (assets/shared/songs.js, public domain) with their extra parts ---------- */
 const DEMOS=Object.fromEntries(Songs.list.map(s=>[s.id,s]));
-function demoSong(id){
-  const d=DEMOS[id],beat=60/d.bpm,notes=[];
+function demoSong(id){return songData(DEMOS[id]);}
+function songData(d){
+  const beat=60/d.bpm,notes=[];
   const ps=Songs.parts(d);
   ps.forEach((part,p)=>{for(const x of part.notes)notes.push({n:x.n,t:x.t*beat,d:x.d*beat*.92,v:p?.55:.75,p});});
   notes.sort((a,b)=>a.t-b.t||a.n-b.n);
@@ -633,6 +634,18 @@ function loadSong(data,name,opts={}){
   renderAll();
   if(!opts.quiet)Tools.toast(t('loaded',{name:songTitle()}));
 }
+// Own song from the Liederbuch: { title, meter, bpm, melody } (from the address #song=… or the stored song)
+function ownSongFrom(o){
+  if(!o||typeof o.title!=='string'||typeof o.melody!=='string'||o.melody.length>20000||!/^\d{1,2}\/(1|2|4|8|16)$/.test(o.meter)||!(o.bpm>=20&&o.bpm<=300))throw new Error('bad song');
+  const title=o.title.slice(0,80);
+  return {title:{de:title,en:title},meter:o.meter,bpm:o.bpm,melody:o.melody,lyrics:[]};
+}
+function loadOwn(o,opts={}){
+  const s=ownSongFrom(o),d=songData(s);
+  loadSong(d,s.title.de,opts);
+  Tools.save(LS_SONG,{own:{title:s.title.de,meter:s.meter,bpm:s.bpm,melody:s.melody}});
+  Tools.diag.log('own song loaded',{notes:d.notes.length});
+}
 function songTitle(){return song?(song.demo?DEMOS[song.demo].title[Tools.lang()]||DEMOS[song.demo].title.de:song.name):'';}
 function loadDemo(id,opts){
   const d=demoSong(id);d.demo=id;
@@ -693,7 +706,7 @@ function renderTransport(){
   $('playIcon').setAttribute('d',playing?'M6 4h4v16h-4zM14 4h4v16h-4z':'M7 4v16l13 -8z');
 }
 function partLabel(p,i){
-  if(song.demo)return p.label[Tools.lang()]||p.label.de||t('partName',{n:i+1});
+  if(p.label)return p.label[Tools.lang()]||p.label.de||t('partName',{n:i+1});
   return p.name?`${t('partName',{n:i+1})} · ${p.name}`:t('partName',{n:i+1});
 }
 function renderParts(){
@@ -837,8 +850,18 @@ const saved=Tools.load(LS_SONG,null);
 // ../piano/?song=<id> (link from the Liederbuch) opens that song; the parameter is removed again
 const qs=new URLSearchParams(location.search),asked=qs.get('song');
 if(asked!=null){qs.delete('song');history.replaceState(history.state,'',location.pathname+(qs.toString()?'?'+qs:'')+location.hash);}
+// ../piano/#song=<base64url JSON>: an own song from the Liederbuch
+const hashSong=/^#song=([\w-]+)$/.exec(location.hash);
+if(hashSong)history.replaceState(history.state,'',location.pathname+location.search);
 try{
-  if(asked&&Object.hasOwn(DEMOS,asked)){loadDemo(asked,{quiet:true});Tools.diag.log('song from link',{song:asked});}
+  if(hashSong){
+    try{
+      const b=atob(hashSong[1].replace(/-/g,'+').replace(/_/g,'/'));
+      loadOwn(JSON.parse(new TextDecoder().decode(Uint8Array.from(b,c=>c.charCodeAt(0)))),{quiet:true});
+    }catch(e){Tools.diag.log('song link failed',{error:String(e)});Tools.toast(t('errLink'),4000);renderAll();}
+  }
+  else if(asked&&Object.hasOwn(DEMOS,asked)){loadDemo(asked,{quiet:true});Tools.diag.log('song from link',{song:asked});}
+  else if(saved&&saved.own)loadOwn(saved.own,{quiet:true});
   else if(saved&&saved.demo&&Object.hasOwn(DEMOS,saved.demo))loadDemo(saved.demo,{quiet:true});
   else if(saved&&typeof saved.data==='string')loadBytes(unb64(saved.data),String(saved.name||'MIDI'),{quiet:true,restore:true});
   else renderAll();
@@ -860,7 +883,7 @@ function songState(){
   return {loaded:true,title:song.demo?DEMOS[song.demo].title.en:song.name,example:!!song.demo,
     duration_seconds:+song.duration.toFixed(2),position_seconds:+Math.min(songPos(),song.duration).toFixed(2),
     playing,speed_percent:settings.speed,note_count:song.notes.length,
-    parts:song.parts.map((p,i)=>({index:i+1,name:song.demo?p.label.en:p.name,notes:p.count,
+    parts:song.parts.map((p,i)=>({index:i+1,name:p.label?p.label.en:p.name,notes:p.count,
       lowest:enName(p.low),highest:enName(p.high),muted:!p.on}))};
 }
 Tools.mcp.register({

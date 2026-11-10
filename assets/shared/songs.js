@@ -1,6 +1,7 @@
 /* Shared songs (public domain only) for the Liederbuch (songbook/) and the Klavier (piano/).
    Each song is one melody written as tokens "Note:beats" – e.g. "C4" (a quarter), "G4:2" (half),
-   "E4:1.5" (dotted quarter), "D#5:.25" (sixteenth), "r:1" (rest). "|" marks a bar line and is checked
+   "E4:1.5" (dotted quarter), "D#5:.25" (sixteenth), "r:1" (rest), "G4:2~" (tied to the next note, which has
+   the same pitch – also over a bar line). "|" marks a bar line and is checked
    against the meter (Songs.bars throws if a bar is too long or too short). Note names: C4 = middle C,
    "#" sharp, "b" flat (also "H" for the German B). Beats are quarter notes.
    lyrics: one string per verse, in ABC "w:" style – "-" between syllables, "_" holds the previous
@@ -121,26 +122,41 @@ function parseNote(s) {
   return (Number(m[3]) + 1) * 12 + base + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
 }
 
-// Tokens of one voice: [{ n (MIDI number, null = rest), letter ('C'…'B'), acc ('#', 'b', ''), oct, t, d, bar }]
-// t and d in beats (quarter notes); bar = a "|" follows this note
+// Errors with a code and values, so that pages can show them in their language
+class SongError extends Error {
+  constructor(code, params, text) { super(text); this.code = code; this.params = params; }
+}
+
+// Tokens of one voice: [{ n (MIDI number, null = rest), letter ('C'…'B'), acc ('#', 'b', ''), oct, t, d, bar, tie }]
+// t and d in beats (quarter notes); bar = a "|" follows this note; tie = held into the next note
 function tokens(str) {
   const out = [];
-  let t = 0;
-  for (const tok of String(str).trim().split(/\s+/)) {
-    if (!tok) continue;
-    if (tok === '|') { if (out.length) out[out.length - 1].bar = true; continue; }
-    const [nm, len] = tok.split(':');
-    const d = len == null ? 1 : Number(len);
-    if (!(d > 0) || Math.round(d * 4) !== d * 4) throw new Error(`Bad length in "${tok}"`);
-    if (nm === 'r') { out.push({ n: null, t, d, bar: false }); t += d; continue; }
+  let t = 0, i = 0;
+  for (const raw of String(str).trim().split(/\s+/)) {
+    if (!raw) continue;
+    if (raw === '|') { if (out.length) out[out.length - 1].bar = true; continue; }
+    i++;
+    const tie = raw.endsWith('~'), tok = tie ? raw.slice(0, -1) : raw;
+    const [nm, len, extra] = tok.split(':');
+    const d = len == null || len === '' ? 1 : Number(len);
+    if (extra != null || !(d > 0) || d > 64 || Math.round(d * 4) !== d * 4)
+      throw new SongError('length', { token: raw, n: i }, `Bad length in "${raw}"`);
+    if (nm === 'r' || nm === 'R') {
+      if (tie) throw new SongError('note', { token: raw, n: i }, `A rest cannot be tied: "${raw}"`);
+      out.push({ n: null, t, d, bar: false, tie: false }); t += d; continue;
+    }
     const n = parseNote(nm);
-    if (n == null) throw new Error(`Bad note "${tok}"`);
+    if (n == null || n < 21 || n > 108) throw new SongError('note', { token: raw, n: i }, `Bad note "${raw}"`);
     const m = /^([A-Ha-h])([#b]?)/.exec(nm);
     let letter = m[1].toUpperCase();
     if (letter === 'H') letter = 'B';
-    out.push({ n, letter, acc: m[2], oct: Number(nm.slice(m[0].length)), t, d, bar: false });
+    out.push({ n, letter, acc: m[2], oct: Number(nm.slice(m[0].length)), t, d, bar: false, tie });
     t += d;
   }
+  out.forEach((x, k) => {
+    if (x.tie && !(out[k + 1] && out[k + 1].n === x.n))
+      throw new SongError('tie', { n: k + 1 }, `Note ${k + 1} is tied to a different note`);
+  });
   return out;
 }
 
@@ -148,7 +164,7 @@ function tokens(str) {
 const barBeats = meter => { const [a, b] = meter.split('/').map(Number); return a * 4 / b; };
 
 // Splits the melody into bars and checks them against the meter: [[token, …], …]
-// The first bar may be an upbeat (song.upbeat beats), the last one then is short by as much.
+// The first bar may be an upbeat (song.upbeat beats); the last one may be short (by as much, or more).
 function bars(song) {
   const len = barBeats(song.meter), up = song.upbeat || 0;
   const list = tokens(song.melody), out = [];
@@ -157,14 +173,13 @@ function bars(song) {
   list.forEach((tok, i) => {
     cur.push(tok);
     filled += tok.d;
-    if (filled > need + 1e-9) throw new Error(`${song.id}: note ${i + 1} crosses the bar line`);
+    if (filled > need + 1e-9) throw new SongError('cross', { n: i + 1, bar: out.length + 1 }, `${song.id}: note ${i + 1} crosses the bar line`);
     const full = Math.abs(filled - need) < 1e-9;
-    if (tok.bar && !full) throw new Error(`${song.id}: bar ${out.length + 1} has ${filled} beats, expected ${need}`);
+    if (tok.bar && !full) throw new SongError('bar', { bar: out.length + 1, beats: filled, need }, `${song.id}: bar ${out.length + 1} has ${filled} beats, expected ${need}`);
     if (full) close();
   });
   if (cur.length) {
-    // Last bar: completes the upbeat
-    if (Math.abs(filled - (len - up)) > 1e-9) throw new Error(`${song.id}: last bar has ${filled} beats`);
+    // Last bar: usually completes the upbeat, may also be shorter (it never crosses the bar line, see above)
     out.push(cur);
   }
   return out;
@@ -176,14 +191,28 @@ function parts(song) {
   const voices = [song.melody, ...(song.piano && song.piano.voices || [])];
   return voices.map((v, i) => ({
     name: { de: names.de[i] || '', en: names.en[i] || '' },
-    notes: tokens(v).filter(x => x.n != null).map(x => ({ n: x.n, t: x.t, d: x.d }))
+    notes: sounding(tokens(v))
   }));
 }
+// Notes as they sound: rests left out, tied notes joined – [{ n, t, d, i (index of the first token) }]
+function sounding(list) {
+  const out = [];
+  list.forEach((x, i) => {
+    if (x.n == null) return;
+    const prev = list[i - 1];
+    if (prev && prev.tie && out.length) { out[out.length - 1].d += x.d; return; }
+    out.push({ n: x.n, t: x.t, d: x.d, i });
+  });
+  return out;
+}
+
+// Number of lyric units (syllables, "_", "*") of a verse – one per note, rests excluded
+const syllables = verse => String(verse).trim() ? String(verse).trim().split(/\s+/).flatMap(w => w === '_' || w === '*' ? [w] : w.split('-')).length : 0;
 
 const byId = new Map(LIST.map(s => [s.id, s]));
 window.Songs = {
   list: LIST,
   get: id => byId.get(id) || null,
-  parseNote, tokens, bars, barBeats, parts
+  parseNote, tokens, bars, barBeats, parts, sounding, syllables, SongError
 };
 })();
