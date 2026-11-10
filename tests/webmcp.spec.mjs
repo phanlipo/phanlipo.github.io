@@ -1602,7 +1602,7 @@ test.describe('songbook tools', () => {
     expect(result.open).toBe('entchen');
     expect(result.songs.map(s => s.id)).toEqual(await page.evaluate(() => Songs.list.map(s => s.id)));
     expect(result.songs.find(s => s.id === 'ode')).toEqual({
-      id: 'ode', title: 'Ode to Joy', title_de: 'Ode an die Freude', category: 'classical', meter: '4/4', bars: 16,
+      id: 'ode', title: 'Ode to Joy', title_de: 'Ode an die Freude', category: 'classical', own: false, meter: '4/4', bars: 16,
       notes: 62, tempo_bpm: 100, has_lyrics: true, melody_by: 'Ludwig van Beethoven (1824)', words_by: 'Friedrich Schiller (1785/1803)',
     });
     let r = await call(page, 'songbook_open_song', { id: 'ode' });

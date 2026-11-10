@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="list_songs, open_song, control_playback">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-12nPIz3xI/jjPIPh+Rd62LnDy7IeYLoyPN9oiaI5eX4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-pqHq4ylTZgDrl2P49rZqr4HF818bqwSeH5dEICTTBiM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -73,8 +73,26 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .slider output{min-width:3.5em;text-align:end;font-variant-numeric:tabular-nums}
 .legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 0 0;padding:0;list-style:none;font-size:14px}
 .legend b{font-size:16px}
+/* Editor for own songs */
+.editor{width:min(680px,calc(100% - 16px));max-height:calc(100dvh - 16px);padding:0;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text)}
+.editor::backdrop{background:rgba(0,0,0,.45)}
+.editor form{padding:16px;display:grid;gap:10px}
+.editor h2{margin:0;font-size:20px}
+.field{display:grid;gap:4px;min-width:0}
+.field>span{font-weight:600;font-size:14px}
+.field input,.field select,.field textarea{width:100%;box-sizing:border-box;min-height:44px;padding:8px 10px;font-size:16px}
+.field textarea{resize:vertical;line-height:1.4}
+.mono{font-family:var(--mono)}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.edcheck{margin:0;padding:8px 12px;border-radius:8px;background:var(--surface-2);font-size:14px;white-space:pre-line}
+.edcheck.bad{color:var(--err);border-inline-start:4px solid var(--err)}
+.edcheck.ok{border-inline-start:4px solid var(--ok)}
+.editor details{border:1px solid var(--border);border-radius:8px;padding:6px 10px}
+.editor summary{cursor:pointer;min-height:32px;display:flex;align-items:center;font-weight:600;font-size:14px}
+.editor details ul{margin:6px 0;padding-inline-start:20px;font-size:14px}
+.editor .row .btn.danger{margin-inline-start:auto}
 @media print{
-  header,.pick,.actions,.transport,footer,.menu-btn,.update-btn,details,[data-menu],.toast{display:none!important}
+  header,.pick,.actions,.transport,footer,.menu-btn,.update-btn,details,[data-menu],.toast,dialog{display:none!important}
   body{background:#fff}
   main{padding:0;max-width:none}
   .card{border:0;box-shadow:none;padding:0}
@@ -101,6 +119,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
       <a class="btn primary" id="toPiano" href="../piano/" data-i18n="toPiano">Im Klavier üben</a>
       <button type="button" class="btn" id="btnMidi" data-i18n="saveMidi">MIDI speichern</button>
       <button type="button" class="btn" id="btnPrint" data-i18n="print">Drucken</button>
+      <button type="button" class="btn" id="btnEdit"></button>
     </div>
   </section>
 
@@ -136,6 +155,67 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <div class="slider"><input type="range" id="volume" min="0" max="100" step="5" value="80"><output id="volumeOut" for="volume">80 %</output></div>
 </section>
 
+<section class="card" aria-labelledby="h-own" data-menu>
+  <h2 id="h-own" data-i18n="own">Eigene Lieder</h2>
+  <p class="muted" data-i18n="ownIntro">Eigene Lieder eintippen oder eine ABC-Datei laden. Sie bleiben in diesem Browser und sind in der Sicherung enthalten.</p>
+  <div class="row">
+    <button type="button" class="btn" id="btnNew" data-i18n="newSong">Neues Lied</button>
+    <button type="button" class="btn" id="btnImport" data-i18n="importAbc">ABC-Datei laden</button>
+  </div>
+  <input type="file" id="abcFile" accept=".abc,.txt,text/plain,text/vnd.abc" hidden>
+</section>
+
+<dialog class="editor" id="editor" aria-labelledby="edHead">
+  <form id="edForm" novalidate>
+    <h2 id="edHead"></h2>
+    <label class="field"><span data-i18n="ed.name">Titel</span><input type="text" id="edName" maxlength="80" autocomplete="off"></label>
+    <div class="fields">
+      <label class="field"><span data-i18n="ed.meter">Taktart</span><select id="edMeter"></select></label>
+      <label class="field"><span data-i18n="ed.upbeat">Auftakt (Schläge)</span><input type="text" id="edUpbeat" inputmode="decimal" autocomplete="off"></label>
+      <label class="field"><span data-i18n="ed.bpm">Tempo (Viertel pro Minute)</span><input type="number" id="edBpm" min="20" max="300" step="1" inputmode="numeric"></label>
+    </div>
+    <label class="field"><span data-i18n="ed.melody">Melodie</span><textarea id="edMelody" class="mono" rows="5" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="C4 D4 E4 F4 | G4:2 G4:2 |"></textarea></label>
+    <details>
+      <summary data-i18n="ed.howTo">So schreibt man die Melodie</summary>
+      <div data-lang="de">
+      <ul>
+        <li>Jede Note ist <b>Name + Oktave</b>: <code>C4</code> ist das mittlere C, <code>C5</code> eine Oktave höher, <code>F#4</code> = Fis, <code>Bb3</code> = B (H geht auch: <code>H3</code>).</li>
+        <li>Die Länge in Vierteln nach einem Doppelpunkt: ohne Angabe eine Viertel, <code>:2</code> Halbe, <code>:4</code> Ganze, <code>:.5</code> Achtel, <code>:1.5</code> punktierte Viertel, <code>:.25</code> Sechzehntel.</li>
+        <li><code>r</code> ist eine Pause (<code>r:2</code> halbe Pause), <code>|</code> ein Taktstrich – er wird gegen die Taktart geprüft.</li>
+        <li><code>~</code> am Ende verbindet mit der nächsten gleichen Note (Haltebogen), auch über den Taktstrich: <code>G4:2~ | G4</code>.</li>
+        <li>Liedtext: Silben mit <code>-</code> trennen, <code>_</code> hält eine Silbe über die nächste Note, <code>*</code> lässt eine Note ohne Text. Jede Note (außer Pausen) bekommt genau eine Silbe.</li>
+      </ul>
+      </div>
+      <div data-lang="en" lang="en" hidden>
+      <ul>
+        <li>Each note is <b>name + octave</b>: <code>C4</code> is middle C, <code>C5</code> an octave higher, <code>F#4</code> = F sharp, <code>Bb3</code> = B flat.</li>
+        <li>The length in quarters after a colon: none for a quarter, <code>:2</code> half, <code>:4</code> whole, <code>:.5</code> eighth, <code>:1.5</code> dotted quarter, <code>:.25</code> sixteenth.</li>
+        <li><code>r</code> is a rest (<code>r:2</code> half rest), <code>|</code> a bar line – it is checked against the meter.</li>
+        <li><code>~</code> at the end ties to the next note of the same pitch, also over a bar line: <code>G4:2~ | G4</code>.</li>
+        <li>Lyrics: split syllables with <code>-</code>, <code>_</code> holds a syllable over the next note, <code>*</code> leaves a note without text. Every note (except rests) gets exactly one syllable.</li>
+      </ul>
+      </div>
+    </details>
+    <label class="field"><span data-i18n="ed.lyrics">Liedtext – eine Strophe pro Absatz</span><textarea id="edLyrics" rows="4" placeholder="Al-le mei-ne Ent-chen …"></textarea></label>
+    <div class="fields">
+      <label class="field"><span data-i18n="ed.by">Melodie von</span><input type="text" id="edBy" maxlength="100" autocomplete="off"></label>
+      <label class="field"><span data-i18n="ed.words">Text von</span><input type="text" id="edWords" maxlength="100" autocomplete="off"></label>
+    </div>
+    <details id="edAbcBox">
+      <summary data-i18n="ed.abc">Aus ABC-Notation übernehmen</summary>
+      <p class="muted" data-i18n="ed.abcIntro">ABC-Text (z. B. von einer Liedersammlung im Netz) hier einfügen – Titel, Takt, Tempo, Melodie und Text werden oben eingetragen.</p>
+      <label class="field"><span data-i18n="ed.abcText">ABC-Text</span><textarea id="edAbc" class="mono" rows="5" spellcheck="false" autocapitalize="off" placeholder="X:1&#10;T:…&#10;M:4/4&#10;L:1/4&#10;K:C&#10;C D E F | G2 G2 |"></textarea></label>
+      <div class="row"><button type="button" class="btn" id="edAbcApply" data-i18n="ed.abcApply">Übernehmen</button></div>
+    </details>
+    <p class="edcheck" id="edCheck" role="status" aria-live="polite"></p>
+    <div class="row">
+      <button type="submit" class="btn primary" id="edSave" data-i18n="ed.save">Speichern</button>
+      <button type="button" class="btn" id="edCancel" data-i18n="ed.cancel">Abbrechen</button>
+      <button type="button" class="btn danger" id="edDelete" data-i18n="ed.delete">Löschen</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- data:start -->
 <details class="data card">
   <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
@@ -168,11 +248,19 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li><b>♯</b> vor der Zahl: die schwarze Taste rechts daneben (z. B. ♯4 = Fis).</li>
     <li>Im Menü (☰) unter <b>Einstellungen</b> lassen sich statt der Zahlen die Notennamen zeigen oder beides ausblenden; dort stehen auch Tempo, Klang und Lautstärke.</li>
   </ul>
+  <h3>Eigene Lieder</h3>
+  <ul>
+    <li>Im Menü (☰) unter <b>Eigene Lieder</b>: <b>Neues Lied</b> öffnet den Editor – Titel, Taktart, Tempo, Melodie und Liedtext eintippen. Darunter steht, wie man Noten schreibt (z. B. <code>C4 D4 E4:2 | r G4:.5 G4:.5</code>). Fehler wie ein zu langer Takt werden sofort angezeigt.</li>
+    <li><b>ABC-Datei laden</b> übernimmt ein Lied in <i>ABC-Notation</i> (ein verbreitetes Textformat für Noten, viele Volkslieder gibt es im Netz so). Den ABC-Text kann man im Editor auch einfügen. Übernommen wird die oberste Stimme; Wiederholungen werden nicht ausgeschrieben.</li>
+    <li>Mit <b>Bearbeiten</b> unter den Noten änderst oder löschst du ein eigenes Lied; bei einem Lied aus dem Buch entsteht eine Kopie, die du anpassen kannst (z. B. eine andere Tonart).</li>
+    <li>Eigene Lieder liegen nur in diesem Browser – über <b>Daten sichern &amp; übertragen</b> lassen sie sich sichern oder auf ein anderes Gerät bringen. <b>Im Klavier üben</b> funktioniert auch mit ihnen.</li>
+    <li>Ob ein eigenes Lied frei verwendet werden darf, prüft die App nicht.</li>
+  </ul>
   <h3>Hinweise</h3>
   <ul>
     <li>Die Arrangements sind einfache, einstimmige Übungsfassungen in C-Dur bzw. a-Moll. Quellen der Melodien und Texte stehen unter dem Titel.</li>
     <li>Der Klang wird im Browser erzeugt (keine Aufnahmen), alles funktioniert offline. Kein Ton? Lautstärke aufdrehen, auf dem iPhone den Stummschalter ausschalten.</li>
-    <li>Gespeichert werden nur die Einstellungen und das zuletzt gewählte Lied – in diesem Browser.</li>
+    <li>Gespeichert werden die Einstellungen, das zuletzt gewählte Lied und deine eigenen Lieder – nur in diesem Browser.</li>
     <li>Notensatz mit <i>abcjs</i> (MIT-Lizenz).</li>
     <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann die Lieder auflisten, ein Lied öffnen und die Wiedergabe steuern (WebMCP). Jeder Aufruf erscheint hier als Hinweis.</li>
   </ul>
@@ -194,11 +282,19 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li><b>♯</b> before the number: the black key to its right (e.g. ♯4 = F♯).</li>
     <li>In the menu (☰) under <b>Settings</b> you can show note names instead of numbers or hide both; tempo, sound and volume are there too.</li>
   </ul>
+  <h3>Your own songs</h3>
+  <ul>
+    <li>In the menu (☰) under <b>My songs</b>: <b>New song</b> opens the editor – type in title, meter, tempo, melody and lyrics. Below it explains how to write notes (e.g. <code>C4 D4 E4:2 | r G4:.5 G4:.5</code>). Mistakes such as a bar that is too long are shown right away.</li>
+    <li><b>Load ABC file</b> takes over a song in <i>ABC notation</i> (a common text format for music, many folk songs are on the web like this). You can also paste ABC text in the editor. The top voice is taken; repeats are not written out.</li>
+    <li><b>Edit</b> below the music changes or deletes one of your songs; for a song from the book it makes a copy you can adapt (e.g. another key).</li>
+    <li>Your songs stay in this browser only – back them up or move them to another device with <b>Back up &amp; transfer data</b>. <b>Practise on the piano</b> works with them too.</li>
+    <li>The app does not check whether you may freely use a song of your own.</li>
+  </ul>
   <h3>Notes</h3>
   <ul>
     <li>The arrangements are simple single-line practice versions in C major or A minor. Sources of the melodies and words are shown below the title.</li>
     <li>The sound is generated in the browser (no recordings), everything works offline. No sound? Turn up the volume; on iPhone switch off the silent switch.</li>
-    <li>Only the settings and the last song chosen are stored – in this browser.</li>
+    <li>The settings, the last song chosen and your own songs are stored – only in this browser.</li>
     <li>Music engraving with <i>abcjs</i> (MIT licence).</li>
     <li><b>AI agent:</b> an AI agent in the browser can list the songs, open one and control playback (WebMCP). Each call shows a note here.</li>
   </ul>
@@ -214,7 +310,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 1b2f3febf00c</p>
+  <p class="footer-version">Version c2799fd520b9</p>
   <!-- footer:end -->
 </footer>
 
@@ -233,7 +329,18 @@ de:{
   melody:'Melodie: {a}',text:'Text: {a}',both:'Melodie und Text: {a}',
   noLyrics:'ohne Text',scoreFailed:'Die Noten lassen sich nicht anzeigen.',
   midiSaved:'MIDI-Datei gespeichert',noAudio:'Dieser Browser kann keine Töne erzeugen.',
-  scoreLabel:'Noten: {title}',
+  scoreLabel:'Noten: {title}','g.own':'Eigene Lieder',ownSong:'eigenes Lied',
+  edit:'Bearbeiten',editCopy:'Als eigenes Lied bearbeiten',edNew:'Neues Lied',edEdit:'Lied bearbeiten',edCopy:'Kopie als eigenes Lied',
+  copyName:'{title} (Kopie)',saved:'„{title}“ gespeichert',deleted:'„{title}“ gelöscht',deleteQ:'„{title}“ löschen?',
+  'chk.ok':'✓ {bars} Takte, {notes} Noten','chk.verse':'Strophe {v}: {s} Silben für {n} Noten','chk.empty':'Die Melodie ist leer.',
+  'chk.name':'Bitte einen Titel eingeben.','chk.bpm':'Tempo: 20 bis 300 Viertel pro Minute.','chk.upbeat':'Der Auftakt muss kürzer als ein Takt sein (in Vierteln, z. B. 1 oder 0,5).',
+  'err.length':'Note {n} („{token}“): unbekannte Länge – z. B. :2, :.5, :1.5.','err.note':'Note {n} („{token}“) ist unbekannt – z. B. C4, F#4, Bb3 oder r für eine Pause.',
+  'err.tie':'Note {n} ist mit ~ an eine andere Tonhöhe gebunden.','err.cross':'Note {n} reicht über das Ende von Takt {bar} – teilen und mit ~ verbinden.',
+  'err.bar':'Takt {bar} hat {beats} Schläge, erwartet {need}.',
+  'err.tooMany':'Höchstens {n} eigene Lieder.','err.tooLong':'Die Melodie ist zu lang.',
+  'abc.empty':'Im ABC-Text wurde kein Lied gefunden.','abc.big':'Die Datei ist zu groß (höchstens 1 MB).','abc.more':'Die Datei enthält mehrere Lieder – das erste wurde übernommen.',
+  'abc.voices':'Nur die oberste Stimme wurde übernommen.','abc.chords':'Bei Akkorden wurde nur der höchste Ton übernommen.','abc.round':'Triolen oder ungewöhnliche Längen wurden gerundet.',
+  'abc.done':'ABC übernommen – bitte prüfen und speichern.',
   'mcp.list':'Lieder gelesen','mcp.open':'Lied geöffnet','mcp.control':'Wiedergabe gesteuert'
 },
 en:{
@@ -248,7 +355,23 @@ en:{
   melody:'Music: {a}',text:'Words: {a}',both:'Music and words: {a}',
   noLyrics:'no lyrics',scoreFailed:'The sheet music cannot be shown.',
   midiSaved:'MIDI file saved',noAudio:'This browser cannot play generated sounds.',
-  scoreLabel:'Sheet music: {title}',
+  scoreLabel:'Sheet music: {title}','g.own':'My songs',ownSong:'own song',
+  own:'My songs',ownIntro:'Type in your own songs or load an ABC file. They stay in this browser and are part of the backup.',newSong:'New song',importAbc:'Load ABC file',
+  'ed.name':'Title','ed.meter':'Meter','ed.upbeat':'Upbeat (beats)','ed.bpm':'Tempo (quarters per minute)','ed.melody':'Melody','ed.howTo':'How to write the melody',
+  'ed.lyrics':'Lyrics – one verse per paragraph','ed.by':'Music by','ed.words':'Words by','ed.abc':'Take over from ABC notation',
+  'ed.abcIntro':'Paste ABC text (e.g. from a song collection on the web) here – title, meter, tempo, melody and lyrics are filled in above.',
+  'ed.abcText':'ABC text','ed.abcApply':'Take over','ed.save':'Save','ed.cancel':'Cancel','ed.delete':'Delete',
+  edit:'Edit',editCopy:'Edit as my own song',edNew:'New song',edEdit:'Edit song',edCopy:'Copy as my own song',
+  copyName:'{title} (copy)',saved:'“{title}” saved',deleted:'“{title}” deleted',deleteQ:'Delete “{title}”?',
+  'chk.ok':'✓ {bars} bars, {notes} notes','chk.verse':'Verse {v}: {s} syllables for {n} notes','chk.empty':'The melody is empty.',
+  'chk.name':'Please enter a title.','chk.bpm':'Tempo: 20 to 300 quarters per minute.','chk.upbeat':'The upbeat must be shorter than a bar (in quarters, e.g. 1 or 0.5).',
+  'err.length':'Note {n} (“{token}”): unknown length – e.g. :2, :.5, :1.5.','err.note':'Note {n} (“{token}”) is unknown – e.g. C4, F#4, Bb3 or r for a rest.',
+  'err.tie':'Note {n} is tied with ~ to a different pitch.','err.cross':'Note {n} goes past the end of bar {bar} – split it and tie with ~.',
+  'err.bar':'Bar {bar} has {beats} beats, expected {need}.',
+  'err.tooMany':'At most {n} songs of your own.','err.tooLong':'The melody is too long.',
+  'abc.empty':'No song found in the ABC text.','abc.big':'The file is too large (1 MB at most).','abc.more':'The file contains several songs – the first one was taken.',
+  'abc.voices':'Only the top voice was taken.','abc.chords':'For chords only the highest note was taken.','abc.round':'Triplets or unusual lengths were rounded.',
+  'abc.done':'ABC taken over – please check and save.',
   'mcp.list':'songs read','mcp.open':'song opened','mcp.control':'playback controlled'
 }});
 const {$,t}=Tools;
@@ -256,7 +379,30 @@ const LS='songbook.settings.v1';
 const LABELS=['numbers','names','none'],SOUNDS=PianoSound.SOUNDS,GROUPS=['kids','christmas','classical'];
 const clampInt=(v,a,b,d)=>Number.isFinite(v)?Math.min(b,Math.max(a,Math.round(v/10)*10)):d;
 const settings=Object.assign({song:Songs.list[0].id,labels:'numbers',speed:100,sound:'piano',volume:80},Tools.load(LS,{}));
-if(!Songs.get(settings.song))settings.song=Songs.list[0].id;
+
+/* ---------- Own songs: same format as assets/shared/songs.js, stored in this browser ---------- */
+const LS_OWN='songbook.songs.v1',MAX_OWN=200,MAX_MELODY=20000;
+const METERS=['2/4','3/4','4/4','2/2','3/8','6/8','9/8','12/8'];
+const str=(x,max)=>typeof x==='string'?x.slice(0,max):'';
+// Stored: { id, title, meter, bpm, upbeat, melody, lyrics: [verse…], by, words } → song object (or null if broken)
+function ownSong(o){
+  if(!o||typeof o!=='object'||!/^u-[\w-]{1,40}$/.test(o.id)||!/^\d{1,2}\/(1|2|4|8|16)$/.test(o.meter))return null;
+  const title=str(o.title,80).trim()||'?';
+  const s={id:o.id,own:true,group:'own',title:{de:title,en:title},meter:o.meter,
+    bpm:Number.isFinite(o.bpm)?Math.min(300,Math.max(20,Math.round(o.bpm))):100,
+    upbeat:Number.isFinite(o.upbeat)&&o.upbeat>0?o.upbeat:0,melody:str(o.melody,MAX_MELODY),
+    lyrics:(Array.isArray(o.lyrics)?o.lyrics:[]).map(v=>str(v,5000)).filter(v=>v.trim()).slice(0,12),
+    credits:{melody:str(o.by,100).trim()||undefined,text:str(o.words,100).trim()||undefined}};
+  try{Songs.bars(s);}catch(_){return null;}
+  return s;
+}
+const stored=s=>({id:s.id,title:s.title.de,meter:s.meter,bpm:s.bpm,upbeat:s.upbeat||0,melody:s.melody,lyrics:s.lyrics,
+  by:s.credits.melody||'',words:s.credits.text||''});
+let own=(()=>{const a=Tools.load(LS_OWN,[]);return Array.isArray(a)?a.map(ownSong).filter(Boolean).slice(0,MAX_OWN):[];})();
+const saveOwn=()=>Tools.save(LS_OWN,own.map(stored));
+const getSong=id=>Songs.get(id)||own.find(s=>s.id===id)||null;
+const allSongs=()=>[...Songs.list,...own];
+if(!getSong(settings.song))settings.song=Songs.list[0].id;
 if(!LABELS.includes(settings.labels))settings.labels='numbers';
 if(!SOUNDS.includes(settings.sound))settings.sound='piano';
 settings.speed=clampInt(settings.speed,50,150,100);
@@ -354,7 +500,7 @@ function toAbc(song,counts){
           sung++;
           const key=tok.letter+tok.oct,want=tok.acc||'=',have=acc[key]||'=';
           if(want!==have){abc+=want==='#'?'^':want==='b'?'_':'=';acc[key]=want;}
-          abc+=abcPitch(tok)+len16(tok.d);
+          abc+=abcPitch(tok)+len16(tok.d)+(tok.tie?'-':'');
         }
         pos+=tok.d;
       });
@@ -368,7 +514,10 @@ function toAbc(song,counts){
       if(part.length)abc+='w: '+part.map((u,k)=>u.text.replace(/[%\\"]/g,'')+(k<part.length-1?u.sep:u.sep==='-'?'-':'')).join('')+'\n';
     });
   });
-  return {abc,starts,tokens,lines:lines.length};
+  // Sounding length per token: a tied note lasts into the next one, which is not struck again (null)
+  const dur=tokens.map(()=>null);
+  for(const x of Songs.sounding(tokens))dur[x.i]=x.d;
+  return {abc,starts,tokens,dur,lines:lines.length};
 }
 
 /* ---------- State ---------- */
@@ -379,7 +528,7 @@ const bps=()=>song.bpm*settings.speed/100/60;            // beats per second
 const songPos=()=>playing?anchorPos+(perf()-anchorPerf)*bps():pos;
 
 function selectSong(id,opts={}){
-  const s=Songs.get(id);if(!s)return false;
+  const s=getSong(id);if(!s)return false;
   if(playing)pause();
   song=s;settings.song=id;saveSettings();
   abcInfo=null;
@@ -397,17 +546,28 @@ function renderHead(){
   $('songTitle').textContent=s.title[L]||s.title.de;
   const c=s.credits||{},who=x=>x==='trad'?t('trad'):x;
   let parts=[];
-  if(c.melody==='trad'&&c.text==='trad')parts.push(t('folk'));
+  if(s.own){if(c.melody)parts.push(t('melody',{a:c.melody}));if(c.text)parts.push(t('text',{a:c.text}));}
+  else if(c.melody==='trad'&&c.text==='trad')parts.push(t('folk'));
   else if(c.melody&&c.melody===c.text)parts.push(t('both',{a:who(c.melody)}));
   else{if(c.melody)parts.push(t('melody',{a:who(c.melody)}));if(c.text)parts.push(t('text',{a:c.text==='trad'?t('tradText'):c.text}));}
   if(!s.lyrics.length)parts.push(t('noLyrics'));
-  parts.push(t('pd'));
+  if(s.own)parts.unshift(t('ownSong'));else parts.push(t('pd'));
   $('credits').textContent=parts.join(' · ');
-  $('toPiano').href='../piano/?song='+encodeURIComponent(s.id);
+  $('toPiano').href=s.own?'../piano/#song='+pianoLink(s):'../piano/?song='+encodeURIComponent(s.id);
+  $('btnEdit').textContent=t(s.own?'edit':'editCopy');
+}
+// Own songs travel to the Klavier app in the address (#song=…, base64url JSON) – its storage is separate on iPhone
+function pianoLink(s){
+  const bytes=new TextEncoder().encode(JSON.stringify({title:s.title.de,meter:s.meter,bpm:s.bpm,melody:s.melody}));
+  let b='';for(const x of bytes)b+=String.fromCharCode(x);
+  return btoa(b).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
 function renderSongSelect(){
   const L=Tools.lang();
-  $('song').innerHTML=GROUPS.map(g=>`<optgroup label="${Tools.esc(t('g.'+g))}">`+Songs.list.filter(s=>s.group===g).map(s=>`<option value="${Tools.esc(s.id)}">${Tools.esc(s.title[L]||s.title.de)}</option>`).join('')+'</optgroup>').join('');
+  $('song').innerHTML=[...GROUPS,'own'].map(g=>{
+    const list=allSongs().filter(s=>s.group===g);
+    return list.length?`<optgroup label="${Tools.esc(t('g.'+g))}">`+list.map(s=>`<option value="${Tools.esc(s.id)}">${Tools.esc(s.title[L]||s.title.de)}</option>`).join('')+'</optgroup>':'';
+  }).join('');
   if(song)$('song').value=song.id;
 }
 // Lines of the rendered score in which lyrics or labels overlap (measured in the SVG)
@@ -490,10 +650,10 @@ function schedule(){
   if(now>=total){finish();return;}
   const c=snd.peek(),horizon=now+.25*bps(),toks=abcInfo.tokens;
   while(nextIdx<toks.length&&toks[nextIdx].t<horizon){
-    const x=toks[nextIdx++];
-    if(x.n==null||x.t<now-.05)continue;
+    const i=nextIdx++,x=toks[i],d=abcInfo.dur[i];
+    if(x.n==null||d==null||x.t<now-.05)continue;
     sounded++;$('score').dataset.sounded=String(sounded);
-    if(c)snd.voice(x.n,.75,c.currentTime+Math.max(0,(x.t-now)/bps()),x.d/bps()*.92);
+    if(c)snd.voice(x.n,.75,c.currentTime+Math.max(0,(x.t-now)/bps()),d/bps()*.92);
   }
 }
 function play(){
@@ -590,7 +750,7 @@ function midiFile(s){
 }
 function saveMidi(){
   const blob=new Blob([midiFile(song)],{type:'audio/midi'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=song.id+'.mid';
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(song.own?song.title.de.replace(/[\\/:*?"<>|]+/g,'').trim()||'song':song.id)+'.mid';
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),10000);
   Tools.toast(t('midiSaved'));
   Tools.diag.log('midi saved',{song:song.id,bytes:blob.size});
@@ -638,13 +798,194 @@ function renderSettings(){
   renderSpeed();renderLegend();
 }
 
+/* ---------- Editor for own songs ---------- */
+let editing=null;          // id of the own song being edited, or null for a new one
+const ed=id=>$(id);
+function openEditor(src,mode){
+  // mode: 'new' (empty), 'edit' (own song), 'copy' (built-in song as a new own song)
+  editing=mode==='edit'?src.id:null;
+  const s=src||{title:{de:''},meter:'4/4',bpm:100,upbeat:0,melody:'',lyrics:[],credits:{}};
+  ed('edHead').textContent=t(mode==='edit'?'edEdit':mode==='copy'?'edCopy':'edNew');
+  renderMeters(s.meter);
+  ed('edName').value=mode==='copy'?t('copyName',{title:s.title[Tools.lang()]||s.title.de}):s.title.de;
+  ed('edUpbeat').value=fmtB(s.upbeat||0);
+  ed('edBpm').value=String(s.bpm);
+  ed('edMelody').value=s.melody.replace(/\s*\|\s*/g,' | ').trim();
+  ed('edLyrics').value=s.lyrics.join('\n\n');
+  ed('edBy').value=s.credits.melody==='trad'?t('trad'):s.credits.melody||'';
+  ed('edWords').value=s.credits.text==='trad'?t('tradText'):s.credits.text||'';
+  ed('edAbc').value='';ed('edAbcBox').open=false;
+  ed('edDelete').hidden=mode!=='edit';
+  checkDraft();
+  if(Tools.menu&&Tools.menu.close)Tools.menu.close();
+  ed('editor').showModal();
+  ed('edName').focus();
+  Tools.diag.log('editor',{mode});
+}
+function renderMeters(m){
+  const list=METERS.includes(m)||!m?METERS:[...METERS,m];
+  ed('edMeter').innerHTML=list.map(x=>`<option${x===m?' selected':''}>${x}</option>`).join('');
+}
+function readDraft(){
+  return {id:editing||'u-draft',title:{de:ed('edName').value.trim()},meter:ed('edMeter').value,
+    bpm:Number(ed('edBpm').value),upbeat:Tools.parseNum(ed('edUpbeat').value)||0,
+    melody:ed('edMelody').value.trim(),
+    lyrics:ed('edLyrics').value.split(/\n\s*\n/).map(v=>v.replace(/\s+/g,' ').trim()).filter(Boolean),
+    credits:{melody:ed('edBy').value.trim()||undefined,text:ed('edWords').value.trim()||undefined}};
+}
+const fmtB=x=>Tools.fmt(x,x%1?2:0);
+// Checks the draft; returns the problem (text) or null; shows bars, notes and syllables per verse
+function checkDraft(){
+  const d=readDraft(),out=ed('edCheck');
+  let problem=null,info='';
+  const barLen=METERS.includes(d.meter)||/^\d+\/\d+$/.test(d.meter)?Songs.barBeats(d.meter):4;
+  if(!d.title.de)problem=t('chk.name');
+  else if(!d.melody)problem=t('chk.empty');
+  else if(d.melody.length>MAX_MELODY)problem=t('err.tooLong');
+  else if(!(d.bpm>=20&&d.bpm<=300))problem=t('chk.bpm');
+  else if(!(d.upbeat>=0&&d.upbeat<barLen)||Math.round(d.upbeat*4)!==d.upbeat*4)problem=t('chk.upbeat');
+  else{
+    try{
+      const bars=Songs.bars(d),notes=Songs.tokens(d.melody).filter(x=>x.n!=null).length;
+      info=t('chk.ok',{bars:bars.length,notes});
+      d.lyrics.forEach((v,i)=>{const n=Songs.syllables(v);if(n!==notes)info+='\n'+t('chk.verse',{v:i+1,s:n,n:notes});});
+    }catch(e){
+      const p=Object.assign({},e.params||{});
+      for(const k of ['beats','need'])if(k in p)p[k]=fmtB(p[k]);
+      problem=e.code?t('err.'+e.code,p):String(e.message);
+    }
+  }
+  out.textContent=problem||info;
+  out.className='edcheck '+(problem?'bad':'ok');
+  return problem;
+}
+function saveDraft(){
+  const problem=checkDraft();
+  if(problem){Tools.toast(problem,4000);return;}
+  if(!editing&&own.length>=MAX_OWN){Tools.toast(t('err.tooMany',{n:MAX_OWN}),4000);return;}
+  const d=readDraft();
+  d.id=editing||'u-'+Date.now().toString(36)+Math.floor(Math.random()*1296).toString(36);
+  const s=ownSong(stored(d));
+  if(!s){Tools.toast(t('scoreFailed'),4000);return;}
+  const i=own.findIndex(x=>x.id===s.id);
+  if(i>=0)own[i]=s;else own.push(s);
+  saveOwn();
+  ed('editor').close();
+  renderSongSelect();selectSong(s.id);
+  Tools.toast(t('saved',{title:s.title.de}));
+  Tools.diag.log('own song saved',{bars:barStarts.length,verses:s.lyrics.length,count:own.length});
+}
+function deleteOwn(){
+  const s=own.find(x=>x.id===editing);if(!s)return;
+  if(!confirm(t('deleteQ',{title:s.title.de})))return;
+  own=own.filter(x=>x.id!==s.id);saveOwn();
+  ed('editor').close();
+  renderSongSelect();selectSong(Songs.list[0].id);
+  Tools.toast(t('deleted',{title:s.title.de}));
+  Tools.diag.log('own song deleted',{count:own.length});
+}
+
+/* ---------- ABC notation → song (abcjs reads it; the first voice of the first tune is taken) ---------- */
+const NOTE_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function fromAbc(text){
+  if(!window.ABCJS)throw new Error(t('scoreFailed'));
+  if(!/^\s*K:/m.test(String(text)))throw new Error(t('abc.empty'));   // every ABC tune has a key line
+  const tunes=ABCJS.renderAbc(document.createElement('div'),String(text),{});
+  const v=tunes[0];
+  if(!v||!v.lines||!v.lines.some(l=>l.staff))throw new Error(t('abc.empty'));
+  const warn=new Set();if((ABCJS.numberOfTunes?ABCJS.numberOfTunes(String(text)):tunes.length)>1)warn.add('abc.more');
+  const mf=v.getMeterFraction()||{};
+  const meter=mf.num>0&&[1,2,4,8,16].includes(mf.den)?mf.num+'/'+mf.den:'4/4';
+  const barLen=Songs.barBeats(meter);
+  const bpm=Math.min(300,Math.max(20,Math.round((v.getBpm()||100)*(v.getBeatLength()||.25)/.25)));
+  const keyAcc={};
+  for(const a of (v.getKeySignature()||{}).accidentals||[])keyAcc[String(a.note).toUpperCase()]=a.acc==='sharp'?1:a.acc==='flat'?-1:0;
+  const toks=[],lyr=[];   // lyr[k] = lyric list of the k-th sung note
+  for(const line of v.lines){
+    if(!line.staff)continue;
+    if(line.staff.length>1||line.staff[0].voices.length>1)warn.add('abc.voices');
+    let barAcc={};
+    for(const e of line.staff[0].voices[0]){
+      if(e.el_type==='bar'){barAcc={};if(toks.length&&toks[toks.length-1]!=='|')toks.push('|');continue;}
+      if(e.el_type!=='note'||!e.duration)continue;
+      let d=e.duration*4;const r=Math.round(d*4)/4;
+      if(Math.abs(r-d)>1e-6)warn.add('abc.round');
+      d=Math.max(.25,r);
+      if(e.rest||!e.pitches||!e.pitches.length){toks.push({d});continue;}
+      if(e.pitches.length>1)warn.add('abc.chords');
+      const p=e.pitches.reduce((a,b)=>b.pitch>a.pitch?b:a);
+      const step=((p.pitch%7)+7)%7,letter='CDEFGAB'[step],oct=4+Math.floor(p.pitch/7),key=letter+oct;
+      let acc;
+      if(p.accidental){acc={sharp:1,flat:-1,natural:0,dblsharp:2,dblflat:-2,quartersharp:1,quarterflat:-1}[p.accidental]||0;barAcc[key]=acc;}
+      else acc=key in barAcc?barAcc[key]:keyAcc[letter]||0;
+      const midi=(oct+1)*12+[0,2,4,5,7,9,11][step]+acc;
+      const name=acc===1?letter+'#'+oct:acc===-1?letter+'b'+oct:acc===0?key:NOTE_NAMES[midi%12]+(Math.floor(midi/12)-1);
+      toks.push({name,d,tie:!!p.startTie});
+      lyr.push(e.lyric||[]);
+    }
+  }
+  while(toks[0]==='|')toks.shift();
+  if(!toks.some(x=>x!=='|'&&x.name))throw new Error(t('abc.empty'));
+  const num=x=>String(+x.toFixed(2)).replace(/^0\./,'.');
+  const melody=toks.map(x=>x==='|'?'|':(x.name||'r')+(x.d!==1?':'+num(x.d):'')+(x.tie?'~':'')).join(' ').replace(/\s*\|\s*$/,'');
+  // Lyrics: one verse per w: line; "_" after a held syllable, "*" for a note without text
+  const verses=Math.max(0,...lyr.map(l=>l.length));
+  const lyrics=[];
+  for(let k=0;k<verses;k++){
+    const units=[];let hold=false;
+    for(const l of lyr){
+      const y=l[k],syl=y&&String(y.syllable||'').trim();
+      if(syl){units.push(syl.replace(/\s+/g,'~')+(y.divider==='-'?'-':' '));hold=y.divider==='_';}
+      else units.push(hold?'_ ':'* ');
+    }
+    let txt=units.join('').replace(/~/g,' ').trim();
+    while(/(^|\s)\*$/.test(txt))txt=txt.replace(/\s*\*$/,'');
+    if(txt.replace(/[*_\s]/g,''))lyrics.push(txt);
+  }
+  const pick=Math.round((v.getPickupLength?v.getPickupLength():0)*16)/4;
+  return {draft:{title:{de:str(v.metaText&&v.metaText.title,80).trim()||'ABC'},meter,bpm,upbeat:pick>0&&pick<barLen?pick:0,melody,lyrics,
+    credits:{melody:str(v.metaText&&v.metaText.composer,100).trim()||undefined}},warn:[...warn]};
+}
+function applyAbc(text,opts={}){
+  try{
+    const {draft,warn}=fromAbc(text);
+    if(opts.open)openEditor(null,'new');
+    renderMeters(draft.meter);
+    ed('edName').value=draft.title.de;ed('edUpbeat').value=fmtB(draft.upbeat);ed('edBpm').value=String(draft.bpm);
+    ed('edMelody').value=draft.melody;ed('edLyrics').value=draft.lyrics.join('\n\n');
+    ed('edBy').value=draft.credits.melody||'';ed('edWords').value='';
+    ed('edAbcBox').open=false;
+    checkDraft();
+    Tools.toast([t('abc.done'),...warn.map(w=>t(w))].join(' '),5000);
+    Tools.diag.log('abc imported',{notes:draft.melody.split(' ').length,verses:draft.lyrics.length,warn});
+  }catch(e){
+    Tools.toast(String(e.message||e),5000);
+    Tools.diag.log('abc failed',{error:String(e)});
+  }
+}
+$('btnEdit').addEventListener('click',()=>{pause();openEditor(song,song.own?'edit':'copy');});
+$('btnNew').addEventListener('click',()=>openEditor(null,'new'));
+$('btnImport').addEventListener('click',()=>{$('abcFile').value='';$('abcFile').click();});
+$('abcFile').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  if(f.size>1024*1024){Tools.toast(t('abc.big'),4000);return;}
+  applyAbc(await f.text(),{open:true});
+});
+$('edAbcApply').addEventListener('click',()=>applyAbc(ed('edAbc').value));
+let checkTimer=0;
+$('edForm').addEventListener('input',e=>{if(e.target.id==='edAbc')return;clearTimeout(checkTimer);checkTimer=setTimeout(checkDraft,250);});
+$('edForm').addEventListener('change',e=>{if(e.target.id!=='edAbc')checkDraft();});
+$('edForm').addEventListener('submit',e=>{e.preventDefault();saveDraft();});
+$('edCancel').addEventListener('click',()=>ed('editor').close());
+$('edDelete').addEventListener('click',deleteOwn);
+
 /* ---------- Start ---------- */
 renderSettings();
 renderSongSelect();
 // ?song=<id> (link from the Klavier app) opens that song; the parameter is removed again
 const qs=new URLSearchParams(location.search),asked=qs.get('song');
 if(asked!=null){qs.delete('song');history.replaceState(history.state,'',location.pathname+(qs.toString()?'?'+qs:'')+location.hash);}
-selectSong(asked&&Songs.get(asked)?asked:settings.song,{quiet:true});
+selectSong(asked&&getSong(asked)?asked:settings.song,{quiet:true});
 // Re-layout the lines when the width changes noticeably (rotation, window size)
 new ResizeObserver(()=>{const w=$('score').clientWidth;if(song&&Math.abs(w-lastWidth)>24){const was=playing;renderScore();if(was)highlight();}}).observe($('score'));
 requestAnimationFrame(frame);
@@ -656,7 +997,7 @@ Tools.diag.info(()=>({song:song&&song.id,labels:settings.labels,speed:settings.s
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
 function songInfo(s){
   const notes=Songs.tokens(s.melody).filter(x=>x.n!=null);
-  return {id:s.id,title:s.title.en,title_de:s.title.de,category:s.group,meter:s.meter,bars:Songs.bars(s).length,
+  return {id:s.id,title:s.title.en,title_de:s.title.de,category:s.group,own:!!s.own,meter:s.meter,bars:Songs.bars(s).length,
     notes:notes.length,tempo_bpm:s.bpm,has_lyrics:s.lyrics.length>0,
     melody_by:s.credits.melody||null,words_by:s.credits.text||null};
 }
@@ -666,16 +1007,16 @@ function state(){
 }
 Tools.mcp.register({
   name:'list_songs',title:'List the songs',label:'mcp.list',readOnly:true,
-  description:'Lists the public domain songs in the songbook: id, English and German title, category (kids, christmas, classical), meter, number of bars and notes, tempo in beats per minute, whether it has lyrics and who wrote melody and words ("trad" = traditional). Also returns the id of the song that is open.',
+  description:'Lists the songs in the songbook – the built-in public domain ones and the user\'s own songs (own: true, category own): id, English and German title, category (kids, christmas, classical, own), meter, number of bars and notes, tempo in beats per minute, whether it has lyrics and who wrote melody and words ("trad" = traditional). Also returns the id of the song that is open.',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
-  execute:()=>({open:song?song.id:null,songs:Songs.list.map(songInfo)})
+  execute:()=>({open:song?song.id:null,songs:allSongs().map(songInfo)})
 });
 Tools.mcp.register({
   name:'open_song',title:'Open a song',label:'mcp.open',
   description:'Shows a song from the songbook with its sheet music (stops playback). Use an id from list_songs. Returns the playback state with details about the song.',
   inputSchema:{type:'object',properties:{id:{type:'string',maxLength:40,description:'Song id, e.g. "entchen" or "ode".'}},required:['id'],additionalProperties:false},
   execute:({id})=>{
-    if(!Songs.get(id))throw new Error(`Unknown song "${id}" – use list_songs for the ids`);
+    if(!getSong(id))throw new Error(`Unknown song "${id}" – use list_songs for the ids`);
     selectSong(id);
     return state();
   }

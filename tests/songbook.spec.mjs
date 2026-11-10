@@ -206,3 +206,173 @@ test('wide screen: several bars per line, the layout follows the width', async (
   await page.setViewportSize({ width: 375, height: 740 });
   await expect.poll(async () => Number(await score(page).getAttribute('data-lines'))).toBeGreaterThan(wide);
 });
+
+test.describe('own songs', () => {
+  const KUCKUCK = `X:1
+T:Kuckuck
+C:trad.
+M:3/4
+L:1/4
+Q:1/4=120
+K:F
+C|A F2|A F2-|F G/A/ B|c2 z|]
+w:Kuck-uck, Kuck-uck_ ruft's aus dem Wald
+w:zwei-te Stro-phe, hier *
+X:2
+T:Noch eins
+K:C
+CDEF|
+`;
+
+  async function newSong(page) {
+    await openMenu(page);
+    await page.click('#btnNew');
+    await expect(page.locator('#editor')).toBeVisible();
+  }
+
+  test('type in a song: checks while typing, saves, survives a reload, edit and delete', async ({ page }) => {
+    await page.goto(URL_);
+    await newSong(page);
+    await expect(page.locator('#edHead')).toHaveText('Neues Lied');
+    await expect(page.locator('#edDelete')).toBeHidden();
+    await page.fill('#edName', 'Mein Lied');
+    await page.fill('#edMelody', 'C4 D4 E4 | F4:2 G4:2');
+    await expect(page.locator('#edCheck')).toHaveText('Takt 1 hat 3 Schläge, erwartet 4.');
+    await page.fill('#edMelody', 'C4 D4 E4 F4:.5 X4');
+    await expect(page.locator('#edCheck')).toHaveText(/Note 5 \(„X4“\) ist unbekannt/);
+    await page.fill('#edMelody', 'C4 D4 E4 F4:2 G4:2');
+    await expect(page.locator('#edCheck')).toHaveText('Note 4 reicht über das Ende von Takt 1 – teilen und mit ~ verbinden.');
+    await page.fill('#edMelody', 'C4 D4 E4 F4:1~ | F4 G4:2 r | E4:2.5 r:.5');
+    await page.fill('#edLyrics', 'Das ist _ mein Lied _ so\n\nzwei-te Stro-phe');
+    await expect(page.locator('#edCheck')).toHaveText('✓ 3 Takte, 7 Noten\nStrophe 2: 4 Silben für 7 Noten');
+    await page.fill('#edBy', 'Ich');
+    await page.click('#edSave');
+    await expect(page.locator('#editor')).toBeHidden();
+    await expect(page.locator('#toast')).toHaveText('„Mein Lied“ gespeichert');
+    await expect(page.locator('#songTitle')).toHaveText('Mein Lied');
+    await expect(page.locator('#credits')).toHaveText('eigenes Lied · Melodie: Ich');
+    await expect(score(page)).toHaveAttribute('data-notes', '9');
+    await expect(page.locator('#song optgroup[label="Eigene Lieder"] option')).toHaveText(['Mein Lied']);
+    await expect(page.locator('#btnEdit')).toHaveText('Bearbeiten');
+
+    await page.reload();
+    await expect(page.locator('#songTitle')).toHaveText('Mein Lied');
+    await page.click('#btnEdit');
+    await expect(page.locator('#edHead')).toHaveText('Lied bearbeiten');
+    await expect(page.locator('#edMelody')).toHaveValue('C4 D4 E4 F4:1~ | F4 G4:2 r | E4:2.5 r:.5');
+    await page.fill('#edName', 'Mein neues Lied');
+    await page.click('#edSave');
+    await expect(page.locator('#song option')).toHaveCount(await page.evaluate(() => Songs.list.length + 1));
+    await expect(page.locator('#song')).toHaveValue(/^u-/);
+
+    await page.click('#btnEdit');
+    page.once('dialog', d => d.accept());
+    await page.click('#edDelete');
+    await expect(page.locator('#toast')).toHaveText('„Mein neues Lied“ gelöscht');
+    await expect(page.locator('#songTitle')).toHaveText('Alle meine Entchen');
+    await expect(page.locator('#song optgroup[label="Eigene Lieder"]')).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('songbook.songs.v1'))).toBe('[]');
+  });
+
+  test('a tied note sounds once, for both lengths', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL_);
+    await newSong(page);
+    await page.fill('#edName', 'Haltebogen');
+    await page.fill('#edBpm', '60');
+    await page.fill('#edMelody', 'C4:4~ | C4 E4:3');
+    await page.click('#edSave');
+    await expect(page.locator('dialog[open]')).toHaveCount(0);
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+    await page.click('#btnPlay');
+    await page.clock.runFor(4500);                       // beat 4.5: the tied C is still on, E not yet
+    await expect(score(page)).toHaveAttribute('data-cur', '1');
+    await page.clock.runFor(4000);
+    expect(await score(page).getAttribute('data-sounded')).toBe('2');
+  });
+
+  test('copy of a book song becomes an own song', async ({ page }) => {
+    await page.goto(URL_);
+    await expect(page.locator('#btnEdit')).toHaveText('Als eigenes Lied bearbeiten');
+    await page.click('#btnEdit');
+    await expect(page.locator('#edHead')).toHaveText('Kopie als eigenes Lied');
+    await expect(page.locator('#edName')).toHaveValue('Alle meine Entchen (Kopie)');
+    await expect(page.locator('#edBy')).toHaveValue('Volksweise');
+    await expect(page.locator('#edCheck')).toHaveText('✓ 10 Takte, 27 Noten');
+    await page.click('#edSave');
+    await expect(page.locator('#songTitle')).toHaveText('Alle meine Entchen (Kopie)');
+    await expect(score(page)).toHaveAttribute('data-notes', '27');
+    expect(await page.evaluate(() => Songs.get('entchen').title.de)).toBe('Alle meine Entchen');
+  });
+
+  test('ABC file: key signature, ties, upbeat, lyrics and the first tune only', async ({ page }) => {
+    await page.goto(URL_);
+    await openMenu(page);
+    await page.setInputFiles('#abcFile', { name: 'kuckuck.abc', mimeType: 'text/plain', buffer: Buffer.from(KUCKUCK) });
+    await expect(page.locator('#editor')).toBeVisible();
+    await expect(page.locator('#toast')).toContainText('ABC übernommen');
+    await expect(page.locator('#toast')).toContainText('mehrere Lieder');
+    await expect(page.locator('#edName')).toHaveValue('Kuckuck');
+    await expect(page.locator('#edMeter')).toHaveValue('3/4');
+    await expect(page.locator('#edUpbeat')).toHaveValue('1');
+    await expect(page.locator('#edBpm')).toHaveValue('120');
+    await expect(page.locator('#edBy')).toHaveValue('trad.');
+    // B in F major is B flat; F2- ties into the next bar
+    await expect(page.locator('#edMelody')).toHaveValue('C4 | A4 F4:2 | A4 F4:2~ | F4 G4:.5 A4:.5 Bb4 | C5:2 r');
+    await expect(page.locator('#edLyrics')).toHaveValue("Kuck-uck, Kuck-uck _ ruft's aus dem Wald\n\nzwei-te Stro-phe, hier");
+    await expect(page.locator('#edCheck')).toHaveText('✓ 5 Takte, 10 Noten\nStrophe 1: 9 Silben für 10 Noten\nStrophe 2: 5 Silben für 10 Noten');
+    await page.click('#edSave');
+    await expect(page.locator('#songTitle')).toHaveText('Kuckuck');
+    await expect(score(page)).toHaveAttribute('data-notes', '11');
+    await expect(labelsOf(page, 8)).toHaveText('♭7');
+
+    // Pasted ABC text in the editor; a broken one gives a message
+    await page.click('#btnEdit');
+    await page.click('#edAbcBox summary');
+    await page.fill('#edAbc', 'nur Text');
+    await page.click('#edAbcApply');
+    await expect(page.locator('#toast')).toHaveText('Im ABC-Text wurde kein Lied gefunden.');
+    await page.fill('#edAbc', 'X:1\nT:Zwei Stimmen\nM:2/4\nL:1/8\nK:G\nV:1\nfg [ab]c|\nV:2\nDD DD|\n');
+    await page.click('#edAbcApply');
+    await expect(page.locator('#edMelody')).toHaveValue('F#5:.5 G5:.5 B5:.5 C5:.5');
+    await expect(page.locator('#toast')).toContainText('oberste Stimme');
+    await expect(page.locator('#toast')).toContainText('höchste Ton');
+    await page.click('#edCancel');
+  });
+
+  test('own song in the Klavier app (via the address), also after a reload', async ({ page }) => {
+    await page.goto(URL_);
+    await newSong(page);
+    await page.fill('#edName', 'Für das Klavier');
+    await page.fill('#edMelody', 'C4 E4 G4 C5 | G4:2~ G4:2');
+    await page.click('#edSave');
+    await expect(page.locator('#toPiano')).toHaveAttribute('href', /^\.\.\/piano\/#song=[\w-]+$/);
+    await page.click('#toPiano');
+    await expect(page.locator('#songName')).toHaveText('Für das Klavier');
+    await expect(page).toHaveURL(/\/piano\/$/);
+    await openMenu(page);
+    await expect(page.locator('#parts li')).toHaveText(['Melodie (5 Noten)']);   // the tied G sounds once
+    await closeMenu(page);
+    await page.reload();
+    await expect(page.locator('#songName')).toHaveText('Für das Klavier');
+    await page.goto('/piano/?link=1#song=kaputt');
+    await expect(page.locator('#toast')).toHaveText('Das Lied aus dem Link lässt sich nicht öffnen.');
+    await page.evaluate(() => localStorage.clear());
+  });
+
+  test('broken stored songs are left out, the backup contains the own songs', async ({ page }) => {
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('seeded')) return;
+      sessionStorage.setItem('seeded', '1');
+      localStorage.setItem('songbook.songs.v1', JSON.stringify([
+        { id: 'u-ok', title: 'Gut', meter: '4/4', bpm: 90, upbeat: 0, melody: 'C4:4', lyrics: [], by: '', words: '' },
+        { id: 'u-bad', title: 'Kaputt', meter: '4/4', bpm: 90, melody: 'C4:5' },
+        { id: 'x', title: 'Falsche ID', meter: '4/4', bpm: 90, melody: 'C4:4' },
+      ]));
+      localStorage.setItem('songbook.settings.v1', JSON.stringify({ song: 'u-bad' }));
+    });
+    await page.goto(URL_);
+    await expect(page.locator('#songTitle')).toHaveText('Alle meine Entchen');
+    await expect(page.locator('#song optgroup[label="Eigene Lieder"] option')).toHaveText(['Gut']);
+  });
+});
