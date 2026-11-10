@@ -1,6 +1,7 @@
 // MovePlay – motion engine (no DOM). Turns the 33 body points of MediaPipe Pose into movements.
 //
-//   const m = Motion.create({ full: true })          full: the whole body (down to the ankles) must be visible
+//   const m = Motion.create({ full: true, easy })    full: the whole body (down to the ankles) must be visible,
+//                                                    easy: smaller jumps, ducks and squats count (small children)
 //   const events = m.update(points, t, aspect)       points: Float32Array x,y,z,visibility × 33 (x, y: 0…1) or null,
 //                                                    t: ms, aspect: picture width / height
 //   m.state                                          see below; m.recalibrate() starts the calibration again
@@ -32,10 +33,30 @@
     lostMs: 600,        // no person this long → forget the smoothing
     forgetMs: 5000,     // … this long → calibrate again
     scaleDiff: 0.3, scaleMs: 1500,  // torso length differs this much for this long (player came closer) → calibrate again
+    energyMs: 400,      // window for the energy (how much the player moves)
+    kneeUp: 0.35,       // knee less than this below the hip = knee raised (pose games)
   };
+  // Legs of a pose: does the pose's leg rule hold? (spread in torso lengths, see T.jackOpen / jackClosed)
+  function legsOk(rule, pose) {
+    if (!rule || rule === 'any') return true;
+    if (rule === 'apart') return pose.spread != null && pose.spread > T.jackOpen;
+    if (rule === 'together') return (pose.spread == null || pose.spread < T.jackClosed) && !pose.kneeL && !pose.kneeR;
+    if (rule === 'oneUp') return pose.kneeL !== pose.kneeR;
+    return false;
+  }
+  // How well the body matches a pose { left, right, legs }: ok = both arms within ± tolerance degrees and the legs right
+  function matchPose(target, pose, tolerance) {
+    if (!pose || pose.left == null || pose.right == null) return { ok: false, score: 0 };
+    const dl = Math.abs(pose.left - target.left), dr = Math.abs(pose.right - target.right);
+    const legs = legsOk(target.legs, pose);
+    return { ok: dl <= tolerance && dr <= tolerance && legs, score: Math.max(0, 1 - (dl + dr) / 2 / 90) * (legs ? 1 : 0.5) };
+  }
 
   function create(opts) {
     const full = !(opts && opts.full === false);
+    const easy = !!(opts && opts.easy);
+    const k = easy ? 0.7 : 1;   // easy: smaller movements are enough
+    const L = { jumpUp: T.jumpUp * k, jumpShoulder: T.jumpShoulder * k, jumpAnkle: T.jumpAnkle * k, duckDown: T.duckDown * k, squatDown: T.squatDown * k };
     const sm = new Float32Array(33 * 3);   // smoothed x (× aspect), y, visibility
     let have = false, lastSeen = -1e9, lastT = null, aspect = 1;
     let base = null, anchor = null, calibT = 0, sums = null;
@@ -43,9 +64,11 @@
     const st = {
       present: false, visible: false, calibrated: false, calib: 0,
       airborne: false, ducking: false, squatting: false, armL: false, armR: false, armsUp: false,
-      hands: [], body: null, energy: 0, points: null, aspect: 1,
+      hands: [], body: null, energy: 0, points: null, aspect: 1, easy,
+      pose: null,   // arm angles (0° down, 90° sideways, 180° up) and legs, for pose games
     };
-    let single = null, apart = null, jack = 'closed', prev = null;
+    let hist = [];
+    let single = null, apart = null, jack = 'closed';
 
     const X = i => sm[3 * i], Y = i => sm[3 * i + 1], V = i => sm[3 * i + 2];
     const seen = i => V(i) >= T.vis && Y(i) > 0 && Y(i) < 1 && X(i) > 0 && X(i) < aspect;
@@ -94,13 +117,13 @@
       const ankRel = m.ankY != null && base.ankY != null ? (base.ankY - m.ankY) / u : null;
 
       // Jump: hips and shoulders go up together (and the feet leave the ground, if they are in the picture)
-      if (!st.airborne && hipRel > T.jumpUp && shRel > T.jumpShoulder && (ankRel == null || ankRel > T.jumpAnkle)) { st.airborne = true; emit('jump'); }
+      if (!st.airborne && hipRel > L.jumpUp && shRel > L.jumpShoulder && (ankRel == null || ankRel > L.jumpAnkle)) { st.airborne = true; emit('jump'); }
       else if (st.airborne && hipRel < T.jumpDown) st.airborne = false;
       // Duck: the head goes down
-      if (!st.ducking && noseDrop > T.duckDown) { st.ducking = true; emit('duck'); }
+      if (!st.ducking && noseDrop > L.duckDown) { st.ducking = true; emit('duck'); }
       else if (st.ducking && noseDrop < T.duckUp) st.ducking = false;
       // Squat: the hips go down
-      if (!st.squatting && -hipRel > T.squatDown) { st.squatting = true; emit('squat'); }
+      if (!st.squatting && -hipRel > L.squatDown) { st.squatting = true; emit('squat'); }
       else if (st.squatting && -hipRel < T.squatUp) st.squatting = false;
 
       // Arms: up = wrist clearly above the nose, down again = wrist below the shoulders (hysteresis)
@@ -145,6 +168,17 @@
       } else scaleSince = null;
     }
 
+    // Arm angles and legs: what pose games compare with the pose to copy
+    function poseOf(m) {
+      const u = base ? base.torso : m.torso;
+      // Angle between "arm hanging down" and shoulder → wrist: 0° down, 90° sideways, 180° straight up
+      const angle = (sh, wr) => seen(sh) && seen(wr) ? Math.round(Math.atan2(Math.abs(X(wr) - X(sh)), Y(wr) - Y(sh)) * 180 / Math.PI) : null;
+      const knee = (kn, hip) => seen(kn) && seen(hip) ? (Y(kn) - Y(hip)) / u < T.kneeUp : false;
+      return { left: angle(P.lSh, P.lWr), right: angle(P.rSh, P.rWr),
+        spread: anklesSeen() ? Math.abs(X(P.lAnk) - X(P.rAnk)) / u : null,
+        kneeL: knee(P.lKnee, P.lHip), kneeR: knee(P.rKnee, P.rHip) };
+    }
+
     function update(points, t, asp) {
       const out = [];
       const dt = lastT == null ? 0 : Math.max(0, Math.min(200, t - lastT));
@@ -152,7 +186,7 @@
       aspect = asp || 1; st.aspect = aspect;
       if (!points) {
         st.present = false; st.visible = false; st.hands = []; st.points = null;
-        if (t - lastSeen > T.lostMs) { have = false; resetMoves(); }
+        if (t - lastSeen > T.lostMs) { have = false; resetMoves(); hist = []; st.energy = 0; st.pose = null; }
         if (t - lastSeen > T.forgetMs && (st.calibrated || anchor)) recalibrate();
         if (!st.calibrated) { anchor = null; calibT = 0; st.calib = 0; }
         return out;
@@ -168,13 +202,17 @@
       st.present = true;
       st.visible = needed().every(seen);
       const m = measure();
-      // Energy: how much the body moves (torso lengths per second, smoothed) – e.g. for freeze games
-      if (prev && dt > 0 && m.torso > 0) {
-        const v = (Math.hypot(m.hipX - prev.hipX, m.hipY - prev.hipY) + Math.abs(m.noseY - prev.noseY)
-          + Math.hypot(X(P.lWr) - prev.lw[0], Y(P.lWr) - prev.lw[1]) + Math.hypot(X(P.rWr) - prev.rw[0], Y(P.rWr) - prev.rw[1])) / m.torso / (dt / 1000);
-        st.energy += (v - st.energy) * Math.min(1, dt / 300);
+      // Energy: how far hips, head and hands moved in the last 0.4 s (torso lengths per second) – for freeze games.
+      // Measured over a window, not frame to frame: the small jitter of the detection cancels out.
+      const now = { t, hipX: m.hipX, hipY: m.hipY, noseY: m.noseY, lw: [X(P.lWr), Y(P.lWr)], rw: [X(P.rWr), Y(P.rWr)] };
+      hist.push(now);
+      while (hist.length > 2 && t - hist[1].t >= T.energyMs) hist.shift();
+      const old = hist[0];
+      if (old !== now && m.torso > 0 && t - old.t > 100) {
+        const dist = Math.hypot(m.hipX - old.hipX, m.hipY - old.hipY) + Math.abs(m.noseY - old.noseY)
+          + Math.hypot(now.lw[0] - old.lw[0], now.lw[1] - old.lw[1]) + Math.hypot(now.rw[0] - old.rw[0], now.rw[1] - old.rw[1]);
+        st.energy = dist / (base ? base.torso : m.torso) / ((t - old.t) / 1000);
       }
-      prev = { hipX: m.hipX, hipY: m.hipY, noseY: m.noseY, lw: [X(P.lWr), Y(P.lWr)], rw: [X(P.rWr), Y(P.rWr)] };
 
       if (!st.calibrated) { if (st.visible) calibrate(m, dt); else { anchor = null; calibT = 0; st.calib = 0; } }
       else if (st.visible || (seen(P.lSh) && seen(P.rSh) && seen(P.lHip) && seen(P.rHip))) moves(m, t, dt, out);
@@ -184,6 +222,7 @@
         .map(([w, f]) => ({ x: (seen(f) ? (X(w) + X(f)) / 2 : X(w)) / aspect, y: seen(f) ? (Y(w) + Y(f)) / 2 : Y(w) }));
       const u = base ? base.torso : m.torso;
       st.body = { x: m.shX / aspect, shoulderY: m.shY, hipY: m.hipY, headY: m.noseY, u, ux: u / aspect };
+      st.pose = poseOf(m);
       st.points = Array.from({ length: 33 }, (_, i) => ({ x: X(i) / aspect, y: Y(i), seen: seen(i) }));
       return out;
     }
@@ -191,5 +230,5 @@
     return { update, recalibrate, state: st, get base() { return base && { ...base }; } };
   }
 
-  root.Motion = { create, EVENTS, BONES, P, T };
+  root.Motion = { create, matchPose, legsOk, EVENTS, BONES, P, T };
 })(typeof self !== 'undefined' ? self : globalThis);

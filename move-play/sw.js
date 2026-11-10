@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "move-play";
-const VERSION = '5ced7a6b288e';
+const VERSION = '99d94105fa04';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -10,7 +10,9 @@ const FILES = [
   "engine.js",
   "games/bubbles.json",
   "games/duck-jump.json",
+  "games/freeze-dance.json",
   "games/jumping-jacks.json",
+  "games/poses.json",
   "games/simon.json",
   "icon-180.png",
   "icon-192.png",

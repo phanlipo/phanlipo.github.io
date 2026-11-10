@@ -1,7 +1,14 @@
 // Body pose for MovePlay (MediaPipe Tasks Vision, Pose Landmarker lite).
 // Messages from the page:
-//   { type: 'load' }                       load engine + model once → { type: 'loaded', delegate } or { type: 'error', code, message }
-//   { type: 'frame', bitmap }              → { type: 'result', poses: [Float32Array x,y,z,visibility × 33 (x, y: 0…1 of the picture)], ms }
+//   { type: 'load', gpu, parts }           load engine + model once → { type: 'loaded', delegate } or { type: 'error', code, message }
+//                                          gpu: try the graphics chip first (falls back to the CPU if it fails);
+//                                          the first pictures are timed – if the GPU is slow (e.g. a simulated one),
+//                                          the CPU is timed too and the faster one is kept
+//   { type: 'options', parts }             1: one person in the whole picture; 2: one person in each half (two players)
+//   { type: 'frame', bitmap }              → { type: 'result', poses: [Float32Array x,y,z,visibility × 33 (x, y: 0…1 of the picture)],
+//                                               halves: [left half, right half of the picture] (parts 2, each a pose or null), ms, delegate }
+// Two players: MediaPipe's own search for several people found only one of them in tests (or none). Each half of
+// the picture gets its own detector instead (with its own tracking) – the players each stay on their side.
 // While loading: { type: 'progress', loaded, total } (bytes). Notes for the diagnostics: { type: 'log', msg, data }.
 
 // Network guard – installed before the library is imported. MediaPipe 1.x sends usage statistics to Google
@@ -60,50 +67,119 @@ async function model() {
   return buf;
 }
 
-let landmarker = null, delegate = 'CPU';
-async function load() {
+let landmarkers = [], delegate = 'CPU', parts = 1, vision = null, factory = null, buf = null;
+const fileset = {
+  wasmLoaderPath: new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.js', self.location.href).href,
+  wasmBinaryPath: new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.wasm', self.location.href).href,
+};
+async function create(d) {
+  const list = [];
+  for (let i = 0; i < parts; i++) {
+    // MediaPipe takes the engine from self.ModuleFactory and clears it after each task – hand it over again each time
+    self.ModuleFactory = factory;
+    list.push(await vision.PoseLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetBuffer: buf, delegate: d },
+      runningMode: 'VIDEO', numPoses: 1,
+      minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+    }));
+  }
+  for (const lm of landmarkers) lm.close?.();
+  landmarkers = list; delegate = d;
+}
+const ready = () => landmarkers.length > 0;
+async function load(gpu) {
   const t0 = performance.now();
-  const [vision, buf] = await Promise.all([import('../assets/vendor/mediapipe/vision_bundle.mjs'), model()]);
-  self.ModuleFactory = (await import('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.js')).default;
-  const fileset = {
-    wasmLoaderPath: new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.js', self.location.href).href,
-    wasmBinaryPath: new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.wasm', self.location.href).href,
-  };
-  landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetBuffer: buf, delegate },
-    runningMode: 'VIDEO', numPoses: 1,
-    minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
-  });
+  [vision, buf] = await Promise.all([import('../assets/vendor/mediapipe/vision_bundle.mjs'), model()]);
+  factory = (await import('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.js')).default;
+  // Graphics chip first (usually several times faster on phones), the CPU if that does not work
+  if (gpu && self.OffscreenCanvas) {
+    try { await create('GPU'); }
+    catch (e) { post({ type: 'log', msg: 'gpu failed', data: { e: String(e?.message || e).slice(0, 200) } }); }
+  }
+  if (!ready()) await create('CPU');
+  else bench = { GPU: [], CPU: [] };
   post({ type: 'log', msg: 'model ready', data: { ms: Math.round(performance.now() - t0), delegate } });
+}
+// The GPU can also fail only when the first picture is processed (driver problems): then the CPU takes over
+let switching = null;
+function use(d) {
+  switching = create(d).catch(err => post({ type: 'log', msg: d.toLowerCase() + ' failed', data: { e: String(err?.message || err).slice(0, 200) } }))
+    .finally(() => { switching = null; });
+}
+function toCpu(e) {
+  post({ type: 'log', msg: 'gpu failed', data: { e: String(e?.message || e).slice(0, 200), on: 'frame' } });
+  bench = null; use('CPU');
+}
+// Timing: the first frames after starting (and after a switch) warm up, the next ones are measured
+const WARM = 3, TIMED = 8, FAST = 40;   // ms per picture that is fast enough
+let bench = null;   // { GPU: [ms…], CPU: [ms…] } while choosing
+function timed(ms) {
+  if (!bench) return;
+  const list = bench[delegate];
+  list.push(ms);
+  // Clearly too slow already after the first pictures (e.g. a simulated GPU): no need to wait for more
+  const slow = delegate === 'GPU' && list.length >= 2 && ms > 4 * FAST;
+  if (list.length < WARM + TIMED && !slow) return;
+  const avg = d => { const l = bench[d].length > WARM ? bench[d].slice(WARM) : bench[d].slice(1); return Math.round(l.reduce((a, b) => a + b, 0) / l.length); };
+  if (delegate === 'GPU' && avg('GPU') <= FAST) { post({ type: 'log', msg: 'delegate chosen', data: { gpu: avg('GPU'), use: 'GPU' } }); bench = null; return; }
+  if (delegate === 'GPU') { use('CPU'); return; }
+  const g = avg('GPU'), c = avg('CPU');
+  post({ type: 'log', msg: 'delegate chosen', data: { gpu: g, cpu: c, use: g < c ? 'GPU' : 'CPU' } });
+  bench = null;
+  if (g < c) use('GPU');
 }
 
 let lastTs = 0;
-function frame({ bitmap }) {
+// One person in a picture (or part of it: x0, w = its left edge and width as part of the whole picture)
+function detect(lm, img, ts, x0, w) {
+  const r = lm.detectForVideo(img, ts);
+  const p = r.landmarks && r.landmarks[0];
+  let f = null;
+  if (p) {
+    f = new Float32Array(33 * 4);
+    p.forEach((q, i) => { f[4 * i] = x0 + q.x * w; f[4 * i + 1] = q.y; f[4 * i + 2] = q.z; f[4 * i + 3] = q.visibility ?? 1; });
+  }
+  r.close?.();
+  return f;
+}
+const OVERLAP = 0.05;   // each half reaches this far past the middle
+async function frame({ bitmap }) {
   const t0 = performance.now();
   // VIDEO mode needs strictly increasing timestamps
   const ts = lastTs = Math.max(lastTs + 1, Math.round(performance.now()));
-  const poses = [];
+  let halves = null, poses = [];
   try {
-    const r = landmarker.detectForVideo(bitmap, ts);
-    for (const lm of r.landmarks || []) {
-      const f = new Float32Array(33 * 4);
-      lm.forEach((p, i) => { f[4 * i] = p.x; f[4 * i + 1] = p.y; f[4 * i + 2] = p.z; f[4 * i + 3] = p.visibility ?? 1; });
-      poses.push(f);
+    if (landmarkers.length === 1) { const f = detect(landmarkers[0], bitmap, ts, 0, 1); if (f) poses.push(f); }
+    else {
+      const W = bitmap.width, H = bitmap.height, cw = Math.round(W * (0.5 + OVERLAP));
+      halves = [];
+      for (const [i, sx] of [[0, 0], [1, W - cw]]) {
+        const part = await createImageBitmap(bitmap, sx, 0, cw, H);
+        try { halves.push(detect(landmarkers[i], part, ts, sx / W, cw / W)); } finally { part.close(); }
+      }
+      poses = halves.filter(Boolean);
     }
-    r.close?.();
   } finally { bitmap.close(); }
-  post({ type: 'result', poses, ms: Math.round(performance.now() - t0) }, poses.map(p => p.buffer));
+  const ms = Math.round(performance.now() - t0);
+  post({ type: 'result', poses, halves, ms, delegate }, poses.map(p => p.buffer));
+  timed(ms);
 }
 
 let loading = null;
 self.onmessage = async ({ data }) => {
   if (data.type === 'frame') {
-    if (!landmarker) { data.bitmap.close(); post({ type: 'result', poses: [], ms: 0 }); return; }
-    try { frame(data); }
-    catch (e) { post({ type: 'result', poses: [], error: String(e?.message || e) }); }
+    if (!ready() || switching) { data.bitmap.close(); post({ type: 'result', poses: [], ms: 0, delegate }); return; }
+    try { await frame(data); }
+    catch (e) {
+      if (delegate === 'GPU') toCpu(e);
+      post({ type: 'result', poses: [], error: String(e?.message || e), delegate });
+    }
+  } else if (data.type === 'options') {
+    if (data.parts !== parts) { parts = data.parts; if (ready()) use(delegate); }
   } else if (data.type === 'load') {
+    if (data.parts) parts = data.parts;
     try {
-      loading ??= load();
+      loading ??= load(!!data.gpu);
       await loading;
       post({ type: 'loaded', delegate });
     } catch (e) {

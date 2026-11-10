@@ -2322,14 +2322,16 @@ test.describe('move-play tools', () => {
     await page.addInitScript(() => localStorage.setItem('move-play.scores.v1', JSON.stringify({ simon: { best: 84, plays: 3, last: 40 } })));
     await fakeModelContext(page);
     await page.goto('/move-play/');
-    await expect(page.locator('#games .game')).toHaveCount(4);
+    await expect(page.locator('#games .game')).toHaveCount(6);
     const list = await call(page, 'move_play_list_games', {});
     expect(list.ok).toBe(true);
-    expect(list.result.games.map(g => [g.id, g.title, g.mechanic, g.durationSeconds, g.needsFullBody, g.best])).toEqual([
-      ['simon', 'Simon Says', 'command', 60, true, 84],
-      ['jumping-jacks', 'Jumping Jack Challenge', 'count', 30, true, null],
-      ['duck-jump', 'Duck & Jump', 'dodge', 60, true, null],
-      ['bubbles', 'Catch the Bubbles', 'targets', 45, false, null],
+    expect(list.result.games.map(g => [g.id, g.title, g.mechanic, g.durationSeconds, g.needsFullBody, g.maxPlayers, g.best])).toEqual([
+      ['simon', 'Simon Says', 'command', 60, true, 2, 84],
+      ['jumping-jacks', 'Jumping Jack Challenge', 'count', 30, true, 2, null],
+      ['duck-jump', 'Duck & Jump', 'dodge', 60, true, 2, null],
+      ['bubbles', 'Catch the Bubbles', 'targets', 45, false, 2, null],
+      ['freeze-dance', 'Freeze Dance', 'freeze', 60, false, 2, null],
+      ['poses', 'Copy the Pose', 'pose', 60, true, 2, null],
     ]);
     expect(JSON.stringify(list.result)).not.toMatch(/[äöüß]/);
     await expect(page.locator('#toast')).toHaveText('KI-Agent: Spiele aufgelistet');
