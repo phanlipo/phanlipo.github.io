@@ -376,3 +376,16 @@ CDEF|
     await expect(page.locator('#song optgroup[label="Eigene Lieder"] option')).toHaveText(['Gut']);
   });
 });
+
+test('link buttons look like the other buttons: text centred, no underline', async ({ page }) => {
+  await page.goto(URL_);
+  const [link, btn] = await Promise.all(['#toPiano', '#btnMidi'].map(sel => page.locator(sel).evaluate(el => {
+    const r = el.getBoundingClientRect(), range = document.createRange();
+    range.selectNodeContents(el);
+    const tr = range.getBoundingClientRect();
+    return { mid: (tr.top + tr.bottom) / 2 - (r.top + r.bottom) / 2, deco: getComputedStyle(el).textDecorationLine };
+  })));
+  expect(Math.abs(link.mid)).toBeLessThan(1.5);
+  expect(Math.abs(btn.mid)).toBeLessThan(1.5);
+  expect(link.deco).toBe('none');
+});

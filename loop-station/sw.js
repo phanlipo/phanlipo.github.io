@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "loop-station";
-const VERSION = 'd0260cfad9e9';
+const VERSION = '1e444a4c24c2';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
