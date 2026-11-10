@@ -787,6 +787,26 @@ test.describe('page', () => {
     await expect(page.locator('#resBest')).toHaveText('Best: 0');
   });
 
+  test('game choice on a small phone: heading at the top, every game reachable by scrolling', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 640 });
+    await page.goto(URL_);
+    await expect(page.locator('#games .game')).toHaveCount(6);
+    const box = await page.evaluate(() => {
+      const sc = document.getElementById('scMenu'), r = sc.getBoundingClientRect();
+      const top = el => el.getBoundingClientRect().top - r.top;
+      return { overflow: sc.scrollHeight > sc.clientHeight, scrollTop: sc.scrollTop, h2: top(sc.querySelector('h2')), intro: top(sc.querySelector('.intro')) };
+    });
+    // More than fits: it scrolls, and starts with the heading and the hint fully visible (not cut off above)
+    expect(box.overflow).toBe(true);
+    expect(box.scrollTop).toBe(0);
+    expect(box.h2).toBeGreaterThanOrEqual(0);
+    expect(box.intro).toBeGreaterThan(box.h2);
+    await page.locator('[data-game="poses"]').scrollIntoViewIfNeeded();
+    await expect(page.locator('[data-game="poses"]')).toBeInViewport({ ratio: 1 });
+    await page.locator('#scMenu h2').scrollIntoViewIfNeeded();
+    await expect(page.locator('#scMenu h2')).toBeInViewport({ ratio: 1 });
+  });
+
   test('settings are kept, the sound button toggles', async ({ page }) => {
     await page.goto(URL_);
     await expect(page.locator('#btnSound')).toHaveAttribute('aria-pressed', 'true');
