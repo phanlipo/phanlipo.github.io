@@ -1589,6 +1589,45 @@ test.describe('piano tools', () => {
   });
 });
 
+test.describe('songbook tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install();
+    await fakeModelContext(page);
+    await page.goto('/songbook/');
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  });
+
+  test('list_songs, open_song and control_playback', async ({ page }) => {
+    const { result } = await call(page, 'songbook_list_songs', {});
+    expect(result.open).toBe('entchen');
+    expect(result.songs.map(s => s.id)).toEqual(await page.evaluate(() => Songs.list.map(s => s.id)));
+    expect(result.songs.find(s => s.id === 'ode')).toEqual({
+      id: 'ode', title: 'Ode to Joy', title_de: 'Ode an die Freude', category: 'classical', meter: '4/4', bars: 16,
+      notes: 62, tempo_bpm: 100, has_lyrics: true, melody_by: 'Ludwig van Beethoven (1824)', words_by: 'Friedrich Schiller (1785/1803)',
+    });
+    let r = await call(page, 'songbook_open_song', { id: 'ode' });
+    expect(r.result).toMatchObject({ playing: false, bar: 1, position_beats: 0, speed_percent: 100, song: { id: 'ode' } });
+    await expect(page.locator('#songTitle')).toHaveText('Ode an die Freude');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Lied geöffnet');
+    const bad = await call(page, 'songbook_open_song', { id: 'nope' });
+    expect(bad.ok).toBe(false);
+    expect(bad.error).toMatch(/Unknown song/);
+
+    r = await call(page, 'songbook_control_playback', { action: 'play', speed_percent: 150 });
+    expect(r.result).toMatchObject({ playing: true, speed_percent: 150 });
+    await page.clock.runFor(4000);                        // 100 bpm × 150 % = 2.5 beats/s → beat 10, bar 3
+    r = await call(page, 'songbook_control_playback', { action: 'pause' });
+    expect(r.result.playing).toBe(false);
+    expect(r.result.bar).toBe(3);
+    expect(r.result.position_beats).toBeGreaterThanOrEqual(9.9);
+    expect(r.result.position_beats).toBeLessThanOrEqual(10.3);
+    r = await call(page, 'songbook_control_playback', { action: 'stop' });
+    expect(r.result).toMatchObject({ playing: false, position_beats: 0, bar: 1 });
+    expect((await call(page, 'songbook_control_playback', { action: 'play', speed_percent: 200 })).ok).toBe(false);
+    expect((await call(page, 'songbook_control_playback', { action: 'rewind' })).ok).toBe(false);
+  });
+});
+
 test.describe('text-to-speech tools', () => {
   test.beforeEach(async ({ page }) => open(page, '/text-to-speech/'));
 

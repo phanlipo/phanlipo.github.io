@@ -31,6 +31,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | [Klavier](https://phanlipo.github.io/piano/) | `piano/` | Klavier zum Spielen mit den Fingern – MIDI-Dateien laden, die Noten fallen als Animation auf die Tasten. Spuren stummschalten und selbst mitspielen. |
 | [Kuscheltier-Puzzle](https://phanlipo.github.io/plush-puzzle/) | `plush-puzzle/` | Kuscheltiere aus Teilen zusammenbauen: Teile auf den Schatten ziehen, bis sie einrasten – mit Konfetti am Ende. |
 | [Lauftext – ganz groß anzeigen](https://phanlipo.github.io/marquee/) | `marquee/` | Text eingeben, Größe, Farben und Schrift wählen und bildschirmfüllend anzeigen – stehend, laufend oder blinkend. |
+| [Liederbuch](https://phanlipo.github.io/songbook/) | `songbook/` | Gemeinfreie Lieder als Noten mit farbigen Tonstufenzahlen und Liedtext – abspielen und mitlesen, Tempo wählen, im Klavier mit fallenden Noten üben, als MIDI speichern oder drucken. |
 | [Loop-Station](https://phanlipo.github.io/loop-station/) | `loop-station/` | Instrumente, Stimme, Klatschen … aufnehmen und als Schleifen übereinanderlegen – mit Metronom, Takt-Raster und WAV-Export. |
 | [Malen](https://phanlipo.github.io/paint/) | `paint/` | Weiße Leinwand zum Malen mit dem Finger: 6 Farben, Stift, Pinsel, Marker, Spray, Farbtopf und Radierer. |
 | [Markdown-Editor](https://phanlipo.github.io/markdown-editor/) | `markdown-editor/` | Markdown schreiben – als Text oder formatiert ansehen und bearbeiten, mit Knöpfen für Fett, Listen, Links und mehr. Dateien im Verlauf teilen, herunterladen oder löschen. |
