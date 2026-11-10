@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "cast-demo";
-const VERSION = '30e903dd60f9';
+const VERSION = '7c70a385fe17';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -16,7 +16,8 @@ const FILES = [
   "manifest.webmanifest",
   "tv.js",
   "../assets/base.css",
-  "../assets/common.js"
+  "../assets/common.js",
+  "../assets/shared/cast.js"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
 const RUNTIME = {};

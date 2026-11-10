@@ -6,20 +6,22 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Cast-Demo</title>
-<meta name="description" content="Bild und Musik der App auf Chromecast oder Android TV zeigen – mit der Bildschirmübertragung des Handys, im Vollbild und Querformat.">
+<meta name="description" content="Bild und Musik der App auf Chromecast oder Android TV zeigen – direkt gestreamt oder mit der Bildschirmübertragung des Handys.">
 <meta name="tool:tags" content="Freizeit, Musik">
 <meta name="tool:features" content="Vollbild, KI-Agent">
 <meta name="tool:icon" content="cast">
 <meta name="tool:color" content="#155e75">
 <meta name="tool:short-name" content="Cast-Demo">
 <meta name="tool:title-en" content="Cast Demo">
-<meta name="tool:description-en" content="Show the app's picture and music on a Chromecast or Android TV – with the phone's screen casting, in full screen and landscape.">
+<meta name="tool:description-en" content="Show the app's picture and music on a Chromecast or Android TV – streamed directly or with the phone's screen casting.">
 <meta name="tool:short-name-en" content="Cast Demo">
 <meta name="tool:storage" content="cast-demo.">
 <meta name="tool:webmcp" content="set_scene, get_status">
+<!-- Google Cast sender SDK from www.gstatic.com, loaded only when the user taps "Direkt streamen" (assets/shared/cast.js) -->
+<meta name="tool:cast" content="true">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -64,6 +66,12 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
 #tvDlg ol,#tvDlg ul{margin:0;padding-inline-start:20px;display:grid;gap:4px}
 #tvDlg .btn{min-height:48px;justify-content:center;display:inline-flex;align-items:center;text-decoration:none}
 #tvDlg .row .btn{flex:1 1 auto}
+.status.live{color:var(--ok);font-weight:600}
+.status.err{color:var(--err)}
+.field{display:grid;gap:4px;margin-block:8px}
+.field label{font-weight:600;font-size:14px}
+.field input,.field select{min-height:44px;font-size:16px}
+#appId{font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;max-width:12em}
 .check{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding-block:6px;cursor:pointer}
 .check input{width:20px;height:20px;margin:2px 0 0;flex:none;accent-color:var(--accent)}
 </style>
@@ -98,7 +106,7 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
     </button>
     <button type="button" class="btn primary" id="btnTv">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 19l.01 0"/><path d="M7 19a4 4 0 0 0 -4 -4"/><path d="M11 19a8 8 0 0 0 -8 -8"/><path d="M15 19h3a3 3 0 0 0 3 -3v-8a3 3 0 0 0 -3 -3h-12a3 3 0 0 0 -2.8 2"/></svg>
-      <span data-i18n="tv.show">Auf Fernseher zeigen</span>
+      <span id="tvLabel" data-i18n="tv.show">Auf Fernseher zeigen</span>
     </button>
   </div>
 
@@ -106,13 +114,36 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
     <h2 id="h-set" data-i18n="set.h">Einstellungen</h2>
     <label class="check"><input type="checkbox" id="optAutoMusic" checked> <span data-i18n="set.music">Musik im Vollbild automatisch starten</span></label>
     <label class="check"><input type="checkbox" id="optClock" checked> <span data-i18n="set.clock">Uhr im Bild zeigen (zum Ablesen der Verzögerung)</span></label>
+    <h3 data-i18n="set.direct">Direkt streamen</h3>
+    <div class="field">
+      <label for="quality" data-i18n="set.quality">Bildqualität</label>
+      <select id="quality">
+        <option value="480" data-i18n="q.480">480p – wenig WLAN nötig</option>
+        <option value="720" data-i18n="q.720">720p – Standard</option>
+        <option value="1080" data-i18n="q.1080">1080p – braucht gutes WLAN</option>
+      </select>
+    </div>
+    <label class="check"><input type="checkbox" id="optLocal"> <span data-i18n="set.local">Musik beim Streamen auch am Handy abspielen</span></label>
+    <label class="check"><input type="checkbox" id="optTvLog"> <span data-i18n="set.tvLog">Protokoll auf dem Fernseher einblenden (Fehlersuche)</span></label>
+    <label class="check"><input type="checkbox" id="optStun"> <span data-i18n="set.stun">Verbindungshilfe (STUN-Server von Google) – nur wenn es ohne nicht klappt</span></label>
+    <div class="field">
+      <label for="appId" data-i18n="set.appId">Cast-App-ID</label>
+      <input type="text" id="appId" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="appIdHint">
+      <p class="muted" id="appIdHint" style="margin:0" data-i18n="set.appIdHint">Nur ändern, wenn eine eigene Empfänger-App in der Google Cast SDK Developer Console angelegt ist. Leer = Standard.</p>
+    </div>
   </section>
 </main>
 
 <dialog id="tvDlg" aria-labelledby="tvDlgTitle">
   <div class="in">
     <h2 id="tvDlgTitle" data-i18n="dlg.h">Auf Fernseher zeigen</h2>
-    <h3 data-i18n="dlg.step1">1. Bildschirm übertragen</h3>
+    <div id="directBox">
+      <h3 data-i18n="dlg.direct">Direkt streamen</h3>
+      <p data-i18n="dlg.directText">Ein Tippen, dann den Fernseher wählen. Er zeigt nur das Bild der App mit Musik, keine Benachrichtigungen. Handy und Fernseher im selben WLAN; nur Chrome oder Edge.</p>
+      <div class="row"><button type="button" class="btn primary" id="btnDirect" data-i18n="dlg.directGo">Direkt streamen</button></div>
+      <h3 data-i18n="dlg.or">Oder: ganzen Bildschirm übertragen</h3>
+    </div>
+    <h3 data-i18n="dlg.step1">1. Übertragung starten</h3>
     <div data-platform="android">
       <div data-lang="de">
         <p>Das Handy überträgt seinen Bildschirm samt Ton selbst auf Chromecast oder Android TV. Beide müssen im selben WLAN sein.</p>
@@ -142,7 +173,7 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
     <h3 data-i18n="dlg.step2">2. Vollbild starten</h3>
     <p data-i18n="dlg.step2text">Bild im Querformat ohne Leisten, der Bildschirm bleibt an. Beenden mit der Zurück-Geste oder „Vollbild beenden“.</p>
     <div class="row">
-      <button type="button" class="btn primary" id="btnTvGo" data-i18n="dlg.go">Vollbild starten</button>
+      <button type="button" class="btn" id="btnTvGo" data-i18n="dlg.go">Vollbild starten</button>
       <button type="button" class="btn" id="btnTvClose" data-i18n="dlg.close">Schließen</button>
     </div>
   </div>
@@ -164,8 +195,17 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
 <details class="help card">
   <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
   <div data-lang="de">
-  <p>Test, wie sich eine App mit Musik auf einem Chromecast oder Android-TV zeigen lässt. Klappt es gut, kommt „Auf Fernseher zeigen“ auch in andere Apps.</p>
-  <h3>Bedienung</h3>
+  <p>Test, wie sich eine App mit Musik auf einem Chromecast oder Android-TV zeigen lässt – auf zwei Wegen. Klappt es gut, kommt „Auf Fernseher zeigen“ auch in andere Apps.</p>
+  <h3>Direkt streamen</h3>
+  <ul>
+    <li><em>Auf Fernseher zeigen</em> → <em>Direkt streamen</em> → Fernseher wählen. Die Musik startet mit. Beenden mit <em>Streaming beenden</em>.</li>
+    <li>Die App zeichnet ihr Bild selbst und erzeugt die Musik im Browser. Beides geht als Live-Stream (WebRTC) direkt übers WLAN an den Fernseher, ohne Server dazwischen. Auf dem Fernseher läuft dafür eine kleine Empfänger-Seite dieser Website.</li>
+    <li>Für die Auswahl des Fernsehers lädt die App beim ersten Tippen das Cast-Programm von Google (gstatic.com). Vorher wird nichts geladen.</li>
+    <li>Die App beim Streamen geöffnet lassen, der Bildschirm bleibt dafür an. Im Hintergrund bleibt das Bild stehen.</li>
+    <li>Nur in Chrome oder Edge (Android, Computer). Im Menü (☰): Bildqualität, Musik auch am Handy, Protokoll auf dem Fernseher, Verbindungshilfe.</li>
+    <li><em>Probleme:</em> Bleibt „Verbinde …“ stehen, im Menü <em>Protokoll auf dem Fernseher</em> einschalten und es erneut versuchen, notfalls die <em>Verbindungshilfe</em>. Ruckelt es, eine kleinere Bildqualität wählen. Danach <em>Diagnose kopieren</em>.</li>
+  </ul>
+  <h3>Bildschirm übertragen</h3>
   <ul>
     <li><em>Auf Fernseher zeigen</em> tippen. Dann zuerst die Bildschirmübertragung des Handys starten und zurück in die App wechseln. Danach <em>Vollbild starten</em>.</li>
     <li>Im Vollbild dreht das Bild ins Querformat und füllt den Fernseher. Ein Tippen aufs Bild zeigt die Leiste mit Szenen, Musik und <em>Vollbild beenden</em>.</li>
@@ -174,7 +214,7 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
   </ul>
   <h3>Wie es funktioniert</h3>
   <ul>
-    <li>Übertragen wird mit der eingebauten Funktion des Handys bzw. von Chrome. Die App selbst schickt nichts ins Netz, es gibt keinen Server und kein Konto.</li>
+    <li>Übertragen wird mit der eingebauten Funktion des Handys bzw. von Chrome, ohne Server und ohne Konto.</li>
     <li>Eine Webseite kann die Übertragung nicht selbst starten. Der Knopf versucht, die passende Android-Einstellung zu öffnen. Klappt das nicht, über die Schnelleinstellungen.</li>
     <li>Übertragen wird der ganze Handy-Bildschirm, also auch Benachrichtigungen. Tipp: <em>Nicht stören</em> einschalten.</li>
     <li>Der Ton kommt ab Android 10 mit. Bei manchen Handys lässt sich in der Übertragung wählen, ob er am Handy oder am Fernseher spielt.</li>
@@ -182,11 +222,20 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
     <li>Gespeichert werden nur Szene und Einstellungen, in diesem Browser.</li>
   </ul>
   <h3>KI-Agent (WebMCP)</h3>
-  <p>Unterstützt der Browser WebMCP, kann ein KI-Agent die Szene wechseln und den Zustand lesen.</p>
+  <p>Unterstützt der Browser WebMCP, kann ein KI-Agent die Szene wechseln und den Zustand lesen. Streamen starten kann er nicht.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
-  <p>A test of how an app with music can be shown on a Chromecast or Android TV. If it works well, “Show on TV” comes to other apps too.</p>
-  <h3>How to use</h3>
+  <p>A test of how an app with music can be shown on a Chromecast or Android TV – in two ways. If it works well, “Show on TV” comes to other apps too.</p>
+  <h3>Stream directly</h3>
+  <ul>
+    <li><em>Show on TV</em> → <em>Stream directly</em> → pick the TV. The music starts too. End with <em>Stop streaming</em>.</li>
+    <li>The app draws its picture itself and makes the music in the browser. Both go as a live stream (WebRTC) straight over the Wi-Fi to the TV, with no server in between. The TV runs a small receiver page of this website for it.</li>
+    <li>To pick the TV, the app loads Google's Cast program (gstatic.com) on the first tap. Nothing is loaded before.</li>
+    <li>Keep the app open while streaming; the screen stays on for it. In the background the picture freezes.</li>
+    <li>Only in Chrome or Edge (Android, computer). In the menu (☰): picture quality, music on the phone too, log on the TV, connection helper.</li>
+    <li><em>Problems:</em> if “Connecting …” stays, turn on <em>Show a log on the TV</em> in the menu and try again, if needed the <em>connection helper</em>. If it stutters, pick a lower picture quality. Then <em>Copy diagnostics</em>.</li>
+  </ul>
+  <h3>Cast the screen</h3>
   <ul>
     <li>Tap <em>Show on TV</em>. First start the phone's screen casting and come back to the app. Then tap <em>Start full screen</em>.</li>
     <li>In full screen the picture turns to landscape and fills the TV. A tap on the picture shows the bar with scenes, music and <em>Exit full screen</em>.</li>
@@ -195,7 +244,7 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
   </ul>
   <h3>How it works</h3>
   <ul>
-    <li>Casting uses the phone's or Chrome's built-in feature. The app itself sends nothing over the network, there is no server and no account.</li>
+    <li>Casting uses the phone's or Chrome's built-in feature, with no server and no account.</li>
     <li>A web page cannot start casting itself. The button tries to open the right Android setting. If that does not work, use the quick settings.</li>
     <li>The whole phone screen is cast, notifications too. Tip: turn on <em>Do not disturb</em>.</li>
     <li>Sound comes along from Android 10. On some phones you can choose whether it plays on the phone or the TV.</li>
@@ -203,7 +252,7 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
     <li>Only the scene and settings are stored, in this browser.</li>
   </ul>
   <h3>AI agent (WebMCP)</h3>
-  <p>If the browser supports WebMCP, an AI agent can switch the scene and read the state.</p>
+  <p>If the browser supports WebMCP, an AI agent can switch the scene and read the state. It cannot start streaming.</p>
   </div>
   <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
   <h3 data-i18n="diag.h">Fehlersuche</h3>
@@ -216,11 +265,12 @@ main{display:flex;flex-direction:column;gap:10px;padding:10px 12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 30e903dd60f9</p>
+  <p class="footer-version">Version 7c70a385fe17</p>
   <!-- footer:end -->
 </footer>
 
 <script src="../assets/common.js"></script>
+<script src="../assets/shared/cast.js"></script>
 <script src="tv.js"></script>
 <script src="app.js"></script>
 </body>

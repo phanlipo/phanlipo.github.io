@@ -6,23 +6,19 @@ Status: **geplant** (soll kommen), **zurückgestellt** (passt gerade nicht, spä
 
 Neue Einträge oben; bei Umsetzung den Eintrag entfernen oder auf die App verweisen.
 
-## Auf Fernseher streamen (Chromecast / Android TV) – teilweise umgesetzt (2026-11)
+## Auf Fernseher streamen (Chromecast / Android TV) – im Test (2026-11)
 
-Ziel: Bild einer App live mit Musik auf Chromecast oder Android TV.
+Ziel: Bild einer App live mit Musik auf Chromecast oder Android TV. `cast-demo` bietet zwei Wege zum Vergleich; danach entscheiden, was in andere Apps kommt.
 
-**Umgesetzt (`cast-demo`):** Übertragen wird mit der eingebauten Bildschirmübertragung des Handys (Android *Bildschirm übertragen* / *Smart View* / Google-Home-App; Chrome am Computer *Tab streamen*; iPhone nur AirPlay). Die App bereitet nur das Bild vor: Vollbild ohne Leisten, Querformat (`screen.orientation.lock`), Bildschirm bleibt an (Wake Lock), Leiste blendet sich aus. Ein Link `intent:#Intent;action=android.settings.CAST_SETTINGS;end` versucht, die Übertragungs-Einstellung direkt zu öffnen; öffnet Chrome sie nicht (Seite bleibt sichtbar), erscheint ein Hinweis. Baustein `cast-demo/tv.js` (`TvMode`) ohne eigenes DOM – nach erfolgreichem Test nach `assets/shared/` verschieben und in andere Apps einbauen (z. B. als Eintrag im Menü). Kein Code fürs Netz, keine Anmeldung, geht für jede App, wie sie ist.
+**1. Bildschirm übertragen (für jede App):** eingebaute Übertragung des Handys (Android *Bildschirm übertragen* / *Smart View* / Google-Home-App; Chrome am Computer *Tab streamen*; iPhone nur AirPlay). Die App bereitet nur das Bild vor: Vollbild, Querformat (`screen.orientation.lock`), Bildschirm bleibt an, Leiste blendet sich aus – Baustein `cast-demo/tv.js` (`TvMode`). Ein Link `intent:#Intent;action=android.settings.CAST_SETTINGS;end` versucht, die Einstellung direkt zu öffnen, sonst Hinweis. Grenzen: Seite kann die Übertragung nicht selbst starten, spiegelt alles (auch Benachrichtigungen), Ton erst ab Android 10. Offen: ob Chrome den `intent:`-Link öffnet.
 
-**Grenzen:** Die Seite kann die Übertragung nicht selbst starten. Es wird der ganze Bildschirm gespiegelt (auch Benachrichtigungen). Verzögerung ca. 0,5–1 s. Ton erst ab Android 10. Ob der `intent:`-Link aus Chrome die Einstellungen öffnet, ist offen (Chrome lässt aus Webseiten nur bestimmte Intents zu) – auf dem Gerät testen.
-
-**Geprüft und zurückgestellt: eigener Stream per Cast-SDK + WebRTC.** Die App zeichnet in ein `<canvas>`, Musik per Web Audio, beides als WebRTC-Stream direkt im WLAN an eine eigene Empfänger-Seite auf dem Fernseher (Cast „Custom Web Receiver“), Verbindungsaufbau über den Cast-Nachrichtenkanal. Prototyp im Verlauf des Branches `claude/cast-demo-architecture-xx50be` (Commit „WIP: Cast-Demo“). Gründe:
-- Eigene Empfänger brauchen eine App-ID aus der Google Cast SDK Developer Console (5 US-Dollar), und solange sie nicht veröffentlicht ist, muss jedes Gerät per Seriennummer eingetragen werden.
-- Sender- und Empfänger-SDK müssen von `www.gstatic.com` geladen werden (nicht als Vendor-Bibliothek möglich) – Ausnahme von CSP und „keine fremden Server“.
-- Chrome auf Android kann den Bildschirm nicht aufnehmen (`getDisplayMedia` fehlt) – nur Apps, die ihr Bild in ein Canvas zeichnen, wären streambar, DOM-Apps nicht.
-- Ungewiss: WebRTC-Verbindung im WLAN mit mDNS-Kandidaten auf dem Chromecast, Tonqualität (Opus-Stereo per SDP).
+**2. Direkt streamen (nur Apps mit Canvas-Bild):** `assets/shared/cast.js` (`CastStream`). Die App zeichnet in ein `<canvas>`, Musik per Web Audio; beides als WebRTC-Stream direkt im WLAN an die Empfänger-Seite `assets/shared/cast-receiver.html` auf dem Fernseher. Die Empfänger-App ist in der Google Cast SDK Developer Console registriert („phanlipo.github.io“, App-ID `B72055BC`, Custom Receiver mit dieser Adresse); solange sie nicht veröffentlicht ist, nur auf dort eingetragenen Geräten. Der Cast-Nachrichtenkanal trägt nur Angebot/Antwort (ohne Trickle-ICE) und Status. Opus-Stereo mit Musik-Bitrate per SDP. Vorteile: ein Tippen, Fernseher zeigt nur das App-Bild, Handy frei für Bedienung.
+- Ausnahme von den Regeln: Sender- und Empfänger-SDK nur von `www.gstatic.com` (nicht als Vendor-Bibliothek). Die App lädt es erst beim Tippen auf *Direkt streamen*; `<meta name="tool:cast" content="true">` erlaubt es in der CSP (`build.mjs`). Optional STUN-Server von Google (Schalter, aus).
+- Chrome auf Android kann den Bildschirm nicht aufnehmen (`getDisplayMedia` fehlt) – DOM-Apps lassen sich so nicht streamen, nur was ins Canvas gezeichnet wird.
+- Offen bis zum Gerätetest: WebRTC im WLAN mit mDNS-Kandidaten auf dem Chromecast, Tonqualität, Verzögerung.
+- Lohnt sich besonders, wenn der Fernseher ein **anderes** Bild zeigen soll als das Handy (Spiel mit Fernseher als Spielbrett, Handy als Controller).
 
 **Weitere geprüfte Wege:** *Remote Playback API* (`video.remote.prompt()`, Chrome Android, ohne Anmeldung) spielt nur eine Datei-URL auf dem Fernseher ab – kein Live-Bild. *Presentation API* mit `https:`-Adresse rendert nur Chrome am Computer selbst und spiegelt sie; auf Android nur mit Cast-App-ID.
-
-**Neu prüfen, wenn:** eine App ein **anderes** Bild auf dem Fernseher als auf dem Handy braucht (z. B. Spiel mit Fernseher als Spielbrett, Handy als Controller) – dann lohnt der eigene Empfänger.
 
 ## Link-Kürzer – zurückgestellt (2026-11)
 
