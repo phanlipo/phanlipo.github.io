@@ -120,7 +120,8 @@ test('check a ticket, redraw a forfeited one, undo, copy, kept after reload', as
   const c = Number(await num(page));
   await page.reload();
   await expect(page.locator('#count')).toHaveText('Alle Preise sind vergeben');
-  await page.fill('#checkIn', String(other === c ? 3 : other));
+  // A ticket that won nothing: neither of the two winners (a, c)
+  await page.fill('#checkIn', String([1, 2, 3].find(n => n !== a && n !== c)));
   await expect(page.locator('#checkOut')).toContainText('leider kein Gewinn');
   await page.click('#btnCopy');
   await expect(page.locator('#toast')).toHaveText('Liste kopiert');
