@@ -6,6 +6,58 @@ Status: **geplant** (soll kommen), **zurückgestellt** (passt gerade nicht, spä
 
 Neue Einträge oben; bei Umsetzung den Eintrag entfernen oder auf die App verweisen.
 
+## MovePlay – Bewegungsspiele per Kamera – geplant (2026-11)
+
+Ziel: Kinder und Familien spielen vor der Kamera (Handy, Tablet, Laptop) mit dem ganzen Körper – springen, ducken, Arme heben, tanzen. Eine Bewegungs-Engine erkennt die Bewegungen, die Spiele selbst sind JSON-Beschreibungen. Ordner `move-play`, Titel „MovePlay“, `tool:tags` `Freizeit, Spiele, Kinder`, `tool:features` `Kamera, Vollbild, KI-Agent, Download nötig`, Speicher `move-play.`, Bühnen-Layout (Querformat bevorzugt).
+
+**Passt zum Projekt:** läuft komplett im Gerät; MediaPipe (`@mediapipe/tasks-vision` 1.2.0) ist schon als Vendor-Bibliothek da (`precache: false`, `wasm`), das Muster für Worker mit Netzsperre, Modell-Download nach Rückfrage und Offline-Cache steht in `camera-effects/vision-worker.mjs`. Einzige fremde Anfrage: einmalig das Modell *Pose Landmarker lite* (ca. 5–6 MB, `storage.googleapis.com`), danach offline. Kamerabild wird nie verschickt oder aufgenommen.
+
+**Architektur (vier Schichten, nur die unterste kennt MediaPipe):**
+
+1. `pose-worker.mjs` (Worker im App-Ordner, Netzsperre wie `camera-effects`): Kamerabild als `ImageBitmap` rein, je Person 33 Körperpunkte (x, y, z, Sichtbarkeit) raus; `numPoses` 1–4. Wahl lite/full nach Gerät; GPU-Delegate versuchen, sonst CPU. Option: die Netzsperre nach `assets/shared/` auslagern und von beiden Apps nutzen.
+2. `motion.js` – Bewegungs-Engine ohne DOM:
+   - **Normalisieren:** Koordinaten relativ zu Hüftmitte und Rumpflänge → unabhängig von Abstand und Körpergröße (Kind/Erwachsener). Glätten mit One-Euro-Filter.
+   - **Kalibrieren:** 2 s still stehen, ganzer Körper im Bild → Grundhöhe von Hüfte/Kopf je Spieler. Hinweise „weiter zurück“, „mehr Licht“.
+   - **Spieler zuordnen:** Personen bleiben über ihre Position (links/rechts) mit Hysterese derselbe Spieler.
+   - **Ereignisse** (feste, getestete Liste): `jump`, `duck`, `armsUp`, `armLeft/Right`, `clap`, `stepLeft/Right`, `lean`, `runInPlace`, `jumpingJack`, `freeze` (kaum Bewegung) – je mit Zeitstempel und Stärke. **Zustände** laufend: Handpositionen (für Ziele antippen), Bewegungsenergie, Winkel der Gelenke.
+   - **Posen vergleichen:** Ziel-Pose als Winkelvektor (Ellbogen, Schultern, Knie, Hüfte) mit Toleranz → 0–100 %.
+3. `engine.js` – Spiel-Engine: liest eine Spiel-Beschreibung (JSON), führt Runden, Zeit, Punkte, Leben und Schwierigkeit, hört nur auf Ereignisse/Zustände aus `motion.js`. Spielmechaniken als erweiterbare Liste mit festem Vertrag (wie `treasure-hunt/puzzles.js`, `card-games/`), z. B. `mechanics/command.js`:
+   - `command` – Befehle ansagen und im Zeitfenster prüfen („Simon sagt“, mit Fallen ohne „Simon sagt“)
+   - `count` – so viele Wiederholungen wie möglich in N Sekunden (Hampelmann, Kniebeugen)
+   - `dodge` – Hindernisse kommen oben/unten → ducken oder springen
+   - `targets` – Blasen/Sterne erscheinen, mit Hand oder Fuß treffen
+   - `pose` – Posen im Takt nachmachen (Tanz)
+   - `freeze` – tanzen, bei Musik-Stopp einfrieren (Stopptanz)
+   Neue Spiele = neues JSON (ohne Code); neue Mechanik = eine Datei mit Vertrag, Engine und Bewegungserkennung bleiben unverändert. „Beliebige Spiele“ also im Rahmen der Mechaniken – ganz ohne Code geht nicht jedes Spiel.
+4. Seite `index.html` + `render.js`: Canvas mit gespiegeltem Kamerabild (oder nur Strichfigur/Avatar), Spielobjekte, große Anzeigen, Ton per Web Audio (Ansagen per `speechSynthesis` optional, eigene erzeugte Beats – keine geschützte Musik; Melodien aus `assets/shared/songs.js` möglich). Bildschirm bleibt an (Wake Lock), Vollbild.
+
+**JSON-Format (Entwurf, `move-play/games/*.json`, mitgecacht):**
+
+```json
+{ "format": "moveplay-game", "version": 1, "id": "duck-jump",
+  "title": { "de": "Ducken & Springen", "en": "Duck & Jump" },
+  "players": { "min": 1, "max": 2 }, "ages": "4+", "space": "medium",
+  "mechanic": "dodge", "duration": 60,
+  "params": { "speed": [1, 2.5], "obstacles": ["high", "low"], "lives": 3 },
+  "scoring": { "hit": 10, "streakBonus": 5 } }
+```
+
+Geprüft gegen ein Schema (Teilmenge wie `Tools.mcp.checkSchema`), Texte zweisprachig im JSON. Eigene Spiele: JSON-Datei laden oder einfügen, gespeichert unter `move-play.games.v1` (damit in der Sicherung); später ein kleiner Editor.
+
+**Erste Spiele (MVP, 1 Spieler):** Simon sagt · Hampelmann-Challenge · Ducken & Springen · Blasen fangen. **Danach:** Stopptanz, Posen nachmachen, 2 Spieler nebeneinander vor einer Kamera (gegeneinander/miteinander), Bestwerte je Spieler.
+
+**Später:** Fernseher als Bildschirm über `assets/shared/cast.js` (App zeichnet ohnehin ins Canvas – ideal für „Handy filmt, Fernseher zeigt“); Duell auf zwei Geräten über `assets/shared/p2p.js` (nur Ereignisse/Punkte übertragen, nie Bilder).
+
+**WebMCP:** `list_games`, `get_scores` (readOnly), `add_game` (prüft und speichert eine JSON-Beschreibung – ein Agent kann so neue Spiele schreiben). Kamera starten nie per Agent.
+
+**Sicherheit & Kinder:** Hinweis „Platz freiräumen, nichts Zerbrechliches in der Nähe“ vor jedem Spiel mit Springen, `space` im JSON, Pausen-Hinweis nach längerer Zeit, kein Konto, keine Bestenliste online.
+
+**Fehlersuche:** `Tools.diag` meldet Modell, Ladezeit, Delegate (GPU/CPU), Bilder/s, Rechenzeit je Bild, Kameraauflösung, erkannte Personen, Kalibrierung – keine Bilder oder Körperpunkte.
+
+**Tests:** `motion.js` mit aufgezeichneten bzw. erzeugten Körperpunkt-Folgen (`tests/fixtures/`, kein Video) – Sprung, Ducken, Hampelmann je mit Grenzfällen; `engine.js` mit künstlichen Ereignissen (Punkte unabhängig nachrechnen); Seite mit Fake-Kamera von Chromium und ersetztem Worker; Modell-Download blockiert (Fehlermeldung prüfen), Offline-Test nach erstem Laden; echter Download nur in `tests/manual/`.
+
+**Offen / Risiken:** Bildrate auf älteren Android-Handys (Ziel ≥ 15 Bilder/s mit lite-Modell) – vor dem Bau messen; Sprungerkennung, wenn das Handy schräg steht (Kalibrierung); mehrere Kinder dicht nebeneinander (Zuordnung); Safari/iPhone mit WebAssembly im Worker (in `camera-effects` schon erprobt).
+
 ## Auf Fernseher streamen (Chromecast / Android TV) – im Test (2026-11)
 
 Ziel: Bild einer App live mit Musik auf Chromecast oder Android TV. `cast-demo` bietet zwei Wege zum Vergleich; danach entscheiden, was in andere Apps kommt.
