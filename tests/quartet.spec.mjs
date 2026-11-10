@@ -204,6 +204,23 @@ async function playToEnd(pages, limit = 2000) {
   throw new Error('game did not end');
 }
 
+/** Waits until this player picks: taps "Weiter" after comparisons, starts again if the computer won before */
+async function myTurn(page) {
+  for (let i = 0; i < 300; i++) {
+    const r = await page.evaluate(() => {
+      if (document.querySelector('#table button.stat')) return 'mine';
+      const again = document.querySelector('#over:not([hidden]) #btnAgain');
+      if (again) { again.click(); return 'again'; }
+      const next = document.querySelector('#actions:not([hidden]) #btnNext');
+      if (next) next.click();
+      return 'wait';
+    });
+    if (r === 'mine') return;
+    await page.waitForTimeout(50);
+  }
+  throw new Error('never this player\'s turn');
+}
+
 test.describe('against the computer', () => {
   test.beforeEach(async ({ page }) => { await settings(page, { speed: 'fast', length: 'short' }); });
 
@@ -236,11 +253,7 @@ test.describe('against the computer', () => {
     await page.selectOption('#deckSel', 'dinosaurs');
     await page.selectOption('#cpuN', '1');
     await page.click('#btnCpu');
-    // Wait for own turn (the computer may start)
-    for (let i = 0; i < 50 && !(await page.locator('#table button.stat').count()); i++) {
-      if (await page.locator('#btnNext').isVisible()) await page.click('#btnNext');
-      await page.waitForTimeout(100);
-    }
+    await myTurn(page);
     await expect(page.locator('#turn.mine')).toHaveText(/^Du bist dran – wähle eine Kategorie!/);
     await expect(page.locator('#table button.stat')).toHaveCount(6);
     const name = await page.locator('#table .cname').textContent();
@@ -385,10 +398,11 @@ test.describe('WebMCP', () => {
     await page.click('#btnCpu');
     await expect(page.locator('#scrPlay')).toBeVisible();
     // Until it is this player's turn
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 200; i++) {
       r = await page.evaluate(() => window.__call('quartet_get_game', {}));
       if (r.r.your_turn) break;
       if (r.r.phase === 'comparison') await page.evaluate(() => window.__call('quartet_play_move', { index: 0 }));
+      if (r.r.phase === 'over') await page.click('#btnAgain');   // the computer won before this player's turn
       await page.waitForTimeout(250);
     }
     const gm = r.r;
