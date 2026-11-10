@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Liederbuch</title>
+<meta name="description" content="Gemeinfreie Lieder als Noten mit farbigen Tonstufenzahlen und Liedtext – abspielen und mitlesen, Tempo wählen, im Klavier mit fallenden Noten üben, als MIDI speichern oder drucken.">
+<meta name="tool:tags" content="Freizeit, Musik, Kinder">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="music">
+<meta name="tool:color" content="#6b4f1d">
+<meta name="tool:short-name" content="Liederbuch">
+<meta name="tool:title-en" content="Songbook">
+<meta name="tool:description-en" content="Public domain songs as sheet music with coloured scale numbers and lyrics – play and follow along, choose the tempo, practise them on the piano with falling notes, save as MIDI or print.">
+<meta name="tool:short-name-en" content="Songbook">
+<meta name="tool:storage" content="songbook.">
+<meta name="tool:webmcp" content="list_songs, open_song, control_playback">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-VlMDv8U9vREcuW9NJ5rF90pz9ctew2KQtLa2CF4huYM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Liederbuch">
+<meta name="theme-color" content="#6b4f1d">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#6b4f1d;--accent-text:#ffffff;
+  --deg1:#c22933;--deg2:#ad5c00;--deg3:#7a6600;--deg4:#0d7545;--deg5:#006382;--deg6:#294fa1;--deg7:#733894}
+@media (prefers-color-scheme: dark){:root{--accent:#d9b97c;--accent-text:#1f1606;
+  --deg1:#ff8a8f;--deg2:#ffb25c;--deg3:#e3cf52;--deg4:#5fd39a;--deg5:#5cc8eb;--deg6:#9cb6ff;--deg7:#d7a3f2}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.pick{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pick label{font-weight:600}
+.pick select{flex:1;min-width:0;min-height:44px;padding-inline:10px;font-size:16px}
+.sheet h2{margin:0}
+.credits{margin:2px 0 8px}
+/* Notation: abcjs draws with currentColor – text colour in light and dark mode, accent for the note being played */
+.score{color:var(--text);min-height:120px;touch-action:manipulation}
+.score svg{display:block}
+.score .abcjs-note,.score .abcjs-rest{cursor:pointer}
+.score .cur{color:var(--accent)}
+.score .cur .abcjs-notehead{filter:drop-shadow(0 0 2px var(--accent))}
+.score .abcjs-annotation{font-weight:700}
+.score .deg-1{fill:var(--deg1)}.score .deg-2{fill:var(--deg2)}.score .deg-3{fill:var(--deg3)}.score .deg-4{fill:var(--deg4)}
+.score .deg-5{fill:var(--deg5)}.score .deg-6{fill:var(--deg6)}.score .deg-7{fill:var(--deg7)}
+.score-error{color:var(--err)}
+.actions{margin-block-start:10px}
+/* Transport stays at the bottom of the screen while the page scrolls (thumb) */
+.transport{position:sticky;inset-block-end:0;z-index:5;display:flex;align-items:center;gap:8px;
+  padding:8px;padding-block-end:max(8px,env(safe-area-inset-bottom));margin-inline:-12px;margin-block-end:-12px;
+  background:var(--surface);border-block-start:1px solid var(--border)}
+.ctl{width:44px;height:44px;display:grid;place-items:center;flex:none;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit;font-size:22px;line-height:1}
+.ctl.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.ctl:disabled{opacity:.45;cursor:not-allowed}
+.ctl:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.ctl svg{width:22px;height:22px;display:block}
+.where{flex:1;min-width:0;font-variant-numeric:tabular-nums;font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tempo{flex:none;min-width:3.6em;text-align:center;font-variant-numeric:tabular-nums;font-size:14px;font-weight:600}
+/* Menu */
+.card h3{font-size:15px;margin:14px 0 6px}
+.card h3:first-of-type{margin-top:0}
+.seg{display:grid;grid-template-columns:repeat(var(--n,4),1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.seg button{min-height:44px;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;padding:4px;font:inherit;font-size:14px}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:700}
+.slider{display:flex;align-items:center;gap:10px;min-height:44px}
+.slider input{flex:1;accent-color:var(--accent);min-height:44px;margin:0}
+.slider output{min-width:3.5em;text-align:end;font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 0 0;padding:0;list-style:none;font-size:14px}
+.legend b{font-size:16px}
+@media print{
+  header,.pick,.actions,.transport,footer,.menu-btn,.update-btn,details,[data-menu],.toast{display:none!important}
+  body{background:#fff}
+  main{padding:0;max-width:none}
+  .card{border:0;box-shadow:none;padding:0}
+  .score{color:#000}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Liederbuch</span></h1>
+  <p class="sub" data-i18n="sub">Gemeinfreie Lieder mit Noten und Tonstufenzahlen</p>
+</header>
+<main>
+  <section class="card pick" aria-label="Lied wählen" data-i18n-attr="aria-label:pickLabel">
+    <label for="song" data-i18n="song">Lied</label>
+    <select id="song"></select>
+  </section>
+
+  <section class="card sheet" aria-labelledby="songTitle">
+    <h2 id="songTitle"></h2>
+    <p class="credits muted" id="credits"></p>
+    <div class="score" id="score"></div>
+    <div class="row actions">
+      <a class="btn primary" id="toPiano" href="../piano/" data-i18n="toPiano">Im Klavier üben</a>
+      <button type="button" class="btn" id="btnMidi" data-i18n="saveMidi">MIDI speichern</button>
+      <button type="button" class="btn" id="btnPrint" data-i18n="print">Drucken</button>
+    </div>
+  </section>
+
+  <div class="transport" id="transport" role="group" aria-label="Wiedergabe" data-i18n-attr="aria-label:transport">
+    <button type="button" class="ctl primary" id="btnPlay" aria-label="Abspielen" title="Abspielen" data-i18n-attr="aria-label:play; title:play"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor" stroke="none"><path id="playIcon" d="M7 4v16l13 -8z"/></svg></button>
+    <button type="button" class="ctl" id="btnRestart" aria-label="Zum Anfang" title="Zum Anfang" data-i18n-attr="aria-label:restart; title:restart"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5v14l-12 -7z"/><path d="M4 5l0 14"/></svg></button>
+    <span class="where" id="where" aria-live="off"></span>
+    <button type="button" class="ctl" id="btnSlower" aria-label="Langsamer" title="Langsamer" data-i18n-attr="aria-label:slower; title:slower">−</button>
+    <span class="tempo" id="tempo" aria-live="polite"></span>
+    <button type="button" class="ctl" id="btnFaster" aria-label="Schneller" title="Schneller" data-i18n-attr="aria-label:faster; title:faster">+</button>
+  </div>
+</main>
+
+<section class="card" aria-labelledby="h-settings" data-menu>
+  <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+  <h3 id="h-labels" data-i18n="labels">Über den Noten</h3>
+  <div class="seg" id="labels" role="group" aria-labelledby="h-labels" style="--n:3">
+    <button type="button" data-l="numbers" data-i18n="l.numbers">Zahlen</button>
+    <button type="button" data-l="names" data-i18n="l.names">Notennamen</button>
+    <button type="button" data-l="none" data-i18n="l.none">Nichts</button>
+  </div>
+  <ul class="legend" id="legend" aria-label="Tonstufenzahlen" data-i18n-attr="aria-label:legend"></ul>
+  <h3><label for="speed" data-i18n="speed">Tempo</label></h3>
+  <div class="slider"><input type="range" id="speed" min="50" max="150" step="10" value="100"><output id="speedOut" for="speed">100 %</output></div>
+  <h3 id="h-sound" data-i18n="sound">Klang</h3>
+  <div class="seg" id="sounds" role="group" aria-labelledby="h-sound">
+    <button type="button" data-s="piano" data-i18n="s.piano">Klavier</button>
+    <button type="button" data-s="epiano" data-i18n="s.epiano">E-Piano</button>
+    <button type="button" data-s="organ" data-i18n="s.organ">Orgel</button>
+    <button type="button" data-s="synth" data-i18n="s.synth">Synth</button>
+  </div>
+  <h3><label for="volume" data-i18n="volume">Lautstärke</label></h3>
+  <div class="slider"><input type="range" id="volume" min="0" max="100" step="5" value="80"><output id="volumeOut" for="volume">80 %</output></div>
+</section>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein kleines Liederbuch zum Klavierlernen: einfache Melodien als Noten mit Liedtext, die man sich vorspielen lassen und mitlesen kann. Alle Lieder sind gemeinfrei – Melodie und Text sind Volksgut oder ihre Urheber sind seit über 70 Jahren tot.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Oben ein <b>Lied</b> wählen. ▶ spielt es ab, die gerade erklingende Note wird farbig markiert und die Seite läuft mit.</li>
+    <li>Auf eine <b>Note tippen</b>: Sie erklingt, und die Wiedergabe springt dorthin. ⏮ geht zurück zum Anfang.</li>
+    <li><b>−</b> und <b>+</b> unten ändern das <b>Tempo</b> (50–150 %) – zum Üben erst langsam.</li>
+    <li><b>Im Klavier üben</b> öffnet das Lied in der App <i>Klavier</i>: Die Noten fallen auf die Tasten, manche Lieder haben dort eine Begleitung oder eine zweite Stimme (Kanon). Spuren lassen sich stummschalten und selbst spielen.</li>
+    <li><b>MIDI speichern</b> lädt das Lied als MIDI-Datei herunter (für andere Programme), <b>Drucken</b> druckt nur die Noten – oder speichert sie über den Druckdialog als PDF.</li>
+  </ul>
+  <h3>Tonstufenzahlen</h3>
+  <ul>
+    <li>Über jeder Note steht eine farbige Zahl für die weiße Taste: <b>1</b> = C, <b>2</b> = D, <b>3</b> = E, <b>4</b> = F, <b>5</b> = G, <b>6</b> = A, <b>7</b> = H.</li>
+    <li>Ein <b>Punkt über</b> der Zahl heißt eine Oktave höher, ein <b>Punkt darunter</b> eine Oktave tiefer – ohne Punkt liegt die Note zwischen dem mittleren C (C4) und dem H darüber.</li>
+    <li><b>♯</b> vor der Zahl: die schwarze Taste rechts daneben (z. B. ♯4 = Fis).</li>
+    <li>Im Menü (☰) unter <b>Einstellungen</b> lassen sich statt der Zahlen die Notennamen zeigen oder beides ausblenden; dort stehen auch Tempo, Klang und Lautstärke.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Die Arrangements sind einfache, einstimmige Übungsfassungen in C-Dur bzw. a-Moll. Quellen der Melodien und Texte stehen unter dem Titel.</li>
+    <li>Der Klang wird im Browser erzeugt (keine Aufnahmen), alles funktioniert offline. Kein Ton? Lautstärke aufdrehen, auf dem iPhone den Stummschalter ausschalten.</li>
+    <li>Gespeichert werden nur die Einstellungen und das zuletzt gewählte Lied – in diesem Browser.</li>
+    <li>Notensatz mit <i>abcjs</i> (MIT-Lizenz).</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann die Lieder auflisten, ein Lied öffnen und die Wiedergabe steuern (WebMCP). Jeder Aufruf erscheint hier als Hinweis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A small songbook for learning the piano: simple melodies as sheet music with lyrics that you can play back and follow. All songs are in the public domain – melody and words are traditional or their authors died more than 70 years ago.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Pick a <b>song</b> at the top. ▶ plays it, the note being played is highlighted and the page scrolls along.</li>
+    <li><b>Tap a note</b>: it sounds and playback jumps there. ⏮ goes back to the start.</li>
+    <li><b>−</b> and <b>+</b> at the bottom change the <b>tempo</b> (50–150 %) – start slowly when practising.</li>
+    <li><b>Practise on the piano</b> opens the song in the <i>Piano</i> app: the notes fall onto the keys, some songs have an accompaniment or a second voice (round) there. Mute parts and play them yourself.</li>
+    <li><b>Save MIDI</b> downloads the song as a MIDI file (for other programs), <b>Print</b> prints just the music – or saves it as a PDF from the print dialog.</li>
+  </ul>
+  <h3>Scale numbers</h3>
+  <ul>
+    <li>Above each note is a coloured number for the white key: <b>1</b> = C, <b>2</b> = D, <b>3</b> = E, <b>4</b> = F, <b>5</b> = G, <b>6</b> = A, <b>7</b> = B.</li>
+    <li>A <b>dot above</b> the number means one octave higher, a <b>dot below</b> one octave lower – without a dot the note lies between middle C (C4) and the B above it.</li>
+    <li><b>♯</b> before the number: the black key to its right (e.g. ♯4 = F♯).</li>
+    <li>In the menu (☰) under <b>Settings</b> you can show note names instead of numbers or hide both; tempo, sound and volume are there too.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>The arrangements are simple single-line practice versions in C major or A minor. Sources of the melodies and words are shown below the title.</li>
+    <li>The sound is generated in the browser (no recordings), everything works offline. No sound? Turn up the volume; on iPhone switch off the silent switch.</li>
+    <li>Only the settings and the last song chosen are stored – in this browser.</li>
+    <li>Music engraving with <i>abcjs</i> (MIT licence).</li>
+    <li><b>AI agent:</b> an AI agent in the browser can list the songs, open one and control playback (WebMCP). Each call shows a note here.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 7b83528a5738</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/vendor/abcjs/abcjs-basic-min.js"></script>
+<script src="../assets/shared/piano-sound.js"></script>
+<script src="../assets/shared/songs.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  play:'Abspielen',pause:'Pause',where:'Takt {a} / {b}',
+  'g.kids':'Kinderlieder','g.christmas':'Weihnachten','g.classical':'Klassik',
+  trad:'Volksweise',tradText:'überliefert',folk:'Volkslied',pd:'gemeinfrei',
+  melody:'Melodie: {a}',text:'Text: {a}',both:'Melodie und Text: {a}',
+  noLyrics:'ohne Text',scoreFailed:'Die Noten lassen sich nicht anzeigen.',
+  midiSaved:'MIDI-Datei gespeichert',noAudio:'Dieser Browser kann keine Töne erzeugen.',
+  scoreLabel:'Noten: {title}',
+  'mcp.list':'Lieder gelesen','mcp.open':'Lied geöffnet','mcp.control':'Wiedergabe gesteuert'
+},
+en:{
+  title:'Songbook',sub:'Public domain songs with sheet music and scale numbers',
+  pickLabel:'Choose a song',song:'Song',toPiano:'Practise on the piano',saveMidi:'Save MIDI',print:'Print',
+  transport:'Playback',play:'Play',pause:'Pause',restart:'To the start',slower:'Slower',faster:'Faster',
+  settings:'Settings',labels:'Above the notes','l.numbers':'Numbers','l.names':'Note names','l.none':'Nothing',
+  legend:'Scale numbers',speed:'Tempo',sound:'Sound','s.piano':'Piano','s.epiano':'E-piano','s.organ':'Organ','s.synth':'Synth',
+  volume:'Volume',where:'Bar {a} / {b}',
+  'g.kids':'Children’s songs','g.christmas':'Christmas','g.classical':'Classical',
+  trad:'traditional',tradText:'traditional',folk:'Folk song',pd:'public domain',
+  melody:'Music: {a}',text:'Words: {a}',both:'Music and words: {a}',
+  noLyrics:'no lyrics',scoreFailed:'The sheet music cannot be shown.',
+  midiSaved:'MIDI file saved',noAudio:'This browser cannot play generated sounds.',
+  scoreLabel:'Sheet music: {title}',
+  'mcp.list':'songs read','mcp.open':'song opened','mcp.control':'playback controlled'
+}});
+const {$,t}=Tools;
+const LS='songbook.settings.v1';
+const LABELS=['numbers','names','none'],SOUNDS=PianoSound.SOUNDS,GROUPS=['kids','christmas','classical'];
+const clampInt=(v,a,b,d)=>Number.isFinite(v)?Math.min(b,Math.max(a,Math.round(v/10)*10)):d;
+const settings=Object.assign({song:Songs.list[0].id,labels:'numbers',speed:100,sound:'piano',volume:80},Tools.load(LS,{}));
+if(!Songs.get(settings.song))settings.song=Songs.list[0].id;
+if(!LABELS.includes(settings.labels))settings.labels='numbers';
+if(!SOUNDS.includes(settings.sound))settings.sound='piano';
+settings.speed=clampInt(settings.speed,50,150,100);
+settings.volume=Number.isFinite(settings.volume)?Math.min(100,Math.max(0,Math.round(settings.volume))):80;
+const saveSettings=()=>Tools.save(LS,settings);
+
+/* ---------- Sound: the same generated instruments as the Klavier app ---------- */
+const snd=PianoSound({sound:()=>settings.sound,volume:()=>settings.volume,log:(m,d)=>Tools.diag.log(m,d)});
+
+/* ---------- Song → ABC notation (rendered by abcjs) ----------
+   One ABC note per melody token, so token i ↔ note group i in the SVG. The labels above the notes are
+   ABC annotations ("^1"); their colour comes from CSS classes added after rendering. */
+const DEG={C:1,D:2,E:3,F:4,G:5,A:6,B:7};
+const NAMES_DE={C:'C',D:'D',E:'E',F:'F',G:'G',A:'A',B:'H'};
+// Annotations above a note (ABC "^…", the first one is drawn on top): the scale number with a dot above
+// (octave higher) or below it (octave lower), or the note name
+function noteLabel(tok){
+  if(settings.labels==='numbers'){
+    const o=tok.oct-4,dots='•'.repeat(Math.min(2,Math.abs(o)));
+    const num=(tok.acc==='#'?'♯':tok.acc==='b'?'♭':'')+DEG[tok.letter];
+    return o>0?[dots,num]:o<0?[num,dots]:[num];
+  }
+  if(settings.labels==='names'){
+    if(Tools.lang()==='en')return [tok.letter+(tok.acc==='#'?'♯':tok.acc==='b'?'♭':'')];
+    const n=NAMES_DE[tok.letter];
+    if(tok.acc==='#')return [n+'is'];
+    if(tok.acc==='b')return [tok.letter==='B'?'B':tok.letter==='E'?'Es':tok.letter==='A'?'As':n+'es'];
+    return [n];
+  }
+  return [];
+}
+const len16=d=>{const n=Math.round(d*4);return n===1?'':String(n);};
+function abcPitch(tok){
+  const o=tok.oct;
+  return o>=5?tok.letter.toLowerCase()+"'".repeat(o-5):tok.letter+','.repeat(4-o);
+}
+// Lyrics of one verse → one unit per sung note: { text, sep } – sep is "-" inside a word, " " after it
+function lyricUnits(verse){
+  const out=[];
+  for(const word of verse.trim().split(/\s+/)){
+    if(word==='_'||word==='*'){out.push({text:word,sep:' '});continue;}
+    const syl=word.split('-');
+    syl.forEach((x,i)=>out.push({text:x,sep:i<syl.length-1?'-':' '}));
+  }
+  return out;
+}
+// First guess of the bars per line by estimated widths (note head and accidental, or the longest syllable
+// sung on it, 14 px font); renderScore then moves bars down while syllables or numbers overlap
+function noteNeed(tok,syl){
+  let w=tok.d>=1?26:tok.d>=.5?22:18;
+  if(tok.acc)w+=8;
+  return Math.max(w,syl?syl*7+8:0);
+}
+function lineBreaks(bars,width,sylAt){
+  const maxBars=width<500?4:width<900?6:8;
+  const counts=[];let n=0,used=0,k=0;
+  for(const bar of bars){
+    let w=12;
+    for(const tok of bar)w+=noteNeed(tok,tok.n!=null?sylAt[k++]:0);
+    if(n&&(used+w>width-40||n>=maxBars)){counts.push(n);n=0;used=0;}
+    n++;used+=w;
+  }
+  if(n)counts.push(n);
+  return counts;
+}
+// Longest syllable (characters) on each sung note over all verses
+function syllableLengths(song){
+  const sylAt=[];
+  song.lyrics.map(lyricUnits).forEach(units=>units.forEach((u,k)=>{if(u.text!=='_'&&u.text!=='*')sylAt[k]=Math.max(sylAt[k]||0,u.text.length+(u.sep==='-'?1:0));}));
+  return sylAt;
+}
+// Returns { abc, starts: [startChar of each token], tokens } – one ABC line per line of music (counts = bars per line),
+// each followed by its share of every verse (w: lines belong to the music line above them)
+function toAbc(song,counts){
+  const bars=Songs.bars(song),barLen=Songs.barBeats(song.meter);
+  const group=/\/8$/.test(song.meter)?1.5:1;   // beam eighths per beat (x/8: per dotted quarter)
+  let abc='X:1\nM:'+song.meter+'\nL:1/16\n%%annotationfont sans-serif 13\n%%vocalfont sans-serif 14\nK:C\n';
+  const starts=[],tokens=[];
+  const verses=song.lyrics.map(lyricUnits),used=verses.map(()=>0);
+  let at=0;
+  const lines=counts.map(n=>bars.slice(at,at+=n));
+  let bi=0;
+  lines.forEach((line,li)=>{
+    let sung=0;
+    line.forEach(bar=>{
+      const acc={};                   // accidental in force in this bar per letter+octave
+      let pos=bi===0&&song.upbeat?barLen-song.upbeat:0;
+      bar.forEach((tok,i)=>{
+        const atGroup=Math.abs(pos/group-Math.round(pos/group))<1e-9;
+        if(i>0&&atGroup)abc+=' ';
+        starts.push(abc.length);tokens.push(tok);   // abcjs counts the annotation as part of the note
+        if(tok.n!=null)for(const x of noteLabel(tok))abc+='"^'+x+'"';
+        if(tok.n==null)abc+='z'+len16(tok.d);
+        else{
+          sung++;
+          const key=tok.letter+tok.oct,want=tok.acc||'=',have=acc[key]||'=';
+          if(want!==have){abc+=want==='#'?'^':want==='b'?'_':'=';acc[key]=want;}
+          abc+=abcPitch(tok)+len16(tok.d);
+        }
+        pos+=tok.d;
+      });
+      bi++;
+      abc+=bi===bars.length?' |]':' |';
+      if(bi<bars.length&&line[line.length-1]!==bar)abc+=' ';
+    });
+    abc+='\n';
+    verses.forEach((units,v)=>{
+      const part=units.slice(used[v],used[v]+sung);used[v]+=sung;
+      if(part.length)abc+='w: '+part.map((u,k)=>u.text.replace(/[%\\"]/g,'')+(k<part.length-1?u.sep:u.sep==='-'?'-':'')).join('')+'\n';
+    });
+  });
+  return {abc,starts,tokens,lines:lines.length};
+}
+
+/* ---------- State ---------- */
+let song=null,abcInfo=null,groups=[],barStarts=[],total=0;
+let playing=false,pos=0,anchorPerf=0,anchorPos=0,nextIdx=0,schedTimer=null,cur=-1,sounded=0,lastWidth=0;
+const perf=()=>performance.now()/1000;
+const bps=()=>song.bpm*settings.speed/100/60;            // beats per second
+const songPos=()=>playing?anchorPos+(perf()-anchorPerf)*bps():pos;
+
+function selectSong(id,opts={}){
+  const s=Songs.get(id);if(!s)return false;
+  if(playing)pause();
+  song=s;settings.song=id;saveSettings();
+  abcInfo=null;
+  pos=0;cur=-1;
+  // Bar start positions in beats (for "bar 3 / 10")
+  const bars=Songs.bars(s);let at=0;barStarts=bars.map(b=>{const st=at;at+=b.reduce((m,x)=>m+x.d,0);return st;});
+  total=at;
+  $('song').value=id;
+  renderHead();renderScore();renderTransport();
+  if(!opts.quiet)Tools.diag.log('song',{id,bars:bars.length});
+  return true;
+}
+function renderHead(){
+  const s=song,L=Tools.lang();
+  $('songTitle').textContent=s.title[L]||s.title.de;
+  const c=s.credits||{},who=x=>x==='trad'?t('trad'):x;
+  let parts=[];
+  if(c.melody==='trad'&&c.text==='trad')parts.push(t('folk'));
+  else if(c.melody&&c.melody===c.text)parts.push(t('both',{a:who(c.melody)}));
+  else{if(c.melody)parts.push(t('melody',{a:who(c.melody)}));if(c.text)parts.push(t('text',{a:c.text==='trad'?t('tradText'):c.text}));}
+  if(!s.lyrics.length)parts.push(t('noLyrics'));
+  parts.push(t('pd'));
+  $('credits').textContent=parts.join(' · ');
+  $('toPiano').href='../piano/?song='+encodeURIComponent(s.id);
+  document.title=(s.title[L]||s.title.de)+' – '+(L==='en'?'Songbook':'Liederbuch');
+}
+function renderSongSelect(){
+  const L=Tools.lang();
+  $('song').innerHTML=GROUPS.map(g=>`<optgroup label="${Tools.esc(t('g.'+g))}">`+Songs.list.filter(s=>s.group===g).map(s=>`<option value="${Tools.esc(s.id)}">${Tools.esc(s.title[L]||s.title.de)}</option>`).join('')+'</optgroup>').join('');
+  if(song)$('song').value=song.id;
+}
+// Lines of the rendered score in which lyrics or labels overlap (measured in the SVG)
+function crowdedLines(el,width){
+  const bad=new Set();
+  for(const w of el.querySelectorAll('.abcjs-staff-wrapper')){
+    const m=/abcjs-l(\d+)/.exec(w.getAttribute('class')),b=w.getBBox();
+    if(m&&b.x+b.width>width+2)bad.add(Number(m[1]));
+  }
+  const rows=new Map();
+  for(const tx of el.querySelectorAll('.abcjs-lyric,.abcjs-annotation')){
+    const g=tx.closest('.abcjs-note'),m=g&&/abcjs-l(\d+)/.exec(g.getAttribute('class'));
+    if(!m)continue;
+    const b=tx.getBBox();if(!b.width)continue;
+    const key=m[1]+':'+Math.round(b.y/3);
+    if(!rows.has(key))rows.set(key,[]);
+    rows.get(key).push(b);
+  }
+  for(const [key,list] of rows){
+    list.sort((a,b)=>a.x-b.x);
+    for(let i=1;i<list.length;i++)if(list[i].x<list[i-1].x+list[i-1].width+2){bad.add(Number(key.split(':')[0]));break;}
+  }
+  return [...bad].sort((a,b)=>a-b);
+}
+function renderScore(){
+  const el=$('score');
+  const width=Math.max(240,el.clientWidth||320);
+  lastWidth=width;
+  groups=[];
+  if(!window.ABCJS){el.innerHTML=`<p class="score-error">${Tools.esc(t('scoreFailed'))}</p>`;Tools.diag.log('abcjs missing');return;}
+  try{
+    const bars=Songs.bars(song),counts=lineBreaks(bars,width,syllableLengths(song));
+    let vis;
+    for(let round=0;;round++){
+      abcInfo=toAbc(song,counts);
+      vis=ABCJS.renderAbc(el,abcInfo.abc,{add_classes:true,responsive:'resize',staffwidth:width,
+        paddingleft:0,paddingright:0,paddingtop:4,paddingbottom:4,foregroundColor:'currentColor'})[0];
+      // Syllables or numbers overlapping in a line with several bars: its last bar moves to the next line
+      const bad=crowdedLines(el,width).find(l=>counts[l]>1);
+      if(bad==null||round>200)break;
+      counts[bad]--;
+      if(bad+1<counts.length)counts[bad+1]++;else counts.push(1);
+    }
+    el.dataset.lines=String(counts.length);
+    // abcjs element → token index via its position in the ABC text
+    // (abcjs may count a space before the note as part of it: take the first token starting inside the element)
+    const starts=abcInfo.starts;
+    const indexOf=e=>{let lo=0,hi=starts.length;while(lo<hi){const m=(lo+hi)>>1;if(starts[m]<e.startChar)lo=m+1;else hi=m;}return lo<starts.length&&starts[lo]<e.endChar?lo:null;};
+    for(const line of vis.lines)for(const st of line.staff||[])for(const v of st.voices)for(const e of v){
+      if(e.el_type!=='note')continue;
+      const i=indexOf(e);
+      const g=e.abselem&&e.abselem.elemset&&e.abselem.elemset[0];
+      if(i==null||!g)continue;
+      groups[i]=g;g.dataset.i=String(i);
+      const tok=abcInfo.tokens[i];
+      if(settings.labels==='numbers')for(const ann of g.querySelectorAll('.abcjs-annotation'))ann.classList.add('deg-'+DEG[tok.letter]);
+    }
+    const svg=el.querySelector('svg');
+    if(svg){svg.setAttribute('aria-label',t('scoreLabel',{title:$('songTitle').textContent}));svg.querySelector('title')?.remove();}
+    el.dataset.notes=String(groups.filter(Boolean).length);
+    el.dataset.song=song.id;
+    cur=-1;highlight();
+  }catch(e){
+    el.innerHTML=`<p class="score-error">${Tools.esc(t('scoreFailed'))}</p>`;
+    Tools.diag.log('render failed',{song:song.id,error:String(e)});
+  }
+}
+function renderLegend(){
+  const show=settings.labels==='numbers';
+  $('legend').hidden=!show;
+  const names=Tools.lang()==='en'?['C','D','E','F','G','A','B']:['C','D','E','F','G','A','H'];
+  $('legend').innerHTML=names.map((n,i)=>`<li><b style="color:var(--deg${i+1})">${i+1}</b> = ${n}</li>`).join('');
+}
+
+/* ---------- Playback ---------- */
+function lowerBound(beat){const a=abcInfo.tokens;let lo=0,hi=a.length;while(lo<hi){const m=(lo+hi)>>1;if(a[m].t<beat)lo=m+1;else hi=m;}return lo;}
+function schedule(){
+  if(!playing)return;
+  const now=songPos();
+  if(now>=total){finish();return;}
+  const c=snd.peek(),horizon=now+.25*bps(),toks=abcInfo.tokens;
+  while(nextIdx<toks.length&&toks[nextIdx].t<horizon){
+    const x=toks[nextIdx++];
+    if(x.n==null||x.t<now-.05)continue;
+    sounded++;$('score').dataset.sounded=String(sounded);
+    if(c)snd.voice(x.n,.75,c.currentTime+Math.max(0,(x.t-now)/bps()),x.d/bps()*.92);
+  }
+}
+function play(){
+  if(!song||!abcInfo||playing)return;
+  if(pos>=total)pos=0;
+  playing=true;anchorPerf=perf();anchorPos=pos;nextIdx=lowerBound(pos-.001);
+  schedule();schedTimer=setInterval(schedule,40);
+  renderTransport();
+  Tools.diag.log('play',{song:song.id,pos:+pos.toFixed(2),speed:settings.speed,audio:snd.state()});
+}
+function pause(){
+  if(!playing)return;
+  pos=Math.min(total,songPos());playing=false;clearInterval(schedTimer);schedTimer=null;
+  renderTransport();
+}
+function finish(){pause();pos=0;cur=-1;highlight();renderTransport();Tools.diag.log('song ended');}
+function seek(beat){
+  const was=playing;if(was)pause();
+  pos=Math.min(total,Math.max(0,beat));
+  if(was)play();else{renderTransport();highlight();}
+}
+function togglePlay(){if(playing)pause();else play();}
+function setSpeed(p){
+  const was=playing;if(was)pause();
+  settings.speed=clampInt(p,50,150,100);saveSettings();
+  renderSpeed();
+  if(was)play();
+}
+// The note sounding at the current position (or the one tapped last while stopped)
+function noteIndexAt(beat){
+  if(!abcInfo)return -1;
+  const toks=abcInfo.tokens;let i=lowerBound(beat+1e-6)-1;
+  return i>=0&&beat<toks[i].t+toks[i].d?i:-1;
+}
+function highlight(){
+  const i=playing||pos>0?noteIndexAt(songPos()):-1;
+  if(i===cur)return;
+  if(groups[cur])groups[cur].classList.remove('cur');
+  cur=i;
+  $('score').dataset.cur=String(i);
+  const g=groups[i];
+  if(!g)return;
+  g.classList.add('cur');
+  // Keep the line being played visible above the transport bar
+  if(playing){
+    const r=g.getBoundingClientRect(),bottom=window.innerHeight-$('transport').offsetHeight-16;
+    if(r.bottom>bottom||r.top<8)window.scrollBy({top:r.top-Math.max(60,window.innerHeight*.25),behavior:'smooth'});
+  }
+}
+function renderTransport(){
+  const label=t(playing?'pause':'play'),b=$('btnPlay');
+  b.setAttribute('aria-label',label);b.title=label;b.dataset.state=playing?'playing':'paused';
+  $('playIcon').setAttribute('d',playing?'M6 4h4v16h-4zM14 4h4v16h-4z':'M7 4v16l13 -8z');
+  if(!song)return;
+  const p=songPos();let bar=0;while(bar+1<barStarts.length&&barStarts[bar+1]<=p+1e-9)bar++;
+  $('where').textContent=t('where',{a:bar+1,b:barStarts.length});
+}
+function renderSpeed(){
+  $('tempo').textContent=Tools.fmt(settings.speed,0)+' %';
+  $('speed').value=String(settings.speed);$('speedOut').textContent=Tools.fmt(settings.speed,0)+' %';
+  $('btnSlower').disabled=settings.speed<=50;$('btnFaster').disabled=settings.speed>=150;
+}
+let lastBar=-1;
+function frame(){
+  if(playing){
+    if(songPos()>=total)finish();
+    highlight();
+    const bar=Math.floor(songPos()*2);if(bar!==lastBar){lastBar=bar;renderTransport();}
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- MIDI file (type 1: one track per part, 480 ticks per quarter) ---------- */
+function midiFile(s){
+  const TPQ=480,parts=Songs.parts(s);
+  const vlq=n=>{const out=[n&0x7f];while(n>>=7)out.unshift((n&0x7f)|0x80);return out;};
+  const u32=n=>[n>>>24&255,n>>>16&255,n>>>8&255,n&255];
+  const text=(type,str)=>{const b=[...new TextEncoder().encode(str)];return [0,0xff,type,...vlq(b.length),...b];};
+  const track=evs=>[0x4d,0x54,0x72,0x6b,...u32(evs.length),...evs];
+  const us=Math.round(60e6/s.bpm),[num,den]=s.meter.split('/').map(Number);
+  const tracks=[track([...text(3,s.title.de),0,0xff,0x51,3,us>>16&255,us>>8&255,us&255,
+    0,0xff,0x58,4,num,Math.log2(den),24,8,0,0xff,0x2f,0])];
+  parts.forEach((p,ch)=>{
+    const ev=[];
+    for(const x of p.notes){ev.push({t:Math.round(x.t*TPQ),on:true,n:x.n});ev.push({t:Math.round((x.t+x.d)*TPQ)-10,on:false,n:x.n});}
+    ev.sort((a,b)=>a.t-b.t||(a.on-b.on));
+    const bytes=[...text(3,p.name.de||s.title.de),0,0xc0|ch,0];
+    let last=0;
+    for(const e of ev){bytes.push(...vlq(e.t-last),e.on?0x90|ch:0x80|ch,e.n,e.on?(ch?70:96):0);last=e.t;}
+    bytes.push(0,0xff,0x2f,0);
+    tracks.push(track(bytes));
+  });
+  return new Uint8Array([0x4d,0x54,0x68,0x64,...u32(6),0,1,0,tracks.length,TPQ>>8,TPQ&255,...tracks.flat()]);
+}
+function saveMidi(){
+  const blob=new Blob([midiFile(song)],{type:'audio/midi'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=song.id+'.mid';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+  Tools.toast(t('midiSaved'));
+  Tools.diag.log('midi saved',{song:song.id,bytes:blob.size});
+}
+
+/* ---------- Events ---------- */
+$('song').addEventListener('change',e=>selectSong(e.target.value));
+$('btnPlay').addEventListener('click',()=>{snd.unlock();togglePlay();});
+$('btnRestart').addEventListener('click',()=>{seek(0);cur=-1;highlight();});
+$('btnSlower').addEventListener('click',()=>setSpeed(settings.speed-10));
+$('btnFaster').addEventListener('click',()=>setSpeed(settings.speed+10));
+$('btnMidi').addEventListener('click',saveMidi);
+$('btnPrint').addEventListener('click',()=>{Tools.diag.log('print');window.print();});
+// Tap a note: it sounds, and playback continues (or will start) there
+$('score').addEventListener('click',e=>{
+  const g=e.target.closest&&e.target.closest('[data-i]');
+  if(!g||!abcInfo)return;
+  const tok=abcInfo.tokens[Number(g.dataset.i)];if(!tok)return;
+  snd.unlock();
+  if(tok.n!=null&&!playing){const c=snd.ctx();if(c)snd.voice(tok.n,.75,c.currentTime,Math.min(1.2,tok.d/bps()));}
+  seek(tok.t+1e-4);
+});
+document.addEventListener('keydown',e=>{
+  if(e.code!=='Space'||e.ctrlKey||e.metaKey||e.altKey||document.querySelector('dialog[open]'))return;
+  if(e.target.closest&&e.target.closest('button,input,select,textarea,a,summary'))return;
+  e.preventDefault();if(!e.repeat){snd.unlock();togglePlay();}
+});
+$('labels').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-l]');if(!b)return;
+  settings.labels=b.dataset.l;saveSettings();renderSettings();renderScore();
+});
+$('sounds').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-s]');if(!b)return;
+  settings.sound=b.dataset.s;saveSettings();renderSettings();
+  snd.unlock();const c=snd.ctx();if(c)snd.voice(60,.7,c.currentTime,.4);
+});
+$('speed').addEventListener('input',e=>{$('speedOut').textContent=Tools.fmt(Number(e.target.value),0)+' %';});
+$('speed').addEventListener('change',e=>setSpeed(Number(e.target.value)));
+$('volume').addEventListener('input',e=>{settings.volume=Number(e.target.value);snd.setVolume(settings.volume);$('volumeOut').textContent=Tools.fmt(settings.volume,0)+' %';});
+$('volume').addEventListener('change',saveSettings);
+function renderSettings(){
+  for(const b of document.querySelectorAll('#labels button'))b.setAttribute('aria-pressed',String(b.dataset.l===settings.labels));
+  for(const b of document.querySelectorAll('#sounds button'))b.setAttribute('aria-pressed',String(b.dataset.s===settings.sound));
+  $('volume').value=String(settings.volume);$('volumeOut').textContent=Tools.fmt(settings.volume,0)+' %';
+  renderSpeed();renderLegend();
+}
+
+/* ---------- Start ---------- */
+renderSettings();
+renderSongSelect();
+// ?song=<id> (link from the Klavier app) opens that song; the parameter is removed again
+const qs=new URLSearchParams(location.search),asked=qs.get('song');
+if(asked!=null){qs.delete('song');history.replaceState(history.state,'',location.pathname+(qs.toString()?'?'+qs:'')+location.hash);}
+selectSong(asked&&Songs.get(asked)?asked:settings.song,{quiet:true});
+// Re-layout the lines when the width changes noticeably (rotation, window size)
+new ResizeObserver(()=>{const w=$('score').clientWidth;if(song&&Math.abs(w-lastWidth)>24){const was=playing;renderScore();if(was)highlight();}}).observe($('score'));
+requestAnimationFrame(frame);
+if(!(window.AudioContext||window.webkitAudioContext))Tools.toast(t('noAudio'),4000);
+Tools.onLang(()=>{renderSongSelect();renderHead();renderSettings();renderScore();renderTransport();});
+Tools.diag.info(()=>({song:song&&song.id,labels:settings.labels,speed:settings.speed,sound:settings.sound,volume:settings.volume,
+  playing,pos:+songPos().toFixed(2),sounded,notes:groups.filter(Boolean).length,abcjs:window.ABCJS?ABCJS.signature||true:false,audio:snd.state()}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+function songInfo(s){
+  const notes=Songs.tokens(s.melody).filter(x=>x.n!=null);
+  return {id:s.id,title:s.title.en,title_de:s.title.de,category:s.group,meter:s.meter,bars:Songs.bars(s).length,
+    notes:notes.length,tempo_bpm:s.bpm,has_lyrics:s.lyrics.length>0,
+    melody_by:s.credits.melody||null,words_by:s.credits.text||null};
+}
+function state(){
+  return {song:song?songInfo(song):null,playing,bar:Number(($('where').textContent.match(/\d+/)||[1])[0]),
+    position_beats:+Math.min(songPos(),total).toFixed(2),speed_percent:settings.speed};
+}
+Tools.mcp.register({
+  name:'list_songs',title:'List the songs',label:'mcp.list',readOnly:true,
+  description:'Lists the public domain songs in the songbook: id, English and German title, category (kids, christmas, classical), meter, number of bars and notes, tempo in beats per minute, whether it has lyrics and who wrote melody and words ("trad" = traditional). Also returns the id of the song that is open.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({open:song?song.id:null,songs:Songs.list.map(songInfo)})
+});
+Tools.mcp.register({
+  name:'open_song',title:'Open a song',label:'mcp.open',
+  description:'Shows a song from the songbook with its sheet music (stops playback). Use an id from list_songs. Returns the playback state with details about the song.',
+  inputSchema:{type:'object',properties:{id:{type:'string',maxLength:40,description:'Song id, e.g. "entchen" or "ode".'}},required:['id'],additionalProperties:false},
+  execute:({id})=>{
+    if(!Songs.get(id))throw new Error(`Unknown song "${id}" – use list_songs for the ids`);
+    selectSong(id);
+    return state();
+  }
+});
+Tools.mcp.register({
+  name:'control_playback',title:'Control playback',label:'mcp.control',
+  description:'Plays, pauses or stops (pause and back to the start) the open song; the note being played is highlighted in the sheet music. Optionally sets the tempo in percent (50–150, steps of 10). Browsers only play sound after the user has touched the page once. Returns the playback state.',
+  inputSchema:{type:'object',properties:{
+    action:{type:'string',enum:['play','pause','stop'],description:'What to do.'},
+    speed_percent:{type:'integer',minimum:50,maximum:150,description:'Optional tempo in percent (100 = original).'}
+  },required:['action'],additionalProperties:false},
+  execute:({action,speed_percent})=>{
+    if(speed_percent!=null)setSpeed(speed_percent);
+    if(action==='play')play();
+    else if(action==='pause')pause();
+    else{pause();seek(0);cur=-1;highlight();}
+    renderTransport();
+    return state();
+  }
+});
+})();
+</script>
+</body>
+</html>

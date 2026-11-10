@@ -12,7 +12,7 @@ manifest.webmanifest  generiert: nur für das Home-Bildschirm-Icon der Startseit
 assets/base.css       Design-Tokens, Dark Mode, Karten, Buttons, Toast, Hilfe-Bereich
 assets/common.js      window.Tools: $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle, i18n, t, lang, setLang, locale, onLang, menu, mcp, diag, fullscreen, keep; registriert den Service Worker
 assets/vendor/        Fremdbibliotheken mit LICENSE je Ordner (generiert, nicht von Hand ändern)
-assets/shared/        eigene Skripte, die mehrere Apps nutzen (z. B. onnx-tts.js: KI-Stimmen für Text zu Sprache und Schatzsuche; p2p.js: WebRTC-Verbindung per QR-Code ohne Server, genutzt von card-games; heic.js + heic-decode.js: HEIC-Fotos lesen)
+assets/shared/        eigene Skripte, die mehrere Apps nutzen (z. B. onnx-tts.js: KI-Stimmen für Text zu Sprache und Schatzsuche; p2p.js: WebRTC-Verbindung per QR-Code ohne Server, genutzt von card-games; heic.js + heic-decode.js: HEIC-Fotos lesen; songs.js: gemeinfreie Lieder für Liederbuch und Klavier; piano-sound.js: erzeugte Instrumentenklänge für beide)
 template/             Vorlage für neue Seiten (wird nicht gelistet)
 scripts/build.mjs     erzeugt Seitenliste, Fußzeile (inkl. Version), <head>-Block (noindex, CSP, Icons, Manifest), manifest.webmanifest + sw.js je App
 scripts/build-icons.mjs  erzeugt icon.svg und PNG-Icons (180/192/512/maskable) je Seite (Tabler Icons)
