@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "template";
-const VERSION = 'eeafc7e36f5c';
+const VERSION = '521b63f1cf2d';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
