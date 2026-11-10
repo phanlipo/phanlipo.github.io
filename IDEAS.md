@@ -6,6 +6,17 @@ Status: **geplant** (soll kommen), **zurückgestellt** (passt gerade nicht, spä
 
 Neue Einträge oben; bei Umsetzung den Eintrag entfernen oder auf die App verweisen.
 
+## Code ausführen – umgesetzt (Python, JavaScript); Bash verworfen, Pakete zurückgestellt (2026-11)
+
+**Stand:** App `code-runner`: Python (Pyodide = CPython als WebAssembly, `assets/vendor/pyodide`, ca. 13 MB, `precache: false`) und JavaScript, jeweils in einem Worker im App-Ordner (`py-worker.mjs` bleibt zwischen den Läufen, `js-worker.mjs` je Lauf neu; *Stopp* beendet den Worker). `guard.mjs` entfernt dort vor dem ersten Nutzer-Code Netzwerk (`fetch` nur noch für die eigenen Pyodide-Dateien, `XMLHttpRequest`, `WebSocket` …) und den gemeinsamen Speicher der Domain (`caches`, `indexedDB`).
+
+- **`eval` nur im Worker:** Die CSP der Seite bleibt streng (kein `'unsafe-eval'`); Worker haben eine eigene CSP (auf GitHub Pages keine), deshalb läuft der Nutzer-Code dort. Bekannte Lücke: `import('https://…')` lässt sich im Worker nicht abschalten – der Code kommt damit aber an keine Daten der Seite. Steht in der Hilfe („keine vollständige Sandbox“).
+- **Sandbox per `<iframe sandbox>` mit eigener CSP – verworfen:** wäre dichter (`connect-src 'none'`), aber ein Frame ohne eigene Herkunft wird nicht vom Service Worker bedient (offline kaputt), und Code im Frame läuft im Thread der Seite (Endlosschleife friert die App ein, kein *Stopp*).
+- **`input()` mittendrin – zurückgestellt:** Synchrones Warten im Worker braucht `SharedArrayBuffer`, also die Header COOP/COEP, die GitHub Pages nicht setzen kann. Deshalb Eingaben vorab im Menü (eine Zeile je Aufruf). Ebenso kein `KeyboardInterrupt` – *Stopp* beendet den Worker, Python lädt beim nächsten Lauf neu (aus dem Cache).
+- **Python-Pakete (numpy, pandas, matplotlib) – zurückgestellt:** Pyodide lädt sie von `cdn.jsdelivr.net`; das npm-Paket enthält sie nicht. Möglich wäre, einzelne Wheels als eigene Vendor-Einträge auszuliefern (numpy allein ca. 3 MB) – erst bei Bedarf.
+- **Bash/Shell – verworfen:** Ein echtes Bash gibt es im Browser nur mit einem ganzen Linux (v86, WebVM/CheerpX: zig MB Disk-Image, teils von fremden Servern, CheerpX nicht frei lizenziert) oder WASI-Laufzeiten mit eigenem Paket-Server. Eine nachgebaute Shell mit ein paar Befehlen wäre kein Bash und ohne Dateien wenig wert.
+- **Weitere Sprachen – möglich:** Lua (`wasmoon`, MIT, klein), SQL (`sql.js`), Ruby (`ruby.wasm`, groß). Je Sprache ein Worker mit demselben Nachrichten-Vertrag (`run` → `out`/`done`, siehe Kopf von `js-worker.mjs`) und ein Eintrag in `LANGS` in `code-runner/app.js`.
+
 ## MovePlay – Bewegungsspiele per Kamera – umgesetzt, Erweiterungen offen (2026-11)
 
 **Stand:** App `move-play` (Aufbau in `move-play/README.md`) mit 6 Spielen (Simon sagt, Hampelmann-Challenge, Ducken & Springen, Blasen fangen, Stopptanz, Posen nachmachen), allein oder zu zweit nebeneinander (je Spieler eine Bildhälfte), „Leichter erkennen“ für kleine Kinder, GPU mit automatischer Wahl der schnelleren Rechenart. Mit echtem Modell geprüft (`tests/manual/move-play-e2e.mjs`, auch `TWO=1`): Testfoto erkannt und kalibriert, ca. 20–50 ms je Bild am Computer (CPU; die dort nur simulierte GPU ist langsamer und wird automatisch abgewählt).

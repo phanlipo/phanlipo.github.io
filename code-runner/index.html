@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Code ausführen</title>
+<meta name="description" content="Python und JavaScript direkt im Browser schreiben und ausführen – mit Ausgabe, Eingabe für input(), Beispielen und gespeicherten Skripten. Läuft offline, ohne Server.">
+<meta name="tool:tags" content="Arbeit, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Kopieren, KI-Agent, Download nötig">
+<meta name="tool:webmcp" content="run_code, get_code, get_output">
+<meta name="tool:icon" content="terminal-2">
+<meta name="tool:color" content="#3730a3">
+<meta name="tool:short-name" content="Code">
+<meta name="tool:title-en" content="Run Code">
+<meta name="tool:description-en" content="Write and run Python and JavaScript right in the browser – with output, input for input(), examples and saved scripts. Works offline, without a server.">
+<meta name="tool:short-name-en" content="Run Code">
+<meta name="tool:storage" content="code-runner.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Code">
+<meta name="theme-color" content="#3730a3">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#3730a3;--accent-text:#ffffff;--code-size:16px;--out-size:14px}
+@media (prefers-color-scheme: dark){:root{--accent:#a5b4fc;--accent-text:#11132b}}
+body.font-l{--code-size:18px;--out-size:16px}
+body.font-xl{--code-size:21px;--out-size:19px}
+main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right))}
+.topbar{flex:none;display:flex;gap:8px;align-items:center}
+.seg{flex:1;display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;min-width:0}
+.seg button{flex:1;min-height:44px;min-width:0;border:0;background:var(--surface-2);color:var(--text);cursor:pointer;padding-inline:10px;font:inherit;font-size:15px}
+.seg button+button{border-inline-start:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:700}
+.seg button:focus-visible,.icon-btn:focus-visible,.keys button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.icon-btn{flex:none;width:44px;height:44px;display:grid;place-items:center;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);cursor:pointer}
+.icon-btn:hover{border-color:var(--accent)}
+.icon-btn svg{width:22px;height:22px;display:block}
+.edit-box{flex:3 1 0;min-height:88px;display:flex;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.edit-box:focus-within{border-color:var(--accent)}
+#code{flex:1;min-width:0;border:0;border-radius:var(--radius);resize:none;padding:10px 12px;font:var(--code-size)/1.45 var(--mono);outline:0;background:transparent;tab-size:4;white-space:pre-wrap;overflow-wrap:anywhere}
+body.nowrap #code{white-space:pre;overflow-wrap:normal;overflow-x:auto}
+.out-box{flex:2 1 0;min-height:72px;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.out-head{flex:none;display:flex;align-items:center;gap:8px;padding-inline-start:12px;border-block-end:1px solid var(--border);background:var(--surface-2)}
+.out-head h2{font-size:14px;margin:0;flex:none}
+#status{flex:1;min-width:0;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#status.err{color:var(--err)}
+.out-head .icon-btn{border:0;border-radius:0;background:none}
+.out-head .icon-btn:hover{background:var(--surface)}
+#out{flex:1;min-height:0;margin:0;padding:8px 12px;overflow:auto;font:var(--out-size)/1.45 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;outline:0}
+body.nowrap #out{white-space:pre;overflow-wrap:normal}
+#out:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+#out:empty::before{content:attr(data-placeholder);color:var(--muted);font-family:var(--font)}
+#out .o-err{color:var(--err)}
+#out .o-in{color:var(--ok)}
+#out .o-res{color:var(--accent);font-weight:600}
+#out .o-info{color:var(--muted);font-style:italic}
+.bottom{flex:none;display:flex;gap:8px;align-items:center}
+#btnRun{flex:none;min-height:44px;display:inline-flex;align-items:center;gap:6px;padding-inline:14px}
+#btnRun svg{width:20px;height:20px;flex:none}
+#btnRun.stop{background:var(--err);border-color:var(--err);color:var(--surface)}
+.keys{flex:1;min-width:0;display:flex;gap:4px;overflow-x:auto;scrollbar-width:thin;padding-block-end:2px}
+.keys button{flex:none;min-width:44px;height:44px;padding-inline:8px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);cursor:pointer;font:16px var(--mono)}
+.keys button:active{background:var(--surface-2)}
+@media (min-width:900px){
+  main{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-rows:auto minmax(0,1fr) auto;column-gap:10px}
+  .topbar{grid-column:1}.edit-box{grid-column:1;grid-row:2}.bottom{grid-column:1;grid-row:3}
+  .out-box{grid-column:2;grid-row:1 / span 3}
+}
+/* Menu sections */
+.field{display:grid;gap:4px;margin-block:10px}
+.field>span{font-size:14px;color:var(--muted)}
+.field select,.field input[type=text],.field textarea{min-height:44px;padding:8px 10px;font-size:16px;width:100%}
+.field textarea{font-family:var(--mono);min-height:110px;resize:vertical}
+.save-row{display:flex;gap:8px;align-items:end}
+.save-row .field{flex:1;min-width:0;margin:0}
+.save-row .btn,.menu-row .btn{min-height:44px}
+.menu-row{display:flex;gap:8px;flex-wrap:wrap;margin-block-start:10px}
+.scripts{list-style:none;margin:10px 0 0;padding:0}
+.scripts li{display:flex;gap:6px;align-items:center;border-block-end:1px solid var(--border);padding-block:6px}
+.scripts .open{flex:1;min-width:0;min-height:44px;text-align:start;background:none;border:0;color:var(--text);font:inherit;cursor:pointer;padding:0}
+.scripts .name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scripts .meta{display:block;font-size:12px;color:var(--muted)}
+.check{display:flex;gap:10px;align-items:center;min-height:44px}
+.check input{width:22px;height:22px;flex:none;accent-color:var(--accent)}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Code ausführen</span></h1>
+  <p class="sub" data-i18n="sub">Python und JavaScript im Browser ausführen.</p>
+</header>
+
+<main>
+  <div class="topbar">
+    <div class="seg" id="langs" role="group" aria-label="Programmiersprache" data-i18n-attr="aria-label:langLabel">
+      <button type="button" data-l="python" aria-pressed="true">Python</button>
+      <button type="button" data-l="javascript" aria-pressed="false">JavaScript</button>
+    </div>
+  </div>
+  <div class="edit-box">
+    <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Programmcode" data-i18n-attr="aria-label:codeLabel; placeholder:codePh" placeholder="Code hier schreiben …"></textarea>
+  </div>
+  <div class="out-box">
+    <div class="out-head">
+      <h2 id="h-out" data-i18n="output">Ausgabe</h2>
+      <span id="status" role="status"></span>
+      <button type="button" class="icon-btn" id="btnCopy" aria-label="Ausgabe kopieren" title="Ausgabe kopieren" data-i18n-attr="aria-label:copyOut; title:copyOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z"/><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"/></svg></button>
+      <button type="button" class="icon-btn" id="btnClear" aria-label="Ausgabe leeren" title="Ausgabe leeren" data-i18n-attr="aria-label:clearOut; title:clearOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3"/><path d="M18 13.3l-6.3 -6.3"/></svg></button>
+    </div>
+    <pre id="out" tabindex="0" role="log" aria-labelledby="h-out" data-placeholder="Hier erscheint, was das Programm ausgibt." data-i18n-attr="data-placeholder:outPh"></pre>
+  </div>
+  <div class="bottom">
+    <button type="button" class="btn primary" id="btnRun"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor"><path id="runIcon" d="M7 4v16l13 -8z"/></svg><span id="runText">Ausführen</span></button>
+    <div class="keys" id="keys" role="toolbar" aria-label="Zeichen einfügen" data-i18n-attr="aria-label:keysLabel">
+      <button type="button" data-k="indent" aria-label="Einrücken" title="Einrücken" data-i18n-attr="aria-label:indent; title:indent">⇥</button>
+      <button type="button" data-k="outdent" aria-label="Ausrücken" title="Ausrücken" data-i18n-attr="aria-label:outdent; title:outdent">⇤</button>
+      <button type="button" data-p="()">( )</button>
+      <button type="button" data-p="[]">[ ]</button>
+      <button type="button" data-p="{}">{ }</button>
+      <button type="button" data-p='""'>" "</button>
+      <button type="button" data-p="''">' '</button>
+      <button type="button" data-p=":">:</button>
+      <button type="button" data-p="=">=</button>
+      <button type="button" data-p=";">;</button>
+      <button type="button" data-p="_">_</button>
+      <button type="button" data-p="<">&lt;</button>
+      <button type="button" data-p=">">&gt;</button>
+      <button type="button" data-p="#">#</button>
+    </div>
+  </div>
+
+  <section class="card" data-menu aria-labelledby="h-scripts">
+    <h2 id="h-scripts" data-i18n="scripts">Skripte</h2>
+    <label class="field"><span data-i18n="examples">Beispiel laden</span>
+      <select id="examples"></select>
+    </label>
+    <div class="save-row">
+      <label class="field"><span data-i18n="saveName">Aktuellen Code speichern als</span>
+        <input type="text" id="scriptName" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Name" data-i18n-attr="placeholder:namePh">
+      </label>
+      <button type="button" class="btn primary" id="btnSave" data-i18n="save">Speichern</button>
+    </div>
+    <ul class="scripts" id="scripts"></ul>
+    <div class="menu-row">
+      <button type="button" class="btn" id="btnOpen" data-i18n="openFile">Datei öffnen …</button>
+      <button type="button" class="btn" id="btnDownload" data-i18n="download">Als Datei herunterladen</button>
+    </div>
+    <input type="file" id="fileInput" accept=".py,.pyw,.js,.mjs,.cjs,.txt,text/plain,text/x-python,text/javascript,application/javascript" hidden>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-stdin">
+    <h2 id="h-stdin" data-i18n="stdinH">Eingabe für das Programm</h2>
+    <label class="field"><span data-i18n-html="stdinLabel">Eine Zeile je <code>input()</code> (Python) bzw. <code>prompt()</code> (JavaScript)</span>
+      <textarea id="stdin" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    </label>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-settings">
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <label class="field"><span data-i18n="fontSize">Schriftgröße</span>
+      <select id="font">
+        <option value="m" data-i18n="fontM">Normal</option>
+        <option value="l" data-i18n="fontL">Groß</option>
+        <option value="xl" data-i18n="fontXl">Sehr groß</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" id="wrap" checked><span data-i18n="wrap">Lange Zeilen umbrechen</span></label>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Kleine Programme in <b>Python</b> oder <b>JavaScript</b> schreiben und sofort ausführen – zum Lernen, Ausprobieren und Rechnen. Alles läuft in diesem Browser, es gibt keinen Server.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Oben die Sprache wählen, Code schreiben, unten <b>Ausführen</b> tippen (Tastatur: <kbd>Strg</kbd>+<kbd>Enter</kbd>). Die Ausgabe erscheint darunter bzw. am Computer rechts daneben. Fehler sind rot, das Ergebnis der letzten Zeile steht hinter einem Pfeil (→).</li>
+    <li>Läuft ein Programm zu lange oder endlos, beendet <b>Stopp</b> es.</li>
+    <li>Die Leiste unten fügt Zeichen ein, die auf der Handy-Tastatur schwer zu finden sind, und rückt Zeilen ein (⇥) oder aus (⇤). Mit Tastatur rückt <kbd>Tab</kbd> ein; zum Verlassen des Feldes vorher <kbd>Esc</kbd> drücken.</li>
+    <li><b>Eingaben:</b> Ein Programm kann hier nicht mittendrin nachfragen. Was <code>input()</code> (Python) bzw. <code>prompt()</code> oder <code>readline()</code> (JavaScript) lesen soll, vorher im Menü ☰ unter <i>Eingabe für das Programm</i> eintragen – eine Zeile je Aufruf.</li>
+    <li>Im Menü ☰ liegen außerdem <b>Beispiele</b>, die <b>gespeicherten Skripte</b>, <i>Datei öffnen</i> (<code>.py</code>, <code>.js</code>, <code>.txt</code>), <i>Als Datei herunterladen</i> und die Einstellungen (Schriftgröße, Zeilenumbruch).</li>
+    <li>Der Code im Editor wird automatisch gemerkt – je Sprache einer. Jeder Lauf beginnt frisch: Variablen aus dem letzten Lauf gibt es nicht mehr.</li>
+  </ul>
+  <h3>Was geht – und was nicht</h3>
+  <ul>
+    <li><b>Python</b> ist das echte Python (CPython als WebAssembly, <a href="https://pyodide.org" rel="noopener">Pyodide</a>) mit der Standardbibliothek: <code>math</code>, <code>random</code>, <code>json</code>, <code>re</code>, <code>datetime</code>, <code>itertools</code>, <code>statistics</code> … Zusatzpakete wie <code>numpy</code> oder <code>pandas</code> gibt es nicht – sie müssten von einem fremden Server geladen werden.</li>
+    <li>Beim ersten Start von Python lädt die App den Interpreter von dieser Seite (ca. 13 MB, einmalig). Danach geht auch Python offline. JavaScript läuft sofort.</li>
+    <li><b>JavaScript</b> läuft in der JavaScript-Engine des Browsers, aber ohne Seite: kein <code>document</code>, kein <code>window</code>. Ausgaben mit <code>console.log()</code>; <code>await</code> geht direkt auf oberster Ebene, <code>setTimeout</code> auch.</li>
+    <li><b>Bash/Shell</b> gibt es nicht: Dafür bräuchte es ein ganzes Linux im Browser.</li>
+    <li>Sehr lange Ausgaben werden gekürzt (nach ca. 1 Million Zeichen je Lauf).</li>
+  </ul>
+  <h3>Sicherheit &amp; Datenschutz</h3>
+  <ul>
+    <li>Der Code läuft abgetrennt von der Seite in einem eigenen Hintergrund-Prozess (Worker). Netzwerkzugriffe (<code>fetch</code>, <code>XMLHttpRequest</code>, <code>WebSocket</code>) und der Browser-Speicher sind dort gesperrt – ein Programm kann also weder Daten verschicken noch die Daten anderer Apps dieser Seite lesen.</li>
+    <li>Das ist ein Schutz vor Versehen, keine vollständige Sandbox. Führe nur Code aus, den du verstehst oder dem du vertraust.</li>
+    <li>Code, Eingabe und gespeicherte Skripte liegen nur in diesem Browser. Nichts wird hochgeladen.</li>
+  </ul>
+  <h3>KI-Agenten</h3>
+  <p>Browser mit WebMCP können die App als Werkzeug nutzen: Ein KI-Agent kann Code ausführen (er erscheint im Editor, die Ausgabe wie gewohnt darunter) sowie Code und letzte Ausgabe lesen. Hast du ungespeicherten Code im Editor, legt die App ihn vorher unter <i>Skripte</i> ab.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Write small programs in <b>Python</b> or <b>JavaScript</b> and run them right away – for learning, trying things out and calculating. Everything runs in this browser; there is no server.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Choose the language at the top, write code, tap <b>Run</b> at the bottom (keyboard: <kbd>Ctrl</kbd>+<kbd>Enter</kbd>). The output appears below, or next to the editor on a computer. Errors are red; the value of the last line follows an arrow (→).</li>
+    <li>If a program runs too long or forever, <b>Stop</b> ends it.</li>
+    <li>The bar at the bottom inserts characters that are hard to find on a phone keyboard and indents (⇥) or outdents (⇤) lines. With a keyboard <kbd>Tab</kbd> indents; press <kbd>Esc</kbd> first to leave the field.</li>
+    <li><b>Input:</b> a program cannot ask in the middle of a run here. Enter what <code>input()</code> (Python) or <code>prompt()</code> / <code>readline()</code> (JavaScript) should read beforehand in the menu ☰ under <i>Input for the program</i> – one line per call.</li>
+    <li>The menu ☰ also holds <b>examples</b>, your <b>saved scripts</b>, <i>Open file</i> (<code>.py</code>, <code>.js</code>, <code>.txt</code>), <i>Download as file</i> and the settings (font size, line wrapping).</li>
+    <li>The code in the editor is remembered automatically – one per language. Every run starts fresh: variables from the last run are gone.</li>
+  </ul>
+  <h3>What works – and what does not</h3>
+  <ul>
+    <li><b>Python</b> is the real Python (CPython as WebAssembly, <a href="https://pyodide.org" rel="noopener">Pyodide</a>) with its standard library: <code>math</code>, <code>random</code>, <code>json</code>, <code>re</code>, <code>datetime</code>, <code>itertools</code>, <code>statistics</code> … Extra packages such as <code>numpy</code> or <code>pandas</code> are not available – they would have to be loaded from another server.</li>
+    <li>The first time you use Python the app loads the interpreter from this site (about 13 MB, once). After that Python works offline too. JavaScript runs right away.</li>
+    <li><b>JavaScript</b> runs in the browser's JavaScript engine, but without a page: no <code>document</code>, no <code>window</code>. Print with <code>console.log()</code>; top-level <code>await</code> works, and so does <code>setTimeout</code>.</li>
+    <li>There is no <b>Bash/shell</b>: that would need a whole Linux inside the browser.</li>
+    <li>Very long output is cut off (after about 1 million characters per run).</li>
+  </ul>
+  <h3>Security &amp; privacy</h3>
+  <ul>
+    <li>The code runs separated from the page in its own background process (worker). Network access (<code>fetch</code>, <code>XMLHttpRequest</code>, <code>WebSocket</code>) and browser storage are blocked there – so a program can neither send data anywhere nor read the data of other apps on this site.</li>
+    <li>This protects against accidents; it is not a complete sandbox. Only run code you understand or trust.</li>
+    <li>Code, input and saved scripts stay in this browser. Nothing is uploaded.</li>
+  </ul>
+  <h3>AI agents</h3>
+  <p>Browsers with WebMCP can use the app as a tool: an AI agent can run code (it appears in the editor, the output below as usual) and read the code and the last output. If the editor holds unsaved code, the app puts it under <i>Scripts</i> first.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 6b353796300d</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
