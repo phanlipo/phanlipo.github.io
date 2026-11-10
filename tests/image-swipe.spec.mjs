@@ -1,5 +1,5 @@
 // Image Swipe: sources as JSON (fixed items or an API), swipe/like/pass, profiles, results, offline.
-// The TCGdex API is answered by Playwright routes shaped like the real responses – nothing leaves the machine.
+// The API and its pictures are answered by Playwright routes on *.example.test – nothing leaves the machine.
 import { test, expect, clipboardText, openMenu, closeMenu } from './helpers.mjs';
 
 const URL_ = '/image-swipe/';
@@ -7,26 +7,35 @@ const K = { sources: 'image-swipe.sources.v1', profiles: 'image-swipe.profiles.v
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 const ls = (page, key) => page.evaluate(k => JSON.parse(localStorage.getItem(k)), key);
 
-/** Stand-in for api.tcgdex.net and assets.tcgdex.net (answers with CORS headers like the real servers) */
-async function mockTcgdex(page, { cards } = {}) {
+const API = 'https://api.example.test/v1/sets/s1';
+/** An API source as a user would enter it: list under "cards", picture URL built from a template */
+const API_SOURCE = {
+  format: 'image-swipe-source', formatVersion: 1, id: 'karten-s1', title: 'Karten S1',
+  attribution: 'Daten: Beispiel-API',
+  api: { url: API, list: 'cards' },
+  fields: { id: 'id', title: 'name', subtitle: '#{localId}', image: '{image}/high.png' },
+};
+
+/** Stand-in for the API and its picture server (answers with CORS headers like a public API) */
+async function mockApi(page, { cards } = {}) {
   const seen = [];
   const cors = { 'access-control-allow-origin': '*' };
   const set = {
-    id: 'sv01', name: 'Karmesin & Purpur',
+    id: 's1', name: 'Set 1',
     cards: cards || [
-      { id: 'sv01-001', localId: '001', name: 'Tannza', image: 'https://assets.tcgdex.net/de/sv/sv01/001' },
-      { id: 'sv01-002', localId: '002', name: 'Skaraborn', image: 'https://assets.tcgdex.net/de/sv/sv01/002' },
-      { id: 'sv01-003', localId: '003', name: 'Ohne Bild' },                                                  // skipped: no picture
-      { id: 'sv01-002', localId: '002', name: 'Doppelt', image: 'https://assets.tcgdex.net/de/sv/sv01/x' },   // skipped: same id
-      { id: 'sv01-004', localId: '004', name: 'Kapilz', image: 'https://assets.tcgdex.net/de/sv/sv01/004' },
+      { id: 's1-001', localId: '001', name: 'Erste', image: 'https://img.example.test/s1/001' },
+      { id: 's1-002', localId: '002', name: 'Zweite', image: 'https://img.example.test/s1/002' },
+      { id: 's1-003', localId: '003', name: 'Ohne Bild' },                                        // skipped: no picture
+      { id: 's1-002', localId: '002', name: 'Doppelt', image: 'https://img.example.test/s1/x' },   // skipped: same id
+      { id: 's1-004', localId: '004', name: 'Vierte', image: 'https://img.example.test/s1/004' },
     ],
   };
-  await page.context().route(/^https:\/\/(api|assets)\.tcgdex\.net\//, async route => {
+  await page.context().route(/^https:\/\/(api|img)\.example\.test\//, async route => {
     const r = route.request();
     seen.push({ url: r.url(), headers: await r.allHeaders() });
-    if (r.url() === 'https://api.tcgdex.net/v2/de/sets/sv01')
+    if (r.url() === API)
       return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify(set) });
-    if (/^https:\/\/assets\.tcgdex\.net\/de\/sv\/sv01\/\d+\/high\.webp$/.test(r.url()))
+    if (/^https:\/\/img\.example\.test\/s1\/\d+\/high\.png$/.test(r.url()))
       return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'image/png' }, body: PNG });
     return route.fulfill({ status: 404, headers: cors, body: 'not found' });
   });
@@ -42,14 +51,17 @@ async function swipe(page, dx) {
   await page.mouse.up();
 }
 
+/** Adds a source in the menu; a valid one closes the menu so the first card shows */
 async function addJson(page, def) {
   await openMenu(page);
   await page.fill('#srcJson', typeof def === 'string' ? def : JSON.stringify(def));
   await page.click('#btnAdd');
+  await expect(page.locator('#appMenu')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => !(history.state && history.state.toolsMenu))).toBe(true);
 }
 
-// Requests to TCGdex are answered by the routes above – allow exactly these
-test.use({ allowedProblems: /^external request: https:\/\/(api|assets)\.tcgdex\.net\// });
+// Requests to the stand-in API are answered by the routes above – allow exactly these
+test.use({ allowedProblems: /^external request: https:\/\/(api|img)\.example\.test\// });
 
 test.describe('Image Swipe', () => {
   test('emoji example: swipe right/left, buttons, undo – ratings saved per source and item id', async ({ page }) => {
@@ -120,48 +132,59 @@ test.describe('Image Swipe', () => {
     expect(Object.keys(await ls(page, K.swipes))).toEqual(['p1']);
   });
 
-  test('TCGdex example: nothing is requested until “Daten laden”; list, ids and pictures as mapped; cookies never sent', async ({ page }) => {
-    const seen = await mockTcgdex(page);
+  test('menu “Datenquellen” from the empty deck keeps the menu head with ✕ in view', async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 800 });
     await page.goto(URL_);
-    await openMenu(page);
-    await page.click('#btnExTcg');
-    const def = JSON.parse(await page.inputValue('#srcJson'));
-    expect(def).toMatchObject({ format: 'image-swipe-source', formatVersion: 1, id: 'tcgdex-de-sv01', api: { url: 'https://api.tcgdex.net/v2/de/sets/sv01', list: 'cards' } });
-    await page.click('#btnAdd');
-    await expect(page.locator('#srcInfo')).toHaveText('„TCGdex: Karmesin & Purpur (deutsch)“ hinzugefügt – jetzt auf „Daten laden“ tippen.');
-    await expect(page.locator('#srcList .smeta').first()).toHaveText('id: tcgdex-de-sv01 · API api.tcgdex.net · noch nicht geladen');
-    await closeMenu(page);
-    await expect(page.locator('#emptyText')).toContainText('von api.tcgdex.net');
+    await page.locator('#emptyBtns button', { hasText: 'Datenquellen' }).click();
+    await expect(page.locator('#appMenu')).toBeVisible();
+    await expect.poll(() => page.locator('#srcCard').evaluate(c => {
+      const b = c.closest('.menu-body').getBoundingClientRect();
+      return Math.round(c.getBoundingClientRect().top - b.top);
+    })).toBeLessThan(40);
+    expect(await page.locator('#appMenu').evaluate(d => d.scrollTop)).toBe(0);
+    const head = await page.locator('#appMenu .menu-close').boundingBox();
+    const sheet = await page.locator('#appMenu').boundingBox();
+    expect(head.y).toBeGreaterThanOrEqual(sheet.y);
+    await page.locator('#appMenu .menu-close').click();
+    await expect(page.locator('#appMenu')).toBeHidden();
+  });
+
+  test('API source: nothing is requested until “Daten laden”; list, ids and pictures as mapped; cookies never sent', async ({ page }) => {
+    const seen = await mockApi(page);
+    await page.goto(URL_);
+    await addJson(page, API_SOURCE);
+    await expect(page.locator('#srcInfo')).toHaveText('„Karten S1“ hinzugefügt – jetzt auf „Daten laden“ tippen.');
+    await expect(page.locator('#srcList .smeta').first()).toHaveText('id: karten-s1 · API api.example.test · noch nicht geladen');
+    await expect(page.locator('#emptyText')).toContainText('von api.example.test');
     expect(seen).toEqual([]);
 
     await page.locator('#emptyBtns button', { hasText: 'Daten laden' }).click();
-    await expect(page.locator('#card')).toHaveAttribute('data-id', 'sv01-001');
-    await expect(page.locator('#cardTitle')).toHaveText('Tannza');
+    await expect(page.locator('#card')).toHaveAttribute('data-id', 's1-001');
+    await expect(page.locator('#cardTitle')).toHaveText('Erste');
     await expect(page.locator('#cardSub')).toHaveText('#001');
-    await expect(page.locator('#cardAttr')).toContainText('TCGdex');
+    await expect(page.locator('#cardAttr')).toHaveText('Daten: Beispiel-API');
     await expect(page.locator('#cardImg')).toBeVisible();
     expect(await page.locator('#cardImg').evaluate(i => i.src.startsWith('blob:') && i.naturalWidth === 1)).toBe(true);
     // Card without picture and the duplicate id are skipped
     await expect(page.locator('#progress')).toHaveText('0 von 3 bewertet · ♥ 0 · ✕ 0');
     const urls = seen.map(s => s.url);
-    expect(urls[0]).toBe('https://api.tcgdex.net/v2/de/sets/sv01');
-    expect(urls).toContain('https://assets.tcgdex.net/de/sv/sv01/001/high.webp');
+    expect(urls[0]).toBe(API);
+    expect(urls).toContain('https://img.example.test/s1/001/high.png');
     for (const s of seen) expect(s.headers.cookie).toBeUndefined();
 
     await page.click('#btnLike');
     await page.click('#btnNope');
     await page.click('#btnLike');
     await expect(page.locator('#emptyText')).toHaveText('Alles bewertet 🎉');
-    expect((await ls(page, K.swipes)).p1['tcgdex-de-sv01']).toEqual({ 'sv01-001': 'like', 'sv01-002': 'nope', 'sv01-004': 'like' });
+    expect((await ls(page, K.swipes)).p1['karten-s1']).toEqual({ 's1-001': 'like', 's1-002': 'nope', 's1-004': 'like' });
   });
 
   test('API source works offline after loading: list and seen pictures stay on the device', async ({ page, context }) => {
-    const seen = await mockTcgdex(page);
+    const seen = await mockApi(page);
     await page.goto(URL_);
     await page.evaluate(() => navigator.serviceWorker.ready);
+    await addJson(page, API_SOURCE);
     await openMenu(page);
-    await page.click('#btnExTcg');
-    await page.click('#btnAdd');
     await page.locator('#srcList button', { hasText: 'Daten laden' }).click();
     await expect(page.locator('#srcList .smeta').first()).toContainText('3 Einträge · geladen');
     await closeMenu(page);
@@ -171,25 +194,57 @@ test.describe('Image Swipe', () => {
     const before = seen.length;
     await context.setOffline(true);
     await page.reload();
-    await expect(page.locator('#card')).toHaveAttribute('data-id', 'sv01-001');
+    await expect(page.locator('#card')).toHaveAttribute('data-id', 's1-001');
     await expect(page.locator('#cardImg')).toBeVisible();
     expect(await page.locator('#cardImg').evaluate(i => i.naturalWidth)).toBe(1);
     expect(seen.length).toBe(before);
     await context.setOffline(false);
   });
 
+  test('{url|last} takes the number from an address; an object response is one entry', async ({ page }) => {
+    const cors = { 'access-control-allow-origin': '*' };
+    await page.context().route(/^https:\/\/(api|img)\.example\.test\//, route => {
+      const u = route.request().url();
+      if (u === 'https://api.example.test/pokemon?limit=2')
+        return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ count: 2, results: [
+          { name: 'bulbasaur', url: 'https://api.example.test/pokemon/1/' }, { name: 'ditto', url: 'https://api.example.test/pokemon/132/' }] }) });
+      if (u === 'https://api.example.test/pokemon/ditto')
+        return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ id: 132, name: 'ditto',
+          sprites: { other: { 'official-artwork': { front_default: 'https://img.example.test/art/132.png' } } } }) });
+      if (/^https:\/\/img\.example\.test\/art\/\d+\.png$/.test(u))
+        return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'image/png' }, body: PNG });
+      return route.fulfill({ status: 404, headers: cors, body: '' });
+    });
+    await page.goto(URL_);
+    await addJson(page, { id: 'poke-list', title: 'Liste', api: { url: 'https://api.example.test/pokemon?limit=2', list: 'results' },
+      fields: { id: 'name', title: 'name', subtitle: '#{url|last}', image: 'https://img.example.test/art/{url|last}.png' } });
+    await page.locator('#emptyBtns button', { hasText: 'Daten laden' }).click();
+    await expect(page.locator('#card')).toHaveAttribute('data-id', 'bulbasaur');
+    await expect(page.locator('#cardSub')).toHaveText('#1');
+    await expect(page.locator('#cardImg')).toBeVisible();
+    await page.click('#btnLike');
+    await expect(page.locator('#card')).toHaveAttribute('data-id', 'ditto');
+    await expect(page.locator('#cardSub')).toHaveText('#132');
+    await expect(page.locator('#cardImg')).toBeVisible();
+
+    await addJson(page, { id: 'poke-ditto', title: 'Ditto', api: { url: 'https://api.example.test/pokemon/ditto' },
+      fields: { id: 'id', title: 'name', image: 'sprites.other.official-artwork.front_default' } });
+    await page.locator('#emptyBtns button', { hasText: 'Daten laden' }).click();
+    await expect(page.locator('#card')).toHaveAttribute('data-id', '132');
+    await expect(page.locator('#cardTitle')).toHaveText('ditto');
+    await expect(page.locator('#cardImg')).toBeVisible();
+    await expect(page.locator('#progress')).toHaveText('0 von 1 bewertet · ♥ 0 · ✕ 0');
+  });
+
   test.describe('errors', () => {
-    test.use({ allowedProblems: /api\.tcgdex\.net|Failed to load resource/ });
+    test.use({ allowedProblems: /api\.example\.test|Failed to load resource/ });
     test('server error and wrong list path are shown; retry works', async ({ page }) => {
       let fail = true;
-      await page.context().route('https://api.tcgdex.net/**', route => fail
+      await page.context().route('https://api.example.test/**', route => fail
         ? route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: 'busy' })
         : route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' }, body: JSON.stringify({ items: [] }) }));
       await page.goto(URL_);
-      await openMenu(page);
-      await page.click('#btnExTcg');
-      await page.click('#btnAdd');
-      await closeMenu(page);
+      await addJson(page, API_SOURCE);
       await page.locator('#emptyBtns button', { hasText: 'Daten laden' }).click();
       await expect(page.locator('#emptyText')).toContainText('Der Server antwortete mit Status 503.');
       fail = false;
@@ -228,12 +283,10 @@ test.describe('Image Swipe', () => {
     const v2 = { id: 'meine', title: 'Zweite Fassung', items: [{ id: 'b', text: '🅱️', title: 'B' }, { id: 'c', text: '©️', title: 'C' }, { id: 'a', text: '🅰️', title: 'A neu' }] };
     await page.goto(URL_);
     await addJson(page, v1);
-    await closeMenu(page);
     await page.click('#btnLike');                              // a = like
     await expect(page.locator('#card')).toHaveAttribute('data-id', 'b');
     page.once('dialog', d => d.accept());
     await addJson(page, v2);
-    await closeMenu(page);
     await expect(page.locator('#sourceSel option')).toHaveText(['Zweite Fassung']);
     await expect(page.locator('#progress')).toHaveText('1 von 3 bewertet · ♥ 1 · ✕ 0');
     await expect(page.locator('#card')).toHaveAttribute('data-id', 'b');
@@ -243,9 +296,7 @@ test.describe('Image Swipe', () => {
     await page.locator('#srcList button', { hasText: 'Löschen' }).click();
     await expect(page.locator('#srcList li')).toHaveCount(0);
     expect((await ls(page, K.swipes)).p1).toEqual({ meine: { a: 'like' } });
-    await page.fill('#srcJson', JSON.stringify(v2));
-    await page.click('#btnAdd');
-    await closeMenu(page);
+    await addJson(page, v2);
     await expect(page.locator('#progress')).toHaveText('1 von 3 bewertet · ♥ 1 · ✕ 0');
   });
 
@@ -284,7 +335,7 @@ test.describe('Image Swipe', () => {
     await (await chooser).setFiles({ name: 'quelle.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ id: 'datei', title: 'Aus Datei', items: [{ id: 1, text: '📄' }] })) });
     await expect(page.locator('#srcInfo')).toHaveText('Datei gelesen – prüfen und „Hinzufügen“ tippen.');
     await page.click('#btnAdd');
-    await closeMenu(page);
+    await expect(page.locator('#appMenu')).toBeHidden();
     await expect(page.locator('#cardEmoji')).toHaveText('📄');
     await expect(page.locator('#cardTitle')).toHaveText('1');               // no title: the id is shown
   });

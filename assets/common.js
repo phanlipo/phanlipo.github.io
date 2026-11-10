@@ -592,6 +592,9 @@ window.Tools = (function () {
     menuEl.querySelector('.menu-close').addEventListener('click', menuClose);
     // A tap on the backdrop (outside the sheet) closes it
     menuEl.addEventListener('click', e => { if (e.target === menuEl) menuClose(); });
+    // The sheet itself never scrolls (overflow hidden), only .menu-body. scrollIntoView() on an element inside
+    // would still shift the sheet and push the head with ✕ out of view – undo that.
+    menuEl.addEventListener('scroll', () => { if (menuEl.scrollTop || menuEl.scrollLeft) menuEl.scrollTo(0, 0); });
     menuEl.addEventListener('close', () => {
       menuBtn.setAttribute('aria-expanded', 'false');
       if (menuPushed) { menuPushed = false; history.back(); }
