@@ -28,7 +28,9 @@ test('repository files and the template are not published', async ({ request }) 
   for (const path of ['/README.md', '/AGENTS.md', '/NOTICE.md', '/LICENSE', '/package.json', '/package-lock.json',
     '/playwright.config.mjs', '/scripts/build.mjs', '/scripts/vendor.json', '/tests/server.mjs', '/template/',
     '/assets/vendor/README.md', '/assets/vendor/katex/SOURCE.md', '/.nojekyll', '/.github/workflows/pages.yml']) {
-    expect((await request.get(fresh(path))).status(), path).toBe(404);
+    // Not found: 404 – or 503, which GitHub Pages sometimes answers for missing files instead (seen in November 2026).
+    // A published file would answer 200, so this still catches it.
+    expect([404, 503], path).toContain((await request.get(fresh(path))).status());
   }
 });
 

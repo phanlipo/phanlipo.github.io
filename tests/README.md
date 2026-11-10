@@ -72,7 +72,7 @@ LIVE_URL=https://example.org npm run test:live   # andere Adresse
 | Prüft | |
 |---|---|
 | Stand | **jede veröffentlichte Datei** (`publishedFiles` in `scripts/lib.mjs`) ist erreichbar und byte-gleich mit dem Repository |
-| Nicht veröffentlicht | `README.md`, `AGENTS.md`, `NOTICE.md`, `scripts/`, `tests/`, `template/`, `package.json`, Dotfiles … liefern 404 |
+| Nicht veröffentlicht | `README.md`, `AGENTS.md`, `NOTICE.md`, `scripts/`, `tests/`, `template/`, `package.json`, Dotfiles … liefern 404 (oder 503 – so antwortet GitHub Pages zeitweise auf fehlende Dateien; veröffentlicht wäre 200) |
 | Auslieferung | HTTPS, passende Content-Types |
 | Jede App | lädt ohne Fehler und fremde Anfragen auf dem Handy, noindex, CSP, Fußzeile zeigt die aktuelle Version, installierbar, offline nutzbar (echter Service Worker über HTTPS) |
 
