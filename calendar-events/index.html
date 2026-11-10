@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Kalender-Termin erstellen</title>
+<meta name="description" content="Termin mit Ort, Erinnerung und Wiederholung anlegen und in jeden Kalender übernehmen – als .ics-Datei, über Google oder Outlook oder als Link zum Teilen. Öffnet auch .ics-Dateien.">
+<meta name="tool:tags" content="Alltag, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, Kopieren, Verlauf, KI-Agent">
+<meta name="tool:webmcp" content="create_event, get_events">
+<meta name="tool:share-target" content="text/calendar, .ics">
+<meta name="tool:icon" content="calendar-plus">
+<meta name="tool:color" content="#c62828">
+<meta name="tool:short-name" content="Termin">
+<meta name="tool:title-en" content="Create a calendar event">
+<meta name="tool:description-en" content="Set up an event with place, reminder and repetition and add it to any calendar – as an .ics file, via Google or Outlook or as a link to share. Also opens .ics files.">
+<meta name="tool:short-name-en" content="Event">
+<meta name="tool:storage" content="calendar-events.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-cmzGOw+c5LGusoGPFB3PlShNFwjpZTrwymsNIqY9IQU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Termin">
+<meta name="theme-color" content="#c62828">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#c62828;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f28b82;--accent-text:#2b0b09}}
+main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.card h2{font-size:18px;margin:0 0 10px;display:block}
+.form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media (max-width:520px){.form .wide-phone{grid-column:1/-1}}
+.span-all{grid-column:1/-1}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field>span{font-size:13px;color:var(--muted);font-weight:600}
+.field input,.field select,.field textarea{font:inherit;font-size:17px;min-height:46px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);min-width:0;width:100%}
+.field textarea{padding:10px;min-height:84px;resize:vertical}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+.check{display:flex;align-items:center;gap:10px;min-height:44px;font-size:16px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);margin:0}
+.hint{font-size:13px;color:var(--muted);margin:8px 0 0}
+.msg{padding:10px 12px;border-radius:8px;font-size:15px;background:var(--err-bg);color:var(--err);margin:12px 0 0}
+.preview{border:1px solid var(--accent);border-inline-start-width:6px;border-radius:10px;padding:10px 12px;background:color-mix(in srgb,var(--accent) 8%,var(--surface));margin-block-end:12px}
+.preview .pt{margin:0;font-size:18px;font-weight:700;overflow-wrap:anywhere}
+.preview p{margin:2px 0 0;font-size:15px;overflow-wrap:anywhere}
+.preview .pm{color:var(--muted)}
+.acts{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.acts .btn{min-height:48px;display:inline-flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;font-size:16px;padding-block:6px}
+.acts .wide{grid-column:1/-1}
+.list{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}
+.list li{display:flex;align-items:stretch;gap:6px}
+.list .load{flex:1;min-width:0;min-height:52px;text-align:start;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit;padding:6px 12px;display:flex;flex-direction:column;justify-content:center}
+.list .load[aria-current="true"]{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.list .name{font-weight:600;overflow-wrap:anywhere}
+.list .meta{font-size:13px;color:var(--muted)}
+.list .del{flex:none;width:44px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--muted);cursor:pointer;font:inherit;font-size:20px}
+.list .del:hover{color:var(--err);border-color:var(--err)}
+.row .btn{min-height:44px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Kalender-Termin</span></h1>
+  <p class="sub" data-i18n="sub">Termin anlegen und in jeden Kalender übernehmen.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-event">
+    <h2 id="h-event" data-i18n="event">Termin</h2>
+    <div class="form">
+      <label class="field span-all"><span data-i18n="ttl">Titel</span><input type="text" id="title" maxlength="200" autocomplete="off" enterkeyhint="next" placeholder="z. B. Zahnarzt" data-i18n-attr="placeholder:ttlPh"></label>
+      <label class="check span-all"><input type="checkbox" id="allDay"><span data-i18n="allDay">Ganztägig</span></label>
+      <label class="field" id="sdWrap"><span data-i18n="start">Beginn</span><input type="date" id="sd"></label>
+      <label class="field" id="stWrap"><span data-i18n="time">Uhrzeit</span><input type="time" id="st" aria-label="Uhrzeit Beginn" data-i18n-attr="aria-label:stLabel"></label>
+      <label class="field" id="edWrap"><span data-i18n="end">Ende</span><input type="date" id="ed"></label>
+      <label class="field" id="etWrap"><span data-i18n="time">Uhrzeit</span><input type="time" id="et" aria-label="Uhrzeit Ende" data-i18n-attr="aria-label:etLabel"></label>
+      <label class="field span-all"><span data-i18n="loc">Ort (optional)</span><input type="text" id="loc" maxlength="300" autocomplete="off" placeholder="Adresse oder Raum" data-i18n-attr="placeholder:locPh"></label>
+      <label class="field wide-phone"><span data-i18n="alarm">Erinnerung</span><select id="alarm">
+        <option value="-1" data-i18n="al.none">Keine</option>
+        <option value="0" data-i18n="al.0">Zum Beginn</option>
+        <option value="5" data-i18n="al.5">5 Minuten vorher</option>
+        <option value="10" data-i18n="al.10">10 Minuten vorher</option>
+        <option value="15" data-i18n="al.15">15 Minuten vorher</option>
+        <option value="30" data-i18n="al.30">30 Minuten vorher</option>
+        <option value="60" data-i18n="al.60">1 Stunde vorher</option>
+        <option value="120" data-i18n="al.120">2 Stunden vorher</option>
+        <option value="1440" data-i18n="al.1440">1 Tag vorher</option>
+        <option value="2880" data-i18n="al.2880">2 Tage vorher</option>
+        <option value="10080" data-i18n="al.10080">1 Woche vorher</option>
+      </select></label>
+      <label class="field wide-phone"><span data-i18n="repeat">Wiederholung</span><select id="repeat">
+        <option value="" data-i18n="rep.none">Keine</option>
+        <option value="DAILY" data-i18n="rep.DAILY">Täglich</option>
+        <option value="WEEKLY" data-i18n="rep.WEEKLY">Wöchentlich</option>
+        <option value="MONTHLY" data-i18n="rep.MONTHLY">Monatlich</option>
+        <option value="YEARLY" data-i18n="rep.YEARLY">Jährlich</option>
+        <option value="custom" id="repCustom" data-i18n="rep.custom" hidden disabled>Wie in der Datei</option>
+      </select></label>
+      <label class="field span-all" id="countWrap" hidden><span data-i18n="count">Anzahl Termine (leer = ohne Ende)</span><input type="text" id="count" inputmode="numeric" maxlength="3" autocomplete="off"></label>
+      <label class="field span-all"><span data-i18n="url">Link (optional)</span><input type="url" id="url" maxlength="2000" inputmode="url" autocomplete="off" placeholder="https://…"></label>
+      <label class="field span-all"><span data-i18n="desc">Beschreibung (optional)</span><textarea id="desc" maxlength="5000" rows="3"></textarea></label>
+    </div>
+    <p class="hint" id="tzHint"></p>
+    <p class="msg" id="msg" role="alert" hidden></p>
+  </section>
+
+  <section class="card" aria-labelledby="h-add">
+    <h2 id="h-add" data-i18n="add">In den Kalender</h2>
+    <div class="preview" id="preview" hidden>
+      <p class="pt" id="pvTitle"></p>
+      <p id="pvWhen"></p>
+      <p class="pm" id="pvMeta"></p>
+    </div>
+    <div class="acts">
+      <button type="button" class="btn primary wide" id="btnIcs" data-i18n="ics">Kalenderdatei (.ics) speichern</button>
+      <a class="btn" id="btnGoogle" href="#" target="_blank" rel="noopener noreferrer" data-i18n="google">Google Kalender</a>
+      <a class="btn" id="btnOutlook" href="#" target="_blank" rel="noopener noreferrer" data-i18n="outlook">Outlook.com</a>
+      <button type="button" class="btn" id="btnShare" data-i18n="share">Link teilen …</button>
+      <button type="button" class="btn" id="btnCopy" data-i18n="copy">Als Text kopieren</button>
+    </div>
+    <p class="hint" data-i18n="addHint">iPhone, Outlook, Samsung &amp; Co. übernehmen die .ics-Datei. Mit Android-Handys mit Google Kalender am besten den Knopf „Google Kalender“ nutzen.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-list">
+    <h2 id="h-list" data-i18n="list">Meine Termine</h2>
+    <p class="hint" id="listEmpty" data-i18n="listEmpty">Noch nichts hier – jeder Termin, den du in einen Kalender übernimmst, teilst oder aus einer Datei öffnest, erscheint hier.</p>
+    <ul class="list" id="list"></ul>
+    <div class="row">
+      <button type="button" class="btn" id="btnNew" data-i18n="new">Neuer Termin</button>
+      <button type="button" class="btn" id="btnOpen" data-i18n="open">Kalenderdatei öffnen</button>
+      <button type="button" class="btn" id="btnAll" data-i18n="all" hidden>Alle als .ics speichern</button>
+    </div>
+    <input type="file" id="fileInput" accept=".ics,text/calendar" hidden>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-set">
+    <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <div class="form">
+      <label class="field wide-phone"><span data-i18n="setDur">Dauer neuer Termine</span><select id="setDur">
+        <option value="15" data-i18n="dur.15">15 Minuten</option>
+        <option value="30" data-i18n="dur.30">30 Minuten</option>
+        <option value="45" data-i18n="dur.45">45 Minuten</option>
+        <option value="60" data-i18n="dur.60">1 Stunde</option>
+        <option value="90" data-i18n="dur.90">1,5 Stunden</option>
+        <option value="120" data-i18n="dur.120">2 Stunden</option>
+        <option value="180" data-i18n="dur.180">3 Stunden</option>
+      </select></label>
+      <label class="field wide-phone"><span data-i18n="setAlarm">Erinnerung neuer Termine</span><select id="setAlarm"></select></label>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Legt einen Termin an und übernimmt ihn in deinen Kalender – egal welchen. Die App selbst ist kein Kalender: Sie erzeugt den Termin, eingetragen wird er im Kalender deiner Wahl.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Termin:</b> Titel, Beginn und Ende eingeben – oder <i>Ganztägig</i> wählen (das Ende ist dann der letzte Tag). Wer den Beginn verschiebt, verschiebt das Ende mit, die Dauer bleibt gleich. Ort, Erinnerung, Wiederholung, Link und Beschreibung sind freiwillig.</li>
+    <li><b>Kalenderdatei (.ics):</b> das übliche Format für Termine (iCalendar). Auf dem <b>iPhone/iPad</b> fragt Safari direkt, ob der Termin in den Kalender soll. <b>Outlook, Apple Kalender, Samsung Kalender, Thunderbird</b> und andere öffnen die Datei per Antippen bzw. Doppelklick.</li>
+    <li><b>Google Kalender:</b> öffnet Google Kalender (App oder Webseite) mit dem ausgefüllten Termin – nur noch speichern. Der beste Weg auf <b>Android</b>, denn die Google-Kalender-App öffnet keine .ics-Dateien. Google übernimmt Wiederholungen, aber keine Erinnerung – es gilt die Standard-Erinnerung deines Google-Kalenders.</li>
+    <li><b>Outlook.com:</b> öffnet den Termin in Outlook im Browser (privates Microsoft-Konto). Ohne Wiederholung und Erinnerung; für Firmenkonten und Wiederholungen die .ics-Datei nehmen.</li>
+    <li><b>Link teilen:</b> Der ganze Termin steckt im Link. Wer ihn öffnet, sieht den Termin in dieser App und kann ihn mit einem Tipp in den eigenen Kalender übernehmen. Die Uhrzeit wird dabei in die Zeitzone des Empfängers umgerechnet. Ohne Teilen-Funktion wird der Link kopiert.</li>
+    <li><b>Als Text kopieren:</b> Termin als lesbarer Text mit Link, z. B. für eine Nachricht.</li>
+  </ul>
+  <h3>Meine Termine</h3>
+  <ul>
+    <li>Jeder Termin, den du speicherst, an Google/Outlook übergibst, teilst oder kopierst, landet in <b>Meine Termine</b> (die letzten 100). Antippen lädt ihn zum Ändern, <b>×</b> löscht ihn hier (nicht im Kalender).</li>
+    <li>Ein geladener Termin bleibt derselbe: Wird er geändert und neu gespeichert, ersetzt der Kalender den alten Eintrag meist (gleiche Kennung). <i>Neuer Termin</i> beginnt von vorn.</li>
+    <li><i>Alle als .ics speichern</i> packt alle Termine in eine Datei.</li>
+  </ul>
+  <h3>Kalenderdateien öffnen</h3>
+  <ul>
+    <li><i>Kalenderdatei öffnen</i> liest eine .ics-Datei (z. B. eine Einladung aus einer E-Mail). Alle Termine darin landen in <b>Meine Termine</b>, der erste im Formular. So lässt sich eine Einladung auch auf Android in den Google Kalender bringen.</li>
+    <li><b>Android:</b> In der installierten App die .ics-Datei über <i>Teilen</i> an <i>Termin</i> schicken. <b>Windows, Mac &amp; Co.</b> (Chrome/Edge): in der installierten App per <i>Öffnen mit</i>.</li>
+    <li>Ungewöhnliche Wiederholungen aus der Datei („jeden 2. Dienstag“) bleiben erhalten und heißen dann <i>Wie in der Datei</i>.</li>
+  </ul>
+  <h3>Zeitzone</h3>
+  <p>Uhrzeiten gelten in der Zeitzone dieses Geräts. Einmalige Termine stehen in der Datei in Weltzeit (UTC), wiederholte mit Zeitzone – so bleibt ein wöchentlicher Termin um 10 Uhr auch nach der Zeitumstellung um 10 Uhr.</p>
+  <h3>Datenschutz</h3>
+  <p>Termine bleiben in diesem Browser gespeichert, die App läuft offline. Nur wenn du <i>Google Kalender</i> oder <i>Outlook.com</i> antippst, gehen die Angaben des Termins an Google bzw. Microsoft – sie stehen in der Adresse, die sich dann öffnet. Beim Link zum Teilen steht der Termin hinter dem #; dieser Teil wird beim Öffnen nicht an den Server geschickt.</p>
+  <h3>Einstellungen (Menü ☰)</h3>
+  <p>Dauer und Erinnerung, mit denen ein neuer Termin beginnt.</p>
+  <h3>KI-Agent</h3>
+  <p>Ein KI-Agent im Browser (WebMCP) kann einen Termin ins Formular eintragen und die Liste lesen. Er bekommt die .ics-Daten und Links zurück; in deinen Kalender kommt der Termin nur über die Knöpfe hier.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Sets up an event and adds it to your calendar – whichever one you use. The app itself is not a calendar: it creates the event, your calendar of choice stores it.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Event:</b> enter a title, start and end – or choose <i>All day</i> (the end is then the last day). Moving the start moves the end too, so the duration stays the same. Place, reminder, repetition, link and description are optional.</li>
+    <li><b>Calendar file (.ics):</b> the common format for events (iCalendar). On the <b>iPhone/iPad</b> Safari asks right away whether to add the event. <b>Outlook, Apple Calendar, Samsung Calendar, Thunderbird</b> and others open the file with a tap or double click.</li>
+    <li><b>Google Calendar:</b> opens Google Calendar (app or website) with the event filled in – just save it. The best way on <b>Android</b>, as the Google Calendar app does not open .ics files. Google takes repetitions but no reminder – your Google Calendar's default reminder applies.</li>
+    <li><b>Outlook.com:</b> opens the event in Outlook in the browser (personal Microsoft account). Without repetition and reminder; for work accounts and repetitions use the .ics file.</li>
+    <li><b>Share link:</b> the whole event is in the link. Whoever opens it sees the event in this app and can add it to their own calendar with one tap. The time is converted to the recipient's time zone. Without a share function the link is copied.</li>
+    <li><b>Copy as text:</b> the event as readable text with a link, e.g. for a message.</li>
+  </ul>
+  <h3>My events</h3>
+  <ul>
+    <li>Every event you save, hand to Google/Outlook, share or copy goes into <b>My events</b> (the last 100). Tap one to edit it, <b>×</b> deletes it here (not in the calendar).</li>
+    <li>A loaded event stays the same event: changed and saved again, the calendar usually replaces the old entry (same identifier). <i>New event</i> starts afresh.</li>
+    <li><i>Save all as .ics</i> puts all events into one file.</li>
+  </ul>
+  <h3>Opening calendar files</h3>
+  <ul>
+    <li><i>Open calendar file</i> reads an .ics file (e.g. an invitation from an email). All events in it go into <b>My events</b>, the first one into the form. This also gets an invitation into Google Calendar on Android.</li>
+    <li><b>Android:</b> in the installed app, send the .ics file to <i>Event</i> via <i>Share</i>. <b>Windows, Mac &amp; co.</b> (Chrome/Edge): in the installed app via <i>Open with</i>.</li>
+    <li>Unusual repetitions from the file ("every 2nd Tuesday") are kept and then called <i>As in the file</i>.</li>
+  </ul>
+  <h3>Time zone</h3>
+  <p>Times are in the time zone of this device. One-off events are written to the file in universal time (UTC), repeating ones with the time zone – so a weekly event at 10:00 stays at 10:00 after the clocks change.</p>
+  <h3>Privacy</h3>
+  <p>Events stay saved in this browser, the app works offline. Only when you tap <i>Google Calendar</i> or <i>Outlook.com</i> do the event details go to Google or Microsoft – they are in the address that opens. In the share link the event comes after the #; this part is not sent to the server when the link is opened.</p>
+  <h3>Settings (menu ☰)</h3>
+  <p>Duration and reminder a new event starts with.</p>
+  <h3>AI agent</h3>
+  <p>An AI agent in the browser (WebMCP) can fill an event into the form and read the list. It gets the .ics data and links back; the event only gets into your calendar via the buttons here.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 61ba9e5c1939</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const AL_DE={'al.none':'Keine','al.0':'Zum Beginn','al.5':'5 Minuten vorher','al.10':'10 Minuten vorher','al.15':'15 Minuten vorher','al.30':'30 Minuten vorher','al.60':'1 Stunde vorher','al.120':'2 Stunden vorher','al.1440':'1 Tag vorher','al.2880':'2 Tage vorher','al.10080':'1 Woche vorher'};
+const AL_EN={'al.none':'None','al.0':'At the start','al.5':'5 minutes before','al.10':'10 minutes before','al.15':'15 minutes before','al.30':'30 minutes before','al.60':'1 hour before','al.120':'2 hours before','al.1440':'1 day before','al.2880':'2 days before','al.10080':'1 week before'};
+Tools.i18n({
+  de:Object.assign({
+    'rep.none':'Keine','rep.DAILY':'Täglich','rep.WEEKLY':'Wöchentlich','rep.MONTHLY':'Monatlich','rep.YEARLY':'Jährlich','rep.custom':'Wie in der Datei',
+    'rep.count':'{rep}, {n}-mal',remind:'Erinnerung: {al}',
+    errTitle:'Bitte einen Titel eingeben.',errStart:'Bitte Datum und Uhrzeit für den Beginn wählen.',errEnd:'Bitte Datum und Uhrzeit für das Ende wählen.',
+    errOrder:'Das Ende liegt vor dem Beginn.',errCount:'Anzahl: bitte eine ganze Zahl von 1 bis 999 (oder leer lassen).',errUrl:'Der Link muss mit http:// oder https:// beginnen.',
+    tzHint:'Zeitzone: {tz}',allDayOn:'{date}, ganztägig',
+    saved:'Kalenderdatei gespeichert',savedAll:'{n} Termine in einer Datei gespeichert',copied:'Termin kopiert',linkCopied:'Link kopiert',copyFail:'Kopieren nicht möglich',
+    fromLink:'Termin aus dem Link übernommen – jetzt in deinen Kalender eintragen',
+    imported1:'1 Termin aus der Datei geladen',imported:'{n} Termine aus der Datei geladen',errNoEvents:'Keine Termine in der Datei gefunden.',errBig:'Die Datei ist zu groß (höchstens 2 MB).',
+    del:'Löschen: {name}',deleted:'Termin aus der Liste gelöscht',untitled:'Termin',fileAll:'termine',addLink:'In den Kalender übernehmen:',
+    'mcp.create':'Termin eingetragen','mcp.list':'Termine gelesen'
+  },AL_DE),
+  en:Object.assign({
+    title:'Calendar event',sub:'Set up an event and add it to any calendar.',
+    event:'Event',ttl:'Title',ttlPh:'e.g. Dentist',allDay:'All day',start:'Start',end:'End',time:'Time',stLabel:'Time start',etLabel:'Time end',
+    loc:'Place (optional)',locPh:'Address or room',alarm:'Reminder',repeat:'Repeat',count:'Number of events (empty = no end)',url:'Link (optional)',desc:'Description (optional)',
+    add:'Add to calendar',ics:'Save calendar file (.ics)',google:'Google Calendar',outlook:'Outlook.com',share:'Share link …',copy:'Copy as text',
+    addHint:'iPhone, Outlook, Samsung & co. take the .ics file. On Android phones with Google Calendar, best use the "Google Calendar" button.',
+    list:'My events',listEmpty:'Nothing here yet – every event you add to a calendar, share or open from a file appears here.',
+    new:'New event',open:'Open calendar file',all:'Save all as .ics',
+    settings:'Settings',setDur:'Duration of new events',setAlarm:'Reminder for new events',
+    'dur.15':'15 minutes','dur.30':'30 minutes','dur.45':'45 minutes','dur.60':'1 hour','dur.90':'1.5 hours','dur.120':'2 hours','dur.180':'3 hours',
+    'rep.none':'None','rep.DAILY':'Daily','rep.WEEKLY':'Weekly','rep.MONTHLY':'Monthly','rep.YEARLY':'Yearly','rep.custom':'As in the file',
+    'rep.count':'{rep}, {n} times',remind:'Reminder: {al}',
+    errTitle:'Please enter a title.',errStart:'Please pick a date and time for the start.',errEnd:'Please pick a date and time for the end.',
+    errOrder:'The end lies before the start.',errCount:'Number: please a whole number from 1 to 999 (or leave it empty).',errUrl:'The link must start with http:// or https://.',
+    tzHint:'Time zone: {tz}',allDayOn:'{date}, all day',
+    saved:'Calendar file saved',savedAll:'{n} events saved in one file',copied:'Event copied',linkCopied:'Link copied',copyFail:'Copying not possible',
+    fromLink:'Event taken from the link – now add it to your calendar',
+    imported1:'1 event loaded from the file',imported:'{n} events loaded from the file',errNoEvents:'No events found in the file.',errBig:'The file is too big (2 MB at most).',
+    del:'Delete: {name}',deleted:'Event deleted from the list',untitled:'Event',fileAll:'events',addLink:'Add to your calendar:',
+    'mcp.create':'event filled in','mcp.list':'events read'
+  },AL_EN)
+});
+const t=Tools.t,$=Tools.$;
+const LS_DRAFT='calendar-events.draft.v1',LS_LIST='calendar-events.events.v1',LS_SET='calendar-events.settings.v1';
+const LIST_MAX=100,PARSE_MAX=500;
+const ALARMS=[-1,0,5,10,15,30,60,120,1440,2880,10080];
+const DURS=[15,30,45,60,90,120,180];
+const REPEATS=['DAILY','WEEKLY','MONTHLY','YEARLY'];
+const LIM={title:200,loc:300,desc:5000,url:2000,rrule:300};
+const pad=n=>String(n).padStart(2,'0');
+const isoDate=d=>`${String(d.getFullYear()).padStart(4,'0')}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const hm=d=>`${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const TZ=()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'';}catch(_){return '';}};
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+
+const settings=Object.assign({dur:60,alarm:15},Tools.load(LS_SET,{}));
+if(!DURS.includes(settings.dur))settings.dur=60;
+if(!ALARMS.includes(settings.alarm))settings.alarm=15;
+
+/* ---------- Event model ----------
+   {id, uid, title, allDay, sd, st, ed, et, loc, desc, url, alarm, repeat, count, rrule, updated}
+   sd/ed 'YYYY-MM-DD', st/et 'HH:MM' local time; all-day: ed is the last day (inclusive).
+   alarm: minutes before the start, -1 = none. repeat: '' | DAILY | WEEKLY | MONTHLY | YEARLY | custom (rrule from a file). */
+function newEvent(){
+  const s=new Date();s.setMinutes(0,0,0);s.setHours(s.getHours()+1);
+  const e=new Date(s.getTime()+settings.dur*6e4);
+  return {id:newId(),uid:'',title:'',allDay:false,sd:isoDate(s),st:hm(s),ed:isoDate(e),et:hm(e),loc:'',desc:'',url:'',alarm:settings.alarm,repeat:'',count:'',rrule:''};
+}
+function clean(x){
+  const e=newEvent();
+  if(!x||typeof x!=='object')return e;
+  for(const k of ['id','uid','title','sd','st','ed','et','loc','desc','url','repeat','count','rrule'])if(typeof x[k]==='string')e[k]=x[k];
+  e.allDay=x.allDay===true;
+  if(ALARMS.includes(x.alarm))e.alarm=x.alarm;
+  if(e.repeat!=='custom'&&!REPEATS.includes(e.repeat))e.repeat='';
+  if(e.repeat==='custom'&&!e.rrule)e.repeat='';
+  if(typeof x.updated==='number')e.updated=x.updated;
+  if(!e.id)e.id=newId();
+  return e;
+}
+// Local date + time ('' = 00:00) → Date, or null (also for 31 February)
+function parseLocal(date,time){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(date||''),tm=/^(\d{2}):(\d{2})$/.exec(time||'00:00');
+  if(!m||!tm)return null;
+  const y=+m[1],mo=+m[2]-1,d=+m[3],h=+tm[1],mi=+tm[2];
+  if(h>23||mi>59)return null;
+  const x=new Date(2000,0,1);x.setFullYear(y,mo,d);x.setHours(h,mi,0,0);
+  return x.getFullYear()===y&&x.getMonth()===mo&&x.getDate()===d?x:null;
+}
+// {start, end} as Dates; all-day: end = the day after the last day (exclusive, like iCalendar), last = last day
+function range(e){
+  if(e.allDay){
+    const s=parseLocal(e.sd,''),l=parseLocal(e.ed,'');
+    if(!s)return {err:'errStart'};
+    if(!l)return {err:'errEnd'};
+    const end=new Date(l);end.setDate(end.getDate()+1);
+    return {start:s,end,last:l};
+  }
+  const s=e.st&&parseLocal(e.sd,e.st),end=e.et&&parseLocal(e.ed,e.et);
+  if(!s)return {err:'errStart'};
+  if(!end)return {err:'errEnd'};
+  return {start:s,end};
+}
+const normUrl=s=>{s=String(s||'').trim();return !s||/^[a-z][a-z0-9+.-]*:/i.test(s)?s:'https://'+s;};
+function check(e){
+  if(!e.title.trim())return 'errTitle';
+  const r=range(e);
+  if(r.err)return r.err;
+  if(r.end<r.start||(e.allDay&&r.last<r.start))return 'errOrder';
+  if(REPEATS.includes(e.repeat)&&e.count!==''&&!(/^\d{1,3}$/.test(e.count)&&+e.count>=1))return 'errCount';
+  if(e.url.trim()&&!/^https?:\/\/[^\s]+$/i.test(normUrl(e.url)))return 'errUrl';
+  return null;
+}
+const ruleOf=e=>e.repeat==='custom'?e.rrule:REPEATS.includes(e.repeat)?'FREQ='+e.repeat+(e.count?';COUNT='+(+e.count):''):'';
+const safeRule=s=>String(s||'').replace(/^RRULE:/i,'').toUpperCase().replace(/[^A-Z0-9=;,:+-]/g,'').slice(0,LIM.rrule);
+
+/* ---------- Time zones ---------- */
+// Wall-clock fields [y, m0, d, h, mi, s] in the IANA zone tz → ms since 1970, or null if the zone is unknown
+function zoned(f,tz){
+  let fmt;
+  try{fmt=new Intl.DateTimeFormat('en-US',{timeZone:tz,hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});}catch(_){return null;}
+  const want=Date.UTC(f[0],f[1],f[2],f[3],f[4],f[5]);
+  const offAt=ms=>{const o={};for(const x of fmt.formatToParts(new Date(ms)))o[x.type]=x.value;return Date.UTC(+o.year,+o.month-1,+o.day,+o.hour%24,+o.minute,+o.second)-ms;};
+  let ms=want-offAt(want);ms=want-offAt(ms);
+  return ms;
+}
+// Offset of the device's zone in minutes (local = UTC + offset) at the instant ms
+const offAt=ms=>-new Date(ms).getTimezoneOffset();
+const offStr=m=>(m<0?'-':'+')+pad(Math.floor(Math.abs(m)/60))+pad(Math.abs(m)%60);
+// Clock changes of the device's zone in a year: [{at, from, to}], found to the minute
+function transitions(year){
+  const res=[],stop=Date.UTC(year+1,0,1);
+  let prev=Date.UTC(year,0,1),o=offAt(prev);
+  for(let ms=prev+864e5;ms<=stop;prev=ms,ms+=864e5){
+    const n=offAt(ms);
+    if(n===o)continue;
+    let lo=prev,hi=ms;
+    while(hi-lo>6e4){const mid=lo+Math.floor((hi-lo)/12e4)*6e4;if(mid===lo)break;if(offAt(mid)===o)lo=mid;else hi=mid;}
+    res.push({at:hi,from:o,to:n});o=n;
+  }
+  return res;
+}
+// VTIMEZONE of the device's zone with yearly rules derived from the clock changes of that year
+function vtimezone(tzid,year){
+  const L=['BEGIN:VTIMEZONE','TZID:'+tzid],tr=transitions(year);
+  if(!tr.length){
+    const o=offAt(Date.UTC(year,0,1));
+    L.push('BEGIN:STANDARD','DTSTART:19700101T000000','TZOFFSETFROM:'+offStr(o),'TZOFFSETTO:'+offStr(o),'END:STANDARD');
+  }
+  for(const x of tr){
+    const w=new Date(x.at+x.from*6e4); // wall clock just before the change, read as UTC
+    const y=w.getUTCFullYear(),mo=w.getUTCMonth(),d=w.getUTCDate(),dim=new Date(Date.UTC(y,mo+1,0)).getUTCDate();
+    const nth=d+7>dim?-1:Math.ceil(d/7),kind=x.to>x.from?'DAYLIGHT':'STANDARD';
+    L.push('BEGIN:'+kind,`DTSTART:${y}${pad(mo+1)}${pad(d)}T${pad(w.getUTCHours())}${pad(w.getUTCMinutes())}00`,
+      'TZOFFSETFROM:'+offStr(x.from),'TZOFFSETTO:'+offStr(x.to),
+      `RRULE:FREQ=YEARLY;BYMONTH=${mo+1};BYDAY=${nth}${['SU','MO','TU','WE','TH','FR','SA'][w.getUTCDay()]}`,'END:'+kind);
+  }
+  L.push('END:VTIMEZONE');
+  return L;
+}
+
+/* ---------- iCalendar (RFC 5545) ---------- */
+const icsText=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r\n|\r|\n/g,'\\n');
+const enc=new TextEncoder();
+// Lines longer than 75 bytes are folded: CRLF + space, never inside a character
+function fold(line){
+  if(enc.encode(line).length<=75)return line;
+  let out='',cur='',len=0,limit=75;
+  for(const ch of line){
+    const n=enc.encode(ch).length;
+    if(len+n>limit){out+=cur+'\r\n ';cur='';len=0;limit=74;}
+    cur+=ch;len+=n;
+  }
+  return out+cur;
+}
+const utc=d=>d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
+const dateVal=s=>s.replace(/-/g,'');
+const localVal=(date,time)=>dateVal(date)+'T'+time.replace(':','')+'00';
+function trigger(m){
+  if(m===0)return 'PT0S';
+  if(m%1440===0)return `-P${m/1440}D`;
+  if(m%60===0)return `-PT${m/60}H`;
+  return `-PT${m}M`;
+}
+function vevent(e,tz,stamp){
+  const r=range(e),rule=ruleOf(e);
+  const L=['BEGIN:VEVENT','UID:'+(e.uid||e.id+'@phanlipo.github.io'),'DTSTAMP:'+stamp];
+  if(e.allDay)L.push('DTSTART;VALUE=DATE:'+dateVal(e.sd),'DTEND;VALUE=DATE:'+dateVal(isoDate(r.end)));
+  else if(rule){
+    // Repeating: wall-clock time in the zone, so it stays at the same time across clock changes
+    const p=tz?';TZID='+tz:'';
+    L.push('DTSTART'+p+':'+localVal(e.sd,e.st),'DTEND'+p+':'+localVal(e.ed,e.et));
+  }else L.push('DTSTART:'+utc(r.start),'DTEND:'+utc(r.end));
+  L.push('SUMMARY:'+icsText(e.title.trim()));
+  if(e.loc.trim())L.push('LOCATION:'+icsText(e.loc.trim()));
+  if(e.desc.trim())L.push('DESCRIPTION:'+icsText(e.desc.trim()));
+  if(e.url.trim())L.push('URL:'+normUrl(e.url));
+  if(rule)L.push('RRULE:'+rule);
+  if(e.alarm>=0)L.push('BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+icsText(e.title.trim()),'TRIGGER:'+trigger(e.alarm),'END:VALARM');
+  L.push('END:VEVENT');
+  return L;
+}
+function icsFor(events){
+  const tz=TZ(),stamp=utc(new Date());
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//phanlipo.github.io//calendar-events//DE','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  const zoneYears=events.filter(e=>!e.allDay&&ruleOf(e)).map(e=>range(e).start.getFullYear());
+  if(tz&&zoneYears.length)L.push(...vtimezone(tz,Math.min(...zoneYears)));
+  for(const e of events)L.push(...vevent(e,tz,stamp));
+  L.push('END:VCALENDAR');
+  return L.map(fold).join('\r\n')+'\r\n';
+}
+
+/* ---------- Reading .ics files ---------- */
+function prop(line){
+  let i=0,q=false;
+  for(;i<line.length;i++){const c=line[i];if(c==='"')q=!q;else if(c===':'&&!q)break;}
+  if(i>=line.length)return null;
+  const parts=line.slice(0,i).split(';'),params={};
+  for(const p of parts.slice(1)){const k=p.indexOf('=');if(k>0)params[p.slice(0,k).toUpperCase()]=p.slice(k+1).replace(/^"|"$/g,'');}
+  return {name:parts[0].toUpperCase(),params,value:line.slice(i+1)};
+}
+const unText=s=>s.replace(/\\([\\;,nN])/g,(m,c)=>c==='n'||c==='N'?'\n':c);
+// DATE / DATE-TIME (UTC, with TZID or floating) → {d: Date, allDay}
+function icsDate(p){
+  const v=p.value.trim();
+  let m=/^(\d{4})(\d{2})(\d{2})$/.exec(v);
+  if(m)return {allDay:true,d:new Date(+m[1],+m[2]-1,+m[3])};
+  m=/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/i.exec(v);
+  if(!m)return null;
+  const f=[+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]];
+  if(m[7])return {d:new Date(Date.UTC(...f))};
+  // Zones like "/mozilla.org/…/Europe/Berlin" end in the IANA name; Windows names ("W. Europe Standard Time") count as local
+  const tz=p.params.TZID&&(/[A-Za-z_]+\/[A-Za-z_+-]+(?:\/[A-Za-z_+-]+)?$/.exec(p.params.TZID)||[p.params.TZID])[0];
+  const ms=tz?zoned(f,tz):null;
+  return {d:ms==null?new Date(f[0],f[1],f[2],f[3],f[4],f[5]):new Date(ms)};
+}
+function durMs(v){
+  const m=/^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/i.exec(String(v).trim());
+  if(!m)return null;
+  const ms=((+(m[2]||0)*7+ +(m[3]||0))*864e5)+(+(m[4]||0))*36e5+(+(m[5]||0))*6e4+(+(m[6]||0))*1e3;
+  return m[1]==='-'?-ms:ms;
+}
+function fromIcs(x){
+  const s=x.DTSTART&&icsDate(x.DTSTART);
+  if(!s)return null;
+  const e=newEvent();
+  e.uid=x.UID?x.UID.value.trim().slice(0,255):'';
+  e.title=(x.SUMMARY?unText(x.SUMMARY.value).trim():'').slice(0,LIM.title)||t('untitled');
+  e.loc=x.LOCATION?unText(x.LOCATION.value).trim().slice(0,LIM.loc):'';
+  e.desc=x.DESCRIPTION?unText(x.DESCRIPTION.value).trim().slice(0,LIM.desc):'';
+  const u=x.URL?x.URL.value.trim():'';
+  e.url=/^https?:\/\/\S+$/i.test(u)?u.slice(0,LIM.url):'';
+  let end=x.DTEND&&icsDate(x.DTEND);
+  end=end?end.d:null;
+  if(!end&&x.DURATION){const d=durMs(x.DURATION.value);if(d!=null){end=new Date(s.d);if(s.allDay)end.setDate(end.getDate()+Math.round(d/864e5));else end=new Date(s.d.getTime()+d);}}
+  e.allDay=!!s.allDay;
+  e.sd=isoDate(s.d);
+  if(e.allDay){
+    const last=end?new Date(end):new Date(s.d);
+    if(end)last.setDate(last.getDate()-1); // DTEND is exclusive
+    e.ed=isoDate(last<s.d?s.d:last);
+  }else{
+    const en=end&&end>=s.d?end:s.d;
+    e.st=hm(s.d);e.ed=isoDate(en);e.et=hm(en);
+  }
+  e.alarm=-1;
+  if(x.TRIGGER&&!/DATE-TIME/i.test(x.TRIGGER.params.VALUE||'')&&!/END/i.test(x.TRIGGER.params.RELATED||'')){
+    const d=durMs(x.TRIGGER.value);
+    if(d!=null){const min=Math.max(0,Math.round(-d/6e4));e.alarm=ALARMS.filter(a=>a>=0).reduce((a,b)=>Math.abs(b-min)<Math.abs(a-min)?b:a);}
+  }
+  e.repeat='';e.count='';e.rrule='';
+  if(x.RRULE){
+    const rule=safeRule(x.RRULE.value),p={};
+    for(const part of rule.split(';')){const [k,v]=part.split('=');if(k)p[k]=v;}
+    const keys=Object.keys(p).filter(k=>!(k==='INTERVAL'&&p[k]==='1'));
+    if(REPEATS.includes(p.FREQ)&&keys.every(k=>k==='FREQ'||k==='COUNT')&&(!p.COUNT||/^\d{1,3}$/.test(p.COUNT)&&+p.COUNT>=1)){e.repeat=p.FREQ;e.count=p.COUNT||'';}
+    else if(rule){e.repeat='custom';e.rrule=rule;}
+  }
+  return e;
+}
+function parseIcs(text){
+  const lines=String(text).replace(/\r\n?/g,'\n').replace(/\n[ \t]/g,'').split('\n');
+  const out=[];let cur=null,alarm=0;
+  for(const line of lines){
+    if(out.length>=PARSE_MAX)break;
+    const p=prop(line);
+    if(!p)continue;
+    const v=p.value.trim().toUpperCase();
+    if(p.name==='BEGIN'){if(v==='VEVENT'){cur={};alarm=0;}else if(cur&&v==='VALARM')alarm++;continue;}
+    if(p.name==='END'){
+      if(v==='VALARM'&&cur){alarm--;continue;}
+      if(v==='VEVENT'&&cur){const e=fromIcs(cur);if(e)out.push(e);cur=null;}
+      continue;
+    }
+    if(!cur)continue;
+    if(alarm){if(p.name==='TRIGGER'&&!cur.TRIGGER)cur.TRIGGER=p;continue;}
+    if(!(p.name in cur))cur[p.name]=p;
+  }
+  return out;
+}
+
+/* ---------- Links to Google, Outlook and back to this app ---------- */
+function googleUrl(e){
+  const r=range(e),tz=TZ(),rule=ruleOf(e),p=new URLSearchParams({action:'TEMPLATE',text:e.title.trim()});
+  if(e.allDay)p.set('dates',dateVal(e.sd)+'/'+dateVal(isoDate(r.end)));
+  else if(tz){p.set('dates',localVal(e.sd,e.st)+'/'+localVal(e.ed,e.et));p.set('ctz',tz);}
+  else p.set('dates',utc(r.start)+'/'+utc(r.end));
+  const details=[e.desc.trim(),normUrl(e.url)].filter(Boolean).join('\n\n');
+  if(details)p.set('details',details);
+  if(e.loc.trim())p.set('location',e.loc.trim());
+  if(rule)p.set('recur','RRULE:'+rule);
+  return 'https://calendar.google.com/calendar/render?'+p;
+}
+const isoOff=d=>`${isoDate(d)}T${hm(d)}:00${offStr(-d.getTimezoneOffset()).replace(/(\d\d)$/,':$1')}`;
+function outlookUrl(e){
+  const r=range(e),p=new URLSearchParams({path:'/calendar/action/compose',rru:'addevent',subject:e.title.trim()});
+  if(e.allDay){p.set('startdt',e.sd);p.set('enddt',isoDate(r.end));p.set('allday','true');}
+  else{p.set('startdt',isoOff(r.start));p.set('enddt',isoOff(r.end));p.set('allday','false');}
+  const body=[e.desc.trim(),normUrl(e.url)].filter(Boolean).join('\n\n');
+  if(body)p.set('body',body);
+  if(e.loc.trim())p.set('location',e.loc.trim());
+  return 'https://outlook.live.com/calendar/0/action/compose?'+p;
+}
+// The whole event after the # – that part never reaches a server
+function eventLink(e){
+  const p=new URLSearchParams();
+  p.set('t',e.title.trim());
+  if(e.allDay)p.set('a','1');
+  p.set('s',e.sd);if(!e.allDay)p.set('st',e.st);
+  p.set('e',e.ed);if(!e.allDay){p.set('et',e.et);if(TZ())p.set('z',TZ());}
+  if(e.loc.trim())p.set('l',e.loc.trim());
+  if(e.desc.trim())p.set('d',e.desc.trim());
+  if(e.url.trim())p.set('u',normUrl(e.url));
+  if(e.repeat==='custom')p.set('rr',e.rrule);
+  else if(e.repeat){p.set('r',e.repeat.toLowerCase());if(e.count)p.set('c',String(+e.count));}
+  if(e.alarm>=0)p.set('m',String(e.alarm));
+  return location.origin+location.pathname+'#'+p;
+}
+function fromLink(){
+  const p=new URLSearchParams(location.hash.slice(1));
+  if(!p.has('t')||!p.has('s'))return null;
+  history.replaceState(history.state,'',location.pathname+location.search);
+  const str=(k,max)=>(p.get(k)||'').slice(0,max),e=newEvent();
+  e.title=str('t',LIM.title);e.allDay=p.get('a')==='1';
+  e.sd=str('s',10);e.ed=str('e',10)||e.sd;
+  if(!e.allDay){e.st=str('st',5);e.et=str('et',5)||e.st;}
+  e.loc=str('l',LIM.loc);e.desc=str('d',LIM.desc);
+  const u=str('u',LIM.url);e.url=/^https?:\/\/\S+$/i.test(u)?u:'';
+  const r=(p.get('r')||'').toUpperCase(),c=p.get('c')||'';
+  e.repeat='';e.count='';
+  if(REPEATS.includes(r)){e.repeat=r;e.count=/^\d{1,3}$/.test(c)&&+c>=1?c:'';}
+  else if(p.get('rr')){e.rrule=safeRule(p.get('rr'));e.repeat=e.rrule?'custom':'';}
+  if(p.has('m')){const m=Number(p.get('m'));e.alarm=ALARMS.includes(m)?m:-1;}
+  // Sent from another time zone: the same moment in ours
+  const z=p.get('z');
+  if(!e.allDay&&z&&z!==TZ())for(const [dk,tk] of [['sd','st'],['ed','et']]){
+    const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(e[dk]),n=/^(\d{2}):(\d{2})$/.exec(e[tk]);
+    const ms=m&&n?zoned([+m[1],+m[2]-1,+m[3],+n[1],+n[2],0],z):null;
+    if(ms!=null){const d=new Date(ms);e[dk]=isoDate(d);e[tk]=hm(d);}
+  }
+  return e;
+}
+
+/* ---------- Texts ---------- */
+const D_OPT={weekday:'short',day:'numeric',month:'short',year:'numeric'},T_OPT={hour:'2-digit',minute:'2-digit'};
+function whenText(e){
+  const r=range(e),L=Tools.locale();
+  if(r.err)return '';
+  if(e.allDay){
+    const a=r.start.toLocaleDateString(L,D_OPT);
+    return e.sd===e.ed?t('allDayOn',{date:a}):`${a} – ${r.last.toLocaleDateString(L,D_OPT)}`;
+  }
+  const a=r.start.toLocaleString(L,Object.assign({},D_OPT,T_OPT));
+  return `${a} – ${e.sd===e.ed?r.end.toLocaleTimeString(L,T_OPT):r.end.toLocaleString(L,Object.assign({},D_OPT,T_OPT))}`;
+}
+function repeatText(e){
+  if(!e.repeat)return '';
+  if(e.repeat==='custom')return t('rep.custom');
+  const base=t('rep.'+e.repeat);
+  return e.count?t('rep.count',{rep:base,n:+e.count}):base;
+}
+function plainText(e){
+  const L=[e.title.trim(),'🗓 '+whenText(e)];
+  if(e.loc.trim())L.push('📍 '+e.loc.trim());
+  const rp=repeatText(e);if(rp)L.push('🔁 '+rp);
+  if(e.url.trim())L.push(normUrl(e.url));
+  if(e.desc.trim())L.push('',e.desc.trim());
+  return L.join('\n');
+}
+function fileName(e){
+  const base=e.title.trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g,' ').replace(/\s+/g,' ').trim().slice(0,60);
+  return (base||t('untitled'))+'.ics';
+}
+
+/* ---------- State and form ---------- */
+let S=clean(Tools.load(LS_DRAFT,null));
+let list=Tools.load(LS_LIST,[]);
+list=Array.isArray(list)?list.map(clean):[];
+let tried=false;
+const els={title:$('title'),sd:$('sd'),st:$('st'),ed:$('ed'),et:$('et'),loc:$('loc'),desc:$('desc'),url:$('url'),count:$('count')};
+const saveDraft=()=>Tools.save(LS_DRAFT,S);
+function fill(){
+  for(const k of Object.keys(els))els[k].value=S[k];
+  $('allDay').checked=S.allDay;
+  $('alarm').value=String(S.alarm);
+  $('repCustom').hidden=$('repCustom').disabled=S.repeat!=='custom';
+  $('repeat').value=S.repeat;
+}
+let lastErr=null;
+function render(){
+  for(const id of ['stWrap','etWrap'])$(id).hidden=S.allDay;
+  $('countWrap').hidden=!REPEATS.includes(S.repeat);
+  $('tzHint').textContent=S.allDay?'':t('tzHint',{tz:TZ()||'–'});
+  $('tzHint').hidden=S.allDay;
+  const err=check(S),show=err&&(tried||err!=='errTitle');
+  $('msg').hidden=!show;
+  if(show)$('msg').textContent=t(err);
+  if(err!==lastErr){if(err)Tools.diag.log('invalid input',{err});lastErr=err;}
+  $('preview').hidden=!!err;
+  $('btnGoogle').href=err?'#':googleUrl(S);
+  $('btnOutlook').href=err?'#':outlookUrl(S);
+  if(err)return;
+  $('pvTitle').textContent=S.title.trim();
+  $('pvWhen').textContent=whenText(S);
+  $('pvMeta').textContent=[S.loc.trim()&&'📍 '+S.loc.trim(),repeatText(S)&&'🔁 '+repeatText(S),S.alarm>=0&&'⏰ '+t('remind',{al:t('al.'+S.alarm)})].filter(Boolean).join(' · ');
+  $('pvMeta').hidden=!$('pvMeta').textContent;
+}
+// Moving the start keeps the duration
+function keepDuration(prev){
+  const a=range(prev),b=range(S);
+  if(a.err||b.err)return;
+  if(S.allDay){
+    const l=new Date(b.start);l.setDate(l.getDate()+Math.round((a.last-a.start)/864e5));S.ed=isoDate(l);
+  }else{
+    const end=new Date(b.start.getTime()+Math.max(0,a.end-a.start));S.ed=isoDate(end);S.et=hm(end);
+  }
+  els.ed.value=S.ed;els.et.value=S.et;
+}
+for(const k of Object.keys(els))els[k].addEventListener('input',()=>{
+  const prev=Object.assign({},S);
+  S[k]=els[k].value;
+  if(k==='sd'||k==='st')keepDuration(prev);
+  saveDraft();render();
+});
+$('allDay').addEventListener('change',()=>{
+  S.allDay=$('allDay').checked;
+  if(S.allDay){if(S.ed<S.sd)S.ed=S.sd;}
+  else{
+    if(!S.st)S.st='09:00';
+    const s=parseLocal(S.sd,S.st),e=parseLocal(S.ed,S.et);
+    if(s&&(!e||e<=s)){const n=new Date(s.getTime()+settings.dur*6e4);S.ed=isoDate(n);S.et=hm(n);}
+  }
+  fill();saveDraft();render();Tools.diag.log('all day',{on:S.allDay});
+});
+$('alarm').addEventListener('change',()=>{S.alarm=+$('alarm').value;saveDraft();render();});
+$('repeat').addEventListener('change',()=>{
+  S.repeat=$('repeat').value;
+  if(S.repeat!=='custom')S.rrule='';
+  fill();saveDraft();render();
+});
+
+/* ---------- My events ---------- */
+function remember(){
+  S.updated=Date.now();
+  list=[Object.assign({},S),...list.filter(x=>x.id!==S.id)].slice(0,LIST_MAX);
+  Tools.save(LS_LIST,list);saveDraft();renderList();
+}
+function load(e){
+  S=clean(e);tried=false;fill();saveDraft();render();renderList();
+}
+function renderList(){
+  const ul=$('list');ul.textContent='';
+  $('listEmpty').hidden=list.length>0;
+  $('btnAll').hidden=!list.length;
+  for(const e of list){
+    const li=document.createElement('li');
+    const b=document.createElement('button');b.type='button';b.className='load';
+    if(e.id===S.id)b.setAttribute('aria-current','true');
+    const n=document.createElement('span');n.className='name';n.textContent=e.title.trim()||t('untitled');
+    const m=document.createElement('span');m.className='meta';
+    m.textContent=[whenText(e),e.repeat&&'🔁'].filter(Boolean).join(' · ');
+    b.append(n,m);
+    b.addEventListener('click',()=>{load(e);Tools.diag.log('event loaded',{allDay:e.allDay,repeat:e.repeat||'none'});window.scrollTo({top:0,behavior:'smooth'});});
+    const x=document.createElement('button');x.type='button';x.className='del';x.textContent='×';
+    x.setAttribute('aria-label',t('del',{name:n.textContent}));
+    x.addEventListener('click',()=>{
+      list=list.filter(y=>y!==e);Tools.save(LS_LIST,list);renderList();
+      Tools.toast(t('deleted'));Tools.diag.log('event deleted',{count:list.length});
+    });
+    li.append(b,x);ul.append(li);
+  }
+}
+
+/* ---------- Actions ---------- */
+// Valid? Then the event goes into "My events". Otherwise the reason is shown.
+function ready(){
+  tried=true;
+  const err=check(S);
+  render();
+  if(err){$('msg').scrollIntoView({block:'center',behavior:'smooth'});Tools.diag.log('action blocked',{err});return false;}
+  remember();
+  return true;
+}
+function download(name,text){
+  const f=new File([text],name,{type:'text/calendar'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(f);a.download=name;document.body.append(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+}
+$('btnIcs').addEventListener('click',()=>{
+  if(!ready())return;
+  download(fileName(S),icsFor([S]));
+  Tools.toast(t('saved'));Tools.diag.log('ics saved',{allDay:S.allDay,repeat:S.repeat||'none',alarm:S.alarm});
+});
+for(const [id,what] of [['btnGoogle','google'],['btnOutlook','outlook']])$(id).addEventListener('click',ev=>{
+  if(!ready()){ev.preventDefault();return;}
+  ev.currentTarget.href=what==='google'?googleUrl(S):outlookUrl(S);
+  Tools.diag.log('opened '+what,{allDay:S.allDay,repeat:S.repeat||'none'});
+});
+$('btnShare').addEventListener('click',async()=>{
+  if(!ready())return;
+  const url=eventLink(S);
+  if(navigator.share){
+    try{await navigator.share({title:S.title.trim(),text:plainText(S),url});Tools.diag.log('link shared');return;}
+    catch(e){if(e&&e.name==='AbortError'){Tools.diag.log('share cancelled');return;}Tools.diag.log('share failed',{err:e&&e.name||String(e)});}
+  }
+  Tools.toast(t(await Tools.copyText(url)?'linkCopied':'copyFail'));
+  Tools.diag.log('link copied');
+});
+$('btnCopy').addEventListener('click',async()=>{
+  if(!ready())return;
+  const ok=await Tools.copyText(plainText(S)+'\n\n'+t('addLink')+'\n'+eventLink(S));
+  Tools.toast(t(ok?'copied':'copyFail'));Tools.diag.log('text copied',{ok});
+});
+$('btnNew').addEventListener('click',()=>{
+  load(newEvent());Tools.diag.log('new event');
+  window.scrollTo({top:0,behavior:'smooth'});els.title.focus({preventScroll:true});
+});
+$('btnAll').addEventListener('click',()=>{
+  const ok=list.filter(e=>!check(e));
+  if(!ok.length)return;
+  download(`${t('fileAll')}-${isoDate(new Date())}.ics`,icsFor(ok));
+  Tools.toast(t('savedAll',{n:ok.length}));Tools.diag.log('all saved',{count:ok.length});
+});
+async function openFile(f){
+  Tools.diag.log('open file',{size:f.size,type:f.type||'-'});
+  if(f.size>2*1024*1024){Tools.toast(t('errBig'));return;}
+  let evs=[];
+  try{evs=parseIcs(await f.text()).map(clean);}catch(e){Tools.diag.log('parse failed',{err:String(e&&e.message||e)});}
+  if(!evs.length){Tools.toast(t('errNoEvents'));Tools.diag.log('no events in file');return;}
+  const now=Date.now();
+  evs.forEach((e,i)=>{e.updated=now-i;});
+  // Same event again (same UID): the new version replaces the old one
+  list=[...evs,...list.filter(x=>!x.uid||!evs.some(e=>e.uid===x.uid))].slice(0,LIST_MAX);
+  Tools.save(LS_LIST,list);
+  load(evs[0]);
+  Tools.toast(evs.length===1?t('imported1'):t('imported',{n:evs.length}));
+  Tools.diag.log('file loaded',{events:evs.length,custom:evs.filter(e=>e.repeat==='custom').length});
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+$('btnOpen').addEventListener('click',()=>{const i=$('fileInput');i.value='';i.click();});
+$('fileInput').addEventListener('change',()=>{const f=$('fileInput').files[0];if(f)openFile(f);});
+
+/* ---------- Settings (menu) ---------- */
+function fillSettings(){
+  const sel=$('setAlarm'),v=String(settings.alarm);sel.textContent='';
+  for(const a of ALARMS){const o=document.createElement('option');o.value=String(a);o.textContent=t('al.'+a);sel.append(o);}
+  sel.value=v;$('setDur').value=String(settings.dur);
+}
+$('setDur').addEventListener('change',()=>{settings.dur=+$('setDur').value;Tools.save(LS_SET,settings);});
+$('setAlarm').addEventListener('change',()=>{settings.alarm=+$('setAlarm').value;Tools.save(LS_SET,settings);});
+
+/* ---------- Start ---------- */
+const linked=fromLink();
+if(linked){S=linked;tried=true;Tools.diag.log('event from link',{allDay:S.allDay,repeat:S.repeat||'none'});}
+fill();fillSettings();render();renderList();
+if(linked){saveDraft();Tools.toast(t('fromLink'));}
+Tools.takeSharedFile().then(f=>{if(f){Tools.diag.log('shared file received');openFile(f);}});
+Tools.onLang(()=>{fillSettings();render();renderList();});
+Tools.diag.info(()=>({allDay:S.allDay,repeat:S.repeat||'none',alarm:S.alarm,place:!!S.loc.trim(),link:!!S.url.trim(),
+  error:check(S),events:list.length,timeZone:TZ()||null,share:'share' in navigator}));
+
+/* ---------- WebMCP ---------- */
+const MCP_ERR={errTitle:'title must not be empty.',errStart:'Invalid start_date or start_time – expected YYYY-MM-DD and HH:MM.',
+  errEnd:'Invalid end_date or end_time – expected YYYY-MM-DD and HH:MM.',errOrder:'The end lies before the start.',
+  errCount:'count must be 1 to 999.',errUrl:'url must start with http:// or https://.'};
+function describe(e,withIcs){
+  const out={title:e.title.trim(),all_day:e.allDay,start:e.allDay?e.sd:`${e.sd}T${e.st}`,end:e.allDay?e.ed:`${e.ed}T${e.et}`,
+    time_zone:TZ()||null,location:e.loc.trim(),description:e.desc.trim(),url:e.url.trim()?normUrl(e.url):'',
+    reminder_minutes:e.alarm>=0?e.alarm:null,repeat:e.repeat==='custom'?'custom':(e.repeat||'none').toLowerCase(),
+    count:e.count?+e.count:null};
+  if(e.repeat==='custom')out.rrule=e.rrule;
+  if(!check(e)){
+    if(withIcs)out.ics=icsFor([e]);
+    out.google_calendar_url=googleUrl(e);out.outlook_url=outlookUrl(e);out.event_link=eventLink(e);
+  }
+  return out;
+}
+const d10=d=>({type:'string',minLength:10,maxLength:10,description:d});
+const t5=d=>({type:'string',minLength:5,maxLength:5,description:d});
+Tools.mcp.register({
+  name:'create_event',title:'Create a calendar event',label:'mcp.create',
+  description:'Fills the event form of the app with a new calendar event and adds it to the list "My events". Times are local wall-clock times in the time zone of the device; leave out start_time for an all-day event. Returns the event, the iCalendar file content (.ics, RFC 5545) and links that add it to Google Calendar or Outlook.com or open it in this app. Nothing is downloaded or sent anywhere – the user adds the event to a calendar with the buttons in the app.',
+  inputSchema:{type:'object',properties:{
+    title:{type:'string',minLength:1,maxLength:LIM.title,description:'Title of the event.'},
+    start_date:d10('Start date as YYYY-MM-DD.'),
+    start_time:t5('Start time as HH:MM (24 h). Leave out for an all-day event.'),
+    end_date:d10('End date as YYYY-MM-DD; for all-day events the last day (inclusive). Default: the start date, or the date of start time plus the default duration.'),
+    end_time:t5('End time as HH:MM (24 h), only with start_time. Default: start plus the default duration set in the app.'),
+    location:{type:'string',maxLength:LIM.loc,description:'Place or address.'},
+    description:{type:'string',maxLength:LIM.desc,description:'Notes for the event.'},
+    url:{type:'string',maxLength:LIM.url,description:'Link for the event (http or https).'},
+    reminder_minutes:{type:'integer',enum:ALARMS,description:'Reminder in minutes before the start, 0 = at the start, -1 = none. Default: the app setting.'},
+    repeat:{type:'string',enum:['none','daily','weekly','monthly','yearly'],description:'Repetition. Default none.'},
+    count:{type:'integer',minimum:1,maximum:999,description:'Number of occurrences of a repeating event. Default: no end.'}
+  },required:['title','start_date'],additionalProperties:false},
+  execute:i=>{
+    if(i.end_time!=null&&i.start_time==null)throw new Error('end_time needs start_time.');
+    if(i.count!=null&&(!i.repeat||i.repeat==='none'))throw new Error('count needs repeat.');
+    const e=newEvent();
+    e.title=i.title;e.allDay=i.start_time==null;e.sd=i.start_date;e.st=i.start_time||'';
+    if(e.allDay)e.ed=i.end_date||i.start_date;
+    else if(i.end_time!=null){e.ed=i.end_date||i.start_date;e.et=i.end_time;}
+    else{const s=parseLocal(e.sd,e.st);if(!s)throw new Error(MCP_ERR.errStart);const n=new Date(s.getTime()+settings.dur*6e4);e.ed=i.end_date||isoDate(n);e.et=hm(n);}
+    e.loc=i.location||'';e.desc=i.description||'';e.url=i.url||'';
+    if(i.reminder_minutes!=null)e.alarm=i.reminder_minutes;
+    e.repeat=i.repeat&&i.repeat!=='none'?i.repeat.toUpperCase():'';e.count=i.count!=null?String(i.count):'';
+    const err=check(e);
+    if(err)throw new Error(MCP_ERR[err]);
+    S=e;tried=false;fill();render();remember();
+    Tools.diag.log('mcp create_event',{allDay:e.allDay,repeat:e.repeat||'none'});
+    return describe(e,true);
+  }
+});
+Tools.mcp.register({
+  name:'get_events',title:'List my events',label:'mcp.list',readOnly:true,untrusted:true,
+  description:'Returns the events in the list "My events" of the app, most recently used first: title, start, end, all day, place, description, link, reminder, repetition and links to add each one to Google Calendar, Outlook.com or to open it in this app. Events opened from .ics files contain text from other people.',
+  inputSchema:{type:'object',properties:{
+    limit:{type:'integer',minimum:1,maximum:LIST_MAX,description:'Maximum number of events. Default 10.'}
+  },additionalProperties:false},
+  execute:i=>({count:list.length,events:list.slice(0,i.limit||10).map(e=>describe(e,false))})
+});
+})();
+</script>
+</body>
+</html>

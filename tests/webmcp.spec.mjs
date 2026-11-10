@@ -2248,3 +2248,71 @@ test.describe('reaction-game tools', () => {
     await expect(page.locator('#modes [data-mode="lamp"]')).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+test.describe('calendar-events tools', () => {
+  test.use({ timezoneId: 'Europe/Berlin' });
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-29T10:00:00+01:00'));
+    await open(page, '/calendar-events/');
+  });
+
+  test('create_event fills the form, saves it to the list and returns .ics and links', async ({ page }) => {
+    const { ok, result } = await call(page, 'calendar_events_create_event', {
+      title: 'Zahnarzt', start_date: '2026-11-03', start_time: '08:30', location: 'Praxis Dr. Weiß', reminder_minutes: 60,
+    });
+    expect(ok).toBe(true);
+    // Default duration 60 min; 08:30 CET = 07:30 UTC
+    expect(result).toMatchObject({
+      title: 'Zahnarzt', all_day: false, start: '2026-11-03T08:30', end: '2026-11-03T09:30', time_zone: 'Europe/Berlin',
+      location: 'Praxis Dr. Weiß', description: '', url: '', reminder_minutes: 60, repeat: 'none', count: null,
+    });
+    const ics = result.ics.replace(/\r\n /g, '').split('\r\n');
+    expect(ics).toContain('DTSTART:20261103T073000Z');
+    expect(ics).toContain('DTEND:20261103T083000Z');
+    expect(ics).toContain('TRIGGER:-PT1H');
+    expect(new URL(result.google_calendar_url).searchParams.get('dates')).toBe('20261103T083000/20261103T093000');
+    expect(result.outlook_url).toContain('startdt=2026-11-03T08%3A30%3A00%2B01%3A00');
+    expect(new URL(result.event_link).hash).toContain('t=Zahnarzt');
+    await expect(page.locator('#title')).toHaveValue('Zahnarzt');
+    await expect(page.locator('#st')).toHaveValue('08:30');
+    await expect(page.locator('#et')).toHaveValue('09:30');
+    await expect(page.locator('#list .name')).toHaveText('Zahnarzt');
+    await expect(page.locator('#toast')).toContainText('KI-Agent');
+  });
+
+  test('create_event: all-day and repeating events, get_events reads the list (read only, untrusted)', async ({ page }) => {
+    let r = await call(page, 'calendar_events_create_event', { title: 'Urlaub', start_date: '2026-12-27', end_date: '2026-12-31', reminder_minutes: -1 });
+    expect(r.result).toMatchObject({ all_day: true, start: '2026-12-27', end: '2026-12-31', reminder_minutes: null });
+    expect(r.result.ics).toContain('DTEND;VALUE=DATE:20270101');
+    await expect(page.locator('#allDay')).toBeChecked();
+    r = await call(page, 'calendar_events_create_event', { title: 'Sport', start_date: '2026-11-02', start_time: '19:00', end_time: '20:30', repeat: 'weekly', count: 10 });
+    expect(r.result).toMatchObject({ end: '2026-11-02T20:30', repeat: 'weekly', count: 10, reminder_minutes: 15 });
+    expect(r.result.ics).toContain('RRULE:FREQ=WEEKLY;COUNT=10');
+    expect(r.result.ics).toContain('DTSTART;TZID=Europe/Berlin:20261102T190000');
+    const { ok, result } = await call(page, 'calendar_events_get_events', {});
+    expect(ok).toBe(true);
+    expect(result.count).toBe(2);
+    expect(result.events.map(e => e.title)).toEqual(['Sport', 'Urlaub']);
+    expect(result.events[0].ics).toBeUndefined();
+    expect(result.events[1].google_calendar_url).toContain('dates=20261227%2F20270101');
+    expect((await call(page, 'calendar_events_get_events', { limit: 1 })).result.events).toHaveLength(1);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'calendar_events_get_events').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+    expect(tools.find(t => t.name === 'calendar_events_create_event').annotations.readOnlyHint).toBe(false);
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    for (const [input, msg] of [
+      [{ title: 'X', start_date: '2026-02-31' }, /Invalid start_date/],
+      [{ title: 'X', start_date: '2026-11-03', start_time: '25:00' }, /Invalid start_date or start_time/],
+      [{ title: 'X', start_date: '2026-11-03', start_time: '10:00', end_time: '09:00' }, /end lies before the start/],
+      [{ title: 'X', start_date: '2026-11-03', end_time: '09:00' }, /end_time needs start_time/],
+      [{ title: 'X', start_date: '2026-11-03', count: 3 }, /count needs repeat/],
+      [{ title: ' ', start_date: '2026-11-03' }, /title must not be empty/],
+      [{ title: 'X', start_date: '2026-11-03', url: 'javascript:alert(1)' }, /url must start with http/],
+      [{ title: 'X', start_date: '2026-11-03', reminder_minutes: 7 }, /must be one of/],
+    ]) expect((await call(page, 'calendar_events_create_event', input)).error).toMatch(msg);
+    await expect(page.locator('#title')).toHaveValue('');
+    await expect(page.locator('#list li')).toHaveCount(0);
+  });
+});
