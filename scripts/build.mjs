@@ -90,7 +90,6 @@ function pageInfo({ folder, file }) {
     shareText: meta(html, 'tool:share-text') === 'true',
     webmcp: (meta(html, 'tool:webmcp') || '').split(',').map(s => s.trim()).filter(Boolean),
     connect: (meta(html, 'tool:connect') || '').split(/\s+/).filter(Boolean),
-    cast: meta(html, 'tool:cast') === 'true',
     icon: existsSync(join(ROOT, folder, 'icon.svg')),
   };
 }
@@ -200,11 +199,9 @@ function csp(p) {
   const wasm = isApp(p) && vendorsOf(p).some(v => VENDOR[v]?.wasm) ? " 'wasm-unsafe-eval'" : '';
   // Libraries that start their worker from in-memory code (blob: URL, e.g. the MP3 encoder) – only in pages using them
   const blobWorker = isApp(p) && vendorsOf(p).some(v => VENDOR[v]?.blobWorker) ? ' blob:' : '';
-  // Google Cast sender SDK (only loaded when the user taps "stream to TV", see assets/shared/cast.js)
-  const cast = p.cast ? ' https://www.gstatic.com' : '';
   return [
     "default-src 'self'",
-    `script-src 'self'${wasm}${cast}${hashes.length ? ' ' + hashes.join(' ') : ''}`,
+    `script-src 'self'${wasm}${hashes.length ? ' ' + hashes.join(' ') : ''}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "media-src 'self' blob: mediastream:",

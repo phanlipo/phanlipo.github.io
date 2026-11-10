@@ -1,60 +1,43 @@
-/* Cast demo: draws a live scene into a canvas, plays generated music (Web Audio) and streams both
-   to a Chromecast / Android TV with assets/shared/cast.js. */
+/* Cast demo: an animated scene with generated music, shown on a Chromecast / Android TV with the phone's own
+   screen casting. tv.js prepares the picture (full screen, landscape, screen stays on). */
 (function(){
 'use strict';
 Tools.i18n({
   de:{
-    'st.idle':'Nicht verbunden','st.loading':'Cast wird geladen …','st.choosing':'Fernseher wählen …',
-    'st.connecting':'Verbinde mit {tv} …','st.streaming':'Live auf {tv}','st.tv':'Fernseher',
-    'st.stats':'{w}×{h} · {fps} fps · {kbps} kbit/s','music.play':'Musik an','music.pause':'Musik aus',
-    'cast.start':'Auf Fernseher streamen','cast.stop':'Streaming beenden',
-    'err.no-app-id':'Erst im Menü die Cast-App-ID eintragen (Einrichtung).',
-    'err.unsupported':'Streamen auf Chromecast geht nur in Chrome oder Edge (Android, Computer).',
-    'err.sdk-load':'Das Cast-Programm von Google ließ sich nicht laden. Online?',
-    'err.session':'Der Fernseher hat die Empfänger-App nicht gestartet. App-ID und Einrichtung prüfen.',
-    'err.no-answer':'Der Fernseher antwortet nicht. Empfänger-Adresse in der Developer Console prüfen.',
-    'err.ice-failed':'Keine Verbindung zum Fernseher. Gleiches WLAN? Sonst im Menü die Verbindungshilfe einschalten.',
-    'err.receiver':'Fehler auf dem Fernseher – Diagnose kopieren.','err.webrtc':'Streamen fehlgeschlagen – Diagnose kopieren.',
-    'err.cancel':'Abgebrochen.',
-    'idOk':'App-ID gespeichert.','idBad':'Die App-ID hat 8 Zeichen (0–9, A–F).','copied':'Adresse kopiert.',
-    'mcp.scene':'Szene gewechselt','mcp.status':'Stream-Status gelesen','live':'LIVE','sc.wavesName':'Wellen','sc.starsName':'Sterne','sc.barsName':'Balken'
+    'music.play':'Musik an','music.pause':'Musik aus',
+    'st.android':'Tipp: Erst die Bildschirmübertragung starten, dann Vollbild.',
+    'st.ios':'Tipp: Mit Apple TV über die Bildschirmsynchronisierung, dann Vollbild.',
+    'st.desktop':'Tipp: In Chrome über ⋮ → Streamen den Tab übertragen, dann Vollbild.',
+    'tv.noLandscape':'Querformat ließ sich nicht festlegen – Handy bitte drehen.',
+    'mcp.scene':'Szene gewechselt','mcp.status':'Zustand gelesen',
+    'sc.wavesName':'Wellen','sc.starsName':'Sterne','sc.barsName':'Balken'
   },
   en:{
-    title:'Cast Demo',sub:'Stream picture and music live to the TV.',
-    view:'Picture streamed to the TV – tap for effects',scene:'Scene','sc.waves':'Waves','sc.stars':'Stars','sc.bars':'Bars',
-    'tv.h':'TV & setup','tv.appId':'Cast app ID','tv.appIdPh':'e.g. 1A2B3C4D',
-    'tv.appIdHint':'8 characters from the Google Cast SDK Developer Console (see setup below).',
-    'tv.quality':'Picture quality','q.480':'480p – needs little Wi-Fi','q.720':'720p – default','q.1080':'1080p – needs good Wi-Fi',
-    'tv.local':'Also play the music on the phone while streaming','tv.log':'Show a log on the TV (troubleshooting)',
-    'tv.stun':'Use a connection helper (Google STUN server) – only if it does not work without',
-    'setup.h':'Setup (once)','setup.copy':'Copy address',
-    'st.idle':'Not connected','st.loading':'Loading Cast …','st.choosing':'Pick a TV …',
-    'st.connecting':'Connecting to {tv} …','st.streaming':'Live on {tv}','st.tv':'TV',
-    'st.stats':'{w}×{h} · {fps} fps · {kbps} kbit/s','music.play':'Music on','music.pause':'Music off',
-    'cast.start':'Stream to TV','cast.stop':'Stop streaming',
-    'err.no-app-id':'First enter the Cast app ID in the menu (setup).',
-    'err.unsupported':'Streaming to Chromecast only works in Chrome or Edge (Android, computer).',
-    'err.sdk-load':'Could not load Google\'s Cast program. Online?',
-    'err.session':'The TV did not start the receiver app. Check the app ID and setup.',
-    'err.no-answer':'The TV does not answer. Check the receiver address in the Developer Console.',
-    'err.ice-failed':'No connection to the TV. Same Wi-Fi? Otherwise turn on the connection helper in the menu.',
-    'err.receiver':'Error on the TV – copy the diagnostics.','err.webrtc':'Streaming failed – copy the diagnostics.',
-    'err.cancel':'Cancelled.',
-    'idOk':'App ID saved.','idBad':'The app ID has 8 characters (0–9, A–F).','copied':'Address copied.',
-    'mcp.scene':'Scene switched','mcp.status':'Stream status read','live':'LIVE','sc.wavesName':'Waves','sc.starsName':'Stars','sc.barsName':'Bars'
+    title:'Cast Demo',sub:'Show picture and music on the TV.',
+    view:'Picture for the TV – tap for effects',bar:'Controls',scene:'Scene','sc.waves':'Waves','sc.stars':'Stars','sc.bars':'Bars',
+    'music.play':'Music on','music.pause':'Music off','tv.show':'Show on TV','tv.exit':'Exit full screen',
+    'set.h':'Settings','set.music':'Start the music automatically in full screen','set.clock':'Show a clock in the picture (to read the delay)',
+    'dlg.h':'Show on TV','dlg.step1':'1. Cast the screen','dlg.open':'Open casting in the settings',
+    'dlg.fail':'Could not be opened directly – please use the quick settings or the Google Home app.',
+    'dlg.step2':'2. Start full screen','dlg.step2text':'Picture in landscape without bars, the screen stays on. Exit with the back gesture or “Exit full screen”.',
+    'dlg.go':'Start full screen','dlg.close':'Close',
+    'st.android':'Tip: first start the screen casting, then full screen.',
+    'st.ios':'Tip: with an Apple TV via Screen Mirroring, then full screen.',
+    'st.desktop':'Tip: in Chrome cast the tab via ⋮ → Cast, then full screen.',
+    'tv.noLandscape':'Could not lock landscape – please turn the phone.',
+    'mcp.scene':'Scene switched','mcp.status':'State read',
+    'sc.wavesName':'Waves','sc.starsName':'Stars','sc.barsName':'Bars'
   }
 });
 const t=Tools.t, $=Tools.$;
 const LS='cast-demo.settings.v1';
 const SCENES=['waves','stars','bars'];
-const QUALITY={480:{w:854,h:480,bitrate:1500000},720:{w:1280,h:720,bitrate:4000000},1080:{w:1920,h:1080,bitrate:8000000}};
-const settings=Object.assign({appId:'',quality:'720',local:false,tvLog:false,stun:false,scene:'waves'},Tools.load(LS,{}));
-if(!QUALITY[settings.quality]) settings.quality='720';
+const settings=Object.assign({scene:'waves',autoMusic:true,clock:true},Tools.load(LS,{}));
 if(!SCENES.includes(settings.scene)) settings.scene='waves';
 const save=()=>Tools.save(LS,settings);
 
 /* ---------- Music (generated, original: Am – F – C – G at 100 bpm) ---------- */
-let ac=null, master, localOut, streamOut, analyser, delay, noise, playing=false, timer=0, nextTime=0, step=0, startTime=0;
+let ac=null, master, analyser, delay, noise, playing=false, timer=0, nextTime=0, step=0, startTime=0;
 const BPM=100, STEP=60/BPM/4;
 const CHORDS=[[57,60,64],[53,57,60],[48,52,55],[55,59,62]];   // Am F C G (MIDI)
 const hz=m=>440*Math.pow(2,(m-69)/12);
@@ -65,8 +48,7 @@ function audio(){
   const comp=ac.createDynamicsCompressor(); master.connect(comp);
   analyser=ac.createAnalyser(); analyser.fftSize=256; analyser.smoothingTimeConstant=.75;
   comp.connect(analyser);
-  localOut=ac.createGain(); comp.connect(localOut).connect(ac.destination);
-  streamOut=ac.createMediaStreamDestination(); comp.connect(streamOut);
+  comp.connect(ac.destination);
   delay=ac.createDelay(1); delay.delayTime.value=STEP*3;
   const fb=ac.createGain(); fb.gain.value=.32; const wet=ac.createGain(); wet.gain.value=.35;
   delay.connect(fb).connect(delay); delay.connect(wet).connect(master);
@@ -132,11 +114,6 @@ function musicOff(){
   Tools.diag.log('music off');
   renderButtons();
 }
-function localSound(){
-  if(!localOut) return;
-  const on=CastStream.state==='idle'||settings.local;
-  localOut.gain.setTargetAtTime(on?1:0,ac.currentTime,.05);
-}
 
 /* ---------- Picture ---------- */
 const canvas=$('view'), g2=canvas.getContext('2d',{alpha:false});
@@ -144,11 +121,6 @@ let W=canvas.width, H=canvas.height;
 const bins=new Uint8Array(128);
 const ripples=[];
 const stars=Array.from({length:260},()=>({x:Math.random()*2-1,y:Math.random()*2-1,z:Math.random()}));
-function resize(){
-  const q=QUALITY[settings.quality];
-  if(canvas.width!==q.w){ canvas.width=q.w; canvas.height=q.h; }
-  W=canvas.width; H=canvas.height;
-}
 function level(a,b){ let s=0; for(let i=a;i<b;i++) s+=bins[i]; return s/(b-a)/255; }
 function drawWaves(now,bass,mid,high){
   const hue=(now/80)%360;
@@ -199,18 +171,15 @@ function overlay(now){
     g2.beginPath(); g2.arc(r.x*W,r.y*H,H*(.03+age*.25),0,Math.PI*2); g2.stroke();
   }
   // Clock with tenths: compare phone and TV to read the delay
-  const d=new Date();
-  const clock=d.toLocaleTimeString(Tools.locale(),{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'.'+Math.floor(d.getMilliseconds()/100);
-  g2.font=`600 ${Math.round(H/14)}px system-ui,sans-serif`; g2.textAlign='right'; g2.textBaseline='bottom';
-  g2.fillStyle='rgba(0,0,0,.45)'; g2.fillText(clock,W-H/28+2,H-H/28+2);
-  g2.fillStyle='#fff'; g2.fillText(clock,W-H/28,H-H/28);
+  if(settings.clock){
+    const d=new Date();
+    const clock=d.toLocaleTimeString(Tools.locale(),{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'.'+Math.floor(d.getMilliseconds()/100);
+    g2.font=`600 ${Math.round(H/14)}px system-ui,sans-serif`; g2.textAlign='right'; g2.textBaseline='bottom';
+    g2.fillStyle='rgba(0,0,0,.45)'; g2.fillText(clock,W-H/28+2,H-H/28+2);
+    g2.fillStyle='#fff'; g2.fillText(clock,W-H/28,H-H/28);
+  }
   g2.textAlign='left'; g2.font=`600 ${Math.round(H/22)}px system-ui,sans-serif`;
   g2.fillStyle='rgba(255,255,255,.85)'; g2.fillText(t('sc.'+settings.scene+'Name'),H/28,H-H/28);
-  if(CastStream.state==='streaming'){
-    g2.textBaseline='top'; g2.fillStyle='#ef4444';
-    g2.beginPath(); g2.arc(H/28+H/50,H/28+H/40,H/50,0,Math.PI*2); g2.fill();
-    g2.fillStyle='#fff'; g2.fillText(t('live'),H/28+H/22,H/28);
-  }
 }
 let frames=0;
 function frame(now){
@@ -234,124 +203,70 @@ canvas.addEventListener('pointerdown',e=>{
   if(ripples.length>30) ripples.shift();
 });
 
-/* ---------- Streaming ---------- */
-let videoTrack=null, wake=null;
-async function wakeLock(on){
-  try{
-    if(on&&!wake&&'wakeLock' in navigator&&document.visibilityState==='visible'){
-      wake=await navigator.wakeLock.request('screen');
-      wake.addEventListener('release',()=>{ wake=null; });
-    } else if(!on&&wake){ await wake.release(); wake=null; }
-  }catch(e){ Tools.diag.log('wake lock failed',{error:String(e&&e.name)}); }
+
+/* ---------- TV mode ---------- */
+const screenEl=$('screen'), dlg=$('tvDlg'), platform=TvMode.platform();
+let barTimer=0;
+function showBar(){
+  screenEl.classList.remove('bar-hidden');
+  clearTimeout(barTimer);
+  barTimer=setTimeout(()=>{ if(!screenEl.contains(document.activeElement)||document.activeElement===canvas) screenEl.classList.add('bar-hidden'); },3000);
 }
-document.addEventListener('visibilitychange',()=>{
-  Tools.diag.log('visibility',{state:document.visibilityState});
-  if(document.visibilityState==='visible'&&CastStream.state==='streaming') wakeLock(true);
+canvas.addEventListener('click',()=>{ if(TvMode.active()) showBar(); });
+$('tvBar').addEventListener('focusin',showBar);
+$('tvBar').addEventListener('pointerdown',showBar);
+TvMode.onChange(on=>{
+  screenEl.classList.toggle('tv',on);
+  if(on) showBar(); else { clearTimeout(barTimer); screenEl.classList.remove('bar-hidden'); }
 });
-async function castToggle(){
-  if(CastStream.state!=='idle'){ Tools.diag.log('stop streaming'); CastStream.stop(); return; }
-  if(!/^[0-9A-F]{8}$/.test(settings.appId)){
-    Tools.toast(t('err.no-app-id'));
-    Tools.menu.open&&Tools.menu.open();
-    setTimeout(()=>$('appId').focus(),300);
-    return;
-  }
-  await musicOn();   // inside the tap: browsers only start sound after a user gesture
-  resize();
-  if(videoTrack) videoTrack.stop();
-  videoTrack=canvas.captureStream(30).getVideoTracks()[0];
-  const stream=new MediaStream([videoTrack,...streamOut.stream.getAudioTracks()]);
-  Tools.diag.log('start streaming',{quality:settings.quality,stun:settings.stun});
-  try{
-    await CastStream.start({appId:settings.appId,stream,maxBitrate:QUALITY[settings.quality].bitrate,stun:settings.stun,tvLog:settings.tvLog});
-  }catch(e){
-    if(e.code&&e.code!=='cancel') showError(e.code);
-  }
-}
-let errorCode='';
-function showError(code){ errorCode=code; Tools.toast(t('err.'+code)||t('err.webrtc')); render(); }
-function render(){
-  const st=$('status'), s=CastStream.state, x=CastStream.stats;
-  const tv=CastStream.device||t('st.tv');
-  let text=t('st.'+s,{tv});
-  if(s==='streaming'&&x&&x.width) text+=' · '+t('st.stats',{w:x.width,h:x.height,fps:Tools.fmt(x.fps||0,0),kbps:Tools.fmt(x.kbps||0,0)});
-  if(s==='idle'&&errorCode) text=t('err.'+errorCode);
-  st.textContent=text;
-  st.classList.toggle('live',s==='streaming');
-  st.classList.toggle('err',s==='idle'&&!!errorCode);
-  renderButtons();
-}
-function renderButtons(){
-  const s=CastStream.state;
-  $('castLabel').textContent=t(s==='idle'?'cast.start':'cast.stop');
-  $('btnCast').classList.toggle('primary',s==='idle');
-  $('musicLabel').textContent=t(playing?'music.pause':'music.play');
-  $('btnMusic').setAttribute('aria-pressed',String(playing));
-  for(const b of document.querySelectorAll('[data-scene]')) b.setAttribute('aria-pressed',String(b.dataset.scene===settings.scene));
-}
-let lastState='idle';
-CastStream.onChange(state=>{
-  if(state!==lastState){
-    Tools.diag.log('cast state',{state});
-    if(state!=='idle') errorCode='';
-    if(state==='streaming') wakeLock(true);
-    if(state==='idle'){ wakeLock(false); if(videoTrack){ videoTrack.stop(); videoTrack=null; } }
-    lastState=state;
-    localSound();
-  }
-  if(state==='idle'&&CastStream.info().error) errorCode=CastStream.info().error;
-  render();
+for(const el of dlg.querySelectorAll('[data-platform]')) el.hidden=el.dataset.platform!==platform;
+$('btnTv').addEventListener('click',()=>{ $('castFail').hidden=true; Tools.diag.log('tv dialog',{platform}); dlg.showModal(); });
+$('btnTvClose').addEventListener('click',()=>dlg.close());
+dlg.addEventListener('click',e=>{ if(e.target===dlg) dlg.close(); });
+$('castLink').addEventListener('click',()=>{
+  $('castFail').hidden=true;
+  TvMode.watchLaunch(opened=>{ $('castFail').hidden=opened; });
 });
+$('btnTvGo').addEventListener('click',async()=>{
+  dlg.close();
+  if(settings.autoMusic) musicOn();   // still inside the tap: browsers start sound only after a gesture
+  const r=await TvMode.enter(screenEl);
+  if(!r.landscape&&platform!=='desktop'&&matchMedia('(orientation: portrait)').matches) Tools.toast(t('tv.noLandscape'));
+});
+$('btnTvExit').addEventListener('click',()=>TvMode.exit());
 
 /* ---------- Controls & settings ---------- */
-$('btnCast').addEventListener('click',castToggle);
-$('btnMusic').addEventListener('click',()=>playing?musicOff():musicOn());
+function renderButtons(){
+  for(const b of document.querySelectorAll('[data-music]')){
+    (b.querySelector('span')||b).textContent=t(playing?'music.pause':'music.play');
+    b.setAttribute('aria-pressed',String(playing));
+  }
+  for(const b of document.querySelectorAll('[data-scene]')) b.setAttribute('aria-pressed',String(b.dataset.scene===settings.scene));
+}
+function render(){ $('status').textContent=t('st.'+platform); renderButtons(); }
+for(const b of document.querySelectorAll('[data-music]')) b.addEventListener('click',()=>playing?musicOff():musicOn());
 function setScene(s){ settings.scene=s; save(); renderButtons(); }
 for(const b of document.querySelectorAll('[data-scene]')) b.addEventListener('click',()=>setScene(b.dataset.scene));
-const idIn=$('appId'), qIn=$('quality');
-idIn.value=settings.appId; qIn.value=settings.quality;
-$('optLocal').checked=settings.local; $('optTvLog').checked=settings.tvLog; $('optStun').checked=settings.stun;
-idIn.addEventListener('change',()=>{
-  const v=idIn.value.trim().toUpperCase();
-  if(v&&!/^[0-9A-F]{8}$/.test(v)){ Tools.toast(t('idBad')); return; }
-  idIn.value=v; settings.appId=v; save();
-  if(v) Tools.toast(t('idOk'));
-  Tools.diag.log('app id',{set:!!v});
-});
-qIn.addEventListener('change',()=>{ settings.quality=qIn.value; save(); resize(); Tools.diag.log('quality',{q:settings.quality}); });
-$('optLocal').addEventListener('change',e=>{ settings.local=e.target.checked; save(); localSound(); });
-$('optTvLog').addEventListener('change',e=>{ settings.tvLog=e.target.checked; save(); CastStream.setTvLog(settings.tvLog); });
-$('optStun').addEventListener('change',e=>{ settings.stun=e.target.checked; save(); });
-$('receiverUrl').textContent=CastStream.RECEIVER_URL;
-$('btnCopyUrl').addEventListener('click',async()=>{ if(await Tools.copyText(CastStream.RECEIVER_URL)) Tools.toast(t('copied')); });
-resize();
+$('optAutoMusic').checked=settings.autoMusic; $('optClock').checked=settings.clock;
+$('optAutoMusic').addEventListener('change',e=>{ settings.autoMusic=e.target.checked; save(); });
+$('optClock').addEventListener('change',e=>{ settings.clock=e.target.checked; save(); });
 render();
 Tools.onLang(render);
 
-Tools.diag.info(()=>({
-  cast:CastStream.info(),appId:!!settings.appId,quality:settings.quality,scene:settings.scene,
-  music:playing,audio:ac?ac.state:'none',localSound:settings.local,stun:settings.stun,tvLog:settings.tvLog,
-  wakeLock:!!wake,frames,canvas:`${W}x${H}`,
-  captureStream:'captureStream' in HTMLCanvasElement.prototype,webrtc:'RTCPeerConnection' in window
-}));
-// CSP problems (e.g. something the Cast SDK loads) do not reach console.error – log them for the report
-document.addEventListener('securitypolicyviolation',e=>Tools.diag.log('csp',{directive:e.effectiveDirective,blocked:String(e.blockedURI).slice(0,80)}));
+Tools.diag.info(()=>({tv:TvMode.info(),scene:settings.scene,music:playing,audio:ac?ac.state:'none',autoMusic:settings.autoMusic,clock:settings.clock,frames,
+  screen:`${screen.width}x${screen.height}`,orientation:screen.orientation?screen.orientation.type:'?'}));
 
 /* ---------- WebMCP ---------- */
 Tools.mcp.register({
   name:'set_scene',title:'Switch the scene',label:'mcp.scene',
-  description:'Switches the animated scene shown in the app (and on the TV while streaming): waves, stars or bars. Returns the scene now shown.',
+  description:'Switches the animated scene shown in the app (and on the TV while the phone casts its screen): waves, stars or bars. Returns the scene now shown.',
   inputSchema:{type:'object',properties:{scene:{type:'string',enum:SCENES,description:'The scene to show.'}},required:['scene'],additionalProperties:false},
   execute:({scene})=>{ setScene(scene); return {scene}; }
 });
 Tools.mcp.register({
-  name:'get_status',title:'Read the stream status',label:'mcp.status',readOnly:true,
-  description:'Reads whether the app is streaming to a TV (state idle, loading, choosing, connecting or streaming), the TV name, the picture size, frames per second and video bitrate in kbit/s while streaming, plus scene, music on or off and picture quality.',
+  name:'get_status',title:'Read the state',label:'mcp.status',readOnly:true,
+  description:'Reads the scene shown, whether the music plays, whether the app is in TV mode (full screen for screen casting) and whether the picture is locked to landscape.',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
-  execute:()=>{
-    const x=CastStream.stats;
-    return {state:CastStream.state,tv:CastStream.device||null,scene:settings.scene,music:playing,quality:settings.quality+'p',
-      stream:x&&x.width?{width:x.width,height:x.height,fps:x.fps||0,kbps:x.kbps||0}:null,error:CastStream.info().error||null};
-  }
+  execute:()=>{ const i=TvMode.info(); return {scene:settings.scene,music:playing,tv_mode:i.active,landscape:i.landscape}; }
 });
 })();
