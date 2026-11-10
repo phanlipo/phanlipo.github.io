@@ -1,7 +1,7 @@
 // Shared test helpers.
 import { test as base, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, allPages, meta } from '../scripts/lib.mjs';
 
@@ -87,9 +87,10 @@ export function tools() {
     }));
 }
 
-/** Apps that are translated (call Tools.i18n) – they show the language switch */
+/** Apps that are translated (call Tools.i18n in the page or a script of the app folder) – they show the language switch */
 export function translatedApps() {
-  return apps().filter(a => readFileSync(join(ROOT, a.folder, 'index.html'), 'utf8').includes('Tools.i18n('));
+  return apps().filter(a => ['index.html', ...readdirSync(join(ROOT, a.folder)).filter(f => f.endsWith('.js') && f !== 'sw.js')]
+    .some(f => readFileSync(join(ROOT, a.folder, f), 'utf8').includes('Tools.i18n(')));
 }
 
 /** Installable apps: every tool plus the template */
