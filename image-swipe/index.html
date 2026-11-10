@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Bild-Swipe</title>
+<meta name="description" content="Bilder nach rechts liken oder nach links wegwischen – mit eigenen Datenquellen als JSON und mehreren Profilen.">
+<meta name="tool:tags" content="Freizeit, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Kopieren, KI-Agent">
+<meta name="tool:icon" content="cards">
+<meta name="tool:color" content="#b8326a">
+<meta name="tool:short-name" content="Bild-Swipe">
+<meta name="tool:title-en" content="Image Swipe">
+<meta name="tool:description-en" content="Swipe pictures right to like or left to pass – with your own data sources as JSON and several profiles.">
+<meta name="tool:short-name-en" content="Image Swipe">
+<meta name="tool:storage" content="image-swipe.">
+<meta name="tool:webmcp" content="list_sources, get_results">
+<!-- Data sources are APIs the user enters (JSON description) – requests only after a tap on "Daten laden" -->
+<meta name="tool:connect" content="https: http://localhost:* http://127.0.0.1:*">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-PIE1/brg/L69mtvtzEf2ps/vEAVNW8zyhuQniMazwPM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Bild-Swipe">
+<meta name="theme-color" content="#b8326a">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#b8326a;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f08bb4;--accent-text:#2a0a17}}
+/* Stage layout: picker row, the card deck (fills the rest), progress and the three action buttons at the thumb */
+main{max-width:640px;margin-inline:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.pick{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pick select{width:100%;min-width:0;min-height:44px;font-size:16px}
+
+/* ---------- Deck & card ---------- */
+.deck{flex:1;min-height:180px;position:relative;display:flex;align-items:stretch;justify-content:center}
+.swipe{position:relative;width:100%;max-width:460px;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:grab;will-change:transform}
+.swipe.drag{cursor:grabbing}
+.swipe.fly{transition:transform .26s ease-in}
+.swipe.back{transition:transform .2s ease-out}
+.media{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;background:var(--surface-2);container-type:size}
+.media img{max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;-webkit-user-drag:none}
+.emoji{font-size:min(60cqw,60cqh);line-height:1}
+.media-msg{color:var(--muted);padding:12px;text-align:center}
+.caption{padding:10px 14px 12px}
+.caption .ttl{font-weight:700;font-size:18px;margin:0;overflow-wrap:anywhere}
+.caption .st{margin:0;color:var(--muted);font-size:14px;overflow-wrap:anywhere}
+.caption .attr{margin:4px 0 0;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.stamp{position:absolute;top:16px;padding:2px 12px;border:4px solid;border-radius:10px;background:var(--surface);
+  font-weight:800;font-size:24px;letter-spacing:.04em;opacity:0;pointer-events:none}
+.stamp.like{left:16px;color:var(--ok);rotate:-12deg}
+.stamp.nope{right:16px;color:var(--err);rotate:12deg}
+.empty{width:100%;max-width:460px;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;text-align:center;
+  padding:16px;border:2px dashed var(--border);border-radius:18px;white-space:pre-line;overflow-wrap:anywhere}
+.empty p{margin:0}
+.empty .row{justify-content:center}
+.progress{margin:0;text-align:center;color:var(--muted);font-size:14px;min-height:21px}
+.actions{flex:none;display:flex;justify-content:center;align-items:center;gap:22px;padding-bottom:4px}
+.act{width:64px;height:64px;border-radius:50%;border:2px solid var(--border);background:var(--surface);color:var(--text);
+  font-size:28px;line-height:1;display:grid;place-items:center;cursor:pointer;box-shadow:var(--shadow)}
+.act:disabled{opacity:.4;cursor:default}
+.act.like{color:var(--ok);border-color:var(--ok)}
+.act.nope{color:var(--err);border-color:var(--err)}
+.act.undo{width:52px;height:52px;font-size:22px;color:var(--muted)}
+
+/* ---------- Results ---------- */
+.results{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;margin:0}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{min-height:44px;padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer}
+.tab[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.rlist{flex:1;min-height:0;overflow:auto;list-style:none;margin:0;padding:0}
+.rlist li{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.thumb{flex:none;width:48px;height:48px;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;font-size:30px;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:contain}
+.rtext{flex:1;min-width:0}
+.rtext b,.rtext span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rtext span{color:var(--muted);font-size:13px}
+.ibtn{flex:none;min-width:44px;min-height:44px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:18px;cursor:pointer}
+
+/* ---------- Menu sections ---------- */
+.card h3{font-size:16px;margin:14px 0 8px}
+.plist{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:8px}
+.plist li{display:flex;gap:8px;align-items:center}
+.plist input{flex:1;min-width:0}
+.slist{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.slist li{border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px}
+.slist .stitle{font-weight:700;overflow-wrap:anywhere}
+.slist .smeta{color:var(--muted);font-size:13px;overflow-wrap:anywhere;margin:2px 0 6px}
+.slist .row{gap:6px}
+textarea#srcJson{width:100%;min-height:10em;font-family:var(--mono);font-size:16px;resize:vertical}
+.info{margin:6px 0 0;white-space:pre-line;overflow-wrap:anywhere}
+.info.err{color:var(--err)}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer;margin-top:8px}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.help pre{white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--mono);font-size:13px;background:var(--surface-2);padding:8px;border-radius:8px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Bild-Swipe</span></h1>
+  <p class="sub" data-i18n="sub">Liken oder wegwischen</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnResults" aria-pressed="false" aria-label="Ergebnis" title="Ergebnis" data-i18n-attr="aria-label:results; title:results"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <div class="pick">
+    <label class="sr-only" for="profileSel" data-i18n="pick.profile">Profil</label>
+    <select id="profileSel"></select>
+    <label class="sr-only" for="sourceSel" data-i18n="pick.source">Datenquelle</label>
+    <select id="sourceSel"></select>
+  </div>
+
+  <section class="play" id="play" aria-label="Bilder bewerten" data-i18n-attr="aria-label:play">
+    <div class="deck" id="deck">
+      <div class="swipe" id="card" hidden>
+        <div class="media" id="media">
+          <img id="cardImg" alt="" hidden>
+          <span class="emoji" id="cardEmoji" role="img" hidden></span>
+          <span class="media-msg" id="mediaMsg" hidden></span>
+        </div>
+        <div class="caption">
+          <p class="ttl" id="cardTitle"></p>
+          <p class="st" id="cardSub"></p>
+          <p class="attr" id="cardAttr"></p>
+        </div>
+        <span class="stamp like" id="stampLike" aria-hidden="true" data-i18n="stamp.like">Like</span>
+        <span class="stamp nope" id="stampNope" aria-hidden="true" data-i18n="stamp.nope">Weg</span>
+      </div>
+      <div class="empty" id="empty" hidden>
+        <p id="emptyText"></p>
+        <div class="row" id="emptyBtns"></div>
+      </div>
+    </div>
+    <p class="progress" id="progress" role="status" aria-live="polite"></p>
+    <div class="actions">
+      <button type="button" class="act nope" id="btnNope" aria-label="Weg" title="Weg (Pfeil links)" data-i18n-attr="aria-label:nope; title:nopeKey"><span aria-hidden="true">✕</span></button>
+      <button type="button" class="act undo" id="btnUndo" aria-label="Rückgängig" title="Rückgängig" data-i18n-attr="aria-label:undo; title:undo"><span aria-hidden="true">↶</span></button>
+      <button type="button" class="act like" id="btnLike" aria-label="Gefällt mir" title="Gefällt mir (Pfeil rechts)" data-i18n-attr="aria-label:like; title:likeKey"><span aria-hidden="true">♥</span></button>
+    </div>
+  </section>
+
+  <section class="card results" id="results" aria-labelledby="h-res" hidden>
+    <h2 id="h-res" data-i18n="res.h">Ergebnis</h2>
+    <div class="tabs" role="group" aria-label="Anzeigen" data-i18n-attr="aria-label:res.show">
+      <button type="button" class="tab" data-tab="like" aria-pressed="true"></button>
+      <button type="button" class="tab" data-tab="nope" aria-pressed="false"></button>
+    </div>
+    <p class="muted" id="resInfo"></p>
+    <ul class="rlist" id="resList"></ul>
+    <div class="row">
+      <button type="button" class="btn" id="btnCopy" data-i18n="res.copy">Liste kopieren</button>
+      <button type="button" class="btn danger" id="btnResetSrc" data-i18n="res.reset">Bewertungen zurücksetzen</button>
+    </div>
+  </section>
+
+  <section class="card" id="srcCard" aria-labelledby="h-src" data-menu>
+    <h2 id="h-src" data-i18n="src.h">Datenquellen</h2>
+    <p class="muted" data-i18n="src.intro">Eine Datenquelle ist eine kleine JSON-Beschreibung: feste Einträge oder eine API, die du selbst einträgst. Die eindeutige id der Quelle und jedes Eintrags hält die Bewertungen fest.</p>
+    <ul class="slist" id="srcList"></ul>
+    <h3><label for="srcJson" data-i18n="src.add.h">Quelle hinzufügen (JSON)</label></h3>
+    <textarea id="srcJson" rows="8" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder='{ "id": "…", "title": "…", "items": […] }'></textarea>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnAdd" data-i18n="src.add">Hinzufügen</button>
+      <button type="button" class="btn" id="btnFile" data-i18n="src.file">Datei öffnen …</button>
+      <button type="button" class="btn" id="btnExEmoji" data-i18n="ex.emoji">Beispiel: Emojis</button>
+      <button type="button" class="btn" id="btnExTcg" data-i18n="ex.tcg">Beispiel: TCGdex</button>
+    </div>
+    <input type="file" id="fileIn" accept=".json,application/json,text/plain" hidden>
+    <p class="info" id="srcInfo" role="status" aria-live="polite"></p>
+    <label class="check"><input type="checkbox" id="optShuffle"> <span data-i18n="shuffle">Zufällige Reihenfolge (je Profil fest)</span></label>
+  </section>
+
+  <section class="card" id="profCard" aria-labelledby="h-prof" data-menu>
+    <h2 id="h-prof" data-i18n="prof.h">Profile</h2>
+    <p class="muted" data-i18n="prof.intro">Jedes Profil hat eigene Bewertungen – z. B. für mehrere Personen am selben Handy.</p>
+    <ul class="plist" id="profList"></ul>
+    <div class="row">
+      <label class="sr-only" for="profNew" data-i18n="prof.newLabel">Name des neuen Profils</label>
+      <input type="text" id="profNew" maxlength="30" autocomplete="off" placeholder="Neues Profil" data-i18n-attr="placeholder:prof.new">
+      <button type="button" class="btn" id="btnProfAdd" data-i18n="prof.add">Profil hinzufügen</button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Bild für Bild entscheiden: nach <b>rechts wischen = gefällt mir</b>, nach <b>links wischen = weg</b>. Die Bilder kommen aus Datenquellen, die du selbst als JSON einträgst – die App bringt keine fremden Inhalte mit.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Wischen</b> oder die Knöpfe unten: ✕ weg, ♥ gefällt mir, ↶ macht die letzte Bewertung rückgängig. Am Computer gehen auch die Pfeiltasten ← und →.</li>
+    <li><b>Profil</b> und <b>Datenquelle</b> wählst du oben. Jedes Profil hat eigene Bewertungen; Profile legst du im Menü ☰ unter <i>Profile</i> an, benennst sie um oder löschst sie.</li>
+    <li><b>Ergebnis</b> (♡ oben): Liste der gelikten bzw. weggewischten Einträge. Dort lässt sich jede Bewertung umdrehen oder entfernen, die Liste kopieren oder alles für diese Quelle zurücksetzen.</li>
+    <li><b>Datenquelle hinzufügen</b> (Menü ☰ → <i>Datenquellen</i>): JSON einfügen oder als Datei öffnen, dann <i>Hinzufügen</i>. Zum Ausprobieren gibt es zwei Beispiele: <i>Emojis</i> (feste Einträge, ganz ohne Internet) und <i>TCGdex</i> (eine öffentliche Sammelkarten-API).</li>
+    <li>Bei einer API-Quelle lädt die App erst nach einem Tipp auf <i>Daten laden</i>. Die Liste bleibt danach auf dem Gerät, angesehene Bilder auch – so geht es offline weiter. <i>Neu laden</i> holt die Liste erneut.</li>
+  </ul>
+  <h3>Eindeutige id</h3>
+  <ul>
+    <li>Jede Quelle hat eine <code>id</code> (Buchstaben, Ziffern, <code>. _ : -</code>), jeder Eintrag ebenfalls (Feld per <code>fields.id</code>). Gespeichert wird je Profil: Quelle-id → Eintrags-id → <i>like</i> oder <i>nope</i>.</li>
+    <li>Fügst du eine Quelle mit derselben id erneut hinzu, wird sie ersetzt – die Bewertungen bleiben. Auch nach dem Löschen einer Quelle bleiben sie und kommen mit derselben id zurück.</li>
+    <li>Ändert sich die id, gilt es als neue Quelle. Einträge ohne id, ohne Bild/Text oder mit doppelter id werden übersprungen.</li>
+  </ul>
+  <h3>Aufbau der JSON</h3>
+  <pre>{
+  "format": "image-swipe-source",
+  "formatVersion": 1,
+  "id": "meine-quelle",
+  "title": "Titel" oder { "de": "…", "en": "…" },
+  "attribution": "Quelle/Rechte (wird angezeigt)",
+  "link": "https://…",
+  "items": [ { "id": "1", "title": "…", "image": "https://…" } ]
+}</pre>
+  <p>Statt <code>items</code> eine API: <code>"api": { "url": "https://…", "list": "cards" }</code> – <code>url</code> darf auch eine Liste von Adressen sein, <code>list</code> ist der Pfad zur Liste in der Antwort (leer = die Antwort ist selbst die Liste). Mit <code>fields</code> sagst du, wo was steht: <code>id</code>, <code>title</code>, <code>subtitle</code>, <code>image</code> (Bild-Adresse) und <code>text</code> (z. B. ein Emoji statt Bild). Werte sind Pfade wie <code>set.name</code> oder Vorlagen mit geschweiften Klammern wie <code>"{image}/high.webp"</code>. Fehlt ein Feld in einer Vorlage, bleibt das Feld leer.</p>
+  <h3>Hinweise</h3>
+  <ul>
+    <li><b>Nutzungsrechte:</b> Die App liefert keine Bilder oder Daten mit. Was du einträgst, rufst du selbst ab – achte auf die Bedingungen des jeweiligen Anbieters. TCGdex ist ein inoffizielles Fan-Projekt (tcgdex.dev); Kartenbilder und Marken gehören ihren Rechteinhabern.</li>
+    <li><b>Wenn nichts lädt:</b> Der Server muss Zugriffe aus Webseiten erlauben (CORS) – sonst blockiert der Browser die Antwort. Das gilt auch für die Bilder. Nur <code>https</code> (und <code>http://localhost</code>) geht.</li>
+    <li>Die App sendet keine Bewertungen oder anderen Daten an Server – nur einfache Abrufe ohne Cookies. Quellen, Profile und Bewertungen liegen in diesem Browser und sind in der Sicherung enthalten; geladene Listen und Bilder nicht (die lädt man neu).</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann die Quellen und das Ergebnis lesen (WebMCP), aber nichts bewerten oder laden. Jeder Aufruf erscheint hier als Hinweis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Decide picture by picture: <b>swipe right = like</b>, <b>swipe left = pass</b>. The pictures come from data sources you enter yourself as JSON – the app ships no third-party content.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Swipe</b> or use the buttons below: ✕ pass, ♥ like, ↶ undoes the last rating. On a computer the arrow keys ← and → work too.</li>
+    <li>Pick the <b>profile</b> and the <b>data source</b> at the top. Every profile has its own ratings; add, rename or delete profiles in the menu ☰ under <i>Profiles</i>.</li>
+    <li><b>Results</b> (♡ at the top): list of liked or passed entries. There you can flip or remove each rating, copy the list or reset everything for this source.</li>
+    <li><b>Add a data source</b> (menu ☰ → <i>Data sources</i>): paste JSON or open it as a file, then <i>Add</i>. Two examples to try: <i>Emojis</i> (fixed entries, no internet at all) and <i>TCGdex</i> (a public trading card API).</li>
+    <li>For an API source the app only loads after you tap <i>Load data</i>. The list then stays on the device, and so do pictures you have seen – so you can carry on offline. <i>Reload</i> fetches the list again.</li>
+  </ul>
+  <h3>Unique id</h3>
+  <ul>
+    <li>Every source has an <code>id</code> (letters, digits, <code>. _ : -</code>), and so does every entry (field set with <code>fields.id</code>). Stored per profile: source id → entry id → <i>like</i> or <i>nope</i>.</li>
+    <li>Adding a source with the same id again replaces it – the ratings stay. They also stay after deleting a source and come back with the same id.</li>
+    <li>A different id is a new source. Entries without id, without picture/text or with a duplicate id are skipped.</li>
+  </ul>
+  <h3>JSON layout</h3>
+  <pre>{
+  "format": "image-swipe-source",
+  "formatVersion": 1,
+  "id": "my-source",
+  "title": "Title" or { "de": "…", "en": "…" },
+  "attribution": "source/rights (shown)",
+  "link": "https://…",
+  "items": [ { "id": "1", "title": "…", "image": "https://…" } ]
+}</pre>
+  <p>Instead of <code>items</code> an API: <code>"api": { "url": "https://…", "list": "cards" }</code> – <code>url</code> may also be a list of addresses, <code>list</code> is the path to the list in the response (empty = the response is the list). <code>fields</code> says where things are: <code>id</code>, <code>title</code>, <code>subtitle</code>, <code>image</code> (picture address) and <code>text</code> (e.g. an emoji instead of a picture). Values are paths like <code>set.name</code> or templates with curly braces like <code>"{image}/high.webp"</code>. If a value in a template is missing, the field stays empty.</p>
+  <h3>Notes</h3>
+  <ul>
+    <li><b>Rights of use:</b> the app ships no pictures or data. What you enter, you fetch yourself – mind the provider’s terms. TCGdex is an unofficial fan project (tcgdex.dev); card images and trademarks belong to their owners.</li>
+    <li><b>If nothing loads:</b> the server has to allow requests from web pages (CORS) – otherwise the browser blocks the response. The same goes for the pictures. Only <code>https</code> (and <code>http://localhost</code>) works.</li>
+    <li>The app sends no ratings or other data to servers – only plain requests without cookies. Sources, profiles and ratings stay in this browser and are part of the backup; loaded lists and pictures are not (they are loaded again).</li>
+    <li><b>AI agent:</b> an AI agent in the browser can read the sources and the results (WebMCP), but cannot rate or load anything. Every call shows up here as a notice.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version b1472832cf4f</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  'prof.me':'Ich','prof.name':'Name von Profil {n}','prof.del':'Profil {name} löschen','prof.delQ':'Profil „{name}“ mit allen Bewertungen löschen?',
+  'prof.default':'Profil {n}','prof.max':'Höchstens {n} Profile.',
+  'src.none':'Keine Datenquelle','src.static':'{n} Einträge in der JSON','src.notLoaded':'API {host} · noch nicht geladen',
+  'src.loadedInfo':'API {host} · {n} Einträge · geladen {date}','src.load':'Daten laden','src.reload':'Neu laden','src.edit':'Bearbeiten','src.del':'Löschen',
+  'src.delQ':'Datenquelle „{name}“ entfernen? Die Bewertungen bleiben gespeichert und kommen zurück, wenn du eine Quelle mit derselben id hinzufügst.',
+  'src.replaceQ':'Es gibt schon eine Quelle mit der id „{id}“ („{name}“). Ersetzen? Die Bewertungen bleiben erhalten.',
+  'src.added':'„{name}“ hinzugefügt.','src.addedApi':'„{name}“ hinzugefügt – jetzt auf „Daten laden“ tippen.',
+  'src.example':'Beispiel eingefügt – prüfen und „Hinzufügen“ tippen.','src.fileRead':'Datei gelesen – prüfen und „Hinzufügen“ tippen.',
+  'src.edited':'JSON zum Bearbeiten eingefügt – ändern und „Hinzufügen“ tippen (gleiche id = ersetzen).',
+  'empty.none':'Noch keine Datenquelle.\nIm Menü ☰ unter „Datenquellen“ eine JSON-Beschreibung eintragen – oder das Emoji-Beispiel ausprobieren.',
+  'empty.load':'Diese Quelle lädt ihre Einträge von {host}.\nDie Liste bleibt danach auf dem Gerät.',
+  'empty.done':'Alles bewertet 🎉','empty.sources':'Datenquellen','empty.results':'Ergebnis ansehen','empty.addEmoji':'Beispiel: Emojis',
+  loading:'Lädt …','loaded':'{n} Einträge geladen.',
+  'img.loading':'Bild lädt …','img.error':'Bild konnte nicht geladen werden.',
+  progress:'{done} von {n} bewertet · ♥ {like} · ✕ {nope}','progress.none':'',
+  'tab.like':'♥ Gefällt mir ({n})','tab.nope':'✕ Weg ({n})',
+  'res.none':'Keine Datenquelle gewählt.','res.empty':'Noch nichts in dieser Liste.','res.more':'… und {n} weitere (alle in „Liste kopieren“).',
+  'res.toLike':'{name}: auf „gefällt mir“ ändern','res.toNope':'{name}: auf „weg“ ändern','res.unrate':'{name}: Bewertung entfernen',
+  'res.copied':'{n} Einträge kopiert.','res.copyFail':'Kopieren nicht möglich.','res.resetQ':'Alle Bewertungen von „{prof}“ für „{src}“ zurücksetzen?','res.resetDone':'Zurückgesetzt.',
+  'res.unknown':'(nicht in der geladenen Liste)',
+  saveFail:'Speichern fehlgeschlagen – ist der Speicher voll?',
+  'e.empty':'Bitte zuerst JSON eintragen.','e.big':'Die JSON ist zu groß (höchstens 512 KB).','e.parse':'Keine gültige JSON: {msg}',
+  'e.object':'Die JSON muss ein Objekt sein: { … }.','e.format':'„format“ muss „{f}“ sein.','e.version':'Diese „formatVersion“ wird nicht unterstützt (nur 1).',
+  'e.id':'„id“ fehlt oder ist ungültig: 1–80 Zeichen, Buchstaben, Ziffern und . _ : - (am Anfang ein Buchstabe oder eine Ziffer).',
+  'e.title':'„title“ fehlt.','e.fields':'„fields“ muss ein Objekt mit Texten sein, z. B. { "id": "id", "image": "{image}/high.webp" }.',
+  'e.both':'Entweder „items“ oder „api“ angeben, nicht beides.','e.data':'Es fehlt „items“ (Liste) oder „api“ mit „url“.',
+  'e.url':'„api.url“ muss eine https-Adresse sein (oder eine Liste von bis zu 20).','e.list':'„api.list“ muss ein Pfad als Text sein, z. B. "cards".',
+  'e.many':'Zu viele Einträge (höchstens {n}).','e.noItems':'Keine verwendbaren Einträge: Jeder braucht eine id und ein Bild (https) oder einen Text.',
+  'e.link':'„link“ muss eine https-Adresse sein.','e.attr':'„attribution“ muss ein Text mit höchstens 300 Zeichen sein.',
+  'e.maxSources':'Höchstens {n} Datenquellen.','e.file':'Datei konnte nicht gelesen werden.',
+  'e.net':'Keine Verbindung zu {host} – offline, falsche Adresse oder der Server erlaubt keine Zugriffe aus Webseiten (CORS).',
+  'e.http':'Der Server antwortete mit Status {status}.','e.json':'Die Antwort ist keine JSON.','e.notList':'In der Antwort steht unter „{path}“ keine Liste – „api.list“ prüfen.',
+  'mcp.sources':'Datenquellen gelesen','mcp.results':'Ergebnis gelesen'
+},
+en:{
+  title:'Image Swipe',sub:'Like or swipe away',results:'Results',play:'Rate pictures','pick.profile':'Profile','pick.source':'Data source',
+  'stamp.like':'Like','stamp.nope':'Nope',nope:'Pass',nopeKey:'Pass (left arrow)',undo:'Undo',like:'Like',likeKey:'Like (right arrow)',
+  'res.h':'Results','res.show':'Show','res.copy':'Copy list','res.reset':'Reset ratings',
+  'src.h':'Data sources','src.intro':'A data source is a small JSON description: fixed entries or an API you enter yourself. The unique id of the source and of every entry keeps the ratings.',
+  'src.add.h':'Add a source (JSON)','src.add':'Add','src.file':'Open file …','ex.emoji':'Example: Emojis','ex.tcg':'Example: TCGdex',
+  shuffle:'Random order (fixed per profile)',
+  'prof.h':'Profiles','prof.intro':'Every profile has its own ratings – e.g. for several people on the same phone.','prof.newLabel':'Name of the new profile','prof.new':'New profile','prof.add':'Add profile',
+  'prof.me':'Me','prof.name':'Name of profile {n}','prof.del':'Delete profile {name}','prof.delQ':'Delete profile “{name}” with all its ratings?',
+  'prof.default':'Profile {n}','prof.max':'At most {n} profiles.',
+  'src.none':'No data source','src.static':'{n} entries in the JSON','src.notLoaded':'API {host} · not loaded yet',
+  'src.loadedInfo':'API {host} · {n} entries · loaded {date}','src.load':'Load data','src.reload':'Reload','src.edit':'Edit','src.del':'Delete',
+  'src.delQ':'Remove data source “{name}”? The ratings stay saved and come back when you add a source with the same id.',
+  'src.replaceQ':'There already is a source with the id “{id}” (“{name}”). Replace it? The ratings are kept.',
+  'src.added':'“{name}” added.','src.addedApi':'“{name}” added – now tap “Load data”.',
+  'src.example':'Example inserted – check it and tap “Add”.','src.fileRead':'File read – check it and tap “Add”.',
+  'src.edited':'JSON inserted for editing – change it and tap “Add” (same id = replace).',
+  'empty.none':'No data source yet.\nEnter a JSON description in the menu ☰ under “Data sources” – or try the emoji example.',
+  'empty.load':'This source loads its entries from {host}.\nThe list stays on the device afterwards.',
+  'empty.done':'All rated 🎉','empty.sources':'Data sources','empty.results':'View results','empty.addEmoji':'Example: Emojis',
+  loading:'Loading …','loaded':'{n} entries loaded.',
+  'img.loading':'Loading picture …','img.error':'The picture could not be loaded.',
+  progress:'{done} of {n} rated · ♥ {like} · ✕ {nope}','progress.none':'',
+  'tab.like':'♥ Liked ({n})','tab.nope':'✕ Passed ({n})',
+  'res.none':'No data source selected.','res.empty':'Nothing in this list yet.','res.more':'… and {n} more (all in “Copy list”).',
+  'res.toLike':'{name}: change to “like”','res.toNope':'{name}: change to “pass”','res.unrate':'{name}: remove rating',
+  'res.copied':'{n} entries copied.','res.copyFail':'Copying is not possible.','res.resetQ':'Reset all ratings of “{prof}” for “{src}”?','res.resetDone':'Reset.',
+  'res.unknown':'(not in the loaded list)',
+  saveFail:'Saving failed – is the storage full?',
+  'e.empty':'Please enter JSON first.','e.big':'The JSON is too large (at most 512 KB).','e.parse':'Not valid JSON: {msg}',
+  'e.object':'The JSON must be an object: { … }.','e.format':'“format” must be “{f}”.','e.version':'This “formatVersion” is not supported (only 1).',
+  'e.id':'“id” is missing or invalid: 1–80 characters, letters, digits and . _ : - (starting with a letter or digit).',
+  'e.title':'“title” is missing.','e.fields':'“fields” must be an object of texts, e.g. { "id": "id", "image": "{image}/high.webp" }.',
+  'e.both':'Give either “items” or “api”, not both.','e.data':'“items” (a list) or “api” with “url” is missing.',
+  'e.url':'“api.url” must be an https address (or a list of up to 20).','e.list':'“api.list” must be a path as text, e.g. "cards".',
+  'e.many':'Too many entries (at most {n}).','e.noItems':'No usable entries: each needs an id and a picture (https) or a text.',
+  'e.link':'“link” must be an https address.','e.attr':'“attribution” must be a text of at most 300 characters.',
+  'e.maxSources':'At most {n} data sources.','e.file':'The file could not be read.',
+  'e.net':'No connection to {host} – offline, wrong address or the server does not allow requests from web pages (CORS).',
+  'e.http':'The server answered with status {status}.','e.json':'The response is not JSON.','e.notList':'The response has no list at “{path}” – check “api.list”.',
+  'mcp.sources':'data sources read','mcp.results':'results read'
+}});
+const {$,t}=Tools;
+const K={sources:'image-swipe.sources.v1',profiles:'image-swipe.profiles.v1',swipes:'image-swipe.swipes.v1',settings:'image-swipe.settings.v1'};
+const FORMAT='image-swipe-source';
+const MAX_DEF=512*1024,MAX_ITEMS=20000,MAX_SOURCES=50,MAX_PROFILES=20,MAX_RESULTS=300;
+const ID_RE=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/;
+const DEF_FIELDS={id:'id',title:'title',subtitle:'subtitle',image:'image',text:'text'};
+const n0=x=>Tools.fmt(x,0);
+const own=(o,k)=>!!o&&Object.prototype.hasOwnProperty.call(o,k);
+const isObj=v=>!!v&&typeof v==='object'&&!Array.isArray(v);
+
+/* ---------- Examples (only descriptions – the app ships no third-party data) ---------- */
+const EMOJIS=[['1F436','🐶','Hund','Dog'],['1F431','🐱','Katze','Cat'],['1F42D','🐭','Maus','Mouse'],['1F439','🐹','Hamster','Hamster'],
+  ['1F430','🐰','Hase','Rabbit'],['1F98A','🦊','Fuchs','Fox'],['1F43B','🐻','Bär','Bear'],['1F43C','🐼','Panda','Panda'],
+  ['1F428','🐨','Koala','Koala'],['1F42F','🐯','Tiger','Tiger'],['1F981','🦁','Löwe','Lion'],['1F42E','🐮','Kuh','Cow'],
+  ['1F437','🐷','Schwein','Pig'],['1F438','🐸','Frosch','Frog'],['1F435','🐵','Affe','Monkey'],['1F414','🐔','Huhn','Chicken'],
+  ['1F427','🐧','Pinguin','Penguin'],['1F989','🦉','Eule','Owl'],['1F984','🦄','Einhorn','Unicorn'],['1F419','🐙','Oktopus','Octopus'],
+  ['1F34E','🍎','Apfel','Apple'],['1F34C','🍌','Banane','Banana'],['1F353','🍓','Erdbeere','Strawberry'],['1F349','🍉','Wassermelone','Watermelon'],
+  ['1F351','🍑','Pfirsich','Peach'],['1F951','🥑','Avocado','Avocado'],['1F955','🥕','Karotte','Carrot'],['1F966','🥦','Brokkoli','Broccoli'],
+  ['1F355','🍕','Pizza','Pizza'],['1F354','🍔','Hamburger','Hamburger'],['1F35F','🍟','Pommes','French fries'],['1F363','🍣','Sushi','Sushi'],
+  ['1F369','🍩','Donut','Doughnut'],['1F36B','🍫','Schokolade','Chocolate'],['1F366','🍦','Softeis','Soft ice cream'],['1F9C0','🧀','Käse','Cheese']];
+const EX_EMOJI={
+  format:FORMAT,formatVersion:1,id:'emoji-tiere-essen',
+  title:{de:'Emojis: Tiere & Essen',en:'Emojis: animals & food'},
+  attribution:'Unicode-Emojis (Schrift des Geräts)',
+  fields:{id:'id',text:'emoji',title:'name',subtitle:'U+{id}'},
+  items:EMOJIS.map(([id,emoji,de,en])=>({id,emoji,name:{de,en}}))
+};
+const EX_TCG={
+  format:FORMAT,formatVersion:1,id:'tcgdex-de-sv01',
+  title:{de:'TCGdex: Karmesin & Purpur (deutsch)',en:'TCGdex: Scarlet & Violet (German)'},
+  attribution:'Daten & Bilder: TCGdex (tcgdex.dev, inoffiziell) – Rechte bei den Rechteinhabern',
+  link:'https://tcgdex.dev',
+  api:{url:'https://api.tcgdex.net/v2/de/sets/sv01',list:'cards'},
+  fields:{id:'id',title:'name',subtitle:'#{localId}',image:'{image}/high.webp'}
+};
+
+/* ---------- Mapping a source to items ---------- */
+function pickLang(v){
+  if(v==null)return '';
+  if(typeof v==='string')return v;
+  if(typeof v==='number'||typeof v==='boolean')return String(v);
+  if(isObj(v)){
+    for(const k of [Tools.lang(),'de','en'])if(typeof v[k]==='string')return v[k];
+    for(const x of Object.values(v))if(typeof x==='string')return x;
+  }
+  return '';
+}
+function getPath(o,path){
+  if(!path)return o;
+  for(const k of path.split('.')){
+    if(o==null||typeof o!=='object'||!own(o,k))return undefined;
+    o=o[k];
+  }
+  return o;
+}
+// A field spec is a path ("set.name") or a template ("{image}/high.webp"); a missing value empties a template
+function field(raw,spec){
+  if(typeof spec!=='string'||!spec)return '';
+  if(spec.includes('{')){
+    let miss=false;
+    const s=spec.replace(/\{([^{}]*)\}/g,(_,p)=>{const v=pickLang(getPath(raw,p.trim()));if(v==='')miss=true;return v;});
+    return miss?'':s;
+  }
+  return pickLang(getPath(raw,spec));
+}
+const okUrl=u=>u.protocol==='https:'||(u.protocol==='http:'&&/^(localhost|127\.0\.0\.1|\[::1\])$/.test(u.hostname));
+function imageUrl(v,base){
+  if(!v)return '';
+  if(/^data:image\//i.test(v))return v.length<=2e6?v:'';
+  try{const u=base?new URL(v,base):new URL(v);return okUrl(u)?u.href:'';}catch(_){return '';}
+}
+const isApi=def=>!!def&&!Array.isArray(def.items);
+const apiUrls=def=>def&&def.api?(Array.isArray(def.api.url)?def.api.url:[def.api.url]):[];
+const apiSig=def=>isApi(def)?JSON.stringify(def.api):'';
+const hostOf=def=>{try{return new URL(apiUrls(def)[0]).host;}catch(_){return '?';}};
+function mapItems(def,rawList){
+  const F=Object.assign({},DEF_FIELDS,isObj(def.fields)?def.fields:{});
+  const base=apiUrls(def)[0];
+  const items=[],seen=new Set();let skipped=0,dup=0;
+  for(const raw of rawList){
+    if(items.length>=MAX_ITEMS)break;
+    if(!isObj(raw)){skipped++;continue;}
+    const id=field(raw,F.id);
+    if(!id||id.length>200||id==='__proto__'){skipped++;continue;}
+    if(seen.has(id)){dup++;continue;}
+    const image=imageUrl(field(raw,F.image),base),text=field(raw,F.text).slice(0,40);
+    if(!image&&!text){skipped++;continue;}
+    seen.add(id);
+    items.push({id,image,text,title:field(raw,F.title).slice(0,200),subtitle:field(raw,F.subtitle).slice(0,200)});
+  }
+  return {items,skipped,dup};
+}
+function fail(key,p){const e=new Error(key);e.key=key;e.p=p;throw e;}
+const errText=e=>e&&e.key?t(e.key,e.p):String(e&&e.message||e);
+function validate(def){
+  if(!isObj(def))fail('e.object');
+  if(def.format!==undefined&&def.format!==FORMAT)fail('e.format',{f:FORMAT});
+  if(def.formatVersion!==undefined&&def.formatVersion!==1)fail('e.version');
+  if(typeof def.id!=='string'||!ID_RE.test(def.id))fail('e.id');
+  if(!pickLang(def.title).trim())fail('e.title');
+  if(def.fields!==undefined&&(!isObj(def.fields)||Object.values(def.fields).some(v=>typeof v!=='string')))fail('e.fields');
+  if(def.link!==undefined){let ok=false;try{ok=new URL(def.link).protocol==='https:';}catch(_){} if(!ok)fail('e.link');}
+  if(def.attribution!==undefined&&(typeof def.attribution!=='string'||def.attribution.length>300))fail('e.attr');
+  if(Array.isArray(def.items)){
+    if(def.api!==undefined)fail('e.both');
+    if(def.items.length>MAX_ITEMS)fail('e.many',{n:n0(MAX_ITEMS)});
+    if(!mapItems(def,def.items).items.length)fail('e.noItems');
+  }else{
+    if(!isObj(def.api))fail('e.data');
+    const urls=apiUrls(def);
+    if(!urls.length||urls.length>20)fail('e.url');
+    for(const u of urls){let ok=false;try{ok=typeof u==='string'&&okUrl(new URL(u));}catch(_){} if(!ok)fail('e.url');}
+    if(def.api.list!==undefined&&typeof def.api.list!=='string')fail('e.list');
+  }
+  return def;
+}
+
+/* ---------- Stored state ---------- */
+let sources=Tools.load(K.sources,[]);
+sources=(Array.isArray(sources)?sources:[]).filter(d=>{try{validate(d);return true;}catch(_){return false;}});
+let profiles=Tools.load(K.profiles,null);
+if(!isObj(profiles)||!Array.isArray(profiles.list))profiles={list:[],current:null};
+profiles.list=profiles.list.filter(p=>isObj(p)&&typeof p.id==='string'&&p.id&&p.id!=='__proto__')
+  .map(p=>({id:p.id,name:typeof p.name==='string'?p.name.slice(0,30):null}));
+if(!profiles.list.length)profiles.list.push({id:'p1',name:null});
+if(!profiles.list.some(p=>p.id===profiles.current))profiles.current=profiles.list[0].id;
+let swipes=Tools.load(K.swipes,{});
+if(!isObj(swipes))swipes={};
+let settings=Tools.load(K.settings,{});
+if(!isObj(settings))settings={};
+if(typeof settings.shuffle!=='boolean')settings.shuffle=false;
+if(!isObj(settings.loaded))settings.loaded={};
+if(!sources.some(s=>s.id===settings.source))settings.source=sources[0]?sources[0].id:null;
+
+const saveOr=(k,v)=>{const ok=Tools.save(k,v);if(!ok)Tools.toast(t('saveFail'),3000);return ok;};
+const saveSources=()=>saveOr(K.sources,sources);
+const saveProfiles=()=>saveOr(K.profiles,profiles);
+const saveSwipes=()=>saveOr(K.swipes,swipes);
+const saveSettings=()=>saveOr(K.settings,settings);
+
+const curDef=()=>sources.find(s=>s.id===settings.source)||null;
+const profName=p=>p&&p.name?p.name:t('prof.me');
+const curProfile=()=>profiles.list.find(p=>p.id===profiles.current);
+function ratings(src=settings.source,prof=profiles.current){
+  const p=own(swipes,prof)?swipes[prof]:null;
+  return p&&own(p,src)&&isObj(p[src])?p[src]:{};
+}
+const rating=(r,id)=>own(r,id)?r[id]:undefined;
+function setRating(src,id,v){
+  const pid=profiles.current;
+  if(!isObj(swipes[pid]))swipes[pid]={};
+  const p=swipes[pid];
+  if(!isObj(p[src]))p[src]={};
+  if(v)p[src][id]=v;else delete p[src][id];
+  if(!Object.keys(p[src]).length)delete p[src];
+  saveSwipes();
+}
+
+/* ---------- Lists (API responses kept in Cache Storage via Tools.keep) ---------- */
+const raw={};        // source id -> raw list from the API
+const mapped={};     // source id -> mapped items (cleared on language change)
+const status={};     // source id -> 'loading' | {error}
+const listKey=id=>'list/'+id;
+function itemsOf(def){
+  if(!def)return null;
+  if(own(mapped,def.id))return mapped[def.id];
+  const list=isApi(def)?raw[def.id]:def.items;
+  if(!list)return null;
+  return (mapped[def.id]=mapItems(def,list).items);
+}
+async function restoreList(def){
+  if(!def||!isApi(def)||raw[def.id])return;
+  const j=await Tools.keep.json(listKey(def.id),null);
+  if(j&&Array.isArray(j.raw)&&j.sig===apiSig(def)){raw[def.id]=j.raw;delete mapped[def.id];}
+}
+async function loadApi(def){
+  if(status[def.id]==='loading')return;
+  status[def.id]='loading';
+  render();
+  try{
+    let all=[];
+    for(const url of apiUrls(def)){
+      let res;
+      try{res=await fetch(url,{credentials:'omit',cache:'no-store'});}
+      catch(_){fail('e.net',{host:new URL(url).host});}
+      if(!res.ok)fail('e.http',{status:res.status});
+      let json;
+      try{json=await res.json();}catch(_){fail('e.json');}
+      const list=getPath(json,def.api.list||'');
+      if(!Array.isArray(list))fail('e.notList',{path:def.api.list||'/'});
+      all=all.concat(list);
+      if(all.length>=MAX_ITEMS){all=all.slice(0,MAX_ITEMS);break;}
+    }
+    const m=mapItems(def,all);
+    if(!m.items.length)fail('e.noItems');
+    raw[def.id]=all;delete mapped[def.id];
+    await Tools.keep.putJson(listKey(def.id),{sig:apiSig(def),at:Date.now(),raw:all});
+    settings.loaded[def.id]={at:Date.now(),n:m.items.length};
+    saveSettings();
+    delete status[def.id];
+    Tools.diag.log('list loaded',{items:m.items.length,skipped:m.skipped,duplicates:m.dup,urls:apiUrls(def).length});
+    Tools.toast(t('loaded',{n:n0(m.items.length)}));
+  }catch(e){
+    status[def.id]={error:errText(e)};
+    Tools.diag.log('list load failed',{error:e&&e.key||String(e)});
+  }
+  render();
+}
+
+/* ---------- Pictures: fetched once, then kept on the device (works offline) ---------- */
+function hash(s){ // cyrb53
+  let h1=0xdeadbeef,h2=0x41c6ce57;
+  for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677);}
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+  h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  return 4294967296*(2097151&h2)+(h1>>>0);
+}
+const imgKey=(src,item)=>'img/'+src+'/'+hash(item.id+'\n'+item.image).toString(36);
+const urlCache=new Map(); // key -> Promise<url|null>
+function loadImage(src,item){
+  if(!item.image)return Promise.resolve(null);
+  if(item.image.startsWith('data:'))return Promise.resolve(item.image);
+  const key=imgKey(src,item);
+  if(urlCache.has(key))return urlCache.get(key);
+  const p=(async()=>{
+    const kept=await Tools.keep.get(key);
+    if(kept&&kept.size)return URL.createObjectURL(kept);
+    try{
+      const res=await fetch(item.image,{credentials:'omit'});
+      if(!res.ok){Tools.diag.log('image failed',{status:res.status});return null;}
+      const blob=await res.blob();
+      if(!blob.size||/^(text|application\/json)/.test(blob.type)){Tools.diag.log('image is no picture',{type:blob.type});return null;}
+      await Tools.keep.put(key,blob);
+      return URL.createObjectURL(blob);
+    }catch(e){Tools.diag.log('image failed',{error:String(e)});return null;}
+  })();
+  urlCache.set(key,p);
+  p.then(u=>{if(!u)urlCache.delete(key);});
+  // Keep a few pictures in memory; release the oldest
+  while(urlCache.size>16){
+    const [k,old]=urlCache.entries().next().value;
+    urlCache.delete(k);
+    old.then(u=>{if(u&&u.startsWith('blob:'))URL.revokeObjectURL(u);});
+  }
+  return p;
+}
+async function dropSourceFiles(id){
+  await Tools.keep.remove(listKey(id));
+  for(const n of await Tools.keep.names())if(n.startsWith('img/'+id+'/'))await Tools.keep.remove(n);
+}
+
+/* ---------- Order & queue ---------- */
+let orderCache=null;
+function ordered(def,list){
+  if(!settings.shuffle)return list;
+  const key=def.id+'\n'+profiles.current;
+  if(orderCache&&orderCache.key===key&&orderCache.list===list)return orderCache.out;
+  const out=list.map(it=>[hash(profiles.current+'\n'+it.id),it]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+  orderCache={key,list,out};
+  return out;
+}
+let forcedId=null;  // shown next (after undo)
+function nextItems(n){
+  const def=curDef(),list=itemsOf(def);
+  if(!list)return null;
+  const r=ratings(),out=[];
+  if(forcedId){const f=list.find(i=>i.id===forcedId);if(f&&!rating(r,f.id))out.push(f);else forcedId=null;}
+  for(const it of ordered(def,list)){
+    if(out.length>=n)break;
+    if(!rating(r,it.id)&&it!==out[0])out.push(it);
+  }
+  return out;
+}
+function counts(def){
+  const list=itemsOf(def),r=ratings();
+  let like=0,nope=0;
+  if(list)for(const it of list){const v=rating(r,it.id);if(v==='like')like++;else if(v==='nope')nope++;}
+  return {n:list?list.length:0,like,nope,done:like+nope};
+}
+
+/* ---------- Pickers ---------- */
+const profileSel=$('profileSel'),sourceSel=$('sourceSel');
+function renderPickers(){
+  profileSel.replaceChildren(...profiles.list.map(p=>new Option(profName(p),p.id,false,p.id===profiles.current)));
+  if(!sources.length){
+    sourceSel.replaceChildren(new Option(t('src.none'),''));
+    sourceSel.disabled=true;
+  }else{
+    sourceSel.disabled=false;
+    sourceSel.replaceChildren(...sources.map(s=>new Option(pickLang(s.title),s.id,false,s.id===settings.source)));
+  }
+}
+let undoStack=[];
+async function selectSource(id){
+  settings.source=id;saveSettings();
+  forcedId=null;undoStack=[];
+  render();
+  await restoreList(curDef());
+  render();
+}
+profileSel.addEventListener('change',()=>{
+  profiles.current=profileSel.value;saveProfiles();
+  forcedId=null;undoStack=[];
+  Tools.diag.log('profile switched',{profiles:profiles.list.length});
+  render();
+});
+sourceSel.addEventListener('change',()=>selectSource(sourceSel.value));
+
+/* ---------- Deck ---------- */
+const card=$('card'),cardImg=$('cardImg'),cardEmoji=$('cardEmoji'),mediaMsg=$('mediaMsg');
+const stampLike=$('stampLike'),stampNope=$('stampNope');
+const emptyEl=$('empty'),emptyText=$('emptyText'),emptyBtns=$('emptyBtns');
+const btnLike=$('btnLike'),btnNope=$('btnNope'),btnUndo=$('btnUndo');
+const reduced=()=>window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+function showEmpty(text,buttons){
+  card.hidden=true;card.dataset.id='';
+  emptyEl.hidden=false;emptyText.textContent=text;
+  emptyBtns.replaceChildren(...buttons.map(([act,label,primary])=>{
+    const b=document.createElement('button');
+    b.type='button';b.className='btn'+(primary?' primary':'');b.dataset.act=act;b.textContent=label;
+    return b;
+  }));
+}
+function setTransform(dx,dy){
+  card.style.transform=dx||dy?`translate(${dx}px,${dy}px) rotate(${dx/18}deg)`:'';
+  stampLike.style.opacity=Math.max(0,Math.min(1,dx/90));
+  stampNope.style.opacity=Math.max(0,Math.min(1,-dx/90));
+}
+function showCard(def,item){
+  emptyEl.hidden=true;card.hidden=false;
+  card.classList.remove('fly','back','drag');setTransform(0,0);
+  card.dataset.id=item.id;
+  const name=item.title||item.id;
+  $('cardTitle').textContent=name;
+  $('cardSub').textContent=item.subtitle;$('cardSub').hidden=!item.subtitle;
+  $('cardAttr').textContent=def.attribution||'';$('cardAttr').hidden=!def.attribution;
+  const asText=()=>{cardEmoji.textContent=item.text;cardEmoji.setAttribute('aria-label',name);cardEmoji.hidden=false;};
+  cardImg.hidden=true;cardEmoji.hidden=true;mediaMsg.hidden=true;
+  if(!item.image){asText();return;}
+  mediaMsg.textContent=t('img.loading');mediaMsg.hidden=false;
+  loadImage(def.id,item).then(u=>{
+    if(card.dataset.id!==item.id)return;
+    if(u){cardImg.src=u;cardImg.alt=name;cardImg.hidden=false;mediaMsg.hidden=true;}
+    else if(item.text){mediaMsg.hidden=true;asText();}
+    else mediaMsg.textContent=t('img.error');
+  });
+}
+function renderDeck(){
+  const def=curDef();
+  let can=false;
+  if(!def)showEmpty(t('empty.none'),[['addEmoji',t('empty.addEmoji'),true],['sources',t('empty.sources')]]);
+  else if(isApi(def)&&!raw[def.id]){
+    const st=status[def.id];
+    if(st==='loading')showEmpty(t('loading'),[]);
+    else showEmpty((st&&st.error?st.error+'\n\n':'')+t('empty.load',{host:hostOf(def)}),[['load',t('src.load'),true]]);
+  }else{
+    const q=nextItems(3);
+    if(!q.length)showEmpty(t('empty.done'),[['results',t('empty.results'),true]]);
+    else{
+      showCard(def,q[0]);can=true;
+      for(const it of q.slice(1))loadImage(def.id,it);
+    }
+  }
+  btnLike.disabled=btnNope.disabled=!can;
+  btnUndo.disabled=!undoStack.length;
+}
+function renderProgress(){
+  const def=curDef();
+  const c=def&&itemsOf(def)?counts(def):null;
+  $('progress').textContent=c?t('progress',{done:n0(c.done),n:n0(c.n),like:n0(c.like),nope:n0(c.nope)}):'';
+}
+emptyBtns.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-act]');if(!b)return;
+  const act=b.dataset.act;
+  if(act==='addEmoji')addDef(EX_EMOJI);
+  else if(act==='sources')openSources();
+  else if(act==='load'){const d=curDef();if(d)loadApi(d);}
+  else if(act==='results')showResults(true);
+});
+function openSources(){
+  Tools.menu.open();
+  requestAnimationFrame(()=>$('srcCard').scrollIntoView({block:'start'}));
+}
+
+// A running fly-out animation; a new tap or key press finishes it at once, so fast taps are never lost
+let pending=null;
+const flush=()=>{if(pending){clearTimeout(pending.timer);const f=pending.finish;pending=null;f();}};
+function decide(kind){
+  flush();
+  const def=curDef(),id=card.dataset.id;
+  if(card.hidden||!def||!id)return;
+  const finish=()=>{
+    pending=null;
+    undoStack.push({src:def.id,id,prev:rating(ratings(),id)});
+    if(undoStack.length>50)undoStack.shift();
+    setRating(def.id,id,kind);
+    if(forcedId===id)forcedId=null;
+    Tools.diag.log('swipe',{kind});
+    renderDeck();renderProgress();
+    if(!$('results').hidden)renderResults();
+  };
+  if(reduced()){finish();return;}
+  const dir=kind==='like'?1:-1;
+  card.classList.remove('drag','back');card.classList.add('fly');
+  card.style.transform=`translate(${dir*120}vw,${drag?drag.dy:0}px) rotate(${dir*30}deg)`;
+  (dir>0?stampLike:stampNope).style.opacity=1;
+  pending={finish,timer:setTimeout(finish,270)};
+}
+function undo(){
+  flush();
+  const u=undoStack.pop();
+  if(!u)return;
+  if(u.src!==settings.source){undoStack=[];renderDeck();return;}
+  setRating(u.src,u.id,u.prev);
+  forcedId=u.id;
+  Tools.diag.log('undo',{});
+  renderDeck();renderProgress();
+  if(!$('results').hidden)renderResults();
+}
+btnLike.addEventListener('click',()=>decide('like'));
+btnNope.addEventListener('click',()=>decide('nope'));
+btnUndo.addEventListener('click',undo);
+
+// Swipe gesture
+let drag=null;
+card.addEventListener('pointerdown',e=>{
+  if(pending||e.button>0)return;
+  drag={x:e.clientX,y:e.clientY,dx:0,dy:0,t:performance.now(),pid:e.pointerId};
+  try{card.setPointerCapture(e.pointerId);}catch(_){}
+  card.classList.remove('back');card.classList.add('drag');
+});
+card.addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.pid)return;
+  drag.dx=e.clientX-drag.x;drag.dy=(e.clientY-drag.y)*.3;
+  setTransform(drag.dx,drag.dy);
+});
+function endDrag(e,cancel){
+  if(!drag||e.pointerId!==drag.pid)return;
+  const {dx}=drag,v=dx/Math.max(1,performance.now()-drag.t);
+  card.classList.remove('drag');
+  const far=Math.min(110,card.offsetWidth*.28);
+  if(!cancel&&(Math.abs(dx)>far||(Math.abs(dx)>30&&Math.abs(v)>.6)))decide(dx>0?'like':'nope');
+  else{card.classList.add('back');setTransform(0,0);}
+  drag=null;
+}
+card.addEventListener('pointerup',e=>endDrag(e,false));
+card.addEventListener('pointercancel',e=>endDrag(e,true));
+document.addEventListener('keydown',e=>{
+  if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey)return;
+  if(e.target.closest&&e.target.closest('input,textarea,select,dialog'))return;
+  if(!$('results').hidden)return;
+  if(e.key==='ArrowRight'){e.preventDefault();decide('like');}
+  else if(e.key==='ArrowLeft'){e.preventDefault();decide('nope');}
+  else if(e.key==='Backspace'){e.preventDefault();undo();}
+});
+
+/* ---------- Results ---------- */
+let resTab='like';
+let resUrls=[];
+const btnResults=$('btnResults');
+function showResults(on){
+  $('results').hidden=!on;$('play').hidden=on;
+  btnResults.setAttribute('aria-pressed',String(on));
+  if(on)renderResults();
+  else{resUrls.forEach(u=>URL.revokeObjectURL(u));resUrls=[];renderDeck();}
+}
+btnResults.addEventListener('click',()=>showResults($('results').hidden));
+function resultEntries(def,kind){
+  const r=ratings(def.id),list=itemsOf(def);
+  const byId=list?new Map(list.map(i=>[i.id,i])):new Map();
+  const ids=Object.keys(r).filter(id=>kind==='all'?true:r[id]===kind);
+  return ids.reverse().map(id=>Object.assign({rating:r[id]},byId.get(id)||{id,title:'',subtitle:'',text:'',image:'',unknown:true}));
+}
+function renderResults(){
+  const def=curDef(),listEl=$('resList');
+  resUrls.forEach(u=>URL.revokeObjectURL(u));resUrls=[];
+  document.querySelectorAll('.tab').forEach(b=>{
+    const k=b.dataset.tab;
+    b.setAttribute('aria-pressed',String(k===resTab));
+    b.textContent=t('tab.'+k,{n:def?n0(resultEntries(def,k).length):'0'});
+  });
+  $('btnCopy').disabled=$('btnResetSrc').disabled=!def;
+  if(!def){$('resInfo').textContent=t('res.none');listEl.replaceChildren();return;}
+  const all=resultEntries(def,resTab);
+  $('resInfo').textContent=all.length?(all.length>MAX_RESULTS?t('res.more',{n:n0(all.length-MAX_RESULTS)}):''):t('res.empty');
+  $('resInfo').hidden=!$('resInfo').textContent;
+  listEl.replaceChildren(...all.slice(0,MAX_RESULTS).map(it=>{
+    const li=document.createElement('li');li.dataset.id=it.id;
+    const th=document.createElement('span');th.className='thumb';th.setAttribute('aria-hidden','true');
+    if(it.text)th.textContent=it.text;
+    if(it.image){
+      // Only pictures already on the device – the results view sends no requests
+      (it.image.startsWith('data:')?Promise.resolve(it.image):Tools.keep.get(imgKey(def.id,it)).then(f=>{if(!f)return null;const u=URL.createObjectURL(f);resUrls.push(u);return u;}))
+        .then(u=>{if(!u)return;const img=document.createElement('img');img.alt='';img.src=u;th.replaceChildren(img);});
+    }
+    const tx=document.createElement('span');tx.className='rtext';
+    const b=document.createElement('b');b.textContent=it.title||it.id;
+    const s=document.createElement('span');s.textContent=it.unknown?it.id+' '+t('res.unknown'):[it.subtitle,it.id].filter(Boolean).join(' · ');
+    tx.append(b,s);
+    const name=it.title||it.id;
+    const flip=document.createElement('button');flip.type='button';flip.className='ibtn';flip.dataset.act='flip';
+    flip.textContent=it.rating==='like'?'✕':'♥';flip.setAttribute('aria-label',t(it.rating==='like'?'res.toNope':'res.toLike',{name}));flip.title=flip.getAttribute('aria-label');
+    const un=document.createElement('button');un.type='button';un.className='ibtn';un.dataset.act='unrate';
+    un.textContent='↺';un.setAttribute('aria-label',t('res.unrate',{name}));un.title=un.getAttribute('aria-label');
+    li.append(th,tx,flip,un);
+    return li;
+  }));
+}
+document.querySelector('.tabs').addEventListener('click',e=>{
+  const b=e.target.closest('.tab');if(!b)return;
+  resTab=b.dataset.tab;renderResults();
+});
+$('resList').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-act]');if(!b)return;
+  const def=curDef(),id=b.closest('li').dataset.id;if(!def)return;
+  const cur=rating(ratings(),id);
+  if(b.dataset.act==='flip')setRating(def.id,id,cur==='like'?'nope':'like');
+  else setRating(def.id,id,undefined);
+  undoStack=[];forcedId=null;
+  renderResults();renderProgress();
+});
+$('btnCopy').addEventListener('click',async()=>{
+  const def=curDef();if(!def)return;
+  const all=resultEntries(def,resTab);
+  const text=all.map(it=>it.title?`${it.title} (${it.id})`:it.id).join('\n');
+  const ok=await Tools.copyText(text);
+  Tools.toast(ok?t('res.copied',{n:n0(all.length)}):t('res.copyFail'));
+});
+$('btnResetSrc').addEventListener('click',()=>{
+  const def=curDef();if(!def)return;
+  if(!confirm(t('res.resetQ',{prof:profName(curProfile()),src:pickLang(def.title)})))return;
+  const p=swipes[profiles.current];
+  if(isObj(p))delete p[def.id];
+  saveSwipes();undoStack=[];forcedId=null;
+  Tools.toast(t('res.resetDone'));
+  renderResults();renderProgress();
+});
+
+/* ---------- Menu: data sources ---------- */
+const srcJson=$('srcJson'),srcInfo=$('srcInfo');
+function info(msg,err){srcInfo.textContent=msg;srcInfo.classList.toggle('err',!!err);}
+function renderSources(){
+  const ul=$('srcList');
+  ul.replaceChildren(...sources.map(def=>{
+    const li=document.createElement('li');li.dataset.id=def.id;
+    const h=document.createElement('div');h.className='stitle';h.textContent=pickLang(def.title);
+    const m=document.createElement('div');m.className='smeta';
+    const ld=settings.loaded[def.id];
+    const kind=!isApi(def)?t('src.static',{n:n0(mapItems(def,def.items).items.length)})
+      :raw[def.id]&&ld?t('src.loadedInfo',{host:hostOf(def),n:n0(ld.n),date:new Date(ld.at).toLocaleDateString(Tools.locale())})
+      :t('src.notLoaded',{host:hostOf(def)});
+    m.textContent='id: '+def.id+' · '+kind;
+    const row=document.createElement('div');row.className='row';
+    const mk=(act,label,cls)=>{const b=document.createElement('button');b.type='button';b.className='btn small'+(cls?' '+cls:'');b.dataset.act=act;b.textContent=label;return b;};
+    if(isApi(def)){const b=mk('load',t(raw[def.id]?'src.reload':'src.load'));b.disabled=status[def.id]==='loading';row.append(b);}
+    row.append(mk('edit',t('src.edit')),mk('del',t('src.del'),'danger'));
+    li.append(h,m,row);
+    if(def.link){
+      const a=document.createElement('a');a.href=def.link;a.target='_blank';a.rel='noopener noreferrer';a.textContent=def.link;a.className='smeta';a.style.display='block';
+      li.insertBefore(a,row);
+    }
+    return li;
+  }));
+}
+$('srcList').addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-act]');if(!b)return;
+  const id=b.closest('li').dataset.id,def=sources.find(s=>s.id===id);if(!def)return;
+  if(b.dataset.act==='load'){
+    if(settings.source!==id)await selectSource(id);
+    loadApi(def);
+  }else if(b.dataset.act==='edit'){
+    srcJson.value=JSON.stringify(def,null,2);info(t('src.edited'));srcJson.focus();
+  }else if(b.dataset.act==='del'){
+    if(!confirm(t('src.delQ',{name:pickLang(def.title)})))return;
+    sources=sources.filter(s=>s.id!==id);saveSources();
+    delete raw[id];delete mapped[id];delete status[id];delete settings.loaded[id];
+    if(settings.source===id)settings.source=sources[0]?sources[0].id:null;
+    saveSettings();undoStack=[];forcedId=null;
+    Tools.diag.log('source removed',{sources:sources.length});
+    await dropSourceFiles(id);
+    await restoreList(curDef());
+    render();
+  }
+});
+async function addDef(def){
+  try{validate(def);}catch(e){info(errText(e),true);return false;}
+  def=JSON.parse(JSON.stringify(def));
+  const i=sources.findIndex(s=>s.id===def.id);
+  if(i>=0){
+    if(!confirm(t('src.replaceQ',{id:def.id,name:pickLang(sources[i].title)})))return false;
+    if(apiSig(sources[i])!==apiSig(def)){
+      delete raw[def.id];delete settings.loaded[def.id];
+      await dropSourceFiles(def.id);
+    }
+    sources[i]=def;
+  }else{
+    if(sources.length>=MAX_SOURCES){info(t('e.maxSources',{n:MAX_SOURCES}),true);return false;}
+    sources.push(def);
+  }
+  delete mapped[def.id];delete status[def.id];orderCache=null;
+  if(!saveSources()){sources=Tools.load(K.sources,[]);info(t('saveFail'),true);return false;}
+  const name=pickLang(def.title);
+  info(t(isApi(def)?'src.addedApi':'src.added',{name}));
+  Tools.toast(t(isApi(def)?'src.addedApi':'src.added',{name}),2500);
+  Tools.diag.log('source added',{kind:isApi(def)?'api':'items',replaced:i>=0,sources:sources.length});
+  await selectSource(def.id);
+  return true;
+}
+$('btnAdd').addEventListener('click',async()=>{
+  const txt=srcJson.value.trim();
+  if(!txt){info(t('e.empty'),true);return;}
+  if(txt.length>MAX_DEF){info(t('e.big'),true);return;}
+  let def;
+  try{def=JSON.parse(txt);}catch(e){info(t('e.parse',{msg:e.message}),true);return;}
+  if(await addDef(def))srcJson.value='';
+});
+$('btnExEmoji').addEventListener('click',()=>{srcJson.value=JSON.stringify(EX_EMOJI,null,2);info(t('src.example'));});
+$('btnExTcg').addEventListener('click',()=>{srcJson.value=JSON.stringify(EX_TCG,null,2);info(t('src.example'));});
+$('btnFile').addEventListener('click',()=>$('fileIn').click());
+$('fileIn').addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0];e.target.value='';
+  if(!f)return;
+  if(f.size>MAX_DEF){info(t('e.big'),true);return;}
+  try{srcJson.value=await f.text();info(t('src.fileRead'));}
+  catch(_){info(t('e.file'),true);}
+});
+const optShuffle=$('optShuffle');
+optShuffle.checked=settings.shuffle;
+optShuffle.addEventListener('change',()=>{
+  settings.shuffle=optShuffle.checked;saveSettings();
+  orderCache=null;forcedId=null;renderDeck();
+});
+
+/* ---------- Menu: profiles ---------- */
+function renderProfiles(){
+  $('profList').replaceChildren(...profiles.list.map((p,i)=>{
+    const li=document.createElement('li');li.dataset.id=p.id;
+    const inp=document.createElement('input');inp.type='text';inp.maxLength=30;inp.value=p.name||'';inp.placeholder=t('prof.me');
+    inp.autocomplete='off';inp.setAttribute('aria-label',t('prof.name',{n:i+1}));
+    const del=document.createElement('button');del.type='button';del.className='btn danger small';del.textContent='✕';
+    del.setAttribute('aria-label',t('prof.del',{name:profName(p)}));del.title=del.getAttribute('aria-label');
+    del.disabled=profiles.list.length<2;
+    li.append(inp,del);
+    return li;
+  }));
+}
+$('profList').addEventListener('change',e=>{
+  const li=e.target.closest('li');if(!li||e.target.tagName!=='INPUT')return;
+  const p=profiles.list.find(x=>x.id===li.dataset.id);if(!p)return;
+  p.name=e.target.value.trim().slice(0,30)||null;
+  saveProfiles();renderPickers();renderProfiles();
+});
+$('profList').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  const id=b.closest('li').dataset.id,p=profiles.list.find(x=>x.id===id);
+  if(!p||profiles.list.length<2)return;
+  if(!confirm(t('prof.delQ',{name:profName(p)})))return;
+  profiles.list=profiles.list.filter(x=>x.id!==id);
+  delete swipes[id];saveSwipes();
+  if(profiles.current===id)profiles.current=profiles.list[0].id;
+  saveProfiles();undoStack=[];forcedId=null;orderCache=null;
+  Tools.diag.log('profile deleted',{profiles:profiles.list.length});
+  render();
+});
+function addProfile(){
+  if(profiles.list.length>=MAX_PROFILES){Tools.toast(t('prof.max',{n:MAX_PROFILES}));return;}
+  const inp=$('profNew');
+  let id;do{id='p'+Math.random().toString(36).slice(2,9);}while(profiles.list.some(p=>p.id===id));
+  profiles.list.push({id,name:inp.value.trim().slice(0,30)||t('prof.default',{n:profiles.list.length+1})});
+  profiles.current=id;saveProfiles();
+  inp.value='';undoStack=[];forcedId=null;
+  Tools.diag.log('profile added',{profiles:profiles.list.length});
+  render();
+}
+$('btnProfAdd').addEventListener('click',addProfile);
+$('profNew').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addProfile();}});
+
+/* ---------- Render all ---------- */
+function render(){
+  renderPickers();renderDeck();renderProgress();renderSources();renderProfiles();
+  if(!$('results').hidden)renderResults();
+}
+Tools.onLang(()=>{for(const k of Object.keys(mapped))delete mapped[k];orderCache=null;render();});
+
+/* ---------- WebMCP: read only, nothing is loaded from the network ---------- */
+Tools.mcp.register({
+  name:'list_sources',title:'List image sources',
+  description:'Lists the data sources added in Image Swipe: id, title, kind (items or api), whether its list is loaded, number of entries and how many the current profile liked and passed. Also returns the current profile and the selected source.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  readOnly:true,untrusted:true,label:'mcp.sources',
+  execute:()=>({
+    profile:profName(curProfile()),profiles:profiles.list.map(profName),selected:settings.source,
+    sources:sources.map(def=>{
+      const list=itemsOf(def),r=ratings(def.id);
+      let liked=0,passed=0;for(const v of Object.values(r)){if(v==='like')liked++;else if(v==='nope')passed++;}
+      return {id:def.id,title:pickLang(def.title),kind:isApi(def)?'api':'items',loaded:!!list,entries:list?list.length:null,liked,passed};
+    })
+  })
+});
+Tools.mcp.register({
+  name:'get_results',title:'Get swipe results',
+  description:'Returns the entries the current profile liked and/or passed in one data source (default: the selected source), newest first, with id, title and subtitle. Reads only what is stored on the device.',
+  inputSchema:{type:'object',properties:{
+    source:{type:'string',maxLength:80,description:'Source id from list_sources (default: selected source)'},
+    rating:{type:'string',enum:['like','nope','all'],description:'Which entries: like, nope (passed) or all (default)'}
+  },additionalProperties:false},
+  readOnly:true,untrusted:true,label:'mcp.results',
+  execute:({source,rating:kind='all'})=>{
+    const def=sources.find(s=>s.id===(source||settings.source));
+    if(!def)throw new Error(source?`Unknown source id: ${source}`:'No data source selected');
+    const entries=resultEntries(def,kind).map(it=>({id:it.id,rating:it.rating,title:it.title||null,subtitle:it.subtitle||null}));
+    return {profile:profName(curProfile()),source:def.id,title:pickLang(def.title),count:entries.length,entries};
+  }
+});
+
+Tools.diag.info(()=>{
+  const def=curDef(),list=itemsOf(def),c=def&&list?counts(def):null;
+  return {profiles:profiles.list.length,sources:sources.length,sourceKind:def?(isApi(def)?'api':'items'):null,
+    listLoaded:!!list,entries:list?list.length:null,rated:c?c.done:null,shuffle:settings.shuffle,
+    loading:Object.values(status).filter(s=>s==='loading').length,picturesInMemory:urlCache.size};
+});
+
+render();
+restoreList(curDef()).then(render);
+})();
+</script>
+</body>
+</html>
