@@ -249,6 +249,7 @@ const FILE_TYPES = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
   '.heic': 'image/heic', '.heif': 'image/heif', '.avif': 'image/avif', '.gif': 'image/gif', '.bmp': 'image/bmp',
   '.ico': 'image/x-icon', '.svg': 'image/svg+xml',
+  '.ics': 'text/calendar',
 };
 function fileHandlers(p) {
   const exts = p.shareAccept.filter(a => a.startsWith('.')).map(a => a.toLowerCase());
