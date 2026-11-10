@@ -888,8 +888,8 @@ test.describe('page', () => {
     await page.waitForTimeout(600);
     expect(await page.evaluate(() => window.__notes)).toBe(n1);
     await page.click('#btnSound');
-    // Dance until the stop, then freeze – at once, in the page: after the stop there are about 400 ms to stand still
-    // (grace 800 ms minus the 400 ms the movement is averaged over); waiting for the text from here can take longer
+    // Dance until the stop, then freeze – at once, in the page: after the stop there are about 800 ms to stand still
+    // (grace 1200 ms minus the 400 ms the movement is averaged over); waiting for the text from here can take longer
     await page.evaluate(() => {
       const el = document.getElementById('prompt');
       new MutationObserver(() => { if (el.textContent === 'Stopp! Einfrieren!' && window.__pose.dance) { window.__pose = {}; window.__bc.postMessage({}); } })

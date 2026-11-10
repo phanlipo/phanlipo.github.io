@@ -236,6 +236,14 @@ test.describe('iPhone', () => {
   });
 });
 
+// A picture of the 1280×720 stream: 16:9 (within 2 px, encoders round to even sizes), at most the full size
+// and not smaller than a quarter of it
+function expectPicture(w, h) {
+  expect(w, `width of ${w}×${h}`).toBeLessThanOrEqual(1280);
+  expect(w, `width of ${w}×${h}`).toBeGreaterThanOrEqual(320);
+  expect(Math.abs(w * 9 / 16 - h), `16:9, got ${w}×${h}`).toBeLessThanOrEqual(2);
+}
+
 test.describe('direct streaming with a fake Cast SDK', () => {
   // The app's service worker would fetch the SDK itself (not routed by Playwright) – block it here
   test.use({ serviceWorkers: 'block', allowedProblems: /external request: https:\/\/www\.gstatic\.com\/cv\/js\/sender\/v1\/cast_sender\.js/ });
@@ -263,13 +271,17 @@ test.describe('direct streaming with a fake Cast SDK', () => {
     await expect(page.locator('.controls [data-music]')).toHaveAttribute('aria-pressed', 'true');   // music starts with the stream
     await expect(page.getByRole('button', { name: 'Streaming beenden' })).toBeVisible();
 
-    // The TV plays a 1280×720 video with an audio track
-    await expect.poll(() => tv.evaluate(() => document.getElementById('video').videoWidth), { timeout: 20000 }).toBe(1280);
+    // The TV plays the 16:9 picture with an audio track. The app sends 1280×720; on a busy computer WebRTC
+    // itself sends a smaller picture to keep it smooth (960×540, 640×360 …) – never a larger or distorted one.
+    await expect.poll(() => tv.evaluate(() => document.getElementById('video').videoWidth), { timeout: 20000 }).toBeGreaterThan(0);
     const rx = await tv.evaluate(() => {
       const v = document.getElementById('video');
-      return { h: v.videoHeight, audio: v.srcObject.getAudioTracks().length, video: v.srcObject.getVideoTracks().length, idle: document.getElementById('idle').hidden };
+      return { w: v.videoWidth, h: v.videoHeight, audio: v.srcObject.getAudioTracks().length, video: v.srcObject.getVideoTracks().length, idle: document.getElementById('idle').hidden };
     });
-    expect(rx).toEqual({ h: 720, audio: 1, video: 1, idle: true });
+    expect(rx).toMatchObject({ audio: 1, video: 1, idle: true });
+    expectPicture(rx.w, rx.h);
+    // What goes into the stream is the full 1280×720 canvas
+    expect(await page.evaluate(() => { const c = document.getElementById('view'); return [c.width, c.height]; })).toEqual([1280, 720]);
     // The audio track carries sound (level measured on the TV, independent of the app)
     const level = await tv.evaluate(async () => {
       const ac = new AudioContext(); await ac.resume();
@@ -281,7 +293,9 @@ test.describe('direct streaming with a fake Cast SDK', () => {
     });
     expect(level).toBeGreaterThan(0.01);
     // Stats from WebRTC: size, fps, bitrate
-    await expect(page.locator('#status')).toContainText('1280×720', { timeout: 10000 });
+    await expect(page.locator('#status')).toContainText(/\d+×\d+/, { timeout: 10000 });
+    const sent = (await page.locator('#status').textContent()).match(/(\d+)×(\d+)/);
+    expectPicture(Number(sent[1]), Number(sent[2]));
     expect(await page.evaluate(() => Tools.diag.text())).toContain('"state":"streaming"');
 
     // Stop: the TV is told (bye), the receiver goes back to idle
