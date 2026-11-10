@@ -2,7 +2,9 @@
 // 4:3 picture, as the worker delivers them (Float32Array x, y, z, visibility; x, y 0…1, picture not mirrored – so the
 // player's left side is on the right of the picture). Runs in the page and in the fake worker, hence a source string.
 //
-// makePose({ dy, duck, squat, arms: 'up' | 'left' | 'right' | 'clap', legs: 'apart', hand: [x, y], scale, hide: [i…], x })
+// makePose({ dy, duck, squat, arms: 'up' | 'left' | 'right' | 'clap', armL, armR, legs: 'apart', knee: 'left' | 'right', hand: [x, y], scale, hide: [i…], x })
+//   armL / armR  the player's left / right arm at this angle (0° hanging down, 90° sideways, 180° straight up)
+//   knee   this knee raised (thigh horizontal)
 //   dy     whole body this far up (picture heights; jump) – torso length is 0.25
 //   duck   head and shoulders this far down       squat  everything above the knees this far down
 //   hand   the right hand (wrist and index finger) at this picture point
@@ -34,6 +36,16 @@ function makePose(o) {
   if (o.arms === 'up' || o.arms === 'left') arm('l', 'up');
   if (o.arms === 'up' || o.arms === 'right') arm('r', 'up');
   if (o.arms === 'clap') { arm('l', 'clap'); arm('r', 'clap'); }
+  const angled = (side, deg) => {
+    const [sh, el, wr, idx] = side === 'l' ? [11, 13, 15, 19] : [12, 14, 16, 20];
+    const out = side === 'l' ? 1 : -1, a = deg * Math.PI / 180, len = 0.24;   // arm length in picture heights
+    const dx = out * Math.sin(a) * len * 0.75, dy = Math.cos(a) * len;    // x × 3/4: picture is 4:3
+    set(el, p[sh][0] + dx / 2, p[sh][1] + dy / 2); set(wr, p[sh][0] + dx, p[sh][1] + dy); set(idx, p[wr][0], p[wr][1] + 0.02);
+  };
+  if (o.armL != null) angled('l', o.armL);
+  if (o.armR != null) angled('r', o.armR);
+  if (o.knee === 'left') { set(25, 0.56, 0.57); set(27, 0.56, 0.72); }
+  if (o.knee === 'right') { set(26, 0.44, 0.57); set(28, 0.44, 0.72); }
   if (o.legs === 'apart') { set(25, 0.57, 0.72); set(26, 0.43, 0.72); set(27, 0.61, 0.88); set(28, 0.39, 0.88); }
   if (o.duck) for (const i of upper) p[i][1] += o.duck;
   if (o.squat) for (let i = 0; i <= 24; i++) p[i][1] += o.squat;

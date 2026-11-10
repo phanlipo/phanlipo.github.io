@@ -6,9 +6,12 @@ Status: **geplant** (soll kommen), **zurückgestellt** (passt gerade nicht, spä
 
 Neue Einträge oben; bei Umsetzung den Eintrag entfernen oder auf die App verweisen.
 
-## MovePlay – Bewegungsspiele per Kamera – erste Version umgesetzt (2026-11)
+## MovePlay – Bewegungsspiele per Kamera – umgesetzt, Erweiterungen offen (2026-11)
 
-**Stand:** App `move-play` (Aufbau in `move-play/README.md`) mit 1 Spieler, Kalibrierung und vier Spielen: Simon sagt, Hampelmann-Challenge, Ducken & Springen, Blasen fangen. Mit echtem Modell geprüft (`tests/manual/move-play-e2e.mjs`: Testfoto erkannt und kalibriert, ca. 15 ms je Bild am Computer). **Noch offen:** Messung auf einem älteren Android-Handy (Bilder/s, Sprungerkennung bei schräg stehendem Handy), GPU-Delegate (läuft bisher auf der CPU), und alles unter „Danach“ / „Später“: Stopptanz, Posen nachmachen, 2 Spieler, eigene Spiele laden (JSON) und `add_game` für KI-Agenten, Fernseher, Duell auf zwei Geräten. Schritte zur Seite (`stepLeft/Right`) und `lean` sind noch nicht in der Bewegungs-Engine.
+**Stand:** App `move-play` (Aufbau in `move-play/README.md`) mit 6 Spielen (Simon sagt, Hampelmann-Challenge, Ducken & Springen, Blasen fangen, Stopptanz, Posen nachmachen), allein oder zu zweit nebeneinander (je Spieler eine Bildhälfte), „Leichter erkennen“ für kleine Kinder, GPU mit automatischer Wahl der schnelleren Rechenart. Mit echtem Modell geprüft (`tests/manual/move-play-e2e.mjs`, auch `TWO=1`): Testfoto erkannt und kalibriert, ca. 20–50 ms je Bild am Computer (CPU; die dort nur simulierte GPU ist langsamer und wird automatisch abgewählt).
+
+- Zwei Spieler über MediaPipes `numPoses: 2` gingen nicht: Mit echtem Modell wurde nur eine oder gar keine Person gefunden, auch bei zwei verschiedenen Bildern. Deshalb je Bildhälfte ein eigener Detektor.
+- **Noch offen:** Test auf echten Handys (Bilder/s mit GPU und CPU, Sprungerkennung bei schräg stehendem Handy, Schwellen für Stopptanz), eigene Spiele laden (JSON) und `add_game` für KI-Agenten, Fernseher (`cast.js`), Duell auf zwei Geräten (`p2p.js`). Schritte zur Seite (`stepLeft/Right`) und `lean` fehlen noch in der Bewegungs-Engine.
 
 Ursprünglicher Plan:
 

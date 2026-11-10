@@ -1,7 +1,9 @@
 // MovePlay – game engine (no DOM). Runs a game described as JSON (games/*.json, format in README.md).
 //
 //   MoveEngine.validate(def, check)   throws if the description is not valid (check = Tools.mcp.checkSchema)
-//   const g = MoveEngine.create(def, { rng })
+//   const g = MoveEngine.create(def, { rng, sync })    sync: several players – each has its own game with the same seed;
+//                                                     mechanics then keep a fixed rhythm (the next command, pose … comes
+//                                                     at the same time for everybody, not as soon as one player is done)
 //   g.update(t, motion)               every frame: t in ms, motion = Motion state (see motion.js)
 //   g.event(ev, motion)               a movement from Motion.update ({ type, t })
 //   g.pause() / g.resume() / g.stop()
@@ -33,6 +35,7 @@
       id: { type: 'string', minLength: 1, maxLength: 40 },
       title: text, description: longText,
       emoji: { type: 'string', minLength: 1, maxLength: 8 },
+      players: { type: 'integer', minimum: 1, maximum: 2 },   // most players at once (default 2)
       mechanic: { type: 'string' },
       needs: { type: 'string', enum: ['full', 'upper'] },
       space: { type: 'string', enum: ['small', 'medium', 'large'] },
@@ -69,7 +72,7 @@
     const sc = def.scoring;
     let last = null, paused = false, queue = [];
     const g = {
-      def, rng, phase: 'countdown', clock: 0, since: 0,
+      def, rng, sync: !!(opts && opts.sync), phase: 'countdown', clock: 0, dt: 0, since: 0,
       score: 0, count: 0, hits: 0, misses: 0, streak: 0, bestStreak: 0,
       lives: def.lives, countdown: 3, timeLeft: def.duration, prompt: null, objects: [], m: {}, result: null,
       get duration() { return def.duration * 1000; },
@@ -99,7 +102,7 @@
           if (g.since >= COUNTDOWN) { g.phase = 'play'; mech.start(g, def.params); }
           return;
         }
-        g.clock += dt;
+        g.clock += dt; g.dt = dt;
         g.timeLeft = Math.max(0, Math.ceil((g.duration - g.clock) / 1000));
         mech.update(g, def.params, motion || {});
         if (g.phase === 'play' && g.clock >= g.duration) end('time');

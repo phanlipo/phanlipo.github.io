@@ -6,20 +6,20 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>MovePlay</title>
-<meta name="description" content="Bewegungsspiele vor der Kamera für Kinder und Familien: Simon sagt, Hampelmann-Challenge, Ducken &amp; Springen, Blasen fangen – die App erkennt Springen, Ducken, Armeheben und Klatschen.">
+<meta name="description" content="Bewegungsspiele vor der Kamera für Kinder und Familien, allein oder zu zweit: Simon sagt, Hampelmann, Ducken &amp; Springen, Blasen fangen, Stopptanz, Posen nachmachen – die App erkennt Springen, Ducken, Armeheben und Klatschen.">
 <meta name="tool:tags" content="Freizeit, Spiele, Kinder">
 <meta name="tool:features" content="Kamera, KI-Agent, Download nötig">
 <meta name="tool:icon" content="stretching">
 <meta name="tool:color" content="#5f3dc4">
 <meta name="tool:short-name" content="MovePlay">
 <meta name="tool:title-en" content="MovePlay">
-<meta name="tool:description-en" content="Movement games in front of the camera for kids and families: Simon Says, jumping jack challenge, duck &amp; jump, catch the bubbles – the app recognises jumping, ducking, raising arms and clapping.">
+<meta name="tool:description-en" content="Movement games in front of the camera for kids and families, alone or for two: Simon Says, jumping jacks, duck &amp; jump, catch the bubbles, freeze dance, copy the pose – the app recognises jumping, ducking, raising arms and clapping.">
 <meta name="tool:short-name-en" content="MovePlay">
 <meta name="tool:storage" content="move-play.">
 <meta name="tool:webmcp" content="list_games, get_scores">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-tR4Mbs1K31yEVWbqUS6s+XHKsFPuvzRSgFVYN1muSHc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-3bu4j96OTs6g9eIql7ENWD1x94Nk6vzo2FJpLL8KE9o='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -58,7 +58,15 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
 /* Game: score, time, lives on top; the command in the middle */
 .hud{position:absolute;inset-block-start:8px;inset-inline:8px;display:flex;gap:8px;justify-content:space-between;pointer-events:none}
 .hud[hidden]{display:none}
-.hud span{padding:4px 12px;border-radius:999px;background:rgba(0,0,0,.6);font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
+.hud>span{padding:4px 12px;border-radius:999px;background:rgba(0,0,0,.6);font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
+.hud>span[hidden],.hud span span[hidden]{display:none}
+.view.two #hudA{box-shadow:inset 0 0 0 3px #b197fc}.view.two #hudB{box-shadow:inset 0 0 0 3px #fdba74}
+.players{flex:none;width:min(320px,100%);border-color:rgba(255,255,255,.3)}
+.players button{min-height:44px;border:0;background:rgba(255,255,255,.1);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+.players button+button{border-inline-start:1px solid rgba(255,255,255,.3)}
+.players button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text)}
+.seg{display:flex;border:2px solid var(--border);border-radius:12px;overflow:hidden}.seg button{flex:1}
+.game:disabled{opacity:.45;cursor:not-allowed}
 .prompt{position:absolute;inset-block-start:56px;inset-inline:8px;margin:0;text-align:center;font-size:clamp(24px,6vw,44px);font-weight:800;text-shadow:0 2px 8px rgba(0,0,0,.9);pointer-events:none}
 .prompt.trick{color:#fde68a}
 .ptimer{position:absolute;inset-block-start:46px;inset-inline:25%;height:6px;border-radius:3px;background:rgba(255,255,255,.25);overflow:hidden;pointer-events:none}
@@ -71,6 +79,7 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
 .flash{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s}
 .flash.good{background:radial-gradient(circle,transparent 55%,rgba(34,197,94,.55));opacity:1;transition:none}
 .flash.bad{background:radial-gradient(circle,transparent 55%,rgba(239,68,68,.6));opacity:1;transition:none}
+.feedback.side-A{inset-inline:8px 50%}.feedback.side-B{inset-inline:50% 8px}
 .feedback{position:absolute;inset-block-end:18%;inset-inline:8px;margin:0;text-align:center;font-size:26px;font-weight:800;text-shadow:0 2px 8px rgba(0,0,0,.9);pointer-events:none}
 .busy{position:absolute;inset-block-end:8px;inset-inline:8px;margin:0;padding:6px 10px;border-radius:10px;background:rgba(0,0,0,.75);color:#fff;font-size:14px;text-align:center;z-index:1}
 .busy[hidden]{display:none}
@@ -101,11 +110,14 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
     <canvas id="out" role="img" aria-label="Kamerabild mit Spiel" data-i18n-attr="aria-label:picture"></canvas>
     <div class="flash" id="flash" aria-hidden="true"></div>
     <div class="hud" id="hud" hidden>
-      <span id="hudScore"></span><span id="hudLives" role="img" aria-label="Leben"></span><span id="hudTime"></span>
+      <span class="pl" id="hudA"><b id="hudAScore"></b> <span id="hudALives" role="img" aria-label="Leben"></span></span>
+      <span id="hudTime"></span>
+      <span class="pl" id="hudB" hidden><b id="hudBScore"></b> <span id="hudBLives" role="img" aria-label="Leben"></span></span>
     </div>
     <div class="ptimer" id="ptimer" hidden><i id="ptBar"></i></div>
     <p class="prompt" id="prompt" role="status" aria-live="assertive"></p>
-    <p class="feedback" id="feedback" aria-hidden="true"></p>
+    <p class="feedback" id="fbA" aria-hidden="true"></p>
+    <p class="feedback" id="fbB" aria-hidden="true"></p>
     <p class="cd" id="cd" hidden></p>
     <p class="away" id="away" role="status" hidden></p>
     <p class="busy" id="busy" role="status" hidden></p>
@@ -113,12 +125,18 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
     <div class="screen" id="scMenu">
       <h2 data-i18n="choose">Spiel wählen</h2>
       <p class="intro" data-i18n="intro">Handy hinstellen (z. B. ans Regal lehnen), Kamera auf dich, 2–3 Schritte zurück – und los!</p>
+      <div class="seg players" id="players" role="group" aria-label="Spieler" data-i18n-attr="aria-label:playersLabel">
+        <button type="button" data-players="1" aria-pressed="true"><span aria-hidden="true">👤 </span><span data-i18n="p.1">1 Spieler</span></button>
+        <button type="button" data-players="2" aria-pressed="false"><span aria-hidden="true">👥 </span><span data-i18n="p.2">2 Spieler</span></button>
+      </div>
       <div class="games" id="games" role="group" aria-label="Spiele" data-i18n-attr="aria-label:games"></div>
     </div>
     <div class="screen calib" id="scCalib" hidden>
       <div class="calbox">
         <h2 id="calTitle"></h2>
+        <p id="calTwo" hidden data-i18n="cal.two">Zu zweit: Jeder bleibt auf seiner Hälfte des Bildes (Strich in der Mitte).</p>
         <p id="calText" role="status"></p>
+        <p id="calText2" role="status" hidden></p>
         <progress id="calBar" max="100" value="0" aria-label="Kalibrieren" data-i18n-attr="aria-label:calibrating"></progress>
         <p class="space" id="calSpace" hidden data-i18n="space">Platz freiräumen: Nichts Zerbrechliches in der Nähe, keine Stolperfallen.</p>
         <button type="button" class="btn" id="btnCalCancel" data-i18n="cancel">Abbrechen</button>
@@ -149,6 +167,8 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
   <label class="check"><input type="checkbox" id="optMirror"> <span data-i18n="opt.mirror">Bild spiegeln (wie ein Spiegel)</span></label>
   <label class="check"><input type="checkbox" id="optCam"> <span data-i18n="opt.cam">Kamerabild zeigen (sonst nur Strichfigur)</span></label>
   <label class="check"><input type="checkbox" id="optVoice"> <span data-i18n="opt.voice">Befehle vorlesen</span></label>
+  <label class="check"><input type="checkbox" id="optEasy"> <span data-i18n="opt.easy">Leichter erkennen (kleine Kinder: kleinere Sprünge und Ducken zählen)</span></label>
+  <label class="check"><input type="checkbox" id="optGpu"> <span data-i18n="opt.gpu">Grafikchip nutzen (schneller; ausschalten, wenn die Erkennung spinnt)</span></label>
   <h3 data-i18n="models.h">Körpererkennung</h3>
   <p class="muted" id="modelsInfo" data-i18n="models.none">Noch nicht heruntergeladen.</p>
   <div class="row"><button type="button" class="btn" id="btnDelModels" data-i18n="models.delete" disabled>Heruntergeladene Erkennung löschen</button></div>
@@ -175,7 +195,8 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
   <ul>
     <li>Handy oder Tablet hinstellen (z. B. ans Regal lehnen oder auf einen Stuhl), Kamera zu dir. Querformat passt meist besser.</li>
     <li>Spiel antippen und Kamera erlauben. Dann 2–3 Schritte zurückgehen, bis du ganz zu sehen bist, und kurz still stehen – die App misst, wie groß du im Bild bist. Danach zählt sie 3 – 2 – 1.</li>
-    <li>Gespielt wird allein vor der Kamera; stehen mehrere im Bild, zählt die Person, die die App zuerst erkennt.</li>
+    <li>Allein oder zu zweit: Über den Spielen <i>1 Spieler</i> oder <i>2 Spieler</i> wählen. Zu zweit stellt ihr euch nebeneinander, jeder auf seine Hälfte des Bildes (Strich in der Mitte) – wer links steht, ist <b>Links</b> (lila), wer rechts steht, <b>Rechts</b> (orange). Wer über die Mitte läuft, wird kurz nicht erkannt. Beide bekommen dieselben Befehle, Hindernisse und dieselbe Musik zur selben Zeit; wer mehr Punkte hat, gewinnt. Zu zweit geht etwas weiter zurück, damit ihr beide ganz ins Bild passt. Bestwerte gibt es nur allein.</li>
+    <li>Allein vor der Kamera: Stehen mehrere im Bild, zählt die Person, die die App zuerst erkennt.</li>
     <li>Gehst du aus dem Bild, hält das Spiel an und geht weiter, sobald du zurück bist. ■ oben beendet das Spiel.</li>
   </ul>
   <h3>Die Spiele</h3>
@@ -184,6 +205,8 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
     <li><b>Hampelmann-Challenge:</b> So viele Hampelmänner wie möglich in 30 Sekunden – Arme ganz nach oben, dann wieder ganz runter.</li>
     <li><b>Ducken &amp; Springen:</b> Hohe Balken: ducken. Niedrige Balken: springen. Es wird immer schneller.</li>
     <li><b>Blasen fangen:</b> Seifenblasen mit der Hand berühren. Bomben nicht anfassen – das kostet Punkte.</li>
+    <li><b>Stopptanz:</b> Tanzen, solange die Musik spielt. Hört sie auf: einfrieren! Wer sich bewegt oder vorher nicht richtig tanzt, verliert ein Leben. Mit Ton spielen (Lautsprecher oben).</li>
+    <li><b>Posen nachmachen:</b> Oben rechts erscheint eine Figur (Stern, Rakete, Flieger, Storch …). Nachmachen und kurz halten – der Ring um den Kopf zeigt, wie lange noch. Beim Storch und Baum ein Knie hochziehen.</li>
   </ul>
   <h3>Sicherheit</h3>
   <ul>
@@ -193,6 +216,8 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
   <h3>Im Menü ☰</h3>
   <ul>
     <li>Einstellungen: Bild spiegeln, nur Strichfigur statt Kamerabild, Befehle vorlesen. Den Ton schaltet der Lautsprecher oben ein und aus.</li>
+    <li><i>Leichter erkennen</i>: Für kleine Kinder zählen schon kleinere Sprünge, Ducker und Kniebeugen, beim Stopptanz darf man beim Einfrieren etwas wackeln.</li>
+    <li><i>Grafikchip nutzen</i> (an): Die Erkennung rechnet auf dem Grafikchip – meist deutlich schneller. Klappt das auf einem Gerät nicht, nimmt die App von selbst den Prozessor. Wirkt die Erkennung trotzdem seltsam, ausschalten (gilt ab dem nächsten Spiel).</li>
     <li>Bestwerte bleiben auf diesem Gerät gespeichert; mit „Daten sichern“ lassen sie sich übertragen.</li>
   </ul>
   <h3>Datenschutz &amp; Download</h3>
@@ -210,7 +235,8 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
   <ul>
     <li>Stand the phone or tablet up (e.g. lean it against a shelf or put it on a chair), camera facing you. Landscape usually works better.</li>
     <li>Tap a game and allow the camera. Then take 2–3 steps back until all of you is in the picture and stand still for a moment – the app measures how big you are in the picture. Then it counts 3 – 2 – 1.</li>
-    <li>One player at a time; if several people are in the picture, the one the app finds first counts.</li>
+    <li>Alone or for two: choose <i>1 player</i> or <i>2 players</i> above the games. Two players stand side by side, each on their half of the picture (line in the middle) – whoever stands on the left is <b>Left</b> (purple), on the right <b>Right</b> (orange). Crossing the middle means not being recognised for a moment. Both get the same commands, obstacles and music at the same time; whoever has more points wins. With two, step back a bit further so you both fit in the picture. Best scores are kept for one player only.</li>
+    <li>One player: if several people are in the picture, the one the app finds first counts.</li>
     <li>If you leave the picture, the game pauses and goes on as soon as you are back. ■ at the top ends the game.</li>
   </ul>
   <h3>The games</h3>
@@ -219,6 +245,8 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
     <li><b>Jumping Jack Challenge:</b> As many jumping jacks as you can in 30 seconds – arms all the way up, then all the way down.</li>
     <li><b>Duck &amp; Jump:</b> High bars: duck. Low bars: jump. It keeps getting faster.</li>
     <li><b>Catch the Bubbles:</b> Touch the bubbles with your hand. Don’t touch the bombs – that costs points.</li>
+    <li><b>Freeze Dance:</b> Dance while the music plays. When it stops: freeze! Moving, or not really dancing before, costs a life. Play with the sound on (speaker at the top).</li>
+    <li><b>Copy the Pose:</b> A figure appears at the top right (star, rocket, plane, stork …). Copy it and hold it for a moment – the ring around your head shows how much longer. For the stork and the tree, raise one knee.</li>
   </ul>
   <h3>Safety</h3>
   <ul>
@@ -228,6 +256,8 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
   <h3>In the menu ☰</h3>
   <ul>
     <li>Settings: mirror the picture, stick figure only instead of the camera picture, read commands aloud. The speaker at the top turns the sound on and off.</li>
+    <li><i>Easier detection</i>: for small children smaller jumps, ducks and squats count, and in freeze dance a little wobbling is allowed.</li>
+    <li><i>Use the graphics chip</i> (on): the detection runs on the graphics chip – usually much faster. If that does not work on a device, the app uses the processor by itself. If the detection still behaves oddly, turn it off (applies from the next game).</li>
     <li>Best scores stay on this device; “Back up data” transfers them.</li>
   </ul>
   <h3>Privacy &amp; download</h3>
@@ -250,7 +280,7 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 5ced7a6b288e</p>
+  <p class="footer-version">Version 99d94105fa04</p>
   <!-- footer:end -->
 </footer>
 
@@ -264,17 +294,22 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
 Tools.i18n({
   de:{
     best:'Bestwert: {n}',noBest:'Noch nicht gespielt',
-    'cal.title':'{game}','cal.nobody':'Niemand zu sehen – stell dich vor die Kamera.',
+    'cal.nobody':'Niemand zu sehen – stell dich vor die Kamera.',
     'cal.full':'Geh weiter zurück, bis du von Kopf bis Fuß zu sehen bist.','cal.upper':'Geh etwas zurück, bis Kopf, Arme und Hüfte zu sehen sind.',
-    'cal.still':'Gut so! Jetzt kurz still stehen …','cal.again':'Du bist näher gekommen – kurz still stehen, die App misst neu.',
+    'cal.still':'Gut so! Jetzt kurz still stehen …','cal.ready':'Bereit ✓','cal.again':'Du bist näher gekommen – kurz still stehen, die App misst neu.',
+    'cal.nobody2':'Noch nicht zu sehen – stell dich auf deine Hälfte.','cal.two':'Zu zweit: Jeder bleibt auf seiner Hälfte des Bildes (Strich in der Mitte).',
     'cmd.jump':'Spring!','cmd.duck':'Duck dich!','cmd.squat':'Kniebeuge!','cmd.armsUp':'Arme hoch!','cmd.armLeft':'Linken Arm hoch!','cmd.armRight':'Rechten Arm hoch!','cmd.clap':'Klatsch in die Hände!','cmd.jumpingJack':'Hampelmann!',
-    simon:'{prefix}: {cmd}',
+    'cmd.dance':'Tanzen! 🎵','cmd.freeze':'Stopp! Einfrieren!',
+    simon:'{prefix}: {cmd}',pose:'{emoji} {name}!',
     'fb.good':'Super!','fb.late':'Zu spät!','fb.trickOk':'Gut aufgepasst!','fb.trickBad':'Reingefallen!','fb.dodgeOk':'Geschafft!','fb.dodgeBad':'Autsch!','fb.bomb':'Bumm!',
-    go:'Los!',away:'Wo bist du? Stell dich wieder ins Bild – das Spiel wartet.',
+    'fb.statue':'Wie eine Statue!','fb.moved':'Bewegt!','fb.lazy':'Mehr tanzen!','fb.poseOk':'Super!','fb.poseMiss':'Weiter geht’s!',
+    go:'Los!',away:'Wo bist du? Stell dich wieder ins Bild – das Spiel wartet.',away2:'{who} ist nicht zu sehen – das Spiel wartet.',
     score:'⭐ {n}',time:'⏱ {n}',lives:'Leben: {n}',
+    'p.A':'Links','p.B':'Rechts','p.1':'1 Spieler','p.2':'2 Spieler',
     'res.time':'Zeit um!','res.lives':'Keine Leben mehr!','res.stopped':'Spiel beendet',
-    'res.points':'Punkte','res.count':'{n} geschafft','res.detail':'{hits} getroffen · {misses} daneben · beste Serie {streak}',
+    'res.count':'{n} geschafft','res.detail':'{hits} getroffen · {misses} daneben · beste Serie {streak}',
     'res.record':'🏆 Neuer Bestwert!','res.best':'Bestwert: {n}',
+    'res.wins':'🏆 {who} gewinnt!','res.draw':'🤝 Unentschieden!','res.two':'{a}: {va} · {b}: {vb}','res.noBest':'Bestwerte gibt es nur für 1 Spieler.',
     noCam:'Dieser Browser kann nicht auf die Kamera zugreifen.',denied:'Kein Zugriff auf die Kamera. Bitte in den Einstellungen des Browsers erlauben und nochmal versuchen.',
     notFound:'Keine Kamera gefunden.',busyCam:'Die Kamera wird gerade von einer anderen App benutzt.',camErr:'Kamera-Fehler: {e}',
     confirmDl:'Für die Körpererkennung lädt die App einmalig ca. {mb} MB herunter (Rechenprogramm von dieser Seite, Modell von Google). Das Kamerabild bleibt auf dem Gerät. Jetzt laden? Am besten im WLAN.',
@@ -287,22 +322,28 @@ Tools.i18n({
   },
   en:{
     title:'MovePlay',sub:'Movement games in front of the camera',stop:'End game',sound:'Sound',picture:'Camera picture with game',
-    choose:'Choose a game',intro:'Stand the phone up (e.g. lean it against a shelf), camera facing you, 2–3 steps back – and go!',games:'Games',
+    choose:'Choose a game',intro:'Stand the phone up (e.g. lean it against a shelf), camera facing you, 2–3 steps back – and go!',games:'Games',playersLabel:'Players',
     calibrating:'Calibrating',space:'Make room: nothing fragile nearby, nothing to trip over.',cancel:'Cancel',again:'Play again',other:'Other game',retry:'Try again',back:'Back',
     settings:'Settings','opt.mirror':'Mirror the picture (like a mirror)','opt.cam':'Show the camera picture (otherwise stick figure only)','opt.voice':'Read commands aloud',
+    'opt.easy':'Easier detection (small children: smaller jumps and ducks count)','opt.gpu':'Use the graphics chip (faster; turn off if the detection misbehaves)',
     'models.h':'Body detection','models.delete':'Delete downloaded detection',
     best:'Best: {n}',noBest:'Not played yet',
-    'cal.title':'{game}','cal.nobody':'Nobody in the picture – stand in front of the camera.',
+    'cal.nobody':'Nobody in the picture – stand in front of the camera.',
     'cal.full':'Step back until you can be seen from head to toe.','cal.upper':'Step back a little until your head, arms and hips can be seen.',
-    'cal.still':'Good! Now stand still for a moment …','cal.again':'You came closer – stand still for a moment, the app measures again.',
+    'cal.still':'Good! Now stand still for a moment …','cal.ready':'Ready ✓','cal.again':'You came closer – stand still for a moment, the app measures again.',
+    'cal.nobody2':'Not in the picture yet – stand on your half.','cal.two':'Two players: each of you stays on your half of the picture (line in the middle).',
     'cmd.jump':'Jump!','cmd.duck':'Duck!','cmd.squat':'Squat!','cmd.armsUp':'Arms up!','cmd.armLeft':'Left arm up!','cmd.armRight':'Right arm up!','cmd.clap':'Clap your hands!','cmd.jumpingJack':'Jumping jacks!',
-    simon:'{prefix}: {cmd}',
+    'cmd.dance':'Dance! 🎵','cmd.freeze':'Stop! Freeze!',
+    simon:'{prefix}: {cmd}',pose:'{emoji} {name}!',
     'fb.good':'Great!','fb.late':'Too late!','fb.trickOk':'Well spotted!','fb.trickBad':'Gotcha!','fb.dodgeOk':'Made it!','fb.dodgeBad':'Ouch!','fb.bomb':'Boom!',
-    go:'Go!',away:'Where are you? Step back into the picture – the game is waiting.',
+    'fb.statue':'Like a statue!','fb.moved':'You moved!','fb.lazy':'Dance more!','fb.poseOk':'Great!','fb.poseMiss':'Next one!',
+    go:'Go!',away:'Where are you? Step back into the picture – the game is waiting.',away2:'{who} cannot be seen – the game is waiting.',
     score:'⭐ {n}',time:'⏱ {n}',lives:'Lives: {n}',
+    'p.A':'Left','p.B':'Right','p.1':'1 player','p.2':'2 players',
     'res.time':'Time’s up!','res.lives':'No lives left!','res.stopped':'Game ended',
-    'res.points':'Points','res.count':'{n} done','res.detail':'{hits} hits · {misses} misses · best streak {streak}',
+    'res.count':'{n} done','res.detail':'{hits} hits · {misses} misses · best streak {streak}',
     'res.record':'🏆 New best score!','res.best':'Best: {n}',
+    'res.wins':'🏆 {who} wins!','res.draw':'🤝 It’s a draw!','res.two':'{a}: {va} · {b}: {vb}','res.noBest':'Best scores are kept for 1 player only.',
     noCam:'This browser cannot access the camera.',denied:'No access to the camera. Please allow it in the browser settings and try again.',
     notFound:'No camera found.',busyCam:'The camera is being used by another app.',camErr:'Camera error: {e}',
     confirmDl:'For the body detection the app downloads about {mb} MB once (engine from this site, model from Google). The camera picture stays on the device. Download now? Wi-Fi recommended.',
@@ -316,16 +357,18 @@ Tools.i18n({
 });
 const t=Tools.t,$=Tools.$;
 const LS={settings:'move-play.settings.v1',scores:'move-play.scores.v1'};
-const s=Object.assign({mirror:true,cam:true,voice:true,sound:true},Tools.load(LS.settings,{}));
+const s=Object.assign({mirror:true,cam:true,voice:true,sound:true,easy:false,gpu:true,players:1},Tools.load(LS.settings,{}));
 const save=()=>Tools.save(LS.settings,s);
 let scores=Tools.load(LS.scores,{});
 if(!scores||typeof scores!=='object'||Array.isArray(scores))scores={};
 const video=$('video'),out=$('out'),ctx=out.getContext('2d');
 const lang=()=>Tools.lang()==='en'?'en':'de';
 const tx=o=>o?o[lang()]||o.de:'';
+// Players: A stands on the left of the screen, B on the right
+const SIDES=['A','B'],COLORS=['#b197fc','#fdba74'],BODY=['rgba(177,151,252,.95)','rgba(253,186,116,.95)'];
 
 /* ---------- Games (games/*.json) ---------- */
-const BUILTIN=['simon','jumping-jacks','duck-jump','bubbles'];
+const BUILTIN=['simon','jumping-jacks','duck-jump','bubbles','freeze-dance','poses'];
 let games=[];
 async function loadGames(){
   const list=await Promise.all(BUILTIN.map(async id=>{
@@ -338,17 +381,24 @@ async function loadGames(){
   games=list.filter(Boolean);
   renderGames();
 }
+const maxPlayers=g=>g.players||2;
 function renderGames(){
   const box=$('games');box.textContent='';
   for(const g of games){
     const b=document.createElement('button');
     b.type='button';b.className='game';b.dataset.game=g.id;
     const best=scores[g.id]?.best;
-    b.innerHTML=`<span class="e" aria-hidden="true">${Tools.esc(g.emoji)}</span><span class="n">${Tools.esc(tx(g.title))}</span><span class="d">${Tools.esc(tx(g.description))}</span><span class="b">${Tools.esc(best!=null?t('best',{n:Tools.fmt(best,0)}):t('noBest'))}</span>`;
+    b.innerHTML=`<span class="e" aria-hidden="true">${Tools.esc(g.emoji)}</span><span class="n">${Tools.esc(tx(g.title))}</span><span class="d">${Tools.esc(tx(g.description))}</span><span class="b">${Tools.esc(s.players>1?'':best!=null?t('best',{n:Tools.fmt(best,0)}):t('noBest'))}</span>`;
+    b.disabled=s.players>maxPlayers(g);
     b.addEventListener('click',()=>choose(g));
     box.append(b);
   }
+  for(const b of $('players').querySelectorAll('button'))b.setAttribute('aria-pressed',String(Number(b.dataset.players)===s.players));
 }
+$('players').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-players]');if(!b)return;
+  s.players=Number(b.dataset.players);save();renderGames();Tools.diag.log('players',{n:s.players});
+});
 
 /* ---------- Screens ---------- */
 let screen='menu';
@@ -357,7 +407,7 @@ function show(name){
   for(const [id,n] of [['scMenu','menu'],['scCalib','calib'],['scResult','result'],['scMsg','msg']])$(id).hidden=n!==name;
   const inGame=name==='play';
   $('hud').hidden=!inGame;$('btnStop').hidden=!(inGame||name==='calib');
-  if(!inGame){$('prompt').textContent='';$('ptimer').hidden=true;$('cd').hidden=true;$('away').hidden=true;$('feedback').textContent='';}
+  if(!inGame){$('prompt').textContent='';$('ptimer').hidden=true;$('cd').hidden=true;$('away').hidden=true;for(const x of SIDES)$('fb'+x).textContent='';musicOff();shownPrompt=undefined;}
 }
 let retry=null;
 function message(text,again){
@@ -402,7 +452,7 @@ async function lockScreen(on){
   }catch(e){Tools.diag.log('wake lock',{name:e?.name});}
 }
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){if(running){stopCamera();resume=true;game?.pause();Tools.diag.log('camera paused (hidden)');}}
+  if(document.hidden){if(running){stopCamera();resume=true;for(const p of players)p.game?.pause();musicOff();Tools.diag.log('camera paused (hidden)');}}
   else if(resume){resume=false;if(screen==='play'||screen==='calib'||screen==='result')startCamera();}
 });
 
@@ -410,15 +460,15 @@ document.addEventListener('visibilitychange',()=>{
 const MODEL={url:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',mb:5.8};
 const ENGINE={url:new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.wasm',location.href).href,mb:14.5};
 const MODEL_CACHE='move-play-models';
-let worker=null,ready=false,pending=null,busy=false,inferMs=0,results=0,delegate='';
+let worker=null,ready=false,pending=null,busy=false,inferMs=0,results=0,delegate='',workerPoses=1,lastPoses=0;
 function getWorker(){
   if(worker)return worker;
   worker=new Worker('pose-worker.mjs',{type:'module'});
   worker.onmessage=({data:d})=>{
     if(d.type==='result'){
-      busy=false;inferMs=d.ms??inferMs;results++;
+      busy=false;inferMs=d.ms??inferMs;results++;if(d.delegate)delegate=d.delegate;
       if(d.error)Tools.diag.log('inference error',{e:String(d.error).slice(0,200)});
-      onPose(d.poses&&d.poses[0]||null);
+      lastPoses=(d.poses||[]).length;onPoses(d.poses||[],d.halves);
     }else if(d.type==='progress')busyText(t('loading',{p:Math.round(d.loaded/d.total*100)}));
     else if(d.type==='loaded'){ready=true;delegate=d.delegate||'';busyText('');pending?.res(true);pending=null;refreshModels();}
     else if(d.type==='error'){
@@ -430,6 +480,7 @@ function getWorker(){
     busyText('');pending?.rej('engine');pending=null;};
   return worker;
 }
+function resetWorker(){worker?.terminate();worker=null;ready=false;pending=null;busy=false;}
 function busyText(x){$('busy').hidden=!x;$('busy').textContent=x||'';}
 async function missingMb(){
   let mb=0;
@@ -448,27 +499,29 @@ async function controlled(){
   if(!sw.controller)Tools.diag.log('worker starts without service worker');
 }
 // Loads the detection once; asks before the first download. Resolves true when ready.
-async function loadModel(){
-  if(ready)return true;
+async function loadModel(n){
+  if(ready){if(workerPoses!==n){workerPoses=n;worker.postMessage({type:'options',parts:n});}return true;}
   if(!pending){
     const mb=await missingMb();
     if(mb>0.01&&!confirm(t('confirmDl',{mb:Tools.fmt(mb,1)}))){Tools.diag.log('download declined');return 'declined';}
-    if(ready)return true;
+    if(ready)return loadModel(n);
     if(!pending){
       busyText(t('loadingEngine'));
-      Tools.diag.log('loading model',{mb:Math.round(mb*10)/10});
+      Tools.diag.log('loading model',{mb:Math.round(mb*10)/10,gpu:s.gpu});
       const p=new Promise((res,rej)=>{pending={res,rej};});
       pending.p=p;
       await controlled();
-      getWorker().postMessage({type:'load'});
+      workerPoses=n;
+      getWorker().postMessage({type:'load',gpu:s.gpu,parts:n});
     }
   }
-  try{return await pending.p;}catch(code){return code==='download'?'download':'engine';}
+  try{await pending.p;return loadModel(n);}catch(code){return code==='download'?'download':'engine';}
 }
 async function infer(){
   if(busy||!ready||!running||video.readyState<2)return;
   busy=true;
-  const W=video.videoWidth,H=video.videoHeight,k=Math.min(1,320/Math.max(W,H));
+  // Two players stand further away: a little more detail
+  const W=video.videoWidth,H=video.videoHeight,k=Math.min(1,(players.length>1?480:320)/Math.max(W,H));
   try{
     const bitmap=await createImageBitmap(video,{resizeWidth:Math.round(W*k),resizeHeight:Math.round(H*k)});
     worker.postMessage({type:'frame',bitmap},[bitmap]);
@@ -491,129 +544,214 @@ $('btnDelModels').addEventListener('click',async()=>{
     await caches.delete(MODEL_CACHE);
     for(const k of await caches.keys())if(k.startsWith('vendor:mediapipe@'))await caches.delete(k);
   }catch{}
-  worker?.terminate();worker=null;ready=false;pending=null;
+  resetWorker();
   Tools.diag.log('models deleted');Tools.toast(t('deleted'));refreshModels();
 });
 
+/* ---------- Players ---------- */
+// players[i] = { tracker, game, lastSeen } – one for each person in front of the camera
+let current=null,players=[],calibLogged=false;
+const screenX=x=>s.mirror?1-x:x;
+const poseX=p=>(p[4*23]+p[4*24])/2;
+// Which person is which player: for two, each half of the picture has its own detection (see pose-worker.mjs) –
+// the half on the left of the screen is A (mirrored: the right half of the camera picture).
+function assign(poses,halves){
+  if(players.length===1)return [poses[0]||null];
+  if(halves)return s.mirror?[halves[1]||null,halves[0]||null]:[halves[0]||null,halves[1]||null];
+  // (without halves: the one further left is A; a single person belongs to whoever was last seen nearest)
+  const list=poses.slice(0,2).map(p=>({p,x:screenX(poseX(p))}));
+  if(list.length===2){list.sort((a,b)=>a.x-b.x);return [list[0].p,list[1].p];}
+  if(!list.length)return [null,null];
+  const known=players.map(pl=>pl.tracker.state.body?screenX(pl.tracker.state.body.x):null);
+  const one=list[0];
+  let i=one.x<0.5?0:1;
+  if(known[0]!=null&&known[1]!=null)i=Math.abs(known[0]-one.x)<=Math.abs(known[1]-one.x)?0:1;
+  return i===0?[one.p,null]:[null,one.p];
+}
+function onPoses(poses,halves){
+  if(!players.length)return;
+  const now=performance.now(),aspect=video.videoWidth/video.videoHeight||1;
+  assign(poses,halves).forEach((p,i)=>{
+    const pl=players[i];
+    for(const ev of pl.tracker.update(p,now,aspect)){
+      if(ev.type==='recalibrate')Tools.diag.log('recalibrate',{player:SIDES[i]});
+      else pl.game?.event(ev,pl.tracker.state);
+    }
+  });
+}
+
 /* ---------- Game flow ---------- */
-let current=null,game=null,tracker=null,lastPresent=0,calibLogged=false;
 async function choose(def){
   current=def;audio();
-  Tools.diag.log('game chosen',{id:def.id});
-  show('calib');$('calTitle').textContent=tx(def.title);$('calText').textContent=t('cal.nobody');$('calBar').value=0;
-  $('calSpace').hidden=def.space==='small';
+  const n=Math.min(s.players,maxPlayers(def));
+  Tools.diag.log('game chosen',{id:def.id,players:n});
+  show('calib');$('calTitle').textContent=tx(def.title);$('calText').textContent=t('cal.nobody');$('calText2').hidden=n<2;$('calBar').value=0;
+  $('calSpace').hidden=def.space==='small';$('calTwo').hidden=n<2;
+  players=[];
   if(!await startCamera())return;
-  const r=await loadModel();
+  const r=await loadModel(n);
   if(current!==def||screen!=='calib')return;
   if(r!==true){stopCamera();message(r==='declined'?t('declined'):r==='download'?t('dlFail'):t('engineFail'),()=>choose(def));return;}
-  tracker=Motion.create({full:def.needs==='full'});
+  players=Array.from({length:n},()=>({tracker:Motion.create({full:def.needs==='full',easy:s.easy}),game:null,lastSeen:0}));
   calibLogged=false;
 }
 function startGame(){
-  game=MoveEngine.create(current);
-  lastPresent=performance.now();
+  // Same seed for everybody: the same commands, obstacles and music at the same time
+  const seed=Math.floor(Math.random()*2**31)+1,sync=players.length>1;
+  for(const p of players){p.game=MoveEngine.create(current,{rng:MoveEngine.seeded(seed),sync});p.lastSeen=performance.now();}
   show('play');
-  Tools.diag.log('game start',{id:current.id});
+  for(const x of SIDES)$('fb'+x).className='feedback'+(sync?' side-'+x:'');
+  $('hudB').hidden=!sync;
+  $('view').classList.toggle('two',sync);
+  Tools.diag.log('game start',{id:current.id,players:players.length});
 }
-function onPose(points){
-  if(!tracker)return;
-  const now=performance.now();
-  const events=tracker.update(points,now,video.videoWidth/video.videoHeight||1);
-  for(const ev of events){
-    if(ev.type==='recalibrate')Tools.diag.log('recalibrate');
-    else if(game)game.event(ev,tracker.state);
-  }
+function calText(st){
+  return !st.present?t(players.length>1?'cal.nobody2':'cal.nobody'):!st.visible?t(current.needs==='full'?'cal.full':'cal.upper'):st.calibrated?t('cal.ready'):t('cal.still');
 }
 function tickCalib(){
-  const st=tracker?.state;
-  if(!st){return;}
-  $('calText').textContent=!st.present?t('cal.nobody'):!st.visible?t(current.needs==='full'?'cal.full':'cal.upper'):t('cal.still');
-  $('calBar').value=Math.round(st.calib*100);
-  if(st.calibrated){
-    if(!calibLogged){calibLogged=true;Tools.diag.log('calibrated',{u:Math.round(tracker.base.torso*1000)/1000});}
+  if(!players.length)return;
+  const two=players.length>1;
+  players.forEach((pl,i)=>{
+    const text=calText(pl.tracker.state);
+    $(i?'calText2':'calText').textContent=two?t('p.'+SIDES[i])+': '+text:text;
+  });
+  $('calBar').value=Math.round(Math.min(...players.map(p=>p.tracker.state.calib))*100);
+  if(players.every(p=>p.tracker.state.calibrated)){
+    if(!calibLogged){calibLogged=true;Tools.diag.log('calibrated',{u:players.map(p=>Math.round(p.tracker.base.torso*1000)/1000)});}
     startGame();
   }
 }
-let shown={};
+let shown={},shownPrompt;
 const setText=(id,v)=>{if(shown[id]!==v){shown[id]=v;$(id).textContent=v;}};
+const lead=()=>players.find(p=>p.game&&p.game.phase!=='done')||players[0];
 function tickGame(now){
-  const st=tracker.state;
-  // Player left the picture: wait for them
-  if(st.present)lastPresent=now;
-  // … or came much closer (the app measures again): the game waits
-  const away=game.phase!=='done'&&now-lastPresent>1500,lost=!away&&!st.calibrated;
-  if((away||lost)&&!game.paused){game.pause();Tools.diag.log(away?'paused (nobody)':'paused (calibrating)');}
-  else if(!away&&!lost&&game.paused&&running){game.resume();}
-  $('away').hidden=!away&&!lost;
-  if(away)setText('away',t('away'));else if(lost)setText('away',t('cal.again'));
-  game.update(now,st);
-  for(const e of game.take())feedback(e);
-  setText('hudScore',current.mechanic==='count'?current.emoji+' '+Tools.fmt(game.count,0):t('score',{n:Tools.fmt(game.score,0)}));
-  setText('hudTime',t('time',{n:game.timeLeft}));
-  $('hudLives').hidden=!current.lives;
-  setText('hudLives',current.lives?'❤️'.repeat(game.lives)+'🤍'.repeat(current.lives-game.lives):'');
-  $('hudLives').setAttribute('aria-label',t('lives',{n:game.lives}));
-  $('cd').hidden=game.phase!=='countdown';
-  if(game.phase==='countdown')setText('cd',String(game.countdown||''));
-  const p=game.prompt;
+  // Somebody left the picture or came much closer (the app measures again): everybody waits
+  let away=null,lost=false;
+  players.forEach((pl,i)=>{
+    const st=pl.tracker.state;
+    if(st.present)pl.lastSeen=now;
+    if(pl.game.phase!=='done'){if(now-pl.lastSeen>1500)away=away??i;else if(!st.calibrated)lost=true;}
+  });
+  const wait=away!=null||lost;
+  for(const pl of players){
+    if(wait&&!pl.game.paused){pl.game.pause();}
+    else if(!wait&&pl.game.paused&&running)pl.game.resume();
+  }
+  if(wait&&!shown.wait)Tools.diag.log(away!=null?'paused (nobody)':'paused (calibrating)');
+  shown.wait=wait;
+  $('away').hidden=!wait;
+  if(away!=null)setText('away',players.length>1?t('away2',{who:t('p.'+SIDES[away])}):t('away'));else if(lost)setText('away',t('cal.again'));
+  players.forEach((pl,i)=>{
+    pl.game.update(now,pl.tracker.state);
+    for(const e of pl.game.take())feedback(e,i);
+  });
+  if(!screenIsPlay())return;
+  const g=lead().game;
+  // The shared prompt (the same for every player)
+  if(g.prompt!==shownPrompt){
+    shownPrompt=g.prompt;
+    const text=promptText(g.prompt);
+    $('prompt').textContent=text;$('prompt').classList.toggle('trick',!!g.prompt?.trick);
+    if(text&&current.mechanic!=='count'&&current.mechanic!=='freeze')speak(text);
+    if(current.mechanic==='freeze'){if(g.prompt?.cmd==='dance')musicOn();else musicOff();}
+  }
+  players.forEach((pl,i)=>{
+    const x=pl.game,id='hud'+SIDES[i];
+    setText(id+'Score',(current.mechanic==='count'?current.emoji+' '+Tools.fmt(x.count,0):t('score',{n:Tools.fmt(x.score,0)})));
+    const lv=$(id+'Lives');
+    lv.hidden=!current.lives;
+    setText(id+'Lives',current.lives?'❤️'.repeat(x.lives)+'🤍'.repeat(current.lives-x.lives):'');
+    lv.setAttribute('aria-label',t('lives',{n:x.lives}));
+  });
+  setText('hudTime',t('time',{n:g.timeLeft}));
+  $('cd').hidden=g.phase!=='countdown';
+  if(g.phase==='countdown')setText('cd',String(g.countdown||''));
+  const p=g.prompt;
   $('ptimer').hidden=!(p&&p.until);
-  if(p&&p.until)$('ptBar').style.transform=`scaleX(${Math.max(0,(p.until-game.clock)/(p.until-p.from))})`;
+  if(p&&p.until)$('ptBar').style.transform=`scaleX(${Math.max(0,(p.until-g.clock)/(p.until-p.from))})`;
+  if(players.every(pl=>pl.game.phase==='done'))finish();
 }
+const screenIsPlay=()=>screen==='play';
 function promptText(p){
   if(!p)return '';
+  if(p.pose)return t('pose',{emoji:p.pose.emoji||'',name:tx(p.pose.name)}).trim();
   const cmd=t('cmd.'+p.cmd);
   return p.prefix&&!p.trick?t('simon',{prefix:tx(p.prefix),cmd}):cmd;
 }
-let fbTimer=0;
-function feedback(e){
-  if(e.type==='prompt'){
-    const text=promptText(e.prompt);
-    $('prompt').textContent=text;$('prompt').classList.toggle('trick',!!e.prompt?.trick);
-    if(text&&current.mechanic!=='count')speak(text);
-    return;
+const fbTimer={};
+function feedback(e,i){
+  if(e.type==='prompt'||e.type==='end')return;
+  if(i===0||players.length===1){
+    if(e.type==='tick'){sound('tick');return;}
+    if(e.type==='go'){sound('go');showFb(t('go'),0);return;}
   }
-  if(e.type==='tick'){sound('tick');return;}
-  if(e.type==='go'){sound('go');showFb(t('go'));return;}
-  if(e.type==='end'){finish(e.why);return;}
+  if(e.type==='tick'||e.type==='go')return;
   const good=e.type==='good';
   sound(good?'good':'bad');
-  flash(good?'good':'bad');
-  if(current.mechanic==='command'){$('prompt').textContent='';showFb(t(good?(e.trick?'fb.trickOk':'fb.good'):(e.trick?'fb.trickBad':'fb.late')));}
-  else if(current.mechanic==='dodge')showFb(t(good?'fb.dodgeOk':'fb.dodgeBad'));
-  else if(e.bomb)showFb(t('fb.bomb'));
+  if(players.length===1)flash(good?'good':'bad');
+  const m=current.mechanic;
+  const key=m==='command'?(good?(e.trick?'fb.trickOk':'fb.good'):(e.trick?'fb.trickBad':'fb.late'))
+    :m==='dodge'?(good?'fb.dodgeOk':'fb.dodgeBad')
+    :m==='freeze'?(good?'fb.statue':e.lazy?'fb.lazy':'fb.moved')
+    :m==='pose'?(good?'fb.poseOk':'fb.poseMiss')
+    :e.bomb?'fb.bomb':null;
+  if(key)showFb(t(key),i);
+  if(m==='command'&&players.length===1){$('prompt').textContent='';}
 }
-function showFb(x){$('feedback').textContent=x;clearTimeout(fbTimer);fbTimer=setTimeout(()=>{$('feedback').textContent='';},900);}
+function showFb(x,i){
+  const id='fb'+SIDES[i];
+  $(id).textContent=x;clearTimeout(fbTimer[id]);fbTimer[id]=setTimeout(()=>{$(id).textContent='';},900);
+}
 function flash(kind){
   const f=$('flash');f.className='flash '+kind;
   requestAnimationFrame(()=>requestAnimationFrame(()=>{f.className='flash';}));
 }
-function finish(why){
-  const r=game.result;
-  const value=current.mechanic==='count'?r.count:r.score;
-  const old=scores[current.id]?.best;
-  const record=value>0&&(old==null||value>old);
-  scores[current.id]={best:Math.max(old??0,value),plays:(scores[current.id]?.plays||0)+1,last:value};
-  Tools.save(LS.scores,scores);
-  Tools.diag.log('game end',{id:current.id,why,score:r.score,count:r.count,hits:r.hits,misses:r.misses,s:r.seconds});
+const valueOf=r=>current.mechanic==='count'?r.count:r.score;
+function finish(){
+  musicOff();
+  const res=players.map(p=>p.game.result);
   show('result');
-  $('resTitle').textContent=current.emoji+' '+t('res.'+why);
-  $('resScore').textContent=Tools.fmt(value,0);
-  $('resDetail').textContent=current.mechanic==='count'?t('res.count',{n:Tools.fmt(r.count,0)}):t('res.detail',{hits:r.hits,misses:r.misses,streak:r.bestStreak});
-  $('resBest').textContent=record?t('res.record'):t('res.best',{n:Tools.fmt(scores[current.id].best,0)});
-  sound(record?'record':'end');
+  if(players.length===1){
+    const r=res[0],value=valueOf(r);
+    const old=scores[current.id]?.best;
+    const record=value>0&&(old==null||value>old);
+    scores[current.id]={best:Math.max(old??0,value),plays:(scores[current.id]?.plays||0)+1,last:value};
+    Tools.save(LS.scores,scores);
+    Tools.diag.log('game end',{id:current.id,why:r.why,score:r.score,count:r.count,hits:r.hits,misses:r.misses,s:r.seconds});
+    $('resTitle').textContent=current.emoji+' '+t('res.'+r.why);
+    $('resScore').textContent=Tools.fmt(value,0);
+    $('resDetail').textContent=current.mechanic==='count'?t('res.count',{n:Tools.fmt(r.count,0)}):t('res.detail',{hits:r.hits,misses:r.misses,streak:r.bestStreak});
+    $('resBest').textContent=record?t('res.record'):t('res.best',{n:Tools.fmt(scores[current.id].best,0)});
+    sound(record?'record':'end');
+  }else{
+    const [a,b]=res.map(valueOf);
+    Tools.diag.log('game end',{id:current.id,players:2,why:res.map(r=>r.why),values:[a,b]});
+    $('resTitle').textContent=a===b?t('res.draw'):t('res.wins',{who:t('p.'+(a>b?'A':'B'))});
+    $('resScore').textContent=Tools.fmt(a,0)+' : '+Tools.fmt(b,0);
+    $('resDetail').textContent=t('res.two',{a:t('p.A'),b:t('p.B'),va:Tools.fmt(a,0),vb:Tools.fmt(b,0)});
+    $('resBest').textContent=t('res.noBest');
+    sound(a===b?'end':'record');
+  }
   renderGames();
-  game=null;
+  for(const p of players)p.game=null;
+  $('view').classList.remove('two');
 }
 function toMenu(){
-  if(game){game.stop();game=null;}
-  current=null;stopCamera();show('menu');renderGames();
+  for(const p of players)p.game?.stop();
+  players=[];current=null;stopCamera();show('menu');renderGames();
+  if(gpuChanged){gpuChanged=false;resetWorker();}
 }
 $('btnStop').addEventListener('click',()=>{
-  if(game&&game.phase!=='done'){game.stop();for(const e of game.take())feedback(e);}
-  else toMenu();
+  if(screen==='play'&&players.some(p=>p.game&&p.game.phase!=='done')){
+    for(const p of players)p.game.stop();
+    finish();
+  }else toMenu();
 });
 $('btnCalCancel').addEventListener('click',toMenu);
-$('btnAgain').addEventListener('click',()=>{const d=current;if(!d)return;if(running&&ready&&tracker?.state.calibrated){startGame();}else choose(d);});
+$('btnAgain').addEventListener('click',()=>{
+  const d=current;if(!d)return;
+  if(running&&ready&&players.length&&players.every(p=>p.tracker.state.calibrated))startGame();else choose(d);
+});
 $('btnOther').addEventListener('click',toMenu);
 
 /* ---------- Drawing ---------- */
@@ -626,12 +764,12 @@ function loop(now){
   if(out.width!==W||out.height!==H){out.width=W;out.height=H;}
   infer();
   if(screen==='calib'&&ready)tickCalib();
-  else if(screen==='play'&&game)tickGame(now);
+  else if(screen==='play'&&players[0]?.game)tickGame(now);
   draw(W,H);
   frames++;
   if(now-fpsT>1000){fps=Math.round(frames*1000/(now-fpsT));frames=0;fpsT=now;}
 }
-const px=(x,W)=>(s.mirror?1-x:x)*W;
+const px=(x,W)=>screenX(x)*W;
 function draw(W,H){
   ctx.save();
   if(s.cam){
@@ -641,13 +779,24 @@ function draw(W,H){
     ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(0,0,W,H);
   }else{ctx.fillStyle='#14122a';ctx.fillRect(0,0,W,H);}
   ctx.restore();
-  const st=tracker?.state;
-  if(st?.points)drawBody(st,W,H);
-  if(game)for(const o of game.objects)drawObject(o,st,W,H);
+  const two=players.length>1;
+  // Two players: each stays on their half
+  if(two){ctx.save();ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=Math.max(3,H/160);ctx.setLineDash([H/30,H/40]);
+    ctx.beginPath();ctx.moveTo(W/2,0);ctx.lineTo(W/2,H);ctx.stroke();ctx.restore();}
+  players.forEach((pl,i)=>{
+    const st=pl.tracker.state;
+    if(st.points)drawBody(st,W,H,two||st.calibrated?BODY[i]:'rgba(255,255,255,.85)');
+    if(pl.game){
+      for(const o of pl.game.objects)drawObject(o,st,W,H,i);
+      if(current.mechanic==='pose'&&pl.game.m?.state==='show')drawHold(pl.game.m,st,W,H,i);
+    }
+  });
+  const g=players[0]&&lead().game;
+  if(g?.prompt?.pose)drawPose(g.prompt.pose,W,H);
 }
-function drawBody(st,W,H){
+function drawBody(st,W,H,color){
   const p=st.points,lw=Math.max(4,H/90);
-  ctx.lineCap='round';ctx.lineWidth=lw;ctx.strokeStyle=st.calibrated?'rgba(177,151,252,.95)':'rgba(255,255,255,.85)';
+  ctx.lineCap='round';ctx.lineWidth=lw;ctx.strokeStyle=color;
   ctx.beginPath();
   for(const [a,b] of Motion.BONES){if(!p[a].seen||!p[b].seen)continue;ctx.moveTo(px(p[a].x,W),p[a].y*H);ctx.lineTo(px(p[b].x,W),p[b].y*H);}
   ctx.stroke();
@@ -655,13 +804,15 @@ function drawBody(st,W,H){
   ctx.fillStyle='#fde68a';
   for(const h of st.hands){ctx.beginPath();ctx.arc(px(h.x,W),h.y*H,lw*1.6,0,Math.PI*2);ctx.fill();}
 }
-function drawObject(o,st,W,H){
+function drawObject(o,st,W,H,i){
+  const two=players.length>1;
   if(o.kind==='high'||o.kind==='low'){
     const b=st?.body,u=b?b.u:0.18;
-    // High bars at head height, low bars at the feet
+    // Obstacles move towards the player (for two: from the outside); high ones at head height, low ones at the feet
+    const base=b?screenX(b.x):two?(i?0.75:0.25):0.5,dir=two&&i===0?-1:1;
     const cy=o.kind==='high'?(b?b.headY:0.2):(b?Math.min(0.95,b.hipY+1.7*u):0.88);
     const h=o.kind==='high'?Math.max(0.06,u*0.5):Math.max(0.05,u*0.35);
-    const x=o.x*W,w=W*0.07,y=(cy-h/2)*H;
+    const x=(base+dir*o.dist*(two?0.35:0.6))*W,w=W*0.07,y=(cy-h/2)*H;
     ctx.fillStyle=o.state==='ok'?'rgba(34,197,94,.9)':o.state==='bad'?'rgba(239,68,68,.9)':o.kind==='high'?'rgba(249,115,22,.95)':'rgba(56,189,248,.95)';
     ctx.fillRect(x-w/2,y,w,h*H);
     ctx.fillStyle='#fff';ctx.font=`700 ${Math.round(H/16)}px system-ui,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
@@ -674,7 +825,7 @@ function drawObject(o,st,W,H){
     ctx.font=`${Math.round(r*1.8)}px system-ui,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('💣',x,y);
   }else{
     const g=ctx.createRadialGradient(x-r/3,y-r/3,r/8,x,y,r);
-    g.addColorStop(0,'rgba(255,255,255,.9)');g.addColorStop(.5,'rgba(186,230,253,.45)');g.addColorStop(1,'rgba(167,139,250,.75)');
+    g.addColorStop(0,'rgba(255,255,255,.9)');g.addColorStop(.5,'rgba(186,230,253,.45)');g.addColorStop(1,two?COLORS[i]:'rgba(167,139,250,.75)');
     ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
     ctx.lineWidth=Math.max(2,r/12);ctx.strokeStyle=o.pop==='ok'?'rgba(34,197,94,.9)':'rgba(255,255,255,.8)';ctx.stroke();
   }
@@ -683,67 +834,126 @@ function drawObject(o,st,W,H){
     ctx.beginPath();ctx.arc(x,y,r+ctx.lineWidth,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-o.age));ctx.stroke();}
   ctx.globalAlpha=1;
 }
+// Pose game: how long the pose has been held, as a ring around the head
+function drawHold(m,st,W,H,i){
+  const p=st.points;if(!p||!p[0].seen)return;
+  const x=px(p[0].x,W),y=p[0].y*H,r=Math.max(18,(st.body?.u||0.2)*H*0.35),lw=Math.max(5,H/70);
+  ctx.lineWidth=lw;ctx.strokeStyle='rgba(255,255,255,.35)';ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle=m.done?'rgba(34,197,94,.95)':COLORS[i];
+  ctx.beginPath();ctx.arc(x,y,r,-Math.PI/2,-Math.PI/2+Math.PI*2*(m.done?1:m.held||0));ctx.stroke();
+}
+// The pose to copy as a small figure in the corner – as the player sees themselves (mirrored or not)
+function drawPose(pose,W,H){
+  // One player: top right; two: on the middle line, where nobody stands
+  const two=players.length>1,k=H*0.11,cx=two?W/2:W-k*1.6,cy=two?H*0.5:k*1.9,lw=Math.max(4,k/9);
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,.55)';ctx.beginPath();ctx.roundRect?ctx.roundRect(cx-k*1.4,cy-k*1.6,k*2.8,k*3.4,k*0.3):ctx.rect(cx-k*1.4,cy-k*1.6,k*2.8,k*3.4);ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=lw;ctx.lineCap='round';
+  const sh=cy-k*0.6,hip=cy+k*0.4;
+  ctx.beginPath();ctx.arc(cx,sh-k*0.35,k*0.22,0,Math.PI*2);ctx.stroke();
+  const line=(x1,y1,x2,y2)=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
+  line(cx,sh-k*0.1,cx,hip);
+  // The player's left arm is on the left of the screen when the picture is mirrored
+  for(const [deg,side] of [[pose.left,s.mirror?-1:1],[pose.right,s.mirror?1:-1]]){
+    const a=deg*Math.PI/180;line(cx+side*k*0.15,sh,cx+side*k*0.15+side*Math.sin(a)*k*0.9,sh+Math.cos(a)*k*0.9);
+  }
+  const spread=pose.legs==='apart'?0.55:0.15;
+  for(const side of [-1,1]){
+    if(pose.legs==='oneUp'&&side===(s.mirror?-1:1)){line(cx,hip,cx+side*k*0.45,hip+k*0.35);line(cx+side*k*0.45,hip+k*0.35,cx+side*k*0.15,hip+k*0.75);}
+    else line(cx,hip,cx+side*k*spread,hip+k*1.0);
+  }
+  ctx.restore();
+}
 
-/* ---------- Sound & voice ---------- */
+/* ---------- Sound, music & voice ---------- */
 let ac=null;
 function audio(){
   if(!ac&&s.sound){try{ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){Tools.diag.log('audio error',{name:e?.name});}}
   if(ac?.state==='suspended')ac.resume().catch(()=>{});
 }
 const TONES={tick:[[660,.12]],go:[[880,.25]],good:[[660,.08],[990,.14]],bad:[[220,.25]],end:[[523,.15],[392,.3]],record:[[523,.12],[659,.12],[784,.12],[1047,.35]]};
+function tone(f,at,d,type,vol){
+  const o=ac.createOscillator(),g=ac.createGain();
+  o.type=type;o.frequency.value=f;
+  g.gain.setValueAtTime(0.0001,at);g.gain.exponentialRampToValueAtTime(vol,at+0.01);g.gain.exponentialRampToValueAtTime(0.0001,at+d);
+  o.connect(g).connect(ac.destination);o.start(at);o.stop(at+d+0.02);
+  return o;
+}
 function sound(name){
   if(!s.sound||!ac)return;
   let at=ac.currentTime;
-  for(const [f,d] of TONES[name]||[]){
-    const o=ac.createOscillator(),g=ac.createGain();
-    o.type=name==='bad'?'sawtooth':'triangle';o.frequency.value=f;
-    g.gain.setValueAtTime(0.0001,at);g.gain.exponentialRampToValueAtTime(0.25,at+0.01);g.gain.exponentialRampToValueAtTime(0.0001,at+d);
-    o.connect(g).connect(ac.destination);o.start(at);o.stop(at+d+0.02);at+=d;
-  }
+  for(const [f,d] of TONES[name]||[]){tone(f,at,d,name==='bad'?'sawtooth':'triangle',0.25);at+=d;}
 }
+// Freeze dance: a little generated tune (no recordings) – kick, hi-hat and a pentatonic melody at 120 BPM
+let music=null,musicSteps=0;
+const MELODY=[0,4,7,4,9,7,4,2,0,2,4,7,9,12,9,7];
+function musicOn(){
+  if(music||!s.sound||!ac)return;
+  let next=ac.currentTime+0.05;const step=0.25;
+  music=setInterval(()=>{
+    while(next<ac.currentTime+0.3){
+      const i=musicSteps++%16;
+      if(i%2===0){const o=tone(110,next,0.18,'sine',0.5);o.frequency.exponentialRampToValueAtTime(45,next+0.15);}
+      tone(6000,next,0.03,'square',0.03);
+      if(i%2===0||i%5===0)tone(392*2**(MELODY[i]/12),next,0.22,'triangle',0.12);
+      next+=step;
+    }
+  },60);
+}
+function musicOff(){if(music){clearInterval(music);music=null;}}
 function speak(text){
   if(!s.voice||!s.sound||!('speechSynthesis' in window))return;
   try{
     speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(text);u.lang=lang()==='en'?'en-US':'de-DE';u.rate=1.05;
+    const u=new SpeechSynthesisUtterance(text.replace(/[^\p{L}\p{N}\s:!?.,’'-]/gu,'').trim());u.lang=lang()==='en'?'en-US':'de-DE';u.rate=1.05;
     speechSynthesis.speak(u);
   }catch(e){Tools.diag.log('speech error',{name:e?.name});}
 }
 
 /* ---------- Settings ---------- */
 function renderSettings(){
-  $('optMirror').checked=s.mirror;$('optCam').checked=s.cam;$('optVoice').checked=s.voice;
+  $('optMirror').checked=s.mirror;$('optCam').checked=s.cam;$('optVoice').checked=s.voice;$('optEasy').checked=s.easy;$('optGpu').checked=s.gpu;
   $('btnSound').setAttribute('aria-pressed',String(s.sound));
   $('icoSound').hidden=!s.sound;$('icoMute').hidden=s.sound;
 }
-for(const [id,k] of [['optMirror','mirror'],['optCam','cam'],['optVoice','voice']])
-  $(id).addEventListener('change',e=>{s[k]=e.target.checked;save();Tools.diag.log('setting',{[k]:s[k]});});
-$('btnSound').addEventListener('click',()=>{s.sound=!s.sound;save();renderSettings();if(s.sound)audio();else if('speechSynthesis' in window)speechSynthesis.cancel();});
+for(const [id,k] of [['optMirror','mirror'],['optCam','cam'],['optVoice','voice'],['optEasy','easy'],['optGpu','gpu']])
+  $(id).addEventListener('change',e=>{
+    s[k]=e.target.checked;save();Tools.diag.log('setting',{[k]:s[k]});
+    // Both take effect with the next game; the detection then starts again (from the cache, no new download)
+    if(k==='gpu'){if(screen==='menu')resetWorker();else gpuChanged=true;}
+  });
+let gpuChanged=false;
+$('btnSound').addEventListener('click',()=>{
+  s.sound=!s.sound;save();renderSettings();
+  if(s.sound){audio();if(current?.mechanic==='freeze'&&lead()?.game?.prompt?.cmd==='dance')musicOn();}
+  else{musicOff();if('speechSynthesis' in window)speechSynthesis.cancel();}
+});
 
 /* ---------- WebMCP ---------- */
 Tools.mcp.register({
   name:'list_games',title:'List the movement games',readOnly:true,label:'mcp.games',
-  description:'Lists the movement games of MovePlay with id, English title and description, mechanic (command, count, dodge, targets), duration in seconds, whether the whole body must be visible, and the best score on this device (null if never played). Games are played in front of the camera; an agent cannot start them.',
+  description:'Lists the movement games of MovePlay with id, English title and description, mechanic (command, count, dodge, targets, freeze, pose), duration in seconds, lives, the most players at once, whether the whole body must be visible, and the best single-player score on this device (null if never played). Games are played in front of the camera; an agent cannot start them.',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
-  execute:()=>({games:games.map(g=>({id:g.id,title:g.title.en,description:g.description.en,mechanic:g.mechanic,durationSeconds:g.duration,lives:g.lives,needsFullBody:g.needs==='full',best:scores[g.id]?.best??null}))})
+  execute:()=>({games:games.map(g=>({id:g.id,title:g.title.en,description:g.description.en,mechanic:g.mechanic,durationSeconds:g.duration,lives:g.lives,maxPlayers:maxPlayers(g),needsFullBody:g.needs==='full',best:scores[g.id]?.best??null}))})
 });
 Tools.mcp.register({
   name:'get_scores',title:'Get the best scores',readOnly:true,label:'mcp.scores',
-  description:'Returns the best score, the last score and the number of plays per game on this device. For the jumping jack challenge the score is the number of jumping jacks, otherwise points.',
+  description:'Returns the best score, the last score and the number of plays per game on this device (single player games only). For the jumping jack challenge the score is the number of jumping jacks, otherwise points.',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
   execute:()=>({scores:games.map(g=>({id:g.id,title:g.title.en,best:scores[g.id]?.best??null,last:scores[g.id]?.last??null,plays:scores[g.id]?.plays||0}))})
 });
 
 /* ---------- Diagnostics ---------- */
-Tools.diag.info(()=>{
-  const st=tracker?.state;
-  return {camera:running?'on':'off',video:video.videoWidth?video.videoWidth+'x'+video.videoHeight:'-',fps,
-    model:ready?'ready':pending?'loading':'no',delegate:delegate||'-',inferMs,results,
-    person:st?(st.present?(st.visible?'visible':'partly'):'none'):'-',calibrated:!!st?.calibrated,
-    screen,game:current?.id||'-',phase:game?.phase||'-',games:games.length};
-});
+Tools.diag.info(()=>({
+  camera:running?'on':'off',video:video.videoWidth?video.videoWidth+'x'+video.videoHeight:'-',fps,
+  model:ready?'ready':pending?'loading':'no',delegate:delegate||'-',gpu:s.gpu,easy:s.easy,inferMs,results,
+  players:players.length||s.players,found:lastPoses,
+  person:players.length?players.map(p=>{const st=p.tracker.state;return st.present?(st.visible?'visible':'partly'):'none';}).join(','):'-',
+  calibrated:players.length?players.map(p=>!!p.tracker.state.calibrated).join(','):'-',
+  screen,game:current?.id||'-',phase:players[0]?.game?.phase||'-',games:games.length
+}));
 
-Tools.onLang(()=>{renderGames();if(game?.prompt)$('prompt').textContent=promptText(game.prompt);refreshModels();});
+Tools.onLang(()=>{renderGames();shownPrompt=undefined;refreshModels();});
 renderSettings();
 show('menu');
 loadGames();
