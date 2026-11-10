@@ -9,6 +9,18 @@ Tools.i18n({
     'st.ios':'Tipp: Mit Apple TV über die Bildschirmsynchronisierung, dann Vollbild.',
     'st.desktop':'Tipp: In Chrome über ⋮ → Streamen den Tab übertragen, dann Vollbild.',
     'tv.noLandscape':'Querformat ließ sich nicht festlegen – Handy bitte drehen.',
+    'cast.stop':'Streaming beenden','live':'LIVE',
+    'st.idle':'','st.loading':'Cast wird geladen …','st.choosing':'Fernseher wählen …',
+    'st.connecting':'Verbinde mit {tv} …','st.streaming':'Live auf {tv}','st.tv':'Fernseher',
+    'st.stats':'{w}×{h} · {fps} fps · {kbps} kbit/s',
+    'err.no-app-id':'Die Cast-App-ID im Menü hat nicht 8 Zeichen (0–9, A–F).',
+    'err.unsupported':'Direkt streamen geht nur in Chrome oder Edge (Android, Computer).',
+    'err.sdk-load':'Das Cast-Programm von Google ließ sich nicht laden. Online?',
+    'err.session':'Der Fernseher hat die Empfänger-App nicht gestartet. Ist sie in der Developer Console veröffentlicht?',
+    'err.no-answer':'Der Fernseher antwortet nicht – erneut versuchen, sonst Diagnose kopieren.',
+    'err.ice-failed':'Keine Verbindung zum Fernseher. Gleiches WLAN? Sonst im Menü die Verbindungshilfe einschalten.',
+    'err.receiver':'Fehler auf dem Fernseher – Diagnose kopieren.','err.webrtc':'Streamen fehlgeschlagen – Diagnose kopieren.',
+    'err.cancel':'Abgebrochen.','idOk':'App-ID gespeichert.','idBad':'Die App-ID hat 8 Zeichen (0–9, A–F).',
     'mcp.scene':'Szene gewechselt','mcp.status':'Zustand gelesen',
     'sc.wavesName':'Wellen','sc.starsName':'Sterne','sc.barsName':'Balken'
   },
@@ -25,6 +37,24 @@ Tools.i18n({
     'st.ios':'Tip: with an Apple TV via Screen Mirroring, then full screen.',
     'st.desktop':'Tip: in Chrome cast the tab via ⋮ → Cast, then full screen.',
     'tv.noLandscape':'Could not lock landscape – please turn the phone.',
+    'set.direct':'Stream directly','set.quality':'Picture quality','q.480':'480p – needs little Wi-Fi','q.720':'720p – default','q.1080':'1080p – needs good Wi-Fi',
+    'set.local':'Also play the music on the phone while streaming','set.tvLog':'Show a log on the TV (troubleshooting)',
+    'set.stun':'Connection helper (Google STUN server) – only if it does not work without',
+    'set.appId':'Cast app ID','set.appIdHint':'Only change it if you have your own receiver app in the Google Cast SDK Developer Console. Empty = default.',
+    'dlg.direct':'Stream directly','dlg.directText':'One tap, then pick the TV. It shows only the app\'s picture with music, no notifications. Phone and TV on the same Wi-Fi; Chrome or Edge only.',
+    'dlg.directGo':'Stream directly','dlg.or':'Or: cast the whole screen',
+    'cast.stop':'Stop streaming','live':'LIVE',
+    'st.idle':'','st.loading':'Loading Cast …','st.choosing':'Pick a TV …',
+    'st.connecting':'Connecting to {tv} …','st.streaming':'Live on {tv}','st.tv':'TV',
+    'st.stats':'{w}×{h} · {fps} fps · {kbps} kbit/s',
+    'err.no-app-id':'The Cast app ID in the menu does not have 8 characters (0–9, A–F).',
+    'err.unsupported':'Streaming directly only works in Chrome or Edge (Android, computer).',
+    'err.sdk-load':'Could not load Google\'s Cast program. Online?',
+    'err.session':'The TV did not start the receiver app. Is it published in the Developer Console?',
+    'err.no-answer':'The TV does not answer – try again, otherwise copy the diagnostics.',
+    'err.ice-failed':'No connection to the TV. Same Wi-Fi? Otherwise turn on the connection helper in the menu.',
+    'err.receiver':'Error on the TV – copy the diagnostics.','err.webrtc':'Streaming failed – copy the diagnostics.',
+    'err.cancel':'Cancelled.','idOk':'App ID saved.','idBad':'The app ID has 8 characters (0–9, A–F).',
     'mcp.scene':'Scene switched','mcp.status':'State read',
     'sc.wavesName':'Waves','sc.starsName':'Stars','sc.barsName':'Bars'
   }
@@ -32,12 +62,17 @@ Tools.i18n({
 const t=Tools.t, $=Tools.$;
 const LS='cast-demo.settings.v1';
 const SCENES=['waves','stars','bars'];
-const settings=Object.assign({scene:'waves',autoMusic:true,clock:true},Tools.load(LS,{}));
+// Receiver app "phanlipo.github.io" in the Google Cast SDK Developer Console (receiver: assets/shared/cast-receiver.html)
+const DEFAULT_APP_ID='B72055BC';
+const QUALITY={480:{w:854,h:480,bitrate:1500000},720:{w:1280,h:720,bitrate:4000000},1080:{w:1920,h:1080,bitrate:8000000}};
+const settings=Object.assign({scene:'waves',autoMusic:true,clock:true,appId:'',quality:'720',local:false,tvLog:false,stun:false},Tools.load(LS,{}));
 if(!SCENES.includes(settings.scene)) settings.scene='waves';
+if(!QUALITY[settings.quality]) settings.quality='720';
+const appId=()=>settings.appId||DEFAULT_APP_ID;
 const save=()=>Tools.save(LS,settings);
 
 /* ---------- Music (generated, original: Am – F – C – G at 100 bpm) ---------- */
-let ac=null, master, analyser, delay, noise, playing=false, timer=0, nextTime=0, step=0, startTime=0;
+let ac=null, master, analyser, localOut, streamOut, delay, noise, playing=false, timer=0, nextTime=0, step=0, startTime=0;
 const BPM=100, STEP=60/BPM/4;
 const CHORDS=[[57,60,64],[53,57,60],[48,52,55],[55,59,62]];   // Am F C G (MIDI)
 const hz=m=>440*Math.pow(2,(m-69)/12);
@@ -48,7 +83,8 @@ function audio(){
   const comp=ac.createDynamicsCompressor(); master.connect(comp);
   analyser=ac.createAnalyser(); analyser.fftSize=256; analyser.smoothingTimeConstant=.75;
   comp.connect(analyser);
-  comp.connect(ac.destination);
+  localOut=ac.createGain(); comp.connect(localOut).connect(ac.destination);
+  streamOut=ac.createMediaStreamDestination(); comp.connect(streamOut);
   delay=ac.createDelay(1); delay.delayTime.value=STEP*3;
   const fb=ac.createGain(); fb.gain.value=.32; const wet=ac.createGain(); wet.gain.value=.35;
   delay.connect(fb).connect(delay); delay.connect(wet).connect(master);
@@ -118,6 +154,12 @@ function musicOff(){
 /* ---------- Picture ---------- */
 const canvas=$('view'), g2=canvas.getContext('2d',{alpha:false});
 let W=canvas.width, H=canvas.height;
+function resize(){
+  const q=QUALITY[settings.quality];
+  if(canvas.width!==q.w){ canvas.width=q.w; canvas.height=q.h; }
+  W=canvas.width; H=canvas.height;
+}
+resize();
 const bins=new Uint8Array(128);
 const ripples=[];
 const stars=Array.from({length:260},()=>({x:Math.random()*2-1,y:Math.random()*2-1,z:Math.random()}));
@@ -180,6 +222,11 @@ function overlay(now){
   }
   g2.textAlign='left'; g2.font=`600 ${Math.round(H/22)}px system-ui,sans-serif`;
   g2.fillStyle='rgba(255,255,255,.85)'; g2.fillText(t('sc.'+settings.scene+'Name'),H/28,H-H/28);
+  if(CastStream.state==='streaming'){
+    g2.textBaseline='top'; g2.fillStyle='#ef4444';
+    g2.beginPath(); g2.arc(H/28+H/50,H/28+H/40,H/50,0,Math.PI*2); g2.fill();
+    g2.fillStyle='#fff'; g2.fillText(t('live'),H/28+H/22,H/28);
+  }
 }
 let frames=0;
 function frame(now){
@@ -220,7 +267,55 @@ TvMode.onChange(on=>{
   if(on) showBar(); else { clearTimeout(barTimer); screenEl.classList.remove('bar-hidden'); }
 });
 for(const el of dlg.querySelectorAll('[data-platform]')) el.hidden=el.dataset.platform!==platform;
-$('btnTv').addEventListener('click',()=>{ $('castFail').hidden=true; Tools.diag.log('tv dialog',{platform}); dlg.showModal(); });
+$('btnTv').addEventListener('click',()=>{
+  if(CastStream.state!=='idle'){ Tools.diag.log('stop streaming'); CastStream.stop(); return; }
+  $('castFail').hidden=true; Tools.diag.log('tv dialog',{platform}); dlg.showModal();
+});
+$('directBox').hidden=platform==='ios';
+
+/* ---------- Direct streaming (assets/shared/cast.js) ---------- */
+let videoTrack=null, wake=null, errorCode='', lastState='idle';
+function localSound(){
+  if(!localOut) return;
+  localOut.gain.setTargetAtTime(CastStream.state==='idle'||settings.local?1:0,ac.currentTime,.05);
+}
+async function wakeLock(on){
+  try{
+    if(on&&!wake&&'wakeLock' in navigator&&document.visibilityState==='visible'){
+      wake=await navigator.wakeLock.request('screen');
+      wake.addEventListener('release',()=>{ wake=null; });
+    } else if(!on&&wake){ await wake.release(); wake=null; }
+  }catch(e){ Tools.diag.log('wake lock failed',{error:String(e&&e.name)}); }
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&CastStream.state==='streaming') wakeLock(true);
+});
+$('btnDirect').addEventListener('click',async()=>{
+  dlg.close();
+  errorCode='';
+  await musicOn();   // inside the tap: browsers start sound only after a gesture
+  resize();
+  if(videoTrack) videoTrack.stop();
+  videoTrack=canvas.captureStream(30).getVideoTracks()[0];
+  const stream=new MediaStream([videoTrack,...streamOut.stream.getAudioTracks()]);
+  Tools.diag.log('start streaming',{quality:settings.quality,stun:settings.stun,ownAppId:!!settings.appId});
+  try{
+    await CastStream.start({appId:appId(),stream,maxBitrate:QUALITY[settings.quality].bitrate,stun:settings.stun,tvLog:settings.tvLog});
+  }catch(e){
+    if(e.code&&e.code!=='cancel'){ errorCode=e.code; Tools.toast(t('err.'+e.code)); render(); }
+  }
+});
+CastStream.onChange(state=>{
+  if(state!==lastState){
+    Tools.diag.log('cast state',{state});
+    if(state==='streaming') wakeLock(true);
+    if(state==='idle'){ wakeLock(false); if(videoTrack){ videoTrack.stop(); videoTrack=null; } }
+    lastState=state;
+    localSound();
+  }
+  if(state==='idle'&&CastStream.info().error) errorCode=CastStream.info().error;
+  render();
+});
 $('btnTvClose').addEventListener('click',()=>dlg.close());
 dlg.addEventListener('click',e=>{ if(e.target===dlg) dlg.close(); });
 $('castLink').addEventListener('click',()=>{
@@ -243,17 +338,46 @@ function renderButtons(){
   }
   for(const b of document.querySelectorAll('[data-scene]')) b.setAttribute('aria-pressed',String(b.dataset.scene===settings.scene));
 }
-function render(){ $('status').textContent=t('st.'+platform); renderButtons(); }
+function render(){
+  const st=$('status'), s=CastStream.state, x=CastStream.stats;
+  let text;
+  if(s!=='idle'){
+    text=t('st.'+s,{tv:CastStream.device||t('st.tv')});
+    if(s==='streaming'&&x&&x.width) text+=' · '+t('st.stats',{w:x.width,h:x.height,fps:Tools.fmt(x.fps||0,0),kbps:Tools.fmt(x.kbps||0,0)});
+  } else text=errorCode?t('err.'+errorCode):t('st.'+platform);
+  st.textContent=text;
+  st.classList.toggle('live',s==='streaming');
+  st.classList.toggle('err',s==='idle'&&!!errorCode);
+  $('tvLabel').textContent=t(s==='idle'?'tv.show':'cast.stop');
+  $('btnTv').classList.toggle('primary',s==='idle');
+  renderButtons();
+}
 for(const b of document.querySelectorAll('[data-music]')) b.addEventListener('click',()=>playing?musicOff():musicOn());
 function setScene(s){ settings.scene=s; save(); renderButtons(); }
 for(const b of document.querySelectorAll('[data-scene]')) b.addEventListener('click',()=>setScene(b.dataset.scene));
+const idIn=$('appId'), qIn=$('quality');
+idIn.value=settings.appId; idIn.placeholder=DEFAULT_APP_ID; qIn.value=settings.quality;
+$('optLocal').checked=settings.local; $('optTvLog').checked=settings.tvLog; $('optStun').checked=settings.stun;
+idIn.addEventListener('change',()=>{
+  const v=idIn.value.trim().toUpperCase();
+  if(v&&!/^[0-9A-F]{8}$/.test(v)){ Tools.toast(t('idBad')); return; }
+  idIn.value=v; settings.appId=v; save();
+  Tools.toast(t('idOk'));
+  Tools.diag.log('app id',{own:!!v});
+});
+qIn.addEventListener('change',()=>{ settings.quality=qIn.value; save(); resize(); Tools.diag.log('quality',{q:settings.quality}); });
+$('optLocal').addEventListener('change',e=>{ settings.local=e.target.checked; save(); localSound(); });
+$('optTvLog').addEventListener('change',e=>{ settings.tvLog=e.target.checked; save(); CastStream.setTvLog(settings.tvLog); });
+$('optStun').addEventListener('change',e=>{ settings.stun=e.target.checked; save(); });
 $('optAutoMusic').checked=settings.autoMusic; $('optClock').checked=settings.clock;
 $('optAutoMusic').addEventListener('change',e=>{ settings.autoMusic=e.target.checked; save(); });
 $('optClock').addEventListener('change',e=>{ settings.clock=e.target.checked; save(); });
 render();
 Tools.onLang(render);
 
-Tools.diag.info(()=>({tv:TvMode.info(),scene:settings.scene,music:playing,audio:ac?ac.state:'none',autoMusic:settings.autoMusic,clock:settings.clock,frames,
+Tools.diag.info(()=>({cast:CastStream.info(),ownAppId:!!settings.appId,quality:settings.quality,localSound:settings.local,stun:settings.stun,tvLog:settings.tvLog,streamWakeLock:!!wake,
+  captureStream:'captureStream' in HTMLCanvasElement.prototype,webrtc:'RTCPeerConnection' in window,
+  tv:TvMode.info(),scene:settings.scene,music:playing,audio:ac?ac.state:'none',autoMusic:settings.autoMusic,clock:settings.clock,frames,
   screen:`${screen.width}x${screen.height}`,orientation:screen.orientation?screen.orientation.type:'?'}));
 
 /* ---------- WebMCP ---------- */
@@ -265,8 +389,12 @@ Tools.mcp.register({
 });
 Tools.mcp.register({
   name:'get_status',title:'Read the state',label:'mcp.status',readOnly:true,
-  description:'Reads the scene shown, whether the music plays, whether the app is in TV mode (full screen for screen casting) and whether the picture is locked to landscape.',
+  description:'Reads the scene shown, whether the music plays, whether the app is in TV mode (full screen for screen casting), whether the picture is locked to landscape, and the direct stream: state (idle, loading, choosing, connecting or streaming), TV name, picture size, frames per second and video bitrate in kbit/s.',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
-  execute:()=>{ const i=TvMode.info(); return {scene:settings.scene,music:playing,tv_mode:i.active,landscape:i.landscape}; }
+  execute:()=>{
+    const i=TvMode.info(), x=CastStream.stats;
+    return {scene:settings.scene,music:playing,tv_mode:i.active,landscape:i.landscape,
+      stream:{state:CastStream.state,tv:CastStream.device||null,size:x&&x.width?{width:x.width,height:x.height}:null,fps:x?x.fps||0:null,kbps:x?x.kbps||0:null,error:CastStream.info().error||null}};
+  }
 });
 })();
