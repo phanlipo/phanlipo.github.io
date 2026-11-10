@@ -2316,3 +2316,26 @@ test.describe('calendar-events tools', () => {
     await expect(page.locator('#list li')).toHaveCount(0);
   });
 });
+
+test.describe('move-play tools', () => {
+  test('list_games and get_scores: the games with their best scores, in English', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('move-play.scores.v1', JSON.stringify({ simon: { best: 84, plays: 3, last: 40 } })));
+    await fakeModelContext(page);
+    await page.goto('/move-play/');
+    await expect(page.locator('#games .game')).toHaveCount(4);
+    const list = await call(page, 'move_play_list_games', {});
+    expect(list.ok).toBe(true);
+    expect(list.result.games.map(g => [g.id, g.title, g.mechanic, g.durationSeconds, g.needsFullBody, g.best])).toEqual([
+      ['simon', 'Simon Says', 'command', 60, true, 84],
+      ['jumping-jacks', 'Jumping Jack Challenge', 'count', 30, true, null],
+      ['duck-jump', 'Duck & Jump', 'dodge', 60, true, null],
+      ['bubbles', 'Catch the Bubbles', 'targets', 45, false, null],
+    ]);
+    expect(JSON.stringify(list.result)).not.toMatch(/[äöüß]/);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Spiele aufgelistet');
+    const scores = await call(page, 'move_play_get_scores', {});
+    expect(scores.result.scores[0]).toEqual({ id: 'simon', title: 'Simon Says', best: 84, last: 40, plays: 3 });
+    expect(scores.result.scores[1]).toEqual({ id: 'jumping-jacks', title: 'Jumping Jack Challenge', best: null, last: null, plays: 0 });
+    expect((await call(page, 'move_play_get_scores', { game: 'simon' })).error).toBe('input.game is not allowed');
+  });
+});
