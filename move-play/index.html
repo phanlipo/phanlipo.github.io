@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>MovePlay</title>
+<meta name="description" content="Bewegungsspiele vor der Kamera für Kinder und Familien: Simon sagt, Hampelmann-Challenge, Ducken &amp; Springen, Blasen fangen – die App erkennt Springen, Ducken, Armeheben und Klatschen.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="Kamera, KI-Agent, Download nötig">
+<meta name="tool:icon" content="stretching">
+<meta name="tool:color" content="#5f3dc4">
+<meta name="tool:short-name" content="MovePlay">
+<meta name="tool:title-en" content="MovePlay">
+<meta name="tool:description-en" content="Movement games in front of the camera for kids and families: Simon Says, jumping jack challenge, duck &amp; jump, catch the bubbles – the app recognises jumping, ducking, raising arms and clapping.">
+<meta name="tool:short-name-en" content="MovePlay">
+<meta name="tool:storage" content="move-play.">
+<meta name="tool:webmcp" content="list_games, get_scores">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-tR4Mbs1K31yEVWbqUS6s+XHKsFPuvzRSgFVYN1muSHc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="MovePlay">
+<meta name="theme-color" content="#5f3dc4">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#5f3dc4;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#b197fc;--accent-text:#1c1240}}
+/* Stage layout: the camera picture with the game fills the screen; settings in the menu */
+main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
+.view{flex:1;min-height:200px;position:relative;border-radius:var(--radius);overflow:hidden;background:#000;color:#fff}
+.view canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+#video{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
+/* Screens over the picture: game choice, calibration, result, messages */
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:rgba(0,0,0,.72);overflow-y:auto}
+.screen[hidden],.screen>[hidden]{display:none}
+.screen.calib{justify-content:flex-end;background:linear-gradient(to top,rgba(0,0,0,.8),rgba(0,0,0,.25) 55%,transparent)}
+.screen h2{margin:0;font-size:22px;color:#fff}
+.screen p{margin:0;max-width:36em}
+.screen .btn{min-height:52px;font-size:17px;font-weight:600}
+.intro{color:#e5e5e5}
+.games{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;width:min(720px,100%)}
+.game{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:132px;padding:10px;border:2px solid rgba(255,255,255,.25);border-radius:14px;background:rgba(255,255,255,.1);color:#fff;font:inherit;cursor:pointer;text-align:center}
+.game:hover,.game:focus-visible{border-color:var(--accent);background:rgba(255,255,255,.16)}
+.game .e{font-size:34px;line-height:1.1}
+.game .n{font-weight:700;font-size:16px}
+.game .d{font-size:13px;color:#e5e5e5;line-height:1.3}
+.game .b{font-size:13px;color:#fde68a;font-weight:600}
+.calbox{display:grid;gap:8px;justify-items:center;width:min(520px,100%)}
+.calbox progress{width:100%;height:14px;accent-color:var(--accent)}
+.calbox .space{color:#fde68a}
+.big{font-size:56px;font-weight:800;line-height:1;margin:0}
+.res-best{color:#fde68a;font-weight:700}
+/* Game: score, time, lives on top; the command in the middle */
+.hud{position:absolute;inset-block-start:8px;inset-inline:8px;display:flex;gap:8px;justify-content:space-between;pointer-events:none}
+.hud[hidden]{display:none}
+.hud span{padding:4px 12px;border-radius:999px;background:rgba(0,0,0,.6);font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
+.prompt{position:absolute;inset-block-start:56px;inset-inline:8px;margin:0;text-align:center;font-size:clamp(24px,6vw,44px);font-weight:800;text-shadow:0 2px 8px rgba(0,0,0,.9);pointer-events:none}
+.prompt.trick{color:#fde68a}
+.ptimer{position:absolute;inset-block-start:46px;inset-inline:25%;height:6px;border-radius:3px;background:rgba(255,255,255,.25);overflow:hidden;pointer-events:none}
+.ptimer[hidden]{display:none}
+.ptimer i{display:block;height:100%;background:#fff;transform-origin:left}
+.cd{position:absolute;inset:0;margin:0;display:flex;align-items:center;justify-content:center;font-size:120px;font-weight:800;text-shadow:0 4px 16px rgba(0,0,0,.9);pointer-events:none}
+.cd[hidden]{display:none}
+.away{position:absolute;inset-block-end:12px;inset-inline:12px;margin:0;padding:8px 12px;border-radius:12px;background:rgba(0,0,0,.75);text-align:center;font-weight:600}
+.away[hidden]{display:none}
+.flash{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s}
+.flash.good{background:radial-gradient(circle,transparent 55%,rgba(34,197,94,.55));opacity:1;transition:none}
+.flash.bad{background:radial-gradient(circle,transparent 55%,rgba(239,68,68,.6));opacity:1;transition:none}
+.feedback{position:absolute;inset-block-end:18%;inset-inline:8px;margin:0;text-align:center;font-size:26px;font-weight:800;text-shadow:0 2px 8px rgba(0,0,0,.9);pointer-events:none}
+.busy{position:absolute;inset-block-end:8px;inset-inline:8px;margin:0;padding:6px 10px;border-radius:10px;background:rgba(0,0,0,.75);color:#fff;font-size:14px;text-align:center;z-index:1}
+.busy[hidden]{display:none}
+.head-btn[hidden]{display:none}
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.card h2{margin-block-end:8px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">MovePlay</span></h1>
+  <p class="sub" data-i18n="sub">Bewegungsspiele vor der Kamera</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnStop" aria-label="Spiel beenden" title="Spiel beenden" data-i18n-attr="aria-label:stop; title:stop" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -10"/></svg>
+    </button>
+    <button type="button" class="head-btn" id="btnSound" aria-pressed="true" aria-label="Ton" title="Ton" data-i18n-attr="aria-label:sound; title:sound">
+      <svg id="icoSound" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 8a5 5 0 0 1 0 8"/><path d="M17.7 5a9 9 0 0 1 0 14"/><path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5"/></svg>
+      <svg id="icoMute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5"/><path d="M16 10l4 4m0 -4l-4 4"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="view" id="view">
+    <video id="video" playsinline muted autoplay aria-hidden="true" tabindex="-1"></video>
+    <canvas id="out" role="img" aria-label="Kamerabild mit Spiel" data-i18n-attr="aria-label:picture"></canvas>
+    <div class="flash" id="flash" aria-hidden="true"></div>
+    <div class="hud" id="hud" hidden>
+      <span id="hudScore"></span><span id="hudLives" role="img" aria-label="Leben"></span><span id="hudTime"></span>
+    </div>
+    <div class="ptimer" id="ptimer" hidden><i id="ptBar"></i></div>
+    <p class="prompt" id="prompt" role="status" aria-live="assertive"></p>
+    <p class="feedback" id="feedback" aria-hidden="true"></p>
+    <p class="cd" id="cd" hidden></p>
+    <p class="away" id="away" role="status" hidden></p>
+    <p class="busy" id="busy" role="status" hidden></p>
+
+    <div class="screen" id="scMenu">
+      <h2 data-i18n="choose">Spiel wählen</h2>
+      <p class="intro" data-i18n="intro">Handy hinstellen (z. B. ans Regal lehnen), Kamera auf dich, 2–3 Schritte zurück – und los!</p>
+      <div class="games" id="games" role="group" aria-label="Spiele" data-i18n-attr="aria-label:games"></div>
+    </div>
+    <div class="screen calib" id="scCalib" hidden>
+      <div class="calbox">
+        <h2 id="calTitle"></h2>
+        <p id="calText" role="status"></p>
+        <progress id="calBar" max="100" value="0" aria-label="Kalibrieren" data-i18n-attr="aria-label:calibrating"></progress>
+        <p class="space" id="calSpace" hidden data-i18n="space">Platz freiräumen: Nichts Zerbrechliches in der Nähe, keine Stolperfallen.</p>
+        <button type="button" class="btn" id="btnCalCancel" data-i18n="cancel">Abbrechen</button>
+      </div>
+    </div>
+    <div class="screen" id="scResult" hidden>
+      <h2 id="resTitle"></h2>
+      <p class="big" id="resScore"></p>
+      <p id="resDetail"></p>
+      <p class="res-best" id="resBest"></p>
+      <div class="row" style="justify-content:center">
+        <button type="button" class="btn primary" id="btnAgain" data-i18n="again">Nochmal</button>
+        <button type="button" class="btn" id="btnOther" data-i18n="other">Anderes Spiel</button>
+      </div>
+    </div>
+    <div class="screen" id="scMsg" hidden>
+      <p id="msgText"></p>
+      <div class="row" style="justify-content:center">
+        <button type="button" class="btn primary" id="btnRetry" data-i18n="retry">Nochmal versuchen</button>
+        <button type="button" class="btn" id="btnBack" data-i18n="back">Zurück</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<section class="card" data-menu aria-labelledby="h-settings">
+  <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+  <label class="check"><input type="checkbox" id="optMirror"> <span data-i18n="opt.mirror">Bild spiegeln (wie ein Spiegel)</span></label>
+  <label class="check"><input type="checkbox" id="optCam"> <span data-i18n="opt.cam">Kamerabild zeigen (sonst nur Strichfigur)</span></label>
+  <label class="check"><input type="checkbox" id="optVoice"> <span data-i18n="opt.voice">Befehle vorlesen</span></label>
+  <h3 data-i18n="models.h">Körpererkennung</h3>
+  <p class="muted" id="modelsInfo" data-i18n="models.none">Noch nicht heruntergeladen.</p>
+  <div class="row"><button type="button" class="btn" id="btnDelModels" data-i18n="models.delete" disabled>Heruntergeladene Erkennung löschen</button></div>
+</section>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Bewegungsspiele für Kinder und Familien: Die Kamera erkennt, wie du dich bewegst – springen, ducken, Arme heben, klatschen, Hampelmann.</p>
+  <h3>So geht’s</h3>
+  <ul>
+    <li>Handy oder Tablet hinstellen (z. B. ans Regal lehnen oder auf einen Stuhl), Kamera zu dir. Querformat passt meist besser.</li>
+    <li>Spiel antippen und Kamera erlauben. Dann 2–3 Schritte zurückgehen, bis du ganz zu sehen bist, und kurz still stehen – die App misst, wie groß du im Bild bist. Danach zählt sie 3 – 2 – 1.</li>
+    <li>Gespielt wird allein vor der Kamera; stehen mehrere im Bild, zählt die Person, die die App zuerst erkennt.</li>
+    <li>Gehst du aus dem Bild, hält das Spiel an und geht weiter, sobald du zurück bist. ■ oben beendet das Spiel.</li>
+  </ul>
+  <h3>Die Spiele</h3>
+  <ul>
+    <li><b>Simon sagt:</b> Nur machen, was „Simon sagt“! Kommt ein Befehl ohne „Simon sagt“, stehen bleiben. Drei Fehler, dann ist Schluss.</li>
+    <li><b>Hampelmann-Challenge:</b> So viele Hampelmänner wie möglich in 30 Sekunden – Arme ganz nach oben, dann wieder ganz runter.</li>
+    <li><b>Ducken &amp; Springen:</b> Hohe Balken: ducken. Niedrige Balken: springen. Es wird immer schneller.</li>
+    <li><b>Blasen fangen:</b> Seifenblasen mit der Hand berühren. Bomben nicht anfassen – das kostet Punkte.</li>
+  </ul>
+  <h3>Sicherheit</h3>
+  <ul>
+    <li>Vorher Platz freiräumen: nichts Zerbrechliches in der Nähe, keine Stolperfallen, nicht auf glattem Boden in Socken springen.</li>
+    <li>Kinder beim Spielen begleiten und zwischendurch Pausen machen.</li>
+  </ul>
+  <h3>Im Menü ☰</h3>
+  <ul>
+    <li>Einstellungen: Bild spiegeln, nur Strichfigur statt Kamerabild, Befehle vorlesen. Den Ton schaltet der Lautsprecher oben ein und aus.</li>
+    <li>Bestwerte bleiben auf diesem Gerät gespeichert; mit „Daten sichern“ lassen sie sich übertragen.</li>
+  </ul>
+  <h3>Datenschutz &amp; Download</h3>
+  <ul>
+    <li>Das Kamerabild wird nur auf dem Gerät ausgewertet – nichts wird aufgenommen, gespeichert oder verschickt.</li>
+    <li>Beim ersten Spiel lädt die App nach Rückfrage die Körpererkennung herunter: das Rechenprogramm (MediaPipe, ca. 14 MB) von dieser Seite und das Modell <i>Pose Landmarker</i> (ca. 5,8 MB) von Google (storage.googleapis.com). Danach geht alles offline. Löschen lässt sich die Erkennung im Menü.</li>
+    <li>Die Bibliothek MediaPipe würde von sich aus Nutzungsstatistiken an Google senden – die App sperrt das: Außer der Modell-Datei darf die Erkennung nichts aus dem Netz laden.</li>
+    <li>Ältere Handys schaffen weniger Bilder pro Sekunde; dann reagiert das Spiel etwas später. Gutes Licht hilft.</li>
+    <li>iPhone: Die Kamera fragt in der Home-Bildschirm-App ggf. erneut nach der Erlaubnis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Movement games for kids and families: the camera recognises how you move – jumping, ducking, raising arms, clapping, jumping jacks.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li>Stand the phone or tablet up (e.g. lean it against a shelf or put it on a chair), camera facing you. Landscape usually works better.</li>
+    <li>Tap a game and allow the camera. Then take 2–3 steps back until all of you is in the picture and stand still for a moment – the app measures how big you are in the picture. Then it counts 3 – 2 – 1.</li>
+    <li>One player at a time; if several people are in the picture, the one the app finds first counts.</li>
+    <li>If you leave the picture, the game pauses and goes on as soon as you are back. ■ at the top ends the game.</li>
+  </ul>
+  <h3>The games</h3>
+  <ul>
+    <li><b>Simon Says:</b> Only do what “Simon says”! If a command comes without “Simon says”, stay still. Three mistakes and the game is over.</li>
+    <li><b>Jumping Jack Challenge:</b> As many jumping jacks as you can in 30 seconds – arms all the way up, then all the way down.</li>
+    <li><b>Duck &amp; Jump:</b> High bars: duck. Low bars: jump. It keeps getting faster.</li>
+    <li><b>Catch the Bubbles:</b> Touch the bubbles with your hand. Don’t touch the bombs – that costs points.</li>
+  </ul>
+  <h3>Safety</h3>
+  <ul>
+    <li>Make room first: nothing fragile nearby, nothing to trip over, no jumping in socks on a slippery floor.</li>
+    <li>Stay with children while they play and take breaks.</li>
+  </ul>
+  <h3>In the menu ☰</h3>
+  <ul>
+    <li>Settings: mirror the picture, stick figure only instead of the camera picture, read commands aloud. The speaker at the top turns the sound on and off.</li>
+    <li>Best scores stay on this device; “Back up data” transfers them.</li>
+  </ul>
+  <h3>Privacy &amp; download</h3>
+  <ul>
+    <li>The camera picture is only analysed on the device – nothing is recorded, stored or sent anywhere.</li>
+    <li>For the first game the app asks once and then downloads the body detection: the engine (MediaPipe, about 14 MB) from this site and the <i>Pose Landmarker</i> model (about 5.8 MB) from Google (storage.googleapis.com). After that everything works offline. The detection can be deleted in the menu.</li>
+    <li>The MediaPipe library would send usage statistics to Google on its own – the app blocks that: apart from the model file the detection may not load anything from the internet.</li>
+    <li>Older phones manage fewer pictures per second; the game then reacts a little later. Good light helps.</li>
+    <li>iPhone: in the home screen app the camera may ask for permission again.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 5ced7a6b288e</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="motion.js"></script>
+<script src="engine.js"></script>
+<script src="mechanics.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    best:'Bestwert: {n}',noBest:'Noch nicht gespielt',
+    'cal.title':'{game}','cal.nobody':'Niemand zu sehen – stell dich vor die Kamera.',
+    'cal.full':'Geh weiter zurück, bis du von Kopf bis Fuß zu sehen bist.','cal.upper':'Geh etwas zurück, bis Kopf, Arme und Hüfte zu sehen sind.',
+    'cal.still':'Gut so! Jetzt kurz still stehen …','cal.again':'Du bist näher gekommen – kurz still stehen, die App misst neu.',
+    'cmd.jump':'Spring!','cmd.duck':'Duck dich!','cmd.squat':'Kniebeuge!','cmd.armsUp':'Arme hoch!','cmd.armLeft':'Linken Arm hoch!','cmd.armRight':'Rechten Arm hoch!','cmd.clap':'Klatsch in die Hände!','cmd.jumpingJack':'Hampelmann!',
+    simon:'{prefix}: {cmd}',
+    'fb.good':'Super!','fb.late':'Zu spät!','fb.trickOk':'Gut aufgepasst!','fb.trickBad':'Reingefallen!','fb.dodgeOk':'Geschafft!','fb.dodgeBad':'Autsch!','fb.bomb':'Bumm!',
+    go:'Los!',away:'Wo bist du? Stell dich wieder ins Bild – das Spiel wartet.',
+    score:'⭐ {n}',time:'⏱ {n}',lives:'Leben: {n}',
+    'res.time':'Zeit um!','res.lives':'Keine Leben mehr!','res.stopped':'Spiel beendet',
+    'res.points':'Punkte','res.count':'{n} geschafft','res.detail':'{hits} getroffen · {misses} daneben · beste Serie {streak}',
+    'res.record':'🏆 Neuer Bestwert!','res.best':'Bestwert: {n}',
+    noCam:'Dieser Browser kann nicht auf die Kamera zugreifen.',denied:'Kein Zugriff auf die Kamera. Bitte in den Einstellungen des Browsers erlauben und nochmal versuchen.',
+    notFound:'Keine Kamera gefunden.',busyCam:'Die Kamera wird gerade von einer anderen App benutzt.',camErr:'Kamera-Fehler: {e}',
+    confirmDl:'Für die Körpererkennung lädt die App einmalig ca. {mb} MB herunter (Rechenprogramm von dieser Seite, Modell von Google). Das Kamerabild bleibt auf dem Gerät. Jetzt laden? Am besten im WLAN.',
+    loadingEngine:'Körpererkennung wird geladen …',loading:'Körpererkennung wird geladen … {p} %',
+    dlFail:'Download fehlgeschlagen. Beim ersten Mal braucht die App Internet – bitte nochmal versuchen.',engineFail:'Die Körpererkennung ließ sich nicht starten.',
+    declined:'Ohne Körpererkennung geht es leider nicht.',
+    'models.none':'Noch nicht heruntergeladen.','models.have':'Heruntergeladen: {list} ({mb} MB).','models.engine':'Rechenprogramm','models.model':'Modell',
+    'models.confirm':'Heruntergeladene Körpererkennung löschen? Sie wird beim nächsten Spiel neu geladen.',deleted:'Gelöscht.',
+    'mcp.games':'Spiele aufgelistet','mcp.scores':'Bestwerte gelesen'
+  },
+  en:{
+    title:'MovePlay',sub:'Movement games in front of the camera',stop:'End game',sound:'Sound',picture:'Camera picture with game',
+    choose:'Choose a game',intro:'Stand the phone up (e.g. lean it against a shelf), camera facing you, 2–3 steps back – and go!',games:'Games',
+    calibrating:'Calibrating',space:'Make room: nothing fragile nearby, nothing to trip over.',cancel:'Cancel',again:'Play again',other:'Other game',retry:'Try again',back:'Back',
+    settings:'Settings','opt.mirror':'Mirror the picture (like a mirror)','opt.cam':'Show the camera picture (otherwise stick figure only)','opt.voice':'Read commands aloud',
+    'models.h':'Body detection','models.delete':'Delete downloaded detection',
+    best:'Best: {n}',noBest:'Not played yet',
+    'cal.title':'{game}','cal.nobody':'Nobody in the picture – stand in front of the camera.',
+    'cal.full':'Step back until you can be seen from head to toe.','cal.upper':'Step back a little until your head, arms and hips can be seen.',
+    'cal.still':'Good! Now stand still for a moment …','cal.again':'You came closer – stand still for a moment, the app measures again.',
+    'cmd.jump':'Jump!','cmd.duck':'Duck!','cmd.squat':'Squat!','cmd.armsUp':'Arms up!','cmd.armLeft':'Left arm up!','cmd.armRight':'Right arm up!','cmd.clap':'Clap your hands!','cmd.jumpingJack':'Jumping jacks!',
+    simon:'{prefix}: {cmd}',
+    'fb.good':'Great!','fb.late':'Too late!','fb.trickOk':'Well spotted!','fb.trickBad':'Gotcha!','fb.dodgeOk':'Made it!','fb.dodgeBad':'Ouch!','fb.bomb':'Boom!',
+    go:'Go!',away:'Where are you? Step back into the picture – the game is waiting.',
+    score:'⭐ {n}',time:'⏱ {n}',lives:'Lives: {n}',
+    'res.time':'Time’s up!','res.lives':'No lives left!','res.stopped':'Game ended',
+    'res.points':'Points','res.count':'{n} done','res.detail':'{hits} hits · {misses} misses · best streak {streak}',
+    'res.record':'🏆 New best score!','res.best':'Best: {n}',
+    noCam:'This browser cannot access the camera.',denied:'No access to the camera. Please allow it in the browser settings and try again.',
+    notFound:'No camera found.',busyCam:'The camera is being used by another app.',camErr:'Camera error: {e}',
+    confirmDl:'For the body detection the app downloads about {mb} MB once (engine from this site, model from Google). The camera picture stays on the device. Download now? Wi-Fi recommended.',
+    loadingEngine:'Loading body detection …',loading:'Loading body detection … {p} %',
+    dlFail:'Download failed. The first time the app needs the internet – please try again.',engineFail:'The body detection could not be started.',
+    declined:'Sorry, it does not work without the body detection.',
+    'models.none':'Not downloaded yet.','models.have':'Downloaded: {list} ({mb} MB).','models.engine':'engine','models.model':'model',
+    'models.confirm':'Delete the downloaded body detection? It will be downloaded again for the next game.',deleted:'Deleted.',
+    'mcp.games':'listed the games','mcp.scores':'read the best scores'
+  }
+});
+const t=Tools.t,$=Tools.$;
+const LS={settings:'move-play.settings.v1',scores:'move-play.scores.v1'};
+const s=Object.assign({mirror:true,cam:true,voice:true,sound:true},Tools.load(LS.settings,{}));
+const save=()=>Tools.save(LS.settings,s);
+let scores=Tools.load(LS.scores,{});
+if(!scores||typeof scores!=='object'||Array.isArray(scores))scores={};
+const video=$('video'),out=$('out'),ctx=out.getContext('2d');
+const lang=()=>Tools.lang()==='en'?'en':'de';
+const tx=o=>o?o[lang()]||o.de:'';
+
+/* ---------- Games (games/*.json) ---------- */
+const BUILTIN=['simon','jumping-jacks','duck-jump','bubbles'];
+let games=[];
+async function loadGames(){
+  const list=await Promise.all(BUILTIN.map(async id=>{
+    try{
+      const r=await fetch('games/'+id+'.json');
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      return MoveEngine.validate(await r.json(),Tools.mcp.checkSchema);
+    }catch(e){Tools.diag.log('game invalid',{id,e:String(e.message||e).slice(0,200)});return null;}
+  }));
+  games=list.filter(Boolean);
+  renderGames();
+}
+function renderGames(){
+  const box=$('games');box.textContent='';
+  for(const g of games){
+    const b=document.createElement('button');
+    b.type='button';b.className='game';b.dataset.game=g.id;
+    const best=scores[g.id]?.best;
+    b.innerHTML=`<span class="e" aria-hidden="true">${Tools.esc(g.emoji)}</span><span class="n">${Tools.esc(tx(g.title))}</span><span class="d">${Tools.esc(tx(g.description))}</span><span class="b">${Tools.esc(best!=null?t('best',{n:Tools.fmt(best,0)}):t('noBest'))}</span>`;
+    b.addEventListener('click',()=>choose(g));
+    box.append(b);
+  }
+}
+
+/* ---------- Screens ---------- */
+let screen='menu';
+function show(name){
+  screen=name;
+  for(const [id,n] of [['scMenu','menu'],['scCalib','calib'],['scResult','result'],['scMsg','msg']])$(id).hidden=n!==name;
+  const inGame=name==='play';
+  $('hud').hidden=!inGame;$('btnStop').hidden=!(inGame||name==='calib');
+  if(!inGame){$('prompt').textContent='';$('ptimer').hidden=true;$('cd').hidden=true;$('away').hidden=true;$('feedback').textContent='';}
+}
+let retry=null;
+function message(text,again){
+  show('msg');$('msgText').textContent=text;retry=again||null;$('btnRetry').hidden=!again;
+}
+$('btnRetry').addEventListener('click',()=>{const r=retry;retry=null;if(r)r();});
+$('btnBack').addEventListener('click',toMenu);
+
+/* ---------- Camera ---------- */
+let stream=null,running=false,raf=0,wake=null,resume=false;
+async function startCamera(){
+  if(running)return true;
+  if(!navigator.mediaDevices?.getUserMedia){Tools.diag.log('camera: no getUserMedia');message(t('noCam'));return false;}
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}});
+    video.srcObject=stream;
+    await video.play().catch(()=>{});
+    if(!video.videoWidth)await new Promise(r=>video.addEventListener('loadedmetadata',r,{once:true}));
+    running=true;
+    Tools.diag.log('camera started',{w:video.videoWidth,h:video.videoHeight});
+    lockScreen(true);
+    if(!raf)raf=requestAnimationFrame(loop);
+    return true;
+  }catch(e){
+    const n=e?.name||'Error';
+    Tools.diag.log('camera error',{name:n});
+    stopCamera();
+    message(n==='NotAllowedError'||n==='SecurityError'?t('denied'):n==='NotFoundError'||n==='OverconstrainedError'?t('notFound'):n==='NotReadableError'?t('busyCam'):t('camErr',{e:n}),()=>current&&choose(current));
+    return false;
+  }
+}
+function stopCamera(){
+  running=false;
+  if(stream){for(const tr of stream.getTracks())tr.stop();stream=null;}
+  video.srcObject=null;lockScreen(false);
+}
+// Keep the screen on while the camera runs (nobody touches the phone while playing)
+async function lockScreen(on){
+  try{
+    if(on&&!wake&&'wakeLock' in navigator&&document.visibilityState==='visible'){wake=await navigator.wakeLock.request('screen');wake.addEventListener('release',()=>{wake=null;});}
+    else if(!on&&wake){await wake.release();wake=null;}
+  }catch(e){Tools.diag.log('wake lock',{name:e?.name});}
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){if(running){stopCamera();resume=true;game?.pause();Tools.diag.log('camera paused (hidden)');}}
+  else if(resume){resume=false;if(screen==='play'||screen==='calib'||screen==='result')startCamera();}
+});
+
+/* ---------- Body detection: worker (MediaPipe) ---------- */
+const MODEL={url:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',mb:5.8};
+const ENGINE={url:new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.wasm',location.href).href,mb:14.5};
+const MODEL_CACHE='move-play-models';
+let worker=null,ready=false,pending=null,busy=false,inferMs=0,results=0,delegate='';
+function getWorker(){
+  if(worker)return worker;
+  worker=new Worker('pose-worker.mjs',{type:'module'});
+  worker.onmessage=({data:d})=>{
+    if(d.type==='result'){
+      busy=false;inferMs=d.ms??inferMs;results++;
+      if(d.error)Tools.diag.log('inference error',{e:String(d.error).slice(0,200)});
+      onPose(d.poses&&d.poses[0]||null);
+    }else if(d.type==='progress')busyText(t('loading',{p:Math.round(d.loaded/d.total*100)}));
+    else if(d.type==='loaded'){ready=true;delegate=d.delegate||'';busyText('');pending?.res(true);pending=null;refreshModels();}
+    else if(d.type==='error'){
+      Tools.diag.log('model error',{code:d.code,e:String(d.message||'').slice(0,200)});
+      busyText('');pending?.rej(d.code);pending=null;refreshModels();
+    }else if(d.type==='log')Tools.diag.log('worker: '+d.msg,d.data);
+  };
+  worker.onerror=e=>{Tools.diag.log('worker error',{e:String(e.message||'').slice(0,200)});e.preventDefault?.();
+    busyText('');pending?.rej('engine');pending=null;};
+  return worker;
+}
+function busyText(x){$('busy').hidden=!x;$('busy').textContent=x||'';}
+async function missingMb(){
+  let mb=0;
+  try{
+    if(!await caches.match(MODEL.url))mb+=MODEL.mb;
+    if(!await caches.match(ENGINE.url))mb+=ENGINE.mb;
+  }catch{mb=MODEL.mb+ENGINE.mb;}
+  return mb;
+}
+// On the very first visit the service worker takes over the page only shortly after loading. The worker must
+// start under it – otherwise the engine (14.5 MB) bypasses its cache and is missing offline later.
+async function controlled(){
+  const sw=navigator.serviceWorker;
+  if(!sw||sw.controller)return;
+  await Promise.race([new Promise(r=>sw.addEventListener('controllerchange',r,{once:true})),new Promise(r=>setTimeout(r,4000))]);
+  if(!sw.controller)Tools.diag.log('worker starts without service worker');
+}
+// Loads the detection once; asks before the first download. Resolves true when ready.
+async function loadModel(){
+  if(ready)return true;
+  if(!pending){
+    const mb=await missingMb();
+    if(mb>0.01&&!confirm(t('confirmDl',{mb:Tools.fmt(mb,1)}))){Tools.diag.log('download declined');return 'declined';}
+    if(ready)return true;
+    if(!pending){
+      busyText(t('loadingEngine'));
+      Tools.diag.log('loading model',{mb:Math.round(mb*10)/10});
+      const p=new Promise((res,rej)=>{pending={res,rej};});
+      pending.p=p;
+      await controlled();
+      getWorker().postMessage({type:'load'});
+    }
+  }
+  try{return await pending.p;}catch(code){return code==='download'?'download':'engine';}
+}
+async function infer(){
+  if(busy||!ready||!running||video.readyState<2)return;
+  busy=true;
+  const W=video.videoWidth,H=video.videoHeight,k=Math.min(1,320/Math.max(W,H));
+  try{
+    const bitmap=await createImageBitmap(video,{resizeWidth:Math.round(W*k),resizeHeight:Math.round(H*k)});
+    worker.postMessage({type:'frame',bitmap},[bitmap]);
+  }catch(e){busy=false;}
+}
+async function refreshModels(){
+  let have=[],bytes=0;
+  try{
+    for(const [u,name] of [[ENGINE.url,'models.engine'],[MODEL.url,'models.model']]){
+      const r=await caches.match(u);
+      if(r){have.push(t(name));bytes+=(await r.clone().arrayBuffer()).byteLength;}
+    }
+  }catch{}
+  $('modelsInfo').textContent=have.length?t('models.have',{list:have.join(', '),mb:Tools.fmt(bytes/1048576,1)}):t('models.none');
+  $('btnDelModels').disabled=!have.length;
+}
+$('btnDelModels').addEventListener('click',async()=>{
+  if(!confirm(t('models.confirm')))return;
+  try{
+    await caches.delete(MODEL_CACHE);
+    for(const k of await caches.keys())if(k.startsWith('vendor:mediapipe@'))await caches.delete(k);
+  }catch{}
+  worker?.terminate();worker=null;ready=false;pending=null;
+  Tools.diag.log('models deleted');Tools.toast(t('deleted'));refreshModels();
+});
+
+/* ---------- Game flow ---------- */
+let current=null,game=null,tracker=null,lastPresent=0,calibLogged=false;
+async function choose(def){
+  current=def;audio();
+  Tools.diag.log('game chosen',{id:def.id});
+  show('calib');$('calTitle').textContent=tx(def.title);$('calText').textContent=t('cal.nobody');$('calBar').value=0;
+  $('calSpace').hidden=def.space==='small';
+  if(!await startCamera())return;
+  const r=await loadModel();
+  if(current!==def||screen!=='calib')return;
+  if(r!==true){stopCamera();message(r==='declined'?t('declined'):r==='download'?t('dlFail'):t('engineFail'),()=>choose(def));return;}
+  tracker=Motion.create({full:def.needs==='full'});
+  calibLogged=false;
+}
+function startGame(){
+  game=MoveEngine.create(current);
+  lastPresent=performance.now();
+  show('play');
+  Tools.diag.log('game start',{id:current.id});
+}
+function onPose(points){
+  if(!tracker)return;
+  const now=performance.now();
+  const events=tracker.update(points,now,video.videoWidth/video.videoHeight||1);
+  for(const ev of events){
+    if(ev.type==='recalibrate')Tools.diag.log('recalibrate');
+    else if(game)game.event(ev,tracker.state);
+  }
+}
+function tickCalib(){
+  const st=tracker?.state;
+  if(!st){return;}
+  $('calText').textContent=!st.present?t('cal.nobody'):!st.visible?t(current.needs==='full'?'cal.full':'cal.upper'):t('cal.still');
+  $('calBar').value=Math.round(st.calib*100);
+  if(st.calibrated){
+    if(!calibLogged){calibLogged=true;Tools.diag.log('calibrated',{u:Math.round(tracker.base.torso*1000)/1000});}
+    startGame();
+  }
+}
+let shown={};
+const setText=(id,v)=>{if(shown[id]!==v){shown[id]=v;$(id).textContent=v;}};
+function tickGame(now){
+  const st=tracker.state;
+  // Player left the picture: wait for them
+  if(st.present)lastPresent=now;
+  // … or came much closer (the app measures again): the game waits
+  const away=game.phase!=='done'&&now-lastPresent>1500,lost=!away&&!st.calibrated;
+  if((away||lost)&&!game.paused){game.pause();Tools.diag.log(away?'paused (nobody)':'paused (calibrating)');}
+  else if(!away&&!lost&&game.paused&&running){game.resume();}
+  $('away').hidden=!away&&!lost;
+  if(away)setText('away',t('away'));else if(lost)setText('away',t('cal.again'));
+  game.update(now,st);
+  for(const e of game.take())feedback(e);
+  setText('hudScore',current.mechanic==='count'?current.emoji+' '+Tools.fmt(game.count,0):t('score',{n:Tools.fmt(game.score,0)}));
+  setText('hudTime',t('time',{n:game.timeLeft}));
+  $('hudLives').hidden=!current.lives;
+  setText('hudLives',current.lives?'❤️'.repeat(game.lives)+'🤍'.repeat(current.lives-game.lives):'');
+  $('hudLives').setAttribute('aria-label',t('lives',{n:game.lives}));
+  $('cd').hidden=game.phase!=='countdown';
+  if(game.phase==='countdown')setText('cd',String(game.countdown||''));
+  const p=game.prompt;
+  $('ptimer').hidden=!(p&&p.until);
+  if(p&&p.until)$('ptBar').style.transform=`scaleX(${Math.max(0,(p.until-game.clock)/(p.until-p.from))})`;
+}
+function promptText(p){
+  if(!p)return '';
+  const cmd=t('cmd.'+p.cmd);
+  return p.prefix&&!p.trick?t('simon',{prefix:tx(p.prefix),cmd}):cmd;
+}
+let fbTimer=0;
+function feedback(e){
+  if(e.type==='prompt'){
+    const text=promptText(e.prompt);
+    $('prompt').textContent=text;$('prompt').classList.toggle('trick',!!e.prompt?.trick);
+    if(text&&current.mechanic!=='count')speak(text);
+    return;
+  }
+  if(e.type==='tick'){sound('tick');return;}
+  if(e.type==='go'){sound('go');showFb(t('go'));return;}
+  if(e.type==='end'){finish(e.why);return;}
+  const good=e.type==='good';
+  sound(good?'good':'bad');
+  flash(good?'good':'bad');
+  if(current.mechanic==='command'){$('prompt').textContent='';showFb(t(good?(e.trick?'fb.trickOk':'fb.good'):(e.trick?'fb.trickBad':'fb.late')));}
+  else if(current.mechanic==='dodge')showFb(t(good?'fb.dodgeOk':'fb.dodgeBad'));
+  else if(e.bomb)showFb(t('fb.bomb'));
+}
+function showFb(x){$('feedback').textContent=x;clearTimeout(fbTimer);fbTimer=setTimeout(()=>{$('feedback').textContent='';},900);}
+function flash(kind){
+  const f=$('flash');f.className='flash '+kind;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{f.className='flash';}));
+}
+function finish(why){
+  const r=game.result;
+  const value=current.mechanic==='count'?r.count:r.score;
+  const old=scores[current.id]?.best;
+  const record=value>0&&(old==null||value>old);
+  scores[current.id]={best:Math.max(old??0,value),plays:(scores[current.id]?.plays||0)+1,last:value};
+  Tools.save(LS.scores,scores);
+  Tools.diag.log('game end',{id:current.id,why,score:r.score,count:r.count,hits:r.hits,misses:r.misses,s:r.seconds});
+  show('result');
+  $('resTitle').textContent=current.emoji+' '+t('res.'+why);
+  $('resScore').textContent=Tools.fmt(value,0);
+  $('resDetail').textContent=current.mechanic==='count'?t('res.count',{n:Tools.fmt(r.count,0)}):t('res.detail',{hits:r.hits,misses:r.misses,streak:r.bestStreak});
+  $('resBest').textContent=record?t('res.record'):t('res.best',{n:Tools.fmt(scores[current.id].best,0)});
+  sound(record?'record':'end');
+  renderGames();
+  game=null;
+}
+function toMenu(){
+  if(game){game.stop();game=null;}
+  current=null;stopCamera();show('menu');renderGames();
+}
+$('btnStop').addEventListener('click',()=>{
+  if(game&&game.phase!=='done'){game.stop();for(const e of game.take())feedback(e);}
+  else toMenu();
+});
+$('btnCalCancel').addEventListener('click',toMenu);
+$('btnAgain').addEventListener('click',()=>{const d=current;if(!d)return;if(running&&ready&&tracker?.state.calibrated){startGame();}else choose(d);});
+$('btnOther').addEventListener('click',toMenu);
+
+/* ---------- Drawing ---------- */
+let frames=0,fpsT=0,fps=0;
+function loop(now){
+  raf=requestAnimationFrame(loop);
+  if(!running||video.readyState<2)return;
+  const W=video.videoWidth,H=video.videoHeight;
+  if(!W||!H)return;
+  if(out.width!==W||out.height!==H){out.width=W;out.height=H;}
+  infer();
+  if(screen==='calib'&&ready)tickCalib();
+  else if(screen==='play'&&game)tickGame(now);
+  draw(W,H);
+  frames++;
+  if(now-fpsT>1000){fps=Math.round(frames*1000/(now-fpsT));frames=0;fpsT=now;}
+}
+const px=(x,W)=>(s.mirror?1-x:x)*W;
+function draw(W,H){
+  ctx.save();
+  if(s.cam){
+    if(s.mirror){ctx.translate(W,0);ctx.scale(-1,1);}
+    ctx.drawImage(video,0,0,W,H);
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(0,0,W,H);
+  }else{ctx.fillStyle='#14122a';ctx.fillRect(0,0,W,H);}
+  ctx.restore();
+  const st=tracker?.state;
+  if(st?.points)drawBody(st,W,H);
+  if(game)for(const o of game.objects)drawObject(o,st,W,H);
+}
+function drawBody(st,W,H){
+  const p=st.points,lw=Math.max(4,H/90);
+  ctx.lineCap='round';ctx.lineWidth=lw;ctx.strokeStyle=st.calibrated?'rgba(177,151,252,.95)':'rgba(255,255,255,.85)';
+  ctx.beginPath();
+  for(const [a,b] of Motion.BONES){if(!p[a].seen||!p[b].seen)continue;ctx.moveTo(px(p[a].x,W),p[a].y*H);ctx.lineTo(px(p[b].x,W),p[b].y*H);}
+  ctx.stroke();
+  if(p[0].seen){ctx.beginPath();ctx.arc(px(p[0].x,W),p[0].y*H,lw*2.2,0,Math.PI*2);ctx.stroke();}
+  ctx.fillStyle='#fde68a';
+  for(const h of st.hands){ctx.beginPath();ctx.arc(px(h.x,W),h.y*H,lw*1.6,0,Math.PI*2);ctx.fill();}
+}
+function drawObject(o,st,W,H){
+  if(o.kind==='high'||o.kind==='low'){
+    const b=st?.body,u=b?b.u:0.18;
+    // High bars at head height, low bars at the feet
+    const cy=o.kind==='high'?(b?b.headY:0.2):(b?Math.min(0.95,b.hipY+1.7*u):0.88);
+    const h=o.kind==='high'?Math.max(0.06,u*0.5):Math.max(0.05,u*0.35);
+    const x=o.x*W,w=W*0.07,y=(cy-h/2)*H;
+    ctx.fillStyle=o.state==='ok'?'rgba(34,197,94,.9)':o.state==='bad'?'rgba(239,68,68,.9)':o.kind==='high'?'rgba(249,115,22,.95)':'rgba(56,189,248,.95)';
+    ctx.fillRect(x-w/2,y,w,h*H);
+    ctx.fillStyle='#fff';ctx.font=`700 ${Math.round(H/16)}px system-ui,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(o.kind==='high'?'⬇':'⬆',x,o.kind==='high'?y+h*H+H/18:y-H/18);
+    return;
+  }
+  const x=px(o.x,W),y=o.y*H,r=o.r*H*(o.pop?1.3:1);
+  ctx.globalAlpha=o.pop?0.5:1;
+  if(o.kind==='bomb'){
+    ctx.font=`${Math.round(r*1.8)}px system-ui,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('💣',x,y);
+  }else{
+    const g=ctx.createRadialGradient(x-r/3,y-r/3,r/8,x,y,r);
+    g.addColorStop(0,'rgba(255,255,255,.9)');g.addColorStop(.5,'rgba(186,230,253,.45)');g.addColorStop(1,'rgba(167,139,250,.75)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+    ctx.lineWidth=Math.max(2,r/12);ctx.strokeStyle=o.pop==='ok'?'rgba(34,197,94,.9)':'rgba(255,255,255,.8)';ctx.stroke();
+  }
+  // Remaining time as a thin ring
+  if(!o.pop){ctx.lineWidth=Math.max(3,r/10);ctx.strokeStyle=o.kind==='bomb'?'rgba(239,68,68,.8)':'rgba(253,230,138,.9)';
+    ctx.beginPath();ctx.arc(x,y,r+ctx.lineWidth,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-o.age));ctx.stroke();}
+  ctx.globalAlpha=1;
+}
+
+/* ---------- Sound & voice ---------- */
+let ac=null;
+function audio(){
+  if(!ac&&s.sound){try{ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){Tools.diag.log('audio error',{name:e?.name});}}
+  if(ac?.state==='suspended')ac.resume().catch(()=>{});
+}
+const TONES={tick:[[660,.12]],go:[[880,.25]],good:[[660,.08],[990,.14]],bad:[[220,.25]],end:[[523,.15],[392,.3]],record:[[523,.12],[659,.12],[784,.12],[1047,.35]]};
+function sound(name){
+  if(!s.sound||!ac)return;
+  let at=ac.currentTime;
+  for(const [f,d] of TONES[name]||[]){
+    const o=ac.createOscillator(),g=ac.createGain();
+    o.type=name==='bad'?'sawtooth':'triangle';o.frequency.value=f;
+    g.gain.setValueAtTime(0.0001,at);g.gain.exponentialRampToValueAtTime(0.25,at+0.01);g.gain.exponentialRampToValueAtTime(0.0001,at+d);
+    o.connect(g).connect(ac.destination);o.start(at);o.stop(at+d+0.02);at+=d;
+  }
+}
+function speak(text){
+  if(!s.voice||!s.sound||!('speechSynthesis' in window))return;
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);u.lang=lang()==='en'?'en-US':'de-DE';u.rate=1.05;
+    speechSynthesis.speak(u);
+  }catch(e){Tools.diag.log('speech error',{name:e?.name});}
+}
+
+/* ---------- Settings ---------- */
+function renderSettings(){
+  $('optMirror').checked=s.mirror;$('optCam').checked=s.cam;$('optVoice').checked=s.voice;
+  $('btnSound').setAttribute('aria-pressed',String(s.sound));
+  $('icoSound').hidden=!s.sound;$('icoMute').hidden=s.sound;
+}
+for(const [id,k] of [['optMirror','mirror'],['optCam','cam'],['optVoice','voice']])
+  $(id).addEventListener('change',e=>{s[k]=e.target.checked;save();Tools.diag.log('setting',{[k]:s[k]});});
+$('btnSound').addEventListener('click',()=>{s.sound=!s.sound;save();renderSettings();if(s.sound)audio();else if('speechSynthesis' in window)speechSynthesis.cancel();});
+
+/* ---------- WebMCP ---------- */
+Tools.mcp.register({
+  name:'list_games',title:'List the movement games',readOnly:true,label:'mcp.games',
+  description:'Lists the movement games of MovePlay with id, English title and description, mechanic (command, count, dodge, targets), duration in seconds, whether the whole body must be visible, and the best score on this device (null if never played). Games are played in front of the camera; an agent cannot start them.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({games:games.map(g=>({id:g.id,title:g.title.en,description:g.description.en,mechanic:g.mechanic,durationSeconds:g.duration,lives:g.lives,needsFullBody:g.needs==='full',best:scores[g.id]?.best??null}))})
+});
+Tools.mcp.register({
+  name:'get_scores',title:'Get the best scores',readOnly:true,label:'mcp.scores',
+  description:'Returns the best score, the last score and the number of plays per game on this device. For the jumping jack challenge the score is the number of jumping jacks, otherwise points.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({scores:games.map(g=>({id:g.id,title:g.title.en,best:scores[g.id]?.best??null,last:scores[g.id]?.last??null,plays:scores[g.id]?.plays||0}))})
+});
+
+/* ---------- Diagnostics ---------- */
+Tools.diag.info(()=>{
+  const st=tracker?.state;
+  return {camera:running?'on':'off',video:video.videoWidth?video.videoWidth+'x'+video.videoHeight:'-',fps,
+    model:ready?'ready':pending?'loading':'no',delegate:delegate||'-',inferMs,results,
+    person:st?(st.present?(st.visible?'visible':'partly'):'none'):'-',calibrated:!!st?.calibrated,
+    screen,game:current?.id||'-',phase:game?.phase||'-',games:games.length};
+});
+
+Tools.onLang(()=>{renderGames();if(game?.prompt)$('prompt').textContent=promptText(game.prompt);refreshModels();});
+renderSettings();
+show('menu');
+loadGames();
+refreshModels();
+})();
+</script>
+</body>
+</html>

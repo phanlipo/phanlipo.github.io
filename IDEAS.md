@@ -6,7 +6,12 @@ Status: **geplant** (soll kommen), **zurückgestellt** (passt gerade nicht, spä
 
 Neue Einträge oben; bei Umsetzung den Eintrag entfernen oder auf die App verweisen.
 
-## MovePlay – Bewegungsspiele per Kamera – geplant (2026-11)
+## MovePlay – Bewegungsspiele per Kamera – erste Version umgesetzt (2026-11)
+
+**Stand:** App `move-play` (Aufbau in `move-play/README.md`) mit 1 Spieler, Kalibrierung und vier Spielen: Simon sagt, Hampelmann-Challenge, Ducken & Springen, Blasen fangen. Mit echtem Modell geprüft (`tests/manual/move-play-e2e.mjs`: Testfoto erkannt und kalibriert, ca. 15 ms je Bild am Computer). **Noch offen:** Messung auf einem älteren Android-Handy (Bilder/s, Sprungerkennung bei schräg stehendem Handy), GPU-Delegate (läuft bisher auf der CPU), und alles unter „Danach“ / „Später“: Stopptanz, Posen nachmachen, 2 Spieler, eigene Spiele laden (JSON) und `add_game` für KI-Agenten, Fernseher, Duell auf zwei Geräten. Schritte zur Seite (`stepLeft/Right`) und `lean` sind noch nicht in der Bewegungs-Engine.
+
+Ursprünglicher Plan:
+
 
 Ziel: Kinder und Familien spielen vor der Kamera (Handy, Tablet, Laptop) mit dem ganzen Körper – springen, ducken, Arme heben, tanzen. Eine Bewegungs-Engine erkennt die Bewegungen, die Spiele selbst sind JSON-Beschreibungen. Ordner `move-play`, Titel „MovePlay“, `tool:tags` `Freizeit, Spiele, Kinder`, `tool:features` `Kamera, Vollbild, KI-Agent, Download nötig`, Speicher `move-play.`, Bühnen-Layout (Querformat bevorzugt).
 
