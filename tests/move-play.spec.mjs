@@ -874,21 +874,28 @@ test.describe('page', () => {
     await pose(page, {});
     await page.click('[data-game="freeze-dance"]');
     await expect(page.locator('#cd')).toBeVisible();
+    // Dance from the countdown on: who dances for less than 40 % of a (possibly short) dance loses a life,
+    // and noticing "Tanzen!" from here can take a second
+    await pose(page, { dance: true });
     await expect(page.locator('#cd')).toBeHidden({ timeout: 5000 });
     await expect(page.locator('#prompt')).toHaveText('Tanzen! 🎵');
-    await pose(page, { dance: true });
     const n0 = await page.evaluate(() => window.__notes);
-    await page.waitForTimeout(600);
-    expect(await page.evaluate(() => window.__notes)).toBeGreaterThan(n0 + 4);
+    // The tune adds 4 to 7 notes in 600 ms (4 steps per second with 1 to 3 notes each) – wait for them instead of a fixed time
+    await expect.poll(() => page.evaluate(() => window.__notes), { timeout: 3000 }).toBeGreaterThan(n0 + 4);
     // Sound off: the music stops
     await page.click('#btnSound');
     const n1 = await page.evaluate(() => window.__notes);
     await page.waitForTimeout(600);
     expect(await page.evaluate(() => window.__notes)).toBe(n1);
     await page.click('#btnSound');
-    // Dance until the stop, then freeze
+    // Dance until the stop, then freeze – at once, in the page: after the stop there are about 400 ms to stand still
+    // (grace 800 ms minus the 400 ms the movement is averaged over); waiting for the text from here can take longer
+    await page.evaluate(() => {
+      const el = document.getElementById('prompt');
+      new MutationObserver(() => { if (el.textContent === 'Stopp! Einfrieren!' && window.__pose.dance) { window.__pose = {}; window.__bc.postMessage({}); } })
+        .observe(el, { childList: true, characterData: true, subtree: true });
+    });
     await expect(page.locator('#prompt')).toHaveText('Stopp! Einfrieren!', { timeout: 10000 });
-    await pose(page, {});
     await expect(page.locator('#prompt')).toHaveText('Tanzen! 🎵', { timeout: 6000 });
     await expect(page.locator('#hudAScore')).toHaveText('⭐ 10');
     await expect(page.locator('#hudALives')).toHaveText('❤️❤️❤️');

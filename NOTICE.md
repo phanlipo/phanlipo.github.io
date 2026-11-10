@@ -34,6 +34,7 @@ neben jeder Bibliothek in `assets/vendor/<name>/LICENSE` und wird mit ihr ausgel
 | [mediapipe](https://ai.google.dev/edge/mediapipe/solutions/guide) (`@mediapipe/tasks-vision`) | 1.2.0 | [Apache-2.0](assets/vendor/mediapipe/LICENSE) | siehe Lizenztext | Personen erkennen (Objekterkennung) und vom Hintergrund trennen (Segmentierung) in Kamera-Effekte – läuft im Worker, dessen Netzsperre die eingebaute Nutzungsstatistik der Bibliothek blockiert |
 | [libheif](https://github.com/catdad-experiments/libheif-js) (`libheif-js`) | 1.23.5 | [LGPL-3.0](assets/vendor/libheif/LICENSE) | siehe Lizenztext | HEIC/HEIF-Fotos (iPhone) dekodieren (libheif mit libde265 als WebAssembly) im Bildkonverter |
 | [abcjs](https://abcjs.net) (`abcjs`) | 6.7.2 | [MIT](assets/vendor/abcjs/LICENSE) | Copyright (c) 2009-2026 Paul Rosen and Gregory Dyke | Notensatz (ABC-Notation als SVG) im Liederbuch |
+| [pyodide](https://pyodide.org) (`pyodide`) | 314.0.7 | [MPL-2.0](assets/vendor/pyodide/LICENSE) | siehe Lizenztext | Python-Interpreter (CPython als WebAssembly) in Code ausführen |
 
 ## Weitere Lizenzdateien
 

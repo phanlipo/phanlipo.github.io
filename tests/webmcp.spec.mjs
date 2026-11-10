@@ -2341,3 +2341,83 @@ test.describe('move-play tools', () => {
     expect((await call(page, 'move_play_get_scores', { game: 'simon' })).error).toBe('input.game is not allowed');
   });
 });
+
+test.describe('code-runner tools', () => {
+  const P = 'code_runner_';
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/code-runner/');
+  });
+
+  test('run_code: JavaScript and Python run in the app, the result comes back and is shown', async ({ page }) => {
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === P + 'run_code').annotations).toEqual({ readOnlyHint: false });
+    expect(tools.find(t => t.name === P + 'get_code').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+    expect(tools.find(t => t.name === P + 'get_output').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+    expect((await call(page, P + 'get_output', {})).result).toEqual({ has_run: false, running: false });
+
+    // 1 + 2 + … + 100 = 5050; 12! = 479001600
+    let r = await call(page, P + 'run_code', { language: 'javascript', code: 'let s = 0;\nfor (let i = 1; i <= 100; i++) s += i;\nconsole.log("sum", s);\nconsole.error("note");\nprompt()', stdin: 'typed\n' });
+    expect(r.ok).toBe(true);
+    expect(r.result).toEqual({ language: 'javascript', status: 'finished', stdout: 'sum 5050\n', stderr: 'note\n', result: '"typed"',
+      error: null, duration_ms: expect.any(Number), output_truncated: false });
+    await expect(page.locator('#langs [data-l="javascript"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#code')).toHaveValue(/s \+= i;/);
+    await expect(page.locator('#out')).toHaveText('sum 5050\nnote\ntyped\n→ "typed"\n');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Code ausgeführt');
+
+    r = await call(page, P + 'run_code', { language: 'python', code: 'import math\nprint(math.factorial(12))\nint(input()) * 2', stdin: '21' });
+    expect(r.result).toMatchObject({ language: 'python', status: 'finished', stdout: '479001600\n', stderr: '', result: '42', error: null });
+    await expect(page.locator('#langs [data-l="python"]')).toHaveAttribute('aria-pressed', 'true');
+
+    expect((await call(page, P + 'get_code', {})).result).toEqual({ language: 'python', code: 'import math\nprint(math.factorial(12))\nint(input()) * 2', stdin: '' });
+    expect((await call(page, P + 'get_output', {})).result).toMatchObject({ has_run: true, running: false, language: 'python', status: 'finished', stdout: '479001600\n', result: '42' });
+  });
+
+  test('run_code: errors with line, timeout, invalid input; unsaved code of the user is kept as a script', async ({ page }) => {
+    await page.locator('#langs [data-l="javascript"]').click();
+    await page.locator('#code').fill('// my own work');
+    let r = await call(page, P + 'run_code', { language: 'javascript', code: 'console.log("a");\nnull.x' });
+    expect(r.result).toMatchObject({ status: 'error', stdout: 'a\n', result: null, error: { message: expect.stringMatching(/^TypeError: /), line: 2 } });
+    expect(r.result.stderr).toMatch(/^TypeError: .*\(Zeile 2\)\n$/);
+    const scripts = await page.evaluate(() => JSON.parse(localStorage.getItem('code-runner.scripts.v1')));
+    expect(scripts.map(s => [s.lang, s.code])).toEqual([['javascript', '// my own work']]);
+    expect(scripts[0].name).toMatch(/^Entwurf /);
+    // The agent's own code is not kept again
+    await call(page, P + 'run_code', { language: 'javascript', code: '1' });
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('code-runner.scripts.v1')).length)).toBe(1);
+
+    r = await call(page, P + 'run_code', { language: 'python', code: 'def f():\n    raise ValueError("bad")\nf()' });
+    // line = where the error was raised (innermost frame of the program), the traceback names both
+    expect(r.result).toMatchObject({ status: 'error', error: { line: 2 } });
+    expect(r.result.stderr).toContain('File "main.py", line 3, in <module>');
+    expect(r.result.error.message).toMatch(/ValueError: bad$/);
+
+    r = await call(page, P + 'run_code', { language: 'javascript', code: 'console.log("start");\nwhile (true) {}', timeout_seconds: 1 });
+    expect(r.result).toMatchObject({ status: 'timed_out', stdout: 'start\n' });
+    await expect(page.locator('#status')).toHaveText('Abgebrochen nach 1 s');
+    expect((await call(page, P + 'run_code', { language: 'javascript', code: '2 + 2' })).result.result).toBe('4');
+
+    for (const [input, msg] of [
+      [{ language: 'bash', code: 'ls' }, /input.language must be one of: python, javascript/],
+      [{ language: 'python' }, /input.code is required/],
+      [{ language: 'python', code: '' }, /at least 1 characters/],
+      [{ language: 'python', code: '1', timeout_seconds: 500 }, /must be <= 120/],
+      [{ language: 'python', code: '1', packages: ['numpy'] }, /input.packages is not allowed/],
+    ]) expect((await call(page, P + 'run_code', input)).error).toMatch(msg);
+    await expect(page.locator('#code')).toHaveValue('2 + 2');
+  });
+
+  test('run_code: refused while a program is running; get_output reads the output so far; no network', async ({ page }) => {
+    await page.locator('#langs [data-l="javascript"]').click();
+    await page.locator('#code').fill('console.log("tick");\nsetInterval(() => {}, 1000);');
+    await page.locator('#btnRun').click();
+    await expect(page.locator('#out')).toHaveText('tick\n');
+    expect((await call(page, P + 'run_code', { language: 'javascript', code: '1' })).error).toMatch(/still running/);
+    expect((await call(page, P + 'get_output', {})).result).toMatchObject({ has_run: true, running: true, status: 'running', stdout: 'tick\n' });
+    await page.locator('#btnRun').click();
+    expect((await call(page, P + 'get_output', {})).result).toMatchObject({ running: false, status: 'stopped', stdout: 'tick\n' });
+    const r = await call(page, P + 'run_code', { language: 'javascript', code: 'return await fetch("https://example.com/").then(() => "sent", e => e.message)' });
+    expect(r.result.result).toBe('"fetch is blocked: code in this app runs without network access"');
+  });
+});
