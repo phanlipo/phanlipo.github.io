@@ -5,7 +5,7 @@ Supertrumpf (Autoquartett) gegen den Computer oder mit mehreren Handys über Web
 ```
 index.html   Oberfläche und Ablauf: Startseite, Runde (Gastgeber), Einladen/Beitreten, Spieltisch, WebMCP
 game.js      window.Quartet: Regeln, Computer, Sicht je Platz, Zahlen-Format – ohne DOM, Zustand ist reines JSON
-decks.js     window.QuartetDecks: 20 Kartensätze – generiert von scripts/quartet-decks.mjs, nie von Hand ändern
+decks.js     window.QuartetDecks: 17 Kartensätze – generiert von scripts/quartet-decks.mjs, nie von Hand ändern
 ../assets/shared/p2p.js   Verbindung ohne Server (QR-Codes, WebRTC, Scanner), wie in card-games
 ```
 
@@ -15,7 +15,7 @@ decks.js     window.QuartetDecks: 20 Kartensätze – generiert von scripts/quar
 node scripts/quartet-decks.mjs ../supertrumpf-creator/cards_data
 ```
 
-Übernommen werden Name, Gruppe, Kartennummer (Gruppe + laufende Nummer, wie auf den gedruckten Karten), alle Kategorien mit Zahlen (Text-Kategorien wie Hauptstadt fallen weg, mindestens 3 müssen bleiben) und der kurze deutsche Kartentext. Keine Bilder (Größe, Lizenzen der Wikipedia-Bilder) – jedes Deck hat ein Emoji. Im Skript stehen: Auswahl und Reihenfolge der Decks, englische Titel, Kategorie- und Einheitennamen, Kategorien, in denen der kleinere Wert gewinnt (`LOW`), und Jahres-Kategorien (`YEAR`, ohne Tausenderpunkt). Neue Kategorie ohne englischen Namen → das Skript bricht ab.
+Übernommen werden Name, Gruppe, Kartennummer (Gruppe + laufende Nummer, wie auf den gedruckten Karten), die Kategorien mit Zahlen – 4 bis 6 je Karte (Text-Kategorien wie Hauptstadt fallen weg; Decks mit weniger als 4 Zahlen-Kategorien – Arzneimittel, Gewerkschaften, Biblische Persönlichkeiten – werden nicht übernommen, mehr als 6 auf die ersten 6 gekürzt) und der kurze deutsche Kartentext. Länder bekommen ihren ISO-Code (`f`, aus der Flaggen-Adresse der Quelle); die Flagge kommt aus dem Vendor-Paket `flag-icons` (`precache: false`: lädt beim ersten Ansehen, bleibt dann offline). Sonst noch keine Bilder (Größe, Lizenzen der Wikipedia-Bilder) – jedes Deck hat ein Emoji. Im Skript stehen: Auswahl und Reihenfolge der Decks, englische Titel, Kategorie- und Einheitennamen, Kategorien, in denen der kleinere Wert gewinnt (`LOW`), und Jahres-Kategorien (`YEAR`, ohne Tausenderpunkt). Neue Kategorie ohne englischen Namen → das Skript bricht ab.
 
 ## Ablauf
 

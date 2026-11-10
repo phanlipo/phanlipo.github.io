@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "quartet";
-const VERSION = '7b4832377e36';
+const VERSION = '9602079423c5';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -23,7 +23,9 @@ const FILES = [
   "../assets/vendor/zxing-wasm/reader/zxing_reader.wasm"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
-const RUNTIME = {};
+const RUNTIME = {
+  "../assets/vendor/flag-icons/": "vendor:flag-icons@7.6.0"
+};
 const RUNTIME_URLS = Object.entries(RUNTIME).map(([dir, cache]) => [new URL(dir, self.location).href, cache]);
 
 self.addEventListener('install', event => {

@@ -8,6 +8,7 @@ neben jeder Bibliothek in `assets/vendor/<name>/LICENSE` und wird mit ihr ausgel
 
 | Bibliothek | Version | Lizenz | Copyright | Verwendet für |
 |---|---|---|---|---|
+| [flag-icons](https://flagicons.lipis.dev/) (`flag-icons`) | 7.6.0 | [MIT](assets/vendor/flag-icons/LICENSE) | Copyright (c) 2013 Panayiotis Lipiridis | Flaggen der Länder im Quartett (Kartensatz „Länder der Welt“) |
 | [katex](https://katex.org) (`katex`) | 0.19.1 | [MIT](assets/vendor/katex/LICENSE) | Copyright (c) 2013-2020 Khan Academy and other contributors | Formelsatz (LaTeX) im Brau-Rechner |
 | [zxing-wasm](https://github.com/Sec-ant/zxing-wasm) (`zxing-wasm`) | 3.1.6 | [MIT](assets/vendor/zxing-wasm/LICENSE) | Copyright (c) 2023 Ze-Zheng Wu | DataMatrix-Decoder (WebAssembly) im SecurPharm-Scanner |
 | [zxing-library](https://github.com/zxing-js/library) (`@zxing/library`) | 0.23.0 | [Apache-2.0](assets/vendor/zxing-library/LICENSE) | Copyright (c) 2005 Sun Microsystems, Inc.; Copyright © 2010-2014 University of Manchester; Copyright © 2010-2015 Stian Soiland-Reyes; Copyright © 2015 Peter Hull | Ersatz-Decoder (JavaScript) im SecurPharm-Scanner |

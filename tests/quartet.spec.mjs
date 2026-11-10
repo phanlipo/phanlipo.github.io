@@ -15,12 +15,13 @@ const rules = (page, fn, arg) => page.evaluate(([src, a]) => new Function('Q', '
 test.describe('rules', () => {
   test.beforeEach(async ({ page }) => { await page.goto(URL_); });
 
-  test('decks: numeric values for every category, unique card numbers, enough cards for 6 players', async ({ page }) => {
+  test('decks: 4 to 6 numeric values per card, unique card numbers, enough cards for 6 players, flags for countries', async ({ page }) => {
     const decks = await page.evaluate(() => window.QuartetDecks);
-    expect(decks.length).toBe(20);
-    expect(new Set(decks.map(d => d.id)).size).toBe(20);
+    expect(decks.length).toBe(17);
+    expect(new Set(decks.map(d => d.id)).size).toBe(17);
     for (const d of decks) {
-      expect(d.cats.length, d.id).toBeGreaterThanOrEqual(3);
+      expect(d.cats.length, d.id).toBeGreaterThanOrEqual(4);
+      expect(d.cats.length, d.id).toBeLessThanOrEqual(6);
       expect(d.cards.length, d.id).toBeGreaterThanOrEqual(12);
       expect(new Set(d.cards.map(c => c.id)).size, d.id).toBe(d.cards.length);
       for (const c of d.cards) {
@@ -33,6 +34,10 @@ test.describe('rules', () => {
     // German thousands separators of the source are read as such ("357.588" km² for Germany)
     const de = decks.find(d => d.id === 'countries_continents').cards.find(c => c.n === 'Deutschland');
     expect(de.v[0]).toBe(357588);
+    expect(de.f).toBe('de');
+    const countries = decks.find(d => d.id === 'countries_continents').cards;
+    expect(countries.every(c => /^[a-z]{2}(-[a-z]+)?$/.test(c.f))).toBe(true);
+    expect(decks.filter(d => d.id !== 'countries_continents').every(d => d.cards.every(c => !c.f))).toBe(true);
   });
 
   test('deal: all cards once, evenly, seeded', async ({ page }) => {
@@ -403,6 +408,26 @@ test.describe('WebMCP', () => {
     r = await page.evaluate(() => window.__call('quartet_play_move', { index: 9 }));
     expect(r.ok).toBe(false);
   });
+});
+
+test('countries: every flag exists; flags load on first use and stay offline', async ({ page, context }) => {
+  test.setTimeout(60000);
+  await settings(page, { speed: 'slow', deck: 'countries_continents', bots: 1 });
+  await page.goto(URL_);
+  const codes = await page.evaluate(() => window.QuartetDecks.find(d => d.id === 'countries_continents').cards.map(c => c.f));
+  for (const c of new Set(codes)) expect((await page.request.get(`/assets/vendor/flag-icons/${c}.svg`)).status(), c).toBe(200);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await page.click('#btnCpu');
+  const img = page.locator('#table .qcard .pic.flag img');
+  await expect(img).toHaveCount(1);
+  const code = await page.evaluate(() => document.querySelector('#table .pic img').getAttribute('src').match(/(\w[\w-]*)\.svg$/)[1]);
+  await expect.poll(() => img.evaluate(i => i.complete && i.naturalWidth > 0)).toBe(true);
+  // Offline: the flag seen before still loads
+  await context.setOffline(true);
+  await page.reload();
+  await page.evaluate(c => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(); i.onerror = rej; i.src = `../assets/vendor/flag-icons/${c}.svg`; }), code);
+  await context.setOffline(false);
 });
 
 test.describe('English', () => {
