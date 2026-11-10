@@ -35,7 +35,7 @@ node scripts/quartet-decks.mjs ../supertrumpf-creator/cards_data
 
 ## Mögliche Erweiterungen
 
-- Bilder der Karten aus supertrumpf-creator (verkleinert, mit Bildnachweis je Karte).
+- Bilder der Karten aus supertrumpf-creator – zurückgestellt, Gründe und geplanter Weg in `IDEAS.md` („Quartett: Kartenbilder“).
 - Eigene Kartensätze laden (JSON im Format von supertrumpf-creator).
 - Englische Kartennamen und Gruppen.
 - Wiederverbinden nach Abbruch (heute übernimmt der Computer).

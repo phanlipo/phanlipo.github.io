@@ -6,6 +6,24 @@ Status: **geplant** (soll kommen), **zurückgestellt** (passt gerade nicht, spä
 
 Neue Einträge oben; bei Umsetzung den Eintrag entfernen oder auf die App verweisen.
 
+## Quartett: Kartenbilder – zurückgestellt (2026-11)
+
+Bilder auf den Karten von `quartet` wie auf den gedruckten Karten von supertrumpf-creator. Umgesetzt sind nur die Flaggen der Länder (Vendor-Paket `flag-icons`, MIT, `precache: false`); alle anderen Karten zeigen das Emoji des Decks.
+
+**Warum nicht jetzt:**
+
+- **Lizenzen:** Die Fotos in `supertrumpf-creator/cards_data/<deck>/images/` sind die Hauptbilder der Wikipedia-Artikel – Urheber und Lizenz sind dort nicht gespeichert, meist verlangen sie Namensnennung (CC BY-SA). Ohne Bildnachweis je Karte lassen sie sich nicht weitergeben. Frei verwendbar wären nur die selbst erzeugten Bilder (KI-Bilder: Einhörner, Prinzessinnen, Teilchenzoo; selbst gerenderte Städtekarten, Bierglas-Farben, Hopfen-Collagen).
+- **Größe:** Alle Dateien im App-Ordner landen beim ersten Öffnen im Offline-Cache. Rund 900 Bilder (ca. 15 KB als WebP mit 320 px) wären über 10 MB auf einmal.
+
+**Geplanter Weg, wenn es kommt:**
+
+1. `scripts/quartet-images.mjs`: Bilder aus supertrumpf-creator verkleinern → `quartet/img/<deck>/<Kartennummer>.webp`, dazu `credits.json` je Deck (Urheber, Lizenz, Quelle).
+2. Lizenzdaten der Wikipedia-Bilder einmalig von Wikimedia Commons holen (`extmetadata`: Artist, LicenseShortName); nur freie Lizenzen übernehmen. Ist ein Datenabruf – nur auf ausdrücklichen Wunsch.
+3. `build.mjs`: `<app>/img/` nicht vorab cachen, sondern beim ersten Gebrauch (wie Vendor-Pakete mit `precache: false`); optional Knopf „Kartensatz offline speichern“.
+4. Karte: Bild mit kleiner Bildnachweis-Zeile, sonst Emoji; Liste der Bildnachweise in der Hilfe.
+
+**Neu prüfen, wenn:** die Lizenzdaten vorliegen oder zuerst nur die selbst erzeugten Bilder übernommen werden sollen.
+
 ## Code ausführen – umgesetzt (Python, JavaScript); Bash verworfen, Pakete zurückgestellt (2026-11)
 
 **Stand:** App `code-runner`: Python (Pyodide = CPython als WebAssembly, `assets/vendor/pyodide`, ca. 13 MB, `precache: false`) und JavaScript, jeweils in einem Worker im App-Ordner (`py-worker.mjs` bleibt zwischen den Läufen, `js-worker.mjs` je Lauf neu; *Stopp* beendet den Worker). `guard.mjs` entfernt dort vor dem ersten Nutzer-Code Netzwerk (`fetch` nur noch für die eigenen Pyodide-Dateien, `XMLHttpRequest`, `WebSocket` …) und den gemeinsamen Speicher der Domain (`caches`, `indexedDB`).
