@@ -194,7 +194,7 @@ Jede App bietet im Menü (☰) den einklappbaren Bereich **„Daten sichern & ü
 
 ## Prüfen vor dem Commit
 
-`npm test` muss grün sein (einmalig vorher `npm install` und `npx playwright install chromium`, für den Grundcheck zusätzlich `npx playwright install --with-deps webkit firefox`). Die Tests prüfen das Folgende größtenteils automatisch:
+Während der Arbeit an einer App reicht `npm run test:app -- <ordner>` (fachliche Tests der App plus alle allgemeinen Prüfungen, die sie betreffen; weitere Playwright-Optionen dahinter, z. B. `--repeat-each=5 --workers=4`, um Wackler zu finden). Vor dem Commit: `npm test` muss grün sein (einmalig vorher `npm install` und `npx playwright install chromium`, für den Grundcheck zusätzlich `npx playwright install --with-deps webkit firefox`). Die Tests prüfen das Folgende größtenteils automatisch:
 
 - Seite lädt ohne JavaScript-Fehler.
 - Bei 375 px und bei Desktop-Breite kein horizontales Scrollen.

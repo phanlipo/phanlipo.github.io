@@ -31,9 +31,9 @@ const sample = page => page.evaluate(() => {
 
 test('the picture is live, music toggles both buttons, scene and settings persist', async ({ page }) => {
   await page.goto('/cast-demo/');
+  // Live: the picture changes (wait for the next drawn frames instead of a fixed pause)
   const a = await sample(page);
-  await page.waitForTimeout(300);
-  expect(await sample(page)).not.toBe(a);
+  await expect.poll(() => sample(page)).not.toBe(a);
   await page.locator('.controls [data-music]').click();
   await expect(page.locator('.controls [data-music]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.controls [data-music]')).toHaveText('Musik aus');

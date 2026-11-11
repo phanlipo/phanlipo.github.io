@@ -8,6 +8,9 @@ const pixel = (page, x, y) => page.evaluate(([x, y]) => {
   return [d[0], d[1], d[2]];
 }, [x, y]);
 
+/** After a viewport change: two animation frames – the page's ResizeObserver (fit) has run by then, however slow the machine */
+const frames = page => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+
 /** Drags across the canvas from (x1, y1) to (x2, y2) in CSS px relative to the canvas */
 async function stroke(page, x1, y1, x2, y2, { hold = 0 } = {}) {
   const box = await page.locator('#paper').boundingBox();
@@ -137,9 +140,9 @@ test('rotating to a narrower screen keeps the picture', async ({ page }) => {
   await page.click('[data-tool="brush"]');
   await stroke(page, 500, 60, 700, 60);
   await page.setViewportSize({ width: 375, height: 800 });
-  await page.waitForTimeout(100);
+  await frames(page);
   await page.setViewportSize({ width: 800, height: 500 });
-  await page.waitForTimeout(100);
+  await frames(page);
   expect(await pixel(page, 600, 60)).not.toEqual(WHITE);
 });
 
@@ -154,7 +157,7 @@ test('turning portrait → landscape → portrait shows the whole picture and ke
   const size = await page.evaluate(() => { const c = document.getElementById('paper'); return [c.width, c.height]; });
 
   await page.setViewportSize({ width: 800, height: 390 });
-  await page.waitForTimeout(150);
+  await frames(page);
   // Same picture (no resize), shown whole inside the visible area
   expect(await page.evaluate(() => { const c = document.getElementById('paper'); return [c.width, c.height]; })).toEqual(size);
   const [wrap, paper] = await page.evaluate(() => ['wrap', 'paper'].map(id => {
@@ -172,7 +175,7 @@ test('turning portrait → landscape → portrait shows the whole picture and ke
   await stroke(page, 60 * k, 60 * k, 160 * k, 60 * k);
 
   await page.setViewportSize({ width: 390, height: 800 });
-  await page.waitForTimeout(150);
+  await frames(page);
   expect(await page.evaluate(() => { const c = document.getElementById('paper'); return [c.width, c.height]; })).toEqual(size);
   expect(near(await pixel(page, bx - 50, by), [0x1b, 0x1b, 0x1b])).toBe(true);
   expect(near(await pixel(page, 110, 60), [0xe5, 0x39, 0x35], 20)).toBe(true);

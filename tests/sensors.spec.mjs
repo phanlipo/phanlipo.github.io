@@ -313,7 +313,8 @@ test.describe('sound level', () => {
     await tab(page, 'Schall');
     await running(page, 'sound');
     await expect.poll(async () => num(await text(page, 'sNow')), { timeout: 8000 }).toBeGreaterThan(dbfs + 100 - 0.3);
-    await page.waitForTimeout(800);
+    // The average follows the current level with a delay – wait for it instead of a fixed pause
+    await expect.poll(async () => Math.abs(num(await text(page, 'sAvg')) - (dbfs + 100)), { timeout: 8000 }).toBeLessThan(0.5);
     expect(num(await text(page, 'sNow'))).toBeCloseTo(dbfs + 100, 0);
     expect(num(await text(page, 'sAvg'))).toBeCloseTo(dbfs + 100, 0);
     expect(num(await text(page, 'sDbfs'))).toBeCloseTo(dbfs, 0);
