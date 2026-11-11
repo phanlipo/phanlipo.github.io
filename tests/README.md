@@ -13,6 +13,7 @@ npx playwright install chromium      # einmalig: Browser
 npm test                             # alle Tests
 npx playwright test tests/dice-coin.spec.mjs   # nur eine Datei
 npx playwright test -g "offline"     # nur Tests, deren Name passt
+npm run test:app -- pdf-viewer       # nur eine App: ihre Tests + alle allgemeinen Prüfungen, die sie betreffen
 ```
 
 Ein kleiner Webserver (`tests/server.mjs`) startet automatisch und liefert das Repository wie GitHub Pages aus.

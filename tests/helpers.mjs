@@ -131,6 +131,15 @@ export async function openMenu(page) {
   await expect(page.locator('#appMenu')).toBeVisible();
 }
 
+/**
+ * Waits until the CSS animations and transitions running on the element (and inside it) have finished –
+ * e.g. the opening animation of the menu – instead of a fixed pause that is too short under load.
+ */
+export function animationsDone(locator) {
+  return locator.evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(a => a.finished.catch(() => {})))
+    .then(() => undefined));
+}
+
 /** Closes the menu again (close button), so the stage can be used */
 export async function closeMenu(page) {
   if (!(await page.locator('#appMenu[open]').count())) return;

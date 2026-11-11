@@ -167,10 +167,10 @@ test('in time: counts in one bar, records exactly one bar, metronome clicks; tem
   const rate = await page.evaluate(() => new AudioContext().sampleRate);
   expect(await num(page, 'data-loop-samples')).toBe(rate); // 4 beats at 240 BPM = 1 s
   expect(await num(page, 'data-loop-ms')).toBe(1000);
-  await page.waitForTimeout(600);
+  // Two bars of clicks: wait until they are scheduled (a fixed pause got fewer under load)
+  await expect.poll(() => page.evaluate(() => window.__clicks.length), { timeout: 5000 }).toBeGreaterThanOrEqual(8);
   const clicks = await page.evaluate(() => window.__clicks);
   // Beats 0.25 s apart, the first of every bar higher
-  expect(clicks.length).toBeGreaterThanOrEqual(8);
   for (let i = 1; i < clicks.length; i++) expect(clicks[i][0] - clicks[i - 1][0]).toBeCloseTo(0.25, 3);
   const accents = clicks.map(c => c[1] > 1500);
   expect(accents.slice(0, 8)).toEqual([true, false, false, false, true, false, false, false]);

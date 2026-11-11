@@ -67,10 +67,9 @@ test.describe('landscape screen', () => {
     await expect(showText(page)).toHaveCSS('color', 'rgb(255, 234, 0)');
     // 60 % of 400 px
     expect(parseFloat(await showText(page).getAttribute('data-font-size'))).toBeCloseTo(240, 0);
+    // Moves to the left: wait for the movement instead of a fixed pause (under load fewer frames are drawn)
     const a = (await box(page)).left;
-    await page.waitForTimeout(300);
-    const b = (await box(page)).left;
-    expect(b).toBeLessThan(a - 20);
+    await expect.poll(async () => (await box(page)).left).toBeLessThan(a - 20);
     // Text is one line: its height is about one line
     const r = await box(page);
     expect(r.bottom - r.top).toBeLessThan(240 * 1.3);
@@ -110,8 +109,7 @@ test.describe('landscape screen', () => {
     await page.locator('#motions [data-m="right"]').click();
     await page.click('#btnShow');
     const a = (await box(page)).left;
-    await page.waitForTimeout(300);
-    expect((await box(page)).left).toBeGreaterThan(a + 10);
+    await expect.poll(async () => (await box(page)).left).toBeGreaterThan(a + 10);
   });
 
   test('still text is shrunk to fit the screen, Escape and back end it', async ({ page }) => {

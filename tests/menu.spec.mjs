@@ -1,7 +1,7 @@
 // App menu (☰, every app) and stage layout (<body class="stage">), see AGENTS.md "Layout: Karten oder Bühne".
 // Every app: settings/history marked data-menu, data backup, help and footer are in the menu, which "back" closes.
 // Stage apps additionally fill the screen, the page does not scroll.
-import { test, expect, apps, stageApps, VIEWPORTS, expectNoHorizontalScroll } from './helpers.mjs';
+import { test, expect, apps, stageApps, VIEWPORTS, expectNoHorizontalScroll, animationsDone } from './helpers.mjs';
 
 const list = stageApps();
 
@@ -128,7 +128,7 @@ for (const app of apps()) {
       await page.goto(url);
       await page.locator('.menu-btn').click();
       await expect(page.locator('#appMenu')).toBeVisible();
-      await page.waitForTimeout(300); // opening animation
+      await animationsDone(page.locator('#appMenu')); // opening animation
       const box = await page.locator('#appMenu').boundingBox();
       expect(Math.round(box.x + box.width)).toBe(VIEWPORTS.desktop.width);
       expect(Math.round(box.height)).toBe(VIEWPORTS.desktop.height);
@@ -139,7 +139,8 @@ for (const app of apps()) {
       await page.setViewportSize(PHONES.portrait);
       await page.goto(url);
       await page.locator('.menu-btn').click();
-      await page.waitForTimeout(300); // opening animation
+      await expect(page.locator('#appMenu')).toBeVisible();
+      await animationsDone(page.locator('#appMenu')); // opening animation
       const m = await page.evaluate(() => {
         const sheet = document.querySelector('#appMenu'), body = sheet.querySelector('.menu-body');
         const r = sheet.getBoundingClientRect();
