@@ -116,6 +116,10 @@ for (const t of tools) {
       throw new Error(`${t.file}: tool:connect "${c}" not allowed (https: / https://host / http://localhost:* only)`);
   if (!t.titleEn || !t.descriptionEn)
     throw new Error(`${t.file}: <meta name="tool:title-en"> and <meta name="tool:description-en"> are required (English start page and manifest)`);
+  // Start page cards show only the name – what the app does belongs in the description
+  for (const name of [t.title, t.titleEn])
+    if (/ [–—-] |[:?|]/.test(name) || name.length > 24)
+      throw new Error(`${t.file}: title "${name}" too long – only the app's name (max. 24 characters, no addition after "–"/":"), details go in the description`);
 }
 // Installable apps: every listed tool plus the template (so copies work right away)
 const apps = [...tools, ...pages.filter(p => p.folder === 'template')];
