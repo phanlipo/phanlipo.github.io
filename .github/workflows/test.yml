@@ -49,9 +49,13 @@ jobs:
         id: flaky
         if: always()
         run: node tests/flaky-summary.mjs
-      # On failure – and when a test was flaky, so its trace can be looked at although the run is green
+      # On failure – and when a test was flaky, so its trace can be looked at although the run is green.
+      # Only a helper: if GitHub's artifact storage fails (November 2026: hung 10 minutes, then failed),
+      # the job keeps the result of the tests instead of turning red.
       - name: Upload report
         if: failure() || steps.flaky.outputs.flaky == 'true'
+        continue-on-error: true
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ matrix.shard }}
@@ -93,6 +97,8 @@ jobs:
         run: node tests/flaky-summary.mjs
       - name: Upload report
         if: failure() || steps.flaky.outputs.flaky == 'true'
+        continue-on-error: true
+        timeout-minutes: 5
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ matrix.engine }}
