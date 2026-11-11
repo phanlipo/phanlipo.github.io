@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="get_game, fire_shot">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rSmymUqdtvnxgHx2i4mPHgFuMrAykS7XkSHm+8ZMhc0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-F/+4PNlYhdfBX/yKvDoS20qr3nft2aFmSIVC3wJHBWc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -334,13 +334,14 @@ button.cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px;z-i
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 2b101ffe4e2e</p>
+  <p class="footer-version">Version 27781d892d30</p>
   <!-- footer:end -->
 </footer>
 
 <script src="../assets/common.js"></script>
 <script src="../assets/vendor/qrcode-generator/qrcode.js"></script>
 <script src="../assets/vendor/zxing-wasm/iife/reader/index.js"></script>
+<script src="../assets/shared/p2p.js"></script>
 <script>
 (function(){
 'use strict';
@@ -420,66 +421,16 @@ const settings=Tools.load(LS_SET,{stun:false});
    would pass through a third-party server (AGENTS.md: no data to servers). If it is ever wanted:
    three optional fields in the settings (turn:/turns: URL, user name, password) for the user's
    own server (e.g. coturn), saved in sea-battle.settings.v1, explained in the help (what the server
-   sees), added as {urls,username,credential} to iceServers in newPeer(). Both devices need the
-   same setting; ICE gathering may then take longer (raise the timeout in gathered()); relay
-   candidates make the code longer (encodeSdp keeps "raddr/rport", so they already fit). */
-const STUN='stun:stun.l.google.com:19302';
+   sees), added as {urls,username,credential} to iceServers in P2P.peer() (assets/shared/p2p.js, shared
+   with the other multi-device games). Both devices need the same setting; ICE gathering may then take
+   longer (raise the timeout in gathered() there); relay candidates make the code longer (encode keeps
+   "raddr/rport", so they already fit). */
 const N=10,COLS='ABCDEFGHIJ';
 const FLEET=[{id:'5',len:5},{id:'4',len:4},{id:'3a',len:3},{id:'3b',len:3},{id:'2',len:2}];
 const cellName=i=>COLS[i%N]+(Math.floor(i/N)+1);
 const shipName=s=>t('ship.'+s.id);
 
-/* ================= Connection codes =================
-   The code holds only what a data-channel SDP needs (setup role, ICE user/password, DTLS fingerprint,
-   candidates); the full SDP is rebuilt from it. Game code = link to this page with #join=<code>. */
-const b64u=bytes=>btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-const unb64u=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
-function encodeSdp(sdp,kind){
-  const lines=sdp.split(/\r?\n/).map(l=>l.trim());
-  const get=k=>{const l=lines.find(x=>x.startsWith('a='+k+':'));return l?l.slice(k.length+3).trim():'';};
-  const fp=get('fingerprint').split(' ');
-  if(!fp[1]||fp[0].toLowerCase()!=='sha-256')throw new Error('no sha-256 fingerprint');
-  const setup={actpass:'x',active:'a',passive:'p'}[get('setup')]||'x';
-  const cands=lines.filter(l=>l.startsWith('a=candidate:')).map(l=>{
-    const p=l.slice(12).split(' '),i=p.indexOf('raddr');
-    return p.slice(0,8).concat(i>0?['raddr',p[i+1],'rport',p[i+3]]:[]).join('_');
-  });
-  return {code:[kind+'1',setup,get('ice-ufrag'),get('ice-pwd'),b64u(fp[1].split(':').map(h=>parseInt(h,16))),...cands].join('~'),candidates:cands};
-}
-function decodeCode(code){
-  const p=code.trim().split('~');
-  if(p.length<6||!/^[OA]1$/.test(p[0])||!/^[xap]$/.test(p[1]))throw new Error('bad code');
-  const [,setup,ufrag,pwd,fp,...cands]=p;
-  if(!/^[A-Za-z0-9+/]{4,256}$/.test(ufrag)||!/^[A-Za-z0-9+/]{22,256}$/.test(pwd))throw new Error('bad credentials');
-  const bytes=unb64u(fp);if(bytes.length!==32)throw new Error('bad fingerprint');
-  const hex=[...bytes].map(b=>b.toString(16).padStart(2,'0').toUpperCase()).join(':');
-  for(const c of cands)if(!/^[A-Za-z0-9+/._:-]+$/.test(c))throw new Error('bad candidate');
-  const sdp=['v=0','o=- 0 2 IN IP4 127.0.0.1','s=-','t=0 0','a=group:BUNDLE 0',
-    'm=application 9 UDP/DTLS/SCTP webrtc-datachannel','c=IN IP4 0.0.0.0',
-    ...cands.map(c=>'a=candidate:'+c.replace(/_/g,' ')),'a=end-of-candidates',
-    'a=ice-ufrag:'+ufrag,'a=ice-pwd:'+pwd,'a=fingerprint:sha-256 '+hex,
-    'a=setup:'+{x:'actpass',a:'active',p:'passive'}[setup],'a=mid:0','a=sctp-port:5000','a=max-message-size:262144',''].join('\r\n');
-  return {type:p[0][0]==='O'?'offer':'answer',sdp};
-}
-/** Code from scanned/pasted text: the link (#join=…) or the bare code */
-function extractCode(text){
-  const s=String(text||'').trim(),m=s.match(/[#&?]join=([^&\s]+)/);
-  try{return m?decodeURIComponent(m[1]):s;}catch(_){return s;}
-}
-const kindOf=code=>/^O1~/.test(code)?'offer':/^A1~/.test(code)?'answer':null;
-const offerLink=code=>location.origin+location.pathname+'#join='+code;
-
-/* ================= QR ================= */
-function drawQr(canvas,text){
-  const qr=qrcode(0,'L');qr.addData(text,'Byte');qr.make();
-  const n=qr.getModuleCount(),Q=4,scale=Math.max(4,Math.floor(600/(n+2*Q))),size=(n+2*Q)*scale;
-  canvas.width=canvas.height=size;
-  const ctx=canvas.getContext('2d');
-  ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);ctx.fillStyle='#000';
-  for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(qr.isDark(r,c))ctx.fillRect((c+Q)*scale,(r+Q)*scale,scale,scale);
-  canvas.dataset.text=text;
-  Tools.diag.log('qr drawn',{modules:n,chars:text.length});
-}
+/* Connection codes, QR code, WebRTC and the QR scanner: assets/shared/p2p.js (window.P2P) */
 
 /* ================= Screens ================= */
 const SCREENS=['scrLobby','scrHost','scrGuest','scrScan','scrSetup','scrPlay'];
@@ -492,49 +443,23 @@ function show(id){
 }
 const setStatus=(id,msg,cls)=>{const el=$(id);el.textContent=msg||'';el.className='status'+(cls?' '+cls:'');};
 
-/* ================= WebRTC ================= */
-let pc=null,dc=null,role=null,myCode='',connectTimer=null,closing=false,wakeLock=null;
-const connected=()=>!!dc&&dc.readyState==='open';
+/* ================= Connection (P2P.peer) ================= */
+let peer=null,role=null,myCode='',connectTimer=null,wakeLock=null;
+const connected=()=>!!peer&&peer.isOpen();
 function closeConn(){
-  closing=true;
   clearTimeout(connectTimer);
-  try{if(dc)dc.close();}catch(_){}
-  try{if(pc)pc.close();}catch(_){}
-  pc=dc=null;role=null;myCode='';
+  const p=peer;peer=null;role=null;myCode='';
+  if(p)p.close();
   releaseWake();
-  closing=false;
 }
 function newPeer(r){
   closeConn();
-  if(!window.RTCPeerConnection)throw new Error('noRtc');
-  role=r;
-  pc=new RTCPeerConnection({iceServers:settings.stun?[{urls:STUN}]:[]});
-  dc=pc.createDataChannel('sea-battle',{negotiated:true,id:0,ordered:true});
-  const myPc=pc,myDc=dc;
-  pc.addEventListener('connectionstatechange',()=>{
-    Tools.diag.log('pc state',myPc.connectionState);
-    if(myPc===pc&&myPc.connectionState==='failed')lostConnection('disconnected');
-  });
-  pc.addEventListener('iceconnectionstatechange',()=>Tools.diag.log('ice state',myPc.iceConnectionState));
-  dc.addEventListener('open',()=>{if(myDc===dc)onOpen();});
-  dc.addEventListener('close',()=>{Tools.diag.log('channel closed');if(myDc===dc&&!closing)lostConnection('disconnected');});
-  dc.addEventListener('message',e=>{if(myDc===dc)onMessage(e.data);});
-}
-function gathered(p){
-  return new Promise(res=>{
-    if(p.iceGatheringState==='complete')return res();
-    const done=()=>{if(p.iceGatheringState==='complete'){clearTimeout(to);res();}};
-    const to=setTimeout(res,settings.stun?5000:2500);
-    p.addEventListener('icegatheringstatechange',done);
-  });
-}
-async function localCode(kind){
-  await gathered(pc);
-  const {code,candidates}=encodeSdp(pc.localDescription.sdp,kind);
-  Tools.diag.log((kind==='O'?'offer':'answer')+' created',{chars:code.length,candidates:candidates.length,
-    types:candidates.map(c=>c.split('_')[7]).join(',')||'none',stun:settings.stun});
-  if(!candidates.length)throw new Error('noCandidates');
-  return code;
+  const p=P2P.peer({stun:!!settings.stun,label:'sea-battle'});
+  peer=p;role=r;
+  p.on('open',()=>{if(p===peer)onOpen();});
+  p.on('message',m=>{if(p===peer)onMessage(m);});
+  p.on('close',why=>{if(p===peer)lostConnection('disconnected');});
+  return p;
 }
 function errText(e){return e&&(e.message==='noRtc'||e.message==='noCandidates')?t(e.message):t('connectFail');}
 
@@ -542,13 +467,11 @@ async function startHost(){
   show('scrHost');setStatus('hostStatus',t('preparing'));
   const ctx=$('qrOffer').getContext('2d');ctx.clearRect(0,0,9999,9999);$('answerIn').value='';
   try{
-    newPeer('host');
-    const p=pc;
-    await pc.setLocalDescription(await pc.createOffer());
-    const code=await localCode('O');
-    if(p!==pc)return;
-    myCode=offerLink(code);
-    drawQr($('qrOffer'),myCode);
+    const p=newPeer('host');
+    const code=await p.offer();
+    if(p!==peer)return;
+    myCode=P2P.link(code);
+    P2P.drawQr($('qrOffer'),myCode);
     setStatus('hostStatus',t('waitAnswer'));
   }catch(e){Tools.diag.log('host failed',e);setStatus('hostStatus',errText(e),'err');}
 }
@@ -556,42 +479,33 @@ async function acceptOffer(code){
   show('scrGuest');setStatus('guestStatus',t('preparing'));
   const ctx=$('qrAnswer').getContext('2d');ctx.clearRect(0,0,9999,9999);
   try{
-    const desc=decodeCode(code);
-    newPeer('guest');
-    const p=pc;
-    await pc.setRemoteDescription(desc);
-    await pc.setLocalDescription(await pc.createAnswer());
-    const answer=await localCode('A');
-    if(p!==pc)return;
+    const p=newPeer('guest');
+    const answer=await p.answer(code);
+    if(p!==peer)return;
     myCode=answer;
-    drawQr($('qrAnswer'),answer);
+    P2P.drawQr($('qrAnswer'),answer);
     if(!connected())setStatus('guestStatus',t('waitHost'));
   }catch(e){Tools.diag.log('join failed',e);setStatus('guestStatus',errText(e),'err');}
 }
 async function acceptAnswer(code){
   show('scrHost');
-  if(!pc||role!=='host'||pc.signalingState!=='have-local-offer'){setStatus('hostStatus',t('connectFail'),'err');return;}
+  const p=peer;
+  if(!p||role!=='host'){setStatus('hostStatus',t('connectFail'),'err');return;}
   try{
-    await pc.setRemoteDescription(decodeCode(code));
-    Tools.diag.log('answer set');
+    await p.accept(code);
     setStatus('hostStatus',t('connecting'));
     clearTimeout(connectTimer);
-    connectTimer=setTimeout(()=>{if(!connected()){Tools.diag.log('connect timeout',{ice:pc&&pc.iceConnectionState});setStatus('hostStatus',t('connectFail'),'err');}},20000);
+    connectTimer=setTimeout(()=>{if(p===peer&&!connected()){Tools.diag.log('connect timeout',p.state());setStatus('hostStatus',t('connectFail'),'err');}},20000);
   }catch(e){Tools.diag.log('answer failed',e);setStatus('hostStatus',t('connectFail'),'err');}
 }
 /** Scanned or pasted text: decides what to do with it */
 function useCode(text,expect){
-  const code=extractCode(text),kind=kindOf(code);
-  let valid=!!kind;
-  if(valid){try{decodeCode(code);}catch(_){valid=false;}}
-  if(!valid)return {ok:false,msg:t('badCode')};
-  if(expect==='offer'&&kind==='answer')return {ok:false,msg:t('isAnswer')};
-  if(expect==='answer'&&kind==='offer')return {ok:false,msg:t('isOffer')};
-  if(kind==='offer')acceptOffer(code);else acceptAnswer(code);
+  const r=P2P.check(text,expect);
+  if(!r.ok)return {ok:false,msg:t(r.why)};
+  if(r.kind==='offer')acceptOffer(r.code);else acceptAnswer(r.code);
   return {ok:true};
 }
 function lostConnection(reason){
-  if(closing)return;
   Tools.diag.log('connection lost',reason);
   const wasGame=['scrSetup','scrPlay'].includes(screen)||screen==='scrGuest'||screen==='scrHost';
   closeConn();resetGame();
@@ -608,7 +522,7 @@ function onOpen(){
   game.games=0;game.starter=null;
   startSetup();
 }
-function send(msg){if(connected())dc.send(JSON.stringify(msg));}
+function send(msg){if(peer)peer.send(msg);}
 
 /* ---------- Screen stays on while connected ---------- */
 async function keepAwake(){
@@ -618,75 +532,28 @@ async function keepAwake(){
 function releaseWake(){if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null;}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&connected())keepAwake();});
 
-/* ================= Scanner (BarcodeDetector → zxing-wasm) ================= */
-let stream=null,scanTimer=null,scanExpect=null,detector=null,wasmReady=null,scanEngine='',lastHint=0,scanBusy=false;
-const scanCanvas=document.createElement('canvas');
-async function getDetector(){
-  if(detector!==null)return detector;
-  detector=false;
-  try{if('BarcodeDetector' in window&&(await window.BarcodeDetector.getSupportedFormats()).includes('qr_code'))detector=new window.BarcodeDetector({formats:['qr_code']});}catch(_){}
-  return detector;
-}
-function prepareWasm(){
-  if(wasmReady)return wasmReady;
-  wasmReady=Promise.resolve().then(()=>{
-    if(!window.ZXingWASM)return false;
-    return Promise.resolve(window.ZXingWASM.prepareZXingModule({fireImmediately:true,overrides:{locateFile:(path,prefix)=>path.endsWith('.wasm')?new URL('../assets/vendor/zxing-wasm/reader/'+path,location.href).href:prefix+path}})).then(()=>true);
-  }).catch(e=>{Tools.diag.log('zxing-wasm',e);return false;});
-  return wasmReady;
-}
-async function startScan(expect){
+/* ================= Scanner (P2P.scanner: BarcodeDetector → zxing-wasm) ================= */
+let scanExpect=null,lastHint=0;
+const scanner=P2P.scanner($('video'),{
+  onText(text){
+    const r=useCode(text,scanExpect);
+    if(r.ok){Tools.diag.log('code scanned',{expect:scanExpect});return true;}
+    if(Date.now()-lastHint>1500){lastHint=Date.now();setStatus('scanStatus',r.msg,'err');}
+    return false;
+  },
+  onStatus(code,detail){
+    if(code==='hint')setStatus('scanStatus',t('scanHint'));
+    else setStatus('scanStatus',code==='camFail'?t('camFail',{e:detail}):t(code),'err');
+  },
+});
+function startScan(expect){
   scanExpect=expect;
   $('h-scan').textContent=t(expect==='offer'?'scanOfferH':'scanAnswerH');
   show('scrScan');setStatus('scanStatus','');
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus('scanStatus',t('noCam'),'err');return;}
-  const det=await getDetector();
-  if(!det&&!(await prepareWasm())){setStatus('scanStatus',t('noDecoder'),'err');return;}
-  scanEngine=det?'BarcodeDetector':'zxing-wasm';
-  try{
-    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
-    if(screen!=='scrScan'){stopScan();return;}
-    const v=$('video');v.srcObject=stream;await v.play();
-    Tools.diag.log('camera on',{engine:scanEngine,w:v.videoWidth,h:v.videoHeight});
-    setStatus('scanStatus',t('scanHint'));
-    scanTimer=setTimeout(scanFrame,250);
-  }catch(e){
-    Tools.diag.log('camera failed',e);
-    setStatus('scanStatus',e&&e.name==='NotAllowedError'?t('camDenied'):t('camFail',{e:e&&e.name||String(e)}),'err');
-  }
+  scanner.start();
 }
-function stopScan(){
-  clearTimeout(scanTimer);scanTimer=null;
-  if(stream){stream.getTracks().forEach(tr=>tr.stop());stream=null;}
-  $('video').srcObject=null;
-}
-async function decodeVideo(v){
-  if(detector){const r=await detector.detect(v);return r&&r[0]?r[0].rawValue:null;}
-  const W=v.videoWidth,H=v.videoHeight,sc=Math.min(1,960/Math.max(W,H));
-  scanCanvas.width=Math.round(W*sc);scanCanvas.height=Math.round(H*sc);
-  const ctx=scanCanvas.getContext('2d',{willReadFrequently:true});
-  ctx.drawImage(v,0,0,scanCanvas.width,scanCanvas.height);
-  const res=await window.ZXingWASM.readBarcodes(ctx.getImageData(0,0,scanCanvas.width,scanCanvas.height),{formats:['QRCode'],tryHarder:true,maxNumberOfSymbols:1});
-  const hit=res&&res.find(r=>r.isValid!==false&&r.text);return hit?hit.text:null;
-}
-async function scanFrame(){
-  if(!stream)return;
-  const v=$('video');
-  if(!scanBusy&&v.videoWidth){
-    scanBusy=true;
-    try{
-      const text=await decodeVideo(v);
-      if(text&&stream){
-        const r=useCode(text,scanExpect);
-        if(r.ok){Tools.diag.log('code scanned',{expect:scanExpect});if(navigator.vibrate)navigator.vibrate(60);stopScan();return;}
-        if(Date.now()-lastHint>1500){lastHint=Date.now();setStatus('scanStatus',r.msg,'err');}
-      }
-    }catch(e){Tools.diag.log('scan error',e);}
-    finally{scanBusy=false;}
-  }
-  if(stream)scanTimer=setTimeout(scanFrame,200);
-}
-function cancelScan(){stopScan();show(scanExpect==='answer'&&pc?'scrHost':'scrLobby');}
+function stopScan(){scanner.stop();}
+function cancelScan(){stopScan();show(scanExpect==='answer'&&peer?'scrHost':'scrLobby');}
 
 /* ================= Game ================= */
 const game={ships:[],sel:null,myReady:false,peerReady:false,myTurn:false,busy:null,over:null,
@@ -901,9 +768,8 @@ function finish(result){
   Tools.diag.log('game over',{result,games:game.games});
   if(navigator.vibrate)navigator.vibrate(result==='won'?[60,40,60,40,200]:300);
 }
-function onMessage(raw){
-  let m;try{m=JSON.parse(raw);}catch(_){Tools.diag.log('bad message');return;}
-  if(!m||typeof m!=='object')return;
+/** Message from the other device (already parsed by P2P, always an object) */
+function onMessage(m){
   switch(m.t){
     case 'hello':if(m.v!==1)Tools.diag.log('peer version',m.v);break;
     case 'ready':game.peerReady=true;if(screen==='scrSetup')renderSetup();maybeStart();break;
@@ -964,8 +830,8 @@ joinFromLink();
 window.addEventListener('hashchange',joinFromLink);
 
 /* ================= Diagnostics ================= */
-Tools.diag.info(()=>({screen,role:role||'-',pc:pc?pc.connectionState:'-',ice:pc?pc.iceConnectionState:'-',channel:dc?dc.readyState:'-',
-  stun:!!settings.stun,scanner:scanEngine||'-',camera:!!stream,webrtc:!!window.RTCPeerConnection,
+Tools.diag.info(()=>({screen,role:role||'-',...(peer?peer.state():{pc:'-',ice:'-',channel:'-'}),
+  stun:!!settings.stun,scanner:scanner.engine()||'-',camera:scanner.active(),webrtc:!!window.RTCPeerConnection,
   barcodeDetector:'BarcodeDetector' in window,ships:game.ships.length,shotsFired:game.enemy.filter(Boolean).length,
   shotsReceived:game.own.filter(Boolean).length,myTurn:game.myTurn,over:game.over||'-',games:game.games}));
 
