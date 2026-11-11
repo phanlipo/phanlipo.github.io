@@ -30,12 +30,15 @@ for (const app of pages) {
         expect(await serviceWorkerActive(page), 'service worker installed and active').toBe('active');
         // let the page finish loading what it fetches by itself (e.g. WebAssembly) – going offline in the
         // middle aborts those requests, which is not what a user does
+        await fontsLoaded(page);
         await page.reload({ waitUntil: 'networkidle' });
         expect(await page.evaluate(() => !!navigator.serviceWorker.controller), 'controlled by its service worker').toBe(true);
         expect(await missingFromCache(page), 'files of sw.js missing from the offline cache').toEqual([]);
+        await fontsLoaded(page);
         await context.setOffline(true);
         await page.reload();
         await expect(page.locator('h1').first()).toBeVisible();
+        await fontsLoaded(page);
         await context.setOffline(false);
       });
     }
@@ -53,6 +56,14 @@ function serviceWorkerActive(page, ms = 20000) {
     const s = w => (w ? w.state : '-');
     return `after ${ms} ms: installing ${s(reg.installing)}, waiting ${s(reg.waiting)}, active ${s(reg.active)}`;
   }, ms);
+}
+
+// Waits until the web fonts the page started loading are done (e.g. KaTeX in brew-calculator). A reload
+// in the middle aborts them, and Firefox reports each aborted font as a console error
+// ("downloadable font: download failed … status=2152398850" = NS_BINDING_ABORTED) – seen in CI.
+// A missing font file still fails: the promise resolves, and the failed request is a console error too.
+function fontsLoaded(page) {
+  return page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
 // Every file the app's sw.js precaches must be in its cache before going offline

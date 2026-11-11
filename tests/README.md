@@ -105,5 +105,7 @@ Erwartete Werte möglichst **unabhängig nachrechnen** (siehe `brew-calculator.s
 
 Die Tests laufen parallel und müssen unter Last stabil sein (CI: 4 Worker je Runner). Deshalb:
 
+- **Zweiter Versuch nur in CI, wackelige Tests sichtbar:** In CI bekommt jeder Test einen zweiten Versuch (`retries: 1`, mit Trace). Wird ein Test erst dann grün, listet `tests/flaky-summary.mjs` ihn als Warnung am PR und in der Job-Zusammenfassung (mit der Fehlermeldung des ersten Versuchs); der Bericht mit Trace liegt als Artefakt `playwright-report-…` bereit. Solche Tests wie rote beheben. Lokal nachstellen: `npx playwright test <datei> --repeat-each=10 --workers=4`.
+
 - **Keine echte Wartezeit, wo es eine Uhr gibt:** Zeitabhängiges mit `page.clock` steuern. Läuft die Uhr nach `clock.install()` frei weiter, kommt unter Last echte Zeit hinzu – vor dem Messen anhalten (`clock.pauseAt(…)`) und nur mit `clock.runFor(…)` weiterdrehen (Beispiel: Klavier-Werkzeuge in `webmcp.spec.mjs`). Echte Zeit nur, wo sie zur Sache gehört (Audio-Aufnahmen in `talking-animal`).
 - **Barrierefreiheit:** `axe(page)` aus `helpers.mjs` statt `new AxeBuilder(…)`.

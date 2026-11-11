@@ -14,9 +14,18 @@ export default defineConfig({
   // (Playwright's default is half). Locally the default stays.
   workers: process.env.CI ? 4 : undefined,
   forbidOnly: !!process.env.CI,
-  retries: 0,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  // CI: one retry, so a single hiccup of a shared runner (service worker install stalls, CPU starved by
+  // a parallel OCR test) does not turn the whole run red. A test that passes only on the retry is
+  // "flaky": tests/flaky-summary.mjs lists it as a warning on the pull request and in the job summary,
+  // with the trace of the retry in the report – it must be fixed like a red test (AGENTS.md, "Tests").
+  // A test that fails twice stays red. Locally no retry: every failure shows up at once.
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI
+    ? [['list'], ['html', { open: 'never' }], ['json', { outputFile: 'test-results/report.json' }]]
+    : 'list',
   use: {
+    // Trace (DOM snapshots, network, console) of the retry: shows what happened in the flaky attempt
+    trace: process.env.CI ? 'on-first-retry' : 'off',
     baseURL: `http://localhost:${PORT}`,
     serviceWorkers: 'allow',
     locale: 'de-DE',
