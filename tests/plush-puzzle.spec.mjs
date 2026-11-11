@@ -239,6 +239,11 @@ test('the shadow keeps its size while parts are added (no zooming in)', async ({
   // A small change of the board (e.g. the browser bar) keeps the size too and keeps the parts on the board
   await page.setViewportSize({ width: 375, height: 660 });
   await expect.poll(async () => (await box(page.locator('#board'))).h).toBeLessThan(board0.h - 30);
+  // The app follows the new size on the next frame: wait until its board matches
+  await expect.poll(async () => page.evaluate(() => {
+    const vb = document.getElementById('svg').viewBox.baseVal, b = document.getElementById('board');
+    return Math.abs(vb.height - b.clientHeight);
+  })).toBeLessThan(2);
   const s1 = await shadowSize(page);
   expect(Math.abs(s1.w - s0.w)).toBeLessThan(1);
   const boardBox = await box(page.locator('#board'));
@@ -252,8 +257,9 @@ test('the shadow keeps its size while parts are added (no zooming in)', async ({
   await page.setViewportSize({ width: 375, height: 700 });
   await page.reload();
   await expect(page.locator('#board')).toHaveAttribute('data-phase', 'play');
+  // Same board size → exactly the same size (the trial placement has a fixed seed)
   const s2 = await shadowSize(page);
-  expect(Math.abs(s2.w - s0.w) / s0.w).toBeLessThan(0.1);
+  expect(Math.abs(s2.w - s0.w)).toBeLessThan(1);
 });
 
 for (const [id, n] of [['lion', 10], ['giraffe', 11], ['owl', 12], ['octopus', 9]]) {
