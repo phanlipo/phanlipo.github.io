@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "sea-battle";
-const VERSION = '2b101ffe4e2e';
+const VERSION = '27781d892d30';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -15,6 +15,7 @@ const FILES = [
   "manifest.webmanifest",
   "../assets/base.css",
   "../assets/common.js",
+  "../assets/shared/p2p.js",
   "../assets/vendor/qrcode-generator/qrcode.js",
   "../assets/vendor/zxing-wasm/iife/reader/index.js",
   "../assets/vendor/zxing-wasm/reader/zxing_reader.wasm"

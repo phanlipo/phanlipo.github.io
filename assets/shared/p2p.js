@@ -1,5 +1,6 @@
 /* Direct connections between devices (WebRTC data channels) without a server – window.P2P.
-   Used by card-games and quartet; the format of the codes is the one of sea-battle and rock-paper-scissors.
+   Used by card-games, quartet, sea-battle and rock-paper-scissors. Do not change the format of the codes
+   without still accepting the old one: devices with an older and a newer app version must still connect.
 
    Two codes are exchanged (QR code, link or copied text):
      offer  "O1~…"  host → guest   (as link: <page>#join=<code>, opens the page on the other phone)
