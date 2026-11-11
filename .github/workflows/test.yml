@@ -1,4 +1,6 @@
 # Runs the browser tests (tests/, Playwright) for every pull request and every push to main.
+# In CI every test gets one retry (playwright.config.mjs); tests that pass only on the retry are listed
+# as warnings and in the job summary (tests/flaky-summary.mjs) – fix them like red tests.
 name: Tests
 
 on:
@@ -43,8 +45,13 @@ jobs:
         run: node scripts/build.mjs
       - name: Run tests
         run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/3
+      - name: List flaky tests
+        id: flaky
+        if: always()
+        run: node tests/flaky-summary.mjs
+      # On failure – and when a test was flaky, so its trace can be looked at although the run is green
       - name: Upload report
-        if: failure()
+        if: failure() || steps.flaky.outputs.flaky == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ matrix.shard }}
@@ -55,10 +62,17 @@ jobs:
   # On macOS: there both browsers run without extra system packages – on Ubuntu, WebKit needs GTK 4,
   # GStreamer … via apt (--with-deps), and the Ubuntu mirror sometimes took over 15 minutes for that.
   # WebKit on macOS is also closer to Safari.
+  # One runner per engine: macos-latest has only 3 CPUs, and with both engines on one runner the service
+  # workers sometimes did not finish installing in time ("installing" after 20 s). Each engine now has
+  # its runner to itself, with 2 workers.
   engines:
-    name: WebKit & Firefox
+    name: ${{ matrix.engine == 'webkit' && 'WebKit' || 'Firefox' }}
     runs-on: macos-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [webkit, firefox]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -68,18 +82,20 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install webkit firefox
+      - run: npx playwright install ${{ matrix.engine }}
       - name: Build generated files
         run: node scripts/build.mjs
-      # macos-latest has 3 CPUs: with the 4 workers of playwright.config (sized for the 4-core Ubuntu
-      # runners) the service workers of WebKit and Firefox sometimes did not finish installing in time
       - name: Run tests
-        run: npx playwright test --project=webkit --project=firefox --workers=2
+        run: npx playwright test --project=${{ matrix.engine }} --workers=2
+      - name: List flaky tests
+        id: flaky
+        if: always()
+        run: node tests/flaky-summary.mjs
       - name: Upload report
-        if: failure()
+        if: failure() || steps.flaky.outputs.flaky == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report-engines
+          name: playwright-report-${{ matrix.engine }}
           path: playwright-report/
           retention-days: 14
 
