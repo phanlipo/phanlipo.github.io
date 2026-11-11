@@ -274,6 +274,28 @@ test.describe('against the computer', () => {
       expect(await page.locator('.cmp li').nth(vals[0] > vals[1] ? 0 : 1).getAttribute('class')).toContain('win');
     }
     await expect(page.locator('#btnNext')).toBeVisible();
+    // Own card shown in full first; tapping the opponent's row shows the opponent's whole card
+    const shown = page.locator('.reveal .mine');
+    await expect(shown.locator('.mine-h')).toHaveText('Deine Karte');
+    await expect(shown.locator('.cname')).toHaveText(name);
+    await expect(page.locator('.cmp .row-btn').first()).toHaveAttribute('aria-pressed', 'true');
+    const other = page.locator('.cmp li').nth(1);
+    const otherName = await other.locator('.who span').textContent();
+    const otherVal = await other.locator('.val').textContent();
+    await other.locator('.row-btn').click();
+    await expect(shown.locator('.mine-h')).toHaveText('Karte von Computer 1');
+    await expect(shown.locator('.cname')).toHaveText(otherName);
+    await expect(other.locator('.row-btn')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.cmp .row-btn').first()).toHaveAttribute('aria-pressed', 'false');
+    // all categories of the opponent's card, the chosen one marked with the value from the list
+    await expect(shown.locator('.stat')).toHaveCount(6);
+    await expect(shown.locator('.stat.hit .sv')).toHaveText(otherVal);
+    await expect(shown.locator('.stat.hit .sn')).toHaveText('Gewicht');
+    // next round: own card again
+    await page.click('#btnNext');
+    await myTurn(page);
+    await page.locator('#table button.stat').first().click();
+    await expect(page.locator('.reveal .mine .mine-h')).toHaveText('Deine Karte');
   });
 
   test('settings are kept', async ({ page }) => {
