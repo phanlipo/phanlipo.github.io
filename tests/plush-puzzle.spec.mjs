@@ -141,7 +141,9 @@ test('the last part brings confetti; the animal counts as finished', async ({ pa
   // The rain stops by itself
   await expect(page.locator('#confetti')).toBeHidden({ timeout: 15000 });
   await page.click('#btnOther');
-  await expect(page.locator('[data-animal="dolphin"] .done')).toHaveText('⭐ 1× fertig');
+  // Only a star is visible; the count is for screen readers
+  await expect(page.locator('[data-animal="dolphin"] .done')).toHaveText('⭐1× fertig');
+  await expect(page.locator('[data-animal="dolphin"] .done .sr-only')).toHaveText('1× fertig');
   await openMenu(page);
   await expect(page.locator('#solvedInfo')).toHaveText('Schon 1× ein Tier fertig gebaut.');
   await closeMenu(page);
