@@ -72,7 +72,7 @@ const appId=()=>settings.appId||DEFAULT_APP_ID;
 const save=()=>Tools.save(LS,settings);
 
 /* ---------- Music (generated, original: Am – F – C – G at 100 bpm) ---------- */
-let ac=null, master, analyser, localOut, streamOut, delay, noise, playing=false, timer=0, nextTime=0, step=0, startTime=0;
+let ac=null, master, analyser, localOut, streamOut, delay, noise, playing=false, timer=0, nextTime=0, step=0;
 const BPM=100, STEP=60/BPM/4;
 const CHORDS=[[57,60,64],[53,57,60],[48,52,55],[55,59,62]];   // Am F C G (MIDI)
 const hz=m=>440*Math.pow(2,(m-69)/12);
@@ -139,7 +139,7 @@ async function musicOn(){
   audio();
   try{ await ac.resume(); }catch(e){ Tools.diag.log('audio resume failed',{error:String(e)}); }
   if(playing) return;
-  playing=true; step=0; nextTime=ac.currentTime+.08; startTime=nextTime;
+  playing=true; step=0; nextTime=ac.currentTime+.08;
   tick(); timer=setInterval(tick,50);
   Tools.diag.log('music on',{audio:ac.state});
   renderButtons();

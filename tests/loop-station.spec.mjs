@@ -24,7 +24,6 @@ const looper = page => page.locator('#looper');
 const state = (page, s, timeout = 5000) => expect(looper(page)).toHaveAttribute('data-state', s, { timeout });
 const tracks = (page, n, timeout = 5000) => expect(looper(page)).toHaveAttribute('data-tracks', String(n), { timeout });
 const num = async (page, attr) => Number(await looper(page).getAttribute(attr));
-const micOn = (page, on) => page.evaluate(on => { window.__mic.gain.gain.value = on ? 0.5 : 0; }, on);
 
 // Tempo mode: 240 BPM, 4/4, 1 bar = exactly 1 s
 async function tempoMode(page, { countIn = true, click = true } = {}) {

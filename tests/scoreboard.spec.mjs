@@ -655,6 +655,9 @@ test.describe('English', () => {
     await tap(page, 0, 3);
     await tap(page, 1, 3);
     await expect(page.locator('#info')).toHaveText('Set 1 · Deuce');
+    // Subtitle and the take-back button had the same key "sub" – the button text replaced the subtitle
+    await expect(page.locator('header p.sub')).toHaveText('Show the score big');
+    await expect(side(page, 0).locator('.minus')).toHaveAccessibleName('Take back the last point of Player 1');
     await pickSport(page, 'football');
     await expect(side(page, 0).locator('.name')).toHaveText('Home');
     await expect(page.locator('#btnHalf')).toHaveText('2nd half');

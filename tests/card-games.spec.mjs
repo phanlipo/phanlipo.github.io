@@ -117,9 +117,10 @@ test.describe('Mau Mau rules', () => {
       st.pile = [...st.pile, ...all.slice(0, -1)]; st.draw = []; // everything on the pile
       const top = st.pile.at(-1), size = st.pile.length;
       g.apply(st, 0, { a: 'draw' });
-      return { top: st.pile, size, left: st.draw.length, hand: st.hands[0].length };
+      return { top, pile: st.pile, size, left: st.draw.length, hand: st.hands[0].length };
     });
-    expect(r.top.length).toBe(1);
+    // Only the top card stays on the pile – the very card that was on top before
+    expect(r.pile).toEqual([r.top]);
     expect(r.left).toBe(r.size - 2);
     expect(r.hand).toBe(6);
   });
