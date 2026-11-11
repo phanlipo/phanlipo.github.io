@@ -99,9 +99,25 @@ jobs:
           path: playwright-report/
           retention-days: 14
 
+  # Static check of our own code (eslint.config.mjs): misspelled names, unused variables, duplicate keys
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+
   # The check "test" that the branch protection of main requires: green only when every part is green.
   test:
-    needs: [shard, engines]
+    needs: [shard, engines, lint]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -110,6 +126,7 @@ jobs:
         env:
           SHARDS: ${{ needs.shard.result }}
           ENGINES: ${{ needs.engines.result }}
+          LINT: ${{ needs.lint.result }}
         run: |
-          echo "Chromium: $SHARDS, WebKit & Firefox: $ENGINES"
-          test "$SHARDS" = success && test "$ENGINES" = success
+          echo "Chromium: $SHARDS, WebKit & Firefox: $ENGINES, ESLint: $LINT"
+          test "$SHARDS" = success && test "$ENGINES" = success && test "$LINT" = success

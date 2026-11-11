@@ -562,7 +562,7 @@ test.describe('game engine', () => {
       const g = MoveEngine.create(def, { rng: MoveEngine.seeded(9) }), step = clock(g);
       step(3000);
       const out = [];
-      const dancing = { energy: 6 }, still = { energy: 0.3 }, wobble = { energy: 1.5 };
+      const dancing = { energy: 6 }, still = { energy: 0.3 };
       const until = (cmd, motion) => { while (g.phase === 'play' && g.prompt.cmd !== cmd) step(50, motion); };
       out.push(['start', g.prompt.cmd, g.m.until - g.m.from >= p.dance[0] && g.m.until - g.m.from <= p.dance[1]]);
       // 1: dance, then freeze properly (moving in the first moment after the stop is allowed)
@@ -629,7 +629,7 @@ test.describe('game engine', () => {
       step(g.prompt.until - g.clock + 50, { pose: { left: 0, right: 0, spread: 0.4, kneeL: false, kneeR: false } });
       out.push(['missed', g.score, g.misses, g.prompt]);
       // 3: nobody seen → nothing held
-      const q3 = shown(); step(1500, {});
+      shown(); step(1500, {});
       out.push(['nobody', g.m.held]);
       return out;
     });
