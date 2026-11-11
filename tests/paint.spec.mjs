@@ -1,5 +1,5 @@
 // Malen: colours, tools, eraser, reset, picture kept after reload and rotation, WebMCP-free basics.
-import { test, expect } from './helpers.mjs';
+import { test, expect, mockAndroidShare } from './helpers.mjs';
 
 /** Colour of the canvas pixel at CSS position (x, y) */
 const pixel = (page, x, y) => page.evaluate(([x, y]) => {
@@ -120,6 +120,68 @@ test('reset clears only after confirming', async ({ page }) => {
   // Stays empty after reload
   await page.reload();
   expect(await pixel(page, 120, 50)).toEqual(WHITE);
+});
+
+/** Colour at CSS position (x, y) of a PNG (buffer), decoded in the page */
+const pngPixel = (page, buf, x, y, scale = 1) => page.evaluate(async ([b64, x, y, scale]) => {
+  const img = new Image();
+  img.src = 'data:image/png;base64,' + b64;
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0);
+  const d = g.getImageData(Math.round(x * scale), Math.round(y * scale), 1, 1).data;
+  return { rgb: [d[0], d[1], d[2]], w: img.width, h: img.height };
+}, [buf.toString('base64'), x, y, scale]);
+
+test('colours look on screen as they are painted – no veil over the picture', async ({ page }) => {
+  await page.click('[data-tool="marker"]');
+  await stroke(page, 20, 200, 220, 200);
+  await page.click('[data-tool="brush"]');
+  await page.click('[data-color="black"]');
+  await stroke(page, 20, 60, 220, 60);
+  await page.click('[data-color="red"]');
+  await stroke(page, 20, 120, 220, 120);
+  const box = await page.locator('#paper').boundingBox();
+  const shot = await page.screenshot({ clip: box });
+  // What the eye sees (both canvases composited) must equal the paper's pixels
+  expect(near((await pngPixel(page, shot, 120, 60)).rgb, [0x1b, 0x1b, 0x1b])).toBe(true);
+  expect(near((await pngPixel(page, shot, 120, 120)).rgb, [0xe5, 0x39, 0x35])).toBe(true);
+  expect((await pngPixel(page, shot, 120, 160)).rgb).toEqual(WHITE);
+  expect(near((await pngPixel(page, shot, 120, 200)).rgb, await pixel(page, 120, 200))).toBe(true);
+});
+
+test.describe('export', () => {
+  test('saves the canvas as a PNG at full resolution', async ({ page }) => {
+    await page.click('[data-tool="brush"]');
+    await page.click('[data-color="blue"]');
+    await stroke(page, 20, 80, 220, 80);
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+    expect(dl.suggestedFilename()).toMatch(/^malen-\d{4}-\d{2}-\d{2}-\d{4}\.png$/);
+    const buf = await (await import('node:fs/promises')).readFile(await dl.path());
+    const size = await page.locator('#paper').evaluate(c => ({ w: c.width, h: c.height, k: c.width / c.clientWidth }));
+    const px = await pngPixel(page, buf, 120, 80, size.k);
+    expect([px.w, px.h]).toEqual([size.w, size.h]);
+    expect(near(px.rgb, [0x1e, 0x88, 0xe5])).toBe(true);
+    // The background is white, not transparent
+    expect((await pngPixel(page, buf, 120, 160, size.k)).rgb).toEqual(WHITE);
+    await expect(page.locator('.toast')).toHaveText('Bild gespeichert');
+  });
+
+  test('share button only where files can be shared; shares a PNG', async ({ page }) => {
+    await expect(page.locator('#btnShare')).toBeHidden();
+    await mockAndroidShare(page);
+    await page.reload();
+    await expect(page.locator('#btnShare')).toBeVisible();
+    await stroke(page, 20, 80, 220, 80);
+    await page.click('#btnShare');
+    await expect.poll(() => page.evaluate(() => window.__shared.length)).toBe(1);
+    const [f] = (await page.evaluate(() => window.__shared))[0];
+    expect(f.type).toBe('image/png');
+    expect(f.name).toMatch(/^malen-.*\.png$/);
+    expect(f.size).toBeGreaterThan(100);
+  });
 });
 
 test('picture, colour and tool are kept after reload', async ({ page }) => {
@@ -311,5 +373,10 @@ test.describe('English', () => {
     await expect(page.locator('[data-tool="fill"]')).toHaveAttribute('aria-label', 'Paint bucket');
     await expect(page.locator('[data-color="purple"]')).toHaveAttribute('aria-label', 'Purple');
     await expect(page.locator('#btnReset')).toHaveAttribute('aria-label', 'Clear canvas');
+    await expect(page.locator('#btnSave')).toHaveAttribute('aria-label', 'Save as image');
+  });
+  test('the exported file has an English name', async ({ page }) => {
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+    expect(dl.suggestedFilename()).toMatch(/^paint-.*\.png$/);
   });
 });
