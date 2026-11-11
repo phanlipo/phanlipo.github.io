@@ -30,6 +30,13 @@ async function dragTo(page, i, j, dx = 0, dy = 0) {
   await page.mouse.move(from.x + b.cx - a.cx + dx, from.y + b.cy - a.cy + dy, { steps: 5 });
   await page.mouse.up();
 }
+/** The app follows a new board size once it has settled (a moment later): wait until it has */
+async function settled(page) {
+  await expect.poll(() => page.evaluate(() => {
+    const vb = document.getElementById('svg').viewBox.baseVal, b = document.getElementById('board');
+    return Math.max(Math.abs(vb.width - b.clientWidth), Math.abs(vb.height - b.clientHeight));
+  })).toBeLessThan(2);
+}
 async function startAnimal(page, id) {
   await page.click(`[data-animal="${id}"]`);
   await expect(page.locator('#board')).toHaveAttribute('data-phase', 'solution');
@@ -39,7 +46,8 @@ async function startAnimal(page, id) {
 
 test('choose an animal: the solution comes first, then the parts lie around the shadow', async ({ page }) => {
   await page.goto('/plush-puzzle/');
-  await expect(page.locator('.animal')).toHaveText(['Teddy', 'Hase', 'Panda', 'Delfin', 'Katze', 'Elefant']);
+  await expect(page.locator('.animal .name')).toHaveText(['Teddy', 'Hase', 'Panda', 'Delfin', 'Katze', 'Elefant', 'Löwe', 'Giraffe', 'Eule', 'Krake']);
+  await expect(page.locator('.animal .parts')).toHaveText(['8 Teile', '9 Teile', '8 Teile', '5 Teile', '9 Teile', '7 Teile', '10 Teile', '11 Teile', '12 Teile', '9 Teile']);
   await expect(page.locator('#btnPeek')).toBeHidden();
   await page.click('[data-animal="teddy"]');
   await expect(page.locator('#status')).toHaveText('So sieht der Teddy aus. Schau gut hin!');
@@ -204,6 +212,7 @@ test('turning the phone keeps snapped parts and spreads the loose ones on the ne
   await dragTo(page, 8, 8);
   await page.setViewportSize({ width: 780, height: 390 });
   await expect.poll(async () => (await box(page.locator('#board'))).w).toBeGreaterThan(600);
+  await settled(page);
   await expect(page.locator('.piece[data-i="8"]')).toHaveAttribute('data-slot', '8');
   await expect.poll(async () => { const a = await box(page.locator('.piece[data-i="8"]')), b = await box(page.locator('.slot[data-j="8"]')); return Math.hypot(a.cx - b.cx, a.cy - b.cy); }).toBeLessThan(1);
   const boardBox = await box(page.locator('#board'));
@@ -217,11 +226,89 @@ test('turning the phone keeps snapped parts and spreads the loose ones on the ne
   await expect(page.locator('.piece[data-i="0"]')).toHaveAttribute('data-slot', '0');
 });
 
+// Size of the whole shadow (all spots together)
+const shadowSize = page => page.locator('#shadow').evaluate(el => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height }; });
+
+test('the shadow keeps its size while parts are added (no zooming in)', async ({ page }) => {
+  // Phone width: the first status text needs two lines, "Super! …" only one – the board must not grow
+  await page.setViewportSize({ width: 375, height: 700 });
+  await page.goto('/plush-puzzle/');
+  await startAnimal(page, 'teddy');
+  const s0 = await shadowSize(page), status0 = await box(page.locator('#status')), board0 = await box(page.locator('#board'));
+  for (const i of [7, 2, 0, 1]) {
+    await dragTo(page, i, i);
+    await expect(page.locator(`.piece[data-i="${i}"]`)).toHaveAttribute('data-slot', String(i));
+    const s = await shadowSize(page);
+    expect(Math.abs(s.w - s0.w), `shadow width after part ${i}`).toBeLessThan(1);
+    expect(Math.abs(s.h - s0.h), `shadow height after part ${i}`).toBeLessThan(1);
+  }
+  expect((await box(page.locator('#status'))).h).toBeCloseTo(status0.h, 0);
+  expect((await box(page.locator('#board'))).h).toBeCloseTo(board0.h, 0);
+  // A small change of the board (e.g. the browser bar) keeps the size too and keeps the parts on the board
+  await page.setViewportSize({ width: 375, height: 660 });
+  await expect.poll(async () => (await box(page.locator('#board'))).h).toBeLessThan(board0.h - 30);
+  await settled(page);
+  const s1 = await shadowSize(page);
+  expect(Math.abs(s1.w - s0.w)).toBeLessThan(1);
+  const boardBox = await box(page.locator('#board'));
+  for (let i = 0; i < 8; i++) {
+    const p = await box(page.locator(`.piece[data-i="${i}"]`));
+    expect(p.y).toBeGreaterThanOrEqual(boardBox.y - 1);
+    expect(p.y + p.h).toBeLessThanOrEqual(boardBox.y + boardBox.h + 1);
+  }
+  await expect.poll(async () => { const a = await box(page.locator('.piece[data-i="7"]')), b = await box(page.locator('.slot[data-j="7"]')); return Math.hypot(a.cx - b.cx, a.cy - b.cy); }).toBeLessThan(1);
+  // After a reload the shadow has the same size again
+  await page.setViewportSize({ width: 375, height: 700 });
+  await page.reload();
+  await expect(page.locator('#board')).toHaveAttribute('data-phase', 'play');
+  // Same board size → exactly the same size (the trial placement has a fixed seed)
+  const s2 = await shadowSize(page);
+  expect(Math.abs(s2.w - s0.w)).toBeLessThan(1);
+});
+
+for (const [id, n] of [['lion', 10], ['giraffe', 11], ['owl', 12], ['octopus', 9]]) {
+  test(`harder animal ${id}: ${n} parts, all fit on a phone and the puzzle can be solved`, async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    await page.goto('/plush-puzzle/');
+    await startAnimal(page, id);
+    await expect(page.locator('#loose .piece')).toHaveCount(n);
+    const boardBox = await box(page.locator('#board'));
+    const parts = await Promise.all([...Array(n).keys()].map(i => box(page.locator(`.piece[data-i="${i}"]`))));
+    for (const p of parts) {
+      expect(p.x).toBeGreaterThanOrEqual(boardBox.x - 1);
+      expect(p.x + p.w).toBeLessThanOrEqual(boardBox.x + boardBox.w + 1);
+      expect(p.y + p.h).toBeLessThanOrEqual(boardBox.y + boardBox.h + 1);
+    }
+    for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) {
+      const a = parts[i], b = parts[k];
+      expect(a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h, `parts ${i} and ${k} overlap`).toBe(false);
+    }
+    // Back to front, as a child would: big parts first
+    for (let i = 0; i < n; i++) {
+      await dragTo(page, i, i);
+      await expect(page.locator(`.piece[data-i="${i}"]`)).toHaveAttribute('data-slot', String(i));
+    }
+    await expect(page.locator('#board')).toHaveAttribute('data-phase', 'done');
+  });
+}
+
+test('octopus: every tentacle fits only its own spot', async ({ page }) => {
+  await page.goto('/plush-puzzle/');
+  await startAnimal(page, 'octopus');
+  await dragTo(page, 0, 7);
+  await expect(page.locator('.piece[data-i="0"]')).toHaveAttribute('data-slot', '-1');
+  await dragTo(page, 3, 4);
+  await expect(page.locator('.piece[data-i="3"]')).toHaveAttribute('data-slot', '-1');
+  await dragTo(page, 3, 3);
+  await expect(page.locator('.piece[data-i="3"]')).toHaveAttribute('data-slot', '3');
+});
+
 test.describe('English', () => {
   test.use({ locale: 'en-US' });
   test('texts follow the language', async ({ page }) => {
     await page.goto('/plush-puzzle/');
-    await expect(page.locator('.animal')).toHaveText(['Teddy', 'Bunny', 'Panda', 'Dolphin', 'Cat', 'Elephant']);
+    await expect(page.locator('.animal .name')).toHaveText(['Teddy', 'Bunny', 'Panda', 'Dolphin', 'Cat', 'Elephant', 'Lion', 'Giraffe', 'Owl', 'Octopus']);
+    await expect(page.locator('[data-animal="owl"] .parts')).toHaveText('12 parts');
     await page.click('[data-animal="cat"]');
     await expect(page.locator('#status')).toHaveText('This is what the Cat looks like. Look closely!');
     await page.click('#btnGo');

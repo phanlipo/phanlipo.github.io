@@ -2150,9 +2150,10 @@ test.describe('plush-puzzle tools', () => {
   test('list_animals and get_progress read without changing anything', async ({ page }) => {
     let r = await call(page, 'plush_puzzle_list_animals', {});
     expect(r.ok).toBe(true);
-    expect(r.result.animals.map(a => a.id)).toEqual(['teddy', 'bunny', 'panda', 'dolphin', 'cat', 'elephant']);
+    expect(r.result.animals.map(a => a.id)).toEqual(['teddy', 'bunny', 'panda', 'dolphin', 'cat', 'elephant', 'lion', 'giraffe', 'owl', 'octopus']);
+    expect(r.result.animals.map(a => a.parts)).toEqual([8, 9, 8, 5, 9, 7, 10, 11, 12, 9]);
     expect(r.result.animals[0]).toEqual({ id: 'teddy', name: 'Teddy bear', parts: 8, times_finished: 0 });
-    expect(await page.locator('.animal').count()).toBe(6);
+    expect(await page.locator('.animal').count()).toBe(10);
     r = await call(page, 'plush_puzzle_get_progress', {});
     expect(r.result).toEqual({ animal: null, phase: 'choosing', parts_total: 0, parts_placed: 0, loose_parts: [] });
     await expect(page.locator('#pick')).toBeVisible();
