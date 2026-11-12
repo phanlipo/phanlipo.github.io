@@ -20,7 +20,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rGrlEMIgkpcX/ekbWeV5dNDQyZP05MBxfRGJiqy2Zt0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-jOCZgccPI687r0G+4kTz8onRAUW/c5fb5oqJDiWBa7c='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -50,6 +50,9 @@ body.night .page{filter:invert(1) hue-rotate(180deg)}
   padding-inline:max(14px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right));transition:transform .2s ease,opacity .2s ease}
 #bar input[type=range]{flex:1;min-width:0;height:44px;accent-color:var(--accent);margin:0}
 #pageLabel{flex:none;min-width:5.5em;text-align:center;font-variant-numeric:tabular-nums}
+/* Full screen (no navigation bar): keep the slider out of the edge where a swipe brings back the system bars */
+body.edge-gap #bar{padding-block-end:max(28px,env(safe-area-inset-bottom))}
+body.edge-gap.stage>main{padding-block-end:calc(98px + env(safe-area-inset-bottom))}
 body.bars-hidden>header{transform:translateY(-110%);opacity:0;pointer-events:none}
 body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
 /* Page number while scrolling with hidden bars */
@@ -166,7 +169,7 @@ dialog#pwDlg::backdrop{background:rgba(0,0,0,.6)}
   </ul>
   <h3>Vollbild und Systemleisten</h3>
   <ul>
-    <li><b>Installierte App (Android):</b> startet ohne Status- und Navigationsleiste. Wischen vom oberen oder unteren Rand zeigt sie kurz an.</li>
+    <li><b>Installierte App (Android):</b> startet ohne Status- und Navigationsleiste. Wischen vom oberen oder unteren Rand zeigt sie kurz an. Damit das nicht die Seite wechselt, hat die untere Leiste dann einen freien Rand, und der Seiten-Regler reagiert nur auf Wischen zur Seite oder Tippen – nicht auf Wischen nach oben.</li>
     <li><b>Im Browser:</b> Ein Tippen zum Ausblenden der Leisten schaltet auch das Vollbild ein und verbirgt Adressleiste, Statusleiste und Navigationsleiste (abschaltbar im Menü). Die Zurück-Geste oder der Knopf <i>Vollbild</i> beendet es. Ohne Tippen dürfen Webseiten das nicht.</li>
     <li><b>iPhone:</b> Safari erlaubt kein Vollbild für Webseiten; die zum Home-Bildschirm hinzugefügte App zeigt aber keine Safari-Leisten.</li>
   </ul>
@@ -199,7 +202,7 @@ dialog#pwDlg::backdrop{background:rgba(0,0,0,.6)}
   </ul>
   <h3>Full screen and system bars</h3>
   <ul>
-    <li><b>Installed app (Android):</b> starts without status and navigation bar. Swiping from the top or bottom edge shows them for a moment.</li>
+    <li><b>Installed app (Android):</b> starts without status and navigation bar. Swiping from the top or bottom edge shows them for a moment. So that this does not change the page, the bottom bar then keeps a free edge, and the page slider only reacts to sideways swipes or taps – not to swiping up.</li>
     <li><b>In the browser:</b> a tap that hides the bars also turns on full screen and hides the address bar, status bar and navigation bar (can be turned off in the menu). The back gesture or the <i>Full screen</i> button ends it. Web pages may not do this without a tap.</li>
     <li><b>iPhone:</b> Safari allows no full screen for web pages; the app added to the home screen shows no Safari bars, though.</li>
   </ul>
@@ -224,7 +227,7 @@ dialog#pwDlg::backdrop{background:rgba(0,0,0,.6)}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 369918423972</p>
+  <p class="footer-version">Version cca2a528a6f4</p>
   <!-- footer:end -->
 </footer>
 
@@ -633,7 +636,35 @@ new ResizeObserver(()=>{
   updateCurrent(); scheduleRender();
 }).observe(view);
 
-$('pageRange').addEventListener('input',e=>goTo(Number(e.target.value)));
+/* Page slider. On touch it only turns pages once the finger clearly moves sideways or lifts without moving up:
+   a swipe up from the bottom edge (brings back the hidden navigation bar, goes home) leaves the page as it was. */
+const range=$('pageRange');
+let rangeTouch=null;
+range.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='mouse') return;
+  rangeTouch={x:e.clientX,y:e.clientY,p:cur,ok:false,off:false};
+});
+range.addEventListener('pointermove',e=>{
+  const r=rangeTouch; if(!r||r.ok||r.off) return;
+  const dx=Math.abs(e.clientX-r.x), dy=Math.abs(e.clientY-r.y);
+  if(dy>10&&dy>dx){r.off=true;range.value=r.p;Tools.diag.log('slider: vertical swipe ignored');}
+  else if(dx>10){r.ok=true;goTo(Number(range.value));}
+});
+range.addEventListener('pointerup',()=>{
+  const r=rangeTouch; rangeTouch=null; if(!r) return;
+  if(r.off) range.value=cur; else goTo(Number(range.value));
+});
+range.addEventListener('pointercancel',()=>{
+  // the system took over the gesture (edge swipe): back to the page from before
+  const r=rangeTouch; rangeTouch=null; if(!r) return;
+  Tools.diag.log('slider: gesture cancelled');
+  if(cur!==r.p) goTo(r.p); else range.value=cur;
+});
+range.addEventListener('input',()=>{
+  const r=rangeTouch;
+  if(r&&(!r.ok||r.off)){if(r.off) range.value=r.p;return;}
+  goTo(Number(range.value));
+});
 
 /* ---------- Remembered page per document (pdf.js fingerprint, no file name) ---------- */
 let positions=Tools.load(LP,{});
@@ -700,6 +731,8 @@ function renderFs(){
   $('btnFs').hidden=!fs.supported()||fs.system();
   $('btnFs').setAttribute('aria-pressed',String(on));
   $('icoFsOn').hidden=on; $('icoFsOff').hidden=!on;
+  // no navigation bar at the bottom: leave room for the edge swipe
+  body.classList.toggle('edge-gap',on||fs.system());
 }
 $('btnFs').addEventListener('click',async()=>{
   barsTouched=true; clearTimeout(hideTimer);

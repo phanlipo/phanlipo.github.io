@@ -413,3 +413,49 @@ test.describe('English', () => {
     await expect(page.locator('#docInfo')).toHaveText(/5 Seite\(n\)/);
   });
 });
+
+test('page slider ignores a swipe up from the bottom edge and a gesture the system takes over', async ({ page }) => {
+  await page.goto(URL_);
+  await openPdf(page);
+  const touch = (type, x, y) => page.locator('#pageRange').evaluate((el, [type, x, y]) =>
+    el.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', clientX: x, clientY: y, bubbles: true })), [type, x, y]);
+  const setValue = v => page.locator('#pageRange').evaluate((el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, v);
+  // finger lands on the slider (the browser jumps the value), then moves up: page stays
+  await touch('pointerdown', 300, 640);
+  await setValue('4');
+  await expect(page.locator('#pageLabel')).toHaveText('1 / 5');
+  await touch('pointermove', 302, 600);
+  await touch('pointerup', 302, 560);
+  await expect(page.locator('#pageLabel')).toHaveText('1 / 5');
+  await expect(page.locator('#pageRange')).toHaveValue('1');
+  // the system takes over the gesture: back to the page from before
+  await touch('pointerdown', 300, 640);
+  await setValue('5');
+  await touch('pointercancel', 300, 640);
+  await expect(page.locator('#pageLabel')).toHaveText('1 / 5');
+  await expect(page.locator('#pageRange')).toHaveValue('1');
+  // tap on the slider still jumps
+  await touch('pointerdown', 200, 640);
+  await setValue('3');
+  await touch('pointerup', 200, 640);
+  await expect(page.locator('#pageLabel')).toHaveText('3 / 5');
+  // sideways drag turns pages while dragging
+  await touch('pointerdown', 200, 640);
+  await touch('pointermove', 240, 642);
+  await setValue('5');
+  await expect(page.locator('#pageLabel')).toHaveText('5 / 5');
+  await touch('pointerup', 240, 642);
+  await expect(page.locator('#pageLabel')).toHaveText('5 / 5');
+});
+
+test('in full screen the bottom bar keeps a free edge for the system swipe', async ({ page }) => {
+  await page.goto(URL_);
+  await openPdf(page);
+  const pad = () => page.locator('#bar').evaluate(el => parseFloat(getComputedStyle(el).paddingBottom));
+  expect(await pad()).toBeLessThan(10);
+  await page.evaluate(() => document.documentElement.requestFullscreen());
+  await expect(page.locator('body')).toHaveClass(/edge-gap/);
+  expect(await pad()).toBeGreaterThanOrEqual(28);
+  await page.evaluate(() => document.exitFullscreen());
+  await expect(page.locator('body')).not.toHaveClass(/edge-gap/);
+});
