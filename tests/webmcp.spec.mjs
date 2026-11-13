@@ -2437,6 +2437,12 @@ test.describe('calc-pad tools', () => {
     expect((await call(page, 'calc_pad_calculate', { expression: '200 + 10%' })).result.result).toBe(220);
     expect((await call(page, 'calc_pad_calculate', { expression: '2^10 + sqrt(16)' })).result.result).toBe(1028);
     expect((await call(page, 'calc_pad_calculate', { expression: '1.5 * 4' })).result.result).toBe(6);
+    // sin 30° = 0.5, sin(π/2) = 1 in radians, d/dx x³ at 2 = 3·2² = 12, ∫₀¹ x² = 1/3
+    expect((await call(page, 'calc_pad_calculate', { expression: 'sin 30' })).result.result).toBe(0.5);
+    expect((await call(page, 'calc_pad_calculate', { expression: 'sin(pi/2)', angle_unit: 'radians' })).result.result).toBe(1);
+    expect((await call(page, 'calc_pad_calculate', { expression: 'derivative(x^3; 2)' })).result.result).toBe(12);
+    expect((await call(page, 'calc_pad_calculate', { expression: 'integral(x^2; 0; 1)' })).result.result).toBeCloseTo(1 / 3, 9);
+    expect((await call(page, 'calc_pad_calculate', { expression: '1', angle_unit: 'gon' })).ok).toBe(false);
     expect((await call(page, 'calc_pad_calculate', { expression: '1/0' })).error).toContain('not defined');
     expect((await call(page, 'calc_pad_calculate', { expression: 'hello' })).error).toContain('not a complete calculation');
     expect((await call(page, 'calc_pad_calculate', { expression: '' })).ok).toBe(false);
@@ -2463,7 +2469,10 @@ test.describe('calc-pad tools', () => {
     ]);
     expect((await call(page, 'calc_pad_add_lines', { text: '' })).ok).toBe(false);
     expect((await call(page, 'calc_pad_add_lines', { text: 'x'.repeat(5001) })).ok).toBe(false);
+    // Quadratic: x² − 5x + 6 = 0 → 2 and 3
+    expect((await call(page, 'calc_pad_add_lines', { text: '\nx^2 - 5x + 6 = 0' })).result.added[1]).toEqual(
+      { line: 9, text: 'x^2 - 5x + 6 = 0', solutions: [{ name: 'x', value: 2 }, { name: 'x', value: 3 }] });
     // Saved like typed text
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('calc-pad.pads.v1')).pads[0].text)).toBe('Miete 850 + 120\nNotiz\n× 12\n1/0\n\n3b + 2c = 0\nb + c = -1');
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('calc-pad.pads.v1')).pads[0].text)).toBe('Miete 850 + 120\nNotiz\n× 12\n1/0\n\n3b + 2c = 0\nb + c = -1\n\nx^2 - 5x + 6 = 0');
   });
 });

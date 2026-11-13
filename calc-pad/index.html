@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Rechenzettel</title>
-<meta name="description" content="Rechnen und Notizen auf einem Zettel: Jede Zeile mit einer Rechnung zeigt ihr Ergebnis, Text dazwischen stört nicht, mit „+ 20“ rechnest du weiter, Gleichungen wie 3a = 15 werden gelöst. Ergebnis antippen kopiert es.">
+<meta name="description" content="Rechnen und Notizen auf einem Zettel: Jede Zeile mit einer Rechnung zeigt ihr Ergebnis, Text dazwischen stört nicht, mit „+ 20“ rechnest du weiter, Gleichungen wie x² = 2 werden gelöst, dazu sin, ln, Ableitung und Integral. Ergebnis antippen kopiert es.">
 <meta name="tool:tags" content="Alltag, Rechner">
 <meta name="tool:features" content="Kopieren, Verlauf, KI-Agent">
 <meta name="tool:webmcp" content="calculate, read_pad, add_lines">
@@ -14,12 +14,12 @@
 <meta name="tool:color" content="#336b87">
 <meta name="tool:short-name" content="Rechenzettel">
 <meta name="tool:title-en" content="Calc Pad">
-<meta name="tool:description-en" content="Calculate and take notes on one pad: every line with a calculation shows its result, text in between is fine, “+ 20” carries on, equations like 3a = 15 are solved. Tap a result to copy it.">
+<meta name="tool:description-en" content="Calculate and take notes on one pad: every line with a calculation shows its result, text in between is fine, “+ 20” carries on, equations like x² = 2 are solved, also sin, ln, derivative and integral. Tap a result to copy it.">
 <meta name="tool:short-name-en" content="Calc Pad">
 <meta name="tool:storage" content="calc-pad.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Xtk+1UngYF7pT4l43g/DaHHtcq5/gFoCEwBd9Ni7LQQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-6gNKx83Qezomq3QpecjRt1nDI+fA820ehaPANjb8/rg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -83,6 +83,10 @@ main{display:flex;flex-direction:column}
 .pads .meta{display:block;font-size:12px;color:var(--muted)}
 .pads .del{flex:none;width:44px;height:44px;display:grid;place-items:center;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);cursor:pointer}
 .pads .del svg{width:20px;height:20px}
+fieldset{border:0;margin:0;padding:0}
+legend{font-weight:600;padding:0;margin-block-end:4px}
+.choice{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.choice input{width:22px;height:22px;flex:none;margin:0;accent-color:var(--accent)}
 </style>
 </head>
 <body class="stage">
@@ -130,6 +134,15 @@ main{display:flex;flex-direction:column}
     <button type="button" class="op" data-k="+" aria-label="plus +" data-i18n-attr="aria-label:plus">+</button>
   </div>
 
+  <section class="card" data-menu aria-labelledby="h-settings">
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <fieldset id="angle">
+      <legend data-i18n="angle">Winkel bei sin, cos, tan</legend>
+      <label class="choice"><input type="radio" name="angle" value="deg" checked><span data-i18n="deg">Grad (sin 30 = 0,5)</span></label>
+      <label class="choice"><input type="radio" name="angle" value="rad"><span data-i18n="rad">Bogenmaß (sin(pi/6) = 0,5)</span></label>
+    </fieldset>
+  </section>
+
   <section class="card" data-menu aria-labelledby="h-pads">
     <h2 id="h-pads" data-i18n="pads">Zettel</h2>
     <p class="muted" data-i18n="padsIntro">Alles wird automatisch gespeichert – nur in diesem Browser.</p>
@@ -163,7 +176,10 @@ main{display:flex;flex-direction:column}
     <li>Eine Zeile mit nur einer Zahl (<code>Brot 3,50</code>) zeigt die Zahl grau – sie zählt für <code>summe</code> und zum Weiterrechnen.</li>
     <li><b>summe</b> (oder <code>sum</code>) addiert die Ergebnisse darüber bis zur letzten leeren Zeile – praktisch für Einkaufslisten. Eine leere Zeile beginnt einen neuen Block.</li>
     <li><b>Namen merken:</b> <code>Miete = 850</code> merkt sich den Wert, darunter geht <code>Miete × 12</code>.</li>
-    <li><b>Gleichungen lösen:</b> Steht ein unbekannter Name in einer Gleichung, löst der Zettel sie: <code>3a = 15</code> (oder <code>3*a = 15</code>) zeigt <code>a = 5</code>. Mehrere Gleichungen direkt untereinander sind ein <b>Gleichungssystem</b>: <code>3b + 2c = 0</code> und darunter <code>b + c = −1</code> ergibt <code>b = 2</code> und <code>c = −3</code> – je Zeile ein Name. Die Lösungen kannst du darunter weiterverwenden (<code>b − c</code>), bis zur nächsten leeren Zeile; danach sind die Namen wieder frei. Es geht nur um <b>lineare</b> Gleichungen (kein <code>a²</code>, kein <code>a × b</code>). Gibt es keine Lösung, steht dort „keine Lösung“; fehlt noch eine Gleichung, bleibt es leer. Eine Zahl direkt vor dem Namen multipliziert (<code>3a</code>), mit Leerzeichen ist es Text (<code>850 Miete</code>). Für Buchstaben die Tastatur einschalten (Knopf oben).</li>
+    <li><b>Gleichungen lösen:</b> Steht ein unbekannter Name in einer Gleichung, löst der Zettel sie: <code>3a = 15</code> (oder <code>3*a = 15</code>) zeigt <code>a = 5</code>. Mehrere Gleichungen direkt untereinander sind ein <b>Gleichungssystem</b>: <code>3b + 2c = 0</code> und darunter <code>b + c = −1</code> ergibt <code>b = 2</code> und <code>c = −3</code> – je Zeile ein Name. Die Lösungen kannst du darunter weiterverwenden (<code>b − c</code>), bis zur nächsten leeren Zeile; danach sind die Namen wieder frei. Gibt es keine Lösung, steht dort „keine Lösung“; fehlt noch eine Gleichung, bleibt es leer. Systeme gehen nur mit <b>linearen</b> Gleichungen (kein <code>a × b</code>).</li>
+    <li><b>Quadratische und andere Gleichungen</b> mit <b>einer</b> Unbekannten: <code>x^2 − 5x + 6 = 0</code> zeigt <code>x = 2; 3</code>, ebenso höhere Polynome (<code>x^3 = 8</code>), <code>2^x = 10</code>, <code>e^x = 5</code>, <code>ln(x) = 1</code> oder <code>sin x = 0,5</code>. Angezeigt werden alle <b>reellen</b> Lösungen, bei periodischen (sin, cos, tan) die ersten vier ab 0 und „…“. Ohne reelle Lösung (<code>x^2 = −1</code>) steht dort „keine reelle Lösung“. Polynome werden exakt gelöst, andere Gleichungen durch Suchen zwischen −1 Milliarde und 1 Milliarde auf etwa 10 Stellen genau. Gibt es genau eine Lösung, gilt sie darunter wie ein Wert; eine neue Gleichung mit demselben Namen wird aber wieder für sich gelöst. Eine Zahl direkt vor dem Namen multipliziert (<code>3a</code>), mit Leerzeichen ist es Text (<code>850 Miete</code>). Für Buchstaben die Tastatur einschalten (Knopf oben).</li>
+    <li><b>Funktionen:</b> <code>sqrt</code> bzw. <code>√</code> (Wurzel), <code>exp</code>, <code>ln</code>, <code>log</code> (Zehnerlogarithmus), <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>asin</code>, <code>acos</code>, <code>atan</code>, <code>abs</code> (Betrag), <code>runden</code>, Fakultät <code>5!</code>, <code>x²</code> und <code>x³</code> wie <code>x^2</code>, Konstanten <code>pi</code> bzw. <code>π</code> und <code>e</code>. Klammern sind bei einer Zahl nicht nötig: <code>sin 30</code>, <code>√2</code>, <code>2pi</code>. Winkel rechnet der Zettel in <b>Grad</b> (<code>sin 30 = 0,5</code>); auf Bogenmaß umstellen kannst du im Menü unter <i>Einstellungen</i>.</li>
+    <li><b>Ableitung und Integral</b> (als Zahl): <code>ableitung(x^2; 3)</code> ergibt 6 (Steigung bei x = 3), <code>integral(x^2; 0; 1)</code> ergibt 0,3333333333 (Fläche von 0 bis 1). Die Teile trennt ein Semikolon. Der Name in der Funktion ist frei wählbar (<code>integral(2t; 0; 3)</code>), darf aber oben noch keinen Wert bekommen haben. Gerechnet wird numerisch auf etwa 10 Stellen; Formeln als Ergebnis (z.&nbsp;B. „3x²“) gibt es nicht. Mit Winkelfunktionen gilt auch hier die Einstellung Grad/Bogenmaß – für Analysis meist Bogenmaß wählen.</li>
     <li>Rechenzeichen: <code>+ − × ÷</code> (auch <code>- * /</code> und <code>x</code> zwischen Zahlen), <code>^</code> hoch, <code>√</code> Wurzel, Klammern. Punkt- vor Strichrechnung gilt. <code>200 + 10%</code> ergibt 220, <code>200 − 10%</code> ergibt 180, <code>200 × 10%</code> ergibt 20. Text nach <code>=</code> wird überlesen.</li>
     <li>Zahlen schreibst du deutsch: <code>1.234,5</code>; <code>1,5</code> und <code>1.5</code> gehen beide (ein Punkt vor genau drei Ziffern trennt Tausender). Auf Englisch gilt <code>1,234.5</code>.</li>
   </ul>
@@ -178,7 +194,7 @@ main{display:flex;flex-direction:column}
     <li>Im Menü ☰ liegen deine <b>Zettel</b>: antippen zum Öffnen, daneben Löschen. <i>Neuer Zettel</i> beginnt einen leeren; der bisherige bleibt erhalten.</li>
     <li>Alles wird automatisch in diesem Browser gespeichert und funktioniert offline; nichts wird hochgeladen.</li>
     <li>Gerechnet wird mit etwa 12 gültigen Stellen. Für Geld und Alltag genau genug – für Buchhaltung bitte nachprüfen.</li>
-    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann rechnen, den offenen Zettel samt Lösungen lesen und Zeilen anhängen (WebMCP). Löschen oder ändern kann er nichts. Jeder Aufruf erscheint als Hinweis.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann rechnen (auch Funktionen, Ableitung, Integral), den offenen Zettel samt Lösungen lesen und Zeilen anhängen (WebMCP). Löschen oder ändern kann er nichts. Jeder Aufruf erscheint als Hinweis.</li>
   </ul>
   </div>
   <div data-lang="en" lang="en" hidden>
@@ -191,7 +207,10 @@ main{display:flex;flex-direction:column}
     <li>A line with just one number (<code>Bread 3.50</code>) shows it in grey – it counts for <code>sum</code> and for carrying on.</li>
     <li><b>sum</b> adds up the results above, back to the last empty line – handy for shopping lists. An empty line starts a new block.</li>
     <li><b>Names:</b> <code>rent = 850</code> remembers the value, below it <code>rent × 12</code> works.</li>
-    <li><b>Solve equations:</b> if an equation contains an unknown name, the pad solves it: <code>3a = 15</code> (or <code>3*a = 15</code>) shows <code>a = 5</code>. Several equations right below each other are a <b>system of equations</b>: <code>3b + 2c = 0</code> and below it <code>b + c = −1</code> gives <code>b = 2</code> and <code>c = −3</code> – one name per line. You can use the solutions below (<code>b − c</code>) up to the next empty line; after that the names are free again. Only <b>linear</b> equations work (no <code>a²</code>, no <code>a × b</code>). Without a solution it says “no solution”; while an equation is still missing it stays empty. A number right before a name multiplies (<code>3a</code>), with a space it is text (<code>850 rent</code>). Switch on the keyboard for letters (button at the top).</li>
+    <li><b>Solve equations:</b> if an equation contains an unknown name, the pad solves it: <code>3a = 15</code> (or <code>3*a = 15</code>) shows <code>a = 5</code>. Several equations right below each other are a <b>system of equations</b>: <code>3b + 2c = 0</code> and below it <code>b + c = −1</code> gives <code>b = 2</code> and <code>c = −3</code> – one name per line. You can use the solutions below (<code>b − c</code>) up to the next empty line; after that the names are free again. Without a solution it says “no solution”; while an equation is still missing it stays empty. Systems only work with <b>linear</b> equations (no <code>a × b</code>).</li>
+    <li><b>Quadratic and other equations</b> with <b>one</b> unknown: <code>x^2 − 5x + 6 = 0</code> shows <code>x = 2; 3</code>, likewise higher polynomials (<code>x^3 = 8</code>), <code>2^x = 10</code>, <code>e^x = 5</code>, <code>ln(x) = 1</code> or <code>sin x = 0.5</code>. All <b>real</b> solutions are shown, for periodic ones (sin, cos, tan) the first four from 0 and “…”. Without a real solution (<code>x^2 = −1</code>) it says “no real solution”. Polynomials are solved exactly, other equations by searching between −1 billion and 1 billion to about 10 digits. With exactly one solution it counts as a value below; a new equation with the same name is still solved on its own. A number right before a name multiplies (<code>3a</code>), with a space it is text (<code>850 rent</code>). Switch on the keyboard for letters (button at the top).</li>
+    <li><b>Functions:</b> <code>sqrt</code> or <code>√</code> (square root), <code>exp</code>, <code>ln</code>, <code>log</code> (base 10), <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>asin</code>, <code>acos</code>, <code>atan</code>, <code>abs</code>, <code>round</code>, factorial <code>5!</code>, <code>x²</code> and <code>x³</code> like <code>x^2</code>, constants <code>pi</code> or <code>π</code> and <code>e</code>. With a plain number no brackets are needed: <code>sin 30</code>, <code>√2</code>, <code>2pi</code>. Angles are in <b>degrees</b> (<code>sin 30 = 0.5</code>); you can switch to radians in the menu under <i>Settings</i>.</li>
+    <li><b>Derivative and integral</b> (as a number): <code>derivative(x^2; 3)</code> gives 6 (slope at x = 3), <code>integral(x^2; 0; 1)</code> gives 0.3333333333 (area from 0 to 1). The parts are separated by a semicolon. Any name works in the function (<code>integral(2t; 0; 3)</code>), as long as it has not got a value above. The calculation is numeric to about 10 digits; there are no formulas as results (like “3x²”). With trigonometric functions the degrees/radians setting applies here too – for calculus usually choose radians.</li>
     <li>Operators: <code>+ − × ÷</code> (also <code>- * /</code> and <code>x</code> between numbers), <code>^</code> power, <code>√</code> square root, brackets. Multiplication comes before addition. <code>200 + 10%</code> gives 220, <code>200 − 10%</code> gives 180, <code>200 × 10%</code> gives 20. Text after <code>=</code> is skipped.</li>
     <li>Numbers in English: <code>1,234.5</code>; <code>1.5</code> and <code>1,5</code> both work (a comma before exactly three digits separates thousands). In German it is <code>1.234,5</code>.</li>
   </ul>
@@ -220,7 +239,7 @@ main{display:flex;flex-direction:column}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 3c3dcd080278</p>
+  <p class="footer-version">Version 3fd8b3b3c49c</p>
   <!-- footer:end -->
 </footer>
 
@@ -231,7 +250,7 @@ main{display:flex;flex-direction:column}
 'use strict';
 Tools.i18n({
   de:{
-    copyRes:'{v} kopieren',undef:'nicht definiert',contra:'keine Lösung',copied:'Kopiert: {v}',copyFail:'Kopieren hat nicht geklappt',
+    copyRes:'{v} kopieren',undef:'nicht definiert',contra:'keine Lösung',noreal:'keine reelle Lösung',copied:'Kopiert: {v}',copyFail:'Kopieren hat nicht geklappt',
     copiedAll:'Zettel kopiert',emptyPad:'Der Zettel ist leer',
     pasteNo:'Einfügen ist hier nicht erlaubt – lange auf den Zettel tippen und „Einfügen“ wählen.',pasteEmpty:'Die Zwischenablage ist leer',
     untitled:'Leerer Zettel',lines:'{n} Zeilen',line1:'1 Zeile',delPad:'„{name}“ löschen',delConfirm:'Zettel „{name}“ löschen?',deleted:'Zettel gelöscht',
@@ -242,7 +261,8 @@ Tools.i18n({
     padPh:'Shopping: 12.50 + 3.99\n+ 2.49\nNote: bottle deposit back\n− 0.75\nrent = 850\nrent × 12',
     paste:'Paste',back:'Delete',div:'divided by ÷',sqrt:'square root √',mul:'times ×',pow:'power ^',minus:'minus −',enter:'New line',
     decLabel:'point .',ansLabel:'last result ans',plus:'plus +',pads:'Pads',padsIntro:'Everything is saved automatically – only in this browser.',newPad:'New pad',
-    copyRes:'Copy {v}',undef:'undefined',contra:'no solution',copied:'Copied: {v}',copyFail:'Copying did not work',
+    settings:'Settings',angle:'Angles for sin, cos, tan',deg:'Degrees (sin 30 = 0.5)',rad:'Radians (sin(pi/6) = 0.5)',
+    copyRes:'Copy {v}',undef:'undefined',contra:'no solution',noreal:'no real solution',copied:'Copied: {v}',copyFail:'Copying did not work',
     copiedAll:'Pad copied',emptyPad:'The pad is empty',
     pasteNo:'Pasting is not allowed here – long-press the pad and choose “Paste”.',pasteEmpty:'The clipboard is empty',
     untitled:'Empty pad',lines:'{n} lines',line1:'1 line',delPad:'Delete “{name}”',delConfirm:'Delete pad “{name}”?',deleted:'Pad deleted',
@@ -258,7 +278,7 @@ const stored=Tools.load(LS_PADS,null);
 let pads=stored&&Array.isArray(stored.pads)?stored.pads.filter(p=>p&&typeof p.id==='string'&&typeof p.text==='string'):[];
 if(!pads.length)pads=[{id:newId(),text:'',updated:Date.now()}];
 let cur=pads.find(p=>p.id===(stored&&stored.current))||pads[0];
-const settings=Object.assign({keys:true},Tools.load(LS_SET,{}));
+const settings=Object.assign({keys:true,deg:true},Tools.load(LS_SET,{}));
 
 const pad=$('pad'), mirror=$('mirror'), wrap=$('sheetWrap'), keys=$('keys'), btnKeys=$('btnKeys');
 let results=[];
@@ -277,7 +297,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&saveTimer)
 /* ---------- Mirror with results ---------- */
 function render(){
   const lines=pad.value.split('\n');
-  results=E.evaluate(pad.value,dec());
+  results=E.evaluate(pad.value,dec(),{deg:settings.deg!==false});
   while(mirror.children.length>lines.length)mirror.lastChild.remove();
   while(mirror.children.length<lines.length){
     const row=document.createElement('div');row.className='ml';
@@ -297,14 +317,20 @@ function render(){
         b.textContent=label;b.setAttribute('aria-label',t('copyRes',{v:label}));
         mr.append(b);
       }else if(r.error){
-        const s=document.createElement('span');s.className='res err';s.textContent=t(r.error==='contra'?'contra':'undef');mr.append(s);
+        const s=document.createElement('span');s.className='res err';s.textContent=t(r.error==='contra'||r.error==='noreal'?r.error:'undef');mr.append(s);
       }
     }
     const b=mr.firstChild;if(b)b.dataset.i=i;
   });
 }
 // Equations show their solutions ("a = 5", several: "b = 2; c = -3"), everything else the number
-function resText(r,f){return r.solved?r.solved.map(x=>`${x.name} = ${f(x.value)}`).join('; '):f(r.value);}
+// Several solutions of one name: "x = 2; 3", periodic ones end with "…"
+function resText(r,f){
+  if(!r.solved)return f(r.value);
+  const one=r.solved.every(x=>x.name===r.solved[0].name);
+  const s=one?`${r.solved[0].name} = ${r.solved.map(x=>f(x.value)).join('; ')}`:r.solved.map(x=>`${x.name} = ${f(x.value)}`).join('; ');
+  return r.more?s+'; …':s;
+}
 const rerender=()=>{mirror.querySelectorAll('.mr').forEach(m=>{delete m.dataset.key;});render();};
 
 // The textarea never scrolls itself (it is as tall as the mirror) – keep the line with the cursor in view
@@ -477,6 +503,15 @@ function deletePad(p){
 }
 $('btnNew').addEventListener('click',()=>{newPad();Tools.menu.close();});
 
+/* ---------- Angle unit ---------- */
+const angleInputs=[...document.querySelectorAll('#angle input')];
+const showAngle=()=>angleInputs.forEach(i=>{i.checked=(i.value==='rad')===(settings.deg===false);});
+angleInputs.forEach(i=>i.addEventListener('change',()=>{
+  settings.deg=i.value!=='rad';Tools.save(LS_SET,settings);rerender();
+  Tools.diag.log('angle',{deg:settings.deg});
+}));
+showAngle();
+
 /* ---------- Start ---------- */
 const setDecKey=()=>{$('keyDec').textContent=dec();};
 setDecKey();applyKeys();showPad();renderPads();
@@ -484,7 +519,7 @@ Tools.onLang(()=>{setDecKey();rerender();renderPads();});
 
 Tools.diag.info(()=>({
   pads:pads.length,lines:pad.value?pad.value.split('\n').length:0,results:results.filter(r=>r.value!=null).length,
-  keypad:settings.keys,clipboardRead:!!(navigator.clipboard&&typeof navigator.clipboard.readText==='function'),
+  keypad:settings.keys,angle:settings.deg===false?'rad':'deg',clipboardRead:!!(navigator.clipboard&&typeof navigator.clipboard.readText==='function'),
   execCommand:typeof document.execCommand==='function'
 }));
 
@@ -493,23 +528,27 @@ const lineInfo=(text,i)=>{
   const r=results[i]||{};const o={line:i+1,text};
   if(r.solved)o.solutions=r.solved.map(x=>({name:x.name,value:x.value}));
   else if(r.value!=null)o.result=r.value;
-  if(r.error)o.error=r.error==='contra'?'no solution':'undefined';
+  if(r.more)o.more_solutions=true;
+  if(r.error)o.error={contra:'no solution',noreal:'no real solution'}[r.error]||'undefined';
   return o;
 };
 Tools.mcp.register({
   name:'calculate',title:'Calculate an expression',label:'mcp.calc',readOnly:true,
-  description:'Calculates one expression with the rules of the pad: + - * / ^, sqrt, brackets, percent ("200 + 10%" is 220), decimal point ".", words are ignored. Returns the result as a number. Does not change the pad.',
-  inputSchema:{type:'object',properties:{expression:{type:'string',minLength:1,maxLength:500,description:'For example "(850 + 120) * 12" or "200 + 10%"'}},required:['expression'],additionalProperties:false},
-  execute:({expression})=>{
-    const r=E.calc(expression,'.');
-    if(r.error)throw new Error('The result is not defined (division by zero or square root of a negative number).');
-    if(r.value==null)throw new Error('This is not a complete calculation. Use numbers with "." as decimal point and + - * / ^ sqrt ( ).');
+  description:'Calculates one expression with the rules of the pad: + - * / ^, brackets, percent ("200 + 10%" is 220), factorial "5!", constants pi and e, functions sqrt exp ln log sin cos tan asin acos atan abs round, derivative(f; a) and integral(f; a; b) numerically (e.g. "integral(x^2; 0; 1)"). Decimal point "."; arguments are separated by ";". Returns the result as a number. Does not change the pad.',
+  inputSchema:{type:'object',properties:{
+    expression:{type:'string',minLength:1,maxLength:500,description:'For example "(850 + 120) * 12", "sin 30" or "derivative(x^3; 2)"'},
+    angle_unit:{type:'string',enum:['degrees','radians'],description:'Unit of the angles of sin, cos, tan and their inverses (default degrees)'}
+  },required:['expression'],additionalProperties:false},
+  execute:({expression,angle_unit})=>{
+    const r=E.calc(expression,'.',{deg:angle_unit!=='radians'});
+    if(r.error)throw new Error('The result is not defined (e.g. division by zero, square root or logarithm of a negative number).');
+    if(r.value==null)throw new Error('This is not a complete calculation. Use numbers with "." as decimal point, + - * / ^ ( ), the listed functions and ";" between arguments.');
     return {expression,result:r.value};
   }
 });
 Tools.mcp.register({
   name:'read_pad',title:'Read the open pad',label:'mcp.read',readOnly:true,untrusted:true,
-  description:'Returns the lines of the pad that is open in the app, each with its result if the line is a calculation, or the solved unknowns if it is a linear equation. number_format says how numbers in the pad are written (it follows the language of the app).',
+  description:'Returns the lines of the pad that is open in the app, each with its result if the line is a calculation, or the solutions if it is an equation (more_solutions: periodic, only the first ones are listed). number_format says how numbers in the pad are written (it follows the language of the app).',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
   execute:()=>{
     const lines=pad.value.split('\n');
@@ -519,7 +558,7 @@ Tools.mcp.register({
 });
 Tools.mcp.register({
   name:'add_lines',title:'Add lines to the pad',label:'mcp.add',
-  description:'Appends lines (calculations or notes, separated by newlines) at the end of the open pad and returns them with their results. A line starting with an operator ("+ 20") continues from the last result; "sum" adds the results above; linear equations ("3a = 15", or a system on consecutive lines like "3b + 2c = 0" and "b + c = -1") are solved. Write numbers as given by number_format of read_pad.',
+  description:'Appends lines (calculations or notes, separated by newlines) at the end of the open pad and returns them with their results. A line starting with an operator ("+ 20") continues from the last result; "sum" adds the results above; linear equations ("3a = 15", or a system on consecutive lines like "3b + 2c = 0" and "b + c = -1") and equations with one unknown ("x^2 - 5x + 6 = 0", "2^x = 10") are solved; sin/cos/tan use the angle unit chosen in the app. Write numbers as given by number_format of read_pad.',
   inputSchema:{type:'object',properties:{text:{type:'string',minLength:1,maxLength:5000,description:'One or more lines, e.g. "Rent 850 + 120\\n* 12"'}},required:['text'],additionalProperties:false},
   execute:({text})=>{
     const add=text.replace(/\r\n?/g,'\n').replace(/\n+$/,'');

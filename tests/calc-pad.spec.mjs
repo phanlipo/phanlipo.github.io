@@ -65,11 +65,11 @@ test.describe('German', () => {
       '',
       'Miete = 850', // assignment stays an assignment
       '850 Miete', // a space before a name: text, no 850 × 850
-      'k^2 = 4', // not linear: no result
+      'k^2 = 4', // quadratic: both solutions
       '0,5k = 1,5 ⇒ k = 3', // text after ⇒ is skipped: k = 3
     ].join('\n'));
     expect(await results(page)).toEqual([
-      'a = 5', '10', '', 'b = 2', 'c = -3', '5', '', 'x = 5', '12', '', '', 'keine Lösung', '', '', '', '850', '', '', 'k = 3',
+      'a = 5', '10', '', 'b = 2', 'c = -3', '5', '', 'x = 5', '12', '', '', 'keine Lösung', '', '', '', '850', '', 'k = -2; 2', 'k = 3',
     ]);
     // Solutions are not part of the sum and not "ans"
     await pad(page).fill('10\n3a = 6\n+ 1\nsumme');
@@ -83,6 +83,64 @@ test.describe('German', () => {
     expect(await clipboardText(page)).toBe(all);
     await pad(page).fill(all);
     expect(await results(page)).toEqual(['b = 2', 'c = -3']);
+  });
+
+  test('functions, constants, derivative and integral', async ({ page }) => {
+    const de = v => v.toLocaleString('de-DE', { maximumFractionDigits: 10 });
+    await pad(page).fill([
+      'sin 30', 'cos(60)', 'tan 45', 'tan 90', 'asin(0,5)', // degrees by default
+      'e^2', 'ln(e)', 'log 1000', '√2', '2pi', '5! + 1', 'abs(-3)', 'runden(2,5)', '3²', 'ln(-1)', 'Super!',
+      'ableitung(x^2; 3)', // d/dx x² = 2x → 6
+      'integral(x^2; 0; 1)', // x³/3 from 0 to 1 = 1/3
+      'integral(2t; 0; 3)', // t² from 0 to 3 = 9
+      'integral(1/x; 1; e)', // ln e − ln 1 = 1
+    ].join('\n'));
+    expect(await results(page)).toEqual([
+      '0,5', '0,5', '1', 'nicht definiert', '30',
+      de(Math.exp(2)), '1', '3', de(Math.SQRT2), de(2 * Math.PI), '121', '3', '3', '9', 'nicht definiert', '',
+      '6', de(1 / 3), '9', '1',
+    ]);
+    // Radians in the menu: sin(pi/2) = 1, d/dx sin x at 0 = cos 0 = 1, ∫ sin from 0 to π = 2
+    await pad(page).fill('sin(pi/2)\nableitung(sin(x); 0)\nintegral(sin(x); 0; pi)\nsin 30');
+    expect((await results(page))[0]).not.toBe('1');
+    await openMenu(page);
+    await page.getByLabel('Bogenmaß (sin(pi/6) = 0,5)').check();
+    await closeMenu(page);
+    expect((await results(page)).slice(0, 3)).toEqual(['1', '1', '2']);
+    expect((await results(page))[3]).toBe(de(Math.sin(30)));
+    await page.reload();
+    expect((await results(page))[0]).toBe('1');
+  });
+
+  test('quadratic, polynomial and other equations with one unknown', async ({ page }) => {
+    await pad(page).fill([
+      'x^2 - 5x + 6 = 0', // (x − 2)(x − 3)
+      'x² = 2', // ±√2
+      'x^2 + 1 = 0', // no real solution
+      '(x-1)^2 = 0', // double root, counts as value below
+      'x + 1', // 2
+      'x^3 = 8', // a new equation with x is solved on its own: 2
+      'x^4 - 5x^2 + 4 = 0', // (x² − 1)(x² − 4): ±1, ±2
+      '2^x = 10', // log2 10
+      'e^x = 5', // ln 5
+      'sin x = 0,5', // 30°, 150°, 390°, 510° …
+      '1/x = 0', // pole, no root
+      'integral(x^2; 0; a) = 9', // a³/3 = 9 → a = 3
+    ].join('\n'));
+    const de = v => v.toLocaleString('de-DE', { maximumFractionDigits: 10 });
+    expect(await results(page)).toEqual([
+      'x = 2; 3', `x = ${de(-Math.SQRT2)}; ${de(Math.SQRT2)}`, 'keine reelle Lösung', 'x = 1', '2', 'x = 2', 'x = -2; -1; 1; 2',
+      // found by numeric search: 10 significant digits
+      `x = ${de(Number(Math.log2(10).toPrecision(10)))}`, `x = ${de(Number(Math.log(5).toPrecision(10)))}`, 'x = 30; 150; 390; 510; …', 'keine reelle Lösung', 'a = 3',
+    ]);
+    // Tap copies all solutions of the line; the pad copy pastes back the same
+    await page.locator('#mirror .res').first().click();
+    expect(await clipboardText(page)).toBe('x = 2; 3');
+    await pad(page).fill('x^2 - 5x + 6 = 0');
+    await page.click('#btnCopyAll');
+    expect(await clipboardText(page)).toBe('x^2 - 5x + 6 = 0   ⇒ x = 2; 3');
+    await pad(page).fill(await clipboardText(page));
+    expect(await results(page)).toEqual(['x = 2; 3']);
   });
 
   test('keypad writes into the pad without the phone keyboard and continues after a note', async ({ page }) => {
