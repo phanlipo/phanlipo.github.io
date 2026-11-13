@@ -23,10 +23,11 @@ const T = {
   check: [{ U: 'STOP', R: ['R'], D: 'STOP', L: ['L'] }, { U: ['U'], R: 'STOP', D: ['D'], L: 'STOP' }],
   block: [{ U: ['U'], R: ['R'], D: ['D'], L: ['L'] }],
   laser: [{ U: 'STOP', R: 'STOP', D: 'STOP', L: 'STOP' }],
+  wall: [{ U: 'STOP', R: 'STOP', D: 'STOP', L: 'STOP' }],
 };
 const MOVE = { U: [0, -1], R: [1, 0], D: [0, 1], L: [-1, 0] };
 const SHOOT = ['R', 'D', 'L', 'U'];   // laser direction per rotation
-const parse = s => { const m = /^([LTSDCB])([A-E])([1-5])([0-3])([qm]*)$/.exec(s); return { type: { L: 'laser', T: 'target', S: 'split', D: 'double', C: 'check', B: 'block' }[m[1]], x: m[2].charCodeAt(0) - 65, y: Number(m[3]) - 1, r: Number(m[4]), must: m[5].includes('m') }; };
+const parse = s => { const m = /^([LTSDCBW])([A-E])([1-5])([0-3])([qm]*)$/.exec(s); return { type: { L: 'laser', T: 'target', S: 'split', D: 'double', C: 'check', B: 'block', W: 'wall' }[m[1]], x: m[2].charCodeAt(0) - 65, y: Number(m[3]) - 1, r: Number(m[4]), must: m[5].includes('m') }; };
 function rules(pieces, targets) {
   const at = (x, y) => pieces.findIndex(p => p.x === x && p.y === y);
   const laser = pieces.find(p => p.type === 'laser');
@@ -47,7 +48,7 @@ function rules(pieces, targets) {
       break;
     }
   }
-  const ok = pieces.every((p, i) => p.type === 'laser' || p.type === 'block' || (p.type === 'check' ? passed.has(i) : hit.has(i)))
+  const ok = pieces.every((p, i) => p.type === 'laser' || p.type === 'block' || p.type === 'wall' || (p.type === 'check' ? passed.has(i) : hit.has(i)))
     && pieces.every((p, i) => !p.must || lit.has(i)) && lit.size === targets;
   return { ok, lit: lit.size };
 }
@@ -58,10 +59,10 @@ function solvedBoard(l) {
   return { fixed, added };
 }
 
-test('the puzzle list: 40 own puzzles, each with a working solution that uses every piece to add', () => {
-  expect(LEVELS).toHaveLength(40);
-  expect(new Set(LEVELS.map(l => l.id)).size).toBe(40);
-  for (const d of ['easy', 'medium', 'hard', 'expert']) expect(LEVELS.filter(l => l.d === d)).toHaveLength(10);
+test('the puzzle list: 50 own puzzles, each with a working solution that uses every piece to add', () => {
+  expect(LEVELS).toHaveLength(50);
+  expect(new Set(LEVELS.map(l => l.id)).size).toBe(50);
+  for (const d of ['easy', 'medium', 'hard', 'expert', 'walls']) expect(LEVELS.filter(l => l.d === d)).toHaveLength(10);
   for (const l of LEVELS) {
     const { fixed, added } = solvedBoard(l);
     // The solution adds exactly the pieces of the supply
@@ -108,6 +109,9 @@ test('beam rules: mirrors, target sides, splitter, checkpoint and blocker (worke
     .toEqual(['check', 'count', 'tray', 'untouched', 'untouched']);
   expect(await issues([{ type: 'laser', x: 0, y: 0, r: 0 }, { type: 'target', x: 4, y: 0, r: 0, must: true }], 1, 0)).toEqual([]);
   expect(await issues([{ type: 'laser', x: 0, y: 0, r: 0 }, { type: 'target', x: 4, y: 0, r: 2, must: true }], 0, 0)).toEqual(['must']);
+  // A wall stops the beam from every side; it is hit but need not be
+  for (const r of [0, 1, 2, 3]) expect(await lit([{ type: 'laser', x: 2, y: 2, r }, { type: 'wall', x: [3, 2, 1, 2][r], y: [2, 3, 2, 1][r], r: 0 }, { type: 'target', x: [4, 2, 0, 2][r], y: [2, 4, 2, 0][r], r: 0 }])).toEqual({ lit: [], touched: [1], passed: [] });
+  expect(await issues([{ type: 'laser', x: 0, y: 0, r: 0 }, { type: 'target', x: 4, y: 0, r: 0 }, { type: 'wall', x: 2, y: 2, r: 0 }], 1, 0)).toEqual([]);
   // Laser turned (r1) shoots down
   expect((await lit([{ type: 'laser', x: 0, y: 0, r: 1 }, { type: 'target', x: 0, y: 4, r: 1 }])).lit).toEqual([1]);
 });
@@ -117,8 +121,8 @@ test('first puzzle: place the piece by tapping, turn it, drag it, switch on the 
   expect(LEVELS[0]).toEqual({ id: 'e01', d: 'easy', t: 1, p: ['LA41', 'TB50m', 'BA20'], a: ['D'], s: ['DA50'] });
   const cell = (x, y) => page.locator(`.cell[data-x="${x}"][data-y="${y}"]`);
   await page.goto('/laser-mirrors/');
-  await expect(page.locator('#solvedCount')).toHaveText('0 von 40 Rätseln gelöst');
-  await expect(page.locator('.lvl')).toHaveCount(40);
+  await expect(page.locator('#solvedCount')).toHaveText('0 von 50 Rätseln gelöst');
+  await expect(page.locator('.lvl')).toHaveCount(50);
   await page.click('[data-level="e01"]');
   await expect(page.locator('#levelName')).toHaveText('Leicht 1');
   await expect(page.locator('#status')).toHaveText('Ziel: 1 Ziel treffen. Teile setzen, dann den Laser einschalten.');
@@ -174,7 +178,7 @@ test('first puzzle: place the piece by tapping, turn it, drag it, switch on the 
   await page.click('#btnNext');
   await expect(page.locator('#levelName')).toHaveText('Leicht 2');
   await page.click('#btnLevels');
-  await expect(page.locator('#solvedCount')).toHaveText('1 von 40 Rätseln gelöst');
+  await expect(page.locator('#solvedCount')).toHaveText('1 von 50 Rätseln gelöst');
   await expect(page.locator('[data-level="e01"]')).toHaveClass(/solved/);
   await expect(page.locator('[data-level="e02"]')).not.toHaveClass(/solved/);
 });
@@ -224,7 +228,7 @@ test('drag from the supply, back into the supply, Delete key, reload keeps the b
 });
 
 // One test per difficulty, so they run in parallel
-for (const d of ['easy', 'medium', 'hard', 'expert']) {
+for (const d of ['easy', 'medium', 'hard', 'expert', 'walls']) {
   test(`the hint leads to the solution in every puzzle (${d})`, async ({ page }) => {
     await page.goto('/laser-mirrors/');
     for (const l of LEVELS.filter(l => l.d === d)) {
@@ -248,7 +252,7 @@ for (const d of ['easy', 'medium', 'hard', 'expert']) {
       await expect(page.locator('.goal .dot.on')).toHaveCount(l.t);
     }
     await page.click('#btnLevels');
-    await expect(page.locator('#solvedCount')).toHaveText('10 von 40 Rätseln gelöst');
+    await expect(page.locator('#solvedCount')).toHaveText('10 von 50 Rätseln gelöst');
   });
 }
 
@@ -273,7 +277,7 @@ test.describe('English', () => {
   test.use({ locale: 'en-US' });
   test('texts follow the language', async ({ page }) => {
     await page.goto('/laser-mirrors/');
-    await expect(page.locator('#solvedCount')).toHaveText('0 of 40 puzzles solved');
+    await expect(page.locator('#solvedCount')).toHaveText('0 of 50 puzzles solved');
     await page.click('[data-level="m02"]');
     await expect(page.locator('#levelName')).toHaveText('Medium 2');
     await page.click('#btnLaser');
