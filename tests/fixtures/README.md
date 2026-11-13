@@ -42,3 +42,10 @@ SecurPharm-Scanner (`securpharm-scanner.spec.mjs`):
 
 - `code.heic` – securPharm-DataMatrix (derselbe Code wie im Test) als HEIC, Stand-in für ein iPhone-Foto einer Packung.
   Erzeugt mit `node tests/fixtures/code-heic.mjs` (braucht Python mit `pillow-heif`).
+
+Videoanalyse (`video-analysis.spec.mjs`, `webmcp.spec.mjs`):
+
+- `fall.webm` – 320×240, 30 fps, 1,5 s, VP8, jedes Bild ein Keyframe (genaues Springen). Ein rotes 16×16-Quadrat
+  bewegt sich gleichförmig nach rechts und fällt beschleunigt: linke obere Ecke x = 52 + 40·t, y = 22 + 60·t² (Pixel);
+  VP8 legt es auf gerade Pixel. Ein schwarzer Balken von x = 0 bis 200 (y = 220…223) ist der Maßstab (200 px = 1 m).
+  `ffmpeg -f lavfi -i "color=c=0xe8e8e8:s=320x240:r=30:d=1.5" -f lavfi -i "color=c=red:s=16x16:r=30:d=1.5" -filter_complex "[0]drawbox=x=0:y=220:w=200:h=4:color=black:t=fill[bg];[bg][1]overlay=x='52+40*t':y='22+60*t*t'" -c:v libvpx -b:v 300k -g 1 -auto-alt-ref 0 fall.webm`

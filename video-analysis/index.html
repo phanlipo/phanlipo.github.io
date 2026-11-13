@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Videoanalyse</title>
+<meta name="description" content="Bewegungen aus einem Handyvideo messen: Maßstab und Ursprung festlegen, das Objekt Bild für Bild antippen oder automatisch verfolgen lassen – Weg, Geschwindigkeit und Fit (linear, Wurf, Schwingung) mit Fehlern, Export als CSV.">
+<meta name="tool:tags" content="Arbeit, Messen">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, Kopieren, KI-Agent">
+<meta name="tool:share-target" content="video/*, .mp4, .m4v, .mov, .webm">
+<meta name="tool:webmcp" content="get_measurements, fit_data">
+<meta name="tool:icon" content="chart-dots-3">
+<meta name="tool:color" content="#1e6091">
+<meta name="tool:short-name" content="Videoanalyse">
+<meta name="tool:title-en" content="Video Analysis">
+<meta name="tool:description-en" content="Measure motion from a phone video: set scale and origin, tap the object frame by frame or let it be tracked automatically – position, velocity and fits (linear, projectile, oscillation) with errors, export as CSV.">
+<meta name="tool:short-name-en" content="Video Lab">
+<meta name="tool:storage" content="video-analysis.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Videoanalyse">
+<meta name="theme-color" content="#1e6091">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#1e6091;--accent-text:#ffffff;--pt:#e11d48;--fit:#1e6091}
+@media (prefers-color-scheme: dark){:root{--accent:#7cb8e4;--accent-text:#0b1d2b;--pt:#fb7185;--fit:#7cb8e4}}
+main{max-width:900px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.card h2{margin:0 0 8px}
+.pick{display:flex;gap:8px;flex-wrap:wrap}
+.pick label.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;flex:1 1 180px;cursor:pointer}
+.pick input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.pick label.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+/* Video with the marks on a canvas above it; the loupe follows the finger */
+.vbox{position:relative;margin-inline:auto;max-width:100%;background:#000;border-radius:8px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+.vbox video,.vbox canvas.ov{position:absolute;inset:0;width:100%;height:100%;display:block}
+.vbox canvas.ov{cursor:crosshair}
+.loupe{position:absolute;width:132px;height:132px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.5);pointer-events:none}
+.frame-row{display:grid;grid-template-columns:repeat(2,48px) 1fr repeat(2,48px);gap:6px;align-items:center;margin-top:8px}
+.frame-row button{min-height:48px;padding:0;font-size:15px}
+.frame-info{text-align:center;font-variant-numeric:tabular-nums;font-size:15px;line-height:1.25}
+.frame-info small{display:block;color:var(--muted);font-size:13px}
+input[type=range]{width:100%;min-height:44px;accent-color:var(--accent);margin:0}
+.seg{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:8px}
+.seg button{flex:1;border:0;background:var(--surface-2);color:var(--text);min-height:48px;font:inherit;font-size:15px;cursor:pointer;padding-inline:6px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+.hint{min-height:1.4em;margin:8px 0;font-size:15px;color:var(--muted)}
+.hint.warn{color:var(--warn)}
+.row .btn{min-height:44px}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.field{display:grid;gap:4px;font-size:14px;color:var(--muted);font-weight:600;min-width:0}
+.field input,.field select{min-height:44px;padding-inline:10px;font-size:16px;width:100%}
+.field small{font-weight:400}
+.len{display:grid;grid-template-columns:1fr 5.5em;gap:6px}
+label.check{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+label.check input{width:22px;height:22px;accent-color:var(--accent)}
+.summary{margin:0 0 8px;color:var(--muted);font-size:15px}
+.graph{width:100%;height:240px;display:block;background:var(--surface-2);border-radius:8px;margin-top:8px}
+.fit{margin:8px 0;padding:0;list-style:none;display:grid;gap:2px;font-variant-numeric:tabular-nums}
+.fit li:first-child{font-weight:600}
+.table-wrap{max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;margin-top:8px}
+table.data{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px}
+table.data th,table.data td{padding:4px 8px;text-align:end;border-bottom:1px solid var(--border);white-space:nowrap}
+table.data th{position:sticky;top:0;background:var(--surface-2);font-size:13px;color:var(--muted)}
+table.data tr.cur td{background:var(--surface-2);font-weight:600}
+table.data button{border:0;background:none;color:var(--accent);font:inherit;text-decoration:underline;cursor:pointer;min-height:32px;padding:0 4px}
+.help code{font-family:var(--mono);background:var(--surface-2);padding:0 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Videoanalyse</span></h1>
+  <p class="sub" data-i18n="sub">Bewegungen im Video vermessen</p>
+</header>
+
+<main>
+  <section class="card" id="loadCard" aria-labelledby="h-load">
+    <h2 id="h-load" data-i18n="loadH">Video öffnen</h2>
+    <p data-i18n="loadIntro">Ein kurzes Video einer Bewegung wählen oder aufnehmen – z. B. ein fallender Ball, ein Pendel, ein rollendes Auto. Mit Stativ, seitlich zur Bewegung und mit einem Gegenstand bekannter Länge im Bild.</p>
+    <div class="pick">
+      <label class="btn primary"><input type="file" id="fileIn" accept="video/*,.mp4,.mov,.m4v,.webm"><span data-i18n="choose">Video wählen</span></label>
+      <label class="btn"><input type="file" id="camIn" accept="video/*" capture="environment"><span data-i18n="record">Video aufnehmen</span></label>
+    </div>
+    <p class="hint" id="loadHint" role="status"></p>
+  </section>
+
+  <section class="card" id="videoCard" aria-labelledby="h-video" hidden>
+    <h2 id="h-video" class="sr-only" data-i18n="videoH">Video</h2>
+    <div class="vbox" id="vbox">
+      <video id="vid" playsinline muted preload="auto"></video>
+      <canvas class="ov" id="ov" role="img" aria-label="Video mit Markierungen. Antippen setzt je nach Modus Maßstab, Ursprung oder Messpunkt." data-i18n-attr="aria-label:ovLabel"></canvas>
+      <canvas class="loupe" id="loupe" width="264" height="264" hidden aria-hidden="true"></canvas>
+    </div>
+    <div class="frame-row">
+      <button type="button" class="btn" id="back10" aria-label="10 Bilder zurück" data-i18n-attr="aria-label:back10">«</button>
+      <button type="button" class="btn" id="back1" aria-label="1 Bild zurück" data-i18n-attr="aria-label:back1">‹</button>
+      <p class="frame-info" id="frameInfo" aria-live="polite">–</p>
+      <button type="button" class="btn" id="fwd1" aria-label="1 Bild vor" data-i18n-attr="aria-label:fwd1">›</button>
+      <button type="button" class="btn" id="fwd10" aria-label="10 Bilder vor" data-i18n-attr="aria-label:fwd10">»</button>
+    </div>
+    <input type="range" id="seek" min="0" max="0" step="1" value="0" aria-label="Bild im Video" data-i18n-attr="aria-label:seekLabel">
+    <div class="seg" role="group" aria-label="Was ein Tippen ins Video setzt" data-i18n-attr="aria-label:modeLabel">
+      <button type="button" data-mode="scale" aria-pressed="false" data-i18n="modeScale">Maßstab</button>
+      <button type="button" data-mode="origin" aria-pressed="false" data-i18n="modeOrigin">Ursprung</button>
+      <button type="button" data-mode="track" aria-pressed="true" data-i18n="modeTrack">Punkte</button>
+    </div>
+    <p class="hint" id="hint" role="status"></p>
+    <div class="row">
+      <button type="button" class="btn primary" id="auto" data-i18n="auto">Automatisch verfolgen</button>
+      <button type="button" class="btn" id="delPoint" data-i18n="delPoint">Punkt in diesem Bild löschen</button>
+    </div>
+  </section>
+
+  <section class="card" id="calCard" aria-labelledby="h-cal" hidden>
+    <h2 id="h-cal" data-i18n="calH">Maßstab &amp; Zeit</h2>
+    <div class="fields">
+      <div class="field"><label for="len" data-i18n="lenL">Länge des Maßstabs</label>
+        <div class="len"><input type="text" id="len" inputmode="decimal" autocomplete="off">
+          <select id="unit" aria-label="Einheit" data-i18n-attr="aria-label:unitL"><option value="1">m</option><option value="0.01">cm</option><option value="0.001">mm</option></select></div>
+      </div>
+      <label class="field" for="fps"><span><span data-i18n="fpsL">Bildrate der Datei (Bilder/s)</span> <small id="fpsAuto"></small></span><input type="text" id="fps" inputmode="decimal" autocomplete="off"></label>
+      <label class="field" for="slow"><span data-i18n="slowL">Zeitlupenfaktor</span><input type="text" id="slow" inputmode="decimal" autocomplete="off"></label>
+      <label class="field" for="step"><span data-i18n="stepL">Weiter nach jedem Punkt um (Bilder)</span><input type="text" id="step" inputmode="numeric" autocomplete="off"></label>
+    </div>
+    <label class="check"><input type="checkbox" id="rotate"><span data-i18n="rotateL">x-Achse entlang des Maßstabs (bei schräg gehaltener Kamera)</span></label>
+    <div class="row"><button type="button" class="btn danger" id="closeVideo" data-i18n="closeVideo">Video schließen</button></div>
+  </section>
+
+  <section class="card" id="resCard" aria-labelledby="h-res" hidden>
+    <h2 id="h-res" data-i18n="resH">Messwerte</h2>
+    <p class="summary" id="summary" role="status"></p>
+    <div class="fields">
+      <label class="field" for="qty"><span data-i18n="qtyL">Diagramm</span>
+        <select id="qty">
+          <option value="y" data-i18n="q.y">y über t</option><option value="x" data-i18n="q.x">x über t</option>
+          <option value="vy" data-i18n="q.vy">vy über t</option><option value="vx" data-i18n="q.vx">vx über t</option>
+          <option value="v" data-i18n="q.v">Betrag v über t</option><option value="path" data-i18n="q.path">Bahn: y über x</option>
+        </select>
+      </label>
+      <label class="field" for="model"><span data-i18n="modelL">Ausgleichskurve</span>
+        <select id="model">
+          <option value="none" data-i18n="m.none">keine</option><option value="lin" data-i18n="m.lin">linear</option>
+          <option value="quad" data-i18n="m.quad">quadratisch (Wurf, Fall)</option><option value="sine" data-i18n="m.sine">Sinus (Schwingung)</option>
+        </select>
+      </label>
+    </div>
+    <canvas class="graph" id="graph" role="img" aria-label="Diagramm der Messwerte mit Ausgleichskurve" data-i18n-attr="aria-label:graphLabel"></canvas>
+    <ul class="fit" id="fitOut" aria-live="polite"></ul>
+    <div class="table-wrap">
+      <table class="data">
+        <caption class="sr-only" data-i18n="tableCap">Messpunkte</caption>
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button type="button" class="btn" id="csv" data-i18n="csv">CSV speichern</button>
+      <button type="button" class="btn" id="copy" data-i18n="copy">Tabelle kopieren</button>
+      <button type="button" class="btn danger" id="clearPts" data-i18n="clearPts">Alle Punkte löschen</button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Misst Bewegungen in einem Video: Wo ist das Objekt in jedem Bild? Daraus entstehen Weg-Zeit- und Geschwindigkeits-Diagramme und eine Ausgleichskurve mit Fehlerangabe – etwa die Fallbeschleunigung g aus einem fallenden Ball.</p>
+  <h3>Gut filmen</h3>
+  <ul>
+    <li>Handy fest abstützen (Stativ, Stapel Bücher), <b>senkrecht</b> auf die Ebene der Bewegung, nicht schwenken oder zoomen.</li>
+    <li>Einen Gegenstand bekannter Länge (Zollstock, Lineal, Fliese) <b>in derselben Ebene</b> wie die Bewegung ins Bild legen – das wird der Maßstab.</li>
+    <li>Viel Licht (kurze Belichtung, keine verwischten Bilder) und ein Objekt, das sich vom Hintergrund abhebt. Zeitlupe gibt mehr Bilder pro Sekunde.</li>
+  </ul>
+  <h3>Messen in drei Schritten</h3>
+  <ol>
+    <li><b>Maßstab:</b> beide Enden des bekannten Gegenstands antippen und die Länge eintragen. Erneutes Antippen verschiebt das nähere Ende. Ohne Maßstab sind die Werte in Pixeln.</li>
+    <li><b>Ursprung</b> (optional): den Nullpunkt antippen. x zeigt nach rechts, y nach oben. Standard ist die linke untere Ecke. Wurde schräg gefilmt, lässt sich die x-Achse am Maßstab ausrichten (Maßstab dann waagerecht anlegen, etwa an eine Tischkante).</li>
+    <li><b>Punkte:</b> das Objekt antippen – die App springt danach ein Bild (oder die eingestellte Schrittweite) weiter. Beim Tippen zeigt eine <b>Lupe</b> die Stelle vergrößert; der Punkt wird beim Loslassen gesetzt, also mit dem Finger feinjustieren. Ein erneutes Tippen im selben Bild ersetzt den Punkt.</li>
+  </ol>
+  <p><b>Automatisch verfolgen:</b> das Objekt im ersten Bild antippen, dann den Knopf drücken. Die App sucht das Muster um den Punkt Bild für Bild (Kreuzkorrelation) und hört auf, wenn sie es verliert oder das Video endet. Danach die Punkte kurz prüfen; falsche lassen sich im jeweiligen Bild neu setzen oder löschen.</p>
+  <h3>Zeit</h3>
+  <ul>
+    <li>Die <b>Bildrate</b> wird beim Öffnen gemessen (Anzeige „erkannt“) und lässt sich überschreiben.</li>
+    <li><b>Zeitlupenfaktor:</b> wie viel langsamer das Video abläuft als die Wirklichkeit. Eine Zeitlupe mit 240 Bildern/s, die mit 30 Bildern/s gespeichert ist, hat den Faktor 8. Bei normalen Videos 1.</li>
+  </ul>
+  <h3>Auswerten</h3>
+  <ul>
+    <li>t beginnt beim ersten Punkt. Geschwindigkeiten sind zentrale Differenzen benachbarter Punkte (am Rand einseitig) – Messfehler der Positionen wirken dort verstärkt.</li>
+    <li><b>linear:</b> y = a + b·t, die Steigung b ist die Geschwindigkeit. <b>quadratisch:</b> y = c₀ + c₁·t + c₂·t², die Beschleunigung ist 2c₂ (beim freien Fall ≈ −9,81 m/s²). <b>Sinus:</b> y = A·sin(ωt + φ) + c, mit Periode T = 2π/ω.</li>
+    <li>Die Fehler (±) sind Standardfehler der Ausgleichsrechnung – sie erfassen die Streuung der Punkte, nicht einen falschen Maßstab oder schräge Kamera.</li>
+    <li>Ein Tippen auf die Zeit in der Tabelle springt zu diesem Bild. <b>CSV speichern</b> (deutsch: Semikolon, Dezimalkomma; englisch: Komma, Punkt) und <b>Tabelle kopieren</b> (zum Einfügen in eine Tabellenkalkulation) nehmen alle Punkte mit.</li>
+  </ul>
+  <h3>Speicher &amp; Datenschutz</h3>
+  <ul>
+    <li>Das Video wird nur im Browser ausgewertet und nirgendwohin gesendet. Damit die Arbeit ein Neuladen oder ein Update übersteht, bleiben Video, Maßstab und Punkte im Speicher der App, bis du <b>Video schließen</b> tippst oder alle Daten löschst. Sie sind nicht Teil der Sicherung (zu groß); exportiere die Punkte als CSV.</li>
+    <li>Auf Android und unter Windows (installierte App) lässt sich ein Video direkt aus der Galerie an die App teilen bzw. mit ihr öffnen.</li>
+    <li>Videos, die der Browser nicht abspielen kann (z. B. manche HEVC-Videos in Firefox), lassen sich nicht öffnen – dann in der Kamera-App „kompatibel“ (H.264) wählen.</li>
+    <li>Ein KI-Agent im Browser kann die Messwerte lesen und eine Ausgleichskurve wählen (WebMCP), aber keine Videos öffnen oder Punkte ändern.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Measures motion in a video: where is the object in each frame? From that come position-time and velocity graphs and a fitted curve with errors – for example the gravitational acceleration g from a falling ball.</p>
+  <h3>Filming well</h3>
+  <ul>
+    <li>Rest the phone firmly (tripod, pile of books), <b>perpendicular</b> to the plane of motion, no panning or zooming.</li>
+    <li>Put an object of known length (folding rule, ruler, tile) into the picture <b>in the same plane</b> as the motion – it becomes the scale.</li>
+    <li>Plenty of light (short exposure, no blurred frames) and an object that stands out from the background. Slow motion gives more frames per second.</li>
+  </ul>
+  <h3>Measuring in three steps</h3>
+  <ol>
+    <li><b>Scale:</b> tap both ends of the known object and enter its length. Tapping again moves the nearer end. Without a scale the values are in pixels.</li>
+    <li><b>Origin</b> (optional): tap the zero point. x points right, y up. The default is the bottom left corner. If you filmed at an angle, the x axis can follow the scale (then lay the scale horizontally, e.g. along a table edge).</li>
+    <li><b>Points:</b> tap the object – the app then moves on by one frame (or the step set). While you touch, a <b>loupe</b> magnifies the spot; the point is set when you lift your finger, so fine-tune with the finger. Tapping again in the same frame replaces the point.</li>
+  </ol>
+  <p><b>Track automatically:</b> tap the object in the first frame, then press the button. The app looks for the pattern around the point frame by frame (cross-correlation) and stops when it loses it or the video ends. Check the points afterwards; wrong ones can be set again or deleted in their frame.</p>
+  <h3>Time</h3>
+  <ul>
+    <li>The <b>frame rate</b> is measured when opening (shown as “detected”) and can be overridden.</li>
+    <li><b>Slow-motion factor:</b> how much slower the video runs than reality. A 240 fps slow motion stored at 30 fps has the factor 8. For normal videos 1.</li>
+  </ul>
+  <h3>Analysis</h3>
+  <ul>
+    <li>t starts at the first point. Velocities are central differences of neighbouring points (one-sided at the ends) – position errors are amplified there.</li>
+    <li><b>linear:</b> y = a + b·t, the slope b is the velocity. <b>quadratic:</b> y = c₀ + c₁·t + c₂·t², the acceleration is 2c₂ (≈ −9.81 m/s² in free fall). <b>Sine:</b> y = A·sin(ωt + φ) + c, with period T = 2π/ω.</li>
+    <li>The errors (±) are standard errors of the fit – they capture the scatter of the points, not a wrong scale or a tilted camera.</li>
+    <li>Tapping the time in the table jumps to that frame. <b>Save CSV</b> (English: comma, decimal point; German: semicolon, decimal comma) and <b>Copy table</b> (to paste into a spreadsheet) include all points.</li>
+  </ul>
+  <h3>Storage &amp; privacy</h3>
+  <ul>
+    <li>The video is analysed only in the browser and sent nowhere. So that your work survives a reload or an update, video, scale and points stay in the app’s storage until you tap <b>Close video</b> or delete all data. They are not part of the backup (too big); export the points as CSV.</li>
+    <li>On Android and Windows (installed app) a video can be shared to the app from the gallery or opened with it.</li>
+    <li>Videos the browser cannot play (e.g. some HEVC videos in Firefox) cannot be opened – then choose “most compatible” (H.264) in the camera app.</li>
+    <li>An AI agent in the browser can read the measurements and choose a fit (WebMCP), but cannot open videos or change points.</li>
+  </ul>
+  </div>
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 97ce49aa4137</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="analysis.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

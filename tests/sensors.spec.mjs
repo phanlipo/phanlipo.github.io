@@ -38,7 +38,7 @@ test('overview: tiles open a tool, back returns, the last tool reopens', async (
   await expect(page.locator('#overview')).toBeVisible();
   await expect(page.locator('#toolbar')).toBeHidden();
   await expect(page.locator('.panel:visible')).toHaveCount(0);
-  await expect(page.locator('#overview .tile')).toHaveCount(12);
+  await expect(page.locator('#overview .tile')).toHaveCount(14);
   await page.locator('#overview').getByRole('button', { name: 'Wasserwaage' }).click();
   await expect(page.locator('#p-level')).toBeVisible();
   await expect(page.locator('#overview')).toBeHidden();
@@ -100,7 +100,7 @@ test('tabs switch panels, support arrow keys and are remembered', async ({ page 
 for (const scheme of ['light', 'dark']) {
   test(`every tab has no accessibility violations (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
-    for (const name of ['Kompass', 'Wasserwaage', 'Beschleunigung', 'Vibrometer', 'Schall', 'Stimmgerät', 'Tacho', 'Schritte', 'Tongenerator', 'Lampe & Morse', 'Puls', 'Klatsch-Stoppuhr']) {
+    for (const name of ['Kompass', 'Wasserwaage', 'Beschleunigung', 'Vibrometer', 'Schall', 'Spektrogramm', 'Stimmgerät', 'Tacho', 'Schritte', 'Tongenerator', 'Lampe & Morse', 'Puls', 'Spektrometer', 'Klatsch-Stoppuhr']) {
       await tab(page, name);
       const { violations } = await axe(page).analyze();
       expect(violations.map(v => `${name}: ${v.id} → ${v.nodes.map(n => n.target.join(' ')).join(' | ')}`)).toEqual([]);
@@ -385,7 +385,8 @@ async function fakeCamera(page, { pulseHz = 0, cams = null, caps = {}, bright = 
 async function download(page, click) {
   const [dl] = await Promise.all([page.waitForEvent('download'), click()]);
   const { readFileSync } = await import('node:fs');
-  return { name: dl.suggestedFilename(), text: readFileSync(await dl.path(), 'utf8').replace(/^\ufeff/, '') };
+  const buf = readFileSync(await dl.path());
+  return { name: dl.suggestedFilename(), buf, text: buf.toString('utf8').replace(/^\ufeff/, '') };
 }
 
 test('compass: geographic north and a stored bearing', async ({ page }) => {
@@ -512,6 +513,216 @@ test.describe('sound extensions', () => {
       expect(l).toMatch(/^\d\d:\d\d:\d\d;\d+,\d$/);
       expect(num(l.split(';')[1])).toBeCloseTo(20 * Math.log10(0.5 / Math.SQRT2) + 100, 0);
     }
+  });
+});
+
+test.describe('spectrogram', () => {
+  // Sample rate of the fake microphone (the AudioContext of the page uses the same)
+  const rate = page => page.evaluate(() => window.__mic.ctx.sampleRate);
+
+  test('peak frequency and level of a 1 kHz sine; harmonics of a sawtooth', async ({ page }) => {
+    await fakeMic(page, 1000, 0.5);
+    await tab(page, 'Spektrogramm');
+    await running(page, 'spectro');
+    // Amplitude 0,5 → 20·log10(0,5) = −6,02 dBFS
+    await expect.poll(async () => Math.abs(num(await text(page, 'spPeak')) - 1000), { timeout: 8000 }).toBeLessThan(2);
+    await expect.poll(async () => Math.abs(num(await text(page, 'spLevel')) - 20 * Math.log10(0.5))).toBeLessThan(1.5);
+    const sr = await rate(page);
+    await expect(page.locator('#spRes')).toHaveText(new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(sr / 4096));
+    // Sawtooth 220 Hz: harmonics n·220 Hz with amplitude 1/n – six strongest are 220 … 1320 Hz
+    await page.evaluate(() => { window.__mic.osc.type = 'sawtooth'; window.__mic.osc.frequency.value = 220; });
+    const rows = page.locator('#spPeaks tr');
+    await expect.poll(async () => (await rows.allTextContents()).map(r => r.match(/×([\d,]+)$/)?.[1]).join(' '), { timeout: 8000 })
+      .toBe('1,00 2,00 3,00 4,00 5,00 6,00');
+    const f = (await rows.locator('td:first-child').allTextContents()).map(num);
+    f.forEach((v, i) => expect(Math.abs(v - 220 * (i + 1))).toBeLessThan(2));
+    // Level of the 2nd harmonic is 20·log10(1/2) ≈ −6 dB below the fundamental
+    const db = (await rows.locator('td:nth-child(2)').allTextContents()).map(num);
+    expect(Math.abs(db[0] - db[1] - 20 * Math.log10(2))).toBeLessThan(1.5);
+  });
+
+  test('stop freezes the image; tapping reads frequency and time; image saved as PNG', async ({ page }) => {
+    await fakeMic(page, 2000, 0.5);
+    await tab(page, 'Spektrogramm');
+    await running(page, 'spectro');
+    await expect.poll(async () => Math.abs(num(await text(page, 'spPeak')) - 2000), { timeout: 8000 }).toBeLessThan(3);
+    await page.waitForFunction(() => document.querySelectorAll('#spPeaks tr').length > 0);
+    await page.locator('[data-start="spectro"]').click();
+    await expect(page.locator('[data-start="spectro"]')).toHaveText('Starten');
+    await expect(page.locator('#spPng')).toBeEnabled();
+    // Logarithmic axis from 20 Hz to 5 kHz: 2 kHz lies at log(5000/2000)/log(5000/20) of the height
+    const box = await page.locator('#spAxes').boundingBox();
+    const y = Math.log(5000 / 2000) / Math.log(5000 / 20);
+    await page.locator('#spAxes').click({ position: { x: box.width - 3, y: y * box.height } });
+    const cur = await text(page, 'spCursor');
+    expect(cur).toMatch(/^[\d.]+ Hz · [-−]?0,\d s · [-−]?\d+ dB$/);
+    expect(Math.abs(num(cur.split(' Hz')[0]) - 2000)).toBeLessThan(2000 * 0.03);
+    // The level under the cursor is the sine itself (−6 dBFS, scalloping of the Hann window at most −1,4 dB)
+    expect(num(cur.split('·')[2])).toBeGreaterThan(-9);
+    // Linear axis: the cursor keeps its frequency
+    await page.getByRole('button', { name: 'linear' }).click();
+    await expect(page.locator('#spCursor')).toHaveText(cur);
+    const { name, buf } = await download(page, () => page.locator('#spPng').click());
+    expect(name).toMatch(/^spektrogramm-\d{4}-\d\d-\d\d-\d{4}\.png$/);
+    expect(buf.subarray(1, 4).toString()).toBe('PNG');
+    // Settings are kept
+    await page.locator('#spFft').selectOption('8192');
+    await page.locator('#spWin').selectOption('blackman');
+    await page.reload();
+    await expect(page.locator('#p-spectro')).toBeVisible();
+    await expect(page.locator('#spFft')).toHaveValue('8192');
+    await expect(page.locator('#spWin')).toHaveValue('blackman');
+    await expect(page.getByRole('button', { name: 'linear' })).toHaveAttribute('aria-pressed', 'true');
+    await running(page, 'spectro');
+    // Started without a tap, the fake microphone stays silent (autoplay rules): stop and start by tap
+    await page.locator('[data-start="spectro"]').click();
+    await page.locator('[data-start="spectro"]').click();
+    await running(page, 'spectro');
+    await expect.poll(async () => Math.abs(num(await text(page, 'spPeak')) - 2000), { timeout: 8000 }).toBeLessThan(2);
+    await expect(page.locator('#spRes')).toHaveText(new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(await rate(page) / 8192));
+  });
+});
+
+// Spectrometer: a fake camera shows a line spectrum behind a grating – black picture 640×360 with a band
+// (rows 160–200) holding three Gaussian lines at x = 200 (blue), 400 (green) and 500 (orange, weaker).
+// Positions along the strip run from 0 to 1000: x → x / 639 · 1000.
+async function fakeSpectrum(page, { peak = 200 } = {}) {
+  await page.addInitScript(({ peak }) => {
+    window.__gum = []; window.__applied = [];
+    navigator.mediaDevices.enumerateDevices = async () => [
+      { kind: 'videoinput', deviceId: 'back0', label: 'camera2 0, facing back', groupId: '' },
+      { kind: 'videoinput', deviceId: 'front1', label: 'camera2 1, facing front', groupId: '' },
+    ];
+    navigator.mediaDevices.getUserMedia = async constraints => {
+      window.__gum.push(constraints.video);
+      const cv = document.createElement('canvas');
+      cv.width = 640; cv.height = 360;
+      const c = cv.getContext('2d');
+      const lines = [[200, [0.15, 0.3, 1]], [400, [0.25, 1, 0.25]], [500, [1, 0.55, 0.15]]];
+      const paint = () => {
+        c.fillStyle = '#000'; c.fillRect(0, 0, 640, 360);
+        for (let x = 0; x < 640; x++) {
+          let r = 0, g = 0, b = 0;
+          lines.forEach(([x0, col], k) => {
+            const a = Math.exp(-((x - x0) ** 2) / (2 * 3 ** 2)) * (k === 2 ? 0.6 : 1);
+            r += a * col[0]; g += a * col[1]; b += a * col[2];
+          });
+          c.fillStyle = `rgb(${Math.round(peak * r)},${Math.round(peak * g)},${Math.round(peak * b)})`;
+          c.fillRect(x, 160, 1, 41);
+        }
+      };
+      paint(); setInterval(paint, 30);
+      const stream = cv.captureStream(30), track = stream.getVideoTracks()[0];
+      const front = constraints.video.facingMode && constraints.video.facingMode.ideal === 'user' || constraints.video.deviceId && constraints.video.deviceId.exact === 'front1';
+      Object.defineProperty(track, 'label', { value: front ? 'camera2 1, facing front' : 'camera2 0, facing back' });
+      track.getCapabilities = () => ({ exposureMode: ['continuous', 'manual'], whiteBalanceMode: ['continuous', 'manual'], exposureCompensation: { min: -2, max: 2, step: 0.5 } });
+      track.getSettings = () => ({ deviceId: front ? 'front1' : 'back0' });
+      track.applyConstraints = async c => { window.__applied.push(c.advanced[0]); };
+      return stream;
+    };
+  }, { peak });
+  await page.reload();
+}
+const posOf = x => x / 639 * 1000;
+const peakRows = page => page.locator('#smPeaks tr').evaluateAll(trs => trs.map(tr => [...tr.cells].map(td => td.textContent)));
+async function tapSpectrum(page, frac) {
+  const box = await page.locator('#smGraph').boundingBox();
+  await page.locator('#smGraph').click({ position: { x: frac * box.width, y: box.height / 2 } });
+}
+
+test.describe('spectrometer', () => {
+  test('finds the lines, calibrates with two of them, keeps the calibration, exports CSV', async ({ page }) => {
+    await fakeSpectrum(page);
+    await tab(page, 'Spektrometer');
+    await expect(page.locator('#smCalInfo')).toContainText('Nicht kalibriert');
+    await page.locator('[data-start="spm"]').click();
+    await running(page, 'spm');
+    await expect.poll(async () => (await peakRows(page)).length, { timeout: 8000 }).toBe(3);
+    let rows = await peakRows(page);
+    [200, 400, 500].forEach((x, i) => expect(Math.abs(num(rows[i][0]) - posOf(x)), `line ${i + 1}`).toBeLessThan(1.5));
+    // brightness: green line (0,25+1+0,25)/3 of 200/255
+    expect(num(rows[1][1])).toBeCloseTo(1.5 / 3 * 200 / 255 * 100, -1);
+    // Tap near the blue line → the cursor snaps to it; take it as position 1 (436 nm), the green one as 2 (546 nm)
+    await tapSpectrum(page, posOf(200) / 1000 + 0.008);
+    await expect(page.locator('#smCursor')).toHaveText(new RegExp(`^${rows[0][0].replace('.', '\\.')} · Helligkeit \\d+ %$`));
+    await page.locator('[data-smtake="1"]').click();
+    await tapSpectrum(page, posOf(400) / 1000 - 0.008);
+    await page.locator('[data-smtake="2"]').click();
+    await expect(page.locator('#smL1')).toHaveValue('436');
+    await expect(page.locator('#smL2')).toHaveValue('546');
+    await expect(page.locator('#smColPos')).toHaveText('Wellenlänge');
+    // linear: x = 500 lies 300/200 of the way from 436 to 546 → 436 + 1,5 · 110 = 601 nm
+    await expect.poll(async () => num((await peakRows(page))[2][0]), { timeout: 5000 }).toBeGreaterThan(599);
+    rows = await peakRows(page);
+    expect(rows.map(r => r[0])).toEqual(['436,0 nm', '546,0 nm', rows[2][0]]);
+    expect(Math.abs(num(rows[2][0]) - 601)).toBeLessThan(1);
+    // range of the strip: positions 0 and 1000
+    const nmPerPos = 110 / (posOf(400) - posOf(200));
+    await expect(page.locator('#smCalInfo')).toHaveText(`Kalibriert: ${Math.round(436 - posOf(200) * nmPerPos)} bis ${Math.round(436 + (1000 - posOf(200)) * nmPerPos)} nm im Streifen, ${nmPerPos.toFixed(3).replace('.', ',')} nm je Stelle.`);
+    // CSV with wavelengths
+    const { name, text: csv } = await download(page, () => page.locator('#smCsv').click());
+    expect(name).toMatch(/^spektrum-.*\.csv$/);
+    const lines = csv.trim().split(/\r\n/);
+    expect(lines[0]).toBe('Stelle;Wellenlänge (nm);Helligkeit;Rot;Grün;Blau');
+    expect(lines).toHaveLength(641);
+    const at500 = lines[501].split(';').map(num);
+    expect(at500[0]).toBeCloseTo(posOf(500), 0);
+    expect(at500[1]).toBeCloseTo(601, 0);
+    // calibration kept
+    await page.reload();
+    await expect(page.locator('#p-spm')).toBeVisible();
+    await expect(page.locator('#smCalInfo')).toContainText('Kalibriert:');
+  });
+
+  test('camera choice: front camera, cameras by name; exposure held', async ({ page }) => {
+    await fakeSpectrum(page);
+    await tab(page, 'Spektrometer');
+    await page.locator('[data-start="spm"]').click();
+    await running(page, 'spm');
+    expect(await page.evaluate(() => window.__gum[0].facingMode)).toEqual({ ideal: 'environment' });
+    // after the permission the cameras appear by name
+    await expect(page.locator('#smCam option')).toHaveText(['Rückkamera', 'Frontkamera', 'camera2 0, facing back', 'camera2 1, facing front']);
+    await page.locator('#smCam').selectOption({ label: 'Frontkamera' });
+    await expect.poll(() => page.evaluate(() => window.__gum.length)).toBe(2);
+    expect(await page.evaluate(() => window.__gum[1].facingMode)).toEqual({ ideal: 'user' });
+    await running(page, 'spm');
+    await page.locator('#smCam').selectOption('back0');
+    await expect.poll(() => page.evaluate(() => window.__gum.at(-1).deviceId)).toEqual({ exact: 'back0' });
+    // exposure and white balance held; compensation offered by this camera
+    await page.getByLabel('Belichtung und Weißabgleich festhalten').check();
+    await expect.poll(() => page.evaluate(() => window.__applied.at(-1))).toEqual({ exposureMode: 'manual', whiteBalanceMode: 'manual' });
+    await expect(page.locator('#smExpBox')).toBeVisible();
+    await page.locator('#smExp').fill('-1');
+    await expect.poll(() => page.evaluate(() => window.__applied.at(-1))).toEqual({ exposureCompensation: -1 });
+    // the chosen camera is used again after a reload
+    await page.reload();
+    await page.locator('[data-start="spm"]').click();
+    await running(page, 'spm');
+    expect(await page.evaluate(() => window.__gum.at(-1).deviceId)).toEqual({ exact: 'back0' });
+    await expect(page.locator('#smCam')).toHaveValue('back0');
+  });
+
+  test('strip: tapping moves it, the brightest is found; dark frame; overexposure', async ({ page }) => {
+    await fakeSpectrum(page, { peak: 255 });
+    await tab(page, 'Spektrometer');
+    await page.locator('[data-start="spm"]').click();
+    await running(page, 'spm');
+    await expect.poll(async () => (await peakRows(page)).length, { timeout: 8000 }).toBe(3);
+    await expect(page.locator('#st-spm')).toHaveText(/^Übersteuert/);
+    // strip moved to the top of the picture: no spectrum there
+    const box = await page.locator('#smBand').boundingBox();
+    await page.locator('#smBand').click({ position: { x: box.width / 2, y: 4 } });
+    await expect.poll(async () => (await peakRows(page))[0][0]).toBe('–');
+    await page.getByRole('button', { name: 'Hellsten Streifen suchen' }).click();
+    await expect.poll(async () => (await peakRows(page)).length).toBe(3);
+    const band = await page.evaluate(() => JSON.parse(localStorage.getItem('sensors.settings.v1')).spm.band);
+    expect(band * 359).toBeGreaterThanOrEqual(160);
+    expect(band * 359).toBeLessThanOrEqual(200);
+    // the picture does not change: minus itself as dark frame nothing is left
+    await page.getByRole('button', { name: 'Dunkelbild abziehen' }).click();
+    await expect.poll(async () => (await peakRows(page))[0][0]).toBe('–');
+    await page.getByRole('button', { name: 'Dunkelbild verwerfen' }).click();
+    await expect.poll(async () => (await peakRows(page)).length).toBe(3);
   });
 });
 

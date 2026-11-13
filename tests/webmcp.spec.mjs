@@ -2476,3 +2476,105 @@ test.describe('calc-pad tools', () => {
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('calc-pad.pads.v1')).pads[0].text)).toBe('Miete 850 + 120\nNotiz\n× 12\n1/0\n\n3b + 2c = 0\nb + c = -1\n\nx^2 - 5x + 6 = 0');
   });
 });
+
+test.describe('function-plotter tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/function-plotter/'));
+
+  test('set_functions: lines with errors, parameters, view fitted; shown in the app', async ({ page }) => {
+    const r = await call(page, 'function_plotter_set_functions', { functions: ['p x^2 + q', 'f(x) = sin x', "f'(x)", 'x $'], x_min: -2, x_max: 2 });
+    expect(r.ok).toBe(true);
+    expect(r.result.lines.map(l => l.error ? 'error' : l.name || 'fn')).toEqual(['fn', 'f', 'fn', 'error']);
+    expect(r.result.parameters).toEqual({ p: 1, q: 1 });
+    expect(r.result.view.x_min).toBe(-2);
+    expect(r.result.view.x_max).toBe(2);
+    // y fitted to the curves on [−2, 2]: x² + 1 reaches 5, sin and cos reach about ±1
+    expect(r.result.view.y_max).toBeGreaterThan(5);
+    expect(r.result.view.y_min).toBeLessThan(-0.9);
+    await expect(page.locator('#fns input')).toHaveCount(4);
+    await expect(page.locator('#fns input').first()).toHaveValue('p x^2 + q');
+    await expect(page.locator('#params .param label')).toHaveText(['p', 'q']);
+    const bad = await call(page, 'function_plotter_set_functions', { functions: ['x'], x_min: 3, x_max: 1 });
+    expect(bad).toEqual({ ok: false, error: 'x_max must be greater than x_min.' });
+  });
+
+  test('set_parameter and evaluate: values recomputed independently, zeros and extrema', async ({ page }) => {
+    await call(page, 'function_plotter_set_functions', { functions: ['p x^2 - c', 'g = 2', 'g x'], x_min: -3, x_max: 3 });
+    let r = await call(page, 'function_plotter_set_parameter', { name: 'c', value: 4, min: 0, max: 10 });
+    expect(r).toEqual({ ok: true, result: { name: 'c', value: 4, min: 0, max: 10 } });
+    await expect(page.locator('#params .param[data-p="c"] [data-role="v"]')).toHaveValue('4');
+    r = await call(page, 'function_plotter_set_parameter', { name: 'z', value: 1 });
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe('Unknown parameter "z". Parameters: p, c.');
+    r = await call(page, 'function_plotter_evaluate', { x: 1.5 });
+    expect(r.ok).toBe(true);
+    const [l1, l2, l3] = r.result.lines;
+    expect(l1.value).toBeCloseTo(1.5 ** 2 - 4, 12);
+    expect(l2).toMatchObject({ constant: 'g', value: 2 });
+    expect(l3.value).toBeCloseTo(3, 12);
+    expect(l1.points.map(p => p.type)).toEqual(['zero', 'min', 'zero']);
+    expect(l1.points[0].x).toBeCloseTo(-2, 8);
+    expect(l1.points[2].x).toBeCloseTo(2, 8);
+    expect(l1.points[1].y).toBeCloseTo(-4, 8);
+    // the app shows the values at x = 1,5
+    await expect(page.locator('#readoutList li').first()).toHaveText('x = 1,5');
+    // not defined → null
+    await call(page, 'function_plotter_set_functions', { functions: ['ln x'] });
+    r = await call(page, 'function_plotter_evaluate', { x: -1 });
+    expect(r.result.lines[0].value).toBeNull();
+  });
+});
+
+test.describe('video-analysis tools', () => {
+  test.use({ locale: 'de-DE' });
+  test.beforeEach(async ({ page }) => open(page, '/video-analysis/'));
+
+  test('without a video both tools explain what to do', async ({ page }) => {
+    for (const [name, input] of [['video_analysis_get_measurements', {}], ['video_analysis_fit_data', { quantity: 'y', model: 'quad' }]]) {
+      expect(await call(page, name, input)).toEqual({ ok: false, error: 'No video is open. Ask the user to open a video in the app.' });
+    }
+  });
+
+  test('get_measurements and fit_data on tracked points (synthetic fall, see video-analysis.spec.mjs)', async ({ page }) => {
+    await page.locator('#fileIn').setInputFiles(new URL('./fixtures/fall.webm', import.meta.url).pathname);
+    await expect(page.locator('#frameInfo')).toContainText('Bild 1 von 45');
+    const box = await page.locator('#ov').boundingBox(), s = box.width / 320;
+    const tap = (x, y) => page.locator('#ov').click({ position: { x: x * s, y: y * s } });
+    await page.getByRole('button', { name: 'Maßstab', exact: true }).click();
+    await tap(0, 222); await tap(200, 222);
+    await page.getByRole('button', { name: 'Punkte', exact: true }).click();
+    // centres of the square in frames 0, 1, 2 … (even pixels, see video-analysis.spec.mjs)
+    const truth = k => { const t = k / 30; return { x: 2 * Math.floor((52 + 40 * t) / 2) + 8, y: 2 * Math.floor((22 + 60 * t * t) / 2) + 8 }; };
+    for (let k = 0; k < 30; k += 1) {
+      await expect(page.locator('#frameInfo')).toContainText(`Bild ${k + 1} von 45`);
+      await tap(truth(k).x, truth(k).y);
+    }
+    await expect(page.locator('#tbody tr')).toHaveCount(30);
+    let r = await call(page, 'video_analysis_get_measurements', {});
+    expect(r.ok).toBe(true);
+    expect(r.result.units).toEqual({ position: 'm', velocity: 'm/s' });
+    expect(r.result.scale.length_m).toBe(1);
+    expect(r.result.scale.pixels).toBeCloseTo(200, 0);
+    expect(r.result.frame_rate).toBe(30);
+    expect(r.result.points).toHaveLength(30);
+    expect(r.result.points[10].t).toBeCloseTo(10 / 30, 9);
+    expect(r.result.points[10].x).toBeCloseTo(truth(10).x / 200, 2);
+    r = await call(page, 'video_analysis_fit_data', { quantity: 'y', model: 'quad' });
+    expect(r.ok).toBe(true);
+    // expected: least squares of the true (even-pixel) positions, y = (222 − y_px)/200, computed here with the
+    // normal equations of y = c0 + c1·t + c2·t² (Cramer's rule)
+    const T = Array.from({ length: 30 }, (_, k) => k / 30), Yv = T.map((_, k) => (222 - truth(k).y) / 200);
+    const S = n => T.reduce((a, t) => a + t ** n, 0), SY = n => T.reduce((a, t, i) => a + t ** n * Yv[i], 0);
+    const det3 = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    const N = [[S(0), S(1), S(2)], [S(1), S(2), S(3)], [S(2), S(3), S(4)]];
+    const c2 = det3(N.map((row, i) => [row[0], row[1], SY(i)])) / det3(N);
+    expect(r.result.fit.acceleration).toBeCloseTo(2 * c2, 2);
+    expect(Math.abs(2 * c2 + 0.6)).toBeLessThan(0.05);
+    expect(r.result.fit.acceleration_error).toBeGreaterThan(0);
+    await expect(page.locator('#model')).toHaveValue('quad');
+    await expect(page.locator('#fitOut li').nth(1)).toContainText('Beschleunigung');
+    r = await call(page, 'video_analysis_fit_data', { quantity: 'x', model: 'lin' });
+    expect(Math.abs(r.result.fit.coefficients[1] - 0.2)).toBeLessThan(0.005);
+    r = await call(page, 'video_analysis_fit_data', { quantity: 'x', model: 'cubic' });
+    expect(r.ok).toBe(false);
+  });
+});
