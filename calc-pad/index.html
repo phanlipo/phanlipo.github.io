@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Rechenzettel</title>
+<meta name="description" content="Rechnen und Notizen auf einem Zettel: Jede Zeile mit einer Rechnung zeigt ihr Ergebnis, Text dazwischen stört nicht, mit „+ 20“ rechnest du weiter, Gleichungen wie 3a = 15 werden gelöst. Ergebnis antippen kopiert es.">
+<meta name="tool:tags" content="Alltag, Rechner">
+<meta name="tool:features" content="Kopieren, Verlauf, KI-Agent">
+<meta name="tool:webmcp" content="calculate, read_pad, add_lines">
+<meta name="tool:icon" content="calculator">
+<meta name="tool:color" content="#336b87">
+<meta name="tool:short-name" content="Rechenzettel">
+<meta name="tool:title-en" content="Calc Pad">
+<meta name="tool:description-en" content="Calculate and take notes on one pad: every line with a calculation shows its result, text in between is fine, “+ 20” carries on, equations like 3a = 15 are solved. Tap a result to copy it.">
+<meta name="tool:short-name-en" content="Calc Pad">
+<meta name="tool:storage" content="calc-pad.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Xtk+1UngYF7pT4l43g/DaHHtcq5/gFoCEwBd9Ni7LQQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Rechenzettel">
+<meta name="theme-color" content="#336b87">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#336b87;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#8ec3dc;--accent-text:#0b1a22}}
+main{display:flex;flex-direction:column}
+/* ---------- The pad: a textarea over a mirror that has the same line breaks and holds the results ----------
+   The mirror sets the height (the textarea never scrolls itself, the wrapper does), its text is invisible;
+   every line is a grid row: text column (as wide as the textarea's text) + result column.
+   --rw in cqi (width of .sheet), so the grid and the textarea padding resolve it the same way. */
+.sheet-wrap{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;background:var(--surface)}
+.sheet{--lh:28px;--rw:clamp(96px,36cqi,280px);--pad:10px;position:relative;container-type:inline-size;min-height:100%;font:17px/var(--lh) var(--font);
+  background-image:repeating-linear-gradient(to bottom,transparent 0 calc(var(--lh) - 1px),color-mix(in srgb,var(--border) 70%,transparent) calc(var(--lh) - 1px) var(--lh));
+  background-position:0 var(--pad);background-repeat:repeat-y}
+.mirror{position:relative;z-index:1;padding:var(--pad) 12px calc(var(--pad) + var(--lh));pointer-events:none}
+.ml{display:grid;grid-template-columns:minmax(0,1fr) var(--rw);min-height:var(--lh)}
+.mt{white-space:pre-wrap;overflow-wrap:anywhere;color:transparent;tab-size:4}
+.mr{display:flex;align-items:flex-end;justify-content:flex-end;min-width:0;border-inline-start:1px dashed var(--border)}
+#pad{position:absolute;inset:0;width:100%;height:100%;margin:0;border:0;border-radius:0;outline:0;resize:none;overflow:hidden;background:transparent;color:var(--text);
+  font:inherit;line-height:inherit;tab-size:4;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--accent);
+  padding:var(--pad) calc(12px + var(--rw)) calc(var(--pad) + var(--lh)) 12px}
+#pad::placeholder{color:var(--muted);opacity:1}
+.res{pointer-events:auto;max-width:100%;height:var(--lh);padding:0 0 0 8px;border:0;border-radius:6px;background:none;color:var(--text);
+  font:inherit;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.res:hover{background:var(--surface-2)}
+.res:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.res.plain{font-weight:400;color:var(--muted)}
+.res.err{font-weight:400;color:var(--err)}
+.res.flash{background:var(--accent);color:var(--accent-text)}
+/* ---------- Keypad (thumb area) ---------- */
+.keys{flex:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:8px;padding-inline:max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right));
+  border-block-start:1px solid var(--border);background:var(--surface-2)}
+.keys[hidden]{display:none}
+.keys button{min-height:46px;min-width:0;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);
+  font:inherit;font-size:21px;cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none;display:grid;place-items:center}
+.keys button:active{background:var(--border)}
+.keys button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.keys .op{font-weight:700;color:var(--accent);background:var(--surface-2)}
+.keys .fn{font-size:17px;background:var(--surface-2)}
+.keys .enter{grid-row:span 2;background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.keys svg{width:24px;height:24px;display:block}
+/* Landscape phones and wide screens: keypad beside the pad */
+@media (orientation:landscape) and (max-height:540px),(min-width:820px){
+  main{flex-direction:row}
+  .keys{width:min(46%,400px);align-content:end;border-block-start:0;border-inline-start:1px solid var(--border)}
+  .keys button{min-height:44px}
+}
+@media (min-width:820px){.keys button{min-height:56px}}
+/* ---------- Pads (in the menu) ---------- */
+.pads{list-style:none;margin:0 0 10px;padding:0}
+.pads li{display:flex;gap:6px;align-items:center;border-block-end:1px solid var(--border);padding-block:4px}
+.pads .open{flex:1;min-width:0;min-height:44px;text-align:start;background:none;border:0;color:var(--text);font:inherit;cursor:pointer;padding:0}
+.pads .name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pads li.current .name{font-weight:700}
+.pads .meta{display:block;font-size:12px;color:var(--muted)}
+.pads .del{flex:none;width:44px;height:44px;display:grid;place-items:center;padding:0;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);cursor:pointer}
+.pads .del svg{width:20px;height:20px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Rechenzettel</span></h1>
+  <p class="sub" data-i18n="sub">Rechnen und Notizen auf einem Zettel.</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnKeys" aria-pressed="true" aria-label="Tastenfeld" title="Tastenfeld" data-i18n-attr="aria-label:keys; title:keys"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2l0 -14"/><path d="M8 8a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1v1a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1l0 -1"/><path d="M8 14l0 .01"/><path d="M12 14l0 .01"/><path d="M16 14l0 .01"/><path d="M8 17l0 .01"/><path d="M12 17l0 .01"/><path d="M16 17l0 .01"/></svg></button>
+    <button type="button" class="head-btn" id="btnCopyAll" aria-label="Zettel kopieren" title="Zettel kopieren" data-i18n-attr="aria-label:copyAll; title:copyAll"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666"/><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <h2 class="sr-only" data-i18n="h.pad">Zettel</h2>
+  <div class="sheet-wrap" id="sheetWrap">
+    <div class="sheet" id="sheet">
+      <div class="mirror" id="mirror"></div>
+      <textarea id="pad" inputmode="none" spellcheck="false" autocomplete="off" autocapitalize="sentences" aria-label="Zettel" data-i18n-attr="aria-label:padLabel; placeholder:padPh" placeholder="Einkauf: 12,50 + 3,99&#10;+ 2,49&#10;Notiz: Pfand zurück&#10;− 0,75&#10;Miete = 850&#10;Miete × 12"></textarea>
+    </div>
+  </div>
+  <div class="keys" id="keys" role="group" aria-label="Tastenfeld" data-i18n-attr="aria-label:keys">
+    <button type="button" class="fn" data-k="paste" aria-label="Einfügen" title="Einfügen" data-i18n-attr="aria-label:paste; title:paste"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2"/><path d="M9 5a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2"/></svg></button>
+    <button type="button" class="fn" data-k="(">(</button>
+    <button type="button" class="fn" data-k=")">)</button>
+    <button type="button" class="fn" data-k="%">%</button>
+    <button type="button" class="fn" data-k="back" aria-label="Löschen" title="Löschen" data-i18n-attr="aria-label:back; title:back"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-11l-5 -5a1.5 1.5 0 0 1 0 -2l5 -5l11 0"/><path d="M12 10l4 4m0 -4l-4 4"/></svg></button>
+    <button type="button" data-k="7">7</button>
+    <button type="button" data-k="8">8</button>
+    <button type="button" data-k="9">9</button>
+    <button type="button" class="op" data-k="÷" aria-label="geteilt durch ÷" data-i18n-attr="aria-label:div">÷</button>
+    <button type="button" class="fn" data-k="√" aria-label="Wurzel √" data-i18n-attr="aria-label:sqrt">√</button>
+    <button type="button" data-k="4">4</button>
+    <button type="button" data-k="5">5</button>
+    <button type="button" data-k="6">6</button>
+    <button type="button" class="op" data-k="×" aria-label="mal ×" data-i18n-attr="aria-label:mul">×</button>
+    <button type="button" class="fn" data-k="^" aria-label="hoch ^" data-i18n-attr="aria-label:pow">^</button>
+    <button type="button" data-k="1">1</button>
+    <button type="button" data-k="2">2</button>
+    <button type="button" data-k="3">3</button>
+    <button type="button" class="op" data-k="−" aria-label="minus −" data-i18n-attr="aria-label:minus">−</button>
+    <button type="button" class="enter" data-k="enter" aria-label="Neue Zeile" title="Neue Zeile" data-i18n-attr="aria-label:enter; title:enter"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6v6a3 3 0 0 1 -3 3h-10l4 -4m0 8l-4 -4"/></svg></button>
+    <button type="button" data-k="0">0</button>
+    <button type="button" data-k="dec" id="keyDec" aria-label="Komma ," data-i18n-attr="aria-label:decLabel">,</button>
+    <button type="button" class="fn" data-k="ans" aria-label="letztes Ergebnis ans" data-i18n-attr="aria-label:ansLabel">ans</button>
+    <button type="button" class="op" data-k="+" aria-label="plus +" data-i18n-attr="aria-label:plus">+</button>
+  </div>
+
+  <section class="card" data-menu aria-labelledby="h-pads">
+    <h2 id="h-pads" data-i18n="pads">Zettel</h2>
+    <p class="muted" data-i18n="padsIntro">Alles wird automatisch gespeichert – nur in diesem Browser.</p>
+    <ul class="pads" id="pads"></ul>
+    <div class="row"><button type="button" class="btn primary" id="btnNew" data-i18n="newPad">Neuer Zettel</button></div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Zettel zum Rechnen: Schreib Rechnungen und Notizen untereinander. Jede Zeile, die eine Rechnung enthält, zeigt rechts ihr Ergebnis – Text dazwischen stört nicht, und du kannst jederzeit weiterrechnen.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Mit dem <b>Tastenfeld</b> unten tippst du Zahlen und Rechenzeichen, ohne dass die Handy-Tastatur aufgeht. Für Text tippst du oben auf den Knopf <b>Tastenfeld</b> (Taschenrechner): Dann erscheint die normale Tastatur; nochmal tippen holt das Tastenfeld zurück.</li>
+    <li><b>Weiterrechnen:</b> Beginnt eine Zeile mit einem Rechenzeichen (<code>+ 20</code>, <code>× 2</code>, <code>÷ 4</code>, <code>− 5</code>), rechnet sie mit dem letzten Ergebnis weiter – auch wenn dazwischen Notizen stehen. <code>ans</code> (oder <code>erg</code>) steht für das letzte Ergebnis, z.&nbsp;B. <code>ans × 1,19</code>.</li>
+    <li><b>Text und Rechnung mischen:</b> Wörter und Zeichen wie € werden überlesen – <code>Miete 850 € + Strom 120 €</code> ergibt 970. Text vor einem Doppelpunkt ist eine Beschriftung (<code>Einkauf: 12,50 + 3,99</code>). Stehen zwei Zahlen ohne Rechenzeichen nebeneinander (Datum, Telefonnummer), ist die Zeile nur Text.</li>
+    <li>Eine Zeile mit nur einer Zahl (<code>Brot 3,50</code>) zeigt die Zahl grau – sie zählt für <code>summe</code> und zum Weiterrechnen.</li>
+    <li><b>summe</b> (oder <code>sum</code>) addiert die Ergebnisse darüber bis zur letzten leeren Zeile – praktisch für Einkaufslisten. Eine leere Zeile beginnt einen neuen Block.</li>
+    <li><b>Namen merken:</b> <code>Miete = 850</code> merkt sich den Wert, darunter geht <code>Miete × 12</code>.</li>
+    <li><b>Gleichungen lösen:</b> Steht ein unbekannter Name in einer Gleichung, löst der Zettel sie: <code>3a = 15</code> (oder <code>3*a = 15</code>) zeigt <code>a = 5</code>. Mehrere Gleichungen direkt untereinander sind ein <b>Gleichungssystem</b>: <code>3b + 2c = 0</code> und darunter <code>b + c = −1</code> ergibt <code>b = 2</code> und <code>c = −3</code> – je Zeile ein Name. Die Lösungen kannst du darunter weiterverwenden (<code>b − c</code>), bis zur nächsten leeren Zeile; danach sind die Namen wieder frei. Es geht nur um <b>lineare</b> Gleichungen (kein <code>a²</code>, kein <code>a × b</code>). Gibt es keine Lösung, steht dort „keine Lösung“; fehlt noch eine Gleichung, bleibt es leer. Eine Zahl direkt vor dem Namen multipliziert (<code>3a</code>), mit Leerzeichen ist es Text (<code>850 Miete</code>). Für Buchstaben die Tastatur einschalten (Knopf oben).</li>
+    <li>Rechenzeichen: <code>+ − × ÷</code> (auch <code>- * /</code> und <code>x</code> zwischen Zahlen), <code>^</code> hoch, <code>√</code> Wurzel, Klammern. Punkt- vor Strichrechnung gilt. <code>200 + 10%</code> ergibt 220, <code>200 − 10%</code> ergibt 180, <code>200 × 10%</code> ergibt 20. Text nach <code>=</code> wird überlesen.</li>
+    <li>Zahlen schreibst du deutsch: <code>1.234,5</code>; <code>1,5</code> und <code>1.5</code> gehen beide (ein Punkt vor genau drei Ziffern trennt Tausender). Auf Englisch gilt <code>1,234.5</code>.</li>
+  </ul>
+  <h3>Kopieren &amp; Einfügen</h3>
+  <ul>
+    <li><b>Ergebnis antippen</b> kopiert es – ohne Tausenderpunkte (<code>1234,5</code>), damit es sich in Banking-Apps, Formulare und Tabellen einfügen lässt.</li>
+    <li>Der Knopf <b>Einfügen</b> (Klemmbrett, links oben im Tastenfeld) setzt den kopierten Text an der Schreibmarke ein – z.&nbsp;B. einen Betrag aus einer anderen App, um damit weiterzurechnen. Beim ersten Mal fragt der Browser evtl. um Erlaubnis. Geht das nicht, lange auf den Zettel tippen und <i>Einfügen</i> wählen.</li>
+    <li><b>Zettel kopieren</b> (oben) kopiert den ganzen Zettel als Text, jede Rechnung mit <code>= Ergebnis</code> dahinter, jede Gleichung mit <code>⇒ a = 5</code> – zum Weiterschicken. So kopierter Text lässt sich wieder einfügen und rechnet genauso.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Im Menü ☰ liegen deine <b>Zettel</b>: antippen zum Öffnen, daneben Löschen. <i>Neuer Zettel</i> beginnt einen leeren; der bisherige bleibt erhalten.</li>
+    <li>Alles wird automatisch in diesem Browser gespeichert und funktioniert offline; nichts wird hochgeladen.</li>
+    <li>Gerechnet wird mit etwa 12 gültigen Stellen. Für Geld und Alltag genau genug – für Buchhaltung bitte nachprüfen.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann rechnen, den offenen Zettel samt Lösungen lesen und Zeilen anhängen (WebMCP). Löschen oder ändern kann er nichts. Jeder Aufruf erscheint als Hinweis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A pad for calculating: write calculations and notes one below the other. Every line that contains a calculation shows its result on the right – text in between is fine, and you can carry on calculating at any time.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>With the <b>keypad</b> at the bottom you type numbers and operators without the phone keyboard popping up. For text, tap the <b>Keypad</b> button at the top (calculator): the normal keyboard appears; tap again to get the keypad back.</li>
+    <li><b>Carry on:</b> a line that starts with an operator (<code>+ 20</code>, <code>× 2</code>, <code>÷ 4</code>, <code>− 5</code>) continues from the last result – even with notes in between. <code>ans</code> stands for the last result, e.g. <code>ans × 1.2</code>.</li>
+    <li><b>Mix text and maths:</b> words and signs like $ are skipped – <code>Rent 850 $ + power 120 $</code> gives 970. Text before a colon is a label (<code>Shopping: 12.50 + 3.99</code>). Two numbers next to each other without an operator (date, phone number) make the line plain text.</li>
+    <li>A line with just one number (<code>Bread 3.50</code>) shows it in grey – it counts for <code>sum</code> and for carrying on.</li>
+    <li><b>sum</b> adds up the results above, back to the last empty line – handy for shopping lists. An empty line starts a new block.</li>
+    <li><b>Names:</b> <code>rent = 850</code> remembers the value, below it <code>rent × 12</code> works.</li>
+    <li><b>Solve equations:</b> if an equation contains an unknown name, the pad solves it: <code>3a = 15</code> (or <code>3*a = 15</code>) shows <code>a = 5</code>. Several equations right below each other are a <b>system of equations</b>: <code>3b + 2c = 0</code> and below it <code>b + c = −1</code> gives <code>b = 2</code> and <code>c = −3</code> – one name per line. You can use the solutions below (<code>b − c</code>) up to the next empty line; after that the names are free again. Only <b>linear</b> equations work (no <code>a²</code>, no <code>a × b</code>). Without a solution it says “no solution”; while an equation is still missing it stays empty. A number right before a name multiplies (<code>3a</code>), with a space it is text (<code>850 rent</code>). Switch on the keyboard for letters (button at the top).</li>
+    <li>Operators: <code>+ − × ÷</code> (also <code>- * /</code> and <code>x</code> between numbers), <code>^</code> power, <code>√</code> square root, brackets. Multiplication comes before addition. <code>200 + 10%</code> gives 220, <code>200 − 10%</code> gives 180, <code>200 × 10%</code> gives 20. Text after <code>=</code> is skipped.</li>
+    <li>Numbers in English: <code>1,234.5</code>; <code>1.5</code> and <code>1,5</code> both work (a comma before exactly three digits separates thousands). In German it is <code>1.234,5</code>.</li>
+  </ul>
+  <h3>Copy &amp; paste</h3>
+  <ul>
+    <li><b>Tap a result</b> to copy it – without thousands separators (<code>1234.5</code>), so it pastes into banking apps, forms and spreadsheets.</li>
+    <li>The <b>Paste</b> button (clipboard, top left of the keypad) inserts the copied text at the cursor – e.g. an amount from another app to calculate with. The browser may ask for permission the first time. If that does not work, long-press the pad and choose <i>Paste</i>.</li>
+    <li><b>Copy pad</b> (at the top) copies the whole pad as text, each calculation followed by <code>= result</code>, each equation by <code>⇒ a = 5</code> – to send on. Text copied like this can be pasted back and calculates the same.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>The menu ☰ holds your <b>pads</b>: tap one to open it, delete next to it. <i>New pad</i> starts an empty one; the previous one is kept.</li>
+    <li>Everything is saved automatically in this browser and works offline; nothing is uploaded.</li>
+    <li>Calculations use about 12 significant digits. Precise enough for money and everyday use – please double-check for accounting.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can calculate, read the open pad and add lines to it (WebMCP). It cannot delete or change anything. Each call shows a note.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 3c3dcd080278</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="calc.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    copyRes:'{v} kopieren',undef:'nicht definiert',contra:'keine Lösung',copied:'Kopiert: {v}',copyFail:'Kopieren hat nicht geklappt',
+    copiedAll:'Zettel kopiert',emptyPad:'Der Zettel ist leer',
+    pasteNo:'Einfügen ist hier nicht erlaubt – lange auf den Zettel tippen und „Einfügen“ wählen.',pasteEmpty:'Die Zwischenablage ist leer',
+    untitled:'Leerer Zettel',lines:'{n} Zeilen',line1:'1 Zeile',delPad:'„{name}“ löschen',delConfirm:'Zettel „{name}“ löschen?',deleted:'Zettel gelöscht',
+    'mcp.calc':'gerechnet','mcp.read':'Zettel gelesen','mcp.add':'Zeilen angehängt'
+  },
+  en:{
+    title:'Calc Pad',sub:'Calculations and notes on one pad.',keys:'Keypad',copyAll:'Copy pad','h.pad':'Pad',padLabel:'Pad',
+    padPh:'Shopping: 12.50 + 3.99\n+ 2.49\nNote: bottle deposit back\n− 0.75\nrent = 850\nrent × 12',
+    paste:'Paste',back:'Delete',div:'divided by ÷',sqrt:'square root √',mul:'times ×',pow:'power ^',minus:'minus −',enter:'New line',
+    decLabel:'point .',ansLabel:'last result ans',plus:'plus +',pads:'Pads',padsIntro:'Everything is saved automatically – only in this browser.',newPad:'New pad',
+    copyRes:'Copy {v}',undef:'undefined',contra:'no solution',copied:'Copied: {v}',copyFail:'Copying did not work',
+    copiedAll:'Pad copied',emptyPad:'The pad is empty',
+    pasteNo:'Pasting is not allowed here – long-press the pad and choose “Paste”.',pasteEmpty:'The clipboard is empty',
+    untitled:'Empty pad',lines:'{n} lines',line1:'1 line',delPad:'Delete “{name}”',delConfirm:'Delete pad “{name}”?',deleted:'Pad deleted',
+    'mcp.calc':'calculated','mcp.read':'pad read','mcp.add':'lines added'
+  }
+});
+const t=Tools.t, $=Tools.$, E=window.CalcEngine;
+const LS_PADS='calc-pad.pads.v1', LS_SET='calc-pad.settings.v1';
+const MAX_TEXT=100000;
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+const stored=Tools.load(LS_PADS,null);
+let pads=stored&&Array.isArray(stored.pads)?stored.pads.filter(p=>p&&typeof p.id==='string'&&typeof p.text==='string'):[];
+if(!pads.length)pads=[{id:newId(),text:'',updated:Date.now()}];
+let cur=pads.find(p=>p.id===(stored&&stored.current))||pads[0];
+const settings=Object.assign({keys:true},Tools.load(LS_SET,{}));
+
+const pad=$('pad'), mirror=$('mirror'), wrap=$('sheetWrap'), keys=$('keys'), btnKeys=$('btnKeys');
+let results=[];
+const dec=()=>Tools.lang()==='en'?'.':',';
+const show=v=>E.format(v,Tools.locale(),true);
+// Copied without thousands separators: pastes into banking apps, forms and spreadsheets
+const plain=v=>E.format(v,Tools.locale(),false);
+
+/* ---------- Saving ---------- */
+let saveTimer=0;
+function saveNow(){clearTimeout(saveTimer);saveTimer=0;Tools.save(LS_PADS,{current:cur.id,pads});}
+const scheduleSave=()=>{clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,400);};
+window.addEventListener('pagehide',()=>{if(saveTimer)saveNow();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&saveTimer)saveNow();});
+
+/* ---------- Mirror with results ---------- */
+function render(){
+  const lines=pad.value.split('\n');
+  results=E.evaluate(pad.value,dec());
+  while(mirror.children.length>lines.length)mirror.lastChild.remove();
+  while(mirror.children.length<lines.length){
+    const row=document.createElement('div');row.className='ml';
+    const mt=document.createElement('span');mt.className='mt';mt.setAttribute('aria-hidden','true');
+    const mr=document.createElement('span');mr.className='mr';
+    row.append(mt,mr);mirror.append(row);
+  }
+  lines.forEach((line,i)=>{
+    const row=mirror.children[i], mt=row.firstChild, mr=row.lastChild, r=results[i];
+    if(mt.textContent!==line)mt.textContent=line;
+    const label=r.value!=null?resText(r,show):'';
+    const key=r.value!=null?(r.plain?'p':'v')+label:(r.error?'e'+r.error:'');
+    if(mr.dataset.key!==key){
+      mr.dataset.key=key;mr.textContent='';
+      if(r.value!=null){
+        const b=document.createElement('button');b.type='button';b.className='res'+(r.plain?' plain':'');
+        b.textContent=label;b.setAttribute('aria-label',t('copyRes',{v:label}));
+        mr.append(b);
+      }else if(r.error){
+        const s=document.createElement('span');s.className='res err';s.textContent=t(r.error==='contra'?'contra':'undef');mr.append(s);
+      }
+    }
+    const b=mr.firstChild;if(b)b.dataset.i=i;
+  });
+}
+// Equations show their solutions ("a = 5", several: "b = 2; c = -3"), everything else the number
+function resText(r,f){return r.solved?r.solved.map(x=>`${x.name} = ${f(x.value)}`).join('; '):f(r.value);}
+const rerender=()=>{mirror.querySelectorAll('.mr').forEach(m=>{delete m.dataset.key;});render();};
+
+// The textarea never scrolls itself (it is as tall as the mirror) – keep the line with the cursor in view
+function caretIntoView(){
+  const i=pad.value.slice(0,pad.selectionEnd).split('\n').length-1, row=mirror.children[i];
+  if(!row)return;
+  const w=wrap.getBoundingClientRect(), r=row.getBoundingClientRect(), lh=parseFloat(getComputedStyle(row).minHeight)||28;
+  if(r.bottom>w.bottom)wrap.scrollTop+=r.bottom-w.bottom+lh;
+  else if(r.top<w.top)wrap.scrollTop-=w.top-r.top+4;
+}
+function changed(){
+  cur.text=pad.value;cur.updated=Date.now();
+  render();caretIntoView();scheduleSave();renderPadsSoon();
+}
+pad.addEventListener('input',changed);
+
+/* ---------- Editing with the keypad ---------- */
+let sel=null; // cursor while the pad is not focused (keypad used with a keyboard, after a menu)
+pad.addEventListener('blur',()=>{sel=[pad.selectionStart,pad.selectionEnd];});
+const getSel=()=>document.activeElement===pad?[pad.selectionStart,pad.selectionEnd]:(sel||[pad.value.length,pad.value.length]);
+function focusPad(){
+  if(document.activeElement===pad)return;
+  const [s,e]=getSel();
+  pad.focus({preventScroll:true});pad.setSelectionRange(s,e);
+}
+// execCommand keeps the browser's undo history; setRangeText is the fallback
+function insert(text,focus){
+  if(focus)focusPad();
+  if(document.activeElement===pad){
+    let ok=false;try{ok=document.execCommand('insertText',false,text);}catch(_){}
+    if(ok)return;
+  }
+  const [s,e]=getSel();
+  pad.setRangeText(text,s,e,'end');sel=[pad.selectionStart,pad.selectionEnd];
+  pad.dispatchEvent(new Event('input'));
+}
+function backspace(focus){
+  if(focus)focusPad();
+  if(document.activeElement===pad){
+    if(pad.selectionStart===0&&pad.selectionEnd===0)return;
+    let ok=false;try{ok=document.execCommand('delete');}catch(_){}
+    if(ok)return;
+  }
+  let [s,e]=getSel();
+  if(s===e){if(!s)return;s--;}
+  pad.setRangeText('',s,e,'end');sel=[pad.selectionStart,pad.selectionEnd];
+  pad.dispatchEvent(new Event('input'));
+}
+const OPS=new Set(['+','−','×','÷']);
+function keyText(k){
+  const v=pad.value, [s]=getSel(), prev=v[s-1];
+  if(OPS.has(k))return (s===0||prev==='\n'||prev===' '?'':' ')+k+' ';
+  if(k==='ans')return (prev&&/[\w)]/.test(prev)?' ':'')+'ans';
+  if(k==='dec')return dec();
+  if(k==='enter')return '\n';
+  return k;
+}
+async function paste(focus){
+  if(focus)focusPad();
+  const cb=navigator.clipboard;
+  if(!cb||typeof cb.readText!=='function'){Tools.toast(t('pasteNo'),4000);Tools.diag.log('paste: no clipboard api');return;}
+  let txt;
+  try{txt=await cb.readText();}catch(e){Tools.toast(t('pasteNo'),4000);Tools.diag.log('paste failed',{error:e&&e.name});return;}
+  txt=String(txt||'').replace(/\r\n?/g,'\n').trim();
+  if(!txt){Tools.toast(t('pasteEmpty'));return;}
+  insert(txt.slice(0,MAX_TEXT));
+  Tools.diag.log('paste ok',{chars:txt.length});
+}
+// Keep the cursor in the pad: no focus change on pointer down
+keys.addEventListener('pointerdown',e=>{if(e.target.closest('button'))e.preventDefault();});
+// Delete repeats while held
+let repeat=0;
+const stopRepeat=()=>{clearTimeout(repeat);clearInterval(repeat);repeat=0;};
+keys.addEventListener('pointerdown',e=>{
+  const b=e.target.closest('[data-k="back"]');if(!b||e.button>0)return;
+  backspace(true);
+  stopRepeat();repeat=setTimeout(()=>{repeat=setInterval(()=>backspace(true),70);},450);
+});
+['pointerup','pointercancel','pointerleave'].forEach(n=>keys.addEventListener(n,stopRepeat));
+keys.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-k]');if(!b)return;
+  const k=b.dataset.k, pointer=e.detail>0; // detail 0 = Enter/Space on the focused key: focus stays on the keypad
+  if(k==='back'){if(!pointer)backspace(false);return;}
+  if(k==='paste'){paste(pointer);return;}
+  insert(keyText(k),pointer);
+});
+
+/* ---------- Copy ---------- */
+async function copy(text,msg){
+  const ok=await Tools.copyText(text);
+  Tools.toast(ok?msg:t('copyFail'));
+  Tools.diag.log(ok?'copied':'copy failed',{chars:text.length});
+}
+mirror.addEventListener('pointerdown',e=>{if(e.target.closest('button.res'))e.preventDefault();});
+mirror.addEventListener('click',e=>{
+  const b=e.target.closest('button.res');if(!b)return;
+  const r=results[+b.dataset.i];if(!r||r.value==null)return;
+  b.classList.add('flash');setTimeout(()=>b.classList.remove('flash'),300);
+  const s=r.solved&&r.solved.length>1?resText(r,plain):plain(r.value);copy(s,t('copied',{v:s}));
+});
+// Each calculation with "= result" behind it, equations with "⇒ a = 5"; pasted back it calculates the same
+// (text after "=" in a calculation and after "⇒" is skipped)
+function padAsText(){
+  return pad.value.split('\n').map((l,i)=>{
+    const r=results[i];
+    if(r&&r.solved)return l.replace(/\s*⇒.*$/,'')+'   ⇒ '+resText(r,plain);
+    if(!r||r.value==null||r.single)return l;
+    const body=l.replace(/\s*=\s*$/,'');
+    if(!r.assign&&body.includes('='))return l;
+    return body+' = '+plain(r.value);
+  }).join('\n').replace(/\s+$/,'');
+}
+$('btnCopyAll').addEventListener('click',()=>{
+  if(!pad.value.trim()){Tools.toast(t('emptyPad'));return;}
+  copy(padAsText(),t('copiedAll'));
+});
+
+/* ---------- Keypad or keyboard ---------- */
+function applyKeys(){
+  keys.hidden=!settings.keys;
+  btnKeys.setAttribute('aria-pressed',String(settings.keys));
+  // Keypad: the cursor shows, the phone keyboard stays closed
+  pad.setAttribute('inputmode',settings.keys?'none':'text');
+  pad.spellcheck=!settings.keys;
+}
+btnKeys.addEventListener('click',()=>{
+  settings.keys=!settings.keys;Tools.save(LS_SET,settings);
+  const [s,e]=getSel();
+  pad.blur();applyKeys();
+  pad.focus({preventScroll:true});pad.setSelectionRange(s,e);
+  Tools.diag.log('input mode',{keypad:settings.keys});
+});
+
+/* ---------- Pads (menu) ---------- */
+const padTitle=p=>{const l=p.text.split('\n').map(s=>s.trim()).find(Boolean);return l?(l.length>40?l.slice(0,40)+'…':l):t('untitled');};
+const ICON_DEL='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg>';
+function renderPads(){
+  const ul=$('pads');ul.textContent='';
+  [...pads].sort((a,b)=>b.updated-a.updated).forEach(p=>{
+    const li=document.createElement('li');if(p===cur)li.className='current';
+    const n=p.text?p.text.split('\n').length:0;
+    const when=new Date(p.updated).toLocaleString(Tools.locale(),{dateStyle:'short',timeStyle:'short'});
+    li.innerHTML=`<button type="button" class="open"${p===cur?' aria-current="true"':''}><span class="name">${Tools.esc(padTitle(p))}</span><span class="meta">${Tools.esc(n===1?t('line1'):t('lines',{n}))} · ${Tools.esc(when)}</span></button>`
+      +`<button type="button" class="del" aria-label="${Tools.esc(t('delPad',{name:padTitle(p)}))}" title="${Tools.esc(t('delPad',{name:padTitle(p)}))}">${ICON_DEL}</button>`;
+    li.querySelector('.open').addEventListener('click',()=>{openPad(p);Tools.menu.close();});
+    li.querySelector('.del').addEventListener('click',()=>deletePad(p));
+    ul.append(li);
+  });
+}
+let padsTimer=0;
+const renderPadsSoon=()=>{clearTimeout(padsTimer);padsTimer=setTimeout(renderPads,500);};
+function showPad(){pad.value=cur.text;sel=null;wrap.scrollTop=0;render();}
+// An empty pad is not kept when you switch away from it
+function dropEmpty(keep){pads=pads.filter(p=>p===keep||p.text.trim());}
+function openPad(p){cur=p;dropEmpty(cur);showPad();saveNow();renderPads();}
+function newPad(){
+  if(!cur.text.trim()){showPad();return cur;}
+  const p={id:newId(),text:'',updated:Date.now()};
+  pads.unshift(p);openPad(p);
+  Tools.diag.log('new pad',{pads:pads.length});
+  return p;
+}
+function deletePad(p){
+  if(p.text.trim()&&!confirm(t('delConfirm',{name:padTitle(p)})))return;
+  pads=pads.filter(x=>x!==p);
+  if(!pads.length)pads=[{id:newId(),text:'',updated:Date.now()}];
+  if(p===cur){cur=[...pads].sort((a,b)=>b.updated-a.updated)[0];showPad();}
+  saveNow();renderPads();Tools.toast(t('deleted'));
+  Tools.diag.log('pad deleted',{pads:pads.length});
+}
+$('btnNew').addEventListener('click',()=>{newPad();Tools.menu.close();});
+
+/* ---------- Start ---------- */
+const setDecKey=()=>{$('keyDec').textContent=dec();};
+setDecKey();applyKeys();showPad();renderPads();
+Tools.onLang(()=>{setDecKey();rerender();renderPads();});
+
+Tools.diag.info(()=>({
+  pads:pads.length,lines:pad.value?pad.value.split('\n').length:0,results:results.filter(r=>r.value!=null).length,
+  keypad:settings.keys,clipboardRead:!!(navigator.clipboard&&typeof navigator.clipboard.readText==='function'),
+  execCommand:typeof document.execCommand==='function'
+}));
+
+/* ---------- WebMCP ---------- */
+const lineInfo=(text,i)=>{
+  const r=results[i]||{};const o={line:i+1,text};
+  if(r.solved)o.solutions=r.solved.map(x=>({name:x.name,value:x.value}));
+  else if(r.value!=null)o.result=r.value;
+  if(r.error)o.error=r.error==='contra'?'no solution':'undefined';
+  return o;
+};
+Tools.mcp.register({
+  name:'calculate',title:'Calculate an expression',label:'mcp.calc',readOnly:true,
+  description:'Calculates one expression with the rules of the pad: + - * / ^, sqrt, brackets, percent ("200 + 10%" is 220), decimal point ".", words are ignored. Returns the result as a number. Does not change the pad.',
+  inputSchema:{type:'object',properties:{expression:{type:'string',minLength:1,maxLength:500,description:'For example "(850 + 120) * 12" or "200 + 10%"'}},required:['expression'],additionalProperties:false},
+  execute:({expression})=>{
+    const r=E.calc(expression,'.');
+    if(r.error)throw new Error('The result is not defined (division by zero or square root of a negative number).');
+    if(r.value==null)throw new Error('This is not a complete calculation. Use numbers with "." as decimal point and + - * / ^ sqrt ( ).');
+    return {expression,result:r.value};
+  }
+});
+Tools.mcp.register({
+  name:'read_pad',title:'Read the open pad',label:'mcp.read',readOnly:true,untrusted:true,
+  description:'Returns the lines of the pad that is open in the app, each with its result if the line is a calculation, or the solved unknowns if it is a linear equation. number_format says how numbers in the pad are written (it follows the language of the app).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{
+    const lines=pad.value.split('\n');
+    return {title:cur.text.trim()?padTitle(cur):'',number_format:dec()===','?'german (1.234,5)':'english (1,234.5)',
+      line_count:lines.length,lines:lines.slice(0,1000).map(lineInfo)};
+  }
+});
+Tools.mcp.register({
+  name:'add_lines',title:'Add lines to the pad',label:'mcp.add',
+  description:'Appends lines (calculations or notes, separated by newlines) at the end of the open pad and returns them with their results. A line starting with an operator ("+ 20") continues from the last result; "sum" adds the results above; linear equations ("3a = 15", or a system on consecutive lines like "3b + 2c = 0" and "b + c = -1") are solved. Write numbers as given by number_format of read_pad.',
+  inputSchema:{type:'object',properties:{text:{type:'string',minLength:1,maxLength:5000,description:'One or more lines, e.g. "Rent 850 + 120\\n* 12"'}},required:['text'],additionalProperties:false},
+  execute:({text})=>{
+    const add=text.replace(/\r\n?/g,'\n').replace(/\n+$/,'');
+    if(pad.value.length+add.length>MAX_TEXT)throw new Error('The pad is full.');
+    const start=pad.value===''?0:pad.value.split('\n').length+(pad.value.endsWith('\n')?-1:0);
+    pad.value=pad.value===''||pad.value.endsWith('\n')?pad.value+add:pad.value+'\n'+add;
+    changed();saveNow();
+    wrap.scrollTop=wrap.scrollHeight;
+    const lines=pad.value.split('\n');
+    return {added:lines.slice(start).map((l,j)=>lineInfo(l,start+j))};
+  }
+});
+})();
+</script>
+</body>
+</html>

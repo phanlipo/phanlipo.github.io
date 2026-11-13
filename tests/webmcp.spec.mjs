@@ -2422,3 +2422,48 @@ test.describe('code-runner tools', () => {
     expect(r.result.result).toBe('"fetch is blocked: code in this app runs without network access"');
   });
 });
+
+test.describe('calc-pad tools', () => {
+  test.use({ locale: 'de-DE' });
+  test.beforeEach(async ({ page }) => { await open(page, '/calc-pad/'); });
+
+  test('calculate returns the number and leaves the pad alone', async ({ page }) => {
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'calc_pad_calculate').annotations.readOnlyHint).toBe(true);
+    expect(tools.find(t => t.name === 'calc_pad_read_pad').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+    expect(tools.find(t => t.name === 'calc_pad_add_lines').annotations.readOnlyHint).toBe(false);
+    // (850 + 120) * 12 = 11640; 200 + 10 % of 200 = 220; 2^10 + sqrt(16) = 1028; agents always use the decimal point
+    expect((await call(page, 'calc_pad_calculate', { expression: '(850 + 120) * 12' })).result).toEqual({ expression: '(850 + 120) * 12', result: 11640 });
+    expect((await call(page, 'calc_pad_calculate', { expression: '200 + 10%' })).result.result).toBe(220);
+    expect((await call(page, 'calc_pad_calculate', { expression: '2^10 + sqrt(16)' })).result.result).toBe(1028);
+    expect((await call(page, 'calc_pad_calculate', { expression: '1.5 * 4' })).result.result).toBe(6);
+    expect((await call(page, 'calc_pad_calculate', { expression: '1/0' })).error).toContain('not defined');
+    expect((await call(page, 'calc_pad_calculate', { expression: 'hello' })).error).toContain('not a complete calculation');
+    expect((await call(page, 'calc_pad_calculate', { expression: '' })).ok).toBe(false);
+    expect((await call(page, 'calc_pad_calculate', { expression: '1', other: 1 })).ok).toBe(false);
+    await expect(page.locator('#pad')).toHaveValue('');
+  });
+
+  test('add_lines appends to the open pad and read_pad returns lines with results', async ({ page }) => {
+    await page.fill('#pad', 'Miete 850 + 120');
+    const a = await call(page, 'calc_pad_add_lines', { text: 'Notiz\n× 12\n' });
+    expect(a).toEqual({ ok: true, result: { added: [{ line: 2, text: 'Notiz' }, { line: 3, text: '× 12', result: 11640 }] } });
+    await expect(page.locator('#pad')).toHaveValue('Miete 850 + 120\nNotiz\n× 12');
+    await expect(page.locator('#mirror .res').last()).toHaveText('11.640');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Zeilen angehängt');
+    const r = (await call(page, 'calc_pad_read_pad', {})).result;
+    expect(r).toEqual({
+      title: 'Miete 850 + 120', number_format: 'german (1.234,5)', line_count: 3,
+      lines: [{ line: 1, text: 'Miete 850 + 120', result: 970 }, { line: 2, text: 'Notiz' }, { line: 3, text: '× 12', result: 11640 }],
+    });
+    expect((await call(page, 'calc_pad_add_lines', { text: '1/0' })).result.added).toEqual([{ line: 4, text: '1/0', error: 'undefined' }]);
+    // A system of equations: 3b + 2c = 0, b + c = -1 → b = 2, c = -3
+    expect((await call(page, 'calc_pad_add_lines', { text: '\n3b + 2c = 0\nb + c = -1' })).result.added).toEqual([
+      { line: 5, text: '' }, { line: 6, text: '3b + 2c = 0', solutions: [{ name: 'b', value: 2 }] }, { line: 7, text: 'b + c = -1', solutions: [{ name: 'c', value: -3 }] },
+    ]);
+    expect((await call(page, 'calc_pad_add_lines', { text: '' })).ok).toBe(false);
+    expect((await call(page, 'calc_pad_add_lines', { text: 'x'.repeat(5001) })).ok).toBe(false);
+    // Saved like typed text
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('calc-pad.pads.v1')).pads[0].text)).toBe('Miete 850 + 120\nNotiz\n× 12\n1/0\n\n3b + 2c = 0\nb + c = -1');
+  });
+});
