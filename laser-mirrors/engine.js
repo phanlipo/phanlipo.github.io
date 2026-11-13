@@ -11,14 +11,15 @@
      split   half mirror on the same diagonal: lets the beam through and reflects a second one
      double  mirror on both sides of the same diagonal
      check   gate open from left to right (blocks beams travelling up or down)
-     block   lets every beam pass, only takes up the cell */
+     block   lets every beam pass, only takes up the cell
+     wall    stops every beam (need not be hit) */
 (function (root) {
   'use strict';
   const N = 5;
   const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
-  const TYPES = ['laser', 'target', 'split', 'double', 'check', 'block'];
+  const TYPES = ['laser', 'target', 'split', 'double', 'check', 'block', 'wall'];
   // Rotations that look and act differently (split/double/check repeat after half a turn)
-  const PERIOD = { laser: 4, target: 4, split: 2, double: 2, check: 2, block: 1 };
+  const PERIOD = { laser: 4, target: 4, split: 2, double: 2, check: 2, block: 1, wall: 1 };
   const BACKSLASH = d => 3 - d;   // mirror "\": right ↔ down, left ↔ up
 
   /** What a piece does with a beam travelling in direction d (world directions).
@@ -35,6 +36,7 @@
       case 'split': return { out: [d, w(BACKSLASH(l))] };
       case 'double': return { out: [w(BACKSLASH(l))] };
       case 'check': return l === 1 || l === 3 ? { out: [d] } : { out: [], stop: true };
+      case 'wall': return { out: [], stop: true };
       default: return { out: [d] };          // block
     }
   }
@@ -83,13 +85,13 @@
 
   /** Checks the rules: the right number of targets lit, every piece on the board touched by the beam
       (the blocker excepted, a checkpoint passed through), every target marked "must" lit, no piece left
-      over (trayLeft). Returns { solved, lit, issues: [{ k, … }], trace } */
+      over (trayLeft). Walls need not be hit. Returns { solved, lit, issues: [{ k, … }], trace } */
   function evaluate(pieces, targets, trayLeft) {
     const tr = trace(pieces);
     const issues = [];
     if (trayLeft > 0) issues.push({ k: 'tray', n: trayLeft });
     pieces.forEach((p, i) => {
-      if (p.type === 'block' || p.type === 'laser') return;
+      if (p.type === 'block' || p.type === 'laser' || p.type === 'wall') return;
       if (p.type === 'check' ? !tr.passed.has(i) : !tr.touched.has(i)) issues.push({ k: p.type === 'check' ? 'check' : 'untouched', i });
     });
     pieces.forEach((p, i) => { if (p.must && !tr.lit.has(i)) issues.push({ k: 'must', i }); });

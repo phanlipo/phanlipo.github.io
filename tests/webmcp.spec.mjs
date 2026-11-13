@@ -2203,7 +2203,7 @@ test.describe('laser-mirrors tools', () => {
 
   test('list_puzzles, start_puzzle and get_board read the puzzle', async ({ page }) => {
     let r = await call(page, 'laser_mirrors_list_puzzles', {});
-    expect(r.result.puzzles).toHaveLength(40);
+    expect(r.result.puzzles).toHaveLength(50);
     // e01: laser A4 shooting down, marked target B5, blocker A2; a double mirror to add
     expect(r.result.puzzles[0]).toEqual({ id: 'e01', difficulty: 'easy', number: 1, targets: 1, pieces_to_add: ['double'], solved: false });
     expect(await call(page, 'laser_mirrors_get_board', {})).toEqual({ ok: true, result: { puzzle: null } });
