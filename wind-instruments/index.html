@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="get_status, set_instrument, play_melody">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-QrjsXPj1yZa9r3gY2vgqSuZb7CpirSKZ+1BDxzrqkCQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-pCKgoExbAhgIEzqHgQIKPQ1DEu8MF+0pIRjNBP8b+VU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -262,7 +262,7 @@ main{max-width:900px;margin-inline:auto;padding:8px;display:flex;flex-direction:
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 415218faecb0</p>
+  <p class="footer-version">Version 8ef22dfaf9d3</p>
   <!-- footer:end -->
 </footer>
 
@@ -362,7 +362,8 @@ const panNote=i=>72+12*Math.floor(i/7)+SCALE[i%7];
 let overblown=false, partial=0;
 const INST={
   whistle:{kind:'tube',count:6,hand:3,
-    timbre:{h:[1,.32,.1,.04,.02],noise:.1,chiff:.5,q:5,lp:5200,bright:0,bend:30,vib:8},
+    timbre:{soft:[1,.16,.05,.015],loud:[1,.42,.17,.08,.035,.015],loudExp:1.4,lpx:[5,9,1],noise:.05,q:7,air:.06,airHp:2800,chiff:.45,
+      bend:30,vib:9,vibDelay:.45,trem:.12,attack:.03,release:.05},
     resolve(c,L){
       if(L<=0)overblown=false;
       else if(s.overblow){if(!overblown&&L>0.74)overblown=true;else if(overblown&&L<0.6)overblown=false;}
@@ -410,7 +411,9 @@ const INST={
     chart(){const n=pipeCount();return Array.from({length:n},(_,i)=>({midi:panNote(i),closed:Array.from({length:n},(_,j)=>j===i),level:NORMAL}));}
   },
   trumpet:{kind:'trumpet',count:3,
-    timbre:{h:[1,.85,.72,.6,.5,.42,.34,.26,.2,.15,.11,.08,.06,.04],noise:.02,chiff:.15,q:4,lp:700,bright:4200,bend:10,vib:5},
+    timbre:{soft:[1,.32,.1,.03,.01],loud:[.62,1,.95,.86,.74,.62,.5,.4,.31,.24,.18,.14,.1,.075,.055,.04,.03,.02],loudExp:1.2,
+      lpx:[1.8,14,1.6],lpStart:1.1,drive:2.6,formant:[1250,4,.9],noise:.008,q:3,air:.004,chiff:.05,scoop:45,glide:.03,
+      bend:8,vib:5,vibDelay:.6,trem:.03,attack:.018,release:.03},
     resolve(c,L){
       if(L>0){
         // Hysteresis so the natural tone does not flicker at a border
@@ -433,57 +436,93 @@ const play=$('play'), instEl=$('inst');
 function pipeCount(){const w=instEl.clientWidth||play.clientWidth||360;return Math.max(8,Math.min(15,Math.floor((w+4)/46)));}
 let cur=INST[s.inst]?s.inst:'whistle';
 
-/* ---------- Sound: one voice, breath drives volume, brightness and pitch ---------- */
+/* ---------- Sound: one voice, breath drives volume, brightness and pitch ----------
+   Two waveforms (soft/loud) are crossfaded by the breath, so the spectrum grows with the
+   dynamics like on real instruments; the low-pass follows the pitch (lpx: cutoff = f·(a+b·L^c)).
+   drive = soft saturation that adds upper harmonics when blowing hard (brass "blare"),
+   formant = bell/body resonance, air = broadband breath hiss, scoop = pitch rising into the
+   note (lips settling), vibDelay = vibrato fades in after the note start, trem = amplitude vibrato. */
 let ctx=null, nodes=null;
 function audio(){
   if(!ctx){
     const AC=window.AudioContext||window.webkitAudioContext;
     if(!AC)return null;
     try{ctx=new AC();}catch(e){Tools.diag.log('audio failed',{error:String(e)});return null;}
-    const osc=ctx.createOscillator(), tone=ctx.createGain(), lp=ctx.createBiquadFilter(), env=ctx.createGain(), vol=ctx.createGain();
+    const g=v=>{const n=ctx.createGain();n.gain.value=v;return n;}, filt=type=>{const n=ctx.createBiquadFilter();n.type=type;return n;};
+    const oscS=ctx.createOscillator(), oscL=ctx.createOscillator(), gS=g(1), gL=g(0);
+    const drive=g(1), shaper=ctx.createWaveShaper(), post=g(1);
+    const curve=new Float32Array(1024);for(let i=0;i<1024;i++)curve[i]=Math.tanh((i/1023*2-1)*3);
+    shaper.curve=curve;shaper.oversample='2x';
+    const lp=filt('lowpass'), pk=filt('peaking'), trem=g(1), env=g(0), vol=g(1);
     const len=ctx.sampleRate*2, buf=ctx.createBuffer(1,len,ctx.sampleRate), d=buf.getChannelData(0);
     for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
     const noise=ctx.createBufferSource();noise.buffer=buf;noise.loop=true;
-    const bp=ctx.createBiquadFilter();bp.type='bandpass';
-    const ng=ctx.createGain();
-    const lfo=ctx.createOscillator(), lfoGain=ctx.createGain();lfo.frequency.value=5.2;
-    lfo.connect(lfoGain).connect(osc.detune);
-    lp.type='lowpass';env.gain.value=0;
-    osc.connect(tone).connect(lp).connect(env);
+    const bp=filt('bandpass'), ng=g(0), hp=filt('highpass'), ag=g(0);
+    const lfo=ctx.createOscillator(), lfoGain=g(0), tremGain=g(0);lfo.frequency.value=5.2;
+    lfo.connect(lfoGain);lfoGain.connect(oscS.detune);lfoGain.connect(oscL.detune);
+    lfo.connect(tremGain).connect(trem.gain);
+    oscS.connect(gS).connect(drive);oscL.connect(gL).connect(drive);
+    drive.connect(shaper).connect(post).connect(lp).connect(pk).connect(trem).connect(env);
     noise.connect(bp).connect(ng).connect(env);
+    noise.connect(hp).connect(ag).connect(env);
     env.connect(vol).connect(ctx.destination);
-    osc.start();noise.start();lfo.start();
-    nodes={osc,tone,lp,env,vol,bp,ng,lfoGain};
+    oscS.start();oscL.start();noise.start();lfo.start();
+    nodes={oscS,oscL,gS,gL,drive,post,lp,pk,env,vol,bp,ng,hp,ag,lfoGain,tremGain};
     setTimbre();setVolume();
     Tools.diag.log('audio ready',{sampleRate:ctx.sampleRate});
   }
   if(ctx.state==='suspended')ctx.resume().catch(()=>{});
   return ctx;
 }
+function wave(h){
+  const real=new Float32Array(h.length+1), imag=new Float32Array(h.length+1);
+  h.forEach((a,i)=>{imag[i+1]=a;});
+  return ctx.createPeriodicWave(real,imag);
+}
 function setTimbre(){
   if(!nodes)return;
-  const tb=INST[cur].timbre, real=new Float32Array(tb.h.length+1), imag=new Float32Array(tb.h.length+1);
-  tb.h.forEach((a,i)=>{imag[i+1]=a;});
-  nodes.osc.setPeriodicWave(ctx.createPeriodicWave(real,imag));
-  nodes.bp.Q.value=tb.q;nodes.ng.gain.value=tb.noise;nodes.lfoGain.gain.value=tb.vib;
+  const tb=INST[cur].timbre, fm=tb.formant||[1000,0,1];
+  nodes.oscS.setPeriodicWave(wave(tb.soft||tb.h));
+  nodes.oscL.setPeriodicWave(wave(tb.loud||tb.soft||tb.h));
+  nodes.pk.frequency.value=fm[0];nodes.pk.gain.value=fm[1];nodes.pk.Q.value=fm[2];
+  nodes.bp.Q.value=tb.q;nodes.ng.gain.value=tb.noise;
+  nodes.hp.frequency.value=tb.airHp||3000;nodes.ag.gain.value=tb.air||0;
+  const now=ctx.currentTime, set=(p,v)=>{p.cancelScheduledValues(now);p.setValueAtTime(v,now);};
+  set(nodes.lfoGain.gain,tb.vibDelay?0:tb.vib);set(nodes.tremGain.gain,0);
+  set(nodes.oscS.detune,0);set(nodes.oscL.detune,0);
 }
 function setVolume(){if(nodes)nodes.vol.gain.setTargetAtTime(Math.pow(s.volume/100,2)*0.9,ctx.currentTime,0.02);}
 let sounding=false, lastMidi=null;
 function sound(midi,L){
   if(!nodes)return;
   const now=ctx.currentTime, tb=INST[cur].timbre, on=midi!=null&&L>0;
-  if(!on){if(sounding)nodes.env.gain.setTargetAtTime(0,now,0.035);sounding=false;return;}
-  const f=hz(midi)*Math.pow(2,(L-0.5)*tb.bend/1200);
+  if(!on){if(sounding)nodes.env.gain.setTargetAtTime(0,now,tb.release||0.035);sounding=false;return;}
+  const f0=hz(midi), f=f0*Math.pow(2,(L-0.5)*tb.bend/1200), fp=[nodes.oscS.frequency,nodes.oscL.frequency,nodes.bp.frequency];
+  const lpx=tb.lpx, lpf=p=>Math.min(15000,lpx?f0*(lpx[0]+lpx[1]*Math.pow(L,lpx[2])):tb.lp+tb.bright*L);
   if(!sounding||midi!==lastMidi){
-    // Note start: a short puff of air ("chiff")
+    // Note start: a short puff of air ("chiff"), pitch and brightness settle in
     nodes.ng.gain.cancelScheduledValues(now);
     nodes.ng.gain.setValueAtTime(tb.noise+tb.chiff,now);
     nodes.ng.gain.setTargetAtTime(tb.noise,now+0.01,0.03);
+    if(tb.scoop)[nodes.oscS.detune,nodes.oscL.detune].forEach(dt=>{dt.cancelScheduledValues(now);dt.setValueAtTime(-tb.scoop,now);dt.setTargetAtTime(0,now,0.025);});
+    if(tb.lpStart){nodes.lp.frequency.cancelScheduledValues(now);nodes.lp.frequency.setValueAtTime(f0*tb.lpStart,now);}
   }
-  if(!sounding){nodes.osc.frequency.setValueAtTime(f,now);nodes.bp.frequency.setValueAtTime(f,now);}
-  else{nodes.osc.frequency.setTargetAtTime(f,now,0.012);nodes.bp.frequency.setTargetAtTime(f,now,0.012);}
-  nodes.lp.frequency.setTargetAtTime(Math.min(15000,tb.lp+tb.bright*L),now,0.03);
-  nodes.env.gain.setTargetAtTime(Math.pow(L,0.7)*0.6,now,0.02);
+  if(!sounding){
+    fp.forEach(p=>p.setValueAtTime(f,now));
+    if(!tb.lpStart)nodes.lp.frequency.setValueAtTime(lpf(),now);
+    if(tb.vibDelay){
+      // Players start a note straight and let the vibrato bloom
+      [[nodes.lfoGain.gain,tb.vib],[nodes.tremGain.gain,tb.trem||0]].forEach(([p,v])=>{
+        p.cancelScheduledValues(now);p.setValueAtTime(0,now);p.setValueAtTime(0,now+tb.vibDelay*0.4);p.linearRampToValueAtTime(v,now+tb.vibDelay);});
+    }
+  }else fp.forEach(p=>p.setTargetAtTime(f,now,tb.glide||0.012));
+  nodes.lp.frequency.setTargetAtTime(lpf(),now,0.03);
+  // Crossfade soft → loud waveform, saturation grows with the breath
+  const x=Math.min(1,Math.pow(L,tb.loudExp||1));
+  nodes.gS.gain.setTargetAtTime(1-x,now,0.03);nodes.gL.gain.setTargetAtTime(x,now,0.03);
+  const dr=0.15+(tb.drive||0)*L*L;
+  nodes.drive.gain.setTargetAtTime(dr/3,now,0.03);nodes.post.gain.setTargetAtTime(1/Math.tanh(dr),now,0.03);
+  nodes.env.gain.setTargetAtTime(Math.pow(L,0.7)*0.6,now,tb.attack||0.02);
   sounding=true;lastMidi=midi;
 }
 
