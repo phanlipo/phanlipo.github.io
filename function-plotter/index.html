@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Funktionsplotter</title>
+<meta name="description" content="Funktionen zeichnen und mit Schiebereglern verändern: Jeder unbekannte Name wird zum Parameter, ▶ lässt ihn laufen. Nullstellen, Extrema, Ableitungen, Zoom mit zwei Fingern, Werte antippen.">
+<meta name="tool:tags" content="Arbeit, Rechner">
+<meta name="tool:features" content="Verlauf, KI-Agent">
+<meta name="tool:webmcp" content="set_functions, set_parameter, evaluate">
+<meta name="tool:icon" content="math-function">
+<meta name="tool:color" content="#5b21b6">
+<meta name="tool:short-name" content="Plotter">
+<meta name="tool:title-en" content="Function Plotter">
+<meta name="tool:description-en" content="Plot functions and change them with sliders: every unknown name becomes a parameter, ▶ animates it. Zeros, extrema, derivatives, two-finger zoom, tap to read values.">
+<meta name="tool:short-name-en" content="Plotter">
+<meta name="tool:storage" content="function-plotter.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Plotter">
+<meta name="theme-color" content="#5b21b6">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#5b21b6;--accent-text:#ffffff;
+  --f1:#2563eb;--f2:#dc2626;--f3:#047857;--f4:#b45309;--f5:#7c3aed;--f6:#be185d;--f7:#0e7490;--f8:#4d7c0f;
+  --grid:rgba(0,0,0,.07);--grid-major:rgba(0,0,0,.16);--axis:rgba(0,0,0,.6)}
+@media (prefers-color-scheme: dark){:root{--accent:#a78bfa;--accent-text:#160b2e;
+  --f1:#60a5fa;--f2:#f87171;--f3:#34d399;--f4:#fbbf24;--f5:#c4b5fd;--f6:#f472b6;--f7:#22d3ee;--f8:#a3e635;
+  --grid:rgba(255,255,255,.06);--grid-major:rgba(255,255,255,.15);--axis:rgba(255,255,255,.65)}}
+main{display:flex;flex-direction:column}
+/* Plot on top, functions and sliders below (side by side on wide screens) */
+.plot{position:relative;flex:1 1 55%;min-height:200px;background:var(--surface);border-block:1px solid var(--border)}
+.plot canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+.plot canvas:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.readout{position:absolute;inset-block-start:8px;inset-inline-start:8px;max-width:calc(100% - 16px);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;
+  padding:6px 4px 6px 10px;font-size:14px;font-variant-numeric:tabular-nums;box-shadow:var(--shadow);display:flex;gap:4px;align-items:flex-start}
+.readout ul{list-style:none;margin:0;padding:2px 0;display:grid;gap:2px;min-width:0}
+.readout li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.readout i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-inline-end:6px;vertical-align:baseline}
+.readout .close{width:36px;height:36px;min-height:36px}
+.zoom{position:absolute;inset-block-end:8px;inset-inline-end:8px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:44px;height:44px;border-radius:50%;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font:inherit;font-size:22px;line-height:1;cursor:pointer;box-shadow:var(--shadow)}
+.panel{flex:1 1 45%;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:10px 12px 12px;display:grid;gap:12px;align-content:start}
+.panel h2{font-size:15px;margin:0;color:var(--muted)}
+.fns{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.fn{display:grid;grid-template-columns:44px 1fr 44px;gap:6px;align-items:center}
+.fn input{min-height:44px;font-size:16px;font-family:var(--mono);padding-inline:10px;width:100%;min-width:0}
+.fn input[aria-invalid="true"]{border-color:var(--err)}
+.swatch{width:44px;height:44px;border-radius:10px;border:2px solid var(--c);background:var(--c);cursor:pointer;padding:0;position:relative}
+.swatch[aria-pressed="false"]{background:transparent}
+.swatch span{font:600 13px var(--font);color:var(--surface)}
+.swatch[aria-pressed="false"] span{color:var(--c)}
+.icon-btn{width:44px;height:44px;min-height:44px;display:grid;place-items:center;border:0;border-radius:10px;background:none;color:var(--muted);font:inherit;font-size:22px;cursor:pointer;padding:0}
+.icon-btn:hover{background:var(--surface-2);color:var(--text)}
+.icon-btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-text)}
+.icon-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.fn-err{grid-column:2 / 4;margin:-4px 0 0;font-size:13px;color:var(--err)}
+.fn-info{grid-column:2 / 4;margin:-4px 0 0;font-size:13px;color:var(--muted)}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+.tools .btn{min-height:44px}
+.tools select{min-height:44px;font-size:16px;flex:1 1 180px;min-width:0}
+.params{display:grid;gap:10px}
+.param{display:grid;gap:2px;border:1px solid var(--border);border-radius:10px;padding:6px 8px;background:var(--surface)}
+.p-top{display:flex;align-items:center;gap:6px}
+.p-top label{font-family:var(--mono);font-weight:700;font-size:17px}
+.p-top input{width:9em;min-height:40px;font-size:16px;font-variant-numeric:tabular-nums;padding-inline:8px}
+.p-top .icon-btn{margin-inline-start:auto}
+.p-bot{display:grid;grid-template-columns:5em 1fr 5em;gap:8px;align-items:center}
+.p-bot input[type=text]{min-height:40px;font-size:16px;padding-inline:6px;width:100%;min-width:0;text-align:center}
+.p-bot input[type=range]{width:100%;min-height:44px;accent-color:var(--accent);margin:0}
+.view-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.view-grid label{display:grid;gap:4px;font-size:14px;color:var(--muted);font-weight:600}
+.view-grid input{min-height:44px;font-size:16px;padding-inline:10px;width:100%}
+label.check{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+label.check input{width:22px;height:22px;accent-color:var(--accent)}
+.help code{font-family:var(--mono);background:var(--surface-2);padding:0 4px;border-radius:4px}
+@media (min-width:900px){
+  main{flex-direction:row}
+  .plot{flex:1 1 auto;order:2;border-block:0;border-inline-start:1px solid var(--border)}
+  .panel{flex:0 0 380px;order:1}
+}
+@media (orientation:landscape) and (max-height:500px){
+  main{flex-direction:row}
+  .plot{flex:1 1 60%;order:2;border-block:0;border-inline-start:1px solid var(--border)}
+  .panel{flex:1 1 40%;order:1}
+}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Funktionsplotter</span></h1>
+  <p class="sub" data-i18n="sub">Funktionen zeichnen, Parameter mit Schiebereglern verändern</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnFit" aria-label="y-Achse anpassen" title="y-Achse anpassen" data-i18n-attr="aria-label:fit; title:fit"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8v-2a2 2 0 0 1 2 -2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2 -2v-2"/><path d="M8 14l3 -3l2 2l3 -3"/></svg></button>
+    <button type="button" class="head-btn" id="btnPng" aria-label="Als Bild speichern" title="Als Bild speichern" data-i18n-attr="aria-label:png; title:png"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <div class="plot" id="plot">
+    <canvas id="cv" tabindex="0" role="img" aria-label="Graph der Funktionen. Ziehen verschiebt, zwei Finger oder Mausrad zoomen, Antippen zeigt Werte." data-i18n-attr="aria-label:cvLabel"></canvas>
+    <div class="readout" id="readout" hidden>
+      <ul id="readoutList" aria-live="polite"></ul>
+      <button type="button" class="icon-btn close" id="readoutClose" aria-label="Werte ausblenden" data-i18n-attr="aria-label:hideValues">×</button>
+    </div>
+    <div class="zoom">
+      <button type="button" id="zoomIn" aria-label="Vergrößern" data-i18n-attr="aria-label:zoomIn">+</button>
+      <button type="button" id="zoomOut" aria-label="Verkleinern" data-i18n-attr="aria-label:zoomOut">−</button>
+    </div>
+  </div>
+  <div class="panel" id="panel">
+    <section aria-labelledby="h-fns">
+      <h2 id="h-fns" class="sr-only" data-i18n="fnsH">Funktionen</h2>
+      <ol class="fns" id="fns"></ol>
+    </section>
+    <div class="tools">
+      <button type="button" class="btn" id="add" data-i18n="add">+ Funktion</button>
+      <label class="sr-only" for="examples" data-i18n="examplesL">Beispiel laden</label>
+      <select id="examples">
+        <option value="" data-i18n="examples">Beispiel laden …</option>
+      </select>
+    </div>
+    <section id="paramsBox" aria-labelledby="h-params" hidden>
+      <h2 id="h-params" data-i18n="paramsH">Parameter</h2>
+      <div class="params" id="params"></div>
+    </section>
+  </div>
+</main>
+
+<section class="card" data-menu aria-labelledby="h-view">
+  <h2 id="h-view" data-i18n="viewH">Ansicht</h2>
+  <div class="view-grid">
+    <label for="vx0"><span data-i18n="x0">x von</span><input type="text" id="vx0" inputmode="decimal" autocomplete="off"></label>
+    <label for="vx1"><span data-i18n="x1">x bis</span><input type="text" id="vx1" inputmode="decimal" autocomplete="off"></label>
+    <label for="vy0"><span data-i18n="y0">y von</span><input type="text" id="vy0" inputmode="decimal" autocomplete="off"></label>
+    <label for="vy1"><span data-i18n="y1">y bis</span><input type="text" id="vy1" inputmode="decimal" autocomplete="off"></label>
+  </div>
+  <div class="row">
+    <button type="button" class="btn primary" id="viewApply" data-i18n="apply">Übernehmen</button>
+    <button type="button" class="btn" id="viewReset" data-i18n="reset">Standardansicht</button>
+  </div>
+  <label class="check"><input type="checkbox" id="optPoints"><span data-i18n="optPoints">Nullstellen und Extrema markieren</span></label>
+  <label class="check"><input type="checkbox" id="optEqual"><span data-i18n="optEqual">x und y gleich skalieren (Kreise bleiben rund)</span></label>
+  <label class="view-grid" for="optPeriod" style="grid-template-columns:1fr"><span data-i18n="period">Dauer eines Durchlaufs bei ▶ (Sekunden)</span><input type="text" id="optPeriod" inputmode="decimal" autocomplete="off"></label>
+</section>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Eine Funktion je Zeile eintippen – sie wird sofort gezeichnet. Jeder Name, der weder <code>x</code> noch eine bekannte Funktion oder Konstante ist, wird zum <b>Parameter</b> mit eigenem Schieberegler: <code>a sin(b x + c)</code> ergibt drei Regler.</p>
+  <h3>Eingabe</h3>
+  <ul>
+    <li>Rechenzeichen <code>+ − * / ^</code>, auch <code>·</code>, <code>×</code>, <code>²</code>, <code>³</code>, <code>√</code>. Malzeichen dürfen fehlen: <code>2x</code>, <code>a x²</code>, <code>2(x+1)</code>, <code>a sin x</code>. Mehrbuchstabige Namen sind ein Name: <code>ax</code> ist ein Parameter, <code>a x</code> ist a mal x.</li>
+    <li>Dezimalkomma oder -punkt (<code>1,5</code> = <code>1.5</code>), Zehnerpotenzen als <code>6.6e-34</code>. Mehrere Argumente mit Semikolon: <code>max(x; 0)</code>, <code>log(2; x)</code> (Logarithmus zur Basis 2).</li>
+    <li>Funktionen: <code>sin cos tan cot asin acos atan sinh cosh tanh exp ln lg log log2 sqrt cbrt abs sign floor ceil round min max mod step sinc gamma erf erfc</code>, Betrag auch als <code>|x|</code>, Fakultät <code>n!</code>. Ohne Klammern gilt der folgende Ausdruck: <code>sin 2x</code> = sin(2x). Winkel im Bogenmaß.</li>
+    <li>Konstanten: <code>pi</code> bzw. <code>π</code>, <code>e</code>. Griechische Buchstaben sind erlaubt (<code>ω</code>, <code>γ</code>), ebenso Namen mit Ziffern (<code>v0</code>, <code>x_1</code>).</li>
+    <li><b>Benennen:</b> <code>f(x) = x³ − 3x</code> – dann zeichnet <code>f'(x)</code> die Ableitung, <code>f''(x)</code> die zweite (numerisch), <code>f(x − 1)</code> die verschobene Kurve. Eine eigene Variable geht auch: <code>s(t) = v0 t + a/2 t²</code>.</li>
+    <li><b>Feste Werte:</b> <code>g = 9,81</code> zeichnet nichts, sondern gibt dem Namen einen Wert für die anderen Zeilen.</li>
+    <li>Text nach <code>#</code> ist ein Kommentar.</li>
+  </ul>
+  <h3>Parameter</h3>
+  <ul>
+    <li>Schieberegler ziehen oder den Wert eintippen; die Felder links und rechts legen den Bereich fest. <b>▶</b> lässt den Parameter immer wieder von links nach rechts laufen – mit <code>t</code> als Zeit wird aus <code>sin(k x − ω t)</code> eine laufende Welle. Die Dauer eines Durchlaufs steht im Menü.</li>
+    <li>Werte und Bereiche bleiben gespeichert, auch wenn ein Parameter kurz aus der Formel verschwindet.</li>
+  </ul>
+  <h3>Ansehen</h3>
+  <ul>
+    <li><b>Ziehen</b> verschiebt, <b>zwei Finger</b>, Mausrad oder <b>+ / −</b> zoomen. Der Knopf oben (Rahmen mit Kurve) passt die y-Achse an die Kurven an. Genaue Grenzen, gleiche Skalierung und Standardansicht im Menü (☰).</li>
+    <li><b>Antippen</b> zeigt die Werte aller Kurven an dieser Stelle. Nahe einer markierten Nullstelle, eines Maximums oder Minimums rastet die Anzeige dort ein und nennt den genauen Punkt. Schnittpunkte zweier Kurven findet man mit einer dritten Zeile <code>f(x) − g(x)</code>.</li>
+    <li>Farbfeld links neben der Zeile blendet die Kurve aus und ein. Tastatur: Pfeiltasten verschieben, <code>+</code>/<code>−</code> zoomen, wenn der Graph ausgewählt ist.</li>
+    <li>Polstellen (<code>1/x</code>, <code>tan x</code>) werden nicht verbunden. Sehr schnell schwingende Kurven können beim Herauszoomen grob wirken – dann hineinzoomen.</li>
+  </ul>
+  <h3>Speichern &amp; KI-Agenten</h3>
+  <ul>
+    <li>Funktionen, Parameter und Ansicht bleiben in diesem Browser gespeichert; der Pfeil oben speichert den Graphen als PNG. Alles läuft offline, nichts wird gesendet.</li>
+    <li>Ein KI-Agent im Browser kann Funktionen setzen, Parameter ändern und Werte ausrechnen lassen (WebMCP). Was er ändert, siehst du sofort hier.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Type one function per line – it is drawn immediately. Every name that is neither <code>x</code> nor a known function or constant becomes a <b>parameter</b> with its own slider: <code>a sin(b x + c)</code> gives three sliders.</p>
+  <h3>Input</h3>
+  <ul>
+    <li>Operators <code>+ − * / ^</code>, also <code>·</code>, <code>×</code>, <code>²</code>, <code>³</code>, <code>√</code>. Multiplication signs may be left out: <code>2x</code>, <code>a x²</code>, <code>2(x+1)</code>, <code>a sin x</code>. Names with several letters are one name: <code>ax</code> is a parameter, <code>a x</code> is a times x.</li>
+    <li>Decimal point or comma (<code>1.5</code> = <code>1,5</code>), powers of ten as <code>6.6e-34</code>. Several arguments with a semicolon: <code>max(x; 0)</code>, <code>log(2; x)</code> (logarithm to base 2).</li>
+    <li>Functions: <code>sin cos tan cot asin acos atan sinh cosh tanh exp ln lg log log2 sqrt cbrt abs sign floor ceil round min max mod step sinc gamma erf erfc</code>, absolute value also as <code>|x|</code>, factorial <code>n!</code>. Without brackets the following term is the argument: <code>sin 2x</code> = sin(2x). Angles in radians.</li>
+    <li>Constants: <code>pi</code> or <code>π</code>, <code>e</code>. Greek letters are allowed (<code>ω</code>, <code>γ</code>), as are names with digits (<code>v0</code>, <code>x_1</code>).</li>
+    <li><b>Naming:</b> <code>f(x) = x³ − 3x</code> – then <code>f'(x)</code> draws the derivative, <code>f''(x)</code> the second one (numerically), <code>f(x − 1)</code> the shifted curve. A different variable works too: <code>s(t) = v0 t + a/2 t²</code>.</li>
+    <li><b>Fixed values:</b> <code>g = 9.81</code> draws nothing but gives the name a value for the other lines.</li>
+    <li>Text after <code>#</code> is a comment.</li>
+  </ul>
+  <h3>Parameters</h3>
+  <ul>
+    <li>Drag the slider or type the value; the fields left and right set the range. <b>▶</b> runs the parameter from left to right over and over – with <code>t</code> as time, <code>sin(k x − ω t)</code> becomes a travelling wave. The duration of one run is set in the menu.</li>
+    <li>Values and ranges are kept, even if a parameter briefly disappears from the formula.</li>
+  </ul>
+  <h3>Viewing</h3>
+  <ul>
+    <li><b>Drag</b> to pan, <b>two fingers</b>, mouse wheel or <b>+ / −</b> to zoom. The button at the top (frame with a curve) fits the y axis to the curves. Exact limits, equal scaling and the default view are in the menu (☰).</li>
+    <li><b>Tap</b> to show the values of all curves at that point. Near a marked zero, maximum or minimum the display snaps to it and names the exact point. To find where two curves cross, add a third line <code>f(x) − g(x)</code>.</li>
+    <li>The colour square left of a line hides and shows the curve. Keyboard: arrow keys pan, <code>+</code>/<code>−</code> zoom when the graph is selected.</li>
+    <li>Poles (<code>1/x</code>, <code>tan x</code>) are not connected. Curves that oscillate very fast can look coarse when zoomed out – zoom in.</li>
+  </ul>
+  <h3>Saving &amp; AI agents</h3>
+  <ul>
+    <li>Functions, parameters and view are kept in this browser; the arrow at the top saves the graph as PNG. Everything runs offline, nothing is sent.</li>
+    <li>An AI agent in the browser can set functions, change parameters and evaluate values (WebMCP). What it changes shows up here immediately.</li>
+  </ul>
+  </div>
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 9ad3c7c64ad0</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="expr.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

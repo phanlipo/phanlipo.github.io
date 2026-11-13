@@ -2476,3 +2476,50 @@ test.describe('calc-pad tools', () => {
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('calc-pad.pads.v1')).pads[0].text)).toBe('Miete 850 + 120\nNotiz\n× 12\n1/0\n\n3b + 2c = 0\nb + c = -1\n\nx^2 - 5x + 6 = 0');
   });
 });
+
+test.describe('function-plotter tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/function-plotter/'));
+
+  test('set_functions: lines with errors, parameters, view fitted; shown in the app', async ({ page }) => {
+    const r = await call(page, 'function_plotter_set_functions', { functions: ['p x^2 + q', 'f(x) = sin x', "f'(x)", 'x $'], x_min: -2, x_max: 2 });
+    expect(r.ok).toBe(true);
+    expect(r.result.lines.map(l => l.error ? 'error' : l.name || 'fn')).toEqual(['fn', 'f', 'fn', 'error']);
+    expect(r.result.parameters).toEqual({ p: 1, q: 1 });
+    expect(r.result.view.x_min).toBe(-2);
+    expect(r.result.view.x_max).toBe(2);
+    // y fitted to the curves on [−2, 2]: x² + 1 reaches 5, sin and cos reach about ±1
+    expect(r.result.view.y_max).toBeGreaterThan(5);
+    expect(r.result.view.y_min).toBeLessThan(-0.9);
+    await expect(page.locator('#fns input')).toHaveCount(4);
+    await expect(page.locator('#fns input').first()).toHaveValue('p x^2 + q');
+    await expect(page.locator('#params .param label')).toHaveText(['p', 'q']);
+    const bad = await call(page, 'function_plotter_set_functions', { functions: ['x'], x_min: 3, x_max: 1 });
+    expect(bad).toEqual({ ok: false, error: 'x_max must be greater than x_min.' });
+  });
+
+  test('set_parameter and evaluate: values recomputed independently, zeros and extrema', async ({ page }) => {
+    await call(page, 'function_plotter_set_functions', { functions: ['p x^2 - c', 'g = 2', 'g x'], x_min: -3, x_max: 3 });
+    let r = await call(page, 'function_plotter_set_parameter', { name: 'c', value: 4, min: 0, max: 10 });
+    expect(r).toEqual({ ok: true, result: { name: 'c', value: 4, min: 0, max: 10 } });
+    await expect(page.locator('#params .param[data-p="c"] [data-role="v"]')).toHaveValue('4');
+    r = await call(page, 'function_plotter_set_parameter', { name: 'z', value: 1 });
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe('Unknown parameter "z". Parameters: p, c.');
+    r = await call(page, 'function_plotter_evaluate', { x: 1.5 });
+    expect(r.ok).toBe(true);
+    const [l1, l2, l3] = r.result.lines;
+    expect(l1.value).toBeCloseTo(1.5 ** 2 - 4, 12);
+    expect(l2).toMatchObject({ constant: 'g', value: 2 });
+    expect(l3.value).toBeCloseTo(3, 12);
+    expect(l1.points.map(p => p.type)).toEqual(['zero', 'min', 'zero']);
+    expect(l1.points[0].x).toBeCloseTo(-2, 8);
+    expect(l1.points[2].x).toBeCloseTo(2, 8);
+    expect(l1.points[1].y).toBeCloseTo(-4, 8);
+    // the app shows the values at x = 1,5
+    await expect(page.locator('#readoutList li').first()).toHaveText('x = 1,5');
+    // not defined → null
+    await call(page, 'function_plotter_set_functions', { functions: ['ln x'] });
+    r = await call(page, 'function_plotter_evaluate', { x: -1 });
+    expect(r.result.lines[0].value).toBeNull();
+  });
+});
