@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Laserspiegel</title>
+<meta name="description" content="Logikrätsel mit Laserstrahl: Spiegel, Strahlteiler und Kontrollpunkt so setzen und drehen, dass der Laser genau die richtigen Ziele trifft – 40 Rätsel in vier Stufen.">
+<meta name="tool:tags" content="Freizeit, Spiele">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="prism-light">
+<meta name="tool:color" content="#c2410c">
+<meta name="tool:short-name" content="Laserspiegel">
+<meta name="tool:title-en" content="Laser Mirrors">
+<meta name="tool:description-en" content="Logic puzzles with a laser beam: place and turn mirrors, beam splitters and a checkpoint so the laser hits exactly the right targets – 40 puzzles in four levels.">
+<meta name="tool:short-name-en" content="Laser Mirror">
+<meta name="tool:storage" content="laser-mirrors.">
+<meta name="tool:webmcp" content="list_puzzles, start_puzzle, get_board, place_piece, rotate_piece, take_back_piece, switch_laser">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Exu6QmqpTkLk6YNsmj7mX0Yx7u1gOEBFg8NN07HNSNA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Laserspiegel">
+<meta name="theme-color" content="#c2410c">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#c2410c;--accent-text:#ffffff;--page-width:1100px;
+  --board-bg:#2b2f3a;--cell-a:#3a404e;--cell-b:#353a47;--cell-line:#4a5162;--beam:#ff2a2a;--beam-glow:rgba(255,60,40,.45)}
+@media (prefers-color-scheme: dark){:root{--accent:#fb923c;--accent-text:#2a1205;
+  --board-bg:#0d1016;--cell-a:#1c212b;--cell-b:#181c25;--cell-line:#2b3240}}
+main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;padding:10px}
+
+/* ---------- Puzzle choice ---------- */
+.pick{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.pick h2{margin:0;font-size:17px}
+.pick .count{color:var(--muted);margin:0}
+.tier-levels{display:grid;grid-template-columns:repeat(5,minmax(44px,1fr));gap:8px;margin-top:6px}
+.lvl{position:relative;min-height:48px;border:2px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);
+  font:inherit;font-size:18px;font-weight:700;cursor:pointer}
+.lvl:hover,.lvl:focus-visible{border-color:var(--accent)}
+.lvl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lvl.solved{background:color-mix(in srgb,var(--ok) 18%,var(--surface));border-color:color-mix(in srgb,var(--ok) 55%,var(--border))}
+.lvl .mark{position:absolute;inset-block-start:1px;inset-inline-end:4px;font-size:12px;color:var(--ok)}
+.free-btn{align-self:flex-start}
+
+/* ---------- Game: info, board, pieces to add, status, buttons ---------- */
+.game{flex:1;min-height:0;display:grid;gap:8px;
+  grid-template:"info" auto "board" minmax(150px,1fr) "tray" auto "status" auto "actions" auto / minmax(0,1fr)}
+.info{grid-area:info;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-weight:600}
+.info .name{flex:1;min-width:0}
+.goal{display:flex;align-items:center;gap:4px}
+.goal .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--accent);display:inline-block}
+.goal .dot.on{background:var(--beam);border-color:var(--beam);box-shadow:0 0 8px var(--beam-glow)}
+.board-wrap{grid-area:board;min-height:0;display:grid;place-items:center;container-type:size}
+.board{position:relative;width:min(100cqw,100cqh);aspect-ratio:1;background:var(--board-bg);border-radius:12px;padding:1.6%;
+  touch-action:none;user-select:none;-webkit-user-select:none}
+.cells{position:relative;width:100%;height:100%;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(5,1fr)}
+.cell{position:relative;padding:0;margin:0;border:1px solid var(--cell-line);background:var(--cell-a);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;touch-action:none;min-width:0;min-height:0;color:#fff}
+.cell:nth-child(odd){background:var(--cell-b)}
+.cell:focus-visible{outline:3px solid var(--accent);outline-offset:-3px;z-index:2}
+.cell.drop{box-shadow:inset 0 0 0 3px var(--accent)}
+.cell.own::after{content:"";position:absolute;inset:3px;border:2px dashed rgba(255,255,255,.55);border-radius:8px;pointer-events:none}
+.cell svg,.tray-piece svg,.ghost svg{width:100%;height:100%;display:block;pointer-events:none}
+.cell .badge{position:absolute;inset-block-start:2px;inset-inline-end:3px;font-size:13px;line-height:1;color:#fff;
+  background:rgba(0,0,0,.55);border-radius:8px;padding:2px 3px;pointer-events:none}
+.cell .must{position:absolute;inset-block-end:2px;inset-inline-start:3px;width:14px;height:14px;border-radius:50%;
+  border:3px solid #ff5a4a;background:#fff;pointer-events:none}
+.beam{position:absolute;inset:1.6%;width:96.8%;height:96.8%;pointer-events:none;overflow:visible}
+.beam .glow{stroke:var(--beam-glow);stroke-width:.2;stroke-linecap:round}
+.beam .core{stroke:var(--beam);stroke-width:.06;stroke-linecap:round}
+.beam .hit{fill:#fff;stroke:var(--beam);stroke-width:.05}
+.beam:not([hidden]){animation:beam-in .25s ease-out}
+@keyframes beam-in{from{opacity:0}}
+.lit-dot{transition:fill .2s}
+.lit .lit-dot{fill:#fff36b;filter:drop-shadow(0 0 4px #ffd400)}
+.board.won{box-shadow:0 0 0 4px var(--ok),0 0 24px var(--ok)}
+@media (prefers-reduced-motion: reduce){.beam:not([hidden]){animation:none}.lit-dot{transition:none}}
+
+.tray{grid-area:tray;display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:60px;padding:4px 6px;border:2px dashed var(--border);border-radius:12px}
+.tray.drop{border-color:var(--accent)}
+.tray .label{color:var(--muted);font-size:14px}
+.tray-piece{position:relative;width:52px;height:52px;padding:0;border:2px solid transparent;border-radius:10px;background:var(--board-bg);cursor:pointer;touch-action:none}
+.tray-piece[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.tray-piece:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tray-piece .n{position:absolute;inset-block-end:-6px;inset-inline-end:-6px;min-width:20px;height:20px;border-radius:10px;
+  background:var(--accent);color:var(--accent-text);font-size:12px;font-weight:700;line-height:20px;text-align:center}
+.tray-piece .must{position:absolute;inset-block-end:2px;inset-inline-start:2px;width:12px;height:12px;border-radius:50%;border:3px solid #ff5a4a;background:#fff}
+.ghost{position:fixed;z-index:60;pointer-events:none;opacity:.85;transform:translate(-50%,-50%)}
+.status{grid-area:status;margin:0;min-height:2.6em;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+.status.ok{color:var(--ok)}
+.actions{grid-area:actions;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.actions .btn{min-height:50px;font-size:17px;font-weight:600;flex:1;max-width:260px}
+#btnLaser[aria-pressed="true"]{background:#b81d1d;border-color:#b81d1d;color:#fff}
+/* Landscape phone and wide screens: board on the left, the rest beside it */
+@media (orientation: landscape) and (min-width: 560px){
+  .game{grid-template:"board info" auto "board tray" auto "board status" auto "board actions" auto "board ." 1fr / minmax(0,1.25fr) minmax(0,1fr);column-gap:14px}
+  .board-wrap{align-self:stretch}
+  .actions{justify-content:flex-start}
+}
+
+/* ---------- Settings ---------- */
+.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.legend{display:grid;grid-template-columns:44px 1fr;gap:6px 10px;align-items:center;margin:8px 0}
+.legend svg{width:44px;height:44px;display:block}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Laserspiegel</span></h1>
+  <p class="sub" data-i18n="sub">Den Laser durch das Spiegelfeld lenken</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnHint" aria-label="Tipp" title="Tipp" data-i18n-attr="aria-label:hint; title:hint" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7"/><path d="M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3"/><path d="M9.7 17l4.6 0"/></svg></button>
+    <button type="button" class="head-btn" id="btnLevels" aria-label="Rätsel wählen" title="Rätsel wählen" data-i18n-attr="aria-label:levels; title:levels" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6v6h-6z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6h-6z"/><path d="M14 14h6v6h-6z"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card play" aria-label="Laserspiegel" data-i18n-attr="aria-label:title">
+    <div class="pick" id="pick">
+      <p class="count" id="solvedCount"></p>
+      <div id="tiers"></div>
+      <div>
+        <h2 data-i18n="freeH">Ausprobieren</h2>
+        <p class="count" data-i18n="freeSub">Alle Teile frei aufs Feld setzen und sehen, was der Strahl macht.</p>
+        <button type="button" class="btn free-btn" id="btnFree" data-i18n="free">Freies Spiel</button>
+      </div>
+    </div>
+    <div class="game" id="game" hidden>
+      <div class="info"><span class="name" id="levelName"></span><span class="goal" id="goal"></span></div>
+      <div class="board-wrap">
+        <div class="board" id="board">
+          <div class="cells" id="cells" role="group" aria-label="Spielfeld" data-i18n-attr="aria-label:boardLabel"></div>
+          <svg class="beam" id="beam" viewBox="0 0 5 5" aria-hidden="true" hidden></svg>
+        </div>
+      </div>
+      <div class="tray" id="tray" role="group" aria-label="Vorrat" data-i18n-attr="aria-label:tray"></div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <div class="actions">
+        <button type="button" class="btn" id="btnLaser" aria-pressed="false"><span aria-hidden="true">⚡ </span><span data-i18n="laser">Laser</span></button>
+        <button type="button" class="btn primary" id="btnNext" hidden><span data-i18n="next">Nächstes Rätsel</span><span aria-hidden="true"> ▶</span></button>
+        <button type="button" class="btn" id="btnRestart"><span aria-hidden="true">↺ </span><span data-i18n="restart">Neu beginnen</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu>
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <label class="check"><input type="checkbox" id="optSound"> <span data-i18n="sound">Töne</span></label>
+    <label class="check"><input type="checkbox" id="optVibrate"> <span data-i18n="vibrate">Vibration beim Lösen (Handy)</span></label>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Logikrätsel auf einem Feld mit 5 × 5 Plätzen: Lenke den Laserstrahl mit Spiegeln so, dass er <b>genau so viele Ziele</b> trifft, wie oben angezeigt.</p>
+  <h3>Die Teile</h3>
+  <div class="legend" id="legendDe"></div>
+  <h3>Regeln</h3>
+  <ul>
+    <li>Alle Teile aus dem <b>Vorrat</b> (unter dem Feld) müssen aufs Feld.</li>
+    <li>Genau die angezeigte Zahl an Zielen muss leuchten. Ziele mit rotem Ring <span aria-hidden="true">◉</span> müssen auf jeden Fall leuchten; bei den anderen Zielspiegeln entscheidest du, ob sie Ziel, Spiegel oder beides sind.</li>
+    <li>Der Strahl muss <b>jedes Teil</b> auf dem Feld treffen – nur der Sperrstein darf liegen bleiben. Durch den Kontrollpunkt muss er hindurch.</li>
+    <li>Teile, die schon zu Beginn auf dem Feld stehen, bleiben an ihrem Platz. Die mit <span aria-hidden="true">↻</span> darfst du drehen.</li>
+  </ul>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Setzen</b>: Teil im Vorrat antippen, dann einen freien Platz antippen – oder das Teil hinziehen.</li>
+    <li><b>Drehen</b>: eigenes Teil (gestrichelter Rahmen) oder Teil mit <span aria-hidden="true">↻</span> antippen – jedes Tippen dreht um 90°.</li>
+    <li><b>Verschieben</b>: eigenes Teil auf einen anderen Platz ziehen, zurück in den Vorrat ziehen nimmt es wieder vom Feld.</li>
+    <li><b>Laser</b> schaltet den Strahl an. Solange er an ist, folgt er jeder Änderung, und unten steht, was noch fehlt.</li>
+    <li><b>Tipp</b> (Glühbirne oben) setzt ein Teil richtig ein. <b>Rätsel wählen</b> (Kacheln oben) führt zur Auswahl.</li>
+    <li>Mit der Tastatur: Tab zu Vorrat und Feld, Enter setzt bzw. dreht, Entf legt ein eigenes Teil zurück.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Die 40 Rätsel sind eigene, für diese App erzeugt. Jedes hat genau eine Lösung. <b>Freies Spiel</b>: alle Teile, auch der Laser, lassen sich frei setzen und drehen – zum Ausprobieren.</li>
+    <li>Gespeichert werden nur gelöste Rätsel, das offene Rätsel und die Einstellungen – in diesem Browser. Alles funktioniert offline.</li>
+    <li><b>KI-Agent:</b> Ein KI-Agent im Browser kann Rätsel auflisten und starten, das Feld lesen, Teile setzen, drehen, zurücklegen und den Laser schalten (WebMCP). Jeder Aufruf erscheint hier als Hinweis.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A logic puzzle on a board of 5 × 5 squares: steer the laser beam with mirrors so that it hits <b>exactly as many targets</b> as shown at the top.</p>
+  <h3>The pieces</h3>
+  <div class="legend" id="legendEn"></div>
+  <h3>Rules</h3>
+  <ul>
+    <li>All pieces from the <b>supply</b> (below the board) must go onto the board.</li>
+    <li>Exactly the number of targets shown must light up. Targets with a red ring <span aria-hidden="true">◉</span> must light up in any case; for the other target mirrors you decide whether they are target, mirror or both.</li>
+    <li>The beam must hit <b>every piece</b> on the board – only the blocker may be left out. It must pass through the checkpoint.</li>
+    <li>Pieces that are on the board from the start stay in their place. Those with <span aria-hidden="true">↻</span> may be turned.</li>
+  </ul>
+  <h3>How to play</h3>
+  <ul>
+    <li><b>Place</b>: tap a piece in the supply, then tap a free square – or drag the piece there.</li>
+    <li><b>Turn</b>: tap your own piece (dashed frame) or a piece with <span aria-hidden="true">↻</span> – each tap turns it by 90°.</li>
+    <li><b>Move</b>: drag your own piece to another square; dragging it back to the supply takes it off the board.</li>
+    <li><b>Laser</b> switches the beam on. While it is on, it follows every change and the line below says what is still missing.</li>
+    <li><b>Hint</b> (bulb at the top) puts one piece in its right place. <b>Choose puzzle</b> (tiles at the top) takes you to the choice.</li>
+    <li>With a keyboard: Tab to the supply and the board, Enter places or turns, Delete puts your own piece back.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>The 40 puzzles are original ones, made for this app. Each has exactly one solution. <b>Free play</b>: every piece, the laser too, can be placed and turned freely – to try things out.</li>
+    <li>Only solved puzzles, the open puzzle and the settings are stored – in this browser. Everything works offline.</li>
+    <li><b>AI agent:</b> an AI agent in the browser can list and start puzzles, read the board, place, turn and take back pieces and switch the laser (WebMCP). Each call shows a note here.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 51ce3d1ae10d</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="engine.js"></script>
+<script src="levels.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  'd.easy':'Leicht','d.medium':'Mittel','d.hard':'Schwer','d.expert':'Experte',
+  'pc.laser':'Laser','pc.target':'Zielspiegel','pc.split':'Strahlteiler','pc.double':'Doppelspiegel','pc.check':'Kontrollpunkt','pc.block':'Sperrstein',
+  levelName:'{d} {n}',freeName:'Freies Spiel',solvedCount:'{n} von {m} Rätseln gelöst',
+  goal:'Ziele:',goalLabel:'{lit} von {t} Zielen leuchten',
+  trayEmpty:'Alle Teile sind auf dem Feld.',trayLabel:'Vorrat:',
+  trayPiece:'{piece} im Vorrat ({n}×)',trayMust:'muss leuchten',
+  cellEmpty:'{cell}: frei',cellPiece:'{cell}: {piece}, {deg}°',cellFixed:'fest',cellTurn:'drehbar',cellOwn:'dein Teil',cellLit:'leuchtet',
+  stOff:'Ziel: {t} {targets} treffen. Teile setzen, dann den Laser einschalten.',
+  target1:'Ziel',targetN:'Ziele',
+  stTray:'Noch {n} {pieces} aus dem Vorrat einsetzen.',piece1:'Teil',pieceN:'Teile',
+  stCount:'{lit} von {t} Zielen getroffen.',
+  stMust:'Das Ziel mit rotem Ring auf {cell} leuchtet nicht.',
+  stUntouched:'Der Strahl trifft das Teil auf {cell} nicht.',
+  stCheck:'Der Strahl muss durch den Kontrollpunkt auf {cell}.',
+  stWon:'🎉 Geschafft! Alle Ziele leuchten.',
+  stFree:'{n} {targets} getroffen.',stFreeOff:'Teile setzen und den Laser einschalten.',
+  pickFirst:'Erst ein Teil im Vorrat antippen.',
+  hintDone:'Tipp: {piece} auf {cell}.',hintTurn:'Tipp: {piece} auf {cell} gedreht.',hintNone:'Alles richtig – schalte den Laser ein!',
+  'mcp.list':'Rätsel gelesen','mcp.start':'Rätsel gestartet','mcp.board':'Feld gelesen','mcp.place':'Teil gesetzt',
+  'mcp.rotate':'Teil gedreht','mcp.back':'Teil zurückgelegt','mcp.laser':'Laser geschaltet'
+},
+en:{
+  title:'Laser Mirrors',sub:'Steer the laser through the mirror board',hint:'Hint',levels:'Choose puzzle',
+  freeH:'Try it out',freeSub:'Place every piece freely and see what the beam does.',free:'Free play',
+  boardLabel:'Board',tray:'Supply',laser:'Laser',next:'Next puzzle',restart:'Start over',
+  settings:'Settings',sound:'Sounds',vibrate:'Vibration when solved (phone)',
+  'd.easy':'Easy','d.medium':'Medium','d.hard':'Hard','d.expert':'Expert',
+  'pc.laser':'Laser','pc.target':'Target mirror','pc.split':'Beam splitter','pc.double':'Double mirror','pc.check':'Checkpoint','pc.block':'Blocker',
+  levelName:'{d} {n}',freeName:'Free play',solvedCount:'{n} of {m} puzzles solved',
+  goal:'Targets:',goalLabel:'{lit} of {t} targets lit',
+  trayEmpty:'All pieces are on the board.',trayLabel:'Supply:',
+  trayPiece:'{piece} in the supply ({n}×)',trayMust:'must light up',
+  cellEmpty:'{cell}: empty',cellPiece:'{cell}: {piece}, {deg}°',cellFixed:'fixed',cellTurn:'can be turned',cellOwn:'your piece',cellLit:'lit',
+  stOff:'Goal: hit {t} {targets}. Place the pieces, then switch on the laser.',
+  target1:'target',targetN:'targets',
+  stTray:'Place {n} more {pieces} from the supply.',piece1:'piece',pieceN:'pieces',
+  stCount:'{lit} of {t} targets hit.',
+  stMust:'The target with the red ring on {cell} is not lit.',
+  stUntouched:'The beam does not hit the piece on {cell}.',
+  stCheck:'The beam must pass through the checkpoint on {cell}.',
+  stWon:'🎉 Solved! All targets are lit.',
+  stFree:'{n} {targets} hit.',stFreeOff:'Place pieces and switch on the laser.',
+  pickFirst:'Tap a piece in the supply first.',
+  hintDone:'Hint: {piece} on {cell}.',hintTurn:'Hint: {piece} on {cell} turned.',hintNone:'All correct – switch on the laser!',
+  'mcp.list':'puzzles read','mcp.start':'puzzle started','mcp.board':'board read','mcp.place':'piece placed',
+  'mcp.rotate':'piece turned','mcp.back':'piece taken back','mcp.laser':'laser switched'
+}});
+const {$,t}=Tools;
+const L=window.LaserEngine,LEVELS=window.LaserLevels;
+const TIERS=['easy','medium','hard','expert'];
+const LETTER={L:'laser',T:'target',S:'split',D:'double',C:'check',B:'block'};
+const BOX={laser:1,target:5,split:2,double:1,check:1,block:1};
+
+/* ---------- Storage ---------- */
+const LS_PROGRESS='laser-mirrors.progress.v1',LS_GAME='laser-mirrors.game.v1',LS_SETTINGS='laser-mirrors.settings.v1';
+const progress=Tools.load(LS_PROGRESS,{solved:{}});
+if(!progress.solved||typeof progress.solved!=='object')progress.solved={};
+const settings=Object.assign({sound:true,vibrate:true},Tools.load(LS_SETTINGS,{}));
+
+/* ---------- Pieces as pictures (100 × 100, drawn in base orientation, turned by r × 90°) ---------- */
+const COLOR={laser:'#d23b1e',target:'#8e3fb5',split:'#13897a',double:'#2468c9',check:'#d9a400',block:'#59606d'};
+function pieceArt(type,r){
+  const tile=`<rect x="6" y="6" width="88" height="88" rx="14" fill="${COLOR[type]}" stroke="rgba(0,0,0,.35)" stroke-width="2"/>`;
+  let art='';
+  switch(type){
+    case 'laser':art=`<rect x="22" y="30" width="44" height="40" rx="10" fill="#4a1208"/><circle cx="44" cy="50" r="11" fill="#ff8d6b"/>`+
+      `<path d="M70 38L90 50L70 62Z" fill="#fff"/>`;break;
+    case 'target':art=`<path d="M10 10L90 90H10Z" fill="#5a2378"/><path d="M10 10L90 90" stroke="#e8eef6" stroke-width="7" stroke-linecap="round"/>`+
+      `<path d="M14 14L86 86" stroke="#9fb3c8" stroke-width="2"/>`+
+      `<circle class="lit-dot" cx="24" cy="58" r="11" fill="#ff5a4a" stroke="#fff" stroke-width="3"/>`;break;
+    case 'split':art=`<path d="M14 14L86 86" stroke="#c9fff6" stroke-width="7" stroke-linecap="round" stroke-dasharray="10 7"/>`;break;
+    case 'double':art=`<path d="M12 12L88 88" stroke="#eef4fb" stroke-width="11" stroke-linecap="round"/><path d="M12 12L88 88" stroke="#7d93ad" stroke-width="3"/>`;break;
+    case 'check':art=`<rect x="14" y="16" width="72" height="14" rx="5" fill="#5e4700"/><rect x="14" y="70" width="72" height="14" rx="5" fill="#5e4700"/>`+
+      `<path d="M28 50H72M37 42L28 50L37 58M63 42L72 50L63 58" stroke="#5e4700" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".55"/>`;break;
+    default:art=`<rect x="26" y="26" width="48" height="48" rx="8" fill="#3b4048" stroke="#8b929e" stroke-width="3"/>`;
+  }
+  return `<svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g transform="rotate(${(r||0)*90} 50 50)">${tile}${art}</g></svg>`;
+}
+
+/* ---------- Game state ----------
+   game = { id ('free' or a puzzle id), level, pieces: [{ type, x, y, r, fixed, q (may turn), must, own }],
+            tray: [{ type, must }], laser, won } */
+let game=null,selected=-1;   // selected: index of the tray group
+const levelById=id=>LEVELS.find(l=>l.id===id);
+function parsePiece(s){
+  const m=/^([LTSDCB])([A-E][1-5])([0-3])([qm]*)$/.exec(s);
+  const c=L.parseCell(m[2]);
+  return {type:LETTER[m[1]],x:c.x,y:c.y,r:Number(m[3]),q:m[4].includes('q'),must:m[4].includes('m')};
+}
+function newGame(id){
+  if(id==='free'){
+    const tray=[];
+    for(const [type,n] of Object.entries(BOX))if(type!=='laser')for(let k=0;k<n;k++)tray.push({type,must:false});
+    return {id,level:null,pieces:[{type:'laser',x:0,y:2,r:0,fixed:false,q:true,must:false,own:true}],tray,laser:true,won:false};
+  }
+  const level=levelById(id);
+  const pieces=level.p.map(s=>{const p=parsePiece(s);p.fixed=true;p.own=false;if(p.q)p.r=0;return p;});
+  // Rotations to find out start at 0 – unless that is the solution, then a quarter turn on
+  const sol=solution(level);
+  for(const p of pieces)if(p.q&&sol.some(z=>z.x===p.x&&z.y===p.y&&same(p,z)))p.r=1;
+  const tray=level.a.map(s=>({type:LETTER[s[0]],must:s.includes('m')}));
+  return {id,level,pieces,tray,laser:false,won:false};
+}
+// The solved board: fixed pieces in their right rotation plus the added pieces, each with lit (true/false)
+function solution(level){
+  const s=level.s.map(parsePiece);
+  const fixed=level.p.map(parsePiece).map(p=>{const z=s.find(q=>q.x===p.x&&q.y===p.y);return z?{...p,r:z.r}:p;});
+  const added=s.filter(z=>!fixed.some(p=>p.x===z.x&&p.y===z.y)).map(z=>({...z,added:true}));
+  const all=fixed.concat(added),lit=L.trace(all).lit;
+  all.forEach((p,i)=>{p.lit=lit.has(i);});
+  return all;
+}
+const same=(p,s)=>p.type===s.type&&p.r%L.PERIOD[p.type]===s.r%L.PERIOD[s.type];
+const pieceAt=(x,y)=>game.pieces.findIndex(p=>p.x===x&&p.y===y);
+const canMove=p=>!p.fixed;
+const canTurn=p=>(!p.fixed||p.q)&&L.PERIOD[p.type]>1;
+
+function saveGame(){
+  if(!game){Tools.remove(LS_GAME);return;}
+  Tools.save(LS_GAME,{id:game.id,laser:game.laser,won:game.won,
+    pieces:game.pieces.map(p=>({t:p.type,x:p.x,y:p.y,r:p.r,f:p.fixed?1:0,q:p.q?1:0,m:p.must?1:0,o:p.own?1:0})),
+    tray:game.tray.map(p=>({t:p.type,m:p.must?1:0}))});
+}
+function restoreGame(){
+  const s=Tools.load(LS_GAME,null);
+  if(!s||typeof s!=='object')return null;
+  try{
+    if(s.id!=='free'&&!levelById(s.id))throw new Error('unknown puzzle');
+    const ok=t=>L.TYPES.includes(t);
+    const pieces=s.pieces.map(p=>{if(!ok(p.t)||!(p.x>=0&&p.x<5&&p.y>=0&&p.y<5))throw new Error('bad piece');
+      return {type:p.t,x:p.x,y:p.y,r:(p.r|0)%4,fixed:!!p.f,q:!!p.q,must:!!p.m,own:!!p.o};});
+    const tray=s.tray.map(p=>{if(!ok(p.t))throw new Error('bad piece');return {type:p.t,must:!!p.m};});
+    return {id:s.id,level:s.id==='free'?null:levelById(s.id),pieces,tray,laser:!!s.laser,won:!!s.won};
+  }catch(e){Tools.diag.log('saved game dropped',{error:String(e.message||e)});Tools.remove(LS_GAME);return null;}
+}
+
+/* ---------- Rendering ---------- */
+const pickEl=$('pick'),gameEl=$('game'),cellsEl=$('cells'),beamEl=$('beam'),trayEl=$('tray'),statusEl=$('status'),boardEl=$('board');
+for(let y=0;y<5;y++)for(let x=0;x<5;x++){
+  const b=document.createElement('button');
+  b.type='button';b.className='cell';b.dataset.x=x;b.dataset.y=y;
+  cellsEl.appendChild(b);
+}
+const cellEl=(x,y)=>cellsEl.children[y*5+x];
+const pieceName=type=>t('pc.'+type);
+
+function renderPick(){
+  const solved=LEVELS.filter(l=>progress.solved[l.id]).length;
+  $('solvedCount').textContent=t('solvedCount',{n:Tools.fmt(solved,0),m:Tools.fmt(LEVELS.length,0)});
+  const host=$('tiers');host.textContent='';
+  for(const d of TIERS){
+    const div=document.createElement('div');
+    const h=document.createElement('h2');h.textContent=t('d.'+d);h.id='tier-'+d;div.appendChild(h);
+    const grid=document.createElement('div');grid.className='tier-levels';grid.setAttribute('role','group');grid.setAttribute('aria-labelledby',h.id);
+    LEVELS.filter(l=>l.d===d).forEach((l,k)=>{
+      const b=document.createElement('button');
+      b.type='button';b.className='lvl'+(progress.solved[l.id]?' solved':'');b.dataset.level=l.id;
+      b.textContent=Tools.fmt(k+1,0);
+      b.setAttribute('aria-label',t('levelName',{d:t('d.'+d),n:Tools.fmt(k+1,0)})+(progress.solved[l.id]?' ✓':''));
+      if(progress.solved[l.id]){const m=document.createElement('span');m.className='mark';m.setAttribute('aria-hidden','true');m.textContent='✓';b.appendChild(m);}
+      grid.appendChild(b);
+    });
+    div.appendChild(grid);host.appendChild(div);
+  }
+}
+function levelTitle(){
+  if(!game||!game.level)return t('freeName');
+  const k=LEVELS.filter(l=>l.d===game.level.d).indexOf(game.level);
+  return t('levelName',{d:t('d.'+game.level.d),n:Tools.fmt(k+1,0)});
+}
+// Tray groups: equal pieces are shown once with a count
+function trayGroups(){
+  const g=[];
+  game.tray.forEach((p,i)=>{
+    const o=g.find(x=>x.type===p.type&&x.must===p.must);
+    if(o)o.idx.push(i);else g.push({type:p.type,must:p.must,idx:[i]});
+  });
+  return g;
+}
+let result=null;
+function render(){
+  if(!game)return;
+  const ev=L.evaluate(game.pieces,game.level?game.level.t:0,game.tray.length);
+  result=ev;
+  const lit=game.laser?ev.trace.lit:new Set();
+  $('levelName').textContent=levelTitle();
+  // Goal: one dot per target, filled while lit
+  const goal=$('goal');goal.textContent='';
+  if(game.level){
+    const lab=document.createElement('span');lab.textContent=t('goal');lab.setAttribute('aria-hidden','true');goal.appendChild(lab);
+    for(let k=0;k<game.level.t;k++){const d=document.createElement('span');d.className='dot'+(game.laser&&k<lit.size?' on':'');d.setAttribute('aria-hidden','true');goal.appendChild(d);}
+    const sr=document.createElement('span');sr.className='sr-only';sr.textContent=t('goalLabel',{lit:Tools.fmt(game.laser?lit.size:0,0),t:Tools.fmt(game.level.t,0)});goal.appendChild(sr);
+  }
+  // Board
+  for(let y=0;y<5;y++)for(let x=0;x<5;x++){
+    const c=cellEl(x,y),i=pieceAt(x,y),cell=L.cellName(x,y);
+    c.textContent='';c.classList.remove('own','lit');
+    if(i<0){c.setAttribute('aria-label',t('cellEmpty',{cell}));delete c.dataset.type;continue;}
+    const p=game.pieces[i];
+    c.dataset.type=p.type;c.dataset.r=p.r;
+    c.insertAdjacentHTML('beforeend',pieceArt(p.type,p.r));
+    if(p.own)c.classList.add('own');
+    if(lit.has(i))c.classList.add('lit');
+    if(p.fixed&&canTurn(p)){const b=document.createElement('span');b.className='badge';b.textContent='↻';b.setAttribute('aria-hidden','true');c.appendChild(b);}
+    if(p.must){const m=document.createElement('span');m.className='must';m.setAttribute('aria-hidden','true');c.appendChild(m);}
+    const extra=[p.own?t('cellOwn'):canTurn(p)?t('cellTurn'):t('cellFixed')];
+    if(p.must)extra.push(t('trayMust'));
+    if(lit.has(i))extra.push(t('cellLit'));
+    c.setAttribute('aria-label',t('cellPiece',{cell,piece:pieceName(p.type),deg:Tools.fmt(p.r*90,0)})+' – '+extra.join(', '));
+  }
+  // Beam
+  beamEl.toggleAttribute('hidden',!game.laser);   // an <svg> has no .hidden property
+  if(game.laser){
+    let s='';
+    for(const [x1,y1,x2,y2,end] of ev.trace.segs){
+      const c=`x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"`;
+      s+=`<line class="glow" ${c}/><line class="core" ${c}/>`;
+      if(end==='lit'||end==='stop')s+=`<circle class="hit" cx="${x2}" cy="${y2}" r="${end==='lit'?.09:.06}"/>`;
+    }
+    beamEl.innerHTML=s;
+  }
+  // Tray
+  trayEl.textContent='';
+  const groups=trayGroups();
+  if(selected>=groups.length)selected=-1;
+  const lab=document.createElement('span');lab.className='label';
+  lab.textContent=groups.length?t('trayLabel'):t('trayEmpty');trayEl.appendChild(lab);
+  groups.forEach((g,k)=>{
+    const b=document.createElement('button');
+    b.type='button';b.className='tray-piece';b.dataset.g=k;b.dataset.type=g.type;
+    b.setAttribute('aria-pressed',String(k===selected));
+    b.setAttribute('aria-label',t('trayPiece',{piece:pieceName(g.type),n:Tools.fmt(g.idx.length,0)})+(g.must?' – '+t('trayMust'):''));
+    b.innerHTML=pieceArt(g.type,0);
+    if(g.must){const m=document.createElement('span');m.className='must';m.setAttribute('aria-hidden','true');b.appendChild(m);}
+    if(g.idx.length>1){const n=document.createElement('span');n.className='n';n.setAttribute('aria-hidden','true');n.textContent=Tools.fmt(g.idx.length,0);b.appendChild(n);}
+    trayEl.appendChild(b);
+  });
+  // Status
+  statusEl.classList.remove('ok');
+  statusEl.textContent=statusText(ev);
+  if(game.won)statusEl.classList.add('ok');
+  boardEl.classList.toggle('won',game.won);
+  $('btnLaser').setAttribute('aria-pressed',String(game.laser));
+  $('btnNext').hidden=!(game.won&&game.level);
+  $('btnHint').hidden=!game.level||game.won;
+}
+function statusText(ev){
+  if(!game.level){
+    const n=ev.trace.lit.size;
+    return game.laser?t('stFree',{n:Tools.fmt(n,0),targets:t(n===1?'target1':'targetN')}):t('stFreeOff');
+  }
+  if(game.won)return t('stWon');
+  if(!game.laser)return t('stOff',{t:Tools.fmt(game.level.t,0),targets:t(game.level.t===1?'target1':'targetN')});
+  // The most useful hint first: pieces left over, then the targets, then pieces the beam misses
+  const by=k=>ev.issues.find(x=>x.k===k);
+  let x;
+  if((x=by('tray')))return t('stTray',{n:Tools.fmt(x.n,0),pieces:t(x.n===1?'piece1':'pieceN')});
+  if((x=by('must')))return t('stMust',{cell:cellOf(x.i)});
+  if((x=by('count')))return t('stCount',{lit:Tools.fmt(x.lit,0),t:Tools.fmt(x.targets,0)});
+  if((x=by('check')))return t('stCheck',{cell:cellOf(x.i)});
+  if((x=by('untouched')))return t('stUntouched',{cell:cellOf(x.i)});
+  return '';
+}
+const cellOf=i=>L.cellName(game.pieces[i].x,game.pieces[i].y);
+
+/* ---------- Changes ---------- */
+function changed(what){
+  render();
+  if(game.level&&game.laser&&!game.won&&result.solved)win();
+  saveGame();
+  if(what)Tools.diag.log(what.k,what);
+}
+function win(){
+  game.won=true;
+  progress.solved[game.id]=1;Tools.save(LS_PROGRESS,progress);
+  render();renderPick();
+  tone([523,659,784,1047],.12);
+  if(settings.vibrate&&navigator.vibrate)try{navigator.vibrate([60,60,120]);}catch(_){}
+  Tools.diag.log('solved',{id:game.id,solved:Object.keys(progress.solved).length});
+  $('btnNext').focus();
+}
+function placeFromTray(ti,x,y,r){
+  if(game.won||pieceAt(x,y)>=0)return false;
+  const p=game.tray.splice(ti,1)[0];
+  game.pieces.push({type:p.type,x,y,r:(r||0)%L.PERIOD[p.type],fixed:false,q:true,must:p.must,own:true});
+  tone([440],.05);
+  return true;
+}
+function movePiece(i,x,y){
+  const p=game.pieces[i];
+  if(game.won||!canMove(p)||pieceAt(x,y)>=0)return false;
+  p.x=x;p.y=y;tone([440],.05);
+  return true;
+}
+function takeBack(i){
+  const p=game.pieces[i];
+  if(game.won||!canMove(p)||p.type==='laser')return false;
+  game.pieces.splice(i,1);
+  game.tray.push({type:p.type,must:p.must});
+  return true;
+}
+function turn(i,r){
+  const p=game.pieces[i];
+  if(game.won||!canTurn(p))return false;
+  p.r=r==null?(p.r+1)%L.PERIOD[p.type]:r%L.PERIOD[p.type];
+  tone([520],.04);
+  return true;
+}
+
+/* ---------- Taps and keys ---------- */
+let suppressClick=false;
+cellsEl.addEventListener('click',e=>{
+  const c=e.target.closest('.cell');
+  if(!c||!game)return;
+  if(suppressClick){suppressClick=false;return;}
+  unlock();
+  const x=Number(c.dataset.x),y=Number(c.dataset.y),i=pieceAt(x,y);
+  if(i<0){
+    if(selected<0){if(game.tray.length&&!game.won)statusEl.textContent=t('pickFirst');return;}
+    const g=trayGroups()[selected];
+    if(g&&placeFromTray(g.idx[0],x,y,0)){
+      if(!trayGroups().some(o=>o.type===g.type&&o.must===g.must))selected=-1;
+      changed({k:'place',type:g.type,cell:L.cellName(x,y)});
+      cellEl(x,y).focus();
+    }
+    return;
+  }
+  if(turn(i))changed({k:'turn',type:game.pieces[i].type,r:game.pieces[i].r});
+});
+cellsEl.addEventListener('keydown',e=>{
+  const c=e.target.closest('.cell');
+  if(!c||!game)return;
+  const x=Number(c.dataset.x),y=Number(c.dataset.y);
+  if(e.key==='Delete'||e.key==='Backspace'){
+    const i=pieceAt(x,y);
+    if(i>=0&&takeBack(i)){e.preventDefault();changed({k:'back',cell:L.cellName(x,y)});cellEl(x,y).focus();}
+    return;
+  }
+  const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+  if(!d)return;
+  const nx=x+d[0],ny=y+d[1];
+  if(nx<0||ny<0||nx>4||ny>4)return;
+  e.preventDefault();cellEl(nx,ny).focus();
+});
+trayEl.addEventListener('click',e=>{
+  const b=e.target.closest('.tray-piece');
+  if(!b||!game)return;
+  if(suppressClick){suppressClick=false;return;}
+  unlock();
+  const k=Number(b.dataset.g);
+  selected=selected===k?-1:k;
+  render();
+  const again=trayEl.querySelector(`[data-g="${k}"]`);if(again)again.focus();
+});
+
+/* ---------- Dragging (pieces from the supply onto the board, own pieces around or back) ---------- */
+let drag=null;
+function startDrag(e){
+  if(!game||game.won||drag||(e.pointerType==='mouse'&&e.button!==0))return;
+  const tp=e.target.closest('.tray-piece'),c=e.target.closest('.cell');
+  let src=null;
+  if(tp)src={tray:Number(tp.dataset.g)};
+  else if(c){const i=pieceAt(Number(c.dataset.x),Number(c.dataset.y));if(i>=0&&canMove(game.pieces[i]))src={piece:i};}
+  if(!src)return;
+  drag={src,id:e.pointerId,x0:e.clientX,y0:e.clientY,moving:false,el:tp||c};
+}
+function dropTarget(e){
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  if(!el)return null;
+  const c=el.closest('.cell');
+  if(c&&cellsEl.contains(c))return {cell:c};
+  if(el.closest('#tray'))return {tray:true};
+  return null;
+}
+function clearDrop(){for(const el of document.querySelectorAll('.drop'))el.classList.remove('drop');}
+document.addEventListener('pointerdown',startDrag);
+document.addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.id)return;
+  if(!drag.moving){
+    if(Math.hypot(e.clientX-drag.x0,e.clientY-drag.y0)<8)return;
+    drag.moving=true;unlock();
+    const g=document.createElement('div');g.className='ghost';
+    const size=cellsEl.children[0].getBoundingClientRect().width;
+    g.style.width=g.style.height=size+'px';
+    const p=drag.src.piece!=null?game.pieces[drag.src.piece]:null;
+    g.innerHTML=p?pieceArt(p.type,p.r):pieceArt(trayGroups()[drag.src.tray].type,0);
+    document.body.appendChild(g);drag.ghost=g;
+    try{drag.el.setPointerCapture(e.pointerId);}catch(_){}
+  }
+  drag.ghost.style.left=e.clientX+'px';drag.ghost.style.top=e.clientY+'px';
+  clearDrop();
+  const d=dropTarget(e);
+  if(d&&d.cell)d.cell.classList.add('drop');
+  else if(d&&d.tray&&drag.src.piece!=null)trayEl.classList.add('drop');
+  e.preventDefault();
+});
+function endDrag(e){
+  if(!drag||e.pointerId!==drag.id)return;
+  const dr=drag;drag=null;
+  if(!dr.moving)return;
+  dr.ghost.remove();clearDrop();
+  suppressClick=true;setTimeout(()=>{suppressClick=false;},0);
+  if(e.type==='pointercancel')return;
+  const d=dropTarget(e);
+  if(!d)return;
+  if(d.cell){
+    const x=Number(d.cell.dataset.x),y=Number(d.cell.dataset.y);
+    if(dr.src.tray!=null){
+      const g=trayGroups()[dr.src.tray];
+      if(g&&placeFromTray(g.idx[0],x,y,0)){selected=-1;changed({k:'drag place',type:g.type,cell:L.cellName(x,y)});}
+    }else if(movePiece(dr.src.piece,x,y))changed({k:'drag move',cell:L.cellName(x,y)});
+  }else if(d.tray&&dr.src.piece!=null){
+    if(takeBack(dr.src.piece))changed({k:'drag back'});
+  }
+}
+document.addEventListener('pointerup',endDrag);
+document.addEventListener('pointercancel',endDrag);
+
+/* ---------- Buttons ---------- */
+function start(id){
+  game=newGame(id);selected=-1;
+  showGame();changed({k:'start',id});
+}
+function showGame(){
+  pickEl.hidden=true;gameEl.hidden=false;$('btnLevels').hidden=false;
+  render();
+}
+function toPick(){
+  game=null;saveGame();
+  gameEl.hidden=true;pickEl.hidden=false;$('btnLevels').hidden=true;$('btnHint').hidden=true;
+  renderPick();
+  const first=pickEl.querySelector('.lvl:not(.solved)')||pickEl.querySelector('.lvl');if(first)first.focus();
+}
+$('tiers').addEventListener('click',e=>{const b=e.target.closest('.lvl');if(b){unlock();start(b.dataset.level);}});
+$('btnFree').addEventListener('click',()=>{unlock();start('free');});
+$('btnLevels').addEventListener('click',toPick);
+$('btnLaser').addEventListener('click',()=>{
+  if(!game)return;unlock();
+  game.laser=!game.laser;
+  if(game.laser)tone([880,1320],.05);
+  changed({k:'laser',on:game.laser});
+});
+$('btnRestart').addEventListener('click',()=>{if(game)start(game.id);});
+$('btnNext').addEventListener('click',()=>{
+  if(!game||!game.level)return;
+  const k=LEVELS.indexOf(game.level);
+  const next=LEVELS.slice(k+1).find(l=>!progress.solved[l.id])||LEVELS[k+1];
+  if(next)start(next.id);else toPick();
+});
+$('btnHint').addEventListener('click',()=>{const h=hint();if(h)statusEl.textContent=h;});
+
+/* ---------- Hint: one step of the solution ---------- */
+function hint(){
+  if(!game||!game.level||game.won)return null;
+  const sol=solution(game.level);
+  // First a rotation to find out
+  for(const z of sol.filter(z=>!z.added)){
+    const i=pieceAt(z.x,z.y),p=game.pieces[i];
+    if(!p||!p.q||same(p,z))continue;
+    p.r=z.r;changed({k:'hint turn',cell:L.cellName(z.x,z.y)});
+    return t('hintTurn',{piece:pieceName(z.type),cell:L.cellName(z.x,z.y)});
+  }
+  // Then a piece to add: a marked target only where a target lights up in the solution
+  const fits=(p,z)=>same(p,z)&&(!p.must||z.lit);
+  const fromTray=z=>{
+    const c=game.tray.map((o,i)=>i).filter(i=>game.tray[i].type===z.type&&(!game.tray[i].must||z.lit));
+    return c.find(i=>game.tray[i].must===z.lit)??c[0]??-1;
+  };
+  for(const z of sol.filter(z=>z.added)){
+    const i=pieceAt(z.x,z.y);
+    if(i>=0&&fits(game.pieces[i],z))continue;
+    if(i>=0&&!takeBack(i))continue;
+    let ti=fromTray(z);
+    if(ti<0){
+      // All of this kind are on the board: take one that is in a wrong place
+      const w=game.pieces.findIndex(o=>o.own&&o.type===z.type&&!sol.some(y=>y.added&&y.x===o.x&&y.y===o.y&&fits(o,y)));
+      if(w<0||!takeBack(w))continue;
+      ti=fromTray(z);
+      if(ti<0)continue;
+    }
+    placeFromTray(ti,z.x,z.y,z.r);selected=-1;
+    changed({k:'hint place',type:z.type,cell:L.cellName(z.x,z.y)});
+    return t('hintDone',{piece:pieceName(z.type),cell:L.cellName(z.x,z.y)});
+  }
+  return t('hintNone');
+}
+
+/* ---------- Settings ---------- */
+$('optSound').checked=settings.sound;$('optVibrate').checked=settings.vibrate;
+$('optSound').addEventListener('change',e=>{settings.sound=e.target.checked;Tools.save(LS_SETTINGS,settings);if(settings.sound)unlock();});
+$('optVibrate').addEventListener('change',e=>{settings.vibrate=e.target.checked;Tools.save(LS_SETTINGS,settings);});
+// Legend in the help: one per language block, so the texts are kept here instead of in the dictionaries
+const LEGEND={
+  de:{
+    laser:'Laser: schießt den Strahl in Pfeilrichtung.',
+    target:'Zielspiegel: Die Spiegelseite lenkt den Strahl um 90° um. Trifft er den roten Punkt, leuchtet das Ziel; die glatte Seite schluckt ihn.',
+    split:'Strahlteiler: Ein Strahl geht geradeaus durch, ein zweiter wird um 90° umgelenkt.',
+    double:'Doppelspiegel: Beide Seiten lenken den Strahl um 90° um.',
+    check:'Kontrollpunkt: Der Strahl muss hindurch – nur in Richtung der Öffnung.',
+    block:'Sperrstein: Der Strahl geht hindurch, aber der Platz ist belegt.'},
+  en:{
+    laser:'Laser: shoots the beam in the direction of the arrow.',
+    target:'Target mirror: the mirror side turns the beam by 90°. If it hits the red dot, the target lights up; the plain side swallows it.',
+    split:'Beam splitter: one beam goes straight through, a second one is turned by 90°.',
+    double:'Double mirror: both sides turn the beam by 90°.',
+    check:'Checkpoint: the beam must pass through – only in the direction of the opening.',
+    block:'Blocker: the beam passes through, but the square is taken.'}
+};
+function renderLegend(){
+  for(const [id,lang] of [['legendDe','de'],['legendEn','en']]){
+    const host=$(id);
+    for(const type of L.TYPES){
+      host.insertAdjacentHTML('beforeend',pieceArt(type,0));
+      const p=document.createElement('span');p.textContent=LEGEND[lang][type];host.appendChild(p);
+    }
+  }
+}
+
+/* ---------- Sound ---------- */
+let ac=null;
+function unlock(){
+  if(!settings.sound)return;
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(!ac&&C){try{ac=new C();Tools.diag.log('audio context created',{state:ac.state});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});}}
+  if(ac&&ac.state!=='running')ac.resume().catch(e=>Tools.diag.log('audio resume failed',{error:String(e)}));
+}
+function tone(freqs,len){
+  if(!settings.sound||!ac||ac.state!=='running')return;
+  try{
+    const now=ac.currentTime;
+    freqs.forEach((f,i)=>{
+      const o=ac.createOscillator(),g=ac.createGain(),t0=now+i*len;
+      o.type='triangle';o.frequency.value=f;
+      g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.2,t0+.01);g.gain.exponentialRampToValueAtTime(.0001,t0+len*1.6);
+      o.connect(g);g.connect(ac.destination);o.start(t0);o.stop(t0+len*1.7);
+    });
+  }catch(e){Tools.diag.log('tone failed',{error:String(e)});}
+}
+
+/* ---------- Start ---------- */
+renderLegend();renderPick();
+game=restoreGame();
+if(game){showGame();Tools.diag.log('restored',{id:game.id});}
+Tools.onLang(()=>{renderPick();if(game)render();});
+Tools.diag.info(()=>({view:game?'game':'pick',puzzle:game?game.id:null,laser:game?game.laser:null,won:game?game.won:null,
+  onBoard:game?game.pieces.length:0,inSupply:game?game.tray.length:0,solved:Object.keys(progress.solved).length,
+  sound:settings.sound,vibrate:settings.vibrate,audio:ac?ac.state:'not created',canVibrate:!!navigator.vibrate}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const needGame=()=>{if(!game)throw new Error('No puzzle is open – start one with start_puzzle.');};
+const cellArg=s=>{const c=L.parseCell(s);if(!c)throw new Error(`"${s}" is not a square – use A1 to E5.`);return c;};
+function board(){
+  if(!game)return {puzzle:null};
+  const ev=L.evaluate(game.pieces,game.level?game.level.t:0,game.tray.length);
+  return {
+    puzzle:game.id,difficulty:game.level?game.level.d:'free',targets_to_light:game.level?game.level.t:null,
+    laser_on:game.laser,solved:game.won,
+    pieces:game.pieces.map((p,i)=>({square:L.cellName(p.x,p.y),type:p.type,rotation:p.r,movable:canMove(p),turnable:canTurn(p),
+      must_light:p.must,lit:game.laser&&ev.trace.lit.has(i)})),
+    supply:game.tray.map((p,i)=>({index:i,type:p.type,must_light:p.must})),
+    beam:game.laser?{targets_lit:ev.lit,problems:game.level?ev.issues.map(x=>{
+      const o={problem:x.k};if(x.i!=null)o.square=cellOf(x.i);if(x.n!=null)o.pieces_left=x.n;if(x.lit!=null){o.lit=x.lit;o.targets=x.targets;}return o;}):[]}:null
+  };
+}
+const RULES='Rules: 5x5 board, squares A1 (top left) to E5, columns A-E, rows 1-5 top to bottom. Rotation 0-3 = quarter turns clockwise. '+
+  'Laser at rotation 0 shoots right. Target mirror at rotation 0: mirror from top left to bottom right facing up/right, target on its left side, its bottom side blocks. '+
+  'Beam splitter and double mirror at rotation 0 lie on the same diagonal. Checkpoint at rotation 0 lets the beam pass left/right. Blocker lets the beam pass.';
+Tools.mcp.register({
+  name:'list_puzzles',title:'List the puzzles',label:'mcp.list',readOnly:true,
+  description:'Lists the 40 puzzles with id, difficulty (easy, medium, hard, expert), number in the difficulty, targets to light, pieces to add and whether it was solved in this browser.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({puzzles:LEVELS.map(l=>({id:l.id,difficulty:l.d,number:LEVELS.filter(o=>o.d===l.d).indexOf(l)+1,targets:l.t,
+    pieces_to_add:l.a.map(a=>LETTER[a[0]]),solved:!!progress.solved[l.id]}))})
+});
+Tools.mcp.register({
+  name:'start_puzzle',title:'Start a puzzle',label:'mcp.start',
+  description:'Opens a puzzle in the app (id from list_puzzles, or "free" for free play with every piece), replacing the open one, laser off. Returns the board like get_board. '+RULES,
+  inputSchema:{type:'object',properties:{puzzle:{type:'string',enum:LEVELS.map(l=>l.id).concat('free'),description:'Puzzle id or "free".'}},required:['puzzle'],additionalProperties:false},
+  execute:({puzzle})=>{start(puzzle);return board();}
+});
+Tools.mcp.register({
+  name:'get_board',title:'Read the board',label:'mcp.board',readOnly:true,
+  description:'Reads the open puzzle: pieces on the board (square, type, rotation, movable, turnable, must_light, lit), the supply and – while the laser is on – the targets lit and what is still wrong. '+RULES,
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:board
+});
+Tools.mcp.register({
+  name:'place_piece',title:'Place a piece from the supply',label:'mcp.place',
+  description:'Puts a piece from the supply (index from get_board) onto a free square with the given rotation. Returns the board.',
+  inputSchema:{type:'object',properties:{
+    supply_index:{type:'integer',minimum:0,maximum:15,description:'Index of the piece in the supply.'},
+    square:{type:'string',maxLength:2,description:'Free square, A1 to E5.'},
+    rotation:{type:'integer',minimum:0,maximum:3,description:'Quarter turns clockwise. Default: 0.'}
+  },required:['supply_index','square'],additionalProperties:false},
+  execute:({supply_index,square,rotation})=>{
+    needGame();
+    if(game.won)throw new Error('The puzzle is already solved.');
+    if(supply_index>=game.tray.length)throw new Error('There is no piece with this index in the supply.');
+    const c=cellArg(square);
+    if(pieceAt(c.x,c.y)>=0)throw new Error(`Square ${square} is taken.`);
+    placeFromTray(supply_index,c.x,c.y,rotation||0);selected=-1;
+    changed({k:'mcp place',cell:L.cellName(c.x,c.y)});
+    return board();
+  }
+});
+Tools.mcp.register({
+  name:'rotate_piece',title:'Turn a piece',label:'mcp.rotate',
+  description:'Sets the rotation of a turnable piece (your own pieces and fixed ones marked turnable) on a square. Returns the board.',
+  inputSchema:{type:'object',properties:{
+    square:{type:'string',maxLength:2,description:'Square of the piece, A1 to E5.'},
+    rotation:{type:'integer',minimum:0,maximum:3,description:'Quarter turns clockwise.'}
+  },required:['square','rotation'],additionalProperties:false},
+  execute:({square,rotation})=>{
+    needGame();
+    const c=cellArg(square),i=pieceAt(c.x,c.y);
+    if(i<0)throw new Error(`There is no piece on ${square}.`);
+    if(game.won)throw new Error('The puzzle is already solved.');
+    if(!turn(i,rotation))throw new Error(`The piece on ${square} cannot be turned.`);
+    changed({k:'mcp turn',cell:square});
+    return board();
+  }
+});
+Tools.mcp.register({
+  name:'take_back_piece',title:'Put a piece back into the supply',label:'mcp.back',
+  description:'Takes one of your own pieces off the board and puts it back into the supply (fixed pieces stay). Returns the board.',
+  inputSchema:{type:'object',properties:{square:{type:'string',maxLength:2,description:'Square of the piece, A1 to E5.'}},required:['square'],additionalProperties:false},
+  execute:({square})=>{
+    needGame();
+    const c=cellArg(square),i=pieceAt(c.x,c.y);
+    if(i<0)throw new Error(`There is no piece on ${square}.`);
+    if(!takeBack(i))throw new Error(`The piece on ${square} cannot be taken back.`);
+    changed({k:'mcp back',cell:square});
+    return board();
+  }
+});
+Tools.mcp.register({
+  name:'switch_laser',title:'Switch the laser on or off',label:'mcp.laser',
+  description:'Switches the laser on (default) or off. With the laser on the app checks the rules; returns the board with targets lit, problems and solved.',
+  inputSchema:{type:'object',properties:{on:{type:'boolean',description:'true: on (default), false: off.'}},additionalProperties:false},
+  execute:({on})=>{needGame();game.laser=on!==false;changed({k:'mcp laser',on:game.laser});return board();}
+});
+})();
+</script>
+</body>
+</html>

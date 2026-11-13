@@ -2195,6 +2195,65 @@ test.describe('plush-puzzle tools', () => {
   });
 });
 
+test.describe('laser-mirrors tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/laser-mirrors/');
+  });
+
+  test('list_puzzles, start_puzzle and get_board read the puzzle', async ({ page }) => {
+    let r = await call(page, 'laser_mirrors_list_puzzles', {});
+    expect(r.result.puzzles).toHaveLength(40);
+    // e01: laser A4 shooting down, marked target B5, blocker A2; a double mirror to add
+    expect(r.result.puzzles[0]).toEqual({ id: 'e01', difficulty: 'easy', number: 1, targets: 1, pieces_to_add: ['double'], solved: false });
+    expect(await call(page, 'laser_mirrors_get_board', {})).toEqual({ ok: true, result: { puzzle: null } });
+    r = await call(page, 'laser_mirrors_start_puzzle', { puzzle: 'e01' });
+    expect(r.result).toEqual({
+      puzzle: 'e01', difficulty: 'easy', targets_to_light: 1, laser_on: false, solved: false,
+      pieces: [
+        { square: 'A4', type: 'laser', rotation: 1, movable: false, turnable: false, must_light: false, lit: false },
+        { square: 'B5', type: 'target', rotation: 0, movable: false, turnable: false, must_light: true, lit: false },
+        { square: 'A2', type: 'block', rotation: 0, movable: false, turnable: false, must_light: false, lit: false },
+      ],
+      supply: [{ index: 0, type: 'double', must_light: false }], beam: null,
+    });
+    await expect(page.locator('#levelName')).toHaveText('Leicht 1');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Rätsel gestartet');
+  });
+
+  test('place, turn, take back and switch the laser until solved', async ({ page }) => {
+    await call(page, 'laser_mirrors_start_puzzle', { puzzle: 'e01' });
+    let r = await call(page, 'laser_mirrors_switch_laser', {});
+    expect(r.result.beam).toEqual({ targets_lit: 0, problems: [{ problem: 'count', lit: 0, targets: 1 }, { problem: 'tray', pieces_left: 1 }, { problem: 'untouched', square: 'B5' }, { problem: 'must', square: 'B5' }] });
+    r = await call(page, 'laser_mirrors_place_piece', { supply_index: 0, square: 'A5', rotation: 1 });
+    expect(r.result.solved).toBe(false);
+    expect(r.result.pieces[3]).toEqual({ square: 'A5', type: 'double', rotation: 1, movable: true, turnable: true, must_light: false, lit: false });
+    await expect(page.locator('.cell[data-x="0"][data-y="4"]')).toHaveClass(/own/);
+    r = await call(page, 'laser_mirrors_take_back_piece', { square: 'A5' });
+    expect(r.result.supply).toHaveLength(1);
+    r = await call(page, 'laser_mirrors_place_piece', { supply_index: 0, square: 'A5' });
+    // A double mirror at rotation 0 ("\") turns the beam coming down to the right, onto B5's target side
+    expect(r.result).toMatchObject({ solved: true, beam: { targets_lit: 1, problems: [] } });
+    expect(r.result.pieces[1].lit).toBe(true);
+    await expect(page.locator('#status')).toHaveText('🎉 Geschafft! Alle Ziele leuchten.');
+    expect((await call(page, 'laser_mirrors_rotate_piece', { square: 'A5', rotation: 1 })).error).toBe('The puzzle is already solved.');
+    r = await call(page, 'laser_mirrors_list_puzzles', {});
+    expect(r.result.puzzles[0].solved).toBe(true);
+  });
+
+  test('invalid input is rejected', async ({ page }) => {
+    expect(await call(page, 'laser_mirrors_place_piece', { supply_index: 0, square: 'A1' })).toEqual({ ok: false, error: 'No puzzle is open – start one with start_puzzle.' });
+    await call(page, 'laser_mirrors_start_puzzle', { puzzle: 'e01' });
+    expect((await call(page, 'laser_mirrors_place_piece', { supply_index: 0, square: 'F9' })).error).toBe('"F9" is not a square – use A1 to E5.');
+    expect((await call(page, 'laser_mirrors_place_piece', { supply_index: 0, square: 'B5' })).error).toBe('Square B5 is taken.');
+    expect((await call(page, 'laser_mirrors_place_piece', { supply_index: 3, square: 'C3' })).error).toBe('There is no piece with this index in the supply.');
+    expect((await call(page, 'laser_mirrors_rotate_piece', { square: 'B5', rotation: 1 })).error).toBe('The piece on B5 cannot be turned.');
+    expect((await call(page, 'laser_mirrors_take_back_piece', { square: 'B5' })).error).toBe('The piece on B5 cannot be taken back.');
+    expect((await call(page, 'laser_mirrors_take_back_piece', { square: 'C3' })).error).toBe('There is no piece on C3.');
+    expect((await call(page, 'laser_mirrors_start_puzzle', { puzzle: 'z99' })).ok).toBe(false);
+  });
+});
+
 test.describe('reaction-game tools', () => {
   test('get_scores reads settings, last game and best scores; set_game sets up the next game', async ({ page }) => {
     const last = { mode: 'lamp', dur: 15, size: 3, points: 7, hits: 8, wrong: 1, missed: 0, avg: 412, fastest: 250, at: '2026-05-01T09:00:00.000Z' };
