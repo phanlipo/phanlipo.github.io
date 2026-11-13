@@ -38,7 +38,7 @@ test('overview: tiles open a tool, back returns, the last tool reopens', async (
   await expect(page.locator('#overview')).toBeVisible();
   await expect(page.locator('#toolbar')).toBeHidden();
   await expect(page.locator('.panel:visible')).toHaveCount(0);
-  await expect(page.locator('#overview .tile')).toHaveCount(12);
+  await expect(page.locator('#overview .tile')).toHaveCount(13);
   await page.locator('#overview').getByRole('button', { name: 'Wasserwaage' }).click();
   await expect(page.locator('#p-level')).toBeVisible();
   await expect(page.locator('#overview')).toBeHidden();
@@ -100,7 +100,7 @@ test('tabs switch panels, support arrow keys and are remembered', async ({ page 
 for (const scheme of ['light', 'dark']) {
   test(`every tab has no accessibility violations (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
-    for (const name of ['Kompass', 'Wasserwaage', 'Beschleunigung', 'Vibrometer', 'Schall', 'Stimmgerät', 'Tacho', 'Schritte', 'Tongenerator', 'Lampe & Morse', 'Puls', 'Klatsch-Stoppuhr']) {
+    for (const name of ['Kompass', 'Wasserwaage', 'Beschleunigung', 'Vibrometer', 'Schall', 'Spektrogramm', 'Stimmgerät', 'Tacho', 'Schritte', 'Tongenerator', 'Lampe & Morse', 'Puls', 'Klatsch-Stoppuhr']) {
       await tab(page, name);
       const { violations } = await axe(page).analyze();
       expect(violations.map(v => `${name}: ${v.id} → ${v.nodes.map(n => n.target.join(' ')).join(' | ')}`)).toEqual([]);
@@ -385,7 +385,8 @@ async function fakeCamera(page, { pulseHz = 0, cams = null, caps = {}, bright = 
 async function download(page, click) {
   const [dl] = await Promise.all([page.waitForEvent('download'), click()]);
   const { readFileSync } = await import('node:fs');
-  return { name: dl.suggestedFilename(), text: readFileSync(await dl.path(), 'utf8').replace(/^\ufeff/, '') };
+  const buf = readFileSync(await dl.path());
+  return { name: dl.suggestedFilename(), buf, text: buf.toString('utf8').replace(/^\ufeff/, '') };
 }
 
 test('compass: geographic north and a stored bearing', async ({ page }) => {
@@ -512,6 +513,73 @@ test.describe('sound extensions', () => {
       expect(l).toMatch(/^\d\d:\d\d:\d\d;\d+,\d$/);
       expect(num(l.split(';')[1])).toBeCloseTo(20 * Math.log10(0.5 / Math.SQRT2) + 100, 0);
     }
+  });
+});
+
+test.describe('spectrogram', () => {
+  // Sample rate of the fake microphone (the AudioContext of the page uses the same)
+  const rate = page => page.evaluate(() => window.__mic.ctx.sampleRate);
+
+  test('peak frequency and level of a 1 kHz sine; harmonics of a sawtooth', async ({ page }) => {
+    await fakeMic(page, 1000, 0.5);
+    await tab(page, 'Spektrogramm');
+    await running(page, 'spectro');
+    // Amplitude 0,5 → 20·log10(0,5) = −6,02 dBFS
+    await expect.poll(async () => Math.abs(num(await text(page, 'spPeak')) - 1000), { timeout: 8000 }).toBeLessThan(2);
+    await expect.poll(async () => Math.abs(num(await text(page, 'spLevel')) - 20 * Math.log10(0.5))).toBeLessThan(1.5);
+    const sr = await rate(page);
+    await expect(page.locator('#spRes')).toHaveText(new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(sr / 4096));
+    // Sawtooth 220 Hz: harmonics n·220 Hz with amplitude 1/n – six strongest are 220 … 1320 Hz
+    await page.evaluate(() => { window.__mic.osc.type = 'sawtooth'; window.__mic.osc.frequency.value = 220; });
+    const rows = page.locator('#spPeaks tr');
+    await expect.poll(async () => (await rows.allTextContents()).map(r => r.match(/×([\d,]+)$/)?.[1]).join(' '), { timeout: 8000 })
+      .toBe('1,00 2,00 3,00 4,00 5,00 6,00');
+    const f = (await rows.locator('td:first-child').allTextContents()).map(num);
+    f.forEach((v, i) => expect(Math.abs(v - 220 * (i + 1))).toBeLessThan(2));
+    // Level of the 2nd harmonic is 20·log10(1/2) ≈ −6 dB below the fundamental
+    const db = (await rows.locator('td:nth-child(2)').allTextContents()).map(num);
+    expect(Math.abs(db[0] - db[1] - 20 * Math.log10(2))).toBeLessThan(1.5);
+  });
+
+  test('stop freezes the image; tapping reads frequency and time; image saved as PNG', async ({ page }) => {
+    await fakeMic(page, 2000, 0.5);
+    await tab(page, 'Spektrogramm');
+    await running(page, 'spectro');
+    await expect.poll(async () => Math.abs(num(await text(page, 'spPeak')) - 2000), { timeout: 8000 }).toBeLessThan(3);
+    await page.waitForFunction(() => document.querySelectorAll('#spPeaks tr').length > 0);
+    await page.locator('[data-start="spectro"]').click();
+    await expect(page.locator('[data-start="spectro"]')).toHaveText('Starten');
+    await expect(page.locator('#spPng')).toBeEnabled();
+    // Logarithmic axis from 20 Hz to 5 kHz: 2 kHz lies at log(5000/2000)/log(5000/20) of the height
+    const box = await page.locator('#spAxes').boundingBox();
+    const y = Math.log(5000 / 2000) / Math.log(5000 / 20);
+    await page.locator('#spAxes').click({ position: { x: box.width - 3, y: y * box.height } });
+    const cur = await text(page, 'spCursor');
+    expect(cur).toMatch(/^[\d.]+ Hz · [-−]?0,\d s · [-−]?\d+ dB$/);
+    expect(Math.abs(num(cur.split(' Hz')[0]) - 2000)).toBeLessThan(2000 * 0.03);
+    // The level under the cursor is the sine itself (−6 dBFS, scalloping of the Hann window at most −1,4 dB)
+    expect(num(cur.split('·')[2])).toBeGreaterThan(-9);
+    // Linear axis: the cursor keeps its frequency
+    await page.getByRole('button', { name: 'linear' }).click();
+    await expect(page.locator('#spCursor')).toHaveText(cur);
+    const { name, buf } = await download(page, () => page.locator('#spPng').click());
+    expect(name).toMatch(/^spektrogramm-\d{4}-\d\d-\d\d-\d{4}\.png$/);
+    expect(buf.subarray(1, 4).toString()).toBe('PNG');
+    // Settings are kept
+    await page.locator('#spFft').selectOption('8192');
+    await page.locator('#spWin').selectOption('blackman');
+    await page.reload();
+    await expect(page.locator('#p-spectro')).toBeVisible();
+    await expect(page.locator('#spFft')).toHaveValue('8192');
+    await expect(page.locator('#spWin')).toHaveValue('blackman');
+    await expect(page.getByRole('button', { name: 'linear' })).toHaveAttribute('aria-pressed', 'true');
+    await running(page, 'spectro');
+    // Started without a tap, the fake microphone stays silent (autoplay rules): stop and start by tap
+    await page.locator('[data-start="spectro"]').click();
+    await page.locator('[data-start="spectro"]').click();
+    await running(page, 'spectro');
+    await expect.poll(async () => Math.abs(num(await text(page, 'spPeak')) - 2000), { timeout: 8000 }).toBeLessThan(2);
+    await expect(page.locator('#spRes')).toHaveText(new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(await rate(page) / 8192));
   });
 });
 
