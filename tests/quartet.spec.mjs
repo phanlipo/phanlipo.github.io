@@ -279,6 +279,9 @@ test.describe('against the computer', () => {
     const shown = page.locator('.reveal .mine');
     await expect(shown.locator('.mine-h')).toHaveText('Deine Karte');
     await expect(shown.locator('.cname')).toHaveText(name);
+    // the small card keeps the picture area (emoji without own picture) and the card text
+    await expect(shown.locator('.pic')).toBeVisible();
+    await expect(shown.locator('.ctext')).toBeVisible();
     await expect(page.locator('.cmp .row-btn').first()).toHaveAttribute('aria-pressed', 'true');
     const other = page.locator('.cmp li').nth(1);
     const otherName = await other.locator('.who span').textContent();
