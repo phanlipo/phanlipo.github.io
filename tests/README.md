@@ -10,7 +10,7 @@ Einen Teil lokal nachstellen: `npx playwright test --shard=2/3`.
 ```sh
 npm install                          # einmalig: Playwright, axe-core, bwip-js
 npx playwright install chromium      # einmalig: Browser
-npm test                             # alle Tests
+npm test                             # alle Tests (dauert lokal lange – läuft bei jedem PR in CI)
 npx playwright test tests/dice-coin.spec.mjs   # nur eine Datei
 npx playwright test -g "offline"     # nur Tests, deren Name passt
 npm run test:app -- pdf-viewer       # nur eine App: ihre Tests + alle allgemeinen Prüfungen, die sie betreffen
