@@ -212,3 +212,44 @@ test.describe('English', () => {
     await expect(page.locator('footer')).toContainText('“QR Code” is a registered trademark of DENSO WAVE INCORPORATED');
   });
 });
+
+test('contact (vCard): scannable, page link and history open it again', async ({ page }) => {
+  await page.click('[data-type="contact"]');
+  await expect(page.locator('#empty')).toHaveText('Kontaktdaten eingeben – der QR-Code erscheint hier.');
+  await page.fill('#cN', 'Jörg van der Berg');
+  await page.fill('#cOrg', 'Bau; Partner');
+  await page.fill('#cEmail', 'joerg@example.com');
+  await page.fill('#cUrl', 'example.com/jb');
+  // Written out by hand (vCard 3.0): family name = last word, ";" escaped, https:// added
+  const vcard = ['BEGIN:VCARD', 'VERSION:3.0', 'N:Berg;Jörg van der;;;', 'FN:Jörg van der Berg', 'ORG:Bau\\; Partner',
+    'EMAIL;TYPE=INTERNET:joerg@example.com', 'URL:https://example.com/jb', 'END:VCARD'].join('\r\n');
+  expect((await decode(page)).text).toBe(vcard);
+  await expect(page.locator('#qr')).toHaveAttribute('aria-label', 'QR-Code mit dem Kontakt „Jörg van der Berg“');
+  await page.click('#btnKeep');
+  await expect(histTexts(page)).resolves.toEqual(['Jörg van der Berg']);
+  await expect(page.locator('#hist .meta').first()).toContainText('Kontakt');
+
+  // Page link: opens exactly this contact
+  const link = await page.inputValue('#pageLink');
+  await page.click('[data-type="text"]');
+  await page.goto(link);
+  await expect(page.locator('[data-type="contact"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#cOrg')).toHaveValue('Bau; Partner');
+  expect((await decode(page)).text).toBe(vcard);
+  // History entry
+  await page.click('[data-type="text"]');
+  await page.locator('#hist .open').first().click();
+  await expect(page.locator('#cUrl')).toHaveValue('https://example.com/jb');
+  expect((await decode(page)).text).toBe(vcard);
+});
+
+test('page link with a vCard from elsewhere (folded lines, 4.0, several values) is read', async ({ page }) => {
+  const foreign = 'BEGIN:VCARD\r\nVERSION:4.0\r\nN:Doe;Jane;;Dr.;\r\nORG:Acme;Sales\r\nTEL;TYPE=cell:tel:+1-555-0100\r\nTEL;TYPE=work:+1-555-0199\r\n'
+    + 'EMAIL:jane@exam\r\n ple.com\r\nADR;TYPE=home:;;1 Main St;Springfield;;12345;USA\r\nEND:VCARD';
+  await page.goto(URL_ + '?q=' + encodeURIComponent(foreign));
+  await expect(page.locator('#cN')).toHaveValue('Dr. Jane Doe');
+  await expect(page.locator('#cOrg')).toHaveValue('Acme, Sales');
+  await expect(page.locator('#cTel')).toHaveValue('+1-555-0100');
+  await expect(page.locator('#cEmail')).toHaveValue('jane@example.com');
+  await expect(page.locator('#cAdr')).toHaveValue('1 Main St, Springfield, 12345, USA');
+});

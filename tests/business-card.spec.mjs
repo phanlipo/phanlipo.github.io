@@ -464,3 +464,79 @@ test('a photo opened with the app becomes a picture on the card', async ({ page 
   await expect(item(page, 'Bild')).toBeVisible();
   await expect(page.locator('#tplStatus')).toHaveText('');
 });
+
+/* ---------- Contact as a QR code ---------- */
+
+/** Reads the QR code in a canvas on the page (or the top square of PNG bytes) with ZXing-JS */
+async function readQr(page, { selector, buf } = {}) {
+  if (!(await page.evaluate(() => !!window.ZXing)))
+    await page.addScriptTag({ url: new URL('/assets/vendor/zxing-library/index.min.js', page.url()).href });
+  return page.evaluate(async ({ selector, b64 }) => {
+    const Z = window.ZXing;
+    let src = document.querySelector(selector);
+    if (b64) { src = new Image(); src.src = 'data:image/png;base64,' + b64; await src.decode(); }
+    const side = src.width;   // the code is the top square, the name is printed below it
+    const c = document.createElement('canvas');
+    c.width = c.height = side;
+    c.getContext('2d').drawImage(src, 0, 0, side, side, 0, 0, side, side);
+    const bitmap = new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(c)));
+    return new Z.QRCodeReader().decode(bitmap, new Map([[Z.DecodeHintType.CHARACTER_SET, 'UTF-8'], [Z.DecodeHintType.PURE_BARCODE, true]])).getText();
+  }, { selector, b64: buf ? buf.toString('base64') : null });
+}
+// Written out by hand from vCard 3.0: N = family;given, "," escaped in values
+const ERIKA = [
+  'BEGIN:VCARD', 'VERSION:3.0', 'N:Mustermann;Erika;;;', 'FN:Erika Mustermann', 'ORG:Muster & Partner', 'TITLE:Produktdesignerin',
+  'TEL;TYPE=WORK,VOICE:+49 30 1234567', 'EMAIL;TYPE=INTERNET:erika@example.com', 'URL:https://www.example.com',
+  'ADR;TYPE=WORK:;;Musterstraße 1\\, 12345 Berlin;;;;', 'END:VCARD',
+];
+
+test('contact QR code from the card texts: scannable vCard, changeable, saved as an image, put on the card', async ({ page }) => {
+  await page.click('#btnContact');
+  await expect(page.locator('#contactDlg')).toBeVisible();
+  await expect(page.locator('#contactName')).toHaveText('Erika Mustermann · Muster & Partner');
+  expect((await readQr(page, { selector: '#contactQr' })).split('\r\n')).toEqual(ERIKA);
+  // Same text as link into the QR Code Generator
+  const href = await page.locator('#contactQrApp').getAttribute('href');
+  expect(decodeURIComponent(href.replace('../qr-code/?q=', ''))).toBe(ERIKA.join('\r\n'));
+
+  // Changing a detail is kept (also after a reload) until "take from the card again"
+  await page.click('#contactEdit summary');
+  await page.fill('[data-ct="tel"]', '+49 170 555');
+  expect(await readQr(page, { selector: '#contactQr' })).toContain('TEL;TYPE=WORK,VOICE:+49 170 555\r\n');
+  await page.reload();
+  await page.click('#btnContact');
+  expect(await readQr(page, { selector: '#contactQr' })).toContain('TEL;TYPE=WORK,VOICE:+49 170 555\r\n');
+
+  // Image: code with the name below, scannable
+  const { name, buf } = await download(page, '#contactSave');
+  expect(name).toBe('kontakt-erika-mustermann.png');
+  const img = await png(page, buf);
+  expect(img.h).toBeGreaterThan(img.w);
+  expect(await readQr(page, { buf })).toContain('FN:Erika Mustermann\r\n');
+
+  await page.click('#contactEdit summary').catch(() => {});
+  await page.click('#contactReset');
+  expect((await readQr(page, { selector: '#contactQr' })).split('\r\n')).toEqual(ERIKA);
+  await page.click('#contactPlace');
+  await expect(page.locator('#contactDlg')).toBeHidden();
+  await saved(page, d => d.sides.front.els.some(e => e.type === 'qr'));
+  const qr = (await els(page)).find(e => e.type === 'qr');
+  expect(qr).toMatchObject({ mode: 'vcard', vc: { n: 'Erika Mustermann', tel: '+49 30 1234567' } });
+  // A vCard on the card is now the source of the contact QR code
+  await expect(item(page, 'QR-Code · vCard')).toHaveAttribute('aria-pressed', 'true');
+  await page.fill('#vcN', 'Erika M.');
+  await page.click('#btnContact');
+  await expect(page.locator('#contactName')).toHaveText('Erika M. · Muster & Partner');
+});
+
+test('contact QR code opens in the QR Code Generator with the same content', async ({ page }) => {
+  await page.click('#btnContact');
+  const href = await page.locator('#contactQrApp').getAttribute('href');
+  // Another app on the same origin: it may only find its own keys
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(new URL(href, page.url()).href);
+  await expect(page.locator('[data-type="contact"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#cN')).toHaveValue('Erika Mustermann');
+  await expect(page.locator('#cAdr')).toHaveValue('Musterstraße 1, 12345 Berlin');
+  expect((await readQr(page, { selector: '#qr' })).split('\r\n')).toEqual(ERIKA);
+});
