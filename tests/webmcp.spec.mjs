@@ -2677,3 +2677,37 @@ test.describe('business-card tools', () => {
     expect((await call(page, 'business_card_add_text', { text: '' })).error).toBe('input.text must have at least 1 characters');
   });
 });
+
+test.describe('tic-tac-toe tools', () => {
+  test('make_move plays on the board, the computer answers, get_game reads it back', async ({ page }) => {
+    await open(page, '/tic-tac-toe/');
+    let r = await call(page, 'tic_tac_toe_make_move', { square: 5 });
+    expect(r.ok).toBe(true);
+    expect(r.result.board[1][1]).toBe('x');
+    expect(r.result.to_move).toBe('o');
+    await expect(page.locator('#board .cell[data-i="4"]')).toHaveAttribute('data-v', 'x');
+    expect((await call(page, 'tic_tac_toe_make_move', { square: 5 })).error).toMatch(/already taken/);
+    expect((await call(page, 'tic_tac_toe_make_move', { square: 10 })).ok).toBe(false);
+    for (const s of [1, 6, 2, 9]) await call(page, 'tic_tac_toe_make_move', { square: s });
+    r = await call(page, 'tic_tac_toe_make_move', { square: 3 });
+    expect(r.result.status).toBe('o_wins');
+    expect(r.result.winning_line).toEqual([1, 2, 3]);
+    expect(r.result.score).toEqual({ x: 0, o: 1, draws: 0 });
+    expect((await call(page, 'tic_tac_toe_make_move', { square: 9 })).error).toMatch(/round is over/);
+    const g = await call(page, 'tic_tac_toe_get_game', {});
+    expect(g.result.status).toBe('o_wins');
+    r = await call(page, 'tic_tac_toe_new_round', {});
+    expect(r.result.status).toBe('playing');
+    expect(r.result.starter).toBe('o');
+    expect(r.result.score.o).toBe(1);
+  });
+
+  test('against the computer it replies within the same call', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('tic-tac-toe.state.v1', JSON.stringify({ opp: 'cpu', level: 'hard' })));
+    await open(page, '/tic-tac-toe/');
+    const r = await call(page, 'tic_tac_toe_make_move', { square: 1 });
+    expect(r.result.opponent).toBe('computer');
+    expect(r.result.board[1][1]).toBe('o');
+    expect(r.result.to_move).toBe('x');
+  });
+});
