@@ -283,6 +283,22 @@ test.describe('qr-code tools', () => {
     expect(result.entries[1]).toMatchObject({ kind: 'wifi', network: 'Heim' });
     expect(JSON.stringify(result)).not.toContain('sehr-geheim');
   });
+
+  test('create_contact_qr_code: vCard shown in the app, in the history as a contact', async ({ page }) => {
+    const r = await call(page, 'qr_code_create_contact_qr_code', { name: 'Erika Mustermann', phone: '+49 30 1234567', website: 'example.com' });
+    expect(r.ok).toBe(true);
+    // Written out by hand (vCard 3.0)
+    expect(r.result.vcard).toBe(['BEGIN:VCARD', 'VERSION:3.0', 'N:Mustermann;Erika;;;', 'FN:Erika Mustermann',
+      'TEL;TYPE=WORK,VOICE:+49 30 1234567', 'URL:https://example.com', 'END:VCARD'].join('\r\n'));
+    expect(new URL(r.result.page_link).searchParams.get('q')).toBe(r.result.vcard);
+    await expect(page.locator('[data-type="contact"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#cTel')).toHaveValue('+49 30 1234567');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Kontakt-QR-Code erstellt');
+    await page.click('#btnKeep');
+    const { result } = await call(page, 'qr_code_get_history', {});
+    expect(result.entries[0]).toMatchObject({ kind: 'contact', name: 'Erika Mustermann', content: r.result.vcard });
+    expect(await call(page, 'qr_code_create_contact_qr_code', { name: '' })).toEqual({ ok: false, error: 'input.name must have at least 1 characters' });
+  });
 });
 
 test.describe('rock-paper-scissors tools', () => {
