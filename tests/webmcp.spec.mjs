@@ -2638,6 +2638,46 @@ test.describe('video-analysis tools', () => {
   });
 });
 
+test.describe('business-card tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/business-card/');
+  });
+
+  test('get_design reads the card; add_text and update_text change it visibly', async ({ page }) => {
+    const d = (await call(page, 'business_card_get_design', {})).result;
+    expect(d).toMatchObject({ width_mm: 85, height_mm: 55, orientation: 'landscape', shown_side: 'front', cards_per_a4_page: 10, back_is_printed: true });
+    expect(d.sides.front.elements.map(e => e.type)).toEqual(['rect', 'text', 'text', 'line', 'text', 'text']);
+    expect(d.sides.back.background).toBe('#0f766e');
+    const name = d.sides.front.elements.find(e => e.text === 'Erika Mustermann');
+    expect(name).toMatchObject({ size_pt: 13, bold: true, align: 'left' });
+
+    const { ok, result } = await call(page, 'business_card_add_text', { text: 'Termin nach Vereinbarung', side: 'back', size_pt: 7, color: '#FFFFFF' });
+    expect(ok).toBe(true);
+    // Centred on the card: left + width / 2 = 42.5 mm (rounded to 0.1)
+    expect(Math.abs(result.x_mm + result.width_mm / 2 - 42.5)).toBeLessThanOrEqual(0.1);
+    expect(result).toMatchObject({ type: 'text', size_pt: 7, color: '#ffffff' });
+    await expect(page.locator('input[name="side"][value="back"]')).toBeChecked();
+    await expect(page.locator('#pText')).toHaveValue('Termin nach Vereinbarung');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Text hinzugefügt');
+
+    const upd = await call(page, 'business_card_update_text', { id: name.id, text: 'Dr. Erika Mustermann', size_pt: 12 });
+    expect(upd.result).toMatchObject({ text: 'Dr. Erika Mustermann', size_pt: 12, x_mm: name.x_mm });
+    await expect(page.locator('input[name="side"][value="front"]')).toBeChecked();
+    await expect(page.locator('#elList button', { hasText: 'Dr. Erika Mustermann' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('set_background and wrong input', async ({ page }) => {
+    expect((await call(page, 'business_card_set_background', { color: '#112233', side: 'front' })).result).toEqual({ side: 'front', background: '#112233' });
+    await expect(page.locator('#bgColor')).toHaveValue('#112233');
+    expect(await call(page, 'business_card_set_background', { color: 'blau100' })).toEqual({ ok: false, error: 'color must be a hex colour like #1f2937' });
+    expect(await call(page, 'business_card_update_text', { id: 'nope' })).toEqual({ ok: false, error: 'no element with id nope' });
+    const line = (await call(page, 'business_card_get_design', {})).result.sides.front.elements.find(e => e.type === 'line');
+    expect((await call(page, 'business_card_update_text', { id: line.id, text: 'x' })).error).toBe(`element ${line.id} is a line, not a text`);
+    expect((await call(page, 'business_card_add_text', { text: '' })).error).toBe('input.text must have at least 1 characters');
+  });
+});
+
 test.describe('tic-tac-toe tools', () => {
   test('make_move plays on the board, the computer answers, get_game reads it back', async ({ page }) => {
     await open(page, '/tic-tac-toe/');
