@@ -6,20 +6,20 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Dienstplan</title>
-<meta name="description" content="Dienst- und Raumplan je Kalenderwoche, z. B. für die Arztpraxis: Arbeitszeiten (auch vormittags und nachmittags), Abwesenheiten auch stundenweise, Räume – mit Prüfung, dass jede Person im Dienst genau einem Raum zugeteilt ist.">
+<meta name="description" content="Dienst- und Raumplan je Kalenderwoche, z. B. für die Arztpraxis: Arbeitszeiten (auch vormittags und nachmittags), Abwesenheiten auch stundenweise, Räume je Arbeitszeit – mit Prüfung, dass jede Person zu jeder Zeit genau einem Raum zugeteilt ist.">
 <meta name="tool:tags" content="Arbeit, Werkzeug">
 <meta name="tool:features" content="Kopieren, KI-Agent">
 <meta name="tool:icon" content="calendar-user">
 <meta name="tool:color" content="#1d6f8c">
 <meta name="tool:short-name" content="Dienstplan">
 <meta name="tool:title-en" content="Duty Roster">
-<meta name="tool:description-en" content="Weekly staff and room plan, e.g. for a medical practice: working hours (also split into morning and afternoon), absences also by the hour, rooms – checks that everyone on duty is assigned to exactly one room.">
+<meta name="tool:description-en" content="Weekly staff and room plan, e.g. for a medical practice: working hours (also split into morning and afternoon), absences also by the hour, rooms per working time – checks that everyone is assigned to exactly one room at any time.">
 <meta name="tool:short-name-en" content="Roster">
 <meta name="tool:storage" content="duty-roster.">
 <meta name="tool:webmcp" content="get_week, get_staff, assign_room, add_absence">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-LfTXWx+d5j5V6rcwdSDD3E/OsktxlvJ33D5N3kF9buc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-0UZRVtlYrjBR6ppTQFsMQMbc1xzJ7j9/wBke1ifAiU4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -57,13 +57,23 @@ h3{font-size:14px;margin:14px 0 6px;color:var(--muted)}
 /* Day cards */
 #days{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr))}
 .day h2{justify-content:space-between;flex-wrap:wrap}
-.rooms{display:grid;gap:8px}
-.room{border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface-2)}
-.room-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-weight:600;margin-block-end:6px}
-.room-head .muted{font-weight:400;font-size:13px}
-.slots{display:grid;gap:6px}
-.slots select{width:100%}
-.slots select.bad{border-color:var(--err);color:var(--err)}
+.people{display:grid;gap:8px}
+/* One person on one day: name (opens the day dialog), then one room choice per working time block */
+.prow{border:1px solid var(--border);border-radius:8px;padding:6px 8px 8px;background:var(--surface-2);display:grid;gap:6px}
+.prow.bad{border-color:var(--err)}
+.pname{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;background:none;border:0;padding:4px 0;min-height:44px;color:var(--text);font:inherit;font-weight:600;text-align:start;cursor:pointer}
+.pname small{font-weight:400;color:var(--muted);font-size:13px}
+.pblk{display:grid;grid-template-columns:minmax(92px,auto) 1fr;gap:8px;align-items:center}
+.pblk .ptime{font-size:14px;font-variant-numeric:tabular-nums}
+.pblk .gone{text-decoration:line-through;color:var(--muted)}
+.pblk select{width:100%}
+.pblk select.bad{border-color:var(--err)}
+.people .chip.add{justify-self:start}
+.roomsum{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:14px}
+.roomsum li{border-inline-start:3px solid var(--border);padding-inline-start:8px}
+.roomsum li.bad{border-color:var(--err)}
+.roomsum .rn{font-weight:600}
+.roomsum .who small,.roomsum .muted{color:var(--muted);font-size:13px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-grid;text-align:start;gap:0;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:10px;padding:4px 10px;min-height:44px;cursor:pointer;font:inherit;font-size:15px;line-height:1.25;max-width:100%;overflow-wrap:anywhere}
 .chip small{color:var(--muted);font-size:12px}
@@ -184,7 +194,7 @@ legend{font-size:14px;color:var(--muted);padding-inline:4px}
   <div role="tabpanel" id="panel-rooms" aria-labelledby="tab-rooms" hidden>
     <section class="card" aria-labelledby="h-rooms">
       <h2 id="h-rooms"><span data-i18n="rooms">Räume</span> <span class="badge" id="roomCount">0</span></h2>
-      <p class="muted" data-i18n="roomsIntro">Räume oder Arbeitsplätze, z. B. Anmeldung, Labor, Sprechzimmer. „Plätze“ = wie viele Personen dort am Tag eingeteilt werden können (z. B. vormittags und nachmittags je eine).</p>
+      <p class="muted" data-i18n="roomsIntro">Räume oder Arbeitsplätze, z. B. Anmeldung, Labor, Sprechzimmer. „Plätze“ = wie viele Personen dort gleichzeitig arbeiten können. Ein Raum kann vormittags von der einen und nachmittags von einer anderen Person besetzt sein.</p>
       <ul class="list" id="roomList"></ul>
       <form class="add" id="roomForm">
         <label class="sr-only" for="roomIn" data-i18n="roomName">Name des Raums</label>
@@ -307,16 +317,17 @@ legend{font-size:14px;color:var(--muted);padding-inline:4px}
   <h3>Einrichten (einmalig)</h3>
   <ul>
     <li><b>Team:</b> Personen mit Funktion, optionalem <b>Stammraum</b> und regelmäßiger Arbeitszeit je Wochentag. Ein Tag kann aus mehreren Zeiten bestehen (<b>+ Zeit</b>), z. B. 08:00–12:00 und 15:00–18:00 – die Lücke dazwischen ist die Pause. Die App rechnet Arbeitszeit und Pause aus und warnt, wenn die Pausen unter der gesetzlichen Mindestpause liegen (Deutschland: 30 min ab mehr als 6 h, 45 min ab mehr als 9 h, gezählt werden Pausen ab 15 min), wenn länger als 6 h am Stück oder mehr als 10 h gearbeitet wird.</li>
-    <li><b>Räume:</b> Räume oder Arbeitsplätze mit der Zahl der <b>Plätze</b> – so viele Personen lassen sich dort an einem Tag einteilen (z. B. Anmeldung mit 2 Plätzen). ↑ ändert die Reihenfolge.</li>
+    <li><b>Räume:</b> Räume oder Arbeitsplätze mit der Zahl der <b>Plätze</b> – so viele Personen können dort <b>gleichzeitig</b> arbeiten (z. B. Anmeldung mit 2 Plätzen). Vormittags die eine, nachmittags eine andere Person im selben Raum braucht nur 1 Platz. ↑ ändert die Reihenfolge.</li>
     <li><b>Abwesend:</b> Urlaub, Krankheit, Fortbildung, Frei usw. für einen Zeitraum – ganztägig oder <b>nur stundenweise</b> (z. B. Urlaub am Nachmittag 13:00–18:00 an jedem Tag des Zeitraums). Ganztägig Abwesende fehlen im Wochenplan, bei stundenweiser Abwesenheit bleibt die übrige Arbeitszeit.</li>
     <li><b>Beispiel laden</b> (solange noch nichts eingetragen ist) zeigt eine kleine Praxis zum Ausprobieren.</li>
   </ul>
   <h3>Wochenplan</h3>
   <ul>
-    <li>‹ und › wechseln die Kalenderwoche. Jeder Tag zeigt die Räume mit ihren Plätzen. Zur Auswahl stehen nur Personen, die an diesem Tag im Dienst sind – mit ihren Zeiten. Unter dem Raum steht, wann er besetzt ist.</li>
-    <li><b>Prüfung:</b> Jede Person im Dienst muss genau einem Raum zugeteilt sein. Die App meldet, wer fehlt, wer doppelt eingeteilt ist und wer eingeteilt, aber abwesend oder nicht im Dienst ist. Oben steht, ob die ganze Woche stimmt. Freie Plätze sind erlaubt.</li>
+    <li>‹ und › wechseln die Kalenderwoche. Jeder Tag zeigt unter „Im Dienst“ alle, die an diesem Tag arbeiten – mit <b>einer Raumauswahl je Arbeitszeit</b>. So geht ein <b>Raumwechsel</b> (z. B. vormittags Anmeldung, nachmittags Labor), und ein Raum kann vormittags und nachmittags verschiedene Personen haben. In der Auswahl steht, wer zur selben Zeit schon im Raum ist („mit …“, „voll“). Unter „Räume“ steht, wer wann wo ist und wann der Raum besetzt ist.</li>
+    <li>Raumwechsel ohne Pause: Namen antippen und die Arbeitszeit für diesen Tag in zwei direkt aufeinanderfolgende Zeiten teilen (z. B. 08:00–13:00 und 13:00–18:00) – oder so schon in der regelmäßigen Arbeitszeit eintragen.</li>
+    <li><b>Prüfung:</b> Jede Person im Dienst muss für ihre ganze Arbeitszeit genau einem Raum zugeteilt sein, und kein Raum darf zur selben Zeit mehr Personen haben als Plätze. Die App meldet, wem für welche Zeit ein Raum fehlt, welcher Raum wann überbelegt ist und wer eingeteilt, aber abwesend oder nicht im Dienst ist. Oben steht, ob die ganze Woche stimmt. Freie Räume sind erlaubt.</li>
     <li><b>Namen antippen</b> (unter „Im Dienst“ oder „Abwesend“): andere Zeiten nur für diesen Tag, „Heute nicht im Dienst“ oder eine Abwesenheit für den Tag (ganz oder stundenweise) eintragen bzw. aufheben. <b>+ Person</b> holt jemanden dazu, der an diesem Tag sonst nicht arbeitet.</li>
-    <li><b>Automatisch auffüllen</b> teilt alle, die noch keinen Raum haben, in einen freien Platz ein: zuerst in den Raum vom selben Wochentag der Vorwoche, sonst in ihren Stammraum. Bestehende Einteilungen bleiben. <b>Woche leeren</b> entfernt nach Rückfrage alle Einteilungen und Tagesabweichungen dieser Woche.</li>
+    <li><b>Automatisch auffüllen</b> gibt jeder Arbeitszeit ohne Raum einen Raum mit freiem Platz: zuerst den Raum derselben Zeit vom selben Wochentag der Vorwoche, sonst den Stammraum. Bestehende Einteilungen bleiben. <b>Woche leeren</b> entfernt nach Rückfrage alle Einteilungen und Tagesabweichungen dieser Woche.</li>
     <li>Die Einstellungen im Menü ☰ legen fest, welche Wochentage im Plan erscheinen (Standard Mo–Fr).</li>
   </ul>
   <h3>Speichern, teilen, übertragen</h3>
@@ -334,16 +345,17 @@ legend{font-size:14px;color:var(--muted);padding-inline:4px}
   <h3>Setting up (once)</h3>
   <ul>
     <li><b>Staff:</b> people with their role, an optional <b>home room</b> and regular working hours per weekday. A day can consist of several times (<b>+ Time</b>), e.g. 08:00–12:00 and 15:00–18:00 – the gap in between is the break. The app works out working time and breaks and warns when the breaks are below the legal minimum (Germany: 30 min for more than 6 h, 45 min for more than 9 h, counting breaks of 15 min or more), when someone works more than 6 h in a row or more than 10 h.</li>
-    <li><b>Rooms:</b> rooms or workstations with their number of <b>places</b> – that many people can be assigned there on one day (e.g. reception with 2 places). ↑ changes the order.</li>
+    <li><b>Rooms:</b> rooms or workstations with their number of <b>places</b> – that many people can work there <b>at the same time</b> (e.g. reception with 2 places). One person in the morning and another in the afternoon in the same room needs only 1 place. ↑ changes the order.</li>
     <li><b>Absences:</b> holiday, sickness, training, time off etc. for a period – all day or <b>by the hour only</b> (e.g. holiday in the afternoon 13:00–18:00 on every day of the period). People absent all day are left out of the week plan; for an absence by the hour the remaining working time stays.</li>
     <li><b>Load example</b> (while nothing has been entered yet) shows a small practice to try it out.</li>
   </ul>
   <h3>Week plan</h3>
   <ul>
-    <li>‹ and › switch the calendar week. Every day shows the rooms with their places. You can only choose people who are on duty that day – with their times. Below each room you see when it is staffed.</li>
-    <li><b>Check:</b> everyone on duty must be assigned to exactly one room. The app reports who is missing, who is assigned twice and who is assigned but absent or off duty. At the top you see whether the whole week is fine. Free places are allowed.</li>
+    <li>‹ and › switch the calendar week. Under “On duty” every day lists everyone working that day – with <b>one room choice per working time</b>. That allows a <b>room change</b> (e.g. reception in the morning, lab in the afternoon), and a room can have different people in the morning and afternoon. The choice shows who is already in the room at the same time (“with …”, “full”). “Rooms” shows who is where when and when each room is staffed.</li>
+    <li>Room change without a break: tap the name and split the working time for this day into two times right after each other (e.g. 08:00–13:00 and 13:00–18:00) – or enter it like that in the regular working hours.</li>
+    <li><b>Check:</b> everyone on duty must be assigned to exactly one room for all of their working time, and no room may have more people at the same time than places. The app reports who lacks a room for which time, which room is overbooked when, and who is assigned but absent or off duty. At the top you see whether the whole week is fine. Free rooms are allowed.</li>
     <li><b>Tap a name</b> (under “On duty” or “Absent”): different times for this day only, “Off duty today”, or add or lift an absence for the day (all day or by the hour). <b>+ Person</b> adds someone who does not usually work that day.</li>
-    <li><b>Fill automatically</b> puts everyone without a room into a free place: first the room from the same weekday of the previous week, otherwise their home room. Existing assignments stay. <b>Clear week</b> removes all assignments and day changes of this week after asking.</li>
+    <li><b>Fill automatically</b> gives every working time without a room a room with a free place: first the room of the same time on the same weekday of the previous week, otherwise the home room. Existing assignments stay. <b>Clear week</b> removes all assignments and day changes of this week after asking.</li>
     <li>The settings in the menu ☰ choose which weekdays appear in the plan (default Mon–Fri).</li>
   </ul>
   <h3>Saving, sharing, transferring</h3>
@@ -367,7 +379,7 @@ legend{font-size:14px;color:var(--muted);padding-inline:4px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version a88c457c2ed2</p>
+  <p class="footer-version">Version 47f6af90a106</p>
   <!-- footer:end -->
 </footer>
 
@@ -382,17 +394,18 @@ Tools.i18n({
     wdLong1:'Montag',wdLong2:'Dienstag',wdLong3:'Mittwoch',wdLong4:'Donnerstag',wdLong5:'Freitag',wdLong6:'Samstag',wdLong7:'Sonntag',
     'abs.vac':'Urlaub','abs.sick':'Krank','abs.train':'Fortbildung','abs.off':'Frei','abs.other':'Sonstiges',
     week:'KW {n}',weekYear:'KW {n} / {y}',range:'{a} – {b}',
-    allOk:'✓ Alle {n} Tage stimmen – jede Person im Dienst ist genau einem Raum zugeteilt.',
+    allOk:'✓ Alle {n} Tage stimmen – jede Person ist für ihre ganze Arbeitszeit genau einem Raum zugeteilt.',
     someBad:'{n} Probleme in dieser Woche – siehe die markierten Tage.',oneBad:'1 Problem in dieser Woche – siehe den markierten Tag.',
     nobody:'Noch kein Team eingetragen. Lege unter „Team“ Personen und unter „Räume“ Räume an – oder lade ein Beispiel.',
     noRooms:'Noch keine Räume eingetragen – lege sie unter „Räume“ an.',
     dayOk:'✓ stimmt',dayBad:'{n} ✕',dayNone:'niemand im Dienst',
-    slot:'{room}, Platz {n}',free:'– frei –',
-    optTime:'{name} ({time})',optElse:'{name} ({time}) · schon: {rooms}',optAbsent:'{name} – abwesend',optOff:'{name} – nicht im Dienst',
+    noRoom:'– kein Raum –',roomFor:'Raum für {name}, {time}',optWith:'{room} · mit {names}',optFull:'{room} · voll ({names})',
+    optAbsent:'abwesend',optOff:'nicht im Dienst',
     covered:'besetzt {t}',uncovered:'nicht besetzt',
-    onDuty:'Im Dienst',absentH:'Abwesend',addPerson:'+ Person',notAssigned:'kein Raum',
-    'i.unassigned':'{name} ist keinem Raum zugeteilt.','i.double':'{name} ist mehrfach eingeteilt: {rooms}.',
+    onDuty:'Im Dienst',absentH:'Abwesend',addPerson:'+ Person',notAssigned:'kein Raum',roomsH:'Räume',editDay:'Zeiten und Abwesenheit an diesem Tag ändern',
+    'i.unassigned':'{name} ist keinem Raum zugeteilt.','i.partial':'{name} hat für {times} keinen Raum.',
     'i.absent':'{name} ist abwesend ({type}), aber eingeteilt: {rooms}.','i.off':'{name} ist nicht im Dienst, aber eingeteilt: {rooms}.',
+    'i.over':'{room} ist {times} überbelegt: {names} – Plätze: {n}.',
     netText:'{h} h Arbeitszeit',netPause:'{h} h Arbeitszeit · {p} Pause',durMin:'{n} min',durH:'{n} h',
     'w.pause30':'Pause zu kurz: ab mehr als 6 h mind. 30 min','w.pause45':'Pause zu kurz: ab mehr als 9 h mind. 45 min',
     'w.block6':'mehr als 6 h am Stück ohne Pause','w.long':'mehr als 10 h Arbeitszeit',
@@ -432,7 +445,7 @@ Tools.i18n({
     prev:'Previous week',next:'Next week',today:'This week',fill:'Fill automatically',share:'Share …',copy:'Copy text',csv:'CSV',print:'Print',clearWeek:'Clear week',
     example:'Load example',overview:'Week overview',
     staff:'Staff',staffIntro:'Regular working hours per weekday – also split, e.g. morning and afternoon; the gap in between is the break. Changes for a single day go into the week plan (tap the name).',addStaff:'+ Add person',
-    rooms:'Rooms',roomsIntro:'Rooms or workstations, e.g. reception, lab, consulting room. “Places” = how many people can be assigned there per day (e.g. one in the morning and one in the afternoon).',
+    rooms:'Rooms',roomsIntro:'Rooms or workstations, e.g. reception, lab, consulting room. “Places” = how many people can work there at the same time. One room can have someone in the morning and someone else in the afternoon.',
     roomName:'Room name',roomPh:'e.g. Lab',add:'Add',
     absAdd:'Add absence',person:'Person',absType:'Type',from:'From',to:'To',absPart:'By the hour only',fromTime:'From time',toTime:'To time',
     absSave:'Add',absences:'Absences',absPast:'Show past ones',
@@ -445,17 +458,18 @@ Tools.i18n({
     wdLong1:'Monday',wdLong2:'Tuesday',wdLong3:'Wednesday',wdLong4:'Thursday',wdLong5:'Friday',wdLong6:'Saturday',wdLong7:'Sunday',
     'abs.vac':'Holiday','abs.sick':'Sick','abs.train':'Training','abs.off':'Time off','abs.other':'Other',
     week:'Week {n}',weekYear:'Week {n} / {y}',range:'{a} – {b}',
-    allOk:'✓ All {n} days are fine – everyone on duty is assigned to exactly one room.',
+    allOk:'✓ All {n} days are fine – everyone is assigned to exactly one room for all of their working time.',
     someBad:'{n} problems this week – see the marked days.',oneBad:'1 problem this week – see the marked day.',
     nobody:'No staff yet. Add people under “Staff” and rooms under “Rooms” – or load an example.',
     noRooms:'No rooms yet – add them under “Rooms”.',
     dayOk:'✓ fine',dayBad:'{n} ✕',dayNone:'nobody on duty',
-    slot:'{room}, place {n}',free:'– free –',
-    optTime:'{name} ({time})',optElse:'{name} ({time}) · already: {rooms}',optAbsent:'{name} – absent',optOff:'{name} – off duty',
+    noRoom:'– no room –',roomFor:'Room for {name}, {time}',optWith:'{room} · with {names}',optFull:'{room} · full ({names})',
+    optAbsent:'absent',optOff:'off duty',
     covered:'staffed {t}',uncovered:'not staffed',
-    onDuty:'On duty',absentH:'Absent',addPerson:'+ Person',notAssigned:'no room',
-    'i.unassigned':'{name} is not assigned to a room.','i.double':'{name} is assigned more than once: {rooms}.',
+    onDuty:'On duty',absentH:'Absent',addPerson:'+ Person',notAssigned:'no room',roomsH:'Rooms',editDay:'change times and absence on this day',
+    'i.unassigned':'{name} is not assigned to a room.','i.partial':'{name} has no room for {times}.',
     'i.absent':'{name} is absent ({type}) but assigned: {rooms}.','i.off':'{name} is off duty but assigned: {rooms}.',
+    'i.over':'{room} is overbooked {times}: {names} – places: {n}.',
     netText:'{h} h working time',netPause:'{h} h working time · {p} break',durMin:'{n} min',durH:'{n} h',
     'w.pause30':'Break too short: at least 30 min for more than 6 h','w.pause45':'Break too short: at least 45 min for more than 9 h',
     'w.block6':'more than 6 h in a row without a break','w.long':'more than 10 h working time',
@@ -491,8 +505,9 @@ Tools.i18n({
   }
 });
 const t=Tools.t,$=Tools.$,esc=Tools.esc;
-// v2: a working day is a list of time blocks (the gaps are the breaks); v1 had one block plus break minutes
-const LS='duty-roster.data.v2',LS_V1='duty-roster.data.v1',LS_UI='duty-roster.ui.v1';
+// v3: rooms are assigned per working time block (plans[date].r[person][block] = room);
+// v2: per day (plans[date].a[room] = [person, …]) with blocks; v1: one time plus break minutes
+const LS='duty-roster.data.v3',OLD=['duty-roster.data.v2','duty-roster.data.v1'],LS_UI='duty-roster.ui.v1';
 const MAX_STAFF=100,MAX_ROOMS=40,MAX_SLOTS=6,MAX_NAME=40,MAX_ABS=2000,MAX_BLOCKS=4;
 const ABS_TYPES=['vac','sick','train','off','other'];
 const TABS=['week','staff','rooms','abs'];
@@ -520,7 +535,7 @@ const mins=s=>{const [h,m]=s.split(':').map(Number);return h*60+m;};
 const hhmm=m=>`${pad(Math.floor(m/60))}:${pad(m%60)}`;
 const validWin=x=>x&&isTime(x.s)&&isTime(x.e)&&mins(x.e)>mins(x.s);
 const sortBlocks=b=>b.slice().sort((a,c)=>mins(a.s)-mins(c.s));
-/** Checks blocks as typed: returns {blocks} sorted, or {err} */
+/** Checks blocks as typed: returns {blocks} sorted, or {err}. Touching blocks (12:00–13:00, 13:00–…) are allowed: room change without a break */
 function checkBlocks(raw){
   if(!raw.length)return {err:'w.order'};
   if(raw.some(x=>!validWin(x)))return {err:'w.order'};
@@ -534,9 +549,15 @@ const breakMin=b=>gaps(b).reduce((s,g)=>s+g,0);
 const hours=m=>(m/60).toLocaleString(Tools.locale(),{maximumFractionDigits:2});
 const dur=m=>m<60?t('durMin',{n:m}):t('durH',{n:hours(m)});
 const span=b=>b.map(x=>`${x.s}–${x.e}`).join(', ');
+/** Blocks joined where one ends when the next begins */
+function joined(b){
+  const out=[];
+  for(const x of sortBlocks(b)){const l=out[out.length-1];if(l&&l.e===x.s)l.e=x.e;else out.push({s:x.s,e:x.e});}
+  return out;
+}
 /** Warnings for one working day (German Working Hours Act: breaks of 15 min or more count; 6 h in a row; 10 h maximum) */
-function timeWarnings(b){
-  const n=netMin(b),br=gaps(b).filter(g=>g>=15).reduce((s,g)=>s+g,0),w=[];
+function timeWarnings(blocks){
+  const b=joined(blocks),n=netMin(b),br=gaps(b).filter(g=>g>=15).reduce((s,g)=>s+g,0),w=[];
   if(n>540&&br<45)w.push('w.pause45');
   else if(n>360&&br<30)w.push('w.pause30');
   else if(b.some(x=>mins(x.e)-mins(x.s)>360))w.push('w.block6');
@@ -554,12 +575,25 @@ function subtract(b,win){
   }
   return out;
 }
+/** Time ranges where more than `places` entries [{name,a,b}] overlap, joined; with the names */
+function overloads(entries,places){
+  const pts=[...new Set(entries.flatMap(e=>[e.a,e.b]))].sort((a,b)=>a-b),out=[];
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1],who=entries.filter(e=>e.a<=a&&e.b>=b);
+    if(who.length<=places)continue;
+    const last=out[out.length-1],names=who.map(e=>e.name);
+    if(last&&last.b===a){last.b=b;for(const n of names)if(!last.names.includes(n))last.names.push(n);}
+    else out.push({a,b,names:[...new Set(names)]});
+  }
+  return out;
+}
+const range=(a,b)=>`${hhmm(a)}–${hhmm(b)}`;
 
 /* ---------- State ---------- */
 const clean=s=>String(s==null?'':s).replace(/\s+/g,' ').trim().slice(0,MAX_NAME);
 const same=(a,b)=>a.toLocaleLowerCase()===b.toLocaleLowerCase();
 const newId=p=>p+Array.from(crypto.getRandomValues(new Uint8Array(5)),b=>(b%36).toString(36)).join('');
-/** A working day from storage: v2 list of blocks, or v1 {s,e,p} (break minutes put in the middle of the day) */
+/** A working day from storage: list of blocks, or v1 {s,e,p} (break minutes put in the middle of the day) */
 function normBlocks(x){
   if(Array.isArray(x)){
     const r=checkBlocks(x.slice(0,MAX_BLOCKS).filter(y=>y&&typeof y==='object').map(y=>({s:y.s,e:y.e})));
@@ -571,7 +605,7 @@ function normBlocks(x){
   const c=Math.round((a+e-p)/2/5)*5;
   return c>a&&c+p<e?[{s:x.s,e:hhmm(c)},{s:hhmm(c+p),e:x.e}]:[{s:x.s,e:x.e}];
 }
-/** Accepts stored or imported data (v1 or v2) defensively: anything invalid is dropped */
+/** Accepts stored or imported data (v1, v2 or v3) defensively: anything invalid is dropped */
 function normalize(d){
   d=d&&typeof d==='object'?d:{};
   const out={staff:[],rooms:[],absences:[],plans:{},days:[1,2,3,4,5]};
@@ -601,36 +635,50 @@ function normalize(d){
   }
   for(const [date,pl] of Object.entries(d.plans&&typeof d.plans==='object'?d.plans:{})){
     if(!isDate(date)||!pl||typeof pl!=='object')continue;
-    const a={},o={};
-    for(const [r,list] of Object.entries(pl.a||{}))if(rid.has(r)&&Array.isArray(list))a[r]=list.map(id=>sid.has(id)?id:'');
+    const o={},r={};
     for(const [id,x] of Object.entries(pl.o||{})){
       if(!sid.has(id)||!x)continue;
       if(x.free===true)o[id]={free:true};
       else{const b=normBlocks(x.b||x);if(b)o[id]={b};}
     }
-    if(Object.keys(a).length||Object.keys(o).length)out.plans[date]={a,o};
+    for(const [id,list] of Object.entries(pl.r||{}))
+      if(sid.has(id)&&Array.isArray(list))r[id]=list.slice(0,MAX_BLOCKS).map(x=>rid.has(x)?x:'');
+    // v2: one room per person and day → every block of that day in this room
+    for(const [room,list] of Object.entries(pl.a||{})){
+      if(!rid.has(room)||!Array.isArray(list))continue;
+      for(const id of list){
+        if(!sid.has(id)||r[id])continue;
+        const p=out.staff.find(x=>x.id===id),ov=o[id];
+        const n=(ov?(ov.free?[]:ov.b):p.times[wd(date)]||[]).length;
+        r[id]=Array(Math.max(1,n)).fill(room);
+      }
+    }
+    if(Object.keys(o).length||Object.keys(r).length)out.plans[date]={o,r};
   }
   return out;
 }
-const fromV1=Tools.load(LS,null)==null&&Tools.load(LS_V1,null)!=null;
-const st=normalize(Tools.load(LS,null)||Tools.load(LS_V1,null));
+const stored=Tools.load(LS,null),older=stored==null?OLD.map(k=>Tools.load(k,null)).find(x=>x!=null):null;
+const st=normalize(stored||older);
 const ui=Object.assign({tab:'week'},Tools.load(LS_UI,{}));
 if(!TABS.includes(ui.tab))ui.tab='week';
 let week=mondayOf(today());
 function save(){
   // Drop empty day plans so the storage stays small
   for(const [d,pl] of Object.entries(st.plans)){
-    for(const [r,list] of Object.entries(pl.a))if(!list.some(Boolean))delete pl.a[r];
-    if(!Object.keys(pl.a).length&&!Object.keys(pl.o).length)delete st.plans[d];
+    for(const [id,list] of Object.entries(pl.r)){
+      while(list.length&&!list[list.length-1])list.pop();
+      if(!list.length)delete pl.r[id];
+    }
+    if(!Object.keys(pl.r).length&&!Object.keys(pl.o).length)delete st.plans[d];
   }
   Tools.save(LS,st);
 }
-if(fromV1){save();Tools.remove(LS_V1);Tools.diag.log('migrated v1 → v2');}
+if(older!=null){save();for(const k of OLD)Tools.remove(k);Tools.diag.log('migrated to v3');}
 
-/* ---------- Who works when ---------- */
+/* ---------- Who works when, and where ---------- */
 const staffById=id=>st.staff.find(p=>p.id===id);
 const roomById=id=>st.rooms.find(r=>r.id===id);
-const ensurePlan=date=>st.plans[date]||(st.plans[date]={a:{},o:{}});
+const ensurePlan=date=>st.plans[date]||(st.plans[date]={o:{},r:{}});
 const absencesOn=(id,date)=>st.absences.filter(a=>a.staff===id&&a.from<=date&&date<=a.to);
 const absText=a=>a.s?t('absTypeTime',{type:t('abs.'+a.type),time:`${a.s}–${a.e}`}):t('abs.'+a.type);
 /** Planned blocks of a person on a date before absences: day change first, else regular hours */
@@ -639,48 +687,70 @@ function baseOn(p,date){
   if(o)return o.free?[]:o.b;
   return p.times[wd(date)]||[];
 }
-/** Working blocks after absences; full = absent all day (or every planned hour) */
+/** Working time after absences, per planned block (parts) and all together (blocks); full = absent all day */
 function stateOn(p,date){
-  const base=baseOn(p,date),abs=absencesOn(p.id,date);
-  let blocks=abs.some(a=>!a.s)?[]:base;
-  for(const a of abs)if(a.s)blocks=subtract(blocks,a);
-  return {base,blocks,abs,full:abs.length>0&&!blocks.length};
+  const base=baseOn(p,date),abs=absencesOn(p.id,date),allDay=abs.some(a=>!a.s);
+  const parts=base.map(b=>{
+    if(allDay)return [];
+    let x=[b];
+    for(const a of abs)if(a.s)x=subtract(x,a);
+    return x;
+  });
+  const blocks=parts.flat();
+  return {base,parts,blocks,abs,full:abs.length>0&&!blocks.length};
+}
+/** Rooms of a person on a date, one per planned block ('' = none) */
+const roomsOf=(date,id)=>((st.plans[date]&&st.plans[date].r[id])||[]).map(x=>roomById(x)?x:'');
+function setRoom(date,id,bi,room){
+  const pl=ensurePlan(date),list=roomsOf(date,id);
+  while(list.length<=bi)list.push('');
+  list[bi]=room;pl.r[id]=list;
 }
 const weekDates=()=>st.days.map(n=>addDays(week,n-1));
-function slotsOf(date,r){
-  const list=((st.plans[date]&&st.plans[date].a[r.id])||[]).slice(0,r.slots).map(id=>staffById(id)?id:'');
-  while(list.length<r.slots)list.push('');
-  return list;
-}
-const roomNames=ids=>ids.map(id=>roomById(id).name).join(', ');
-/** Everything about one day: who is on duty, who is absent, the rooms and the problems */
+const uniq=a=>[...new Set(a)];
+const roomNames=ids=>uniq(ids).map(id=>roomById(id).name).join(', ');
+/** Everything about one day: people with their blocks and rooms, room occupancy, problems */
 function dayInfo(date){
-  const people=st.staff.map(p=>({p,...stateOn(p,date),changed:!!(st.plans[date]&&st.plans[date].o[p.id])}));
-  const onDuty=people.filter(x=>x.blocks.length);
-  const absent=people.filter(x=>x.abs.length);
-  const where={};
-  const rooms=st.rooms.map(r=>{
-    const slots=slotsOf(date,r);
-    slots.forEach(id=>{if(id)(where[id]||=[]).push(r.id);});
-    return {r,slots};
+  const people=st.staff.map(p=>{
+    const s=stateOn(p,date),R=roomsOf(date,p.id),items=[];
+    for(let bi=0;bi<Math.max(s.base.length,R.length);bi++)items.push({bi,base:s.base[bi]||null,parts:s.parts[bi]||[],room:R[bi]||''});
+    const active=items.filter(i=>i.parts.length),stale=items.filter(i=>i.room&&!i.parts.length);
+    return {p,...s,items,active,stale,changed:!!(st.plans[date]&&st.plans[date].o[p.id])};
   });
+  const onDuty=people.filter(x=>x.blocks.length);
+  const listed=people.filter(x=>x.blocks.length||x.stale.length);
+  const absent=people.filter(x=>x.abs.length);
   const issues=[];
   for(const x of people){
-    const w=where[x.p.id]||[];
-    if(!x.blocks.length){if(w.length)issues.push({k:x.full?'absent':'off',x,rooms:w});}
-    else if(!w.length)issues.push({k:'unassigned',x,rooms:w});
-    else if(w.length>1)issues.push({k:'double',x,rooms:w});
+    if(x.stale.length)issues.push({k:x.abs.length?'absent':'off',x,rooms:x.stale.map(i=>i.room)});
+    const missing=x.active.filter(i=>!i.room);
+    if(missing.length)issues.push({k:missing.length===x.active.length?'unassigned':'partial',x,times:missing.flatMap(i=>i.parts)});
   }
-  for(const room of rooms){
-    const iv=room.slots.map(id=>people.find(x=>x.p.id===id)).filter(Boolean)
-      .flatMap(x=>x.blocks.map(b=>[mins(b.s),mins(b.e)])).sort((a,b)=>a[0]-b[0]);
-    const merged=[];
-    for(const [a,b] of iv){const last=merged[merged.length-1];if(last&&a<=last[1])last[1]=Math.max(last[1],b);else merged.push([a,b]);}
-    room.cover=merged;
-  }
-  return {date,people,onDuty,absent,rooms,where,issues};
+  const rooms=st.rooms.map(r=>{
+    const occ=[];   // [{x, parts}] – one entry per person
+    for(const x of people){
+      const parts=x.active.filter(i=>i.room===r.id).flatMap(i=>i.parts);
+      if(parts.length)occ.push({x,parts});
+    }
+    const entries=occ.flatMap(o=>o.parts.map(b=>({name:o.x.p.name,id:o.x.p.id,a:mins(b.s),b:mins(b.e)})));
+    const over=overloads(entries,r.slots);
+    for(const o of over)issues.push({k:'over',room:r,o});
+    const iv=entries.map(e=>[e.a,e.b]).sort((a,b)=>a[0]-b[0]),cover=[];
+    for(const [a,b] of iv){const l=cover[cover.length-1];if(l&&a<=l[1])l[1]=Math.max(l[1],b);else cover.push([a,b]);}
+    return {r,occ,entries,cover,over};
+  });
+  return {date,people,onDuty,listed,absent,rooms,issues};
 }
-const issueText=i=>t('i.'+i.k,{name:i.x.p.name,rooms:roomNames(i.rooms),type:i.x.abs.length?absText(i.x.abs[0]):''});
+function issueText(i){
+  if(i.k==='over')return t('i.over',{room:i.room.name,times:range(i.o.a,i.o.b),names:i.o.names.join(', '),n:i.room.slots});
+  return t('i.'+i.k,{name:i.x.p.name,rooms:i.rooms?roomNames(i.rooms):'',times:i.times?span(i.times):'',type:i.x.abs.length?absText(i.x.abs[0]):''});
+}
+/** Can a person go into a room for these parts without overbooking it? */
+function fits(info,rid,parts,id){
+  const room=info.rooms.find(x=>x.r.id===rid);
+  const entries=room.entries.filter(e=>e.id!==id).concat(parts.map(b=>({name:'',id,a:mins(b.s),b:mins(b.e)})));
+  return !overloads(entries,room.r.slots).length;
+}
 
 /* ---------- Editor for time blocks (staff dialog per weekday, day dialog) ---------- */
 function blocksHtml(b,day){
@@ -739,46 +809,52 @@ document.querySelector('[role=tablist]').addEventListener('keydown',e=>{
 /* ---------- Week view ---------- */
 function weekTitle(){const {w,y}=isoWeek(week);return y===parse(week).getFullYear()&&y===new Date().getFullYear()?t('week',{n:w}):t('weekYear',{n:w,y});}
 function weekRange(){const d=weekDates();return d.length?t('range',{a:dm(d[0]),b:dmy(d[d.length-1])}):'';}
-function optionLabel(info,x,cur){
-  const rooms=(info.where[x.p.id]||[]).filter(r=>r!==cur);
-  return rooms.length?t('optElse',{name:x.p.name,time:span(x.blocks),rooms:roomNames(rooms)}):t('optTime',{name:x.p.name,time:span(x.blocks)});
+/** Room choice for one block: other people in the room at the same time are named */
+function roomOptions(info,x,item){
+  let h=`<option value="">${esc(t('noRoom'))}</option>`;
+  for(const room of info.rooms){
+    const others=uniq(room.entries.filter(e=>e.id!==x.p.id&&item.parts.some(b=>e.a<mins(b.e)&&e.b>mins(b.s))).map(e=>e.name));
+    const label=!others.length?room.r.name:t(others.length>=room.r.slots?'optFull':'optWith',{room:room.r.name,names:others.join(', ')});
+    h+=`<option value="${esc(room.r.id)}"${item.room===room.r.id?' selected':''}>${esc(label)}</option>`;
+  }
+  return h;
+}
+function personRow(info,x){
+  const {date}=info,bad=info.issues.some(i=>i.x===x);
+  let h=`<div class="prow${bad?' bad':''}"><button type="button" class="pname" data-person="${esc(x.p.id)}" data-date="${date}"><span class="pn">${esc(x.p.name)}</span>`
+    +`<small>${x.blocks.length?esc(t('netText',{h:hours(netMin(x.blocks))})):esc(t(x.abs.length?'optAbsent':'optOff'))}${x.changed?' · '+esc(t('changed')):''}${x.abs.length?' · '+esc(x.abs.map(absText).join(', ')):''}</small><span class="sr-only"> – ${esc(t('editDay'))}</span></button>`;
+  for(const item of x.items){
+    if(!item.parts.length&&!item.room)continue;
+    const id=`s-${date}-${x.p.id}-${item.bi}`;
+    const time=item.parts.length?span(item.parts):item.base?`${item.base.s}–${item.base.e}`:'–';
+    const off=!item.parts.length;
+    h+=`<div class="pblk"><span class="ptime${off?' gone':''}">${esc(time)}</span>`
+      +`<select id="${id}" aria-label="${esc(t('roomFor',{name:x.p.name,time}))}" data-date="${date}" data-person="${esc(x.p.id)}" data-bi="${item.bi}"${off||!item.room?' class="bad"':''}>${roomOptions(info,x,item)}</select></div>`;
+  }
+  return h+'</div>';
 }
 function dayCard(info){
   const {date}=info;
   const bad=info.issues.length;
   const badge=!info.onDuty.length&&!bad?`<span class="badge">${esc(t('dayNone'))}</span>`
     :bad?`<span class="badge err">${esc(t('dayBad',{n:bad}))}</span>`:`<span class="badge ok">${esc(t('dayOk'))}</span>`;
-  let h=`<h2 id="h-${date}"><span>${esc(t('wdLong'+wd(date)))}, ${esc(dm(date))}</span>${badge}</h2><div class="rooms">`;
-  for(const room of info.rooms){
-    const {r,slots}=room;
-    const cover=room.cover.length?t('covered',{t:room.cover.map(([a,b])=>hhmm(a)+'–'+hhmm(b)).join(', ')}):t('uncovered');
-    h+=`<div class="room"><div class="room-head"><span>${esc(r.name)}</span><span class="muted">${esc(cover)}</span></div><div class="slots">`;
-    slots.forEach((cur,i)=>{
-      const id=`s-${date}-${r.id}-${i}`;
-      let opts=`<option value="">${esc(t('free'))}</option>`;
-      let isBad=false;
-      if(cur){
-        const x=info.people.find(y=>y.p.id===cur);
-        if(!x.blocks.length){opts+=`<option value="${esc(cur)}">${esc(t(x.full?'optAbsent':'optOff',{name:x.p.name}))}</option>`;isBad=true;}
-        else if((info.where[cur]||[]).length>1)isBad=true;
-      }
-      for(const x of info.onDuty)opts+=`<option value="${esc(x.p.id)}">${esc(optionLabel(info,x,r.id))}</option>`;
-      const label=r.slots>1?t('slot',{room:r.name,n:i+1}):r.name;
-      h+=`<label class="sr-only" for="${id}">${esc(label)}</label><select id="${id}" data-date="${date}" data-room="${esc(r.id)}" data-slot="${i}"${isBad?' class="bad"':''}>${opts.replace(`value="${esc(cur)}"`,`value="${esc(cur)}" selected`)}</select>`;
-    });
-    h+='</div></div>';
-  }
-  h+=`</div><h3>${esc(t('onDuty'))}</h3><div class="chips">`;
-  for(const x of info.onDuty){
-    const w=info.where[x.p.id]||[];
-    const isBad=w.length!==1;
-    h+=`<button type="button" class="chip${isBad?' err':''}${x.changed?' over':''}" data-person="${esc(x.p.id)}" data-date="${date}"><span>${esc(x.p.name)}</span><small>${esc(span(x.blocks))} · ${esc(w.length?roomNames(w):t('notAssigned'))}${x.changed?' · '+esc(t('changed')):''}</small></button>`;
-  }
-  h+=`<button type="button" class="chip add" data-add="${date}">${esc(t('addPerson'))}</button></div>`;
-  if(info.absent.length){
+  let h=`<h2 id="h-${date}"><span>${esc(t('wdLong'+wd(date)))}, ${esc(dm(date))}</span>${badge}</h2>`;
+  h+=`<h3>${esc(t('onDuty'))}</h3><div class="people">${info.listed.map(x=>personRow(info,x)).join('')}`
+    +`<button type="button" class="chip add" data-add="${date}">${esc(t('addPerson'))}</button></div>`;
+  const away=info.absent.filter(x=>x.full);
+  if(away.length){
     h+=`<h3>${esc(t('absentH'))}</h3><div class="chips">`;
-    for(const x of info.absent)h+=`<button type="button" class="chip" data-person="${esc(x.p.id)}" data-date="${date}"><span>${esc(x.p.name)}</span><small>${esc(x.abs.map(absText).join(', '))}</small></button>`;
+    for(const x of away)h+=`<button type="button" class="chip" data-person="${esc(x.p.id)}" data-date="${date}"><span>${esc(x.p.name)}</span><small>${esc(x.abs.map(absText).join(', '))}</small></button>`;
     h+='</div>';
+  }
+  if(info.rooms.length){
+    h+=`<h3>${esc(t('roomsH'))}</h3><ul class="roomsum">`;
+    for(const room of info.rooms){
+      const cover=room.cover.length?t('covered',{t:room.cover.map(([a,b])=>range(a,b)).join(', ')}):t('uncovered');
+      const who=room.occ.map(o=>`${esc(o.x.p.name)} <small>${esc(span(joined(o.parts)))}</small>`).join(' · ');
+      h+=`<li data-room="${esc(room.r.id)}"${room.over.length?' class="bad"':''}><span class="rn">${esc(room.r.name)}</span> <span class="muted">${esc(cover)}</span>${who?`<div class="who">${who}</div>`:''}</li>`;
+    }
+    h+='</ul>';
   }
   if(bad)h+=`<ul class="issues">${info.issues.map(i=>`<li>${esc(issueText(i))}</li>`).join('')}</ul>`;
   return `<section class="card day${bad?' has-issues':''}" data-day="${date}" aria-labelledby="h-${date}">${h}</section>`;
@@ -789,12 +865,10 @@ function renderOverview(infos){
   $('ovTitle').textContent=`${t('overview')} · ${weekTitle()} · ${weekRange()}`;
   let h=`<table><thead><tr><th scope="col"><span class="sr-only">${esc(t('rooms'))}</span></th>${infos.map(i=>`<th scope="col">${esc(dayLabel(i.date))}</th>`).join('')}</tr></thead><tbody>`;
   st.rooms.forEach((r,ri)=>{
-    h+=`<tr><th scope="row">${esc(r.name)}</th>${infos.map(info=>`<td>${info.rooms[ri].slots.filter(Boolean).map(id=>{
-      const x=info.people.find(y=>y.p.id===id);
-      return `<div>${esc(x.p.name)}${x.blocks.length?` <small>${esc(span(x.blocks))}</small>`:''}</div>`;}).join('')}</td>`).join('')}</tr>`;
+    h+=`<tr><th scope="row">${esc(r.name)}</th>${infos.map(info=>`<td>${info.rooms[ri].occ.map(o=>`<div>${esc(o.x.p.name)} <small>${esc(span(joined(o.parts)))}</small></div>`).join('')}</td>`).join('')}</tr>`;
   });
-  const unassigned=infos.map(info=>info.issues.filter(i=>i.k==='unassigned').map(i=>i.x));
-  if(unassigned.some(l=>l.length))h+=`<tr><th scope="row">${esc(t('notAssigned'))}</th>${unassigned.map(l=>`<td>${l.map(x=>`<div>${esc(x.p.name)}</div>`).join('')}</td>`).join('')}</tr>`;
+  const unassigned=infos.map(info=>info.issues.filter(i=>i.k==='unassigned'||i.k==='partial'));
+  if(unassigned.some(l=>l.length))h+=`<tr><th scope="row">${esc(t('notAssigned'))}</th>${unassigned.map(l=>`<td>${l.map(i=>`<div>${esc(i.x.p.name)} <small>${esc(span(i.times))}</small></div>`).join('')}</td>`).join('')}</tr>`;
   h+=`<tr><th scope="row">${esc(t('absentH'))}</th>${infos.map(info=>`<td>${info.absent.map(x=>`<div>${esc(x.p.name)} <small>${esc(x.abs.map(absText).join(', '))}</small></div>`).join('')}</td>`).join('')}</tr>`;
   $('ovTable').innerHTML=h+'</tbody></table>';
 }
@@ -816,15 +890,13 @@ function renderWeek(){
   renderOverview(infos);
 }
 $('days').addEventListener('change',e=>{
-  const sel=e.target.closest('select[data-room]');if(!sel)return;
-  const {date,room}=sel.dataset,slot=Number(sel.dataset.slot),r=roomById(room);
-  const pl=ensurePlan(date);
-  const list=slotsOf(date,r);list[slot]=sel.value;pl.a[room]=list;
+  const sel=e.target.closest('select[data-bi]');if(!sel)return;
+  setRoom(sel.dataset.date,sel.dataset.person,Number(sel.dataset.bi),sel.value);
   save();renderWeek();
-  Tools.diag.log('assigned',{slot,set:!!sel.value});
+  Tools.diag.log('assigned',{block:Number(sel.dataset.bi),set:!!sel.value});
 });
 $('days').addEventListener('click',e=>{
-  const p=e.target.closest('[data-person]'),a=e.target.closest('[data-add]');
+  const p=e.target.closest('[data-person]:not(select)'),a=e.target.closest('[data-add]');
   if(p)openDay(p.dataset.date,p.dataset.person);
   else if(a)openDay(a.dataset.add,null);
 });
@@ -832,25 +904,20 @@ $('btnPrev').addEventListener('click',()=>{week=addDays(week,-7);renderWeek();})
 $('btnNext').addEventListener('click',()=>{week=addDays(week,7);renderWeek();});
 $('btnToday').addEventListener('click',()=>{week=mondayOf(today());renderWeek();});
 
-/** Fill free places: unassigned people go to their room of the same weekday last week, else their home room */
+/** Fill blocks without a room: the room of the same block on the same weekday last week, else the home room – only where it fits */
 function fillWeek(){
   let n=0;
   for(const date of weekDates()){
     const prev=addDays(date,-7);
-    for(;;){
-      const info=dayInfo(date);
-      const todo=info.issues.filter(i=>i.k==='unassigned').map(i=>i.x.p);
-      let done=false;
-      for(const p of todo){
-        const before=st.rooms.filter(r=>slotsOf(prev,r).includes(p.id)).map(r=>r.id);
-        for(const rid of [...before,p.home].filter(Boolean)){
-          const r=roomById(rid);if(!r)continue;
-          const list=slotsOf(date,r),i=list.indexOf('');
-          if(i<0)continue;
-          list[i]=p.id;ensurePlan(date).a[r.id]=list;n++;done=true;break;
-        }
+    for(const p of st.staff){
+      for(;;){
+        const info=dayInfo(date),x=info.people.find(y=>y.p===p),item=x.active.find(i=>!i.room);
+        if(!item)break;
+        const before=roomsOf(prev,p.id),cand=uniq([before[item.bi],...before,p.home].filter(Boolean));
+        const rid=cand.find(r=>fits(info,r,item.parts,p.id));
+        if(!rid)break;
+        setRoom(date,p.id,item.bi,rid);n++;
       }
-      if(!done)break;
     }
   }
   return n;
@@ -873,12 +940,10 @@ function weekText(){
   for(const info of weekDates().map(dayInfo)){
     lines.push('',`${t('wdLong'+wd(info.date))}, ${dm(info.date)}`);
     if(!info.onDuty.length)lines.push(t('textNobody'));
-    for(const room of info.rooms){
-      const names=room.slots.filter(Boolean).map(id=>{const x=info.people.find(y=>y.p.id===id);return x.blocks.length?`${x.p.name} (${span(x.blocks)})`:x.p.name;});
-      if(names.length)lines.push(`${room.r.name}: ${names.join('; ')}`);
-    }
-    const un=info.issues.filter(i=>i.k==='unassigned').map(i=>i.x.p.name);
-    if(un.length)lines.push(t('textNoRoom',{list:un.join(', ')}));
+    for(const room of info.rooms)
+      if(room.occ.length)lines.push(`${room.r.name}: ${room.occ.map(o=>`${o.x.p.name} (${span(joined(o.parts))})`).join('; ')}`);
+    const un=info.issues.filter(i=>i.k==='unassigned'||i.k==='partial');
+    if(un.length)lines.push(t('textNoRoom',{list:un.map(i=>`${i.x.p.name} (${span(i.times)})`).join('; ')}));
     if(info.absent.length)lines.push(t('textAbsent',{list:info.absent.map(x=>`${x.p.name} (${x.abs.map(absText).join(', ')})`).join(', ')}));
   }
   return lines.join('\n');
@@ -890,14 +955,14 @@ function weekCsv(){
   const times=b=>b.map(x=>`${x.s}–${x.e}`).join(' / ');
   const rows=[t('csvHead')];
   for(const info of weekDates().map(dayInfo)){
-    const day=t('wd'+wd(info.date));
-    for(const room of info.rooms)for(const id of room.slots.filter(Boolean)){
-      const x=info.people.find(y=>y.p.id===id);
-      rows.push([info.date,day,room.r.name,x.p.name,times(x.blocks),x.blocks.length?num(netMin(x.blocks)):'',x.abs.map(absText).join(' / ')].map(q).join(sep));
+    const day=t('wd'+wd(info.date)),absOf=x=>x.abs.map(absText).join(' / ');
+    for(const room of info.rooms)for(const o of room.occ){
+      const b=joined(o.parts);
+      rows.push([info.date,day,room.r.name,o.x.p.name,times(b),num(netMin(b)),absOf(o.x)].map(q).join(sep));
     }
-    for(const i of info.issues.filter(i=>i.k==='unassigned'))
-      rows.push([info.date,day,'',i.x.p.name,times(i.x.blocks),num(netMin(i.x.blocks)),i.x.abs.map(absText).join(' / ')].map(q).join(sep));
-    for(const x of info.absent.filter(x=>x.full))rows.push([info.date,day,t('csvAbsent'),x.p.name,'','',x.abs.map(absText).join(' / ')].map(q).join(sep));
+    for(const i of info.issues.filter(i=>i.k==='unassigned'||i.k==='partial'))
+      rows.push([info.date,day,'',i.x.p.name,times(i.times),num(netMin(i.times)),absOf(i.x)].map(q).join(sep));
+    for(const x of info.absent.filter(x=>x.full))rows.push([info.date,day,t('csvAbsent'),x.p.name,'','',absOf(x)].map(q).join(sep));
   }
   return '﻿'+rows.join('\r\n')+'\r\n';
 }
@@ -965,17 +1030,30 @@ $('dfBlocks').addEventListener('input',updateDayNet);
 $('dfBlocks').addEventListener('click',e=>{if(blockClick(e,$('dfBlocks'),t('thisDay')))updateDayNet();});
 $('dfPick').addEventListener('change',()=>{dayCtx.id=$('dfPick').value;fillDay(true);});
 $('dfAbsPart').addEventListener('change',()=>{$('dfAbsTimes').hidden=!$('dfAbsPart').checked;});
+/** New blocks for a day: each keeps the room of the old block it overlaps most (a split block keeps its room in both parts) */
+function carryRooms(date,id,oldB,newB){
+  const old=roomsOf(date,id);
+  if(!old.some(Boolean))return;
+  const R=newB.map(b=>{
+    let best='',most=0;
+    oldB.forEach((o,i)=>{const ov=Math.min(mins(b.e),mins(o.e))-Math.max(mins(b.s),mins(o.s));if(ov>most&&old[i]){most=ov;best=old[i];}});
+    return best;
+  });
+  ensurePlan(date).r[id]=R;
+}
 $('dayForm').addEventListener('submit',e=>{
   e.preventDefault();
   const r=checkBlocks(rawBlocks($('dfBlocks')));
   if(r.err){Tools.toast(t('badTimes'));return;}
-  const {date,id}=dayCtx,p=staffById(id),reg=p.times[wd(date)],pl=ensurePlan(date);
+  const {date,id}=dayCtx,p=staffById(id),reg=p.times[wd(date)],pl=ensurePlan(date),oldB=baseOn(p,date);
   if(reg&&JSON.stringify(reg)===JSON.stringify(r.blocks))delete pl.o[id];else pl.o[id]={b:r.blocks};
+  carryRooms(date,id,oldB,r.blocks);
   save();dayDlg.close();renderWeek();Tools.toast(t('timeSaved'));
   Tools.diag.log('day time saved',{add:dayCtx.add,blocks:r.blocks.length});
 });
 $('dfReset').addEventListener('click',()=>{
-  const {date,id}=dayCtx;delete ensurePlan(date).o[id];save();fillDay(true);renderWeek();
+  const {date,id}=dayCtx,p=staffById(id),oldB=baseOn(p,date);
+  delete ensurePlan(date).o[id];carryRooms(date,id,oldB,baseOn(p,date));save();fillDay(true);renderWeek();
 });
 $('dfFree').addEventListener('click',()=>{
   const {date,id}=dayCtx,p=staffById(id),pl=ensurePlan(date);
@@ -1088,10 +1166,7 @@ $('sfDelete').addEventListener('click',()=>{
   if(!p||!confirm(t('confirmDelStaff',{name:p.name})))return;
   st.staff.splice(st.staff.indexOf(p),1);
   st.absences=st.absences.filter(a=>a.staff!==p.id);
-  for(const pl of Object.values(st.plans)){
-    for(const list of Object.values(pl.a))list.forEach((id,i)=>{if(id===p.id)list[i]='';});
-    delete pl.o[p.id];
-  }
+  for(const pl of Object.values(st.plans)){delete pl.r[p.id];delete pl.o[p.id];}
   save();staffDlg.close();render();
   Tools.diag.log('staff deleted');
 });
@@ -1127,7 +1202,6 @@ $('roomList').addEventListener('change',e=>{
     else if(name)Tools.toast(t('dupRoom',{name}));
   }else if(e.target.matches('[data-slots]')){
     r.slots=Math.min(MAX_SLOTS,Math.max(1,Math.round(Tools.parseNum(e.target.value)||1)));
-    for(const pl of Object.values(st.plans))if(pl.a[r.id])pl.a[r.id]=pl.a[r.id].slice(0,r.slots);
   }
   save();render();
 });
@@ -1136,11 +1210,11 @@ $('roomList').addEventListener('click',e=>{
   const r=roomById(li.dataset.room),i=st.rooms.indexOf(r);
   if(e.target.closest('[data-up]')&&i>0){
     st.rooms.splice(i,1);st.rooms.splice(i-1,0,r);save();render();
-    const b=document.querySelector(`[data-room="${CSS.escape(r.id)}"] [data-up]`);if(b&&!b.disabled)b.focus();
+    const b=document.querySelector(`#roomList [data-room="${CSS.escape(r.id)}"] [data-up]`);if(b&&!b.disabled)b.focus();
   }else if(e.target.closest('[data-del]')){
     if(!confirm(t('confirmDelRoom',{name:r.name})))return;
     st.rooms.splice(i,1);
-    for(const pl of Object.values(st.plans))delete pl.a[r.id];
+    for(const pl of Object.values(st.plans))for(const list of Object.values(pl.r))list.forEach((x,j)=>{if(x===r.id)list[j]='';});
     for(const p of st.staff)if(p.home===r.id)p.home='';
     save();render();
     Tools.diag.log('room deleted');
@@ -1222,6 +1296,11 @@ $('btnExample').addEventListener('click',()=>{
     {id:newId('a'),staff:st.staff[5].id,from:addDays(week,2),to:addDays(week,2),type:'train'},
     {id:newId('a'),staff:st.staff[2].id,from:addDays(week,4),to:addDays(week,4),type:'vac',s:'12:30',e:'16:00'},
   ];
+  // Room change: Anna in the lab in the afternoon (Carla is there only in the morning), Carla at reception in the afternoon
+  for(const date of weekDates()){
+    if(stateOn(st.staff[2],date).parts[1]?.length)setRoom(date,st.staff[2].id,1,R(1));
+    if(stateOn(st.staff[4],date).parts[1]?.length)setRoom(date,st.staff[4].id,1,R(0));
+  }
   fillWeek();save();render();Tools.toast(t('exampleLoaded'));
   Tools.diag.log('example loaded');
 });
@@ -1236,24 +1315,31 @@ const findRoom=name=>{const r=st.rooms.find(x=>same(x.name,clean(name)));if(!r)t
 const checkDate=s=>{if(!isDate(s))throw new Error('date must be a valid date as YYYY-MM-DD');return s;};
 const ABS_EXT={vac:'holiday',sick:'sick',train:'training',off:'time_off',other:'other'};
 const WEEKDAYS=['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-const timeJson=b=>({times:b.map(x=>({start:x.s,end:x.e})),workHours:Math.round(netMin(b)/60*100)/100,breakMinutes:breakMin(b)});
+const tj=b=>b.map(x=>({start:x.s,end:x.e}));
+const timeJson=b=>({times:tj(b),workHours:Math.round(netMin(b)/60*100)/100,breakMinutes:breakMin(b)});
 const absJson=a=>({type:ABS_EXT[a.type],...(a.s?{startTime:a.s,endTime:a.e}:{allDay:true})});
+function problemJson(i){
+  if(i.k==='over')return {type:'room_overbooked',room:i.room.name,start:hhmm(i.o.a),end:hhmm(i.o.b),names:i.o.names,places:i.room.slots};
+  if(i.k==='unassigned'||i.k==='partial')return {type:'no_room',name:i.x.p.name,times:tj(i.times)};
+  return {type:i.k==='off'?'assigned_but_off_duty':'assigned_but_absent',name:i.x.p.name,rooms:uniq(i.rooms).map(id=>roomById(id).name)};
+}
 function weekJson(){
   const {w,y}=isoWeek(week);
   const days=weekDates().map(dayInfo).map(info=>({
     date:info.date,weekday:WEEKDAYS[wd(info.date)-1],
-    rooms:info.rooms.map(room=>({room:room.r.name,places:room.r.slots,people:room.slots.filter(Boolean).map(id=>staffById(id).name)})),
-    onDuty:info.onDuty.map(x=>({name:x.p.name,...timeJson(x.blocks),changedForThisDay:x.changed,rooms:(info.where[x.p.id]||[]).map(id=>roomById(id).name)})),
+    rooms:info.rooms.map(room=>({room:room.r.name,places:room.r.slots,people:room.occ.map(o=>({name:o.x.p.name,times:tj(joined(o.parts))}))})),
+    onDuty:info.onDuty.map(x=>({name:x.p.name,times:x.active.flatMap(i=>i.parts.map(b=>({start:b.s,end:b.e,room:i.room?roomById(i.room).name:null}))),
+      workHours:Math.round(netMin(x.blocks)/60*100)/100,breakMinutes:breakMin(x.blocks),changedForThisDay:x.changed})),
     absent:info.absent.map(x=>({name:x.p.name,absences:x.abs.map(absJson)})),
-    problems:info.issues.map(i=>({type:i.k==='off'?'assigned_but_off_duty':i.k==='absent'?'assigned_but_absent':i.k==='double'?'assigned_more_than_once':'not_assigned',
-      name:i.x.p.name,rooms:i.rooms.map(id=>roomById(id).name)}))
+    problems:info.issues.map(problemJson)
   }));
   return {isoWeek:w,isoYear:y,monday:week,complete:st.rooms.length>0&&days.every(d=>!d.problems.length),days};
 }
 const dateProp={type:'string',minLength:10,maxLength:10,description:'A date as YYYY-MM-DD.'};
+const timeProp=d=>({type:'string',minLength:5,maxLength:5,description:d});
 Tools.mcp.register({
   name:'get_week',title:'Read the week plan',label:'mcp.week',readOnly:true,
-  description:'Shows and returns the duty roster of one calendar week (the week containing the given date, default: the week shown in the app): for each planned weekday the rooms with the assigned people, who is on duty with their working times (a day can have several blocks, e.g. morning and afternoon; gaps are breaks) and working hours, who is absent (all day or by the hour), and the problems (people on duty without a room or in more than one room, assigned people who are absent or off duty). "complete" is true when every day is fine.',
+  description:'Shows and returns the duty roster of one calendar week (the week containing the given date, default: the week shown in the app). For each planned weekday: the rooms with who is there when; who is on duty with each working time block and its room (a day can have several blocks, e.g. morning and afternoon, possibly in different rooms; gaps are breaks); who is absent (all day or by the hour); and the problems (working time without a room, rooms with more people at the same time than places, assigned people who are absent or off duty). "complete" is true when every day is fine.',
   inputSchema:{type:'object',properties:{date:dateProp},additionalProperties:false},
   execute:({date})=>{
     if(date!==undefined)week=mondayOf(checkDate(date));
@@ -1263,7 +1349,7 @@ Tools.mcp.register({
 });
 Tools.mcp.register({
   name:'get_staff',title:'Read staff, rooms and absences',label:'mcp.staff',readOnly:true,
-  description:'Returns the staff with role, home room and regular working times per weekday (one or more blocks with start and end, working hours, break minutes between the blocks), the rooms with their number of places, the planned weekdays, and all absences that end today or later (all day or with start and end time).',
+  description:'Returns the staff with role, home room and regular working times per weekday (one or more blocks with start and end, working hours, break minutes between the blocks), the rooms with their number of places (people at the same time), the planned weekdays, and all absences that end today or later (all day or with start and end time).',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
   execute:()=>({
     plannedWeekdays:st.days.map(d=>WEEKDAYS[d-1]),
@@ -1275,32 +1361,33 @@ Tools.mcp.register({
 });
 Tools.mcp.register({
   name:'assign_room',title:'Assign a person to a room',label:'mcp.assign',
-  description:'Assigns a person to a room on one date in the week plan; the person is taken out of any other room that day, so they end up in exactly one room. The person must be on duty that day (not absent all day), and the room needs a free place. Returns the updated week plan (like get_week).',
+  description:'Assigns a person to a room on one date in the week plan – for the working time block that contains the given time (e.g. "14:00" for the afternoon), or for all their blocks that day if no time is given. Each block is in exactly one room, so a room change during the day means one call per block. The person must be on duty then, and the room must have a free place for that whole time (places = people at the same time). Returns the updated week plan (like get_week).',
   inputSchema:{type:'object',properties:{
     date:dateProp,
     name:{type:'string',minLength:1,maxLength:MAX_NAME,description:'Name of the person, as in get_staff.'},
-    room:{type:'string',minLength:1,maxLength:MAX_NAME,description:'Name of the room, as in get_staff.'}
+    room:{type:'string',minLength:1,maxLength:MAX_NAME,description:'Name of the room, as in get_staff.'},
+    time:timeProp('Optional time HH:MM (24 h) within the block to assign. Default: all blocks of the day.')
   },required:['date','name','room'],additionalProperties:false},
-  execute:({date,name,room})=>{
+  execute:({date,name,room,time})=>{
     checkDate(date);
     const p=findStaff(name),r=findRoom(room),s=stateOn(p,date);
     if(s.full)throw new Error(`${p.name} is absent on ${date}.`);
     if(!s.blocks.length)throw new Error(`${p.name} is not on duty on ${date}.`);
-    const list=slotsOf(date,r);
-    if(!list.includes(p.id)){
-      const i=list.indexOf('');
-      if(i<0)throw new Error(`${r.name} has no free place on ${date} (${r.slots} places).`);
-      list[i]=p.id;
+    if(time!==undefined&&!isTime(time))throw new Error('time must be HH:MM.');
+    const bis=s.parts.map((parts,bi)=>({parts,bi})).filter(x=>x.parts.length&&(time===undefined||x.parts.some(b=>mins(b.s)<=mins(time)&&mins(time)<mins(b.e)))).map(x=>x.bi);
+    if(!bis.length)throw new Error(`${p.name} does not work at ${time} on ${date}. Working times: ${span(s.blocks)}.`);
+    const before=roomsOf(date,p.id);
+    for(const bi of bis)setRoom(date,p.id,bi,r.id);
+    const over=dayInfo(date).rooms.find(x=>x.r===r).over.filter(o=>o.names.includes(p.name));
+    if(over.length){
+      ensurePlan(date).r[p.id]=before;save();
+      throw new Error(`${r.name} has no free place ${over.map(o=>range(o.a,o.b)).join(', ')} on ${date} (${r.slots} places, already: ${uniq(over.flatMap(o=>o.names)).filter(n=>n!==p.name).join(', ')}).`);
     }
-    const pl=ensurePlan(date);
-    for(const other of st.rooms)if(other!==r&&pl.a[other.id])pl.a[other.id]=slotsOf(date,other).map(id=>id===p.id?'':id);
-    pl.a[r.id]=list;
     save();
     week=mondayOf(date);showTab('week');
     return weekJson();
   }
 });
-const timeProp=d=>({type:'string',minLength:5,maxLength:5,description:d});
 Tools.mcp.register({
   name:'add_absence',title:'Add an absence',label:'mcp.absence',
   description:'Adds an absence (holiday, sickness, training, time off or other) of a person from one date to another, both included – all day, or only between startTime and endTime on each of these days (e.g. a holiday afternoon). The remaining working time stays in the week plan; people absent all day are left out, and existing room assignments then show up as problems. Returns the added absence and all of the person’s absences that end today or later.',
