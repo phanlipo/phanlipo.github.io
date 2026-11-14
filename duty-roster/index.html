@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Dienstplan</title>
+<meta name="description" content="Dienst- und Raumplan je Kalenderwoche, z. B. für die Arztpraxis: Arbeitszeiten mit Pausen, Abwesenheiten, Räume – mit Prüfung, dass jede Person im Dienst genau einem Raum zugeteilt ist.">
+<meta name="tool:tags" content="Arbeit, Werkzeug">
+<meta name="tool:features" content="Kopieren, KI-Agent">
+<meta name="tool:icon" content="calendar-user">
+<meta name="tool:color" content="#1d6f8c">
+<meta name="tool:short-name" content="Dienstplan">
+<meta name="tool:title-en" content="Duty Roster">
+<meta name="tool:description-en" content="Weekly staff and room plan, e.g. for a medical practice: working hours with breaks, absences, rooms – checks that everyone on duty is assigned to exactly one room.">
+<meta name="tool:short-name-en" content="Roster">
+<meta name="tool:storage" content="duty-roster.">
+<meta name="tool:webmcp" content="get_week, get_staff, assign_room, add_absence">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-s+Ym9vwTo3dl/5REgKnxP06NkceU88vLZ4O1ctdE2D0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Dienstplan">
+<meta name="theme-color" content="#1d6f8c">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#1d6f8c;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#7cc4de;--accent-text:#0b1d24}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+[role=tabpanel]{display:grid;gap:12px;min-width:0}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.tab{border:1px solid var(--border);background:var(--surface);color:var(--text);min-height:44px;padding-inline:6px;border-radius:999px;cursor:pointer;font:inherit;font-size:15px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+input[type=date],input[type=time]{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;font:inherit;font-size:16px;min-height:44px;padding-inline:8px;min-width:0}
+select,input[type=text],input[type=number]{min-height:44px;padding-inline:8px;min-width:0}
+h3{font-size:14px;margin:14px 0 6px;color:var(--muted)}
+.field{display:grid;gap:4px}
+.field>label,.field>span{font-size:14px;color:var(--muted)}
+.field input,.field select{width:100%}
+.check{display:flex;align-items:center;gap:8px;min-height:44px;font-size:15px}
+.check input{width:20px;height:20px;flex:none;accent-color:var(--accent)}
+/* Week navigation */
+.weeknav{display:grid;grid-template-columns:48px 1fr 48px;gap:8px;align-items:center}
+.weeknav .btn{min-height:48px;font-size:22px;padding:0}
+.weeklabel{text-align:center;display:grid}
+.weeklabel strong{font-size:20px}
+.status{margin:10px 0 0;padding:8px 10px;border-radius:8px;font-size:15px}
+.status.ok{background:var(--ok-bg);color:var(--ok)}
+.status.err{background:var(--err-bg);color:var(--err)}
+.status.info{background:var(--surface-2);color:var(--muted)}
+.actions{margin-block-start:10px}
+/* Day cards */
+#days{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr))}
+.day h2{justify-content:space-between;flex-wrap:wrap}
+.rooms{display:grid;gap:8px}
+.room{border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface-2)}
+.room-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-weight:600;margin-block-end:6px}
+.room-head .muted{font-weight:400;font-size:13px}
+.slots{display:grid;gap:6px}
+.slots select{width:100%}
+.slots select.bad{border-color:var(--err);color:var(--err)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-grid;text-align:start;gap:0;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:10px;padding:4px 10px;min-height:44px;cursor:pointer;font:inherit;font-size:15px;line-height:1.25;max-width:100%;overflow-wrap:anywhere}
+.chip small{color:var(--muted);font-size:12px}
+.chip.err{border-color:var(--err)}
+.chip.err small{color:var(--err)}
+.chip.over small{font-style:italic}
+.chip.add{border-style:dashed;color:var(--accent);font-weight:600;align-content:center}
+.issues{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:4px}
+.issues li{background:var(--err-bg);color:var(--err);border-radius:6px;padding:4px 8px;font-size:14px}
+.issues li.warn{background:var(--warn-bg);color:var(--warn)}
+/* Overview table */
+.ov{overflow-x:auto}
+.ov table{border-collapse:collapse;width:100%;font-size:14px}
+.ov th,.ov td{border:1px solid var(--border);padding:4px 6px;vertical-align:top;text-align:start}
+.ov thead th{background:var(--surface-2)}
+.ov td small{color:var(--muted)}
+.ov td div+div{margin-block-start:2px}
+/* Lists */
+.list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.list>li{display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px 4px 4px 10px;min-height:52px}
+.list>li.muted{background:none;border-style:dashed}
+.list .grow{flex:1;min-width:0}
+.list .who{font-weight:600;overflow-wrap:anywhere}
+.person{flex:1;min-width:0;text-align:start;background:none;border:0;color:var(--text);font:inherit;cursor:pointer;padding:6px 0;display:grid}
+.person small{color:var(--muted);font-size:13px}
+.person small.warn{color:var(--warn)}
+.x{flex:none;width:44px;height:44px;border:0;background:none;color:var(--muted);border-radius:8px;cursor:pointer;font-size:18px;line-height:1}
+.x:hover{color:var(--err)}
+.x:disabled{opacity:.35;cursor:default}
+.roomrow input[type=text]{flex:1;width:0}
+.roomrow input[type=number]{width:64px;flex:none}
+.add{display:flex;gap:8px;margin-block-start:10px}
+.add input{flex:1}
+.form-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));align-items:end}
+.days-set{display:flex;flex-wrap:wrap;gap:4px 14px}
+/* Dialogs */
+dialog{border:0;border-radius:14px;padding:0;width:min(560px,calc(100vw - 16px));max-height:calc(100dvh - 16px);background:var(--surface);color:var(--text);box-shadow:0 10px 40px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.dlg{padding:16px;display:grid;gap:12px}
+.dlg h2{margin:0;font-size:18px}
+fieldset{border:1px solid var(--border);border-radius:8px;margin:0;padding:8px 10px 10px;min-width:0}
+legend{font-size:14px;color:var(--muted);padding-inline:4px}
+.times{display:grid;gap:6px}
+/* One weekday: checkbox with the day on top, then start / end / break, then the working time */
+.times{gap:2px}
+.trow{display:grid;grid-template-columns:1fr 1fr 72px;gap:4px 6px;align-items:center;padding-block-end:6px;border-block-end:1px solid var(--border)}
+.trow:last-child{border-block-end:0}
+.trow .check{grid-column:1/-1;min-height:40px;font-weight:600}
+.trow input:not([type=checkbox]){width:100%}
+.trow .net{grid-column:1/-1;font-size:13px;color:var(--muted)}
+.trow .net:empty{display:none}
+.trow .net.warn{color:var(--warn)}
+.thead{display:grid;grid-template-columns:1fr 1fr 72px;gap:6px;font-size:12px;color:var(--muted)}
+.three{display:grid;grid-template-columns:1fr 1fr 80px;gap:6px}
+.dlg .row{justify-content:flex-end}
+.dlg .row .danger{margin-inline-end:auto}
+@media print{
+  body *{visibility:hidden}
+  #overview,#overview *{visibility:visible}
+  #overview{position:absolute;inset:0 0 auto 0;border:0;box-shadow:none}
+  #overview .ov{overflow:visible}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Dienstplan</span></h1>
+  <p class="sub" data-i18n="sub">Arbeitszeiten, Abwesenheiten und Räume je Woche</p>
+</header>
+
+<main>
+  <div class="tabs" role="tablist" aria-label="Bereiche" data-i18n-attr="aria-label:tabs">
+    <button type="button" class="tab" role="tab" id="tab-week" aria-controls="panel-week" data-tab="week" aria-selected="true" data-i18n="tab.week">Woche</button>
+    <button type="button" class="tab" role="tab" id="tab-staff" aria-controls="panel-staff" data-tab="staff" aria-selected="false" tabindex="-1" data-i18n="tab.staff">Team</button>
+    <button type="button" class="tab" role="tab" id="tab-rooms" aria-controls="panel-rooms" data-tab="rooms" aria-selected="false" tabindex="-1" data-i18n="tab.rooms">Räume</button>
+    <button type="button" class="tab" role="tab" id="tab-abs" aria-controls="panel-abs" data-tab="abs" aria-selected="false" tabindex="-1" data-i18n="tab.abs">Abwesend</button>
+  </div>
+
+  <!-- Week plan -->
+  <div role="tabpanel" id="panel-week" aria-labelledby="tab-week">
+    <section class="card" aria-labelledby="weekTitle">
+      <div class="weeknav">
+        <button type="button" class="btn" id="btnPrev" aria-label="Vorige Woche" data-i18n-attr="aria-label:prev">‹</button>
+        <div class="weeklabel"><strong id="weekTitle">KW</strong><span class="muted" id="weekRange"></span></div>
+        <button type="button" class="btn" id="btnNext" aria-label="Nächste Woche" data-i18n-attr="aria-label:next">›</button>
+      </div>
+      <p class="status info" id="weekStatus" role="status"></p>
+      <div class="row actions" id="weekActions">
+        <button type="button" class="btn small" id="btnToday" data-i18n="today">Diese Woche</button>
+        <button type="button" class="btn small" id="btnFill" data-i18n="fill">Automatisch auffüllen</button>
+        <button type="button" class="btn small" id="btnShare" data-i18n="share" hidden>Teilen …</button>
+        <button type="button" class="btn small" id="btnCopy" data-i18n="copy">Text kopieren</button>
+        <button type="button" class="btn small" id="btnCsv" data-i18n="csv">CSV</button>
+        <button type="button" class="btn small" id="btnPrint" data-i18n="print">Drucken</button>
+        <button type="button" class="btn small danger" id="btnClearWeek" data-i18n="clearWeek">Woche leeren</button>
+      </div>
+      <div class="row actions" id="emptyActions" hidden>
+        <button type="button" class="btn primary" id="btnExample" data-i18n="example">Beispiel laden</button>
+      </div>
+    </section>
+    <div id="days"></div>
+    <section class="card" id="overview" aria-labelledby="ovTitle">
+      <h2 id="ovTitle" data-i18n="overview">Wochenübersicht</h2>
+      <div class="ov" id="ovTable"></div>
+    </section>
+  </div>
+
+  <!-- Staff -->
+  <div role="tabpanel" id="panel-staff" aria-labelledby="tab-staff" hidden>
+    <section class="card" aria-labelledby="h-staff">
+      <h2 id="h-staff"><span data-i18n="staff">Mitarbeitende</span> <span class="badge" id="staffCount">0</span></h2>
+      <p class="muted" data-i18n="staffIntro">Regelmäßige Arbeitszeiten je Wochentag mit Pause. Abweichungen für einen einzelnen Tag trägst du im Wochenplan ein (Name antippen).</p>
+      <ul class="list" id="staffList"></ul>
+      <div class="row actions"><button type="button" class="btn primary" id="btnAddStaff" data-i18n="addStaff">+ Person hinzufügen</button></div>
+    </section>
+  </div>
+
+  <!-- Rooms -->
+  <div role="tabpanel" id="panel-rooms" aria-labelledby="tab-rooms" hidden>
+    <section class="card" aria-labelledby="h-rooms">
+      <h2 id="h-rooms"><span data-i18n="rooms">Räume</span> <span class="badge" id="roomCount">0</span></h2>
+      <p class="muted" data-i18n="roomsIntro">Räume oder Arbeitsplätze, z. B. Anmeldung, Labor, Sprechzimmer. „Plätze“ = wie viele Personen dort am Tag eingeteilt werden können (z. B. vormittags und nachmittags je eine).</p>
+      <ul class="list" id="roomList"></ul>
+      <form class="add" id="roomForm">
+        <label class="sr-only" for="roomIn" data-i18n="roomName">Name des Raums</label>
+        <input type="text" id="roomIn" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="z. B. Labor" data-i18n-attr="placeholder:roomPh">
+        <button type="submit" class="btn primary" data-i18n="add">Hinzufügen</button>
+      </form>
+    </section>
+  </div>
+
+  <!-- Absences -->
+  <div role="tabpanel" id="panel-abs" aria-labelledby="tab-abs" hidden>
+    <section class="card" aria-labelledby="h-absAdd">
+      <h2 id="h-absAdd" data-i18n="absAdd">Abwesenheit eintragen</h2>
+      <form class="form-grid" id="absForm">
+        <div class="field"><label for="absWho" data-i18n="person">Person</label><select id="absWho"></select></div>
+        <div class="field"><label for="absType" data-i18n="absType">Art</label><select id="absType"></select></div>
+        <div class="field"><label for="absFrom" data-i18n="from">Von</label><input type="date" id="absFrom" required></div>
+        <div class="field"><label for="absTo" data-i18n="to">Bis</label><input type="date" id="absTo" required></div>
+        <button type="submit" class="btn primary" id="btnAbsAdd" data-i18n="absSave">Eintragen</button>
+      </form>
+    </section>
+    <section class="card" aria-labelledby="h-absList">
+      <h2 id="h-absList"><span data-i18n="absences">Abwesenheiten</span> <span class="badge" id="absCount">0</span></h2>
+      <label class="check"><input type="checkbox" id="absPast"> <span data-i18n="absPast">Vergangene zeigen</span></label>
+      <ul class="list" id="absList"></ul>
+    </section>
+  </div>
+
+  <!-- Settings (in the menu) -->
+  <section class="card" data-menu aria-labelledby="h-settings">
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <fieldset>
+      <legend data-i18n="workdays">Arbeitstage im Plan</legend>
+      <div class="days-set" id="daysSet"></div>
+    </fieldset>
+  </section>
+</main>
+
+<!-- Edit a person (regular working hours) -->
+<dialog id="staffDlg" aria-labelledby="staffDlgH">
+  <form class="dlg" id="staffForm">
+    <h2 id="staffDlgH"></h2>
+    <div class="field"><label for="sfName" data-i18n="name">Name</label><input type="text" id="sfName" maxlength="40" autocomplete="off" required></div>
+    <div class="form-grid">
+      <div class="field"><label for="sfRole" data-i18n="role">Funktion (optional)</label><input type="text" id="sfRole" maxlength="40" autocomplete="off" placeholder="z. B. MFA, Ärztin" data-i18n-attr="placeholder:rolePh"></div>
+      <div class="field"><label for="sfHome" data-i18n="home">Stammraum (optional)</label><select id="sfHome"></select></div>
+    </div>
+    <fieldset>
+      <legend data-i18n="regular">Regelmäßige Arbeitszeit</legend>
+      <div class="thead" aria-hidden="true"><span data-i18n="from">Von</span><span data-i18n="to">Bis</span><span data-i18n="pauseShort">Pause</span></div>
+      <div class="times" id="sfTimes"></div>
+      <p class="muted" id="sfTotal"></p>
+    </fieldset>
+    <div class="row">
+      <button type="button" class="btn danger" id="sfDelete" data-i18n="delete">Löschen</button>
+      <button type="button" class="btn" id="sfCancel" data-i18n="cancel">Abbrechen</button>
+      <button type="submit" class="btn primary" data-i18n="save">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- One person on one day: different hours, absence -->
+<dialog id="dayDlg" aria-labelledby="dayDlgH">
+  <form class="dlg" id="dayForm">
+    <h2 id="dayDlgH"></h2>
+    <div class="field" id="dfPickWrap"><label for="dfPick" data-i18n="person">Person</label><select id="dfPick"></select></div>
+    <p class="muted" id="dfRegular"></p>
+    <fieldset id="dfTimeSet">
+      <legend data-i18n="dayTime">Arbeitszeit an diesem Tag</legend>
+      <div class="three">
+        <div class="field"><label for="dfStart" data-i18n="from">Von</label><input type="time" id="dfStart" step="300"></div>
+        <div class="field"><label for="dfEnd" data-i18n="to">Bis</label><input type="time" id="dfEnd" step="300"></div>
+        <div class="field"><label for="dfPause" data-i18n="pauseMin">Pause (min)</label><input type="number" id="dfPause" min="0" max="240" step="5" inputmode="numeric"></div>
+      </div>
+      <p class="muted" id="dfNet"></p>
+      <div class="row">
+        <button type="button" class="btn" id="dfReset" data-i18n="asRegular">Wie regulär</button>
+        <button type="button" class="btn" id="dfFree" data-i18n="dayFree">Heute nicht im Dienst</button>
+        <button type="submit" class="btn primary" id="dfSave" data-i18n="saveTime">Zeit speichern</button>
+      </div>
+    </fieldset>
+    <fieldset id="dfAbsSet">
+      <legend data-i18n="absence">Abwesenheit</legend>
+      <p id="dfAbsInfo" class="muted"></p>
+      <div class="row" id="dfAbsAdd">
+        <label class="sr-only" for="dfAbsType" data-i18n="absType">Art</label>
+        <select id="dfAbsType"></select>
+        <button type="button" class="btn" id="dfAbsBtn" data-i18n="absDay">An diesem Tag abwesend</button>
+      </div>
+      <div class="row" id="dfAbsDel" hidden>
+        <button type="button" class="btn" id="dfAbsLift" data-i18n="absLift">Für diesen Tag aufheben</button>
+      </div>
+    </fieldset>
+    <div class="row"><button type="button" class="btn" id="dfClose" data-i18n="close">Schließen</button></div>
+  </form>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Dienst- und Raumplan für eine Kalenderwoche – gedacht z. B. für eine Hausarztpraxis, passt aber für jedes Team mit Räumen oder Arbeitsplätzen.</p>
+  <h3>Einrichten (einmalig)</h3>
+  <ul>
+    <li><b>Team:</b> Personen mit Funktion, optionalem <b>Stammraum</b> und regelmäßiger Arbeitszeit je Wochentag (Beginn, Ende, Pause in Minuten). Die App rechnet die Arbeitszeit ohne Pause aus und warnt, wenn die Pause unter der gesetzlichen Mindestpause liegt (Deutschland: 30 min ab mehr als 6 h, 45 min ab mehr als 9 h) oder mehr als 10 h gearbeitet wird.</li>
+    <li><b>Räume:</b> Räume oder Arbeitsplätze mit der Zahl der <b>Plätze</b> – so viele Personen lassen sich dort an einem Tag einteilen (z. B. Anmeldung mit 2 Plätzen). ↑ ändert die Reihenfolge.</li>
+    <li><b>Abwesend:</b> Urlaub, Krankheit, Fortbildung, Frei usw. für einen Zeitraum. Abwesende fehlen an diesen Tagen im Wochenplan.</li>
+    <li><b>Beispiel laden</b> (solange noch nichts eingetragen ist) zeigt eine kleine Praxis zum Ausprobieren.</li>
+  </ul>
+  <h3>Wochenplan</h3>
+  <ul>
+    <li>‹ und › wechseln die Kalenderwoche. Jeder Tag zeigt die Räume mit ihren Plätzen. Zur Auswahl stehen nur Personen, die an diesem Tag laut Arbeitszeit im Dienst und nicht abwesend sind – mit ihrer Uhrzeit. Unter dem Raum steht, wann er besetzt ist.</li>
+    <li><b>Prüfung:</b> Jede Person im Dienst muss genau einem Raum zugeteilt sein. Die App meldet, wer fehlt, wer doppelt eingeteilt ist und wer eingeteilt, aber abwesend oder nicht im Dienst ist. Oben steht, ob die ganze Woche stimmt. Freie Plätze sind erlaubt.</li>
+    <li><b>Namen antippen</b> (unter „Im Dienst“): abweichende Arbeitszeit nur für diesen Tag, „Heute nicht im Dienst“ oder eine Abwesenheit für den Tag eintragen bzw. aufheben. <b>+ Person</b> holt jemanden dazu, der an diesem Tag sonst nicht arbeitet.</li>
+    <li><b>Automatisch auffüllen</b> teilt alle, die noch keinen Raum haben, in einen freien Platz ein: zuerst in den Raum vom selben Wochentag der Vorwoche, sonst in ihren Stammraum. Bestehende Einteilungen bleiben. <b>Woche leeren</b> entfernt nach Rückfrage alle Einteilungen und Tagesabweichungen dieser Woche.</li>
+    <li>Die Einstellungen im Menü ☰ legen fest, welche Wochentage im Plan erscheinen (Standard Mo–Fr).</li>
+  </ul>
+  <h3>Speichern, teilen, übertragen</h3>
+  <ul>
+    <li>Alles wird automatisch in diesem Browser gespeichert und funktioniert offline.</li>
+    <li><b>Teilen …</b> bzw. <b>Text kopieren</b> gibt den Plan der Woche als Text weiter, z. B. in einen Messenger. <b>CSV</b> speichert ihn als Tabelle für Excel, LibreOffice oder Numbers, <b>Drucken</b> druckt die Wochenübersicht (oder speichert sie als PDF).</li>
+    <li><b>Daten sichern &amp; übertragen</b> im Menü ☰: <i>Sicherung speichern</i> bzw. <i>Teilen …</i> erzeugt eine Datei mit Team, Räumen, Abwesenheiten und allen Wochen. Mit <i>Sicherung laden</i> lässt sie sich auf einem anderen Gerät oder bei Kolleginnen und Kollegen einlesen – das ersetzt dort die Daten dieser App.</li>
+    <li>Es gibt keinen Server: Änderungen auf einem Gerät erscheinen nicht von selbst auf anderen. Am besten pflegt eine Person den Plan und verteilt Text, Ausdruck oder Sicherung.</li>
+    <li>Dienste über Mitternacht werden nicht unterstützt.</li>
+    <li>KI-Agenten im Browser (WebMCP) können den Wochenplan und das Team lesen, Personen einem Raum zuteilen und Abwesenheiten eintragen – nichts löschen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Staff and room plan for a calendar week – made e.g. for a general practice, but it fits any team with rooms or workstations.</p>
+  <h3>Setting up (once)</h3>
+  <ul>
+    <li><b>Staff:</b> people with their role, an optional <b>home room</b> and regular working hours per weekday (start, end, break in minutes). The app works out the hours without the break and warns when the break is below the legal minimum (Germany: 30 min for more than 6 h, 45 min for more than 9 h) or when more than 10 h are worked.</li>
+    <li><b>Rooms:</b> rooms or workstations with their number of <b>places</b> – that many people can be assigned there on one day (e.g. reception with 2 places). ↑ changes the order.</li>
+    <li><b>Absences:</b> holiday, sickness, training, time off etc. for a period. Absent people are left out of the week plan on those days.</li>
+    <li><b>Load example</b> (while nothing has been entered yet) shows a small practice to try it out.</li>
+  </ul>
+  <h3>Week plan</h3>
+  <ul>
+    <li>‹ and › switch the calendar week. Every day shows the rooms with their places. You can only choose people who are on duty that day by their working hours and not absent – with their times. Below each room you see when it is staffed.</li>
+    <li><b>Check:</b> everyone on duty must be assigned to exactly one room. The app reports who is missing, who is assigned twice and who is assigned but absent or off duty. At the top you see whether the whole week is fine. Free places are allowed.</li>
+    <li><b>Tap a name</b> (under “On duty”): different hours for this day only, “Off duty today”, or add or lift an absence for the day. <b>+ Person</b> adds someone who does not usually work that day.</li>
+    <li><b>Fill automatically</b> puts everyone without a room into a free place: first the room from the same weekday of the previous week, otherwise their home room. Existing assignments stay. <b>Clear week</b> removes all assignments and day changes of this week after asking.</li>
+    <li>The settings in the menu ☰ choose which weekdays appear in the plan (default Mon–Fri).</li>
+  </ul>
+  <h3>Saving, sharing, transferring</h3>
+  <ul>
+    <li>Everything is saved automatically in this browser and works offline.</li>
+    <li><b>Share …</b> or <b>Copy text</b> passes on the week’s plan as text, e.g. to a messenger. <b>CSV</b> saves it as a table for Excel, LibreOffice or Numbers, <b>Print</b> prints the week overview (or saves it as PDF).</li>
+    <li><b>Back up &amp; transfer data</b> in the menu ☰: <i>Save backup</i> or <i>Share …</i> creates a file with staff, rooms, absences and all weeks. <i>Load backup</i> reads it on another device or a colleague’s – this replaces this app’s data there.</li>
+    <li>There is no server: changes on one device do not appear on others by themselves. It works best if one person keeps the plan and hands out the text, printout or backup.</li>
+    <li>Shifts past midnight are not supported.</li>
+    <li>AI agents in the browser (WebMCP) can read the week plan and the staff, assign people to a room and add absences – they cannot delete anything.</li>
+  </ul>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 748955d4c494</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    rooms:'Räume',overview:'Wochenübersicht',from:'Von',to:'Bis',pauseMin:'Pause (min)',places:'Plätze',
+    wd1:'Mo',wd2:'Di',wd3:'Mi',wd4:'Do',wd5:'Fr',wd6:'Sa',wd7:'So',
+    wdLong1:'Montag',wdLong2:'Dienstag',wdLong3:'Mittwoch',wdLong4:'Donnerstag',wdLong5:'Freitag',wdLong6:'Samstag',wdLong7:'Sonntag',
+    'abs.vac':'Urlaub','abs.sick':'Krank','abs.train':'Fortbildung','abs.off':'Frei','abs.other':'Sonstiges',
+    week:'KW {n}',weekYear:'KW {n} / {y}',range:'{a} – {b}',
+    allOk:'✓ Alle {n} Tage stimmen – jede Person im Dienst ist genau einem Raum zugeteilt.',
+    someBad:'{n} Probleme in dieser Woche – siehe die markierten Tage.',oneBad:'1 Problem in dieser Woche – siehe den markierten Tag.',
+    nobody:'Noch kein Team eingetragen. Lege unter „Team“ Personen und unter „Räume“ Räume an – oder lade ein Beispiel.',
+    noRooms:'Noch keine Räume eingetragen – lege sie unter „Räume“ an.',
+    dayOk:'✓ stimmt',dayBad:'{n} ✕',dayNone:'niemand im Dienst',
+    slot:'{room}, Platz {n}',free:'– frei –',
+    optTime:'{name} ({time})',optElse:'{name} ({time}) · schon: {rooms}',optAbsent:'{name} – abwesend',optOff:'{name} – nicht im Dienst',
+    covered:'besetzt {t}',uncovered:'nicht besetzt',
+    onDuty:'Im Dienst',absentH:'Abwesend',addPerson:'+ Person',notAssigned:'kein Raum',
+    'i.unassigned':'{name} ist keinem Raum zugeteilt.','i.double':'{name} ist mehrfach eingeteilt: {rooms}.',
+    'i.absent':'{name} ist abwesend ({type}), aber eingeteilt: {rooms}.','i.off':'{name} ist nicht im Dienst, aber eingeteilt: {rooms}.',
+    net:'{h} h',netPause:'{h} h Arbeitszeit ({p} min Pause)',
+    'w.pause30':'Pause zu kurz: ab mehr als 6 h mind. 30 min','w.pause45':'Pause zu kurz: ab mehr als 9 h mind. 45 min','w.long':'mehr als 10 h Arbeitszeit',
+    'w.order':'Ende muss nach dem Beginn liegen',
+    weekTotal:'{h} h pro Woche',noDays:'keine festen Tage',
+    newStaff:'Neue Person',editStaff:'Person bearbeiten',noHome:'– kein –',
+    staffEmpty:'Noch niemand eingetragen.',roomsEmpty:'Noch keine Räume.',absEmpty:'Keine Abwesenheiten.',
+    placesFor:'Plätze für {room}',renameRoom:'Name von {room}',up:'{room} nach oben',removeRoom:'{room} entfernen',
+    removeAbs:'Abwesenheit von {name} entfernen',
+    nameMissing:'Bitte einen Namen eingeben',dupName:'„{name}“ gibt es schon',dupRoom:'Raum „{name}“ gibt es schon',
+    fullStaff:'Höchstens {n} Personen',fullRooms:'Höchstens {n} Räume',fullAbs:'Zu viele Abwesenheiten',
+    badTimes:'Bitte Beginn und Ende prüfen (Ende nach Beginn).',
+    confirmDelStaff:'{name} löschen? Die Person wird auch aus allen Plänen und Abwesenheiten entfernt.',
+    confirmDelRoom:'Raum „{name}“ löschen? Alle Einteilungen in diesen Raum gehen verloren.',
+    confirmClearWeek:'Alle Einteilungen und Tagesabweichungen der KW {n} entfernen?',
+    weekCleared:'Woche geleert',filled:'{n} Einteilungen ergänzt',filledNone:'Nichts aufzufüllen – kein passender freier Platz',
+    absAdded:'Abwesenheit eingetragen',absBadRange:'„Bis“ darf nicht vor „Von“ liegen',absNoPerson:'Bitte zuerst eine Person anlegen',
+    absRange:'{a} – {b}',absOne:'{a}',
+    dayTitle:'{name} · {day}',addTitle:'Person dazuholen · {day}',
+    regularIs:'Regulär: {time}, {p} min Pause',regularOff:'Regulär an diesem Tag nicht im Dienst',
+    changed:'abweichend',absentInfo:'Abwesend: {type} ({range})',notAbsent:'An diesem Tag nicht abwesend.',
+    noOneToAdd:'Alle Personen sind an diesem Tag schon im Dienst oder abwesend.',
+    timeSaved:'Arbeitszeit für diesen Tag gespeichert',
+    copied:'Plan kopiert',copyFail:'Kopieren nicht möglich',csvSaved:'CSV gespeichert',
+    textTitle:'Dienstplan {w} ({r})',textAbsent:'Abwesend: {list}',textNoRoom:'Ohne Raum: {list}',textNobody:'niemand im Dienst',
+    csvHead:'Datum;Tag;Raum;Name;Beginn;Ende;Pause (min);Arbeitszeit (h);Abwesenheit',
+    csvFile:'dienstplan-kw{n}-{y}.csv',csvAbsent:'Abwesend',
+    exRooms:'Anmeldung|Labor|Sprechzimmer 1|Sprechzimmer 2|Funktionsraum',
+    exRoles:'Ärztin|Arzt|MFA|MFA|MFA|Auszubildende',
+    exampleLoaded:'Beispiel geladen',
+    'mcp.week':'Wochenplan gelesen','mcp.staff':'Team gelesen','mcp.assign':'Raum zugeteilt','mcp.absence':'Abwesenheit eingetragen'
+  },
+  en:{
+    title:'Duty Roster',sub:'Working hours, absences and rooms per week',tabs:'Sections',
+    'tab.week':'Week','tab.staff':'Staff','tab.rooms':'Rooms','tab.abs':'Absences',
+    prev:'Previous week',next:'Next week',today:'This week',fill:'Fill automatically',share:'Share …',copy:'Copy text',csv:'CSV',print:'Print',clearWeek:'Clear week',
+    example:'Load example',overview:'Week overview',
+    staff:'Staff',staffIntro:'Regular working hours per weekday with break. Changes for a single day go into the week plan (tap the name).',addStaff:'+ Add person',
+    rooms:'Rooms',roomsIntro:'Rooms or workstations, e.g. reception, lab, consulting room. “Places” = how many people can be assigned there per day (e.g. one in the morning and one in the afternoon).',
+    roomName:'Room name',roomPh:'e.g. Lab',add:'Add',
+    absAdd:'Add absence',person:'Person',absType:'Type',from:'From',to:'To',absSave:'Add',absences:'Absences',absPast:'Show past ones',
+    settings:'Settings',workdays:'Working days in the plan',
+    name:'Name',role:'Role (optional)',rolePh:'e.g. nurse, GP',home:'Home room (optional)',regular:'Regular working hours',regularIs:'Regular: {time}, {p} min break',
+    pauseShort:'Break',delete:'Delete',cancel:'Cancel',save:'Save',
+    dayTime:'Working hours on this day',pauseMin:'Break (min)',asRegular:'As usual',dayFree:'Off duty today',saveTime:'Save hours',
+    absence:'Absence',absDay:'Absent on this day',absLift:'Lift for this day',close:'Close',
+    wd1:'Mon',wd2:'Tue',wd3:'Wed',wd4:'Thu',wd5:'Fri',wd6:'Sat',wd7:'Sun',
+    wdLong1:'Monday',wdLong2:'Tuesday',wdLong3:'Wednesday',wdLong4:'Thursday',wdLong5:'Friday',wdLong6:'Saturday',wdLong7:'Sunday',
+    'abs.vac':'Holiday','abs.sick':'Sick','abs.train':'Training','abs.off':'Time off','abs.other':'Other',
+    week:'Week {n}',weekYear:'Week {n} / {y}',range:'{a} – {b}',
+    allOk:'✓ All {n} days are fine – everyone on duty is assigned to exactly one room.',
+    someBad:'{n} problems this week – see the marked days.',oneBad:'1 problem this week – see the marked day.',
+    nobody:'No staff yet. Add people under “Staff” and rooms under “Rooms” – or load an example.',
+    noRooms:'No rooms yet – add them under “Rooms”.',
+    dayOk:'✓ fine',dayBad:'{n} ✕',dayNone:'nobody on duty',
+    slot:'{room}, place {n}',free:'– free –',
+    optTime:'{name} ({time})',optElse:'{name} ({time}) · already: {rooms}',optAbsent:'{name} – absent',optOff:'{name} – off duty',
+    covered:'staffed {t}',uncovered:'not staffed',
+    onDuty:'On duty',absentH:'Absent',addPerson:'+ Person',notAssigned:'no room',
+    'i.unassigned':'{name} is not assigned to a room.','i.double':'{name} is assigned more than once: {rooms}.',
+    'i.absent':'{name} is absent ({type}) but assigned: {rooms}.','i.off':'{name} is off duty but assigned: {rooms}.',
+    net:'{h} h',netPause:'{h} h working time ({p} min break)',
+    'w.pause30':'Break too short: at least 30 min for more than 6 h','w.pause45':'Break too short: at least 45 min for more than 9 h','w.long':'more than 10 h working time',
+    'w.order':'End must be after the start',
+    weekTotal:'{h} h per week',noDays:'no fixed days',
+    newStaff:'New person',editStaff:'Edit person',noHome:'– none –',
+    staffEmpty:'Nobody added yet.',roomsEmpty:'No rooms yet.',absEmpty:'No absences.',
+    places:'Places',placesFor:'Places for {room}',renameRoom:'Name of {room}',up:'Move {room} up',removeRoom:'Remove {room}',
+    removeAbs:'Remove absence of {name}',
+    nameMissing:'Please enter a name',dupName:'“{name}” already exists',dupRoom:'Room “{name}” already exists',
+    fullStaff:'At most {n} people',fullRooms:'At most {n} rooms',fullAbs:'Too many absences',
+    badTimes:'Please check start and end (end after start).',
+    confirmDelStaff:'Delete {name}? The person is also removed from all plans and absences.',
+    confirmDelRoom:'Delete room “{name}”? All assignments to this room are lost.',
+    confirmClearWeek:'Remove all assignments and day changes of week {n}?',
+    weekCleared:'Week cleared',filled:'{n} assignments added',filledNone:'Nothing to fill – no matching free place',
+    absAdded:'Absence added',absBadRange:'“To” must not be before “From”',absNoPerson:'Please add a person first',
+    absRange:'{a} – {b}',absOne:'{a}',
+    dayTitle:'{name} · {day}',addTitle:'Add a person · {day}',
+    regularOff:'Usually off duty on this day',
+    changed:'changed',absentInfo:'Absent: {type} ({range})',notAbsent:'Not absent on this day.',
+    noOneToAdd:'Everyone is already on duty or absent on this day.',
+    timeSaved:'Hours for this day saved',
+    copied:'Plan copied',copyFail:'Copying is not possible',csvSaved:'CSV saved',
+    textTitle:'Duty roster {w} ({r})',textAbsent:'Absent: {list}',textNoRoom:'Without room: {list}',textNobody:'nobody on duty',
+    csvHead:'Date,Day,Room,Name,Start,End,Break (min),Working time (h),Absence',
+    csvFile:'duty-roster-week{n}-{y}.csv',csvAbsent:'Absent',
+    exRooms:'Reception|Lab|Consulting room 1|Consulting room 2|Diagnostics room',
+    exRoles:'GP|GP|Nurse|Nurse|Nurse|Trainee',
+    exampleLoaded:'Example loaded',
+    'mcp.week':'Week plan read','mcp.staff':'Staff read','mcp.assign':'Room assigned','mcp.absence':'Absence added'
+  }
+});
+const t=Tools.t,$=Tools.$,esc=Tools.esc;
+const LS='duty-roster.data.v1',LS_UI='duty-roster.ui.v1';
+const MAX_STAFF=100,MAX_ROOMS=40,MAX_SLOTS=6,MAX_NAME=40,MAX_ABS=2000;
+const ABS_TYPES=['vac','sick','train','off','other'];
+const TABS=['week','staff','rooms','abs'];
+
+/* ---------- Dates (local, 'YYYY-MM-DD'; noon avoids daylight-saving surprises) ---------- */
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d,12);};
+const isDate=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&iso(parse(s))===s;
+const today=()=>iso(new Date());
+const addDays=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return iso(d);};
+const wd=s=>{const g=parse(s).getDay();return g===0?7:g;};
+const mondayOf=s=>addDays(s,1-wd(s));
+function isoWeek(s){
+  const thu=parse(addDays(s,4-wd(s))),jan1=new Date(thu.getFullYear(),0,1,12);
+  return {w:1+Math.floor(Math.round((thu-jan1)/864e5)/7),y:thu.getFullYear()};
+}
+const dm=s=>parse(s).toLocaleDateString(Tools.locale(),{day:'2-digit',month:'2-digit'});
+const dmy=s=>parse(s).toLocaleDateString(Tools.locale(),{day:'2-digit',month:'2-digit',year:'numeric'});
+const dayLabel=s=>`${t('wd'+wd(s))} ${dm(s)}`;
+
+/* ---------- Times ---------- */
+const isTime=s=>typeof s==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+const mins=s=>{const [h,m]=s.split(':').map(Number);return h*60+m;};
+const hhmm=m=>`${pad(Math.floor(m/60))}:${pad(m%60)}`;
+const validTime=x=>x&&isTime(x.s)&&isTime(x.e)&&mins(x.e)>mins(x.s)&&Number.isInteger(x.p)&&x.p>=0&&x.p<mins(x.e)-mins(x.s);
+const netMin=x=>mins(x.e)-mins(x.s)-x.p;
+const hours=m=>(m/60).toLocaleString(Tools.locale(),{maximumFractionDigits:2});
+const span=x=>`${x.s}–${x.e}`;
+/** Warnings for one working day (German Working Hours Act: breaks; 10 h maximum) */
+function timeWarnings(x){
+  const n=netMin(x),w=[];
+  if(n>540&&x.p<45)w.push('w.pause45');else if(n>360&&x.p<30)w.push('w.pause30');
+  if(n>600)w.push('w.long');
+  return w;
+}
+
+/* ---------- State ---------- */
+const clean=s=>String(s==null?'':s).replace(/\s+/g,' ').trim().slice(0,MAX_NAME);
+const same=(a,b)=>a.toLocaleLowerCase()===b.toLocaleLowerCase();
+const newId=p=>p+Array.from(crypto.getRandomValues(new Uint8Array(5)),b=>(b%36).toString(36)).join('');
+function normTime(x){
+  if(!x||typeof x!=='object')return null;
+  const y={s:x.s,e:x.e,p:Math.round(Number(x.p)||0)};
+  return validTime(y)?y:null;
+}
+/** Accepts stored or imported data defensively: anything invalid is dropped */
+function normalize(d){
+  d=d&&typeof d==='object'?d:{};
+  const out={staff:[],rooms:[],absences:[],plans:{},days:[1,2,3,4,5]};
+  if(Array.isArray(d.days)){
+    const days=[...new Set(d.days.filter(n=>Number.isInteger(n)&&n>=1&&n<=7))].sort((a,b)=>a-b);
+    if(days.length)out.days=days;
+  }
+  const ids=new Set();
+  for(const r of Array.isArray(d.rooms)?d.rooms:[]){
+    if(!r||typeof r.id!=='string'||ids.has(r.id)||!clean(r.name))continue;
+    ids.add(r.id);
+    out.rooms.push({id:r.id,name:clean(r.name),slots:Math.min(MAX_SLOTS,Math.max(1,Math.round(Number(r.slots)||1)))});
+  }
+  for(const p of Array.isArray(d.staff)?d.staff:[]){
+    if(!p||typeof p.id!=='string'||ids.has(p.id)||!clean(p.name))continue;
+    ids.add(p.id);
+    const times={};
+    for(let i=1;i<=7;i++){const x=normTime(p.times&&p.times[i]);if(x)times[i]=x;}
+    out.staff.push({id:p.id,name:clean(p.name),role:clean(p.role),home:out.rooms.some(r=>r.id===p.home)?p.home:'',times});
+  }
+  const sid=new Set(out.staff.map(p=>p.id)),rid=new Set(out.rooms.map(r=>r.id));
+  for(const a of Array.isArray(d.absences)?d.absences:[]){
+    if(!a||!sid.has(a.staff)||!isDate(a.from)||!isDate(a.to)||a.to<a.from)continue;
+    out.absences.push({id:typeof a.id==='string'?a.id:newId('a'),staff:a.staff,from:a.from,to:a.to,type:ABS_TYPES.includes(a.type)?a.type:'other'});
+  }
+  for(const [date,pl] of Object.entries(d.plans&&typeof d.plans==='object'?d.plans:{})){
+    if(!isDate(date)||!pl||typeof pl!=='object')continue;
+    const a={},o={};
+    for(const [r,list] of Object.entries(pl.a||{}))if(rid.has(r)&&Array.isArray(list))a[r]=list.map(id=>sid.has(id)?id:'');
+    for(const [id,x] of Object.entries(pl.o||{})){
+      if(!sid.has(id))continue;
+      if(x&&x.free===true)o[id]={free:true};
+      else{const y=normTime(x);if(y)o[id]=y;}
+    }
+    if(Object.keys(a).length||Object.keys(o).length)out.plans[date]={a,o};
+  }
+  return out;
+}
+const st=normalize(Tools.load(LS,null));
+const ui=Object.assign({tab:'week'},Tools.load(LS_UI,{}));
+if(!TABS.includes(ui.tab))ui.tab='week';
+let week=mondayOf(today());
+function save(){
+  // Drop empty day plans so the storage stays small
+  for(const [d,pl] of Object.entries(st.plans)){
+    for(const [r,list] of Object.entries(pl.a))if(!list.some(Boolean))delete pl.a[r];
+    if(!Object.keys(pl.a).length&&!Object.keys(pl.o).length)delete st.plans[d];
+  }
+  Tools.save(LS,st);
+}
+
+/* ---------- Who works when ---------- */
+const staffById=id=>st.staff.find(p=>p.id===id);
+const roomById=id=>st.rooms.find(r=>r.id===id);
+const ensurePlan=date=>st.plans[date]||(st.plans[date]={a:{},o:{}});
+const absenceOn=(id,date)=>st.absences.find(a=>a.staff===id&&a.from<=date&&date<=a.to)||null;
+/** Working time of a person on a date: day change first, else regular hours; null = off duty */
+function timeOn(p,date){
+  const o=st.plans[date]&&st.plans[date].o[p.id];
+  if(o)return o.free?null:o;
+  return p.times[wd(date)]||null;
+}
+const weekDates=()=>st.days.map(n=>addDays(week,n-1));
+function slotsOf(date,r){
+  const list=((st.plans[date]&&st.plans[date].a[r.id])||[]).slice(0,r.slots).map(id=>staffById(id)?id:'');
+  while(list.length<r.slots)list.push('');
+  return list;
+}
+const roomNames=ids=>ids.map(id=>roomById(id).name).join(', ');
+/** Everything about one day: who is on duty, who is absent, the rooms and the problems */
+function dayInfo(date){
+  const people=st.staff.map(p=>({p,time:timeOn(p,date),abs:absenceOn(p.id,date),changed:!!(st.plans[date]&&st.plans[date].o[p.id])}));
+  const onDuty=people.filter(x=>x.time&&!x.abs);
+  const absent=people.filter(x=>x.abs);
+  const where={};
+  const rooms=st.rooms.map(r=>{
+    const slots=slotsOf(date,r);
+    slots.forEach(id=>{if(id)(where[id]||=[]).push(r.id);});
+    return {r,slots};
+  });
+  const issues=[];
+  for(const x of people){
+    const w=where[x.p.id]||[];
+    if(x.abs){if(w.length)issues.push({k:'absent',x,rooms:w});}
+    else if(!x.time){if(w.length)issues.push({k:'off',x,rooms:w});}
+    else if(!w.length)issues.push({k:'unassigned',x,rooms:w});
+    else if(w.length>1)issues.push({k:'double',x,rooms:w});
+  }
+  for(const room of rooms){
+    const iv=room.slots.map(id=>people.find(x=>x.p.id===id)).filter(x=>x&&x.time&&!x.abs)
+      .map(x=>[mins(x.time.s),mins(x.time.e)]).sort((a,b)=>a[0]-b[0]);
+    const merged=[];
+    for(const [a,b] of iv){const last=merged[merged.length-1];if(last&&a<=last[1])last[1]=Math.max(last[1],b);else merged.push([a,b]);}
+    room.cover=merged;
+  }
+  return {date,people,onDuty,absent,rooms,where,issues};
+}
+const issueText=i=>t('i.'+i.k,{name:i.x.p.name,rooms:roomNames(i.rooms),type:i.x.abs?t('abs.'+i.x.abs.type):''});
+
+/* ---------- Tabs ---------- */
+function showTab(tab,focus){
+  ui.tab=tab;Tools.save(LS_UI,ui);
+  for(const b of document.querySelectorAll('[role=tab]')){
+    const on=b.dataset.tab===tab;
+    b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;
+    $(b.getAttribute('aria-controls')).hidden=!on;
+    if(on&&focus)b.focus();
+  }
+  render();
+}
+document.querySelector('[role=tablist]').addEventListener('click',e=>{const b=e.target.closest('[role=tab]');if(b)showTab(b.dataset.tab);});
+document.querySelector('[role=tablist]').addEventListener('keydown',e=>{
+  const i=TABS.indexOf(ui.tab);
+  const j=e.key==='ArrowRight'?i+1:e.key==='ArrowLeft'?i-1:e.key==='Home'?0:e.key==='End'?TABS.length-1:null;
+  if(j==null)return;
+  e.preventDefault();showTab(TABS[(j+TABS.length)%TABS.length],true);
+});
+
+/* ---------- Week view ---------- */
+function weekTitle(){const {w,y}=isoWeek(week);return y===parse(week).getFullYear()&&y===new Date().getFullYear()?t('week',{n:w}):t('weekYear',{n:w,y});}
+function weekRange(){const d=weekDates();return d.length?t('range',{a:dm(d[0]),b:dmy(d[d.length-1])}):'';}
+function optionLabel(info,x,cur){
+  const rooms=(info.where[x.p.id]||[]).filter(r=>r!==cur);
+  return rooms.length?t('optElse',{name:x.p.name,time:span(x.time),rooms:roomNames(rooms)}):t('optTime',{name:x.p.name,time:span(x.time)});
+}
+function dayCard(info){
+  const {date}=info;
+  const bad=info.issues.length;
+  const badge=!info.onDuty.length&&!bad?`<span class="badge">${esc(t('dayNone'))}</span>`
+    :bad?`<span class="badge err">${esc(t('dayBad',{n:bad}))}</span>`:`<span class="badge ok">${esc(t('dayOk'))}</span>`;
+  let h=`<h2 id="h-${date}"><span>${esc(t('wdLong'+wd(date)))}, ${esc(dm(date))}</span>${badge}</h2><div class="rooms">`;
+  for(const room of info.rooms){
+    const {r,slots}=room;
+    const cover=room.cover.length?t('covered',{t:room.cover.map(([a,b])=>hhmm(a)+'–'+hhmm(b)).join(', ')}):t('uncovered');
+    h+=`<div class="room"><div class="room-head"><span>${esc(r.name)}</span><span class="muted">${esc(cover)}</span></div><div class="slots">`;
+    slots.forEach((cur,i)=>{
+      const id=`s-${date}-${r.id}-${i}`;
+      let opts=`<option value="">${esc(t('free'))}</option>`;
+      let isBad=false;
+      if(cur){
+        const x=info.people.find(y=>y.p.id===cur);
+        if(x.abs){opts+=`<option value="${esc(cur)}">${esc(t('optAbsent',{name:x.p.name}))}</option>`;isBad=true;}
+        else if(!x.time){opts+=`<option value="${esc(cur)}">${esc(t('optOff',{name:x.p.name}))}</option>`;isBad=true;}
+        else if((info.where[cur]||[]).length>1)isBad=true;
+      }
+      for(const x of info.onDuty)opts+=`<option value="${esc(x.p.id)}">${esc(optionLabel(info,x,r.id))}</option>`;
+      const label=r.slots>1?t('slot',{room:r.name,n:i+1}):r.name;
+      h+=`<label class="sr-only" for="${id}">${esc(label)}</label><select id="${id}" data-date="${date}" data-room="${esc(r.id)}" data-slot="${i}"${isBad?' class="bad"':''}>${opts.replace(`value="${esc(cur)}"`,`value="${esc(cur)}" selected`)}</select>`;
+    });
+    h+='</div></div>';
+  }
+  h+=`</div><h3>${esc(t('onDuty'))}</h3><div class="chips">`;
+  for(const x of info.onDuty){
+    const w=info.where[x.p.id]||[];
+    const isBad=w.length!==1;
+    h+=`<button type="button" class="chip${isBad?' err':''}${x.changed?' over':''}" data-person="${esc(x.p.id)}" data-date="${date}"><span>${esc(x.p.name)}</span><small>${esc(span(x.time))} · ${esc(w.length?roomNames(w):t('notAssigned'))}${x.changed?' · '+esc(t('changed')):''}</small></button>`;
+  }
+  h+=`<button type="button" class="chip add" data-add="${date}">${esc(t('addPerson'))}</button></div>`;
+  if(info.absent.length){
+    h+=`<h3>${esc(t('absentH'))}</h3><div class="chips">`;
+    for(const x of info.absent)h+=`<button type="button" class="chip" data-person="${esc(x.p.id)}" data-date="${date}"><span>${esc(x.p.name)}</span><small>${esc(t('abs.'+x.abs.type))}</small></button>`;
+    h+='</div>';
+  }
+  if(bad)h+=`<ul class="issues">${info.issues.map(i=>`<li>${esc(issueText(i))}</li>`).join('')}</ul>`;
+  return `<section class="card day${bad?' has-issues':''}" data-day="${date}" aria-labelledby="h-${date}">${h}</section>`;
+}
+function renderOverview(infos){
+  if(!st.rooms.length&&!st.staff.length){$('ovTable').innerHTML='';$('overview').hidden=true;return;}
+  $('overview').hidden=false;
+  $('ovTitle').textContent=`${t('overview')} · ${weekTitle()} · ${weekRange()}`;
+  let h=`<table><thead><tr><th scope="col"><span class="sr-only">${esc(t('rooms'))}</span></th>${infos.map(i=>`<th scope="col">${esc(dayLabel(i.date))}</th>`).join('')}</tr></thead><tbody>`;
+  st.rooms.forEach((r,ri)=>{
+    h+=`<tr><th scope="row">${esc(r.name)}</th>${infos.map(info=>`<td>${info.rooms[ri].slots.filter(Boolean).map(id=>{
+      const x=info.people.find(y=>y.p.id===id);
+      return `<div>${esc(x.p.name)}${x.time&&!x.abs?` <small>${esc(span(x.time))}</small>`:''}</div>`;}).join('')}</td>`).join('')}</tr>`;
+  });
+  const unassigned=infos.map(info=>info.issues.filter(i=>i.k==='unassigned').map(i=>i.x));
+  if(unassigned.some(l=>l.length))h+=`<tr><th scope="row">${esc(t('notAssigned'))}</th>${unassigned.map(l=>`<td>${l.map(x=>`<div>${esc(x.p.name)}</div>`).join('')}</td>`).join('')}</tr>`;
+  h+=`<tr><th scope="row">${esc(t('absentH'))}</th>${infos.map(info=>`<td>${info.absent.map(x=>`<div>${esc(x.p.name)} <small>${esc(t('abs.'+x.abs.type))}</small></div>`).join('')}</td>`).join('')}</tr>`;
+  $('ovTable').innerHTML=h+'</tbody></table>';
+}
+function renderWeek(){
+  $('weekTitle').textContent=weekTitle();
+  $('weekRange').textContent=weekRange();
+  const empty=!st.staff.length&&!st.rooms.length;
+  $('emptyActions').hidden=!empty;
+  const infos=weekDates().map(dayInfo);
+  const n=infos.reduce((s,i)=>s+i.issues.length,0);
+  const s=$('weekStatus');
+  if(empty){s.className='status info';s.textContent=t('nobody');}
+  else if(!st.rooms.length){s.className='status info';s.textContent=t('noRooms');}
+  else if(n){s.className='status err';s.textContent=n===1?t('oneBad'):t('someBad',{n});}
+  else{s.className='status ok';s.textContent=t('allOk',{n:infos.length});}
+  const focus=document.activeElement&&document.activeElement.id;
+  $('days').innerHTML=empty?'':infos.map(dayCard).join('');
+  if(focus&&focus.startsWith('s-')&&$(focus))$(focus).focus();
+  renderOverview(infos);
+}
+$('days').addEventListener('change',e=>{
+  const sel=e.target.closest('select[data-room]');if(!sel)return;
+  const {date,room}=sel.dataset,slot=Number(sel.dataset.slot),r=roomById(room);
+  const pl=ensurePlan(date);
+  const list=slotsOf(date,r);list[slot]=sel.value;pl.a[room]=list;
+  save();renderWeek();
+  Tools.diag.log('assigned',{slot,set:!!sel.value});
+});
+$('days').addEventListener('click',e=>{
+  const p=e.target.closest('[data-person]'),a=e.target.closest('[data-add]');
+  if(p)openDay(p.dataset.date,p.dataset.person);
+  else if(a)openDay(a.dataset.add,null);
+});
+$('btnPrev').addEventListener('click',()=>{week=addDays(week,-7);renderWeek();});
+$('btnNext').addEventListener('click',()=>{week=addDays(week,7);renderWeek();});
+$('btnToday').addEventListener('click',()=>{week=mondayOf(today());renderWeek();});
+
+/** Fill free places: unassigned people go to their room of the same weekday last week, else their home room */
+function fillWeek(){
+  let n=0;
+  for(const date of weekDates()){
+    const prev=addDays(date,-7);
+    for(;;){
+      const info=dayInfo(date);
+      const todo=info.issues.filter(i=>i.k==='unassigned').map(i=>i.x.p);
+      let done=false;
+      for(const p of todo){
+        const before=st.rooms.filter(r=>slotsOf(prev,r).includes(p.id)).map(r=>r.id);
+        for(const rid of [...before,p.home].filter(Boolean)){
+          const r=roomById(rid);if(!r)continue;
+          const list=slotsOf(date,r),i=list.indexOf('');
+          if(i<0)continue;
+          list[i]=p.id;ensurePlan(date).a[r.id]=list;n++;done=true;break;
+        }
+      }
+      if(!done)break;
+    }
+  }
+  return n;
+}
+$('btnFill').addEventListener('click',()=>{
+  const n=fillWeek();save();renderWeek();
+  Tools.toast(n?t('filled',{n}):t('filledNone'));
+  Tools.diag.log('fill week',{n});
+});
+$('btnClearWeek').addEventListener('click',()=>{
+  if(!confirm(t('confirmClearWeek',{n:isoWeek(week).w})))return;
+  for(let i=0;i<7;i++)delete st.plans[addDays(week,i)];
+  save();renderWeek();Tools.toast(t('weekCleared'));
+  Tools.diag.log('week cleared');
+});
+
+/* ---------- Export: text, CSV, print ---------- */
+function weekText(){
+  const lines=[t('textTitle',{w:weekTitle(),r:weekRange()})];
+  for(const info of weekDates().map(dayInfo)){
+    lines.push('',`${t('wdLong'+wd(info.date))}, ${dm(info.date)}`);
+    if(!info.onDuty.length)lines.push(t('textNobody'));
+    for(const room of info.rooms){
+      const names=room.slots.filter(Boolean).map(id=>{const x=info.people.find(y=>y.p.id===id);return x.time&&!x.abs?`${x.p.name} (${span(x.time)})`:x.p.name;});
+      if(names.length)lines.push(`${room.r.name}: ${names.join(', ')}`);
+    }
+    const un=info.issues.filter(i=>i.k==='unassigned').map(i=>i.x.p.name);
+    if(un.length)lines.push(t('textNoRoom',{list:un.join(', ')}));
+    if(info.absent.length)lines.push(t('textAbsent',{list:info.absent.map(x=>`${x.p.name} (${t('abs.'+x.abs.type)})`).join(', ')}));
+  }
+  return lines.join('\n');
+}
+function weekCsv(){
+  const de=Tools.lang()==='de',sep=de?';':',';
+  const q=v=>{const s=String(v);return s.includes(sep)||/["\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;};
+  const num=m=>de?String(m/60).replace('.',','):String(m/60);
+  const rows=[t('csvHead')];
+  for(const info of weekDates().map(dayInfo)){
+    const day=t('wd'+wd(info.date));
+    for(const room of info.rooms)for(const id of room.slots.filter(Boolean)){
+      const x=info.people.find(y=>y.p.id===id),tm=x.time&&!x.abs?x.time:null;
+      rows.push([info.date,day,room.r.name,x.p.name,tm?tm.s:'',tm?tm.e:'',tm?tm.p:'',tm?num(netMin(tm)):'',x.abs?t('abs.'+x.abs.type):''].map(q).join(sep));
+    }
+    for(const i of info.issues.filter(i=>i.k==='unassigned')){
+      const tm=i.x.time;
+      rows.push([info.date,day,'',i.x.p.name,tm.s,tm.e,tm.p,num(netMin(tm)),''].map(q).join(sep));
+    }
+    for(const x of info.absent)rows.push([info.date,day,t('csvAbsent'),x.p.name,'','','','',t('abs.'+x.abs.type)].map(q).join(sep));
+  }
+  return '﻿'+rows.join('\r\n')+'\r\n';
+}
+if(navigator.share)$('btnShare').hidden=false;
+$('btnShare').addEventListener('click',async()=>{
+  try{await navigator.share({title:t('textTitle',{w:weekTitle(),r:weekRange()}),text:weekText()});Tools.diag.log('week shared');}
+  catch(err){if(err.name!=='AbortError'){Tools.diag.log('share failed',err.name);Tools.toast(t('copyFail'));}}
+});
+$('btnCopy').addEventListener('click',async()=>{
+  const ok=await Tools.copyText(weekText());
+  Tools.toast(ok?t('copied'):t('copyFail'));
+  Tools.diag.log('week copied',{ok});
+});
+$('btnCsv').addEventListener('click',()=>{
+  const {w,y}=isoWeek(week);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([weekCsv()],{type:'text/csv;charset=utf-8'}));
+  a.download=t('csvFile',{n:pad(w),y});
+  document.body.append(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  Tools.toast(t('csvSaved'));Tools.diag.log('csv saved');
+});
+$('btnPrint').addEventListener('click',()=>{Tools.diag.log('print');window.print();});
+
+/* ---------- Day dialog: one person on one day ---------- */
+const dayDlg=$('dayDlg');let dayCtx=null;
+const absOptions=sel=>{const v=sel.value;sel.innerHTML=ABS_TYPES.map(k=>`<option value="${k}">${esc(t('abs.'+k))}</option>`).join('');if(v)sel.value=v;};
+function openDay(date,id){
+  dayCtx={date,id};
+  const pick=$('dfPickWrap');
+  if(!id){
+    const cand=st.staff.filter(p=>!timeOn(p,date)&&!absenceOn(p.id,date));
+    if(!cand.length){Tools.toast(t('noOneToAdd'));return;}
+    $('dfPick').innerHTML=cand.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+    dayCtx.id=cand[0].id;
+  }
+  pick.hidden=!!id;
+  dayCtx.add=!id;
+  fillDay(true);
+  dayDlg.showModal();
+  Tools.diag.log('day dialog',{add:!id});
+}
+function fillDay(resetTimes){
+  const {date,id,add}=dayCtx,p=staffById(id);
+  $('dayDlgH').textContent=add?t('addTitle',{day:dayLabel(date)}):t('dayTitle',{name:p.name,day:dayLabel(date)});
+  const reg=p.times[wd(date)];
+  $('dfRegular').textContent=reg?t('regularIs',{time:span(reg),p:reg.p}):t('regularOff');
+  const abs=absenceOn(id,date);
+  $('dfTimeSet').hidden=!!abs;
+  if(resetTimes){
+    const cur=timeOn(p,date)||reg||{s:'08:00',e:'12:00',p:0};
+    $('dfStart').value=cur.s;$('dfEnd').value=cur.e;$('dfPause').value=String(cur.p);
+  }
+  const o=st.plans[date]&&st.plans[date].o[id];
+  $('dfReset').hidden=!o;
+  $('dfFree').hidden=!timeOn(p,date);
+  updateDayNet();
+  absOptions($('dfAbsType'));
+  $('dfAbsAdd').hidden=!!abs;$('dfAbsDel').hidden=!abs;
+  $('dfAbsInfo').textContent=abs?t('absentInfo',{type:t('abs.'+abs.type),range:absRange(abs)}):t('notAbsent');
+}
+const readTime=(s,e,p)=>({s:$(s).value,e:$(e).value,p:Math.round(Tools.parseNum($(p).value)||0)});
+function netText(x){
+  if(!validTime(x))return {text:t('w.order'),warn:true};
+  const w=timeWarnings(x);
+  return {text:[t('netPause',{h:hours(netMin(x)),p:x.p}),...w.map(k=>t(k))].join(' · '),warn:w.length>0};
+}
+function updateDayNet(){const r=netText(readTime('dfStart','dfEnd','dfPause'));$('dfNet').textContent=r.text;$('dfNet').style.color=r.warn?'var(--warn)':'';}
+for(const id of ['dfStart','dfEnd','dfPause'])$(id).addEventListener('input',updateDayNet);
+$('dfPick').addEventListener('change',()=>{dayCtx.id=$('dfPick').value;fillDay(true);});
+$('dayForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const x=readTime('dfStart','dfEnd','dfPause');
+  if(!validTime(x)){Tools.toast(t('badTimes'));return;}
+  const {date,id}=dayCtx,p=staffById(id),reg=p.times[wd(date)],pl=ensurePlan(date);
+  if(reg&&reg.s===x.s&&reg.e===x.e&&reg.p===x.p)delete pl.o[id];else pl.o[id]=x;
+  save();dayDlg.close();renderWeek();Tools.toast(t('timeSaved'));
+  Tools.diag.log('day time saved',{add:dayCtx.add});
+});
+$('dfReset').addEventListener('click',()=>{
+  const {date,id}=dayCtx;delete ensurePlan(date).o[id];save();fillDay(true);renderWeek();
+});
+$('dfFree').addEventListener('click',()=>{
+  const {date,id}=dayCtx,p=staffById(id),pl=ensurePlan(date);
+  if(p.times[wd(date)])pl.o[id]={free:true};else delete pl.o[id];
+  save();dayDlg.close();renderWeek();
+  Tools.diag.log('day off');
+});
+$('dfAbsBtn').addEventListener('click',()=>{
+  const {date,id}=dayCtx;
+  if(st.absences.length>=MAX_ABS){Tools.toast(t('fullAbs'));return;}
+  st.absences.push({id:newId('a'),staff:id,from:date,to:date,type:$('dfAbsType').value});
+  save();dayDlg.close();renderWeek();Tools.toast(t('absAdded'));
+  Tools.diag.log('absence day added');
+});
+$('dfAbsLift').addEventListener('click',()=>{
+  const {date,id}=dayCtx,a=absenceOn(id,date);if(!a)return;
+  // Take this one day out of the period: it may split into two
+  st.absences.splice(st.absences.indexOf(a),1);
+  if(a.from<date)st.absences.push({...a,to:addDays(date,-1)});
+  if(a.to>date)st.absences.push({...a,id:newId('a'),from:addDays(date,1)});
+  save();fillDay(true);renderWeek();
+  Tools.diag.log('absence day lifted');
+});
+$('dfClose').addEventListener('click',()=>dayDlg.close());
+dayDlg.addEventListener('click',e=>{if(e.target===dayDlg)dayDlg.close();});
+
+/* ---------- Staff ---------- */
+function staffSummary(p){
+  const days=Object.keys(p.times).map(Number).sort((a,b)=>a-b);
+  if(!days.length)return {text:t('noDays'),warn:false};
+  const total=days.reduce((s,d)=>s+netMin(p.times[d]),0);
+  const warn=days.some(d=>timeWarnings(p.times[d]).length);
+  return {text:`${days.map(d=>t('wd'+d)).join(', ')} · ${t('weekTotal',{h:hours(total)})}${warn?' · ⚠':''}`,warn};
+}
+function renderStaff(){
+  $('staffCount').textContent=String(st.staff.length);
+  $('staffList').innerHTML=st.staff.length?st.staff.map(p=>{
+    const s=staffSummary(p);
+    return `<li><button type="button" class="person" data-edit="${esc(p.id)}"><span class="who">${esc(p.name)}${p.role?` <span class="muted">· ${esc(p.role)}</span>`:''}</span><small${s.warn?' class="warn"':''}>${esc(s.text)}</small></button></li>`;
+  }).join(''):`<li class="muted">${esc(t('staffEmpty'))}</li>`;
+}
+const staffDlg=$('staffDlg');let editId=null;
+function openStaff(id){
+  if(!id&&st.staff.length>=MAX_STAFF){Tools.toast(t('fullStaff',{n:MAX_STAFF}));return;}
+  editId=id;
+  const p=id?staffById(id):{name:'',role:'',home:'',times:{}};
+  $('staffDlgH').textContent=id?t('editStaff'):t('newStaff');
+  $('sfName').value=p.name;$('sfRole').value=p.role;
+  $('sfHome').innerHTML=`<option value="">${esc(t('noHome'))}</option>`+st.rooms.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
+  $('sfHome').value=p.home||'';
+  const days=[...new Set([...st.days,...Object.keys(p.times).map(Number)])].sort((a,b)=>a-b);
+  $('sfTimes').innerHTML=days.map(d=>{
+    const x=p.times[d],on=!!x||!id,v=x||{s:'08:00',e:'16:30',p:30};
+    return `<div class="trow" data-wd="${d}">
+      <label class="check"><input type="checkbox" data-on${on?' checked':''}> ${esc(t('wdLong'+d))}</label>
+      <input type="time" step="300" data-s value="${v.s}" aria-label="${esc(t('wdLong'+d)+': '+t('from'))}"${on?'':' disabled'}>
+      <input type="time" step="300" data-e value="${v.e}" aria-label="${esc(t('wdLong'+d)+': '+t('to'))}"${on?'':' disabled'}>
+      <input type="number" min="0" max="240" step="5" inputmode="numeric" data-p value="${v.p}" aria-label="${esc(t('wdLong'+d)+': '+t('pauseMin'))}"${on?'':' disabled'}>
+      <span class="net"></span></div>`;
+  }).join('');
+  $('sfDelete').hidden=!id;
+  updateStaffNet();
+  staffDlg.showModal();
+  if(!id)$('sfName').focus();
+  Tools.diag.log('staff dialog',{edit:!!id});
+}
+function readStaffTimes(){
+  const times={};let bad=false;
+  for(const row of $('sfTimes').children){
+    const on=row.querySelector('[data-on]').checked;
+    for(const inp of row.querySelectorAll('input:not([data-on])'))inp.disabled=!on;
+    const net=row.querySelector('.net');
+    if(!on){net.textContent='';continue;}
+    const x={s:row.querySelector('[data-s]').value,e:row.querySelector('[data-e]').value,p:Math.round(Tools.parseNum(row.querySelector('[data-p]').value)||0)};
+    const r=netText(x);
+    net.textContent=r.text;net.classList.toggle('warn',r.warn);
+    if(validTime(x))times[row.dataset.wd]=x;else bad=true;
+  }
+  return {times,bad};
+}
+function updateStaffNet(){
+  const {times}=readStaffTimes();
+  $('sfTotal').textContent=t('weekTotal',{h:hours(Object.values(times).reduce((s,x)=>s+netMin(x),0))});
+}
+$('sfTimes').addEventListener('input',updateStaffNet);
+$('sfTimes').addEventListener('change',updateStaffNet);
+$('staffForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const name=clean($('sfName').value);
+  if(!name){Tools.toast(t('nameMissing'));$('sfName').focus();return;}
+  if(st.staff.some(p=>p.id!==editId&&same(p.name,name))){Tools.toast(t('dupName',{name}));return;}
+  const {times,bad}=readStaffTimes();
+  if(bad){Tools.toast(t('badTimes'));return;}
+  const data={name,role:clean($('sfRole').value),home:$('sfHome').value,times};
+  if(editId)Object.assign(staffById(editId),data);
+  else st.staff.push({id:newId('p'),...data});
+  save();staffDlg.close();render();
+  Tools.diag.log('staff saved',{edit:!!editId,days:Object.keys(times).length});
+});
+$('sfCancel').addEventListener('click',()=>staffDlg.close());
+$('sfDelete').addEventListener('click',()=>{
+  const p=staffById(editId);
+  if(!p||!confirm(t('confirmDelStaff',{name:p.name})))return;
+  st.staff.splice(st.staff.indexOf(p),1);
+  st.absences=st.absences.filter(a=>a.staff!==p.id);
+  for(const pl of Object.values(st.plans)){
+    for(const list of Object.values(pl.a))list.forEach((id,i)=>{if(id===p.id)list[i]='';});
+    delete pl.o[p.id];
+  }
+  save();staffDlg.close();render();
+  Tools.diag.log('staff deleted');
+});
+$('btnAddStaff').addEventListener('click',()=>openStaff(null));
+$('staffList').addEventListener('click',e=>{const b=e.target.closest('[data-edit]');if(b)openStaff(b.dataset.edit);});
+
+/* ---------- Rooms ---------- */
+function renderRooms(){
+  $('roomCount').textContent=String(st.rooms.length);
+  $('roomList').innerHTML=st.rooms.length?st.rooms.map((r,i)=>`<li class="roomrow" data-room="${esc(r.id)}">
+    <input type="text" maxlength="40" value="${esc(r.name)}" data-name aria-label="${esc(t('renameRoom',{room:r.name}))}">
+    <input type="number" min="1" max="${MAX_SLOTS}" inputmode="numeric" value="${r.slots}" data-slots aria-label="${esc(t('placesFor',{room:r.name}))}" title="${esc(t('places'))}">
+    <button type="button" class="x" data-up aria-label="${esc(t('up',{room:r.name}))}"${i?'':' disabled'}>↑</button>
+    <button type="button" class="x" data-del aria-label="${esc(t('removeRoom',{room:r.name}))}">✕</button></li>`).join('')
+    :`<li class="muted">${esc(t('roomsEmpty'))}</li>`;
+}
+$('roomForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const name=clean($('roomIn').value);
+  if(!name)return;
+  if(st.rooms.some(r=>same(r.name,name))){Tools.toast(t('dupRoom',{name}));return;}
+  if(st.rooms.length>=MAX_ROOMS){Tools.toast(t('fullRooms',{n:MAX_ROOMS}));return;}
+  st.rooms.push({id:newId('r'),name,slots:1});
+  $('roomIn').value='';save();render();$('roomIn').focus();
+  Tools.diag.log('room added',{rooms:st.rooms.length});
+});
+$('roomList').addEventListener('change',e=>{
+  const li=e.target.closest('[data-room]');if(!li)return;
+  const r=roomById(li.dataset.room);
+  if(e.target.matches('[data-name]')){
+    const name=clean(e.target.value);
+    if(name&&!st.rooms.some(x=>x!==r&&same(x.name,name)))r.name=name;
+    else if(name)Tools.toast(t('dupRoom',{name}));
+  }else if(e.target.matches('[data-slots]')){
+    r.slots=Math.min(MAX_SLOTS,Math.max(1,Math.round(Tools.parseNum(e.target.value)||1)));
+    for(const pl of Object.values(st.plans))if(pl.a[r.id])pl.a[r.id]=pl.a[r.id].slice(0,r.slots);
+  }
+  save();render();
+});
+$('roomList').addEventListener('click',e=>{
+  const li=e.target.closest('[data-room]');if(!li)return;
+  const r=roomById(li.dataset.room),i=st.rooms.indexOf(r);
+  if(e.target.closest('[data-up]')&&i>0){
+    st.rooms.splice(i,1);st.rooms.splice(i-1,0,r);save();render();
+    const b=document.querySelector(`[data-room="${CSS.escape(r.id)}"] [data-up]`);if(b&&!b.disabled)b.focus();
+  }else if(e.target.closest('[data-del]')){
+    if(!confirm(t('confirmDelRoom',{name:r.name})))return;
+    st.rooms.splice(i,1);
+    for(const pl of Object.values(st.plans))delete pl.a[r.id];
+    for(const p of st.staff)if(p.home===r.id)p.home='';
+    save();render();
+    Tools.diag.log('room deleted');
+  }
+});
+
+/* ---------- Absences ---------- */
+const absRange=a=>a.from===a.to?t('absOne',{a:dmy(a.from)}):t('absRange',{a:dmy(a.from),b:dmy(a.to)});
+function renderAbs(){
+  const who=$('absWho'),v=who.value;
+  who.innerHTML=st.staff.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  if(staffById(v))who.value=v;
+  absOptions($('absType'));
+  if(!$('absFrom').value)$('absFrom').value=today();
+  if(!$('absTo').value)$('absTo').value=$('absFrom').value;
+  $('btnAbsAdd').disabled=!st.staff.length;
+  const past=$('absPast').checked,now=today();
+  const list=st.absences.filter(a=>past||a.to>=now).slice().sort((a,b)=>a.from.localeCompare(b.from)||staffById(a.staff).name.localeCompare(staffById(b.staff).name));
+  $('absCount').textContent=String(list.length);
+  $('absList').innerHTML=list.length?list.map(a=>{
+    const p=staffById(a.staff);
+    return `<li><span class="grow"><span class="who">${esc(p.name)}</span> <span class="badge">${esc(t('abs.'+a.type))}</span><br><span class="muted">${esc(absRange(a))}</span></span><button type="button" class="x" data-del="${esc(a.id)}" aria-label="${esc(t('removeAbs',{name:p.name}))}">✕</button></li>`;
+  }).join(''):`<li class="muted">${esc(t('absEmpty'))}</li>`;
+}
+$('absFrom').addEventListener('change',()=>{if(!$('absTo').value||$('absTo').value<$('absFrom').value)$('absTo').value=$('absFrom').value;});
+$('absForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const staff=$('absWho').value,from=$('absFrom').value,to=$('absTo').value;
+  if(!staffById(staff)){Tools.toast(t('absNoPerson'));return;}
+  if(!isDate(from)||!isDate(to)||to<from){Tools.toast(t('absBadRange'));return;}
+  if(st.absences.length>=MAX_ABS){Tools.toast(t('fullAbs'));return;}
+  st.absences.push({id:newId('a'),staff,from,to,type:$('absType').value});
+  save();render();Tools.toast(t('absAdded'));
+  Tools.diag.log('absence added',{days:Math.round((parse(to)-parse(from))/864e5)+1});
+});
+$('absPast').addEventListener('change',renderAbs);
+$('absList').addEventListener('click',e=>{
+  const b=e.target.closest('[data-del]');if(!b)return;
+  st.absences=st.absences.filter(a=>a.id!==b.dataset.del);save();render();
+});
+
+/* ---------- Settings: weekdays in the plan ---------- */
+function renderSettings(){
+  $('daysSet').innerHTML=[1,2,3,4,5,6,7].map(d=>`<label class="check"><input type="checkbox" data-day="${d}"${st.days.includes(d)?' checked':''}> ${esc(t('wd'+d))}</label>`).join('');
+}
+$('daysSet').addEventListener('change',e=>{
+  const days=[...$('daysSet').querySelectorAll('input:checked')].map(i=>Number(i.dataset.day));
+  if(!days.length){e.target.checked=true;return;}
+  st.days=days;save();render();
+});
+
+/* ---------- Example: a small general practice ---------- */
+$('btnExample').addEventListener('click',()=>{
+  const rn=t('exRooms').split('|'),roles=t('exRoles').split('|');
+  st.rooms=rn.map((name,i)=>({id:newId('r'),name,slots:i===0?2:1}));
+  const R=i=>st.rooms[i].id;
+  const T=(s,e,p)=>({s,e,p});
+  const wk=(x,days)=>Object.fromEntries(days.map(d=>[d,x]));
+  st.staff=[
+    {name:'Dr. Weber',role:roles[0],home:R(2),times:{...wk(T('08:00','18:00',90),[1,2,4]),...wk(T('08:00','13:00',0),[3,5])}},
+    {name:'Dr. Yilmaz',role:roles[1],home:R(3),times:wk(T('08:00','17:00',60),[1,2,4,5])},
+    {name:'Anna',role:roles[2],home:R(0),times:wk(T('07:30','16:00',30),[1,2,3,4,5])},
+    {name:'Ben',role:roles[3],home:R(0),times:wk(T('12:00','18:30',30),[1,2,4])},
+    {name:'Carla',role:roles[4],home:R(1),times:wk(T('07:30','12:30',0),[1,2,3,4,5])},
+    {name:'Dora',role:roles[5],home:R(4),times:wk(T('08:00','16:30',30),[1,2,3,4])},
+  ].map(p=>({id:newId('p'),...p}));
+  st.absences=[{id:newId('a'),staff:st.staff[5].id,from:addDays(week,2),to:addDays(week,2),type:'train'}];
+  fillWeek();save();render();Tools.toast(t('exampleLoaded'));
+  Tools.diag.log('example loaded');
+});
+
+function render(){
+  renderWeek();renderStaff();renderRooms();renderAbs();renderSettings();
+}
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const findStaff=name=>{const p=st.staff.find(x=>same(x.name,clean(name)));if(!p)throw new Error(`Unknown person: ${name}. Known: ${st.staff.map(x=>x.name).join(', ')||'none'}`);return p;};
+const findRoom=name=>{const r=st.rooms.find(x=>same(x.name,clean(name)));if(!r)throw new Error(`Unknown room: ${name}. Known: ${st.rooms.map(x=>x.name).join(', ')||'none'}`);return r;};
+const checkDate=s=>{if(!isDate(s))throw new Error('date must be a valid date as YYYY-MM-DD');return s;};
+const ABS_EXT={vac:'holiday',sick:'sick',train:'training',off:'time_off',other:'other'};
+const WEEKDAYS=['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+const timeJson=x=>({start:x.s,end:x.e,breakMinutes:x.p,workHours:Math.round(netMin(x)/60*100)/100});
+function weekJson(){
+  const {w,y}=isoWeek(week);
+  const days=weekDates().map(dayInfo).map(info=>({
+    date:info.date,weekday:WEEKDAYS[wd(info.date)-1],
+    rooms:info.rooms.map(room=>({room:room.r.name,places:room.r.slots,people:room.slots.filter(Boolean).map(id=>staffById(id).name)})),
+    onDuty:info.onDuty.map(x=>({name:x.p.name,...timeJson(x.time),changedForThisDay:x.changed,rooms:(info.where[x.p.id]||[]).map(id=>roomById(id).name)})),
+    absent:info.absent.map(x=>({name:x.p.name,type:ABS_EXT[x.abs.type]})),
+    problems:info.issues.map(i=>({type:i.k==='off'?'assigned_but_off_duty':i.k==='absent'?'assigned_but_absent':i.k==='double'?'assigned_more_than_once':'not_assigned',
+      name:i.x.p.name,rooms:i.rooms.map(id=>roomById(id).name)}))
+  }));
+  return {isoWeek:w,isoYear:y,monday:week,complete:st.rooms.length>0&&days.every(d=>!d.problems.length),days};
+}
+const dateProp={type:'string',minLength:10,maxLength:10,description:'A date as YYYY-MM-DD.'};
+Tools.mcp.register({
+  name:'get_week',title:'Read the week plan',label:'mcp.week',readOnly:true,
+  description:'Shows and returns the duty roster of one calendar week (the week containing the given date, default: the week shown in the app): for each planned weekday the rooms with the assigned people, who is on duty with start, end, break and working hours, who is absent, and the problems (people on duty without a room or in more than one room, assigned people who are absent or off duty). "complete" is true when every day is fine.',
+  inputSchema:{type:'object',properties:{date:dateProp},additionalProperties:false},
+  execute:({date})=>{
+    if(date!==undefined)week=mondayOf(checkDate(date));
+    showTab('week');
+    return weekJson();
+  }
+});
+Tools.mcp.register({
+  name:'get_staff',title:'Read staff, rooms and absences',label:'mcp.staff',readOnly:true,
+  description:'Returns the staff with role, home room and regular working hours per weekday (start, end, break minutes, working hours without break), the rooms with their number of places, the planned weekdays, and all absences that end today or later.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({
+    plannedWeekdays:st.days.map(d=>WEEKDAYS[d-1]),
+    rooms:st.rooms.map(r=>({name:r.name,places:r.slots})),
+    staff:st.staff.map(p=>({name:p.name,role:p.role,homeRoom:p.home?roomById(p.home).name:null,
+      regularHours:Object.fromEntries(Object.entries(p.times).map(([d,x])=>[WEEKDAYS[d-1],timeJson(x)]))})),
+    absences:st.absences.filter(a=>a.to>=today()).map(a=>({name:staffById(a.staff).name,type:ABS_EXT[a.type],from:a.from,to:a.to}))
+  })
+});
+Tools.mcp.register({
+  name:'assign_room',title:'Assign a person to a room',label:'mcp.assign',
+  description:'Assigns a person to a room on one date in the week plan; the person is taken out of any other room that day, so they end up in exactly one room. The person must be on duty that day and not absent, and the room needs a free place. Returns the updated week plan (like get_week).',
+  inputSchema:{type:'object',properties:{
+    date:dateProp,
+    name:{type:'string',minLength:1,maxLength:MAX_NAME,description:'Name of the person, as in get_staff.'},
+    room:{type:'string',minLength:1,maxLength:MAX_NAME,description:'Name of the room, as in get_staff.'}
+  },required:['date','name','room'],additionalProperties:false},
+  execute:({date,name,room})=>{
+    checkDate(date);
+    const p=findStaff(name),r=findRoom(room);
+    if(absenceOn(p.id,date))throw new Error(`${p.name} is absent on ${date}.`);
+    if(!timeOn(p,date))throw new Error(`${p.name} is not on duty on ${date}.`);
+    const list=slotsOf(date,r);
+    if(!list.includes(p.id)){
+      const i=list.indexOf('');
+      if(i<0)throw new Error(`${r.name} has no free place on ${date} (${r.slots} places).`);
+      list[i]=p.id;
+    }
+    const pl=ensurePlan(date);
+    for(const other of st.rooms)if(other!==r&&pl.a[other.id])pl.a[other.id]=slotsOf(date,other).map(id=>id===p.id?'':id);
+    pl.a[r.id]=list;
+    save();
+    week=mondayOf(date);showTab('week');
+    return weekJson();
+  }
+});
+Tools.mcp.register({
+  name:'add_absence',title:'Add an absence',label:'mcp.absence',
+  description:'Adds an absence (holiday, sickness, training, time off or other) of a person from one date to another, both included. Absent people are left out of the week plan on those days; existing room assignments then show up as problems. Returns the added absence and all of the person’s absences that end today or later.',
+  inputSchema:{type:'object',properties:{
+    name:{type:'string',minLength:1,maxLength:MAX_NAME,description:'Name of the person, as in get_staff.'},
+    from:dateProp,to:{...dateProp,description:'Last day of the absence as YYYY-MM-DD. Default: same as from.'},
+    type:{type:'string',enum:['holiday','sick','training','time_off','other'],description:'Kind of absence. Default: other.'}
+  },required:['name','from'],additionalProperties:false},
+  execute:({name,from,to=from,type='other'})=>{
+    const p=findStaff(name);checkDate(from);checkDate(to);
+    if(to<from)throw new Error('to must not be before from.');
+    if(st.absences.length>=MAX_ABS)throw new Error('Too many absences stored.');
+    const k=Object.keys(ABS_EXT).find(x=>ABS_EXT[x]===type);
+    st.absences.push({id:newId('a'),staff:p.id,from,to,type:k});
+    save();render();
+    return {added:{name:p.name,type,from,to},absences:st.absences.filter(a=>a.staff===p.id&&a.to>=today()).map(a=>({name:p.name,type:ABS_EXT[a.type],from:a.from,to:a.to}))};
+  }
+});
+
+Tools.diag.info(()=>({tab:ui.tab,staff:st.staff.length,rooms:st.rooms.length,absences:st.absences.length,
+  plannedDays:Object.keys(st.plans).length,weekdays:st.days.join(''),weekIssues:weekDates().map(dayInfo).reduce((s,i)=>s+i.issues.length,0),
+  share:!!navigator.share}));
+showTab(ui.tab);
+Tools.onLang(render);
+})();
+</script>
+</body>
+</html>
