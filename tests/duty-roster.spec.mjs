@@ -3,7 +3,7 @@
 // during the day, one room shared morning/afternoon) and its check, day changes, auto-fill, text/CSV export,
 // English, WebMCP, migration of older formats.
 import { readFileSync } from 'node:fs';
-import { test, expect, clipboardText, switchLang, openMenu, closeMenu } from './helpers.mjs';
+import { test, expect, clipboardText, switchLang, openMenu, closeMenu, mockAndroidShare } from './helpers.mjs';
 
 // Wednesday of calendar week 47/2026 (Mon 16.11. – Sun 22.11.)
 const NOW = new Date('2026-11-18T10:00:00');
@@ -164,7 +164,10 @@ test('week plan: one room per working time, room change, shared room, overbookin
   await pick(sel(page, WED, 'Anna', '07:30–12:30'), 'Labor');
   await expect(page.locator('#weekStatus')).toHaveText('✓ Alle 5 Tage stimmen – jede Person ist für ihre ganze Arbeitszeit genau einem Raum zugeteilt.');
   await expect(page.locator('#weekStatus')).toHaveClass(/ok/);
-  await expect(page.locator('#ovTable tbody tr').first()).toHaveText('AnmeldungAnna 07:30–12:00Ben 13:00–18:30Carla 15:00–18:00Anna 07:30–12:00, 12:30–16:00');
+  // Plan for the team: by person (default), by room
+  await expect(page.locator('#ovTable tbody tr').first()).toHaveText('AnnaAnmeldung07:30–12:00Labor12:30–16:00Anmeldung07:30–12:00, 12:30–16:00Labor07:30–12:30');
+  await page.getByRole('button', { name: 'Nach Räumen' }).click();
+  await expect(page.locator('#ovTable tbody tr').first()).toHaveText('AnmeldungAnna07:30–12:00Ben13:00–18:30Carla15:00–18:00Anna07:30–12:00, 12:30–16:00');
   await page.reload();
   await expect(page.locator('#weekStatus')).toHaveClass(/ok/);
   await expect(sel(page, MON, 'Anna', '12:30–16:00')).toHaveValue(/./);
@@ -479,4 +482,68 @@ test('WebMCP: read the week, assign rooms per working time, add absences', async
     { type: 'assigned_but_absent', name: 'Ben', rooms: ['Anmeldung'] },
     { type: 'no_room', name: 'Carla', times: [{ start: '15:00', end: '18:00' }] }]);
   await expect(day(page, MON).locator('.issues li').nth(1)).toHaveText('Ben ist abwesend (Krank), aber eingeteilt: Anmeldung.');
+});
+
+test('week plan for the team: on top, room colours, absences, today, both views', async ({ page }) => {
+  await expect(page.locator('#overview')).toBeHidden();
+  await page.click('#btnExample');
+  // The plan comes before the editing part
+  const order = await page.locator('#panel-week > *').evaluateAll(els => els.map(e => e.id || e.querySelector('h2')?.id || ''));
+  expect(order.indexOf('overview')).toBeLessThan(order.indexOf('days'));
+  await expect(page.locator('#ovTitle')).toHaveText('Wochenplan KW 47 · 16.11. – 20.11.2026');
+  await expect(page.locator('#ovLegend span')).toHaveText(['Anmeldung', 'Labor', 'Sprechzimmer 1', 'Sprechzimmer 2', 'Funktionsraum']);
+  await expect(page.locator('#ovTable thead th.today')).toHaveText('Mi 18.11.');
+  // By person: rows are people, tags are rooms in their colour
+  await expect(page.locator('#ovTable tbody th')).toHaveText(['Dr. WeberÄrztin', 'Dr. YilmazArzt', 'AnnaMFA', 'BenMFA', 'CarlaMFA', 'DoraAuszubildende']);
+  const anna = page.locator('#ovTable tbody tr').nth(2);
+  await expect(anna.locator('td').nth(0).locator('.tag')).toHaveText(['Anmeldung07:30–12:00', 'Labor12:30–16:00']);
+  await expect(anna.locator('td').nth(4).locator('.tag')).toHaveText(['Anmeldung07:30–12:00', 'Urlaub12:30–16:00']);
+  await expect(anna.locator('td').nth(4).locator('.tag.abs')).toHaveCount(1);
+  const labor = await anna.locator('td').first().locator('.tag').nth(1).evaluate(e => getComputedStyle(e).borderInlineStartColor);
+  expect(labor).toBe('rgb(22, 163, 74)');
+  await expect(page.locator('#ovTable tbody tr').nth(5).locator('td').nth(2)).toHaveText('Fortbildung');
+  // Colour of a room can be changed
+  await tab(page, 'Räume');
+  await page.getByLabel('Farbe für Labor').fill('#123456');
+  await tab(page, 'Woche');
+  expect(await anna.locator('td').first().locator('.tag').nth(1).evaluate(e => getComputedStyle(e).borderInlineStartColor)).toBe('rgb(18, 52, 86)');
+  // A missing room is marked in red
+  await sel(page, MON, 'Anna', '12:30–16:00').selectOption('');
+  await expect(anna.locator('td').first().locator('.tag.none')).toHaveText('kein Raum12:30–16:00');
+  // By room; the view is kept
+  await page.getByRole('button', { name: 'Nach Räumen' }).click();
+  await expect(page.getByRole('button', { name: 'Nach Räumen' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#ovTable tbody th')).toHaveText(['Anmeldung', 'Labor', 'Sprechzimmer 1', 'Sprechzimmer 2', 'Funktionsraum', 'kein Raum', 'Abwesend']);
+  await page.reload();
+  await expect(page.locator('#ovTable tbody th').first()).toHaveText('Anmeldung');
+});
+
+test('week plan as image: saved on the computer, shared on the phone', async ({ page }) => {
+  await page.click('#btnExample');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnImage')]);
+  expect(download.suggestedFilename()).toBe('dienstplan-kw47-2026.png');
+  await expect(page.locator('#toast')).toHaveText('Bild gespeichert');
+  const png = readFileSync(await download.path());
+  expect(png.subarray(1, 4).toString()).toBe('PNG');
+  const width = png.readUInt32BE(16), height = png.readUInt32BE(20);
+  // 2× scale: 2 · (40 + 150 + 5 · 170) wide, all six people below each other
+  expect(width).toBe(2080);
+  expect(height).toBeGreaterThan(600);
+  // A different view gives a different image
+  await page.getByRole('button', { name: 'Nach Räumen' }).click();
+  const [d2] = await Promise.all([page.waitForEvent('download'), page.click('#btnImage')]);
+  expect(readFileSync(await d2.path()).equals(png)).toBe(false);
+});
+
+test.describe('image on a phone', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAndroidShare(page);
+    await page.reload();
+  });
+  test('the image is handed to the share sheet', async ({ page }) => {
+    await page.click('#btnExample');
+    await page.click('#btnImage');
+    await expect.poll(() => page.evaluate(() => window.__shared)).toEqual([[expect.objectContaining({ name: 'dienstplan-kw47-2026.png', type: 'image/png' })]]);
+    await expect(page.locator('#btnShare')).toBeVisible();
+  });
 });
