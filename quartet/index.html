@@ -8,7 +8,7 @@
 <title>Quartett</title>
 <meta name="description" content="Supertrumpf-Kartenspiel mit 17 Decks (Dinosaurier, Autos, Länder …) gegen den Computer oder mit mehreren Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server.">
 <meta name="tool:tags" content="Freizeit, Spiele">
-<meta name="tool:features" content="Kamera, KI-Agent">
+<meta name="tool:features" content="Kamera, Datei öffnen, KI-Agent">
 <meta name="tool:icon" content="trophy">
 <meta name="tool:color" content="#1565c0">
 <meta name="tool:short-name" content="Quartett">
@@ -17,9 +17,10 @@
 <meta name="tool:short-name-en" content="Quartet">
 <meta name="tool:storage" content="quartet.">
 <meta name="tool:webmcp" content="get_game, play_move">
+<meta name="tool:connect" content="https:">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-U+5Vx2WdHI7i7EcXhYW5317hzLiEVlDcNQbqCKovtyE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-XY+I6XDMSDXKp645nrVmGarivHUrqe+cFtjyv5/pMBk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https:; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -43,7 +44,8 @@ main{display:flex;flex-direction:column;padding:12px;padding-inline:max(12px,env
 .big-btns{display:grid;gap:10px}
 .big-btns .btn{min-height:60px;font-size:17px;justify-content:center}
 .big-btns small{display:block;font-size:14px;font-weight:400;opacity:.9}
-.field{display:grid;gap:4px}
+.field{display:grid;gap:4px;min-width:0}
+.field>*{min-width:0;max-width:100%}
 .field input,.field select,.cpu select{min-height:44px;font-size:16px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding-inline:10px}
 .deck-info{margin:0;color:var(--muted);font-size:15px}
 .cpu{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -100,6 +102,19 @@ textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;wo
 .qcard .cname{margin:0;background:var(--text);color:var(--surface);border-radius:6px;padding:6px 10px;font-size:17px;font-weight:800;text-transform:uppercase;overflow-wrap:anywhere;line-height:1.2}
 .qcard .pic{display:grid;place-items:center;height:64px;border-radius:6px;background:var(--surface-2);font-size:40px}
 .qcard .pic.flag{height:96px;padding:8px}
+.qcard .pic.photo{height:150px;padding:0;overflow:hidden}
+.qcard .pic .photo-img{width:100%;height:100%;object-fit:cover}
+.qcard.small .pic.photo{display:grid;height:110px}
+.qcard .credit{margin:-2px 0 0;font-size:11px;color:var(--muted);overflow-wrap:anywhere;line-height:1.25}
+.qcard.small .credit{display:block}
+.img-decks{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:6px}
+.img-decks li{display:flex;align-items:center;gap:8px;min-height:44px;padding:2px 2px 2px 10px;border:1px solid var(--border);border-radius:10px}
+.img-decks li span{flex:1;min-width:0}
+.img-status{margin:6px 0;font-weight:600;min-height:1.4em}
+.img-status.err{color:var(--err)}
+.img-status.ok{color:var(--ok)}
+#imgJson{min-height:96px}
+#h-img~.field{margin-block-end:12px}
 .qcard .pic .flag-img{height:80px;width:auto;max-width:100%;object-fit:contain;border-radius:3px;box-shadow:0 0 0 1px var(--border)}
 .cmp .who .flag-img{height:12px;width:16px;margin-inline-end:6px;vertical-align:-1px;box-shadow:0 0 0 1px var(--border)}
 .qcard .ctext{margin:0;font-size:14px;font-style:italic;color:var(--muted);line-height:1.3}
@@ -144,7 +159,7 @@ textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;wo
 :where(.qcard,.cmp li){--gc:var(--g0)}
 .g0{--gc:var(--g0)}.g1{--gc:var(--g1)}.g2{--gc:var(--g2)}.g3{--gc:var(--g3)}.g4{--gc:var(--g4)}.g5{--gc:var(--g5)}.g6{--gc:var(--g6)}.g7{--gc:var(--g7)}
 .out-msg{margin:auto;text-align:center;font-size:17px;color:var(--muted)}
-@media (max-height:560px){.qcard .pic,.qcard .ctext{display:none}.qcard .stat{min-height:40px}}
+@media (max-height:560px){.qcard .pic:not(.photo),.qcard .ctext{display:none}.qcard .pic.photo{height:90px}.qcard .stat{min-height:40px}}
 @media (prefers-reduced-motion:no-preference){.qcard,.reveal{animation:pop .18s ease-out}@keyframes pop{from{transform:scale(.96);opacity:.4}to{transform:none;opacity:1}}}
 </style>
 </head>
@@ -303,6 +318,28 @@ textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;wo
     <label class="check"><input type="checkbox" id="optStun"> <span data-i18n="optStun">Auch über das Internet verbinden (STUN-Server von Google)</span></label>
     <p class="muted" data-i18n="optStunHelp">Nur nötig, wenn die Handys nicht im selben WLAN sind. Der Server erfährt dabei die öffentliche IP-Adresse – die Spielzüge laufen trotzdem direkt. Klappt nicht in jedem Mobilfunknetz. Alle Geräte müssen es einschalten.</p>
   </section>
+
+  <section class="card" data-menu aria-labelledby="h-img">
+    <h2 id="h-img" data-i18n="imgH">Eigene Bilder</h2>
+    <p class="muted" data-i18n="imgIntro">Bilder für die Karten bringst du selbst mit – als ZIP-Datei oder als JSON-Liste mit Links. Sie bleiben nur auf diesem Gerät.</p>
+    <ul class="img-decks" id="imgDecks" aria-label="Kartensätze mit Bildern" data-i18n-attr="aria-label:imgDecksLbl"></ul>
+    <div class="field">
+      <label for="imgDeck" data-i18n="imgDeck">Kartensatz (für Dateien ohne Kartensatz-Ordner)</label>
+      <select id="imgDeck"></select>
+    </div>
+    <div class="row">
+      <button type="button" class="btn" id="btnImgZip" data-i18n="imgZip">ZIP-Datei wählen …</button>
+      <button type="button" class="btn" id="btnImgJsonFile" data-i18n="imgJsonFile">JSON-Datei wählen …</button>
+    </div>
+    <input type="file" id="imgZipIn" accept=".zip,application/zip,application/x-zip-compressed" hidden>
+    <input type="file" id="imgJsonIn" accept=".json,application/json,text/plain" hidden>
+    <div class="field">
+      <label for="imgJson" data-i18n="imgJsonLbl">Oder JSON-Liste bzw. Link zu einer JSON-Datei einfügen:</label>
+      <textarea id="imgJson" class="code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder='{"A1": "https://…/bild.jpg"}'></textarea>
+    </div>
+    <div class="row"><button type="button" class="btn" id="btnImgLinks" data-i18n="imgLinks">Bilder laden</button></div>
+    <p class="img-status" id="imgStatus" role="status" aria-live="polite"></p>
+  </section>
 </main>
 
 <!-- data:start -->
@@ -341,7 +378,15 @@ textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;wo
   </ol>
   <p>Ohne Kamera lassen sich die Codes kopieren und z. B. per Nachricht schicken („von Hand eingeben“). Den Namen, den die anderen sehen, stellst du im Menü (☰) ein.</p>
   <h3>Kartensätze</h3>
-  <p>Die 17 Kartensätze stammen aus dem Projekt <strong>supertrumpf-creator</strong>, mit dem sich dieselben Karten als PDF zum Ausdrucken erzeugen lassen. Hier hat jede Karte 4 bis 6 Zahlen-Kategorien und einen kurzen Text; die Länder zeigen ihre Flagge (Paket flag-icons, lädt beim ersten Ansehen und bleibt dann offline). Andere Bilder gibt es noch nicht. Werte sind gerundet und ohne Gewähr.</p>
+  <p>Die 17 Kartensätze stammen aus dem Projekt <strong>supertrumpf-creator</strong>, mit dem sich dieselben Karten als PDF zum Ausdrucken erzeugen lassen. Hier hat jede Karte 4 bis 6 Zahlen-Kategorien und einen kurzen Text; die Länder zeigen ihre Flagge (Paket flag-icons, lädt beim ersten Ansehen und bleibt dann offline). Andere Bilder bringst du selbst mit (siehe unten). Werte sind gerundet und ohne Gewähr.</p>
+  <h3>Eigene Bilder (Menü ☰)</h3>
+  <ul>
+    <li><strong>ZIP-Datei:</strong> Bilder (JPG, PNG, WebP, GIF) mit der Kartennummer (<code>A1.jpg</code>), dem Kartennamen (<code>Tyrannosaurus Rex.jpg</code>) oder dem Dateinamen aus supertrumpf-creator (<code>tyrannosaurus_rex.jpg</code>) als Namen. Liegen sie in einem Ordner mit der Kennung des Kartensatzes (z. B. <code>dinosaurs/</code>, <code>tiere/</code>), passen sie zu diesem Kartensatz, sonst zum gewählten. So passt z. B. der gepackte Ordner <code>cards_data/dinosaurs/images</code> direkt.</li>
+    <li><strong>JSON-Liste mit Links</strong> (einfügen, als Datei wählen oder als Link zu einer JSON-Datei): <code>{"A1": "https://…/bild.jpg"}</code> für den gewählten Kartensatz oder <code>{"dinosaurs": {"Velociraptor": {"url": "https://…", "credit": "Foto: …, CC BY-SA 4.0"}}}</code> für mehrere. Ein <code>credit</code> erscheint klein unter dem Bild.</li>
+    <li>Die Bilder werden verkleinert und nur auf diesem Gerät gespeichert (auch offline, nicht in der Sicherungsdatei). Mitspieler sehen sie nur, wenn sie dieselben Bilder geladen haben.</li>
+    <li>Links lädt die Seite nur, wenn du auf <strong>Bilder laden</strong> tippst – direkt vom genannten Server, ohne Cookies. Der Server muss das erlauben (CORS); Wikimedia Commons (<code>upload.wikimedia.org</code>) geht, viele andere Seiten nicht. Nur <code>https</code>.</li>
+    <li>Achte bei fremden Bildern auf Urheberrecht und Lizenz – die Bilder kommen von dir, nicht von dieser Seite.</li>
+  </ul>
   <h3>Verbindung &amp; Datenschutz</h3>
   <ul>
     <li>Die Verbindung nutzt <strong>WebRTC</strong>, wie bei den „Kartenspielen“. Die QR-Codes enthalten nur, wie die Geräte sich erreichen (zufälliger Gerätename im WLAN, Port, Schlüssel-Fingerabdruck). Danach laufen die Züge verschlüsselt direkt zwischen den Geräten, ohne Server.</li>
@@ -350,7 +395,7 @@ textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;wo
     <li>Klappt es nicht? Neu einladen. Manche Gäste- oder Firmen-WLANs lassen Geräte nicht miteinander sprechen – dann den Hotspot nehmen. Für verschiedene Netze gibt es im Menü (☰) „Auch über das Internet verbinden“ (fragt einen STUN-Server von Google nach der öffentlichen Adresse; klappt nicht in jedem Netz).</li>
     <li>Bricht ein Mitspieler ab, spielt der Computer für ihn weiter. Verlässt der Gastgeber das Spiel, endet es für alle.</li>
     <li>Die Kamera wird nur zum Scannen eingeschaltet; die Bilder bleiben auf dem Gerät.</li>
-    <li>Gespeichert werden nur Name, Einstellungen und wie oft du gespielt und gewonnen hast – im Browser dieses Geräts.</li>
+    <li>Gespeichert werden nur Name, Einstellungen, wie oft du gespielt und gewonnen hast und deine eigenen Bilder – im Browser dieses Geräts.</li>
   </ul>
   <h3>KI-Agenten (WebMCP)</h3>
   <ul>
@@ -379,7 +424,15 @@ textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;wo
   </ol>
   <p>Without a camera the codes can be copied and sent, e.g. by message (“enter manually”). Set the name the others see in the menu (☰).</p>
   <h3>Decks</h3>
-  <p>The 17 decks come from the <strong>supertrumpf-creator</strong> project, which prints the same cards as a PDF. Here every card has 4 to 6 number categories and a short text; countries show their flag (package flag-icons, loaded when first seen and then kept offline). Other pictures are not included yet. The card names, groups and texts are German. Values are rounded and without guarantee.</p>
+  <p>The 17 decks come from the <strong>supertrumpf-creator</strong> project, which prints the same cards as a PDF. Here every card has 4 to 6 number categories and a short text; countries show their flag (package flag-icons, loaded when first seen and then kept offline). Other pictures you bring yourself (see below). The card names, groups and texts are German. Values are rounded and without guarantee.</p>
+  <h3>Own pictures (menu ☰)</h3>
+  <ul>
+    <li><strong>ZIP file:</strong> pictures (JPG, PNG, WebP, GIF) named by the card number (<code>A1.jpg</code>), the card name (<code>Tyrannosaurus Rex.jpg</code>) or the file name of supertrumpf-creator (<code>tyrannosaurus_rex.jpg</code>). In a folder named after the deck id (e.g. <code>dinosaurs/</code>, <code>tiere/</code>) they go to that deck, otherwise to the deck picked. So a zipped <code>cards_data/dinosaurs/images</code> folder fits as it is.</li>
+    <li><strong>JSON list of links</strong> (paste it, choose a file or paste a link to a JSON file): <code>{"A1": "https://…/picture.jpg"}</code> for the deck picked or <code>{"dinosaurs": {"Velociraptor": {"url": "https://…", "credit": "Photo: …, CC BY-SA 4.0"}}}</code> for several. A <code>credit</code> is shown small below the picture.</li>
+    <li>The pictures are made smaller and saved on this device only (also offline, not in the backup file). Other players only see them if they loaded the same pictures.</li>
+    <li>Links are only fetched when you tap <strong>Load pictures</strong> – straight from the server named, without cookies. The server has to allow it (CORS); Wikimedia Commons (<code>upload.wikimedia.org</code>) works, many other sites do not. Only <code>https</code>.</li>
+    <li>Mind copyright and licence of pictures from others – the pictures come from you, not from this site.</li>
+  </ul>
   <h3>Connection &amp; privacy</h3>
   <ul>
     <li>The connection uses <strong>WebRTC</strong>, as in “Card Games”. The QR codes only contain how the devices reach each other (random device name in the Wi-Fi, port, key fingerprint). After that the moves travel encrypted directly between the devices, without a server.</li>
@@ -388,7 +441,7 @@ textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;wo
     <li>Not working? Invite again. Some guest or company Wi-Fi networks do not let devices talk to each other – use the hotspot then. For different networks there is “Also connect over the internet” in the menu (☰) (asks a Google STUN server for the public address; does not work in every network).</li>
     <li>If a player drops out, the computer plays on for them. If the host leaves, the game ends for everyone.</li>
     <li>The camera is only switched on for scanning; the images stay on the device.</li>
-    <li>Only your name, the settings and how often you played and won are saved – in this device's browser.</li>
+    <li>Only your name, the settings, how often you played and won and your own pictures are saved – in this device's browser.</li>
   </ul>
   <h3>AI agents (WebMCP)</h3>
   <ul>
@@ -406,7 +459,7 @@ textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;wo
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 8beff9cb36eb</p>
+  <p class="footer-version">Version ced9792620f7</p>
   <!-- footer:end -->
 </footer>
 
@@ -416,10 +469,11 @@ textarea.code{width:100%;min-height:84px;font:16px/1.3 ui-monospace,monospace;wo
 <script src="../assets/shared/p2p.js"></script>
 <script src="decks.js"></script>
 <script src="game.js"></script>
+<script src="images.js"></script>
 <script>
 (function(){
 'use strict';
-const Q=window.Quartet;
+const Q=window.Quartet,QI=window.QuartetImages;
 Tools.i18n({
 de:{
   you:'Du',botName:'Computer {n}',botFor:'{p} (Computer)',playerN:'Spieler {n}',hostName:'Gastgeber',guest:'Handy',
@@ -451,6 +505,15 @@ de:{
   catBy:'{p} wählt {c}',youPick:'Du wählst {c}',cardOf:'Karte von {p}',yourCard:'Deine Karte',showCardLbl:'Karte von {p} zeigen: {c}',tapToSee:'Antippen, um die ganze Karte zu sehen',tieRoundYou:'Gleichstand! {n} Karten liegen im Topf – du wählst noch einmal.',
   youWon:'Du hast gewonnen!',wonBy:'{p} hat gewonnen.',draw:'Unentschieden: {p}.',
   afterRounds:'Nach {n} Runden:',allCards:'Alle Karten verteilt.',
+  imgNone:'Noch keine eigenen Bilder.',imgCount:'{d}: {n} von {m} Bildern',imgRemove:'Entfernen',imgRemoveLbl:'Bilder von {d} entfernen',
+  imgRemoveAsk:'Eigene Bilder von {d} löschen?',imgRemoved:'Bilder entfernt',
+  imgWorking:'Bilder werden gespeichert … {i} von {n}',imgReading:'Lese …',
+  imgDone:'{n} Bilder gespeichert.',imgFailed:'{n} nicht geladen.',imgUnmatched:'{n} passen zu keiner Karte.',imgNothing:'Keine passenden Bilder gefunden.',
+  imgFailHosts:'Server erlaubt keine Zugriffe aus Webseiten (CORS) oder ist nicht erreichbar: {h}',
+  'imgErr.noZip':'Das ist keine ZIP-Datei.','imgErr.badZip':'Die ZIP-Datei ist beschädigt.','imgErr.zip64':'Die ZIP-Datei ist zu groß (ZIP64).',
+  'imgErr.zipTooBig':'Die ZIP-Datei ist zu groß (höchstens 300 MB).','imgErr.noInflate':'Dieser Browser kann keine ZIP-Dateien entpacken – bitte aktualisieren.',
+  'imgErr.badJson':'Das ist kein gültiges JSON.','imgErr.empty':'Erst eine JSON-Liste oder einen Link einfügen.','imgErr.jsonTooBig':'Die JSON-Liste ist zu groß.',
+  'imgErr.http':'Die JSON-Datei ließ sich nicht laden.','imgErr.noDeck':'Kartensatz unbekannt.','imgErr.other':'Fehler beim Laden der Bilder.',
   'mcp.read':'Spiel gelesen','mcp.move':'Zug gemacht'
 },
 en:{
@@ -500,6 +563,18 @@ en:{
   catBy:'{p} picks {c}',youPick:'You pick {c}',cardOf:'Card of {p}',yourCard:'Your card',showCardLbl:'Show the card of {p}: {c}',tapToSee:'Tap to see the whole card',tieRoundYou:'Tie! {n} cards are in the pot – you pick again.',
   youWon:'You won!',wonBy:'{p} won.',draw:'Draw: {p}.',
   afterRounds:'After {n} rounds:',allCards:'All cards won.',
+  imgH:'Own pictures',imgIntro:'You bring the pictures for the cards yourself – as a ZIP file or a JSON list of links. They stay on this device only.',
+  imgDecksLbl:'Decks with pictures',imgDeck:'Deck (for files without a deck folder)',imgZip:'Choose ZIP file …',imgJsonFile:'Choose JSON file …',
+  imgJsonLbl:'Or paste a JSON list or a link to a JSON file:',imgLinks:'Load pictures',
+  imgNone:'No own pictures yet.',imgCount:'{d}: {n} of {m} pictures',imgRemove:'Remove',imgRemoveLbl:'Remove pictures of {d}',
+  imgRemoveAsk:'Delete own pictures of {d}?',imgRemoved:'Pictures removed',
+  imgWorking:'Saving pictures … {i} of {n}',imgReading:'Reading …',
+  imgDone:'{n} pictures saved.',imgFailed:'{n} not loaded.',imgUnmatched:'{n} fit no card.',imgNothing:'No matching pictures found.',
+  imgFailHosts:'Server does not allow requests from web pages (CORS) or cannot be reached: {h}',
+  'imgErr.noZip':'This is not a ZIP file.','imgErr.badZip':'The ZIP file is damaged.','imgErr.zip64':'The ZIP file is too large (ZIP64).',
+  'imgErr.zipTooBig':'The ZIP file is too large (at most 300 MB).','imgErr.noInflate':'This browser cannot unpack ZIP files – please update it.',
+  'imgErr.badJson':'This is not valid JSON.','imgErr.empty':'Paste a JSON list or a link first.','imgErr.jsonTooBig':'The JSON list is too large.',
+  'imgErr.http':'The JSON file could not be loaded.','imgErr.noDeck':'Unknown deck.','imgErr.other':'Error while loading the pictures.',
   'mcp.read':'game read','mcp.move':'move made'
 }});
 const t=Tools.t,$=Tools.$;
@@ -641,6 +716,16 @@ function cardEl(d,c,opts){
   const pic=el('div','pic'+(c.f?' flag':''),c.f?null:d.emoji);pic.setAttribute('aria-hidden','true');
   if(c.f)pic.append(flagImg(c.f));
   body.append(pic);
+  // Own picture (kept on this device) instead of emoji/flag, with its credit line
+  if(QI.has(d.id,c.id)){
+    const cr=QI.credit(d.id,c.id);
+    if(cr)pic.after(el('p','credit',cr));
+    QI.url(d.id,c.id).then(u=>{
+      if(!u)return;
+      const img=el('img','photo-img');img.alt='';img.decoding='async';img.src=u;
+      pic.className='pic photo';pic.textContent='';pic.append(img);
+    });
+  }
   if(c.t&&!isEn())body.append(el('p','ctext',c.t));
   const rows=el('div','rows');
   d.cats.forEach((cat,k)=>{
@@ -1051,7 +1136,64 @@ for(const [id,key] of [['optSpeed','speed'],['optLevel','level'],['optLength','l
 }
 $('optStun').checked=!!settings.stun;
 $('optStun').addEventListener('change',()=>{settings.stun=$('optStun').checked;saveSet();Tools.diag.log('stun',settings.stun);});
+/* ================= Own pictures (menu) ================= */
+let imgBusy=false;
+function renderImages(){
+  deckOptions($('imgDeck'),$('imgDeck').value||settings.deck);
+  const ul=$('imgDecks'),c=QI.counts();ul.innerHTML='';
+  const ids=DECKS.map(d=>d.id).filter(id=>c[id]);
+  if(!ids.length){ul.append(el('li','',t('imgNone')));return;}
+  for(const id of ids){
+    const d=Q.deck(id),li=el('li');
+    li.append(el('span','',t('imgCount',{d:d.emoji+' '+deckTitle(d),n:c[id],m:d.cards.length})));
+    const b=el('button','btn small',t('imgRemove'));b.type='button';b.dataset.deck=id;
+    b.setAttribute('aria-label',t('imgRemoveLbl',{d:deckTitle(d)}));
+    b.addEventListener('click',async()=>{
+      if(!confirm(t('imgRemoveAsk',{d:deckTitle(d)})))return;
+      await QI.removeDeck(id);Tools.diag.log('pictures removed',{deck:id});
+      Tools.toast(t('imgRemoved'));renderImages();if(view)render(view);
+    });
+    li.append(b);ul.append(li);
+  }
+}
+const imgStatus=(msg,cls)=>{const e=$('imgStatus');e.textContent=msg||'';e.className='img-status'+(cls?' '+cls:'');};
+const IMG_ERRORS=['noZip','badZip','zip64','zipTooBig','noInflate','badJson','empty','jsonTooBig','http','noDeck'];
+function imgErr(e){const m=e&&e.message;return t(IMG_ERRORS.includes(m)?'imgErr.'+m:'imgErr.other');}
+async function runImport(kind,job){
+  if(imgBusy)return;
+  imgBusy=true;$('btnImgZip').disabled=$('btnImgJsonFile').disabled=$('btnImgLinks').disabled=true;
+  imgStatus(t('imgReading'));
+  const progress=(i,n)=>imgStatus(t('imgWorking',{i,n}));
+  try{
+    const r=await job(progress);
+    Tools.diag.log('pictures imported',{kind,saved:r.saved,failed:r.failed,unmatched:r.unmatched,decks:r.decks.length});
+    const parts=[r.saved?t('imgDone',{n:r.saved}):t('imgNothing')];
+    if(r.failed)parts.push(t('imgFailed',{n:r.failed}));
+    if(r.unmatched)parts.push(t('imgUnmatched',{n:r.unmatched}));
+    if(r.failedHosts&&r.failedHosts.length)parts.push(t('imgFailHosts',{h:r.failedHosts.join(', ')}));
+    imgStatus(parts.join(' '),r.saved&&!r.failed?'ok':r.saved?'':'err');
+  }catch(e){Tools.diag.log('picture import failed',{kind,e:e&&e.message});imgStatus(imgErr(e),'err');}
+  finally{
+    imgBusy=false;$('btnImgZip').disabled=$('btnImgJsonFile').disabled=$('btnImgLinks').disabled=false;
+    renderImages();if(view)render(view);
+  }
+}
+const imgDeckPicked=()=>Q.deck($('imgDeck').value)||Q.deck(settings.deck);
+$('btnImgZip').addEventListener('click',()=>$('imgZipIn').click());
+$('btnImgJsonFile').addEventListener('click',()=>$('imgJsonIn').click());
+$('imgZipIn').addEventListener('change',()=>{
+  const f=$('imgZipIn').files[0];$('imgZipIn').value='';
+  if(f)runImport('zip',p=>QI.importZip(f,DECKS,imgDeckPicked(),p));
+});
+$('imgJsonIn').addEventListener('change',async()=>{
+  const f=$('imgJsonIn').files[0];$('imgJsonIn').value='';
+  if(f)runImport('json',async p=>QI.importLinks(await QI.readLinkList(await f.text()),DECKS,imgDeckPicked(),p));
+});
+$('btnImgLinks').addEventListener('click',()=>runImport('links',async p=>QI.importLinks(await QI.readLinkList($('imgJson').value),DECKS,imgDeckPicked(),p)));
+QI.load().then(()=>{renderImages();if(view)render(view);});
+
 Tools.onLang(()=>{
+  renderImages();
   renderLobby();
   if(screen==='scrRoom')renderRoom();
   if(screen==='scrWait')renderWait();
@@ -1079,7 +1221,7 @@ Tools.diag.info(()=>({screen,mode:G?'guest':S?S.mode:'-',deck:view?view.deck.id:
   peers:S?S.seats.filter(s=>s.kind==='peer').map(s=>s.peer.state().channel).join(',')||'-':G?G.peer.state().channel:'-',
   inviting:!!invite,game:view?view.game:'-',round:view?view.round:'-',phase:view?view.phase:'-',ver:view?view.ver:'-',over:!!(view&&view.over),
   webrtc:!!window.RTCPeerConnection,scanner:scanner.engine()||'-',camera:scanner.active(),stun:!!settings.stun,
-  speed:settings.speed,level:settings.level,length:settings.length}));
+  speed:settings.speed,level:settings.level,length:settings.length,pictures:Object.values(QI.counts()).reduce((a,b)=>a+b,0),pictureImport:imgBusy}));
 
 /* ================= WebMCP ================= */
 function cardInfo(d,c){
