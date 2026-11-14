@@ -183,6 +183,40 @@ test('first puzzle: place the piece by tapping, turn it, drag it, switch on the 
   await expect(page.locator('[data-level="e02"]')).not.toHaveClass(/solved/);
 });
 
+test('target mirrors: red dot only where a target must light, grey ones may be just mirrors, too many targets explained', async ({ page }) => {
+  const dot = loc => loc.locator('.lit-dot').getAttribute('fill');
+  await page.goto('/laser-mirrors/');
+  // e01: the only target is marked – red, no extra note
+  await page.click('[data-level="e01"]');
+  expect(await dot(page.locator('.cell[data-x="1"][data-y="4"]'))).toBe('#ff5a4a');
+  await expect(page.locator('#status')).toHaveText('Ziel: 1 Ziel treffen. Teile setzen, dann den Laser einschalten.');
+  // e03: a target mirror on A1 and one in the supply, neither marked – grey, and the note says they may be just mirrors
+  expect(LEVELS.find(l => l.id === 'e03')).toMatchObject({ p: ['LB52', 'TA13q', 'CA41'], a: ['T'] });
+  await page.click('#btnLevels');
+  await page.click('[data-level="e03"]');
+  expect(await dot(page.locator('.cell[data-x="0"][data-y="0"]'))).toBe('#b9b2c4');
+  expect(await dot(page.locator('.tray-piece'))).toBe('#b9b2c4');
+  await expect(page.locator('#status')).toHaveText('Ziel: 1 Ziel treffen. Teile setzen, dann den Laser einschalten. Zielspiegel mit grauem Punkt dürfen auch nur Spiegel sein.');
+  // m02: solved board, then the turnable target on D5 turned so that it lights up as well – one too many
+  expect(LEVELS.find(l => l.id === 'm02')).toMatchObject({ t: 1 });
+  expect(LEVELS.find(l => l.id === 'm02').p).toContain('TD53q');
+  await page.click('#btnLevels');
+  await page.click('[data-level="m02"]');
+  for (let k = 0; k < 12; k++) {
+    await page.click('#btnHint');
+    if ((await page.locator('#status').textContent()) === 'Alles richtig – schalte den Laser ein!') break;
+  }
+  const d5 = page.locator('.cell[data-x="3"][data-y="4"]');
+  for (let k = 0; k < 4 && (await d5.getAttribute('data-r')) !== '1'; k++) await d5.click();
+  await expect(d5).toHaveAttribute('data-r', '1');
+  await page.click('#btnLaser');
+  await expect(page.locator('#status')).toHaveText('Ein Ziel zu viel – ein Zielspiegel soll hier nur spiegeln.');
+  await expect(page.locator('.goal .dot.on')).toHaveCount(1);
+  await expect(page.locator('.cell.lit')).toHaveCount(2);
+  // A lit target turns yellow whatever its colour
+  await expect(d5).toHaveClass(/lit/);
+});
+
 test('drag from the supply, back into the supply, Delete key, reload keeps the board', async ({ page }) => {
   await page.goto('/laser-mirrors/');
   await page.click('[data-level="h01"]');
