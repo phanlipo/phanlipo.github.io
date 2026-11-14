@@ -5,9 +5,18 @@ Supertrumpf (Autoquartett) gegen den Computer oder mit mehreren Handys über Web
 ```
 index.html   Oberfläche und Ablauf: Startseite, Runde (Gastgeber), Einladen/Beitreten, Spieltisch, WebMCP
 game.js      window.Quartet: Regeln, Computer, Sicht je Platz, Zahlen-Format – ohne DOM, Zustand ist reines JSON
+images.js    window.QuartetImages: eigene Bilder – ZIP lesen (DecompressionStream, keine Bibliothek), JSON-Linkliste, Zuordnung, Verkleinern, Tools.keep
 decks.js     window.QuartetDecks: 17 Kartensätze – generiert von scripts/quartet-decks.mjs, nie von Hand ändern
 ../assets/shared/p2p.js   Verbindung ohne Server (QR-Codes, WebRTC, Scanner), wie in card-games
 ```
+
+## Eigene Bilder
+
+Die App liefert keine Kartenbilder aus (Lizenzen, Größe – siehe `IDEAS.md`). Wer Bilder möchte, bringt sie im Menü (☰ → „Eigene Bilder“) selbst mit; sie bleiben nur auf dem Gerät.
+
+- **ZIP:** Bilddateien, benannt nach Kartennummer (`A1.jpg`), Kartenname oder Dateiname aus supertrumpf-creator (`latex_utils.sanitize_image_stem`: klein, `♀→f`, `♂→m`, alles außer `a-z 0-9 _ -` → `_`). Ein Ordner mit der Deck-Kennung im Pfad (`dinosaurs/images/…`) legt das Deck fest, sonst gilt das gewählte. Gelesen wird nur das zentrale Verzeichnis, Einträge `stored`/`deflate`, kein ZIP64, keine Verschlüsselung, höchstens 300 MB.
+- **JSON-Linkliste** (einfügen, Datei oder `https`-Link auf eine JSON-Datei): `{"<deck>": {"<Karte>": "https://…" | {"url", "credit"}}}` oder für das gewählte Deck nur das innere Objekt. Nur `https`, Abruf erst auf Knopfdruck, `credentials: 'omit'`, ohne Referrer; dafür `tool:connect` = `https:`. Server ohne CORS-Freigabe scheitern (in der Meldung genannt).
+- **Ablage:** `Tools.keep` – `img/<deck>/<Kartennummer>` (WebP, sonst JPEG, höchstens 480 px) und `images.json` (Bildnachweis, Herkunft). Nicht in der Sicherungsdatei, *Alle Daten löschen* entfernt sie. Im Mehrspieler-Spiel zeigt jedes Handy seine eigenen Bilder.
 
 ## Kartensätze aktualisieren
 
@@ -35,7 +44,8 @@ node scripts/quartet-decks.mjs ../supertrumpf-creator/cards_data
 
 ## Mögliche Erweiterungen
 
-- Bilder der Karten aus supertrumpf-creator – zurückgestellt, Gründe und geplanter Weg in `IDEAS.md` („Quartett: Kartenbilder“).
+- Mitgelieferte Kartenbilder aus supertrumpf-creator – zurückgestellt (`IDEAS.md`, „Quartett: Kartenbilder“); eigene Bilder gehen schon (siehe oben).
+- Eine fertige JSON-Linkliste je Deck aus supertrumpf-creator erzeugen (Wikimedia-Links mit Bildnachweis).
 - Eigene Kartensätze laden (JSON im Format von supertrumpf-creator).
 - Englische Kartennamen und Gruppen.
 - Wiederverbinden nach Abbruch (heute übernimmt der Computer).

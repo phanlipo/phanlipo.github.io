@@ -1,7 +1,8 @@
 // Quartett (Supertrumpf rules): rules on hand-made states, deck data, whole computer games simulated with
 // invariants, a game against the computer through the UI, and two devices over real WebRTC
 // (separate browser contexts – like separate phones).
-import { test, expect, clipboardText, privateClipboard, openDetails, openMenu } from './helpers.mjs';
+import { deflateRawSync, crc32 } from 'node:zlib';
+import { test, expect, clipboardText, privateClipboard, openDetails, openMenu, closeMenu } from './helpers.mjs';
 
 const URL_ = '/quartet/';
 const SET = 'quartet.settings.v1';
@@ -476,5 +477,166 @@ test.describe('English', () => {
     await page.click('#btnCpu');
     await expect(page.locator('#table .qcard .sn').first()).toHaveText('Size');
     await expect(page.locator('#table .qcard .ctext')).toHaveCount(0);
+  });
+});
+
+/* ---------------- Own pictures: ZIP upload and JSON list of links ---------------- */
+
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+/** Minimal ZIP writer for the tests: [{ name, data, store }] – deflate unless store */
+function makeZip(files) {
+  const locals = [], centrals = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = Buffer.from(f.name, 'utf8'), data = Buffer.from(f.data);
+    const body = f.store ? data : deflateRawSync(data), method = f.store ? 0 : 8, crc = crc32(data);
+    const lh = Buffer.alloc(30);
+    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0x0800, 6); lh.writeUInt16LE(method, 8);
+    lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(body.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(name.length, 26);
+    const ch = Buffer.alloc(46);
+    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0x0800, 8); ch.writeUInt16LE(method, 10);
+    ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(body.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(name.length, 28);
+    ch.writeUInt32LE(offset, 42);
+    locals.push(lh, name, body); centrals.push(ch, name);
+    offset += 30 + name.length + body.length;
+  }
+  const cd = Buffer.concat(centrals), end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, cd, end]);
+}
+/** Real picture (PNG drawn in the page) – the 1×1 PNG above is enough for the link tests */
+const pagePng = (page, color) => page.evaluate(c => new Promise(res => {
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 40;
+  const g = cv.getContext('2d'); g.fillStyle = c; g.fillRect(0, 0, 64, 40);
+  cv.toBlob(b => b.arrayBuffer().then(a => res([...new Uint8Array(a)])), 'image/png');
+}), color).then(a => Buffer.from(a));
+
+test.describe('own pictures', () => {
+  test('matching: card number, name, file name of supertrumpf-creator; deck folders; link lists', async ({ page }) => {
+    await page.goto(URL_);
+    const r = await page.evaluate(() => {
+      const QI = window.QuartetImages, decks = window.QuartetDecks, dino = decks.find(d => d.id === 'dinosaurs'), tiere = decks.find(d => d.id === 'tiere');
+      const m = QI.matcher(dino), mt = QI.matcher(tiere);
+      const cham = tiere.cards.find(c => c.n === 'Chamäleon');
+      const zip = QI.zipPlan([
+        { name: 'dinosaurs/images/tyrannosaurus_rex.jpg' }, { name: 'tiere/cham_leon.png' }, { name: 'A2.webp' },
+        { name: 'nichts.jpg' }, { name: 'readme.txt' }, { name: '__MACOSX/dinosaurs/._velociraptor.jpg' },
+      ], decks, dino);
+      const links = QI.linkPlan({ dinosaurs: { A1: 'https://x.test/a.jpg', Velociraptor: { url: 'https://x.test/v.jpg', credit: 'Foto: Y' }, Stegosaurus: 'http://x.test/s.jpg', Godzilla: 'https://x.test/g.jpg' } }, decks, null);
+      const flat = QI.linkPlan({ 'tyrannosaurus_rex': 'https://x.test/t.jpg' }, decks, dino);
+      let bad = null; try { QI.linkPlan([1, 2], decks, dino); } catch (e) { bad = e.message; }
+      return { a1: m('a1'), byName: m('Tyrannosaurus Rex'), byStem: m('tyrannosaurus_rex'), none: m('Godzilla'),
+        cham: [cham.id, mt('cham_leon'), QI.stem('Chamäleon')], vr: dino.cards.find(c => c.n === 'Velociraptor').id, tr: dino.cards.find(c => c.n === 'Tyrannosaurus Rex').id,
+        zip: { plan: zip.plan.map(p => [p.deck, p.id]), unmatched: zip.unmatched },
+        links: { plan: links.plan.map(p => [p.deck, p.id, p.credit]), unmatched: links.unmatched, invalid: links.invalid },
+        flat: flat.plan.map(p => [p.deck, p.id]), bad };
+    });
+    expect(r.a1).toBe('A1');
+    expect(r.byName).toBe(r.tr);
+    expect(r.byStem).toBe(r.tr);
+    expect(r.none).toBeNull();
+    expect(r.cham).toEqual([r.cham[0], r.cham[0], 'cham_leon']);
+    expect(r.zip.plan).toEqual([['dinosaurs', r.tr], ['tiere', r.cham[0]], ['dinosaurs', 'A2']]);
+    expect(r.zip.unmatched).toEqual(['nichts.jpg']);
+    expect(r.links.plan).toEqual([['dinosaurs', 'A1', ''], ['dinosaurs', r.vr, 'Foto: Y']]);
+    expect(r.links.invalid).toEqual(['Stegosaurus']);       // only https
+    expect(r.links.unmatched).toEqual(['Godzilla']);
+    expect(r.flat).toEqual([['dinosaurs', r.tr]]);
+    expect(r.bad).toBe('badJson');
+  });
+
+  test('ZIP upload on the phone: all dinosaurs get their picture, kept offline, removable', async ({ page, context }) => {
+    test.setTimeout(60000);
+    await settings(page, { speed: 'slow', deck: 'dinosaurs', bots: 1 });
+    await page.goto(URL_);
+    const names = await page.evaluate(() => window.QuartetDecks.find(d => d.id === 'dinosaurs').cards.map(c => window.QuartetImages.stem(c.n)));
+    const png = await pagePng(page, '#c0392b');
+    // The zipped images folder of supertrumpf-creator, one entry stored, the rest deflated, plus noise
+    const zip = makeZip([...names.map((n, i) => ({ name: `dinosaurs/images/${n}.png`, data: png, store: i === 0 })),
+      { name: 'dinosaurs/images/notes.txt', data: 'x' }, { name: 'dinosaurs/images/godzilla.png', data: png }]);
+    await openMenu(page);
+    await expect(page.locator('#imgDecks')).toHaveText('Noch keine eigenen Bilder.');
+    await page.setInputFiles('#imgZipIn', { name: 'dinos.zip', mimeType: 'application/zip', buffer: zip });
+    await expect(page.locator('#imgStatus')).toHaveText('12 Bilder gespeichert. 1 passen zu keiner Karte.');
+    await expect(page.locator('#imgDecks li')).toHaveText(/Dinosaurier: 12 von 12 Bildern/);
+    await closeMenu(page);
+    await page.click('#btnCpu');
+    const photo = page.locator('#scrPlay .qcard .pic.photo img');
+    await expect(photo.first()).toBeVisible();
+    await expect.poll(() => photo.first().evaluate(i => i.complete && i.naturalWidth)).toBeGreaterThan(0);
+    // Kept as a small picture (no larger than 480 px) in the app's file cache
+    const kept = await page.evaluate(async () => { const c = await caches.open('file:quartet'); return (await c.keys()).filter(r => /\/img\/dinosaurs\//.test(r.url)).length; });
+    expect(kept).toBe(12);
+    // Offline after a reload: still there
+    await context.setOffline(true);
+    await page.reload();
+    await page.click('#btnCpu');
+    await expect.poll(() => photo.first().evaluate(i => i.complete && i.naturalWidth)).toBeGreaterThan(0);
+    await context.setOffline(false);
+    // Removing the deck's pictures: emoji again
+    page.on('dialog', d => d.accept());
+    await openMenu(page);
+    await page.click('#imgDecks [data-deck="dinosaurs"]');
+    await expect(page.locator('#imgDecks')).toHaveText('Noch keine eigenen Bilder.');
+    await closeMenu(page);
+    await expect(page.locator('#scrPlay .qcard .pic.photo')).toHaveCount(0);
+  });
+
+  test('broken or foreign files are refused with a clear message', async ({ page }) => {
+    await page.goto(URL_);
+    await openMenu(page);
+    await page.setInputFiles('#imgZipIn', { name: 'x.zip', mimeType: 'application/zip', buffer: Buffer.from('kein zip') });
+    await expect(page.locator('#imgStatus')).toHaveText('Das ist keine ZIP-Datei.');
+    await page.fill('#imgJson', '{ kaputt');
+    await page.click('#btnImgLinks');
+    await expect(page.locator('#imgStatus')).toHaveText('Das ist kein gültiges JSON.');
+    await page.fill('#imgJson', '');
+    await page.click('#btnImgLinks');
+    await expect(page.locator('#imgStatus')).toHaveText('Erst eine JSON-Liste oder einen Link einfügen.');
+  });
+
+  test.describe('links', () => {
+    test.use({ allowedProblems: /^external request: https:\/\/(img|nocors|lists)\.example\.test\/|Failed to load resource|Access-Control-Allow-Origin|CORS/ });
+    test('JSON list of links: fetched without cookies, credit shown, failures counted; list by link', async ({ page }) => {
+      const seen = [];
+      await page.context().route(/^https:\/\/(img|nocors|lists)\.example\.test\//, async route => {
+        const r = route.request(), u = r.url();
+        seen.push({ url: u, headers: await r.allHeaders() });
+        const cors = { 'access-control-allow-origin': '*' };
+        // Blocked by CORS or unreachable – both make fetch fail (Playwright's fulfilled answers skip the CORS check)
+        if (u.startsWith('https://nocors.')) return route.abort('failed');
+        if (u === 'https://lists.example.test/dinos.json')
+          return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ A3: 'https://img.example.test/a3.png' }) });
+        if (/\/ok\d?\.png$|\/a3\.png$/.test(u)) return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'image/png' }, body: PNG });
+        return route.fulfill({ status: 404, headers: cors, body: 'nope' });
+      });
+      await settings(page, { speed: 'slow', deck: 'dinosaurs', bots: 1 });
+      await page.goto(URL_);
+      const ids = await page.evaluate(() => window.QuartetDecks.find(d => d.id === 'dinosaurs').cards.map(c => c.id));
+      // Every card: 1 link without CORS, 1 missing, the rest fine with a credit
+      const list = { dinosaurs: Object.fromEntries(ids.map((id, i) => [id, i === 0 ? 'https://nocors.example.test/x.png'
+        : i === 1 ? 'https://img.example.test/missing.png' : { url: 'https://img.example.test/ok.png', credit: `Foto ${id}, CC BY 4.0` }])) };
+      await openMenu(page);
+      await page.fill('#imgJson', JSON.stringify(list));
+      await page.click('#btnImgLinks');
+      await expect(page.locator('#imgStatus')).toHaveText(`10 Bilder gespeichert. 2 nicht geladen. Server erlaubt keine Zugriffe aus Webseiten (CORS) oder ist nicht erreichbar: nocors.example.test, img.example.test`);
+      await expect(page.locator('#imgDecks li')).toHaveText(/Dinosaurier: 10 von 12 Bildern/);
+      // No cookies, no referrer to the picture servers
+      for (const s of seen) { expect(s.headers.cookie).toBeUndefined(); expect(s.headers.referer).toBeUndefined(); }
+      // A list given as a link (replaces the picture of A3, now without credit)
+      await page.fill('#imgJson', 'https://lists.example.test/dinos.json');
+      await page.click('#btnImgLinks');
+      await expect(page.locator('#imgStatus')).toHaveText('1 Bilder gespeichert.');
+      const credits = await page.evaluate(ids => ids.map(id => window.QuartetImages.credit('dinosaurs', id)), ids);
+      expect(credits).toEqual(ids.map((id, i) => (i < 2 || id === 'A3' ? '' : `Foto ${id}, CC BY 4.0`)));
+      await closeMenu(page);
+      // On the card: picture and credit as kept for it
+      await page.click('#btnCpu');
+      const own = await page.locator('#table .qcard .cid').textContent();
+      const i = ids.indexOf(own);
+      await expect(page.locator('#table .qcard .pic.photo')).toHaveCount(i === 0 || i === 1 ? 0 : 1);
+      await expect(page.locator('#table .qcard .credit')).toHaveText(credits[i] ? [credits[i]] : []);
+    });
   });
 });

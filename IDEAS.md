@@ -6,9 +6,9 @@ Status: **geplant** (soll kommen), **zurückgestellt** (passt gerade nicht, spä
 
 Neue Einträge oben; bei Umsetzung den Eintrag entfernen oder auf die App verweisen.
 
-## Quartett: Kartenbilder – zurückgestellt (2026-11)
+## Quartett: Kartenbilder – mitgelieferte zurückgestellt, eigene umgesetzt (2026-11)
 
-Bilder auf den Karten von `quartet` wie auf den gedruckten Karten von supertrumpf-creator. Umgesetzt sind nur die Flaggen der Länder (Vendor-Paket `flag-icons`, MIT, `precache: false`); alle anderen Karten zeigen das Emoji des Decks.
+Bilder auf den Karten von `quartet` wie auf den gedruckten Karten von supertrumpf-creator. Umgesetzt sind die Flaggen der Länder (Vendor-Paket `flag-icons`, MIT, `precache: false`) und **eigene Bilder**: Der Nutzer lädt sie auf dem Handy als ZIP-Datei oder JSON-Liste mit Links (Menü → „Eigene Bilder“, `quartet/images.js`), sie bleiben nur auf seinem Gerät – damit liefert die Seite selbst keine fremden Bilder aus. Ohne eigene Bilder zeigen die Karten das Emoji des Decks. Zurückgestellt bleibt nur, Bilder **mitzuliefern**:
 
 **Warum nicht jetzt:**
 
