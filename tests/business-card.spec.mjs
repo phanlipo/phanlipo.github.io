@@ -2,8 +2,8 @@
 // (pages, cards per page, crop marks – read with an own minimal parser), vCard QR code (decoded with
 // ZXing-JS, independent of the generator), pictures kept over a reload, offline.
 import { readFileSync } from 'node:fs';
-import { inflateSync } from 'node:zlib';
-import { test, expect } from './helpers.mjs';
+import { inflateSync, crc32 } from 'node:zlib';
+import { test, expect, mockLaunchQueue } from './helpers.mjs';
 
 const URL_ = '/business-card/';
 const design = page => page.evaluate(() => JSON.parse(localStorage.getItem('business-card.design.v1')));
@@ -311,4 +311,156 @@ test.describe('English', () => {
     await expect(page.locator('#btnPdf')).toHaveText('PDF (A4, 10 cards)');
     expect((await download(page, '#btnPng')).name).toBe('business-card-front.png');
   });
+});
+
+/* ---------- Templates ---------- */
+
+/** PNG chunks read independently of the app: [{ type, data }] (CRC checked) */
+function chunks(buf) {
+  expect([...buf.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  const out = [];
+  for (let o = 8; o < buf.length;) {
+    const len = buf.readUInt32BE(o), type = buf.toString('latin1', o + 4, o + 8), data = buf.subarray(o + 8, o + 8 + len);
+    expect(buf.readUInt32BE(o + 8 + len), type).toBe(crc32(buf.subarray(o + 4, o + 8 + len)));
+    out.push({ type, data });
+    o += 12 + len;
+  }
+  return out;
+}
+/** The same PNG with the data of chunk bcRd replaced (valid CRC) */
+function withData(buf, json) {
+  const parts = [buf.subarray(0, 8)];
+  for (const c of chunks(buf)) {
+    const data = c.type === 'bcRd' ? Buffer.from(json) : c.data;
+    const head = Buffer.alloc(8); head.writeUInt32BE(data.length); head.write(c.type, 4, 'latin1');
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])));
+    parts.push(head, data, crc);
+  }
+  return Buffer.concat(parts);
+}
+const blue = async page => Buffer.from(await page.evaluate(() => {
+  const c = document.createElement('canvas');
+  c.width = 400; c.height = 200;
+  const x = c.getContext('2d');
+  x.fillStyle = '#2244cc'; x.fillRect(0, 0, 400, 200);
+  return c.toDataURL('image/png').split(',')[1];
+}), 'base64');
+const forgetAll = page => page.evaluate(async () => {
+  localStorage.clear();
+  for (const k of await caches.keys()) if (k.startsWith('file:')) await caches.delete(k);
+});
+
+test('own template: save in the app, load it again after changes, overwrite, delete', async ({ page }) => {
+  await page.fill('#tplName', 'Firma');
+  await page.click('#tplSave');
+  await expect(page.locator('#tplStatus')).toHaveText('Vorlage „Firma“ gespeichert.');
+  await expect(page.locator('#tpl')).toHaveValue(/^own:/);
+  await expect(page.locator('#tplDel')).toBeVisible();
+  // Change the card: blank template
+  page.once('dialog', d => d.accept());
+  await page.selectOption('#tpl', 'blank');
+  await expect(page.locator('#tplDel')).toBeHidden();
+  await page.click('#tplApply');
+  await saved(page, d => d.sides.front.els.length === 0);
+  // After a reload the own template is still in the list and brings everything back
+  await page.reload();
+  await expect(page.locator('#tpl optgroup#tplOwn option')).toHaveText(['Firma']);
+  await page.selectOption('#tpl', { label: 'Firma' });
+  // The card is empty: no question before loading
+  await page.click('#tplApply');
+  await expect(page.locator('#tplStatus')).toHaveText('Vorlage „Firma“ geladen.');
+  await expect(item(page, 'Erika Mustermann')).toBeVisible();
+  expect((await design(page)).sides.back.bg).toBe('#0f766e');
+  // Same name: asks, then overwrites (one entry)
+  await item(page, 'Erika Mustermann').click();
+  await page.fill('#pText', 'Max');
+  page.once('dialog', d => { expect(d.message()).toBe('Es gibt schon eine Vorlage „Firma“. Überschreiben?'); d.accept(); });
+  await page.click('#tplSave');
+  const own = await page.evaluate(() => JSON.parse(localStorage.getItem('business-card.templates.v1')));
+  expect(own).toHaveLength(1);
+  expect(own[0].design.sides.front.els.some(e => e.text === 'Max')).toBe(true);
+  page.once('dialog', d => d.accept());
+  await page.click('#tplDel');
+  await expect(page.locator('#tplStatus')).toHaveText('Vorlage „Firma“ gelöscht.');
+  await expect(page.locator('#tplOwn')).toHaveCount(0);
+});
+
+test('template file: a picture of both sides with the whole design inside, opened on another device', async ({ page }) => {
+  await page.locator('#pickImg').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: await blue(page) });
+  await saved(page, d => d.sides.front.els.some(e => e.type === 'image'));
+  await item(page, 'Erika Mustermann').click();
+  await page.fill('#pText', 'Jörg Groß · „Köln“');
+  await page.fill('#tplName', 'Jörg Groß');
+  const { name, buf } = await download(page, '#tplFile');
+  expect(name).toBe('vorlage-jorg-gross.png');
+  await expect(page.locator('#tplStatus')).toHaveText(/^Vorlagendatei gespeichert \(\d+ KB\)\.$/);
+  // A normal picture: front and back at 200 dpi with a 4 mm grey frame
+  // (85 mm → 669 px, 55 mm → 433 px, 4 mm → 31 px): 669 + 62 wide, 2 × 433 + 3 × 31 high
+  expect(await png(page, buf, [5, 5])).toEqual({ w: 731, h: 959, rgb: [0xe5, 0xe7, 0xeb] });
+  const data = JSON.parse(chunks(buf).find(c => c.type === 'bcRd').data.toString('utf8'));
+  expect(data).toMatchObject({ format: 'phanlipo-business-card', formatVersion: 1, name: 'Jörg Groß' });
+  expect(Object.keys(data.images)).toHaveLength(1);
+
+  // "Another device": nothing stored
+  await forgetAll(page);
+  await page.reload();
+  await expect(item(page, 'Erika Mustermann')).toBeVisible();
+  page.once('dialog', d => { expect(d.message()).toBe('Vorlage „Jörg Groß“ laden? Sie ersetzt die aktuelle Karte.'); d.accept(); });
+  await page.locator('#pickTpl').setInputFiles({ name, mimeType: 'image/png', buffer: buf });
+  await expect(page.locator('#tplStatus')).toHaveText('Vorlage „Jörg Groß“ geladen.');
+  await expect(item(page, 'Jörg Groß · „Köln“')).toBeVisible();
+  await expect(page.locator('#tplName')).toHaveValue('Jörg Groß');
+  // The picture is back (kept under a new id) and printed in the middle of the card
+  const d = await design(page);
+  const img = d.sides.front.els.find(e => e.type === 'image');
+  expect(img.img).not.toBe(Object.keys(data.images)[0]);
+  const out = await download(page, '#btnPng');
+  expect((await png(page, out.buf, [502, 325])).rgb).toEqual([0x22, 0x44, 0xcc]);
+  await page.reload();
+  expect((await png(page, (await download(page, '#btnPng')).buf, [502, 325])).rgb).toEqual([0x22, 0x44, 0xcc]);
+});
+
+test('template files: a plain picture, broken data and a newer version are refused with a message', async ({ page }) => {
+  const file = (await download(page, '#tplFile')).buf;
+  const open = async buffer => {
+    await page.locator('#pickTpl').setInputFiles({ name: 'x.png', mimeType: 'image/png', buffer });
+  };
+  await open(await blue(page));
+  await expect(page.locator('#tplStatus')).toHaveText(/^Dieses Bild enthält keine Visitenkarten-Vorlage/);
+  await open(withData(file, '{"format":"phanlipo-business-card"'));
+  await expect(page.locator('#tplStatus')).toHaveText('Die Vorlagendatei ist beschädigt oder stammt nicht aus dieser App.');
+  await open(withData(file, JSON.stringify({ format: 'phanlipo-business-card', formatVersion: 2, design: {} })));
+  await expect(page.locator('#tplStatus')).toHaveText(/^Die Vorlage stammt aus einer neueren Version/);
+  // Unknown elements and values are dropped or replaced, the rest loads
+  page.once('dialog', d => d.accept());
+  await open(withData(file, JSON.stringify({ format: 'phanlipo-business-card', formatVersion: 1, name: 'Fremd', images: {},
+    design: { format: 'xx', orient: 'portrait', sides: { front: { bg: 'red', els: [
+      { type: 'script', x: 1 }, { type: 'text', text: 'Hallo', size: 1e9, color: 'javascript:1', x: 'a' },
+      { type: 'image', img: 'img-gone', x: 5, y: 5, w: 10, h: 10 },
+    ] } } } })));
+  await expect(page.locator('#tplStatus')).toHaveText('Vorlage „Fremd“ geladen. 1 Bild(er) der Vorlage fehlen.');
+  const d = await design(page);
+  expect(d).toMatchObject({ format: '85x55', orient: 'portrait' });
+  expect(d.sides.front.bg).toBe('#ffffff');
+  expect(d.sides.front.els.map(e => e.type)).toEqual(['text', 'image']);
+  expect(d.sides.front.els[0]).toMatchObject({ text: 'Hallo', size: 120, color: '#1f2937', x: 0 });
+  expect(d.sides.back.els).toEqual([]);
+});
+
+test('shared to the app / opened with it: a template file loads, a photo is inserted', async ({ page }) => {
+  const file = (await download(page, '#tplFile')).buf;
+  await forgetAll(page);
+  await mockLaunchQueue(page, [{ name: 'vorlage.png', mimeType: 'image/png', buffer: file }]);
+  page.once('dialog', d => d.accept());
+  await page.goto(`${URL_}?opened=1`);
+  await expect(page.locator('#tplStatus')).toHaveText('Vorlage „Visitenkarte“ geladen.');
+  expect(new URL(page.url()).search).toBe('');
+});
+
+test('a photo opened with the app becomes a picture on the card', async ({ page }) => {
+  const photo = await blue(page);
+  await mockLaunchQueue(page, [{ name: 'foto.png', mimeType: 'image/png', buffer: photo }]);
+  await page.goto(`${URL_}?opened=1`);
+  await expect(item(page, 'Bild')).toBeVisible();
+  await expect(page.locator('#tplStatus')).toHaveText('');
 });

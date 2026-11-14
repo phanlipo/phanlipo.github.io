@@ -6,20 +6,21 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Visitenkarten</title>
-<meta name="description" content="Visitenkarten gestalten: Texte, Bilder, Logos, Formen und QR-Code (auch vCard) frei anordnen, Farben wählen – als Bild oder als A4-PDF mit Schnittmarken zum Drucken.">
+<meta name="description" content="Visitenkarten gestalten: Texte, Bilder, Logos, Formen und QR-Code (auch vCard) frei anordnen, Farben wählen – als Bild oder A4-PDF mit Schnittmarken drucken, als Vorlage speichern und teilen.">
 <meta name="tool:tags" content="Arbeit, Dokumente">
-<meta name="tool:features" content="Datei öffnen, KI-Agent">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
+<meta name="tool:share-target" content="image/*, .png, .jpg, .jpeg, .webp, .heic, .heif">
 <meta name="tool:webmcp" content="get_design, add_text, update_text, set_background">
 <meta name="tool:icon" content="id">
 <meta name="tool:color" content="#0f766e">
 <meta name="tool:short-name" content="Visitenkarte">
 <meta name="tool:title-en" content="Business Cards">
-<meta name="tool:description-en" content="Design business cards: arrange text, pictures, logos, shapes and a QR code (vCard too), pick colours – download as an image or as an A4 PDF with crop marks for printing.">
+<meta name="tool:description-en" content="Design business cards: arrange text, pictures, logos, shapes and a QR code (vCard too), pick colours – print as an image or A4 PDF with crop marks, save and share as a template.">
 <meta name="tool:short-name-en" content="Cards">
 <meta name="tool:storage" content="business-card.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-Gv2nfhO9bFUlosoaArLbvEk4llaJdBdve/C6O0gf6lg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-6YqzUyA6BefG1yj3u+DumDX3yHTXAWHhTmDF8bU7un4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -34,7 +35,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 @media (min-height:700px){.preview{position:sticky;top:0;z-index:5;box-shadow:0 4px 12px rgba(0,0,0,.12)}}
 @media (min-width:900px){
   main{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);align-items:start}
-  .preview{grid-row:span 3;position:sticky;top:12px}
+  .preview{grid-row:span 4;position:sticky;top:12px}
 }
 .btn:disabled{opacity:.5;cursor:default}
 .btn:disabled:hover{border-color:var(--border)}
@@ -81,6 +82,12 @@ input[type=range]{width:100%;accent-color:var(--accent);min-height:32px}
 #status.err,#qrErr{color:var(--err)}
 #qrErr:empty{display:none}
 .hint{margin:4px 0 0}
+.card h3{font-size:15px;margin:16px 0 6px}
+.mt{margin-top:8px}
+.namerow{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+.namerow .field{flex:1 1 180px}
+#tplStatus{min-height:1.4em;margin:8px 0 0}
+#tplStatus.err{color:var(--err)}
 </style>
 </head>
 <body>
@@ -225,16 +232,39 @@ input[type=range]{width:100%;accent-color:var(--accent);min-height:32px}
         <div class="row"><button type="button" class="btn" id="bgPick" data-i18n="card.bgPick">Wählen …</button><button type="button" class="btn" id="bgClear" data-i18n="card.bgClear" hidden>Entfernen</button></div>
       </div>
       <label class="check field wide"><input type="checkbox" id="optGuides"> <span data-i18n="card.guides">Sicherheitsabstand anzeigen (3 mm, nur in der Vorschau)</span></label>
-      <label class="field"><span data-i18n="card.tpl">Vorlage</span>
-        <select id="tpl">
+    </div>
+    <p class="muted hint" data-i18n="card.note">Die Vorschau zeigt die Schriften dieses Geräts – Bild und PDF sehen genau so aus.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-tpl">
+    <h2 id="h-tpl" data-i18n="tpl.h">Vorlagen</h2>
+    <label class="field"><span data-i18n="card.tpl">Vorlage</span>
+      <select id="tpl">
+        <optgroup label="Mitgeliefert" data-i18n-attr="label:tpl.builtin">
           <option value="classic" data-i18n="tpl.classic">Klassisch</option>
           <option value="modern" data-i18n="tpl.modern">Modern mit QR-Code</option>
           <option value="minimal" data-i18n="tpl.minimal">Minimal zentriert</option>
           <option value="blank" data-i18n="tpl.blank">Leer</option>
-        </select></label>
-      <div class="row field"><span aria-hidden="true">&nbsp;</span><button type="button" class="btn" id="tplApply" data-i18n="card.tplApply">Vorlage laden</button></div>
+        </optgroup>
+      </select></label>
+    <div class="row mt">
+      <button type="button" class="btn" id="tplApply" data-i18n="card.tplApply">Vorlage laden</button>
+      <button type="button" class="btn danger" id="tplDel" data-i18n="tpl.del" hidden>Vorlage löschen</button>
     </div>
-    <p class="muted hint" data-i18n="card.note">Eine Vorlage ersetzt beide Seiten. Die Vorschau zeigt die Schriften dieses Geräts – Bild und PDF sehen genau so aus.</p>
+    <p class="muted hint" data-i18n="tpl.note">Eine Vorlage ersetzt beide Seiten der Karte (Rückgängig holt sie zurück).</p>
+    <h3 data-i18n="tpl.saveH">Aktuelle Karte als Vorlage</h3>
+    <div class="namerow">
+      <label class="field"><span data-i18n="tpl.name">Name der Vorlage</span><input type="text" id="tplName" maxlength="60" autocomplete="off"></label>
+      <button type="button" class="btn" id="tplSave" data-i18n="tpl.save">In der App speichern</button>
+    </div>
+    <div class="row mt">
+      <button type="button" class="btn" id="tplFile" data-i18n="tpl.file">Als Datei speichern</button>
+      <button type="button" class="btn" id="tplShare" data-i18n="tpl.share" hidden>Teilen …</button>
+      <button type="button" class="btn" id="tplOpen" data-i18n="tpl.open">Vorlagendatei öffnen …</button>
+    </div>
+    <input type="file" id="pickTpl" accept="image/png,.png" hidden>
+    <p id="tplStatus" role="status" class="muted"></p>
+    <p class="muted hint" data-i18n-html="tpl.fileNote">Die Vorlagendatei ist ein Bild der Karte (PNG), in dem Entwurf und Bilder stecken – zum Weitergeben oder als Sicherung. Messenger verkleinern Bilder oft und entfernen dabei die Vorlage: dort <b>als Datei bzw. Dokument</b> senden.</p>
   </section>
 
   <section class="card out" aria-labelledby="h-out">
@@ -294,9 +324,17 @@ input[type=range]{width:100%;accent-color:var(--accent);min-height:32px}
     <li><b>Bild (PNG):</b> eine Seite in Druckqualität (300 dpi = 1004 × 650 Pixel bei 85 × 55 mm, 600 dpi doppelt so fein) – z. B. für eine Druckerei, die E-Mail-Signatur oder zum Teilen.</li>
     <li>Kleiner Text unter 6 pt ist gedruckt schwer lesbar; wichtige Inhalte innerhalb des gestrichelten Sicherheitsabstands halten.</li>
   </ul>
+  <h3>Vorlagen speichern &amp; teilen</h3>
+  <ul>
+    <li><b>In der App speichern:</b> Name eingeben, <i>In der App speichern</i> – die Vorlage steht dann unter <i>Eigene Vorlagen</i> in der Liste und lässt sich jederzeit laden oder löschen. Gleicher Name = überschreiben.</li>
+    <li><b>Als Datei speichern / Teilen:</b> ergibt ein Bild der Karte (PNG, Vorder- und Rückseite), in dem der ganze Entwurf samt Bildern steckt. Wer die Datei mit dieser App öffnet (<i>Vorlagendatei öffnen …</i>), bekommt die Karte zum Bearbeiten. Andere Programme zeigen nur das Bild.</li>
+    <li><b>Messenger</b> (z. B. WhatsApp) verkleinern Bilder und entfernen dabei die Vorlage – dort als <i>Datei/Dokument</i> senden. E-Mail, Cloud-Speicher und AirDrop lassen sie unverändert.</li>
+    <li><b>Android:</b> In der installierten App lässt sich eine Vorlagendatei über <i>Teilen</i> direkt an <i>Visitenkarten</i> schicken; ein normales Foto wird dabei als Bild eingefügt. <b>Windows/Mac (Chrome, Edge):</b> PNG-Datei mit <i>Öffnen mit</i> → Visitenkarten. iPhone: über <i>Vorlagendatei öffnen …</i>.</li>
+    <li>Schriften: Die Vorlage speichert die Schriftart als Stil (z. B. „Serif“) – auf einem anderen Gerät wird dessen passende Schrift verwendet.</li>
+  </ul>
   <h3>Speicher</h3>
   <ul>
-    <li>Der Entwurf wird automatisch in diesem Browser gespeichert und ist beim nächsten Öffnen wieder da. Bilder werden verkleinert (höchstens 2000 Pixel) und separat auf dem Gerät abgelegt – sie sind <b>nicht</b> in der Sicherungsdatei unter <i>Daten sichern</i> (die enthält nur Texte, Farben und Anordnung).</li>
+    <li>Der Entwurf wird automatisch in diesem Browser gespeichert und ist beim nächsten Öffnen wieder da. Bilder werden verkleinert (höchstens 2000 Pixel) und separat auf dem Gerät abgelegt – sie sind <b>nicht</b> in der Sicherungsdatei unter <i>Daten sichern</i> (die enthält Texte, Farben, Anordnung und eigene Vorlagen). Komplett mit Bildern sichert die <i>Vorlagendatei</i>.</li>
     <li>HEIC-Fotos (iPhone): Außer in Safari lädt dafür beim ersten Mal ein Decoder (ca. 1,5 MB), danach geht es auch offline.</li>
     <li>Schriften: Es werden die Schriften deines Geräts verwendet. Auf einem anderen Gerät kann eine Schrift etwas anders aussehen – das heruntergeladene Bild bzw. PDF bleibt aber genau so, wie du es gesehen hast.</li>
   </ul>
@@ -322,9 +360,17 @@ input[type=range]{width:100%;accent-color:var(--accent);min-height:32px}
     <li><b>Image (PNG):</b> one side in print quality (300 dpi = 1004 × 650 pixels at 85 × 55 mm, 600 dpi twice as fine) – e.g. for a print shop, an email signature or to share.</li>
     <li>Text below 6 pt is hard to read in print; keep important content inside the dashed safety margin.</li>
   </ul>
+  <h3>Save &amp; share templates</h3>
+  <ul>
+    <li><b>Save in the app:</b> enter a name, <i>Save in the app</i> – the template is then listed under <i>My templates</i> and can be loaded or deleted at any time. Same name = overwrite.</li>
+    <li><b>Save as file / Share:</b> creates a picture of the card (PNG, front and back) that contains the whole design including pictures. Whoever opens the file with this app (<i>Open template file …</i>) gets the card to edit. Other programs just show the picture.</li>
+    <li><b>Messengers</b> (e.g. WhatsApp) shrink pictures and remove the template – send it as a <i>file/document</i> there. Email, cloud storage and AirDrop keep it unchanged.</li>
+    <li><b>Android:</b> in the installed app, a template file can be sent straight to <i>Cards</i> via <i>Share</i>; a normal photo is inserted as a picture. <b>Windows/Mac (Chrome, Edge):</b> PNG file with <i>Open with</i> → Cards. iPhone: via <i>Open template file …</i>.</li>
+    <li>Fonts: the template stores the font style (e.g. “Serif”) – another device uses its matching font.</li>
+  </ul>
   <h3>Storage</h3>
   <ul>
-    <li>The design is saved automatically in this browser and is back next time. Pictures are scaled down (at most 2000 pixels) and kept separately on the device – they are <b>not</b> in the backup file under <i>Back up data</i> (it only contains texts, colours and layout).</li>
+    <li>The design is saved automatically in this browser and is back next time. Pictures are scaled down (at most 2000 pixels) and kept separately on the device – they are <b>not</b> in the backup file under <i>Back up data</i> (it contains texts, colours, layout and your templates). The <i>template file</i> keeps everything including pictures.</li>
     <li>HEIC photos (iPhone): except in Safari, a decoder (about 1.5 MB) loads the first time; after that it works offline too.</li>
     <li>Fonts: the fonts of your device are used. On another device a font may look slightly different – the downloaded image or PDF stays exactly as you saw it.</li>
   </ul>
@@ -342,7 +388,7 @@ input[type=range]{width:100%;accent-color:var(--accent);min-height:32px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 852bd9715f5c</p>
+  <p class="footer-version">Version 62890aa28ae9</p>
   <!-- footer:end -->
 </footer>
 
@@ -374,6 +420,15 @@ Tools.i18n({
     'vc.filled':'Kontaktdaten übernommen.','vc.nothing':'Keine Telefonnummer, E-Mail oder Webseite in den Texten gefunden.',
     cvSide:'Visitenkarte, {side}, {n} Elemente – antippen, ziehen zum Verschieben, Griff unten rechts zum Vergrößern',
     'side.frontL':'Vorderseite','side.backL':'Rückseite',
+    'tpl.defaultName':'Vorlage {n}','tpl.overwrite':'Es gibt schon eine Vorlage „{name}“. Überschreiben?',
+    'tpl.saved':'Vorlage „{name}“ gespeichert.','tpl.saveFail':'Der Speicher ist voll – die Vorlage wurde nicht gespeichert.',
+    'tpl.confirmDel':'Vorlage „{name}“ löschen?','tpl.deleted':'Vorlage „{name}“ gelöscht.','tpl.tooMany':'Höchstens {n} eigene Vorlagen – bitte erst eine löschen.',
+    'tpl.confirmLoad':'Vorlage „{name}“ laden? Sie ersetzt die aktuelle Karte.','tpl.loaded':'Vorlage „{name}“ geladen.',
+    'tpl.noData':'Dieses Bild enthält keine Visitenkarten-Vorlage. Messenger entfernen sie oft beim Verkleinern – dort als Datei senden.',
+    'tpl.invalid':'Die Vorlagendatei ist beschädigt oder stammt nicht aus dieser App.',
+    'tpl.newer':'Die Vorlage stammt aus einer neueren Version der App – bitte die App aktualisieren (↻).',
+    'tpl.tooBig':'Die Datei ist zu groß (höchstens 30 MB).','tpl.fileSaved':'Vorlagendatei gespeichert ({kb} KB).',
+    'tpl.missing':'{n} Bild(er) der Vorlage fehlen.','tpl.fileBase':'vorlage','tpl.untitled':'Visitenkarte',
     'mcp.add':'Text hinzugefügt','mcp.update':'Text geändert','mcp.bg':'Hintergrund geändert'
   },
   en:{
@@ -397,7 +452,7 @@ Tools.i18n({
     'card.bgImg':'Background picture','card.bgPick':'Choose …','card.bgClear':'Remove',
     'card.guides':'Show safety margin (3 mm, preview only)','card.tpl':'Template',
     'tpl.classic':'Classic','tpl.modern':'Modern with QR code','tpl.minimal':'Minimal, centred','tpl.blank':'Blank','card.tplApply':'Load template',
-    'card.note':'A template replaces both sides. The preview uses the fonts of this device – the image and PDF look exactly the same.',
+    'card.note':'The preview uses the fonts of this device – the image and PDF look exactly the same.',
     'out.h':'Download','out.dpi':'Resolution','out.marks':'Crop marks','out.gap':'4 mm gap between cards',
     'out.back':'Back as page 2 (print double-sided)','out.png':'This side as an image (PNG)','out.share':'Share image …',
     pdf:'PDF (A4, {n} cards)',pdf1:'PDF (A4, 1 card)',
@@ -420,6 +475,19 @@ Tools.i18n({
     'vc.filled':'Contact details taken over.','vc.nothing':'No phone number, email or website found in the texts.',
     cvSide:'Business card, {side}, {n} elements – tap, drag to move, handle at the bottom right to resize',
     'side.frontL':'front','side.backL':'back',
+    'tpl.h':'Templates','tpl.builtin':'Built-in','tpl.own':'My templates','tpl.del':'Delete template',
+    'tpl.note':'A template replaces both sides of the card (Undo brings it back).','tpl.saveH':'Current card as a template',
+    'tpl.name':'Template name','tpl.save':'Save in the app','tpl.file':'Save as file','tpl.share':'Share …','tpl.open':'Open template file …',
+    'tpl.fileNote':'The template file is a picture of the card (PNG) that contains the design and its pictures – to pass on or as a backup. Messengers often shrink pictures and remove the template: send it <b>as a file or document</b> there.',
+    'tpl.defaultName':'Template {n}','tpl.overwrite':'There is already a template “{name}”. Overwrite it?',
+    'tpl.saved':'Template “{name}” saved.','tpl.saveFail':'Storage is full – the template was not saved.',
+    'tpl.confirmDel':'Delete template “{name}”?','tpl.deleted':'Template “{name}” deleted.','tpl.tooMany':'At most {n} templates of your own – please delete one first.',
+    'tpl.confirmLoad':'Load template “{name}”? It replaces the current card.','tpl.loaded':'Template “{name}” loaded.',
+    'tpl.noData':'This picture contains no business card template. Messengers often remove it when shrinking pictures – send it as a file there.',
+    'tpl.invalid':'The template file is damaged or does not come from this app.',
+    'tpl.newer':'The template comes from a newer version of the app – please update the app (↻).',
+    'tpl.tooBig':'The file is too big (at most 30 MB).','tpl.fileSaved':'Template file saved ({kb} KB).',
+    'tpl.missing':'{n} picture(s) of the template are missing.','tpl.fileBase':'template','tpl.untitled':'Business card',
     'mcp.add':'text added','mcp.update':'text changed','mcp.bg':'background changed'
   }
 });
@@ -441,6 +509,7 @@ const FONTS={
   mono:'"Courier New", Courier, "Liberation Mono", ui-monospace, monospace'
 };
 const TYPES=['text','image','qr','rect','ellipse','line'];
+const LS_TPL='business-card.templates.v1', TPL_MAX=50;
 const settings=Object.assign({dpi:300,marks:true,gap:false,back:true,guides:true},Tools.load(LS_SET,{}));
 const saveSettings=()=>Tools.save(LS_SET,settings);
 const uid=()=>Math.random().toString(36).slice(2,10);
@@ -563,9 +632,14 @@ async function addPicture(file){
   setStatus('');
   return {id,w,h};
 }
+function imagesOf(d,ids=new Set()){
+  for(const s of Object.values(d.sides)){if(s.bgImg) ids.add(s.bgImg);for(const e of s.els) if(e.type==='image'&&e.img) ids.add(e.img);}
+  return ids;
+}
+// The design and the templates of your own share the kept pictures
 function usedImages(){
-  const ids=new Set();
-  for(const s of Object.values(design.sides)){if(s.bgImg) ids.add(s.bgImg);for(const e of s.els) if(e.type==='image'&&e.img) ids.add(e.img);}
+  const ids=imagesOf(design);
+  for(const o of own) imagesOf(o.design,ids);
   return ids;
 }
 async function loadPictures(){
@@ -832,9 +906,11 @@ function addEl(el){
 const pick=$('pickImg');
 let pickFor=null;
 function choosePicture(target){pickFor=target;pick.value='';pick.click();}
-pick.addEventListener('change',async()=>{
-  const f=pick.files&&pick.files[0], target=pickFor;
-  if(!f) return;
+pick.addEventListener('change',()=>{
+  const f=pick.files&&pick.files[0];
+  if(f) insertPicture(f,pickFor);
+});
+async function insertPicture(f,target){
   try{
     const p=await addPicture(f);
     const [W,H]=dims(design);
@@ -845,7 +921,7 @@ pick.addEventListener('change',async()=>{
       addEl(at(mkImage({img:p.id,w:p.w*k,h:p.h*k}),W/2,H/2));
     }
   }catch(e){setStatus(e.msg||t('img.fail',{name:f.name}),true);Tools.diag.log('picture failed',String(e&&e.message||e));}
-});
+}
 for(const b of document.querySelectorAll('[data-add]')) b.addEventListener('click',()=>{
   const type=b.dataset.add;
   if(type==='image') return choosePicture('new');
@@ -1011,15 +1087,6 @@ $('bgPick').addEventListener('click',()=>choosePicture('bg'));
 $('bgClear').addEventListener('click',()=>{cur().bgImg='';changed(true);syncCard();});
 $('optGuides').checked=settings.guides;
 $('optGuides').addEventListener('change',()=>{settings.guides=$('optGuides').checked;saveSettings();render();});
-$('tplApply').addEventListener('click',()=>{
-  const any=Object.values(design.sides).some(s=>s.els.length||s.bgImg);
-  if(any&&!confirm(t('tpl.confirm'))) return;
-  record();
-  const d=template($('tpl').value,design.format,design.orient);
-  design.sides=d.sides;side='front';selId=null;
-  changed(true);syncCard();renderList();syncProps();render();
-  Tools.diag.log('template',{name:$('tpl').value});
-});
 
 /* ================= Export ================= */
 function setStatus(msg,err){const s=$('status');s.textContent=msg||'';s.className=err?'err':'muted';}
@@ -1129,6 +1196,250 @@ $('btnPdf').addEventListener('click',()=>run(async()=>{
   Tools.diag.log('pdf',{pages:r.pages,perPage:r.n,dpi:settings.dpi,marks:settings.marks,gap:settings.gap,bytes:r.file.size,ms:Math.round(performance.now()-t0)});
 }));
 
+/* ================= Templates: built-in, own (in the app), template file (PNG with the design inside) ================= */
+const TPL_FORMAT='phanlipo-business-card', TPL_VERSION=1, TPL_CHUNK='bcRd', TPL_MAX_BYTES=30*1024*1024;
+const HEXC=/^#[0-9a-fA-F]{6}$/;
+let own=Tools.load(LS_TPL,[]);
+if(!Array.isArray(own)) own=[];
+function tplStatus(msg,err){const s=$('tplStatus');s.textContent=msg||'';s.className=err?'err':'muted';}
+
+/* Checks a design from outside (template file, older own template) and keeps only known fields */
+const nb=(v,lo,hi,f)=>typeof v==='number'&&Number.isFinite(v)?Math.max(lo,Math.min(hi,v)):f;
+const str=(v,max)=>typeof v==='string'?v.slice(0,max):'';
+const col=(v,f)=>typeof v==='string'&&HEXC.test(v)?v.toLowerCase():f;
+const pickOf=(v,list,f)=>list.includes(v)?v:f;
+function cleanEl(e){
+  if(!e||typeof e!=='object'||!TYPES.includes(e.type)) return null;
+  const el={id:uid(),type:e.type,x:nb(e.x,-300,300,0),y:nb(e.y,-300,300,0),w:nb(e.w,0.1,400,10),h:nb(e.h,0.05,400,10),rot:nb(e.rot,-180,180,0),op:nb(e.op,0,100,100)};
+  switch(e.type){
+    case 'text':
+      Object.assign(el,{text:str(e.text,500),font:FONTS[e.font]?e.font:'sans',size:nb(e.size,3,120,9),bold:e.bold===true,italic:e.italic===true,
+        color:col(e.color,'#1f2937'),align:pickOf(e.align,['left','center','right'],'left')});
+      reflow(el);   // fonts of this device: keep the aligned side in place
+      break;
+    case 'rect': case 'ellipse':
+      Object.assign(el,{fill:col(e.fill,'#0f766e'),noFill:e.noFill===true,stroke:col(e.stroke,'#1f2937'),sw:nb(e.sw,0,10,0),r:nb(e.r,0,50,0)});break;
+    case 'line': el.color=col(e.color,'#1f2937');break;
+    case 'image': Object.assign(el,{img:str(e.img,60),clip:pickOf(e.clip,['none','round','circle'],'none')});break;
+    case 'qr':{
+      const vc={}, v=e.vc&&typeof e.vc==='object'?e.vc:{};
+      for(const k of ['n','org','title','tel','email','url','adr']) vc[k]=str(v[k],200);
+      Object.assign(el,{mode:pickOf(e.mode,['text','vcard'],'text'),data:str(e.data,1000),vc,color:col(e.color,'#000000'),bg:e.bg!==false});
+      break;
+    }
+  }
+  return el;
+}
+function cleanDesign(d){
+  if(!d||typeof d!=='object'||!d.sides||typeof d.sides!=='object') return null;
+  const out={format:FORMATS[d.format]?d.format:'85x55',orient:d.orient==='portrait'?'portrait':'landscape',sides:{}};
+  const prev=design; design=out;   // dims() for measuring follows the new card
+  try{
+    for(const k of ['front','back']){
+      const sd=d.sides[k]&&typeof d.sides[k]==='object'?d.sides[k]:{};
+      out.sides[k]={bg:col(sd.bg,'#ffffff'),bgImg:str(sd.bgImg,60),els:(Array.isArray(sd.els)?sd.els:[]).slice(0,300).map(cleanEl).filter(Boolean)};
+    }
+  }finally{design=prev;}
+  return out;
+}
+function anyContent(){return Object.values(design.sides).some(s=>s.els.length||s.bgImg);}
+function useDesign(d,name){
+  record();
+  design=d;side='front';selId=null;guides=[];
+  changed(true);syncCard();layout();renderList();syncProps();
+  Tools.diag.log('template applied',{builtIn:!name,elements:d.sides.front.els.length+d.sides.back.els.length});
+}
+
+/* Built-in and own templates in the list */
+function renderTpl(){
+  const sel=$('tpl'), v=sel.value;
+  const old=$('tplOwn'); if(old) old.remove();
+  if(own.length){
+    const g=document.createElement('optgroup');
+    g.id='tplOwn';g.label=t('tpl.own');
+    for(const o of own){const op=document.createElement('option');op.value='own:'+o.id;op.textContent=o.name;g.append(op);}
+    sel.append(g);
+  }
+  sel.value=[...sel.options].some(o=>o.value===v)?v:'classic';
+  $('tplDel').hidden=!sel.value.startsWith('own:');
+}
+const ownSel=()=>{const v=$('tpl').value;return v.startsWith('own:')?own.find(o=>o.id===v.slice(4))||null:null;};
+$('tpl').addEventListener('change',()=>{$('tplDel').hidden=!ownSel();});
+$('tplApply').addEventListener('click',()=>{
+  const o=ownSel(), v=$('tpl').value;
+  if(anyContent()&&!confirm(o?t('tpl.confirmLoad',{name:o.name}):t('tpl.confirm'))) return;
+  if(o){
+    const d=cleanDesign(clone(o.design));
+    if(d){useDesign(d,o.name);$('tplName').value=o.name;tplStatus(t('tpl.loaded',{name:o.name}));}
+  }else{
+    const d=template(v,design.format,design.orient);
+    useDesign(d,null);tplStatus('');
+  }
+});
+$('tplSave').addEventListener('click',()=>{
+  record();
+  const name=$('tplName').value.trim()||t('tpl.defaultName',{n:own.length+1});
+  const old=own.find(o=>o.name===name);
+  if(old&&!confirm(t('tpl.overwrite',{name}))) return;
+  if(!old&&own.length>=TPL_MAX){tplStatus(t('tpl.tooMany',{n:TPL_MAX}),true);return;}
+  const before=own.slice();
+  const entry={id:old?old.id:uid(),name,saved:new Date().toISOString(),design:clone(design)};
+  own=old?own.map(o=>o===old?entry:o):own.concat(entry);
+  if(!Tools.save(LS_TPL,own)){own=before;tplStatus(t('tpl.saveFail'),true);Tools.diag.log('template save failed');return;}
+  $('tplName').value=name;
+  renderTpl();$('tpl').value='own:'+entry.id;$('tplDel').hidden=false;
+  tplStatus(t('tpl.saved',{name}));
+  Tools.diag.log('template saved',{own:own.length,overwritten:!!old});
+});
+$('tplDel').addEventListener('click',()=>{
+  const o=ownSel(); if(!o||!confirm(t('tpl.confirmDel',{name:o.name}))) return;
+  own=own.filter(x=>x!==o);Tools.save(LS_TPL,own);
+  renderTpl();tplStatus(t('tpl.deleted',{name:o.name}));
+});
+
+/* Template file: a PNG preview of the card with the design in a private chunk "bcRd"
+   (ancillary, private, safe to copy) – any picture viewer shows the card, this app reads the design back. */
+const CRC=(()=>{const tb=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++) c=c&1?0xedb88320^(c>>>1):c>>>1;tb[n]=c>>>0;}return tb;})();
+function crc32(bytes){let c=0xffffffff;for(let i=0;i<bytes.length;i++) c=CRC[(c^bytes[i])&255]^(c>>>8);return (c^0xffffffff)>>>0;}
+const PNG_SIG=[137,80,78,71,13,10,26,10];
+function pngChunks(bytes){
+  if(bytes.length<20||PNG_SIG.some((b,i)=>bytes[i]!==b)) return null;
+  const dv=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength), out=[];
+  for(let o=8;o+12<=bytes.length;){
+    const len=dv.getUint32(o), type=String.fromCharCode(...bytes.subarray(o+4,o+8));
+    if(o+12+len>bytes.length) break;
+    out.push({type,start:o,data:bytes.subarray(o+8,o+8+len),end:o+12+len});
+    if(type==='IEND') break;
+    o+=12+len;
+  }
+  return out;
+}
+function withChunk(png,type,data){
+  const chunks=pngChunks(png), iend=chunks&&chunks.find(c=>c.type==='IEND');
+  if(!iend) throw new Error('png without IEND');
+  const c=new Uint8Array(12+data.length), dv=new DataView(c.buffer);
+  dv.setUint32(0,data.length);
+  for(let i=0;i<4;i++) c[4+i]=type.charCodeAt(i);
+  c.set(data,8);
+  dv.setUint32(8+data.length,crc32(c.subarray(4,8+data.length)));
+  const out=new Uint8Array(png.length+c.length);
+  out.set(png.subarray(0,iend.start),0);out.set(c,iend.start);out.set(png.subarray(iend.start),iend.start+c.length);
+  return out;
+}
+function b64(buf){
+  const u=new Uint8Array(buf);let s='';
+  for(let i=0;i<u.length;i+=0x8000) s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));
+  return btoa(s);
+}
+function unb64(s){const bin=atob(s), u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);return u;}
+function previewCanvas(){
+  const dpi=200, s=dpi/25.4, [W,H]=dims(design), m=Math.round(4*s);
+  const back=hasBack(), cw=Math.round(W*s), ch=Math.round(H*s);
+  const c=document.createElement('canvas');
+  c.width=cw+2*m;c.height=(back?2*ch+m:ch)+2*m;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#e5e7eb';ctx.fillRect(0,0,c.width,c.height);
+  for(const [i,k] of (back?['front','back']:['front']).entries()){
+    ctx.save();ctx.translate(m,m+i*(ch+m));drawSide(ctx,design.sides[k],s);ctx.restore();
+  }
+  return c;
+}
+const slug=s=>s.normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/ß/g,'ss').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);
+async function templateFile(){
+  record();
+  const name=$('tplName').value.trim()||t('tpl.untitled');
+  const images={};
+  for(const id of imagesOf(design)){
+    let blob=await Tools.keep.get(id);
+    if(!blob&&imgs.get(id)){   // not kept (browser without Cache Storage): take it from memory
+      const src=imgs.get(id), c=document.createElement('canvas');
+      c.width=src.naturalWidth||src.width;c.height=src.naturalHeight||src.height;c.getContext('2d').drawImage(src,0,0);
+      blob=await toBlob(c,'image/png');
+    }
+    if(blob) images[id]={type:blob.type||'image/png',data:b64(await blob.arrayBuffer())};
+  }
+  const payload={format:TPL_FORMAT,formatVersion:TPL_VERSION,name,exportedAt:new Date().toISOString(),design:clone(design),images};
+  const png=new Uint8Array(await (await toBlob(previewCanvas(),'image/png')).arrayBuffer());
+  const bytes=withChunk(png,TPL_CHUNK,new TextEncoder().encode(JSON.stringify(payload)));
+  return new File([bytes],t('tpl.fileBase')+'-'+(slug(name)||'visitenkarte')+'.png',{type:'image/png'});
+}
+const fail=key=>Object.assign(new Error(key),{msg:t(key)});
+// Reads a template file: null if it is a PNG/picture without a template, throws for broken ones
+async function readTemplate(file){
+  if(file.size>TPL_MAX_BYTES) throw fail('tpl.tooBig');
+  const chunks=pngChunks(new Uint8Array(await file.arrayBuffer()));
+  const ch=chunks&&chunks.find(c=>c.type===TPL_CHUNK);
+  if(!ch) return null;
+  let p;
+  try{p=JSON.parse(new TextDecoder().decode(ch.data));}catch(_){throw fail('tpl.invalid');}
+  if(!p||p.format!==TPL_FORMAT||!Number.isInteger(p.formatVersion)) throw fail('tpl.invalid');
+  if(p.formatVersion>TPL_VERSION) throw fail('tpl.newer');
+  const d=cleanDesign(p.design);
+  if(!d) throw fail('tpl.invalid');
+  return {name:str(p.name,60).trim(),design:d,images:p.images&&typeof p.images==='object'?p.images:{}};
+}
+// Pictures of the template: decoded, kept on the device under new ids
+async function takeImages(p){
+  const map={};
+  let missing=0;
+  for(const id of imagesOf(p.design)){
+    const im=p.images[id];
+    try{
+      if(!im||typeof im.data!=='string') throw new Error('missing');
+      const blob=new Blob([unb64(im.data)],{type:pickOf(im.type,['image/png','image/jpeg','image/webp'],'image/png')});
+      const src=await decode(blob), nid='img-'+uid();
+      imgs.set(nid,src);await Tools.keep.put(nid,blob);map[id]=nid;
+    }catch(_){missing++;}
+  }
+  for(const sd of Object.values(p.design.sides)){
+    if(sd.bgImg) sd.bgImg=map[sd.bgImg]||'';
+    for(const e of sd.els) if(e.type==='image') e.img=map[e.img]||'';
+  }
+  return missing;
+}
+async function openTemplate(file,{pictureFallback}={}){
+  tplStatus('');
+  let p;
+  try{p=await readTemplate(file);}
+  catch(e){tplStatus(e.msg||t('tpl.invalid'),true);Tools.diag.log('template file rejected',e.message);return false;}
+  if(!p){
+    if(pictureFallback&&/^image\//.test(file.type||'image/')){await insertPicture(file,'new');return true;}
+    tplStatus(t('tpl.noData'),true);Tools.diag.log('template file without data',{type:file.type,size:file.size});
+    return false;
+  }
+  const name=p.name||t('tpl.untitled');
+  if(anyContent()&&!confirm(t('tpl.confirmLoad',{name}))) return false;
+  const missing=await takeImages(p);
+  useDesign(p.design,name);
+  $('tplName').value=p.name;
+  tplStatus(t('tpl.loaded',{name})+(missing?' '+t('tpl.missing',{n:missing}):''),!!missing);
+  Tools.diag.log('template file loaded',{bytes:file.size,elements:p.design.sides.front.els.length+p.design.sides.back.els.length,missing});
+  return true;
+}
+const pickTpl=$('pickTpl');
+$('tplOpen').addEventListener('click',()=>{pickTpl.value='';pickTpl.click();});
+pickTpl.addEventListener('change',()=>{const f=pickTpl.files&&pickTpl.files[0];if(f) openTemplate(f);});
+async function tplRun(fn){
+  const bs=['tplFile','tplShare'].map(id=>$(id));
+  bs.forEach(b=>b.disabled=true);
+  try{await fn();}
+  catch(e){Tools.diag.log('template file failed',String(e&&e.message||e));tplStatus(t('out.fail'),true);}
+  finally{bs.forEach(b=>b.disabled=false);}
+}
+$('tplFile').addEventListener('click',()=>tplRun(async()=>{
+  const f=await templateFile();
+  download(f);
+  tplStatus(t('tpl.fileSaved',{kb:Math.max(1,Math.round(f.size/1024))}));
+  Tools.diag.log('template file',{bytes:f.size,images:imagesOf(design).size});
+}));
+$('tplShare').hidden=!canShareFiles;
+$('tplShare').addEventListener('click',()=>tplRun(async()=>{
+  const f=await templateFile();
+  try{await navigator.share({files:[f],title:f.name});tplStatus('');}
+  catch(e){if(e.name!=='AbortError'){Tools.diag.log('template share failed',e.name);tplStatus(t('out.shareFail'),true);}}
+}));
+renderTpl();
+
 /* ================= WebMCP ================= */
 const HEX=/^#[0-9a-fA-F]{6}$/;
 const checkColor=c=>{if(!HEX.test(c)) throw new Error('color must be a hex colour like #1f2937');return c.toLowerCase();};
@@ -1224,11 +1535,16 @@ Tools.diag.info(()=>{
   const count=k=>TYPES.reduce((o,ty)=>{const n=design.sides[k].els.filter(e=>e.type===ty).length;if(n) o[ty]=n;return o;},{});
   const [W,H]=dims(design);
   return {size:W+'x'+H,side,front:count('front'),back:count('back'),backPrinted:hasBack()&&settings.back,
-    pictures:imgs.size,keep:Tools.keep.supported(),dpi:settings.dpi,marks:settings.marks,gap:settings.gap,undo:undo.length,heic:Heic.info()};
+    ownTemplates:own.length,pictures:imgs.size,keep:Tools.keep.supported(),dpi:settings.dpi,marks:settings.marks,gap:settings.gap,undo:undo.length,heic:Heic.info()};
 });
 syncCard();renderList();syncProps();updUndo();updOut();layout();
-loadPictures().then(()=>render(),e=>Tools.diag.log('pictures failed',String(e&&e.message||e)));
-Tools.onLang(()=>{renderList();syncProps();updOut();render();});
+// Kept work first, then a file shared to / opened with the app (template file, or a photo to insert)
+loadPictures().catch(e=>Tools.diag.log('pictures failed',String(e&&e.message||e))).then(async()=>{
+  render();
+  const f=await Tools.takeSharedFile();
+  if(f){Tools.diag.log('shared file',{type:f.type,size:f.size});await openTemplate(f,{pictureFallback:true});}
+});
+Tools.onLang(()=>{renderList();syncProps();updOut();renderTpl();render();});
 })();
 </script>
 </body>
