@@ -2783,11 +2783,15 @@ test.describe('rss-reader tools', () => {
     const seen = await mockFeeds(page);
     await fakeModelContext(page);
     await page.goto('/rss-reader/');
-    for (const path of ['rss.xml', 'atom.xml']) {
-      await page.fill('#feedUrl', `${FEED_ORIGIN}/${path}`);
-      await page.click('#btnAdd');
-      await expect(page.locator('#status')).toContainText('Einträge');
-    }
+    // First feed on the start screen, the second via menu → "Feed hinzufügen"
+    await page.fill('#feedUrl', `${FEED_ORIGIN}/rss.xml`);
+    await page.click('#btnAdd');
+    await expect(page.locator('#status')).toContainText('3 Einträge');
+    await openMenu(page);
+    await page.click('#btnNew');
+    await page.fill('#feedUrl', `${FEED_ORIGIN}/atom.xml`);
+    await page.click('#btnAdd');
+    await expect(page.locator('#status')).toContainText('2 Einträge');
     expect(seen).toHaveLength(2);
 
     let r = await call(page, 'rss_reader_list_feeds', {});

@@ -1,13 +1,17 @@
 // RSS reader: feeds from stand-in servers (tests/feed-mock.mjs) – with and without CORS, through a proxy, from a file.
-import { test, expect, openMenu, switchLang } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang } from './helpers.mjs';
 import { FEED_ORIGIN, NOCORS_ORIGIN, PROXY_ORIGIN, FEED_PROBLEMS, RSS, mockFeeds } from './feed-mock.mjs';
 
 const URL_ = '/rss-reader/';
 const items = page => page.locator('#items .item');
 const titles = page => page.locator('#items .item .i-title');
 
+/** Adds a feed like a user: on first start with the form on the page, later via menu → "Feed hinzufügen" */
 async function addFeed(page, url, name = '') {
-  if (!(await page.locator('#manage').evaluate(d => d.open))) await page.locator('#manage > summary').click();
+  if (!(await page.locator('#setupCard').isVisible())) {
+    await openMenu(page);
+    if (await page.locator('#btnNew').isVisible()) await page.click('#btnNew');
+  }
   await page.fill('#feedUrl', url);
   await page.fill('#feedName', name);
   await page.click('#btnAdd');
@@ -19,14 +23,14 @@ test.describe('RSS reader', () => {
   test('add an RSS feed: entries newest first, categories, search, read marks – saved over a reload', async ({ page }) => {
     const seen = await mockFeeds(page);
     await page.goto(URL_);
-    await expect(page.locator('#items')).toContainText('Unter „Feeds verwalten“ einen Feed hinzufügen.');
-    await expect(page.locator('#manage')).toHaveJSProperty('open', true);
     await addFeed(page, `${FEED_ORIGIN}/rss.xml`);
     await expect(titles(page)).toHaveText(['Teams: Neue Ansicht', 'Outlook: Ordner teilen', 'Outlook: Kalender drucken']);
-    // Title from the feed, unread count in the selection
-    await expect(page.locator('#feedSel option:checked')).toHaveText('Roadmap Test (3 ungelesen)');
+    // Title from the feed as the heading (one feed: no selection), unread count
+    await expect(page.locator('#h-items')).toHaveText('Roadmap Test');
+    await expect(page.locator('#feedSel')).toBeHidden();
+    await expect(page.locator('#unreadCount')).toHaveText('3 ungelesen');
     await expect(page.locator('#status')).toContainText('3 Einträge');
-    await expect(page.locator('#itemCount')).toHaveText('3');
+    await expect(page.locator('#itemCount')).toHaveText('');
     // No cookies, no referrer
     expect(seen).toHaveLength(1);
     expect(seen[0].cookie).toBeNull();
@@ -53,7 +57,7 @@ test.describe('RSS reader', () => {
     await expect(items(page).nth(1)).not.toHaveClass(/unread/);
     await expect(items(page).nth(1).locator('.i-body')).toContainText('Ordner lassen sich teilen.');
     await expect(items(page).nth(1).getByRole('link', { name: 'Im Browser öffnen' })).toHaveAttribute('href', `${FEED_ORIGIN}/roadmap?id=1002`);
-    await expect(page.locator('#feedSel option:checked')).toHaveText('Roadmap Test (2 ungelesen)');
+    await expect(page.locator('#unreadCount')).toHaveText('2 ungelesen');
     await page.check('#unreadOnly');
     await expect(titles(page)).toHaveText(['Teams: Neue Ansicht', 'Outlook: Kalender drucken']);
 
@@ -65,12 +69,54 @@ test.describe('RSS reader', () => {
     await page.uncheck('#unreadOnly');
     await page.click('#btnAllRead');
     await expect(page.locator('#items .item.unread')).toHaveCount(0);
-    await expect(page.locator('#feedSel option:checked')).toHaveText('Roadmap Test');
+    await expect(page.locator('#unreadCount')).toHaveText('');
     await expect(page.locator('#btnAllRead')).toBeDisabled();
     // Refresh fetches again, read marks stay
     await page.click('#btnRefresh');
     await expect.poll(() => seen.length).toBe(2);
     await expect(page.locator('#items .item.unread')).toHaveCount(0);
+  });
+
+  test('first start shows only the form; afterwards only the entries – managing feeds is in the menu', async ({ page }) => {
+    await mockFeeds(page);
+    await page.goto(URL_);
+    await expect(page.locator('#setupCard')).toBeVisible();
+    await expect(page.locator('#h-setup')).toHaveText('Ersten Feed hinzufügen');
+    await expect(page.locator('#readerCard')).toBeHidden();
+    await expect(page.locator('#setupCard #addForm')).toBeVisible();
+    await expect(page.locator('#btnCancelEdit')).toBeHidden();
+    await addFeed(page, `${FEED_ORIGIN}/rss.xml`);
+    await expect(titles(page)).toHaveCount(3);
+    // Reading: no form, no feed management on the page
+    await expect(page.locator('#setupCard')).toBeHidden();
+    await expect(page.locator('#addForm')).toBeHidden();
+    await expect(page.locator('#feedList')).toBeHidden();
+    await expect(page.locator('main #addForm, main #feedList')).toHaveCount(0);
+    // Menu: list and "add" folded behind a button; cancel folds it again
+    await openMenu(page);
+    await expect(page.locator('#appMenu #feedList .f-name')).toHaveText(['Roadmap Test']);
+    await expect(page.locator('#addForm')).toBeHidden();
+    await expect(page.locator('#btnNew')).toHaveAttribute('aria-expanded', 'false');
+    await page.click('#btnNew');
+    await expect(page.locator('#appMenu #addForm')).toBeVisible();
+    await expect(page.locator('#feedUrl')).toBeFocused();
+    await page.click('#btnCancelEdit');
+    await expect(page.locator('#addForm')).toBeHidden();
+    await expect(page.locator('#btnNew')).toBeVisible();
+    // Adding the second feed closes the menu and shows it; with several feeds the selection is the heading
+    await addFeed(page, `${FEED_ORIGIN}/atom.xml`);
+    await expect(page.locator('#appMenu')).toBeHidden();
+    await expect(titles(page)).toHaveText(['Erster & bester Beitrag', 'Zweiter Beitrag']);
+    await expect(page.locator('#feedSel')).toBeVisible();
+    await expect(page.locator('#feedSel option:checked')).toHaveText('Atom Blog (2 ungelesen)');
+    // Deleting every feed leads back to the first start
+    await openMenu(page);
+    page.on('dialog', d => d.accept());
+    await page.getByRole('button', { name: 'Löschen: Atom Blog' }).click();
+    await page.getByRole('button', { name: 'Löschen: Roadmap Test' }).click();
+    await closeMenu(page);
+    await expect(page.locator('#setupCard #addForm')).toBeVisible();
+    await expect(page.locator('#readerCard')).toBeHidden();
   });
 
   test('feed content is shown safely: no scripts, handlers, images or javascript: links; links open in a new tab', async ({ page }) => {
@@ -102,6 +148,7 @@ test.describe('RSS reader', () => {
     await addFeed(page, `${FEED_ORIGIN}/atom.xml`);
     await expect(titles(page)).toHaveText(['Erster & bester Beitrag', 'Zweiter Beitrag']);
     await expect(page.locator('#feedSel option:checked')).toHaveText('Atom Blog (2 ungelesen)');
+    await expect(page.locator('#h-items')).toHaveClass(/sr-only/);
     await items(page).first().locator('summary').click();
     const body = items(page).first().locator('.i-body .content');
     // Headings one level below the entry, iframes dropped
@@ -112,6 +159,7 @@ test.describe('RSS reader', () => {
 
     await page.selectOption('#feedSel', 'all');
     await expect(page.locator('#feedSel option')).toHaveText(['Alle Feeds (4 ungelesen)', 'Roadmap (3 ungelesen)', 'Atom Blog (1 ungelesen)']);
+    await expect(page.locator('#unreadCount')).toHaveText('4 ungelesen');
     await expect(titles(page)).toHaveText(['Teams: Neue Ansicht', 'Outlook: Ordner teilen', 'Outlook: Kalender drucken', 'Erster & bester Beitrag', 'Zweiter Beitrag']);
     await expect(items(page).first().locator('.i-meta')).toContainText('Roadmap');
     // Refresh with "All feeds" loads every feed
@@ -128,7 +176,7 @@ test.describe('RSS reader', () => {
     await addFeed(page, `${NOCORS_ORIGIN}/m365/rss/`, 'M365');
     const err = page.locator('#feedError');
     await expect(err).toContainText('M365: Der Anbieter erlaubt Browsern nicht, diesen Feed direkt abzurufen (CORS).');
-    await expect(err).toContainText('XML-Datei öffnen');
+    await expect(err.getByRole('button', { name: 'XML-Datei öffnen' })).toBeVisible();
     await expect(err.getByRole('link', { name: 'Feed im Browser öffnen' })).toHaveAttribute('href', `${NOCORS_ORIGIN}/m365/rss/`);
     await expect(page.locator('#status')).toHaveText('Noch nicht geladen – „Aktualisieren“ tippen.');
 
@@ -158,23 +206,26 @@ test.describe('RSS reader', () => {
   test('saved XML file: goes into the feed with the same address, or a new one; wrong files are reported', async ({ page }) => {
     await mockFeeds(page);
     await page.goto(URL_);
-    // New feed from the file: address from the channel link
-    await page.setInputFiles('#fileIn', { name: 'rss.xml', mimeType: 'application/rss+xml', buffer: Buffer.from(RSS) });
+    // First start: new feed from the file, address from the channel link
+    const chooser = page.waitForEvent('filechooser');
+    await page.locator('#setupCard').getByRole('button', { name: 'XML-Datei öffnen' }).click();
+    await (await chooser).setFiles({ name: 'rss.xml', mimeType: 'application/rss+xml', buffer: Buffer.from(RSS) });
     await expect(titles(page)).toHaveCount(3);
-    await expect(page.locator('#feedSel option:checked')).toHaveText('Roadmap Test (3 ungelesen)');
+    await expect(page.locator('#h-items')).toHaveText('Roadmap Test');
+    await expect(page.locator('#unreadCount')).toHaveText('3 ungelesen');
     await expect(page.locator('#status')).toContainText('(aus Datei)');
-    await page.locator('#manage > summary').click();
+    await openMenu(page);
     await expect(page.locator('#feedList .f-url')).toHaveText([`${NOCORS_ORIGIN}/m365/rss`]);
-    // Same file again with "All feeds": matched by address, no second feed
+    await closeMenu(page);
+    // With "All feeds" the same file is matched by address – no further feed.
+    // Phones often save the feed as .txt – the content counts, not the extension.
+    await addFeed(page, `${FEED_ORIGIN}/atom.xml`);
+    await expect(titles(page)).toHaveCount(2);
     await page.selectOption('#feedSel', 'all');
-    await page.setInputFiles('#fileIn', { name: 'rss.xml', mimeType: 'application/rss+xml', buffer: Buffer.from(RSS) });
-    await expect(page.locator('#feedList li')).toHaveCount(1);
-    // Phones often save the feed as .txt – the content counts, not the extension
     await expect(page.locator('#fileIn')).toHaveAttribute('accept', /\.txt\b.*text\/plain/);
-    await page.selectOption('#feedSel', 'all');
     await page.setInputFiles('#fileIn', { name: 'Download.txt', mimeType: 'text/plain', buffer: Buffer.from(RSS.replace(/\n/g, '\r\n')) });
-    await expect(page.locator('#feedList li')).toHaveCount(1);
-    await expect(page.locator('#feedSel option:checked')).toHaveText(/^Roadmap Test/);
+    await expect(page.locator('#feedSel option:checked')).toHaveText('Roadmap Test (3 ungelesen)');
+    await expect(page.locator('#feedList li')).toHaveCount(2);
     await expect(titles(page)).toHaveCount(3);
     // Not a feed
     await page.setInputFiles('#fileIn', { name: 'seite.html', mimeType: 'text/html', buffer: Buffer.from('<!doctype html><title>x</title><p>Hallo') });
@@ -200,7 +251,8 @@ test.describe('RSS reader', () => {
     await addFeed(page, `${FEED_ORIGIN}/fehlt.xml`, 'Fehlt');
     await expect(page.locator('#feedError')).toHaveText('Fehlt: Der Server meldet Fehler 404.');
 
-    // Edit: rename "Fehlt" and point it to the Atom feed
+    // Edit (in the menu): rename "Fehlt" and point it to the Atom feed
+    await openMenu(page);
     await page.getByRole('button', { name: 'Bearbeiten: Fehlt' }).click();
     await expect(page.locator('#h-add')).toHaveText('Feed bearbeiten');
     await expect(page.locator('#feedUrl')).toHaveValue(`${FEED_ORIGIN}/fehlt.xml`);
@@ -218,16 +270,25 @@ test.describe('RSS reader', () => {
     await page.getByRole('button', { name: 'Löschen: Blog' }).click();
     await expect(page.locator('#feedList .f-name')).toHaveText(['Roadmap Test', 'Blog']);
     await page.reload();
-    await page.locator('#manage > summary').click();
+    await openMenu(page);
     await expect(page.locator('#feedList .f-name')).toHaveText(['Roadmap Test', 'Blog']);
   });
 
-  test('link shared to the installed app fills in the form', async ({ page }) => {
-    await page.goto(`${URL_}?title=Mein%20Blog&text=Schau%20mal%20${encodeURIComponent(`${FEED_ORIGIN}/atom.xml`)}`);
-    await expect(page.locator('#manage')).toHaveJSProperty('open', true);
-    await expect(page.locator('#feedUrl')).toHaveValue(`${FEED_ORIGIN}/atom.xml`);
+  test('link shared to the installed app fills in the form – on first start on the page, later in the menu', async ({ page }) => {
+    await mockFeeds(page);
+    const share = `${URL_}?title=Mein%20Blog&text=Schau%20mal%20${encodeURIComponent(`${FEED_ORIGIN}/atom.xml`)}`;
+    await page.goto(share);
+    await expect(page.locator('#setupCard #feedUrl')).toHaveValue(`${FEED_ORIGIN}/atom.xml`);
     await expect(page.locator('#feedName')).toHaveValue('Mein Blog');
     expect(new URL(page.url()).search).toBe('');
+    await page.click('#btnAdd');
+    await expect(titles(page)).toHaveCount(2);
+    await page.goto(share.replace('atom.xml', 'rss.xml'));
+    await expect(page.locator('#appMenu')).toBeVisible();
+    await expect(page.locator('#appMenu #feedUrl')).toHaveValue(`${FEED_ORIGIN}/rss.xml`);
+    await page.click('#btnAdd');
+    await expect(page.locator('#appMenu')).toBeHidden();
+    await expect(titles(page)).toHaveCount(3);
   });
 
   test('works offline with the entries loaded last', async ({ page, context }) => {
@@ -255,9 +316,10 @@ test.describe('English', () => {
     await mockFeeds(page);
     await page.goto(URL_);
     await switchLang(page, 'en');
-    await expect(page.locator('#items')).toContainText('Add a feed under “Manage feeds”.');
+    await expect(page.locator('#h-setup')).toHaveText('Add your first feed');
     await addFeed(page, `${FEED_ORIGIN}/rss.xml`);
-    await expect(page.locator('#feedSel option:checked')).toHaveText('Roadmap Test (3 unread)');
+    await expect(page.locator('#unreadCount')).toHaveText('3 unread');
+    await expect(page.locator('#q')).toHaveAttribute('placeholder', 'Search …');
     await expect(items(page).first().locator('.i-meta')).toContainText('14 Nov 2026');
     await expect(page.locator('#cat option').first()).toHaveText('All categories');
     await addFeed(page, `${NOCORS_ORIGIN}/m365/rss/`);
