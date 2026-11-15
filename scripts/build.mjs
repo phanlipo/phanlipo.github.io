@@ -32,7 +32,8 @@
 //   tool:share-text ("true")                             receive shared links/text (Android) as ?title=&text=&url=
 //   tool:webmcp ("a, b")                                 WebMCP tools the page registers (names without app prefix);
 //                                                        needs the feature "KI-Agent", checked by tests/webmcp.spec.mjs
-//   tool:youtube ("true")                                embeds the YouTube player (frame-src www.youtube-nocookie.com);
+//   tool:youtube ("true")                                embeds the YouTube player (frame-src www.youtube-nocookie.com, and
+//                                                        www.youtube.com for the opt-in "play with YouTube account");
 //                                                        only for apps whose purpose is playing YouTube, see AGENTS.md
 //   tool:title-en, tool:description-en, tool:short-name-en   English texts (start page, manifest, page title);
 //                                                        title and description required for every listed tool
@@ -219,7 +220,7 @@ function csp(p) {
     "media-src 'self' blob: mediastream:",
     `connect-src 'self'${p.connect?.length ? ' ' + p.connect.join(' ') : ''}`,
     "font-src 'self'",
-    ...(p.youtube ? ['frame-src https://www.youtube-nocookie.com'] : []),
+    ...(p.youtube ? ['frame-src https://www.youtube-nocookie.com https://www.youtube.com'] : []),
     `worker-src 'self'${blobWorker}`,
     "manifest-src 'self'",
     "object-src 'none'",

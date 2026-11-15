@@ -6,6 +6,8 @@
 import { expect } from '@playwright/test';
 
 export const YT = 'https://www.youtube-nocookie.com';
+/** Player host with the setting "Mit YouTube-Konto abspielen" */
+export const YT_ACCOUNT = 'https://www.youtube.com';
 export const LIST = 'PLalIG1eq_GwWgya1Z8-f0yE4MCxb3eaH9';
 export const LIST_TITLE = 'Hörspiele (3 Stück in Folge)';
 export const VIDEOS = [
@@ -89,7 +91,7 @@ addEventListener('message', e => {
 /** Routes the embed and oEmbed to the fakes. Returns counters of what was requested. */
 export async function fakeYoutube(page) {
   const seen = { embed: [], oembed: [] };
-  await page.route(`${YT}/**`, async route => {
+  const handler = async route => {
     const url = new URL(route.request().url());
     if (url.pathname.startsWith('/embed/')) {
       seen.embed.push(url.href);
@@ -109,14 +111,17 @@ export async function fakeYoutube(page) {
         : route.fulfill({ status: 404, headers, body: 'Not Found' });
     }
     return route.fulfill({ status: 404, body: '' });
-  });
+  };
+  await page.route(`${YT}/**`, handler);
+  await page.route(`${YT_ACCOUNT}/**`, handler);
   return seen;
 }
 
 /** The fake player's frame (the newest, after the app replaced it) */
 export async function playerFrame(page) {
-  await expect.poll(() => page.frames().filter(f => f.url().startsWith(`${YT}/embed/`)).length).toBeGreaterThan(0);
-  const frame = page.frames().filter(f => f.url().startsWith(`${YT}/embed/`)).at(-1);
+  const players = () => page.frames().filter(f => [YT, YT_ACCOUNT].some(h => f.url().startsWith(`${h}/embed/`)));
+  await expect.poll(() => players().length).toBeGreaterThan(0);
+  const frame = players().at(-1);
   await frame.waitForFunction(() => !!window.fake);
   return frame;
 }
