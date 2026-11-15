@@ -169,6 +169,13 @@ test.describe('RSS reader', () => {
     await page.selectOption('#feedSel', 'all');
     await page.setInputFiles('#fileIn', { name: 'rss.xml', mimeType: 'application/rss+xml', buffer: Buffer.from(RSS) });
     await expect(page.locator('#feedList li')).toHaveCount(1);
+    // Phones often save the feed as .txt – the content counts, not the extension
+    await expect(page.locator('#fileIn')).toHaveAttribute('accept', /\.txt\b.*text\/plain/);
+    await page.selectOption('#feedSel', 'all');
+    await page.setInputFiles('#fileIn', { name: 'Download.txt', mimeType: 'text/plain', buffer: Buffer.from(RSS.replace(/\n/g, '\r\n')) });
+    await expect(page.locator('#feedList li')).toHaveCount(1);
+    await expect(page.locator('#feedSel option:checked')).toHaveText(/^Roadmap Test/);
+    await expect(titles(page)).toHaveCount(3);
     // Not a feed
     await page.setInputFiles('#fileIn', { name: 'seite.html', mimeType: 'text/html', buffer: Buffer.from('<!doctype html><title>x</title><p>Hallo') });
     await expect(page.locator('#feedError')).toHaveText('Datei „seite.html“: Die Antwort ist kein lesbares XML.');
