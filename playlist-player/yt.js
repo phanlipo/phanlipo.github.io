@@ -47,7 +47,17 @@
       switch (d.event) {
         case 'initialDelivery':
         case 'infoDelivery':
-          if (d.info && typeof d.info === 'object') { Object.assign(p.info, d.info); o.onInfo && o.onInfo(p.info, d.info); }
+          if (d.info && typeof d.info === 'object') {
+            // Another video: time and length of the previous one must not be taken for it (they come later)
+            const prev = p.info.videoData && p.info.videoData.video_id;
+            const next = d.info.videoData && d.info.videoData.video_id;
+            if (next && prev && next !== prev) {
+              if (!('currentTime' in d.info)) delete p.info.currentTime;
+              if (!('duration' in d.info)) delete p.info.duration;
+            }
+            Object.assign(p.info, d.info);
+            o.onInfo && o.onInfo(p.info, d.info);
+          }
           break;
         case 'onReady':
           if (p.ready) break;

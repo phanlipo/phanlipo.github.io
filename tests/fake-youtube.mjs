@@ -39,11 +39,15 @@ function setState(s) {
   if (events.has('onStateChange')) send({ event: 'onStateChange', info: s });
   deliver({ playerState: s });
 }
+// Like the real player: the new video's ID comes first, its time and length in a later message
 function load(i, t) {
   idx = i; time = t || 0;
-  deliver({ playlistIndex: idx, videoData: videoData(), duration: v().dur, currentTime: time });
+  deliver({ playlistIndex: idx, videoData: videoData() });
+  deliver({ duration: v().dur, currentTime: time });
   setState(1);
 }
+// Order of "ended" and the move to the next part: 'before' (ended, then next part) or 'after'
+let endOrder = 'before';
 window.fake = {
   state: () => ({ idx, time, state, rate, src: location.href }),
   // Plays on by sec seconds, reporting the time in 1-second steps like the real player does while playing
@@ -51,9 +55,35 @@ window.fake = {
     const end = Math.min(time + sec, v().dur);
     while (time < end) { time = Math.min(time + 1, end); deliver({ currentTime: time }); }
     if (time >= v().dur) {
+      const last = idx >= VIDEOS.length - 1;
+      if (endOrder === 'after' && !last) {
+        idx++; time = 0;
+        deliver({ playlistIndex: idx, videoData: videoData() });
+        setState(0);
+        deliver({ duration: v().dur, currentTime: 0 });
+        setState(1);
+        return;
+      }
       setState(0);
-      if (idx < VIDEOS.length - 1) load(idx + 1, 0);
+      if (!last) load(idx + 1, 0);
     }
+  },
+  setEndOrder(o) { endOrder = o; },
+  // An ad: under the part's video ID the player reports the ad's own length and time, then goes back to the part
+  ad(sec, { ended = false } = {}) {
+    this.adStart(sec, sec);
+    if (ended) setState(0);
+    this.adEnd();
+  },
+  // Ad of sec seconds, played up to upTo seconds and left running
+  adStart(sec, upTo) {
+    deliver({ duration: sec, currentTime: 0 });
+    for (let t = 1; t <= upTo; t++) deliver({ currentTime: t });
+  },
+  // Back to the part where it was
+  adEnd() {
+    deliver({ duration: v().dur, currentTime: time });
+    setState(1);
   },
 };
 addEventListener('message', e => {

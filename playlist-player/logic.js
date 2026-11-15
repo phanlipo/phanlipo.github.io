@@ -56,14 +56,36 @@
 
   const finished = (time, dur) => dur > 0 && (time >= dur * END_SHARE || dur - time <= Math.min(END_LEFT, dur * 0.1));
 
-  /** Position update while playing. Returns true when the track was just marked as heard. */
-  function progress(track, time, dur, now) {
-    if (dur > 0) track.dur = Math.round(dur);
+  // Parts shorter than this are ticked only when the player moves on to the next part: an ad (mostly 6–30 s)
+  // reports its own time and length under the part's video ID and must not tick the part
+  const MIN_TICK = 60;
+
+  /** Position update while playing the part itself (not an ad). The length is the part's known length.
+   *  Returns true when the track was just marked as heard. */
+  function progress(track, time, now) {
     if (!(time >= 0)) return false;
     track.pos = Math.round(time);
     track.lastAt = now;
-    if (!track.done && finished(time, dur || track.dur)) { track.done = true; track.doneAt = now; return true; }
+    if (!track.done && track.dur >= MIN_TICK && finished(time, track.dur)) { track.done = true; track.doneAt = now; return true; }
     return false;
+  }
+
+  /** The player's reported length is the part's (longest seen for this video) – shorter = an ad is playing.
+   *  Returns 'ad' while an ad seems to play, otherwise true if the known length changed. */
+  function takeDuration(track, dur) {
+    if (!(dur > 0)) return false;
+    const d = Math.round(dur);
+    if (track.dur && d < track.dur - 2) return 'ad';
+    if (d > track.dur) { track.dur = d; return true; }
+    return false;
+  }
+
+  /** Mark as heard because the player moved on from it by itself (it ended). Returns true if newly ticked. */
+  function ended(track, now) {
+    if (track.done) return false;
+    track.done = true; track.doneAt = now;
+    if (track.dur) track.pos = track.dur;
+    return true;
   }
 
   /** Mark as heard (or not) by hand. */
@@ -100,7 +122,8 @@
     const known = tracks.filter(t => t.dur > 0);
     const total = known.reduce((s, t) => s + t.dur, 0);
     const heard = known.reduce((s, t) => s + (t.done ? t.dur : Math.min(t.pos, t.dur)), 0);
-    return { count: tracks.length, done, known: known.length, total, heard };
+    // Times only when every part's length is known – otherwise "0:02 of 15:03" would mean only some parts
+    return { count: tracks.length, done, known: known.length, total, heard, complete: known.length === tracks.length && tracks.length > 0 };
   }
 
   /** 3725 → "1:02:05", 65 → "1:05" */
@@ -128,5 +151,5 @@
     return history;
   }
 
-  window.PlaylistLogic = { parseLink, parsePlaylistId, syncTracks, progress, setDone, resumePoint, startOf, summary, fmtTime, addSession, newTrack, finished };
+  window.PlaylistLogic = { parseLink, parsePlaylistId, syncTracks, progress, takeDuration, ended, MIN_TICK, setDone, resumePoint, startOf, summary, fmtTime, addSession, newTrack, finished };
 })();

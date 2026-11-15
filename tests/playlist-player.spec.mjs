@@ -72,7 +72,8 @@ test('nothing from YouTube before a tap; open, play, ticks with date, next part,
   await expect(part(page, 1).locator('input')).toBeChecked();
   const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Berlin' });
   await expect(part(page, 1).locator('.meta')).toContainText(`gehört am ${today}`);
-  await expect(page.locator('#sum')).toHaveText('1 von 3 Teilen gehört · 2:00 von 2:00 gehört (bekannte Teile)');
+  // Only part 1's length is known – no time sum that would cover only some parts
+  await expect(page.locator('#sum')).toHaveText('1 von 3 Teilen gehört');
   // Part ends → the player moves on to part 2 by itself
   await advance(frame, 8);
   await expect(part(page, 2)).toHaveClass(/current/);
@@ -449,4 +450,57 @@ test('"play with YouTube account": player from youtube.com (Premium), reloads at
   await closeMenu(page);
   await expect.poll(() => seen.embed.length).toBe(4);
   expect(new URL(seen.embed[3]).origin).toBe(YT);
+});
+
+test('ads: a pre-roll ad does not tick the part or change its length; a mid-roll ad keeps the part\'s time on screen', async ({ page }) => {
+  await fakeYoutube(page);
+  await page.goto('/playlist-player/');
+  await openPlaylist(page);
+  const frame = await play(page);
+  await expect(parts(page)).toHaveCount(3);
+  // Pre-roll before part 1 is known: the ad (15 s) plays to its end – even with "ended" – and ticks nothing
+  await frame.evaluate(() => window.fake.ad(15, { ended: true }));
+  await expect(page.locator('#tDur')).toHaveText('2:00');
+  await expect(part(page, 1).locator('input')).not.toBeChecked();
+  await expect(page.locator('#sum')).toHaveText('0 von 3 Teilen gehört');
+  await expect(page.locator('#toast')).not.toContainText('gehört ✓');
+  // Part plays to 40 s, then a mid-roll ad: the part's 0:40 / 2:00 stay on screen, marked as ad
+  await advance(frame, 40);
+  await expect(page.locator('#tPos')).toHaveText('0:40');
+  await frame.evaluate(() => window.fake.adStart(20, 19));
+  await expect(page.locator('#nowSub')).toHaveText('Teil 1 von 3 · Werbung');
+  await expect(page.locator('#tPos')).toHaveText('0:40');
+  await expect(page.locator('#tDur')).toHaveText('2:00');
+  await expect(part(page, 1).locator('input')).not.toBeChecked();
+  // Back to the part: time goes on from there, the part's remembered position was not overwritten by the ad
+  await frame.evaluate(() => window.fake.adEnd());
+  await expect(page.locator('#nowSub')).toHaveText('Teil 1 von 3 · Erzähler');
+  await page.locator('#btnPlay').click();
+  await expect(part(page, 1).locator('.meta')).toContainText('bis 0:40 / 2:00 gehört');
+  expect(await page.evaluate(() => Tools.diag.text())).toContain('ad? shorter length reported');
+});
+
+test('part changes: "ended" after the move to the next part ticks the right part; jumping ticks nothing', async ({ page }) => {
+  await fakeYoutube(page);
+  await page.goto('/playlist-player/');
+  await openPlaylist(page);
+  const frame = await play(page);
+  await expect(parts(page)).toHaveCount(3);
+  await frame.evaluate(() => window.fake.setEndOrder('after'));
+  await advance(frame, 120);
+  await expect(part(page, 2)).toHaveClass(/current/);
+  await expect(part(page, 1).locator('input')).toBeChecked();
+  await expect(part(page, 2).locator('input')).not.toBeChecked();
+  // Part 2's length is its own (not part 1's 2:00 from before the switch)
+  await expect(page.locator('#tDur')).toHaveText('1:30');
+  await expect(page.locator('#tPos')).toHaveText('0:00');
+  // Jumping on by hand (button) does not tick the part left behind
+  await advance(frame, 10);
+  await page.getByRole('button', { name: 'Nächster Teil' }).click();
+  await expect(part(page, 3)).toHaveClass(/current/);
+  await expect(part(page, 2).locator('input')).not.toBeChecked();
+  // The last part: ticked at its own end; then all known → time sum
+  await advance(frame, 60);
+  await expect(part(page, 3).locator('input')).toBeChecked();
+  await expect(page.locator('#sum')).toHaveText('2 von 3 Teilen gehört · 3:10 von 4:30 gehört');
 });
