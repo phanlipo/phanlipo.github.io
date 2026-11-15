@@ -9,6 +9,7 @@ import { CLIPS, clip, wavInfo, mp3Info, toneHz, id3Tags, oggTags } from './audio
 import { ORIGIN, API_PROBLEMS, mockApi, addYamlConfig } from './api-mock.mjs';
 import { testSong } from './midi-files.mjs';
 import { fakeCamera, fakeWorker } from './camera-fakes.mjs';
+import { fakeYoutube, playerFrame, LIST, LIST_TITLE, VIDEOS } from './fake-youtube.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -2725,5 +2726,51 @@ test.describe('tic-tac-toe tools', () => {
     expect(r.result.opponent).toBe('computer');
     expect(r.result.board[1][1]).toBe('o');
     expect(r.result.to_move).toBe('x');
+  });
+});
+
+test.describe('playlist-player tools', () => {
+  // Fake YouTube (routed; the service worker would pass requests past the routes)
+  test.use({ serviceWorkers: 'block', allowedProblems: /^external request: https:\/\/www\.youtube-nocookie\.com\/(embed\/|oembed\?)/ });
+
+  test('nothing chosen → errors; control only after the user tapped Play; progress, speed', async ({ page }) => {
+    await fakeYoutube(page);
+    await open(page, '/playlist-player/');
+    expect((await call(page, 'playlist_player_get_progress', {})).error).toMatch(/No playlist chosen/);
+    await page.locator('#inUrl').fill(`https://youtube.com/playlist?list=${LIST}`);
+    await page.getByRole('button', { name: 'Öffnen' }).click();
+    await expect(page.locator('#listName')).toHaveText(LIST_TITLE);
+    // An agent cannot start the player (that loads YouTube) – only the person can
+    let r = await call(page, 'playlist_player_control', { action: 'play' });
+    expect(r.error).toMatch(/user has to tap Play/);
+    await expect(page.locator('#slot iframe')).toHaveCount(0);
+    r = await call(page, 'playlist_player_set_speed', { rate: 1.75 });
+    expect(r.result).toEqual({ speed: 1.75 });
+    await expect(page.locator('#selRate')).toHaveValue('1.75');
+    expect((await call(page, 'playlist_player_set_speed', { rate: 3 })).error).toMatch(/must be one of/);
+
+    await page.locator('#btnStart').click();
+    const frame = await playerFrame(page);
+    await expect(page.locator('#tracks .track')).toHaveCount(3);
+    await expect.poll(() => frame.evaluate(() => window.fake.state().rate)).toBe(1.75);
+    await frame.evaluate(() => window.fake.advance(120));
+    await expect(page.locator('#tracks .track').nth(1)).toHaveClass(/current/);
+    r = await call(page, 'playlist_player_control', { action: 'pause' });
+    expect(r.result).toEqual({ action: 'pause', current_part: 2, part_count: 3 });
+    await expect(page.locator('#btnPlay')).toHaveAttribute('aria-label', 'Abspielen');
+    r = await call(page, 'playlist_player_control', { action: 'next' });
+    await expect(page.locator('#tracks .track').nth(2)).toHaveClass(/current/);
+    expect((await call(page, 'playlist_player_control', { action: 'rewind' })).error).toMatch(/must be one of/);
+
+    const { ok, result } = await call(page, 'playlist_player_get_progress', { limit: 2 });
+    expect(ok).toBe(true);
+    expect(result).toMatchObject({ playlist: LIST_TITLE, part_count: 3, heard_count: 1, current_part: 3, player_started: true, speed: 1.75 });
+    expect(result.parts).toHaveLength(2);
+    expect(result.parts[0]).toMatchObject({ number: 1, title: VIDEOS[0].title, channel: VIDEOS[0].author, duration_seconds: 120, heard: true });
+    expect(Date.parse(result.parts[0].heard_at)).toBeGreaterThan(Date.now() - 60e3);
+    expect(result.parts[1]).toMatchObject({ number: 2, title: VIDEOS[1].title, heard: false });
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'playlist_player_get_progress').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+    expect(tools.find(t => t.name === 'playlist_player_control').annotations.readOnlyHint).toBe(false);
   });
 });
