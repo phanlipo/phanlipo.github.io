@@ -203,6 +203,26 @@ test.describe('RSS reader', () => {
     expect(seen.filter(s => s.url.startsWith(NOCORS_ORIGIN)).length).toBe(before);
   });
 
+  test('proxy errors show the proxy’s own explanation (like Corsfix at its limit); diagnostics only get the code', async ({ page }) => {
+    const seen = await mockFeeds(page);
+    await page.goto(URL_);
+    await openMenu(page);
+    // Same form as Corsfix (see AGENTS.md): sdk=1 and the feed address encoded in url=
+    await page.fill('#proxy', `${PROXY_ORIGIN}/?sdk=1&url={url}`);
+    await page.click('#btnProxy');
+    await addFeed(page, `${NOCORS_ORIGIN}/busy.xml`, 'Busy');
+    const err = page.locator('#feedError');
+    await expect(err).toContainText('Busy: Der Proxy meldet Fehler 429.');
+    await expect(err.locator('.proxy-detail')).toHaveText('Too many requests – Please try again later');
+    const viaProxy = seen.filter(s => s.url.startsWith(PROXY_ORIGIN));
+    expect(viaProxy).toHaveLength(1);
+    expect(viaProxy[0].url).toBe(`${PROXY_ORIGIN}/?sdk=1&url=${encodeURIComponent(`${NOCORS_ORIGIN}/busy.xml`)}`);
+    const diag = await page.evaluate(() => Tools.diag.text());
+    expect(diag).toContain('"proxyCode":"free_tier_concurrency_limit"');
+    expect(diag).not.toContain('Too many requests');
+    expect(diag).not.toContain('busy.xml');
+  });
+
   test('saved XML file: goes into the feed with the same address, or a new one; wrong files are reported', async ({ page }) => {
     await mockFeeds(page);
     await page.goto(URL_);

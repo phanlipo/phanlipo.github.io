@@ -45,6 +45,10 @@ export async function mockFeeds(page, { rss = RSS, atom = ATOM } = {}) {
     if (u.origin === NOCORS_ORIGIN) return route.abort('failed');
     let target = u;
     if (u.origin === PROXY_ORIGIN) target = new URL(u.searchParams.get('url'));
+    // Like Corsfix when its free tier is busy: error status header and an explanation in JSON
+    if (u.origin === PROXY_ORIGIN && target.pathname === '/busy.xml')
+      return route.fulfill({ status: 429, headers: { 'content-type': 'application/json', 'x-corsfix-status': 'free_tier_concurrency_limit', 'access-control-allow-origin': '*', 'access-control-expose-headers': '*' },
+        body: JSON.stringify({ corsfix_error: 'free_tier_concurrency_limit', message: 'Too many requests', if_you_are_user: 'Please try again later' }) });
     const found = body(target.pathname);
     if (target.pathname === '/broken.xml')
       return route.fulfill({ status: 200, headers: { 'content-type': 'text/html', 'access-control-allow-origin': '*' }, body: '<!doctype html><p>Kein Feed' });
