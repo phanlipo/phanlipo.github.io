@@ -523,6 +523,13 @@ test('top card: standard form fields; adding another playlist is folded away onc
   const [open, paste] = [await page.locator('#btnAdd').boundingBox(), await page.locator('#btnPaste').boundingBox()];
   expect(Math.round(open.y)).toBe(Math.round(paste.y));
   await expect(page.getByRole('button', { name: 'Weitere Playlist hinzufügen' })).toBeHidden();
+  // Still side by side on a narrow phone (the longer label wraps inside its button)
+  await page.setViewportSize({ width: 320, height: 800 });
+  const [o2, p2] = [await page.locator('#btnAdd').boundingBox(), await page.locator('#btnPaste').boundingBox()];
+  expect(Math.round(o2.y)).toBe(Math.round(p2.y));
+  expect(p2.x + p2.width).toBeLessThanOrEqual(320);
+  await expectNoHorizontalScroll(page);
+  await page.setViewportSize({ width: 390, height: 800 });
   // Same look as the shared standard: small muted label (base.css)
   expect(await field.locator('label').evaluate(l => getComputedStyle(l).fontSize)).toBe('13px');
   // Wrong input → message under the field
