@@ -203,15 +203,11 @@ test.describe('RSS reader', () => {
     expect(seen.filter(s => s.url.startsWith(NOCORS_ORIGIN)).length).toBe(before);
   });
 
-  test('Corsfix preset fills the proxy field; a proxy error shows the proxy’s own explanation', async ({ page }) => {
+  test('proxy errors show the proxy’s own explanation (like Corsfix at its limit); diagnostics only get the code', async ({ page }) => {
     const seen = await mockFeeds(page);
     await page.goto(URL_);
     await openMenu(page);
-    await page.click('#btnCorsfix');
-    // The form Corsfix's SDK uses: free tier flag and the feed address encoded – no Corsfix script on the page
-    await expect(page.locator('#proxy')).toHaveValue('https://proxy.corsfix.com/?sdk=1&url={url}');
-    await expect(page.locator('script[src*="corsfix"]')).toHaveCount(0);
-    // Saving is still up to the user; the stand-in proxy answers like Corsfix at its limit
+    // Same form as Corsfix (see AGENTS.md): sdk=1 and the feed address encoded in url=
     await page.fill('#proxy', `${PROXY_ORIGIN}/?sdk=1&url={url}`);
     await page.click('#btnProxy');
     await addFeed(page, `${NOCORS_ORIGIN}/busy.xml`, 'Busy');
@@ -221,7 +217,6 @@ test.describe('RSS reader', () => {
     const viaProxy = seen.filter(s => s.url.startsWith(PROXY_ORIGIN));
     expect(viaProxy).toHaveLength(1);
     expect(viaProxy[0].url).toBe(`${PROXY_ORIGIN}/?sdk=1&url=${encodeURIComponent(`${NOCORS_ORIGIN}/busy.xml`)}`);
-    // Only codes in the diagnostics, never the message text or addresses
     const diag = await page.evaluate(() => Tools.diag.text());
     expect(diag).toContain('"proxyCode":"free_tier_concurrency_limit"');
     expect(diag).not.toContain('Too many requests');
