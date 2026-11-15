@@ -32,6 +32,8 @@
 //   tool:share-text ("true")                             receive shared links/text (Android) as ?title=&text=&url=
 //   tool:webmcp ("a, b")                                 WebMCP tools the page registers (names without app prefix);
 //                                                        needs the feature "KI-Agent", checked by tests/webmcp.spec.mjs
+//   tool:youtube ("true")                                embeds the YouTube player (frame-src www.youtube-nocookie.com);
+//                                                        only for apps whose purpose is playing YouTube, see AGENTS.md
 //   tool:title-en, tool:description-en, tool:short-name-en   English texts (start page, manifest, page title);
 //                                                        title and description required for every listed tool
 
@@ -91,6 +93,7 @@ function pageInfo({ folder, file }) {
     webmcp: (meta(html, 'tool:webmcp') || '').split(',').map(s => s.trim()).filter(Boolean),
     connect: (meta(html, 'tool:connect') || '').split(/\s+/).filter(Boolean),
     cast: meta(html, 'tool:cast') === 'true',
+    youtube: meta(html, 'tool:youtube') === 'true',
     icon: existsSync(join(ROOT, folder, 'icon.svg')),
   };
 }
@@ -206,6 +209,8 @@ function csp(p) {
   const blobWorker = isApp(p) && vendorsOf(p).some(v => VENDOR[v]?.blobWorker) ? ' blob:' : '';
   // Google Cast sender SDK (only loaded when the user taps "stream to TV", see assets/shared/cast.js)
   const cast = p.cast ? ' https://www.gstatic.com' : '';
+  // YouTube player as a cross-origin iframe (privacy-enhanced mode), created only after a tap (playlist-player).
+  // No YouTube script runs in the page: it is controlled by postMessage.
   return [
     "default-src 'self'",
     `script-src 'self'${wasm}${cast}${hashes.length ? ' ' + hashes.join(' ') : ''}`,
@@ -214,6 +219,7 @@ function csp(p) {
     "media-src 'self' blob: mediastream:",
     `connect-src 'self'${p.connect?.length ? ' ' + p.connect.join(' ') : ''}`,
     "font-src 'self'",
+    ...(p.youtube ? ['frame-src https://www.youtube-nocookie.com'] : []),
     `worker-src 'self'${blobWorker}`,
     "manifest-src 'self'",
     "object-src 'none'",

@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Playlist-Player</title>
+<meta name="description" content="YouTube-Playlists wie ein Hörbuch hören: Teil für Teil, mit Weiterhören an der letzten Stelle und Häkchen, was wann gehört wurde.">
+<meta name="tool:tags" content="Freizeit, Musik">
+<meta name="tool:features" content="Teilen an App, Verlauf, KI-Agent">
+<meta name="tool:icon" content="headphones">
+<meta name="tool:color" content="#8f2d56">
+<meta name="tool:short-name" content="Playlist">
+<meta name="tool:title-en" content="Playlist Player">
+<meta name="tool:description-en" content="Listen to YouTube playlists like an audiobook: part by part, resuming where you left off, with ticks for what you heard and when.">
+<meta name="tool:short-name-en" content="Playlist">
+<meta name="tool:storage" content="playlist-player.">
+<meta name="tool:share-text" content="true">
+<meta name="tool:webmcp" content="get_progress, control, set_speed">
+<!-- YouTube player (www.youtube-nocookie.com) as iframe, created only when the user taps "Abspielen" – see yt.js -->
+<meta name="tool:youtube" content="true">
+<!-- Titles of the playlist and its parts from YouTube's oEmbed (only after "Öffnen"/"Abspielen", no cookies) -->
+<meta name="tool:connect" content="https://www.youtube-nocookie.com">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-qqMMytyVpV78jcLC2xT3a0Q+63Qi6mn6TUojB2L4Lj8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://www.youtube-nocookie.com; font-src 'self'; frame-src https://www.youtube-nocookie.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Playlist">
+<meta name="theme-color" content="#8f2d56">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#8f2d56;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f08cb6;--accent-text:#1f0a14}}
+main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.field{display:grid;gap:4px;flex:1 1 220px;min-width:0}
+.field label{font-weight:600}
+.field input,.field select{width:100%;font-size:16px}
+.err{color:var(--err)}
+.frame{position:relative;aspect-ratio:16/9;background:#000;border-radius:var(--radius);overflow:hidden;display:grid;place-items:center}
+.frame .slot{position:absolute;inset:0}
+.frame .slot:empty{display:none}
+.frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.frame .start[hidden]{display:none}
+.frame .start{display:grid;gap:8px;justify-items:center;text-align:center;padding:12px;color:#fff}
+.frame .start p{margin:0;color:#e6e6e6}
+.frame .start .btn{min-height:52px;padding-inline:22px;font-size:1.05rem}
+.now{margin:10px 0 4px;font-weight:600;overflow-wrap:anywhere}
+.now-sub{margin:0;color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}
+.time{display:flex;justify-content:space-between;font-variant-numeric:tabular-nums;color:var(--muted);font-size:.9rem;margin-top:2px}
+.bar{display:block;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.bar>span{display:block;height:100%;background:var(--accent)}
+.controls{display:flex;justify-content:center;gap:6px;margin:10px 0 4px}
+.ctl{width:52px;height:52px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--text);display:grid;place-items:center;cursor:pointer;padding:0}
+.ctl svg{width:26px;height:26px}
+.ctl.main{width:60px;height:60px;background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.ctl:disabled{opacity:.45;cursor:default}
+.ctl:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.opts{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.opts .field{flex:1 1 140px}
+.sum{margin:.2rem 0 0;color:var(--muted)}
+.tracks{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.track{display:flex;gap:6px;align-items:stretch;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.track.current{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
+.track-go{flex:1;min-width:0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;text-align:left;background:none;border:0;color:inherit;font:inherit;padding:10px;cursor:pointer;border-radius:var(--radius)}
+.track-go:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.track .num{grid-row:span 3;font-variant-numeric:tabular-nums;color:var(--muted);min-width:1.6em;text-align:right;padding-top:1px}
+.track .tt{font-weight:600;overflow-wrap:anywhere}
+.track .meta{font-size:.85rem;color:var(--muted)}
+.track.done .meta{color:var(--ok)}
+.track.done .tt{font-weight:500}
+.track .bar{margin-top:4px}
+.track-done{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:64px;padding:6px;font-size:.8rem;color:var(--muted);border-left:1px solid var(--border);cursor:pointer}
+.track-done input{width:22px;height:22px;accent-color:var(--accent);margin:0}
+.hist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.hist li{border-bottom:1px solid var(--border);padding:4px 0 6px}
+.hist .when{font-size:.85rem;color:var(--muted)}
+.check{display:flex;gap:10px;align-items:center;min-height:44px}
+.check input{width:22px;height:22px;accent-color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Playlist-Player</span></h1>
+  <p class="sub" data-i18n="sub">YouTube-Playlists Teil für Teil hören – wie ein Hörbuch.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-list">
+    <h2 id="h-list" data-i18n="h.list">Playlist</h2>
+    <div class="row" id="pickRow" hidden>
+      <div class="field">
+        <label for="selList" data-i18n="pick">Meine Playlists</label>
+        <select id="selList"></select>
+      </div>
+    </div>
+    <form id="addForm" class="row" novalidate>
+      <div class="field">
+        <label for="inUrl" data-i18n="add.label">Link oder ID einer YouTube-Playlist</label>
+        <input type="text" id="inUrl" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="https://youtube.com/playlist?list=…" aria-describedby="addErr">
+      </div>
+      <button type="submit" class="btn primary" id="btnAdd" data-i18n="add.btn">Öffnen</button>
+    </form>
+    <div class="row" id="pasteRow" hidden>
+      <button type="button" class="btn" id="btnPaste" data-i18n="paste">Link einfügen &amp; abspielen</button>
+    </div>
+    <p class="err" id="addErr" role="alert"></p>
+  </section>
+
+  <section class="card" id="cardPlayer" aria-labelledby="listName" hidden>
+    <h2 id="listName"></h2>
+    <p class="sum" id="sum"></p>
+    <div class="frame" id="frame">
+      <div class="slot" id="slot"></div>
+      <div class="start" id="startBox">
+        <button type="button" class="btn primary" id="btnStart" data-i18n="start">Abspielen</button>
+        <p id="startInfo"></p>
+      </div>
+    </div>
+    <p class="now" id="now"></p>
+    <p class="now-sub" id="nowSub"></p>
+    <span class="bar" aria-hidden="true"><span id="nowBar" style="width:0"></span></span>
+    <div class="time"><span id="tPos">0:00</span><span id="tDur"></span></div>
+    <div class="controls" role="group" aria-label="Wiedergabe" data-i18n-attr="aria-label:ctl.group">
+      <button type="button" class="ctl" id="btnPrev" aria-label="Vorheriger Teil" data-i18n-attr="aria-label:ctl.prev"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5v14l-12 -7l12 -7"/><path d="M4 5l0 14"/></svg></button>
+      <button type="button" class="ctl" id="btnBack" aria-label="30 Sekunden zurück" data-i18n-attr="aria-label:ctl.back"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.007 16.466a6 6 0 0 0 -4.007 -10.466h-11"/><path d="M12 15.5v3a1.5 1.5 0 0 0 3 0v-3a1.5 1.5 0 0 0 -3 0"/><path d="M6 14h1.5a1.5 1.5 0 0 1 0 3h-.5h.5a1.5 1.5 0 0 1 0 3h-1.5"/><path d="M7 9l-3 -3l3 -3"/></svg></button>
+      <button type="button" class="ctl main" id="btnPlay" aria-label="Abspielen" data-i18n-attr="aria-label:ctl.play"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16l13 -8l-13 -8"/></svg></button>
+      <button type="button" class="ctl" id="btnFwd" aria-label="30 Sekunden vor" data-i18n-attr="aria-label:ctl.fwd"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.007 16.478a6 6 0 0 1 3.993 -10.478h11"/><path d="M15 15.5v3a1.5 1.5 0 0 0 3 0v-3a1.5 1.5 0 0 0 -3 0"/><path d="M17 9l3 -3l-3 -3"/><path d="M9 14h1.5a1.5 1.5 0 0 1 0 3h-.5h.5a1.5 1.5 0 0 1 0 3h-1.5"/></svg></button>
+      <button type="button" class="ctl" id="btnNext" aria-label="Nächster Teil" data-i18n-attr="aria-label:ctl.next"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5v14l12 -7l-12 -7"/><path d="M20 5l0 14"/></svg></button>
+    </div>
+    <div class="opts">
+      <div class="field">
+        <label for="selRate" data-i18n="rate">Tempo</label>
+        <select id="selRate"></select>
+      </div>
+      <div class="field">
+        <label for="selSleep" data-i18n="sleep">Schlaf-Timer</label>
+        <select id="selSleep">
+          <option value="off" data-i18n="sleep.off">Aus</option>
+          <option value="15" data-i18n="sleep.15">15 Minuten</option>
+          <option value="30" data-i18n="sleep.30">30 Minuten</option>
+          <option value="45" data-i18n="sleep.45">45 Minuten</option>
+          <option value="60" data-i18n="sleep.60">60 Minuten</option>
+          <option value="end" data-i18n="sleep.end">Ende des Teils</option>
+        </select>
+      </div>
+    </div>
+    <p class="muted" id="sleepLeft" aria-live="polite"></p>
+    <p id="status" role="status"></p>
+  </section>
+
+  <section class="card" id="cardTracks" aria-labelledby="h-tracks" hidden>
+    <h2 id="h-tracks" data-i18n="h.tracks">Teile</h2>
+    <p class="muted" id="tracksHint"></p>
+    <ol class="tracks" id="tracks"></ol>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-settings">
+    <h2 id="h-settings" data-i18n="h.settings">Einstellungen</h2>
+    <label class="check"><input type="checkbox" id="optWake"><span data-i18n="opt.wake">Bildschirm beim Hören anlassen</span></label>
+    <div id="listSettings" hidden>
+      <div class="row">
+        <div class="field">
+          <label for="inName" data-i18n="name.label">Name der Playlist</label>
+          <input type="text" id="inName" maxlength="80" autocomplete="off">
+        </div>
+      </div>
+      <div class="row">
+        <button type="button" class="btn" id="btnResetAll" data-i18n="resetMarks">Alle Häkchen entfernen</button>
+        <button type="button" class="btn danger" id="btnRemove" data-i18n="remove">Playlist entfernen</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-hist">
+    <h2 id="h-hist" data-i18n="h.hist">Verlauf</h2>
+    <p class="muted" id="histEmpty" data-i18n="hist.empty">Noch nichts gehört.</p>
+    <ol class="hist" id="hist"></ol>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Hört eine YouTube-Playlist wie ein Hörbuch: Teil für Teil, immer an der Stelle weiter, an der du aufgehört hast. Jeder Teil bekommt ein Häkchen, sobald er zu Ende gehört ist – mit Datum. Im Verlauf (Menü) steht, wann du was gehört hast.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><strong>Direkt aus YouTube (Android):</strong> App installieren (Menü → <em>Installieren</em>), dann in der YouTube-App bei der Playlist <em>Teilen</em> → <em>Playlist</em>. Die Playlist öffnet sich und der Player lädt sofort. Wird ein einzelnes Video aus einer Playlist geteilt, geht es bei genau diesem Teil los.</li>
+    <li><strong>iPhone und alle anderen:</strong> In YouTube <em>Teilen</em> → <em>Link kopieren</em>, hier <em>Link einfügen &amp; abspielen</em> tippen (oder den Link ins Feld einfügen und <em>Öffnen</em>). Für einen Kurzbefehl auf dem iPhone: „Teilen“-Eingabe an <code>https://phanlipo.github.io/playlist-player/?url=</code> anhängen und öffnen.</li>
+    <li>Gibt der Browser den Ton nicht sofort frei, einmal ins Video tippen.</li>
+    <li><em>Abspielen</em> startet beim ersten noch nicht gehörten Teil, an der zuletzt gehörten Stelle. Startet es nicht von selbst, einmal ins Video tippen.</li>
+    <li>Einen Teil in der Liste antippen springt dorthin (wieder an die gemerkte Stelle). Das Kästchen <em>gehört</em> setzt oder entfernt das Häkchen von Hand, z. B. für übersprungene Teile.</li>
+    <li>Ein Teil gilt als gehört, wenn er zu Ende läuft oder nur noch der Abspann fehlt (die letzten 2 % bzw. 10 Sekunden).</li>
+    <li><em>Tempo</em> gilt für alle Teile; der <em>Schlaf-Timer</em> hält nach der gewählten Zeit oder am Ende des Teils an.</li>
+    <li>Die Titel aller Teile holt die App, sobald der Player die Playlist geladen hat; die Länge eines Teils kennt sie erst, wenn er einmal lief. Mehrere Playlists lassen sich speichern und oben auswählen.</li>
+  </ul>
+  <h3>Sperrbildschirm und Hintergrund</h3>
+  <p>Abgespielt wird im eingebetteten YouTube-Player. Ob er bei gesperrtem Bildschirm oder in einer anderen App weiterläuft, entscheiden YouTube und der Browser – meist hält er an. Dann hilft <em>Bildschirm beim Hören anlassen</em> im Menü. Die Steuerung im Sperrbildschirm zeigt der Browser für den YouTube-Player an, soweit er es erlaubt.</p>
+  <h3>Datenschutz</h3>
+  <p>Erst wenn du <em>Abspielen</em> tippst (oder eine Playlist hierher teilst bzw. einfügst), lädt die Seite den Player von YouTube (Google) im erweiterten Datenschutzmodus (youtube-nocookie.com). YouTube erfährt dabei wie bei jedem eingebetteten Video deine IP-Adresse und was du abspielst und kann Werbung zeigen. Beim Öffnen einer Playlist und nach dem Laden fragt die App dort außerdem die Titel der Playlist und ihrer Teile ab (ohne Cookies). Sonst schickt sie nichts; Fortschritt, Häkchen und Verlauf liegen nur in diesem Browser („Daten sichern“ im Menü). Ohne Internet lässt sich nichts abspielen, Liste und Verlauf bleiben sichtbar.</p>
+  <p>Für KI-Agenten im Browser (WebMCP) gibt es Werkzeuge, um den Fortschritt abzufragen, die laufende Wiedergabe zu steuern und das Tempo zu setzen. Starten muss die Wiedergabe immer der Mensch.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Listen to a YouTube playlist like an audiobook: part by part, always continuing where you stopped. Each part gets a tick with the date once you have heard it to the end. The history (menu) shows when you listened to what.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><strong>Straight from YouTube (Android):</strong> install the app (menu → <em>Install</em>), then in the YouTube app on the playlist <em>Share</em> → <em>Playlist</em>. The playlist opens and the player loads at once. If you share one video of a playlist, it starts with exactly that part.</li>
+    <li><strong>iPhone and everything else:</strong> in YouTube <em>Share</em> → <em>Copy link</em>, then tap <em>Paste link &amp; play</em> here (or paste the link into the field and tap <em>Open</em>). For an iPhone shortcut: append the shared input to <code>https://phanlipo.github.io/playlist-player/?url=</code> and open it.</li>
+    <li>If the browser does not allow sound right away, tap the video once.</li>
+    <li><em>Play</em> starts with the first part not heard yet, at the last position. If it does not start by itself, tap the video once.</li>
+    <li>Tap a part in the list to jump there (again at the remembered position). The <em>heard</em> box sets or removes the tick by hand, e.g. for parts you skipped.</li>
+    <li>A part counts as heard when it plays to the end or only the credits are left (the last 2 % or 10 seconds).</li>
+    <li><em>Speed</em> applies to all parts; the <em>sleep timer</em> pauses after the chosen time or at the end of the part.</li>
+    <li>The app fetches the titles of all parts once the player has loaded the playlist; it knows a part's length only after it has played once. You can keep several playlists and pick one at the top.</li>
+  </ul>
+  <h3>Lock screen and background</h3>
+  <p>Playback runs in the embedded YouTube player. Whether it keeps playing with the screen locked or in another app is up to YouTube and the browser – usually it stops. <em>Keep the screen on while listening</em> in the menu helps then. Lock screen controls are shown by the browser for the YouTube player as far as it allows.</p>
+  <h3>Privacy</h3>
+  <p>Only when you tap <em>Play</em> (or share or paste a playlist here) does the page load the player from YouTube (Google) in privacy-enhanced mode (youtube-nocookie.com). As with any embedded video, YouTube learns your IP address and what you play, and may show ads. When you open a playlist and once it has loaded, the app also asks there for the titles of the playlist and its parts (without cookies). It sends nothing else; progress, ticks and history stay in this browser only (“Back up data” in the menu). Without internet nothing can play; the list and history stay visible.</p>
+  <p>For AI agents in the browser (WebMCP) there are tools to read the progress, control running playback and set the speed. Starting playback is always up to the person.</p>
+  </div>
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 351084199a3e</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="logic.js"></script>
+<script src="yt.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    part:'Teil {n}', unnamed:'Playlist {id}', 'add.bad':'Darin steckt keine Playlist. Erwartet wird ein Link mit „list=…“ oder die ID der Playlist.',
+    added:'Playlist hinzugefügt', exists:'Playlist ist schon gespeichert – ausgewählt', shared:'Geteilte Playlist geöffnet', pasted:'Playlist aus der Zwischenablage geöffnet',
+    pasteFail:'Kein Zugriff auf die Zwischenablage – Link bitte ins Feld einfügen.', pasteNone:'In der Zwischenablage ist kein Playlist-Link. In YouTube: Playlist → Teilen → Link kopieren.',
+    sumNone:'Noch keine Teile bekannt – zum Laden auf „Abspielen“ tippen.', sum:'{done} von {n} Teilen gehört', sumTime:'{heard} von {total} gehört (bekannte Teile)',
+    startFirst:'Lädt die Playlist von YouTube.', startAt:'Weiter mit {part} ab {time}', startFrom:'Weiter mit {part}',
+    allDone:'Alle Teile gehört – Abspielen beginnt wieder vorne.', ofN:'{part} von {n}',
+    notHeard:'noch nicht gehört', heardAt:'gehört am {date}', leftAt:'bis {time} gehört · zuletzt {date}', heardBox:'gehört',
+    tracksHint:'Antippen springt zum Teil. Häkchen setzt die App beim Hören selbst.',
+    'ctl.pause':'Pause', speed:'{r}×', paused:'Angehalten (Schlaf-Timer)', sleepLeft:'Schlaf-Timer: noch {min} min', sleepEnd:'Schlaf-Timer: hält am Ende des Teils an',
+    finished:'{part} gehört ✓', listDone:'Playlist fertig gehört 🎉', offline:'Offline – zum Abspielen wird Internet gebraucht.',
+    loading:'Player wird geladen …', tapVideo:'Startet es nicht? Einmal ins Video tippen.',
+    errBad:'YouTube kennt diese Playlist nicht (Link prüfen).', errHtml5:'Das Video lässt sich hier nicht abspielen.', errGone:'Dieser Teil ist nicht verfügbar (gelöscht oder privat).',
+    errEmbed:'Dieser Teil darf nicht eingebettet abgespielt werden – nur in der YouTube-App.', errAuth:'YouTube spielt diesen Teil hier nur nach Anmeldung ab (Altersfreigabe, Region oder „kein Bot“-Prüfung). Später erneut versuchen oder in der YouTube-App hören.', errReferrer:'YouTube hat den Player abgelehnt (Fehler 153).', errNoResponse:'Der YouTube-Player antwortet nicht. Internet prüfen, Inhaltsblocker ausschalten?', errOther:'YouTube-Fehler {code}',
+    removeAsk:'Playlist „{name}“ mit Fortschritt und Verlauf entfernen?', removed:'Playlist entfernt', resetAsk:'Alle Häkchen und Positionen dieser Playlist entfernen?', resetDone:'Fortschritt zurückgesetzt',
+    histItem:'{part}: {from}–{to}', histWhen:'{date} · {list}',
+    'mcp.control':'Wiedergabe gesteuert', 'mcp.speed':'Tempo gesetzt',
+  },
+  en:{
+    title:'Playlist Player', sub:'Listen to YouTube playlists part by part – like an audiobook.',
+    'h.list':'Playlist', pick:'My playlists', 'add.label':'Link or ID of a YouTube playlist', 'add.btn':'Open',
+    start:'Play', 'ctl.group':'Playback', 'ctl.prev':'Previous part', 'ctl.back':'Back 30 seconds', 'ctl.play':'Play', 'ctl.fwd':'Forward 30 seconds', 'ctl.next':'Next part',
+    rate:'Speed', sleep:'Sleep timer', 'sleep.off':'Off', 'sleep.15':'15 minutes', 'sleep.30':'30 minutes', 'sleep.45':'45 minutes', 'sleep.60':'60 minutes', 'sleep.end':'End of part',
+    'h.tracks':'Parts', 'h.settings':'Settings', 'opt.wake':'Keep the screen on while listening', 'name.label':'Playlist name',
+    resetMarks:'Remove all ticks', remove:'Remove playlist', 'h.hist':'History', 'hist.empty':'Nothing heard yet.',
+    part:'Part {n}', unnamed:'Playlist {id}', 'add.bad':'There is no playlist in this. Expected a link with “list=…” or the playlist ID.',
+    added:'Playlist added', exists:'Playlist is already saved – selected', shared:'Shared playlist opened', pasted:'Playlist opened from the clipboard', paste:'Paste link & play',
+    pasteFail:'No access to the clipboard – please paste the link into the field.', pasteNone:'There is no playlist link in the clipboard. In YouTube: playlist → Share → Copy link.',
+    sumNone:'No parts known yet – tap “Play” to load them.', sum:'{done} of {n} parts heard', sumTime:'{heard} of {total} heard (known parts)',
+    startFirst:'Loads the playlist from YouTube.', startAt:'Continue with {part} at {time}', startFrom:'Continue with {part}',
+    allDone:'All parts heard – Play starts from the beginning again.', ofN:'{part} of {n}',
+    notHeard:'not heard yet', heardAt:'heard on {date}', leftAt:'heard up to {time} · last {date}', heardBox:'heard',
+    tracksHint:'Tap to jump to a part. The app sets the ticks itself while you listen.',
+    'ctl.pause':'Pause', speed:'{r}×', paused:'Paused (sleep timer)', sleepLeft:'Sleep timer: {min} min left', sleepEnd:'Sleep timer: pauses at the end of the part',
+    finished:'{part} heard ✓', listDone:'Playlist finished 🎉', offline:'Offline – playing needs the internet.',
+    loading:'Loading the player …', tapVideo:'Not starting? Tap the video once.',
+    errBad:'YouTube does not know this playlist (check the link).', errHtml5:'The video cannot be played here.', errGone:'This part is not available (deleted or private).',
+    errEmbed:'This part may not be played embedded – only in the YouTube app.', errAuth:'YouTube plays this part here only after signing in (age, region or “not a bot” check). Try again later or listen in the YouTube app.', errReferrer:'YouTube refused the player (error 153).', errNoResponse:'The YouTube player does not answer. Check the internet, turn off content blockers?', errOther:'YouTube error {code}',
+    removeAsk:'Remove the playlist “{name}” with its progress and history?', removed:'Playlist removed', resetAsk:'Remove all ticks and positions of this playlist?', resetDone:'Progress reset',
+    histItem:'{part}: {from}–{to}', histWhen:'{date} · {list}',
+    'mcp.control':'Playback controlled', 'mcp.speed':'Speed set',
+  }
+});
+const t=Tools.t, $=Tools.$, L=PlaylistLogic;
+const LS_DATA='playlist-player.data.v1', LS_SET='playlist-player.settings.v1', LS_HIST='playlist-player.history.v1';
+const RATES=[0.5,0.75,1,1.25,1.5,1.75,2];
+const ICON_PLAY='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16l13 -8l-13 -8"/></svg>';
+const ICON_PAUSE='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12"/><path d="M14 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12"/></svg>';
+
+/* ---------- Stored state ---------- */
+// data: { current: playlist ID, lists: { [id]: { id, name (own), title (YouTube), auto (channel), added, index, tracks:[{ id, title, author, dur, pos, done, doneAt, lastAt }] } } }
+function loadData(){
+  const d=Tools.load(LS_DATA,null);
+  const out={current:null,lists:{}};
+  if(d&&typeof d==='object'&&d.lists&&typeof d.lists==='object'){
+    for(const [id,l] of Object.entries(d.lists)){
+      if(!L.parsePlaylistId(id)||!l||typeof l!=='object') continue;
+      const tracks=Array.isArray(l.tracks)?l.tracks.filter(x=>x&&typeof x.id==='string').map(x=>Object.assign(L.newTrack(x.id),x)):[];
+      out.lists[id]={id,name:String(l.name||''),title:String(l.title||''),auto:String(l.auto||''),added:+l.added||Date.now(),index:Math.max(0,+l.index||0),tracks};
+    }
+    if(out.lists[d.current]) out.current=d.current;
+  }
+  return out;
+}
+const data=loadData();
+const set=Object.assign({rate:1,wake:false},Tools.load(LS_SET,{}));
+if(!RATES.includes(set.rate)) set.rate=1;
+let hist=Tools.load(LS_HIST,[]);
+if(!Array.isArray(hist)) hist=[];
+let lastSave=0;
+const cur=()=>data.current?data.lists[data.current]||null:null;
+function persist(){ Tools.save(LS_DATA,data); lastSave=Date.now(); }
+function saveSoon(){ if(Date.now()-lastSave>5000) persist(); }
+const listName=l=>l.name||l.title||l.auto||t('unnamed',{id:l.id.slice(0,10)+'…'});
+const partName=(l,i)=>{ const tr=l.tracks[i]; return tr&&tr.title?tr.title:t('part',{n:i+1}); };
+const partNo=i=>t('part',{n:i+1});
+const dateFmt=ms=>new Date(ms).toLocaleString(Tools.locale(),{dateStyle:'medium',timeStyle:'short'});
+
+/* ---------- Player ---------- */
+let player=null, state=-1, session=null, pendingSeek=null, sleep={mode:'off'}, wakeLock=null, startHint=0;
+const playing=()=>!!player&&state===1;
+
+function setStatus(msg,err){ const s=$('status'); s.textContent=msg||''; s.classList.toggle('err',!!err); }
+
+// video: a video of the playlist to start with (shared link to one part) – also before the parts are known
+function start(index,video){
+  const list=cur(); if(!list) return;
+  stopPlayer();
+  if(navigator.onLine===false) setStatus(t('offline'),true); else setStatus(t('loading'));
+  if(video){ const i=list.tracks.findIndex(x=>x.id===video); if(i>=0) index=i; }
+  let rp=L.resumePoint(list);
+  if(index!=null&&list.tracks[index]) rp={index,start:L.startOf(list.tracks[index])};
+  const tr=video&&!list.tracks.some(x=>x.id===video)?null:list.tracks[rp.index];
+  const vid=tr?tr.id:video||'';
+  if(tr) list.index=rp.index;
+  pendingSeek=tr?{vid:tr.id,pos:rp.start}:null;
+  Tools.diag.log('player: create',{index:rp.index,known:list.tracks.length,resume:!!tr&&rp.start>0,shared:!!video});
+  $('startBox').hidden=true;
+  player=YtEmbed.create($('slot'),{
+    list:list.id, video:vid, start:tr?rp.start:0, title:'YouTube: '+listName(list),
+    onReady, onInfo, onState, onError, onRate
+  });
+  clearTimeout(startHint);
+  startHint=setTimeout(()=>{ if(player&&state!==1&&!$('status').classList.contains('err')) setStatus(t('tapVideo')); },6000);
+  render();
+}
+function stopPlayer(){
+  closeSession();
+  if(player){ player.destroy(); player=null; persist(); Tools.diag.log('player: closed'); }
+  state=-1; pendingSeek=null; releaseWake();
+  $('slot').replaceChildren();
+  $('startBox').hidden=false;
+}
+function onReady(){
+  Tools.diag.log('player: ready');
+  if(set.rate!==1) player.command('setPlaybackRate',set.rate);
+  player.command('playVideo');
+}
+// Speed changed in YouTube's own menu: keep it (the player's initial info is not taken – it reports 1×)
+function onRate(r){
+  if(!RATES.includes(r)||r===set.rate) return;
+  set.rate=r; Tools.save(LS_SET,set); $('selRate').value=String(r);
+}
+function onError(code){
+  Tools.diag.log('player: error',code);
+  // "auth": YouTube wants a sign-in for this video here ("confirm you're not a bot", age, region)
+  const auth=player&&player.info.videoData&&player.info.videoData.errorCode==='auth';
+  const key=auth?'errAuth':{2:'errBad',5:'errHtml5',100:'errGone',101:'errEmbed',150:'errEmbed',153:'errReferrer','no-response':'errNoResponse'}[code];
+  setStatus(key?t(key):t('errOther',{code:String(code).slice(0,20)}),true);
+}
+function onState(s){
+  const prev=state; state=s;
+  if(prev===s) return;
+  Tools.diag.log('player: state',s);
+  const list=cur(), info=player&&player.info;
+  if(s===1&&sleep.mode==='hold'){
+    if(Date.now()<sleep.until){ player.command('pauseVideo'); sleepDone(); }
+    else sleep={mode:'off'};
+  }
+  if(s===1){
+    clearTimeout(startHint);
+    if(!$('status').classList.contains('err')||prev!==1) setStatus('');
+    requestWake();
+    openSession();
+  } else if(s===2||s===0){
+    if(list&&info) record(info);
+    closeSession(); releaseWake(); persist();
+    if(list){ renderHead(); renderTracks(); }
+  }
+  if(s===0&&list){
+    const i=list.index, tr=list.tracks[i];
+    if(tr&&!tr.done){ tr.done=true; tr.doneAt=Date.now(); if(tr.dur) tr.pos=tr.dur; Tools.toast(t('finished',{part:partNo(i)})); }
+    // Sleep timer "end of part": YouTube moves on by itself – pause the next part as soon as it starts
+    if(sleep.mode==='end') sleep={mode:'hold',until:Date.now()+8000};
+    if(list.tracks.length&&list.tracks.every(x=>x.done)&&i===list.tracks.length-1) Tools.toast(t('listDone'),4000);
+    persist(); renderHead(); renderTracks();
+  }
+  renderNow(); renderMedia();
+}
+// Current part as the player reports it – only if its video ID matches our list (otherwise not synced yet)
+function currentTrack(info){
+  const list=cur(); if(!list) return null;
+  const i=typeof info.playlistIndex==='number'&&info.playlistIndex>=0?info.playlistIndex:list.index;
+  const tr=list.tracks[i], vd=info.videoData;
+  if(!tr||!vd||vd.video_id!==tr.id) return null;
+  return {i,tr};
+}
+function record(info){
+  const c=currentTrack(info); if(!c||pendingSeek&&pendingSeek.vid===c.tr.id) return false;
+  if(!(info.currentTime>0)) return false;
+  const just=L.progress(c.tr,info.currentTime,info.duration,Date.now());
+  if(just) Tools.toast(t('finished',{part:partNo(c.i)}));
+  if(session&&session.vid===c.tr.id){
+    if(Math.abs(info.currentTime-session.to)>20){ closeSession(); openSession(); } // jumped
+    else session.to=info.currentTime;
+  }
+  return just;
+}
+function onInfo(info,delta){
+  const list=cur(); if(!list||!player) return;
+  // State also comes with the info (in case an event listener did not take)
+  if(typeof delta.playerState==='number'&&delta.playerState!==state) onState(delta.playerState);
+  let changed=false;
+  if(delta.playlist&&L.syncTracks(list,info.playlist)){ changed=true; Tools.diag.log('playlist: synced',list.tracks.length); }
+  if(delta.playlist) fillTitles(list);
+  const idx=typeof info.playlistIndex==='number'&&info.playlistIndex>=0?info.playlistIndex:null;
+  if(idx!=null&&idx!==list.index&&list.tracks[idx]){
+    const old=list.index;
+    closeSession();
+    list.index=idx; changed=true;
+    // Moved to another part (end of part, YouTube's own buttons): continue it where it was left
+    if(!pendingSeek||pendingSeek.vid!==list.tracks[idx].id) pendingSeek={vid:list.tracks[idx].id,pos:L.startOf(list.tracks[idx])};
+    if((sleep.mode==='end'&&old===sleep.idx)||(sleep.mode==='hold'&&Date.now()<sleep.until)){ player.command('pauseVideo'); sleepDone(); }
+  }
+  const c=currentTrack(info);
+  if(c){
+    const vd=info.videoData;
+    if(vd.title&&vd.title!==c.tr.title){ c.tr.title=String(vd.title).slice(0,300); changed=true; }
+    if(vd.author&&vd.author!==c.tr.author){ c.tr.author=String(vd.author).slice(0,120); changed=true; }
+    if(!list.auto&&c.tr.author){ list.auto=c.tr.author; changed=true; }
+    if(info.duration>0&&Math.round(info.duration)!==c.tr.dur){ c.tr.dur=Math.round(info.duration); changed=true; }
+    if(pendingSeek&&pendingSeek.vid===c.tr.id&&info.duration>0&&(state===1||info.playerState===1)){
+      const ps=pendingSeek; pendingSeek=null;
+      if(ps.pos>0&&Math.abs((info.currentTime||0)-ps.pos)>3) player.command('seekTo',ps.pos,true);
+    }
+    if(state===1&&!session) openSession();
+    if(state===1&&'currentTime' in delta&&record(info)) changed=true;
+  }
+  if(changed){ persist(); renderHead(); renderTracks(); renderMedia(); } else saveSoon();
+  renderNow();
+}
+
+/* ---------- Listening history ---------- */
+function openSession(){
+  const list=cur(); if(!list||!player||session) return;
+  const c=currentTrack(player.info); if(!c) return;
+  const at=player.info.currentTime||0;
+  session={list:list.id,vid:c.tr.id,idx:c.i,from:at,to:at,at:Date.now()};
+  Tools.diag.log('history: listening from',Math.round(at));
+}
+function closeSession(){
+  if(!session) return;
+  session.end=Date.now();
+  Tools.diag.log('history: stretch',Math.round(session.to-session.from),'s');
+  const n=hist.length, top=hist[0]&&hist[0].to;
+  L.addSession(hist,session);
+  session=null;
+  if(hist.length!==n||(hist[0]&&hist[0].to!==top)){ Tools.save(LS_HIST,hist); renderHist(); }
+}
+
+/* ---------- Sleep timer, screen wake lock, media session ---------- */
+function sleepDone(){
+  sleep={mode:'off'}; $('selSleep').value='off'; renderSleep();
+  Tools.toast(t('paused')); Tools.diag.log('sleep timer: paused');
+}
+$('selSleep').addEventListener('change',e=>{
+  const v=e.target.value, list=cur();
+  sleep=v==='off'?{mode:'off'}:v==='end'?{mode:'end',idx:list?list.index:0}:{mode:'min',until:Date.now()+Number(v)*60e3};
+  Tools.diag.log('sleep timer:',v);
+  renderSleep();
+});
+function renderSleep(){
+  $('sleepLeft').textContent=sleep.mode==='min'?t('sleepLeft',{min:Math.max(1,Math.ceil((sleep.until-Date.now())/60e3))}):sleep.mode==='end'?t('sleepEnd'):'';
+}
+setInterval(()=>{
+  if(sleep.mode!=='min') return;
+  if(Date.now()>=sleep.until){ if(player) player.command('pauseVideo'); sleepDone(); }
+  else renderSleep();
+},1000);
+
+async function requestWake(){
+  if(!set.wake||wakeLock||!('wakeLock' in navigator)) return;
+  try{ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ wakeLock=null; }); Tools.diag.log('wake lock: on'); }
+  catch(e){ Tools.diag.log('wake lock failed:',e&&e.name); }
+}
+function releaseWake(){ if(wakeLock){ wakeLock.release().catch(()=>{}); wakeLock=null; } }
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'){ if(playing()) requestWake(); }
+  else { const l=cur(); if(l&&player) record(player.info); persist(); }
+});
+window.addEventListener('pagehide',()=>{ closeSession(); persist(); });
+
+// Lock screen / headset buttons: the browser shows them for the frame that plays; set ours too where it helps
+const ms='mediaSession' in navigator?navigator.mediaSession:null;
+if(ms){
+  const h={play:()=>player&&player.command('playVideo'),pause:()=>player&&player.command('pauseVideo'),
+    previoustrack:()=>step(-1),nexttrack:()=>step(1),seekbackward:()=>seekBy(-30),seekforward:()=>seekBy(30)};
+  for(const [a,fn] of Object.entries(h)){ try{ ms.setActionHandler(a,fn); }catch(_){} }
+}
+function renderMedia(){
+  if(!ms) return;
+  const list=cur();
+  try{
+    ms.playbackState=playing()?'playing':player?'paused':'none';
+    if(list&&player&&window.MediaMetadata){
+      const tr=list.tracks[list.index];
+      ms.metadata=new MediaMetadata({title:partName(list,list.index),artist:tr&&tr.author||'',album:listName(list)});
+    }
+  }catch(_){}
+}
+
+/* ---------- Controls ---------- */
+function step(d){
+  const list=cur(); if(!list||!list.tracks.length) return;
+  const i=Math.min(Math.max(list.index+d,0),list.tracks.length-1);
+  if(i!==list.index||!player) jump(i);
+}
+function seekBy(s){
+  if(!player) return;
+  const now=player.info.currentTime||0, dur=player.info.duration||Infinity;
+  const to=Math.max(0,Math.min(now+s,dur-1));
+  closeSession(); // the next time report starts a new stretch there
+  player.command('seekTo',to,true);
+  player.info.currentTime=to;
+  renderNow();
+}
+function jump(i){
+  const list=cur(); if(!list||!list.tracks[i]) return;
+  if(!player){ start(i); return; }
+  closeSession();
+  pendingSeek={vid:list.tracks[i].id,pos:L.startOf(list.tracks[i])};
+  player.command('playVideoAt',i);
+  Tools.diag.log('jump',i);
+}
+function togglePlay(){
+  if(!player){ start(); return; }
+  player.command(state===1?'pauseVideo':'playVideo');
+}
+$('btnStart').addEventListener('click',()=>start());
+$('btnPlay').addEventListener('click',togglePlay);
+$('btnPrev').addEventListener('click',()=>step(-1));
+$('btnNext').addEventListener('click',()=>step(1));
+$('btnBack').addEventListener('click',()=>seekBy(-30));
+$('btnFwd').addEventListener('click',()=>seekBy(30));
+$('selRate').addEventListener('change',e=>{
+  set.rate=Number(e.target.value); Tools.save(LS_SET,set);
+  if(player) player.command('setPlaybackRate',set.rate);
+  Tools.diag.log('rate',set.rate);
+});
+$('optWake').checked=!!set.wake;
+$('optWake').addEventListener('change',e=>{
+  set.wake=e.target.checked; Tools.save(LS_SET,set);
+  if(set.wake&&playing()) requestWake(); else if(!set.wake) releaseWake();
+});
+$('tracks').addEventListener('click',e=>{
+  const b=e.target.closest('[data-go]'); if(b) jump(Number(b.dataset.go));
+});
+$('tracks').addEventListener('change',e=>{
+  const c=e.target.closest('[data-done]'); if(!c) return;
+  const list=cur(), tr=list&&list.tracks[Number(c.dataset.done)]; if(!tr) return;
+  L.setDone(tr,c.checked,Date.now());
+  persist(); renderHead(); renderTracks(); renderNow();
+  Tools.diag.log('mark',c.checked);
+});
+
+/* ---------- Titles from YouTube's oEmbed (playlist name, titles of all parts) ----------
+   Only after the user opened the playlist or started playing; no cookies, no referrer. */
+async function oembed(url){
+  const r=await fetch('https://www.youtube-nocookie.com/oembed?format=json&url='+encodeURIComponent(url),{credentials:'omit',referrerPolicy:'no-referrer'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const j=await r.json();
+  return {title:String(j.title||'').slice(0,300),author:String(j.author_name||'').slice(0,120)};
+}
+async function fetchListTitle(list){
+  try{
+    const o=await oembed('https://www.youtube.com/playlist?list='+list.id);
+    if(o.title&&data.lists[list.id]===list){ list.title=o.title; if(!list.auto) list.auto=o.author; persist(); renderLists(); renderHead(); renderHist(); }
+    Tools.diag.log('oembed: playlist ok');
+  }catch(e){ Tools.diag.log('oembed: playlist failed',e&&e.message); }
+}
+let titleRun=null;
+async function fillTitles(list){
+  if(titleRun===list.id) return;
+  titleRun=list.id;
+  let ok=0, fail=0;
+  try{
+    for(const tr of list.tracks){
+      if(tr.title) continue;
+      if(data.current!==list.id||fail>=3) break;
+      try{
+        const o=await oembed('https://www.youtube.com/watch?v='+tr.id);
+        if(!tr.title&&o.title){ tr.title=o.title; tr.author=tr.author||o.author; ok++; persist(); renderTracks(); renderNow(); }
+      }catch(_){ fail++; }
+    }
+  }finally{ titleRun=null; }
+  if(ok||fail) Tools.diag.log('oembed: titles',{ok,fail});
+}
+
+/* ---------- Playlists ---------- */
+function openList(id,how){
+  const known=!!data.lists[id];
+  $('addErr').textContent='';
+  if(!known) data.lists[id]={id,name:'',title:'',auto:'',added:Date.now(),index:0,tracks:[]};
+  if(data.current!==id){ stopPlayer(); data.current=id; }
+  persist(); render();
+  Tools.toast(t(how||(known?'exists':'added')));
+  if(!data.lists[id].title) fetchListTitle(data.lists[id]);
+  Tools.diag.log('playlist:',known?'selected':'added',Object.keys(data.lists).length);
+}
+$('addForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const id=L.parsePlaylistId($('inUrl').value);
+  $('addErr').textContent=id?'':t('add.bad');
+  $('inUrl').setAttribute('aria-invalid',id?'false':'true');
+  if(!id) return;
+  $('inUrl').value='';
+  openList(id);
+});
+// From YouTube: open the playlist and load the player at once – the share/paste is the user's tap.
+// A link to one video of the playlist starts at that part. (The browser may still want one tap on the video.)
+function takeLink(link,how){
+  openList(link.list,how);
+  start(null,link.video);
+}
+if(navigator.clipboard&&typeof navigator.clipboard.readText==='function'){
+  $('pasteRow').hidden=false;
+  $('btnPaste').addEventListener('click',async()=>{
+    let text='';
+    try{ text=await navigator.clipboard.readText(); }
+    catch(e){ Tools.diag.log('paste failed:',e&&e.name); $('addErr').textContent=t('pasteFail'); return; }
+    const link=L.parseLink(text);
+    if(!link){ $('addErr').textContent=t('pasteNone'); return; }
+    takeLink(link,'pasted');
+  });
+}
+$('selList').addEventListener('change',e=>{
+  if(!data.lists[e.target.value]) return;
+  stopPlayer(); data.current=e.target.value; persist(); render();
+});
+$('inName').addEventListener('input',e=>{
+  const l=cur(); if(!l) return;
+  l.name=e.target.value.trim().slice(0,80); persist(); renderHead(); renderLists(); renderHist();
+});
+$('btnRemove').addEventListener('click',()=>{
+  const l=cur(); if(!l||!confirm(t('removeAsk',{name:listName(l)}))) return;
+  stopPlayer();
+  delete data.lists[l.id];
+  hist=hist.filter(h=>h.list!==l.id); Tools.save(LS_HIST,hist);
+  data.current=Object.keys(data.lists)[0]||null;
+  persist(); render(); Tools.menu.close(); Tools.toast(t('removed'));
+});
+$('btnResetAll').addEventListener('click',()=>{
+  const l=cur(); if(!l||!confirm(t('resetAsk'))) return;
+  for(const tr of l.tracks){ tr.done=false; tr.doneAt=0; tr.pos=0; }
+  l.index=0; persist(); render(); Tools.menu.close(); Tools.toast(t('resetDone'));
+});
+
+/* ---------- Rendering ---------- */
+function renderLists(){
+  const ids=Object.keys(data.lists).sort((a,b)=>data.lists[a].added-data.lists[b].added);
+  $('pickRow').hidden=ids.length<2;
+  $('selList').replaceChildren(...ids.map(id=>{ const o=document.createElement('option'); o.value=id; o.textContent=listName(data.lists[id]); return o; }));
+  if(data.current) $('selList').value=data.current;
+}
+function renderHead(){
+  const list=cur();
+  $('cardPlayer').hidden=$('cardTracks').hidden=$('listSettings').hidden=!list;
+  if(!list) return;
+  $('listName').textContent=listName(list);
+  if(document.activeElement!==$('inName')){ $('inName').value=list.name; $('inName').placeholder=listName(list); }
+  const s=L.summary(list);
+  $('sum').textContent=s.count?t('sum',{done:s.done,n:s.count})+(s.total?' · '+t('sumTime',{heard:L.fmtTime(s.heard),total:L.fmtTime(s.total)}):''):t('sumNone');
+  const rp=L.resumePoint(list);
+  $('startInfo').textContent=!list.tracks.length?t('startFirst'):list.tracks.every(x=>x.done)?t('allDone'):
+    rp.start>0?t('startAt',{part:partNo(rp.index),time:L.fmtTime(rp.start)}):t('startFrom',{part:partNo(rp.index)});
+}
+function renderNow(){
+  const list=cur(); if(!list) return;
+  const info=player?player.info:{};
+  const n=list.tracks.length, i=list.index, tr=list.tracks[i];
+  const live=player&&tr&&info.videoData&&info.videoData.video_id===tr.id;
+  $('now').textContent=n?partName(list,i):'';
+  $('nowSub').textContent=n?[t('ofN',{part:partNo(i),n}),tr&&tr.author].filter(Boolean).join(' · '):'';
+  const pos=live&&info.currentTime>0&&!pendingSeek?info.currentTime:tr?(tr.done&&!live?tr.dur:tr.pos):0;
+  const dur=live&&info.duration>0?info.duration:tr?tr.dur:0;
+  $('tPos').textContent=L.fmtTime(pos);
+  $('tDur').textContent=dur?L.fmtTime(dur):'';
+  $('nowBar').style.width=dur?Math.min(100,pos/dur*100).toFixed(1)+'%':'0';
+  const p=playing();
+  $('btnPlay').innerHTML=p?ICON_PAUSE:ICON_PLAY;
+  $('btnPlay').setAttribute('aria-label',t(p?'ctl.pause':'ctl.play'));
+  $('btnPrev').disabled=!n||i<=0;
+  $('btnNext').disabled=!n||i>=n-1;
+  $('btnBack').disabled=$('btnFwd').disabled=!player;
+}
+function trackMeta(tr){
+  if(tr.done) return t('heardAt',{date:dateFmt(tr.doneAt||tr.lastAt||Date.now())});
+  if(tr.pos>0&&tr.lastAt) return t('leftAt',{time:L.fmtTime(tr.pos)+(tr.dur?' / '+L.fmtTime(tr.dur):''),date:dateFmt(tr.lastAt)});
+  return t('notHeard')+(tr.dur?' · '+L.fmtTime(tr.dur):'');
+}
+function renderTracks(){
+  const list=cur(); if(!list) return;
+  $('tracksHint').textContent=list.tracks.length?t('tracksHint'):t('sumNone');
+  $('tracks').replaceChildren(...list.tracks.map((tr,i)=>{
+    const li=document.createElement('li');
+    li.className='track'+(tr.done?' done':'')+(i===list.index?' current':'');
+    const share=tr.done?100:tr.dur?Math.min(100,tr.pos/tr.dur*100):0;
+    li.innerHTML=`<button type="button" class="track-go" data-go="${i}"${i===list.index?' aria-current="true"':''}>
+      <span class="num">${i+1}</span><span class="tt"></span><span class="meta"></span>
+      <span class="bar" aria-hidden="true"><span style="width:${share.toFixed(1)}%"></span></span></button>
+      <label class="track-done"><input type="checkbox" data-done="${i}"${tr.done?' checked':''}><span>${Tools.esc(t('heardBox'))}</span></label>`;
+    li.querySelector('.tt').textContent=partName(list,i);
+    li.querySelector('.meta').textContent=trackMeta(tr);
+    const box=li.querySelector('input');
+    box.setAttribute('aria-label',t('heardBox')+': '+partName(list,i));
+    return li;
+  }));
+}
+function renderHist(){
+  $('histEmpty').hidden=hist.length>0;
+  $('hist').replaceChildren(...hist.slice(0,100).map(h=>{
+    const l=data.lists[h.list], li=document.createElement('li');
+    const name=l?(()=>{ const i=l.tracks.findIndex(x=>x.id===h.vid); return i>=0?partNo(i)+(l.tracks[i].title?' – '+l.tracks[i].title:''):t('part',{n:h.idx+1}); })():t('part',{n:h.idx+1});
+    const d=document.createElement('div'); d.textContent=t('histItem',{part:name,from:L.fmtTime(h.from),to:L.fmtTime(h.to)});
+    const w=document.createElement('div'); w.className='when'; w.textContent=t('histWhen',{date:dateFmt(h.at),list:l?listName(l):'–'});
+    li.append(d,w);
+    return li;
+  }));
+}
+function renderRates(){
+  $('selRate').replaceChildren(...RATES.map(r=>{ const o=document.createElement('option'); o.value=String(r); o.textContent=t('speed',{r:Tools.fmt(r,Math.round(r*100)%10?2:r%1?1:0)}); return o; }));
+  $('selRate').value=String(set.rate);
+}
+function render(){ renderLists(); renderHead(); renderNow(); renderTracks(); renderHist(); renderSleep(); renderMedia(); }
+Tools.onLang(()=>{ renderRates(); render(); });
+
+/* ---------- Start: shared link (Android share sheet) ---------- */
+renderRates();
+render();
+// Shared from the YouTube app (Android share sheet) or opened as ./?url=<link> (e.g. an iPhone shortcut)
+const shared=Tools.takeSharedText();
+if(shared){
+  const link=L.parseLink(shared.url)||L.parseLink(shared.text)||L.parseLink(shared.title);
+  if(link) takeLink(link,'shared');
+  else { $('addErr').textContent=t('add.bad'); Tools.diag.log('shared text without playlist'); }
+}
+
+/* ---------- Diagnostics (no titles or IDs) ---------- */
+Tools.diag.info(()=>{
+  const l=cur();
+  return { playlists:Object.keys(data.lists).length, parts:l?l.tracks.length:0, heard:l?l.tracks.filter(x=>x.done).length:0,
+    index:l?l.index:null, player:player?(player.ready?'ready':'loading'):'none', state, rate:set.rate, sleep:sleep.mode,
+    wake:set.wake?(wakeLock?'held':'wanted'):'off', history:hist.length, online:navigator.onLine };
+});
+
+/* ---------- WebMCP tools ---------- */
+const iso=ms=>ms?new Date(ms).toISOString():null;
+Tools.mcp.register({
+  name:'get_progress', title:'Get listening progress',
+  description:'Returns the chosen YouTube playlist with its parts: title, length, position reached, whether each part was heard to the end and when. Titles come from YouTube.',
+  inputSchema:{type:'object',properties:{limit:{type:'integer',minimum:1,maximum:500,description:'Maximum number of parts to return (default 200)'}},additionalProperties:false},
+  readOnly:true, untrusted:true,
+  execute:({limit})=>{
+    const l=cur(); if(!l) throw new Error('No playlist chosen yet – the user has to open one first');
+    const s=L.summary(l);
+    return { playlist:listName(l), part_count:s.count, heard_count:s.done, current_part:l.tracks.length?l.index+1:null,
+      player_started:!!player, playing:playing(), speed:set.rate,
+      parts:l.tracks.slice(0,limit||200).map((x,i)=>({ number:i+1, title:x.title||null, channel:x.author||null, duration_seconds:x.dur||null,
+        position_seconds:x.pos, heard:x.done, heard_at:iso(x.doneAt), last_listened:iso(x.lastAt) })) };
+  }
+});
+Tools.mcp.register({
+  name:'control', title:'Control playback',
+  description:'Controls playback that the user already started: play, pause, previous or next part, 30 seconds back or forward. Fails if the user has not tapped Play yet.',
+  inputSchema:{type:'object',properties:{action:{type:'string',enum:['play','pause','previous','next','back_30','forward_30']}},required:['action'],additionalProperties:false},
+  label:'mcp.control',
+  execute:({action})=>{
+    const l=cur(); if(!l) throw new Error('No playlist chosen yet');
+    if(!player) throw new Error('Playback has not been started – the user has to tap Play first');
+    ({play:()=>player.command('playVideo'),pause:()=>player.command('pauseVideo'),previous:()=>step(-1),next:()=>step(1),
+      back_30:()=>seekBy(-30),forward_30:()=>seekBy(30)})[action]();
+    return { action, current_part:l.index+1, part_count:l.tracks.length };
+  }
+});
+Tools.mcp.register({
+  name:'set_speed', title:'Set playback speed',
+  description:'Sets the playback speed for all parts of the playlist (0.5 to 2 times). Applies at once if playback is running.',
+  inputSchema:{type:'object',properties:{rate:{type:'number',enum:RATES}},required:['rate'],additionalProperties:false},
+  label:'mcp.speed',
+  execute:({rate})=>{
+    set.rate=rate; Tools.save(LS_SET,set); $('selRate').value=String(rate);
+    if(player) player.command('setPlaybackRate',rate);
+    return { speed:rate };
+  }
+});
+})();
+</script>
+</body>
+</html>
