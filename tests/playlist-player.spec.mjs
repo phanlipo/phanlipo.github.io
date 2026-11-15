@@ -547,3 +547,25 @@ test('top card: standard form fields; adding another playlist is folded away onc
   await expect(page.locator('#pickRow label')).toHaveText('Meine Playlists');
   await expectNoHorizontalScroll(page);
 });
+
+test.describe('picture-in-picture tip', () => {
+  test.use({ userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' });
+  test('on Android: tip under "Hörmodus"; in the help how to allow it', async ({ page }) => {
+    await fakeYoutube(page);
+    await page.goto('/playlist-player/');
+    await openPlaylist(page);
+    await expect(page.locator('#pipTip')).toHaveText('Tipp – Bild im Bild: im Player auf Vollbild ⤢ tippen, dann zum Startbildschirm wischen.');
+    await expect(page.locator('#pipTip')).toBeVisible();
+    await openMenu(page);
+    await page.locator('details.help > summary').click();
+    await expect(page.locator('details.help')).toContainText('Android-Einstellungen → Apps → Chrome → Bild im Bild');
+  });
+});
+
+test('no picture-in-picture tip off Android', async ({ page }) => {
+  await fakeYoutube(page);
+  await page.goto('/playlist-player/');
+  await openPlaylist(page);
+  await expect(page.locator('#btnListen')).toBeVisible();
+  await expect(page.locator('#pipTip')).toBeHidden();
+});
