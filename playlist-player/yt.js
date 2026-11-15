@@ -3,7 +3,9 @@
 // embed – done here directly so that no script from YouTube runs in this page (CSP: only own scripts,
 // frame-src www.youtube-nocookie.com). See README.md.
 //
-//   const p = YtEmbed.create(container, { list, video, start, title, onReady, onInfo, onState, onRate, onError })
+//   const p = YtEmbed.create(container, { list, video, start, title, account, onReady, onInfo, onState, onRate, onError })
+//   account: true = www.youtube.com (the browser's YouTube sign-in counts, e.g. Premium without ads) instead of
+//   the privacy-enhanced www.youtube-nocookie.com – only when the user chose it in the settings
 //   p.command('playVideo') / ('pauseVideo') / ('seekTo', 30, true) / ('playVideoAt', 2) / ('setPlaybackRate', 1.5)
 //   p.info        latest state the player reported (playerState, currentTime, duration, playlist,
 //                 playlistIndex, videoData {video_id, title, author}, playbackRate)
@@ -11,31 +13,33 @@
 (function () {
   'use strict';
   const ORIGIN = 'https://www.youtube-nocookie.com';
+  const ORIGIN_ACCOUNT = 'https://www.youtube.com';
   const EVENTS = ['onStateChange', 'onError', 'onPlaybackRateChange'];
 
   function create(container, o) {
+    const origin = o.account ? ORIGIN_ACCOUNT : ORIGIN;
     const iframe = document.createElement('iframe');
     const q = new URLSearchParams({ list: o.list, enablejsapi: '1', origin: location.origin, widgetid: '1', playsinline: '1', rel: '0', autoplay: '1' });
     if (o.start > 0) q.set('start', String(Math.floor(o.start)));
     // A video of the playlist: starts there (with the playlist around it); otherwise the playlist from the beginning
     const path = o.video && /^[A-Za-z0-9_-]{6,20}$/.test(o.video) ? encodeURIComponent(o.video) : 'videoseries';
-    iframe.src = `${ORIGIN}/embed/${path}?${q}`;
+    iframe.src = `${origin}/embed/${path}?${q}`;
     iframe.title = o.title || 'YouTube';
     iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
     iframe.allowFullscreen = true;
     // YouTube refuses embeds without a referrer (error 153); only the origin is sent
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-    const p = { iframe, info: {}, ready: false, destroyed: false };
+    const p = { iframe, origin, info: {}, ready: false, destroyed: false };
     let heard = false, tries = 0, timer = 0;
 
     const post = msg => {
       if (p.destroyed || !iframe.contentWindow) return;
-      try { iframe.contentWindow.postMessage(JSON.stringify({ ...msg, id: 1, channel: 'widget' }), ORIGIN); } catch (_) {}
+      try { iframe.contentWindow.postMessage(JSON.stringify({ ...msg, id: 1, channel: 'widget' }), origin); } catch (_) {}
     };
     p.command = (func, ...args) => post({ event: 'command', func, args });
 
     function onMessage(e) {
-      if (e.source !== iframe.contentWindow || e.origin !== ORIGIN) return;
+      if (e.source !== iframe.contentWindow || e.origin !== origin) return;
       let d = e.data;
       if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) { return; } }
       if (!d || typeof d !== 'object') return;
@@ -89,5 +93,5 @@
     return p;
   }
 
-  window.YtEmbed = { create, ORIGIN };
+  window.YtEmbed = { create, ORIGIN, ORIGIN_ACCOUNT };
 })();

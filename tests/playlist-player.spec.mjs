@@ -3,11 +3,11 @@
 // progress, ticks with dates, resume point (also after a reload), parts jumping, manual ticks, speed,
 // sleep timer, history, playlist link parsing, sharing from YouTube (Android), errors, English.
 import { test, expect, openMenu, closeMenu, switchLang, axe, expectNoHorizontalScroll } from './helpers.mjs';
-import { fakeYoutube, playerFrame, YT, LIST, LIST_TITLE, VIDEOS, LIST_BLOCKED } from './fake-youtube.mjs';
+import { fakeYoutube, playerFrame, YT, YT_ACCOUNT, LIST, LIST_TITLE, VIDEOS, LIST_BLOCKED } from './fake-youtube.mjs';
 
 // Requests to the (routed) fake YouTube are expected; everything else still fails the test.
 // Service worker blocked: requests it passes on would bypass page.route (and reach the real YouTube).
-test.use({ serviceWorkers: 'block', allowedProblems: /^external request: https:\/\/www\.youtube-nocookie\.com\/(embed\/|oembed\?)|^console: Failed to load resource: the server responded with a status of 404/ });
+test.use({ serviceWorkers: 'block', allowedProblems: /^external request: https:\/\/www\.youtube(-nocookie)?\.com\/(embed\/|oembed\?)|^console: Failed to load resource: the server responded with a status of 404/ });
 // (404: oEmbed does not know the playlist – as YouTube answers for private or unknown lists)
 test.use({ timezoneId: 'Europe/Berlin' });
 
@@ -403,4 +403,50 @@ test.describe('English listening mode', () => {
     await expect(dlg.getByRole('button', { name: 'Exit' })).toBeVisible();
     await expect(dlg.getByRole('button', { name: 'Forward 30 seconds' })).toBeVisible();
   });
+});
+
+test('"play with YouTube account": player from youtube.com (Premium), reloads at the same place, privacy mode by default', async ({ page }) => {
+  const seen = await fakeYoutube(page);
+  await page.goto('/playlist-player/');
+  // Allowed as frame only – oEmbed stays on the privacy-enhanced host
+  const csp = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
+  expect(csp).toContain(`frame-src ${YT} ${YT_ACCOUNT};`);
+  expect(csp).toContain(`connect-src 'self' ${YT};`);
+  await openPlaylist(page);
+  let frame = await play(page);
+  expect(new URL(seen.embed[0]).origin).toBe(YT);
+  await expect(parts(page)).toHaveCount(3);
+  await advance(frame, 25);
+  await openMenu(page);
+  const opt = page.getByRole('checkbox', { name: 'Mit YouTube-Konto abspielen' });
+  await expect(opt).not.toBeChecked();
+  await expect(opt).toHaveAccessibleDescription(/YouTube Premium \(ohne Werbung\)/);
+  await opt.check();
+  await closeMenu(page);
+  // Running player reloaded from youtube.com, at the same part and position, and playing
+  await expect.poll(() => seen.embed.length).toBe(2);
+  const src = new URL(seen.embed[1]);
+  expect(src.origin).toBe(YT_ACCOUNT);
+  expect(src.pathname).toBe(`/embed/${VIDEOS[0].id}`);
+  expect(src.searchParams.get('start')).toBe('25');
+  frame = await playerFrame(page);
+  expect(frame.url()).toMatch(/^https:\/\/www\.youtube\.com\/embed\//);
+  await expect(page.locator('#btnPlay')).toHaveAttribute('aria-label', 'Pause');
+  // The player from youtube.com is controlled like the other (messages from its origin are taken)
+  await advance(frame, 5);
+  await expect(page.locator('#tPos')).toHaveText('0:30');
+  await page.locator('#btnPlay').click();
+  await expect.poll(async () => (await fakeState(frame)).state).toBe(2);
+  // Kept after a reload; diagnostics show the mode
+  await page.reload();
+  await page.locator('#btnStart').click();
+  await expect.poll(() => seen.embed.length).toBe(3);
+  expect(new URL(seen.embed[2]).origin).toBe(YT_ACCOUNT);
+  expect(await page.evaluate(() => Tools.diag.text())).toContain('account: true');
+  // Off again → privacy-enhanced mode
+  await openMenu(page);
+  await opt.uncheck();
+  await closeMenu(page);
+  await expect.poll(() => seen.embed.length).toBe(4);
+  expect(new URL(seen.embed[3]).origin).toBe(YT);
 });
