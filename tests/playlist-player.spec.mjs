@@ -171,7 +171,7 @@ test('speed is kept and sent to the player; sleep timer pauses at the end of the
 test('playlist links: watch links, youtu.be, music, bare ID; no playlist → message; several playlists', async ({ page }) => {
   await fakeYoutube(page);
   await page.goto('/playlist-player/');
-  for (const bad of ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'hallo', 'https://example.com/?list=PLxxxxxxxxxxxxxxxx']) {
+  for (const bad of ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'hallo', 'https://example.com/?list=PLxxxxxxxxxxxxxxxx', 'https://notyoutube.com/playlist?list=PLxxxxxxxxxxxxxxxx']) {
     await openPlaylist(page, bad);
     await expect(page.locator('#addErr')).toContainText('Darin steckt keine Playlist');
     await expect(page.locator('#cardPlayer')).toBeHidden();
@@ -202,11 +202,50 @@ test('playlist links: watch links, youtu.be, music, bare ID; no playlist → mes
   await expect(page.locator('#pickRow')).toBeHidden();
 });
 
-test('shared from the YouTube app (Android share sheet) opens the playlist', async ({ page }) => {
-  await fakeYoutube(page);
+test('shared from the YouTube app (Android share sheet): opens the playlist and loads the player at once', async ({ page }) => {
+  const seen = await fakeYoutube(page);
   await page.goto(`/playlist-player/?text=${encodeURIComponent('Schau dir das an: ' + LINK)}`);
   await expect(page.locator('#listName')).toHaveText(LIST_TITLE);
   await expect(page).toHaveURL(/\/playlist-player\/$/);
+  await playerFrame(page);
+  await expect(page.locator('#tracks .tt')).toHaveText(VIDEOS.map(v => v.title));
+  await expect(part(page, 1)).toHaveClass(/current/);
+  expect(new URL(seen.embed[0]).pathname).toBe('/embed/videoseries');
+});
+
+test('a shared video of the playlist starts with that part – before and after the parts are known', async ({ page }) => {
+  const seen = await fakeYoutube(page);
+  // Not known yet: the player starts with that video, the list follows from the player
+  await page.goto(`/playlist-player/?url=${encodeURIComponent(`https://youtu.be/${VIDEOS[1].id}?list=${LIST}&si=abc`)}`);
+  const frame = await playerFrame(page);
+  expect(new URL(seen.embed[0]).pathname).toBe(`/embed/${VIDEOS[1].id}`);
+  await expect(part(page, 2)).toHaveClass(/current/);
+  await advance(frame, 40);
+  // Known: shared part 3 → starts there; part 2 again later → continues at 0:40
+  await page.goto(`/playlist-player/?url=${encodeURIComponent(`https://m.youtube.com/watch?v=${VIDEOS[2].id}&list=${LIST}&index=3`)}`);
+  await playerFrame(page);
+  await expect(part(page, 3)).toHaveClass(/current/);
+  await page.goto(`/playlist-player/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${VIDEOS[1].id}&list=${LIST}`)}`);
+  const frame3 = await playerFrame(page);
+  expect(new URL(seen.embed.at(-1)).searchParams.get('start')).toBe('40');
+  await expect.poll(async () => (await fakeState(frame3)).idx).toBe(1);
+  await expect(page.locator('#tPos')).toHaveText('0:40');
+});
+
+test('paste link & play: from the clipboard, nothing usable → hint', async ({ page }) => {
+  const seen = await fakeYoutube(page);
+  await page.goto('/playlist-player/');
+  const paste = page.getByRole('button', { name: 'Link einfügen & abspielen' });
+  await page.evaluate(() => navigator.clipboard.writeText('https://www.youtube.com/watch?v=dQw4w9WgXcQ'));
+  await paste.click();
+  await expect(page.locator('#addErr')).toContainText('In der Zwischenablage ist kein Playlist-Link');
+  expect(seen.embed).toEqual([]);
+  await page.evaluate(l => navigator.clipboard.writeText(l), LINK);
+  await paste.click();
+  await expect(page.locator('#addErr')).toHaveText('');
+  await expect(page.locator('#listName')).toHaveText(LIST_TITLE);
+  await playerFrame(page);
+  await expect(page.locator('#btnPlay')).toHaveAttribute('aria-label', 'Pause');
 });
 
 test('YouTube refuses the playlist → understandable message', async ({ page }) => {

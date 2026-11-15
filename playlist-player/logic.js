@@ -8,20 +8,31 @@
   const ID_RE = /^[A-Za-z0-9_-]{12,64}$/;
   const HOSTS = /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/i;
 
-  /** Playlist ID from a link (youtube.com/playlist?list=…, watch?v=…&list=…, youtu.be/…?list=…, music.youtube.com)
-   *  or a bare ID; also finds the link inside shared text. null if there is none. */
-  function parsePlaylistId(input) {
+  const VIDEO_RE = /^[A-Za-z0-9_-]{11}$/;
+
+  /** Playlist ID and, if the link points at one video of it, that video:
+   *  youtube.com/playlist?list=…, watch?v=…&list=…, youtu.be/<video>?list=…, music.youtube.com, m.youtube.com,
+   *  or a bare playlist ID; also finds the link inside shared text ("Schau mal: https://…").
+   *  → { list, video } (video '' if none), or null if there is no playlist. */
+  function parseLink(input) {
     const s = String(input || '').trim();
     if (!s) return null;
-    if (ID_RE.test(s)) return s;
-    const found = s.match(/(?:https?:\/\/)?(?:[\w-]+\.)*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)\/\S*/i);
+    if (ID_RE.test(s)) return { list: s, video: '' };
+    // The host must start there – not "youtube.com" inside "notyoutube.com" (no lookbehind: older Safari)
+    const found = s.match(/(^|[^\w.-])((?:https?:\/\/)?(?:[\w-]+\.)*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)\/\S*)/i);
     if (!found) return null;
     let url;
-    try { url = new URL(/^https?:/i.test(found[0]) ? found[0] : 'https://' + found[0]); } catch (_) { return null; }
+    try { url = new URL(/^https?:/i.test(found[2]) ? found[2] : 'https://' + found[2]); } catch (_) { return null; }
     if (!HOSTS.test(url.hostname)) return null;
     const list = url.searchParams.get('list');
-    return list && ID_RE.test(list) ? list : null;
+    if (!list || !ID_RE.test(list)) return null;
+    let video = url.searchParams.get('v') || '';
+    if (/youtu\.be$/i.test(url.hostname)) video = url.pathname.slice(1);
+    else if (/^\/(embed|shorts|live)\//.test(url.pathname)) video = url.pathname.split('/')[2] || '';
+    return { list, video: VIDEO_RE.test(video) ? video : '' };
   }
+  /** Only the playlist ID (see parseLink) */
+  const parsePlaylistId = input => (parseLink(input) || {}).list || null;
 
   const newTrack = id => ({ id, title: '', author: '', dur: 0, pos: 0, done: false, doneAt: 0, lastAt: 0 });
 
@@ -117,5 +128,5 @@
     return history;
   }
 
-  window.PlaylistLogic = { parsePlaylistId, syncTracks, progress, setDone, resumePoint, startOf, summary, fmtTime, addSession, newTrack, finished };
+  window.PlaylistLogic = { parseLink, parsePlaylistId, syncTracks, progress, setDone, resumePoint, startOf, summary, fmtTime, addSession, newTrack, finished };
 })();
