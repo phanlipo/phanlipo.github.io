@@ -10,6 +10,7 @@ import { ORIGIN, API_PROBLEMS, mockApi, addYamlConfig } from './api-mock.mjs';
 import { testSong } from './midi-files.mjs';
 import { fakeCamera, fakeWorker } from './camera-fakes.mjs';
 import { fakeYoutube, playerFrame, LIST, LIST_TITLE, VIDEOS } from './fake-youtube.mjs';
+import { FEED_ORIGIN, FEED_PROBLEMS, mockFeeds } from './feed-mock.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -2772,5 +2773,66 @@ test.describe('playlist-player tools', () => {
     const tools = await listTools(page);
     expect(tools.find(t => t.name === 'playlist_player_get_progress').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
     expect(tools.find(t => t.name === 'playlist_player_control').annotations.readOnlyHint).toBe(false);
+  });
+});
+
+test.describe('rss-reader tools', () => {
+  test.use({ allowedProblems: FEED_PROBLEMS });
+
+  test('list_feeds, list_items (filters, paging, plain text) and select_feed – never fetch', async ({ page }) => {
+    const seen = await mockFeeds(page);
+    await fakeModelContext(page);
+    await page.goto('/rss-reader/');
+    for (const path of ['rss.xml', 'atom.xml']) {
+      await page.fill('#feedUrl', `${FEED_ORIGIN}/${path}`);
+      await page.click('#btnAdd');
+      await expect(page.locator('#status')).toContainText('Einträge');
+    }
+    expect(seen).toHaveLength(2);
+
+    let r = await call(page, 'rss_reader_list_feeds', {});
+    expect(r.result.current).toBe(r.result.feeds[1].id);
+    expect(r.result.feeds.map(f => [f.name, f.url, f.entries, f.unread])).toEqual([
+      ['Roadmap Test', `${FEED_ORIGIN}/rss.xml`, 3, 3], ['Atom Blog', `${FEED_ORIGIN}/atom.xml`, 2, 2]]);
+    const [rss, atom] = r.result.feeds.map(f => f.id);
+
+    // Default: the feed shown in the app
+    r = await call(page, 'rss_reader_list_items', {});
+    expect(r.result.items.map(i => i.title)).toEqual(['Erster & bester Beitrag', 'Zweiter Beitrag']);
+    r = await call(page, 'rss_reader_list_items', { feed_id: rss, category: 'Outlook', limit: 1 });
+    expect(r.result).toMatchObject({ feed_id: rss, total: 2, offset: 0 });
+    expect(r.result.items).toEqual([{ id: '1002', feed_id: rss, title: 'Outlook: Ordner teilen', link: `${FEED_ORIGIN}/roadmap?id=1002`,
+      date: '2026-11-13T09:00:00.000Z', categories: ['Rolling out', 'Outlook'], read: false, summary: 'Ordner lassen sich teilen.' }]);
+    r = await call(page, 'rss_reader_list_items', { feed_id: rss, category: 'Outlook', limit: 1, offset: 1 });
+    expect(r.result.items.map(i => i.id)).toEqual(['1003']);
+    // Summary is plain text: no markup, scripts dropped, image as alt text
+    r = await call(page, 'rss_reader_list_items', { feed_id: 'all', query: 'ansicht' });
+    expect(r.result.items).toHaveLength(1);
+    expect(r.result.items[0].summary).toBe('Eine neue Ansicht. [Bild] böser Link Details');
+    expect((await call(page, 'rss_reader_list_items', { feed_id: 'nope' })).error).toMatch(/Unknown feed_id/);
+    expect((await call(page, 'rss_reader_list_items', { limit: 51 })).error).toMatch(/limit/);
+
+    // Read state follows the app
+    await page.locator('#items .item summary').first().click();
+    await expect(page.locator('#items .item').first()).not.toHaveClass(/unread/);
+    r = await call(page, 'rss_reader_list_items', { unread_only: true });
+    expect(r.result.items.map(i => i.title)).toEqual(['Zweiter Beitrag']);
+
+    // select_feed switches the view
+    r = await call(page, 'rss_reader_select_feed', { feed_id: rss });
+    expect(r.result.feed).toMatchObject({ id: rss, name: 'Roadmap Test', unread: 3 });
+    await expect(page.locator('#feedSel')).toHaveValue(rss);
+    await expect(page.locator('#items .item')).toHaveCount(3);
+    await call(page, 'rss_reader_select_feed', { feed_id: 'all' });
+    await expect(page.locator('#feedSel')).toHaveValue('all');
+    await expect(page.locator('#items .item')).toHaveCount(5);
+    expect((await call(page, 'rss_reader_select_feed', { feed_id: 'nope' })).error).toMatch(/Unknown feed_id/);
+    expect(atom).toBeTruthy();
+    // Agents never fetch
+    expect(seen).toHaveLength(2);
+
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'rss_reader_list_items').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+    expect(tools.find(t => t.name === 'rss_reader_select_feed').annotations.readOnlyHint).toBe(false);
   });
 });

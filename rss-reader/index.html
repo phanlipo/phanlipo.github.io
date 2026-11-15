@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>RSS-Reader</title>
+<meta name="description" content="RSS- und Atom-Feeds lesen: Feed-Adressen eintragen und verwalten, Einträge durchsuchen, nach Kategorie filtern und gelesene markieren – auch offline.">
+<meta name="tool:tags" content="Arbeit, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
+<meta name="tool:icon" content="rss">
+<meta name="tool:color" content="#b93c0b">
+<meta name="tool:short-name" content="RSS-Reader">
+<meta name="tool:title-en" content="RSS Reader">
+<meta name="tool:description-en" content="Read RSS and Atom feeds: add and manage feed addresses, search entries, filter by category and mark them read – offline too.">
+<meta name="tool:short-name-en" content="RSS Reader">
+<meta name="tool:storage" content="rss-reader.">
+<meta name="tool:share-text" content="true">
+<meta name="tool:webmcp" content="list_feeds, select_feed, list_items">
+<!-- Feeds come from servers the user enters (and optionally their own CORS proxy) – only after a tap -->
+<meta name="tool:connect" content="https: http://localhost:* http://127.0.0.1:*">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-IEJQINx3AsWDwawwWv6BBqF5Y9WK09hHlBgjB9ktMqM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="RSS-Reader">
+<meta name="theme-color" content="#b93c0b">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#b93c0b;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#fb8a55;--accent-text:#1a0b03}}
+main{max-width:860px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+body{--page-width:860px}
+.status{margin:8px 0 0;font-size:14px;color:var(--muted);min-height:1.5em}
+.feed-error{margin:10px 0 0;padding:10px 12px;border-radius:8px;background:var(--err-bg);color:var(--text);font-size:14px}
+.feed-error strong{color:var(--err)}
+.feed-error p{margin:4px 0}
+#feedList{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px}
+#feedList li{border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+#feedList .f-name{font-weight:600;flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
+#feedList .f-url{flex:1 1 100%;font-family:var(--mono);font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.filters{display:grid;grid-template-columns:1fr;gap:0 12px}
+@media (min-width:600px){.filters{grid-template-columns:2fr 1fr}}
+.check{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+#items{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px}
+.item{border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+.item>details>summary{cursor:pointer;list-style:none;padding:10px 12px;min-height:44px;display:block}
+.item>details>summary::-webkit-details-marker{display:none}
+.item .i-title{display:block;font-weight:400;overflow-wrap:anywhere}
+.item.unread .i-title{font-weight:700}
+.item.unread .i-title::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-inline-end:8px;vertical-align:middle}
+.item .i-meta{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;margin-top:4px;font-size:13px;color:var(--muted)}
+.item .i-body{padding:0 12px 12px;overflow-wrap:anywhere;font-size:15px}
+.item .i-body .content>:first-child{margin-top:0}
+.item .i-body h4,.item .i-body h5,.item .i-body h6{margin:12px 0 4px;font-size:15px}
+.item .i-body blockquote{margin:8px 0;padding-inline-start:10px;border-inline-start:3px solid var(--border);color:var(--muted)}
+.item .i-body pre{overflow-x:auto;background:var(--surface-2);padding:8px;border-radius:6px;font-size:13px}
+.item .i-body a{color:var(--accent);text-decoration:underline}
+.table-wrap{overflow-x:auto;max-width:100%}
+.table-wrap table{border-collapse:collapse;font-size:14px}
+.table-wrap td,.table-wrap th{border:1px solid var(--border);padding:4px 6px;text-align:start}
+.empty{color:var(--muted);text-align:center;padding:16px 8px;margin:0}
+#more{margin-top:12px;width:100%}
+.count{font-weight:400;color:var(--muted);font-size:14px}
+#manage>summary{display:inline-flex;align-items:center;margin-top:12px;list-style:none}
+#manage>summary::-webkit-details-marker{display:none}
+.manage-body{margin-top:12px}
+#h-add{font-size:15px;margin:0 0 8px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">RSS-Reader</span></h1>
+  <p class="sub" data-i18n="sub">RSS- und Atom-Feeds lesen und verwalten.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-feeds">
+    <h2 id="h-feeds" data-i18n="feeds">Feeds</h2>
+    <div class="form-field">
+      <label for="feedSel" data-i18n="feedSel">Anzeigen</label>
+      <select id="feedSel"></select>
+    </div>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnRefresh" data-i18n="refresh">Aktualisieren</button>
+      <button type="button" class="btn" id="btnFile" data-i18n="openFile">XML-Datei öffnen</button>
+      <input type="file" id="fileIn" accept=".xml,.rss,.atom,application/rss+xml,application/atom+xml,application/xml,text/xml" hidden>
+    </div>
+    <p class="status" id="status" role="status"></p>
+    <div id="feedError" class="feed-error" role="alert" hidden></div>
+
+    <details id="manage">
+      <summary class="btn" data-i18n="manage">Feeds verwalten</summary>
+      <div class="manage-body">
+        <ul id="feedList"></ul>
+        <form id="addForm" novalidate>
+          <h3 id="h-add" data-i18n="addH">Feed hinzufügen</h3>
+          <div class="form-field">
+            <label for="feedUrl" data-i18n="feedUrl">Adresse des Feeds (RSS oder Atom)</label>
+            <input type="url" id="feedUrl" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://…">
+          </div>
+          <div class="form-field">
+            <label for="feedName" data-i18n="feedName">Name (optional)</label>
+            <input type="text" id="feedName" maxlength="80" autocomplete="off">
+            <p class="form-hint" data-i18n="feedNameHint">Leer lassen, um den Titel aus dem Feed zu übernehmen.</p>
+          </div>
+          <p class="form-error" id="addError" role="alert"></p>
+          <div class="row">
+            <button type="submit" class="btn primary" id="btnAdd" data-i18n="add">Hinzufügen</button>
+            <button type="button" class="btn" id="btnCancelEdit" data-i18n="cancel" hidden>Abbrechen</button>
+            <button type="button" class="btn" id="btnExample" data-i18n="example">Beispiel: Microsoft 365 Roadmap</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-items">
+    <h2 id="h-items"><span data-i18n="items">Einträge</span> <span class="count" id="itemCount"></span></h2>
+    <div class="filters">
+      <div class="form-field">
+        <label for="q" data-i18n="search">Suchen</label>
+        <input type="search" id="q" autocomplete="off">
+      </div>
+      <div class="form-field" id="catField" hidden>
+        <label for="cat" data-i18n="category">Kategorie</label>
+        <select id="cat"></select>
+      </div>
+    </div>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="unreadOnly"> <span data-i18n="unreadOnly">Nur ungelesene</span></label>
+      <button type="button" class="btn" id="btnAllRead" data-i18n="allRead">Alle als gelesen markieren</button>
+    </div>
+    <ul id="items" aria-labelledby="h-items"></ul>
+    <button type="button" class="btn" id="more" hidden></button>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-settings">
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <div class="form-field">
+      <label for="proxy" data-i18n="proxy">Eigener CORS-Proxy (optional)</label>
+      <input type="url" id="proxy" inputmode="url" spellcheck="false" placeholder="https://proxy.example/?url={url}">
+      <p class="form-hint" data-i18n="proxyHint">Nur für Feeds, die der Browser nicht direkt laden darf. {url} wird durch die Feed-Adresse ersetzt; fehlt es, wird sie angehängt. Der Proxy sieht, welche Feeds Sie abrufen.</p>
+    </div>
+    <p class="form-error" id="proxyError" role="alert"></p>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnProxy" data-i18n="save">Speichern</button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Liest RSS- und Atom-Feeds, z. B. die <a href="https://www.microsoft.com/releasecommunications/api/v2/m365/rss/">Microsoft 365 Roadmap</a>, Blogs, Nachrichten oder Release-Hinweise. Mehrere Feeds lassen sich speichern und einzeln oder zusammen anzeigen.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><strong>Feeds verwalten</strong> → Adresse eintragen → <strong>Hinzufügen</strong>. Der Feed wird gleich geladen; ohne Namen wird sein Titel übernommen. Mit <strong>Bearbeiten</strong> Name und Adresse ändern.</li>
+    <li><strong>Aktualisieren</strong> lädt den gewählten Feed neu (bei „Alle Feeds“ alle nacheinander). Die Seite lädt nie von selbst – nur nach Tippen.</li>
+    <li>Einträge antippen zum Aufklappen; dann gelten sie als gelesen. Suche und Kategorie filtern die Liste.</li>
+    <li>Android, installierte App: einen Feed-Link aus einer anderen App an den RSS-Reader <strong>teilen</strong> – die Adresse steht dann im Formular. Auf dem iPhone geht das nicht; Adresse dort kopieren und einfügen.</li>
+  </ul>
+  <h3>Feed lädt nicht? (CORS)</h3>
+  <p>Diese Seite hat keinen eigenen Server: Ihr Browser fragt den Feed direkt beim Anbieter ab. Das erlaubt der Browser nur, wenn der Anbieter es freigibt (CORS). Viele tun das, manche nicht – auch die Microsoft 365 Roadmap nicht. Dann gibt es zwei Wege:</p>
+  <ul>
+    <li><strong>XML-Datei öffnen:</strong> den Feed im Browser öffnen, als Datei speichern und hier öffnen. Die Einträge landen im gewählten Feed (bzw. in dem mit derselben Adresse oder in einem neuen).</li>
+    <li><strong>Eigener CORS-Proxy</strong> (Menü → Einstellungen), z. B. ein kleiner eigener Cloudflare Worker. Schlägt der direkte Abruf fehl, wird der Proxy versucht und sich das für diesen Feed gemerkt. Öffentliche Proxy-Dienste funktionieren auch, sehen aber, welche Feeds Sie lesen.</li>
+  </ul>
+  <p>Nur <code>https://</code>-Feeds lassen sich direkt laden; <code>http://</code> geht nur über den Proxy.</p>
+  <h3>Datenschutz &amp; Speicher</h3>
+  <ul>
+    <li>Anfragen gehen nur an die eingetragenen Feed-Adressen bzw. Ihren Proxy, ohne Cookies und ohne Absender-Adresse (Referrer).</li>
+    <li>Bilder und eingebettete Inhalte aus Feeds werden nicht geladen (statt Bildern steht ihr Alternativtext da); Links öffnen in einem neuen Tab.</li>
+    <li>Gespeichert werden in diesem Browser: die Feed-Liste, die Proxy-Einstellung, welche Einträge gelesen sind und die zuletzt geladenen Einträge (je Feed die neuesten 200) – damit sie auch offline lesbar sind. Alles steckt in der Sicherung unter „Daten sichern“.</li>
+  </ul>
+  <h3>KI-Agent</h3>
+  <p>Ein KI-Agent im Browser (WebMCP) kann die Feeds auflisten, einen Feed anzeigen lassen und die geladenen Einträge lesen (Titel, Link, Datum, Kategorien, kurzer Text). Feeds abrufen, hinzufügen oder löschen kann er nicht.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Reads RSS and Atom feeds, e.g. the <a href="https://www.microsoft.com/releasecommunications/api/v2/m365/rss/">Microsoft 365 Roadmap</a>, blogs, news or release notes. Save several feeds and show them one by one or together.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><strong>Manage feeds</strong> → enter the address → <strong>Add</strong>. The feed is loaded right away; without a name its title is used. <strong>Edit</strong> changes name and address.</li>
+    <li><strong>Refresh</strong> reloads the chosen feed (with “All feeds” all of them, one after another). The page never loads on its own – only after a tap.</li>
+    <li>Tap an entry to expand it; it then counts as read. Search and category filter the list.</li>
+    <li>Android, installed app: <strong>share</strong> a feed link from another app to RSS Reader – the address is then filled into the form. iPhone cannot do this; copy and paste the address there.</li>
+  </ul>
+  <h3>Feed won’t load? (CORS)</h3>
+  <p>This page has no server of its own: your browser asks the provider for the feed directly. The browser only allows that if the provider permits it (CORS). Many do, some don’t – the Microsoft 365 Roadmap doesn’t either. Then there are two ways:</p>
+  <ul>
+    <li><strong>Open XML file:</strong> open the feed in the browser, save it as a file and open it here. The entries go into the chosen feed (or the one with the same address, or a new one).</li>
+    <li><strong>Own CORS proxy</strong> (menu → Settings), e.g. a small Cloudflare Worker of your own. If the direct request fails, the proxy is tried and remembered for that feed. Public proxy services work too, but they see which feeds you read.</li>
+  </ul>
+  <p>Only <code>https://</code> feeds can be loaded directly; <code>http://</code> works only through the proxy.</p>
+  <h3>Privacy &amp; storage</h3>
+  <ul>
+    <li>Requests only go to the feed addresses you entered or your proxy, without cookies and without the sending page (referrer).</li>
+    <li>Images and embedded content from feeds are not loaded (their alternative text is shown instead); links open in a new tab.</li>
+    <li>Stored in this browser: the feed list, the proxy setting, which entries are read and the entries loaded last (the newest 200 per feed) – so they can be read offline. All of it is in the backup under “Back up data”.</li>
+  </ul>
+  <h3>AI agent</h3>
+  <p>An AI agent in the browser (WebMCP) can list the feeds, show a feed and read the loaded entries (title, link, date, categories, short text). It cannot fetch, add or delete feeds.</p>
+  </div>
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version de7b7db597b6</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="feed.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    all:'Alle Feeds',allN:'Alle Feeds ({n} ungelesen)',feedN:'{name} ({n} ungelesen)',noFeeds:'Noch kein Feed',
+    allCats:'Alle Kategorien',edit:'Bearbeiten',del:'Löschen',delQ:'Feed „{name}“ löschen?',deleted:'Feed gelöscht',
+    saveEdit:'Speichern',editH:'Feed bearbeiten',added:'Feed hinzugefügt',updated:'Gespeichert',
+    errUrl:'Bitte eine gültige Adresse mit https:// eingeben.',errHttp:'http://-Adressen lassen sich nur über einen eigenen Proxy laden (Menü → Einstellungen).',
+    errDup:'Dieser Feed ist schon in der Liste.',errProxy:'Bitte eine https://-Adresse eingeben (oder leer lassen).',
+    proxySaved:'Proxy gespeichert',proxyCleared:'Proxy entfernt',
+    loading:'Lade {name} …',stand:'Stand {date} · {n} Einträge',standFile:'aus Datei',never:'Noch nicht geladen – „Aktualisieren“ tippen.',
+    noUrl:'Feed ohne Adresse – nur per Datei zu aktualisieren.',
+    loaded:'{n} Einträge geladen',loadedNew:'{n} neu',
+    'e.cors':'Der Anbieter erlaubt Browsern nicht, diesen Feed direkt abzurufen (CORS).',
+    'e.corsHelp':'Feed im Browser öffnen, als Datei speichern und mit „XML-Datei öffnen“ laden – oder einen eigenen CORS-Proxy eintragen (Menü → Einstellungen).',
+    'e.proxy':'Auch über den Proxy ließ sich der Feed nicht laden.',
+    'e.offline':'Keine Verbindung zum Internet.',
+    'e.timeout':'Der Server antwortet nicht.',
+    'e.http':'Der Server meldet Fehler {n}.',
+    'e.notXml':'Die Antwort ist kein lesbares XML.',
+    'e.notFeed':'Das ist kein RSS- oder Atom-Feed.',
+    'e.big':'Der Feed ist zu groß (über 20 MB).',
+    'e.file':'Datei „{name}“: {m}',
+    openFeed:'Feed im Browser öffnen',
+    noItems:'Keine Einträge.',noMatch:'Kein Eintrag passt zum Filter.',addFirst:'Unter „Feeds verwalten“ einen Feed hinzufügen.',
+    more:'{n} weitere anzeigen',countOf:'{shown} von {n}',countN:'{n}',open:'Im Browser öffnen',
+    markedRead:'Als gelesen markiert',fileLoaded:'{n} Einträge aus der Datei',
+    'mcp.feeds':'Feeds auflisten','mcp.select':'Feed anzeigen','mcp.items':'Einträge lesen'
+  },
+  en:{
+    title:'RSS Reader',sub:'Read and manage RSS and Atom feeds.',feeds:'Feeds',feedSel:'Show',refresh:'Refresh',openFile:'Open XML file',
+    manage:'Manage feeds',addH:'Add feed',feedUrl:'Feed address (RSS or Atom)',feedName:'Name (optional)',
+    feedNameHint:'Leave empty to use the title from the feed.',add:'Add',cancel:'Cancel',example:'Example: Microsoft 365 Roadmap',
+    items:'Entries',search:'Search',category:'Category',unreadOnly:'Unread only',allRead:'Mark all as read',
+    settings:'Settings',proxy:'Own CORS proxy (optional)',
+    proxyHint:'Only for feeds the browser may not load directly. {url} is replaced by the feed address; without it the address is appended. The proxy sees which feeds you fetch.',
+    save:'Save',
+    all:'All feeds',allN:'All feeds ({n} unread)',feedN:'{name} ({n} unread)',noFeeds:'No feed yet',
+    allCats:'All categories',edit:'Edit',del:'Delete',delQ:'Delete feed “{name}”?',deleted:'Feed deleted',
+    saveEdit:'Save',editH:'Edit feed',added:'Feed added',updated:'Saved',
+    errUrl:'Please enter a valid address starting with https://.',errHttp:'http:// addresses can only be loaded through your own proxy (menu → Settings).',
+    errDup:'This feed is already in the list.',errProxy:'Please enter an https:// address (or leave it empty).',
+    proxySaved:'Proxy saved',proxyCleared:'Proxy removed',
+    loading:'Loading {name} …',stand:'As of {date} · {n} entries',standFile:'from file',never:'Not loaded yet – tap “Refresh”.',
+    noUrl:'Feed without an address – can only be updated from a file.',
+    loaded:'{n} entries loaded',loadedNew:'{n} new',
+    'e.cors':'The provider does not allow browsers to fetch this feed directly (CORS).',
+    'e.corsHelp':'Open the feed in the browser, save it as a file and load it with “Open XML file” – or enter your own CORS proxy (menu → Settings).',
+    'e.proxy':'The feed could not be loaded through the proxy either.',
+    'e.offline':'No internet connection.',
+    'e.timeout':'The server does not respond.',
+    'e.http':'The server reports error {n}.',
+    'e.notXml':'The response is no readable XML.',
+    'e.notFeed':'This is no RSS or Atom feed.',
+    'e.big':'The feed is too large (over 20 MB).',
+    'e.file':'File “{name}”: {m}',
+    openFeed:'Open feed in the browser',
+    noItems:'No entries.',noMatch:'No entry matches the filter.',addFirst:'Add a feed under “Manage feeds”.',
+    more:'Show {n} more',countOf:'{shown} of {n}',countN:'{n}',open:'Open in browser',
+    markedRead:'Marked as read',fileLoaded:'{n} entries from the file',
+    'mcp.feeds':'List feeds','mcp.select':'Show feed','mcp.items':'Read entries'
+  }
+});
+const t=Tools.t,$=Tools.$;
+
+/* ---------- Storage (prefix rss-reader., see tool:storage) ----------
+   feeds.v1    { feeds: [{ id, url, name, title, viaProxy, read: [item ids] }] }
+   cache.v1    { <feed id>: { fetched: ms, file: bool, items: [{ id, title, link, date, categories, author, html }] } }
+   settings.v1 { proxy, current: 'all' | feed id, unreadOnly } */
+const LS_FEEDS='rss-reader.feeds.v1',LS_CACHE='rss-reader.cache.v1',LS_SET='rss-reader.settings.v1';
+const MAX_ITEMS=200,MAX_HTML=8000,MAX_READ=2000,PAGE=50,MAX_BYTES=20*1024*1024,TIMEOUT=30000;
+const EXAMPLE={url:'https://www.microsoft.com/releasecommunications/api/v2/m365/rss/',name:'Microsoft 365 Roadmap'};
+
+const store=Tools.load(LS_FEEDS,{feeds:[]});
+if(!Array.isArray(store.feeds))store.feeds=[];
+let cache=Tools.load(LS_CACHE,{});
+if(!cache||typeof cache!=='object'||Array.isArray(cache))cache={};
+const settings=Object.assign({proxy:'',current:'all',unreadOnly:false},Tools.load(LS_SET,{}));
+const readSets=new Map(store.feeds.map(f=>[f.id,new Set(Array.isArray(f.read)?f.read:[])]));
+
+const feedById=id=>store.feeds.find(f=>f.id===id)||null;
+const feedName=f=>f.name||f.title||hostOf(f.url)||'Feed';
+function hostOf(u){ try{ return new URL(u).host; }catch(_){ return ''; } }
+const readSet=f=>{ let s=readSets.get(f.id); if(!s){ s=new Set(); readSets.set(f.id,s); } return s; };
+const itemsOf=f=>(cache[f.id]&&Array.isArray(cache[f.id].items))?cache[f.id].items:[];
+const unreadOf=f=>{ const r=readSet(f); return itemsOf(f).filter(i=>!r.has(i.id)).length; };
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+function saveFeeds(){
+  for(const f of store.feeds){
+    // Keep only read marks of entries that still exist (plus a few for feeds that drop old entries)
+    const ids=new Set(itemsOf(f).map(i=>i.id));
+    f.read=[...readSet(f)].filter(id=>ids.has(id)).slice(-MAX_READ);
+  }
+  Tools.save(LS_FEEDS,store);
+}
+function saveCache(){
+  if(Tools.save(LS_CACHE,cache))return;
+  // Storage full: keep fewer entries per feed rather than none
+  for(let keep=100;keep>=10;keep=Math.floor(keep/2)){
+    for(const c of Object.values(cache))if(c.items)c.items=c.items.slice(0,keep);
+    if(Tools.save(LS_CACHE,cache)){ Tools.diag.log('cache trimmed',{keep}); return; }
+  }
+  Tools.diag.log('cache not saved');
+}
+const saveSettings=()=>Tools.save(LS_SET,settings);
+if(settings.current!=='all'&&!feedById(settings.current))settings.current='all';
+
+/* ---------- Addresses ---------- */
+function checkUrl(raw){
+  const s=String(raw||'').trim();
+  let u; try{ u=new URL(s); }catch(_){ return {error:'errUrl'}; }
+  if(u.protocol==='http:'&&!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(u.hostname)&&!settings.proxy)return {error:'errHttp'};
+  if(!/^https?:$/.test(u.protocol))return {error:'errUrl'};
+  return {url:u.href};
+}
+const sameUrl=(a,b)=>{ try{ const x=new URL(a),y=new URL(b); return (x.host+x.pathname.replace(/\/$/,'')+x.search).toLowerCase()===(y.host+y.pathname.replace(/\/$/,'')+y.search).toLowerCase(); }catch(_){ return false; } };
+function proxied(url){
+  const p=settings.proxy;
+  return p.includes('{url}')?p.split('{url}').join(encodeURIComponent(url)):p+encodeURIComponent(url);
+}
+
+/* ---------- Fetching (only after a tap; never by an agent) ---------- */
+async function get(url){
+  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),TIMEOUT);
+  try{
+    const res=await fetch(url,{credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',signal:ctl.signal,
+      headers:{Accept:'application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, */*;q=0.5'}});
+    if(!res.ok){ const e=new Error('http'); e.code='http'; e.status=res.status; throw e; }
+    const len=+res.headers.get('content-length')||0;
+    if(len>MAX_BYTES){ const e=new Error('big'); e.code='big'; throw e; }
+    const text=await res.text();
+    if(text.length>MAX_BYTES){ const e=new Error('big'); e.code='big'; throw e; }
+    return text;
+  }catch(e){
+    if(e.code)throw e;
+    const x=new Error(e.name); x.code=e.name==='AbortError'?'timeout':(navigator.onLine===false?'offline':'blocked'); throw x;
+  }finally{ clearTimeout(timer); }
+}
+async function fetchFeed(f){
+  const direct=!(f.viaProxy&&settings.proxy)&&!(/^http:/.test(f.url)&&settings.proxy&&!/^http:\/\/(localhost|127\.0\.0\.1)/.test(f.url));
+  if(direct){
+    try{ const text=await get(f.url); Tools.diag.log('fetched',{via:'direct',bytes:text.length}); return {text,via:'direct'}; }
+    catch(e){
+      Tools.diag.log('fetch failed',{via:'direct',code:e.code,status:e.status||null});
+      if(e.code!=='blocked'||!settings.proxy){ if(e.code==='blocked')e.code='cors'; throw e; }
+    }
+  }
+  try{ const text=await get(proxied(f.url)); Tools.diag.log('fetched',{via:'proxy',bytes:text.length}); return {text,via:'proxy'}; }
+  catch(e){ Tools.diag.log('fetch failed',{via:'proxy',code:e.code,status:e.status||null}); if(e.code==='blocked')e.code='proxy'; throw e; }
+}
+
+// Merges freshly parsed entries into the cache of a feed; returns the number of new entries
+function store_items(f,parsed,fromFile){
+  const old=new Set(itemsOf(f).map(i=>i.id));
+  const seen=new Set();
+  const items=[];
+  for(const it of parsed.items){
+    if(!it.id||seen.has(it.id))continue;
+    seen.add(it.id);
+    items.push({id:String(it.id).slice(0,500),title:it.title.slice(0,500),link:it.link.slice(0,2000),date:it.date,
+      categories:it.categories.slice(0,20).map(c=>c.slice(0,100)),author:(it.author||'').slice(0,200),html:it.html.slice(0,MAX_HTML)});
+  }
+  // Newest first where dates exist; entries without a date keep the feed's order
+  if(items.some(i=>i.date))items.sort((a,b)=>(b.date||0)-(a.date||0));
+  const fresh=items.slice(0,MAX_ITEMS);
+  const added=fresh.filter(i=>!old.has(i.id)).length;
+  // First load: mark nothing as read; later loads keep the marks of entries that stay
+  cache[f.id]={fetched:Date.now(),file:!!fromFile,items:fresh};
+  if(parsed.title)f.title=parsed.title.slice(0,200);
+  saveCache(); saveFeeds();
+  return added;
+}
+
+let busy=false;
+async function refresh(){
+  if(busy)return;
+  const list=settings.current==='all'?store.feeds.filter(f=>f.url):[feedById(settings.current)].filter(f=>f&&f.url);
+  if(!list.length)return;
+  busy=true; $('btnRefresh').disabled=true; showError(null);
+  let total=0,added=0;const errors=[];
+  for(const f of list){
+    $('status').textContent=t('loading',{name:feedName(f)});
+    try{
+      const {text,via}=await fetchFeed(f);
+      const parsed=RssFeed.parse(text);
+      if(via==='proxy'&&!f.viaProxy){ f.viaProxy=true; }
+      if(via==='direct'&&f.viaProxy){ f.viaProxy=false; }
+      added+=store_items(f,parsed,false);
+      total+=itemsOf(f).length;
+      Tools.diag.log('feed parsed',{kind:parsed.kind,items:parsed.items.length});
+    }catch(e){
+      Tools.diag.log('feed error',{code:e.code||e.name});
+      errors.push({f,e});
+    }
+  }
+  busy=false; $('btnRefresh').disabled=false;
+  render();
+  if(errors.length)showError(errors);
+  else Tools.toast(t('loaded',{n:total})+(added&&added!==total?' · '+t('loadedNew',{n:added}):''));
+}
+
+function errText(e){
+  const code=e.code||'notXml';
+  return code==='http'?t('e.http',{n:e.status}):t('e.'+code);
+}
+function showError(errors){
+  const box=$('feedError');
+  box.replaceChildren();
+  box.hidden=!errors;
+  if(!errors)return;
+  for(const {f,e} of errors){
+    const p=document.createElement('p');
+    const s=document.createElement('strong'); s.textContent=feedName(f)+': ';
+    p.append(s,errText(e));
+    box.append(p);
+    if(e.code==='cors'||e.code==='proxy'){
+      const h=document.createElement('p'); h.textContent=t('e.corsHelp'); box.append(h);
+      const a=document.createElement('a'); a.href=f.url; a.target='_blank'; a.rel='noopener noreferrer'; a.textContent=t('openFeed');
+      const pa=document.createElement('p'); pa.append(a); box.append(pa);
+    }
+  }
+}
+
+/* ---------- Opening a saved XML file ---------- */
+async function loadFile(file){
+  showError(null);
+  let parsed;
+  try{
+    if(file.size>MAX_BYTES){ const e=new Error('big'); e.code='big'; throw e; }
+    parsed=RssFeed.parse(await file.text());
+  }catch(e){
+    Tools.diag.log('file error',{code:e.code||e.name});
+    const box=$('feedError'); box.hidden=false; box.textContent=t('e.file',{name:file.name,m:errText(e)});
+    return;
+  }
+  const self=parsed.self||(/^https?:/.test(parsed.link)&&/rss|feed|atom|xml/i.test(parsed.link)?parsed.link:'');
+  let f=settings.current!=='all'?feedById(settings.current):null;
+  if(!f&&self)f=store.feeds.find(x=>sameUrl(x.url,self))||null;
+  if(!f){
+    f={id:newId(),url:self&&/^https:/.test(self)?self:'',name:'',title:'',viaProxy:false,read:[]};
+    store.feeds.push(f);
+  }
+  const n=parsed.items.length;
+  store_items(f,parsed,true);
+  settings.current=f.id; saveSettings();
+  Tools.diag.log('file loaded',{kind:parsed.kind,items:n});
+  render();
+  Tools.toast(t('fileLoaded',{n:itemsOf(f).length}));
+}
+$('btnFile').addEventListener('click',()=>$('fileIn').click());
+$('fileIn').addEventListener('change',e=>{ const file=e.target.files[0]; e.target.value=''; if(file)loadFile(file); });
+
+/* ---------- Feed management ---------- */
+let editing=null;
+function startEdit(f){
+  editing=f?f.id:null;
+  $('feedUrl').value=f?f.url:'';
+  $('feedName').value=f?f.name:'';
+  $('addError').textContent='';
+  $('btnAdd').textContent=f?t('saveEdit'):t('add');
+  $('h-add').textContent=f?t('editH'):t('addH');
+  $('btnCancelEdit').hidden=!f;
+  $('btnExample').hidden=!!f;
+  if(f){ $('manage').open=true; $('feedUrl').focus(); }
+}
+$('btnCancelEdit').addEventListener('click',()=>startEdit(null));
+$('btnExample').addEventListener('click',()=>{ $('feedUrl').value=EXAMPLE.url; $('feedName').value=EXAMPLE.name; $('addError').textContent=''; });
+$('addForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const r=checkUrl($('feedUrl').value);
+  if(r.error){ $('addError').textContent=t(r.error); $('feedUrl').focus(); return; }
+  const name=$('feedName').value.trim().slice(0,80);
+  if(store.feeds.some(f=>f.id!==editing&&f.url&&sameUrl(f.url,r.url))){ $('addError').textContent=t('errDup'); return; }
+  if(editing){
+    const f=feedById(editing);
+    if(f){
+      if(!sameUrl(f.url,r.url)){ f.viaProxy=false; }
+      f.url=r.url; f.name=name;
+    }
+    saveFeeds(); startEdit(null); render(); Tools.toast(t('updated'));
+    Tools.diag.log('feed edited');
+    return;
+  }
+  const f={id:newId(),url:r.url,name,title:'',viaProxy:false,read:[]};
+  store.feeds.push(f); saveFeeds();
+  settings.current=f.id; saveSettings();
+  startEdit(null);
+  Tools.diag.log('feed added',{feeds:store.feeds.length});
+  render();
+  Tools.toast(t('added'));
+  refresh();
+});
+
+function renderFeedList(){
+  const ul=$('feedList');
+  ul.replaceChildren();
+  for(const f of store.feeds){
+    const li=document.createElement('li');
+    const n=document.createElement('span'); n.className='f-name'; n.textContent=feedName(f);
+    const ed=document.createElement('button'); ed.type='button'; ed.className='btn small'; ed.textContent=t('edit');
+    ed.setAttribute('aria-label',`${t('edit')}: ${feedName(f)}`);
+    ed.addEventListener('click',()=>startEdit(f));
+    const del=document.createElement('button'); del.type='button'; del.className='btn small danger'; del.textContent=t('del');
+    del.setAttribute('aria-label',`${t('del')}: ${feedName(f)}`);
+    del.addEventListener('click',()=>{
+      if(!confirm(t('delQ',{name:feedName(f)})))return;
+      store.feeds=store.feeds.filter(x=>x!==f); delete cache[f.id]; readSets.delete(f.id);
+      if(settings.current===f.id){ settings.current='all'; saveSettings(); }
+      if(editing===f.id)startEdit(null);
+      saveFeeds(); saveCache(); render(); Tools.toast(t('deleted'));
+      Tools.diag.log('feed deleted',{feeds:store.feeds.length});
+    });
+    const u=document.createElement('span'); u.className='f-url'; u.textContent=f.url||t('noUrl');
+    li.append(n,ed,del,u);
+    ul.append(li);
+  }
+}
+
+/* ---------- Entries ---------- */
+let shown=PAGE;
+function currentFeeds(){ return settings.current==='all'?store.feeds:[feedById(settings.current)].filter(Boolean); }
+function allEntries(){
+  const out=[];
+  for(const f of currentFeeds())for(const it of itemsOf(f))out.push({f,it});
+  if(settings.current==='all')out.sort((a,b)=>(b.it.date||0)-(a.it.date||0));
+  return out;
+}
+const searchText=new WeakMap();
+function haystack(it){
+  let s=searchText.get(it);
+  if(s==null){ s=(it.title+' '+it.categories.join(' ')+' '+RssFeed.text(it.html)).toLowerCase(); searchText.set(it,s); }
+  return s;
+}
+function filtered(opts){
+  const q=(opts.query||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return allEntries().filter(({f,it})=>{
+    if(opts.unreadOnly&&readSet(f).has(it.id))return false;
+    if(opts.category&&!it.categories.includes(opts.category))return false;
+    if(q.length){ const h=haystack(it); if(!q.every(w=>h.includes(w)))return false; }
+    return true;
+  });
+}
+const uiFilter=()=>({query:$('q').value,category:$('cat').value,unreadOnly:$('unreadOnly').checked});
+const fmtDate=ms=>ms?new Date(ms).toLocaleString(Tools.locale(),{dateStyle:'medium',timeStyle:'short'}):'';
+
+function renderSelect(){
+  const sel=$('feedSel');
+  sel.replaceChildren();
+  const total=store.feeds.reduce((s,f)=>s+unreadOf(f),0);
+  const all=new Option(store.feeds.length?(total?t('allN',{n:total}):t('all')):t('noFeeds'),'all');
+  sel.append(all);
+  for(const f of store.feeds){
+    const n=unreadOf(f);
+    sel.append(new Option(n?t('feedN',{name:feedName(f),n}):feedName(f),f.id));
+  }
+  sel.value=settings.current;
+  $('btnRefresh').disabled=busy||!currentFeeds().some(f=>f.url);
+}
+function renderCats(){
+  const cats=new Map();
+  for(const {it} of allEntries())for(const c of it.categories)cats.set(c,(cats.get(c)||0)+1);
+  const sel=$('cat'),prev=sel.value;
+  sel.replaceChildren(new Option(t('allCats'),''));
+  for(const c of [...cats.keys()].sort((a,b)=>a.localeCompare(b,Tools.locale())))sel.append(new Option(`${c} (${cats.get(c)})`,c));
+  sel.value=cats.has(prev)?prev:'';
+  $('catField').hidden=!cats.size;
+}
+function renderStatus(){
+  const fs=currentFeeds();
+  if(!fs.length){ $('status').textContent=''; return; }
+  if(fs.length===1){
+    const f=fs[0],c=cache[f.id];
+    $('status').textContent=c?t('stand',{date:fmtDate(c.fetched),n:c.items.length})+(c.file?` (${t('standFile')})`:''):(f.url?t('never'):t('noUrl'));
+    return;
+  }
+  const times=fs.map(f=>cache[f.id]&&cache[f.id].fetched).filter(Boolean);
+  $('status').textContent=times.length?t('stand',{date:fmtDate(Math.min(...times)),n:fs.reduce((s,f)=>s+itemsOf(f).length,0)}):t('never');
+}
+function renderItems(){
+  const list=filtered(uiFilter());
+  const total=allEntries().length;
+  const ul=$('items');
+  ul.replaceChildren();
+  if(!list.length){
+    const p=document.createElement('li'); p.className='empty';
+    p.textContent=!store.feeds.length?t('addFirst'):total?t('noMatch'):t('noItems');
+    ul.append(p);
+  }
+  const multi=settings.current==='all'&&store.feeds.length>1;
+  for(const {f,it} of list.slice(0,shown)){
+    const li=document.createElement('li'); li.className='item'+(readSet(f).has(it.id)?'':' unread');
+    const d=document.createElement('details');
+    const s=document.createElement('summary');
+    const title=document.createElement('span'); title.className='i-title'; title.textContent=it.title||RssFeed.text(it.html,120)||'–';
+    const meta=document.createElement('span'); meta.className='i-meta';
+    const bits=[fmtDate(it.date),multi?feedName(f):'',it.author].filter(Boolean);
+    if(bits.length){ const m=document.createElement('span'); m.textContent=bits.join(' · '); meta.append(m); }
+    for(const c of it.categories.slice(0,6)){ const b=document.createElement('span'); b.className='badge'; b.textContent=c; meta.append(b); }
+    s.append(title,meta);
+    d.append(s);
+    d.addEventListener('toggle',()=>{
+      if(!d.open)return;
+      if(!d.querySelector('.i-body')){
+        const body=document.createElement('div'); body.className='i-body';
+        const content=document.createElement('div'); content.className='content';
+        content.append(RssFeed.render(it.html,it.link||f.url||undefined));
+        body.append(content);
+        if(/^https?:/.test(it.link)){
+          const row=document.createElement('p'); row.className='row';
+          const a=document.createElement('a'); a.className='btn small'; a.href=it.link; a.target='_blank'; a.rel='noopener noreferrer';
+          a.referrerPolicy='no-referrer'; a.textContent=t('open');
+          row.append(a); body.append(row);
+        }
+        d.append(body);
+      }
+      if(!readSet(f).has(it.id)){
+        readSet(f).add(it.id); li.classList.remove('unread'); saveFeeds(); renderSelect();
+      }
+    });
+    li.append(d);
+    ul.append(li);
+  }
+  const rest=list.length-Math.min(shown,list.length);
+  $('more').hidden=rest<=0;
+  if(rest>0)$('more').textContent=t('more',{n:Math.min(rest,PAGE)});
+  $('itemCount').textContent=list.length<total?t('countOf',{shown:list.length,n:total}):total?t('countN',{n:total}):'';
+  $('btnAllRead').disabled=!list.some(({f,it})=>!readSet(f).has(it.id));
+}
+function render(){ renderSelect(); renderCats(); renderStatus(); renderFeedList(); renderItems(); }
+
+$('feedSel').addEventListener('change',()=>{ settings.current=$('feedSel').value; saveSettings(); shown=PAGE; showError(null); render(); });
+$('btnRefresh').addEventListener('click',refresh);
+$('q').addEventListener('input',()=>{ shown=PAGE; renderItems(); });
+$('cat').addEventListener('change',()=>{ shown=PAGE; renderItems(); });
+$('unreadOnly').checked=!!settings.unreadOnly;
+$('unreadOnly').addEventListener('change',()=>{ settings.unreadOnly=$('unreadOnly').checked; saveSettings(); shown=PAGE; renderItems(); });
+$('more').addEventListener('click',()=>{ shown+=PAGE; renderItems(); });
+$('btnAllRead').addEventListener('click',()=>{
+  for(const {f,it} of filtered(uiFilter()))readSet(f).add(it.id);
+  saveFeeds(); renderSelect(); renderItems(); Tools.toast(t('markedRead'));
+});
+
+/* ---------- Settings: own CORS proxy ---------- */
+$('proxy').value=settings.proxy;
+$('btnProxy').addEventListener('click',()=>{
+  const v=$('proxy').value.trim();
+  if(v){
+    let ok=false; try{ const u=new URL(v.split('{url}').join('x')); ok=u.protocol==='https:'||/^(localhost|127\.0\.0\.1)$/.test(u.hostname); }catch(_){}
+    if(!ok){ $('proxyError').textContent=t('errProxy'); return; }
+  }
+  $('proxyError').textContent='';
+  settings.proxy=v;
+  if(!v)for(const f of store.feeds)f.viaProxy=false;
+  saveSettings(); saveFeeds();
+  Tools.toast(t(v?'proxySaved':'proxyCleared'));
+  Tools.diag.log('proxy',{set:!!v});
+  Tools.menu.close();
+  render();
+});
+
+/* ---------- Link shared to the installed app (Android): prefill the form ---------- */
+const shared=Tools.takeSharedText();
+if(shared){
+  const m=(shared.url+' '+shared.text).match(/https?:\/\/\S+/);
+  if(m){ startEdit(null); $('feedUrl').value=m[0]; $('feedName').value=shared.title.slice(0,80); $('manage').open=true; Tools.diag.log('link shared'); }
+}
+if(!store.feeds.length)$('manage').open=true;
+
+/* ---------- WebMCP: read what is loaded, switch the view – never fetch, add or delete ---------- */
+const feedInfo=f=>({id:f.id,name:feedName(f),url:f.url,entries:itemsOf(f).length,unread:unreadOf(f),
+  fetched:cache[f.id]?new Date(cache[f.id].fetched).toISOString():null});
+Tools.mcp.register({
+  name:'list_feeds',title:'List feeds',label:'mcp.feeds',readOnly:true,
+  description:'Lists the feeds saved in the reader with id, name, address, number of loaded entries, unread entries and when they were last loaded (ISO time or null). Also returns which feed is shown ("all" or a feed id). Feeds are only fetched when the user taps Refresh.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({current:settings.current,feeds:store.feeds.map(feedInfo)})
+});
+Tools.mcp.register({
+  name:'select_feed',title:'Show a feed',label:'mcp.select',
+  description:'Shows one saved feed in the reader, or all feeds together with feed_id "all". Does not fetch anything; the entries loaded last are shown. Returns the feed info.',
+  inputSchema:{type:'object',properties:{feed_id:{type:'string',maxLength:40,description:'Feed id from list_feeds, or "all".'}},required:['feed_id'],additionalProperties:false},
+  execute:i=>{
+    if(i.feed_id!=='all'&&!feedById(i.feed_id))throw new Error('Unknown feed_id – use list_feeds.');
+    settings.current=i.feed_id; saveSettings(); shown=PAGE; render();
+    return i.feed_id==='all'?{current:'all',feeds:store.feeds.map(feedInfo)}:{current:i.feed_id,feed:feedInfo(feedById(i.feed_id))};
+  }
+});
+Tools.mcp.register({
+  name:'list_items',title:'Read feed entries',label:'mcp.items',readOnly:true,untrusted:true,
+  description:'Returns loaded entries, newest first: id, feed id, title, link, date (ISO or null), categories, read state and a plain-text summary (up to 500 characters). Filters by feed (default: the feed shown in the app), words in title, categories or text, category and unread state. The content comes from the feed providers.',
+  inputSchema:{type:'object',properties:{
+    feed_id:{type:'string',maxLength:40,description:'Feed id from list_feeds or "all". Default: the feed shown in the app.'},
+    query:{type:'string',maxLength:200,description:'Words that must all appear (case-insensitive).'},
+    category:{type:'string',maxLength:100,description:'Exact category name.'},
+    unread_only:{type:'boolean',description:'Only entries not read yet. Default false.'},
+    limit:{type:'integer',minimum:1,maximum:50,description:'Maximum number of entries. Default 20.'},
+    offset:{type:'integer',minimum:0,maximum:5000,description:'Entries to skip (paging). Default 0.'}
+  },additionalProperties:false},
+  execute:i=>{
+    const id=i.feed_id||settings.current;
+    if(id!=='all'&&!feedById(id))throw new Error('Unknown feed_id – use list_feeds.');
+    const prev=settings.current; settings.current=id;
+    let list;
+    try{ list=filtered({query:i.query,category:i.category,unreadOnly:!!i.unread_only}); }finally{ settings.current=prev; }
+    const off=i.offset||0,lim=i.limit||20;
+    return {feed_id:id,total:list.length,offset:off,items:list.slice(off,off+lim).map(({f,it})=>({
+      id:it.id,feed_id:f.id,title:it.title,link:it.link,date:it.date?new Date(it.date).toISOString():null,
+      categories:it.categories,read:readSet(f).has(it.id),summary:RssFeed.text(it.html,500)}))};
+  }
+});
+
+Tools.diag.info(()=>({feeds:store.feeds.length,current:settings.current==='all'?'all':'one',proxy:!!settings.proxy,
+  viaProxy:store.feeds.filter(f=>f.viaProxy).length,cached:Object.values(cache).reduce((s,c)=>s+((c&&c.items)||[]).length,0)}));
+Tools.onLang(()=>{ startEdit(editing?feedById(editing):null); render(); });
+render();
+})();
+</script>
+</body>
+</html>
