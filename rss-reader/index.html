@@ -21,7 +21,7 @@
 <meta name="tool:connect" content="https: http://localhost:* http://127.0.0.1:*">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-IEJQINx3AsWDwawwWv6BBqF5Y9WK09hHlBgjB9ktMqM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-c50mmRzkt52uZ9QgFKPWIvFXkhjTAs+Ms7+654z9jA4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -42,8 +42,9 @@ body{--page-width:860px}
 #feedList li{border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
 #feedList .f-name{font-weight:600;flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
 #feedList .f-url{flex:1 1 100%;font-family:var(--mono);font-size:12px;color:var(--muted);overflow-wrap:anywhere}
-.filters{display:grid;grid-template-columns:1fr;gap:0 12px}
-@media (min-width:600px){.filters{grid-template-columns:2fr 1fr}}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}
+.filters:has(#catField[hidden]){grid-template-columns:1fr}
+.filters .form-field{margin-bottom:6px}
 .check{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
 .check input{width:20px;height:20px;accent-color:var(--accent)}
 #items{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px}
@@ -66,10 +67,20 @@ body{--page-width:860px}
 .empty{color:var(--muted);text-align:center;padding:16px 8px;margin:0}
 #more{margin-top:12px;width:100%}
 .count{font-weight:400;color:var(--muted);font-size:14px}
-#manage>summary{display:inline-flex;align-items:center;margin-top:12px;list-style:none}
-#manage>summary::-webkit-details-marker{display:none}
-.manage-body{margin-top:12px}
-#h-add{font-size:15px;margin:0 0 8px}
+#h-add{font-size:15px;margin:16px 0 8px}
+#setupSlot #h-add{display:none}
+.setup-file{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 0}
+.toolbar{display:flex;align-items:center;gap:8px}
+.toolbar h2{flex:1 1 auto;margin:0;min-width:0;overflow-wrap:anywhere}
+.toolbar .sel-wrap{flex:1 1 auto;min-width:0}
+.toolbar select{width:100%;min-height:44px;padding-inline:10px}
+.toolbar .btn{flex:none}
+.status{margin:6px 0 10px}
+.unread-count:not(:empty){color:var(--accent);font-weight:600}
+.unread-count:not(:empty)::after{content:" · ";color:var(--muted);font-weight:400}
+.filter-row{flex-wrap:nowrap}
+.filter-row .count{margin-inline-start:auto}
+#feedList:empty{display:none}
 </style>
 </head>
 <body>
@@ -79,64 +90,72 @@ body{--page-width:860px}
 </header>
 
 <main>
-  <section class="card" aria-labelledby="h-feeds">
-    <h2 id="h-feeds" data-i18n="feeds">Feeds</h2>
-    <div class="form-field">
-      <label for="feedSel" data-i18n="feedSel">Anzeigen</label>
-      <select id="feedSel"></select>
-    </div>
-    <div class="row">
-      <button type="button" class="btn primary" id="btnRefresh" data-i18n="refresh">Aktualisieren</button>
-      <button type="button" class="btn" id="btnFile" data-i18n="openFile">XML-Datei öffnen</button>
-      <input type="file" id="fileIn" accept=".xml,.rss,.atom,.txt,application/rss+xml,application/atom+xml,application/xml,text/xml,text/plain" hidden>
-    </div>
-    <p class="status" id="status" role="status"></p>
-    <div id="feedError" class="feed-error" role="alert" hidden></div>
-
-    <details id="manage">
-      <summary class="btn" data-i18n="manage">Feeds verwalten</summary>
-      <div class="manage-body">
-        <ul id="feedList"></ul>
-        <form id="addForm" novalidate>
-          <h3 id="h-add" data-i18n="addH">Feed hinzufügen</h3>
-          <div class="form-field">
-            <label for="feedUrl" data-i18n="feedUrl">Adresse des Feeds (RSS oder Atom)</label>
-            <input type="url" id="feedUrl" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://…">
-          </div>
-          <div class="form-field">
-            <label for="feedName" data-i18n="feedName">Name (optional)</label>
-            <input type="text" id="feedName" maxlength="80" autocomplete="off">
-            <p class="form-hint" data-i18n="feedNameHint">Leer lassen, um den Titel aus dem Feed zu übernehmen.</p>
-          </div>
-          <p class="form-error" id="addError" role="alert"></p>
-          <div class="row">
-            <button type="submit" class="btn primary" id="btnAdd" data-i18n="add">Hinzufügen</button>
-            <button type="button" class="btn" id="btnCancelEdit" data-i18n="cancel" hidden>Abbrechen</button>
-            <button type="button" class="btn" id="btnExample" data-i18n="example">Beispiel: Microsoft 365 Roadmap</button>
-          </div>
-        </form>
-      </div>
-    </details>
+  <!-- First start (no feed yet): only the form. Afterwards the page shows the entries; managing feeds is in the menu. -->
+  <section class="card" id="setupCard" aria-labelledby="h-setup" hidden>
+    <h2 id="h-setup" data-i18n="setupH">Ersten Feed hinzufügen</h2>
+    <div id="setupSlot"></div>
+    <p class="muted setup-file"><span data-i18n="setupFile">Feed schon als Datei gespeichert?</span> <button type="button" class="btn small js-file" data-i18n="openFile">XML-Datei öffnen</button></p>
   </section>
 
-  <section class="card" aria-labelledby="h-items">
-    <h2 id="h-items"><span data-i18n="items">Einträge</span> <span class="count" id="itemCount"></span></h2>
+  <section class="card" id="readerCard" aria-labelledby="h-items" hidden>
+    <div class="toolbar">
+      <h2 id="h-items"><span id="feedTitle"></span></h2>
+      <div class="sel-wrap" id="selWrap" hidden>
+        <label for="feedSel" class="sr-only" data-i18n="feedSel">Feed</label>
+        <select id="feedSel"></select>
+      </div>
+      <button type="button" class="btn primary" id="btnRefresh" data-i18n="refresh">Aktualisieren</button>
+    </div>
+    <p class="status"><span id="unreadCount" class="unread-count"></span><span id="status" role="status"></span></p>
+    <div id="feedError" class="feed-error" role="alert" hidden></div>
+    <!-- Compact filter bar: the placeholder and the first option say what the fields are, labels for screen readers -->
     <div class="filters">
       <div class="form-field">
-        <label for="q" data-i18n="search">Suchen</label>
-        <input type="search" id="q" autocomplete="off">
+        <label for="q" class="sr-only" data-i18n="search">Suchen</label>
+        <input type="search" id="q" autocomplete="off" placeholder="Suchen …" data-i18n-attr="placeholder:searchPh">
       </div>
       <div class="form-field" id="catField" hidden>
-        <label for="cat" data-i18n="category">Kategorie</label>
+        <label for="cat" class="sr-only" data-i18n="category">Kategorie</label>
         <select id="cat"></select>
       </div>
     </div>
-    <div class="row">
+    <div class="row filter-row">
       <label class="check"><input type="checkbox" id="unreadOnly"> <span data-i18n="unreadOnly">Nur ungelesene</span></label>
-      <button type="button" class="btn" id="btnAllRead" data-i18n="allRead">Alle als gelesen markieren</button>
+      <button type="button" class="btn small" id="btnAllRead" data-i18n="allRead">Alle gelesen</button>
+      <span class="count" id="itemCount" aria-live="polite"></span>
     </div>
     <ul id="items" aria-labelledby="h-items"></ul>
     <button type="button" class="btn" id="more" hidden></button>
+  </section>
+
+  <section class="card" data-menu id="manageCard" aria-labelledby="h-manage">
+    <h2 id="h-manage" data-i18n="manage">Feeds verwalten</h2>
+    <ul id="feedList"></ul>
+    <div class="row" id="manageActions">
+      <button type="button" class="btn" id="btnNew" aria-expanded="false" aria-controls="addForm" data-i18n="addMore">Feed hinzufügen</button>
+      <button type="button" class="btn js-file" data-i18n="openFile">XML-Datei öffnen</button>
+    </div>
+    <div id="menuSlot">
+      <form id="addForm" novalidate>
+        <h3 id="h-add" data-i18n="addH">Feed hinzufügen</h3>
+        <div class="form-field">
+          <label for="feedUrl" data-i18n="feedUrl">Adresse des Feeds (RSS oder Atom)</label>
+          <input type="url" id="feedUrl" inputmode="url" autocomplete="url" spellcheck="false" enterkeyhint="go" placeholder="https://…">
+        </div>
+        <div class="form-field">
+          <label for="feedName" data-i18n="feedName">Name (optional)</label>
+          <input type="text" id="feedName" maxlength="80" autocomplete="off">
+          <p class="form-hint" data-i18n="feedNameHint">Leer lassen, um den Titel aus dem Feed zu übernehmen.</p>
+        </div>
+        <p class="form-error" id="addError" role="alert"></p>
+        <div class="row">
+          <button type="submit" class="btn primary" id="btnAdd" data-i18n="add">Hinzufügen</button>
+          <button type="button" class="btn" id="btnCancelEdit" data-i18n="cancel" hidden>Abbrechen</button>
+          <button type="button" class="btn" id="btnExample" data-i18n="example">Beispiel: Microsoft 365 Roadmap</button>
+        </div>
+      </form>
+    </div>
+    <input type="file" id="fileIn" accept=".xml,.rss,.atom,.txt,application/rss+xml,application/atom+xml,application/xml,text/xml,text/plain" hidden>
   </section>
 
   <section class="card" data-menu aria-labelledby="h-settings">
@@ -172,7 +191,8 @@ body{--page-width:860px}
   <p>Liest RSS- und Atom-Feeds, z. B. die <a href="https://www.microsoft.com/releasecommunications/api/v2/m365/rss/">Microsoft 365 Roadmap</a>, Blogs, Nachrichten oder Release-Hinweise. Mehrere Feeds lassen sich speichern und einzeln oder zusammen anzeigen.</p>
   <h3>Bedienung</h3>
   <ul>
-    <li><strong>Feeds verwalten</strong> → Adresse eintragen → <strong>Hinzufügen</strong>. Der Feed wird gleich geladen; ohne Namen wird sein Titel übernommen. Mit <strong>Bearbeiten</strong> Name und Adresse ändern.</li>
+    <li>Beim ersten Start: Adresse eintragen → <strong>Hinzufügen</strong>. Der Feed wird gleich geladen; ohne Namen wird sein Titel übernommen. Danach zeigt die Seite nur noch die Einträge.</li>
+    <li>Weitere Feeds, Bearbeiten und Löschen: Menü ☰ → <strong>Feeds verwalten</strong>. Mit mehreren Feeds wählt die Auswahl oben, welcher angezeigt wird (oder „Alle Feeds“).</li>
     <li><strong>Aktualisieren</strong> lädt den gewählten Feed neu (bei „Alle Feeds“ alle nacheinander). Die Seite lädt nie von selbst – nur nach Tippen.</li>
     <li>Einträge antippen zum Aufklappen; dann gelten sie als gelesen. Suche und Kategorie filtern die Liste.</li>
     <li>Android, installierte App: einen Feed-Link aus einer anderen App an den RSS-Reader <strong>teilen</strong> – die Adresse steht dann im Formular. Auf dem iPhone geht das nicht; Adresse dort kopieren und einfügen.</li>
@@ -197,7 +217,8 @@ body{--page-width:860px}
   <p>Reads RSS and Atom feeds, e.g. the <a href="https://www.microsoft.com/releasecommunications/api/v2/m365/rss/">Microsoft 365 Roadmap</a>, blogs, news or release notes. Save several feeds and show them one by one or together.</p>
   <h3>How to use</h3>
   <ul>
-    <li><strong>Manage feeds</strong> → enter the address → <strong>Add</strong>. The feed is loaded right away; without a name its title is used. <strong>Edit</strong> changes name and address.</li>
+    <li>On first start: enter the address → <strong>Add</strong>. The feed is loaded right away; without a name its title is used. From then on the page shows only the entries.</li>
+    <li>More feeds, editing and deleting: menu ☰ → <strong>Manage feeds</strong>. With several feeds, the selection at the top chooses which one is shown (or “All feeds”).</li>
     <li><strong>Refresh</strong> reloads the chosen feed (with “All feeds” all of them, one after another). The page never loads on its own – only after a tap.</li>
     <li>Tap an entry to expand it; it then counts as read. Search and category filter the list.</li>
     <li>Android, installed app: <strong>share</strong> a feed link from another app to RSS Reader – the address is then filled into the form. iPhone cannot do this; copy and paste the address there.</li>
@@ -228,7 +249,7 @@ body{--page-width:860px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 0f77fe72d445</p>
+  <p class="footer-version">Version 42cb2d2562fd</p>
   <!-- footer:end -->
 </footer>
 
@@ -239,7 +260,7 @@ body{--page-width:860px}
 'use strict';
 Tools.i18n({
   de:{
-    all:'Alle Feeds',allN:'Alle Feeds ({n} ungelesen)',feedN:'{name} ({n} ungelesen)',noFeeds:'Noch kein Feed',
+    all:'Alle Feeds',allN:'Alle Feeds ({n} ungelesen)',feedN:'{name} ({n} ungelesen)',unreadN:'{n} ungelesen',
     allCats:'Alle Kategorien',edit:'Bearbeiten',del:'Löschen',delQ:'Feed „{name}“ löschen?',deleted:'Feed gelöscht',
     saveEdit:'Speichern',editH:'Feed bearbeiten',added:'Feed hinzugefügt',updated:'Gespeichert',
     errUrl:'Bitte eine gültige Adresse mit https:// eingeben.',errHttp:'http://-Adressen lassen sich nur über einen eigenen Proxy laden (Menü → Einstellungen).',
@@ -260,19 +281,20 @@ Tools.i18n({
     'e.file':'Datei „{name}“: {m}',
     openFeed:'Feed im Browser öffnen',
     noItems:'Keine Einträge.',noMatch:'Kein Eintrag passt zum Filter.',addFirst:'Unter „Feeds verwalten“ einen Feed hinzufügen.',
-    more:'{n} weitere anzeigen',countOf:'{shown} von {n}',countN:'{n}',open:'Im Browser öffnen',
+    more:'{n} weitere anzeigen',countOf:'{shown} von {n}',open:'Im Browser öffnen',
     markedRead:'Als gelesen markiert',fileLoaded:'{n} Einträge aus der Datei',
     'mcp.feeds':'Feeds auflisten','mcp.select':'Feed anzeigen','mcp.items':'Einträge lesen'
   },
   en:{
-    title:'RSS Reader',sub:'Read and manage RSS and Atom feeds.',feeds:'Feeds',feedSel:'Show',refresh:'Refresh',openFile:'Open XML file',
+    title:'RSS Reader',sub:'Read and manage RSS and Atom feeds.',feedSel:'Feed',refresh:'Refresh',openFile:'Open XML file',
+    setupH:'Add your first feed',setupFile:'Feed already saved as a file?',addMore:'Add feed',
     manage:'Manage feeds',addH:'Add feed',feedUrl:'Feed address (RSS or Atom)',feedName:'Name (optional)',
     feedNameHint:'Leave empty to use the title from the feed.',add:'Add',cancel:'Cancel',example:'Example: Microsoft 365 Roadmap',
-    items:'Entries',search:'Search',category:'Category',unreadOnly:'Unread only',allRead:'Mark all as read',
+    items:'Entries',search:'Search',category:'Category',unreadOnly:'Unread only',allRead:'All read',searchPh:'Search …',
     settings:'Settings',proxy:'Own CORS proxy (optional)',
     proxyHint:'Only for feeds the browser may not load directly. {url} is replaced by the feed address; without it the address is appended. The proxy sees which feeds you fetch.',
     save:'Save',
-    all:'All feeds',allN:'All feeds ({n} unread)',feedN:'{name} ({n} unread)',noFeeds:'No feed yet',
+    all:'All feeds',allN:'All feeds ({n} unread)',feedN:'{name} ({n} unread)',unreadN:'{n} unread',
     allCats:'All categories',edit:'Edit',del:'Delete',delQ:'Delete feed “{name}”?',deleted:'Feed deleted',
     saveEdit:'Save',editH:'Edit feed',added:'Feed added',updated:'Saved',
     errUrl:'Please enter a valid address starting with https://.',errHttp:'http:// addresses can only be loaded through your own proxy (menu → Settings).',
@@ -293,7 +315,7 @@ Tools.i18n({
     'e.file':'File “{name}”: {m}',
     openFeed:'Open feed in the browser',
     noItems:'No entries.',noMatch:'No entry matches the filter.',addFirst:'Add a feed under “Manage feeds”.',
-    more:'Show {n} more',countOf:'{shown} of {n}',countN:'{n}',open:'Open in browser',
+    more:'Show {n} more',countOf:'{shown} of {n}',open:'Open in browser',
     markedRead:'Marked as read',fileLoaded:'{n} entries from the file',
     'mcp.feeds':'List feeds','mcp.select':'Show feed','mcp.items':'Read entries'
   }
@@ -454,7 +476,8 @@ function showError(errors){
     if(e.code==='cors'||e.code==='proxy'){
       const h=document.createElement('p'); h.textContent=t('e.corsHelp'); box.append(h);
       const a=document.createElement('a'); a.href=f.url; a.target='_blank'; a.rel='noopener noreferrer'; a.textContent=t('openFeed');
-      const pa=document.createElement('p'); pa.append(a); box.append(pa);
+      const b=document.createElement('button'); b.type='button'; b.className='btn small js-file'; b.textContent=t('openFile');
+      const pa=document.createElement('p'); pa.className='row'; pa.append(a,b); box.append(pa);
     }
   }
 }
@@ -482,26 +505,52 @@ async function loadFile(file){
   store_items(f,parsed,true);
   settings.current=f.id; saveSettings();
   Tools.diag.log('file loaded',{kind:parsed.kind,items:n});
+  closeForm(); Tools.menu.close();
   render();
   Tools.toast(t('fileLoaded',{n:itemsOf(f).length}));
 }
-$('btnFile').addEventListener('click',()=>$('fileIn').click());
+// Several "Open XML file" buttons (first start, menu, CORS error) share one file input
+document.addEventListener('click',e=>{ if(e.target.closest('.js-file'))$('fileIn').click(); });
 $('fileIn').addEventListener('change',e=>{ const file=e.target.files[0]; e.target.value=''; if(file)loadFile(file); });
 
-/* ---------- Feed management ---------- */
-let editing=null;
-function startEdit(f){
-  editing=f?f.id:null;
+/* ---------- Feed management ----------
+   Same pattern as playlist-player: without a feed the page shows only the form (first start). With feeds the
+   page shows the entries; the list, "add" (folded behind a button) and edit live in the menu (data-menu). */
+let editing=null,formOpen=false;
+function formTexts(){
+  $('btnAdd').textContent=editing?t('saveEdit'):t('add');
+  $('h-add').textContent=editing?t('editH'):t('addH');
+}
+function placeForm(){
+  const none=!store.feeds.length;
+  const slot=none?$('setupSlot'):$('menuSlot');
+  if($('addForm').parentNode!==slot)slot.append($('addForm'));
+  $('setupCard').hidden=!none;
+  $('readerCard').hidden=none;
+  $('menuSlot').hidden=none||!formOpen;
+  $('manageActions').hidden=!none&&formOpen;
+  $('btnNew').hidden=none;
+  $('btnNew').setAttribute('aria-expanded',String(formOpen&&!none));
+  $('btnCancelEdit').hidden=none;
+  $('btnExample').hidden=!!editing;
+  formTexts();
+}
+function openForm(f){
+  editing=f?f.id:null; formOpen=true;
   $('feedUrl').value=f?f.url:'';
   $('feedName').value=f?f.name:'';
   $('addError').textContent='';
-  $('btnAdd').textContent=f?t('saveEdit'):t('add');
-  $('h-add').textContent=f?t('editH'):t('addH');
-  $('btnCancelEdit').hidden=!f;
-  $('btnExample').hidden=!!f;
-  if(f){ $('manage').open=true; $('feedUrl').focus(); }
+  placeForm();
+  if(store.feeds.length)Tools.menu.open();
+  $('feedUrl').focus();
 }
-$('btnCancelEdit').addEventListener('click',()=>startEdit(null));
+function closeForm(){
+  editing=null; formOpen=false;
+  $('feedUrl').value=''; $('feedName').value=''; $('addError').textContent='';
+  placeForm();
+}
+$('btnNew').addEventListener('click',()=>openForm(null));
+$('btnCancelEdit').addEventListener('click',()=>{ closeForm(); $('btnNew').focus(); });
 $('btnExample').addEventListener('click',()=>{ $('feedUrl').value=EXAMPLE.url; $('feedName').value=EXAMPLE.name; $('addError').textContent=''; });
 $('addForm').addEventListener('submit',e=>{
   e.preventDefault();
@@ -515,14 +564,15 @@ $('addForm').addEventListener('submit',e=>{
       if(!sameUrl(f.url,r.url)){ f.viaProxy=false; }
       f.url=r.url; f.name=name;
     }
-    saveFeeds(); startEdit(null); render(); Tools.toast(t('updated'));
+    saveFeeds(); closeForm(); render(); Tools.toast(t('updated'));
     Tools.diag.log('feed edited');
     return;
   }
   const f={id:newId(),url:r.url,name,title:'',viaProxy:false,read:[]};
   store.feeds.push(f); saveFeeds();
   settings.current=f.id; saveSettings();
-  startEdit(null);
+  // Back to reading: the new feed's entries
+  closeForm(); Tools.menu.close();
   Tools.diag.log('feed added',{feeds:store.feeds.length});
   render();
   Tools.toast(t('added'));
@@ -537,14 +587,14 @@ function renderFeedList(){
     const n=document.createElement('span'); n.className='f-name'; n.textContent=feedName(f);
     const ed=document.createElement('button'); ed.type='button'; ed.className='btn small'; ed.textContent=t('edit');
     ed.setAttribute('aria-label',`${t('edit')}: ${feedName(f)}`);
-    ed.addEventListener('click',()=>startEdit(f));
+    ed.addEventListener('click',()=>openForm(f));
     const del=document.createElement('button'); del.type='button'; del.className='btn small danger'; del.textContent=t('del');
     del.setAttribute('aria-label',`${t('del')}: ${feedName(f)}`);
     del.addEventListener('click',()=>{
       if(!confirm(t('delQ',{name:feedName(f)})))return;
       store.feeds=store.feeds.filter(x=>x!==f); delete cache[f.id]; readSets.delete(f.id);
       if(settings.current===f.id){ settings.current='all'; saveSettings(); }
-      if(editing===f.id)startEdit(null);
+      if(editing===f.id||!store.feeds.length)closeForm();
       saveFeeds(); saveCache(); render(); Tools.toast(t('deleted'));
       Tools.diag.log('feed deleted',{feeds:store.feeds.length});
     });
@@ -582,17 +632,23 @@ const uiFilter=()=>({query:$('q').value,category:$('cat').value,unreadOnly:$('un
 const fmtDate=ms=>ms?new Date(ms).toLocaleString(Tools.locale(),{dateStyle:'medium',timeStyle:'short'}):'';
 
 function renderSelect(){
-  const sel=$('feedSel');
+  const sel=$('feedSel'),multi=store.feeds.length>1;
   sel.replaceChildren();
-  const total=store.feeds.reduce((s,f)=>s+unreadOf(f),0);
-  const all=new Option(store.feeds.length?(total?t('allN',{n:total}):t('all')):t('noFeeds'),'all');
-  sel.append(all);
+  const total=store.feeds.reduce((n,f)=>n+unreadOf(f),0);
+  sel.append(new Option(total?t('allN',{n:total}):t('all'),'all'));
   for(const f of store.feeds){
     const n=unreadOf(f);
     sel.append(new Option(n?t('feedN',{name:feedName(f),n}):feedName(f),f.id));
   }
   sel.value=settings.current;
-  $('btnRefresh').disabled=busy||!currentFeeds().some(f=>f.url);
+  // One feed: its name as the heading. Several: the selection is the heading (the h2 stays for screen readers).
+  $('selWrap').hidden=!multi;
+  $('h-items').classList.toggle('sr-only',multi);
+  const cur=currentFeeds();
+  $('feedTitle').textContent=settings.current==='all'&&multi?t('all'):(cur[0]?feedName(cur[0]):'');
+  const unread=cur.reduce((n,f)=>n+unreadOf(f),0);
+  $('unreadCount').textContent=unread?t('unreadN',{n:unread}):'';
+  $('btnRefresh').disabled=busy||!cur.some(f=>f.url);
 }
 function renderCats(){
   const cats=new Map();
@@ -661,10 +717,10 @@ function renderItems(){
   const rest=list.length-Math.min(shown,list.length);
   $('more').hidden=rest<=0;
   if(rest>0)$('more').textContent=t('more',{n:Math.min(rest,PAGE)});
-  $('itemCount').textContent=list.length<total?t('countOf',{shown:list.length,n:total}):total?t('countN',{n:total}):'';
+  $('itemCount').textContent=list.length<total?t('countOf',{shown:list.length,n:total}):'';
   $('btnAllRead').disabled=!list.some(({f,it})=>!readSet(f).has(it.id));
 }
-function render(){ renderSelect(); renderCats(); renderStatus(); renderFeedList(); renderItems(); }
+function render(){ placeForm(); renderSelect(); renderCats(); renderStatus(); renderFeedList(); renderItems(); }
 
 $('feedSel').addEventListener('change',()=>{ settings.current=$('feedSel').value; saveSettings(); shown=PAGE; showError(null); render(); });
 $('btnRefresh').addEventListener('click',refresh);
@@ -700,9 +756,8 @@ $('btnProxy').addEventListener('click',()=>{
 const shared=Tools.takeSharedText();
 if(shared){
   const m=(shared.url+' '+shared.text).match(/https?:\/\/\S+/);
-  if(m){ startEdit(null); $('feedUrl').value=m[0]; $('feedName').value=shared.title.slice(0,80); $('manage').open=true; Tools.diag.log('link shared'); }
+  if(m){ openForm(null); $('feedUrl').value=m[0]; $('feedName').value=shared.title.slice(0,80); Tools.diag.log('link shared'); }
 }
-if(!store.feeds.length)$('manage').open=true;
 
 /* ---------- WebMCP: read what is loaded, switch the view – never fetch, add or delete ---------- */
 const feedInfo=f=>({id:f.id,name:feedName(f),url:f.url,entries:itemsOf(f).length,unread:unreadOf(f),
@@ -749,7 +804,7 @@ Tools.mcp.register({
 
 Tools.diag.info(()=>({feeds:store.feeds.length,current:settings.current==='all'?'all':'one',proxy:!!settings.proxy,
   viaProxy:store.feeds.filter(f=>f.viaProxy).length,cached:Object.values(cache).reduce((s,c)=>s+((c&&c.items)||[]).length,0)}));
-Tools.onLang(()=>{ startEdit(editing?feedById(editing):null); render(); });
+Tools.onLang(()=>render());
 render();
 })();
 </script>
