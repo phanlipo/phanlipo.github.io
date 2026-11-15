@@ -297,3 +297,110 @@ test.describe('English', () => {
     await expect(page.locator('#sum')).toContainText('1 von 3 Teilen gehört');
   });
 });
+
+// Wake lock recorded instead of the real API (not available headless)
+async function mockWakeLock(page) {
+  await page.addInitScript(() => {
+    window.__wake = { requested: 0, released: 0 };
+    Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => {
+      __wake.requested++;
+      const s = new EventTarget(); s.release = async () => { __wake.released++; s.dispatchEvent(new Event('release')); };
+      return s;
+    } } });
+  });
+}
+
+test('listening mode: black full screen with big buttons, keeps the screen on, player plays on, back gesture closes', async ({ page }) => {
+  await mockWakeLock(page);
+  await fakeYoutube(page);
+  await page.goto('/playlist-player/');
+  await openPlaylist(page);
+  const frame = await play(page);
+  await expect(parts(page)).toHaveCount(3);
+  await advance(frame, 20);
+  await page.locator('#selSleep').selectOption('30');
+  await page.getByRole('button', { name: 'Hörmodus' }).click();
+  await expect(page.getByRole('dialog', { name: 'Kapitel 1: Der Anfang' })).toBeVisible();
+  const dlg = page.locator('#listen');
+  await expect(dlg.locator('#lSub')).toHaveText('Teil 1 von 3');
+  await expect(dlg.locator('.l-time')).toHaveText('0:20 / 2:00');
+  await expect(dlg.locator('#lSleep')).toHaveText('Schlaf-Timer: noch 30 min');
+  await expect(dlg.locator('#lClock')).toHaveText(/^\d\d:\d\d$/);
+  // Nearly black, whole screen, also in light mode
+  expect(await dlg.evaluate(d => getComputedStyle(d).backgroundColor)).toBe('rgb(0, 0, 0)');
+  const box = await dlg.boundingBox();
+  expect(box.width).toBe(page.viewportSize().width);
+  expect(box.height).toBe(page.viewportSize().height);
+  // Screen stays on while it is open – even with the setting off (playing alone does not take it)
+  await expect.poll(() => page.evaluate(() => __wake.requested)).toBe(1);
+  // Big buttons control the player underneath, which keeps playing
+  await dlg.getByRole('button', { name: '30 Sekunden vor' }).click();
+  await expect.poll(async () => (await fakeState(frame)).time).toBe(50);
+  await advance(frame, 5);
+  await expect(dlg.locator('.l-time')).toHaveText('0:55 / 2:00');
+  await dlg.getByRole('button', { name: 'Pause' }).click();
+  await expect.poll(async () => (await fakeState(frame)).state).toBe(2);
+  await expect(dlg.getByRole('button', { name: 'Abspielen' })).toBeVisible();
+  expect(await page.evaluate(() => __wake.released)).toBe(0); // paused: still on while the mode is open
+  await dlg.getByRole('button', { name: 'Abspielen' }).click();
+  await dlg.getByRole('button', { name: 'Nächster Teil' }).click();
+  await expect(dlg.locator('h2')).toHaveText('Kapitel 2: Die Mitte');
+  await expect(dlg.getByRole('button', { name: 'Vorheriger Teil' })).toBeEnabled();
+  // Back gesture closes it (not the app), screen may go off again
+  await page.goBack();
+  await expect(dlg).toBeHidden();
+  await expect(page).toHaveURL(/\/playlist-player\/$/);
+  await expect.poll(() => page.evaluate(() => __wake.released)).toBe(1);
+  await expect(page.getByRole('button', { name: 'Hörmodus' })).toBeFocused();
+  expect((await fakeState(frame)).state).toBe(1);
+  // Exit button, and the history entry is taken back (one back step leaves nothing behind)
+  await page.getByRole('button', { name: 'Hörmodus' }).click();
+  await expect(dlg).toBeVisible();
+  await dlg.getByRole('button', { name: 'Beenden' }).click();
+  await expect(dlg).toBeHidden();
+  await expect.poll(() => page.evaluate(() => !(history.state && history.state.listenMode))).toBe(true);
+});
+
+for (const scheme of ['light', 'dark']) {
+  test(`listening mode is accessible (${scheme}) and fits a small phone`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.emulateMedia({ colorScheme: scheme });
+    await mockWakeLock(page);
+    await fakeYoutube(page);
+    await page.goto('/playlist-player/');
+    await openPlaylist(page);
+    await play(page);
+    await expect(parts(page)).toHaveCount(3);
+    await page.locator('#selSleep').selectOption('end');
+    await page.getByRole('button', { name: 'Hörmodus' }).click();
+    await expect(page.locator('#listen')).toBeVisible();
+    // All buttons on screen, at least 44 px
+    for (const b of await page.locator('#listen button').all()) {
+      const r = await b.boundingBox();
+      expect(r.y + r.height).toBeLessThanOrEqual(640);
+      expect(Math.min(r.width, r.height)).toBeGreaterThanOrEqual(44);
+    }
+    await expectNoHorizontalScroll(page);
+    const { violations } = await axe(page).include('#listen').analyze();
+    expect(violations.map(v => `${v.id}: ${v.nodes.map(n => n.target).join(', ')}`)).toEqual([]);
+  });
+}
+
+test.describe('English listening mode', () => {
+  test.use({ locale: 'en-US' });
+  test('texts in English', async ({ page }) => {
+    await mockWakeLock(page);
+    await fakeYoutube(page);
+    await page.goto('/playlist-player/');
+    await page.locator('#inUrl').fill(LINK);
+    await page.getByRole('button', { name: 'Open' }).click();
+    await page.locator('#btnStart').click();
+    await playerFrame(page);
+    await expect(parts(page)).toHaveCount(3);
+    await page.getByRole('button', { name: 'Listening mode' }).click();
+    const dlg = page.locator('#listen');
+    await expect(dlg.locator('#lSub')).toHaveText('Part 1 of 3');
+    await expect(dlg.getByRole('button', { name: 'Exit' })).toBeVisible();
+    await expect(dlg.getByRole('button', { name: 'Forward 30 seconds' })).toBeVisible();
+  });
+});
