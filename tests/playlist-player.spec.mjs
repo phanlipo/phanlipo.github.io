@@ -19,6 +19,9 @@ const fakeState = frame => frame.evaluate(() => window.fake.state());
 const commands = frame => frame.evaluate(() => window.commands);
 
 async function openPlaylist(page, link = LINK) {
+  // With playlists saved, the form is folded behind "Weitere Playlist hinzufügen"
+  const more = page.getByRole('button', { name: 'Weitere Playlist hinzufügen' });
+  if (await more.isVisible() && (await more.getAttribute('aria-expanded')) === 'false') await more.click();
   await page.locator('#inUrl').fill(link);
   await page.getByRole('button', { name: 'Öffnen' }).click();
 }
@@ -503,4 +506,44 @@ test('part changes: "ended" after the move to the next part ticks the right part
   await advance(frame, 60);
   await expect(part(page, 3).locator('input')).toBeChecked();
   await expect(page.locator('#sum')).toHaveText('2 von 3 Teilen gehört · 3:10 von 4:30 gehört');
+});
+
+test('top card: standard form fields; adding another playlist is folded away once there is one', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await fakeYoutube(page);
+  await page.goto('/playlist-player/');
+  // No playlist yet: the form is open, field label above a full-width field, both buttons in one row
+  const field = page.locator('#addForm .form-field');
+  await expect(field.locator('label')).toHaveText('Link oder ID einer YouTube-Playlist');
+  const [lab, inp] = [await field.locator('label').boundingBox(), await page.locator('#inUrl').boundingBox()];
+  expect(lab.y + lab.height).toBeLessThanOrEqual(inp.y);
+  expect(inp.height).toBeGreaterThanOrEqual(44);
+  const card = await page.locator('#addForm').boundingBox();
+  expect(Math.round(inp.width)).toBe(Math.round(card.width));
+  const [open, paste] = [await page.locator('#btnAdd').boundingBox(), await page.locator('#btnPaste').boundingBox()];
+  expect(Math.round(open.y)).toBe(Math.round(paste.y));
+  await expect(page.getByRole('button', { name: 'Weitere Playlist hinzufügen' })).toBeHidden();
+  // Same look as the shared standard: small muted label (base.css)
+  expect(await field.locator('label').evaluate(l => getComputedStyle(l).fontSize)).toBe('13px');
+  // Wrong input → message under the field
+  await page.locator('#inUrl').fill('hallo');
+  await page.locator('#btnAdd').click();
+  await expect(page.locator('#addErr')).toBeVisible();
+  // One playlist: form folded, only the button; it opens and closes the form
+  await openPlaylist(page);
+  await expect(page.locator('#addForm')).toBeHidden();
+  await expect(page.locator('#pickRow')).toBeHidden();
+  const more = page.getByRole('button', { name: 'Weitere Playlist hinzufügen' });
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+  await more.click();
+  await expect(page.locator('#addForm')).toBeVisible();
+  await expect(page.locator('#inUrl')).toBeFocused();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  await more.click();
+  await expect(page.locator('#addForm')).toBeHidden();
+  // A second playlist: selection appears, form folds again
+  await openPlaylist(page, 'PLsecondsecondsecond22');
+  await expect(page.locator('#addForm')).toBeHidden();
+  await expect(page.locator('#pickRow label')).toHaveText('Meine Playlists');
+  await expectNoHorizontalScroll(page);
 });
