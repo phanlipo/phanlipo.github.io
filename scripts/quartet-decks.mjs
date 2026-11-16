@@ -12,7 +12,7 @@ import { ROOT } from './lib.mjs';
 const SRC = process.argv[2];
 if (!SRC) { console.error('usage: node scripts/quartet-decks.mjs <folder with the deck JSON files>'); process.exit(1); }
 
-// File, emoji (picture of the deck), English title
+// File, emoji (kept in decks.js for older room codes; the page shows a Tabler icon per deck, see DECK_ICON in quartet/index.html), English title
 const DECKS = [
   ['dinosaurs', '🦖', 'Dinosaurs'], ['tiere', '🐘', 'Animal Kingdom'], ['autos', '🚗', 'Cars'],
   ['grossstaedte', '🏙️', 'German Cities'], ['countries_continents', '🌍', 'Countries of the World'],

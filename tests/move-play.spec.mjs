@@ -717,25 +717,26 @@ test.describe('page', () => {
     await expect(page.locator('#btnStop')).toBeVisible();
     await expect(page.locator('#cd')).toBeHidden({ timeout: 5000 });
     await expect(page.locator('#prompt')).toHaveText('Hampelmann!');
-    await expect(page.locator('#hudAScore')).toHaveText('🤸 0');
-    await expect(page.locator('#hudTime')).toHaveText(/⏱ (30|29|28)/);
+    await expect(page.locator('#hudAScore')).toHaveText('0');
+  await expect(page.locator('#hudAScore use')).toHaveAttribute('href', /#stretching$/);
+    await expect(page.locator('#hudTime')).toHaveText(/^\s*(30|29|28)$/);
     await expect(page.locator('#hudALives')).toBeHidden();
     for (let i = 0; i < 3; i++) { await hold(page, { arms: 'up', legs: 'apart' }); await hold(page, {}); }
-    await expect(page.locator('#hudAScore')).toHaveText('🤸 3');
+    await expect(page.locator('#hudAScore')).toHaveText('3');
     // Ending early still shows the result
     await page.click('#btnStop');
     await expect(page.locator('#scResult')).toBeVisible();
-    await expect(page.locator('#resTitle')).toHaveText('🤸 Spiel beendet');
+    await expect(page.locator('#resTitle')).toHaveText('Spiel beendet');
     await expect(page.locator('#resScore')).toHaveText('3');
     await expect(page.locator('#resDetail')).toHaveText('3 geschafft');
-    await expect(page.locator('#resBest')).toHaveText('🏆 Neuer Bestwert!');
+    await expect(page.locator('#resBest')).toHaveText('Neuer Bestwert!');
     expect(JSON.parse(await page.evaluate(() => localStorage.getItem('move-play.scores.v1')))['jumping-jacks']).toEqual({ best: 3, plays: 1, last: 3 });
     // Again: no new calibration, straight to the countdown; fewer this time – the best score stays
     await page.click('#btnAgain');
     await expect(page.locator('#cd')).toBeVisible();
     await expect(page.locator('#cd')).toBeHidden({ timeout: 5000 });
     await hold(page, { arms: 'up', legs: 'apart' }); await hold(page, {});
-    await expect(page.locator('#hudAScore')).toHaveText('🤸 1');
+    await expect(page.locator('#hudAScore')).toHaveText('1');
     await page.click('#btnStop');
     await expect(page.locator('#resBest')).toHaveText('Bestwert: 3');
     await page.click('#btnOther');
@@ -756,7 +757,8 @@ test.describe('page', () => {
     await page.click('[data-game="simon"]');
     await expect(page.locator('#cd')).toBeVisible();
     await expect(page.locator('#cd')).toBeHidden({ timeout: 5000 });
-    await expect(page.locator('#hudALives')).toHaveText('❤️❤️❤️');
+    await expect(page.locator('#hudALives')).toHaveText('');
+  await expect(page.locator('#hudALives .ic.filled')).toHaveCount(3);
     await expect(page.locator('#hudALives')).toHaveAttribute('aria-label', 'Leben: 3');
     await expect(page.locator('#prompt')).toHaveText(/^Simon sagt: (Spring!|Duck dich!|Arme hoch!|Linken Arm hoch!|Rechten Arm hoch!|Klatsch in die Hände!)$/, { timeout: 4000 });
     await pose(page, null);
@@ -779,9 +781,9 @@ test.describe('page', () => {
     await page.click('[data-game="bubbles"]');
     await expect(page.locator('#calSpace')).toBeHidden();
     await expect(page.locator('#hud')).toBeVisible();
-    await expect(page.locator('#hudAScore')).toHaveText('⭐ 0');
+    await expect(page.locator('#hudAScore')).toHaveText('0');
     await page.click('#btnStop');
-    await expect(page.locator('#resTitle')).toHaveText('🫧 Game ended');
+    await expect(page.locator('#resTitle')).toHaveText('Game ended');
     await expect(page.locator('#resDetail')).toHaveText('0 hits · 0 misses · best streak 0');
     // Nothing scored: no "new best"
     await expect(page.locator('#resBest')).toHaveText('Best: 0');
@@ -844,15 +846,15 @@ test.describe('page', () => {
     await expect(page.locator('#cd')).toBeHidden({ timeout: 5000 });
     for (let i = 0; i < 3; i++) { await hold(page, [L({ arms: 'up', legs: 'apart' }), R({})]); await hold(page, [L({}), R({})]); }
     await hold(page, [L({}), R({ arms: 'up', legs: 'apart' })]); await hold(page, [L({}), R({})]);
-    await expect(page.locator('#hudAScore')).toHaveText('🤸 3');
-    await expect(page.locator('#hudBScore')).toHaveText('🤸 1');
+    await expect(page.locator('#hudAScore')).toHaveText('3');
+    await expect(page.locator('#hudBScore')).toHaveText('1');
     // One of them leaves: everybody waits
     await pose(page, [L({})]);
     await expect(page.locator('#away')).toHaveText('Rechts ist nicht zu sehen – das Spiel wartet.');
     await pose(page, [L({}), R({})]);
     await expect(page.locator('#away')).toBeHidden();
     await page.click('#btnStop');
-    await expect(page.locator('#resTitle')).toHaveText('🏆 Links gewinnt!');
+    await expect(page.locator('#resTitle')).toHaveText('Links gewinnt!');
     await expect(page.locator('#resScore')).toHaveText('3 : 1');
     await expect(page.locator('#resBest')).toHaveText('Bestwerte gibt es nur für 1 Spieler.');
     expect(await page.evaluate(() => localStorage.getItem('move-play.scores.v1'))).toBeNull();
@@ -878,7 +880,7 @@ test.describe('page', () => {
     // and noticing "Tanzen!" from here can take a second
     await pose(page, { dance: true });
     await expect(page.locator('#cd')).toBeHidden({ timeout: 5000 });
-    await expect(page.locator('#prompt')).toHaveText('Tanzen! 🎵');
+    await expect(page.locator('#prompt')).toHaveText('Tanzen!');
     const n0 = await page.evaluate(() => window.__notes);
     // The tune adds 4 to 7 notes in 600 ms (4 steps per second with 1 to 3 notes each) – wait for them instead of a fixed time
     await expect.poll(() => page.evaluate(() => window.__notes), { timeout: 3000 }).toBeGreaterThan(n0 + 4);
@@ -896,9 +898,10 @@ test.describe('page', () => {
         .observe(el, { childList: true, characterData: true, subtree: true });
     });
     await expect(page.locator('#prompt')).toHaveText('Stopp! Einfrieren!', { timeout: 10000 });
-    await expect(page.locator('#prompt')).toHaveText('Tanzen! 🎵', { timeout: 6000 });
-    await expect(page.locator('#hudAScore')).toHaveText('⭐ 10');
-    await expect(page.locator('#hudALives')).toHaveText('❤️❤️❤️');
+    await expect(page.locator('#prompt')).toHaveText('Tanzen!', { timeout: 6000 });
+    await expect(page.locator('#hudAScore')).toHaveText('10');
+    await expect(page.locator('#hudALives')).toHaveText('');
+  await expect(page.locator('#hudALives .ic.filled')).toHaveCount(3);
   });
 
   test('copy the pose: the figure is shown, holding it scores', async ({ page }) => {
@@ -911,10 +914,10 @@ test.describe('page', () => {
     await expect(page.locator('#cd')).toBeHidden({ timeout: 5000 });
     await expect(page.locator('#prompt')).not.toHaveText('', { timeout: 4000 });
     const text = await page.locator('#prompt').textContent();
-    const target = def.params.poses.find(p => text === `${p.emoji} ${p.name.de}!`);
+    const target = def.params.poses.find(p => text === `${p.name.de}!`);
     expect(target, text).toBeTruthy();
     await pose(page, { armL: target.left, armR: target.right, legs: target.legs === 'apart' ? 'apart' : undefined, knee: target.legs === 'oneUp' ? 'left' : undefined });
-    await expect(page.locator('#hudAScore')).toHaveText('⭐ 10', { timeout: 4000 });
+    await expect(page.locator('#hudAScore')).toHaveText('10', { timeout: 4000 });
     await expect(page.locator('#prompt')).toHaveText('');
   });
 

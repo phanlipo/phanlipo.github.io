@@ -28,13 +28,13 @@
   // The description of a game (params are checked against the mechanic's own schema)
   const SCHEMA = {
     type: 'object', additionalProperties: false,
-    required: ['format', 'version', 'id', 'title', 'description', 'emoji', 'mechanic', 'needs', 'space', 'duration', 'lives', 'scoring', 'params'],
+    required: ['format', 'version', 'id', 'title', 'description', 'icon', 'mechanic', 'needs', 'space', 'duration', 'lives', 'scoring', 'params'],
     properties: {
       format: { type: 'string', enum: ['moveplay-game'] },
       version: { type: 'integer', minimum: 1, maximum: 1 },
       id: { type: 'string', minLength: 1, maxLength: 40 },
       title: text, description: longText,
-      emoji: { type: 'string', minLength: 1, maxLength: 8 },
+      icon: { type: 'string', minLength: 1, maxLength: 40 },   // Tabler icon name (assets/icons.svg)
       players: { type: 'integer', minimum: 1, maximum: 2 },   // most players at once (default 2)
       mechanic: { type: 'string' },
       needs: { type: 'string', enum: ['full', 'upper'] },

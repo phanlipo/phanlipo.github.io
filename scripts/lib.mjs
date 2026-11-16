@@ -147,13 +147,14 @@ export function publishedFiles(dir = '') {
    Tabler Outline icons, used as <svg class="ic"><use href="../assets/icons.svg#name"/></svg> or Tools.icon('name').
    The sprite holds exactly the icons the pages use; scripts/build-icons.mjs --sprite writes it (needs the npm
    registry), build.mjs --check compares it with usedIcons() without network. Names are found only when they are
-   written literally: icons.svg#name, icon('name') (Tools.icon), data-icon="name", icon: 'name' (data lists). */
+   written literally: icons.svg#name, icon('name') (Tools.icon), data-icon="name", icon: 'name' (data lists),
+   "icon": "name" (JSON data, e.g. move-play/games). */
 export const ICON_SPRITE = 'assets/icons.svg';
 const ICON_PATTERNS = [/\bicons\.svg#([a-z0-9-]+)/g, /\bicon\(\s*['"]([a-z0-9-]+)['"]/g,
-  /\bdata-icon=["']([a-z0-9-]+)["']/g, /\bicon:\s*['"]([a-z0-9-]+)['"]/g];
+  /\bdata-icon=["']([a-z0-9-]+)["']/g, /\bicon:\s*['"]([a-z0-9-]+)['"]/g, /"icon":\s*"([a-z0-9-]+)"/g];
 export function usedIcons() {
   const files = [...publishedFiles(), ...publishedTemplate()]
-    .filter(f => /\.(html|m?js)$/.test(f) && !f.startsWith('assets/vendor/') && !f.endsWith('/sw.js'));
+    .filter(f => /\.(html|m?js|json)$/.test(f) && !f.startsWith('assets/vendor/') && !f.endsWith('/sw.js'));
   const used = new Map();
   for (const f of files) {
     const text = readFileSync(join(ROOT, f), 'utf8');
