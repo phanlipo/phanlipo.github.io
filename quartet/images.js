@@ -4,8 +4,8 @@
 
    Matching a picture to a card of a deck (in this order):
      card number ("A1", any case) · card name ("Tyrannosaurus Rex", any case) ·
-     file name of supertrumpf-creator ("tyrannosaurus_rex": lower case, ♀→f, ♂→m, everything but
-     a-z 0-9 _ - becomes "_") – so a zipped cards_data/<deck>/images folder fits as it is.
+     file name stem ("tyrannosaurus_rex": lower case, ♀→f, ♂→m, everything but
+     a-z 0-9 _ - becomes "_").
 
    ZIP: entries "<deck id>/…/<stem>.<ext>" go to that deck, others to the deck picked on the page.
         Only stored (0) and deflate (8) entries, no encryption, no ZIP64; inflated with
@@ -22,7 +22,7 @@
   const INDEX = 'images.json';
 
   /* ---------- Matching ---------- */
-  /** File name stem as supertrumpf-creator writes it (latex_utils.sanitize_image_stem) */
+  /** File name stem of a card name (lower case, ♀→f, ♂→m, other characters → "_") */
   const stem = name => String(name).toLowerCase().replace(/♀/g, 'f').replace(/♂/g, 'm').replace(/[^a-zA-Z0-9_-]/g, '_');
   /** Lookup table of a deck: number, name and stem → card number */
   function matcher(deck) {
