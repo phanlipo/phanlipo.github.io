@@ -41,6 +41,18 @@ window.Tools = (function () {
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  /* ---------- Icons: Tabler Outline from the shared sprite (assets/icons.svg, see UI-KONZEPT.md) ----------
+     Tools.icon('download') → <svg class="ic" aria-hidden="true"><use href=".../assets/icons.svg#download"/></svg>
+     Decorative: the button around it carries the text or aria-label. Write the name literally (as in
+     Tools.icon('download')) – scripts/build-icons.mjs --sprite only puts literally written names into the sprite.
+     Second argument: extra classes, e.g. 'filled'. In HTML: <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg> */
+  const ICON_URL = (() => {
+    try { return new URL('icons.svg', document.currentScript.src).href; } catch (_) { return '../assets/icons.svg'; }
+  })();
+  function icon(name, cls) {
+    return `<svg class="ic${cls ? ' ' + esc(cls) : ''}" aria-hidden="true" focusable="false"><use href="${ICON_URL}#${esc(name)}"/></svg>`;
+  }
+
   async function copyText(txt) {
     try { await navigator.clipboard.writeText(txt); return true; } catch (_) {
       // Fallback for http:// or browsers without async clipboard
@@ -466,40 +478,70 @@ window.Tools = (function () {
 
   /* ---------- App menu (every app) and stage layout ----------
      Every app (page with <details class="help">) gets a menu button (☰) at the right of its header. It opens a
-     modal <dialog> – a bottom sheet on phones, a side panel on wide screens – with, in this order: every element
-     with data-menu (app settings, history …), the data backup section, the help and the footer.
-     Without JavaScript they simply stay at the end of the page.
+     modal <dialog> – a bottom sheet on phones, a side panel on wide screens – laid out as a tool list (UI-KONZEPT.md):
+       1. every element with data-menu, in page order: actions (<div class="menu-list">), app sections (cards)
+       2. one list of standard sections: data backup, help, "install as app" – each a sub page
+       3. the footer (language switch, links)
+     Sections: data-icon="settings" (Tabler name) puts a Tabler icon in front of the section's summary or first heading.
+     Sub pages: <details class="card" data-menu data-menu-page data-icon="history"><summary>Title</summary>…</details>
+     shows as a row with › and, tapped, fills the sheet (summary = back row with ‹). One level only; the back
+     button/gesture returns to the list first. Tools.menu.open('id') opens the menu at that sub page (or scrolls
+     to that element). Without JavaScript all sections simply stay at the end of the page.
      The back button/gesture closes the menu instead of leaving the app. Tools.menu.open() / .close().
-     <body class="stage"> (stage layout): the header (title, optional <div class="stage-actions"> with up to two
-     quick actions as <button class="head-btn">) and <main> fill exactly the screen, the page does not scroll. */
+     <body class="stage"> (stage layout): the header (title, optional <div class="stage-actions"> with the quick
+     actions as <button class="head-btn">) and <main> fill exactly the screen, the page does not scroll. */
   Object.assign(dict.de, { 'menu.open': 'Menü', 'menu.title': 'Menü', 'menu.close': 'Menü schließen' });
   Object.assign(dict.en, { 'menu.open': 'Menu', 'menu.title': 'Menu', 'menu.close': 'Close menu' });
-  const svgIcon = d => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-  // Tabler Icons (MIT): menu-2, x
-  const ICON_MENU = svgIcon('<path d="M4 6l16 0"/><path d="M4 12l16 0"/><path d="M4 18l16 0"/>');
-  const ICON_CLOSE = svgIcon('<path d="M18 6l-12 12"/><path d="M6 6l12 12"/>');
-  // Tabler Icons (MIT): refresh
-  const ICON_RELOAD = svgIcon('<path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/>');
-  let menuEl = null, menuBtn = null, menuPushed = false;
+  const ICON_MENU = icon('menu-2'), ICON_CLOSE = icon('x'), ICON_RELOAD = icon('refresh');
+  let menuEl = null, menuBtn = null, menuPushed = false, pagePushed = false, ignorePop = 0;
 
-  function menuOpen() {
-    if (!menuEl || menuEl.open) return;
-    menuEl.showModal();
-    menuBtn.setAttribute('aria-expanded', 'true');
-    // An own history entry, so "back" closes the menu (with CloseWatcher the dialog closes itself, see 'close').
-    // It keeps the current state, so pages with their own entries (e.g. sensors: tool view) see the same state.
-    try { history.pushState(Object.assign({}, history.state, { toolsMenu: true }), ''); menuPushed = true; } catch (_) {}
-    diagLog('menu opened');
+  const openPage = () => menuEl && menuEl.querySelector('details.menu-page[open]');
+  function menuOpen(id) {
+    if (!menuEl) return;
+    if (!menuEl.open) {
+      menuEl.showModal();
+      menuBtn.setAttribute('aria-expanded', 'true');
+      // An own history entry, so "back" closes the menu (with CloseWatcher the dialog closes itself, see 'close').
+      // It keeps the current state, so pages with their own entries (e.g. sensors: tool view) see the same state.
+      try { history.pushState(Object.assign({}, history.state, { toolsMenu: true }), ''); menuPushed = true; } catch (_) {}
+      diagLog('menu opened');
+    }
+    const target = typeof id === 'string' && id ? document.getElementById(id) : null;
+    if (target && menuEl.contains(target)) {
+      if (target.matches('details.menu-page')) target.open = true;
+      else target.scrollIntoView({ block: 'start' });
+    }
   }
   function menuClose() { if (menuEl && menuEl.open) menuEl.close(); }
 
-  /* ---------- "Install as app" (top of the menu, every app) ----------
-     Chrome decides itself whether and when it shows its own install banner (engagement, a dismissal blocks it for
+  // Icon in front of a section's summary/heading, chevrons for rows (› sub page, ⌄ folds open in place)
+  function decorateSection(el, name) {
+    if (!name || el.dataset.iconDone) return;
+    el.dataset.iconDone = '1';
+    const head = el.matches('details') ? el.querySelector(':scope>summary') : el.querySelector('h2,h3');
+    if (!head) return;
+    // The text goes into its own span (translations replace only that, not the icons)
+    const label = document.createElement('span');
+    label.className = 'menu-label';
+    for (const a of ['data-i18n', 'data-i18n-html']) if (head.hasAttribute(a)) { label.setAttribute(a, head.getAttribute(a)); head.removeAttribute(a); }
+    label.append(...head.childNodes);
+    head.append(label);
+    head.classList.add('menu-row');
+    head.insertAdjacentHTML('afterbegin', `<span class="menu-ico">${icon(name)}</span>`);
+    if (el.matches('details')) {
+      head.insertAdjacentHTML('afterbegin', `<span class="menu-back">${icon('chevron-left')}</span>`);
+      head.insertAdjacentHTML('beforeend', el.classList.contains('menu-page')
+        ? `<span class="menu-chev">${icon('chevron-right')}</span>` : `<span class="menu-chev">${icon('chevron-down')}</span>`);
+    }
+  }
+
+  /* ---------- "Install as app" (sub page at the end of the menu, every app) ----------
+     Browsers show their own install hint only rarely (Chrome: engagement heuristics, after a dismissal not for
      months). So the menu offers installing at any time: with Chrome's prompt (beforeinstallprompt) where the browser
      offers it, otherwise the menu path of the browser (iPhone: Share → Add to Home Screen). Hidden in the installed
      app. Chrome's own banner is not suppressed (no preventDefault). */
   Object.assign(dict.de, {
-    'appInstall.h': '📲 Als App installieren',
+    'appInstall.h': 'Als App installieren',
     'appInstall.text': 'Dann startet die App vom Startbildschirm wie eine normale App – auch offline.',
     'appInstall.btn': 'App installieren',
     'appInstall.ios': 'In Safari auf Teilen tippen → „Zum Home-Bildschirm“. Die installierte App hat eigenen Speicher – vorhandene Daten mit „Daten sichern & übertragen“ mitnehmen.',
@@ -507,7 +549,7 @@ window.Tools = (function () {
     'appInstall.done': 'Installiert – die App jetzt vom Startbildschirm öffnen.',
   });
   Object.assign(dict.en, {
-    'appInstall.h': '📲 Install as an app',
+    'appInstall.h': 'Install as an app',
     'appInstall.text': 'The app then starts from your home screen like a normal app – offline too.',
     'appInstall.btn': 'Install app',
     'appInstall.ios': 'In Safari, tap Share → “Add to Home Screen”. The installed app has its own storage – take existing data along with “Back up & transfer data”.',
@@ -523,12 +565,11 @@ window.Tools = (function () {
 
   function setupInstall() {
     if (!document.querySelector('link[rel="manifest"]')) return null;
-    const el = document.createElement('section');
+    const el = document.createElement('details');
     el.className = 'card menu-install'; el.id = 'menuInstall';
-    el.setAttribute('aria-labelledby', 'menuInstallTitle');
-    el.innerHTML = `<h3 id="menuInstallTitle" data-i18n="appInstall.h">${esc(t('appInstall.h'))}</h3>`
+    el.innerHTML = `<summary id="menuInstallTitle" data-i18n="appInstall.h">${esc(t('appInstall.h'))}</summary>`
       + `<p data-i18n="appInstall.text">${esc(t('appInstall.text'))}</p>`
-      + `<button type="button" class="btn primary" id="btnAppInstall" data-i18n="appInstall.btn" hidden>${esc(t('appInstall.btn'))}</button>`
+      + `<button type="button" class="btn primary block" id="btnAppInstall" hidden>${icon('device-mobile-down')}<span data-i18n="appInstall.btn">${esc(t('appInstall.btn'))}</span></button>`
       + '<p class="muted" id="menuInstallInfo" role="status"></p>';
     const btn = el.querySelector('#btnAppInstall'), info = el.querySelector('#menuInstallInfo');
     installRender = () => {
@@ -558,8 +599,8 @@ window.Tools = (function () {
     if (menuEl || !document.querySelector('details.help')) return;
     const header = document.querySelector('body > header');
     if (!header) return;
-    const parts = [...document.querySelectorAll('[data-menu]'), document.querySelector('details.data'),
-      document.querySelector('details.help'), document.querySelector('body > footer')].filter(Boolean);
+    const appParts = [...document.querySelectorAll('[data-menu]')];
+    const data = document.querySelector('details.data'), help = document.querySelector('details.help');
     const installEl = setupInstall();
     menuEl = document.createElement('dialog');
     menuEl.className = 'menu-sheet'; menuEl.id = 'appMenu';
@@ -567,7 +608,18 @@ window.Tools = (function () {
     menuEl.innerHTML = `<div class="menu-head"><h2 id="appMenuTitle" data-i18n="menu.title">${esc(t('menu.title'))}</h2>`
       + `<button type="button" class="head-btn menu-close" aria-label="${esc(t('menu.close'))}" title="${esc(t('menu.close'))}" data-i18n-attr="aria-label:menu.close; title:menu.close">${ICON_CLOSE}</button></div>`
       + '<div class="menu-body"></div>';
-    menuEl.querySelector('.menu-body').append(...(installEl ? [installEl] : []), ...parts);
+    const body = menuEl.querySelector('.menu-body');
+    for (const el of appParts) if (el.matches('details[data-menu-page]')) el.classList.add('menu-page');
+    const group = document.createElement('div');
+    group.className = 'menu-group';
+    for (const std of [{ el: data, icon: 'database' }, { el: help, icon: 'help-circle' }, { el: installEl, icon: 'device-mobile-down' }]) {
+      if (!std.el) continue;
+      std.el.classList.add('menu-page');
+      group.append(std.el);
+      decorateSection(std.el, std.icon);
+    }
+    for (const el of appParts) decorateSection(el, el.dataset.icon);
+    body.append(...appParts, group, ...[document.querySelector('body > footer')].filter(Boolean));
     document.body.append(menuEl);
 
     let actions = header.querySelector('.stage-actions');
@@ -588,18 +640,48 @@ window.Tools = (function () {
     actions.append(updateBtn, menuBtn);
     if (translated) { applyI18n(menuEl); applyI18n(actions); }
 
-    menuBtn.addEventListener('click', menuOpen);
+    menuBtn.addEventListener('click', () => menuOpen());
     menuEl.querySelector('.menu-close').addEventListener('click', menuClose);
     // A tap on the backdrop (outside the sheet) closes it
     menuEl.addEventListener('click', e => { if (e.target === menuEl) menuClose(); });
     // The sheet itself never scrolls (overflow hidden), only .menu-body. scrollIntoView() on an element inside
     // would still shift the sheet and push the head with ✕ out of view – undo that.
     menuEl.addEventListener('scroll', () => { if (menuEl.scrollTop || menuEl.scrollLeft) menuEl.scrollTo(0, 0); });
+    // Sub pages: one at a time, each with its own history entry (back returns to the list)
+    menuEl.addEventListener('toggle', e => {
+      const d = e.target;
+      if (!(d instanceof HTMLDetailsElement) || !d.classList.contains('menu-page')) return;
+      if (d.open) {
+        for (const o of menuEl.querySelectorAll('details.menu-page[open]')) if (o !== d) { o.dataset.silent = '1'; o.open = false; }
+        body.scrollTop = 0; d.scrollTop = 0;
+        menuEl.classList.add('page-open');
+        if (!pagePushed) { try { history.pushState(Object.assign({}, history.state, { toolsMenuPage: true }), ''); pagePushed = true; } catch (_) {} }
+        diagLog('menu page opened:', d.id || d.className);
+      } else {
+        if (d.dataset.silent) { delete d.dataset.silent; return; }
+        if (!openPage()) menuEl.classList.remove('page-open');
+        if (pagePushed) { pagePushed = false; ignorePop++; history.back(); }
+      }
+    }, true);
+    // Esc / Android back (CloseWatcher) with a sub page open: back to the list instead of closing the menu
+    menuEl.addEventListener('cancel', e => {
+      const d = openPage();
+      if (d) { e.preventDefault(); d.open = false; d.querySelector(':scope>summary')?.focus(); }
+    });
     menuEl.addEventListener('close', () => {
       menuBtn.setAttribute('aria-expanded', 'false');
-      if (menuPushed) { menuPushed = false; history.back(); }
+      for (const d of menuEl.querySelectorAll('details.menu-page[open]')) { d.dataset.silent = '1'; d.open = false; }
+      menuEl.classList.remove('page-open');
+      const n = (menuPushed ? 1 : 0) + (pagePushed ? 1 : 0);
+      menuPushed = false; pagePushed = false;
+      if (n) { ignorePop++; history.go(-n); }
     });
-    window.addEventListener('popstate', () => { if (menuEl.open) { menuPushed = false; menuEl.close(); } });
+    window.addEventListener('popstate', () => {
+      if (ignorePop) { ignorePop--; return; }
+      const d = openPage();
+      if (d && pagePushed) { pagePushed = false; d.dataset.silent = '1'; d.open = false; menuEl.classList.remove('page-open'); return; }
+      if (menuEl.open) { menuPushed = false; menuEl.close(); }
+    });
     document.body.classList.add('has-menu');
   }
   // common.js is loaded at the end of <body>: build the menu right away, before the first paint
@@ -855,7 +937,7 @@ window.Tools = (function () {
   else setupDiagUi();
 
   return {
-    $, load, save, remove, toast, esc, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle,
+    $, load, save, remove, toast, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle,
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     menu: { open: menuOpen, close: menuClose, element: () => menuEl },

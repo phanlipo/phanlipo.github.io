@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "api-check";
-const VERSION = 'e59d1830fa7f';
+const VERSION = '69ea10190267';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -15,6 +15,7 @@ const FILES = [
   "manifest.webmanifest",
   "../assets/base.css",
   "../assets/common.js",
+  "../assets/icons.svg",
   "../assets/vendor/js-yaml/js-yaml.umd.min.js"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)

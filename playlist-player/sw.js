@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "playlist-player";
-const VERSION = '6c3085465628';
+const VERSION = '8b4e6c0bfaa4';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -16,7 +16,8 @@ const FILES = [
   "manifest.webmanifest",
   "yt.js",
   "../assets/base.css",
-  "../assets/common.js"
+  "../assets/common.js",
+  "../assets/icons.svg"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
 const RUNTIME = {};

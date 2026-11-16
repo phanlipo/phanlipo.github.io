@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "video-to-audio";
-const VERSION = '51664e883362';
+const VERSION = 'b7923d3f7425';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -15,6 +15,7 @@ const FILES = [
   "manifest.webmanifest",
   "../assets/base.css",
   "../assets/common.js",
+  "../assets/icons.svg",
   "../assets/vendor/mediabunny/mediabunny.min.mjs"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)

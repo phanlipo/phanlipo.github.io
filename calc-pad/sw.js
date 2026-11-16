@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "calc-pad";
-const VERSION = 'df6ec9b1a47c';
+const VERSION = 'b1fca1ddb08b';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -15,7 +15,8 @@ const FILES = [
   "icon.svg",
   "manifest.webmanifest",
   "../assets/base.css",
-  "../assets/common.js"
+  "../assets/common.js",
+  "../assets/icons.svg"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
 const RUNTIME = {};

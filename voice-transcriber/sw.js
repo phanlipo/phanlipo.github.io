@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "voice-transcriber";
-const VERSION = 'f482f5bfbc91';
+const VERSION = 'fd7306dff0fe';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -16,6 +16,7 @@ const FILES = [
   "worker.js",
   "../assets/base.css",
   "../assets/common.js",
+  "../assets/icons.svg",
   "../assets/vendor/ogg-opus-decoder/ogg-opus-decoder.min.js"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
