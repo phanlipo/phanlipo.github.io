@@ -68,7 +68,7 @@ test('two players: X wins, the line is shown, score counts, the start alternates
   await expect(cell(page, 3)).toBeDisabled(); // taken
   await cell(page, 2).click();
   await expect(page.locator('#board')).toHaveAttribute('data-result', 'x');
-  await expect(page.locator('#status')).toHaveText('🎉 Spieler ✕ gewinnt!');
+  await expect(page.locator('#status')).toHaveText('Spieler ✕ gewinnt!');
   await expect(page.locator('#board .cell.win')).toHaveCount(3);
   await expect(page.locator('#board .winline')).toHaveCount(1);
   await expect(page.locator('#board .cell:not(:disabled)')).toHaveCount(0);
@@ -87,7 +87,7 @@ test('two players: a full board without a row is a draw', async ({ page }) => {
   // x o x / x o o / o x x
   await tapAll(page, [0, 1, 2, 4, 3, 5, 7, 6, 8]);
   await expect(page.locator('#board')).toHaveAttribute('data-result', 'draw');
-  await expect(page.locator('#status')).toHaveText('🤝 Unentschieden');
+  await expect(page.locator('#status')).toHaveText('Unentschieden');
   await expect(page.locator('#ptsD')).toHaveText('1');
   await expect(page.locator('#ptsX')).toHaveText('0');
 });
@@ -159,7 +159,7 @@ test.describe('English', () => {
     await page.goto('/tic-tac-toe/');
     await expect(page.locator('#status')).toHaveText('Player ✕’s turn (✕)');
     await tapAll(page, [0, 3, 1, 4, 2]);
-    await expect(page.locator('#status')).toHaveText('🎉 Player ✕ wins!');
+    await expect(page.locator('#status')).toHaveText('Player ✕ wins!');
     await expect(page.locator('#btnNext')).toHaveText('Next round');
   });
 });

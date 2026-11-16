@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "function-plotter";
-const VERSION = '161dc4650529';
+const VERSION = 'f83a56266e4a';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

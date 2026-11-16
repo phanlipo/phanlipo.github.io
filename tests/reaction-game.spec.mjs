@@ -66,7 +66,7 @@ test('countdown, then moles: hits and misses give the points, best score is kept
   await expect(on(page)).toHaveCount(0);
   const points = Math.max(0, hits - wrong);
   await expect(page.locator('#resScore')).toHaveText(String(points));
-  await expect(page.locator('#resRecord')).toHaveText('🏆 Neuer Rekord!');
+  await expect(page.locator('#resRecord')).toHaveText('Neuer Rekord!');
   await expect(page.locator('#resList li').nth(0)).toHaveText(`Treffer: ${hits}`);
   await expect(page.locator('#resList li').nth(1)).toHaveText(`Daneben: ${wrong}`);
   await expect(page.locator('#resList li').nth(2)).toHaveText(/^Entwischt: \d+$/);

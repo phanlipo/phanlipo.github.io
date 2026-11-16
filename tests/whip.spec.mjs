@@ -50,7 +50,7 @@ test('each crack has its length, the loudest moment is the crack, never clips', 
       expect(peak, kind).toBeLessThanOrEqual(1);
     }
   }
-  await expect(page.locator('#status')).toHaveText('💥 Manege!');
+  await expect(page.locator('#status')).toHaveText('Manege!');
 });
 
 test('random picks different cracks', async ({ page }) => {
@@ -209,7 +209,7 @@ test.describe('English', () => {
     await page.click('#sounds [data-s="coach"]');
     await expect(page.locator('#sounds [data-s="coach"]')).toContainText('Coachman');
     await whip(page).click();
-    await expect(page.locator('#status')).toHaveText('💥 Coachman!');
+    await expect(page.locator('#status')).toHaveText('Coachman!');
     await expect(page.locator('#whipLabel')).toHaveText('Tap to crack!');
     await expect(page.locator('#sens [data-v="high"]')).toHaveText('Light');
   });

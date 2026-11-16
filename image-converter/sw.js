@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "image-converter";
-const VERSION = '26da93409a15';
+const VERSION = '8d137d51ba75';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
