@@ -20,7 +20,7 @@
 <meta name="tool:share-target" content="audio/*, audio/ogg, audio/opus, .opus, .ogg, .oga, .m4a, .mp3, .wav, .webm">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-RLftPJABQIBTW+xVLyPeG4PaHdyMH0RjefePpZ0lbjc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-7kciKkuC5IhpMendpZQmiBjsNySmzXibUdM0vwpV9hs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -35,16 +35,10 @@ header{display:flex;flex-direction:column}
 main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
 @media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
 .full{grid-column:1/-1}
-.drop{display:block;width:100%;border:2px dashed var(--border);border-radius:var(--radius);padding:22px 14px;text-align:center;color:var(--muted);background:transparent;cursor:pointer;font:inherit}
-.drop strong{color:var(--text)}
-.drop.over,.drop:hover{border-color:var(--accent);color:var(--text)}
 .fileinfo{margin-block:10px 6px;font-size:14px;word-break:break-word}
 audio{width:100%;margin-block-start:6px}
-.field{display:flex;flex-direction:column;gap:4px;margin-block-end:12px}
-.field>span{font-size:13px;color:var(--muted);font-weight:600}
 select{min-height:44px;padding-inline:10px;width:100%}
 .btn.big{width:100%;min-height:54px;font-size:18px}
-.btn:disabled{opacity:.55;cursor:not-allowed}
 .progress{margin-block-start:10px}
 progress{width:100%;height:10px;accent-color:var(--accent)}
 .status{font-size:14px;margin-block:6px 0;min-height:1.4em}
@@ -73,9 +67,11 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
 
 <main>
   <section class="card" aria-labelledby="h-audio">
-    <h2 id="h-audio" data-i18n="h.audio">1 · Sprachnachricht wählen</h2>
-    <button type="button" class="drop" id="drop">
-      <span data-i18n-html="drop"><strong>Audiodatei wählen</strong><br>oder hierher ziehen · z. B. WhatsApp-Sprachnachricht (.opus)</span>
+    <h2 id="h-audio"><span class="step">1</span><span data-i18n="h.audio">Sprachnachricht wählen</span></h2>
+    <button type="button" class="dropzone" id="drop">
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-music"/></svg>
+      <strong data-i18n="drop">Audiodatei wählen</strong>
+      <span class="dz-hint" data-i18n="dropHint">oder hierher ziehen · z. B. WhatsApp-Sprachnachricht (.opus)</span>
     </button>
     <input type="file" id="file" accept="audio/*,.opus,.ogg,.oga,.m4a,.mp3,.wav,.webm,.aac,.flac" hidden>
     <div class="fileinfo" id="fileInfo" aria-live="polite"></div>
@@ -83,28 +79,29 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
   </section>
 
   <section class="card" aria-labelledby="h-settings">
-    <h2 id="h-settings" data-i18n="h.settings">2 · Transkribieren</h2>
-    <label class="field"><span data-i18n="model">Modell</span>
+    <h2 id="h-settings"><span class="step">2</span><span data-i18n="h.settings">Transkribieren</span></h2>
+    <label class="form-field"><span data-i18n="model">Modell</span>
       <select id="model">
         <option value="onnx-community/whisper-base" selected>Standard – base</option>
         <option value="onnx-community/whisper-small">Genauer – small</option>
       </select>
     </label>
-    <label class="field"><span data-i18n="language">Sprache</span>
+    <label class="form-field"><span data-i18n="language">Sprache</span>
       <select id="language">
         <option value="german" selected data-i18n="lang.de">Deutsch</option>
         <option value="english" data-i18n="lang.en">Englisch</option>
         <option value="" data-i18n="lang.auto">Automatisch erkennen</option>
       </select>
     </label>
-    <label class="field"><span data-i18n="device">Rechnen mit</span>
+    <label class="form-field"><span data-i18n="device">Rechnen mit</span>
       <select id="device">
         <option value="auto" selected data-i18n="dev.auto">Automatisch (empfohlen)</option>
         <option value="gpu" data-i18n="dev.gpu">Grafikkarte – schneller, größerer Download</option>
         <option value="cpu" data-i18n="dev.cpu">Prozessor – kleinerer Download</option>
       </select>
     </label>
-    <button type="button" class="btn primary big" id="btnRun" disabled>Transkribieren</button>
+    <p class="notice info" id="runHint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="runHint">Erst oben eine Audiodatei wählen.</span></p>
+    <button type="button" class="btn primary big block" id="btnRun" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#text-recognition"/></svg><span id="btnRunLabel">Transkribieren</span></button>
     <div class="progress" id="progressBox" hidden>
       <progress id="progress" max="100"></progress>
     </div>
@@ -112,18 +109,18 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
     <details id="modelBox">
       <summary data-i18n="models">Heruntergeladene Modelle</summary>
       <p class="muted" id="modelInfo"></p>
-      <button type="button" class="btn small danger" id="btnDeleteModels" data-i18n="deleteModels">Modelle löschen</button>
+      <button type="button" class="btn small danger" id="btnDeleteModels"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="deleteModels">Modelle löschen</span></button>
     </details>
   </section>
 
   <section class="card full" aria-labelledby="h-text">
-    <h2 id="h-text" data-i18n="h.text">3 · Text</h2>
+    <h2 id="h-text"><span class="step">3</span><span data-i18n="h.text">Text</span></h2>
     <label class="sr-only" for="text" data-i18n="textLabel">Transkribierter Text</label>
     <textarea id="text" placeholder="Hier erscheint der Text – er lässt sich danach bearbeiten." data-i18n-attr="placeholder:textPh"></textarea>
     <div class="row" style="margin-block-start:8px">
-      <button type="button" class="btn" id="btnCopy" data-i18n="copy">Kopieren</button>
-      <button type="button" class="btn" id="btnSaveTxt" data-i18n="saveTxt">Als Textdatei speichern</button>
-      <button type="button" class="btn" id="btnShare" data-i18n="share" hidden>Teilen …</button>
+      <button type="button" class="btn" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Kopieren</span></button>
+      <button type="button" class="btn" id="btnSaveTxt"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="saveTxt">Als Textdatei speichern</span></button>
+      <button type="button" class="btn" id="btnShare" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="share">Teilen …</span></button>
     </div>
     <p class="meta-line" id="resultMeta"></p>
     <details id="chunkBox" hidden>
@@ -136,7 +133,7 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
     <h2 id="h-hist"><span data-i18n="history">Verlauf</span> <span class="badge" id="histCount">0</span></h2>
     <ul class="hist" id="hist"></ul>
     <div class="row" style="margin-block-start:8px">
-      <button type="button" class="btn small danger" id="btnClearHist" data-i18n="clearHist">Verlauf löschen</button>
+      <button type="button" class="btn small danger" id="btnClearHist"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearHist">Verlauf löschen</span></button>
     </div>
   </section>
 </main>
@@ -223,7 +220,7 @@ textarea#text{width:100%;min-height:180px;padding:10px;font:inherit;line-height:
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version fd7306dff0fe</p>
+  <p class="footer-version">Version a960716e296a</p>
   <!-- footer:end -->
 </footer>
 
@@ -250,11 +247,11 @@ Tools.i18n({
     'mcp.transcript': 'Transkript gelesen', 'mcp.history': 'Transkript-Verlauf gelesen',
   },
   en: {
-    title: 'Speech to Text', sub: 'Transcribe voice messages right in the browser – the audio never leaves the device.',
-    'h.audio': '1 · Choose a voice message', drop: '<strong>Choose an audio file</strong><br>or drag it here · e.g. a WhatsApp voice message (.opus)',
-    'h.settings': '2 · Transcribe', model: 'Model', language: 'Language', 'lang.de': 'German', 'lang.en': 'English', 'lang.auto': 'Detect automatically',
+    runHint: 'Choose an audio file above first.', title: 'Speech to Text', sub: 'Transcribe voice messages right in the browser – the audio never leaves the device.',
+    'h.audio': 'Choose a voice message', drop: 'Choose an audio file', dropHint: 'or drag it here · e.g. a WhatsApp voice message (.opus)',
+    'h.settings': 'Transcribe', model: 'Model', language: 'Language', 'lang.de': 'German', 'lang.en': 'English', 'lang.auto': 'Detect automatically',
     device: 'Compute with', 'dev.auto': 'Automatic (recommended)', 'dev.gpu': 'Graphics card – faster, bigger download', 'dev.cpu': 'Processor – smaller download',
-    run: 'Transcribe', models: 'Downloaded models', deleteModels: 'Delete models', 'h.text': '3 · Text', textLabel: 'Transcribed text',
+    run: 'Transcribe', models: 'Downloaded models', deleteModels: 'Delete models', 'h.text': 'Text', textLabel: 'Transcribed text',
     textPh: 'The text appears here – you can edit it afterwards.', copy: 'Copy', saveTxt: 'Save as text file', share: 'Share …', chunks: 'With timestamps',
     history: 'History', clearHist: 'Clear history',
     'm.base': 'Standard – base', 'm.small': 'More accurate – small', 'm.slower': 'slower', 'm.size': '{label} (approx. {mb} MB{note})',
@@ -272,7 +269,7 @@ Tools.i18n({
   },
 });
 const t = Tools.t;
-$('btnRun').textContent = t('run');
+$('btnRunLabel').textContent = t('run');
 const LS_SET = 'voice-transcriber.settings.v1', LS_HIST = 'voice-transcriber.history.v1', MAX_HIST = 50;
 const MODEL_CACHE = 'transformers-cache';
 // Download size per model and device (sum of the ONNX files transformers.js loads):
@@ -345,6 +342,7 @@ async function takeFile(file) {
   if (!file || busy) return;
   status('');
   $('fileInfo').textContent = t('reading', { f: file.name });
+  $('runHint').hidden = true;
   $('btnRun').disabled = true;
   try {
     const { samples, decoder } = await decodeAudio(file);
@@ -419,7 +417,7 @@ function finish() {
   clearInterval(timer);
   $('progressBox').hidden = true;
   $('btnRun').disabled = !audio;
-  $('btnRun').textContent = t('run');
+  $('btnRunLabel').textContent = t('run');
   if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
 }
 
@@ -427,7 +425,7 @@ $('btnRun').addEventListener('click', async () => {
   if (!audio || busy) return;
   busy = true;
   $('btnRun').disabled = true;
-  $('btnRun').textContent = t('running');
+  $('btnRunLabel').textContent = t('running');
   status(t('starting'));
   try { wakeLock = navigator.wakeLock ? await navigator.wakeLock.request('screen') : null; } catch (_) { wakeLock = null; }
   runId++;
@@ -574,7 +572,7 @@ Tools.mcp.register({
   }),
 });
 // Language switched: model labels, run button, history and model info are generated
-Tools.onLang(() => { labelModels(false); $('btnRun').textContent = t(busy ? 'running' : 'run'); renderHist(); if ($('modelBox').open) updateModelInfo(); });
+Tools.onLang(() => { labelModels(false); $('btnRunLabel').textContent = t(busy ? 'running' : 'run'); renderHist(); if ($('modelBox').open) updateModelInfo(); });
 })();
 </script>
 </body>

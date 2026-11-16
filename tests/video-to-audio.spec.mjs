@@ -42,8 +42,11 @@ async function expectMp3(page, buf, c) {
 
 test('AAC from an MP4: copied unchanged into an .m4a without the picture', async ({ page }) => {
   await page.goto(URL_);
+  await expect(page.locator('#btnRun')).toBeDisabled();
+  await expect(page.locator('#runHint')).toHaveText('Erst oben ein Video wählen.');
   await choose(page, 'aac');
   await expect(page.locator('#fileInfo')).toContainText('„clip-aac.mp4“');
+  await expect(page.locator('#runHint')).toBeHidden();
   await expect(page.locator('#fileInfo')).toContainText('Tonspur: AAC, Mono, 44,1 kHz · 0:02');
   const { name, buf } = await extract(page, 'aac', 'original');
   expect(name).toBe('clip-aac.m4a');

@@ -232,11 +232,12 @@ test('playback of the selection starts and stops', async ({ page }) => {
   await open(page);
   await select(page, '0', '0,3');
   await page.click('#btnPlay');
-  await expect(page.locator('#btnPlay')).toHaveText('■ Stopp');
-  await expect(page.locator('#btnPlay')).toHaveText('▶ Auswahl abspielen', { timeout: 5000 });   // ends by itself
+  await expect(page.locator('#btnPlay')).toHaveText('Stopp');
+  await expect(page.locator('#btnPlay use')).toHaveAttribute('href', /#player-stop$/);
+  await expect(page.locator('#btnPlay')).toHaveText('Auswahl abspielen', { timeout: 5000 });   // ends by itself
   await page.click('#btnPlay');
   await page.click('#btnPlay');
-  await expect(page.locator('#btnPlay')).toHaveText('▶ Auswahl abspielen');
+  await expect(page.locator('#btnPlay')).toHaveText('Auswahl abspielen');
 });
 
 test('Opus input (voice message) to Opus and AAC output', async ({ page }) => {
@@ -485,6 +486,6 @@ test.describe('English', () => {
     await expect(page.locator('#status')).toHaveText('Done.');
     await switchLang(page, 'de');
     await expect(page.locator('#selInfo')).toHaveText('Alles ausgewählt (1,0 s)');
-    await expect(page.locator('#btnPlay')).toHaveText('▶ Auswahl abspielen');
+    await expect(page.locator('#btnPlay')).toHaveText('Auswahl abspielen');
   });
 });
