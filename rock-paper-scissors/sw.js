@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "rock-paper-scissors";
-const VERSION = '38b41a232449';
+const VERSION = '776b3cdd7b0a';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

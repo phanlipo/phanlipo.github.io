@@ -156,7 +156,9 @@ window.HuntMap = (function () {
         ctx.globalAlpha = m.kind === 'dim' ? 0.55 : 1;
         ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, big ? 24 : 16, 0, 2 * Math.PI); ctx.fill();
         ctx.strokeStyle = big ? '#b45309' : '#64748b'; ctx.lineWidth = big ? 4 : 2; ctx.stroke();
-        ctx.fillStyle = '#000'; ctx.fillText(m.emoji || '📍', x, y + 1);
+        // The emoji a user gave the station (content), else a small pin dot
+        if (m.emoji) { ctx.fillStyle = '#000'; ctx.fillText(m.emoji, x, y + 1); }
+        else { ctx.fillStyle = big ? '#b45309' : '#64748b'; ctx.beginPath(); ctx.arc(x, y, big ? 9 : 6, 0, 2 * Math.PI); ctx.fill(); }
         ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
       }
     }

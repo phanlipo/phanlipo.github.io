@@ -3,8 +3,8 @@
 
    Hunt (configuration, portable as a JSON file):
      { format, version, id, title, intro, finale, radius, megaCost, pin,
-       characters: [{ id, name, emoji, image, side: 'ally'|'enemy'|'other', power, hp, ability }],
-       stations:   [{ id, name, emoji, hint, image, lat, lon, radius, when, scenes: [Scene] }] }
+       characters: [{ id, name, emoji, icon, image, side: 'ally'|'enemy'|'other', power, hp, ability }],
+       stations:   [{ id, name, emoji, icon, hint, image, lat, lon, radius, when, scenes: [Scene] }] }
      Scene:   { id, title, text, character, battle, repeat, when, puzzle, win: Effects, lose: Effects }
      when:    { flags: [], notFlags: [], team, energy, visits }   – all must hold
      Effects: { text, flags: [], unflags: [], ally, energy, treasure }
@@ -22,6 +22,8 @@ window.HuntEngine = (function () {
 
   /* ---------- Normalising (imported files, editor, AI agents) ---------- */
   const str = (v, max) => (typeof v === 'string' ? v : v == null ? '' : String(v)).slice(0, max || 200);
+  // Tabler icon name (only the built-in example sets one; the page shows it from the shared sprite)
+  const iconName = v => typeof v === 'string' && /^[a-z0-9-]{1,40}$/.test(v) ? v : '';
   const num = (v, d, min, max) => { const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d; };
   const int = (v, d, min, max) => Math.round(num(v, d, min, max));
   const list = v => (Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : [])
@@ -51,13 +53,13 @@ window.HuntEngine = (function () {
   }
   function station(s, types) {
     s = s || {};
-    return { id: str(s.id, 60) || uid('st'), name: str(s.name, 80), emoji: str(s.emoji, 16), hint: str(s.hint, MAX_TEXT),
+    return { id: str(s.id, 60) || uid('st'), name: str(s.name, 80), emoji: str(s.emoji, 16), icon: iconName(s.icon), hint: str(s.hint, MAX_TEXT),
       image: image(s.image), lat: coord(s.lat, 90), lon: coord(s.lon, 180), radius: int(s.radius, 0, 0, 500),
       when: cond(s.when), scenes: (Array.isArray(s.scenes) ? s.scenes : []).slice(0, 50).map(x => scene(x, types)) };
   }
   function character(c) {
     c = c || {};
-    return { id: str(c.id, 60) || uid('ch'), name: str(c.name, 80), emoji: str(c.emoji, 16), image: image(c.image),
+    return { id: str(c.id, 60) || uid('ch'), name: str(c.name, 80), emoji: str(c.emoji, 16), icon: iconName(c.icon), image: image(c.image),
       side: SIDES.includes(c.side) ? c.side : 'ally', power: int(c.power, 2, 0, 99), hp: int(c.hp, 10, 1, 999), ability: str(c.ability, 120) };
   }
   // Brings any object into the hunt shape (unknown fields are dropped, ids made unique)

@@ -27,7 +27,7 @@ async function station(page, id) {
 }
 const next = page => page.getByRole('button', { name: 'Weiter', exact: true }).click();
 const fallback = page => page.getByRole('button', { name: 'Eltern: als geschafft werten' }).click();
-const energy = page => hud(page).locator('.energy [aria-hidden]');
+const energy = page => hud(page).locator('.energy > [aria-hidden]');
 
 
 test.describe('engine', () => {
@@ -149,7 +149,7 @@ test('whole example game without GPS: allies, energy, lost battle, mega evolutio
   await fallback(page);
   await expect(page.getByText('Flinker Fuchs ist jetzt in eurem Team!')).toBeVisible();
   await next(page);
-  await expect(hud(page)).toContainText('🦊');
+  await expect(hud(page).locator('.team use[href$="#paw"]')).toHaveCount(1);
 
   // 3. Owl: quiz, a wrong answer first
   await station(page, 'owl');
@@ -176,12 +176,12 @@ test('whole example game without GPS: allies, energy, lost battle, mega evolutio
   await page.getByRole('button', { name: 'Prüfen' }).click();
   await expect(page.getByText('+1 Energie')).toBeVisible();
   await next(page);
-  await expect(energy(page)).toHaveText('⚡ 1');
+  await expect(energy(page)).toHaveText('1');
   await station(page, 'spring');
   await expect(page.getByText('Schon wieder da?')).toBeVisible();
   await page.getByRole('button', { name: 'Geschafft!' }).click();
   await next(page);
-  await expect(energy(page)).toHaveText('⚡ 2');
+  await expect(energy(page)).toHaveText('2');
 
   // 6. Castle again: roaring gives the bonus; without the mega evolution 1 + 3·3 + 3 = 13 < 14
   await station(page, 'castle');
@@ -200,7 +200,7 @@ test('whole example game without GPS: allies, energy, lost battle, mega evolutio
   await expect(page.locator('#hpVal')).toHaveText('0');
   await expect(page.getByText('Der Drache schrumpft')).toBeVisible();
   await next(page);
-  await expect(energy(page)).toHaveText('⚡ 0');
+  await expect(energy(page)).toHaveText('0');
 
   // The castle has changed: the defeated dragon is replaced by a new story event
   await station(page, 'castle');
@@ -269,7 +269,7 @@ test('a reload (app update, phone ending the app) comes back to the same screen'
   await station(page, 'spring');
   await page.getByRole('button', { name: 'Geschafft!' }).click();
   await next(page);
-  await expect(energy(page)).toHaveText('⚡ 2');
+  await expect(energy(page)).toHaveText('2');
 
   // Battle: the bonus task already solved stays solved, the mega choice too
   await station(page, 'castle');
@@ -281,11 +281,11 @@ test('a reload (app update, phone ending the app) comes back to the same screen'
   await page.reload();
   await expect(page.locator('#teamList li[data-k="bonus"]')).toHaveCount(1);
   await expect(page.getByRole('button', { name: /Mega-Entwicklung/ })).toHaveAttribute('aria-pressed', 'true');
-  await expect(energy(page)).toHaveText('⚡ 2');
+  await expect(energy(page)).toHaveText('2');
   // Reload during the attack: paid once, the scene ends with the result already decided (1 + 3 + 3 = 7, ×2 = 14 ≥ 14)
   await page.getByRole('button', { name: 'Angriff!' }).click();
   await page.reload();
-  await expect(energy(page)).toHaveText('⚡ 0');
+  await expect(energy(page)).toHaveText('0');
   await expect(page.getByText('Der Drache schrumpft')).toBeVisible();
   const game = await page.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('treasure-hunt.game.')))));
   expect(game.mega).toBe(1);
@@ -383,7 +383,7 @@ test('resume code: continue on another device with the exported hunt', async ({ 
   await p2.getByLabel('Code', { exact: true }).fill(code.toLowerCase());
   await p2.getByRole('button', { name: 'Weiterspielen' }).click();
   await expect(p2.getByText('Wohin geht ihr?')).toBeVisible();
-  await expect(p2.locator('#hud .team')).toContainText('🦉');
+  await expect(p2.locator('#hud .team use[href$="#feather"]')).toHaveCount(1);
   await expect(p2.locator('[data-id="owl"]')).toContainText('besucht');
   await expect(p2.locator('#hud .prog')).toContainText('2/6');
   await other.close();
