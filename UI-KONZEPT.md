@@ -1,6 +1,6 @@
 # UI-Konzept: einheitliche Bedienelemente, Werkzeuglisten und Icons
 
-**Status:** Vorschlag zur Abstimmung (November 2026), noch nichts umgesetzt.
+**Status:** abgestimmt (November 2026), die Entscheidungen stehen in Abschnitt 8. Umgesetzt ist noch nichts.
 **Grundlage:** Screenshots aller 57 Apps und der Vorlage (375 px, hell, Deutsch; jeweils die Startansicht und das geöffnete Menü) sowie eine Auswertung des Codes (Knöpfe, Icons, eigenes CSS je App).
 
 Ziel: Wer eine App kennt, findet sich in jeder anderen sofort zurecht. Gleiche Handlungen sehen überall gleich aus, und Icons machen Knöpfe auf dem Handy schneller erkennbar.
@@ -38,9 +38,9 @@ Ziel: Wer eine App kennt, findet sich in jeder anderen sofort zurecht. Gleiche H
 
 1. **Ein Icon-Satz:** nur **Tabler Outline**, Strichstärke 2, Farbe `currentColor`. Er ist schon die Quelle der App-Icons (`scripts/vendor.json`, Eintrag `tabler-icons`).
 2. **Feste Größen:** 24 px in Kopfleiste und Werkzeugleiste, 20 px in Knöpfen mit Text und in Menüzeilen, 16 px neben Fließtext und in Hinweisen, 32–48 px in Kacheln und Leerzuständen.
-3. **Icon + Text ist der Normalfall.** Nur ein Icon ohne Text gibt es ausschließlich in der Kopfleiste und in Werkzeugleisten, mit Icons aus dem Lexikon (Abschnitt 3) und immer mit `aria-label` und `title`.
+3. **Beschriftung, wenn Platz ist.** Knöpfe, Umschalter, Kacheln und Menüzeilen haben immer Text (Icon davor bzw. darüber). In Kopfleiste und Werkzeugleiste entscheidet der Platz (Regeln in Abschnitt 4 und 4a). Ein Knopf ohne sichtbaren Text nimmt ein Icon aus dem Lexikon (Abschnitt 3) und hat immer `aria-label` und `title`.
 4. **Ein Wort, ein Icon – und umgekehrt.** Das Lexikon ist verbindlich: Wer „Teilen“ anbietet, nimmt `share`; `share` bedeutet nie etwas anderes.
-5. **Emoji sind Inhalt, keine Bedienung.** Erlaubt sind sie für Spielfiguren, Tiere, die „Charaktere“ von Geräuschen und Stimmen, Sportarten, Kartensätze und Kinder-Illustrationen. Nicht erlaubt sind sie als Funktionssymbol vor einem Knopftext, in Statusmeldungen und in Überschriften (auch nicht 📲 im Menü).
+5. **Keine Emoji in der Oberfläche.** Weder als Funktionssymbol noch als Bild in Kacheln, Statusmeldungen, Überschriften oder Leerzuständen (auch nicht 📲 im Menü). Stattdessen gilt diese Reihenfolge: (a) ein passendes Tabler-Icon (es gibt z. B. `hand-two-fingers`, `hand-grab`, `hand-stop`, `file-text`, `cat`, `dog`, `pig`, `fish`, `horse`, `robot`, `alien`, `ghost`, `wind`, `droplet`, `cloud-storm`, `ball-football`, `ping-pong`, `target`, `gift`, `bottle`, `map-2`, `key`, `trophy`, `swords`), (b) eine vorhandene eigene SVG-Illustration der App (z. B. die Tiere in `plush-puzzle`, die Katze in `talking-animal`), (c) nur Text. Ausgenommen sind Inhalte, die Nutzer selbst eingeben, und Datensätze, deren Zweck Emoji sind (Emoji-Beispiel in `image-swipe`).
 6. **Pro Ansicht eine Hauptaktion** (`.btn.primary`). Auf dem Handy nimmt sie die volle Breite ein und steht am Ende ihrer Karte, in Bühnen-Apps unten in Daumennähe.
 7. **Die Akzentfarbe markiert genau zwei Dinge:** die Hauptaktion und die aktuelle Auswahl. Icons erscheinen in Akzentfarbe nur in Kacheln und in aktiven Werkzeugen.
 8. **Gesperrt heißt erklärt:** Ein gesperrter Knopf bekommt einen sichtbaren Hinweis, was noch fehlt (z. B. „Erst ein Video wählen.“).
@@ -158,8 +158,8 @@ Neue gemeinsame Klassen, damit Apps keine eigenen Varianten mehr bauen müssen. 
 | **Knopf mit Icon** | `<button class="btn primary block">${icon} Audio herausziehen</button>` | Icon vor dem Text, Abstand 8 px. `.block` = volle Breite. `.btn.icon` = quadratisch 44 px, nur Icon + `aria-label` |
 | **Umschalter** `.seg` | `<div class="seg" role="radiogroup">` mit Knöpfen `aria-pressed` | 2–4 kurze, sich ausschließende Optionen, gleich breit, Auswahl in Akzent, optional Icon. Ersetzt alle 8 eigenen `.seg`-Varianten |
 | **Chips** `.chips` | Reihe von Pillen, waagrecht scrollbar | 5+ Optionen oder Ansichten (Woche/Team/Räume, Instrumente, Würfelseiten). Bei sehr vielen Optionen ein `<select>` |
-| **Kacheln** `.tiles` | Raster mit Bild oben und Text darunter | Optionen mit Bild (Sensoren, Geräusche, Stimmen, Effekte). Bild = Tabler-Icon (Funktion) oder Emoji/Illustration (Inhalt). 3 Spalten bei 375 px, Auswahl = Akzentfläche |
-| **Werkzeugleiste** `.toolbar` | unten in Bühnen-Apps, Knöpfe mit Icon über kurzem Wort | höchstens 5 Einträge, sonst „Mehr“ (`dots`). Immer mit Beschriftung; nur bei allgemein bekannten Formatierungen (B, I) darf sie fehlen. Aktives Werkzeug in Akzent |
+| **Kacheln** `.tiles` | Raster mit Bild oben und Text darunter | Optionen mit Bild (Sensoren, Geräusche, Stimmen, Effekte). Bild = Tabler-Icon oder eigene SVG-Illustration, nie Emoji. Immer mit Text. 3 Spalten bei 375 px, Auswahl = Akzentfläche |
+| **Werkzeugleiste** `.toolbar` | unten in Bühnen-Apps, Knöpfe mit Icon, darunter ein kurzes Wort | **Beschriftung, wenn Platz ist:** Jeder Eintrag braucht mit Wort mindestens 64 px Breite, also bis zu 5 Einträge bei 375 px. Passen mehr hinein, zeigt die Leiste nur Icons (44 px, `aria-label` und `title`). Das macht `base.css` automatisch per Container-Abfrage, die App setzt immer beide (Icon und Wort). Werkzeuge, die nicht passen, kommen hinter „Mehr“ (`dots`). Aktives Werkzeug in Akzent |
 | **Ablagefläche** `.dropzone` | `<label class="dropzone">` mit Icon `file-upload`, „PDF wählen“ und „oder hierher ziehen“ | einziges Muster zum Datei-Wählen; Tippen öffnet die Dateiauswahl, Ziehen funktioniert auf dem PC. Kamera/Aufnahme als zweiter Knopf darunter |
 | **Leerzustand** `.empty` | Icon 44 px (gedämpft), ein Satz, optional Hauptaktion | statt freiem Text oder Emoji-Bild; Kinder-Apps dürfen eine Illustration nehmen |
 | **Schritt** `.step` | `<h2><span class="step">1</span>Video wählen</h2>` | für feste Abläufe (Datei → Einstellung → Ergebnis), runder Zahlpunkt in Akzent |
@@ -168,6 +168,18 @@ Neue gemeinsame Klassen, damit Apps keine eigenen Varianten mehr bauen müssen. 
 | **Gesperrt** | `.btn:disabled` grau statt blasser Akzent, dazu `.notice.info` mit Grund | Leitlinie 8 |
 
 Die Bildtafel „Bausteine“ (siehe unten) zeigt Menü, Datei-App, Bühnen-App und Spiel als Entwurf.
+
+---
+
+## 4a. Kopfleiste: Schnellaktionen nach Bedarf
+
+Es gibt keine feste Höchstzahl. Die Zahl richtet sich nach dem Bedarf der App und dem Platz:
+
+- **In die Kopfleiste** gehört, was während der Hauptaufgabe immer wieder gebraucht wird und keinen Platz auf der Seite hat (Rückgängig, Speichern/Teilen des Ergebnisses, Vollbild, Kamera wechseln, Ton). Einmalige oder seltene Aktionen kommen ins Menü, Hauptaktionen auf die Seite.
+- **Platzregel (wird getestet):** Bei 375 px Breite mit sichtbarem ↻-Knopf für Updates muss der Titel mindestens 96 px breit bleiben und darf nicht abgeschnitten werden. Bei einem kurzen Titel sind so bis zu 4 Schnellaktionen möglich, bei einem langen weniger. Was nicht passt, kommt als erste Zeile ins Menü.
+- **Beschriftung:** In der Kopfleiste stehen nur Icons, denn für Text ist kein Platz. Deshalb nur Icons aus dem Lexikon.
+- **Reihenfolge** von links nach rechts: Bearbeiten (Rückgängig/Wiederholen) → Ansicht (Vollbild, Alles zeigen) → Ergebnis (Speichern, Teilen) → ↻ → ☰.
+- Knöpfe, die gerade nichts bewirken, werden ausgeblendet (`hidden`), nicht nur gesperrt. Ausnahme: Rückgängig/Wiederholen, deren Platz stabil bleiben soll.
 
 ---
 
@@ -183,9 +195,9 @@ Das Menü ist der Ort für alles, was selten gebraucht wird. Es soll in jeder Ap
 │ │ ✕  PDF schließen                (rot)│ │     Gefährliches am Ende, rot
 │ └──────────────────────────────────────┘ │
 │ ┌──────────────────────────────────────┐ │  2. Bereiche der App (Meine Mindmaps, Feeds …)
-│ │ ⚙  Einstellungen                   ⌄ │ │  3. Standardbereiche, immer in dieser Reihenfolge,
-│ │ ⟲  Verlauf                         3 │ │     zugeklappt, Icon aus Abschnitt 3
-│ │ ⛁  Daten sichern & übertragen      ⌄ │ │
+│ │ ⚙  Einstellungen                   › │ │  3. Standardbereiche, immer in dieser Reihenfolge,
+│ │ ⟲  Verlauf                       3 › │ │     Icon aus Abschnitt 3; › = Unterseite,
+│ │ ⛁  Daten sichern & übertragen      › │ │     ⌄ = klappt an Ort und Stelle auf
 │ │ ?  Anleitung & Hinweise            ⌄ │ │
 │ │ 📱 Als App installieren            ⌄ │ │  4. Installieren: eine Zeile statt großer Karte
 │ └──────────────────────────────────────┘ │
@@ -201,6 +213,15 @@ Das Menü ist der Ort für alles, was selten gebraucht wird. Es soll in jeder Ap
 - **Aktionen** im Menü stehen als `.menu-list` mit `<button data-icon="…">` untereinander, nicht als verstreute Text-Knöpfe. „Löschen/Schließen/Verwerfen“ stehen am Ende, in `--err`, mit `trash` bzw. `x`.
 - **Überschriften** innerhalb eines Abschnitts sind einheitlich `h3` (16 px). Unterbereiche wie „Personenerkennung“ werden zu eigenen Abschnitten oder zu `h4`.
 - **Nach einer Aktion, die zur App zurückführt:** `Tools.menu.close()` (wie bisher).
+
+### Unterseiten
+
+Kleine Abschnitte klappen an Ort und Stelle auf. Ein Abschnitt wird zur **Unterseite**, wenn er
+- aufgeklappt höher als etwa eine halbe Bildschirmhöhe wird (z. B. viele Einstellungen wie in `move-play`, `camera-effects`, `pdf-viewer`), oder
+- eine eigene Liste zum Verwalten enthält (Meine Mindmaps, Feeds, Playlists, Profile, Lose & Preise, Datenquellen), oder
+- selbst wieder Unterteilungen hat (Daten sichern & übertragen: Sichern / Laden / Alles löschen).
+
+Markup: `<section data-menu data-menu-page data-icon="settings" aria-labelledby="…">`. Im Menü erscheint dann eine Zeile mit Icon, Titel, optional einem Wert oder einer Zahl und `chevron-right`. Ein Tippen schiebt die Unterseite im selben Sheet herein. Ihre Kopfzeile hat `chevron-left` (zurück) und den Titel, ✕ schließt das ganze Menü. Die Zurück-Geste des Handys führt erst zur Menü-Übersicht zurück (eigener History-Eintrag wie heute beim Menü). Eine Ebene reicht, Unterseiten von Unterseiten gibt es nicht. `Tools.menu.open('<id>')` öffnet direkt eine Unterseite (z. B. aus einem Leerzustand: „Datenquelle eintragen“).
 
 ---
 
@@ -221,7 +242,10 @@ Das Menü ist der Ort für alles, was selten gebraucht wird. Es soll in jeder Ap
 ### Allgemeine Tests (neu, z. B. `tests/ui.spec.mjs`)
 
 - Jeder `.head-btn`- und `.toolbar`-Knopf hat ein `svg.ic` und einen zugänglichen Namen.
-- Kein Knopftext beginnt mit einem Emoji, außer in `.tiles` und in Bereichen mit `data-content` (Spielinhalt).
+- Kein Emoji im sichtbaren Text der Seite (geprüft im gerenderten DOM, hell und Englisch), außer in Nutzereingaben und in ausdrücklich markierten Datensätzen (`data-emoji-content`, z. B. das Emoji-Beispiel in `image-swipe`).
+- Kopfleiste bei 375 px mit sichtbarem ↻: Der Titel ist ≥ 96 px breit und nicht abgeschnitten, nichts läuft über.
+- Werkzeugleiste: Jeder Eintrag ist ≥ 44 px breit; ohne sichtbares Wort hat er `aria-label` und `title`.
+- Menü-Unterseiten: öffnen, Zurück-Knopf und Zurück-Geste führen zur Übersicht, ✕ schließt alles, der Fokus springt sinnvoll mit.
 - Gleiche Aktionen haben gleiche Icons: Wenn ein `aria-label` einem Lexikon-Wort entspricht (z. B. „Rückgängig“), muss das passende Icon verwendet sein.
 - Die Bausteine bestehen axe hell und dunkel (laufen über die vorhandenen a11y-Tests ohnehin mit).
 
@@ -237,22 +261,24 @@ Das Menü ist der Ort für alles, was selten gebraucht wird. Es soll in jeder Ap
 Jeder Schritt ist ein eigener PR mit Vorher/Nachher-Screenshots (hell und dunkel, 375 px) und `npm run test:app` für die betroffenen Apps.
 
 1. **Grundlage (sichtbar nur in der Vorlage):** Sprite-Erzeugung, `Tools.icon`, Lexikon, Bausteine in `base.css`, `template/`, Tests, Abschnitt in `AGENTS.md`.
-2. **Menü (wirkt auf alle Apps):** Icons für Standardbereiche, Installieren als Zeile ans Ende, `data-icon` für `data-menu`-Abschnitte, `.menu-list`.
+2. **Menü (wirkt auf alle Apps):** Icons für Standardbereiche, Installieren als Zeile ans Ende, `data-icon` für `data-menu`-Abschnitte, `.menu-list`, Unterseiten (`data-menu-page`). „Daten sichern & übertragen“ wird gleich zur Unterseite.
 3. **Datei-Apps:** `audio-studio`, `pdf2word`, `video-to-audio`, `voice-transcriber`, `pdf-edit`, `pdf-viewer`, `image-converter`, `doc-scanner`, `video-analysis`, `securpharm-scanner` → `.dropzone`, `.step`, Knöpfe mit Icons, gesperrte Knöpfe mit Grund.
 4. **Bühnen-Apps mit Werkzeugen:** `paint`, `mind-map`, `markdown-editor`, `loop-station`, `code-runner`, `business-card`, `calc-pad`, `songbook`, `piano`, `function-plotter`, `playlist-player` → `.toolbar`, kopierte SVGs durch das Sprite ersetzen.
-5. **Spiele & Spaß:** `card-games`, `quartet`, `sea-battle`, `tic-tac-toe`, `rock-paper-scissors`, `reaction-game`, `dice-coin`, `lucky-wheel`, `raffle`, `spin-the-bottle`, `scoreboard`, `move-play`, `laser-mirrors`, `plush-puzzle`, `treasure-hunt`, `whip`, `whoopee-cushion`, `talking-animal`, `camera-effects`, `image-swipe`, `wind-instruments` → Emoji aus den Bedienknöpfen (der Inhalt bleibt), `.seg`/`.tiles`, ein gemeinsamer Mehrspieler-Startbildschirm.
+5. **Spiele & Spaß:** `card-games`, `quartet`, `sea-battle`, `tic-tac-toe`, `rock-paper-scissors`, `reaction-game`, `dice-coin`, `lucky-wheel`, `raffle`, `spin-the-bottle`, `scoreboard`, `move-play`, `laser-mirrors`, `plush-puzzle`, `treasure-hunt`, `whip`, `whoopee-cushion`, `talking-animal`, `camera-effects`, `image-swipe`, `wind-instruments` → alle Emoji durch Tabler-Icons, eigene Illustrationen oder Text ersetzen (Leitlinie 5), `.seg`/`.tiles`, ein gemeinsamer Mehrspieler-Startbildschirm. `treasure-hunt` (221 Emoji, auch in Figuren und Stationen) bekommt dafür einen eigenen PR.
 6. **Formular-Apps:** `api-check`, `brew-calculator`, `countdown`, `calendar-events`, `data-logger`, `reminders`, `rss-reader`, `qr-code`, `secret-santa`, `duty-roster`, `text-to-speech`, `marquee`, `ai-chat`, `sensors`, `cast-demo` → `.form-field` statt `.field`, `.seg`/`.chips`, `.notice`.
 
 Gespeicherte Daten und Schlüssel bleiben dabei unverändert; es ändert sich nur die Darstellung.
 
 ---
 
-## 8. Offene Fragen zur Abstimmung
+## 8. Entscheidungen
 
-1. **Emoji in Kinder- und Spaß-Apps:** Sollen die Kacheln von `whoopee-cushion`, `whip`, `talking-animal`, `camera-effects` ihre Emoji behalten (Vorschlag: ja, als Inhalt) oder einheitliche Illustrationen bekommen?
-2. **Werkzeugleiste immer beschriftet?** Vorschlag: ja. Die Ausnahme sind Formatierungszeichen in `markdown-editor`, die zusätzlich einen Tooltip und `aria-label` haben.
-3. **Menü flach oder mit Unterseiten?** Vorschlag: flach mit zugeklappten Abschnitten (wie heute, nur mit Icons). Unterseiten würden mehr Code in `common.js` bedeuten.
-4. **Kopfleiste:** Bleibt es bei höchstens zwei Schnellaktionen in Bühnen-Apps (heute bis zu drei in `pdf-viewer`)?
+| Frage | Entscheidung | Umsetzung |
+|---|---|---|
+| Emoji in Kinder- und Spaß-Apps? | **Emoji werden nicht gebraucht** und fallen überall weg, auch in Kacheln und als Spielinhalt. | Leitlinie 5: Tabler-Icon → eigene Illustration → Text; Test „kein Emoji im sichtbaren Text“ |
+| Werkzeugleiste immer beschriftet? | **Beschriftung nur, wenn Platz ist.** | `.toolbar` mit Wort ab 64 px je Eintrag, sonst nur Icon mit `aria-label` und `title` (Abschnitt 4); Knöpfe, Kacheln und Menüzeilen haben immer Text |
+| Menü flach oder mit Unterseiten? | **Unterseiten, wo nötig.** | Kriterien und Verhalten in Abschnitt 5 „Unterseiten“; eine Ebene |
+| Anzahl der Schnellaktionen? | **Je nach Bedarf**, begrenzt durch den Platz. | Abschnitt 4a: Bedarfs- und Platzregel (Titel ≥ 96 px bei 375 px mit ↻), getestet |
 
 ---
 
@@ -267,7 +293,7 @@ Gespeicherte Daten und Schlüssel bleiben dabei unverändert; es ändert sich nu
 | business-card | Werkzeuge Text/Bild/QR als Text-Knöpfe | `.toolbar` bzw. Knöpfe mit Icons |
 | calc-pad | gut; Tastenfeld mit eigenen Zeichen | Sprite statt kopierter SVGs |
 | calendar-events | nur Text-Knöpfe | Hauptaktion mit Icon `calendar` |
-| camera-effects | Tabs mit Emoji, Effekt-Kacheln Emoji | `.seg` mit Tabler-Icon, `.tiles` (Emoji bleibt als Inhalt) |
+| camera-effects | Tabs mit Emoji, Effekt-Kacheln Emoji | `.seg` mit `palette` / `mood-smile` / `user-scan`, `.tiles` mit Tabler-Icons |
 | card-games, quartet, sea-battle | Startbildschirm ähnlich, aber nicht gleich | gemeinsamer Mehrspieler-Start mit `device-desktop` / `devices` / `scan` |
 | cast-demo | ok | `.seg` |
 | code-runner | Werkzeugleiste mit Textzeichen `⇥ ( ) [ ]` | `.toolbar` (Zeichen als Inhalt erlaubt, aber gleiche Größe) |
@@ -278,33 +304,33 @@ Gespeicherte Daten und Schlüssel bleiben dabei unverändert; es ändert sich nu
 | duty-roster | Ansichten als Pillen, grauer Hinweis | `.chips`, `.notice.info` |
 | function-plotter | +/− als Text, Emoji im Code | `zoom-in` / `zoom-out` |
 | image-converter | Ablagefläche mit Knopf darin | `.dropzone` |
-| image-swipe | ♥ als Zeichen | `heart` |
+| image-swipe | ♥ als Zeichen | `heart`; das Emoji-Beispiel bleibt (Datensatz, `data-emoji-content`) |
 | laser-mirrors | ⚡ Laser-Knopf | `.btn` mit Tabler-Icon |
-| loop-station | 🔴 Aufnehmen, ▶️ Start | `player-record`, `player-play`, `.toolbar` |
+| loop-station | 🔴 Aufnehmen, ▶️ Start, Emoji im Leerzustand | `player-record`, `player-play`, `.toolbar`, `.empty` mit `vinyl` |
 | lucky-wheel, raffle | gut | Sprite |
 | markdown-editor | Formatierung ohne Beschriftung | `.toolbar` mit Tooltips |
 | marquee | ok | `.seg` |
 | mind-map | Werkzeugleiste schon vorbildlich | als Vorlage für `.toolbar` |
-| move-play | 👤/👥 im Umschalter | `.seg` mit `user` / `users` |
+| move-play | 👤/👥 im Umschalter, Emoji in Spielkarten | `.seg` mit `user` / `users`, Spielkarten mit Tabler-Icons |
 | paint | Werkzeugleiste ohne Beschriftung, Teilen-Icon abweichend | `.toolbar`, `share` |
 | pdf-edit, pdf2word, video-to-audio, voice-transcriber | blass gesperrte Hauptaktion ohne Grund | gesperrt + `.notice.info`, `.dropzone`, `.step` |
-| pdf-viewer | drei Kopfleisten-Aktionen, Menü-Aktionen verstreut | `.menu-list` |
+| pdf-viewer | drei Kopfleisten-Aktionen, Menü-Aktionen verstreut, lange Einstellungen | `.menu-list`, Einstellungen als Unterseite; Kopfleiste bleibt bei drei (passt laut Platzregel) |
 | piano, songbook | Player-Leiste eigen | gemeinsame Player-Leiste (`player-*`) |
 | playlist-player | gut, nutzt schon `.form-field` | Sprite |
 | plush-puzzle | ▶ als Zeichen | `player-play` |
 | qr-code | zweizeiliges Segment „Link / Text“ | `.seg` mit Icons (`link`, `wifi`, `address-book`) |
-| reaction-game | Emoji in Spielauswahl | `.seg` (Emoji als Inhalt ok) |
+| reaction-game | Emoji in Spielauswahl (🔨 💡 🦟) | `.seg` mit `hammer` / `bulb` / `bug` |
 | reminders | 🔕-Status | `.notice.warn` mit `bell-off` |
-| rock-paper-scissors | 🖥️/📱/🎲/🧠 in Umschaltern | `.seg` mit `device-desktop` / `users` |
+| rock-paper-scissors | 🖥️/📱/🎲/🧠 in Umschaltern, Emoji-Handzeichen | `.seg` mit `device-desktop` / `users` / `dice-5` / `brain`; Handzeichen als Tabler-Icons `hand-two-fingers` (Schere), `hand-grab` (Stein), `hand-stop` (Papier); Echse und Spock als eigene Illustrationen (Tabler hat dafür keine Handzeichen) |
 | rss-reader | gut, nutzt schon `.form-field` | Knöpfe mit Icons |
-| scoreboard | Sportarten mit Emoji | ok (Inhalt) |
+| scoreboard | Sportarten mit Emoji | `ball-football`, `ping-pong`, `ball-tennis`, `target`; ohne passendes Icon nur Text |
 | secret-santa | 🎁 Knopf | Hauptaktion mit `gift` |
 | securpharm-scanner | Schritte, gut | `.seg`, `.step` |
 | sensors | Kacheln mit Tabler-Icons – vorbildlich | als Vorlage für `.tiles` |
-| spin-the-bottle | 🍾 Drehen | `rotate-clockwise` oder ohne Icon |
-| talking-animal, whip, whoopee-cushion | 🎤 / 📳 / 🔁 in Bedienknöpfen | Tabler-Icons; Kacheln behalten Emoji |
+| spin-the-bottle | 🍾 Drehen | `rotate-clockwise` |
+| talking-animal, whip, whoopee-cushion | 🎤 / 📳 / 🔁 in Bedienknöpfen, Emoji-Kacheln für Stimmen/Geräusche | `microphone`, `device-mobile-vibration`, `repeat`; Kacheln mit Tabler-Icons (z. B. `mouse`, `robot`, `alien`, `wind`, `droplet`, `cloud-storm`, `dice-5`) |
 | text-to-speech | ▶ als Zeichen | `player-play` |
 | tic-tac-toe | 👥 / 🤖 | `users` / `device-desktop` |
-| treasure-hunt | 221 Emoji, auch ➕ 📂 ✏️ in Knöpfen | Knöpfe auf Tabler, Spielinhalt bleibt |
+| treasure-hunt | 221 Emoji, auch ➕ 📂 ✏️ in Knöpfen | Knöpfe und Inhalt auf Tabler-Icons (`map-2`, `map-pin`, `compass`, `key`, `trophy`, `swords`, `bolt`, `confetti`) bzw. Illustrationen, eigener PR |
 | video-analysis | Primärknopf statt Ablagefläche | `.dropzone` + Aufnehmen |
 | wind-instruments | Pillen-Tabs | `.chips` |
