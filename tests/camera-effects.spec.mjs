@@ -181,7 +181,7 @@ test.describe('people (fake detection worker)', () => {
     let msg = '';
     page.once('dialog', d => { msg = d.message(); d.accept(); });
     await page.click('#btnDetect');
-    await expect(page.locator('#badge')).toHaveText('👤 2 Personen');
+    await expect(page.locator('#badge')).toHaveText('2 Personen');
     // Not cached yet: engine (14.5 MB) + model (4.6 MB)
     expect(msg).toContain('ca. 19,1 MB');
     expect(msg).toContain('Google');
@@ -276,10 +276,10 @@ test.describe('people (fake detection worker)', () => {
       await expect(page.locator('#fx button[data-fx="thermal"] .l')).toHaveText('Thermal');
       await startCamera(page);
       await page.click('#btnDetect');
-      await expect(page.locator('#badge')).toHaveText('👤 2 people');
+      await expect(page.locator('#badge')).toHaveText('2 people');
       expect(msg).toContain('about 19.1 MB');
       await switchLang(page, 'de');
-      await expect(page.locator('#badge')).toHaveText('👤 2 Personen');
+      await expect(page.locator('#badge')).toHaveText('2 Personen');
       await expect(page.locator('#fx button[data-fx="thermal"] .l')).toHaveText('Wärmebild');
     });
   });

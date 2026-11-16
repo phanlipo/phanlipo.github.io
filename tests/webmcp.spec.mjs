@@ -1120,7 +1120,7 @@ test.describe('camera-effects tools', () => {
     await startCamera(page);
     expect((await call(page, 'camera_effects_get_people', {})).result).toMatchObject({ camera_on: true, detecting: false, count: 0 });
     await page.click('#btnDetect');
-    await expect(page.locator('#badge')).toHaveText('👤 2 Personen');
+    await expect(page.locator('#badge')).toHaveText('2 Personen');
     const r = (await call(page, 'camera_effects_get_people', {})).result;
     expect(r).toMatchObject({ camera_on: true, detecting: true, count: 2 });
     // Fake worker: camera x 0.1, width 0.3 → mirrored selfie shows it at 1 − 0.1 − 0.3 = 0.6

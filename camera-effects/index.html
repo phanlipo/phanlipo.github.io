@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="list_effects, set_effect, set_face, get_people">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-S0s0myqaT0h81NoQB30HEboGR7ail8O3ZMEEAG23Pk4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-3j7DFiGgotZYoF7SHNXgOZAFLTOxu9OUmMKBwKUhXjk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -34,6 +34,10 @@
 main{max-width:1100px;margin-inline:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
 .view{flex:1;min-height:160px;position:relative;border-radius:var(--radius);overflow:hidden;background:#000}
 .view canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+.shutter{position:absolute;z-index:3;inset-block-end:12px;inset-inline-start:50%;transform:translateX(-50%);width:64px;height:64px;border-radius:50%;border:4px solid #fff;background:var(--accent);color:var(--accent-text);display:grid;place-items:center;padding:0;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+.shutter .ic{width:28px;height:28px}
+.shutter:disabled{display:none}
+.shutter:focus-visible{outline:3px solid #fff;outline-offset:3px}
 #video{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
 .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;color:#fff;background:rgba(0,0,0,.55)}
 .overlay[hidden]{display:none}
@@ -50,7 +54,9 @@ main{max-width:1100px;margin-inline:auto;padding:8px;display:flex;flex-direction
 .fx::-webkit-scrollbar{display:none}
 .fx button{flex:none;scroll-snap-align:start;min-width:72px;min-height:60px;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);
   font:inherit;font-size:13px;font-weight:600;line-height:1.15;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 8px;cursor:pointer}
-.fx button .e{font-size:22px;line-height:1.2}
+.fx button .e{line-height:1}
+.fx button .e .ic{width:24px;height:24px}
+.tabs .e .ic,.toggle .ic{width:18px;height:18px}
 .fx button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
 .row2{display:flex;gap:6px;align-items:stretch}
 .seg{flex:1;display:flex;min-width:0;border:2px solid var(--border);border-radius:12px;overflow:hidden}
@@ -60,12 +66,12 @@ main{max-width:1100px;margin-inline:auto;padding:8px;display:flex;flex-direction
 .toggle{flex:none;min-height:44px;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);font:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:2px 8px;white-space:nowrap}
 @media (max-width:400px){.seg button,.toggle{font-size:13px}.seg button{padding-inline:4px}}
 .toggle[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
-.tabs .e{font-size:16px}
+.tabs .e{line-height:1}
 .pane[hidden]{display:none}
 .pane{display:grid;gap:6px}
 /* Compact chips (distortions): emoji and text side by side */
 .fx.compact button{flex-direction:row;gap:4px;min-height:44px;min-width:0;padding:2px 10px;white-space:nowrap}
-.fx.compact button .e{font-size:18px}
+.fx.compact button .e .ic{width:20px;height:20px}
 .card h2{margin-block-end:8px}
 .check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
 .check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
@@ -82,7 +88,7 @@ dialog#photo .row{margin-block-start:10px}
   .fx{flex-wrap:wrap;overflow:visible;-webkit-mask-image:none;mask-image:none}
   .fx{gap:4px}
   .fx button{min-width:64px;flex:1 0 64px;min-height:44px;font-size:12px;padding-block:2px}
-  .fx button .e{font-size:16px}
+  .fx button .e .ic{width:20px;height:20px}
   .row2{flex-direction:column}
   .fx.compact button{flex:1 0 auto}
   .tabs{position:sticky;top:0;z-index:1;background:var(--bg)}
@@ -96,9 +102,6 @@ dialog#photo .row{margin-block-start:10px}
   <div class="stage-actions">
     <button type="button" class="head-btn" id="btnFlip" aria-label="Kamera wechseln" data-i18n-attr="aria-label:flip; title:flip" title="Kamera wechseln" disabled>
       <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#camera-rotate"/></svg>
-    </button>
-    <button type="button" class="head-btn" id="btnPhoto" aria-label="Foto aufnehmen" data-i18n-attr="aria-label:photo; title:photo" title="Foto aufnehmen" disabled>
-      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#camera"/></svg>
     </button>
   </div>
 </header>
@@ -114,12 +117,16 @@ dialog#photo .row{margin-block-start:10px}
       <p id="ovText" data-i18n="intro">Tippe auf „Kamera starten“ und wähle unten einen Effekt.</p>
       <button type="button" class="btn primary" id="btnStart" data-i18n="start">Kamera starten</button>
     </div>
+    <!-- Shutter at the bottom of the picture (thumb), shown while the camera runs -->
+    <button type="button" class="shutter" id="btnPhoto" aria-label="Foto aufnehmen" data-i18n-attr="aria-label:photo; title:photo" title="Foto aufnehmen" disabled>
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#camera"/></svg>
+    </button>
   </div>
 
   <div class="controls">
     <div class="seg tabs" id="tabs" role="group" aria-label="Bereich" data-i18n-attr="aria-label:tabs">
-      <button type="button" data-tab="fx" aria-pressed="true"><span class="e" aria-hidden="true">🎨 </span><span data-i18n="tab.fx">Effekte</span></button>
-      <button type="button" data-tab="face" aria-pressed="false"><span class="e" aria-hidden="true">🙂 </span><span data-i18n="tab.face">Gesicht</span></button>
+      <button type="button" data-tab="fx" aria-pressed="true"><span class="e" aria-hidden="true"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#palette"/></svg></span><span data-i18n="tab.fx">Effekte</span></button>
+      <button type="button" data-tab="face" aria-pressed="false"><span class="e" aria-hidden="true"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#mood-smile"/></svg></span><span data-i18n="tab.face">Gesicht</span></button>
     </div>
     <div class="pane" id="paneFace" hidden>
       <h2 class="sr-only" id="h-acc" data-i18n="acc">Accessoire</h2>
@@ -136,7 +143,7 @@ dialog#photo .row{margin-block-start:10px}
         <button type="button" data-scope="people" aria-pressed="false" data-i18n="scope.people">Personen</button>
         <button type="button" data-scope="background" aria-pressed="false" data-i18n="scope.background">Hintergrund</button>
       </div>
-      <button type="button" class="toggle" id="btnDetect" aria-pressed="false"><span aria-hidden="true">👤 </span><span data-i18n="detect">Erkennen</span></button>
+      <button type="button" class="toggle" id="btnDetect" aria-pressed="false"><span aria-hidden="true"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#user-scan"/></svg></span><span data-i18n="detect">Erkennen</span></button>
     </div>
     </div>
   </div>
@@ -185,10 +192,10 @@ dialog#photo .row{margin-block-start:10px}
   <h3>Bedienung</h3>
   <ul>
     <li><b>Kamera starten</b> tippen und den Zugriff erlauben. Oben rechts wechselst du zwischen Front- und Rückkamera und nimmst ein <b>Foto</b> auf (mit Effekt, zum Speichern oder Teilen).</li>
-    <li>Im Reiter <b>🎨 Effekte</b> unten einen <b>Effekt</b> wählen – die Reihe lässt sich seitlich wischen: Original, Schwarzweiß, Sepia, Negativ, Comic, Skizze, Wärmebild, Nachtsicht, Pixel, Retro, Pop-Art, Neon, Bunt, Weichzeichner, Spiegel und Kaleidoskop.</li>
+    <li>Im Reiter <b>Effekte</b> unten einen <b>Effekt</b> wählen – die Reihe lässt sich seitlich wischen: Original, Schwarzweiß, Sepia, Negativ, Comic, Skizze, Wärmebild, Nachtsicht, Pixel, Retro, Pop-Art, Neon, Bunt, Weichzeichner, Spiegel und Kaleidoskop.</li>
     <li><b>Wirkt auf:</b> <i>Alles</i>, nur auf <i>Personen</i> oder nur auf den <i>Hintergrund</i>. So wird z. B. mit <i>Weichzeichner</i> + <i>Hintergrund</i> der Hintergrund unscharf, mit <i>Schwarzweiß</i> + <i>Hintergrund</i> bleibt nur die Person farbig.</li>
-    <li><b>👤 Erkennen</b> rahmt jede erkannte Person ein und zählt sie (oben links).</li>
-    <li>Reiter <b>🙂 Gesicht</b>: oben ein <b>Accessoire</b> – Sonnenbrille, Herzbrille, Partyhut, Krone, Katze, Hund (streckt die Zunge raus, wenn du den Mund öffnest), Hase, Teufel, Schnurrbart, Clownsnase, Heiligenschein; darunter eine <b>Verzerrung</b> – Fischauge, Große Augen, Großer Mund, Mini-Gesicht, Wirbel, Breit, Lang, Wackeln. Beides lässt sich kombinieren und mit jedem Effekt mischen, bis zu drei Gesichter gleichzeitig.</li>
+    <li><b>Erkennen</b> rahmt jede erkannte Person ein und zählt sie (oben links).</li>
+    <li>Reiter <b>Gesicht</b>: oben ein <b>Accessoire</b> – Sonnenbrille, Herzbrille, Partyhut, Krone, Katze, Hund (streckt die Zunge raus, wenn du den Mund öffnest), Hase, Teufel, Schnurrbart, Clownsnase, Heiligenschein; darunter eine <b>Verzerrung</b> – Fischauge, Große Augen, Großer Mund, Mini-Gesicht, Wirbel, Breit, Lang, Wackeln. Beides lässt sich kombinieren und mit jedem Effekt mischen, bis zu drei Gesichter gleichzeitig.</li>
     <li>Im Menü ☰ unter <i>Einstellungen</i>: Stärke des Effekts, Spiegeln der Selfie-Kamera, Sicherheit der Erkennung in %, heruntergeladene Erkennung löschen.</li>
   </ul>
   <h3>Personenerkennung</h3>
@@ -212,10 +219,10 @@ dialog#photo .row{margin-block-start:10px}
   <h3>How to use</h3>
   <ul>
     <li>Tap <b>Start camera</b> and allow access. At the top right you switch between front and rear camera and take a <b>photo</b> (with the effect, to save or share).</li>
-    <li>In the <b>🎨 Effects</b> tab pick an <b>effect</b> below – swipe the row sideways: original, black &amp; white, sepia, negative, comic, sketch, thermal, night vision, pixel, retro, pop art, neon, vivid, soft blur, mirror and kaleidoscope.</li>
+    <li>In the <b>Effects</b> tab pick an <b>effect</b> below – swipe the row sideways: original, black &amp; white, sepia, negative, comic, sketch, thermal, night vision, pixel, retro, pop art, neon, vivid, soft blur, mirror and kaleidoscope.</li>
     <li><b>Applies to:</b> <i>All</i>, only <i>People</i> or only the <i>Background</i>. For example <i>Soft blur</i> + <i>Background</i> blurs the background, <i>Black &amp; white</i> + <i>Background</i> keeps only the person in colour.</li>
-    <li><b>👤 Detect</b> draws a frame around every person found and counts them (top left).</li>
-    <li><b>🙂 Face</b> tab: at the top an <b>accessory</b> – sunglasses, heart glasses, party hat, crown, cat, dog (sticks out its tongue when you open your mouth), bunny, devil, moustache, clown nose, halo; below it a <b>distortion</b> – fisheye, big eyes, big mouth, tiny face, swirl, wide, long, wobble. Both can be combined and mixed with any effect, up to three faces at once.</li>
+    <li><b>Detect</b> draws a frame around every person found and counts them (top left).</li>
+    <li><b>Face</b> tab: at the top an <b>accessory</b> – sunglasses, heart glasses, party hat, crown, cat, dog (sticks out its tongue when you open your mouth), bunny, devil, moustache, clown nose, halo; below it a <b>distortion</b> – fisheye, big eyes, big mouth, tiny face, swirl, wide, long, wobble. Both can be combined and mixed with any effect, up to three faces at once.</li>
     <li>In the menu ☰ under <i>Settings</i>: strength of the effect, mirroring the selfie camera, detection confidence in %, deleting the downloaded detection.</li>
   </ul>
   <h3>People detection</h3>
@@ -245,7 +252,7 @@ dialog#photo .row{margin-block-start:10px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version e54e4fd394ef</p>
+  <p class="footer-version">Version 7910e65551fe</p>
   <!-- footer:end -->
 </footer>
 
@@ -254,13 +261,10 @@ dialog#photo .row{margin-block-start:10px}
 <script>
 (function(){
 'use strict';
-const FX=[
-  ['none','🎥'],['gray','⚫'],['sepia','🟤'],['invert','🔄'],['comic','💥'],['sketch','✏️'],['thermal','🌡️'],['night','🌙'],
-  ['pixel','👾'],['retro','📼'],['popart','🎨'],['neon','✨'],['vivid','🌈'],['blur','💧'],['mirror','🪞'],['kaleido','🔯']
-];
+const FX=[['none',Tools.icon('movie')],['gray',Tools.icon('circle-half')],['sepia',Tools.icon('coffee')],['invert',Tools.icon('contrast')],['comic',Tools.icon('bolt')],['sketch',Tools.icon('writing')],['thermal',Tools.icon('temperature')],['night',Tools.icon('moon')],['pixel',Tools.icon('grid-dots')],['retro',Tools.icon('device-tv-old')],['popart',Tools.icon('palette')],['neon',Tools.icon('sparkles')],['vivid',Tools.icon('rainbow')],['blur',Tools.icon('droplet')],['mirror',Tools.icon('flip-vertical')],['kaleido',Tools.icon('hexagon')]];
 const IDS=FX.map(f=>f[0]);
-const ACC=[['none','🚫'],['glasses','🕶️'],['hearts','😍'],['hat','🥳'],['crown','👑'],['cat','🐱'],['dog','🐶'],['bunny','🐰'],['devil','😈'],['mustache','🥸'],['clown','🤡'],['halo','😇']];
-const WARP=[['none','🙂'],['bulge','🐟'],['eyes','👀'],['mouth','👄'],['pinch','🤏'],['swirl','🌀'],['wide','↔️'],['long','↕️'],['wobble','〰️']];
+const ACC=[['none',Tools.icon('ban')],['glasses',Tools.icon('sunglasses')],['hearts',Tools.icon('heart')],['hat',Tools.icon('confetti')],['crown',Tools.icon('crown')],['cat',Tools.icon('cat')],['dog',Tools.icon('dog')],['bunny',Tools.icon('carrot')],['devil',Tools.icon('flame')],['mustache',Tools.icon('mood-wrrr')],['clown',Tools.icon('mood-crazy-happy')],['halo',Tools.icon('feather')]];
+const WARP=[['none',Tools.icon('mood-smile')],['bulge',Tools.icon('fish')],['eyes',Tools.icon('eye')],['mouth',Tools.icon('mood-tongue')],['pinch',Tools.icon('hand-grab')],['swirl',Tools.icon('spiral')],['wide',Tools.icon('arrows-horizontal')],['long',Tools.icon('arrows-vertical')],['wobble',Tools.icon('wave-sine')]];
 const ACC_IDS=ACC.map(a=>a[0]),WARP_IDS=WARP.map(w=>w[0]);
 const SCOPES=['all','people','background'];
 Tools.i18n({
@@ -628,7 +632,7 @@ function updateBadge(){
   const n=persons.length;
   if(n===shownCount)return;
   shownCount=n;
-  $('badge').textContent='👤 '+(n===0?t('people0'):n===1?t('people1'):t('people',{n}));
+  $('badge').innerHTML=Tools.icon('user-scan')+' '+Tools.esc(n===0?t('people0'):n===1?t('people1'):t('people',{n}));
 }
 
 /* ---------- Controls ---------- */

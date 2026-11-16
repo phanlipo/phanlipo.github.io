@@ -175,7 +175,7 @@ test.describe('Image Swipe', () => {
     await page.click('#btnLike');
     await page.click('#btnNope');
     await page.click('#btnLike');
-    await expect(page.locator('#emptyText')).toHaveText('Alles bewertet 🎉');
+    await expect(page.locator('#emptyText')).toHaveText('Alles bewertet');
     expect((await ls(page, K.swipes)).p1['karten-s1']).toEqual({ 's1-001': 'like', 's1-002': 'nope', 's1-004': 'like' });
   });
 
