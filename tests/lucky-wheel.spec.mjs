@@ -9,7 +9,7 @@ async function underPointer(page, onWheel) {
   const a = (((-rot) % TAU) + TAU) % TAU;
   return onWheel[Math.floor(a / (TAU / count))];
 }
-const winner = async page => (await page.locator('#result').textContent()).replace(/^🎉 /, '');
+const winner = async page => (await page.locator('#result').textContent()).trim();
 
 async function setEntries(page, list) {
   await openMenu(page);
@@ -99,7 +99,7 @@ test('fair: three entries come up about equally often', async ({ page }) => {
     const c = {};
     for (let i = 0; i < 600; i++) {
       document.getElementById('btnSpin').click();
-      const w = document.getElementById('result').textContent.replace(/^🎉 /, '');
+      const w = document.getElementById('result').textContent.trim();
       c[w] = (c[w] || 0) + 1;
     }
     return c;
@@ -117,7 +117,8 @@ test('animated spin: button disabled while spinning, lands on the winner', async
   await page.click('#btnSpin');
   await expect(page.locator('#result')).toHaveText('Dreht …');
   await expect(page.locator('#btnSpin')).toBeDisabled();
-  await expect(page.locator('#result')).toHaveText(/^🎉 /, { timeout: 10000 });
+  await expect(page.locator('#result')).toHaveClass(/\bwin\b/, { timeout: 10000 });
+  await expect(page.locator('#result use')).toHaveAttribute('href', /#confetti$/);
   await expect(page.locator('#btnSpin')).toBeEnabled();
   expect(await underPointer(page, list)).toBe(await winner(page));
 });

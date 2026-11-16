@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "plush-puzzle";
-const VERSION = '3f90101f9f7a';
+const VERSION = 'c57e78e8e29d';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

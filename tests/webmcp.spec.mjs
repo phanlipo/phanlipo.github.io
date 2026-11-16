@@ -993,7 +993,7 @@ test.describe('spin-the-bottle tools', () => {
     expect(result).toEqual({ player: ['Anna', 'Ben', 'Cem', 'Dora'][seat], seat_index: seat,
       angle_degrees: result.angle_degrees, total_spins: 1 });
     await expect(page.locator('.name.hit')).toHaveText(result.player);
-    await expect(page.locator('#status')).toHaveText(`🍾 ${result.player} ist dran!`);
+    await expect(page.locator('#status')).toHaveText(`${result.player} ist dran!`);
     await expect(page.locator('#toast')).toHaveText('KI-Agent: Flasche gedreht');
     const { result: info } = await call(page, 'spin_the_bottle_get_players', {});
     expect(info).toEqual({ players: ['Anna', 'Ben', 'Cem', 'Dora'], last_player: result.player, total_spins: 1, spinning: false,
@@ -1847,7 +1847,7 @@ test.describe('lucky-wheel tools', () => {
     expect(result.candidates).toContain(result.winner);
     expect(result.candidates[result.position - 1]).toBe(result.winner);
     expect(result).toMatchObject({ totalEntries: 3, removedFromWheel: false });
-    await expect(page.locator('#result')).toHaveText('🎉 ' + result.winner);
+    await expect(page.locator('#result')).toHaveText(result.winner);
     await expect(page.locator('#count')).toHaveText('3 Einträge auf dem Rad');
     await expect(page.locator('#toast')).toHaveText('KI-Agent: Rad gedreht');
     // The pointer stands on the winner (segment i starts at i·360°/n clockwise from the top)
@@ -2253,7 +2253,7 @@ test.describe('laser-mirrors tools', () => {
     // A double mirror at rotation 0 ("\") turns the beam coming down to the right, onto B5's target side
     expect(r.result).toMatchObject({ solved: true, beam: { targets_lit: 1, problems: [] } });
     expect(r.result.pieces[1].lit).toBe(true);
-    await expect(page.locator('#status')).toHaveText('🎉 Geschafft! Alle Ziele leuchten.');
+    await expect(page.locator('#status')).toHaveText('Geschafft! Alle Ziele leuchten.');
     expect((await call(page, 'laser_mirrors_rotate_piece', { square: 'A5', rotation: 1 })).error).toBe('The puzzle is already solved.');
     r = await call(page, 'laser_mirrors_list_puzzles', {});
     expect(r.result.puzzles[0].solved).toBe(true);

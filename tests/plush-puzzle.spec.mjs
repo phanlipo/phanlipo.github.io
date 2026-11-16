@@ -133,7 +133,7 @@ test('the last part brings confetti; the animal counts as finished', async ({ pa
     await expect(page.locator(`.piece[data-i="${i}"]`)).toHaveAttribute('data-slot', String(i));
   }
   await expect(page.locator('#board')).toHaveAttribute('data-phase', 'done');
-  await expect(page.locator('#status')).toHaveText('🎉 Geschafft! Der Delfin ist fertig!');
+  await expect(page.locator('#status')).toHaveText('Geschafft! Der Delfin ist fertig!');
   await expect(page.locator('#confetti')).toBeVisible();
   await expect(page.locator('#confetti')).toHaveAttribute('data-active', 'true');
   await expect(page.locator('#btnAgain')).toBeFocused();
@@ -142,7 +142,7 @@ test('the last part brings confetti; the animal counts as finished', async ({ pa
   await expect(page.locator('#confetti')).toBeHidden({ timeout: 15000 });
   await page.click('#btnOther');
   // Only a star is visible; the count is for screen readers
-  await expect(page.locator('[data-animal="dolphin"] .done')).toHaveText('⭐1× fertig');
+  await expect(page.locator('[data-animal="dolphin"] .done')).toHaveText('1× fertig');
   await expect(page.locator('[data-animal="dolphin"] .done .sr-only')).toHaveText('1× fertig');
   await openMenu(page);
   await expect(page.locator('#solvedInfo')).toHaveText('Schon 1× ein Tier fertig gebaut.');

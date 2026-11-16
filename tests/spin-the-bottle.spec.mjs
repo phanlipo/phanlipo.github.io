@@ -27,7 +27,7 @@ test('free spin without names stops somewhere new and remembers the angle', asyn
   const angles = new Set();
   for (let i = 0; i < 5; i++) {
     await spinAndWait(page);
-    await expect(page.locator('#status')).toHaveText('🍾 Gestoppt – wen trifft’s?');
+    await expect(page.locator('#status')).toHaveText('Gestoppt – wen trifft’s?');
     const a = await angle(page);
     expect(a).toBeGreaterThanOrEqual(0);
     expect(a).toBeLessThan(360);
@@ -37,7 +37,7 @@ test('free spin without names stops somewhere new and remembers the angle', asyn
   const last = await angle(page);
   await page.reload();
   expect(await angle(page)).toBeCloseTo(last, 1);
-  await expect(page.locator('#status')).toHaveText('🍾 Gestoppt – wen trifft’s?');
+  await expect(page.locator('#status')).toHaveText('Gestoppt – wen trifft’s?');
 });
 
 test('the bottle keeps turning while spinning and the button is blocked', async ({ page }) => {
@@ -70,7 +70,7 @@ test('players entered in the menu sit around the table; the named player matches
   for (let i = 0; i < 24; i++) {
     await spinAndWait(page, 1000);
     const who = names[seatOf(await angle(page), 4)];
-    await expect(page.locator('#status')).toHaveText(`🍾 ${who} ist dran!`);
+    await expect(page.locator('#status')).toHaveText(`${who} ist dran!`);
     await expect(page.locator('.name.hit')).toHaveText(who);
     // Fair mode (default): never the same player twice in a row
     expect(who).not.toBe(prev);
@@ -132,7 +132,7 @@ test('tapping the table spins; a fast swipe spins in its direction; a slow drag 
   await page.mouse.click(...at(0));
   await expect(table).toHaveAttribute('data-spinning', 'true');
   await expect(table).toHaveAttribute('data-spinning', 'false', { timeout: 3000 });
-  await expect(page.locator('#status')).toHaveText('🍾 Gestoppt – wen trifft’s?');
+  await expect(page.locator('#status')).toHaveText('Gestoppt – wen trifft’s?');
 
   // Fast swipes, clockwise and counter-clockwise (screen: top → right is clockwise)
   for (const [dir, sign] of [['cw', 1], ['ccw', -1]]) {
@@ -177,11 +177,11 @@ test.describe('English', () => {
     await page.clock.install();
     await withState(page, { ...base, players: ['Anna', 'Ben'] });
     await page.goto('/spin-the-bottle/');
-    await expect(page.locator('#btnSpin')).toHaveText('🍾 Spin');
+    await expect(page.locator('#btnSpin')).toHaveText('Spin');
     await expect(page.locator('#status')).toHaveText('Tap or swipe around to spin');
     await spinAndWait(page);
     const who = ['Anna', 'Ben'][seatOf(await angle(page), 2)];
-    await expect(page.locator('#status')).toHaveText(`🍾 ${who}’s turn!`);
+    await expect(page.locator('#status')).toHaveText(`${who}’s turn!`);
     await openMenu(page);
     await expect(page.locator('#playersInfo')).toHaveText('2 players at the table.');
   });

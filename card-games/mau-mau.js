@@ -44,7 +44,7 @@
         'mm.you.play': 'Du bist dran: passende Karte legen oder ziehen.', 'mm.wait': '{p} ist dran.',
         'mm.last.play': '{p} legt {c}.', 'mm.last.wish': '{p} legt {c} und wünscht {s}.', 'mm.last.draw': '{p} zieht eine Karte.',
         'mm.last.drawN': '{p} zieht {n} Karten.', 'mm.last.pass': '{p} sagt weiter.', 'mm.last.skip': '{p} muss aussetzen.', 'mm.last.youSkip': 'Du musst aussetzen.',
-        'mm.won': '{p} gewinnt!', 'mm.youWon': 'Du gewinnst! 🎉', 'mm.mau': 'Mau!',
+        'mm.won': '{p} gewinnt!', 'mm.youWon': 'Du gewinnst!', 'mm.mau': 'Mau!',
       },
       en: {
         'mm.title': 'Mau Mau', 'mm.desc': 'Suit on suit, rank on rank – whoever gets rid of all cards first wins. 2–5 players.',
@@ -55,7 +55,7 @@
         'mm.you.play': 'Your turn: play a matching card or draw.', 'mm.wait': '{p} is playing.',
         'mm.last.play': '{p} plays {c}.', 'mm.last.wish': '{p} plays {c} and wishes {s}.', 'mm.last.draw': '{p} draws a card.',
         'mm.last.drawN': '{p} draws {n} cards.', 'mm.last.pass': '{p} passes.', 'mm.last.skip': '{p} is skipped.', 'mm.last.youSkip': 'You are skipped.',
-        'mm.won': '{p} wins!', 'mm.youWon': 'You win! 🎉', 'mm.mau': 'Mau!',
+        'mm.won': '{p} wins!', 'mm.youWon': 'You win!', 'mm.mau': 'Mau!',
       },
     },
 
