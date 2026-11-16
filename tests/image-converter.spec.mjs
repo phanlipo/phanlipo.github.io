@@ -325,7 +325,7 @@ test.describe('Compressing', () => {
     await expect(page.locator('#limitHint')).toContainText('senkt die Qualität');
     await convert(page);
     const meta = page.locator('#outList .meta.ok');
-    await expect(meta).toContainText(`✓ ≤ ${kb} KB`);
+    await expect(meta).toContainText(`≤ ${kb} KB`);
     const q = Number((await meta.textContent()).match(/Qualität (\d+)/)[1]);
     expect(q).toBeGreaterThanOrEqual(40); expect(q).toBeLessThan(85);
     const { name, buf } = await save(page);
@@ -358,7 +358,8 @@ test.describe('Compressing', () => {
     await setLimit(page, 60);
     await expect(page.locator('#limitHint')).toContainText('PNG ist verlustfrei');
     await convert(page);
-    await expect(page.locator('#outList .meta.ok')).toHaveText('✓ ≤ 60 KB');
+    await expect(page.locator('#outList .meta.ok')).toHaveText('≤ 60 KB');
+    await expect(page.locator('#outList .meta.ok use')).toHaveAttribute('href', /#circle-check$/);
     const { buf } = await save(page);
     expect(buf.length).toBeLessThanOrEqual(60000);
     const r = await pixels(page, buf, 'image/png', [[0, 0]]);
@@ -380,7 +381,7 @@ test.describe('Compressing', () => {
     await add(page, [{ name: 'foto.jpg', mimeType: 'image/jpeg', buffer: await photo(page, 400, 300) }]);
     await setLimit(page, 1);
     await page.click('#btnConvert');
-    await expect(page.locator('#outList .meta.err')).toContainText('✕ 1 KB nicht erreicht · Qualität 40');
+    await expect(page.locator('#outList .meta.err')).toContainText('1 KB nicht erreicht · Qualität 40');
     await expect(page.locator('#status')).toHaveText('1 Bild umgewandelt. 1 Bild ist größer als 1 KB.');
     await expect(page.locator('#status')).toHaveClass(/err/);
     const { buf } = await save(page);
@@ -406,7 +407,7 @@ test.describe('English', () => {
   test.use({ locale: 'en-US' });
   test('texts, results and errors in English', async ({ page }) => {
     await page.goto(URL_);
-    await expect(page.locator('#btnPick')).toHaveText('Choose images');
+    await expect(page.locator('#btnPick strong')).toHaveText('Choose images');
     await page.locator('#formats input[value="png"]').check({ force: true });
     await expect(page.locator('#fmtHint')).toContainText('Lossless');
     await page.setInputFiles('#inPick', [{ name: 'a.txt', mimeType: 'text/plain', buffer: Buffer.from('x') }]);

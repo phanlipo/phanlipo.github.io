@@ -20,7 +20,7 @@
 <meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif, .avif, .gif, .bmp, .ico, .svg">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-j8ANMg2NwnMPMrTXqwx90PQvQXmMOBd46EJgrxVZ2Bw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-1jYaB/fJ4ZkKnJCMlSnw1Fq4A7agGoXUssi23autiMw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -32,9 +32,6 @@
 :root{--accent:#7e22ce;--accent-text:#ffffff}
 @media (prefers-color-scheme: dark){:root{--accent:#d8b4fe;--accent-text:#1e0836}}
 main{max-width:900px;margin-inline:auto;padding:12px;display:grid;gap:12px}
-.drop{border:2px dashed var(--border);border-radius:var(--radius);padding:16px;display:grid;gap:8px;justify-items:start}
-.drop.over{border-color:var(--accent);background:var(--surface-2)}
-.drop p{margin:0}
 .files{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
 .files li{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}
 .files img{width:56px;height:56px;object-fit:contain;border-radius:4px;background:repeating-conic-gradient(var(--border) 0 25%,transparent 0 50%) 0 0/12px 12px}
@@ -42,24 +39,18 @@ main{max-width:900px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .files .meta{font-size:13px;color:var(--muted)}
 .files .err{color:var(--err)}
 .files .btn{min-width:44px;padding-inline:10px}
-.formats{display:flex;flex-wrap:wrap;gap:6px;border:0;margin:0;padding:0}
-.formats legend{padding:0;margin-bottom:6px;font-weight:600}
-.formats label{position:relative}
-.formats input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
-.formats span{display:inline-flex;align-items:center;min-height:44px;padding-inline:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);font-weight:600}
-.formats input:checked+span{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
-.formats input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
-.formats input:disabled+span{opacity:.45;text-decoration:line-through}
-.opts{display:grid;gap:12px;margin-top:12px}
-.opts label{display:grid;gap:4px;font-weight:600}
+.opts{display:grid;gap:4px;margin-top:12px}
 .opts .inline{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
-.opts .inline label{flex:1 1 160px}
+.opts .inline>.form-field{flex:1 1 160px}
+.check{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:600}
+.check input{width:22px;height:22px;margin:0;accent-color:var(--accent)}
 input[type=range]{width:100%;min-height:44px;accent-color:var(--accent)}
 input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
-.opts label.check{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:600}
-.opts label.check input{width:22px;height:22px;margin:0;accent-color:var(--accent)}
 .files .ok{color:var(--ok,inherit)}
 #status{margin:8px 0 0;min-height:1.3em}
+#drop.over .dropzone{border-color:var(--accent);background:var(--surface-2)}
+#formats input:disabled+span{text-decoration:line-through}
+.res-mark{display:inline-flex;align-items:center;gap:4px}
 #status.err{color:var(--err)}
 </style>
 </head>
@@ -71,65 +62,64 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
 
 <main>
   <section class="card" aria-labelledby="h-in">
-    <h2 id="h-in" data-i18n="in.h">1. Bilder wählen</h2>
-    <div class="drop" id="drop">
-      <button type="button" class="btn primary" id="btnPick" data-i18n="in.pick">Bilder wählen</button>
-      <p class="muted" data-i18n="in.hint">Oder hierher ziehen bzw. einfügen. Möglich: JPG, PNG, HEIC/HEIF, WebP, AVIF, GIF, BMP, ICO, SVG (TIFF nur in Safari).</p>
+    <h2 id="h-in"><span class="step">1</span><span data-i18n="in.h">Bilder wählen</span></h2>
+    <div id="drop">
+      <button type="button" class="dropzone" id="btnPick"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#photo"/></svg><strong data-i18n="in.pick">Bilder wählen</strong>
+      <span class="dz-hint" data-i18n="in.hint">Oder hierher ziehen bzw. einfügen. Möglich: JPG, PNG, HEIC/HEIF, WebP, AVIF, GIF, BMP, ICO, SVG (TIFF nur in Safari).</span></button>
     </div>
     <input type="file" id="inPick" multiple accept="image/*,.heic,.heif,.avif,.svg,.ico,.bmp,.gif,.tif,.tiff" hidden>
     <ul class="files" id="inList" aria-labelledby="h-in"></ul>
     <div class="row" id="inActions" hidden>
-      <button type="button" class="btn" id="btnAdd" data-i18n="in.add">Weitere hinzufügen</button>
-      <button type="button" class="btn" id="btnClear" data-i18n="in.clear">Alle entfernen</button>
+      <button type="button" class="btn" id="btnAdd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="in.add">Weitere hinzufügen</span></button>
+      <button type="button" class="btn" id="btnClear"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="in.clear">Alle entfernen</span></button>
     </div>
   </section>
 
   <section class="card" aria-labelledby="h-out">
-    <h2 id="h-out" data-i18n="out.h">2. Zielformat</h2>
-    <fieldset class="formats" id="formats">
-      <legend class="sr-only" data-i18n="out.h">2. Zielformat</legend>
+    <h2 id="h-out"><span class="step">2</span><span data-i18n="out.h">Zielformat</span></h2>
+    <fieldset class="chips wrap" id="formats">
+      <legend class="sr-only" data-i18n="out.h">Zielformat</legend>
     </fieldset>
     <p class="muted" id="fmtHint"></p>
     <div class="opts">
-      <label id="qRow"><span><span data-i18n="out.quality">Qualität</span>: <output id="qOut" for="quality"></output></span>
+      <label class="form-field" id="qRow"><span><span data-i18n="out.quality">Qualität</span>: <output id="qOut" for="quality"></output></span>
         <input type="range" id="quality" min="10" max="100" step="5">
       </label>
       <div class="inline" id="sizeRow">
-        <label><span data-i18n="out.size">Größe</span>
+        <label class="form-field"><span data-i18n="out.size">Größe</span>
           <select id="resize">
             <option value="original" data-i18n="out.original">Originalgröße</option>
             <option value="max" data-i18n="out.max">Längste Seite in Pixel</option>
             <option value="percent" data-i18n="out.percent">Prozent</option>
           </select>
         </label>
-        <label id="valRow"><span id="valLabel">Pixel</span>
+        <label class="form-field" id="valRow"><span id="valLabel">Pixel</span>
           <input type="number" id="resizeVal" inputmode="numeric">
         </label>
       </div>
       <div id="limitRow">
         <label class="check"><input type="checkbox" id="limitOn"><span data-i18n="out.limit">Dateigröße begrenzen</span></label>
         <div class="inline" id="limitValRow">
-          <label><span data-i18n="out.limitVal">Höchstens (KB)</span>
+          <label class="form-field"><span data-i18n="out.limitVal">Höchstens (KB)</span>
             <input type="number" id="limitVal" inputmode="numeric" min="1" max="100000">
           </label>
         </div>
         <p class="muted" id="limitHint"></p>
       </div>
-      <label id="bgRow"><span data-i18n="out.bg">Hintergrund für transparente Bereiche</span>
+      <label class="form-field" id="bgRow"><span data-i18n="out.bg">Hintergrund für transparente Bereiche</span>
         <input type="color" id="bg">
       </label>
     </div>
-    <div class="row" style="margin-top:12px">
-      <button type="button" class="btn primary" id="btnConvert" disabled data-i18n="out.convert">Umwandeln</button>
-    </div>
+    <p class="notice info" id="convertHint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="out.hint">Erst oben Bilder wählen.</span></p>
+    <button type="button" class="btn primary block" id="btnConvert" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#transform"/></svg><span data-i18n="out.convert">Umwandeln</span></button>
     <p id="status" role="status"></p>
   </section>
 
   <section class="card" id="results" aria-labelledby="h-res" hidden>
-    <h2 id="h-res" data-i18n="res.h">3. Ergebnis</h2>
+    <h2 id="h-res"><span class="step">3</span><span data-i18n="res.h">Ergebnis</span></h2>
     <div class="row">
-      <button type="button" class="btn primary" id="btnZip" data-i18n="res.zip">Alle als ZIP speichern</button>
-      <button type="button" class="btn" id="btnShare" data-i18n="res.share" hidden>Teilen …</button>
+      <button type="button" class="btn primary" id="btnZip"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-zip"/></svg><span data-i18n="res.zip">Alle als ZIP speichern</span></button>
+      <button type="button" class="btn" id="btnShare" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="res.share">Teilen …</span></button>
     </div>
     <ul class="files" id="outList" aria-labelledby="h-res"></ul>
   </section>
@@ -239,7 +229,7 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 174287d134f6</p>
+  <p class="footer-version">Version a80bc7dfad26</p>
   <!-- footer:end -->
 </footer>
 
@@ -278,13 +268,13 @@ Tools.i18n({
   },
   en:{
     title:'Image Converter',sub:'Convert JPG, PNG, WebP, HEIC, SVG and more – everything stays on your device.',
-    'in.h':'1. Choose images','in.pick':'Choose images',
+    'in.h':'Choose images','in.pick':'Choose images',
     'in.hint':'Or drag them here or paste them. Supported: JPG, PNG, HEIC/HEIF, WebP, AVIF, GIF, BMP, ICO, SVG (TIFF in Safari only).',
     'in.add':'Add more','in.clear':'Remove all',
-    'out.h':'2. Target format','out.quality':'Quality','out.size':'Size','out.original':'Original size',
+    'out.h':'Target format','out.hint':'Choose images above first.','out.quality':'Quality','out.size':'Size','out.original':'Original size',
     'out.max':'Longest side in pixels','out.percent':'Percent','out.bg':'Background for transparent areas',
     'out.convert':'Convert',
-    'res.h':'3. Result','res.zip':'Save all as ZIP','res.share':'Share …',
+    'res.h':'Result','res.zip':'Save all as ZIP','res.share':'Share …',
     'fmt.jpg':'Photos, small, no transparency. Readable everywhere.',
     'fmt.png':'Lossless, with transparency – for graphics, screenshots and logos.',
     'fmt.webp':'Smaller than JPG and PNG, with transparency. For websites and messengers.',
@@ -487,7 +477,7 @@ function renderItems(){
     const m=document.createElement('div'); m.className='meta'+(it.error?' err':'');
     m.textContent=it.error||`${it.fmt.toUpperCase()} · ${it.w}×${it.h} · ${fmtSize(it.bytes)}`;
     txt.append(n,m);
-    const b=document.createElement('button'); b.type='button'; b.className='btn'; b.textContent='✕';
+    const b=document.createElement('button'); b.type='button'; b.className='btn icon'; b.innerHTML=Tools.icon('x');
     b.setAttribute('aria-label',t('in.remove',{name:it.name}));
     b.addEventListener('click',()=>removeItem(it.id));
     li.append(img,txt,b); return li;
@@ -495,6 +485,7 @@ function renderItems(){
   $('inActions').hidden=!items.length;
   $('drop').hidden=!!items.length;
   $('btnConvert').disabled=!items.some(i=>!i.error);
+  $('convertHint').hidden=!!items.length;
 }
 
 /* ---------- Target size ---------- */
@@ -654,7 +645,8 @@ function renderResults(){
     if(r.fits!=null){
       const lim=document.createElement('div'); lim.className='meta '+(r.fits?'ok':'err');
       const kb=Tools.fmt(settings.limitKb,0);
-      lim.textContent=(r.fits?'✓ '+t('res.fits',{kb}):'✕ '+t('res.miss',{kb}))+(r.quality!=null?' · '+t('res.quality',{q:r.quality}):'');
+      lim.innerHTML=(r.fits?Tools.icon('circle-check','sm'):Tools.icon('alert-circle','sm'))+' '+Tools.esc((r.fits?t('res.fits',{kb}):t('res.miss',{kb}))+(r.quality!=null?' · '+t('res.quality',{q:r.quality}):''));
+      lim.classList.add('res-mark');
       txt.append(n,m,lim);
     } else txt.append(n,m);
     const a=document.createElement('a'); a.className='btn'; a.href=r.url; a.download=r.name;
