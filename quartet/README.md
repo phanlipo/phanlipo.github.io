@@ -1,6 +1,6 @@
 # Quartett – Aufbau
 
-Supertrumpf (Autoquartett) gegen den Computer oder mit mehreren Handys über WebRTC. Die Kartensätze stammen aus dem Repository [supertrumpf-creator](https://github.com/phanlipo/supertrumpf-creator), das dieselben Karten als druckbare PDFs erzeugt. (`.md` wird nicht veröffentlicht.)
+Supertrumpf (Autoquartett) gegen den Computer oder mit mehreren Handys über WebRTC. (`.md` wird nicht veröffentlicht.)
 
 ```
 index.html   Oberfläche und Ablauf: Startseite, Runde (Gastgeber), Einladen/Beitreten, Spieltisch, WebMCP
@@ -14,14 +14,14 @@ decks.js     window.QuartetDecks: 17 Kartensätze – generiert von scripts/quar
 
 Die App liefert keine Kartenbilder aus (Lizenzen, Größe – siehe `IDEAS.md`). Wer Bilder möchte, bringt sie im Menü (☰ → „Eigene Bilder“) selbst mit; sie bleiben nur auf dem Gerät.
 
-- **ZIP:** Bilddateien, benannt nach Kartennummer (`A1.jpg`), Kartenname oder Dateiname aus supertrumpf-creator (`latex_utils.sanitize_image_stem`: klein, `♀→f`, `♂→m`, alles außer `a-z 0-9 _ -` → `_`). Ein Ordner mit der Deck-Kennung im Pfad (`dinosaurs/images/…`) legt das Deck fest, sonst gilt das gewählte. Gelesen wird nur das zentrale Verzeichnis, Einträge `stored`/`deflate`, kein ZIP64, keine Verschlüsselung, höchstens 300 MB.
+- **ZIP:** Bilddateien, benannt nach Kartennummer (`A1.jpg`), Kartenname oder Dateiname (klein, `♀→f`, `♂→m`, alles außer `a-z 0-9 _ -` → `_`). Ein Ordner mit der Deck-Kennung im Pfad (`dinosaurs/images/…`) legt das Deck fest, sonst gilt das gewählte. Gelesen wird nur das zentrale Verzeichnis, Einträge `stored`/`deflate`, kein ZIP64, keine Verschlüsselung, höchstens 300 MB.
 - **JSON-Linkliste** (einfügen, Datei oder `https`-Link auf eine JSON-Datei): `{"<deck>": {"<Karte>": "https://…" | {"url", "credit"}}}` oder für das gewählte Deck nur das innere Objekt. Nur `https`, Abruf erst auf Knopfdruck, `credentials: 'omit'`, ohne Referrer; dafür `tool:connect` = `https:`. Server ohne CORS-Freigabe scheitern (in der Meldung genannt).
 - **Ablage:** `Tools.keep` – `img/<deck>/<Kartennummer>` (WebP, sonst JPEG, höchstens 480 px) und `images.json` (Bildnachweis, Herkunft). Nicht in der Sicherungsdatei, *Alle Daten löschen* entfernt sie. Im Mehrspieler-Spiel zeigt jedes Handy seine eigenen Bilder.
 
 ## Kartensätze aktualisieren
 
 ```bash
-node scripts/quartet-decks.mjs ../supertrumpf-creator/cards_data
+node scripts/quartet-decks.mjs <Ordner mit den Deck-JSON-Dateien>
 ```
 
 Übernommen werden Name, Gruppe, Kartennummer (Gruppe + laufende Nummer, wie auf den gedruckten Karten), die Kategorien mit Zahlen – 4 bis 6 je Karte (Text-Kategorien wie Hauptstadt fallen weg; Decks mit weniger als 4 Zahlen-Kategorien – Arzneimittel, Gewerkschaften, Biblische Persönlichkeiten – werden nicht übernommen, mehr als 6 auf die ersten 6 gekürzt) und der kurze deutsche Kartentext. Länder bekommen ihren ISO-Code (`f`, aus der Flaggen-Adresse der Quelle); die Flagge kommt aus dem Vendor-Paket `flag-icons` (`precache: false`: lädt beim ersten Ansehen, bleibt dann offline). Sonst noch keine Bilder (Größe, Lizenzen der Wikipedia-Bilder) – jedes Deck hat ein Emoji. Im Skript stehen: Auswahl und Reihenfolge der Decks, englische Titel, Kategorie- und Einheitennamen, Kategorien, in denen der kleinere Wert gewinnt (`LOW`), und Jahres-Kategorien (`YEAR`, ohne Tausenderpunkt). Neue Kategorie ohne englischen Namen → das Skript bricht ab.
@@ -44,8 +44,8 @@ node scripts/quartet-decks.mjs ../supertrumpf-creator/cards_data
 
 ## Mögliche Erweiterungen
 
-- Mitgelieferte Kartenbilder aus supertrumpf-creator – zurückgestellt (`IDEAS.md`, „Quartett: Kartenbilder“); eigene Bilder gehen schon (siehe oben).
-- Eine fertige JSON-Linkliste je Deck aus supertrumpf-creator erzeugen (Wikimedia-Links mit Bildnachweis).
-- Eigene Kartensätze laden (JSON im Format von supertrumpf-creator).
+- Mitgelieferte Kartenbilder – zurückgestellt (`IDEAS.md`, „Quartett: Kartenbilder“); eigene Bilder gehen schon (siehe oben).
+- Eine fertige JSON-Linkliste je Deck erzeugen (Wikimedia-Links mit Bildnachweis).
+- Eigene Kartensätze laden (JSON im Format der Quelldaten).
 - Englische Kartennamen und Gruppen.
 - Wiederverbinden nach Abbruch (heute übernimmt der Computer).

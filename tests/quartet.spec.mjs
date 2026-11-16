@@ -516,7 +516,7 @@ const pagePng = (page, color) => page.evaluate(c => new Promise(res => {
 }), color).then(a => Buffer.from(a));
 
 test.describe('own pictures', () => {
-  test('matching: card number, name, file name of supertrumpf-creator; deck folders; link lists', async ({ page }) => {
+  test('matching: card number, name, file name stem; deck folders; link lists', async ({ page }) => {
     await page.goto(URL_);
     const r = await page.evaluate(() => {
       const QI = window.QuartetImages, decks = window.QuartetDecks, dino = decks.find(d => d.id === 'dinosaurs'), tiere = decks.find(d => d.id === 'tiere');
@@ -555,7 +555,7 @@ test.describe('own pictures', () => {
     await page.goto(URL_);
     const names = await page.evaluate(() => window.QuartetDecks.find(d => d.id === 'dinosaurs').cards.map(c => window.QuartetImages.stem(c.n)));
     const png = await pagePng(page, '#c0392b');
-    // The zipped images folder of supertrumpf-creator, one entry stored, the rest deflated, plus noise
+    // A zipped images folder per deck, one entry stored, the rest deflated, plus noise
     const zip = makeZip([...names.map((n, i) => ({ name: `dinosaurs/images/${n}.png`, data: png, store: i === 0 })),
       { name: 'dinosaurs/images/notes.txt', data: 'x' }, { name: 'dinosaurs/images/godzilla.png', data: png }]);
     await openMenu(page);
