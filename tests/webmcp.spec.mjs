@@ -81,6 +81,23 @@ test('without WebMCP the page works and registers nothing', async ({ page }) => 
   await expect(page.locator('#histCount')).toHaveText('1');
 });
 
+test.describe('template tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/template/');
+  });
+
+  test('count raises the counter shown in the app; get_state reads it; limits like the UI', async ({ page }) => {
+    expect(await call(page, 'template_count', { times: 3 })).toEqual({ ok: true, result: { count: 3 } });
+    await expect(page.locator('#count')).toHaveText('Geklickt: 3×');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: gezählt');
+    expect(await call(page, 'template_get_state', {})).toEqual({ ok: true, result: { count: 3, kind: 'alone' } });
+    expect(await call(page, 'template_count', { times: 101 })).toEqual({ ok: false, error: 'input.times must be <= 100' });
+    expect(await call(page, 'template_count', { reset: true })).toEqual({ ok: false, error: 'input.reset is not allowed' });
+    await expect(page.locator('#count')).toHaveText('Geklickt: 3×');
+  });
+});
+
 test.describe('dice-coin tools', () => {
   test.beforeEach(async ({ page }) => {
     await fakeModelContext(page);

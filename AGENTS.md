@@ -20,7 +20,7 @@ Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/), ohne Server 
 1. `template/` nach `<tool-name>/` kopieren (Ordnername englisch, kebab-case). Die Vorlage zeigt alle Muster (Meta-Angaben, Zweisprachigkeit, Hilfe, Fehlersuche, Bühne).
 2. Meta-Angaben setzen: `<title>` (nur Kurzname, max. 24 Zeichen), Beschreibung, `tool:tags` (erste = `Alltag`/`Arbeit`/`Freizeit`, dann 1–2 Themen), optional `tool:features` (nur Werte aus `FEATURES` in `build.mjs`), `tool:short-name` (≤ 12), englische Fassungen `tool:title-en`/`-description-en`/`-short-name-en` (Pflicht), `tool:storage`, `tool:icon` (Tabler-Icon, Outline), `tool:color`. `build.mjs` prüft das meiste und bricht bei Fehlern ab.
 3. `node scripts/build-icons.mjs <tool-name>`, dann `node scripts/build.mjs`.
-4. Fachliche Tests in `tests/<tool-name>.spec.mjs` (allgemeine Prüfungen greifen automatisch).
+4. Fachliche Tests in `tests/<tool-name>.spec.mjs` – Startpunkt `tests/template.spec.mjs` (allgemeine Prüfungen greifen automatisch), WebMCP-Werkzeuge in `tests/webmcp.spec.mjs`.
 
 Nicht gelistete Seiten (z. B. Weiterleitungen): `<meta name="tool:hidden" content="true">`. **Umbenennen** einer geteilten App: im alten Ordner eine Weiterleitung lassen.
 
