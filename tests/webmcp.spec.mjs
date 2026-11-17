@@ -2752,6 +2752,52 @@ test.describe('tic-tac-toe tools', () => {
   });
 });
 
+test.describe('hangman tools', () => {
+  const seed = (page, game, extra = {}) => page.addInitScript(([g, e]) => localStorage.setItem('hangman.state.v1',
+    JSON.stringify({ mode: 'solo', level: 'medium', ...e, game: g && { lang: 'de', cat: 'animals', source: 'list', lives: 8, guessed: [], ...g } })), [game, extra]);
+
+  test('get_game hides the word, guess_letter plays on the keys, the word shows once it is over', async ({ page }) => {
+    await seed(page, { word: 'KÄSE' });
+    await open(page, '/hangman/');
+    let r = await call(page, 'hangman_get_game', {});
+    expect(r.result).toMatchObject({ mode: 'alone', status: 'playing', pattern: '____', letters_in_word: 4, topic: 'animals', word: null, mistakes: 0, max_mistakes: 8 });
+    expect(r.result.letters_left_to_try).toHaveLength(29);
+    expect(JSON.stringify(r.result)).not.toContain('KÄSE');
+    r = await call(page, 'hangman_guess_letter', { letter: 'ä' });
+    expect(r.result).toMatchObject({ hit: true, pattern: '_Ä__', right_letters: ['Ä'] });
+    await expect(page.locator('#keys .key[data-l="Ä"]')).toHaveAttribute('data-state', 'hit');
+    r = await call(page, 'hangman_guess_letter', { letter: 'x' });
+    expect(r.result).toMatchObject({ hit: false, wrong_letters: ['X'], mistakes: 1, mistakes_left: 7 });
+    await expect(page.locator('#lives')).toHaveText('Fehler 1 von 8');
+    expect((await call(page, 'hangman_guess_letter', { letter: 'X' })).error).toMatch(/already guessed/);
+    expect((await call(page, 'hangman_guess_letter', { letter: '1' })).ok).toBe(false);
+    expect((await call(page, 'hangman_new_game', {})).error).toMatch(/still being guessed/);
+    for (const l of 'KS') await call(page, 'hangman_guess_letter', { letter: l });
+    r = await call(page, 'hangman_guess_letter', { letter: 'E' });
+    expect(r.result).toMatchObject({ status: 'won', word: 'KÄSE', pattern: 'KÄSE' });
+    expect(r.result.statistics.won).toBe(1);
+    await expect(page.locator('#status')).toHaveText('Gewonnen!');
+    expect((await call(page, 'hangman_guess_letter', { letter: 'B' })).error).toMatch(/game is over/);
+    r = await call(page, 'hangman_new_game', { topic: 'food' });
+    expect(r.result).toMatchObject({ status: 'playing', topic: 'food', word: null, mistakes: 0 });
+    await expect(page.locator('#topic')).toHaveText('Thema: Essen');
+  });
+
+  test('new_game with a secret word for the user; two-player mode needs a word', async ({ page }) => {
+    await seed(page, null, { mode: 'duo' });
+    await open(page, '/hangman/');
+    let r = await call(page, 'hangman_get_game', {});
+    expect(r.result.status).toBe('waiting_for_word');
+    expect((await call(page, 'hangman_guess_letter', { letter: 'A' })).error).toMatch(/no word yet/);
+    expect((await call(page, 'hangman_new_game', {})).error).toMatch(/two-player mode/);
+    expect((await call(page, 'hangman_new_game', { word: 'R2D2' })).error).toMatch(/Only letters/);
+    r = await call(page, 'hangman_new_game', { word: 'Eis-bär', hint: 'kalt' });
+    expect(r.result).toMatchObject({ status: 'playing', pattern: '___-___', own_word: true, hint: 'kalt', word: null });
+    await expect(page.locator('#play')).toBeVisible();
+    await expect(page.locator('#topic')).toHaveText('Hinweis: kalt');
+  });
+});
+
 test.describe('dots-and-boxes tools', () => {
   test('make_move draws lines, a closed box moves again, get_game reads it back, new_round', async ({ page }) => {
     await open(page, '/dots-and-boxes/');

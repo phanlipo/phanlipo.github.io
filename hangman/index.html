@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Galgenmännchen</title>
+<meta name="description" content="Wörter raten, Buchstabe für Buchstabe – allein mit Wörtern aus sechs Themen oder zu zweit mit einem eigenen geheimen Wort.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="abc">
+<meta name="tool:color" content="#8a4b2c">
+<meta name="tool:short-name" content="Galgenmann">
+<meta name="tool:title-en" content="Hangman">
+<meta name="tool:description-en" content="Guess words letter by letter – alone with words from six topics, or two players with a secret word of your own.">
+<meta name="tool:short-name-en" content="Hangman">
+<meta name="tool:storage" content="hangman.">
+<meta name="tool:webmcp" content="get_game, guess_letter, new_game">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann das Spiel lesen (das gesuchte Wort erst nach dem Ende), Buchstaben raten und ein neues Wort starten – auch mit einem eigenen geheimen Wort, das du dann rätst. Jeder Zug erscheint sofort im Spiel.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the game (the word only once it is over), guess letters and start a new word – also with a secret word of its own for you to guess. Every move shows up in the game right away.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-qW8kcEQ3ykTgy33Vju8P59cotpEmOdGk+pcAoxSYB2E='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Galgenmann">
+<meta name="theme-color" content="#8a4b2c">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#8a4b2c;--accent-text:#ffffff;--wood:var(--muted);--man:var(--text)}
+@media (prefers-color-scheme: dark){:root{--accent:#e2a47e;--accent-text:#1f120a}}
+main{max-width:560px;margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:12px}
+
+/* ---------- Top line: topic and mistakes ---------- */
+.info-row{flex:none;display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:15px}
+.topic{min-width:0;color:var(--muted);overflow-wrap:anywhere}
+.lives{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
+.lives[data-low="true"]{color:var(--err)}
+
+/* ---------- Drawing ---------- */
+.drawing-wrap{flex:1;min-height:110px;container-type:size;display:grid;place-items:center}
+.drawing{height:min(100cqh,100cqw*1.1);max-height:260px;aspect-ratio:200/220;display:block;overflow:visible}
+.drawing :is(path,circle,line){fill:none;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+.drawing .wood{stroke:var(--wood)}
+.drawing .man{stroke:var(--man)}
+.drawing .ghost{stroke:var(--border);stroke-width:2;stroke-dasharray:2 7}
+.drawing .part{display:none}
+.drawing .part.on{display:inline}
+.drawing .part.new{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .45s ease-out forwards}
+.drawing[data-result="lost"] .man{stroke:var(--err)}
+.drawing[data-result="won"] .ghost{stroke:var(--ok);stroke-dasharray:none;stroke-width:3}
+.drawing .face{display:none}
+.drawing[data-result="lost"] .face{display:inline}
+@keyframes draw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion: reduce){.drawing .part.new{animation:none;stroke-dashoffset:0;stroke-dasharray:none}}
+
+/* ---------- Word ---------- */
+.word{flex:none;margin:0;display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;container-type:inline-size;--n:8}
+.wd{display:flex;gap:4px;white-space:nowrap}
+.ch{width:min(38px,calc((100cqw - 4px * var(--n)) / var(--n)));min-width:14px;height:1.6em;display:grid;place-items:end center;
+  font-size:min(28px,calc((100cqw - 4px * var(--n)) / var(--n) * .8));font-weight:700;line-height:1.2;border-block-end:3px solid var(--text)}
+.ch.sep{border-color:transparent}
+.ch.missed{color:var(--err)}
+.ch.pop{animation:pop .3s ease-out}
+@keyframes pop{50%{transform:translateY(-4px)}}
+@media (prefers-reduced-motion: reduce){.ch.pop{animation:none}}
+
+.status{flex:none;text-align:center;min-height:26px;margin:0;font-weight:600;font-size:17px;overflow-wrap:anywhere}
+.status[data-state="won"]{color:var(--ok)}
+.status[data-state="lost"]{color:var(--err)}
+
+/* ---------- Letter keys ---------- */
+.keys{flex:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:5px}
+.key{min-height:44px;padding:0;margin:0;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);
+  font:inherit;font-size:19px;font-weight:700;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.key:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.key:active:not(:disabled){background:var(--accent);color:var(--accent-text)}
+.key:disabled{cursor:default}
+.key[data-state="hit"]{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.key[data-state="miss"]{background:var(--err-bg);color:var(--err);border-color:transparent;text-decoration:line-through}
+.key[data-state="off"]{opacity:.55}
+.actions{flex:none;display:grid}
+.actions .btn{min-height:52px;font-size:17px;font-weight:600}
+
+/* ---------- Word entry (two players) ---------- */
+.setup{display:grid;gap:12px;align-content:start}
+.setup h2{margin:0}
+.setup p{margin:0}
+.secret-row{display:flex;gap:8px;align-items:stretch}
+.secret-row input{flex:1;min-width:0}
+
+/* ---------- Menu cards ---------- */
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-of-type{margin-top:4px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.stats .stat-box span{font-size:13px;color:var(--muted)}
+.muted-info{color:var(--muted);margin:8px 0 0;font-size:14px;display:block}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Galgenmännchen</span></h1>
+  <p class="sub" data-i18n="sub">Wörter raten</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnTip" aria-label="Tipp: einen Buchstaben aufdecken" title="Tipp: einen Buchstaben aufdecken (kostet einen Fehler)" data-i18n-attr="aria-label:tip; title:tipTitle" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#bulb"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card play" id="play" aria-label="Spiel" data-i18n-attr="aria-label:playLabel" hidden>
+    <div class="info-row">
+      <span class="topic" id="topic"></span>
+      <span class="lives" id="lives"></span>
+    </div>
+    <div class="drawing-wrap">
+      <svg class="drawing" id="drawing" viewBox="0 0 200 220" role="img" aria-label="">
+        <!-- Dotted outline of the person: shows how much is left -->
+        <g class="ghost"><circle cx="140" cy="68" r="18"/><path d="M140 86V140M140 100L118 125M140 100L162 125M140 140L120 178M140 140L160 178"/></g>
+        <path class="part wood" data-p="0" pathLength="1" d="M14 212Q55 188 96 212"/>
+        <path class="part wood" data-p="1" pathLength="1" d="M55 200V20"/>
+        <path class="part wood" data-p="2" pathLength="1" d="M55 20H145"/>
+        <path class="part wood" data-p="3" pathLength="1" d="M55 56L91 20"/>
+        <path class="part wood" data-p="4" pathLength="1" d="M140 20V50"/>
+        <circle class="part man" data-p="5" pathLength="1" cx="140" cy="68" r="18"/>
+        <path class="part man" data-p="6" pathLength="1" d="M140 86V140"/>
+        <path class="part man" data-p="7" pathLength="1" d="M140 100L118 125"/>
+        <path class="part man" data-p="8" pathLength="1" d="M140 100L162 125"/>
+        <path class="part man" data-p="9" pathLength="1" d="M140 140L120 178"/>
+        <path class="part man" data-p="10" pathLength="1" d="M140 140L160 178"/>
+        <path class="face man" style="stroke-width:3" d="M131 61L137 67M137 61L131 67M143 61L149 67M149 61L143 67M133 77H147"/>
+      </svg>
+    </div>
+    <p class="word" id="word" role="img" aria-label=""></p>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="keys" id="keys" role="group" aria-label="Buchstaben" data-i18n-attr="aria-label:keysLabel"></div>
+    <div class="actions" id="overActions" hidden>
+      <button type="button" class="btn primary" id="btnNext"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="next">Neues Wort</span></button>
+    </div>
+  </section>
+
+  <section class="card setup" id="setup" aria-labelledby="h-setup" hidden>
+    <h2 id="h-setup"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg> <span data-i18n="setupH">Geheimes Wort ausdenken</span></h2>
+    <p data-i18n="setupIntro">Wer sich das Wort ausdenkt, tippt es hier ein, ohne dass die anderen hinsehen. Dann das Handy weitergeben – die anderen raten.</p>
+    <form id="setupForm" class="setup" novalidate>
+      <div class="form-field">
+        <label for="secret" data-i18n="secretL">Geheimes Wort</label>
+        <div class="secret-row">
+          <input type="password" id="secret" maxlength="30" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="secretInfo">
+          <button type="button" class="btn icon" id="btnShow" aria-label="Wort zeigen" title="Wort zeigen" data-i18n-attr="aria-label:show; title:show" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eye"/></svg></button>
+        </div>
+        <small id="secretInfo" class="muted-info" data-i18n="secretInfo">Buchstaben A–Z, Ä, Ö, Ü, Leerzeichen und Bindestrich, höchstens 30 Zeichen.</small>
+      </div>
+      <div class="form-field">
+        <label for="hintIn" data-i18n="hintL">Hinweis (freiwillig)</label>
+        <input type="text" id="hintIn" maxlength="40" autocomplete="off" placeholder="z. B. ein Tier" data-i18n-attr="placeholder:hintPh">
+      </div>
+      <p class="form-error" id="setupErr" role="alert" hidden></p>
+      <button type="submit" class="btn primary block" id="btnStart"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span data-i18n="start">Raten lassen</span></button>
+    </form>
+  </section>
+
+  <section class="card" id="settingsCard" aria-labelledby="h-settings" data-menu data-icon="settings">
+    <h2 id="h-settings" data-i18n="settings">Spiel &amp; Einstellungen</h2>
+    <h3 id="h-mode" data-i18n="mode">Spielart</h3>
+    <div class="seg" id="mode" role="group" aria-labelledby="h-mode">
+      <button type="button" data-v="solo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#user"/></svg><span data-i18n="mode.solo">Allein</span></button>
+      <button type="button" data-v="duo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span data-i18n="mode.duo">Zu zweit</span></button>
+    </div>
+    <div id="catBox">
+      <h3 id="h-cat" data-i18n="cat">Thema</h3>
+      <div class="chips wrap" id="cats" role="group" aria-labelledby="h-cat"></div>
+    </div>
+    <h3 id="h-level" data-i18n="level">Schwierigkeit</h3>
+    <div class="seg" id="levels" role="group" aria-labelledby="h-level">
+      <button type="button" data-v="easy" data-i18n="level.easy">Leicht</button>
+      <button type="button" data-v="medium" data-i18n="level.medium">Mittel</button>
+      <button type="button" data-v="hard" data-i18n="level.hard">Schwer</button>
+    </div>
+    <p class="muted-info" id="levelInfo"></p>
+  </section>
+
+  <section class="card" id="statsCard" aria-labelledby="h-stats" data-menu data-icon="trophy">
+    <h2 id="h-stats" data-i18n="stats">Statistik (allein)</h2>
+    <div class="stats">
+      <div class="stat-box"><b id="stWon">0</b><span data-i18n="st.won">Gewonnen</span></div>
+      <div class="stat-box"><b id="stLost">0</b><span data-i18n="st.lost">Verloren</span></div>
+      <div class="stat-box"><b id="stStreak">0</b><span data-i18n="st.streak">Serie</span></div>
+      <div class="stat-box"><b id="stBest">0</b><span data-i18n="st.best">Beste Serie</span></div>
+    </div>
+    <div class="row" style="margin-top:10px"><button type="button" class="btn" id="btnResetStats"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="resetStats">Statistik zurücksetzen</span></button></div>
+  </section>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnSkip"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-shuffle"/></svg><span data-i18n="skip">Anderes Wort</span></button>
+  <button type="button" id="btnGiveUp"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#flag"/></svg><span data-i18n="giveUp">Aufgeben und Wort zeigen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Das Ratespiel mit Stift und Papier, nur auf dem Handy: Gesucht ist ein Wort, von dem zuerst nur die Lücken zu sehen sind. Ratet Buchstabe für Buchstabe. Jeder falsche Buchstabe malt ein Stück mehr vom Galgenmännchen. Ist das Wort vollständig, bevor das Bild fertig ist, habt ihr gewonnen.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Einen Buchstaben antippen (am Computer auch einfach tippen). Richtige Buchstaben erscheinen grün und an allen Stellen im Wort, falsche werden rot durchgestrichen.</li>
+    <li>Oben steht das Thema und wie viele Fehler schon gemacht wurden. Die gepunktete Figur zeigt, wie viel noch fehlt.</li>
+    <li><b>Tipp</b> (Glühbirne oben) deckt einen Buchstaben auf – das kostet einen Fehler. Beim letzten erlaubten Fehler gibt es keinen Tipp mehr.</li>
+    <li>Nach dem Ende startet <b>Neues Wort</b> die nächste Runde.</li>
+    <li>Im Menü ☰: <b>Anderes Wort</b> (solange noch nichts geraten wurde, zählt nicht als verloren), <b>Aufgeben</b> (deckt das Wort auf und zählt als verloren), die <b>Spielart</b>, das <b>Thema</b> der Wörter, die <b>Schwierigkeit</b> und die <b>Statistik</b>.</li>
+  </ul>
+  <h3>Allein oder zu zweit</h3>
+  <ul>
+    <li><b>Allein:</b> Die App wählt ein Wort aus dem gewählten Thema (Tiere, Essen, Zuhause, Natur, Fahrzeuge, Sport &amp; Spiel oder alle). Wörter wiederholen sich erst, wenn viele andere dran waren. Die Wörter kommen in der Sprache der App.</li>
+    <li><b>Zu zweit:</b> Einer denkt sich ein Wort aus und tippt es verdeckt ein (mit dem Auge lässt es sich kurz zeigen), auf Wunsch mit einem Hinweis. Dann bekommen die anderen das Handy und raten. Erlaubt sind die Buchstaben A–Z, auf Deutsch auch Ä, Ö und Ü, dazu Leerzeichen und Bindestriche für mehrere Wörter. ß wird zu SS.</li>
+  </ul>
+  <h3>Schwierigkeit</h3>
+  <ul>
+    <li><b>Leicht:</b> 11 Fehler erlaubt – der Galgen wird Stück für Stück mitgemalt.</li>
+    <li><b>Mittel:</b> 8 Fehler – Hügel, Pfahl und Balken stehen schon.</li>
+    <li><b>Schwer:</b> 6 Fehler – der Galgen steht ganz, nur noch die Figur wird gemalt.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Das laufende Spiel (auch ein eigenes Wort), die Einstellungen, die zuletzt gespielten Wörter und die Statistik der Spiele allein bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>The pen-and-paper guessing game, on your phone: there’s a word you first only see as gaps. Guess it letter by letter. Every wrong letter draws one more piece of the hangman. Complete the word before the drawing is finished and you win.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li>Tap a letter (on a computer you can also just type it). Right letters turn green and appear everywhere in the word, wrong ones are crossed out in red.</li>
+    <li>The top shows the topic and how many mistakes have been made. The dotted figure shows how much is left.</li>
+    <li><b>Tip</b> (light bulb at the top) uncovers a letter – that costs one mistake. With only one mistake left there are no more tips.</li>
+    <li>Once a game is over, <b>New word</b> starts the next one.</li>
+    <li>In the menu ☰: <b>Other word</b> (while nothing has been guessed yet, it doesn’t count as lost), <b>Give up</b> (uncovers the word and counts as lost), the <b>mode</b>, the <b>topic</b> of the words, the <b>difficulty</b> and the <b>statistics</b>.</li>
+  </ul>
+  <h3>Alone or two players</h3>
+  <ul>
+    <li><b>Alone:</b> the app picks a word from the chosen topic (animals, food, home, nature, vehicles, sport &amp; play, or all). Words only come up again after many others. Words are in the language of the app.</li>
+    <li><b>Two players:</b> one thinks of a word and types it in hidden (the eye shows it for a moment), with an optional hint. Then the others get the phone and guess. Allowed are the letters A–Z, plus spaces and hyphens for several words.</li>
+  </ul>
+  <h3>Difficulty</h3>
+  <ul>
+    <li><b>Easy:</b> 11 mistakes allowed – the gallows is drawn piece by piece too.</li>
+    <li><b>Medium:</b> 8 mistakes – hill, post and beam are already there.</li>
+    <li><b>Hard:</b> 6 mistakes – the gallows stands complete, only the figure is drawn.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The current game (including a word of your own), the settings, the recently played words and the statistics of games alone stay only in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann das Spiel lesen (das gesuchte Wort erst nach dem Ende), Buchstaben raten und ein neues Wort starten – auch mit einem eigenen geheimen Wort, das du dann rätst. Jeder Zug erscheint sofort im Spiel. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the game (the word only once it is over), guess letters and start a new word – also with a secret word of its own for you to guess. Every move shows up in the game right away. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version a4f6abc1aef8</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="game.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'cat.all':'Alle','cat.animals':'Tiere','cat.food':'Essen','cat.home':'Zuhause','cat.nature':'Natur','cat.vehicles':'Fahrzeuge','cat.play':'Sport & Spiel',
+    topic:'Thema: {c}',hint:'Hinweis: {h}',ownWord:'Eigenes Wort',
+    lives:'Fehler {m} von {n}',
+    left:'Noch {n} Fehler erlaubt',leftOne:'Nur noch ein Fehler erlaubt!',
+    won:'Gewonnen!',wonPerfect:'Gewonnen – ganz ohne Fehler!',lost:'Leider verloren – das war das Wort.',
+    drawing:'Galgenmännchen: {k} von {n} Teilen gemalt',
+    wordLabel:'Wort mit {n} Buchstaben: {p}',gap:'Lücke',
+    keyHit:'{l}, richtig',keyMiss:'{l}, falsch',
+    levelInfo:'{n} Fehler erlaubt. Gilt ab dem nächsten Wort, wenn gerade geraten wird.',
+    later:'Gilt ab dem nächsten Wort',tipped:'Aufgedeckt: {l}',
+    'err.empty':'Bitte ein Wort eingeben.','err.long':'Höchstens 30 Zeichen.','err.short':'Das Wort braucht mindestens zwei verschiedene Buchstaben.',
+    'err.chars':'Nur Buchstaben A–Z, Ä, Ö, Ü, einzelne Leerzeichen und Bindestriche zwischen den Wörtern.',
+    resetQ:'Statistik ({n} Spiele) auf null setzen?',statsReset:'Statistik zurückgesetzt',
+    hide:'Wort verbergen',
+    'mcp.guess':'Buchstabe {l}','mcp.new':'Neues Wort'
+  },
+  en:{
+    title:'Hangman',sub:'Guess the word',tip:'Tip: uncover a letter',tipTitle:'Tip: uncover a letter (costs one mistake)',
+    playLabel:'Game',keysLabel:'Letters',next:'New word',
+    setupH:'Think of a secret word',setupIntro:'Whoever thinks of the word types it in here while the others don’t look. Then pass the phone on – the others guess.',
+    secretL:'Secret word',show:'Show word',secretInfo:'Letters A–Z, spaces and hyphens, at most 30 characters.',
+    hintL:'Hint (optional)',hintPh:'e.g. an animal',start:'Let them guess',
+    settings:'Game & settings',mode:'Mode','mode.solo':'Alone','mode.duo':'Two players',cat:'Topic',
+    level:'Difficulty','level.easy':'Easy','level.medium':'Medium','level.hard':'Hard',
+    stats:'Statistics (alone)','st.won':'Won','st.lost':'Lost','st.streak':'Streak','st.best':'Best streak',resetStats:'Reset statistics',
+    skip:'Other word',giveUp:'Give up and show the word',
+    'cat.all':'All','cat.animals':'Animals','cat.food':'Food','cat.home':'Home','cat.nature':'Nature','cat.vehicles':'Vehicles','cat.play':'Sport & play',
+    topic:'Topic: {c}',hint:'Hint: {h}',ownWord:'Own word',
+    lives:'Mistakes {m} of {n}',
+    left:'{n} mistakes left',leftOne:'Only one mistake left!',
+    won:'You won!',wonPerfect:'You won – without a single mistake!',lost:'Lost, sorry – that was the word.',
+    drawing:'Hangman: {k} of {n} parts drawn',
+    wordLabel:'Word with {n} letters: {p}',gap:'gap',
+    keyHit:'{l}, right',keyMiss:'{l}, wrong',
+    levelInfo:'{n} mistakes allowed. Applies from the next word if a word is being guessed.',
+    later:'Applies from the next word',tipped:'Uncovered: {l}',
+    'err.empty':'Please enter a word.','err.long':'At most 30 characters.','err.short':'The word needs at least two different letters.',
+    'err.chars':'Only letters A–Z, single spaces and hyphens between words.',
+    resetQ:'Set the statistics ({n} games) back to zero?',statsReset:'Statistics reset',
+    hide:'Hide word',
+    'mcp.guess':'Letter {l}','mcp.new':'New word'
+  }
+});
+const t=Tools.t,H=window.Hangman;
+const LS='hangman.state.v1';
+const MODES=['solo','duo'],LEVELS=Object.keys(H.LIVES),CATS=['all',...H.CATEGORIES];
+const fresh=()=>({mode:'solo',level:'medium',cat:'all',game:null,stats:{won:0,lost:0,streak:0,best:0},recent:[]});
+function saneGame(g){
+  if(!g||typeof g!=='object'||typeof g.word!=='string')return null;
+  const lang=g.lang==='en'?'en':'de';
+  if(H.check(g.word,lang)||H.normalize(g.word)!==g.word)return null;
+  const lives=Object.values(H.LIVES).includes(g.lives)?g.lives:H.LIVES.medium;
+  const out=H.create({word:g.word,lang,cat:H.CATEGORIES.includes(g.cat)?g.cat:'',hint:typeof g.hint==='string'?g.hint:'',source:g.source==='own'?'own':'list',lives});
+  if(Array.isArray(g.guessed))for(const ch of g.guessed){if(H.status(out)!=='playing')break;try{H.guess(out,ch);}catch{/* skip */}}
+  if(Number.isInteger(g.hints)&&g.hints>0)out.hints=Math.min(g.hints,out.guessed.filter(ch=>out.word.includes(ch)).length);
+  out.gaveUp=g.gaveUp===true;out.done=g.done===true;
+  return out;
+}
+function sane(s){
+  const d=fresh();
+  if(!s||typeof s!=='object')return d;
+  if(MODES.includes(s.mode))d.mode=s.mode;
+  if(LEVELS.includes(s.level))d.level=s.level;
+  if(CATS.includes(s.cat))d.cat=s.cat;
+  d.game=saneGame(s.game);
+  if(s.stats&&typeof s.stats==='object')for(const k of Object.keys(d.stats))if(Number.isInteger(s.stats[k])&&s.stats[k]>=0)d.stats[k]=s.stats[k];
+  if(Array.isArray(s.recent))d.recent=s.recent.filter(w=>typeof w==='string').slice(-60);
+  return d;
+}
+const state=sane(Tools.load(LS,null));
+const save=()=>Tools.save(LS,state);
+let lastParts=-1,popLetter='';
+
+const G=()=>state.game;
+const playing=()=>!!G()&&H.status(G())==='playing';
+const touched=()=>!!G()&&G().guessed.length>0;
+
+// ---------- Starting words ----------
+function startSolo(){
+  const p=H.pick(Tools.lang(),state.cat,state.recent);
+  state.game=H.create({word:p.word,lang:Tools.lang(),cat:p.cat,source:'list',lives:H.LIVES[state.level]});
+  state.recent=[...state.recent.filter(w=>w!==p.word),p.word].slice(-60);
+  lastParts=-1;popLetter='';
+  Tools.diag.log('new word',{source:'list',cat:p.cat,level:state.level,lang:Tools.lang()});
+}
+function startOwn(word,hint,lang){
+  state.game=H.create({word,lang,hint,source:'own',lives:H.LIVES[state.level]});
+  lastParts=-1;popLetter='';
+  Tools.diag.log('new word',{source:'own',level:state.level,lang,hint:!!state.game.hint});
+}
+function next(){
+  if(state.mode==='solo')startSolo();
+  else state.game=null;
+  save();render();
+  if(state.mode==='duo')Tools.$('secret').focus();
+}
+// Records a finished game once (statistics only for games alone)
+function finish(){
+  const g=G();
+  if(!g||g.done||H.status(g)==='playing')return;
+  g.done=true;
+  const won=H.status(g)==='won';
+  if(g.source==='list'){
+    const s=state.stats;
+    if(won){s.won++;s.streak++;s.best=Math.max(s.best,s.streak);}else{s.lost++;s.streak=0;}
+  }
+  Tools.diag.log('game over',{result:won?'won':'lost',mistakes:H.mistakes(g),lives:g.lives,gaveUp:g.gaveUp,source:g.source});
+  if(!won&&navigator.vibrate)try{navigator.vibrate([60,60,60]);}catch{/* ignore */}
+}
+function guess(letter){
+  const g=G();
+  const hit=H.guess(g,letter);
+  popLetter=hit?H.normalize(letter):'';
+  if(!hit&&navigator.vibrate)try{navigator.vibrate(40);}catch{/* ignore */}
+  finish();save();render();
+  return hit;
+}
+
+// ---------- Rendering ----------
+const keysEl=Tools.$('keys'),wordEl=Tools.$('word'),drawEl=Tools.$('drawing');
+let keysLang='';
+function renderKeys(g){
+  if(keysLang!==g.lang){
+    keysLang=g.lang;keysEl.textContent='';
+    for(const l of H.ALPHABET[g.lang]){
+      const b=document.createElement('button');
+      b.type='button';b.className='key';b.textContent=l;b.dataset.l=l;
+      b.addEventListener('click',()=>{if(playing()&&!G().guessed.includes(l))guess(l);});
+      keysEl.appendChild(b);
+    }
+  }
+  const over=H.status(g)!=='playing';
+  for(const b of keysEl.children){
+    const l=b.dataset.l,used=g.guessed.includes(l);
+    const st=used?(g.word.includes(l)?'hit':'miss'):over?'off':'';
+    b.dataset.state=st;b.disabled=used||over;
+    if(used)b.setAttribute('aria-label',t(st==='hit'?'keyHit':'keyMiss',{l}));else b.removeAttribute('aria-label');
+  }
+}
+function renderWord(g){
+  const m=H.mask(g),st=H.status(g);
+  const words=[];let cur=[];
+  [...g.word].forEach((ch,i)=>{if(ch===' '){words.push(cur);cur=[];}else cur.push(i);});
+  words.push(cur);
+  wordEl.textContent='';
+  wordEl.style.setProperty('--n',String(Math.max(6,...words.map(w=>w.length))));
+  for(const w of words){
+    const wd=document.createElement('span');wd.className='wd';
+    for(const i of w){
+      const ch=g.word[i],s=document.createElement('span');
+      s.className='ch';s.setAttribute('aria-hidden','true');
+      if(!H.isLetter(ch,g.lang))s.classList.add('sep');
+      s.textContent=m[i]||'';
+      if(st==='lost'&&H.isLetter(ch,g.lang)&&!g.guessed.includes(ch))s.classList.add('missed');
+      if(popLetter&&ch===popLetter)s.classList.add('pop');
+      wd.appendChild(s);
+    }
+    wordEl.appendChild(wd);
+  }
+  const n=[...g.word].filter(ch=>H.isLetter(ch,g.lang)).length;
+  wordEl.setAttribute('aria-label',t('wordLabel',{n:Tools.fmt(n,0),p:m.map(c=>c===null?t('gap'):c===' '?' – ':c).join(' ')}));
+}
+function renderDrawing(g){
+  const k=H.parts(g),st=H.status(g);
+  for(const p of drawEl.querySelectorAll('.part')){
+    const i=Number(p.dataset.p);
+    p.classList.toggle('on',i<k);
+    p.classList.toggle('new',lastParts>=0&&i>=lastParts&&i<k);
+  }
+  lastParts=k;
+  drawEl.dataset.result=st==='playing'?'':st;
+  drawEl.setAttribute('aria-label',t('drawing',{k:Tools.fmt(k,0),n:Tools.fmt(H.PARTS,0)}));
+}
+function render(){
+  const g=G(),duoSetup=!g&&state.mode==='duo';
+  if(!g&&!duoSetup){startSolo();save();}
+  Tools.$('play').hidden=duoSetup;
+  Tools.$('setup').hidden=!duoSetup;
+  const tipBtn=Tools.$('btnTip');
+  if(G()){
+    const gg=G(),st=H.status(gg),mk=H.mistakes(gg),left=gg.lives-mk;
+    const topic=Tools.$('topic');
+    topic.textContent='';
+    if(gg.source==='own'){topic.textContent=gg.hint?t('hint',{h:gg.hint}):t('ownWord');}
+    else topic.textContent=t('topic',{c:t('cat.'+gg.cat)});
+    const lv=Tools.$('lives');
+    lv.textContent=t('lives',{m:Tools.fmt(mk,0),n:Tools.fmt(gg.lives,0)});
+    lv.dataset.low=String(st==='playing'&&left<=1);
+    renderDrawing(gg);renderWord(gg);renderKeys(gg);
+    const s=Tools.$('status');
+    s.dataset.state=st;
+    s.textContent=st==='won'?t(mk?'won':'wonPerfect'):st==='lost'?t('lost'):left===1?t('leftOne'):t('left',{n:Tools.fmt(left,0)});
+    Tools.$('overActions').hidden=st==='playing';
+    keysEl.hidden=st!=='playing';
+    tipBtn.hidden=!H.canTip(gg);
+  }else tipBtn.hidden=true;
+  popLetter='';
+  // Menu
+  const p=playing();
+  Tools.$('btnSkip').hidden=!(p&&state.mode==='solo'&&!touched());
+  Tools.$('btnGiveUp').hidden=!(p&&(state.mode==='duo'||touched()));
+  for(const b of document.querySelectorAll('#mode button'))b.setAttribute('aria-pressed',String(b.dataset.v===state.mode));
+  for(const b of document.querySelectorAll('#levels button'))b.setAttribute('aria-pressed',String(b.dataset.v===state.level));
+  renderCats();
+  Tools.$('catBox').hidden=state.mode!=='solo';
+  Tools.$('levelInfo').textContent=t('levelInfo',{n:Tools.fmt(H.LIVES[state.level],0)});
+  const s=state.stats;
+  Tools.$('stWon').textContent=Tools.fmt(s.won,0);Tools.$('stLost').textContent=Tools.fmt(s.lost,0);
+  Tools.$('stStreak').textContent=Tools.fmt(s.streak,0);Tools.$('stBest').textContent=Tools.fmt(s.best,0);
+}
+const catsEl=Tools.$('cats');
+function renderCats(){
+  if(!catsEl.children.length)for(const c of CATS){
+    const b=document.createElement('button');b.type='button';b.dataset.v=c;
+    b.addEventListener('click',()=>setCat(c));
+    catsEl.appendChild(b);
+  }
+  for(const b of catsEl.children){b.textContent=t('cat.'+b.dataset.v);b.setAttribute('aria-pressed',String(b.dataset.v===state.cat));}
+}
+
+// ---------- Settings: apply right away unless a word is being guessed ----------
+function changed(){
+  if(touched()&&playing()){Tools.toast(t('later'));save();render();return;}
+  if(state.mode==='solo')startSolo();else state.game=null;
+  save();render();
+}
+function setCat(c){if(state.cat===c)return;state.cat=c;Tools.diag.log('topic',{cat:c});changed();}
+for(const b of document.querySelectorAll('#mode button'))b.addEventListener('click',()=>{
+  if(state.mode===b.dataset.v)return;
+  state.mode=b.dataset.v;Tools.diag.log('mode',{mode:state.mode});changed();
+});
+for(const b of document.querySelectorAll('#levels button'))b.addEventListener('click',()=>{
+  if(state.level===b.dataset.v)return;
+  state.level=b.dataset.v;Tools.diag.log('level',{level:state.level});
+  // A word nobody has guessed on yet keeps its word and takes the new number of mistakes
+  if(G()&&playing()&&!touched()){G().lives=H.LIVES[state.level];lastParts=-1;save();render();return;}
+  changed();
+});
+
+// ---------- Actions ----------
+Tools.$('btnNext').addEventListener('click',next);
+Tools.$('btnTip').addEventListener('click',()=>{
+  const g=G();if(!g||!H.canTip(g))return;
+  const l=H.tip(g);popLetter=l;
+  Tools.diag.log('tip',{mistakes:H.mistakes(g)});
+  finish();save();render();
+  Tools.toast(t('tipped',{l}));
+});
+Tools.$('btnSkip').addEventListener('click',()=>{Tools.menu.close();startSolo();save();render();});
+Tools.$('btnGiveUp').addEventListener('click',()=>{
+  const g=G();if(!g||!playing())return;
+  Tools.menu.close();
+  g.gaveUp=true;finish();save();render();
+});
+Tools.$('btnResetStats').addEventListener('click',async()=>{
+  const s=state.stats,n=s.won+s.lost;
+  if(n&&!await Tools.confirm(t('resetQ',{n:Tools.fmt(n,0)}),{action:'reset'}))return;
+  state.stats={won:0,lost:0,streak:0,best:0};save();render();Tools.toast(t('statsReset'));
+});
+// Physical keyboard: letters guess, Enter starts the next word
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey||e.defaultPrevented)return;
+  const el=e.target instanceof Element?e.target:null;
+  if(document.querySelector('dialog[open]')||el&&el.closest('input,textarea,select,[contenteditable]'))return;
+  const g=G();if(!g)return;
+  if(e.key==='Enter'&&!playing()&&!(el&&el.closest('button,a,summary'))){e.preventDefault();next();return;}
+  if(e.key.length!==1)return;
+  const l=H.normalize(e.key);
+  if(l.length===1&&playing()&&H.isLetter(l,g.lang)&&!g.guessed.includes(l)){e.preventDefault();guess(l);}
+});
+
+// ---------- Word entry (two players) ----------
+const secret=Tools.$('secret'),showBtn=Tools.$('btnShow'),errEl=Tools.$('setupErr');
+function setShown(on){
+  secret.type=on?'text':'password';
+  showBtn.setAttribute('aria-pressed',String(on));
+  const key=on?'hide':'show';
+  showBtn.setAttribute('data-i18n-attr',`aria-label:${key}; title:${key}`);
+  showBtn.setAttribute('aria-label',t(key));showBtn.title=t(key);
+  showBtn.querySelector('use').setAttribute('href',on?'../assets/icons.svg#eye-off':'../assets/icons.svg#eye');
+}
+showBtn.addEventListener('click',()=>setShown(secret.type==='password'));
+secret.addEventListener('input',()=>{errEl.hidden=true;});
+Tools.$('setupForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const lang=Tools.lang(),err=H.check(secret.value,lang);
+  if(err){errEl.textContent=t('err.'+err);errEl.hidden=false;secret.focus();Tools.diag.log('word rejected',{reason:err});return;}
+  startOwn(secret.value,Tools.$('hintIn').value,lang);
+  secret.value='';Tools.$('hintIn').value='';setShown(false);errEl.hidden=true;
+  save();render();
+});
+
+// Language switched: an untouched word from the list comes in the new language
+Tools.onLang(()=>{
+  const g=G();
+  if(g&&g.source==='list'&&!touched()&&playing()&&g.lang!==Tools.lang()){startSolo();save();}
+  if(!errEl.hidden){const c=H.check(secret.value,Tools.lang());if(c)errEl.textContent=t('err.'+c);else errEl.hidden=true;}
+  setShown(secret.type==='text');
+  render();
+});
+Tools.diag.info(()=>{const g=G();return {mode:state.mode,level:state.level,cat:state.cat,status:g?H.status(g):'setup',source:g?g.source:null,lang:g?g.lang:null,mistakes:g?H.mistakes(g):null,guessed:g?g.guessed.length:null,stats:state.stats};});
+render();
+save(); // keeps the checked state (repaired or dropped game)
+
+// ---------- WebMCP ----------
+function view(){
+  const g=G();
+  if(!g)return {mode:'two_players',status:'waiting_for_word',difficulty:state.level,max_mistakes:H.LIVES[state.level],statistics:state.stats};
+  const st=H.status(g),mk=H.mistakes(g);
+  return {mode:state.mode==='solo'?'alone':'two_players',status:st,
+    pattern:H.mask(g).map(c=>c===null?'_':c).join(''),pattern_info:'"_" is a letter still to guess; spaces and hyphens are part of the word',
+    letters_in_word:[...g.word].filter(ch=>H.isLetter(ch,g.lang)).length,
+    language:g.lang,topic:g.source==='list'?g.cat:null,hint:g.source==='own'?g.hint||null:null,own_word:g.source==='own',
+    right_letters:g.guessed.filter(ch=>g.word.includes(ch)),wrong_letters:H.wrong(g),tips_used:g.hints,
+    mistakes:mk,max_mistakes:g.lives,mistakes_left:Math.max(0,g.lives-mk),
+    letters_left_to_try:st==='playing'?H.ALPHABET[g.lang].filter(l=>!g.guessed.includes(l)):[],
+    word:st==='playing'?null:g.word,difficulty:state.level,statistics:state.stats};
+}
+const OVER='The game is over – start the next word with new_game.';
+Tools.mcp.register({
+  name:'get_game',title:'Read the game',readOnly:true,
+  description:'Reads the current hangman game: the pattern of the word ("_" for letters still to guess), the topic or the hint, right and wrong letters, mistakes made and allowed, the letters still available, the status (playing, won, lost, or waiting_for_word while a player has to type a secret word) and the statistics. The word itself is only included once the game is over.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>view()
+});
+Tools.mcp.register({
+  name:'guess_letter',title:'Guess a letter',label:'mcp.guess',
+  description:'Guesses one letter in the current word, as if the user tapped it. German games also have the umlauts A-umlaut, O-umlaut and U-umlaut, sent as the single umlaut character. Shows the move in the app and returns whether the letter is in the word, plus the game afterwards (same as get_game).',
+  inputSchema:{type:'object',properties:{letter:{type:'string',minLength:1,maxLength:1,description:'One letter A-Z (German games also the three umlauts).'}},required:['letter'],additionalProperties:false},
+  execute:({letter})=>{
+    const g=G();
+    if(!g)throw new Error('There is no word yet – a player has to type a secret word first, or call new_game with a word.');
+    try{const hit=guess(letter);return Object.assign({hit},view());}
+    catch(e){
+      if(e.message==='over')throw new Error(OVER);
+      if(e.message==='guessed')throw new Error(`The letter ${H.normalize(letter)} was already guessed.`);
+      throw new Error(`"${letter}" is not a letter of this game.`);
+    }
+  }
+});
+Tools.mcp.register({
+  name:'new_game',title:'Start a new word',label:'mcp.new',
+  description:'Starts the next word. Without "word", the app picks a random word (alone mode; optionally from a topic, which also becomes the chosen topic). With "word", that word becomes a secret word for the user to guess (optional hint shown above it) – in two-player mode a word is required. Not possible while a word is being guessed (at least one letter tried). Returns the new game (same as get_game; the word stays hidden).',
+  inputSchema:{type:'object',properties:{
+    topic:{type:'string',enum:CATS,description:'Topic of the random word; "all" mixes all topics.'},
+    word:{type:'string',minLength:2,maxLength:H.MAX_LEN,description:'A secret word for the user: letters A-Z (in German also the umlauts), single spaces or hyphens between words.'},
+    hint:{type:'string',maxLength:40,description:'Optional hint shown with the secret word.'}
+  },additionalProperties:false},
+  execute:({topic,word,hint})=>{
+    if(touched()&&playing())throw new Error('A word is still being guessed – finish it or give up in the app first.');
+    if(word!==undefined){
+      const err=H.check(word,Tools.lang());
+      if(err)throw new Error({empty:'The word is empty.',long:'The word is too long.',short:'The word needs at least two different letters.',
+        chars:Tools.lang()==='de'?'Only letters A-Z, the umlauts and single spaces or hyphens between words.':'Only letters A-Z and single spaces or hyphens between words.'}[err]);
+      startOwn(word,hint||'',Tools.lang());
+    }else{
+      if(state.mode==='duo')throw new Error('In two-player mode pass the secret word in "word".');
+      if(topic)state.cat=topic;
+      startSolo();
+    }
+    save();render();
+    return view();
+  }
+});
+})();
+</script>
+</body>
+</html>
