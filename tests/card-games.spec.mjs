@@ -1,7 +1,7 @@
 // Card games (Mau Mau, Durak): rules checked on hand-made states, whole computer games simulated with
 // invariants, a game against the computer through the UI, and several devices over real WebRTC
 // (separate browser contexts – like separate phones).
-import { test, expect, clipboardText, privateClipboard, openDetails } from './helpers.mjs';
+import { test, expect, clipboardText, privateClipboard, openDetails, onDialog } from './helpers.mjs';
 
 const URL_ = '/card-games/';
 const FAST = { 'card-games.settings.v1': JSON.stringify({ speed: 'fast' }) };
@@ -473,7 +473,7 @@ test('three phones and a computer play Durak; everyone sees only their own cards
   await expect(b.page.locator('#hand .card-face')).toHaveCount(5);
 
   // A guest leaves during the game: the computer takes over, the game goes on
-  b.page.on('dialog', d => d.accept());
+  await onDialog(b.page, d => d.accept());
   await b.page.click('#btnLeave');
   await expect(b.page.locator('#scrLobby')).toBeVisible();
   await expect(host.locator('#seats')).toContainText('Cleo (Computer)');
@@ -481,7 +481,7 @@ test('three phones and a computer play Durak; everyone sees only their own cards
   await expect(host.locator('#over')).toBeVisible();
 
   // Host ends: the guest is told
-  host.on('dialog', d => d.accept());
+  await onDialog(host, d => d.accept());
   await host.click('#btnEnd');
   await expect(a.page.locator('#lobbyStatus')).toHaveText('Der Gastgeber hat das Spiel beendet.');
   for (const x of [a, b]) { expect(x.problems).toEqual([]); await x.context.close(); }

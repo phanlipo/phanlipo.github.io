@@ -2,7 +2,7 @@
 // that speaks the real postMessage protocol. Nothing is loaded from YouTube before the user taps;
 // progress, ticks with dates, resume point (also after a reload), parts jumping, manual ticks, speed,
 // sleep timer, history, playlist link parsing, sharing from YouTube (Android), errors, English.
-import { test, expect, openMenu, closeMenu, switchLang, axe, expectNoHorizontalScroll } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, axe, expectNoHorizontalScroll, onDialog } from './helpers.mjs';
 import { fakeYoutube, playerFrame, YT, YT_ACCOUNT, LIST, LIST_TITLE, VIDEOS, LIST_BLOCKED } from './fake-youtube.mjs';
 
 // Requests to the (routed) fake YouTube are expected; everything else still fails the test.
@@ -199,7 +199,7 @@ test('playlist links: watch links, youtu.be, music, bare ID; no playlist → mes
   await closeMenu(page);
   await expect(page.locator('#listName')).toHaveText('Gute-Nacht-Geschichten');
   // Remove (with confirmation) → the other one is left
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await openMenu(page);
   await page.getByRole('button', { name: 'Playlist entfernen' }).click();
   await expect(page.locator('#listName')).toHaveText('Playlist PLsecondse…');

@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="get_status, play, stop, set_track, set_tempo">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-a7vafIcaIFu1PWsy2ocVvtVgrZahLfMNFE6XK96qHzQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-cZD1JJ8kD2KlO/lEq1D4P0KxI0M4naprUXfjdeEHA6I='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -69,9 +69,8 @@ main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;fle
 .recrow{border-style:dashed;border-color:var(--rec)}
 .recrow .tn{background:var(--rec);color:var(--rec-text)}
 
-.meter{flex:none;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;visibility:hidden}
+.meter{flex:none;height:6px;visibility:hidden}
 .meter.on{visibility:visible}
-.meter span{display:block;height:100%;width:0;background:var(--ok)}
 
 /* ---------- Transport ---------- */
 .actions{flex:none;display:grid;grid-template-columns:48px 48px 3fr 2fr;gap:8px}
@@ -86,8 +85,6 @@ main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;fle
 /* ---------- Settings ---------- */
 .card h3{font-size:15px;margin:16px 0 6px}
 .card h3:first-of-type{margin-top:4px}
-.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
-.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 .fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .fields label,.form-field{display:flex;flex-direction:column;gap:2px;font-size:14px;color:var(--muted);min-width:0}
 .fields input,.fields select,.form-field input,.form-field select{min-height:44px;padding-inline:8px;font-size:16px;width:100%}
@@ -114,7 +111,7 @@ main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;fle
     <div class="beats" id="beatDots" aria-hidden="true"></div>
     <p class="status" id="status" role="status" aria-live="polite"></p>
     <ul class="tracks" id="tracks" aria-label="Spuren" data-i18n-attr="aria-label:tracks"></ul>
-    <div class="meter" id="meter" aria-hidden="true"><span id="meterBar"></span></div>
+    <div class="meter ok" id="meter" aria-hidden="true"><i id="meterBar"></i></div>
     <div class="actions">
       <button type="button" class="btn ib" id="btnUndo" aria-label="Rückgängig" data-i18n-attr="aria-label:undo" title="Rückgängig" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrow-back-up"/></svg></button>
       <button type="button" class="btn ib" id="btnRedo" aria-label="Wiederholen" data-i18n-attr="aria-label:redo" title="Wiederholen" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrow-forward-up"/></svg></button>
@@ -238,7 +235,7 @@ main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;fle
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 96e0dbf5ea4d</p>
+  <p class="footer-version">Version 0a7a1ae0671d</p>
   <!-- footer:end -->
 </footer>
 
@@ -568,9 +565,9 @@ function deleteTrack(tr){
   Tools.toast(t('deleted',{n}));Tools.diag.log('track deleted',{n});
   afterEdit();
 }
-function clearAll(){
+async function clearAll(){
   if(!tracks.length&&!rec)return;
-  if(!confirm(t('confirmClear')))return;
+  if(!await Tools.confirm(t('confirmClear'), { action: 'delete' }))return;
   if(rec){clearTimeout(rec.timer);rec=null;}
   stopTransport();
   tracks=[];undoStack=[];redoStack=[];loop=null;

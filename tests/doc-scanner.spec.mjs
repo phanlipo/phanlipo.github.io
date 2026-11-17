@@ -2,7 +2,7 @@
 // black mark in its top left corner) are drawn in the browser. Checked: corner detection against the
 // known corners, the PDF structure (parsed here, xref offsets verified) and the page images in it
 // (decoded separately): straightened, mark position, shadow removed, black & white, order, rotation.
-import { test, expect, mockLaunchQueue } from './helpers.mjs';
+import { test, expect, mockLaunchQueue, onDialog } from './helpers.mjs';
 
 const URL_ = '/doc-scanner/';
 const W = 1200, H = 900;
@@ -138,7 +138,7 @@ const REGIONS = {
 };
 
 test.beforeEach(async ({ page }) => {
-  page.on('dialog', d => d.accept());
+  await onDialog(page, d => d.accept());
   await page.goto(URL_);
 });
 

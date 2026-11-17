@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="play_round, get_score">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-kmHkPEwlsIDMi+cR3fkqN3kEGnYz9ZRSrYCEBKOhitg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-cgvpHfRNvWf3/Kk44p636yVX8HoE+qgFoZorPRjAg1Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -94,13 +94,11 @@ textarea.code{min-height:84px;word-break:break-all}
 .video-wrap::after{content:"";position:absolute;inset:15%;border:3px solid rgba(255,255,255,.8);border-radius:12px;pointer-events:none}
 .conn-on{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
 .conn-on p{margin:0;font-weight:600;color:var(--ok)}
-.check{display:flex;gap:10px;align-items:flex-start;min-height:44px;font-size:16px;cursor:pointer}
-.check input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--accent)}
 
 /* ---------- Diagrams in the help ---------- */
 .rules{display:grid;gap:4px 16px;grid-template-columns:minmax(0,1fr)}
 @media (min-width:600px){.rules{grid-template-columns:minmax(0,260px) minmax(0,1fr);align-items:center}}
-.rules svg{width:100%;max-width:300px;height:auto;display:block;margin-inline:auto;color:var(--text)}
+.rules>svg{width:100%;max-width:300px;height:auto;display:block;margin-inline:auto;color:var(--text)}
 .rules svg .node{fill:var(--surface-2);stroke:var(--border);stroke-width:2}
 .rules svg .lbl{fill:var(--text);font-size:15px;font-weight:600}
 .rules svg .arrow{stroke:var(--accent);fill:var(--accent)}
@@ -338,7 +336,7 @@ textarea.code{min-height:84px;word-break:break-all}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 5d88be61c13f</p>
+  <p class="footer-version">Version 07cb08c0175f</p>
   <!-- footer:end -->
 </footer>
 
@@ -563,8 +561,8 @@ Tools.$('modes').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   state.mode=b.dataset.m;save();cpuNext=computerMove();renderAll();
 });
-Tools.$('btnReset').addEventListener('click',()=>{
-  if(!confirm(t('confirmReset')))return;
+Tools.$('btnReset').addEventListener('click',async ()=>{
+  if(!await Tools.confirm(t('confirmReset'), { action: 'reset' }))return;
   if(online()){delete net.v[state.variant];renderScore();return;}
   delete state.v[state.variant];save();cpuNext=computerMove();clearArena();renderAll();
 });
@@ -853,10 +851,10 @@ function onMessage(m){
 }
 
 /* ---------- Wiring ---------- */
-$('opp').addEventListener('click',e=>{
+$('opp').addEventListener('click',async e=>{
   const b=e.target.closest('button');if(!b||b.dataset.o===state.opp)return;
   if(b.dataset.o==='cpu'&&(peer||scanner.active())){
-    if(connected()&&!confirm(t('net.confirmLeave')))return;
+    if(connected()&&!await Tools.confirm(t('net.confirmLeave'), { action: 'leave' }))return;
     leave();
   }
   state.opp=b.dataset.o;save();
@@ -869,7 +867,7 @@ $('btnJoin').addEventListener('click',()=>startScan('offer'));
 $('btnScanAnswer').addEventListener('click',()=>startScan('answer'));
 $('btnScanCancel').addEventListener('click',cancelScan);
 for(const id of ['btnHostCancel','btnGuestCancel'])$(id).addEventListener('click',()=>{closeConn();showPanel('connLobby');});
-$('btnLeave').addEventListener('click',()=>{if(!confirm(t('net.confirmLeave')))return;leave();});
+$('btnLeave').addEventListener('click',async ()=>{if(!await Tools.confirm(t('net.confirmLeave'), { action: 'leave' }))return;leave();});
 $('btnOfferIn').addEventListener('click',()=>{const r=useCode($('offerIn').value,'offer');if(!r.ok)setStatus('lobbyStatus',r.msg,'err');else $('offerIn').value='';});
 $('btnAnswerIn').addEventListener('click',()=>{const r=useCode($('answerIn').value,'answer');if(!r.ok)setStatus('hostStatus',r.msg,'err');});
 async function copyCode(){if(!myCode)return;Tools.toast(t((await Tools.copyText(myCode))?'copiedOk':'copyFail'));}

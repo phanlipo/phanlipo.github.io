@@ -3,7 +3,7 @@
 // ZXing-JS, independent of the generator), pictures kept over a reload, offline.
 import { readFileSync } from 'node:fs';
 import { inflateSync, crc32 } from 'node:zlib';
-import { test, expect, mockLaunchQueue } from './helpers.mjs';
+import { test, expect, mockLaunchQueue, onDialog } from './helpers.mjs';
 
 const URL_ = '/business-card/';
 const design = page => page.evaluate(() => JSON.parse(localStorage.getItem('business-card.design.v1')));
@@ -26,7 +26,7 @@ async function at(page, x, y) {
 }
 
 async function blank(page) {
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.selectOption('#tpl', 'blank');
   await page.click('#tplApply');
   await saved(page, d => d.sides.front.els.length === 0);
@@ -213,7 +213,7 @@ test('A4 PDF: 10 cards per page, back as page 2, crop marks; without a back only
   await page.check('#optGap');
   await page.uncheck('#optMarks');
   await expect(page.locator('#btnPdf')).toHaveText('PDF (A4, 8 Karten)');
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.selectOption('#tpl', 'minimal');
   await page.click('#tplApply');
   await expect(page.locator('#optBack')).toBeDisabled();
@@ -357,7 +357,7 @@ test('own template: save in the app, load it again after changes, overwrite, del
   await expect(page.locator('#tpl')).toHaveValue(/^own:/);
   await expect(page.locator('#tplDel')).toBeVisible();
   // Change the card: blank template
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.selectOption('#tpl', 'blank');
   await expect(page.locator('#tplDel')).toBeHidden();
   await page.click('#tplApply');
@@ -374,12 +374,13 @@ test('own template: save in the app, load it again after changes, overwrite, del
   // Same name: asks, then overwrites (one entry)
   await item(page, 'Erika Mustermann').click();
   await page.fill('#pText', 'Max');
-  page.once('dialog', d => { expect(d.message()).toBe('Es gibt schon eine Vorlage „Firma“. Überschreiben?'); d.accept(); });
+  await onDialog(page, d => { expect(d.message()).toBe('Es gibt schon eine Vorlage „Firma“. Überschreiben?'); d.accept(); }, { once: true });
   await page.click('#tplSave');
+  await expect(page.locator('#tplStatus')).toHaveText('Vorlage „Firma“ gespeichert.');
   const own = await page.evaluate(() => JSON.parse(localStorage.getItem('business-card.templates.v1')));
   expect(own).toHaveLength(1);
   expect(own[0].design.sides.front.els.some(e => e.text === 'Max')).toBe(true);
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#tplDel');
   await expect(page.locator('#tplStatus')).toHaveText('Vorlage „Firma“ gelöscht.');
   await expect(page.locator('#tplOwn')).toHaveCount(0);
@@ -405,7 +406,7 @@ test('template file: a picture of both sides with the whole design inside, opene
   await forgetAll(page);
   await page.reload();
   await expect(item(page, 'Erika Mustermann')).toBeVisible();
-  page.once('dialog', d => { expect(d.message()).toBe('Vorlage „Jörg Groß“ laden? Sie ersetzt die aktuelle Karte.'); d.accept(); });
+  await onDialog(page, d => { expect(d.message()).toBe('Vorlage „Jörg Groß“ laden? Sie ersetzt die aktuelle Karte.'); d.accept(); }, { once: true });
   await page.locator('#pickTpl').setInputFiles({ name, mimeType: 'image/png', buffer: buf });
   await expect(page.locator('#tplStatus')).toHaveText('Vorlage „Jörg Groß“ geladen.');
   await expect(item(page, 'Jörg Groß · „Köln“')).toBeVisible();
@@ -432,7 +433,7 @@ test('template files: a plain picture, broken data and a newer version are refus
   await open(withData(file, JSON.stringify({ format: 'phanlipo-business-card', formatVersion: 2, design: {} })));
   await expect(page.locator('#tplStatus')).toHaveText(/^Die Vorlage stammt aus einer neueren Version/);
   // Unknown elements and values are dropped or replaced, the rest loads
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await open(withData(file, JSON.stringify({ format: 'phanlipo-business-card', formatVersion: 1, name: 'Fremd', images: {},
     design: { format: 'xx', orient: 'portrait', sides: { front: { bg: 'red', els: [
       { type: 'script', x: 1 }, { type: 'text', text: 'Hallo', size: 1e9, color: 'javascript:1', x: 'a' },
@@ -451,7 +452,7 @@ test('shared to the app / opened with it: a template file loads, a photo is inse
   const file = (await download(page, '#tplFile')).buf;
   await forgetAll(page);
   await mockLaunchQueue(page, [{ name: 'vorlage.png', mimeType: 'image/png', buffer: file }]);
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.goto(`${URL_}?opened=1`);
   await expect(page.locator('#tplStatus')).toHaveText('Vorlage „Visitenkarte“ geladen.');
   expect(new URL(page.url()).search).toBe('');

@@ -1,5 +1,5 @@
 // Generic checks that run automatically for every page – a new tool is covered without extra work.
-import { test, expect, tools, apps, VIEWPORTS, expectNoHorizontalScroll, openMenu } from './helpers.mjs';
+import { test, expect, tools, apps, VIEWPORTS, expectNoHorizontalScroll, openMenu, onDialog } from './helpers.mjs';
 import { allPages } from '../scripts/lib.mjs';
 
 test('robots.txt allows crawling so search engines can see the noindex tag', async ({ request }) => {
@@ -372,7 +372,7 @@ for (const app of apps()) {
 
       // Change the data, then import the backup again
       await page.evaluate(([own]) => localStorage.setItem(own, '"changed"'), [own]);
-      page.once('dialog', d => d.accept());
+      await onDialog(page, d => d.accept(), { once: true });
       await importFile(page, file);
       await page.waitForEvent('load');
       expect(await page.evaluate(([own]) => localStorage.getItem(own), [own])).toBe(JSON.stringify({ hello: 'Grüße', n: 1 }));
@@ -405,7 +405,7 @@ for (const app of apps()) {
       const { own } = await prepare(page);
       // A key of another app on the same domain must survive (removed again before the end of the test)
       await page.evaluate(() => localStorage.setItem('zzOtherApp.data.v1', 'keep'));
-      page.once('dialog', d => d.accept());
+      await onDialog(page, d => d.accept(), { once: true });
       await page.click('[data-data="clear"]');
       await page.waitForEvent('load');
       const state = await page.evaluate(([own]) => ({ own: localStorage.getItem(own), other: localStorage.getItem('zzOtherApp.data.v1') }), [own]);

@@ -125,6 +125,18 @@ for (const app of apps()) {
       }
     });
 
+    test('checkboxes and radios with words sit in label.check (or in .seg/.chips/.tiles)', async ({ page }) => {
+      await page.goto(url);
+      // All of the page, also in the menu and hidden views – the rule is about the markup
+      const bad = await page.evaluate(() => [...document.querySelectorAll('input[type=checkbox],input[type=radio]')].filter(el => {
+        if (el.closest('.seg,.chips,.tiles,.toolbar,table,.menu-list,[data-data],[data-diag]')) return false;
+        const cs = getComputedStyle(el);
+        if (cs.opacity === '0' || cs.appearance === 'none' || el.classList.contains('sr-only')) return false; // drawn by the page itself
+        return !el.closest('label.check');
+      }).map(el => el.id || el.name || el.outerHTML.slice(0, 80)));
+      expect(bad, 'use <label class="check"><input …><span>…</span></label> (base.css)').toEqual([]);
+    });
+
     test('icon-only buttons: name, sprite icon of the lexicon, 44 px', async ({ page }) => {
       await page.setViewportSize(VIEWPORTS.mobile);
       await page.goto(url);

@@ -21,7 +21,7 @@
 <meta name="tool:connect" content="https: http://localhost:* http://127.0.0.1:*">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-WJDtVG4yjQKltA9378SRocB0nmPWcBaRi8X6GvQ1abc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-qXHpV4m2Si5jIRK9l7HtuSUpGxhNI36G4YLutQIHuQI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -78,8 +78,7 @@ main{max-width:640px;margin-inline:auto;padding:8px;display:flex;flex-direction:
 .tabs{display:flex;gap:8px;flex-wrap:wrap}
 .tab{min-height:44px;padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer}
 .tab[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
-.rlist{flex:1;min-height:0;overflow:auto;list-style:none;margin:0;padding:0}
-.rlist li{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.rlist{flex:1;min-height:0;overflow:auto}
 .thumb{flex:none;width:48px;height:48px;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;font-size:30px;overflow:hidden}
 .thumb img{width:100%;height:100%;object-fit:contain}
 .rtext{flex:1;min-width:0}
@@ -100,8 +99,7 @@ main{max-width:640px;margin-inline:auto;padding:8px;display:flex;flex-direction:
 textarea#srcJson{min-height:10em}
 .info{margin:6px 0 0;white-space:pre-line;overflow-wrap:anywhere}
 .info.err{color:var(--err)}
-.check{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer;margin-top:8px}
-.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.check{margin-top:8px}
 .help pre{white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--mono);font-size:13px;background:var(--surface-2);padding:8px;border-radius:8px}
 </style>
 </head>
@@ -158,7 +156,7 @@ textarea#srcJson{min-height:10em}
       <button type="button" class="tab" data-tab="nope" aria-pressed="false"></button>
     </div>
     <p class="muted" id="resInfo"></p>
-    <ul class="rlist" id="resList" data-emoji-content></ul>
+    <ul class="rlist list-rows" id="resList" data-emoji-content></ul>
     <div class="row">
       <button type="button" class="btn" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="res.copy">Liste kopieren</span></button>
       <button type="button" class="btn danger" id="btnResetSrc"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="res.reset">Bewertungen zurücksetzen</span></button>
@@ -289,7 +287,7 @@ textarea#srcJson{min-height:10em}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version aff79abd5377</p>
+  <p class="footer-version">Version 8aa3d858a1ac</p>
   <!-- footer:end -->
 </footer>
 
@@ -907,9 +905,9 @@ $('btnCopy').addEventListener('click',async()=>{
   const ok=await Tools.copyText(text);
   Tools.toast(ok?t('res.copied',{n:n0(all.length)}):t('res.copyFail'));
 });
-$('btnResetSrc').addEventListener('click',()=>{
+$('btnResetSrc').addEventListener('click',async ()=>{
   const def=curDef();if(!def)return;
-  if(!confirm(t('res.resetQ',{prof:profName(curProfile()),src:pickLang(def.title)})))return;
+  if(!await Tools.confirm(t('res.resetQ',{prof:profName(curProfile()),src:pickLang(def.title)}), { action: 'reset' }))return;
   const p=swipes[profiles.current];
   if(isObj(p))delete p[def.id];
   saveSwipes();undoStack=[];forcedId=null;
@@ -952,7 +950,7 @@ $('srcList').addEventListener('click',async e=>{
   }else if(b.dataset.act==='edit'){
     srcJson.value=JSON.stringify(def,null,2);info(t('src.edited'));srcJson.focus();
   }else if(b.dataset.act==='del'){
-    if(!confirm(t('src.delQ',{name:pickLang(def.title)})))return;
+    if(!await Tools.confirm(t('src.delQ',{name:pickLang(def.title)}), { action: 'delete' }))return;
     sources=sources.filter(s=>s.id!==id);saveSources();
     delete raw[id];delete mapped[id];delete status[id];delete settings.loaded[id];
     if(settings.source===id)settings.source=sources[0]?sources[0].id:null;
@@ -968,7 +966,7 @@ async function addDef(def){
   def=JSON.parse(JSON.stringify(def));
   const i=sources.findIndex(s=>s.id===def.id);
   if(i>=0){
-    if(!confirm(t('src.replaceQ',{id:def.id,name:pickLang(sources[i].title)})))return false;
+    if(!await Tools.confirm(t('src.replaceQ',{id:def.id,name:pickLang(sources[i].title)}), { action: 'replace' }))return false;
     if(apiSig(sources[i])!==apiSig(def)){
       delete raw[def.id];delete settings.loaded[def.id];
       await dropSourceFiles(def.id);
@@ -1030,11 +1028,11 @@ $('profList').addEventListener('change',e=>{
   p.name=e.target.value.trim().slice(0,30)||null;
   saveProfiles();renderPickers();renderProfiles();
 });
-$('profList').addEventListener('click',e=>{
+$('profList').addEventListener('click',async e=>{
   const b=e.target.closest('button');if(!b)return;
   const id=b.closest('li').dataset.id,p=profiles.list.find(x=>x.id===id);
   if(!p||profiles.list.length<2)return;
-  if(!confirm(t('prof.delQ',{name:profName(p)})))return;
+  if(!await Tools.confirm(t('prof.delQ',{name:profName(p)}), { action: 'delete' }))return;
   profiles.list=profiles.list.filter(x=>x.id!==id);
   delete swipes[id];saveSwipes();
   if(profiles.current===id)profiles.current=profiles.list[0].id;

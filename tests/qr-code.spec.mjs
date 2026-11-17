@@ -1,6 +1,6 @@
 // QR-Code-Generator: codes are decoded with an independent reader (ZXing-JS from assets/vendor,
 // not the generator library), WLAN format, size limit, share target (Android) and history.
-import { test, expect } from './helpers.mjs';
+import { test, expect, onDialog } from './helpers.mjs';
 
 const URL_ = '/qr-code/';
 
@@ -120,7 +120,7 @@ test('history: remember, reopen, delete; input survives a reload', async ({ page
 
   await page.getByRole('button', { name: 'Eintrag löschen: erster' }).click();
   expect(await histTexts(page)).toEqual(['Gast']);
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnClearHist');
   await expect(page.locator('#hist')).toContainText('Noch keine Einträge');
 });

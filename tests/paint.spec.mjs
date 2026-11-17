@@ -1,5 +1,5 @@
 // Malen: colours, tools, eraser, reset, picture kept after reload and rotation, WebMCP-free basics.
-import { test, expect, mockAndroidShare } from './helpers.mjs';
+import { test, expect, mockAndroidShare, onDialog } from './helpers.mjs';
 
 /** Colour of the canvas pixel at CSS position (x, y) */
 const pixel = (page, x, y) => page.evaluate(([x, y]) => {
@@ -111,12 +111,13 @@ test('eraser paints white; a colour switches back to the last tool', async ({ pa
 
 test('reset clears only after confirming', async ({ page }) => {
   await stroke(page, 20, 50, 220, 50);
-  page.once('dialog', d => d.dismiss());
+  await onDialog(page, d => d.dismiss(), { once: true });
   await page.click('#btnReset');
+  await expect(page.locator('dialog.tools-ask')).toHaveCount(0);     // answered
   expect(await pixel(page, 120, 50)).not.toEqual(WHITE);
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnReset');
-  expect(await pixel(page, 120, 50)).toEqual(WHITE);
+  await expect.poll(() => pixel(page, 120, 50)).toEqual(WHITE);
   // Stays empty after reload
   await page.reload();
   expect(await pixel(page, 120, 50)).toEqual(WHITE);

@@ -1,5 +1,5 @@
 // RSS reader: feeds from stand-in servers (tests/feed-mock.mjs) – with and without CORS, through a proxy, from a file.
-import { test, expect, openMenu, closeMenu, switchLang } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, onDialog } from './helpers.mjs';
 import { FEED_ORIGIN, NOCORS_ORIGIN, PROXY_ORIGIN, FEED_PROBLEMS, RSS, mockFeeds } from './feed-mock.mjs';
 
 const URL_ = '/rss-reader/';
@@ -111,7 +111,7 @@ test.describe('RSS reader', () => {
     await expect(page.locator('#feedSel option:checked')).toHaveText('Atom Blog (2 ungelesen)');
     // Deleting every feed leads back to the first start
     await openMenu(page);
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.getByRole('button', { name: 'Löschen: Atom Blog' }).click();
     await page.getByRole('button', { name: 'Löschen: Roadmap Test' }).click();
     await closeMenu(page);
@@ -283,10 +283,10 @@ test.describe('RSS reader', () => {
     await expect(page.locator('#h-add')).toHaveText('Feed hinzufügen');
 
     // Delete after confirming
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.getByRole('button', { name: 'Löschen: Kaputt' }).click();
     await expect(page.locator('#feedList .f-name')).toHaveText(['Roadmap Test', 'Blog']);
-    page.once('dialog', d => d.dismiss());
+    await onDialog(page, d => d.dismiss(), { once: true });
     await page.getByRole('button', { name: 'Löschen: Blog' }).click();
     await expect(page.locator('#feedList .f-name')).toHaveText(['Roadmap Test', 'Blog']);
     await page.reload();

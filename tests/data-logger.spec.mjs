@@ -1,5 +1,5 @@
 // Data logger: profiles, measurements, data points, charts and exports. Expected values worked out by hand.
-import { test, expect, axe } from './helpers.mjs';
+import { test, expect, axe, onDialog } from './helpers.mjs';
 
 test.use({ timezoneId: 'Europe/Berlin' });
 // Friday 30 Oct 2026, 12:00 CET
@@ -127,16 +127,17 @@ test('period filter: older values drop out of the chart, not out of the table', 
   await expect(page.locator('[data-range="1d"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('delete data point, measurement and profile – only after confirming', async ({ page }) => {
+test('delete data point (with undo), measurement and profile (only after confirming)', async ({ page }) => {
   await sample(page);
-  page.once('dialog', d => d.dismiss());
   await rows(page).nth(0).getByRole('button', { name: 'Datenpunkt vom 30.10.2026, 12:00 löschen' }).click();
+  await expect(rows(page)).toHaveCount(2);
+  await page.getByRole('button', { name: 'Rückgängig' }).click();
   await expect(rows(page)).toHaveCount(3);
-  page.once('dialog', d => { expect(d.message()).toBe('Datenpunkt vom 30.10.2026, 12:00 löschen?'); d.accept(); });
+  await expect(rows(page).nth(0).getByRole('button', { name: 'Datenpunkt vom 30.10.2026, 12:00 löschen' })).toBeVisible();
   await rows(page).nth(0).getByRole('button').click();
   await expect(rows(page)).toHaveCount(2);
   // Deleting weight removes its values; the point of 28 Oct had only weight and goes too
-  page.once('dialog', d => { expect(d.message()).toBe('Messwert „Gewicht“ mit 2 Werten löschen?'); d.accept(); });
+  await onDialog(page, d => { expect(d.message()).toBe('Messwert „Gewicht“ mit 2 Werten löschen?'); d.accept(); }, { once: true });
   await page.getByRole('button', { name: 'Messwert löschen: Gewicht' }).click();
   await expect(page.locator('#metrics li')).toHaveCount(1);
   await expect(rows(page)).toHaveCount(1);
@@ -147,11 +148,11 @@ test('delete data point, measurement and profile – only after confirming', asy
   await expect(page.locator('#profileSel option')).toHaveText(['Gesundheit', 'Garten']);
   await page.selectOption('#profileSel', { label: 'Gesundheit' });
   await expect(rows(page)).toHaveCount(1);
-  page.once('dialog', d => { expect(d.message()).toBe('Profil „Gesundheit“ mit 1 Datenpunkten löschen?'); d.accept(); });
+  await onDialog(page, d => { expect(d.message()).toBe('Profil „Gesundheit“ mit 1 Datenpunkten löschen?'); d.accept(); }, { once: true });
   await page.click('#btnDelProfile');
   await expect(page.locator('#profileSel option')).toHaveText(['Garten']);
   await expect(page.locator('#profileName')).toHaveValue('Garten');
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnDelProfile');
   await expect(page.locator('#noProfile')).toBeVisible();
   await page.reload();
@@ -166,7 +167,7 @@ test('at most 8 measurements, each with its own colour', async ({ page }) => {
   const colours = await page.locator('#metrics .swatch').evaluateAll(s => s.map(x => getComputedStyle(x).backgroundColor));
   expect(new Set(colours).size).toBe(8);
   // A freed colour is reused by the next new measurement, the others keep theirs
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.getByRole('button', { name: 'Messwert löschen: Messwert 3' }).click();
   await page.click('#btnAddMetric');
   const after = await page.locator('#metrics .swatch').evaluateAll(s => s.map(x => getComputedStyle(x).backgroundColor));

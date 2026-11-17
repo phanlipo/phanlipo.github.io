@@ -1,5 +1,5 @@
 // Glücksrad: the pointer lands on the drawn entry, entries, removing winners, fairness, history, English.
-import { test, expect, openMenu, closeMenu, switchLang } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, onDialog } from './helpers.mjs';
 
 const TAU = Math.PI * 2;
 /** Entry under the pointer, worked out from the wheel's rotation (segment i starts at i·360°/n clockwise from the top) */
@@ -133,7 +133,7 @@ test('clear history', async ({ page }) => {
   await page.click('#btnSpin');
   await openMenu(page);
   await expect(page.locator('#histCount')).toHaveText('1');
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnClearHist');
   await expect(page.locator('#histCount')).toHaveText('0');
 });

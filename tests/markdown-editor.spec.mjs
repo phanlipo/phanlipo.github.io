@@ -187,7 +187,6 @@ test('files: new, list in the menu, open, delete – kept after reload', async (
   await expect(raw(page)).toHaveValue('# Erste\n\nHallo');
   // Delete the open file: the other one opens
   await openMenu(page);
-  page.once('dialog', d => d.accept());
   await page.locator('#files li', { hasText: 'Erste' }).locator('[data-act="delete"]').click();
   await expect(page.locator('#files li .name')).toHaveText(['Notiz']);
   await closeMenu(page);

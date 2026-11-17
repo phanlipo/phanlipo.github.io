@@ -1,6 +1,6 @@
 // Loop-Station: records from a fake microphone, loops, layers tracks, metronome/bar grid, WAV export.
 import { readFileSync } from 'node:fs';
-import { test, expect, openMenu, closeMenu, switchLang } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, onDialog } from './helpers.mjs';
 import { wavInfo, toneHz, peak } from './audio-files.mjs';
 
 const F = 440, AMP = 0.5; // fake microphone: sine with known frequency and amplitude
@@ -132,10 +132,10 @@ test('new tracks: end after one round, undo/redo, delete and bring back, at most
   await expect(page.locator('#btnRec')).toBeDisabled();
   await expect(page.locator('#status')).toHaveText('Läuft – 8 Spuren voll. Lösche eine, um weiter aufzunehmen.');
   // Deleting everything asks first
-  page.once('dialog', d => d.dismiss());
+  await onDialog(page, d => d.dismiss(), { once: true });
   await page.click('#btnClear');
   await tracks(page, 8);
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnClear');
   await tracks(page, 0);
   await state(page, 'idle');

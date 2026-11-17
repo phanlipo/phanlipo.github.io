@@ -16,7 +16,7 @@ Tools.i18n({
     replaceConfirm:'Der Code im Editor ist nicht gespeichert. Ersetzen?',
     noScripts:'Noch keine Skripte gespeichert.',saved:'Gespeichert: {name}',updated:'Aktualisiert: {name}',saveFail:'Speichern nicht möglich – der Speicher des Browsers ist voll.',
     nameMissing:'Bitte einen Namen eingeben.',emptyCode:'Der Editor ist leer.',
-    delConfirm:'„{name}“ löschen?',deleted:'Gelöscht',deleteN:'Löschen: {name}',delete:'Löschen',
+    deleted:'Gelöscht',deleteN:'Löschen: {name}',delete:'Löschen',
     chars:'{n} Zeichen',tooBig:'Datei zu groß (höchstens 1 MB).',notText:'Das ist keine Textdatei.',opened:'Geöffnet: {name}',downloaded:'Heruntergeladen',
     eofHint:'Tipp: input() hat keine Eingabe mehr gefunden – im Menü ☰ unter „Eingabe für das Programm“ eine Zeile je Aufruf eintragen.',
     draft:'Entwurf {when}',
@@ -42,7 +42,7 @@ Tools.i18n({
     replaceConfirm:'The code in the editor is not saved. Replace it?',
     noScripts:'No scripts saved yet.',saved:'Saved: {name}',updated:'Updated: {name}',saveFail:'Could not save – the browser storage is full.',
     nameMissing:'Please enter a name.',emptyCode:'The editor is empty.',
-    delConfirm:'Delete “{name}”?',deleted:'Deleted',deleteN:'Delete: {name}',delete:'Delete',
+    deleted:'Deleted',deleteN:'Delete: {name}',delete:'Delete',
     chars:'{n} characters',tooBig:'File too large (1 MB at most).',notText:'This is not a text file.',opened:'Opened: {name}',downloaded:'Downloaded',
     eofHint:'Tip: input() found no more input – enter one line per call in the menu ☰ under “Input for the program”.',
     draft:'Draft {when}',
@@ -139,9 +139,9 @@ function setCode(lang,text,name){
   persist();showLang();
 }
 // Asks before unsaved code of that language is replaced
-const mayReplace=lang=>{
+const mayReplace=async lang=>{
   const cur=lang===state.lang?code.value:state.code[lang];
-  return !state.dirty[lang]||!cur.trim()||confirm(t('replaceConfirm'));
+  return !state.dirty[lang]||!cur.trim()||await Tools.confirm(t('replaceConfirm'), { action: 'replace' });
 };
 code.addEventListener('input',()=>{state.code[state.lang]=code.value;state.dirty[state.lang]=true;persistSoon();});
 $('langs').addEventListener('click',e=>{const b=e.target.closest('button[data-l]');if(b)setLang(b.dataset.l);});
@@ -369,12 +369,12 @@ function renderExamples(){
   const sel=$('examples');
   sel.innerHTML=`<option value="">${esc(t('exChoose'))}</option>`+EXAMPLES[state.lang].map((x,i)=>`<option value="${i}">${esc(LABEL[state.lang]+': '+t(x.key))}</option>`).join('');
 }
-$('examples').addEventListener('change',()=>{
+$('examples').addEventListener('change',async()=>{
   const sel=$('examples'),i=sel.value;
   if(i==='')return;
   sel.value='';
   const lang=state.lang,x=EXAMPLES[lang][Number(i)];
-  if(!mayReplace(lang))return;
+  if(!await mayReplace(lang))return;
   setCode(lang,exampleCode(lang,Number(i)));
   if(x.stdin&&!state.stdin.trim()){state.stdin=x.stdin(Tools.lang()==='de');stdinEl.value=state.stdin;persist();}
   Tools.diag.log('example',{lang,i:Number(i)});
@@ -412,18 +412,19 @@ $('btnSave').addEventListener('click',()=>{
   Tools.diag.log('script saved',{lang,chars:text.length,scripts:scripts.length});
 });
 $('scriptName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('btnSave').click();}});
-$('scripts').addEventListener('click',e=>{
+$('scripts').addEventListener('click',async e=>{
   const li=e.target.closest('li[data-id]');
   if(!li)return;
   const s=scripts.find(x=>x.id===li.dataset.id);
   if(!s)return;
   if(e.target.closest('[data-act="delete"]')){
-    if(!confirm(t('delConfirm',{name:s.name})))return;
+    // At once, with undo (UI-KONZEPT.md: one entry → undo instead of asking)
+    const before=scripts.slice();
     scripts=scripts.filter(x=>x!==s);Tools.save(LSC,scripts);renderScripts();
-    Tools.toast(t('deleted'));Tools.diag.log('script deleted',{scripts:scripts.length});
+    Tools.undo(t('deleted'),()=>{scripts=before;Tools.save(LSC,scripts);renderScripts();});Tools.diag.log('script deleted',{scripts:scripts.length});
     return;
   }
-  if(!mayReplace(s.lang))return;
+  if(!await mayReplace(s.lang))return;
   setCode(s.lang,s.code,s.name);
   Tools.diag.log('script opened',{lang:s.lang,chars:s.code.length});
   Tools.menu.close();
@@ -439,7 +440,7 @@ $('fileInput').addEventListener('change',async()=>{
   if(text.includes('\u0000')){Tools.toast(t('notText'),4000);return;}
   const ext=(f.name.match(/\.([A-Za-z0-9]+)$/)||[])[1]||'';
   const lang=/^pyw?$/i.test(ext)?'python':/^[mc]?js$/i.test(ext)?'javascript':state.lang;
-  if(!mayReplace(lang))return;
+  if(!await mayReplace(lang))return;
   setCode(lang,text.replace(/\r\n?/g,'\n').slice(0,MAX_CODE),f.name.replace(/\.[A-Za-z0-9]+$/,'').slice(0,60));
   Tools.toast(t('opened',{name:f.name}));
   Tools.menu.close();

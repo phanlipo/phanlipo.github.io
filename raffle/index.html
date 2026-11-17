@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="draw_ticket, get_results, check_ticket">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-O4S+89Ux65SZ/B6xP0zyBZtHDCDIJ0z+FM+95DxIeJY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-jDEirf8K2XHifpJxFHzYjMnibI8+5V3+H3d2Z9hv1xY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -64,8 +64,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px max(12px,calc((100% 
 .list .btn.small{flex:none}
 .info{margin:8px 0 0;font-size:14px;color:var(--muted)}
 .info.err{color:var(--err)}
-.check{display:flex;align-items:center;gap:8px;min-height:44px;font-size:15px;margin-block-start:8px}
-.check input{width:20px;height:20px;flex:none;accent-color:var(--accent)}
+.check{margin-block-start:8px}
 .muted{color:var(--muted)}
 </style>
 </head>
@@ -192,7 +191,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px max(12px,calc((100% 
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 56408bd5f7aa</p>
+  <p class="footer-version">Version c7a902ffbb07</p>
   <!-- footer:end -->
 </footer>
 
@@ -399,10 +398,10 @@ function undo(){
   saveDraws();last=null;Tools.diag.log('undo',{redraw:!!rec.re});
   render();renderList();renderCheck();Tools.toast(t('undone'));
 }
-function redraw(i){
+async function redraw(i){
   const d=draws[i];
   if(busy||!d||d.v||d.r<0||!pool().length)return;
-  if(!confirm(t('confirmRedraw',{n:show(d.n),prize:prizeText(d.r)})))return;
+  if(!await Tools.confirm(t('confirmRedraw',{n:show(d.n),prize:prizeText(d.r)}), { action: 'reset' }))return;
   d.v=true;audio();
   draw(cfg.anim,d.r,{re:true});
 }
@@ -487,8 +486,8 @@ $('btnUndo').addEventListener('click',undo);
 $('list').addEventListener('click',e=>{const b=e.target.closest('[data-redraw]');if(b)redraw(Number(b.dataset.redraw));});
 $('checkIn').addEventListener('input',renderCheck);
 $('btnEdit').addEventListener('click',()=>{Tools.menu.open();fTickets.focus();});
-$('btnReset').addEventListener('click',()=>{
-  if(busy||!draws.length||!confirm(t('confirmReset')))return;
+$('btnReset').addEventListener('click',async ()=>{
+  if(busy||!draws.length||!await Tools.confirm(t('confirmReset'), { action: 'reset' }))return;
   draws=[];last=null;saveDraws();Tools.diag.log('reset');
   render();renderList();renderCheck();Tools.toast(t('resetDone'));
 });

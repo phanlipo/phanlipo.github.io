@@ -1,6 +1,6 @@
 // Code ausführen: Python (Pyodide) and JavaScript in workers – output, errors, input, stop, lockdown,
 // editor helpers, saved scripts, files, offline. The WebMCP tools are tested in webmcp.spec.mjs.
-import { test, expect, openMenu, closeMenu, clipboardText } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, clipboardText, onDialog } from './helpers.mjs';
 
 const code = page => page.locator('#code');
 const out = page => page.locator('#out');
@@ -265,12 +265,12 @@ test.describe('menu', () => {
 
     await code(page).fill('my_own = 1');
     let asked = 0;
-    page.once('dialog', d => { asked++; d.dismiss(); });
+    await onDialog(page, d => { asked++; d.dismiss(); }, { once: true });
     await openMenu(page);
     await page.locator('#examples').selectOption({ index: 1 });
     expect(asked).toBe(1);
     await expect(code(page)).toHaveValue('my_own = 1');
-    page.once('dialog', d => { asked++; d.accept(); });
+    await onDialog(page, d => { asked++; d.accept(); }, { once: true });
     await page.locator('#examples').selectOption({ index: 1 });
     expect(asked).toBe(2);
     await expect(code(page)).toHaveValue(/print\(f"Hallo \{name\}!"\)/);
@@ -321,7 +321,12 @@ test.describe('menu', () => {
     await expect(lang(page, 'javascript')).toHaveAttribute('aria-pressed', 'true');
     await expect(code(page)).toHaveValue('console.log("two")');
     await openMenu(page);
-    page.once('dialog', d => { expect(d.message()).toBe('„Erstes“ löschen?'); d.accept(); });
+    // Deleting asks nothing but offers to take it back
+    await page.getByRole('button', { name: 'Löschen: Erstes' }).click();
+    await expect(page.locator('#scripts')).toContainText('Noch keine Skripte gespeichert.');
+    await page.getByRole('button', { name: 'Rückgängig' }).click();
+    await expect(page.locator('#scripts .name')).toHaveText(['Erstes']);
+    expect((await stored(page, 'code-runner.scripts.v1')).map(s => s.name)).toEqual(['Erstes']);
     await page.getByRole('button', { name: 'Löschen: Erstes' }).click();
     await expect(page.locator('#scripts')).toContainText('Noch keine Skripte gespeichert.');
     expect(await stored(page, 'code-runner.scripts.v1')).toEqual([]);

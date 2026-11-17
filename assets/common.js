@@ -19,7 +19,10 @@ window.Tools = (function () {
   }
 
   /* ---------- UI ---------- */
-  function toast(msg, ms) {
+  /* Toast: a short note at the bottom. toast(text, ms) or toast(text, { ms, action: { label, icon, run } }) –
+     with an action (e.g. Tools.undo) the note carries a button and stays 6 s. */
+  function toast(msg, opts) {
+    const o = typeof opts === 'object' && opts ? opts : { ms: opts };
     let t = $('toast');
     if (!t) {
       t = document.createElement('div');
@@ -28,13 +31,87 @@ window.Tools = (function () {
     }
     // An open modal dialog (e.g. the menu) lies above the page – show the toast inside it so it stays visible
     let host = document.body;
-    try { host = document.querySelector('dialog:modal') || document.body; } catch (_) {}
+    try { host = [...document.querySelectorAll('dialog:modal')].pop() || document.body; } catch (_) {}
     if (t.parentNode !== host) host.append(t);
     t.textContent = msg;
+    t.classList.toggle('has-action', !!o.action);
+    if (o.action) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'toast-action';
+      b.innerHTML = (o.action.icon ? icon(o.action.icon) : '') + '<span></span>';
+      b.lastChild.textContent = o.action.label;
+      b.addEventListener('click', () => { t.classList.remove('show'); clearTimeout(toast._t); o.action.run(); }, { once: true });
+      t.append(' ', b);
+    }
     t.classList.add('show');
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => t.classList.remove('show'), ms || 1500);
+    toast._t = setTimeout(() => t.classList.remove('show'), o.ms || (o.action ? 6000 : 1500));
   }
+  // Removed something at once instead of asking first: say so and offer to take it back
+  function undo(msg, run) { toast(msg, { action: { label: t('ask.undo'), icon: 'arrow-back-up', run } }); }
+
+  /* Questions in the app's own look instead of the browser's confirm()/prompt() (UI-KONZEPT.md):
+       if (!await Tools.confirm(t('delQ', { name }), { action: 'delete' })) return;
+       const url = await Tools.prompt(t('linkUrl'), { value: 'https://', type: 'url' });  // null = cancelled
+     action names the confirm button: ok (default), delete, reset, leave, replace, load, download – delete, reset
+     and leave are red. ok/cancel give own words instead. A bottom sheet on phones, a small window on wide screens;
+     Escape and the back button of the dialog cancel. Fires "tools:ask" on document (tests answer it, helpers.mjs). */
+  const ASK = {
+    ok: ['check', 'ask.ok'], delete: ['trash', 'ask.delete', 1], reset: ['restore', 'ask.reset', 1], leave: ['logout', 'ask.leave', 1],
+    replace: ['replace', 'ask.replace'], load: ['folder-open', 'ask.load'], download: ['download', 'ask.download'],
+  };
+  function ask(type, message, o) {
+    o = o || {};
+    return new Promise(resolve => {
+      const [ic, key, danger] = ASK[o.action] || ASK.ok;
+      const d = document.createElement('dialog');
+      d.className = 'dialog tools-ask';
+      d.innerHTML = '<form method="dialog"><div class="dialog-body"><p class="ask-text"></p></div><div class="dialog-actions">' +
+        '<button type="submit" class="btn" value="">' + icon('x') + '<span></span></button>' +
+        '<button type="submit" class="btn primary" value="ok">' + icon(ic) + '<span></span></button></div></form>';
+      const text = d.querySelector('.ask-text'), [no, yes] = d.querySelectorAll('button');
+      if (o.title) {
+        const h = document.createElement('h2'); h.className = 'dialog-title'; h.textContent = o.title; h.id = 'toolsAskH';
+        d.querySelector('.dialog-body').prepend(h); d.setAttribute('aria-labelledby', 'toolsAskH');
+      } else d.setAttribute('aria-label', message.split('\n')[0]);
+      text.textContent = message; text.id = 'toolsAskText'; d.setAttribute('aria-describedby', 'toolsAskText');
+      no.lastChild.textContent = o.cancel || t('ask.cancel');
+      yes.lastChild.textContent = o.ok || t(key);
+      if (danger && !o.ok) yes.classList.add('danger');
+      let input = null;
+      if (type === 'prompt') {
+        input = document.createElement('input');
+        input.type = o.type || 'text'; input.value = o.value == null ? '' : String(o.value);
+        input.className = 'ask-input'; input.autocomplete = 'off'; input.setAttribute('aria-labelledby', 'toolsAskText');
+        if (o.maxlength) input.maxLength = o.maxlength;
+        // Enter confirms (the form's first button is Cancel, which implicit submission would take)
+        input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); d.close('ok'); } });
+        text.after(input);
+      }
+      (document.querySelector('dialog:modal') ? [...document.querySelectorAll('dialog:modal')].pop() : document.body).append(d);
+      d.addEventListener('close', () => {
+        const ok = d.returnValue === 'ok';
+        d.remove();
+        resolve(type === 'prompt' ? (ok ? input.value : null) : ok);
+      }, { once: true });
+      d.showModal();
+      (input || (danger ? no : yes)).focus();
+      if (input) input.select();
+      document.dispatchEvent(new CustomEvent('tools:ask', { detail: { type, message, value: input ? input.value : '', dialog: d } }));
+    });
+  }
+  const confirmAsk = (message, o) => ask('confirm', message, o);
+  const promptAsk = (message, o) => ask('prompt', message, o);
+
+  // Own dialogs (<dialog class="dialog">): buttons with data-close close them, a tap on the dim backdrop too
+  document.addEventListener('click', e => {
+    const c = e.target.closest && e.target.closest('dialog.dialog [data-close]');
+    if (c) { c.closest('dialog').close(); return; }
+    if (e.target.matches && e.target.matches('dialog.dialog:not(.tools-ask):not([data-keep])[open]')) {
+      const r = e.target.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.target.close();
+    }
+  });
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -101,6 +178,8 @@ window.Tools = (function () {
     'data.errForeign': 'Die Sicherung enthält unbekannte Einträge und wurde nicht geladen.',
     'data.errWrite': 'Speichern nicht möglich (Speicher voll oder gesperrt).',
     'diag.copied': 'Diagnose kopiert', 'diag.fail': 'Kopieren nicht möglich',
+    'ask.ok': 'OK', 'ask.cancel': 'Abbrechen', 'ask.delete': 'Löschen', 'ask.reset': 'Zurücksetzen', 'ask.leave': 'Verlassen',
+    'ask.replace': 'Ersetzen', 'ask.load': 'Laden', 'ask.download': 'Herunterladen', 'ask.undo': 'Rückgängig',
   });
   Object.assign(dict.en, {
     'sw.updated': 'New version loaded – tap ↻ at the top to update',
@@ -128,6 +207,8 @@ window.Tools = (function () {
     'diag.h': 'Troubleshooting',
     'diag.intro': 'Something does not work? First make the problem happen, then copy the diagnostics and pass them on. They contain the browser, app version, state and a log of the last steps – nothing you entered.',
     'diag.copy': 'Copy diagnostics', 'diag.copied': 'Diagnostics copied', 'diag.fail': 'Copying not possible',
+    'ask.ok': 'OK', 'ask.cancel': 'Cancel', 'ask.delete': 'Delete', 'ask.reset': 'Reset', 'ask.leave': 'Leave',
+    'ask.replace': 'Replace', 'ask.load': 'Load', 'ask.download': 'Download', 'ask.undo': 'Undo',
   });
 
   function t(key, vars) {
@@ -390,14 +471,14 @@ window.Tools = (function () {
         count = validateBackup(backup).length;
       } catch (e) { showInfo(e.message, 'err'); return; }
       const d = new Date(backup.exportedAt), when = isNaN(d) ? t('data.unknownDate') : d.toLocaleString(locale());
-      if (!confirm(t('data.confirmLoad', { when, count }))) return;
+      if (!await confirmAsk(t('data.confirmLoad', { when, count }), { action: 'load' })) return;
       try { importData(backup); } catch (e) { showInfo(e.message, 'err'); return; }
       toast(t('data.loaded'));
       setTimeout(() => location.reload(), 600);
     });
 
-    btn('clear').addEventListener('click', () => {
-      if (!confirm(t('data.confirmClear'))) return;
+    btn('clear').addEventListener('click', async () => {
+      if (!await confirmAsk(t('data.confirmClear'), { action: 'delete' })) return;
       clearData();
       toast(t('data.cleared'));
       setTimeout(() => location.reload(), 600);
@@ -595,6 +676,31 @@ window.Tools = (function () {
     installRender();
     return el;
   }
+
+  /* Stage apps fill the screen with 100dvh. Chrome on Android sometimes keeps a too large dvh after a reload of
+     the installed app (the area behind the navigation bar counts), so the bottom bar slides out of sight until
+     the app is restarted. The real window height wins whenever it is smaller: --app-h (base.css). */
+  function fitStage() {
+    const b = document.body;
+    if (!b || !b.classList.contains('stage')) return;
+    const vv = window.visualViewport;
+    const h = Math.round(Math.min(window.innerHeight, vv ? vv.height + vv.offsetTop : Infinity));
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;inset-block-start:0;height:100dvh;width:0;visibility:hidden;pointer-events:none';
+    b.append(probe);
+    const dvh = probe.getBoundingClientRect().height;
+    probe.remove();
+    if (h > 0 && dvh > h + 1) { b.style.setProperty('--app-h', h + 'px'); try { diagLog('stage: 100dvh ' + Math.round(dvh) + ' > window ' + h); } catch (_) {} }
+    else b.style.removeProperty('--app-h');
+  }
+  function setupStageHeight() {
+    fitStage();
+    window.addEventListener('resize', fitStage);
+    window.addEventListener('pageshow', fitStage);
+    if (window.visualViewport) visualViewport.addEventListener('resize', fitStage);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupStageHeight);
+  else setupStageHeight();
 
   function setupMenu() {
     if (menuEl || !document.querySelector('details.help')) return;
@@ -954,7 +1060,7 @@ window.Tools = (function () {
   else setupDiagUi();
 
   return {
-    $, load, save, remove, toast, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle,
+    $, load, save, remove, toast, undo, confirm: confirmAsk, prompt: promptAsk, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle,
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     menu: { open: menuOpen, close: menuClose, element: () => menuEl },

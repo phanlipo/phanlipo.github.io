@@ -1,6 +1,6 @@
 // Image Swipe: sources as JSON (fixed items or an API), swipe/like/pass, profiles, results, offline.
 // The API and its pictures are answered by Playwright routes on *.example.test – nothing leaves the machine.
-import { test, expect, clipboardText, openMenu, closeMenu } from './helpers.mjs';
+import { test, expect, clipboardText, openMenu, closeMenu, onDialog } from './helpers.mjs';
 
 const URL_ = '/image-swipe/';
 const K = { sources: 'image-swipe.sources.v1', profiles: 'image-swipe.profiles.v1', swipes: 'image-swipe.swipes.v1' };
@@ -125,7 +125,7 @@ test.describe('Image Swipe', () => {
     await page.locator('#profList input').first().fill('Max');
     await page.locator('#profList input').first().press('Tab');
     await expect(page.locator('#profileSel option')).toHaveText(['Max', 'Anna']);
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.locator('#profList li').nth(1).locator('button').click();
     await expect(page.locator('#profileSel option')).toHaveText(['Max']);
     await expect(page.locator('#profList button')).toBeDisabled();       // the last profile stays
@@ -285,14 +285,14 @@ test.describe('Image Swipe', () => {
     await addJson(page, v1);
     await page.click('#btnLike');                              // a = like
     await expect(page.locator('#card')).toHaveAttribute('data-id', 'b');
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await addJson(page, v2);
     await expect(page.locator('#sourceSel option')).toHaveText(['Zweite Fassung']);
     await expect(page.locator('#progress')).toHaveText('1 von 3 bewertet · ♥ 1 · ✕ 0');
     await expect(page.locator('#card')).toHaveAttribute('data-id', 'b');
     // Delete: the ratings stay and come back with the same id
     await openMenu(page);
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.locator('#srcList button', { hasText: 'Löschen' }).click();
     await expect(page.locator('#srcList li')).toHaveCount(0);
     expect((await ls(page, K.swipes)).p1).toEqual({ meine: { a: 'like' } });
@@ -319,7 +319,7 @@ test.describe('Image Swipe', () => {
     await expect(page.locator('#resInfo')).toHaveText('Noch nichts in dieser Liste.');
     await page.locator('.tab[data-tab="nope"]').click();
     await expect(page.locator('#resList b')).toHaveText(['Katze', 'Hund']);
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.click('#btnResetSrc');
     await expect(page.locator('.tab')).toHaveText(['♥ Gefällt mir (0)', '✕ Weg (0)']);
     await page.click('#btnResults');

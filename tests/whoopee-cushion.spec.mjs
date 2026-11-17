@@ -1,5 +1,5 @@
 // Furzkissen: every sound plays with a plausible length and level, counter, time fuse, settings persist.
-import { test, expect } from './helpers.mjs';
+import { test, expect, onDialog } from './helpers.mjs';
 
 // Expected lengths in ms, written down independently of the page (stutter: 4–7 bursts of 80–180 ms + 50–120 ms gaps)
 const RANGE = {
@@ -80,7 +80,7 @@ test('settings and counter persist; reset sets the counter to 0', async ({ page 
   await expect(page.locator('#delays [data-d="10"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#optVibrate')).not.toBeChecked();
   await expect(page.locator('#count')).toHaveText('2');
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnReset');
   await expect(page.locator('#count')).toHaveText('0');
   await page.reload();

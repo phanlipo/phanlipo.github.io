@@ -63,6 +63,13 @@ export default [
       sourceType: 'script',
       globals: { ...globals.browser, ...ownGlobals, ...vendorGlobals },
     },
+    // Questions in the app's own look (UI-KONZEPT.md): Tools.confirm / Tools.prompt / Tools.toast
+    rules: {
+      'no-restricted-globals': ['error',
+        { name: 'confirm', message: 'Use await Tools.confirm(text, { action }) (common.js).' },
+        { name: 'prompt', message: 'Use await Tools.prompt(text, { value }) (common.js).' },
+        { name: 'alert', message: 'Use Tools.toast(text) or a .notice (base.css).' }],
+    },
   },
   // Pages with <script type="module"> and module workers written as .js
   {

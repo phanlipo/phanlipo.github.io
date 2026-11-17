@@ -1,6 +1,6 @@
 // PDF ansehen: full-screen PDF viewer. Test PDFs are built by pdf-tools.mjs, so every page is recognised
 // by its own text; rendering is checked by reading pixels back from the canvas.
-import { test, expect, openMenu, closeMenu, switchLang, mockAndroidShare, mockLaunchQueue } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, mockAndroidShare, mockLaunchQueue, onDialog } from './helpers.mjs';
 
 /** Opens the menu at its settings page ("Anzeige", a sub page of the menu) */
 async function openSettings(page) {
@@ -283,7 +283,7 @@ test('closing the PDF, turning keeping off and deleting all data remove the kept
   await page.locator('#optKeep').check();
   await expect.poll(() => kept(page)).not.toBeNull();
   // "Alle Daten löschen" removes it too (back from the settings page to the menu list first)
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.locator('#setPage > summary').click();
   await page.locator('#appMenu details.data summary').click();
   await page.locator('[data-data="clear"]').click();
