@@ -2862,3 +2862,21 @@ test.describe('rss-reader tools', () => {
     expect(tools.find(t => t.name === 'rss_reader_select_feed').annotations.readOnlyHint).toBe(false);
   });
 });
+
+test.describe('font-creator tools', () => {
+  test('reads the font, picks a character and sets the sample text', async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/font-creator/');
+    const start = (await call(page, 'font_creator_get_font', {})).result;
+    expect(start).toMatchObject({ name: 'Meine Schrift', selected: 'A', drawn: [] });
+    expect(start.missing).toHaveLength(97);
+    const picked = await call(page, 'font_creator_select_character', { character: 'g' });
+    expect(picked).toEqual({ ok: true, result: { selected: 'g', drawn: false } });
+    await expect(page.locator('#grid [data-char="g"]')).toHaveAttribute('aria-pressed', 'true');
+    expect((await call(page, 'font_creator_select_character', { character: '☺' })).ok).toBe(false);
+    const sample = await call(page, 'font_creator_set_sample_text', { text: 'Hallo' });
+    expect(sample.result.missing).toEqual(['H', 'a', 'l', 'o']);
+    await expect(page.locator('#sample')).toHaveValue('Hallo');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('font-creator.font.v1')).sample)).toBe('Hallo');
+  });
+});

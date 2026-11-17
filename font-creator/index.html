@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Schrift-Baukasten</title>
+<meta name="description" content="Eigene Schrift gestalten: Buchstaben, Zahlen und Zeichen mit dem Finger zeichnen, sofort im Beispieltext sehen und als Schriftdatei (TTF) herunterladen.">
+<meta name="tool:tags" content="Freizeit, Werkzeug">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="get_font, select_character, set_sample_text">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann abfragen, welche Zeichen schon gezeichnet sind, ein Zeichen zum Zeichnen auswählen und den Beispieltext ändern. Zeichnen und Löschen kann er nicht.">
+<meta name="tool:webmcp-help-en" content="An AI agent can ask which characters are drawn already, pick a character to draw and change the sample text. It cannot draw or delete.">
+<meta name="tool:icon" content="typography">
+<meta name="tool:color" content="#6d28d9">
+<meta name="tool:short-name" content="Schrift">
+<meta name="tool:title-en" content="Font Creator">
+<meta name="tool:description-en" content="Design your own font: draw letters, digits and symbols with your finger, see them in a sample text right away and download a font file (TTF).">
+<meta name="tool:short-name-en" content="Font">
+<meta name="tool:storage" content="font-creator.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-g15hj8VMhNTDOkWyQY1tnA4PGy0z/A/KdH63qOywYRs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Schrift">
+<meta name="theme-color" content="#6d28d9">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#6d28d9;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#c4b5fd;--accent-text:#1e0b45}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+@media (min-width:860px){main{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}}
+/* Character picker: every character a 44 px button, drawn ones in the user's own font */
+.glyphs{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px;margin-block:12px}
+.glyphs button{min-height:44px;margin:0;padding:0;border:1px dashed var(--border);border-radius:8px;background:var(--surface);
+  color:var(--muted);font:inherit;font-size:22px;line-height:1;cursor:pointer}
+.glyphs button.drawn{border-style:solid;color:var(--text);font-family:"FontCreatorLive",system-ui,sans-serif}
+.glyphs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.glyphs button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+/* Drawing area: a square em box, 1000 units wide */
+.pad{position:relative;width:min(100%,440px);aspect-ratio:1;margin-inline:auto;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface)}
+.pad canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.pad .cur{position:absolute;top:6px;left:8px;margin:0;font-size:14px;font-weight:600;color:var(--muted);pointer-events:none}
+.tools{max-width:440px;margin:8px auto 0}
+.opts{max-width:440px;margin:12px auto 0}
+/* Sample text in the user's own font; characters not drawn yet show in the system font */
+#sample{font-family:"FontCreatorLive",system-ui,sans-serif;line-height:1.25;min-height:160px}
+.missing{margin:0 0 12px;color:var(--muted);font-size:14px}
+.progress{margin:0 0 8px;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Schrift-Baukasten</span></h1>
+  <p class="sub" data-i18n="sub">Zeichne jedes Zeichen selbst – die Schrift entsteht sofort.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-draw">
+    <h2 id="h-draw"><span class="step">1</span><span data-i18n="draw.h">Zeichen zeichnen</span></h2>
+    <div class="seg" role="group" aria-label="Zeichengruppe" data-i18n-attr="aria-label:groups" id="groups">
+      <button type="button" data-group="upper" aria-pressed="true">ABC</button>
+      <button type="button" data-group="lower" aria-pressed="false">abc</button>
+      <button type="button" data-group="digits" aria-pressed="false">123</button>
+      <button type="button" data-group="symbols" aria-pressed="false">!?&amp;</button>
+    </div>
+    <div class="glyphs" id="grid" role="group" aria-label="Zeichen wählen" data-i18n-attr="aria-label:pick"></div>
+    <div class="pad">
+      <canvas id="pad" role="img" aria-label="Zeichenfläche" width="440" height="440"></canvas>
+      <p class="cur" id="cur" aria-hidden="true"></p>
+    </div>
+    <div class="toolbar tools" role="group" aria-label="Werkzeuge" data-i18n-attr="aria-label:tools">
+      <button type="button" id="btnPrev" aria-label="Voriges Zeichen" title="Voriges Zeichen" data-i18n-attr="aria-label:prev; title:prev"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg><span class="tb-label" data-i18n="prev">Voriges Zeichen</span></button>
+      <button type="button" data-tool="pen" aria-pressed="true" aria-label="Stift" title="Stift" data-i18n-attr="aria-label:pen; title:pen"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#pencil"/></svg><span class="tb-label" data-i18n="pen">Stift</span></button>
+      <button type="button" data-tool="eraser" aria-pressed="false" aria-label="Radierer" title="Radierer" data-i18n-attr="aria-label:eraser; title:eraser"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eraser"/></svg><span class="tb-label" data-i18n="eraser">Radierer</span></button>
+      <button type="button" id="btnUndo" aria-label="Rückgängig" title="Rückgängig" data-i18n-attr="aria-label:undo; title:undo" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrow-back-up"/></svg><span class="tb-label" data-i18n="undo">Rückgängig</span></button>
+      <button type="button" id="btnClear" aria-label="Zeichen löschen" title="Zeichen löschen" data-i18n-attr="aria-label:clear; title:clear"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span class="tb-label" data-i18n="clear">Zeichen löschen</span></button>
+      <button type="button" id="btnNext" aria-label="Nächstes Zeichen" title="Nächstes Zeichen" data-i18n-attr="aria-label:next; title:next"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"/></svg><span class="tb-label" data-i18n="next">Nächstes Zeichen</span></button>
+    </div>
+    <div class="opts">
+      <div class="form-field range"><label for="width"><span data-i18n="width">Strichstärke</span> <output id="widthOut" for="width"></output></label><input type="range" id="width" min="20" max="160" step="10"></div>
+      <label class="check"><input type="checkbox" id="optTemplate"><span data-i18n="template">Vorlage zum Nachzeichnen zeigen</span></label>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-preview">
+    <h2 id="h-preview"><span class="step">2</span><span data-i18n="preview.h">Ausprobieren &amp; herunterladen</span></h2>
+    <p class="progress" id="progress" role="status"></p>
+    <div class="form-field">
+      <label for="sample" data-i18n="sample">Beispieltext (in deiner Schrift)</label>
+      <textarea id="sample" spellcheck="false" maxlength="500"></textarea>
+    </div>
+    <p class="missing" id="missing"></p>
+    <div class="form-field range"><label for="size"><span data-i18n="size">Schriftgröße</span> <output id="sizeOut" for="size"></output></label><input type="range" id="size" min="16" max="120" step="4"></div>
+    <div class="form-field">
+      <label for="fontName" data-i18n="name">Name der Schrift</label>
+      <input type="text" id="fontName" maxlength="40" autocomplete="off">
+    </div>
+    <div class="row">
+      <button type="button" class="btn primary block" id="btnDownload"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="download">Schrift herunterladen (TTF)</span></button>
+      <button type="button" class="btn block" id="btnShare" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="share">Schrift teilen</span></button>
+    </div>
+    <p class="form-error" id="dlError" role="alert" hidden></p>
+  </section>
+</main>
+
+<details class="card" data-menu data-menu-page data-icon="settings">
+  <summary data-i18n="settings">Einstellungen</summary>
+  <div class="form-field range"><label for="spacing"><span data-i18n="spacing">Abstand zwischen Zeichen</span> <output id="spacingOut" for="spacing"></output></label><input type="range" id="spacing" min="0" max="200" step="10"></div>
+  <div class="form-field range"><label for="wordSpace"><span data-i18n="wordSpace">Breite des Leerzeichens</span> <output id="wordSpaceOut" for="wordSpace"></output></label><input type="range" id="wordSpace" min="100" max="700" step="20"></div>
+</details>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnAddChar"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="addChar">Weiteres Zeichen hinzufügen</span></button>
+  <button type="button" id="btnClearAll" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearAll">Alle Zeichen löschen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Mit dem Schrift-Baukasten gestaltest du deine eigene Schrift – zum Beispiel deine Handschrift – und nutzt sie danach in Textverarbeitung, Grafik-Apps oder auf Webseiten.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Zeichen wählen:</b> oben die Gruppe (Großbuchstaben, Kleinbuchstaben, Zahlen, Satzzeichen) und dann das Zeichen antippen. Mit einer Tastatur genügt es, die Taste zu drücken. Fehlt ein Zeichen, fügst du es im Menü unter <b>Weiteres Zeichen hinzufügen</b> hinzu.</li>
+    <li><b>Zeichnen:</b> mit Finger, Stift oder Maus auf der Fläche. Die durchgezogene Linie ist die <b>Grundlinie</b>, auf der die Buchstaben stehen; die gestrichelten Linien zeigen die Höhe der Großbuchstaben und der kleinen Buchstaben (x-Höhe). Unter der Grundlinie ist Platz für Unterlängen wie bei g, p oder y.</li>
+    <li><b>Strichstärke</b> gilt für die nächsten Striche. Die <b>Vorlage</b> blendet das Zeichen blass in einer normalen Schrift ein – zum Nachzeichnen.</li>
+    <li><b>Radierer:</b> über einen Strich wischen entfernt ihn ganz. <b>Rückgängig</b> nimmt den letzten Schritt zurück, <b>Zeichen löschen</b> leert das ganze Zeichen.</li>
+    <li><b>Beispieltext:</b> zeigt sofort deine Schrift. Zeichen, die du noch nicht gezeichnet hast, erscheinen in der normalen Schrift und werden darunter aufgezählt.</li>
+    <li><b>Herunterladen</b> speichert eine TrueType-Datei (.ttf) mit allen gezeichneten Zeichen. Abstand zwischen den Zeichen und die Breite des Leerzeichens stellst du im Menü unter <b>Einstellungen</b> ein.</li>
+  </ul>
+  <h3>Schrift installieren</h3>
+  <ul>
+    <li><b>Windows:</b> Datei öffnen und „Installieren“ wählen.</li>
+    <li><b>Mac:</b> Datei öffnen, die Schriftsammlung zeigt „Installieren“.</li>
+    <li><b>Android/iPhone:</b> eigene Schriften lassen sich nicht im ganzen System nutzen, aber in vielen Apps (z. B. Textverarbeitung, Grafik-Apps) importieren.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Deine Zeichnungen und Einstellungen bleiben nur in diesem Browser gespeichert (sichern und übertragen unter „Daten sichern“). Die Schriftdatei entsteht direkt auf dem Gerät; nichts wird an einen Server geschickt, die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>With Font Creator you design your own font – your handwriting, for example – and then use it in word processors, graphics apps or on websites.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Pick a character:</b> tap the group at the top (capitals, small letters, digits, punctuation) and then the character. With a keyboard, just press the key. If a character is missing, add it in the menu under <b>Add another character</b>.</li>
+    <li><b>Draw</b> with your finger, a stylus or the mouse. The solid line is the <b>baseline</b> the letters stand on; the dashed lines show the height of capitals and of small letters (x-height). Below the baseline there is room for descenders as in g, p or y.</li>
+    <li><b>Stroke width</b> applies to the next strokes. The <b>template</b> shows the character faintly in a normal font – to trace it.</li>
+    <li><b>Eraser:</b> swiping over a stroke removes all of it. <b>Undo</b> takes back the last step, <b>Delete character</b> empties the whole character.</li>
+    <li><b>Sample text</b> shows your font right away. Characters you have not drawn yet appear in the normal font and are listed below it.</li>
+    <li><b>Download</b> saves a TrueType file (.ttf) with all drawn characters. Set the gap between characters and the width of the space in the menu under <b>Settings</b>.</li>
+  </ul>
+  <h3>Installing the font</h3>
+  <ul>
+    <li><b>Windows:</b> open the file and choose “Install”.</li>
+    <li><b>Mac:</b> open the file, Font Book offers “Install”.</li>
+    <li><b>Android/iPhone:</b> your own fonts cannot be used system-wide, but many apps (e.g. word processors, graphics apps) can import them.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Your drawings and settings stay only in this browser (back them up or move them under “Back up data”). The font file is made right on the device; nothing is sent to a server and the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann abfragen, welche Zeichen schon gezeichnet sind, ein Zeichen zum Zeichnen auswählen und den Beispieltext ändern. Zeichnen und Löschen kann er nicht. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can ask which characters are drawn already, pick a character to draw and change the sample text. It cannot draw or delete. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version d8ee4ab8c17b</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="ttf.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{canvasFor:'Zeichenfläche für {c}',drawnSr:'gezeichnet',progress:'{n} von {total} Zeichen gezeichnet',
+    missing:'Im Beispiel noch nicht gezeichnet: {list}',missingNone:'Alle Zeichen im Beispiel sind gezeichnet.',
+    defaultName:'Meine Schrift',defaultSample:'Franz jagt im komplett verwahrlosten Taxi quer durch Bayern.\n0123456789 – Äpfel, Öl & Übermut!',
+    cleared:'Zeichen „{c}“ gelöscht',clearAllQ:'Alle {n} gezeichneten Zeichen löschen?',allCleared:'Alle Zeichen gelöscht',
+    addQ:'Welches Zeichen soll dazukommen?',addBad:'Bitte genau ein Zeichen eingeben (keine Emoji, kein Leerzeichen).',added:'„{c}“ hinzugefügt',
+    nothing:'Zeichne zuerst mindestens ein Zeichen.',saved:'Schrift gespeichert',buildFail:'Die Schrift konnte nicht erstellt werden.',
+    'mcp.select':'Zeichen gewählt','mcp.sample':'Beispieltext geändert'},
+  en:{title:'Font Creator',sub:'Draw every character yourself – the font is made right away.','draw.h':'Draw characters',
+    groups:'Character group',pick:'Pick a character',tools:'Tools',prev:'Previous character',next:'Next character',
+    pen:'Pen',eraser:'Eraser',undo:'Undo',clear:'Delete character',width:'Stroke width',template:'Show template to trace',
+    'preview.h':'Try out & download',sample:'Sample text (in your font)',size:'Font size',name:'Font name',
+    download:'Download font (TTF)',share:'Share font',settings:'Settings',spacing:'Gap between characters',wordSpace:'Width of the space',
+    addChar:'Add another character',clearAll:'Delete all characters',
+    canvasFor:'Drawing area for {c}',drawnSr:'drawn',progress:'{n} of {total} characters drawn',
+    missing:'Not drawn yet in the sample: {list}',missingNone:'All characters in the sample are drawn.',
+    defaultName:'My Font',defaultSample:'The quick brown fox jumps over the lazy dog.\n0123456789 – Hello, World & friends!',
+    cleared:'Character “{c}” deleted',clearAllQ:'Delete all {n} drawn characters?',allCleared:'All characters deleted',
+    addQ:'Which character should be added?',addBad:'Please enter exactly one character (no emoji, no space).',added:'“{c}” added',
+    nothing:'Draw at least one character first.',saved:'Font saved',buildFail:'The font could not be made.',
+    'mcp.select':'character picked','mcp.sample':'sample text changed'}
+});
+const t=Tools.t, $=Tools.$;
+
+/* ---------- Data ----------
+   font-creator.font.v1 = { name, sample (null = default text of the language), width, template, size,
+   spacing, wordSpace, extra: [chars], glyphs: { "A": [[width, x0, y0, x1, y1, …], …] } }
+   Stroke coordinates are drawing-area units: 0…1000 across, y downwards; the baseline is at y = 800. */
+const LS='font-creator.font.v1';
+const DEF={name:null,sample:null,width:80,template:true,size:48,spacing:50,wordSpace:300,extra:[],glyphs:{}};
+const S=Object.assign({},DEF,Tools.load(LS,{}));
+if(!S.glyphs||typeof S.glyphs!=='object')S.glyphs={};
+if(!Array.isArray(S.extra))S.extra=[];
+const save=()=>Tools.save(LS,S);
+
+const BASE=800, CAP=100, XH=300; // canvas y of baseline, cap height (700 units) and x-height (500 units)
+const GROUPS={
+  upper:[...'ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ'],
+  lower:[...'abcdefghijklmnopqrstuvwxyzäöüß'],
+  digits:[...'0123456789+-*/=%€$#'],
+  symbols:[...'.,:;!?\'"()[]&@_–…„“'],
+};
+const groupChars=g=>g==='symbols'?GROUPS.symbols.concat(S.extra.filter(c=>!allBase.has(c))):GROUPS[g];
+const allBase=new Set(Object.values(GROUPS).flat());
+const allChars=()=>Object.keys(GROUPS).flatMap(groupChars);
+const groupOf=c=>Object.keys(GROUPS).find(g=>groupChars(g).includes(c))||'symbols';
+let cur='A', group='upper', tool='pen';
+const drawnCount=()=>Object.keys(S.glyphs).filter(c=>S.glyphs[c].length).length;
+
+/* ---------- Undo (this session only) ---------- */
+const history=[];
+function remember(c){
+  history.push({c,strokes:(S.glyphs[c]||[]).map(s=>s.slice())});
+  if(history.length>200)history.shift();
+  $('btnUndo').disabled=false;
+}
+function setGlyph(c,strokes){
+  if(strokes.length)S.glyphs[c]=strokes; else delete S.glyphs[c];
+  save(); changed();
+}
+$('btnUndo').addEventListener('click',()=>{
+  const h=history.pop(); if(!h)return;
+  $('btnUndo').disabled=!history.length;
+  select(h.c); setGlyph(h.c,h.strokes);
+});
+
+/* ---------- Character picker ---------- */
+function renderGroups(){
+  for(const b of document.querySelectorAll('#groups button'))b.setAttribute('aria-pressed',String(b.dataset.group===group));
+  const grid=$('grid'); grid.textContent='';
+  for(const c of groupChars(group)){
+    const b=document.createElement('button');
+    b.type='button'; b.dataset.char=c;
+    const drawn=!!S.glyphs[c]?.length;
+    b.className=drawn?'drawn':'';
+    b.setAttribute('aria-pressed',String(c===cur));
+    b.append(c);
+    if(drawn){ const sr=document.createElement('span'); sr.className='sr-only'; sr.textContent=', '+t('drawnSr'); b.append(sr); }
+    b.addEventListener('click',()=>select(c));
+    grid.append(b);
+  }
+}
+for(const b of document.querySelectorAll('#groups button'))b.addEventListener('click',()=>{
+  group=b.dataset.group;
+  const list=groupChars(group);
+  if(!list.includes(cur))cur=list[0];
+  renderGroups(); drawPad();
+});
+function select(c){
+  cur=c; group=groupOf(c);
+  renderGroups(); drawPad();
+  $('grid').querySelector('[aria-pressed="true"]')?.scrollIntoView?.({block:'nearest'});
+}
+function step(d){
+  const list=allChars(), i=list.indexOf(cur);
+  select(list[(i+d+list.length)%list.length]);
+}
+$('btnPrev').addEventListener('click',()=>step(-1));
+$('btnNext').addEventListener('click',()=>step(1));
+// With a keyboard: pressing a key picks that character (not while typing in a field)
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey||e.defaultPrevented)return;
+  if(e.target.closest?.('input,textarea,select,[contenteditable],dialog'))return;
+  if([...e.key].length!==1)return;
+  if(allChars().includes(e.key)){ e.preventDefault(); select(e.key); }
+});
+
+/* ---------- Drawing area ---------- */
+const pad=$('pad'), ctx=pad.getContext('2d');
+let live=null; // stroke being drawn: [width, x0, y0, …]
+function fit(){
+  const px=Math.round(pad.clientWidth*(window.devicePixelRatio||1));
+  if(px&&(pad.width!==px||pad.height!==px)){ pad.width=pad.height=px; drawPad(); }
+}
+if('ResizeObserver' in window)new ResizeObserver(fit).observe(pad); else window.addEventListener('resize',fit);
+function strokePath(s,k){
+  ctx.lineWidth=s[0]*k;
+  ctx.beginPath();
+  ctx.moveTo(s[1]*k,s[2]*k);
+  if(s.length===3)ctx.lineTo(s[1]*k+0.01,s[2]*k); // a dot
+  for(let i=3;i<s.length;i+=2)ctx.lineTo(s[i]*k,s[i+1]*k);
+  ctx.stroke();
+}
+function drawPad(){
+  const css=getComputedStyle(document.body), k=pad.width/1000;
+  ctx.clearRect(0,0,pad.width,pad.height);
+  // Guide lines: baseline solid, cap height and x-height dashed
+  ctx.strokeStyle=css.getPropertyValue('--border').trim()||'#ccc';
+  ctx.lineWidth=Math.max(1,2*k);
+  for(const [y,dash] of [[BASE,false],[CAP,true],[XH,true]]){
+    ctx.setLineDash(dash?[12*k,10*k]:[]);
+    ctx.beginPath(); ctx.moveTo(0,y*k); ctx.lineTo(pad.width,y*k); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  if(S.template){
+    // The character in the system font, scaled so that capitals reach the cap-height line
+    ctx.font='100px system-ui, sans-serif';
+    const capPx=ctx.measureText('H').actualBoundingBoxAscent||72, size=100*(BASE-CAP)/capPx*k;
+    ctx.font=`${size}px system-ui, sans-serif`;
+    ctx.fillStyle=css.getPropertyValue('--muted').trim()||'#888';
+    ctx.globalAlpha=.3; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillText(cur,500*k,BASE*k);
+    ctx.globalAlpha=1;
+  }
+  ctx.strokeStyle=css.getPropertyValue('--text').trim()||'#000';
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  for(const s of S.glyphs[cur]||[])strokePath(s,k);
+  if(live)strokePath(live,k);
+  $('cur').textContent=cur;
+  pad.setAttribute('aria-label',t('canvasFor',{c:cur}));
+}
+const unit=e=>{
+  const r=pad.getBoundingClientRect();
+  return [Math.round(Tools.clamp((e.clientX-r.left)/r.width*1000,0,1000)),Math.round(Tools.clamp((e.clientY-r.top)/r.height*1000,0,1000))];
+};
+// Eraser: removes every stroke that passes close to the finger
+function eraseAt([x,y]){
+  const list=S.glyphs[cur]||[];
+  const keep=list.filter(s=>{
+    const r=s[0]/2+30;
+    for(let i=1;i<s.length;i+=2){
+      const ax=s[i],ay=s[i+1],bx=s[i+2]??ax,by=s[i+3]??ay,dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy;
+      const u=l?Tools.clamp(((x-ax)*dx+(y-ay)*dy)/l,0,1):0;
+      if(Math.hypot(ax+u*dx-x,ay+u*dy-y)<=r)return false;
+    }
+    return true;
+  });
+  if(keep.length!==list.length){ if(!erased){ remember(cur); erased=true; } setGlyph(cur,keep); }
+}
+let pointer=null, erased=false, frame=0;
+const redraw=()=>{ if(!frame)frame=requestAnimationFrame(()=>{ frame=0; drawPad(); }); };
+pad.addEventListener('pointerdown',e=>{
+  if(pointer!==null)return;
+  pointer=e.pointerId; pad.setPointerCapture?.(e.pointerId); e.preventDefault();
+  const p=unit(e);
+  if(tool==='eraser'){ erased=false; eraseAt(p); return; }
+  live=[S.width,...p]; redraw();
+});
+pad.addEventListener('pointermove',e=>{
+  if(e.pointerId!==pointer)return;
+  for(const ev of (e.getCoalescedEvents?.()||[]).length?e.getCoalescedEvents():[e]){
+    const p=unit(ev);
+    if(tool==='eraser'){ eraseAt(p); continue; }
+    if(!live)continue;
+    const lx=live[live.length-2],ly=live[live.length-1];
+    if(Math.hypot(p[0]-lx,p[1]-ly)>=3)live.push(...p);
+  }
+  if(live)redraw();
+});
+function finish(e){
+  if(e.pointerId!==pointer)return;
+  pointer=null;
+  if(!live)return;
+  const pts=[]; for(let i=1;i<live.length;i+=2)pts.push([live[i],live[i+1]]);
+  const simple=FontTTF.simplify(pts,2.5);
+  const s=[live[0],...simple.flat()];
+  live=null;
+  remember(cur);
+  setGlyph(cur,(S.glyphs[cur]||[]).concat([s]));
+  Tools.diag.log('stroke',{points:pts.length,kept:simple.length});
+}
+pad.addEventListener('pointerup',finish);
+pad.addEventListener('pointercancel',e=>{ if(e.pointerId===pointer){ pointer=null; live=null; drawPad(); } });
+
+for(const b of document.querySelectorAll('[data-tool]'))b.addEventListener('click',()=>{
+  tool=b.dataset.tool;
+  for(const o of document.querySelectorAll('[data-tool]'))o.setAttribute('aria-pressed',String(o===b));
+});
+$('btnClear').addEventListener('click',()=>{
+  const c=cur, old=S.glyphs[c];
+  if(!old?.length)return;
+  remember(c); setGlyph(c,[]);
+  Tools.undo(t('cleared',{c}),()=>{ setGlyph(c,old); select(c); });
+});
+
+/* ---------- Font file ---------- */
+const fontName=()=>(S.name||'').trim()||t('defaultName');
+function makeFont(){
+  const glyphs=[];
+  for(const [c,strokes] of Object.entries(S.glyphs)){
+    const code=c.codePointAt(0);
+    if(!strokes.length||code>0xffff)continue;
+    const contours=strokes.flatMap(s=>{
+      const pts=[]; for(let i=1;i<s.length;i+=2)pts.push([s[i],BASE-s[i+1]]);
+      return FontTTF.strokeContours({w:s[0],pts});
+    });
+    const b=FontTTF.bbox(contours); if(!b)continue;
+    const dx=S.spacing-b.xMin;
+    for(const ct of contours)for(const p of ct)p.x+=dx;
+    glyphs.push({code,contours,advance:b.xMax-b.xMin+2*S.spacing});
+  }
+  return {buffer:FontTTF.build({family:fontName(),glyphs,spaceWidth:S.wordSpace,ascender:800,descender:-200,lineGap:200,xHeight:BASE-XH,capHeight:BASE-CAP}),count:glyphs.length};
+}
+// Live preview: the font is rebuilt after every change and replaces the previous FontFace
+let face=null, build=0;
+async function refreshFont(){
+  const my=++build;
+  let f;
+  try{ f=makeFont(); }catch(e){ Tools.diag.log('font build failed',e); return; }
+  if(!('FontFace' in window)){ Tools.diag.log('FontFace not supported'); return; }
+  try{
+    const ff=new FontFace('FontCreatorLive',f.buffer);
+    await ff.load();
+    if(my!==build)return;
+    document.fonts.add(ff);
+    if(face)document.fonts.delete(face);
+    face=ff;
+    Tools.diag.log('font updated',{glyphs:f.count,bytes:f.buffer.byteLength});
+  }catch(e){ Tools.diag.log('font load failed',e); }
+}
+let timer=0;
+function changed(){
+  renderGroups(); drawPad(); renderPreview();
+  clearTimeout(timer); timer=setTimeout(refreshFont,60);
+}
+
+/* ---------- Preview & download ---------- */
+const sampleText=()=>S.sample??t('defaultSample');
+function renderPreview(){
+  const total=allChars().length, n=allChars().filter(c=>S.glyphs[c]?.length).length;
+  $('progress').textContent=t('progress',{n:Tools.fmt(n,0),total:Tools.fmt(total,0)});
+  const miss=[...new Set([...sampleText()].filter(c=>!/\s/.test(c)&&!S.glyphs[c]?.length))];
+  $('missing').textContent=miss.length?t('missing',{list:miss.slice(0,40).join(' ')+(miss.length>40?' …':'')}):t('missingNone');
+}
+function render(){
+  const sample=$('sample');
+  if(document.activeElement!==sample)sample.value=sampleText();
+  sample.style.fontSize=S.size+'px';
+  $('fontName').placeholder=t('defaultName');
+  if(document.activeElement!==$('fontName'))$('fontName').value=S.name||'';
+  for(const [id,v] of [['width',S.width],['size',S.size],['spacing',S.spacing],['wordSpace',S.wordSpace]]){
+    $(id).value=v; $(id+'Out').textContent=Tools.fmt(v,0);
+  }
+  $('optTemplate').checked=S.template;
+  renderGroups(); drawPad(); renderPreview();
+}
+$('sample').addEventListener('input',e=>{
+  const v=e.target.value;
+  S.sample=v===t('defaultSample')?null:v; save(); renderPreview();
+});
+$('fontName').addEventListener('input',e=>{ S.name=e.target.value.trim()?e.target.value:null; save(); });
+for(const id of ['width','size','spacing','wordSpace'])$(id).addEventListener('input',e=>{
+  S[id]=Number(e.target.value); $(id+'Out').textContent=Tools.fmt(S[id],0); save();
+  if(id==='size')$('sample').style.fontSize=S.size+'px';
+  if(id==='spacing'||id==='wordSpace'){ clearTimeout(timer); timer=setTimeout(refreshFont,150); }
+});
+$('optTemplate').addEventListener('change',e=>{ S.template=e.target.checked; save(); drawPad(); });
+
+const fileName=()=>(fontName().replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,'-').replace(/^-+|-+$/g,'')||'font')+'.ttf';
+function fontFile(){
+  const err=$('dlError'); err.hidden=true;
+  if(!drawnCount()){ err.textContent=t('nothing'); err.hidden=false; return null; }
+  try{ return new File([makeFont().buffer],fileName(),{type:'font/ttf'}); }
+  catch(e){ Tools.diag.log('font build failed',e); err.textContent=t('buildFail'); err.hidden=false; return null; }
+}
+$('btnDownload').addEventListener('click',()=>{
+  const f=fontFile(); if(!f)return;
+  Tools.download(f); Tools.toast(t('saved'));
+  Tools.diag.log('download',{glyphs:drawnCount(),bytes:f.size});
+});
+$('btnShare').hidden=!Tools.canShareFile('font.ttf','font/ttf');
+$('btnShare').addEventListener('click',async()=>{
+  const f=fontFile(); if(!f)return;
+  try{ await navigator.share({files:[f],title:fontName()}); Tools.diag.log('shared'); }
+  catch(e){ if(e.name!=='AbortError')Tools.diag.log('share failed',e); }
+});
+
+/* ---------- Menu ---------- */
+$('btnAddChar').addEventListener('click',async()=>{
+  const v=await Tools.prompt(t('addQ'),{value:''});
+  if(v==null)return;
+  const chars=[...v.trim()];
+  if(chars.length!==1||chars[0].codePointAt(0)>0xffff||/[\s\p{C}]/u.test(chars[0])){ Tools.toast(t('addBad')); return; }
+  const c=chars[0];
+  if(!allChars().includes(c)){ S.extra.push(c); save(); Tools.toast(t('added',{c})); }
+  Tools.menu.close(); select(c);
+});
+$('btnClearAll').addEventListener('click',async()=>{
+  const n=drawnCount(); if(!n){ Tools.menu.close(); return; }
+  if(!await Tools.confirm(t('clearAllQ',{n:Tools.fmt(n,0)}),{action:'delete'}))return;
+  S.glyphs={}; history.length=0; $('btnUndo').disabled=true;
+  save(); changed(); Tools.menu.close(); Tools.toast(t('allCleared'));
+});
+
+render(); refreshFont();
+Tools.diag.info(()=>({drawn:drawnCount(),extra:S.extra.length,group,tool,fontFace:'FontFace' in window,face:face?face.status:null}));
+Tools.onLang(render);
+
+/* ---------- WebMCP ---------- */
+Tools.mcp.register({
+  name:'get_font',title:'Read font',readOnly:true,
+  description:'Reads the font being designed: its name, which characters are drawn already, which offered characters are still missing, and the character currently selected for drawing.',
+  execute:()=>{
+    const list=allChars();
+    return {name:fontName(),selected:cur,drawn:list.filter(c=>S.glyphs[c]?.length),missing:list.filter(c=>!S.glyphs[c]?.length)};
+  }
+});
+Tools.mcp.register({
+  name:'select_character',title:'Pick character',label:'mcp.select',
+  description:'Selects a character in the editor so the user can draw it next, as if the user tapped it. Only characters offered by the app (see get_font) can be selected.',
+  inputSchema:{type:'object',properties:{
+    character:{type:'string',minLength:1,maxLength:2,description:'The single character to select, e.g. "A", "g" or "7".'}
+  },required:['character'],additionalProperties:false},
+  execute:({character})=>{
+    if(!allChars().includes(character))throw new Error('This character is not offered. Use get_font to see the list.');
+    select(character);
+    return {selected:character,drawn:!!S.glyphs[character]?.length};
+  }
+});
+Tools.mcp.register({
+  name:'set_sample_text',title:'Set sample text',label:'mcp.sample',
+  description:'Replaces the sample text that is shown in the user\'s own font. Returns the characters of the text that are not drawn yet.',
+  inputSchema:{type:'object',properties:{
+    text:{type:'string',minLength:1,maxLength:500,description:'The new sample text (up to 500 characters).'}
+  },required:['text'],additionalProperties:false},
+  execute:({text})=>{
+    S.sample=text; save(); $('sample').value=text; renderPreview();
+    return {missing:[...new Set([...text].filter(c=>!/\s/.test(c)&&!S.glyphs[c]?.length))]};
+  }
+});
+})();
+</script>
+</body>
+</html>
