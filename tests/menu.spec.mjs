@@ -253,3 +253,20 @@ test.describe('menu sub pages', () => {
     await expect(page.locator('#appMenu')).toBeVisible();
   });
 });
+
+// Chrome on Android sometimes keeps a too large 100dvh after reloading the installed app (the navigation bar
+// counts); common.js then takes the real window height so the bottom bar of a stage app stays on screen
+test('stage: the real window height wins over a too large 100dvh (bottom bar stays visible)', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 780 });
+  await page.goto('/paint/');
+  await page.evaluate(() => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, get: () => 700 });
+    window.dispatchEvent(new Event('resize'));
+  });
+  await expect.poll(() => page.evaluate(() => document.body.getBoundingClientRect().height)).toBe(700);
+  const bar = await page.locator('#tools').boundingBox();
+  expect(bar.y + bar.height).toBeLessThanOrEqual(700);
+  // Back to normal: the variable goes away again
+  await page.evaluate(() => { delete window.innerHeight; window.dispatchEvent(new Event('resize')); });
+  await expect.poll(() => page.evaluate(() => document.body.style.getPropertyValue('--app-h'))).toBe('');
+});

@@ -677,6 +677,31 @@ window.Tools = (function () {
     return el;
   }
 
+  /* Stage apps fill the screen with 100dvh. Chrome on Android sometimes keeps a too large dvh after a reload of
+     the installed app (the area behind the navigation bar counts), so the bottom bar slides out of sight until
+     the app is restarted. The real window height wins whenever it is smaller: --app-h (base.css). */
+  function fitStage() {
+    const b = document.body;
+    if (!b || !b.classList.contains('stage')) return;
+    const vv = window.visualViewport;
+    const h = Math.round(Math.min(window.innerHeight, vv ? vv.height + vv.offsetTop : Infinity));
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;inset-block-start:0;height:100dvh;width:0;visibility:hidden;pointer-events:none';
+    b.append(probe);
+    const dvh = probe.getBoundingClientRect().height;
+    probe.remove();
+    if (h > 0 && dvh > h + 1) { b.style.setProperty('--app-h', h + 'px'); try { diagLog('stage: 100dvh ' + Math.round(dvh) + ' > window ' + h); } catch (_) {} }
+    else b.style.removeProperty('--app-h');
+  }
+  function setupStageHeight() {
+    fitStage();
+    window.addEventListener('resize', fitStage);
+    window.addEventListener('pageshow', fitStage);
+    if (window.visualViewport) visualViewport.addEventListener('resize', fitStage);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupStageHeight);
+  else setupStageHeight();
+
   function setupMenu() {
     if (menuEl || !document.querySelector('details.help')) return;
     const header = document.querySelector('body > header');
