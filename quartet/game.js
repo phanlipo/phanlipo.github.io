@@ -1,4 +1,4 @@
-/* Quartett (Supertrumpf rules) – window.Quartet. No DOM here: the rules can be tested on their own.
+/* Quartett (card comparison rules) – window.Quartet. No DOM here: the rules can be tested on their own.
    The state is plain JSON and lives only on the host (or the single device against the computer).
    Architecture: quartet/README.md */
 (function () {

@@ -1,4 +1,4 @@
-// Quartett (Supertrumpf rules): rules on hand-made states, deck data, whole computer games simulated with
+// Quartett (card comparison rules): rules on hand-made states, deck data, whole computer games simulated with
 // invariants, a game against the computer through the UI, and two devices over real WebRTC
 // (separate browser contexts – like separate phones).
 import { deflateRawSync, crc32 } from 'node:zlib';

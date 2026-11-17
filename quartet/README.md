@@ -1,6 +1,6 @@
 # Quartett – Aufbau
 
-Supertrumpf (Autoquartett) gegen den Computer oder mit mehreren Handys über WebRTC. (`.md` wird nicht veröffentlicht.)
+Vergleichs-Kartenspiel (Quartett, Autoquartett) gegen den Computer oder mit mehreren Handys über WebRTC. (`.md` wird nicht veröffentlicht.)
 
 ```
 index.html   Oberfläche und Ablauf: Startseite, Runde (Gastgeber), Einladen/Beitreten, Spieltisch, WebMCP

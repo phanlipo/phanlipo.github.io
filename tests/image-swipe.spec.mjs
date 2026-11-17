@@ -205,33 +205,33 @@ test.describe('Image Swipe', () => {
     const cors = { 'access-control-allow-origin': '*' };
     await page.context().route(/^https:\/\/(api|img)\.example\.test\//, route => {
       const u = route.request().url();
-      if (u === 'https://api.example.test/pokemon?limit=2')
+      if (u === 'https://api.example.test/items?limit=2')
         return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ count: 2, results: [
-          { name: 'bulbasaur', url: 'https://api.example.test/pokemon/1/' }, { name: 'ditto', url: 'https://api.example.test/pokemon/132/' }] }) });
-      if (u === 'https://api.example.test/pokemon/ditto')
-        return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ id: 132, name: 'ditto',
-          sprites: { other: { 'official-artwork': { front_default: 'https://img.example.test/art/132.png' } } } }) });
+          { name: 'alpha', url: 'https://api.example.test/items/1/' }, { name: 'beta', url: 'https://api.example.test/items/132/' }] }) });
+      if (u === 'https://api.example.test/items/beta')
+        return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ id: 132, name: 'beta',
+          images: { large: 'https://img.example.test/art/132.png' } }) });
       if (/^https:\/\/img\.example\.test\/art\/\d+\.png$/.test(u))
         return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'image/png' }, body: PNG });
       return route.fulfill({ status: 404, headers: cors, body: '' });
     });
     await page.goto(URL_);
-    await addJson(page, { id: 'poke-list', title: 'Liste', api: { url: 'https://api.example.test/pokemon?limit=2', list: 'results' },
+    await addJson(page, { id: 'api-list', title: 'Liste', api: { url: 'https://api.example.test/items?limit=2', list: 'results' },
       fields: { id: 'name', title: 'name', subtitle: '#{url|last}', image: 'https://img.example.test/art/{url|last}.png' } });
     await page.locator('#emptyBtns button', { hasText: 'Daten laden' }).click();
-    await expect(page.locator('#card')).toHaveAttribute('data-id', 'bulbasaur');
+    await expect(page.locator('#card')).toHaveAttribute('data-id', 'alpha');
     await expect(page.locator('#cardSub')).toHaveText('#1');
     await expect(page.locator('#cardImg')).toBeVisible();
     await page.click('#btnLike');
-    await expect(page.locator('#card')).toHaveAttribute('data-id', 'ditto');
+    await expect(page.locator('#card')).toHaveAttribute('data-id', 'beta');
     await expect(page.locator('#cardSub')).toHaveText('#132');
     await expect(page.locator('#cardImg')).toBeVisible();
 
-    await addJson(page, { id: 'poke-ditto', title: 'Ditto', api: { url: 'https://api.example.test/pokemon/ditto' },
-      fields: { id: 'id', title: 'name', image: 'sprites.other.official-artwork.front_default' } });
+    await addJson(page, { id: 'api-one', title: 'Eintrag', api: { url: 'https://api.example.test/items/beta' },
+      fields: { id: 'id', title: 'name', image: 'images.large' } });
     await page.locator('#emptyBtns button', { hasText: 'Daten laden' }).click();
     await expect(page.locator('#card')).toHaveAttribute('data-id', '132');
-    await expect(page.locator('#cardTitle')).toHaveText('ditto');
+    await expect(page.locator('#cardTitle')).toHaveText('beta');
     await expect(page.locator('#cardImg')).toBeVisible();
     await expect(page.locator('#progress')).toHaveText('0 von 1 bewertet · ♥ 0 · ✕ 0');
   });

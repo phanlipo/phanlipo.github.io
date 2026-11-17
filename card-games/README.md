@@ -60,6 +60,6 @@ Die Oberfläche ist allgemein: Karten in der Hand sind antippbar, wenn ein Zug m
 ## Mögliche Erweiterungen
 
 - Varianten als Optionen in `setup` (z. B. Mau Mau: Ass = nochmal, Punkte zählen; Durak: Weiterschieben „Perevodnoy“).
-- Weitere Spiele: Skat, Schwimmen (31), Uno-artige Spiele, Elfer raus.
+- Weitere Spiele: Skat, Schwimmen (31), Ablegespiele mit Sonderkarten (Mau-Mau-Varianten), Elfer raus.
 - Wiederverbinden nach Abbruch (heute übernimmt der Computer).
 - `sea-battle` und `rock-paper-scissors` könnten ihre eingebaute Verbindung durch `assets/shared/p2p.js` ersetzen (gleiches Code-Format).

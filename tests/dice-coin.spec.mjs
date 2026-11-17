@@ -106,9 +106,9 @@ test('settings, last throw and history survive a reload', async ({ page }) => {
   await expect(page.locator('#histCount')).toHaveText('1');
 });
 
-test('presets: Kniffel loads 5 dice with holding', async ({ page }) => {
+test('presets: poker dice loads 5 dice with holding', async ({ page }) => {
   await openDetails(page, 'Vorlagen');
-  await page.locator('#presets .btn', { hasText: 'Kniffel' }).click();
+  await page.locator('#presets .btn', { hasText: 'Würfelpoker' }).click();
   await expect(page.locator('#board .die')).toHaveCount(5);
   await expect(page.locator('#optHold')).toBeChecked();
 });
@@ -193,7 +193,7 @@ test.describe('English', () => {
     ])));
     await page.reload();
     await page.locator('#presetBox summary').click();
-    await expect(page.locator('#presets .preset > .btn:first-child')).toHaveText(['Catan (2×d6)', 'Mein Spiel']);
+    await expect(page.locator('#presets .preset > .btn:first-child')).toHaveText(['Dice total (2×d6)', 'Mein Spiel']);
     await page.locator('#presets .btn', { hasText: 'Mein Spiel' }).click();
     await expect(page.locator('#board .die')).toHaveCount(3);
   });
