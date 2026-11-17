@@ -44,7 +44,7 @@ node scripts/quartet-decks.mjs <Ordner mit den Deck-JSON-Dateien>
 
 ## Mögliche Erweiterungen
 
-- Mitgelieferte Kartenbilder – zurückgestellt (`IDEAS.md`, „Quartett: Kartenbilder“); eigene Bilder gehen schon (siehe oben).
+- Mitgelieferte Kartenbilder – zurückgestellt (`IDEAS.md`, „Quartett: mitgelieferte Kartenbilder“); eigene Bilder gehen schon (siehe oben).
 - Eine fertige JSON-Linkliste je Deck erzeugen (Wikimedia-Links mit Bildnachweis).
 - Eigene Kartensätze laden (JSON im Format der Quelldaten).
 - Englische Kartennamen und Gruppen.
