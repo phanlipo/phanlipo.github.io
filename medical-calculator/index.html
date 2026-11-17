@@ -20,7 +20,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can use all four calculators (body measures, kidney function, pregnancy, lab values). The values appear here in the input fields and the result is calculated as usual; none of it is stored.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-YKE37Kq8WSFj7R/yarpri5CETb/qsa6D98VG8EjqV5k='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ZrbDXbBQAy54YY223rN1PHH9Bjanm6cLKA/iQ2Mh3Ok='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -32,9 +32,7 @@
 <style>
 :root{--accent:#0b7a75;--accent-text:#ffffff}
 @media (prefers-color-scheme: dark){:root{--accent:#5cc9c2;--accent-text:#06201f}}
-nav.calcs{position:sticky;inset-block-start:0;z-index:5;background:var(--surface);border-block-end:1px solid var(--border);display:flex;gap:6px;padding:8px 12px;overflow-x:auto}
-nav.calcs a{flex:none;text-decoration:none;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:600;white-space:nowrap;min-height:44px;display:flex;align-items:center}
-nav.calcs a:hover{border-color:var(--accent)}
+nav.calcs{position:sticky;inset-block-start:0;z-index:5;background:var(--bg);border-block-end:1px solid var(--border);padding:8px 12px}
 main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
 .card{scroll-margin-top:70px}
 .card h2{font-size:18px;margin:0 0 4px;display:block}
@@ -74,7 +72,7 @@ details.math summary{cursor:pointer;font-weight:600;min-height:44px;display:flex
   <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Medizin-Rechner</span></h1>
   <p class="sub" data-i18n="sub">Formelhilfe für die Praxis – mit Formeln und Erklärung.</p>
 </header>
-<nav class="calcs" aria-label="Rechner" data-i18n-attr="aria-label:nav">
+<nav class="calcs chips" aria-label="Rechner" data-i18n-attr="aria-label:nav">
   <a href="#koerper" data-i18n="nav.1">1 · Körpermaße</a>
   <a href="#niere" data-i18n="nav.2">2 · Nierenfunktion</a>
   <a href="#schwanger" data-i18n="nav.3">3 · Schwangerschaft</a>
@@ -266,7 +264,7 @@ details.math summary{cursor:pointer;font-weight:600;min-height:44px;display:flex
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 83b047dd18ad</p>
+  <p class="footer-version">Version 6eb43ec61d3f</p>
   <!-- footer:end -->
 </footer>
 
@@ -565,6 +563,30 @@ document.querySelectorAll('[data-key]').forEach(el=>{
   if(el.type==='date')el.addEventListener('input',()=>{S[k]=el.value;update();});
 });
 update();
+/* ---------- Jump bar (.chips from base.css): the calculator in view gets aria-current ---------- */
+{
+  const nav=document.querySelector('nav.calcs'),links=[...nav.querySelectorAll('a')];
+  const secs=links.map(a=>document.getElementById(a.getAttribute('href').slice(1)));
+  let cur=-1,raf=0;
+  const mark=()=>{
+    raf=0;
+    const line=nav.getBoundingClientRect().bottom+40,last=secs[secs.length-1];
+    let i=0;secs.forEach((s,j)=>{if(s.getBoundingClientRect().top<=line)i=j;});
+    // at the very bottom a short last section never reaches the line
+    if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-2&&last.getBoundingClientRect().top<window.innerHeight)i=secs.length-1;
+    if(i===cur)return;cur=i;
+    links.forEach((a,j)=>{if(j===i)a.setAttribute('aria-current','true');else a.removeAttribute('aria-current');});
+    // keep the marked chip visible in the horizontally scrolling bar
+    const a=links[i];
+    if(a.offsetLeft<nav.scrollLeft)nav.scrollLeft=a.offsetLeft-12;
+    else if(a.offsetLeft+a.offsetWidth>nav.scrollLeft+nav.clientWidth)nav.scrollLeft=a.offsetLeft+a.offsetWidth-nav.clientWidth+12;
+  };
+  const queue=()=>{if(!raf)raf=requestAnimationFrame(mark);};
+  window.addEventListener('scroll',queue,{passive:true});
+  window.addEventListener('resize',queue);
+  mark();
+}
+
 // Diagnostics: which inputs are filled, never the values
 Tools.diag.info(()=>({filled:Object.keys(S).filter(k=>!['k.unit','l.a','l.dir','p.z'].includes(k)&&S[k]!=='').join(',')||'none',creatinineUnit:S['k.unit'],lab:S['l.a'],labDir:S['l.dir']}));
 Tools.onLang(update);

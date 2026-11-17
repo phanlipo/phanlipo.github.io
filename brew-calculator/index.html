@@ -20,7 +20,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can use all three calculators (volume, fill height, gravity correction, priming sugar). The values appear here in the input fields and the result is calculated as usual.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-lS9oPxA0AL5kj8eQMdF0duKK4JBkgPtXFNO8Jk/XncY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-oROQfKU9DCGxZsz97DrACXPzGVMSZ3O2+B6966cq08Y='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -32,13 +32,11 @@
 <style>
 :root{--accent:#a35a00;--accent-text:#ffffff;--page-width:920px}
 @media (prefers-color-scheme: dark){:root{--accent:#f0b35a;--accent-text:#1b1306}}
-nav.calcs{position:sticky;inset-block-start:0;z-index:5;background:var(--surface);border-block-end:1px solid var(--border);display:flex;gap:6px;padding:8px 12px;overflow-x:auto}
-nav.calcs a{flex:none;text-decoration:none;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:600;white-space:nowrap}
-nav.calcs a:hover{border-color:var(--accent)}
+nav.calcs{position:sticky;inset-block-start:0;z-index:5;background:var(--bg);border-block-end:1px solid var(--border);padding:8px 12px}
 .chips>.chip{min-height:44px;font-size:13px}
 .seg{margin-block-end:4px}
 main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
-.card{scroll-margin-top:60px}
+.card{scroll-margin-top:70px}
 .card h2{font-size:18px;margin:0 0 4px;display:block}
 .card .intro{color:var(--muted);font-size:14px;margin:0 0 14px}
 .form{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
@@ -75,7 +73,7 @@ details.math summary{cursor:pointer;font-weight:600;min-height:36px;display:flex
   <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Brau-Rechner</span></h1>
   <p class="sub" data-i18n="sub">Kleine Rechner fürs Hobbybrauen – mit Formeln und Erklärung.</p>
 </header>
-<nav class="calcs" aria-label="Rechner" data-i18n-attr="aria-label:nav">
+<nav class="calcs chips" aria-label="Rechner" data-i18n-attr="aria-label:nav">
   <a href="#topf" data-i18n="nav.1">1 · Topfvolumen</a>
   <a href="#stammwuerze" data-i18n="nav.2">2 · Stammwürze-Korrektur</a>
   <a href="#zucker" data-i18n="nav.3">3 · Zucker für Nachgärung</a>
@@ -236,7 +234,7 @@ details.math summary{cursor:pointer;font-weight:600;min-height:36px;display:flex
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version ca9c6e4d93b4</p>
+  <p class="footer-version">Version 50569605d07d</p>
   <!-- footer:end -->
 </footer>
 
@@ -585,6 +583,30 @@ const renderChips=()=>{$('zChips').innerHTML=STYLES.map(([n,c])=>'<button type="
 renderChips();
 $('zChips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;S['z.C']=fmt(+b.dataset.c,1);update();});
 update();
+/* ---------- Jump bar (.chips from base.css): the calculator in view gets aria-current ---------- */
+{
+  const nav=document.querySelector('nav.calcs'),links=[...nav.querySelectorAll('a')];
+  const secs=links.map(a=>document.getElementById(a.getAttribute('href').slice(1)));
+  let cur=-1,raf=0;
+  const mark=()=>{
+    raf=0;
+    const line=nav.getBoundingClientRect().bottom+40,last=secs[secs.length-1];
+    let i=0;secs.forEach((s,j)=>{if(s.getBoundingClientRect().top<=line)i=j;});
+    // at the very bottom a short last section never reaches the line
+    if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-2&&last.getBoundingClientRect().top<window.innerHeight)i=secs.length-1;
+    if(i===cur)return;cur=i;
+    links.forEach((a,j)=>{if(j===i)a.setAttribute('aria-current','true');else a.removeAttribute('aria-current');});
+    // keep the marked chip visible in the horizontally scrolling bar
+    const a=links[i];
+    if(a.offsetLeft<nav.scrollLeft)nav.scrollLeft=a.offsetLeft-12;
+    else if(a.offsetLeft+a.offsetWidth>nav.scrollLeft+nav.clientWidth)nav.scrollLeft=a.offsetLeft+a.offsetWidth-nav.clientWidth+12;
+  };
+  const queue=()=>{if(!raf)raf=requestAnimationFrame(mark);};
+  window.addEventListener('scroll',queue,{passive:true});
+  window.addEventListener('resize',queue);
+  mark();
+}
+
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
    English; the values are filled into the calculator so the user sees the same calculation. */

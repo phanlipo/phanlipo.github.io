@@ -187,3 +187,14 @@ test('switching the language re-renders results and formulas', async ({ page }) 
   await expect(main(page, 'pRes')).toContainText(/8 May 2027|May 8, 2027/);
   await expect(page.locator('#bMath')).toContainText('BSA');
 });
+
+test('jump bar: chips from base.css, the calculator in view is marked', async ({ page }) => {
+  const nav = page.locator('nav.calcs.chips');
+  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#koerper');
+  await nav.locator('a[href="#niere"]').click();
+  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#niere');
+  await nav.locator('a[href="#labor"]').click();
+  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#labor');
+  await expect(nav.locator('a[aria-current="true"]')).toHaveCount(1);
+  await expect(nav).toBeInViewport();
+});
