@@ -344,6 +344,43 @@ window.Tools = (function () {
     return shareCache.get(key);
   }
 
+  /* ---------- Sound (Web Audio): one context per page ----------
+     Browsers only play sound after a tap; iPhones also suspend the context when the app was in the background.
+       Tools.audio.context()  → the page's AudioContext (created on first use), null without Web Audio
+       Tools.audio.unlock()   call in a tap/click handler: creates the context and resumes it → context or null
+       Tools.audio.ready()    context exists and runs – only then sounds are audible
+       Tools.audio.tone({ freq, to, ms, type, vol, at, attack })   short synthesised sound, silent when not ready:
+         freq Hz (to: glide to this frequency), ms length, type 'sine'|'square'|'triangle'|'sawtooth', vol 0…1,
+         at = start in seconds from now, attack = fade-in in seconds (0: starts at full volume) */
+  let audioCtx = null;
+  function audioContext() {
+    if (audioCtx) return audioCtx;
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) { diagLog('no AudioContext'); return null; }
+    try { audioCtx = new C(); diagLog('audio context created', { state: audioCtx.state, rate: audioCtx.sampleRate }); }
+    catch (e) { diagLog('audio context failed', e); audioCtx = null; }
+    return audioCtx;
+  }
+  function audioUnlock() {
+    const c = audioContext();
+    if (c && c.state !== 'running') c.resume().then(() => diagLog('audio resumed', { state: c.state }), e => diagLog('audio resume failed', e));
+    return c;
+  }
+  const audioReady = () => !!audioCtx && audioCtx.state === 'running';
+  function tone({ freq = 440, to = freq, ms = 120, type = 'sine', vol = 0.25, at = 0, attack = 0 } = {}) {
+    if (!audioReady()) return;
+    try {
+      const c = audioCtx, t0 = c.currentTime + at, d = ms / 1000, o = c.createOscillator(), g = c.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+      if (to !== freq) o.frequency.exponentialRampToValueAtTime(to, t0 + d);
+      if (attack > 0) { g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + attack); }
+      else g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+      o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + d + 0.02);
+    } catch (e) { diagLog('tone failed', e); }
+  }
+
   /* ---------- Keep the screen on (Screen Wake Lock API) ----------
      While at least one reason holds it, the screen stays on; the browser drops the lock whenever the page is hidden,
      so it is asked for again when the page becomes visible. Without the API nothing happens (iPhone before iOS 16.4 …).
@@ -1086,6 +1123,7 @@ window.Tools = (function () {
     try { bytes = keys.reduce((n, k) => n + k.length + (localStorage.getItem(k) || '').length, 0) * 2; } catch (_) {}
     add('storage', { keys: keys.length, bytes });
     add('kept files', (await keepNames()).length);
+    if (audioCtx) add('audio', { state: audioCtx.state, rate: audioCtx.sampleRate });
     if (wakeReasons.size) add('wake lock', { held: !!wakeSentinel, reasons: [...wakeReasons], supported: wakeSupported() });
     for (const fn of diagInfos) {
       try { for (const [k, v] of Object.entries((await fn()) || {})) add(k, v); } catch (e) { add('info failed', e); }
@@ -1122,6 +1160,7 @@ window.Tools = (function () {
   return {
     $, load, save, remove, toast, undo, confirm: confirmAsk, prompt: promptAsk, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle,
     randomInt, random, uid, clamp, reducedMotion, canShareFile, download: downloadFile,
+    audio: { context: audioContext, unlock: audioUnlock, ready: audioReady, tone },
     wakeLock: { hold: wakeHold, release: wakeRelease, active: () => !!wakeSentinel, supported: wakeSupported, reasons: () => [...wakeReasons] },
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },

@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can make the cushion fart and read the counter. There is only sound once you have tapped yourself.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-O5sPpcFtPT9PiHVMp/rXFE2dRWR8LDIG+bNCD8B9jHI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-CdDEEUHdn8uW8XduBLtgvxoWISS9hNcPHu69wzzdICU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -183,7 +183,7 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 68f6a1667668</p>
+  <p class="footer-version">Version f251cd41ed8b</p>
   <!-- footer:end -->
 </footer>
 
@@ -267,16 +267,8 @@ function synth(kind,sr){
   return {data,duration:p.dur,peak};
 }
 
-let ac=null;
-function audio(){
-  if(ac)return ac;
-  const C=window.AudioContext||window.webkitAudioContext;
-  if(!C){Tools.diag.log('no AudioContext');return null;}
-  try{ac=new C();Tools.diag.log('audio context created',{state:ac.state,rate:ac.sampleRate});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});ac=null;}
-  return ac;
-}
-// Called in a user gesture: browsers only allow sound after one (iPhone: also for the time fuse)
-function unlock(){const c=audio();if(c&&c.state!=='running')c.resume().then(()=>Tools.diag.log('audio resumed',{state:c.state}),e=>Tools.diag.log('audio resume failed',{error:String(e)}));}
+// Sound: shared context from common.js (Tools.audio), unlocked in a tap
+const audio=Tools.audio.context,unlock=Tools.audio.unlock;
 
 /* ---------- Playing ---------- */
 const cushion=$('cushion'),puff=$('puff'),status=$('status');
@@ -359,7 +351,7 @@ renderSettings();renderCount();
 if(!(window.AudioContext||window.webkitAudioContext))status.textContent=t('noAudio');
 Tools.onLang(()=>{renderSounds();if(lastKind&&!fuse)status.textContent=t('played',{s:t('s.'+lastKind)});});
 Tools.diag.info(()=>({sound:state.sound,delay:state.delay,vibrate:state.vibrate,total:state.total,
-  audio:ac?ac.state:'not created',fuse:fuse?Math.max(0,Math.ceil((fuse.end-Date.now())/1000)):0,canVibrate:!!navigator.vibrate}));
+  fuse:fuse?Math.max(0,Math.ceil((fuse.end-Date.now())/1000)):0,canVibrate:!!navigator.vibrate}));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
 Tools.mcp.register({

@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can list the animals, start a puzzle, read the progress and put in one part as a hint.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-wi5Psm3S5RxfJBC+jGLxqYeyrRchEkAL/QPCupYpwr4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-VoCbja03CXtnU5mgJ02LfzlDePlLBSj36OcgRjeg0Tc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -207,7 +207,7 @@ main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;fle
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 06caff737aa7</p>
+  <p class="footer-version">Version 618a55d01106</p>
   <!-- footer:end -->
 </footer>
 
@@ -838,24 +838,11 @@ $('btnOther').addEventListener('click',toPick);
 $('btnAgain').addEventListener('click',()=>{if(game)start(game.a.id);});
 
 /* ---------- Sound ---------- */
-let ac=null;
-function unlock(){
-  if(!state.sound)return;
-  const C=window.AudioContext||window.webkitAudioContext;
-  if(!ac&&C){try{ac=new C();Tools.diag.log('audio context created',{state:ac.state});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});}}
-  if(ac&&ac.state!=='running')ac.resume().catch(e=>Tools.diag.log('audio resume failed',{error:String(e)}));
-}
+// Sound: shared context from common.js (Tools.audio), unlocked in a tap
+const unlock=()=>{if(state.sound)Tools.audio.unlock();};
 function tone(freqs,len){
-  if(!state.sound||!ac||ac.state!=='running')return;
-  try{
-    const now=ac.currentTime;
-    freqs.forEach((f,i)=>{
-      const o=ac.createOscillator(),g=ac.createGain(),t0=now+i*len;
-      o.type='sine';o.frequency.value=f;
-      g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.25,t0+.01);g.gain.exponentialRampToValueAtTime(.0001,t0+len*1.6);
-      o.connect(g);g.connect(ac.destination);o.start(t0);o.stop(t0+len*1.7);
-    });
-  }catch(e){Tools.diag.log('tone failed',{error:String(e)});}
+  if(!state.sound)return;
+  freqs.forEach((f,i)=>Tools.audio.tone({freq:f,ms:len*1600,type:'sine',vol:.25,at:i*len,attack:.01}));
 }
 
 /* ---------- Confetti rain ---------- */
@@ -912,7 +899,7 @@ Tools.onLang(()=>{renderPick();render();});
 Tools.diag.info(()=>({phase:game?game.phase:'pick',animal:game?game.a.id:null,parts:game?game.pieces.length:0,placed:placedCount(),
   board:game?`${Math.round(game.W)}x${Math.round(game.H)}`:null,scale:game?Number(game.s.toFixed(2)):null,
   easy:state.easy,sound:state.sound,vibrate:state.vibrate,solved:Object.values(state.solved).reduce((s,n)=>s+n,0),
-  audio:ac?ac.state:'not created',reducedMotion:reduced(),canVibrate:!!navigator.vibrate}));
+  reducedMotion:reduced(),canVibrate:!!navigator.vibrate}));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
 const NAME_EN={teddy:'Teddy bear',bunny:'Bunny',panda:'Panda',dolphin:'Dolphin',cat:'Cat',elephant:'Elephant',lion:'Lion',giraffe:'Giraffe',owl:'Owl',octopus:'Octopus'};

@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can crack the whip and read the counter. There is only sound once you have tapped yourself.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-3n+WI8IT/puWSqFaavGRQGb2L9oUnk4ng/ebAcM592s='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-36PmxUwkr8onM+Xw/upjoJGsfxovBDvfXeokOn0OK7U='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -190,7 +190,7 @@ main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;ga
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version e32187e2b750</p>
+  <p class="footer-version">Version 5b5f3f969493</p>
   <!-- footer:end -->
 </footer>
 
@@ -287,16 +287,8 @@ function synth(kind,sr){
   return {data,duration:p.dur,crack:p.booms[0][0],booms:p.booms.map(b=>b[0]),peakAt:at/sr,peak};
 }
 
-let ac=null;
-function audio(){
-  if(ac)return ac;
-  const C=window.AudioContext||window.webkitAudioContext;
-  if(!C){Tools.diag.log('no AudioContext');return null;}
-  try{ac=new C();Tools.diag.log('audio context created',{state:ac.state,rate:ac.sampleRate});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});ac=null;}
-  return ac;
-}
-// Called in a user gesture: browsers only allow sound after one
-function unlock(){const c=audio();if(c&&c.state!=='running')c.resume().then(()=>Tools.diag.log('audio resumed',{state:c.state}),e=>Tools.diag.log('audio resume failed',{error:String(e)}));}
+// Sound: shared context from common.js (Tools.audio), unlocked in a tap
+const audio=Tools.audio.context,unlock=Tools.audio.unlock;
 
 /* ---------- Vibration ----------
    One jolt per boom, started right away as a pattern (pause until the boom, then vibrate) –
@@ -428,7 +420,7 @@ if(!(window.AudioContext||window.webkitAudioContext))status.textContent=t('noAud
 Tools.onLang(()=>{renderSounds();if(lastKind)status.textContent=t('cracked',{s:t('s.'+lastKind)});});
 Tools.diag.info(()=>({sound:state.sound,sens:state.sens,vibrate:state.vibrate,swing:state.swing,active,listening,motionSeen,
   peakAcc:Math.round(peakAcc*10)/10,needsPermission:needsPermission(),total:state.total,
-  audio:ac?ac.state:'not created',canVibrate:!!navigator.vibrate,lastVibrate}));
+  canVibrate:!!navigator.vibrate,lastVibrate}));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
 Tools.mcp.register({

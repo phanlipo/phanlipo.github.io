@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can draw a ticket, read the drawn tickets and check a ticket number. It cannot change tickets or prizes.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-cRUseGqr4ciRVkrlk5URX2W4sccFQQX5C6MK+8GRF2E='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-k5ehWK6eu2DEe0SWgAblOb5dw3FbySdAYnU7r7tahoI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -201,7 +201,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px max(12px,calc((100% 
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 147e5c9f8f12</p>
+  <p class="footer-version">Version 9a062aa12157</p>
   <!-- footer:end -->
 </footer>
 
@@ -345,25 +345,11 @@ function nextRank(){
 const rnd=Tools.randomInt; // 0 … n-1
 
 /* ---------- Sound & vibration ---------- */
-let ac=null;
-function audio(){
-  if(!cfg.sound)return null;
-  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();}catch(e){Tools.diag.log('audio failed',e);ac=null;}
-  return ac;
-}
-function tick(){
-  const a=ac;if(!cfg.sound||!a)return;
-  const o=a.createOscillator(),g=a.createGain(),t0=a.currentTime;
-  o.type='square';o.frequency.value=1200;g.gain.setValueAtTime(.03,t0);g.gain.exponentialRampToValueAtTime(.0001,t0+.03);
-  o.connect(g);g.connect(a.destination);o.start(t0);o.stop(t0+.04);
-}
+// Sound: shared context from common.js (Tools.audio), unlocked in a tap
+function audio(){return cfg.sound?Tools.audio.unlock():null;}
+function tick(){if(cfg.sound)Tools.audio.tone({freq:1200,ms:30,type:'square',vol:.03});}
 function fanfare(){
-  const a=ac;if(!cfg.sound||!a)return;
-  [523,659,784,1047].forEach((f,i)=>{
-    const o=a.createOscillator(),g=a.createGain(),t0=a.currentTime+i*.09;
-    o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(.08,t0);g.gain.exponentialRampToValueAtTime(.0001,t0+.25);
-    o.connect(g);g.connect(a.destination);o.start(t0);o.stop(t0+.3);
-  });
+  if(cfg.sound)[523,659,784,1047].forEach((f,i)=>Tools.audio.tone({freq:f,ms:250,type:'triangle',vol:.08,at:i*.09}));
 }
 const vibrate=p=>{if(cfg.vibrate&&navigator.vibrate)try{navigator.vibrate(p);}catch(_){}};
 

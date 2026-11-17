@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can read the best scores and the last result and set mode, duration and field size. Playing is up to you.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-qMmP0BLH4cqmfBPkJs7DEKXOPKP53rTXnNX9mT9BueE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gyhlgVYIrsTnyRerOydlVntDv2KnEiszfTuUW/oQ4PI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -252,7 +252,7 @@ main{max-width:var(--page-width);margin-inline:auto;padding:8px;display:flex;fle
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 2c24440274a4</p>
+  <p class="footer-version">Version 22204def29e2</p>
   <!-- footer:end -->
 </footer>
 
@@ -346,24 +346,9 @@ grid.addEventListener('click',e=>{
 });
 
 /* ---------- Sound ---------- */
-let ac=null;
-function audio(){
-  if(ac||!state.sound)return ac;
-  const C=window.AudioContext||window.webkitAudioContext;
-  if(!C)return null;
-  try{ac=new C();Tools.diag.log('audio context created',{state:ac.state});}catch(e){Tools.diag.log('audio context failed',{error:String(e)});}
-  return ac;
-}
-function unlock(){const c=audio();if(c&&c.state!=='running')c.resume().catch(e=>Tools.diag.log('audio resume failed',{error:String(e)}));}
-function tone(f1,f2,ms,type='sine',vol=.25){
-  if(!state.sound||!ac||ac.state!=='running')return;
-  try{
-    const t0=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();
-    o.type=type;o.frequency.setValueAtTime(f1,t0);o.frequency.exponentialRampToValueAtTime(f2,t0+ms/1000);
-    g.gain.setValueAtTime(vol,t0);g.gain.exponentialRampToValueAtTime(.001,t0+ms/1000);
-    o.connect(g);g.connect(ac.destination);o.start(t0);o.stop(t0+ms/1000+.02);
-  }catch(e){Tools.diag.log('tone failed',{error:String(e)});}
-}
+// Sound: shared context from common.js (Tools.audio), unlocked in a tap
+const unlock=()=>{if(state.sound)Tools.audio.unlock();};
+const tone=(f1,f2,ms,type='sine',vol=.25)=>{if(state.sound)Tools.audio.tone({freq:f1,to:f2,ms,type,vol});};
 const sfx={
   hit:()=>state.mode==='mole'?tone(300,900,90,'triangle'):state.mode==='lamp'?tone(1320,1320,110):tone(700,180,90,'sawtooth',.15),
   wrong:()=>tone(160,110,140,'square',.12),
@@ -651,7 +636,7 @@ Tools.onLang(()=>{
   else if(phase==='running')status.textContent=byMode(game.mode,'playing','playingLamp','playingFly');
 });
 Tools.diag.info(()=>({mode:state.mode,dur:state.dur,size:state.size,phase,sound:state.sound,vibrate:state.vibrate,
-  rounds:state.rounds,bestEntries:Object.keys(state.best).length,audio:ac?ac.state:'not created',canVibrate:!!navigator.vibrate}));
+  rounds:state.rounds,bestEntries:Object.keys(state.best).length,canVibrate:!!navigator.vibrate}));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
 const pub=r=>r&&{mode:r.mode,duration_seconds:r.dur,grid_size:r.mode==='fly'?null:r.size,points:r.points,hits:r.hits,misses:r.wrong,
