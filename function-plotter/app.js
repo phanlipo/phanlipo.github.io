@@ -431,7 +431,7 @@ function paint(c, w, h, scale) {
     if (c.canvas === cv) renderReadout(vis, P);
   }
 }
-const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const clamp = Tools.clamp;
 // A found point next to 0 is 0 up to the numerical noise of the search
 const snapX = x => Math.abs(x) < (V.x1 - V.x0) * 1e-7 ? 0 : x;
 
@@ -592,11 +592,8 @@ $('btnPng').addEventListener('click', () => {
   paint(out.getContext('2d'), W, H, k);
   out.toBlob(b => {
     if (!b) return;
-    const a = document.createElement('a'), d = new Date(), p = n => String(n).padStart(2, '0');
-    a.href = URL.createObjectURL(b);
-    a.download = `${isEn() ? 'plot' : 'funktionsplot'}-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.png`;
-    document.body.append(a); a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    Tools.download(b, `${isEn() ? 'plot' : 'funktionsplot'}-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.png`);
     Tools.toast(t('saved'));
   }, 'image/png');
 });

@@ -13,14 +13,14 @@ Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/), ohne Server 
 - `UI-KONZEPT.md`: Bedienelemente, Icon-Lexikon, Menüaufbau (Regeln kurz unter „Bedienelemente & Icons“).
 - `IDEAS.md`: Ideen für neue Seiten und zurückgestellte/verworfene Ideen (passen nicht zur Architektur) mit Begründung – **vor neuen Apps lesen**; Ideen, die nicht passen (z. B. brauchen Server), dort eintragen statt umsetzen.
 
-**Generiert, nie von Hand bearbeiten:** Bereiche zwischen `<!-- tools/head/footer/data:start -->` und `…:end -->`, `manifest.webmanifest`, `sw.js`, Icons (auch `assets/icons.svg`), `NOTICE.md`, `sbom.cdx.json`, `assets/vendor/`, `quartet/decks.js`, `laser-mirrors/levels.js`.
+**Generiert, nie von Hand bearbeiten:** Bereiche zwischen `<!-- tools/head/footer/data/agent/files:start -->` und `…:end -->`, `manifest.webmanifest`, `sw.js`, Icons (auch `assets/icons.svg`), `NOTICE.md`, `sbom.cdx.json`, `assets/vendor/`, `quartet/decks.js`, `laser-mirrors/levels.js`.
 
 ## Neue App
 
 1. `template/` nach `<tool-name>/` kopieren (Ordnername englisch, kebab-case). Die Vorlage zeigt alle Muster (Meta-Angaben, Zweisprachigkeit, Hilfe, Fehlersuche, Bühne).
 2. Meta-Angaben setzen: `<title>` (nur Kurzname, max. 24 Zeichen), Beschreibung, `tool:tags` (erste = `Alltag`/`Arbeit`/`Freizeit`, dann 1–2 Themen), optional `tool:features` (nur Werte aus `FEATURES` in `build.mjs`), `tool:short-name` (≤ 12), englische Fassungen `tool:title-en`/`-description-en`/`-short-name-en` (Pflicht), `tool:storage`, `tool:icon` (Tabler-Icon, Outline), `tool:color`. `build.mjs` prüft das meiste und bricht bei Fehlern ab.
 3. `node scripts/build-icons.mjs <tool-name>`, dann `node scripts/build.mjs`.
-4. Fachliche Tests in `tests/<tool-name>.spec.mjs` (allgemeine Prüfungen greifen automatisch).
+4. Fachliche Tests in `tests/<tool-name>.spec.mjs` – Startpunkt `tests/template.spec.mjs` (allgemeine Prüfungen greifen automatisch), WebMCP-Werkzeuge in `tests/webmcp.spec.mjs`.
 
 Nicht gelistete Seiten (z. B. Weiterleitungen): `<meta name="tool:hidden" content="true">`. **Umbenennen** einer geteilten App: im alten Ordner eine Weiterleitung lassen.
 
@@ -53,7 +53,7 @@ Nicht gelistete Seiten (z. B. Weiterleitungen): `<meta name="tool:hidden" conten
 - **YouTube (`playlist-player`):** Player nur als iframe von `www.youtube-nocookie.com` (`tool:youtube`, CSP `frame-src`; `www.youtube.com` nur mit der Einstellung „Mit YouTube-Konto abspielen“ für Premium), Werbung nie überspringen/blockieren, gesteuert per postMessage – **kein YouTube-Skript in der Seite**. Iframe und oEmbed-Titel (`tool:connect`) erst nach Tippen bzw. Teilen/Einfügen eines Links, nie per KI-Agent. Tests nur mit `tests/fake-youtube.mjs`.
 - **Cast (`cast-demo`, im Test):** Adresse der Empfängerseite `assets/shared/cast-receiver.html` nie ändern (bei Google registriert). Das Cast-SDK von `www.gstatic.com` ist die einzige erlaubte fremde Skriptquelle (`tool:cast`).
 - **Fotos lesen:** HEIC über `assets/shared/heic.js` + `heic-worker.js` im App-Ordner, `accept="image/*,.heic,.heif"` (Beispiel `image-converter`).
-- **Dateien teilen/öffnen:** `tool:share-target` (Dateien; Endungen müssen in `FILE_TYPES` stehen) bzw. `tool:share-text` (Links/Text), in der Seite `Tools.takeSharedFile(s)()`/`Tools.takeSharedText()`. Zurückspeichern per File System Access API nur mit Ausweichweg (Beispiel `markdown-editor`). iPhone kann beides nicht – in der Hilfe erklären.
+- **Dateien teilen/öffnen:** `tool:share-target` (Dateien; Endungen müssen in `FILE_TYPES` stehen) bzw. `tool:share-text` (Links/Text), in der Seite `Tools.takeSharedFile(s)()`/`Tools.takeSharedText()`. Zurückspeichern per File System Access API nur mit Ausweichweg (Beispiel `markdown-editor`). Den Hilfe-Abschnitt „Dateien an die App geben“ (Android, Öffnen mit, iPhone) erzeugt `build.mjs` (`scripts/partials/help-files.html`, Marker `<!-- files:start/end -->`); in der App nur Besonderheiten erklären.
 - **Benachrichtigungen:** nur per `registration.showNotification()`, kein Push (kein Server); Beispiel und Begründung der Android-Sonderwege in `reminders`.
 
 ## Bedienelemente & Icons
@@ -95,6 +95,7 @@ Jede App bietet Funktionen als WebMCP-Werkzeuge an – **nur über `Tools.mcp.re
 - Ergebnis sichtbar in der App; `readOnly` nur, wenn nichts geändert wird; `untrusted`, wenn das Ergebnis fremde Inhalte enthält.
 - Werkzeuge arbeiten nur mit dem, was der Nutzer schon gewählt hat. **Nie als Werkzeug:** Daten löschen, Sicherung laden, Einstellungen zurücksetzen, Kamera/Mikrofon/Standort, Dateien öffnen, Daten an Server, Passwörter zurückgeben.
 - `tool:webmcp` (Namen ohne Präfix) und Feature `KI-Agent` gehören zusammen (prüft `build.mjs`). Fachliche Tests in `tests/webmcp.spec.mjs`.
+- **Hilfe:** Was ein Agent in der App kann, steht als Klartext in `tool:webmcp-help`/`-help-en`; `build.mjs` macht daraus den Abschnitt „KI-Agenten (WebMCP)“ mit den festen Regeln (`scripts/partials/help-agent.html`, Marker `<!-- agent:start/end -->` vor *Fehlersuche*). Keinen eigenen Agenten-Text in die Hilfe schreiben.
 
 ## Bibliotheken: Pflege & Sicherheit
 

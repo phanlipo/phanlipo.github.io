@@ -150,7 +150,9 @@ export function translatedApps() {
 
 /** Installable apps: every tool plus the template */
 export function apps() {
-  return [...tools(), { folder: 'template', title: 'Neues Tool' }];
+  const html = readFileSync(join(ROOT, 'template/index.html'), 'utf8');
+  const list = name => (meta(html, name) || '').split(',').map(t => t.trim()).filter(Boolean);
+  return [...tools(), { folder: 'template', title: 'Neues Tool', features: list('tool:features'), webmcp: list('tool:webmcp') }];
 }
 
 export const VIEWPORTS = {

@@ -390,7 +390,7 @@ function renderScripts(){
       <button type="button" class="btn icon" data-act="delete" aria-label="${esc(t('deleteN',{name:s.name}))}" title="${esc(t('delete'))}">${ICON_TRASH}</button>
     </li>`;}).join('')||`<li class="muted">${esc(t('noScripts'))}</li>`;
 }
-const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const newId=()=>Tools.uid();
 // Saves code under a name (same name and language: replaced). Returns 'saved' | 'updated' | null (storage full)
 function saveScript(name,lang,text){
   const before=scripts.slice();
@@ -449,11 +449,7 @@ $('btnDownload').addEventListener('click',()=>{
   const text=code.value;
   if(!text.trim()){Tools.toast(t('emptyCode'));return;}
   const base=(state.name[state.lang]||'script').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'_').trim()||'script';
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));
-  a.download=`${base}.${EXT[state.lang]}`;
-  document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+  Tools.download(new Blob([text],{type:'text/plain;charset=utf-8'}),`${base}.${EXT[state.lang]}`);
   Tools.toast(t('downloaded'));
   Tools.diag.log('download',{lang:state.lang,chars:text.length});
 });

@@ -274,22 +274,12 @@ $('btnTv').addEventListener('click',()=>{
 $('directBox').hidden=platform==='ios';
 
 /* ---------- Direct streaming (assets/shared/cast.js) ---------- */
-let videoTrack=null, wake=null, errorCode='', lastState='idle';
+let videoTrack=null, errorCode='', lastState='idle';
 function localSound(){
   if(!localOut) return;
   localOut.gain.setTargetAtTime(CastStream.state==='idle'||settings.local?1:0,ac.currentTime,.05);
 }
-async function wakeLock(on){
-  try{
-    if(on&&!wake&&'wakeLock' in navigator&&document.visibilityState==='visible'){
-      wake=await navigator.wakeLock.request('screen');
-      wake.addEventListener('release',()=>{ wake=null; });
-    } else if(!on&&wake){ await wake.release(); wake=null; }
-  }catch(e){ Tools.diag.log('wake lock failed',{error:String(e&&e.name)}); }
-}
-document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'&&CastStream.state==='streaming') wakeLock(true);
-});
+const wakeLock=on=>on?Tools.wakeLock.hold('streaming'):Tools.wakeLock.release('streaming');
 $('btnDirect').addEventListener('click',async()=>{
   dlg.close();
   errorCode='';
@@ -375,7 +365,7 @@ $('optClock').addEventListener('change',e=>{ settings.clock=e.target.checked; sa
 render();
 Tools.onLang(render);
 
-Tools.diag.info(()=>({cast:CastStream.info(),ownAppId:!!settings.appId,quality:settings.quality,localSound:settings.local,stun:settings.stun,tvLog:settings.tvLog,streamWakeLock:!!wake,
+Tools.diag.info(()=>({cast:CastStream.info(),ownAppId:!!settings.appId,quality:settings.quality,localSound:settings.local,stun:settings.stun,tvLog:settings.tvLog,streamWakeLock:Tools.wakeLock.reasons().includes('streaming'),
   captureStream:'captureStream' in HTMLCanvasElement.prototype,webrtc:'RTCPeerConnection' in window,
   tv:TvMode.info(),scene:settings.scene,music:playing,audio:ac?ac.state:'none',autoMusic:settings.autoMusic,clock:settings.clock,frames,
   screen:`${screen.width}x${screen.height}`,orientation:screen.orientation?screen.orientation.type:'?'}));

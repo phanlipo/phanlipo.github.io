@@ -17,9 +17,11 @@
 <meta name="tool:short-name-en" content="Spin Wheel">
 <meta name="tool:storage" content="lucky-wheel.">
 <meta name="tool:webmcp" content="spin_wheel, get_entries, get_history">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann das Rad drehen – auch mit eigenen Einträgen, die dann auf dem Rad stehen – sowie Einträge und Verlauf lesen.">
+<meta name="tool:webmcp-help-en" content="An AI agent can spin the wheel – also with its own entries, which then appear on the wheel – and read the entries and history.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-UHJCR30GyF8/XNL6FU7Zw3/LcGDuCZPpmXGmYOVTQkg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-AMdewWubyKUudJvjO7CBZ3lSu2usGuM44XWbtLCW7I0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -126,7 +128,6 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px 12px 12px}
   <ul>
     <li>Fair: Der Gewinner wird mit <code>crypto.getRandomValues</code> gleichverteilt ausgelost, erst dann dreht sich das Rad an diese Stelle. Wie lange es dreht, ändert nichts am Ergebnis.</li>
     <li>Einträge, Einstellungen und Verlauf bleiben nur in diesem Browser gespeichert. Die App funktioniert offline.</li>
-    <li>KI-Agenten im Browser (WebMCP) können das Rad drehen – auch mit eigenen Einträgen, die dann auf dem Rad stehen – sowie Einträge und Verlauf lesen. Du siehst jedes Ergebnis in der App.</li>
   </ul>
   </div>
   <div data-lang="en" lang="en" hidden>
@@ -142,9 +143,18 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px 12px 12px}
   <ul>
     <li>Fair: the winner is drawn uniformly with <code>crypto.getRandomValues</code>, only then the wheel turns to that spot. How long it spins does not change the result.</li>
     <li>Entries, settings and history are only stored in this browser. The app works offline.</li>
-    <li>AI agents in the browser (WebMCP) can spin the wheel – also with their own entries, which then appear on the wheel – and read the entries and history. You see every result in the app.</li>
   </ul>
   </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann das Rad drehen – auch mit eigenen Einträgen, die dann auf dem Rad stehen – sowie Einträge und Verlauf lesen. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can spin the wheel – also with its own entries, which then appear on the wheel – and read the entries and history. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
   <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
   <h3 data-i18n="diag.h">Fehlersuche</h3>
   <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
@@ -156,7 +166,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px 12px 12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 9c66db0518e3</p>
+  <p class="footer-version">Version 79ce6ba44c6c</p>
   <!-- footer:end -->
 </footer>
 
@@ -219,12 +229,7 @@ let keep=null;
 const onWheel=()=>entries().map((_,i)=>i).filter(i=>!out.includes(i)||i===keep);
 
 /* ---------- Random (unbiased, crypto) ---------- */
-function rnd(n){ // 0 … n-1
-  const a=new Uint32Array(1),lim=Math.floor(0x100000000/n)*n;
-  do{crypto.getRandomValues(a);}while(a[0]>=lim);
-  return a[0]%n;
-}
-const rndFloat=()=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]/0x100000000;};
+const rnd=Tools.randomInt, rndFloat=Tools.random;
 
 /* ---------- Drawing ---------- */
 const TAU=Math.PI*2;
@@ -316,7 +321,7 @@ function fanfare(){
 const vibrate=p=>{if(cfg.vibrate&&navigator.vibrate)try{navigator.vibrate(p);}catch(_){}};
 
 /* ---------- Spin ---------- */
-const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reduced=Tools.reducedMotion;
 // Angle at which segment k (of n) is under the pointer, at a random spot inside it (not on the edges)
 const targetFor=(k,n)=>-((k+.1+.8*rndFloat())*TAU/n);
 /** Draws the winner (fair, before any animation), then turns the wheel to it. Returns the winner's index in entries(). */

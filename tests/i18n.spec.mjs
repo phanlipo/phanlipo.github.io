@@ -62,8 +62,10 @@ test.describe('browser language English', () => {
       await expect(help.locator('summary')).toHaveText('Instructions & notes');
       await openMenu(page);
       await help.locator('summary').click();
-      await expect(help.locator('[data-lang="en"]')).toBeVisible();
-      await expect(help.locator('[data-lang="de"]')).toBeHidden();
+      // Every language block (the app's own and generated ones such as "AI agents")
+      for (const en of await help.locator('[data-lang="en"]').all()) await expect(en).toBeVisible();
+      for (const de of await help.locator('[data-lang="de"]').all()) await expect(de).toBeHidden();
+      expect(await help.locator('[data-lang="en"]').count()).toBeGreaterThan(0);
       await expect(page.locator('details.data summary')).toHaveText('Back up & transfer data');
       await expectNoHorizontalScroll(page);
     });

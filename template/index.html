@@ -8,7 +8,11 @@
 <title>Neues Tool</title>
 <meta name="description" content="Ein Satz, was das Tool macht – erscheint auf der Startseite.">
 <meta name="tool:tags" content="Alltag, Thema">
-<meta name="tool:features" content="">  <!-- optional, Liste in scripts/build.mjs (FEATURES) -->
+<meta name="tool:features" content="KI-Agent">  <!-- Liste in scripts/build.mjs (FEATURES); "KI-Agent" gehört zu tool:webmcp -->
+<meta name="tool:webmcp" content="count, get_state">  <!-- Namen ohne App-Präfix, genau die per Tools.mcp.register angemeldeten -->
+<!-- Was ein KI-Agent hier kann (Klartext) – build.mjs macht daraus den Hilfe-Abschnitt „KI-Agenten“ -->
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann den Zähler erhöhen und lesen.">
+<meta name="tool:webmcp-help-en" content="An AI agent can raise and read the counter.">
 <meta name="tool:icon" content="template">
 <meta name="tool:color" content="#5d6b7c">
 <meta name="tool:short-name" content="Neues Tool">
@@ -16,9 +20,14 @@
 <meta name="tool:description-en" content="One sentence on what the tool does – shown on the start page.">
 <meta name="tool:short-name-en" content="New Tool">
 <meta name="tool:storage" content="new-tool.">
+<!-- Optional, nur bei Bedarf (Bedeutung in scripts/build.mjs und AGENTS.md):
+     tool:share-target ("image/*, .heic")  Dateien an die App teilen / „Öffnen mit“ → Tools.takeSharedFile(s)()
+     tool:share-text ("true")              Links/Text an die App teilen → Tools.takeSharedText()
+     tool:connect ("https:")               Anfragen an vom Nutzer eingetragene Server (nur nach Knopfdruck)
+     tool:hidden ("true")                  nicht gelistet, keine PWA (z. B. Weiterleitung) -->
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ah1xsl8Xvb42PZZIoPRmHLiDHuT6LLucah01sYyk6Ik='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-eKSwT8/UrwG73V3ul/wdr17lw2oJyfPsuqqnoD5PpBI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -32,6 +41,7 @@
 :root{--accent:#5d6b7c;--accent-text:#ffffff}
 @media (prefers-color-scheme: dark){:root{--accent:#a3b1c2;--accent-text:#11161d}}
 main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.count{margin:0;font-size:20px;font-weight:600}
 </style>
 </head>
 <!-- Layout (AGENTS.md "Layout: Karten oder Bühne"):
@@ -74,7 +84,8 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
       <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#mood-empty"/></svg>
       <p data-i18n="empty">Noch nichts geklickt.</p>
     </div>
-    <label class="check"><input type="checkbox" id="optSound"><span data-i18n="sound">Ton beim Klicken</span></label>
+    <p class="count" id="count" role="status"></p>
+    <label class="check"><input type="checkbox" id="optVibrate"><span data-i18n="vibrate">Vibrieren beim Klicken</span></label>
     <p class="notice info" id="hint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="hint">Hinweis mit Icon.</span></p>
     <button type="button" class="btn primary block" id="btnDemo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="demo">Beispiel</span></button>
   </section>
@@ -106,6 +117,8 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <ul>
     <li>…</li>
   </ul>
+  <h3>Gespeichert</h3>
+  <p>Zähler und Einstellungen bleiben nur in diesem Browser gespeichert (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
   <p>What is the tool for, how do you use it?</p>
@@ -113,7 +126,19 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <ul>
     <li>…</li>
   </ul>
+  <h3>Stored</h3>
+  <p>Counter and settings stay only in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline.</p>
   </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann den Zähler erhöhen und lesen. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can raise and read the counter. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
   <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
   <h3 data-i18n="diag.h">Fehlersuche</h3>
   <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
@@ -125,7 +150,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version e62a61f65380</p>
+  <p class="footer-version">Version aa3fe98cf0e5</p>
   <!-- footer:end -->
 </footer>
 
@@ -136,36 +161,67 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 // Texts: German stays in the HTML (data-i18n="key"); English for those keys plus all texts the
 // script creates (German and English). Call before rendering anything. See AGENTS.md "Sprachen".
 Tools.i18n({
-  de:{clicked:'Geklickt: {n}×',resetQ:'Zähler ({n}×) auf null setzen?'},
+  de:{clicked:'Geklickt: {n}×',resetQ:'Zähler ({n}×) auf null setzen?','mcp.count':'gezählt'},
   en:{title:'New Tool',sub:'Short subtitle.',section:'Section',demo:'Example',clicked:'Clicked: {n}×',
-    kind:'Kind',kindA:'Alone',kindB:'Two of us',empty:'Nothing clicked yet.',hint:'A hint with an icon.',reset:'Reset counter',sound:'Sound on click',resetQ:'Set the counter ({n}×) back to zero?'}
+    kind:'Kind',kindA:'Alone',kindB:'Two of us',empty:'Nothing clicked yet.',hint:'A hint with an icon.',reset:'Reset counter',
+    vibrate:'Vibrate on click',resetQ:'Set the counter ({n}×) back to zero?','mcp.count':'counted'}
 });
 const t=Tools.t;
-// localStorage key convention: <folder-name>.<what>.v1 – the prefix must match <meta name="tool:storage">
+// localStorage key convention: <folder-name>.<what>.v1 – the prefix must match <meta name="tool:storage">.
+// Never rename a key that is in use; a new format gets …v2 and still reads …v1 (AGENTS.md "Speicher").
 const LS='new-tool.settings.v1';
-const settings=Tools.load(LS,{count:0});
-const render=()=>{ Tools.$('empty').hidden=settings.count>0; };
-// .seg: exactly one option pressed (aria-pressed)
+const settings=Object.assign({count:0,kind:'a',vibrate:false},Tools.load(LS,{}));
+const save=()=>Tools.save(LS,settings);
+// Everything the script writes goes through render(), so a language switch only has to call it again
+const render=()=>{
+  Tools.$('empty').hidden=settings.count>0;
+  Tools.$('count').hidden=!settings.count;
+  Tools.$('count').textContent=t('clicked',{n:Tools.fmt(settings.count,0)}); // numbers always via Tools.fmt
+  for(const o of document.querySelectorAll('#kind button'))o.setAttribute('aria-pressed',String(o.dataset.kind===settings.kind));
+  Tools.$('optVibrate').checked=settings.vibrate;
+};
+// .seg: exactly one option pressed (aria-pressed); the choice is saved
 for(const b of document.querySelectorAll('#kind button'))b.addEventListener('click',()=>{
-  for(const o of document.querySelectorAll('#kind button'))o.setAttribute('aria-pressed',String(o===b));
+  settings.kind=b.dataset.kind; save(); render();
 });
+Tools.$('optVibrate').addEventListener('change',e=>{ settings.vibrate=e.target.checked; save(); });
 // Questions in the app's look (never confirm() of the browser); the button says what happens
 Tools.$('btnReset').addEventListener('click',async()=>{
-  if(settings.count&&!await Tools.confirm(t('resetQ',{n:settings.count}),{action:'reset'}))return;
-  settings.count=0; Tools.save(LS,settings); render(); Tools.menu.close();
+  if(settings.count&&!await Tools.confirm(t('resetQ',{n:Tools.fmt(settings.count,0)}),{action:'reset'}))return;
+  settings.count=0; save(); render(); Tools.menu.close();
 });
-render();
-Tools.$('btnDemo').addEventListener('click',()=>{
+function count(){
   settings.count++;
-  render();
-  Tools.save(LS,settings);
-  Tools.toast(t('clicked',{n:settings.count}));
+  save(); render();
+  // New browser features always with a fallback ('x' in navigator), see AGENTS.md "Mobile-first"
+  if(settings.vibrate&&'vibrate' in navigator)navigator.vibrate(30);
   // Diagnostics ("Diagnose kopieren"): log important steps and errors – never user content
   Tools.diag.log('demo clicked',{count:settings.count});
-});
+}
+Tools.$('btnDemo').addEventListener('click',()=>{ count(); Tools.toast(t('clicked',{n:Tools.fmt(settings.count,0)})); });
+render();
 // Page state for the diagnostics report (counts and states, no user content)
-Tools.diag.info(()=>({count:settings.count}));
-// Language switched without reload: re-render generated texts here (Tools.onLang(() => render()))
+Tools.diag.info(()=>({count:settings.count,kind:settings.kind}));
+// Language switched without reload: re-render everything the script wrote
+Tools.onLang(render);
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   Only via Tools.mcp.register; names, descriptions and results in English; same limits as the UI;
+   the result is visible in the app; readOnly only if nothing changes. Never: delete, reset, load backups,
+   camera/microphone/location, open files, send data. Every name is listed in <meta name="tool:webmcp">. */
+Tools.mcp.register({
+  name:'count',title:'Count clicks',label:'mcp.count',
+  description:'Raises the counter of the app by a number of clicks, as if the user pressed the example button. The new value is shown and saved in the app. Returns the new total.',
+  inputSchema:{type:'object',properties:{
+    times:{type:'integer',minimum:1,maximum:100,description:'How many clicks to add. Default 1.'}
+  },additionalProperties:false},
+  execute:({times=1})=>{ for(let i=0;i<times;i++)count(); return {count:settings.count}; }
+});
+Tools.mcp.register({
+  name:'get_state',title:'Read counter',readOnly:true,
+  description:'Reads the current state of the app: the number of clicks so far and the chosen kind (alone or two of us).',
+  execute:()=>({count:settings.count,kind:settings.kind==='a'?'alone':'two'})
+});
 })();
 </script>
 </body>

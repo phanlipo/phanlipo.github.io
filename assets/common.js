@@ -316,6 +316,64 @@ window.Tools = (function () {
     return t === '' ? NaN : Number(t);
   }
 
+  /* ---------- Small helpers many apps need (one implementation instead of a copy per app) ----------
+       Tools.randomInt(n)          uniform whole number 0 … n-1 (crypto.getRandomValues, no modulo bias)
+       Tools.random()              uniform number in [0, 1) (crypto.getRandomValues)
+       Tools.uid(prefix = '')      unique id: prefix + time in base 36 (sorts by creation) + 6 random characters
+       Tools.clamp(v, lo, hi)      v limited to lo … hi
+       Tools.reducedMotion()       the user asked for less motion (prefers-reduced-motion) – skip or shorten animations
+       Tools.canShareFile(name, type)  the device can share such a file with other apps (Web Share with files)
+       Tools.download(file, name)  saves a File/Blob under name (default file.name) via a temporary link */
+  function randomInt(n) {
+    const a = new Uint32Array(1), lim = Math.floor(0x100000000 / n) * n;
+    do crypto.getRandomValues(a); while (a[0] >= lim);
+    return a[0] % n;
+  }
+  function random() { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] / 0x100000000; }
+  const uid = (prefix = '') => prefix + Date.now().toString(36) + Array.from({ length: 6 }, () => randomInt(36).toString(36)).join('');
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const reducedMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } };
+  const shareCache = new Map();
+  function canShareFile(name, type) {
+    const key = name + '|' + type;
+    if (!shareCache.has(key)) {
+      let ok = false;
+      try { ok = !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], name, { type })] })); } catch (_) {}
+      shareCache.set(key, ok);
+    }
+    return shareCache.get(key);
+  }
+
+  /* ---------- Keep the screen on (Screen Wake Lock API) ----------
+     While at least one reason holds it, the screen stays on; the browser drops the lock whenever the page is hidden,
+     so it is asked for again when the page becomes visible. Without the API nothing happens (iPhone before iOS 16.4 …).
+       Tools.wakeLock.hold(reason = 'app')     e.g. 'game', 'playing', 'listening'
+       Tools.wakeLock.release(reason = 'app')  the screen may turn off again once no reason is left
+       Tools.wakeLock.active() → screen is being kept on now; .supported(); .reasons() → [reasons] */
+  const wakeReasons = new Set();
+  let wakeSentinel = null, wakePending = false;
+  const wakeSupported = () => { try { return 'wakeLock' in navigator; } catch (_) { return false; } };
+  async function wakeAcquire() {
+    if (!wakeReasons.size || wakeSentinel || wakePending || !wakeSupported() || document.visibilityState !== 'visible') return;
+    wakePending = true;
+    try {
+      const s = await navigator.wakeLock.request('screen');
+      if (!wakeReasons.size) { s.release().catch(() => {}); return; }
+      wakeSentinel = s;
+      s.addEventListener('release', () => { if (wakeSentinel === s) wakeSentinel = null; });
+      diagLog('wake lock on', [...wakeReasons].join(', '));
+    } catch (e) { diagLog('wake lock failed', e); } finally { wakePending = false; }
+  }
+  function wakeHold(reason = 'app') { wakeReasons.add(reason); return wakeAcquire(); }
+  function wakeRelease(reason = 'app') {
+    wakeReasons.delete(reason);
+    if (wakeReasons.size || !wakeSentinel) return;
+    const s = wakeSentinel; wakeSentinel = null;
+    s.release().catch(() => {});
+    diagLog('wake lock off');
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wakeAcquire(); });
+
   /* ---------- PWA: offline cache + automatic updates ----------
      Pages with <link rel="manifest"> register their generated sw.js (see scripts/build.mjs) – not the start
      page (data-no-sw): its manifest only gives the home screen icon, a service worker there would sit above every app.
@@ -427,11 +485,12 @@ window.Tools = (function () {
     keepClear();
   }
 
-  function downloadFile(file) {
+  function downloadFile(file, name) {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(file); a.download = file.name;
+    a.href = URL.createObjectURL(file); a.download = name || file.name || 'download';
     document.body.append(a); a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    // Some browsers read the file only after click() returns – keep the link alive a while
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 10000);
   }
 
   function setupDataUi() {
@@ -1027,6 +1086,7 @@ window.Tools = (function () {
     try { bytes = keys.reduce((n, k) => n + k.length + (localStorage.getItem(k) || '').length, 0) * 2; } catch (_) {}
     add('storage', { keys: keys.length, bytes });
     add('kept files', (await keepNames()).length);
+    if (wakeReasons.size) add('wake lock', { held: !!wakeSentinel, reasons: [...wakeReasons], supported: wakeSupported() });
     for (const fn of diagInfos) {
       try { for (const [k, v] of Object.entries((await fn()) || {})) add(k, v); } catch (e) { add('info failed', e); }
     }
@@ -1061,6 +1121,8 @@ window.Tools = (function () {
 
   return {
     $, load, save, remove, toast, undo, confirm: confirmAsk, prompt: promptAsk, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle,
+    randomInt, random, uid, clamp, reducedMotion, canShareFile, download: downloadFile,
+    wakeLock: { hold: wakeHold, release: wakeRelease, active: () => !!wakeSentinel, supported: wakeSupported, reasons: () => [...wakeReasons] },
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     menu: { open: menuOpen, close: menuClose, element: () => menuEl },

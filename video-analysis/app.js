@@ -634,11 +634,8 @@ function tableText(sep, withBom) {
   return (withBom ? '﻿' : '') + [head, ...lines].join('\r\n') + '\r\n';
 }
 $('csv').addEventListener('click', () => {
-  const a = document.createElement('a'), d = new Date(), p = n => String(n).padStart(2, '0');
-  a.href = URL.createObjectURL(new Blob([tableText(isEn() ? ',' : ';', true)], { type: 'text/csv;charset=utf-8' }));
-  a.download = `${t('file')}-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.csv`;
-  document.body.append(a); a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  Tools.download(new Blob([tableText(isEn() ? ',' : ';', true)], { type: 'text/csv;charset=utf-8' }), `${t('file')}-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.csv`);
 });
 $('copy').addEventListener('click', async () => {
   const ok = await Tools.copyText(tableText('\t', false));
