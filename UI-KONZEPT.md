@@ -185,10 +185,10 @@ Die Bildtafel „Bausteine“ (siehe unten) zeigt Menü, Datei-App, Bühnen-App 
 
 ## 4b. Werkzeugkasten: Apps mit mehreren Werkzeugen oder Rechnern
 
-**Standard** für jede App, die mehrere eigenständige Werkzeuge bündelt (`sensors`, `brew-calculator`, `medical-calculator`, `finance-calculator`). Aus dem Vergleich der drei bisherigen Varianten (Kacheln + Tabs in `sensors`, Sprung-Pillen in `brew-calculator`, umbrechende Pillen im ersten Finanzrechner) ist das die am besten erkennbare: alles auf einen Blick, Icon und Wort, große Ziele, nichts abgeschnitten.
+**Standard** für jede App, die mehrere eigenständige Werkzeuge bündelt (`sensors`, `brew-calculator`, `medical-calculator`, `finance-calculator`, `unit-converter`). Aus dem Vergleich der drei bisherigen Varianten (Kacheln + Tabs in `sensors`, Sprung-Pillen in `brew-calculator`, umbrechende Pillen im ersten Finanzrechner) ist das die am besten erkennbare: alles auf einen Blick, Icon und Wort, große Ziele, nichts abgeschnitten.
 
 1. **Start = Übersicht:** Kacheln (`.tiles` in `.tool-overview`, Tabler-Icon über dem Namen), ab etwa 6 Werkzeugen in Gruppen mit kleiner Überschrift (`h2`). Keine Nummern („1 ·“), keine Sammelseite „Mehr“ – jedes Werkzeug bekommt eine Kachel.
-2. **Im Werkzeug = Tab-Leiste oben** (`.tabbar`, klebt beim Scrollen): links `‹ Übersicht`, daneben ein Tab je Werkzeug (Icon über kurzem Wort, offenes Werkzeug in Akzent unterstrichen), waagrecht wischbar; das offene Tab rückt in die Mitte. Pfeiltasten/Pos1/Ende wechseln.
+2. **Im Werkzeug = Tab-Leiste oben** (`.tabbar`, klebt beim Scrollen): links `‹ Übersicht`, daneben ein Tab je Werkzeug (Icon über kurzem Wort, offenes Werkzeug in Akzent unterstrichen), waagrecht wischbar; das offene Tab rückt in die Mitte. Pfeiltasten/Pos1/Ende wechseln. Bei vielen Werkzeugen (etwa ab 15) tragen die Tabs `data-group`: die Leiste zeigt dann nur die Gruppe des offenen Werkzeugs (Beispiel `unit-converter`); eine Suche über der Übersicht hilft beim Finden.
 3. **Zurück-Taste** des Handys führt vom Werkzeug zur Übersicht (ein History-Eintrag), nicht aus der App.
 4. **Das zuletzt offene Werkzeug** öffnet nach dem Neuladen wieder (Zustand `{ view, tab }` im Speicher der App).
 5. **Ein Werkzeug = eine Karte** (`section.card.panel`, `role="tabpanel"`), Überschrift ohne Nummer.

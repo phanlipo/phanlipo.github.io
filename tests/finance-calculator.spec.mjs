@@ -322,7 +322,9 @@ test.describe('English', () => {
     await switchLang(page, 'de');
     await expect(page.locator('[data-key="s.ret"]')).toHaveValue('7,5');
     await expect(page.locator('#tab-save')).toHaveText('Sparplan');
+    await set(page, 's.start', '200.000');   // German thousands separator
     await switchLang(page, 'en');
     await expect(page.locator('[data-key="s.ret"]')).toHaveValue('7.5');
+    await expect(page.locator('[data-key="s.start"]')).toHaveValue('200000');   // still two hundred thousand
   });
 });
