@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "medical-calculator";
-const VERSION = '6eb43ec61d3f';
+const VERSION = '34bf212e1456';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -16,6 +16,7 @@ const FILES = [
   "../assets/base.css",
   "../assets/common.js",
   "../assets/icons.svg",
+  "../assets/shared/toolbox.js",
   "../assets/vendor/katex/fonts/KaTeX_AMS-Regular.woff2",
   "../assets/vendor/katex/fonts/KaTeX_Caligraphic-Bold.woff2",
   "../assets/vendor/katex/fonts/KaTeX_Caligraphic-Regular.woff2",

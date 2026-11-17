@@ -166,7 +166,10 @@ Neue gemeinsame Klassen, damit Apps keine eigenen Varianten mehr bauen müssen. 
 | **Leerzustand** `.empty-state` | Icon 44 px (gedämpft), ein Satz, optional Hauptaktion | statt freiem Text oder Emoji-Bild; Kinder-Apps dürfen eine Illustration nehmen |
 | **Schritt** `.step` | `<h2><span class="step">1</span>Video wählen</h2>` | für feste Abläufe (Datei → Einstellung → Ergebnis), runder Zahlpunkt in Akzent |
 | **Hinweis** `.notice` (`.info`, `.warn`, `.err`, `.ok`) | Icon aus dem Abschnitt „Status“ + Text | ersetzt Randbalken, Emoji-Status und graue Kästen; Fehler mit `role="alert"` |
-| **Kennzahl** `.stat-box` | große Zahl + kleine Beschriftung | Punkte, Ergebnisse (`reaction-game`, `rock-paper-scissors`, `brew-calculator`) |
+| **Kennzahl** `.stat-box` | große Zahl + kleine Beschriftung | Punkte, Spielstände (`reaction-game`, `rock-paper-scissors`); Rechenergebnisse als `.calc-result` (siehe 4b) |
+| **Übersicht** `.tool-overview` + **Tab-Leiste** `.tabbar` | Kacheln `[data-open]` in Gruppen mit `h2`, im Werkzeug `‹ Übersicht` + Tabs `role="tab"` | Apps mit mehreren Werkzeugen oder Rechnern, siehe 4b „Werkzeugkasten“ |
+| **Feld mit Einheit** `.input-unit` | `<span class="input-unit"><input type="text" inputmode="decimal"><span class="unit">cm</span></span>` in `.form-field` | Einheit grau rechts im Feld statt im Label; Felder eines Rechners in `.calc-fields` (Raster, ab ~400 px zwei Spalten) |
+| **Ergebnis** `.calc-result` | `<div class="calc-results"><div class="calc-result main"><span class="k">Volumen</span><b class="v">25,45 <small>L</small></b></div></div>` | Frage oben klein, Antwort groß darunter, linksbündig wie die Felder; Hauptergebnis `.main` in Akzent getönt. Herleitung/Tabellen in `<details class="sub">` |
 | **Gesperrt** | `.btn:disabled` grau statt blasser Akzent, dazu `.notice.info` mit Grund | Leitlinie 8 |
 | **Ankreuzfeld** `.check` | `<label class="check"><input type="checkbox"><span>Töne an<small>Erklärung</small></span></label>` | Kasten (22 px) links, Text rechts, Zeile 44 px; Erklärung als `<small>` darunter. Mehrere untereinander in `.checks`. Gilt auch für Radios mit Erklärung (Format-, Modellwahl); 2–4 kurze Optionen ohne Erklärung bleiben `.seg`. Test: jedes Ankreuzfeld steckt in `label.check` (oder `.seg`/`.chips`/`.tiles`) |
 | **Rückfrage** `Tools.confirm` / `Tools.prompt` | `if (!await Tools.confirm(t('delQ'), { action: 'delete' })) return;` | statt `confirm()`/`prompt()` des Browsers: Dialog im Stil der App (Blatt von unten auf dem Handy, kleines Fenster ab 641 px). `action` benennt den Knopf: `ok`, `delete`, `reset`, `leave` (rot), `replace`, `load`, `download`; `ok`/`cancel` für eigene Wörter. Kein `confirm()`/`prompt()` mehr im Code |
@@ -177,6 +180,22 @@ Neue gemeinsame Klassen, damit Apps keine eigenen Varianten mehr bauen müssen. 
 | **Fortschritt** `<progress>` / **Pegel** `.meter` | `<progress value="40" max="100">` · `<div class="meter"><i style="width:40%"></i></div>` | `progress` für laufende Arbeit (Download, Export), 8 px in Akzent; `.meter` für Live-Pegel (Mikrofon, Sensor), Farbe mit `.ok`/`.warn`/`.err`, Höhe darf die App ändern (Spielanzeige). Was passiert, steht als Text daneben |
 
 Die Bildtafel „Bausteine“ (siehe unten) zeigt Menü, Datei-App, Bühnen-App und Spiel als Entwurf.
+
+---
+
+## 4b. Werkzeugkasten: Apps mit mehreren Werkzeugen oder Rechnern
+
+**Standard** für jede App, die mehrere eigenständige Werkzeuge bündelt (`sensors`, `brew-calculator`, `medical-calculator`, `finance-calculator`). Aus dem Vergleich der drei bisherigen Varianten (Kacheln + Tabs in `sensors`, Sprung-Pillen in `brew-calculator`, umbrechende Pillen im ersten Finanzrechner) ist das die am besten erkennbare: alles auf einen Blick, Icon und Wort, große Ziele, nichts abgeschnitten.
+
+1. **Start = Übersicht:** Kacheln (`.tiles` in `.tool-overview`, Tabler-Icon über dem Namen), ab etwa 6 Werkzeugen in Gruppen mit kleiner Überschrift (`h2`). Keine Nummern („1 ·“), keine Sammelseite „Mehr“ – jedes Werkzeug bekommt eine Kachel.
+2. **Im Werkzeug = Tab-Leiste oben** (`.tabbar`, klebt beim Scrollen): links `‹ Übersicht`, daneben ein Tab je Werkzeug (Icon über kurzem Wort, offenes Werkzeug in Akzent unterstrichen), waagrecht wischbar; das offene Tab rückt in die Mitte. Pfeiltasten/Pos1/Ende wechseln.
+3. **Zurück-Taste** des Handys führt vom Werkzeug zur Übersicht (ein History-Eintrag), nicht aus der App.
+4. **Das zuletzt offene Werkzeug** öffnet nach dem Neuladen wieder (Zustand `{ view, tab }` im Speicher der App).
+5. **Ein Werkzeug = eine Karte** (`section.card.panel`, `role="tabpanel"`), Überschrift ohne Nummer.
+6. **Rechner** darin: Felder mit Einheit (`.input-unit`) in `.calc-fields`, Ergebnisse als `.calc-result` (Hauptergebnis `.main`), Meldungen als `.notice`, „Formeln & Erklärung“ und Tabellen in `details.sub`.
+7. **KI-Agenten:** Ein WebMCP-Werkzeug öffnet „sein“ Werkzeug (`box.open(name)`), damit das Ergebnis sichtbar ist.
+
+Verhalten aus **`assets/shared/toolbox.js`** (`Toolbox.init({ state, onChange, onSelect, onOverview })`); Markup im Kommentar am Anfang der Datei und in `base.css`. Apps mit nur einem Rechner brauchen keine Übersicht, nutzen aber dieselben Felder und Ergebnisse.
 
 ---
 
@@ -315,7 +334,7 @@ Gespeicherte Daten und Schlüssel bleiben dabei unverändert; es ändert sich nu
 | ai-chat | Warnung als Randbalken, Senden-Knopf blass | `.notice.warn`, `.btn.icon` mit `send` |
 | api-check | dunkle eckige `.seg`, Hauptaktion schmal | `.seg`, `.btn.primary.block` |
 | audio-studio | Ablagefläche ohne Icon, ▶ als Zeichen | `.dropzone`, `player-play` |
-| brew-calculator | Tab-Pillen abgeschnitten, eigenes `.field` | `.chips`, `.form-field` |
+| brew-calculator | Tab-Pillen abgeschnitten, eigenes `.field` | umgesetzt: Werkzeugkasten (4b), `.input-unit`, `.calc-result` |
 | business-card | Werkzeuge Text/Bild/QR als Text-Knöpfe | `.toolbar` bzw. Knöpfe mit Icons |
 | calc-pad | gut; Tastenfeld mit eigenen Zeichen | Sprite statt kopierter SVGs |
 | calendar-events | nur Text-Knöpfe | Hauptaktion mit Icon `calendar` |
@@ -352,7 +371,7 @@ Gespeicherte Daten und Schlüssel bleiben dabei unverändert; es ändert sich nu
 | scoreboard | Sportarten mit Emoji | `ball-football`, `ping-pong`, `ball-tennis`, `target`; ohne passendes Icon nur Text |
 | secret-santa | 🎁 Knopf | Hauptaktion mit `gift` |
 | securpharm-scanner | Schritte, gut | `.seg`, `.step` |
-| sensors | Kacheln mit Tabler-Icons – vorbildlich | als Vorlage für `.tiles` |
+| sensors | Kacheln mit Tabler-Icons – vorbildlich | Vorlage des Werkzeugkastens (4b), nutzt jetzt `base.css` und `toolbox.js` |
 | spin-the-bottle | 🍾 Drehen | `rotate-clockwise` |
 | talking-animal, whip, whoopee-cushion | 🎤 / 📳 / 🔁 in Bedienknöpfen, Emoji-Kacheln für Stimmen/Geräusche | `microphone`, `device-mobile-vibration`, `repeat`; Kacheln mit Tabler-Icons (z. B. `mouse`, `robot`, `alien`, `wind`, `droplet`, `cloud-storm`, `dice-5`) |
 | text-to-speech | ▶ als Zeichen | `player-play` |

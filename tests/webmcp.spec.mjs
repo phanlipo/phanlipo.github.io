@@ -224,7 +224,7 @@ test.describe('brew-calculator tools', () => {
     expect(r.result.liters_per_cm).toBeCloseTo(Math.PI * 18 ** 2 / 1000, 4);
     expect(r.result.volume_at_20c_l).toBeCloseTo(V * rhoW(98) / rhoW(20), 3);
     await expect(page.locator('[data-key="v.d"]')).toHaveValue('36');
-    await expect(page.locator('#vRes .res.main .v')).toContainText('25,45');
+    await expect(page.locator('#vRes .calc-result.main .v')).toContainText('25,45');
     r = await call(page, 'brew_calculator_pot_volume', { diameter_cm: 36, pot_height_cm: 34, gap_cm: 9 });
     expect(r.result.volume_l).toBeCloseTo(V, 3);
     expect(r.result.fill_height_cm).toBe(25);
@@ -243,7 +243,7 @@ test.describe('brew-calculator tools', () => {
   test('fill_height_for_volume', async ({ page }) => {
     const r = await call(page, 'brew_calculator_fill_height_for_volume', { diameter_cm: 36, target_volume_l: 25 });
     expect(r.result.fill_height_cm).toBeCloseTo(25000 / (Math.PI * 18 ** 2), 2);
-    await expect(page.locator('#vRes .res.main .v')).toContainText('24,6');
+    await expect(page.locator('#vRes .calc-result.main .v')).toContainText('24,6');
   });
 
   test('correct_gravity: Plato and SG', async ({ page }) => {
@@ -281,7 +281,7 @@ test.describe('medical-calculator tools', () => {
     let r = await call(page, 'medical_calculator_body_measures', { height_cm: 180, weight_kg: 80, waist_cm: 90 });
     expect(r.result).toEqual({ bmi: 24.7, who_class: 'normal weight', bsa_mosteller_m2: 2, bsa_dubois_m2: Math.round(0.007184 * 80 ** 0.425 * 180 ** 0.725 * 100) / 100, waist_to_height_ratio: 0.5 });
     await expect(page.locator('[data-key="b.h"]')).toHaveValue('180');
-    await expect(page.locator('#bRes .res.main .v')).toContainText('24,7');
+    await expect(page.locator('#bRes .calc-result.main .v')).toContainText('24,7');
     r = await call(page, 'medical_calculator_kidney_function', { age_years: 75, sex: 'male', creatinine: 168, creatinine_unit: 'umol_l', weight_kg: 70 });
     const S = 168 / 88.4, e = 142 * (S / 0.9) ** -1.2 * 0.9938 ** 75;
     expect(r.result.egfr_ml_min_1_73m2).toBe(Math.round(e));
@@ -2995,5 +2995,59 @@ test.describe('font-creator tools', () => {
     expect(sample.result.missing).toEqual(['H', 'a', 'l', 'o']);
     await expect(page.locator('#sample')).toHaveValue('Hallo');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('font-creator.font.v1')).sample)).toBe('Hallo');
+  });
+});
+
+test.describe('finance-calculator tools', () => {
+  test.use({ locale: 'de-DE' });
+  test.beforeEach(async ({ page }) => open(page, '/finance-calculator/'));
+
+  test('savings_plan fills the savings calculator and returns the result', async ({ page }) => {
+    const r = await call(page, 'finance_calculator_savings_plan', { start_capital: 1000, monthly_contribution: 100, annual_return_percent: 6, years: 10, contribution_at: 'end_of_month' });
+    expect(r.ok).toBe(true);
+    const q = Math.pow(1.06, 1 / 12) - 1;
+    const cap = 1000 * Math.pow(1 + q, 120) + 100 * (Math.pow(1 + q, 120) - 1) / q;
+    expect(r.result.final_capital).toBeCloseTo(cap, 1);
+    expect(r.result.paid_in).toBe(13000);
+    await expect(page.locator('[data-key="s.rate"]')).toHaveValue('100');
+    await expect(page.locator('#tab-save')).toHaveAttribute('aria-selected', 'true');
+    // contribution needed: same plan backwards
+    const back = await call(page, 'finance_calculator_savings_plan', { solve_for: 'monthly_contribution', start_capital: 1000, target_capital: cap, annual_return_percent: 6, years: 10, contribution_at: 'end_of_month' });
+    expect(back.result.monthly_contribution).toBeCloseTo(100, 2);
+    expect((await call(page, 'finance_calculator_savings_plan', { start_capital: 1000, annual_return_percent: 6, years: 10 })).error).toContain('monthly_contribution');
+    expect((await call(page, 'finance_calculator_savings_plan', { solve_for: 'duration', start_capital: 0, monthly_contribution: 0, target_capital: 10, annual_return_percent: 0 })).error).toContain('100 years');
+  });
+
+  test('loan: payment, remaining debt after the fixed period, one of three inputs', async ({ page }) => {
+    const r = await call(page, 'finance_calculator_loan', { amount: 300000, interest_percent: 3.5, initial_repayment_percent: 2, fixed_rate_years: 10 });
+    const i = 0.035 / 12, R = 1375, bal = 300000 * Math.pow(1 + i, 120) - R * (Math.pow(1 + i, 120) - 1) / i;
+    expect(r.result.monthly_payment).toBe(R);
+    expect(r.result.remaining_debt_after_fixed_period).toBeCloseTo(bal, 1);
+    await expect(page.locator('#tab-loan')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('[data-key="l.rate"]')).toHaveValue('3,5');
+    expect((await call(page, 'finance_calculator_loan', { amount: 1000, interest_percent: 3, years: 5, monthly_payment: 20 })).error).toContain('exactly one');
+    expect((await call(page, 'finance_calculator_loan', { amount: 300000, interest_percent: 4, monthly_payment: 900 })).error).toContain('does not cover');
+  });
+
+  test('time_value solves any of the five values', async ({ page }) => {
+    const r = await call(page, 'finance_calculator_time_value', { solve_for: 'pmt', n: 360, rate_percent: 6, pv: 200000, fv: 0 });
+    const i = 0.005;
+    expect(r.result.pmt).toBeCloseTo(-200000 * i / (1 - Math.pow(1 + i, -360)), 2);
+    await expect(page.locator('#tMsg')).toContainText('PMT = -1.199,10');
+    const rate = await call(page, 'finance_calculator_time_value', { solve_for: 'rate_percent', n: 10, pv: -10000, pmt: 0, fv: 20000, payments_per_year: 1 });
+    expect(rate.result.rate_percent).toBeCloseTo((Math.pow(2, 0.1) - 1) * 100, 5);
+    expect((await call(page, 'finance_calculator_time_value', { solve_for: 'rate_percent', n: 10, pv: 10000, pmt: 0, fv: 20000 })).error).toContain('signs');
+    expect((await call(page, 'finance_calculator_time_value', { solve_for: 'fv', n: 10, pv: 1 })).error).toContain('is needed');
+  });
+
+  test('cash_flows and convert_rate', async ({ page }) => {
+    const r = await call(page, 'finance_calculator_cash_flows', { cf0: -1000, flows: [{ amount: 600 }, { amount: 600 }], rate_percent: 10 });
+    expect(r.result.npv).toBeCloseTo(-1000 + 600 / 1.1 + 600 / 1.21, 2);
+    // −1000 + 600/(1+r) + 600/(1+r)² = 0 → 1+r = (600 + √(600² + 4·1000·600)) / 2000
+    expect(r.result.irr_percent).toBeCloseTo(((600 + Math.sqrt(600 ** 2 + 4 * 1000 * 600)) / 2000 - 1) * 100, 4);
+    await expect(page.locator('#cfRows input[data-f="cf"]')).toHaveCount(2);
+    const c = await call(page, 'finance_calculator_convert_rate', { given: 'nominal', rate_percent: 6, compounding_per_year: 12 });
+    expect(c.result.effective_percent).toBeCloseTo((Math.pow(1.005, 12) - 1) * 100, 5);
+    await expect(page.locator('#tab-iconv')).toHaveAttribute('aria-selected', 'true');
   });
 });
