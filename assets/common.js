@@ -243,11 +243,12 @@ window.Tools = (function () {
      so an installed app does not have to be closed and opened again.
      An installed app that comes back from the background does not navigate, so it checks for updates itself
      (at most every 10 minutes). */
-  let updateReady = false, updateBtn = null;
+  let updateReady = false, updateBtn = null, fitTitle = () => {};
   function showUpdate() {
     updateReady = true;
     if (updateBtn) updateBtn.hidden = false;
     document.body.classList.add('update-ready');
+    fitTitle();
   }
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || !document.querySelector('link[rel="manifest"]:not([data-no-sw])')) return;
@@ -683,6 +684,22 @@ window.Tools = (function () {
       if (menuEl.open) { menuPushed = false; menuEl.close(); }
     });
     document.body.classList.add('has-menu');
+    // Long titles (other language, wide system font, more quick actions, the ↻ button) shrink a little instead of
+    // being cut off – down to 14 px (UI-KONZEPT.md 4a). Re-checked whenever the actions or the title change.
+    const h1 = header.querySelector('h1');
+    if (h1) {
+      const span = h1.querySelector(':scope > span') || h1;
+      const fit = () => {
+        span.style.fontSize = '';
+        let size = parseFloat(getComputedStyle(span).fontSize);
+        while (span.scrollWidth > span.clientWidth + 1 && size > 14) { size -= 1; span.style.fontSize = size + 'px'; }
+      };
+      fitTitle = fit;
+      fit();
+      try { new ResizeObserver(() => fit()).observe(actions); } catch (_) {}
+      try { new MutationObserver(() => fit()).observe(span, { childList: true, characterData: true, subtree: true }); } catch (_) {}
+      window.addEventListener('resize', fit);
+    }
   }
   // common.js is loaded at the end of <body>: build the menu right away, before the first paint
   if (document.querySelector('body > footer')) setupMenu();

@@ -87,6 +87,8 @@ for (const app of apps()) {
         const u = document.querySelector('.update-btn');
         if (u) { u.hidden = false; document.body.classList.add('update-ready'); }
       });
+      // The page fits its title to the room left (common.js) – give it a frame to react
+      await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
       const m = await page.evaluate(() => {
         const h1 = document.querySelector('body > header h1');
         const span = h1.querySelector('span') || h1;
@@ -94,12 +96,14 @@ for (const app of apps()) {
         const btns = [...document.querySelectorAll('body > header .head-btn')].filter(b => b.checkVisibility()).map(b => b.getBoundingClientRect());
         return {
           truncated: span.scrollWidth > span.clientWidth + 1, width: r.width, natural: span.scrollWidth,
+          font: parseFloat(getComputedStyle(span).fontSize),
           overlap: btns.some(b => b.left < r.right - 1 && b.right > r.left + 1 && b.top < r.bottom - 1 && b.bottom > r.top + 1),
           outside: btns.some(b => b.right > innerWidth + 0.5 || b.left < -0.5),
           headerOverflow: document.querySelector('body > header').scrollWidth > document.querySelector('body > header').clientWidth + 1,
         };
       });
       expect(m.truncated, 'title cut off – move a quick action into the menu').toBe(false);
+      expect(m.font, 'title shrunk below 14 px – move a quick action into the menu').toBeGreaterThanOrEqual(14);
       expect(m.width, 'title narrower than 96 px').toBeGreaterThanOrEqual(Math.min(96, m.natural) - 1);
       expect(m.overlap, 'buttons over the title').toBe(false);
       expect(m.outside, 'buttons outside the screen').toBe(false);

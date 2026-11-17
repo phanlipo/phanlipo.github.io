@@ -19,7 +19,7 @@
 <meta name="tool:webmcp" content="get_step_count, get_compass_heading">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-+peyD+BrT7H+dXRDf1ICSTcG2r76A4KStVkX6+Di3yM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-BVqECi3WIbyUgymiGcjU58zzZ9+n3GP9dLtYp3X3eME='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -917,7 +917,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 30e16ea94110</p>
+  <p class="footer-version">Version 89c417f54283</p>
   <!-- footer:end -->
 </footer>
 
@@ -1938,7 +1938,11 @@ const spectro = {
     const x = clamp((e.clientX - r.left) / r.width, 0, 1), y = clamp((e.clientY - r.top) / r.height, 0, 1);
     const i = Math.round(x * SP_COLS - 0.5) - (SP_COLS - this.hist.length);
     if (i < 0) { this.cursor = null; }
-    else this.cursor = {id: this.hist[Math.min(i, this.hist.length - 1)].id, f: this.rowFreq(y)};
+    else { // the level comes from every bin the tapped screen pixel shows (like the image: maximum)
+      const d = 0.5 / Math.max(1, r.height);
+      this.cursor = {id: this.hist[Math.min(i, this.hist.length - 1)].id, f: this.rowFreq(y),
+        fa: this.rowFreq(Math.min(1, y + d)), fb: this.rowFreq(Math.max(0, y - d))};
+    }
     this.drawAxes(); this.renderInfo();
   },
   renderInfo(){
@@ -1963,8 +1967,11 @@ const spectro = {
     }
     if (cur) {
       const ago = (this.hist[this.hist.length - 1].id - this.cursor.id) * SP_HOP / 1000, f = this.cursor.f;
-      const k = clamp(Math.round(f / this.binHz), 0, col.spec.length - 1);
-      $('spCursor').textContent = tr('sp.cursor', {f: fmt(f, f < 100 ? 1 : 0), t: fmt(-ago, 1), db: fmt(col.spec[k], 0)});
+      const n = col.spec.length - 1, bin = v => clamp(Math.round(v / this.binHz), 0, n);
+      const k = bin(f), k0 = Math.min(k, bin(this.cursor.fa ?? f)), k1 = Math.max(k, bin(this.cursor.fb ?? f));
+      let db = -Infinity;
+      for (let j = k0; j <= k1; j++) db = Math.max(db, col.spec[j]);
+      $('spCursor').textContent = tr('sp.cursor', {f: fmt(f, f < 100 ? 1 : 0), t: fmt(-ago, 1), db: fmt(db, 0)});
     } else $('spCursor').textContent = tr('sp.tapHint');
   },
   png(){
