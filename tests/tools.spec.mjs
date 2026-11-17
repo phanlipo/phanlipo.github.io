@@ -104,3 +104,46 @@ test('without the Wake Lock API nothing breaks', async ({ page }) => {
   await page.goto('/template/');
   expect(await page.evaluate(async () => { await Tools.wakeLock.hold(); return [Tools.wakeLock.supported(), Tools.wakeLock.active()]; })).toEqual([false, false]);
 });
+
+test.describe('audio', () => {
+  test.beforeEach(async ({ page }) => {
+    // Stand-in for Web Audio: starts suspended like a browser before the first tap, records every tone
+    await page.addInitScript(() => {
+      window.__audio = { created: 0, tones: [] };
+      const param = () => ({ events: [], setValueAtTime(v, t) { this.events.push(['set', v, t]); }, exponentialRampToValueAtTime(v, t) { this.events.push(['ramp', v, t]); } });
+      window.AudioContext = class {
+        constructor() { __audio.created++; this.state = 'suspended'; this.currentTime = 10; this.sampleRate = 48000; this.destination = {}; }
+        resume() { this.state = 'running'; return Promise.resolve(); }
+        createGain() { return { gain: param(), connect() {} }; }
+        createOscillator() {
+          const o = { type: 'sine', frequency: param(), connect() {}, start(t) { o.at = t; __audio.tones.push(o); }, stop(t) { o.end = t; } };
+          return o;
+        }
+      };
+    });
+    await page.goto('/template/');
+  });
+
+  test('silent until unlocked in a tap; one context; tones with glide, delay and length', async ({ page }) => {
+    const r = await page.evaluate(async () => {
+      Tools.audio.tone({ freq: 440 });                            // no context yet: nothing, no context created
+      const before = [__audio.created, Tools.audio.ready()];
+      Tools.audio.unlock(); Tools.audio.unlock();
+      await Promise.resolve();
+      Tools.audio.tone({ freq: 300, to: 900, ms: 100, type: 'triangle', vol: 0.5, at: 0.2 });
+      const o = __audio.tones[0];
+      return { before, created: __audio.created, ready: Tools.audio.ready(), n: __audio.tones.length,
+        type: o.type, freq: o.frequency.events.map(([k, v, t]) => [k, v, Math.round(t * 1000) / 1000]), at: o.at, end: o.end, same: Tools.audio.context() === Tools.audio.context() };
+    });
+    expect(r.before).toEqual([0, false]);
+    expect(r.created).toBe(1);
+    expect(r.same).toBe(true);
+    expect(r.ready).toBe(true);
+    expect(r.n).toBe(1);
+    expect(r.type).toBe('triangle');
+    expect(r.freq).toEqual([['set', 300, 10.2], ['ramp', 900, 10.3]]);  // currentTime 10 + 0.2 s, 100 ms long
+    expect(r.at).toBeCloseTo(10.2);
+    expect(r.end).toBeCloseTo(10.32);
+    expect(await page.evaluate(() => Tools.diag.text())).toMatch(/^audio: \{"state":"running","rate":48000\}$/m);
+  });
+});
