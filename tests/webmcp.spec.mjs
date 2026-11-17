@@ -271,6 +271,40 @@ test.describe('brew-calculator tools', () => {
   });
 });
 
+test.describe('medical-calculator tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date(2026, 10, 17, 10, 0));
+    await open(page, '/medical-calculator/');
+  });
+
+  test('body_measures and kidney_function fill the calculators', async ({ page }) => {
+    let r = await call(page, 'medical_calculator_body_measures', { height_cm: 180, weight_kg: 80, waist_cm: 90 });
+    expect(r.result).toEqual({ bmi: 24.7, who_class: 'normal weight', bsa_mosteller_m2: 2, bsa_dubois_m2: Math.round(0.007184 * 80 ** 0.425 * 180 ** 0.725 * 100) / 100, waist_to_height_ratio: 0.5 });
+    await expect(page.locator('[data-key="b.h"]')).toHaveValue('180');
+    await expect(page.locator('#bRes .res.main .v')).toContainText('24,7');
+    r = await call(page, 'medical_calculator_kidney_function', { age_years: 75, sex: 'male', creatinine: 168, creatinine_unit: 'umol_l', weight_kg: 70 });
+    const S = 168 / 88.4, e = 142 * (S / 0.9) ** -1.2 * 0.9938 ** 75;
+    expect(r.result.egfr_ml_min_1_73m2).toBe(Math.round(e));
+    expect(r.result.kdigo_stage).toBe('G3b');
+    expect(r.result.creatinine_clearance_ml_min).toBe(Math.round((140 - 75) * 70 / (72 * S)));
+    await expect(page.locator('[data-key="k.unit"] [data-v="umol"]')).toHaveAttribute('aria-pressed', 'true');
+    expect((await call(page, 'medical_calculator_kidney_function', { age_years: 40, sex: 'female', creatinine: 50 })).error).toMatch(/Implausible creatinine/);
+  });
+
+  test('pregnancy_dates and convert_lab_value', async ({ page }) => {
+    let r = await call(page, 'medical_calculator_pregnancy_dates', { last_period: '2026-08-01' });
+    expect(r.result).toEqual({ due_date: '2027-05-08', conception_date_approx: '2026-08-15', days_until_due: 172, gestational_age: '15+3', gestational_age_days: 108, trimester: 2 });
+    await expect(page.locator('[data-key="p.L"]')).toHaveValue('2026-08-01');
+    expect((await call(page, 'medical_calculator_pregnancy_dates', { last_period: '2026-12-01' })).error).toBe('last_period is in the future.');
+    expect((await call(page, 'medical_calculator_pregnancy_dates', { last_period: '2026-02-30' })).ok).toBe(false);
+    r = await call(page, 'medical_calculator_convert_lab_value', { analyte: 'hba1c', value: 53, from: 'si' });
+    expect(r.result).toEqual({ value: 53, unit: 'mmol/mol', converted: Math.round((53 / 10.929 + 2.15) * 10) / 10, converted_unit: '%' });
+    await expect(page.locator('[data-key="l.a"]')).toHaveValue('hba1c');
+    r = await call(page, 'medical_calculator_convert_lab_value', { analyte: 'glucose', value: 100 });
+    expect(r.result.converted).toBeCloseTo(100 / 18.016, 2);
+  });
+});
+
 test.describe('qr-code tools', () => {
   test.beforeEach(async ({ page }) => open(page, '/qr-code/'));
 

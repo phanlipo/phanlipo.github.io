@@ -183,3 +183,14 @@ test.describe('English', () => {
     await expect(main(page, 'vRes')).toContainText('25,45');
   });
 });
+
+test('jump bar: chips from base.css, the calculator in view is marked', async ({ page }) => {
+  const nav = page.locator('nav.calcs.chips');
+  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#topf');
+  await nav.locator('a[href="#stammwuerze"]').click();
+  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#stammwuerze');
+  await nav.locator('a[href="#zucker"]').click();
+  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#zucker');
+  await expect(nav.locator('a[aria-current="true"]')).toHaveCount(1);
+  await expect(nav).toBeInViewport();
+});
