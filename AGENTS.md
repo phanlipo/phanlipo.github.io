@@ -13,7 +13,7 @@ Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/), ohne Server 
 - `UI-KONZEPT.md`: Bedienelemente, Icon-Lexikon, Menüaufbau (Regeln kurz unter „Bedienelemente & Icons“).
 - `IDEAS.md`: Ideen für neue Seiten und zurückgestellte/verworfene Ideen (passen nicht zur Architektur) mit Begründung – **vor neuen Apps lesen**; Ideen, die nicht passen (z. B. brauchen Server), dort eintragen statt umsetzen.
 
-**Generiert, nie von Hand bearbeiten:** Bereiche zwischen `<!-- tools/head/footer/data:start -->` und `…:end -->`, `manifest.webmanifest`, `sw.js`, Icons (auch `assets/icons.svg`), `NOTICE.md`, `sbom.cdx.json`, `assets/vendor/`, `quartet/decks.js`, `laser-mirrors/levels.js`.
+**Generiert, nie von Hand bearbeiten:** Bereiche zwischen `<!-- tools/head/footer/data/agent:start -->` und `…:end -->`, `manifest.webmanifest`, `sw.js`, Icons (auch `assets/icons.svg`), `NOTICE.md`, `sbom.cdx.json`, `assets/vendor/`, `quartet/decks.js`, `laser-mirrors/levels.js`.
 
 ## Neue App
 
@@ -95,6 +95,7 @@ Jede App bietet Funktionen als WebMCP-Werkzeuge an – **nur über `Tools.mcp.re
 - Ergebnis sichtbar in der App; `readOnly` nur, wenn nichts geändert wird; `untrusted`, wenn das Ergebnis fremde Inhalte enthält.
 - Werkzeuge arbeiten nur mit dem, was der Nutzer schon gewählt hat. **Nie als Werkzeug:** Daten löschen, Sicherung laden, Einstellungen zurücksetzen, Kamera/Mikrofon/Standort, Dateien öffnen, Daten an Server, Passwörter zurückgeben.
 - `tool:webmcp` (Namen ohne Präfix) und Feature `KI-Agent` gehören zusammen (prüft `build.mjs`). Fachliche Tests in `tests/webmcp.spec.mjs`.
+- **Hilfe:** Was ein Agent in der App kann, steht als Klartext in `tool:webmcp-help`/`-help-en`; `build.mjs` macht daraus den Abschnitt „KI-Agenten (WebMCP)“ mit den festen Regeln (`scripts/partials/help-agent.html`, Marker `<!-- agent:start/end -->` vor *Fehlersuche*). Keinen eigenen Agenten-Text in die Hilfe schreiben.
 
 ## Bibliotheken: Pflege & Sicherheit
 

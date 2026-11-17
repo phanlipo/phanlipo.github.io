@@ -7,6 +7,7 @@
 //   3. <head> block in every page: noindex, Content Security Policy,   <!-- head:start/end -->
 //      favicon, manifest, theme colour
 //   4. Data backup section in every app (scripts/partials/data.html)   <!-- data:start/end -->
+//      and help section on AI agents (scripts/partials/help-agent.html) <!-- agent:start/end -->
 //   5. Per app (every listed tool + template): manifest.webmanifest and sw.js (offline cache).
 //      The cache version is a hash of all cached files, so every change ships automatically;
 //      it is also shown in the app's footer ("Version …").
@@ -32,6 +33,9 @@
 //   tool:share-text ("true")                             receive shared links/text (Android) as ?title=&text=&url=
 //   tool:webmcp ("a, b")                                 WebMCP tools the page registers (names without app prefix);
 //                                                        needs the feature "KI-Agent", checked by tests/webmcp.spec.mjs
+//   tool:webmcp-help, tool:webmcp-help-en                what an AI agent can do in this app (plain text, one or two sentences);
+//                                                        required with tool:webmcp – becomes the help section "KI-Agenten"
+//                                                        (scripts/partials/help-agent.html) <!-- agent:start/end -->
 //   tool:youtube ("true")                                embeds the YouTube player (frame-src www.youtube-nocookie.com, and
 //                                                        www.youtube.com for the opt-in "play with YouTube account");
 //                                                        only for apps whose purpose is playing YouTube, see AGENTS.md
@@ -92,6 +96,8 @@ function pageInfo({ folder, file }) {
     shareAccept: (meta(html, 'tool:share-target') || '').split(',').map(s => s.trim()).filter(Boolean),
     shareText: meta(html, 'tool:share-text') === 'true',
     webmcp: (meta(html, 'tool:webmcp') || '').split(',').map(s => s.trim()).filter(Boolean),
+    agentHelp: meta(html, 'tool:webmcp-help'),
+    agentHelpEn: meta(html, 'tool:webmcp-help-en'),
     connect: (meta(html, 'tool:connect') || '').split(/\s+/).filter(Boolean),
     cast: meta(html, 'tool:cast') === 'true',
     youtube: meta(html, 'tool:youtube') === 'true',
@@ -128,6 +134,13 @@ for (const t of tools) {
 // Installable apps: every listed tool plus the template (so copies work right away)
 const apps = [...tools, ...pages.filter(p => p.folder === 'template')];
 const isApp = p => apps.includes(p);
+for (const p of apps) {
+  if (!p.webmcp.length) continue;
+  if (!p.agentHelp || !p.agentHelpEn)
+    throw new Error(`${p.file}: tool:webmcp needs <meta name="tool:webmcp-help"> and <meta name="tool:webmcp-help-en"> (what an AI agent can do here)`);
+  if (!read(p.file).includes('<!-- agent:start -->'))
+    throw new Error(`${p.file}: tool:webmcp needs <!-- agent:start --><!-- agent:end --> in the help (before "Fehlersuche")`);
+}
 
 /* ---------- Generated blocks ---------- */
 function replaceBlock(text, name, content) {
@@ -507,12 +520,15 @@ const footer = readFileSync(join(ROOT, 'scripts/partials/footer.html'), 'utf8').
 // The start page needs no link to itself
 const footerFor = p => p.folder ? footer : footer.split('\n').filter(l => !l.includes('footer-home')).join('\n');
 const dataBlock = readFileSync(join(ROOT, 'scripts/partials/data.html'), 'utf8').trim();
+const agentBlock = readFileSync(join(ROOT, 'scripts/partials/help-agent.html'), 'utf8').trim();
+const renderAgent = p => `\n  ${agentBlock.replace('{de}', () => escHtml(p.agentHelp)).replace('{en}', () => escHtml(p.agentHelpEn)).replaceAll('\n', '\n  ')}\n  `;
 setBlock('index.html', 'tools', renderCards(), true);
 setBlock('README.md', 'tools', renderTable(), true);
 for (const p of pages) {
   setBlock(p.file, 'footer', `\n  ${footerFor(p).replaceAll('\n', '\n  ')}\n  `, false);
   if (!p.hidden) setBlock(p.file, 'head', renderHead(p), false);
   setBlock(p.file, 'data', isApp(p) && p.storage ? `\n${dataBlock}\n` : '\n', false);
+  setBlock(p.file, 'agent', isApp(p) && p.webmcp.length ? renderAgent(p) : '', false);
 }
 for (const p of apps) {
   if (!p.storage) console.warn(`! ${p.file}: <meta name="tool:storage"> missing – no data backup section`);
