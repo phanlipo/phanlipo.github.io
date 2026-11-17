@@ -40,6 +40,9 @@ Der Test „built-in games are valid“ in `tests/move-play.spec.mjs` prüft jed
 - Spielart: Eintrag in `mechanics.js` mit eigenem `schema`; verändert das Spiel nur über `g.hit()`, `g.miss()`, `g.say()` und `g.objects`. Neue Objektarten zeichnet `drawObject` in `index.html`.
 - Bewegung: in `motion.js` erkennen, in `Motion.EVENTS` eintragen, Text `cmd.<name>` ergänzen, Test mit erzeugten Posen (`tests/move-play-poses.mjs`).
 
-## Geplant
+## Offen
 
-Siehe `IDEAS.md` („MovePlay“): eigene Spiele laden, Fernseher, Duell auf zwei Geräten.
+- Test auf echten Handys: Bilder/s mit GPU und CPU (Ziel ≥ 15 mit lite-Modell), Sprungerkennung bei schräg stehendem Handy, Schwellen für Stopptanz.
+- Bewegungen `stepLeft`/`stepRight` und `lean` in `motion.js`.
+- Eigene Spiele laden (JSON-Datei, gespeichert unter `move-play.games.v1`) und WebMCP `add_game`.
+- Fernseher als Bildschirm über `assets/shared/cast.js` (zeichnet ohnehin ins Canvas); Duell auf zwei Geräten über `assets/shared/p2p.js` (nur Ereignisse/Punkte, nie Bilder).
