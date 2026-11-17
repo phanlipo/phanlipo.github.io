@@ -71,7 +71,7 @@ const TAGS_EN = {
 };
 
 const escHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const escMd = s => s.replace(/\|/g, '\\|');
+const escMd = s => s.replace(/[\\|]/g, '\\$&');
 
 /* ---------- Virtual file system: generated text is kept in memory until the end ---------- */
 const pending = new Map();      // repo-relative path -> new content (string or Buffer)
