@@ -30,6 +30,22 @@
         });
         conn.connected(), conn.role() ('host' | 'guest' | null), conn.peer(), conn.send(msg), conn.close()
         and everything of codes(): conn.useCode(…), conn.startScan(…) …
+
+   3. P2PConnect.room(o): one host, several guests (card-games, quartet) – codes() plus invitations.
+      The page keeps its seats, game and messages (also the hello it sends first). Also uses #qrOffer
+      (invite screen, status #inviteStatus) and #qrAnswer (guest screen, status #answerStatus).
+        const room = P2PConnect.room({
+          label, stun, status,               // as in session()
+          show(step),                        // 'invite' | 'answer' | 'scan': the page shows that screen
+          back(expect),                      // scanner cancelled: show the screen before (room.inviting() helps)
+          beforeJoin(),                      // a game code came in: end what runs (the page's "close all")
+          canJoin(), onFull(),               // host: is a seat free? if not the guest gets {t:'bye'} and the toast "full"
+          onGuest(peer),                     // host: a guest is connected – the page adds the seat and listens to it
+          onGuestPeer(peer),                 // guest: the connection to the host was created (still connecting)
+          onHostOpen(peer), onHostMessage(msg), onHostLost(reason),   // guest: open / message / lost ('disconnected')
+        });
+        room.invite(), room.cancelInvite(), room.inviting(), room.close() (invitation and own guest connection;
+        sends {t:'bye'} to the host) and everything of codes()
 */
 (function () {
   'use strict';
@@ -245,5 +261,82 @@
     return Object.assign(c, { connected, role: () => role, peer: () => peer, close, send: msg => { if (peer) peer.send(msg); } });
   }
 
-  window.P2PConnect = { texts, errText, codes, session };
+  function room(o) {
+    let invite = null, inviteCode = '', guest = null, answerCode = '', connectTimer = null;
+    const clearQr = id => { $(id).getContext('2d').clearRect(0, 0, 9999, 9999); delete $(id).dataset.text; };
+    const newPeer = () => P2P.peer({ stun: !!o.stun(), label: o.label });
+
+    /* Host: invite one phone at a time */
+    function cancelInvite() { clearTimeout(connectTimer); if (invite) { invite.close(); invite = null; } }
+    async function startInvite() {
+      cancelInvite();
+      o.show('invite'); o.status('inviteStatus', t('preparing'));
+      clearQr('qrOffer'); $('answerIn').value = ''; inviteCode = '';
+      let p;
+      try { p = newPeer(); } catch (e) { o.status('inviteStatus', errText(e), 'err'); return; }
+      invite = p;
+      p.on('open', () => { if (invite === p) guestOpen(p); });
+      p.on('close', () => { if (invite === p) { invite = null; o.status('inviteStatus', t('connectFail'), 'err'); } });
+      try {
+        const code = await p.offer();
+        if (invite !== p) return;
+        inviteCode = P2P.link(code);
+        P2P.drawQr($('qrOffer'), inviteCode);
+        o.status('inviteStatus', t('waitAnswer'));
+      } catch (e) { log('invite failed', e); if (invite === p) o.status('inviteStatus', errText(e), 'err'); }
+    }
+    async function acceptAnswer(code) {
+      o.show('invite');
+      if (!invite) { o.status('inviteStatus', t('connectFail'), 'err'); return; }
+      const p = invite;
+      try {
+        await p.accept(code);
+        o.status('inviteStatus', t('connecting'));
+        clearTimeout(connectTimer);
+        connectTimer = setTimeout(() => {
+          if (invite === p && !p.isOpen()) { log('connect timeout', p.state()); o.status('inviteStatus', t('connectFail'), 'err'); }
+        }, 20000);
+      } catch (e) { log('answer failed', e); o.status('inviteStatus', t('connectFail'), 'err'); }
+    }
+    function guestOpen(p) {
+      clearTimeout(connectTimer);
+      invite = null;
+      if (!o.canJoin()) { p.send({ t: 'bye' }); p.close(); Tools.toast(t('full')); o.onFull(); return; }
+      o.onGuest(p);
+    }
+
+    /* Guest: join with a game code */
+    function leave() {
+      const p = guest; guest = null;
+      if (p) { p.send({ t: 'bye' }); p.close(); }
+    }
+    async function join(code) {
+      o.beforeJoin();
+      leave();
+      o.show('answer'); o.status('answerStatus', t('preparing'));
+      clearQr('qrAnswer'); answerCode = '';
+      let p;
+      try { p = newPeer(); } catch (e) { o.status('answerStatus', errText(e), 'err'); return; }
+      guest = p;
+      o.onGuestPeer(p);
+      p.on('open', () => { if (guest === p) { log('connected to host'); o.onHostOpen(p); } });
+      p.on('message', m => { if (guest === p) o.onHostMessage(m); });
+      p.on('close', () => { if (guest === p) o.onHostLost('disconnected'); });
+      try {
+        const ans = await p.answer(code);
+        if (guest !== p) return;
+        answerCode = ans;
+        P2P.drawQr($('qrAnswer'), ans);
+        if (!p.isOpen()) o.status('answerStatus', t('waitHost'));
+      } catch (e) { log('join failed', e); if (guest === p) o.status('answerStatus', errText(e), 'err'); }
+    }
+
+    const c = codes({
+      status: o.status, showScan: () => o.show('scan'), back: o.back,
+      onOffer: join, onAnswer: acceptAnswer, offerCode: () => inviteCode, answerCode: () => answerCode, answerStatus: 'inviteStatus',
+    });
+    return Object.assign(c, { invite: startInvite, cancelInvite, inviting: () => !!invite, close() { cancelInvite(); leave(); } });
+  }
+
+  window.P2PConnect = { texts, errText, codes, session, room };
 })();
