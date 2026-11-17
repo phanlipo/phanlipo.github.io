@@ -369,7 +369,7 @@ test.describe('Android', () => {
 test('daily: stays scheduled at the next day, every date goes to the history', async ({ page }) => {
   await open(page);
   await add(page, 'Tabletten', '2026-10-29T12:01', 'daily');
-  await expect(page.locator('#upList .rel')).toContainText('🔁 täglich');
+  await expect(page.locator('#upList .rel')).toContainText('täglich');
   await expect(page.locator('#repeat')).toHaveValue('none');
   await page.clock.runFor(2 * 60e3);
   await expect.poll(() => notes(page)).toHaveLength(1);
@@ -408,7 +408,7 @@ test('weekly, app closed for several weeks: one late notification, next date in 
   await page.reload();
   await expect.poll(() => notes(page)).toHaveLength(1);
   expect((await notes(page))[0].body).toContain('Fällig war');
-  await expect(page.locator('#upList .rel')).toContainText('🔁 wöchentlich');
+  await expect(page.locator('#upList .rel')).toContainText('wöchentlich');
   const list = await stored(page);
   expect(list.find(r => !r.fired)).toMatchObject({ id: 'rw', at: at('2026-11-04T12:00:00+01:00') });
   expect(list.filter(r => r.fired)).toHaveLength(1);

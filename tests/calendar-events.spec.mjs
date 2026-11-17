@@ -52,7 +52,7 @@ test('.ics of a one-off event: UTC times, escaped text, reminder, CRLF and folde
   await fillEvent(page, { title: 'Essen; mit, Oma', sd: '2026-12-24', st: '18:00', ed: '2026-12-24', et: '20:30', loc: 'Café Müller', desc, url: 'beispiel.de/tisch' });
   await expect(page.locator('#pvTitle')).toHaveText('Essen; mit, Oma');
   await expect(page.locator('#pvWhen')).toHaveText('Do., 24. Dez. 2026, 18:00 – 20:30');
-  await expect(page.locator('#pvMeta')).toHaveText('📍 Café Müller · ⏰ Erinnerung: 15 Minuten vorher');
+  await expect(page.locator('#pvMeta')).toHaveText('Café Müller · Erinnerung: 15 Minuten vorher');
   const { name, text } = await saveIcs(page);
   expect(name).toBe('Essen; mit, Oma.ics');
   // Every line ends with CRLF, none is longer than 75 bytes
@@ -85,7 +85,7 @@ test('repeating event: wall-clock time with time zone and the zone’s clock cha
   await expect(page.locator('#countWrap')).toBeVisible();
   await page.fill('#count', '5');
   await page.selectOption('#alarm', '1440');
-  await expect(page.locator('#pvMeta')).toHaveText('🔁 Wöchentlich, 5-mal · ⏰ Erinnerung: 1 Tag vorher');
+  await expect(page.locator('#pvMeta')).toHaveText('Wöchentlich, 5-mal · Erinnerung: 1 Tag vorher');
   const L = lines((await saveIcs(page)).text);
   expect(L).toContain('DTSTART;TZID=Europe/Berlin:20261105T100000');
   expect(L).toContain('DTEND;TZID=Europe/Berlin:20261105T110000');
@@ -338,7 +338,7 @@ test.describe('English', () => {
     await page.fill('#title', 'Dentist');
     await page.selectOption('#repeat', 'WEEKLY');
     await page.fill('#count', '2');
-    await expect(page.locator('#pvMeta')).toHaveText('🔁 Weekly, 2 times · ⏰ Reminder: 15 minutes before');
+    await expect(page.locator('#pvMeta')).toHaveText('Weekly, 2 times · Reminder: 15 minutes before');
     await page.click('#btnCopy');
     expect(await clipboardText(page)).toContain('\n\nAdd to your calendar:\n');
   });

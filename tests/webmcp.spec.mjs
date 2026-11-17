@@ -638,7 +638,7 @@ test.describe('reminders tools', () => {
     expect((await call(page, 'reminders_list_reminders', {})).result.scheduled[0]).toMatchObject({ text: 'Tabletten (abends)', repeat: 'daily' });
     const u = await call(page, 'reminders_update_reminder', { id: reminder.id, repeat: 'none' });
     expect(u.result.reminder).toMatchObject({ repeat: 'none', at: '2026-10-30T12:01' });
-    await expect(page.locator('#upList .rel')).not.toContainText('🔁');
+    await expect(page.locator('#upList .rel use[href$="#repeat"]')).toHaveCount(0);
   });
 });
 

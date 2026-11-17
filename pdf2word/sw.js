@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "pdf2word";
-const VERSION = 'efa4836a32ca';
+const VERSION = '714116f585de';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
