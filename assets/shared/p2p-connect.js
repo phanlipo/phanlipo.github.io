@@ -1,27 +1,35 @@
-/* Connecting two devices for a game (one host, one guest) – window.P2PConnect.
-   The part every two-player app (rock-paper-scissors, sea-battle) shares, on top of P2P (p2p.js): the steps
-   from "New game" / "Join" to an open connection, QR codes, the scanner, copying and sharing the codes.
+/* Connecting devices for a game – window.P2PConnect. The part all multi-device apps share, on top of
+   P2P (p2p.js): codes, QR codes, the scanner, copying and sharing codes, and the texts for all of it.
    The page keeps its own screens, its game and what happens on a game link (#join=…).
-
-   Elements it uses by id (the page has them, see rock-paper-scissors/index.html):
-     lobby  #btnHost #btnJoin #offerIn #btnOfferIn #lobbyStatus
-     host   #qrOffer #btnCopyOffer #btnShareOffer #btnScanAnswer #answerIn #btnAnswerIn #hostStatus
-     guest  #qrAnswer #btnCopyAnswer #btnShareAnswer #guestStatus
-     scan   #video #h-scan #scanStatus #btnScanCancel
 
    Texts: P2PConnect.texts.de / .en – put them into the page's Tools.i18n call before its own texts
    (a page may override single keys). The page adds shareTitle (title when sharing a code).
+   P2PConnect.errText(error) → text for a failed P2P.peer() / offer / answer.
 
-     const conn = P2PConnect.session({
-       label: 'sea-battle',              // for the diagnostics
-       stun: () => settings.stun,        // also connect over the internet (setting of the app)
-       show(step),                       // 'lobby' | 'host' | 'guest' | 'scan': the page shows that screen
-       status(id, text, cls),            // writes a status line (#hostStatus …); cls 'err' for errors
-       onOpen(), onMessage(msg), onLost(reason)   // reason 'disconnected'; not called after conn.close()
-     });
-     conn.connected(), conn.role() ('host' | 'guest' | null), conn.peer(), conn.send(msg), conn.close()
-     conn.useCode(text, expect)  → { ok } | { ok: false, msg }   (scanned, pasted or from a link)
-     conn.startScan(expect), conn.stopScan(), conn.cancelScan(), conn.scanning(), conn.scanExpect(), conn.scanEngine()
+   1. P2PConnect.codes(o): handling the codes – for every app (also one host with several guests).
+      Elements by id: #btnJoin #offerIn #btnOfferIn #lobbyStatus · #btnScanAnswer #answerIn #btnAnswerIn
+      · #btnCopyOffer #btnShareOffer #btnCopyAnswer #btnShareAnswer · #video #h-scan #scanStatus #btnScanCancel
+        const codes = P2PConnect.codes({
+          status(id, text, cls),       // writes a status line (#scanStatus …); cls 'err' for errors
+          showScan(), back(expect),    // show the scanner screen / leave it (cancel) to the screen before
+          onOffer(code), onAnswer(code),          // a valid game code (guest) / reply code (host) came in
+          offerCode(), answerCode(),              // the code to copy/share: own game link (host) / own reply (guest)
+          answerStatus: 'hostStatus',             // where errors of a pasted reply code are shown
+        });
+        codes.useCode(text, expect) → { ok } | { ok: false, msg }   (scanned, pasted or from a link)
+        codes.startScan(expect), stopScan(), cancelScan(), scanning(), scanExpect(), scanEngine()
+
+   2. P2PConnect.session(o): one host and one guest (rock-paper-scissors, sea-battle) – codes() plus the peer.
+      Also uses #btnHost, #qrOffer, #qrAnswer and the status lines #hostStatus, #guestStatus.
+        const conn = P2PConnect.session({
+          label: 'sea-battle',              // for the diagnostics
+          stun: () => settings.stun,        // also connect over the internet (setting of the app)
+          show(step),                       // 'lobby' | 'host' | 'guest' | 'scan': the page shows that screen
+          status(id, text, cls),
+          onOpen(), onMessage(msg), onLost(reason)   // reason 'disconnected'; not called after conn.close()
+        });
+        conn.connected(), conn.role() ('host' | 'guest' | null), conn.peer(), conn.send(msg), conn.close()
+        and everything of codes(): conn.useCode(…), conn.startScan(…) …
 */
 (function () {
   'use strict';
@@ -116,11 +124,66 @@
     },
   };
 
+  const $ = id => document.getElementById(id), t = (k, p) => Tools.t(k, p), log = (...a) => Tools.diag.log(...a);
+  const errText = e => e && (e.message === 'noRtc' || e.message === 'noCandidates') ? t(e.message) : t('connectFail');
+
+  function codes(o) {
+    let scanExpect = null, lastHint = 0;
+    /** Scanned, pasted or linked text: decides what to do with it */
+    function useCode(text, expect) {
+      const r = P2P.check(text, expect);
+      if (!r.ok) return { ok: false, msg: t(r.why) };
+      if (r.kind === 'offer') o.onOffer(r.code); else o.onAnswer(r.code);
+      return { ok: true };
+    }
+    // Scanner (P2P.scanner: BarcodeDetector → zxing-wasm)
+    const scanner = P2P.scanner($('video'), {
+      onText(text) {
+        const r = useCode(text, scanExpect);
+        if (r.ok) { log('code scanned', { expect: scanExpect }); return true; }
+        if (Date.now() - lastHint > 1500) { lastHint = Date.now(); o.status('scanStatus', r.msg, 'err'); }
+        return false;
+      },
+      onStatus(code, detail) {
+        if (code === 'hint') o.status('scanStatus', t('scanHint'));
+        else o.status('scanStatus', code === 'camFail' ? t('camFail', { e: detail }) : t(code), 'err');
+      },
+    });
+    const scanTitle = () => { $('h-scan').textContent = t(scanExpect === 'offer' ? 'scanOfferH' : 'scanAnswerH'); };
+    function startScan(expect) {
+      scanExpect = expect;
+      scanTitle();
+      o.showScan(); o.status('scanStatus', '');
+      scanner.start();
+    }
+    const stopScan = () => scanner.stop();
+    function cancelScan() { stopScan(); o.back(scanExpect); }
+    Tools.onLang(() => { if (scanner.active()) scanTitle(); });
+
+    $('btnJoin').addEventListener('click', () => startScan('offer'));
+    $('btnScanAnswer').addEventListener('click', () => startScan('answer'));
+    $('btnScanCancel').addEventListener('click', cancelScan);
+    $('btnOfferIn').addEventListener('click', () => {
+      const r = useCode($('offerIn').value, 'offer');
+      if (!r.ok) o.status('lobbyStatus', r.msg, 'err'); else $('offerIn').value = '';
+    });
+    $('btnAnswerIn').addEventListener('click', () => {
+      const r = useCode($('answerIn').value, 'answer');
+      if (!r.ok) o.status(o.answerStatus, r.msg, 'err');
+    });
+    const copy = async text => { if (text) Tools.toast(t((await Tools.copyText(text)) ? 'copiedOk' : 'copyFail')); };
+    $('btnCopyOffer').addEventListener('click', () => copy(o.offerCode()));
+    $('btnCopyAnswer').addEventListener('click', () => copy(o.answerCode()));
+    if (navigator.share) for (const [id, get] of [['btnShareOffer', o.offerCode], ['btnShareAnswer', o.answerCode]]) {
+      $(id).hidden = false;
+      $(id).addEventListener('click', () => { const c = get(); if (c) navigator.share({ title: t('shareTitle'), text: c }).catch(() => {}); });
+    }
+    return { useCode, startScan, stopScan, cancelScan, scanning: () => scanner.active(), scanExpect: () => scanExpect, scanEngine: () => scanner.engine() };
+  }
+
   function session(o) {
-    const $ = id => document.getElementById(id), t = (k, p) => Tools.t(k, p), log = Tools.diag.log;
-    let peer = null, role = null, myCode = '', connectTimer = null, scanExpect = null, lastHint = 0;
+    let peer = null, role = null, myCode = '', connectTimer = null;
     const connected = () => !!peer && peer.isOpen();
-    const errText = e => e && (e.message === 'noRtc' || e.message === 'noCandidates') ? t(e.message) : t('connectFail');
     const clearQr = id => { $(id).getContext('2d').clearRect(0, 0, 9999, 9999); delete $(id).dataset.text; };
 
     function close() {
@@ -174,62 +237,13 @@
         }, 20000);
       } catch (e) { log('answer failed', e); o.status('hostStatus', t('connectFail'), 'err'); }
     }
-    /** Scanned, pasted or linked text: decides what to do with it */
-    function useCode(text, expect) {
-      const r = P2P.check(text, expect);
-      if (!r.ok) return { ok: false, msg: t(r.why) };
-      if (r.kind === 'offer') acceptOffer(r.code); else acceptAnswer(r.code);
-      return { ok: true };
-    }
-
-    /* Scanner (P2P.scanner: BarcodeDetector → zxing-wasm) */
-    const scanner = P2P.scanner($('video'), {
-      onText(text) {
-        const r = useCode(text, scanExpect);
-        if (r.ok) { log('code scanned', { expect: scanExpect }); return true; }
-        if (Date.now() - lastHint > 1500) { lastHint = Date.now(); o.status('scanStatus', r.msg, 'err'); }
-        return false;
-      },
-      onStatus(code, detail) {
-        if (code === 'hint') o.status('scanStatus', t('scanHint'));
-        else o.status('scanStatus', code === 'camFail' ? t('camFail', { e: detail }) : t(code), 'err');
-      },
+    const c = codes({
+      status: o.status, showScan: () => o.show('scan'), back: expect => o.show(expect === 'answer' && peer ? 'host' : 'lobby'),
+      onOffer: acceptOffer, onAnswer: acceptAnswer, offerCode: () => myCode, answerCode: () => myCode, answerStatus: 'hostStatus',
     });
-    const scanTitle = () => { $('h-scan').textContent = t(scanExpect === 'offer' ? 'scanOfferH' : 'scanAnswerH'); };
-    function startScan(expect) {
-      scanExpect = expect;
-      scanTitle();
-      o.show('scan'); o.status('scanStatus', '');
-      scanner.start();
-    }
-    const stopScan = () => scanner.stop();
-    function cancelScan() { stopScan(); o.show(scanExpect === 'answer' && peer ? 'host' : 'lobby'); }
-    Tools.onLang(() => { if (scanner.active()) scanTitle(); });
-
-    /* Buttons */
     $('btnHost').addEventListener('click', startHost);
-    $('btnJoin').addEventListener('click', () => startScan('offer'));
-    $('btnScanAnswer').addEventListener('click', () => startScan('answer'));
-    $('btnScanCancel').addEventListener('click', cancelScan);
-    $('btnOfferIn').addEventListener('click', () => {
-      const r = useCode($('offerIn').value, 'offer');
-      if (!r.ok) o.status('lobbyStatus', r.msg, 'err'); else $('offerIn').value = '';
-    });
-    $('btnAnswerIn').addEventListener('click', () => { const r = useCode($('answerIn').value, 'answer'); if (!r.ok) o.status('hostStatus', r.msg, 'err'); });
-    const copyCode = async () => { if (myCode) Tools.toast(t((await Tools.copyText(myCode)) ? 'copiedOk' : 'copyFail')); };
-    $('btnCopyOffer').addEventListener('click', copyCode);
-    $('btnCopyAnswer').addEventListener('click', copyCode);
-    if (navigator.share) for (const id of ['btnShareOffer', 'btnShareAnswer']) {
-      $(id).hidden = false;
-      $(id).addEventListener('click', () => { if (myCode) navigator.share({ title: t('shareTitle'), text: myCode }).catch(() => {}); });
-    }
-
-    return {
-      connected, role: () => role, peer: () => peer, close, useCode,
-      send: msg => { if (peer) peer.send(msg); },
-      startScan, stopScan, cancelScan, scanning: () => scanner.active(), scanExpect: () => scanExpect, scanEngine: () => scanner.engine(),
-    };
+    return Object.assign(c, { connected, role: () => role, peer: () => peer, close, send: msg => { if (peer) peer.send(msg); } });
   }
 
-  window.P2PConnect = { texts, session };
+  window.P2PConnect = { texts, errText, codes, session };
 })();

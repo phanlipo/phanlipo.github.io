@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can read the running game from your point of view (your cards, the table, allowed moves) and make a move for you. It cannot connect devices.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-az7SLQjdgUqw+V3TTKEpQgRA6QTU/ROdaunUPr1SCnM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-WdIzXPllMmLEXzTSQpZ1V2FPqzJVEnrH1COArPjrKtk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -385,7 +385,7 @@ textarea.code{min-height:84px;word-break:break-all}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version ddc9c12b7f7c</p>
+  <p class="footer-version">Version 4e094d31c658</p>
   <!-- footer:end -->
 </footer>
 
@@ -393,6 +393,7 @@ textarea.code{min-height:84px;word-break:break-all}
 <script src="../assets/vendor/qrcode-generator/qrcode.js"></script>
 <script src="../assets/vendor/zxing-wasm/iife/reader/index.js"></script>
 <script src="../assets/shared/p2p.js"></script>
+<script src="../assets/shared/p2p-connect.js"></script>
 <script src="cards.js"></script>
 <script src="mau-mau.js"></script>
 <script src="durak.js"></script>
@@ -401,41 +402,38 @@ textarea.code{min-height:84px;word-break:break-all}
 'use strict';
 const C=window.CardGames,GAMES=C.games,ORDER=['mau-mau','durak'];
 const strings={
-de:{
+de:{...P2PConnect.texts.de,
+  host:'Mit anderen Handys',pasteOfferLbl:'Spiel-Code oder Link des Gastgebers (z. B. per Nachricht geschickt):',
   you:'Du',botName:'Computer {n}',botFor:'{p} (Computer)',playerN:'Spieler {n}',hostName:'Gastgeber',guest:'Handy',
   cards:'{n} Karten',cardsSr:'Karten',
   statsLine:'{g}: {w} von {p} gewonnen',noStats:'Noch kein Spiel gespielt.',
-  scanOfferH:'Spiel-Code des Gastgebers scannen',scanAnswerH:'Antwort-Code des anderen scannen',
-  preparing:'Verbindung wird vorbereitet …',noRtc:'Dieser Browser kann keine Direktverbindung (WebRTC).',
-  noCandidates:'Keine Netzwerkverbindung gefunden. WLAN oder Hotspot einschalten.',
-  waitAnswer:'Warte auf den Antwort-Code …',waitHost:'Warte, bis der Gastgeber den Code scannt …',
-  connecting:'Verbinde …',connected:'Verbunden!',connectFail:'Keine Verbindung. Alle im selben WLAN? Neu einladen.',
-  badCode:'Das ist kein gültiger Code.',isAnswer:'Das ist ein Antwort-Code – den scannt der Gastgeber.',
-  isOffer:'Das ist ein Spiel-Code – hier wird der Antwort-Code gebraucht.',wrongApp:'Das andere Handy ist nicht in den Kartenspielen.',
-  noCam:'Keine Kamera verfügbar. Code von Hand eingeben.',camDenied:'Kamera nicht erlaubt. Code von Hand eingeben oder Kamera in den Browser-Einstellungen erlauben.',
-  camFail:'Kamera-Fehler: {e}',noDecoder:'Dieser Browser kann keine QR-Codes lesen. Code von Hand eingeben.',scanHint:'QR-Code in den Rahmen halten.',
-  copiedOk:'Code kopiert',copyFail:'Kopieren nicht möglich',shareTitle:'Kartenspiele',
+  scanOfferH:'Spiel-Code des Gastgebers scannen',
+  waitHost:'Warte, bis der Gastgeber den Code scannt …',
+  connectFail:'Keine Verbindung. Alle im selben WLAN? Neu einladen.',
+  isAnswer:'Das ist ein Antwort-Code – den scannt der Gastgeber.',
+  wrongApp:'Das andere Handy ist nicht in den Kartenspielen.',
+  shareTitle:'Kartenspiele',
   joined:'{p} ist dabei.',left:'{p} hat die Runde verlassen.',leftGame:'{p} ist weg – der Computer spielt weiter.',
   remove:'Entfernen',removeLbl:'{p} entfernen',kindMe:'dieses Handy',kindBot:'Computer',kindPeer:'Handy',
   tooFew:'Mindestens {n} Spieler – Handy einladen oder Computer dazu.',tooMany:'{g}: höchstens {n} Spieler.',full:'Die Runde ist voll.',
   waitStart:'Warte, bis der Gastgeber das Spiel startet …',waitGame:'Spiel: {g}',
-  hostLeft:'Der Gastgeber hat das Spiel beendet.',disconnected:'Verbindung getrennt.',
+  hostLeft:'Der Gastgeber hat das Spiel beendet.',
   confirmLeave:'Spiel verlassen?',confirmLeaveHost:'Spiel beenden? Die anderen Handys werden getrennt.',
-  waitAgain:'Warte auf den Gastgeber …',yourTurn:'Du bist dran!',chooseFor:'{c}:',cancel:'Abbrechen',
+  waitAgain:'Warte auf den Gastgeber …',yourTurn:'Du bist dran!',chooseFor:'{c}:',
   'mcp.read':'Spiel gelesen','mcp.move':'Zug gemacht'
 },
-en:{
+en:{...P2PConnect.texts.en,
   title:'Card Games',sub:'Mau Mau and Durak – alone or with several phones',leave:'Leave game',pickGame:'Pick a game',
   opponents:'Opponents',vsCpu:'Against the computer',host:'With other phones',hostSub:'you invite by QR code',
-  join:'Join',joinSub:'scan the host’s QR code',pasteOffer:'Enter game code manually',
-  pasteOfferLbl:'Game code or link of the host (e.g. sent by message):',connect:'Connect',
+  joinSub:'scan the host’s QR code',
+  pasteOfferLbl:'Game code or link of the host (e.g. sent by message):',
   roomH:'Players',playersLbl:'Players',invite:'Invite a phone',addBot:'Add computer',start:'Start game',
   sameWifi:'All devices in the same Wi-Fi, or one phone as a hotspot for the others. Each phone is invited on its own.',
-  inviteH1:'1. The other phone scans this code',qrOffer:'QR code to join',copyCode:'Copy code',share:'Share …',
-  inviteH2:'2. Then scan the reply code',scanAnswer:'Scan reply code',pasteAnswer:'Enter reply code manually',
-  pasteAnswerLbl:'Reply code of the other player:',backRoom:'Back to the players',
-  answerH:'Now the host scans this reply code',qrAnswer:'QR code with the reply',waitH:'Connected',
-  cancel:'Cancel',again:'Play again',toRoom:'Players',end:'Finish',yourCards:'Your cards',
+  inviteH1:'1. The other phone scans this code',
+  inviteH2:'2. Then scan the reply code',
+  backRoom:'Back to the players',
+  answerH:'Now the host scans this reply code',waitH:'Connected',
+  again:'Play again',toRoom:'Players',end:'Finish',yourCards:'Your cards',
   settings:'Settings',optName:'Your name (shown on the other phones)',optSpeed:'Computer speed',
   'speed.slow':'Relaxed','speed.normal':'Normal','speed.fast':'Fast',
   optStun:'Also connect over the internet (Google STUN server)',
@@ -443,21 +441,17 @@ en:{
   you:'You',botName:'Computer {n}',botFor:'{p} (computer)',playerN:'Player {n}',hostName:'Host',guest:'Phone',
   cards:'{n} cards',cardsSr:'cards',
   statsLine:'{g}: won {w} of {p}',noStats:'No game played yet.',
-  scanOfferH:'Scan the host’s game code',scanAnswerH:'Scan the other player’s reply code',
-  preparing:'Preparing the connection …',noRtc:'This browser cannot make direct connections (WebRTC).',
-  noCandidates:'No network connection found. Switch on Wi-Fi or a hotspot.',
-  waitAnswer:'Waiting for the reply code …',waitHost:'Waiting for the host to scan the code …',
-  connecting:'Connecting …',connected:'Connected!',connectFail:'No connection. All in the same Wi-Fi? Invite again.',
-  badCode:'This is not a valid code.',isAnswer:'This is a reply code – the host scans it.',
-  isOffer:'This is a game code – the reply code is needed here.',wrongApp:'The other phone is not in Card Games.',
-  noCam:'No camera available. Enter the code manually.',camDenied:'Camera not allowed. Enter the code manually or allow the camera in the browser settings.',
-  camFail:'Camera error: {e}',noDecoder:'This browser cannot read QR codes. Enter the code manually.',scanHint:'Hold the QR code inside the frame.',
-  copiedOk:'Code copied',copyFail:'Copying not possible',shareTitle:'Card Games',
+  scanOfferH:'Scan the host’s game code',
+  waitHost:'Waiting for the host to scan the code …',
+  connectFail:'No connection. All in the same Wi-Fi? Invite again.',
+  isAnswer:'This is a reply code – the host scans it.',
+  wrongApp:'The other phone is not in Card Games.',
+  shareTitle:'Card Games',
   joined:'{p} joined.',left:'{p} left.',leftGame:'{p} is gone – the computer plays on.',
   remove:'Remove',removeLbl:'Remove {p}',kindMe:'this phone',kindBot:'computer',kindPeer:'phone',
   tooFew:'At least {n} players – invite a phone or add the computer.',tooMany:'{g}: at most {n} players.',full:'No more seats.',
   waitStart:'Waiting for the host to start the game …',waitGame:'Game: {g}',
-  hostLeft:'The host ended the game.',disconnected:'Connection lost.',
+  hostLeft:'The host ended the game.',
   confirmLeave:'Leave the game?',confirmLeaveHost:'End the game? The other phones will be disconnected.',
   waitAgain:'Waiting for the host …',yourTurn:'Your turn!',chooseFor:'{c}:',
   'mcp.read':'game read','mcp.move':'move made'
@@ -935,7 +929,7 @@ async function leave(){
   const peers=S&&S.seats.some(s=>s.kind==='peer');
   if((running||peers||G)&&!await Tools.confirm(t(peers?'confirmLeaveHost':'confirmLeave'), { action: 'leave' }))return;
   Tools.diag.log('leave',{screen});
-  scanner.stop();
+  codes.stopScan();
   closeAll();
   setStatus('lobbyStatus','');show('scrLobby');renderLobby();
 }
@@ -953,31 +947,12 @@ $('btnEnd').addEventListener('click',()=>{
 });
 
 /* ================= Codes, scanner ================= */
-function errText(e){return e&&(e.message==='noRtc'||e.message==='noCandidates')?t(e.message):t('connectFail');}
-/** Scanned or pasted text */
-function useCode(text,expect){
-  const r=P2P.check(text,expect);
-  if(!r.ok)return {ok:false,msg:t(r.why)};
-  if(r.kind==='offer')joinWith(r.code);else acceptAnswer(r.code);
-  return {ok:true};
-}
-let scanExpect=null,lastHint=0;
-const scanner=P2P.scanner($('video'),{
-  onText:text=>{
-    const r=useCode(text,scanExpect);
-    if(r.ok)return true;
-    if(Date.now()-lastHint>1500){lastHint=Date.now();setStatus('scanStatus',r.msg,'err');}
-    return false;
-  },
-  onStatus:(code,detail)=>setStatus('scanStatus',code==='camFail'?t('camFail',{e:detail}):t(code==='hint'?'scanHint':code),code==='hint'?'':'err')
-});
-function startScan(expect){
-  scanExpect=expect;
-  $('h-scan').textContent=t(expect==='offer'?'scanOfferH':'scanAnswerH');
-  show('scrScan');setStatus('scanStatus','');
-  scanner.start();
-}
-function cancelScan(){scanner.stop();if(scanExpect==='answer'&&invite)show('scrInvite');else if(scanExpect==='answer'&&S)openRoom();else show('scrLobby');}
+const errText=P2PConnect.errText;
+// Codes, scanner, copy/share (P2PConnect.codes: assets/shared/p2p-connect.js); invitations stay here (one host, several guests)
+const codes=P2PConnect.codes({status:setStatus,showScan:()=>show('scrScan'),
+  back:expect=>{if(expect==='answer'&&invite)show('scrInvite');else if(expect==='answer'&&S)openRoom();else show('scrLobby');},
+  onOffer:code=>joinWith(code),onAnswer:code=>acceptAnswer(code),offerCode:()=>inviteCode,answerCode:()=>answerCode,answerStatus:'inviteStatus'});
+const useCode=codes.useCode,cancelScan=codes.cancelScan;
 
 /* ---------- Screen stays on while connected ---------- */
 // Screen stays on during a game (Tools.wakeLock asks again when the app becomes visible)
@@ -990,22 +965,8 @@ $('btnCpu').addEventListener('click',()=>{
   startGame();
 });
 $('btnHost').addEventListener('click',()=>{newSession('host',settings.game);openRoom();});
-$('btnJoin').addEventListener('click',()=>startScan('offer'));
 $('btnInvite').addEventListener('click',startInvite);
 $('btnInviteBack').addEventListener('click',()=>{cancelInvite();openRoom();});
-$('btnScanAnswer').addEventListener('click',()=>startScan('answer'));
-$('btnScanCancel').addEventListener('click',cancelScan);
-$('btnOfferIn').addEventListener('click',()=>{const r=useCode($('offerIn').value,'offer');if(!r.ok)setStatus('lobbyStatus',r.msg,'err');else $('offerIn').value='';});
-$('btnAnswerIn').addEventListener('click',()=>{const r=useCode($('answerIn').value,'answer');if(!r.ok)setStatus('inviteStatus',r.msg,'err');});
-async function copy(text){if(!text)return;Tools.toast(t((await Tools.copyText(text))?'copiedOk':'copyFail'));}
-$('btnCopyOffer').addEventListener('click',()=>copy(inviteCode));
-$('btnCopyAnswer').addEventListener('click',()=>copy(answerCode));
-if(navigator.share){
-  for(const [id,get] of [['btnShareOffer',()=>inviteCode],['btnShareAnswer',()=>answerCode]]){
-    $(id).hidden=false;
-    $(id).addEventListener('click',()=>{const c=get();if(c)navigator.share({title:t('shareTitle'),text:c}).catch(()=>{});});
-  }
-}
 $('optName').value=settings.name;
 $('optName').addEventListener('change',()=>{settings.name=$('optName').value.trim().slice(0,16);saveSet();if(S)S.seats[0].name=myName();if(screen==='scrRoom')renderRoom();});
 $('optSpeed').value=settings.speed;
@@ -1017,7 +978,6 @@ Tools.onLang(()=>{
   if(screen==='scrRoom')renderRoom();
   if(screen==='scrWait')renderWait();
   if(screen==='scrPlay'&&view)render(view);
-  if(screen==='scrScan')$('h-scan').textContent=t(scanExpect==='offer'?'scanOfferH':'scanAnswerH');
 });
 renderLobby();
 // Opened through the link in the game QR code (normal camera app): join right away
@@ -1027,7 +987,7 @@ function joinFromLink(){
   history.replaceState(history.state,'',location.pathname+location.search);
   if(view&&!view.over){Tools.diag.log('game link ignored: in a game');return;}
   Tools.diag.log('opened with game link');
-  scanner.stop();
+  codes.stopScan();
   const r=useCode('#join='+m[1],'offer');
   if(!r.ok){show('scrLobby');setStatus('lobbyStatus',r.msg,'err');}
 }
@@ -1039,7 +999,7 @@ Tools.diag.info(()=>({screen,mode:G?'guest':S?S.mode:'-',game:view?view.game:S?S
   seats:S?S.seats.map(s=>s.kind).join(','):G&&G.room?G.room.players.length:'-',
   peers:S?S.seats.filter(s=>s.kind==='peer').map(s=>s.peer.state().channel).join(',')||'-':G?G.peer.state().channel:'-',
   inviting:!!invite,round:view?view.round:'-',ver:view?view.ver:'-',myMoves:view?view.moves.length:'-',over:!!(view&&view.over),
-  webrtc:!!window.RTCPeerConnection,scanner:scanner.engine()||'-',camera:scanner.active(),stun:!!settings.stun,speed:settings.speed}));
+  webrtc:!!window.RTCPeerConnection,scanner:codes.scanEngine()||'-',camera:codes.scanning(),stun:!!settings.stun,speed:settings.speed}));
 
 /* ================= WebMCP ================= */
 function agentView(){

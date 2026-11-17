@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "quartet";
-const VERSION = 'f0c10771b5b7';
+const VERSION = '5c8ff18d8dfd';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -19,6 +19,7 @@ const FILES = [
   "../assets/base.css",
   "../assets/common.js",
   "../assets/icons.svg",
+  "../assets/shared/p2p-connect.js",
   "../assets/shared/p2p.js",
   "../assets/vendor/qrcode-generator/qrcode.js",
   "../assets/vendor/zxing-wasm/iife/reader/index.js",
