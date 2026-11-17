@@ -7,4 +7,9 @@ Python (Pyodide = CPython als WebAssembly, `assets/vendor/pyodide`, ca. 13 MB, `
 - **Eingaben** (`input()`) werden vorab im Menü eingetragen, eine Zeile je Aufruf.
 - **Weitere Sprachen** (z. B. Lua mit `wasmoon`, SQL mit `sql.js`, Ruby mit `ruby.wasm`): je Sprache ein Worker mit demselben Nachrichten-Vertrag (`run` → `out`/`done`, siehe Kopf von `js-worker.mjs`) und ein Eintrag in `LANGS` in `app.js`.
 
-Verworfene und zurückgestellte Wege (Bash, `<iframe sandbox>`, `input()` mittendrin, Python-Pakete): `IDEAS.md`.
+## Verworfen & zurückgestellt
+
+- **Bash/Shell – verworfen:** Echtes Bash gibt es im Browser nur mit einem ganzen Linux (v86, WebVM/CheerpX: viele MB Disk-Image, teils von fremden Servern, CheerpX nicht frei lizenziert) oder WASI-Laufzeiten mit eigenem Paket-Server. Eine nachgebaute Shell wäre kein Bash.
+- **Sandbox per `<iframe sandbox>` – verworfen:** wäre dichter (`connect-src 'none'`), aber ein Frame ohne eigene Herkunft wird nicht vom Service Worker bedient (offline kaputt), und der Code läuft im Thread der Seite (Endlosschleife friert ein, kein *Stopp*).
+- **`input()` mittendrin, `KeyboardInterrupt` – zurückgestellt:** braucht `SharedArrayBuffer`, also COOP/COEP-Header, die GitHub Pages nicht setzen kann.
+- **Python-Pakete (numpy, pandas, matplotlib) – zurückgestellt:** Pyodide lädt sie von `cdn.jsdelivr.net` (fremder Server); möglich wären einzelne Wheels als eigene Vendor-Einträge (numpy allein ca. 3 MB) – erst bei Bedarf.

@@ -12,7 +12,7 @@ decks.js     window.QuartetDecks: 17 Kartensätze – generiert von scripts/quar
 
 ## Eigene Bilder
 
-Die App liefert keine Kartenbilder aus (Lizenzen, Größe – siehe `IDEAS.md`). Wer Bilder möchte, bringt sie im Menü (☰ → „Eigene Bilder“) selbst mit; sie bleiben nur auf dem Gerät.
+Die App liefert keine Kartenbilder aus (Lizenzen, Größe – siehe „Mitgelieferte Kartenbilder“ unten). Wer Bilder möchte, bringt sie im Menü (☰ → „Eigene Bilder“) selbst mit; sie bleiben nur auf dem Gerät.
 
 - **ZIP:** Bilddateien, benannt nach Kartennummer (`A1.jpg`), Kartenname oder Dateiname (klein, `♀→f`, `♂→m`, alles außer `a-z 0-9 _ -` → `_`). Ein Ordner mit der Deck-Kennung im Pfad (`dinosaurs/images/…`) legt das Deck fest, sonst gilt das gewählte. Gelesen wird nur das zentrale Verzeichnis, Einträge `stored`/`deflate`, kein ZIP64, keine Verschlüsselung, höchstens 300 MB.
 - **JSON-Linkliste** (einfügen, Datei oder `https`-Link auf eine JSON-Datei): `{"<deck>": {"<Karte>": "https://…" | {"url", "credit"}}}` oder für das gewählte Deck nur das innere Objekt. Nur `https`, Abruf erst auf Knopfdruck, `credentials: 'omit'`, ohne Referrer; dafür `tool:connect` = `https:`. Server ohne CORS-Freigabe scheitern (in der Meldung genannt).
@@ -44,8 +44,16 @@ node scripts/quartet-decks.mjs <Ordner mit den Deck-JSON-Dateien>
 
 ## Mögliche Erweiterungen
 
-- Mitgelieferte Kartenbilder – zurückgestellt (`IDEAS.md`, „Quartett: mitgelieferte Kartenbilder“); eigene Bilder gehen schon (siehe oben).
 - Eine fertige JSON-Linkliste je Deck erzeugen (Wikimedia-Links mit Bildnachweis).
 - Eigene Kartensätze laden (JSON im Format der Quelldaten).
 - Englische Kartennamen und Gruppen.
 - Wiederverbinden nach Abbruch (heute übernimmt der Computer).
+
+## Mitgelieferte Kartenbilder – zurückgestellt
+
+Bilder, die die Seite selbst ausliefert (eigene Bilder des Nutzers gehen schon, siehe oben).
+
+- **Lizenzen:** Die Fotos in den Quelldaten sind die Hauptbilder der Wikipedia-Artikel – Urheber und Lizenz sind nicht gespeichert, meist ist Namensnennung Pflicht (CC BY-SA). Frei verwendbar wären nur selbst erzeugte Bilder (KI-Bilder, selbst gerenderte Karten/Farben).
+- **Größe:** Alles im App-Ordner landet beim ersten Öffnen im Offline-Cache; rund 900 Bilder (je ca. 15 KB WebP) wären über 10 MB auf einmal.
+- **Weg, wenn es kommt:** Skript verkleinert die Bilder nach `quartet/img/<deck>/<Nr>.webp` mit `credits.json` (Urheber, Lizenz, Quelle; einmalig von Wikimedia Commons `extmetadata` – Datenabruf nur auf ausdrücklichen Wunsch, nur freie Lizenzen); `build.mjs` cacht `<app>/img/` erst bei Gebrauch (wie `precache: false`); Karte mit Bildnachweis-Zeile, Liste in der Hilfe.
+- **Neu prüfen, wenn:** die Lizenzdaten vorliegen oder zuerst nur die selbst erzeugten Bilder übernommen werden sollen.
