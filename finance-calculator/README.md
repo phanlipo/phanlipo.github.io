@@ -5,7 +5,7 @@ Rechner für Zinseszins und Geld über die Zeit, angelehnt an einen Finanztasche
 ## Aufbau
 
 - `finance.js` – reine Rechenlogik ohne DOM (`window.Finance`). Zinssätze kommen als Prozent, Ergebnisse ungerundet; unmögliche Eingaben liefern `{ error: 'code' }`, die Seite übersetzt den Code (`m.<code>`), WebMCP liefert englische Texte.
-- `index.html` – Oberfläche: fünf Ansichten (`.chips` oben, gemerkt in `S.view`): Sparplan, Kredit, Zeitwert, Cashflow, Mehr.
+- `index.html` – Oberfläche nach dem Werkzeugkasten-Standard (`UI-KONZEPT.md` 4b): Übersicht mit 10 Kacheln in drei Gruppen, im Rechner die Tab-Leiste (`assets/shared/toolbox.js`, Zustand in `S.view`/`S.tab`). Felder mit Einheit (`.input-unit`), Ergebnisse `.calc-result`.
 - Eingaben stehen als getippte Zeichenketten in einem Objekt `S` (Schlüssel `<rechner>.<feld>`, gespeichert unter `finance-calculator.inputs.v1`, Cashflow-Zeilen als `rows`). Jede Eingabe ruft `update()`, das alle Rechner neu rechnet – die Rechnungen sind klein.
 - Zahlen: `parse()` nimmt Komma/Punkt und Tausendertrennzeichen der Sprache („200.000“ / „200,000“). Bei Sprachwechsel werden Dezimaltrennzeichen in den Feldern umgeschrieben (`decimals()`).
 

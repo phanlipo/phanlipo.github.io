@@ -20,7 +20,7 @@
 <meta name="tool:storage" content="finance-calculator.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-A2RNQxVMPC7v4oVtxi/1/+GXK0Ye0FSnaYrwQl+mSIE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-24BC5yENH8p/o5l4iYu09uD+BGKnIG8EZFO1TZyoLIY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -29,19 +29,13 @@
 <!-- head:end -->
 <link rel="stylesheet" href="../assets/base.css">
 <style>
-/* Accent = tool:color (light); a lighter shade of it for dark mode */
+/* Accent = tool:color (light); a lighter shade of it for dark mode. Overview, tab bar, fields with unit and
+   result fields come from base.css (UI-KONZEPT.md "Werkzeugkasten", "Rechner"); here only charts, tables, TVM rows. */
 :root{--accent:#1d6b47;--accent-text:#ffffff}
 @media (prefers-color-scheme: dark){:root{--accent:#6fcf9f;--accent-text:#0b1d14}}
 main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
-.card h2{display:flex;align-items:center;gap:8px;font-size:18px;margin:0 0 4px}
-.card h2 .ic{color:var(--accent)}
+.panel>h2{font-size:18px;margin-block-end:4px}
 .intro{color:var(--muted);font-size:14px;margin:0 0 12px}
-.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));column-gap:12px}
-.fields>.seg-group,.fields>.wide{grid-column:1/-1;margin-block-end:12px}
-.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-block:4px 8px}
-.results:empty{display:none}
-.stat-box>b{font-size:22px;overflow-wrap:anywhere}
-.stat-box.main{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
 .chart{margin-block:8px 0}
 .chart svg{display:block;width:100%;height:auto}
 .chart .ax{fill:var(--muted);font-size:12px}
@@ -52,8 +46,6 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-inline-end:6px;vertical-align:-1px}
 .legend .sa{background:color-mix(in srgb,var(--accent) 35%,var(--surface))}
 .legend .sb{background:var(--accent)}
-details.table{margin-block-start:10px;border-block-start:1px solid var(--border);padding-block-start:6px}
-details.table>summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
 .scroll{overflow-x:auto;margin-block-start:8px}
 table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
 .tbl th,.tbl td{padding:6px 8px;border-block-end:1px solid var(--border);text-align:end;white-space:nowrap}
@@ -67,7 +59,6 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
 .cf-row .form-field{margin:0}
 .cf-row.first{grid-template-columns:minmax(0,1fr) auto}
 .sub-h{font-size:15px;margin:16px 0 8px}
-.views{min-width:0}
 </style>
 </head>
 <body>
@@ -77,21 +68,49 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
 </header>
 
 <main>
-<div class="views">
-  <div class="chips wrap" id="views" role="group" aria-label="Rechner" data-i18n-attr="aria-label:views">
-    <button type="button" data-view="save" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trending-up"/></svg><span data-i18n="v.save">Sparplan</span></button>
-    <button type="button" data-view="loan" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#building-bank"/></svg><span data-i18n="v.loan">Kredit</span></button>
-    <button type="button" data-view="tvm" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calculator"/></svg><span data-i18n="v.tvm">Zeitwert</span></button>
-    <button type="button" data-view="cf" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#cash"/></svg><span data-i18n="v.cf">Cashflow</span></button>
-    <button type="button" data-view="more" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#percentage"/></svg><span data-i18n="v.more">Mehr</span></button>
+<section class="tool-overview" id="overview" aria-label="Übersicht" data-i18n-attr="aria-label:ov">
+  <h2 data-i18n="g.save">Sparen &amp; Anlegen</h2>
+  <div class="tiles">
+    <button type="button" data-open="save"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trending-up"/></svg><span data-i18n="v.save">Sparplan</span></button>
+    <button type="button" data-open="change"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chart-line"/></svg><span data-i18n="v.change">Rendite p. a.</span></button>
+    <button type="button" data-open="iconv"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#percentage"/></svg><span data-i18n="v.iconv">Zins umrechnen</span></button>
+  </div>
+  <h2 data-i18n="g.loan">Kredit &amp; Zeitwert</h2>
+  <div class="tiles">
+    <button type="button" data-open="loan"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#building-bank"/></svg><span data-i18n="v.loan">Kredit</span></button>
+    <button type="button" data-open="tvm"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calculator"/></svg><span data-i18n="v.tvm">Zeitwert (TVM)</span></button>
+  </div>
+  <h2 data-i18n="g.biz">Investition &amp; Betrieb</h2>
+  <div class="tiles">
+    <button type="button" data-open="cf"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#cash"/></svg><span data-i18n="v.cf">Cashflow</span></button>
+    <button type="button" data-open="profit"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#receipt"/></svg><span data-i18n="v.profit">Marge</span></button>
+    <button type="button" data-open="breakeven"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#scale"/></svg><span data-i18n="v.be">Break-even</span></button>
+    <button type="button" data-open="depr"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chart-arrows-vertical"/></svg><span data-i18n="v.depr">Abschreibung</span></button>
+    <button type="button" data-open="days"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calendar"/></svg><span data-i18n="v.days">Zinstage</span></button>
+  </div>
+</section>
+
+<div class="tabbar" id="tabbar" hidden>
+  <button type="button" class="back" data-overview><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg><span data-i18n="ov">Übersicht</span></button>
+  <div class="tabs" role="tablist" aria-label="Rechner wählen" data-i18n-attr="aria-label:tabs">
+    <button type="button" role="tab" id="tab-save" aria-controls="save" data-tab="save"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trending-up"/></svg><span data-i18n="v.save">Sparplan</span></button>
+    <button type="button" role="tab" id="tab-change" aria-controls="change" data-tab="change"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chart-line"/></svg><span data-i18n="v.change">Rendite p. a.</span></button>
+    <button type="button" role="tab" id="tab-iconv" aria-controls="iconv" data-tab="iconv"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#percentage"/></svg><span data-i18n="v.iconv">Zins umrechnen</span></button>
+    <button type="button" role="tab" id="tab-loan" aria-controls="loan" data-tab="loan"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#building-bank"/></svg><span data-i18n="v.loan">Kredit</span></button>
+    <button type="button" role="tab" id="tab-tvm" aria-controls="tvm" data-tab="tvm"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calculator"/></svg><span data-i18n="v.tvm">Zeitwert (TVM)</span></button>
+    <button type="button" role="tab" id="tab-cf" aria-controls="cf" data-tab="cf"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#cash"/></svg><span data-i18n="v.cf">Cashflow</span></button>
+    <button type="button" role="tab" id="tab-profit" aria-controls="profit" data-tab="profit"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#receipt"/></svg><span data-i18n="v.profit">Marge</span></button>
+    <button type="button" role="tab" id="tab-breakeven" aria-controls="breakeven" data-tab="breakeven"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#scale"/></svg><span data-i18n="v.be">Break-even</span></button>
+    <button type="button" role="tab" id="tab-depr" aria-controls="depr" data-tab="depr"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chart-arrows-vertical"/></svg><span data-i18n="v.depr">Abschreibung</span></button>
+    <button type="button" role="tab" id="tab-days" aria-controls="days" data-tab="days"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calendar"/></svg><span data-i18n="v.days">Zinstage</span></button>
   </div>
 </div>
 
 <!-- ===================== Sparplan ===================== -->
-<section class="card" data-view="save" aria-labelledby="h-save">
-  <h2 id="h-save"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trending-up"/></svg><span data-i18n="s.title">Sparplan mit Zinseszins</span></h2>
+<section class="card panel" id="save" role="tabpanel" aria-labelledby="tab-save" hidden>
+  <h2 data-i18n="s.title">Sparplan mit Zinseszins</h2>
   <p class="intro" data-i18n="s.intro">Für Aktien, ETFs, Fonds oder Sparkonto: Startkapital plus monatliche Sparrate, Erträge werden wieder angelegt.</p>
-  <div class="fields">
+  <div class="calc-fields">
     <fieldset class="seg-group"><legend data-i18n="calc">Berechnen</legend>
       <div class="seg" data-key="s.mode">
         <button type="button" data-v="end" data-i18n="s.m.end">Endkapital</button>
@@ -100,13 +119,13 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
       </div>
     </fieldset>
     <label class="form-field"><span data-i18n="s.start">Startkapital</span><input type="text" inputmode="decimal" data-key="s.start"></label>
-    <label class="form-field" data-show="s.mode=end,years"><span data-i18n="s.rate">Sparrate pro Monat</span><input type="text" inputmode="decimal" data-key="s.rate"></label>
+    <label class="form-field" data-show="s.mode=end,years"><span data-i18n="s.rate">Sparrate</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="s.rate"><span class="unit" data-i18n="unit.perMonth">/ Monat</span></span></label>
     <label class="form-field" data-show="s.mode=rate,years"><span data-i18n="s.target">Zielkapital</span><input type="text" inputmode="decimal" data-key="s.target"></label>
-    <label class="form-field"><span data-i18n="s.ret">Rendite in % pro Jahr</span><input type="text" inputmode="decimal" data-key="s.ret"></label>
-    <label class="form-field" data-show="s.mode=end,rate"><span data-i18n="s.years">Laufzeit in Jahren</span><input type="text" inputmode="decimal" data-key="s.years"></label>
-    <label class="form-field"><span data-i18n="s.dyn">Dynamik: Rate steigt jährlich um %</span><input type="text" inputmode="decimal" data-key="s.dyn"></label>
-    <label class="form-field"><span data-i18n="s.cost">Kosten (z. B. TER) in % pro Jahr</span><input type="text" inputmode="decimal" data-key="s.cost"></label>
-    <label class="form-field"><span data-i18n="s.infl">Inflation in % pro Jahr</span><input type="text" inputmode="decimal" data-key="s.infl"></label>
+    <label class="form-field"><span data-i18n="s.ret">Rendite</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="s.ret"><span class="unit">% p. a.</span></span></label>
+    <label class="form-field" data-show="s.mode=end,rate"><span data-i18n="s.years">Laufzeit</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="s.years"><span class="unit" data-i18n="unit.years">Jahre</span></span></label>
+    <label class="form-field"><span data-i18n="s.dyn">Dynamik: Rate steigt jährlich um</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="s.dyn"><span class="unit">%</span></span></label>
+    <label class="form-field"><span data-i18n="s.cost">Kosten (z. B. TER)</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="s.cost"><span class="unit">% p. a.</span></span></label>
+    <label class="form-field"><span data-i18n="s.infl">Inflation</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="s.infl"><span class="unit">% p. a.</span></span></label>
     <fieldset class="seg-group"><legend data-i18n="s.timing">Einzahlung</legend>
       <div class="seg" data-key="s.timing">
         <button type="button" data-v="begin" data-i18n="s.t.begin">Monatsanfang</button>
@@ -114,23 +133,54 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
       </div>
     </fieldset>
   </div>
-  <div class="results" id="sRes" role="status"></div>
+  <div class="calc-results" id="sRes" role="status"></div>
   <div id="sMsg"></div>
   <div class="chart" id="sChart"></div>
-  <details class="table" id="sTableBox">
+  <details class="sub" id="sTableBox">
     <summary data-i18n="years">Jahresübersicht</summary>
     <div class="row"><button type="button" class="btn" data-copy="s"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Tabelle kopieren</span></button></div>
     <div class="scroll" id="sTable"></div>
   </details>
 </section>
 
+<!-- ===================== Rendite p. a. ===================== -->
+<section class="card panel" id="change" role="tabpanel" aria-labelledby="tab-change" hidden>
+  <h2 data-i18n="d.title">Veränderung &amp; Rendite pro Jahr</h2>
+  <p class="intro" data-i18n="d.intro">Kurs oder Wert vorher und nachher – die Veränderung in Prozent und, mit Jahren, die durchschnittliche Rendite pro Jahr (CAGR).</p>
+  <div class="calc-fields">
+    <label class="form-field"><span data-i18n="d.old">Wert vorher</span><input type="text" inputmode="decimal" data-key="d.old"></label>
+    <label class="form-field"><span data-i18n="d.new">Wert nachher</span><input type="text" inputmode="decimal" data-key="d.new"></label>
+    <label class="form-field"><span data-i18n="d.years">Zeit dazwischen (optional)</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="d.years"><span class="unit" data-i18n="unit.years">Jahre</span></span></label>
+  </div>
+  <div class="calc-results" id="dRes" role="status"></div>
+  <div id="dMsg"></div>
+</section>
+
+<!-- ===================== Zinsumrechnung ===================== -->
+<section class="card panel" id="iconv" role="tabpanel" aria-labelledby="tab-iconv" hidden>
+  <h2 data-i18n="i.title">Zinsumrechnung nominal ↔ effektiv</h2>
+  <p class="intro" data-i18n="i.intro">Ein Nominalzins mit Zinsgutschrift mehrmals im Jahr ergibt einen höheren effektiven Jahreszins.</p>
+  <div class="calc-fields">
+    <fieldset class="seg-group"><legend data-i18n="i.dir">Gegeben</legend>
+      <div class="seg" data-key="i.dir">
+        <button type="button" data-v="nom" data-i18n="i.nom">Nominalzins</button>
+        <button type="button" data-v="eff" data-i18n="i.eff">Effektivzins</button>
+      </div>
+    </fieldset>
+    <label class="form-field"><span data-i18n="i.val">Zins</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="i.val"><span class="unit">% p. a.</span></span></label>
+    <label class="form-field"><span data-i18n="i.c">Zinsgutschriften</span><span class="input-unit"><input type="text" inputmode="numeric" data-key="i.c"><span class="unit" data-i18n="unit.perYear">/ Jahr</span></span></label>
+  </div>
+  <div class="calc-results" id="iRes" role="status"></div>
+  <div id="iMsg"></div>
+</section>
+
 <!-- ===================== Kredit ===================== -->
-<section class="card" data-view="loan" aria-labelledby="h-loan" hidden>
-  <h2 id="h-loan"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#building-bank"/></svg><span data-i18n="l.title">Kredit (Annuitätendarlehen)</span></h2>
+<section class="card panel" id="loan" role="tabpanel" aria-labelledby="tab-loan" hidden>
+  <h2 data-i18n="l.title">Kredit (Annuitätendarlehen)</h2>
   <p class="intro" data-i18n="l.intro">Gleichbleibende Monatsrate aus Zins und Tilgung – mit Tilgungsplan, Restschuld nach der Zinsbindung und Sondertilgung.</p>
-  <div class="fields">
+  <div class="calc-fields">
     <label class="form-field"><span data-i18n="l.amount">Kreditbetrag</span><input type="text" inputmode="decimal" data-key="l.amount"></label>
-    <label class="form-field"><span data-i18n="l.rate">Sollzins in % pro Jahr</span><input type="text" inputmode="decimal" data-key="l.rate"></label>
+    <label class="form-field"><span data-i18n="l.rate">Sollzins</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="l.rate"><span class="unit">% p. a.</span></span></label>
     <fieldset class="seg-group"><legend data-i18n="l.mode">Vorgabe</legend>
       <div class="seg" data-key="l.mode">
         <button type="button" data-v="tilgung" data-i18n="l.m.tilgung">Tilgung %</button>
@@ -138,16 +188,16 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
         <button type="button" data-v="years" data-i18n="l.m.years">Laufzeit</button>
       </div>
     </fieldset>
-    <label class="form-field" data-show="l.mode=tilgung"><span data-i18n="l.tilgung">Anfängliche Tilgung in % pro Jahr</span><input type="text" inputmode="decimal" data-key="l.tilgung"></label>
-    <label class="form-field" data-show="l.mode=payment"><span data-i18n="l.payment">Monatsrate</span><input type="text" inputmode="decimal" data-key="l.payment"></label>
-    <label class="form-field" data-show="l.mode=years"><span data-i18n="l.years">Laufzeit in Jahren</span><input type="text" inputmode="decimal" data-key="l.years"></label>
-    <label class="form-field"><span data-i18n="l.fixed">Zinsbindung in Jahren (optional)</span><input type="text" inputmode="decimal" data-key="l.fixed"></label>
-    <label class="form-field"><span data-i18n="l.extra">Sondertilgung pro Jahr (optional)</span><input type="text" inputmode="decimal" data-key="l.extra"></label>
+    <label class="form-field" data-show="l.mode=tilgung"><span data-i18n="l.tilgung">Anfängliche Tilgung</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="l.tilgung"><span class="unit">% p. a.</span></span></label>
+    <label class="form-field" data-show="l.mode=payment"><span data-i18n="l.payment">Rate</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="l.payment"><span class="unit" data-i18n="unit.perMonth">/ Monat</span></span></label>
+    <label class="form-field" data-show="l.mode=years"><span data-i18n="l.years">Laufzeit</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="l.years"><span class="unit" data-i18n="unit.years">Jahre</span></span></label>
+    <label class="form-field"><span data-i18n="l.fixed">Zinsbindung (optional)</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="l.fixed"><span class="unit" data-i18n="unit.years">Jahre</span></span></label>
+    <label class="form-field"><span data-i18n="l.extra">Sondertilgung (optional)</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="l.extra"><span class="unit" data-i18n="unit.perYear">/ Jahr</span></span></label>
   </div>
-  <div class="results" id="lRes" role="status"></div>
+  <div class="calc-results" id="lRes" role="status"></div>
   <div id="lMsg"></div>
   <div class="chart" id="lChart"></div>
-  <details class="table" id="lTableBox">
+  <details class="sub" id="lTableBox">
     <summary data-i18n="plan">Tilgungsplan</summary>
     <div class="row"><button type="button" class="btn" data-copy="l"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Tabelle kopieren</span></button></div>
     <div class="scroll" id="lTable"></div>
@@ -155,8 +205,8 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
 </section>
 
 <!-- ===================== Zeitwert (TVM) ===================== -->
-<section class="card" data-view="tvm" aria-labelledby="h-tvm" hidden>
-  <h2 id="h-tvm"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calculator"/></svg><span data-i18n="t.title">Zeitwert des Geldes (TVM)</span></h2>
+<section class="card panel" id="tvm" role="tabpanel" aria-labelledby="tab-tvm" hidden>
+  <h2 data-i18n="t.title">Zeitwert des Geldes (TVM)</h2>
   <p class="intro" data-i18n="t.intro">Wie die TVM-Tasten eines Finanztaschenrechners: vier Werte eingeben, beim fünften auf „Berechnen“ tippen. Geld, das du zahlst, ist negativ; Geld, das du bekommst, positiv.</p>
   <div class="form-field"><span data-i18n="t.examples">Beispiele (antippen zum Übernehmen)</span>
     <div class="chips" id="tExamples">
@@ -167,7 +217,7 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
     </div>
   </div>
   <div id="tvmRows"></div>
-  <div class="fields">
+  <div class="calc-fields">
     <label class="form-field"><span data-i18n="t.py">P/Y – Zahlungen pro Jahr</span><input type="text" inputmode="decimal" data-key="t.py"></label>
     <label class="form-field"><span data-i18n="t.cy">C/Y – Zinsperioden pro Jahr</span><input type="text" inputmode="decimal" data-key="t.cy"></label>
     <fieldset class="seg-group"><legend data-i18n="t.timing">Zahlung</legend>
@@ -179,16 +229,16 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
   </div>
   <div id="tMsg"></div>
   <h3 class="sub-h" data-i18n="t.amort">Tilgung für Perioden (AMORT)</h3>
-  <div class="fields">
+  <div class="calc-fields">
     <label class="form-field"><span data-i18n="t.p1">Von Periode P1</span><input type="text" inputmode="numeric" data-key="t.p1"></label>
     <label class="form-field"><span data-i18n="t.p2">Bis Periode P2</span><input type="text" inputmode="numeric" data-key="t.p2"></label>
   </div>
-  <div class="results" id="tAmort"></div>
+  <div class="calc-results" id="tAmort"></div>
 </section>
 
 <!-- ===================== Cashflow ===================== -->
-<section class="card" data-view="cf" aria-labelledby="h-cf" hidden>
-  <h2 id="h-cf"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#cash"/></svg><span data-i18n="c.title">Kapitalwert &amp; interner Zinsfuß</span></h2>
+<section class="card panel" id="cf" role="tabpanel" aria-labelledby="tab-cf" hidden>
+  <h2 data-i18n="c.title">Kapitalwert &amp; interner Zinsfuß</h2>
   <p class="intro" data-i18n="c.intro">Unregelmäßige Zahlungen einer Investition: heute (CF0) und danach je Periode, gleiche Zahlungen hintereinander mit Anzahl. Auszahlungen negativ.</p>
   <div class="cf-row first">
     <label class="form-field"><span data-i18n="c.cf0">CF0 – Zahlung heute</span><input type="text" inputmode="decimal" data-key="c.cf0"></label>
@@ -196,69 +246,42 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
   </div>
   <div id="cfRows"></div>
   <div class="row"><button type="button" class="btn" id="cfAdd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="c.add">Zahlung hinzufügen</span></button></div>
-  <div class="fields" style="margin-block-start:12px">
-    <label class="form-field"><span data-i18n="c.rate">Zinssatz in % pro Periode</span><input type="text" inputmode="decimal" data-key="c.rate"></label>
+  <div class="calc-fields" style="margin-block-start:12px">
+    <label class="form-field"><span data-i18n="c.rate">Zinssatz</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="c.rate"><span class="unit" data-i18n="unit.perPeriod">% je Periode</span></span></label>
   </div>
-  <div class="results" id="cRes" role="status"></div>
+  <div class="calc-results" id="cRes" role="status"></div>
   <div id="cMsg"></div>
 </section>
 
-<!-- ===================== Mehr ===================== -->
-<section class="card" data-view="more" aria-labelledby="h-iconv" hidden>
-  <h2 id="h-iconv"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#percentage"/></svg><span data-i18n="i.title">Zinsumrechnung nominal ↔ effektiv</span></h2>
-  <p class="intro" data-i18n="i.intro">Ein Nominalzins mit Zinsgutschrift mehrmals im Jahr ergibt einen höheren effektiven Jahreszins.</p>
-  <div class="fields">
-    <fieldset class="seg-group"><legend data-i18n="i.dir">Gegeben</legend>
-      <div class="seg" data-key="i.dir">
-        <button type="button" data-v="nom" data-i18n="i.nom">Nominalzins</button>
-        <button type="button" data-v="eff" data-i18n="i.eff">Effektivzins</button>
-      </div>
-    </fieldset>
-    <label class="form-field"><span data-i18n="i.val">Zins in % pro Jahr</span><input type="text" inputmode="decimal" data-key="i.val"></label>
-    <label class="form-field"><span data-i18n="i.c">Zinsgutschriften pro Jahr</span><input type="text" inputmode="numeric" data-key="i.c"></label>
-  </div>
-  <div class="results" id="iRes" role="status"></div>
-  <div id="iMsg"></div>
-</section>
-
-<section class="card" data-view="more" aria-labelledby="h-chg" hidden>
-  <h2 id="h-chg"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chart-line"/></svg><span data-i18n="d.title">Veränderung &amp; Rendite pro Jahr</span></h2>
-  <p class="intro" data-i18n="d.intro">Kurs oder Wert vorher und nachher – die Veränderung in Prozent und, mit Jahren, die durchschnittliche Rendite pro Jahr (CAGR).</p>
-  <div class="fields">
-    <label class="form-field"><span data-i18n="d.old">Wert vorher</span><input type="text" inputmode="decimal" data-key="d.old"></label>
-    <label class="form-field"><span data-i18n="d.new">Wert nachher</span><input type="text" inputmode="decimal" data-key="d.new"></label>
-    <label class="form-field"><span data-i18n="d.years">Jahre dazwischen (optional)</span><input type="text" inputmode="decimal" data-key="d.years"></label>
-  </div>
-  <div class="results" id="dRes" role="status"></div>
-  <div id="dMsg"></div>
-</section>
-
-<section class="card" data-view="more" aria-labelledby="h-profit" hidden>
-  <h2 id="h-profit"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#receipt"/></svg><span data-i18n="p.title">Gewinn, Marge &amp; Aufschlag</span></h2>
-  <div class="fields">
+<!-- ===================== Marge ===================== -->
+<section class="card panel" id="profit" role="tabpanel" aria-labelledby="tab-profit" hidden>
+  <h2 data-i18n="p.title">Gewinn, Marge &amp; Aufschlag</h2>
+  <div class="calc-fields">
     <label class="form-field"><span data-i18n="p.cost">Kosten (Einkauf)</span><input type="text" inputmode="decimal" data-key="p.cost"></label>
     <label class="form-field"><span data-i18n="p.price">Preis (Verkauf)</span><input type="text" inputmode="decimal" data-key="p.price"></label>
   </div>
-  <div class="results" id="pRes" role="status"></div>
+  <div class="calc-results" id="pRes" role="status"></div>
   <div id="pMsg"></div>
 </section>
 
-<section class="card" data-view="more" aria-labelledby="h-be" hidden>
-  <h2 id="h-be"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#scale"/></svg><span data-i18n="b.title">Break-even</span></h2>
+<!-- ===================== Break-even ===================== -->
+<section class="card panel" id="breakeven" role="tabpanel" aria-labelledby="tab-breakeven" hidden>
+  <h2 data-i18n="b.title">Break-even</h2>
   <p class="intro" data-i18n="b.intro">Ab welcher Stückzahl die Fixkosten gedeckt sind (und optional ein Zielgewinn erreicht ist).</p>
-  <div class="fields">
+  <div class="calc-fields">
     <label class="form-field"><span data-i18n="b.fixed">Fixkosten</span><input type="text" inputmode="decimal" data-key="b.fixed"></label>
-    <label class="form-field"><span data-i18n="b.var">Variable Kosten pro Stück</span><input type="text" inputmode="decimal" data-key="b.var"></label>
-    <label class="form-field"><span data-i18n="b.price">Preis pro Stück</span><input type="text" inputmode="decimal" data-key="b.price"></label>
+    <label class="form-field"><span data-i18n="b.var">Variable Kosten</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="b.var"><span class="unit" data-i18n="unit.perUnit">/ Stück</span></span></label>
+    <label class="form-field"><span data-i18n="b.price">Preis</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="b.price"><span class="unit" data-i18n="unit.perUnit">/ Stück</span></span></label>
     <label class="form-field"><span data-i18n="b.target">Zielgewinn (optional)</span><input type="text" inputmode="decimal" data-key="b.target"></label>
   </div>
-  <div class="results" id="bRes" role="status"></div>
+  <div class="calc-results" id="bRes" role="status"></div>
   <div id="bMsg"></div>
 </section>
 
-<section class="card" data-view="more" aria-labelledby="h-depr" hidden>
-  <h2 id="h-depr"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chart-arrows-vertical"/></svg><span data-i18n="a.title">Abschreibung</span></h2>
-  <div class="fields">
+<!-- ===================== Abschreibung ===================== -->
+<section class="card panel" id="depr" role="tabpanel" aria-labelledby="tab-depr" hidden>
+  <h2 data-i18n="a.title">Abschreibung</h2>
+  <div class="calc-fields">
     <fieldset class="seg-group"><legend data-i18n="a.method">Methode</legend>
       <div class="seg" data-key="a.method">
         <button type="button" data-v="sl" data-i18n="a.sl">Linear</button>
@@ -268,20 +291,21 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
     </fieldset>
     <label class="form-field"><span data-i18n="a.cost">Anschaffungskosten</span><input type="text" inputmode="decimal" data-key="a.cost"></label>
     <label class="form-field"><span data-i18n="a.salvage">Restwert am Ende</span><input type="text" inputmode="decimal" data-key="a.salvage"></label>
-    <label class="form-field"><span data-i18n="a.life">Nutzungsdauer in Jahren</span><input type="text" inputmode="numeric" data-key="a.life"></label>
-    <label class="form-field" data-show="a.method=db"><span data-i18n="a.rate">Satz in % vom Restbuchwert</span><input type="text" inputmode="decimal" data-key="a.rate"></label>
+    <label class="form-field"><span data-i18n="a.life">Nutzungsdauer</span><span class="input-unit"><input type="text" inputmode="numeric" data-key="a.life"><span class="unit" data-i18n="unit.years">Jahre</span></span></label>
+    <label class="form-field" data-show="a.method=db"><span data-i18n="a.rate">Satz vom Restbuchwert</span><span class="input-unit"><input type="text" inputmode="decimal" data-key="a.rate"><span class="unit">%</span></span></label>
   </div>
   <div id="aMsg"></div>
   <div class="scroll" id="aTable"></div>
 </section>
 
-<section class="card" data-view="more" aria-labelledby="h-days" hidden>
-  <h2 id="h-days"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calendar"/></svg><span data-i18n="dt.title">Zinstage zwischen zwei Daten</span></h2>
-  <div class="fields">
+<!-- ===================== Zinstage ===================== -->
+<section class="card panel" id="days" role="tabpanel" aria-labelledby="tab-days" hidden>
+  <h2 data-i18n="dt.title">Zinstage zwischen zwei Daten</h2>
+  <div class="calc-fields">
     <label class="form-field"><span data-i18n="dt.a">Von</span><input type="date" data-key="dt.a"></label>
     <label class="form-field"><span data-i18n="dt.b">Bis</span><input type="date" data-key="dt.b"></label>
   </div>
-  <div class="results" id="dtRes" role="status"></div>
+  <div class="calc-results" id="dtRes" role="status"></div>
   <div id="dtMsg"></div>
 </section>
 </main>
@@ -306,7 +330,7 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
 <details class="help card">
   <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
   <div data-lang="de">
-  <p>Rechner rund um Zinseszins und Geld über die Zeit, angelehnt an einen Finanztaschenrechner. Oben wählst du den Rechner; alles rechnet sofort beim Tippen. Dezimalkomma und -punkt gehen beide, Tausenderpunkte („200.000“) auch. Ergebnisse sind gerundet angezeigt, gerechnet wird genau.</p>
+  <p>Rechner rund um Zinseszins und Geld über die Zeit, angelehnt an einen Finanztaschenrechner. Auf der Übersicht wählst du einen Rechner, oben wechselst du direkt zum nächsten, „Übersicht“ (oder die Zurück-Taste) führt zurück. Alles rechnet sofort beim Tippen. Dezimalkomma und -punkt gehen beide, Tausenderpunkte („200.000“) auch. Ergebnisse sind gerundet angezeigt, gerechnet wird genau.</p>
   <h3>Sparplan</h3>
   <ul>
     <li>Startkapital, monatliche Sparrate, Rendite und Laufzeit ergeben das Endkapital – oder umgekehrt die nötige Sparrate bzw. die Dauer bis zu einem Zielkapital.</li>
@@ -334,7 +358,7 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
     <li>Interner Zinsfuß (IRR): der Zins, bei dem der Kapitalwert null ist. Wechselt das Vorzeichen der Zahlungen mehrmals, kann es mehrere geben – dann steht ein Hinweis da.</li>
     <li>Endwert (NFV) und Amortisationszeit, einfach und abgezinst (in Perioden, zwischen zwei Perioden linear geteilt).</li>
   </ul>
-  <h3>Mehr</h3>
+  <h3>Weitere Rechner</h3>
   <ul>
     <li>Zinsumrechnung: effektiv = (1 + nominal / m)<sup>m</sup> − 1 bei m Zinsgutschriften im Jahr; dazu die Zeit, bis sich Geld verdoppelt.</li>
     <li>Veränderung: (nachher − vorher) / vorher; Rendite pro Jahr (CAGR) = (nachher / vorher)<sup>1/Jahre</sup> − 1.</li>
@@ -347,7 +371,7 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
   <p class="note">Angaben ohne Gewähr, keine Anlage- oder Kreditberatung.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
-  <p>Calculators for compound interest and money over time, modelled on a financial calculator. Pick the calculator at the top; everything updates as you type. Decimal comma and point both work, so do thousands separators. Results are shown rounded, the calculation is exact.</p>
+  <p>Calculators for compound interest and money over time, modelled on a financial calculator. Pick a calculator on the overview; the bar at the top switches to the next one, “Overview” (or the back key) returns. Everything updates as you type. Decimal comma and point both work, so do thousands separators. Results are shown rounded, the calculation is exact.</p>
   <h3>Savings plan</h3>
   <ul>
     <li>Starting capital, monthly contribution, return and duration give the final capital – or the other way round, the contribution needed or the time until a target.</li>
@@ -375,7 +399,7 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
     <li>Internal rate of return (IRR): the rate at which the NPV is zero. If the sign of the cash flows changes more than once there can be several – a note says so.</li>
     <li>Net future value (NFV) and payback period, simple and discounted (in periods, split linearly between two periods).</li>
   </ul>
-  <h3>More</h3>
+  <h3>More calculators</h3>
   <ul>
     <li>Rate conversion: effective = (1 + nominal / m)<sup>m</sup> − 1 with m compounding periods per year; plus the time until money doubles.</li>
     <li>Change: (after − before) / before; yearly return (CAGR) = (after / before)<sup>1/years</sup> − 1.</li>
@@ -407,11 +431,12 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version eae2e8590c0d</p>
+  <p class="footer-version">Version 23313bdb22ef</p>
   <!-- footer:end -->
 </footer>
 
 <script src="../assets/common.js"></script>
+<script src="../assets/shared/toolbox.js"></script>
 <script src="finance.js"></script>
 <script>
 (function(){
@@ -449,31 +474,34 @@ Tools.i18n({
     'mcp.save':'Sparplan berechnet','mcp.loan':'Kredit berechnet','mcp.tvm':'Zeitwert berechnet','mcp.cf':'Cashflow berechnet','mcp.rate':'Zins umgerechnet'
   },
   en:{
-    title:'Finance Calculator',sub:'Compound interest, savings plan, loan and more – like a financial calculator.',views:'Calculators',
-    'v.save':'Savings','v.loan':'Loan','v.tvm':'Time value','v.cf':'Cash flow','v.more':'More',calc:'Calculate',
+    title:'Finance Calculator',sub:'Compound interest, savings plan, loan and more – like a financial calculator.',ov:'Overview',tabs:'Choose calculator',
+    'g.save':'Saving & investing','g.loan':'Loan & time value','g.biz':'Investment & business',
+    'v.save':'Savings plan','v.change':'Return p.a.','v.iconv':'Convert rate','v.loan':'Loan','v.tvm':'Time value (TVM)','v.cf':'Cash flow',
+    'v.profit':'Margin','v.be':'Break-even','v.depr':'Depreciation','v.days':'Day count',calc:'Calculate',
+    'unit.perMonth':'/ month','unit.perYear':'/ year','unit.perUnit':'/ unit','unit.perPeriod':'% per period','unit.years':'years',
     's.title':'Savings plan with compound interest','s.intro':'For stocks, ETFs, funds or a savings account: starting capital plus a monthly contribution, returns are reinvested.',
-    's.m.end':'Final capital','s.m.rate':'Contribution','s.m.years':'Duration','s.start':'Starting capital','s.rate':'Contribution per month','s.target':'Target capital',
-    's.ret':'Return in % per year','s.years':'Duration in years','s.dyn':'Yearly increase of the contribution in %','s.cost':'Costs (e.g. TER) in % per year',
-    's.infl':'Inflation in % per year','s.timing':'Contribution','s.t.begin':'Start of month','s.t.end':'End of month',years:'Year by year',copy:'Copy table',
+    's.m.end':'Final capital','s.m.rate':'Contribution','s.m.years':'Duration','s.start':'Starting capital','s.rate':'Contribution','s.target':'Target capital',
+    's.ret':'Return','s.years':'Duration','s.dyn':'Increase: contribution rises yearly by','s.cost':'Costs (e.g. TER)',
+    's.infl':'Inflation','s.timing':'Contribution','s.t.begin':'Start of month','s.t.end':'End of month',years:'Year by year',copy:'Copy table',
     'l.title':'Loan (annuity)','l.intro':'A fixed monthly payment of interest and repayment – with schedule, remaining debt after the fixed-rate period and extra payments.',
-    'l.amount':'Loan amount','l.rate':'Interest rate in % per year','l.mode':'Set','l.m.tilgung':'Repayment %','l.m.payment':'Payment','l.m.years':'Term',
-    'l.tilgung':'Initial repayment in % per year','l.payment':'Monthly payment','l.years':'Term in years','l.fixed':'Fixed-rate period in years (optional)',
-    'l.extra':'Extra payment per year (optional)',plan:'Repayment schedule',
+    'l.amount':'Loan amount','l.rate':'Interest rate','l.mode':'Set','l.m.tilgung':'Repayment %','l.m.payment':'Payment','l.m.years':'Term',
+    'l.tilgung':'Initial repayment','l.payment':'Payment','l.years':'Term','l.fixed':'Fixed-rate period (optional)',
+    'l.extra':'Extra payment (optional)',plan:'Repayment schedule',
     't.title':'Time value of money (TVM)','t.intro':'Like the TVM keys of a financial calculator: enter four values and tap “Compute” at the fifth. Money you pay is negative, money you receive positive.',
     't.examples':'Examples (tap to use)','t.ex.loan':'Loan payment','t.ex.goal':'Savings goal','t.ex.payout':'Withdrawal plan','t.ex.return':'Return of an investment',
     't.py':'P/Y – payments per year','t.cy':'C/Y – compounding periods per year','t.timing':'Payment','t.end':'End of period (END)','t.begin':'Start of period (BGN)',
     't.amort':'Amortization for periods (AMORT)','t.p1':'From period P1','t.p2':'To period P2',
     'c.title':'Net present value & internal rate of return','c.intro':'Irregular cash flows of an investment: today (CF0) and then per period, equal flows in a row with a count. Outflows negative.',
-    'c.cf0':'CF0 – cash flow today','c.add':'Add cash flow','c.rate':'Interest rate in % per period',
+    'c.cf0':'CF0 – cash flow today','c.add':'Add cash flow','c.rate':'Interest rate',
     'i.title':'Rate conversion nominal ↔ effective','i.intro':'A nominal rate credited several times a year gives a higher effective annual rate.','i.dir':'Given',
-    'i.nom':'Nominal rate','i.eff':'Effective rate','i.val':'Rate in % per year','i.c':'Compounding periods per year',
+    'i.nom':'Nominal rate','i.eff':'Effective rate','i.val':'Rate','i.c':'Compounding',
     'd.title':'Change & yearly return','d.intro':'Price or value before and after – the change in percent and, with years, the average return per year (CAGR).',
-    'd.old':'Value before','d.new':'Value after','d.years':'Years in between (optional)',
+    'd.old':'Value before','d.new':'Value after','d.years':'Time in between (optional)',
     'p.title':'Profit, margin & markup','p.cost':'Cost (purchase)','p.price':'Price (sale)',
     'b.title':'Break-even','b.intro':'From which quantity the fixed costs are covered (and optionally a target profit is reached).','b.fixed':'Fixed costs',
-    'b.var':'Variable cost per unit','b.price':'Price per unit','b.target':'Target profit (optional)',
+    'b.var':'Variable cost','b.price':'Price','b.target':'Target profit (optional)',
     'a.title':'Depreciation','a.method':'Method','a.sl':'Straight-line','a.db':'Declining','a.syd':'Sum of digits','a.cost':'Acquisition cost',
-    'a.salvage':'Salvage value at the end','a.life':'Useful life in years','a.rate':'Rate in % of the book value',
+    'a.salvage':'Salvage value at the end','a.life':'Useful life','a.rate':'Rate of the book value',
     'dt.title':'Days between two dates','dt.a':'From','dt.b':'To',reset:'Reset this calculator',
     'm.missing':'Please fill in all fields.','m.negative':'The starting capital cannot be negative.','m.rate':'The rate is too low (−100 % or less).',
     'm.years':'Enter a duration between 0 and 100 years.','m.target':'Please enter a target above 0.','m.reached':'The target is already reached with the starting capital.',
@@ -511,7 +539,7 @@ const LS='finance-calculator.inputs.v1';
 
 /* ---------- Inputs: one flat object of strings (as typed), saved as a whole ---------- */
 const DEF={
-  view:'save',
+  view:'overview',tab:'save',
   's.mode':'end','s.start':'5000','s.rate':'100','s.target':'100000','s.ret':'7','s.years':'20','s.dyn':'0','s.cost':'0,2','s.infl':'2','s.timing':'begin',
   'l.amount':'300000','l.rate':'3,5','l.mode':'tilgung','l.tilgung':'2','l.payment':'1500','l.years':'30','l.fixed':'10','l.extra':'',
   't.n':'360','t.iy':'6','t.pv':'200000','t.pmt':'','t.fv':'0','t.py':'12','t.cy':'12','t.timing':'end','t.p1':'1','t.p2':'12','t.last':'',
@@ -560,7 +588,7 @@ function duration(months){
 
 /* ---------- Output helpers ---------- */
 function stats(host,items){
-  host.innerHTML=items.filter(Boolean).map(it=>'<div class="stat-box'+(it.main?' main':'')+'"><b>'+esc(it.v)+'</b><small>'+esc(it.k)+'</small></div>').join('');
+  host.innerHTML=items.filter(Boolean).map(it=>'<div class="calc-result'+(it.main?' main':'')+'"><span class="k">'+esc(it.k)+'</span><b class="v">'+esc(it.v)+'</b></div>').join('');
 }
 function note(host,kind,text){
   const ic={err:'alert-circle',warn:'alert-triangle',info:'info-circle',ok:'circle-check'}[kind];
@@ -769,8 +797,6 @@ function syncInputs(){
     else if(document.activeElement!==el)el.value=S[k];
   });
   document.querySelectorAll('[data-show]').forEach(el=>{const [k,v]=el.dataset.show.split('=');el.hidden=!v.split(',').includes(S[k]);});
-  document.querySelectorAll('#views button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===S.view)));
-  document.querySelectorAll('section[data-view]').forEach(s=>{s.hidden=s.dataset.view!==S.view;});
 }
 function update(){
   calcTvm();          // may write the computed value into S first
@@ -819,10 +845,6 @@ document.addEventListener('click',e=>{
     Tools.copyText(txt).then(ok=>{Tools.toast(t(ok?'copied':'copyFail'));Tools.diag.log('table copy',{table:copyBtn.dataset.copy,ok});});
   }
 });
-$('views').addEventListener('click',e=>{
-  const b=e.target.closest('button[data-view]');if(!b)return;
-  S.view=b.dataset.view;Tools.diag.log('view',S.view);update();
-});
 // Cash flow rows
 $('cfRows').addEventListener('input',e=>{
   const el=e.target.closest('[data-row]');if(!el)return;
@@ -850,9 +872,10 @@ $('cfAdd').addEventListener('click',()=>{
   const ins=$('cfRows').querySelectorAll('input[data-f="cf"]');ins[ins.length-1].focus();
 });
 // Reset the calculator that is open (inputs only); can be undone
-const GROUPS={save:['s.'],loan:['l.'],tvm:['t.'],cf:['c.'],more:['i.','d.','p.','b.','a.','dt.']};
+const GROUPS={save:['s.'],loan:['l.'],tvm:['t.'],cf:['c.'],iconv:['i.'],change:['d.'],profit:['p.'],breakeven:['b.'],depr:['a.'],days:['dt.']};
 $('btnReset').addEventListener('click',()=>{
-  const before=Object.assign({},S),beforeRows=rows.map(r=>Object.assign({},r)),view=S.view;
+  const view=box.current();if(!view)return;
+  const before=Object.assign({},S),beforeRows=rows.map(r=>Object.assign({},r));
   for(const k in DEF)if(GROUPS[view].some(p=>k.startsWith(p)))S[k]=DEF[k];
   if(view==='cf')rows=DEF_ROWS.map(r=>Object.assign({},r));
   tvmExact={};renderCfRows();update();Tools.menu.close();
@@ -871,13 +894,19 @@ if('ResizeObserver' in window){
   new ResizeObserver(en=>{const nw=Math.round(en[0].contentRect.width);if(nw&&nw!==w){w=nw;calcSave();calcLoan();}}).observe(document.querySelector('main'));
 }
 decimals();renderTvmRows();renderCfRows();bindInputs(document);update();
-Tools.diag.info(()=>({view:S.view,tvmSolve:S['t.last']||'-',cashFlowRows:rows.length}));
+// Overview of the calculators → tab bar (assets/shared/toolbox.js); the open calculator is remembered
+const box=Toolbox.init({
+  state:{view:S.view,tab:S.tab},
+  onChange:st=>{S.view=st.view;S.tab=st.tab;$('btnReset').hidden=st.view!=='tool';save();},
+  onSelect:(name,{gesture})=>{if(gesture)Tools.diag.log('open',name);calcSave();calcLoan();}
+});
+Tools.diag.info(()=>({view:box.current()||'overview',tvmSolve:S['t.last']||'-',cashFlowRows:rows.length}));
 
 /* ---------- WebMCP: tools for AI agents (see AGENTS.md "WebMCP") ----------
    English; the values are filled into the calculator so the user sees the same calculation. */
 const put=(k,v)=>{S[k]=v==null?'':numStr(v,10);};
 const round=(x,d=2)=>x==null||!Number.isFinite(x)?null:Math.round(x*10**d)/10**d;
-const show=view=>{S.view=view;};
+const show=name=>box.open(name);
 const fail=code=>{throw new Error({missing:'Some values are missing or invalid.',negative:'start_capital must not be negative.',rate:'The rate is too low (−100 % or less).',
   years:'years must be between 0 and 100.',target:'target_capital must be above 0.',reached:'The target is already reached with the starting capital.',
   never:'The target is not reached within 100 years.',amount:'amount must be above 0.',tilgung:'initial_repayment_percent must be above 0.',payment:'monthly_payment must be above 0.',
@@ -1005,7 +1034,7 @@ Tools.mcp.register({
     compounding_per_year:{type:'integer',minimum:1,maximum:100000,description:'Compounding periods per year, e.g. 12 for monthly.'}
   },required:['given','rate_percent','compounding_per_year'],additionalProperties:false},
   execute:i=>{
-    show('more');S['i.dir']=i.given==='nominal'?'nom':'eff';put('i.val',i.rate_percent);put('i.c',i.compounding_per_year);update();
+    show('iconv');S['i.dir']=i.given==='nominal'?'nom':'eff';put('i.val',i.rate_percent);put('i.c',i.compounding_per_year);update();
     const eff=i.given==='nominal'?F.effective(i.rate_percent,i.compounding_per_year):i.rate_percent;
     const nom=i.given==='nominal'?i.rate_percent:F.nominal(i.rate_percent,i.compounding_per_year);
     return {nominal_percent:round(nom,6),effective_percent:round(eff,6),doubling_years:round(F.doubling(eff),4)};

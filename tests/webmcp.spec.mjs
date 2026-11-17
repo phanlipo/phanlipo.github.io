@@ -224,7 +224,7 @@ test.describe('brew-calculator tools', () => {
     expect(r.result.liters_per_cm).toBeCloseTo(Math.PI * 18 ** 2 / 1000, 4);
     expect(r.result.volume_at_20c_l).toBeCloseTo(V * rhoW(98) / rhoW(20), 3);
     await expect(page.locator('[data-key="v.d"]')).toHaveValue('36');
-    await expect(page.locator('#vRes .res.main .v')).toContainText('25,45');
+    await expect(page.locator('#vRes .calc-result.main .v')).toContainText('25,45');
     r = await call(page, 'brew_calculator_pot_volume', { diameter_cm: 36, pot_height_cm: 34, gap_cm: 9 });
     expect(r.result.volume_l).toBeCloseTo(V, 3);
     expect(r.result.fill_height_cm).toBe(25);
@@ -243,7 +243,7 @@ test.describe('brew-calculator tools', () => {
   test('fill_height_for_volume', async ({ page }) => {
     const r = await call(page, 'brew_calculator_fill_height_for_volume', { diameter_cm: 36, target_volume_l: 25 });
     expect(r.result.fill_height_cm).toBeCloseTo(25000 / (Math.PI * 18 ** 2), 2);
-    await expect(page.locator('#vRes .res.main .v')).toContainText('24,6');
+    await expect(page.locator('#vRes .calc-result.main .v')).toContainText('24,6');
   });
 
   test('correct_gravity: Plato and SG', async ({ page }) => {
@@ -281,7 +281,7 @@ test.describe('medical-calculator tools', () => {
     let r = await call(page, 'medical_calculator_body_measures', { height_cm: 180, weight_kg: 80, waist_cm: 90 });
     expect(r.result).toEqual({ bmi: 24.7, who_class: 'normal weight', bsa_mosteller_m2: 2, bsa_dubois_m2: Math.round(0.007184 * 80 ** 0.425 * 180 ** 0.725 * 100) / 100, waist_to_height_ratio: 0.5 });
     await expect(page.locator('[data-key="b.h"]')).toHaveValue('180');
-    await expect(page.locator('#bRes .res.main .v')).toContainText('24,7');
+    await expect(page.locator('#bRes .calc-result.main .v')).toContainText('24,7');
     r = await call(page, 'medical_calculator_kidney_function', { age_years: 75, sex: 'male', creatinine: 168, creatinine_unit: 'umol_l', weight_kg: 70 });
     const S = 168 / 88.4, e = 142 * (S / 0.9) ** -1.2 * 0.9938 ** 75;
     expect(r.result.egfr_ml_min_1_73m2).toBe(Math.round(e));
@@ -3010,7 +3010,7 @@ test.describe('finance-calculator tools', () => {
     expect(r.result.final_capital).toBeCloseTo(cap, 1);
     expect(r.result.paid_in).toBe(13000);
     await expect(page.locator('[data-key="s.rate"]')).toHaveValue('100');
-    await expect(page.locator('#views [data-view="save"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#tab-save')).toHaveAttribute('aria-selected', 'true');
     // contribution needed: same plan backwards
     const back = await call(page, 'finance_calculator_savings_plan', { solve_for: 'monthly_contribution', start_capital: 1000, target_capital: cap, annual_return_percent: 6, years: 10, contribution_at: 'end_of_month' });
     expect(back.result.monthly_contribution).toBeCloseTo(100, 2);
@@ -3023,7 +3023,7 @@ test.describe('finance-calculator tools', () => {
     const i = 0.035 / 12, R = 1375, bal = 300000 * Math.pow(1 + i, 120) - R * (Math.pow(1 + i, 120) - 1) / i;
     expect(r.result.monthly_payment).toBe(R);
     expect(r.result.remaining_debt_after_fixed_period).toBeCloseTo(bal, 1);
-    await expect(page.locator('#views [data-view="loan"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#tab-loan')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('[data-key="l.rate"]')).toHaveValue('3,5');
     expect((await call(page, 'finance_calculator_loan', { amount: 1000, interest_percent: 3, years: 5, monthly_payment: 20 })).error).toContain('exactly one');
     expect((await call(page, 'finance_calculator_loan', { amount: 300000, interest_percent: 4, monthly_payment: 900 })).error).toContain('does not cover');
@@ -3048,6 +3048,6 @@ test.describe('finance-calculator tools', () => {
     await expect(page.locator('#cfRows input[data-f="cf"]')).toHaveCount(2);
     const c = await call(page, 'finance_calculator_convert_rate', { given: 'nominal', rate_percent: 6, compounding_per_year: 12 });
     expect(c.result.effective_percent).toBeCloseTo((Math.pow(1.005, 12) - 1) * 100, 5);
-    await expect(page.locator('#views [data-view="more"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#tab-iconv')).toHaveAttribute('aria-selected', 'true');
   });
 });

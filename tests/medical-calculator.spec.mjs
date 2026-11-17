@@ -13,9 +13,17 @@ const egfr = (age, female, scr) => {
 const cockcroft = (age, female, scr, w) => (140 - age) * w / (72 * scr) * (female ? 0.85 : 1);
 const de = (x, d) => x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
 
-const set = (page, key, value) => page.fill(`[data-key="${key}"]`, String(value));
-const main = (page, id) => page.locator(`#${id} .res.main .v`);
-const result = (page, id, label) => page.locator(`#${id} .res`, { has: page.locator('.k', { hasText: label }) }).locator('.v');
+// The calculators sit behind an overview (assets/shared/toolbox.js): open the one a field belongs to first
+const PANEL = { b: 'koerper', k: 'niere', p: 'schwanger', l: 'labor' };
+async function show(page, id) {
+  if (await page.locator(`#${id}`).isVisible()) return;
+  if (await page.locator('#overview').isVisible()) await page.click(`#overview [data-open="${id}"]`);
+  else await page.click(`#tab-${id}`);
+  await expect(page.locator(`#${id}`)).toBeVisible();
+}
+const set = async (page, key, value) => { await show(page, PANEL[key[0]]); await page.fill(`[data-key="${key}"]`, String(value)); };
+const main = (page, id) => page.locator(`#${id} .calc-result.main .v`);
+const result = (page, id, label) => page.locator(`#${id} .calc-result`, { has: page.locator('.k', { hasText: label }) }).locator('.v');
 
 test.beforeEach(async ({ page }) => {
   // fixed "today" for the pregnancy calculator: Tue 17 Nov 2026, 10:00 local time
@@ -31,7 +39,7 @@ test.describe('1 · body measures', () => {
     await expect(result(page, 'bRes', 'WHO')).toHaveText('Normalgewicht');
     await expect(result(page, 'bRes', 'Mosteller')).toContainText(de(mosteller(180, 80), 2)); // 2,00
     await expect(result(page, 'bRes', 'Du Bois')).toContainText(de(duBois(180, 80), 2));
-    await expect(page.locator('#bRes .res')).toHaveCount(4);
+    await expect(page.locator('#bRes .calc-result')).toHaveCount(4);
   });
 
   test('the class follows the displayed, rounded value', async ({ page }) => {
@@ -53,10 +61,10 @@ test.describe('1 · body measures', () => {
     await expect(result(page, 'bRes', 'Taille')).toContainText(de(88 / 160, 2)); // 0,55
     await expect(result(page, 'bRes', 'Taille')).toContainText('erhöht');
     await set(page, 'b.h', 130);
-    await expect(page.locator('#bMsg .msg.warn')).toContainText('Perzentilen');
+    await expect(page.locator('#bMsg .notice.warn')).toContainText('Perzentilen');
     await set(page, 'b.h', '');
-    await expect(page.locator('#bMsg .msg.err')).toBeVisible();
-    await expect(page.locator('#bRes .res')).toHaveCount(0);
+    await expect(page.locator('#bMsg .notice.err')).toBeVisible();
+    await expect(page.locator('#bRes .calc-result')).toHaveCount(0);
   });
 });
 
@@ -64,11 +72,13 @@ test.describe('2 · kidney function', () => {
   test('eGFR CKD-EPI 2021 and KDIGO stage, female and male', async ({ page }) => {
     await set(page, 'k.A', 50);
     await set(page, 'k.S', '0,8');
-    await expect(page.locator('#kMsg .msg')).toContainText('Geschlecht'); // sex is required
+    await expect(page.locator('#kMsg .notice')).toContainText('Geschlecht'); // sex is required
+    await show(page, PANEL.k);
     await page.click('[data-key="k.sex"] [data-v="f"]');
     const f = egfr(50, true, 0.8);
     await expect(main(page, 'kRes')).toContainText(de(f, 0));
     await expect(result(page, 'kRes', 'KDIGO')).toHaveText(f >= 89.5 ? 'G1 normal oder hoch' : 'G2 leicht vermindert');
+    await show(page, PANEL.k);
     await page.click('[data-key="k.sex"] [data-v="m"]');
     await set(page, 'k.A', 75);
     await set(page, 'k.S', '1,9');
@@ -82,18 +92,20 @@ test.describe('2 · kidney function', () => {
 
   test('Cockcroft-Gault with weight; µmol/l input; switching the unit converts the value', async ({ page }) => {
     await set(page, 'k.A', 70);
+    await show(page, PANEL.k);
     await page.click('[data-key="k.sex"] [data-v="f"]');
     await set(page, 'k.S', '1,2');
     await set(page, 'k.w', 60);
     await expect(result(page, 'kRes', 'Cockcroft')).toContainText(de(cockcroft(70, true, 1.2, 60), 0));
+    await show(page, PANEL.k);
     await page.click('[data-key="k.unit"] [data-v="umol"]');
     await expect(page.locator('[data-key="k.S"]')).toHaveValue(de(1.2 * 88.4, 0)); // 106
     await expect(main(page, 'kRes')).toContainText(de(egfr(70, true, 106 / 88.4), 0));
     await set(page, 'k.S', 5);
-    await expect(page.locator('#kMsg .msg.err')).toContainText('unplausibel');
+    await expect(page.locator('#kMsg .notice.err')).toContainText('unplausibel');
     await set(page, 'k.A', 17);
     await set(page, 'k.S', 80);
-    await expect(page.locator('#kMsg .msg.err')).toContainText('18–120');
+    await expect(page.locator('#kMsg .notice.err')).toContainText('18–120');
   });
 });
 
@@ -115,11 +127,11 @@ test.describe('3 · pregnancy', () => {
     await expect(result(page, 'pRes', 'SSW')).toHaveText('14+3');
     await set(page, 'p.z', 28);
     await set(page, 'p.L', '2026-11-18');
-    await expect(page.locator('#pMsg .msg.err')).toContainText('Zukunft');
+    await expect(page.locator('#pMsg .notice.err')).toContainText('Zukunft');
     await set(page, 'p.L', '2025-12-01');
-    await expect(page.locator('#pMsg .msg.warn')).toContainText('44 Wochen');
+    await expect(page.locator('#pMsg .notice.warn')).toContainText('44 Wochen');
     await set(page, 'p.z', 50);
-    await expect(page.locator('#pMsg .msg.err')).toBeVisible();
+    await expect(page.locator('#pMsg .notice.err')).toBeVisible();
   });
 });
 
@@ -127,6 +139,7 @@ test.describe('4 · lab values', () => {
   test('glucose both ways, switching the direction converts the value', async ({ page }) => {
     await set(page, 'l.x', 100);
     await expect(main(page, 'lRes')).toContainText(de(100 / 18.016, 2)); // 5,55
+    await show(page, PANEL.l);
     await page.click('[data-key="l.dir"] [data-v="si"]');
     await expect(page.locator('[data-key="l.x"]')).toHaveValue('5,55');
     await expect(page.locator('#lUnit')).toHaveText('mmol/l');
@@ -134,17 +147,21 @@ test.describe('4 · lab values', () => {
   });
 
   test('HbA1c, cholesterol, triglycerides and creatinine', async ({ page }) => {
+    await show(page, PANEL.l);
     await page.selectOption('[data-key="l.a"]', 'hba1c');
     await expect(page.locator('[data-key="l.dir"] [data-v="conv"]')).toHaveText('%');
     await set(page, 'l.x', '7,0');
     await expect(main(page, 'lRes')).toContainText(de((7 - 2.15) * 10.929, 0)); // 53
     await set(page, 'l.x', 40);
-    await expect(page.locator('#lMsg .msg.err')).toBeVisible();
+    await expect(page.locator('#lMsg .notice.err')).toBeVisible();
+    await show(page, PANEL.l);
     await page.selectOption('[data-key="l.a"]', 'cholesterol');
     await set(page, 'l.x', 200);
     await expect(main(page, 'lRes')).toContainText(de(200 / 38.665, 2)); // 5,17
+    await show(page, PANEL.l);
     await page.selectOption('[data-key="l.a"]', 'triglycerides');
     await expect(main(page, 'lRes')).toContainText(de(200 / 88.57, 2)); // 2,26
+    await show(page, PANEL.l);
     await page.selectOption('[data-key="l.a"]', 'creatinine');
     await set(page, 'l.x', '1,1');
     await expect(main(page, 'lRes')).toContainText(de(1.1 * 88.4, 0)); // 97
@@ -152,18 +169,21 @@ test.describe('4 · lab values', () => {
   });
 });
 
-test('entered values are never stored, only the two settings', async ({ page }) => {
+test('entered values are never stored, only the settings', async ({ page }) => {
   await set(page, 'b.h', 180);
   await set(page, 'b.m', 80);
   await set(page, 'k.A', 50);
+  await show(page, PANEL.k);
   await page.click('[data-key="k.sex"] [data-v="f"]');
+  await show(page, PANEL.k);
   await page.click('[data-key="k.unit"] [data-v="umol"]');
   await set(page, 'p.L', '2026-08-01');
+  await show(page, PANEL.l);
   await page.selectOption('[data-key="l.a"]', 'hba1c');
   await set(page, 'l.x', 7);
   const stored = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)])));
   expect(Object.keys(stored).filter(k => k.startsWith('medical-calculator.'))).toEqual(['medical-calculator.settings.v1']);
-  expect(JSON.parse(stored['medical-calculator.settings.v1'])).toEqual({ creatinineUnit: 'umol', lab: 'hba1c' });
+  expect(JSON.parse(stored['medical-calculator.settings.v1'])).toEqual({ creatinineUnit: 'umol', lab: 'hba1c', view: 'tool', tab: 'labor' });
   await page.reload();
   for (const k of ['b.h', 'b.m', 'k.A', 'k.S', 'p.L', 'l.x']) await expect(page.locator(`[data-key="${k}"]`)).toHaveValue('');
   await expect(page.locator('[data-key="k.sex"] [aria-pressed="true"]')).toHaveCount(0);
@@ -188,13 +208,19 @@ test('switching the language re-renders results and formulas', async ({ page }) 
   await expect(page.locator('#bMath')).toContainText('BSA');
 });
 
-test('jump bar: chips from base.css, the calculator in view is marked', async ({ page }) => {
-  const nav = page.locator('nav.calcs.chips');
-  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#koerper');
-  await nav.locator('a[href="#niere"]').click();
-  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#niere');
-  await nav.locator('a[href="#labor"]').click();
-  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#labor');
-  await expect(nav.locator('a[aria-current="true"]')).toHaveCount(1);
-  await expect(nav).toBeInViewport();
+test('overview: tiles open a calculator, tabs switch, the back key returns, the open one survives a reload', async ({ page }) => {
+  await expect(page.locator('#overview .tiles > button')).toHaveCount(4);
+  await expect(page.locator('#tabbar')).toBeHidden();
+  await page.click('#overview [data-open="niere"]');
+  await expect(page.locator('#niere')).toBeVisible();
+  await expect(page.locator('#tab-niere')).toHaveAttribute('aria-selected', 'true');
+  await page.click('#tab-labor');
+  await expect(page.locator('#labor')).toBeVisible();
+  await expect(page.locator('#niere')).toBeHidden();
+  await expect(page.locator('#tabbar')).toBeInViewport();
+  await page.reload();
+  await expect(page.locator('#labor')).toBeVisible();
+  await page.goBack();
+  await expect(page.locator('#overview')).toBeVisible();
+  await expect(page.locator('#labor')).toBeHidden();
 });

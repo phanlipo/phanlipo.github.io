@@ -12,9 +12,17 @@ const pFromSg = G => -616.868 + 1111.14 * G - 630.272 * G ** 2 + 135.997 * G ** 
 const corrected = (P, T, Tc) => pFromSg(sgFromP(P) * rhoW(Tc) / rhoW(T));
 const de = (x, d) => x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
 
-const set = (page, key, value) => page.fill(`[data-key="${key}"]`, String(value));
-const main = (page, id) => page.locator(`#${id} .res.main .v`);
-const result = (page, id, label) => page.locator(`#${id} .res`, { has: page.locator('.k', { hasText: label }) }).locator('.v');
+// The calculators sit behind an overview (assets/shared/toolbox.js): open the one a field belongs to first
+const PANEL = { v: 'topf', s: 'stammwuerze', z: 'zucker' };
+async function show(page, id) {
+  if (await page.locator(`#${id}`).isVisible()) return;
+  if (await page.locator('#overview').isVisible()) await page.click(`#overview [data-open="${id}"]`);
+  else await page.click(`#tab-${id}`);
+  await expect(page.locator(`#${id}`)).toBeVisible();
+}
+const set = async (page, key, value) => { await show(page, PANEL[key[0]]); await page.fill(`[data-key="${key}"]`, String(value)); };
+const main = (page, id) => page.locator(`#${id} .calc-result.main .v`);
+const result = (page, id, label) => page.locator(`#${id} .calc-result`, { has: page.locator('.k', { hasText: label }) }).locator('.v');
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/brew-calculator/');
@@ -30,6 +38,7 @@ test.describe('1 · pot volume', () => {
   });
 
   test('volume from gap to the rim', async ({ page }) => {
+    await show(page, 'topf');
     await page.click('[data-key="v.mode"] [data-v="gap"]');
     await set(page, 'v.d', 36);
     await set(page, 'v.H', 34);
@@ -38,6 +47,7 @@ test.describe('1 · pot volume', () => {
   });
 
   test('fill height for a target volume', async ({ page }) => {
+    await show(page, 'topf');
     await page.click('[data-key="v.mode"] [data-v="target"]');
     await set(page, 'v.d', 36);
     await set(page, 'v.V', 25);
@@ -55,7 +65,7 @@ test.describe('1 · pot volume', () => {
 
   test('missing diameter shows an error', async ({ page }) => {
     await set(page, 'v.d', '');
-    await expect(page.locator('#vMsg .msg.err')).toBeVisible();
+    await expect(page.locator('#vMsg .notice.err')).toBeVisible();
   });
 });
 
@@ -85,6 +95,7 @@ test.describe('2 · gravity correction', () => {
   });
 
   test('input as specific gravity', async ({ page }) => {
+    await show(page, 'stammwuerze');
     await page.click('[data-key="s.unit"] [data-v="SG"]');
     await set(page, 's.x', '1,0484');
     await set(page, 's.T', 30);
@@ -116,6 +127,7 @@ test.describe('3 · priming sugar', () => {
   });
 
   test('style chip sets the target CO₂', async ({ page }) => {
+    await show(page, 'zucker');
     await page.locator('#zChips .chip', { hasText: 'Weizen' }).click();
     await expect(page.locator('[data-key="z.C"]')).toHaveValue('7,0');
   });
@@ -123,11 +135,12 @@ test.describe('3 · priming sugar', () => {
   test('no sugar needed when CO₂ is already high enough', async ({ page }) => {
     await set(page, 'z.T', 2);   // cold beer still holds ≈ 2,97 g/L
     await set(page, 'z.C', 2.5);
-    await expect(page.locator('#zMsg .msg.ok')).toContainText('kein Zucker nötig');
+    await expect(page.locator('#zMsg .notice.ok')).toContainText('kein Zucker nötig');
   });
 });
 
 test('formulas render with KaTeX when opened', async ({ page }) => {
+  await show(page, 'zucker');
   await openDetails(page.locator('#zucker'), 'Formeln');
   await expect(page.locator('#zMath .katex').first()).toBeVisible();
   await expect(page.locator('.katex-error')).toHaveCount(0);
@@ -138,10 +151,13 @@ test('formulas explain the calculation with symbols only, values stay in the res
   await set(page, 'z.T', 13);
   await set(page, 'z.V', 23);
   await set(page, 's.T', 27);
-  await openDetails(page.locator('#zucker'), 'Formeln');
-  await openDetails(page.locator('#stammwuerze'), 'Formeln');
   const z = page.locator('#zMath'), s = page.locator('#sMath');
+  await show(page, 'zucker');
+  await openDetails(page.locator('#zucker'), 'Formeln');
   await expect(z.locator('.katex').first()).toBeVisible();
+  await show(page, 'stammwuerze');
+  await openDetails(page.locator('#stammwuerze'), 'Formeln');
+  await expect(s.locator('.katex').first()).toBeVisible();
   await expect(result(page, 'zRes', 'Rest-CO')).toContainText(de(co2(13, 1.013), 2));
   // no entered values or intermediate results inside the formulas
   for (const v of ['13,0', '23,0', de(co2(13, 1.013), 2)]) await expect(z).not.toContainText(v);
@@ -157,8 +173,10 @@ test('formulas explain the calculation with symbols only, values stay in the res
 
 test('inputs survive a reload', async ({ page }) => {
   await set(page, 'v.d', 42);
+  await show(page, 'stammwuerze');
   await page.click('[data-key="s.unit"] [data-v="SG"]');
   await page.reload();
+  await expect(page.locator('#stammwuerze')).toBeVisible();  // the open calculator is remembered
   await expect(page.locator('[data-key="v.d"]')).toHaveValue('42');
   await expect(page.locator('[data-key="s.unit"] [data-v="SG"]')).toHaveAttribute('aria-pressed', 'true');
 });
@@ -167,7 +185,7 @@ test.describe('English', () => {
   test.use({ locale: 'en-US' });
 
   test('labels, results with decimal point and formulas in English', async ({ page }) => {
-    await expect(page.locator('#topf h2')).toHaveText('1 · Volume in a cylindrical pot');
+    await expect(page.locator('#topf h2')).toHaveText('Volume in a cylindrical pot');
     await set(page, 'v.d', '36');
     await set(page, 'v.h', '25');
     await expect(main(page, 'vRes')).toContainText((Math.PI * 18 ** 2 * 25 / 1000).toFixed(2)); // 25.45
@@ -177,6 +195,7 @@ test.describe('English', () => {
     await set(page, 'z.C', 5);
     await expect(result(page, 'zRes', 'Residual CO')).toContainText(co2(20, 1.013).toFixed(2));
     await expect(page.locator('#zChips .chip').first()).toContainText('Stout / Porter · 4.0 g/L');
+    await show(page, 'stammwuerze');
     await openDetails(page.locator('#stammwuerze'), 'Formulas');
     await expect(page.locator('#sMath .legend', { hasText: 'ASBC' })).toContainText('−616.868');
     await switchLang(page, 'de');
@@ -184,13 +203,18 @@ test.describe('English', () => {
   });
 });
 
-test('jump bar: chips from base.css, the calculator in view is marked', async ({ page }) => {
-  const nav = page.locator('nav.calcs.chips');
-  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#topf');
-  await nav.locator('a[href="#stammwuerze"]').click();
-  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#stammwuerze');
-  await nav.locator('a[href="#zucker"]').click();
-  await expect(nav.locator('a[aria-current="true"]')).toHaveAttribute('href', '#zucker');
-  await expect(nav.locator('a[aria-current="true"]')).toHaveCount(1);
-  await expect(nav).toBeInViewport();
+test('overview: tiles open a calculator, tabs switch, the back key returns', async ({ page }) => {
+  await expect(page.locator('#overview .tiles > button')).toHaveCount(3);
+  await expect(page.locator('#tabbar')).toBeHidden();
+  await page.click('#overview [data-open="stammwuerze"]');
+  await expect(page.locator('#stammwuerze')).toBeVisible();
+  await expect(page.locator('#topf')).toBeHidden();
+  await expect(page.locator('#tab-stammwuerze')).toHaveAttribute('aria-selected', 'true');
+  await page.click('#tab-zucker');
+  await expect(page.locator('#zucker')).toBeVisible();
+  await expect(page.locator('#tabbar [aria-selected="true"]')).toHaveCount(1);
+  await expect(page.locator('#tabbar')).toBeInViewport();
+  await page.goBack();
+  await expect(page.locator('#overview')).toBeVisible();
+  await expect(page.locator('#zucker')).toBeHidden();
 });

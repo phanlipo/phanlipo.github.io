@@ -4,8 +4,13 @@ import { test, expect, switchLang, openMenu, clipboardText } from './helpers.mjs
 const de = (x, d = 2) => x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
 const en = (x, d = 2) => x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 const set = (page, key, value) => page.fill(`[data-key="${key}"]`, String(value));
-const stat = (page, host, label) => page.locator(`#${host} .stat-box`).filter({ has: page.getByText(label, { exact: true }) }).locator('b');
-const view = (page, v) => page.click(`#views [data-view="${v}"]`);
+const stat = (page, host, label) => page.locator(`#${host} .calc-result`).filter({ has: page.locator('.k').getByText(label, { exact: true }) }).locator('.v');
+// Opens a calculator: from the overview by its tile, otherwise by its tab
+const view = async (page, v) => {
+  if (await page.locator('#overview').isVisible()) await page.click(`#overview [data-open="${v}"]`);
+  else await page.click(`#tab-${v}`);
+  await expect(page.locator(`#${v}`)).toBeVisible();
+};
 const seg = (page, key, v) => page.click(`[data-key="${key}"] [data-v="${v}"]`);
 
 // Annuity factors: value after n periods of 1 per period, at the end (or start) of each period
@@ -15,6 +20,8 @@ test.use({ locale: 'de-DE' });
 test.beforeEach(async ({ page }) => { await page.goto('/finance-calculator/'); });
 
 test.describe('savings plan', () => {
+  test.beforeEach(async ({ page }) => { await view(page, 'save'); });
+
   test('final capital, paid in, returns and purchasing power', async ({ page }) => {
     await set(page, 's.start', '10.000');      // German thousands separator
     await set(page, 's.rate', '250');
@@ -121,7 +128,7 @@ test.describe('loan', () => {
     await set(page, 'l.rate', '4');
     await set(page, 'l.payment', '900');   // interest alone is 1000 per month
     await expect(page.locator('#lMsg .notice.err')).toContainText('deckt nicht einmal die Zinsen');
-    await expect(page.locator('#lRes .stat-box')).toHaveCount(0);
+    await expect(page.locator('#lRes .calc-result')).toHaveCount(0);
   });
 });
 
@@ -209,7 +216,7 @@ test.describe('cash flows', () => {
 
 test.describe('more', () => {
   test('rate conversion, change, profit, break-even', async ({ page }) => {
-    await view(page, 'more');
+    await view(page, 'iconv');
     await set(page, 'i.val', '6');
     await set(page, 'i.c', '12');
     const eff = (Math.pow(1.005, 12) - 1) * 100;
@@ -217,15 +224,18 @@ test.describe('more', () => {
     await expect(stat(page, 'iRes', 'Verdopplung nach')).toHaveText(de(Math.log(2) / Math.log(1 + eff / 100), 1) + ' Jahre');
     await seg(page, 'i.dir', 'eff');
     await expect(stat(page, 'iRes', 'Nominalzins')).toHaveText(de((Math.pow(1.06, 1 / 12) - 1) * 1200, 4) + ' %');
+    await view(page, 'change');
     await set(page, 'd.old', '80');
     await set(page, 'd.new', '120');
     await set(page, 'd.years', '3');
     await expect(stat(page, 'dRes', 'Veränderung')).toHaveText('50,00 %');
     await expect(stat(page, 'dRes', 'Rendite pro Jahr (CAGR)')).toHaveText(de((Math.pow(1.5, 1 / 3) - 1) * 100, 3) + ' %');
+    await view(page, 'profit');
     await set(page, 'p.cost', '60');
     await set(page, 'p.price', '80');
     await expect(stat(page, 'pRes', 'Marge')).toHaveText('25,00 %');
     await expect(stat(page, 'pRes', 'Aufschlag')).toHaveText(de(100 / 3) + ' %');
+    await view(page, 'breakeven');
     await set(page, 'b.fixed', '12000');
     await set(page, 'b.var', '20');
     await set(page, 'b.price', '50');
@@ -237,7 +247,7 @@ test.describe('more', () => {
   });
 
   test('depreciation methods and day count', async ({ page }) => {
-    await view(page, 'more');
+    await view(page, 'depr');
     await set(page, 'a.cost', '10000');
     await set(page, 'a.salvage', '0');
     await set(page, 'a.life', '4');
@@ -248,6 +258,7 @@ test.describe('more', () => {
     // 4000, 2400 (40 % of 6000 beats 6000 / 3); then straight-line on 3600 over 2 years (1800 > 40 % = 1440)
     await expect(page.locator('#aTable tbody td:nth-child(2)')).toHaveText(['4.000,00', '2.400,00', '1.800,00', '1.800,00']);
     await expect(page.locator('#aMsg')).toContainText('Ab Jahr 3 linear');
+    await view(page, 'days');
     await set(page, 'dt.a', '2024-01-31');
     await set(page, 'dt.b', '2024-03-01');
     await expect(stat(page, 'dtRes', 'Tatsächliche Tage')).toHaveText('30');   // leap year
@@ -255,11 +266,31 @@ test.describe('more', () => {
   });
 });
 
+test('overview: tiles open a calculator, the back key returns, the open calculator survives a reload', async ({ page }) => {
+  await expect(page.locator('#overview .tiles > button')).toHaveCount(10);
+  await expect(page.locator('#tabbar')).toBeHidden();
+  await view(page, 'tvm');
+  await expect(page.locator('#overview')).toBeHidden();
+  await expect(page.locator('#tab-tvm')).toHaveAttribute('aria-selected', 'true');
+  await page.locator('#tab-tvm').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#cf')).toBeVisible();
+  await page.goBack();
+  await expect(page.locator('#overview')).toBeVisible();
+  await expect(page.locator('#cf')).toBeHidden();
+  await view(page, 'depr');
+  await page.reload();
+  await expect(page.locator('#depr')).toBeVisible();
+  await page.click('#tabbar [data-overview]');
+  await expect(page.locator('#overview')).toBeVisible();
+});
+
 test('inputs survive a reload; reset restores the open calculator and can be undone', async ({ page }) => {
   await view(page, 'loan');
   await set(page, 'l.amount', '123456');
   await page.reload();
-  await expect(page.locator('#views [data-view="loan"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#tab-loan')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#loan')).toBeVisible();
   await expect(page.locator('[data-key="l.amount"]')).toHaveValue('123456');
   await openMenu(page);
   await page.click('#btnReset');
@@ -271,6 +302,7 @@ test('inputs survive a reload; reset restores the open calculator and can be und
 test.describe('English', () => {
   test.use({ locale: 'en-US' });
   test('decimal point, thousands commas and CSV with commas', async ({ page }) => {
+    await view(page, 'save');
     await expect(page.locator('[data-key="s.cost"]')).toHaveValue('0.2');
     await set(page, 's.start', '10,000');
     await set(page, 's.rate', '0');
@@ -285,10 +317,11 @@ test.describe('English', () => {
   });
 
   test('switching the language converts decimal separators in the fields', async ({ page }) => {
+    await view(page, 'save');
     await set(page, 's.ret', '7.5');
     await switchLang(page, 'de');
     await expect(page.locator('[data-key="s.ret"]')).toHaveValue('7,5');
-    await expect(page.locator('#views [data-view="save"]')).toHaveText('Sparplan');
+    await expect(page.locator('#tab-save')).toHaveText('Sparplan');
     await switchLang(page, 'en');
     await expect(page.locator('[data-key="s.ret"]')).toHaveValue('7.5');
   });

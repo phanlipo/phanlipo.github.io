@@ -36,9 +36,9 @@ test('overview: tiles open a tool, back returns, the last tool reopens', async (
   await page.evaluate(() => localStorage.clear());
   await page.reload(); // like „Alle Daten löschen“: reload inside the tool's history entry
   await expect(page.locator('#overview')).toBeVisible();
-  await expect(page.locator('#toolbar')).toBeHidden();
+  await expect(page.locator('#tabbar')).toBeHidden();
   await expect(page.locator('.panel:visible')).toHaveCount(0);
-  await expect(page.locator('#overview .tile')).toHaveCount(14);
+  await expect(page.locator('#overview .tiles > button')).toHaveCount(14);
   await page.locator('#overview').getByRole('button', { name: 'Wasserwaage' }).click();
   await expect(page.locator('#p-level')).toBeVisible();
   await expect(page.locator('#overview')).toBeHidden();
@@ -53,7 +53,7 @@ test('overview: tiles open a tool, back returns, the last tool reopens', async (
   await expect(page.locator('#p-speed')).toBeVisible();
   await page.getByRole('button', { name: 'Übersicht' }).click();
   await expect(page.locator('#overview')).toBeVisible();
-  await expect(page.locator('#toolbar')).toBeHidden();
+  await expect(page.locator('#tabbar')).toBeHidden();
   // Reload: the overview stays; after opening a tool the app reopens it
   await page.reload();
   await expect(page.locator('#overview')).toBeVisible();

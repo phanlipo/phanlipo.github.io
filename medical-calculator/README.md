@@ -10,7 +10,7 @@ keine Therapieempfehlung. Das steht sichtbar auf der Seite und in der Hilfe.
 
 **Datenschutz:** Messwerte (Größe, Gewicht, Kreatinin, Daten der Periode …) werden **nicht gespeichert**
 (Patientendaten). Gespeichert werden nur Einstellungen (`medical-calculator.settings.v1`: Einheit des Kreatinins,
-gewählter Laborwert). Diagnose-Protokoll ohne Werte.
+gewählter Laborwert, zuletzt geöffneter Rechner). Diagnose-Protokoll ohne Werte.
 
 **Rundung:** Einteilungen (WHO-Klasse, KDIGO-Stadium) werden auf den **angezeigten, gerundeten** Wert
 angewandt, damit Anzeige und Klasse nie widersprechen.
