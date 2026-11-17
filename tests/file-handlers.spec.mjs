@@ -32,6 +32,19 @@ for (const app of withShare) {
     expect(new Set(exts).size).toBe(exts.length);
     expect(m.launch_handler).toEqual({ client_mode: 'navigate-new' });
   });
+
+  test(`${app.folder}: the help explains sharing and "Open with" under the name the share menu shows`, async ({ page, request }) => {
+    const m = await (await request.get(`/${app.folder}/manifest.webmanifest`)).json();
+    await page.goto(`/${app.folder}/`);
+    const de = page.locator('details.help [data-lang="de"]', { has: page.locator('h3', { hasText: 'Dateien an die App geben' }) });
+    await expect(de).toHaveCount(1);
+    await expect(de).toContainText(`„${m.short_name}“ wählen`);
+    await expect(de).toContainText('Öffnen mit');
+    const en = page.locator('details.help [data-lang="en"]', { has: page.locator('h3', { hasText: 'Giving files to the app' }) });
+    await expect(en).toContainText(`pick “${m.short_name_localized.en}”`);
+    // Only once: no hand-written copy of the same text left in the app's own help
+    expect(await page.locator('details.help li', { hasText: /Windows\/[Cc]omputer/ }).count()).toBe(2);
+  });
 }
 
 test('apps without tool:share-target have neither', async ({ request }) => {

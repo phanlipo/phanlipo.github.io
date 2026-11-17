@@ -7,7 +7,8 @@
 //   3. <head> block in every page: noindex, Content Security Policy,   <!-- head:start/end -->
 //      favicon, manifest, theme colour
 //   4. Data backup section in every app (scripts/partials/data.html)   <!-- data:start/end -->
-//      and help section on AI agents (scripts/partials/help-agent.html) <!-- agent:start/end -->
+//      and help sections on AI agents (scripts/partials/help-agent.html) <!-- agent:start/end -->
+//      and on sharing/opening files (scripts/partials/help-files.html)   <!-- files:start/end -->
 //   5. Per app (every listed tool + template): manifest.webmanifest and sw.js (offline cache).
 //      The cache version is a hash of all cached files, so every change ships automatically;
 //      it is also shown in the app's footer ("Version …").
@@ -29,7 +30,9 @@
 //   tool:storage                                         localStorage key prefix(es) of the app, comma-separated
 //   tool:share-target                                    accepted file types for "share to this app" (Android, one or several files),
 //                                                        e.g. "audio/*, .opus" – see AGENTS.md. The file extensions in it
-//                                                        also become file_handlers ("Open with", Windows/desktop)
+//                                                        also become file_handlers ("Open with", Windows/desktop); the help gets
+//                                                        the section "Dateien an die App geben" (scripts/partials/help-files.html,
+//                                                        <!-- files:start/end -->, uses tool:short-name / -short-name-en)
 //   tool:share-text ("true")                             receive shared links/text (Android) as ?title=&text=&url=
 //   tool:webmcp ("a, b")                                 WebMCP tools the page registers (names without app prefix);
 //                                                        needs the feature "KI-Agent", checked by tests/webmcp.spec.mjs
@@ -135,6 +138,8 @@ for (const t of tools) {
 const apps = [...tools, ...pages.filter(p => p.folder === 'template')];
 const isApp = p => apps.includes(p);
 for (const p of apps) {
+  if (p.shareAccept.length && !read(p.file).includes('<!-- files:start -->'))
+    throw new Error(`${p.file}: tool:share-target needs <!-- files:start --><!-- files:end --> in the help (before "Fehlersuche")`);
   if (!p.webmcp.length) continue;
   if (!p.agentHelp || !p.agentHelpEn)
     throw new Error(`${p.file}: tool:webmcp needs <meta name="tool:webmcp-help"> and <meta name="tool:webmcp-help-en"> (what an AI agent can do here)`);
@@ -521,6 +526,8 @@ const footer = readFileSync(join(ROOT, 'scripts/partials/footer.html'), 'utf8').
 const footerFor = p => p.folder ? footer : footer.split('\n').filter(l => !l.includes('footer-home')).join('\n');
 const dataBlock = readFileSync(join(ROOT, 'scripts/partials/data.html'), 'utf8').trim();
 const agentBlock = readFileSync(join(ROOT, 'scripts/partials/help-agent.html'), 'utf8').trim();
+const filesBlock = readFileSync(join(ROOT, 'scripts/partials/help-files.html'), 'utf8').trim();
+const renderFiles = p => `\n  ${filesBlock.replace('{name}', () => escHtml(p.shortName)).replace('{nameEn}', () => escHtml(p.shortNameEn)).replaceAll('\n', '\n  ')}\n  `;
 const renderAgent = p => `\n  ${agentBlock.replace('{de}', () => escHtml(p.agentHelp)).replace('{en}', () => escHtml(p.agentHelpEn)).replaceAll('\n', '\n  ')}\n  `;
 setBlock('index.html', 'tools', renderCards(), true);
 setBlock('README.md', 'tools', renderTable(), true);
@@ -528,6 +535,7 @@ for (const p of pages) {
   setBlock(p.file, 'footer', `\n  ${footerFor(p).replaceAll('\n', '\n  ')}\n  `, false);
   if (!p.hidden) setBlock(p.file, 'head', renderHead(p), false);
   setBlock(p.file, 'data', isApp(p) && p.storage ? `\n${dataBlock}\n` : '\n', false);
+  setBlock(p.file, 'files', isApp(p) && p.shareAccept.length ? renderFiles(p) : '', false);
   setBlock(p.file, 'agent', isApp(p) && p.webmcp.length ? renderAgent(p) : '', false);
 }
 for (const p of apps) {

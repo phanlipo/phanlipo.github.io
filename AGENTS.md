@@ -13,7 +13,7 @@ Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/), ohne Server 
 - `UI-KONZEPT.md`: Bedienelemente, Icon-Lexikon, Menüaufbau (Regeln kurz unter „Bedienelemente & Icons“).
 - `IDEAS.md`: Ideen für neue Seiten und zurückgestellte/verworfene Ideen (passen nicht zur Architektur) mit Begründung – **vor neuen Apps lesen**; Ideen, die nicht passen (z. B. brauchen Server), dort eintragen statt umsetzen.
 
-**Generiert, nie von Hand bearbeiten:** Bereiche zwischen `<!-- tools/head/footer/data/agent:start -->` und `…:end -->`, `manifest.webmanifest`, `sw.js`, Icons (auch `assets/icons.svg`), `NOTICE.md`, `sbom.cdx.json`, `assets/vendor/`, `quartet/decks.js`, `laser-mirrors/levels.js`.
+**Generiert, nie von Hand bearbeiten:** Bereiche zwischen `<!-- tools/head/footer/data/agent/files:start -->` und `…:end -->`, `manifest.webmanifest`, `sw.js`, Icons (auch `assets/icons.svg`), `NOTICE.md`, `sbom.cdx.json`, `assets/vendor/`, `quartet/decks.js`, `laser-mirrors/levels.js`.
 
 ## Neue App
 
@@ -53,7 +53,7 @@ Nicht gelistete Seiten (z. B. Weiterleitungen): `<meta name="tool:hidden" conten
 - **YouTube (`playlist-player`):** Player nur als iframe von `www.youtube-nocookie.com` (`tool:youtube`, CSP `frame-src`; `www.youtube.com` nur mit der Einstellung „Mit YouTube-Konto abspielen“ für Premium), Werbung nie überspringen/blockieren, gesteuert per postMessage – **kein YouTube-Skript in der Seite**. Iframe und oEmbed-Titel (`tool:connect`) erst nach Tippen bzw. Teilen/Einfügen eines Links, nie per KI-Agent. Tests nur mit `tests/fake-youtube.mjs`.
 - **Cast (`cast-demo`, im Test):** Adresse der Empfängerseite `assets/shared/cast-receiver.html` nie ändern (bei Google registriert). Das Cast-SDK von `www.gstatic.com` ist die einzige erlaubte fremde Skriptquelle (`tool:cast`).
 - **Fotos lesen:** HEIC über `assets/shared/heic.js` + `heic-worker.js` im App-Ordner, `accept="image/*,.heic,.heif"` (Beispiel `image-converter`).
-- **Dateien teilen/öffnen:** `tool:share-target` (Dateien; Endungen müssen in `FILE_TYPES` stehen) bzw. `tool:share-text` (Links/Text), in der Seite `Tools.takeSharedFile(s)()`/`Tools.takeSharedText()`. Zurückspeichern per File System Access API nur mit Ausweichweg (Beispiel `markdown-editor`). iPhone kann beides nicht – in der Hilfe erklären.
+- **Dateien teilen/öffnen:** `tool:share-target` (Dateien; Endungen müssen in `FILE_TYPES` stehen) bzw. `tool:share-text` (Links/Text), in der Seite `Tools.takeSharedFile(s)()`/`Tools.takeSharedText()`. Zurückspeichern per File System Access API nur mit Ausweichweg (Beispiel `markdown-editor`). Den Hilfe-Abschnitt „Dateien an die App geben“ (Android, Öffnen mit, iPhone) erzeugt `build.mjs` (`scripts/partials/help-files.html`, Marker `<!-- files:start/end -->`); in der App nur Besonderheiten erklären.
 - **Benachrichtigungen:** nur per `registration.showNotification()`, kein Push (kein Server); Beispiel und Begründung der Android-Sonderwege in `reminders`.
 
 ## Bedienelemente & Icons
