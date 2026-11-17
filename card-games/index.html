@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can read the running game from your point of view (your cards, the table, allowed moves) and make a move for you. It cannot connect devices.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-WdIzXPllMmLEXzTSQpZ1V2FPqzJVEnrH1COArPjrKtk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-m7G3AE3TjR/gbx60ECopzKxTJE8StdX07xh/Jk0av4A='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -385,7 +385,7 @@ textarea.code{min-height:84px;word-break:break-all}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 4e094d31c658</p>
+  <p class="footer-version">Version 55edf9f0ca01</p>
   <!-- footer:end -->
 </footer>
 
@@ -515,7 +515,7 @@ function renderStats(){
 let S=null;        // {mode:'local'|'host', game, seats:[{kind:'me'|'bot'|'peer', name, bot, peer}], state, ver, round}
 let G=null;        // guest: {peer, view, room}
 let view=null;     // the view this page renders (own seat)
-let botTimer=null,invite=null,inviteCode='',answerCode='',lastActive=false,recorded=-1;
+let botTimer=null,lastActive=false,recorded=-1;
 
 function newSession(mode,gameId){
   closeAll();
@@ -764,43 +764,12 @@ function removeSeat(i){
 $('btnAddBot').addEventListener('click',()=>{addBot();renderRoom();});
 $('btnStart').addEventListener('click',()=>{if(S)startGame();});
 
-/* ---------- Invite one phone ---------- */
-async function startInvite(){
-  if(!S)return;
-  cancelInvite();
-  show('scrInvite');setStatus('inviteStatus',t('preparing'));
-  const ctx2=$('qrOffer').getContext('2d');ctx2.clearRect(0,0,9999,9999);delete $('qrOffer').dataset.text;$('answerIn').value='';inviteCode='';
-  let p;
-  try{p=P2P.peer({stun:settings.stun,label:'card-games'});}catch(e){setStatus('inviteStatus',errText(e),'err');return;}
-  invite=p;
-  p.on('open',()=>{if(invite===p)onGuestOpen(p);});
-  p.on('close',()=>{if(invite===p){invite=null;setStatus('inviteStatus',t('connectFail'),'err');}});
-  try{
-    const code=await p.offer();
-    if(invite!==p)return;
-    inviteCode=P2P.link(code);
-    P2P.drawQr($('qrOffer'),inviteCode);
-    setStatus('inviteStatus',t('waitAnswer'));
-  }catch(e){Tools.diag.log('invite failed',e);if(invite===p)setStatus('inviteStatus',errText(e),'err');}
-}
-function cancelInvite(){if(invite){invite.close();invite=null;}}
-let connectTimer=null;
-async function acceptAnswer(code){
-  show('scrInvite');
-  if(!invite){setStatus('inviteStatus',t('connectFail'),'err');return;}
-  const p=invite;
-  try{
-    await p.accept(code);
-    setStatus('inviteStatus',t('connecting'));
-    clearTimeout(connectTimer);
-    connectTimer=setTimeout(()=>{if(invite===p&&!p.isOpen()){Tools.diag.log('connect timeout',p.state());setStatus('inviteStatus',t('connectFail'),'err');}},20000);
-  }catch(e){Tools.diag.log('answer failed',e);setStatus('inviteStatus',t('connectFail'),'err');}
-}
-function onGuestOpen(p){
-  clearTimeout(connectTimer);
-  invite=null;
-  const g=GAMES[S.game];
-  if(S.seats.length>=g.players.max){p.send({t:'bye'});p.close();openRoom();Tools.toast(t('full'));return;}
+/* ---------- Host: invitations and guests ---------- */
+// Invitations, codes, scanner: P2PConnect.room (assets/shared/p2p-connect.js); seats, game and messages stay here
+function startInvite(){if(S)conn.invite();}
+function cancelInvite(){conn.cancelInvite();}
+/** A guest is connected: it gets a seat */
+function onGuest(p){
   const seat={kind:'peer',name:'',peer:p,hello:false};
   S.seats.push(seat);
   p.on('message',m=>onHostMessage(seat,m));
@@ -850,30 +819,11 @@ function peerGone(seat){
 }
 
 /* ================= Guest ================= */
-async function joinWith(code){
-  closeAll();
-  show('scrAnswer');setStatus('answerStatus',t('preparing'));
-  const ctx2=$('qrAnswer').getContext('2d');ctx2.clearRect(0,0,9999,9999);delete $('qrAnswer').dataset.text;answerCode='';
-  let p;
-  try{p=P2P.peer({stun:settings.stun,label:'card-games'});}catch(e){setStatus('answerStatus',errText(e),'err');return;}
-  G={peer:p,view:null,room:null};
-  const my=G;
-  p.on('open',()=>{
-    if(G!==my)return;
-    Tools.diag.log('connected to host');
-    p.send({t:'hello',app:'card-games',v:1,name:myName()});
-    keepAwake();Tools.toast(t('connected'));
-    show('scrWait');renderWait();
-  });
-  p.on('message',m=>{if(G===my)onGuestMessage(m);});
-  p.on('close',()=>{if(G===my)guestLost('disconnected');});
-  try{
-    const ans=await p.answer(code);
-    if(G!==my)return;
-    answerCode=ans;
-    P2P.drawQr($('qrAnswer'),ans);
-    if(!p.isOpen())setStatus('answerStatus',t('waitHost'));
-  }catch(e){Tools.diag.log('join failed',e);if(G===my)setStatus('answerStatus',errText(e),'err');}
+/** Connected to the host: say hello and wait for the room */
+function onHostOpen(p){
+  p.send({t:'hello',app:'card-games',v:1,name:myName()});
+  keepAwake();Tools.toast(t('connected'));
+  show('scrWait');renderWait();
 }
 function onGuestMessage(m){
   switch(m.t){
@@ -916,10 +866,9 @@ function guestLost(reason){
 
 /* ================= Leaving ================= */
 function closeAll(){
-  clearTimeout(botTimer);clearTimeout(connectTimer);
-  cancelInvite();
+  clearTimeout(botTimer);
+  conn.close();
   if(S)for(const s of S.seats)if(s.kind==='peer'&&s.peer){s.peer.send({t:'bye'});s.peer.close();}
-  if(G){G.peer.send({t:'bye'});G.peer.close();}
   S=null;G=null;view=null;lastActive=false;
   hideChooser();
   releaseWake();
@@ -929,7 +878,7 @@ async function leave(){
   const peers=S&&S.seats.some(s=>s.kind==='peer');
   if((running||peers||G)&&!await Tools.confirm(t(peers?'confirmLeaveHost':'confirmLeave'), { action: 'leave' }))return;
   Tools.diag.log('leave',{screen});
-  codes.stopScan();
+  conn.stopScan();
   closeAll();
   setStatus('lobbyStatus','');show('scrLobby');renderLobby();
 }
@@ -947,12 +896,12 @@ $('btnEnd').addEventListener('click',()=>{
 });
 
 /* ================= Codes, scanner ================= */
-const errText=P2PConnect.errText;
-// Codes, scanner, copy/share (P2PConnect.codes: assets/shared/p2p-connect.js); invitations stay here (one host, several guests)
-const codes=P2PConnect.codes({status:setStatus,showScan:()=>show('scrScan'),
-  back:expect=>{if(expect==='answer'&&invite)show('scrInvite');else if(expect==='answer'&&S)openRoom();else show('scrLobby');},
-  onOffer:code=>joinWith(code),onAnswer:code=>acceptAnswer(code),offerCode:()=>inviteCode,answerCode:()=>answerCode,answerStatus:'inviteStatus'});
-const useCode=codes.useCode,cancelScan=codes.cancelScan;
+const conn=P2PConnect.room({label:'card-games',stun:()=>settings.stun,status:setStatus,
+  show:step=>show({invite:'scrInvite',answer:'scrAnswer',scan:'scrScan'}[step]),
+  back:expect=>{if(expect==='answer'&&conn.inviting())show('scrInvite');else if(expect==='answer'&&S)openRoom();else show('scrLobby');},
+  beforeJoin:closeAll,canJoin:()=>S.seats.length<GAMES[S.game].players.max,onFull:openRoom,onGuest,
+  onGuestPeer:p=>{G={peer:p,view:null,room:null};},onHostOpen,onHostMessage:onGuestMessage,onHostLost:guestLost});
+const useCode=conn.useCode,cancelScan=conn.cancelScan;
 
 /* ---------- Screen stays on while connected ---------- */
 // Screen stays on during a game (Tools.wakeLock asks again when the app becomes visible)
@@ -987,7 +936,7 @@ function joinFromLink(){
   history.replaceState(history.state,'',location.pathname+location.search);
   if(view&&!view.over){Tools.diag.log('game link ignored: in a game');return;}
   Tools.diag.log('opened with game link');
-  codes.stopScan();
+  conn.stopScan();
   const r=useCode('#join='+m[1],'offer');
   if(!r.ok){show('scrLobby');setStatus('lobbyStatus',r.msg,'err');}
 }
@@ -998,8 +947,8 @@ window.addEventListener('hashchange',joinFromLink);
 Tools.diag.info(()=>({screen,mode:G?'guest':S?S.mode:'-',game:view?view.game:S?S.game:'-',
   seats:S?S.seats.map(s=>s.kind).join(','):G&&G.room?G.room.players.length:'-',
   peers:S?S.seats.filter(s=>s.kind==='peer').map(s=>s.peer.state().channel).join(',')||'-':G?G.peer.state().channel:'-',
-  inviting:!!invite,round:view?view.round:'-',ver:view?view.ver:'-',myMoves:view?view.moves.length:'-',over:!!(view&&view.over),
-  webrtc:!!window.RTCPeerConnection,scanner:codes.scanEngine()||'-',camera:codes.scanning(),stun:!!settings.stun,speed:settings.speed}));
+  inviting:conn.inviting(),round:view?view.round:'-',ver:view?view.ver:'-',myMoves:view?view.moves.length:'-',over:!!(view&&view.over),
+  webrtc:!!window.RTCPeerConnection,scanner:conn.scanEngine()||'-',camera:conn.scanning(),stun:!!settings.stun,speed:settings.speed}));
 
 /* ================= WebMCP ================= */
 function agentView(){
