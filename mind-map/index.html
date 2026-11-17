@@ -57,13 +57,8 @@ main{display:flex;flex-direction:column}
 .hint{position:absolute;inset-inline:12px;inset-block-start:10px;margin:0;text-align:center;color:var(--muted);font-size:14px;pointer-events:none}
 /* Bottom bar: node actions, or the text field while editing */
 .bar{flex:none;display:flex;gap:6px;justify-content:center;padding:6px 8px;border-radius:0;border-inline:0;border-block-end:0;box-shadow:none}
-.act{flex:1 1 0;max-width:120px;min-width:0;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  padding:4px 2px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);cursor:pointer;font-size:12px;line-height:1.2}
-.act svg{width:22px;height:22px;flex:none}
-.act span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.act:disabled{opacity:.45;cursor:not-allowed}
-.act.danger{color:var(--err)}
-.act:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.bar.toolbar{display:flex}
+.toolbar>.danger{color:var(--err)}
 .edit{align-items:center}
 .edit input{flex:1;min-width:0;min-height:44px;padding-inline:10px;font-size:16px}
 .edit .btn{min-height:44px}
@@ -74,7 +69,7 @@ main{display:flex;flex-direction:column}
 .map-item[aria-current="true"]{border-color:var(--accent);border-width:2px;font-weight:600}
 .map-item .muted{font-weight:400;font-size:13px}
 .map-item .ttl{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#importText{width:100%;min-height:120px;padding:8px;resize:vertical;font-size:16px;margin-block:4px 8px}
+#importText{min-height:120px;margin-block:4px 8px}
 .card p.muted{margin:0 0 8px}
 </style>
 </head>
@@ -82,8 +77,8 @@ main{display:flex;flex-direction:column}
 <header>
   <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Mindmap</span></h1>
   <div class="stage-actions">
-    <button type="button" class="head-btn" id="btnUndo" disabled aria-label="Rückgängig" title="Rückgängig" data-i18n-attr="aria-label:undo; title:undo"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-4 -4l4 -4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></svg></button>
-    <button type="button" class="head-btn" id="btnFit" aria-label="Alles zeigen" title="Alles zeigen" data-i18n-attr="aria-label:fit; title:fit"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/><path d="M4 8v-2a2 2 0 0 1 2 -2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2 -2v-2"/></svg></button>
+    <button type="button" class="head-btn" id="btnUndo" disabled aria-label="Rückgängig" title="Rückgängig" data-i18n-attr="aria-label:undo; title:undo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrow-back-up"/></svg></button>
+    <button type="button" class="head-btn" id="btnFit" aria-label="Alles zeigen" title="Alles zeigen" data-i18n-attr="aria-label:fit; title:fit"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#focus-centered"/></svg></button>
   </div>
 </header>
 
@@ -92,38 +87,37 @@ main{display:flex;flex-direction:column}
     <svg id="svg" role="tree" aria-label="Mindmap" data-i18n-attr="aria-label:map"><g id="view"></g></svg>
     <p class="hint" id="hint" hidden></p>
   </div>
-  <section class="card bar" id="bar" aria-label="Punkt bearbeiten" data-i18n-attr="aria-label:bar">
-    <button type="button" class="act" id="btnChild"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 0"/><path d="M4 5l4 0"/><path d="M6 5v11a1 1 0 0 0 1 1h5"/><path d="M12 8a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1l0 -2"/><path d="M12 16a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1l0 -2"/></svg><span data-i18n="child">Unterpunkt</span></button>
-    <button type="button" class="act" id="btnSibling"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6v4a1 1 0 0 1 -1 1h-14a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h14a1 1 0 0 1 1 1"/><path d="M12 15l0 4"/><path d="M14 17l-4 0"/></svg><span data-i18n="sibling">Nebenpunkt</span></button>
-    <button type="button" class="act" id="btnEdit"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"/><path d="M13.5 6.5l4 4"/></svg><span data-i18n="edit">Text</span></button>
-    <button type="button" class="act danger" id="btnDelete"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg><span data-i18n="delete">Löschen</span></button>
+  <section class="card bar toolbar" id="bar" aria-label="Punkt bearbeiten" data-i18n-attr="aria-label:bar">
+    <button type="button" id="btnChild"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#subtask"/></svg><span class="tb-label" data-i18n="child">Unterpunkt</span></button>
+    <button type="button" id="btnSibling"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#row-insert-bottom"/></svg><span class="tb-label" data-i18n="sibling">Nebenpunkt</span></button>
+    <button type="button" id="btnEdit"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#pencil"/></svg><span class="tb-label" data-i18n="edit">Text</span></button>
+    <button type="button" class="danger" id="btnDelete"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span class="tb-label" data-i18n="delete">Löschen</span></button>
   </section>
   <div class="card bar edit" id="editRow" hidden>
     <label class="sr-only" for="txt" data-i18n="textLabel">Text des Punkts</label>
     <input type="text" id="txt" maxlength="200" autocomplete="off" enterkeyhint="done">
-    <button type="button" class="btn primary" id="btnOk">OK</button>
+    <button type="button" class="btn primary" id="btnOk"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#check"/></svg><span>OK</span></button>
   </div>
 
-  <section class="card" aria-labelledby="h-maps" data-menu>
+  <div class="menu-list" data-menu>
+    <button type="button" id="btnNew"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="newMap">Neue Mindmap</span></button>
+    <button type="button" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Als Text kopieren</span></button>
+    <button type="button" id="btnPng"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="png">Als Bild speichern</span></button>
+  </div>
+  <section class="card" aria-labelledby="h-maps" data-menu data-icon="sitemap">
     <h2 id="h-maps" data-i18n="maps">Meine Mindmaps</h2>
     <ul class="maps" id="mapList"></ul>
     <div class="row">
-      <button type="button" class="btn" id="btnNew" data-i18n="newMap">Neue Mindmap</button>
-      <button type="button" class="btn danger" id="btnDelMap" data-i18n="delMap">Diese Mindmap löschen</button>
+      <button type="button" class="btn danger" id="btnDelMap"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="delMap">Diese Mindmap löschen</span></button>
     </div>
   </section>
-  <section class="card" aria-labelledby="h-export" data-menu>
-    <h2 id="h-export" data-i18n="export">Exportieren &amp; Importieren</h2>
-    <div class="row">
-      <button type="button" class="btn" id="btnCopy" data-i18n="copy">Als Text kopieren</button>
-      <button type="button" class="btn" id="btnPng" data-i18n="png">Als Bild speichern</button>
-    </div>
-    <h3 data-i18n="importH">Aus Text erstellen</h3>
+  <details class="card" id="importPage" data-menu data-menu-page data-icon="text-plus">
+    <summary data-i18n="importH">Aus Text erstellen</summary>
     <p class="muted" data-i18n="importIntro">Eine Gliederung einfügen – je Zeile ein Punkt, Unterpunkte eingerückt (Leerzeichen, Tab oder Aufzählung mit „-“). Die erste Zeile wird zum Thema.</p>
     <label class="sr-only" for="importText" data-i18n="importLabel">Gliederung</label>
     <textarea id="importText" spellcheck="false"></textarea>
-    <button type="button" class="btn" id="btnImport" data-i18n="import">Als neue Mindmap anlegen</button>
-  </section>
+    <button type="button" class="btn primary block" id="btnImport"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="import">Als neue Mindmap anlegen</span></button>
+  </details>
 </main>
 
 <!-- data:start -->
@@ -188,7 +182,7 @@ main{display:flex;flex-direction:column}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version d7b6e1d090f3</p>
+  <p class="footer-version">Version d22e26cb0bf3</p>
   <!-- footer:end -->
 </footer>
 

@@ -20,7 +20,7 @@
 <meta name="tool:share-target" content="video/*, .mp4, .m4v, .mov, .webm, .mkv, .3gp">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-UiZsXts5o/sVsHtDwwHutzbq771QCB+il1z3MYmlHOE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-26YXz75gRwzC8Q/fVRvc/NjvQRr1LP78ZYm0r0nlWeM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -34,9 +34,6 @@
 main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
 @media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
 .full{grid-column:1/-1}
-.drop{display:block;width:100%;border:2px dashed var(--border);border-radius:var(--radius);padding:22px 14px;text-align:center;color:var(--muted);background:transparent;cursor:pointer;font:inherit}
-.drop strong{color:var(--text)}
-.drop.over,.drop:hover{border-color:var(--accent);color:var(--text)}
 .fileinfo{margin-block:10px 0;font-size:14px;overflow-wrap:anywhere}
 .fileinfo:empty{display:none}
 .choice{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding-block:6px;cursor:pointer}
@@ -45,7 +42,6 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template
 fieldset{border:0;margin:0 0 8px;padding:0;min-width:0}
 legend{font-size:13px;color:var(--muted);font-weight:600;padding:0;margin-block-end:4px}
 .btn.big{width:100%;min-height:54px;font-size:18px}
-.btn:disabled{opacity:.55;cursor:not-allowed}
 progress{width:100%;height:10px;accent-color:var(--accent);margin-block-start:10px}
 .status{font-size:14px;margin-block:8px 0;min-height:1.4em}
 .status.err{color:var(--err)}
@@ -60,9 +56,6 @@ audio{display:block;width:100%;margin-block:10px}
 .tags[open]>summary::before{transform:rotate(90deg)}
 .tags>summary>span:first-child{flex:none;white-space:nowrap}
 .tags-sum{font-weight:400;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.field{display:flex;flex-direction:column;gap:4px;margin-block-end:10px}
-.field>span{font-size:13px;color:var(--muted);font-weight:600}
-.field input{min-height:44px;padding:8px 10px}
 .cover-row{align-items:center}
 .cover-row img{width:56px;height:56px;border-radius:6px;object-fit:cover;flex:none;margin-inline-start:auto}
 .cover-row img:not([src]){display:none}
@@ -77,16 +70,18 @@ audio{display:block;width:100%;margin-block:10px}
 
 <main>
   <section class="card" aria-labelledby="h-file">
-    <h2 id="h-file" data-i18n="h.file">1 · Video wählen</h2>
-    <button type="button" class="drop" id="drop">
-      <span data-i18n-html="drop"><strong>Video wählen</strong><br>oder hierher ziehen</span>
+    <h2 id="h-file"><span class="step">1</span><span data-i18n="h.file">Video wählen</span></h2>
+    <button type="button" class="dropzone" id="drop">
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#movie"/></svg>
+      <strong data-i18n="drop">Video wählen</strong>
+      <span class="dz-hint" data-i18n="dropHint">oder hierher ziehen</span>
     </button>
     <input type="file" id="file" accept="video/*,.mp4,.m4v,.mov,.webm,.mkv,.3gp" hidden>
     <p class="fileinfo" id="fileInfo" aria-live="polite"></p>
   </section>
 
   <section class="card" aria-labelledby="h-run">
-    <h2 id="h-run" data-i18n="h.run">2 · Audio speichern</h2>
+    <h2 id="h-run"><span class="step">2</span><span data-i18n="h.run">Audio speichern</span></h2>
     <fieldset>
       <legend data-i18n="format">Format</legend>
       <label class="choice"><input type="radio" name="format" value="original" checked>
@@ -98,24 +93,25 @@ audio{display:block;width:100%;margin-block:10px}
     </fieldset>
     <details class="tags" id="tags" hidden>
       <summary><span data-i18n="tags.summary">Titel, Interpret &amp; Cover</span><span class="tags-sum" id="tagsSum"></span></summary>
-      <label class="field"><span data-i18n="tags.title">Titel</span><input type="text" id="tagTitle" maxlength="200" autocomplete="off"></label>
-      <label class="field"><span data-i18n="tags.artist">Interpret</span><input type="text" id="tagArtist" maxlength="200" autocomplete="off"></label>
-      <label class="field"><span data-i18n="tags.album">Album</span><input type="text" id="tagAlbum" maxlength="200" autocomplete="off"></label>
+      <label class="form-field"><span data-i18n="tags.title">Titel</span><input type="text" id="tagTitle" maxlength="200" autocomplete="off"></label>
+      <label class="form-field"><span data-i18n="tags.artist">Interpret</span><input type="text" id="tagArtist" maxlength="200" autocomplete="off"></label>
+      <label class="form-field"><span data-i18n="tags.album">Album</span><input type="text" id="tagAlbum" maxlength="200" autocomplete="off"></label>
       <label class="choice cover-row"><input type="checkbox" id="tagCover" checked>
         <span><span data-i18n="tags.cover">Bild aus dem Video als Cover</span><small id="coverNote"></small></span><img id="coverImg" alt=""></label>
       <p class="hint" data-i18n="tags.hint">Wird automatisch aus dem Video gefüllt: Titel (sonst der Dateiname), Aufnahmedatum, vorhandene Angaben und ein Standbild. Musik-Apps zeigen das an. WAV speichert kein Cover.</p>
     </details>
-    <button type="button" class="btn primary big" id="btnRun" data-i18n="run" disabled>Audio herausziehen</button>
+    <p class="notice info" id="runHint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="runHint">Erst oben ein Video wählen.</span></p>
+    <button type="button" class="btn primary big block" id="btnRun" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-music"/></svg><span data-i18n="run">Audio herausziehen</span></button>
     <progress id="progress" max="100" value="0" hidden></progress>
     <p class="status" id="status" role="status"></p>
   </section>
 
   <section class="card full" aria-labelledby="h-result" id="result" hidden>
-    <h2 id="h-result" data-i18n="h.result">3 · Audiodatei</h2>
+    <h2 id="h-result"><span class="step">3</span><span data-i18n="h.result">Audiodatei</span></h2>
     <audio id="player" controls preload="metadata"></audio>
     <div class="row">
-      <button type="button" class="btn primary" id="btnSave" data-i18n="save">Audio speichern</button>
-      <button type="button" class="btn" id="btnShare" data-i18n="share" hidden>Teilen …</button>
+      <button type="button" class="btn primary" id="btnSave"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="save">Audio speichern</span></button>
+      <button type="button" class="btn" id="btnShare" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="share">Teilen …</span></button>
     </div>
     <p class="meta-line" id="resultMeta"></p>
     <p class="meta-line" id="resultTags"></p>
@@ -198,7 +194,7 @@ audio{display:block;width:100%;margin-block:10px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 51664e883362</p>
+  <p class="footer-version">Version d916b70bc5ec</p>
   <!-- footer:end -->
 </footer>
 
@@ -222,12 +218,12 @@ Tools.i18n({
     tagCover: 'mit Cover', recorded: 'aufgenommen {d}',
   },
   en: {
-    title: 'Video to Audio', sub: 'Save the sound track of a video – the video never leaves the device.',
-    'h.file': '1 · Choose a video', drop: '<strong>Choose a video</strong><br>or drag it here', 'h.run': '2 · Save audio', format: 'Format',
+    runHint: 'Choose a video above first.', title: 'Video to Audio', sub: 'Save the sound track of a video – the video never leaves the device.',
+    'h.file': 'Choose a video', drop: 'Choose a video', dropHint: 'or drag it here', 'h.run': 'Save audio', format: 'Format',
     'f.original': 'Original<small>The sound track is taken over unchanged – no quality loss, fast. Usually .m4a (AAC), .ogg for WebM videos.</small>',
     'f.wav': 'WAV<small>Uncompressed, works in every editing and audio program. Much larger file.</small>',
     'f.mp3': 'MP3<small>Plays on every device. Re-encoded (192 kbit/s) – slightly below the original, takes a little longer.</small>',
-    run: 'Extract audio', 'h.result': '3 · Audio file', save: 'Save audio', share: 'Share …',
+    run: 'Extract audio', 'h.result': 'Audio file', save: 'Save audio', share: 'Share …',
     fileInfo: '“{f}” · {mb} MB', reading: 'Reading the video …', info: 'Sound track: {codec}, {ch}, {rate} kHz · {dur}',
     mono: 'mono', stereo: 'stereo', channels: '{n} channels',
     working: 'Extracting the sound track … {p} %', decoding: 'Decoding the sound …', done: 'Done.',
@@ -296,6 +292,7 @@ async function readInfo(f) {
 async function takeFile(f) {
   if (!f || busy) return;
   file = f; info = null; result = null; lastError = null; cover = null;
+  $('runHint').hidden = true;
   $('result').hidden = true;
   $('tags').hidden = true;
   $('btnRun').disabled = true;

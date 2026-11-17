@@ -177,7 +177,7 @@
   M.pose = {
     schema: { type: 'object', additionalProperties: false, required: ['poses', 'time', 'hold', 'pause', 'tolerance'], properties: {
       poses: { type: 'array', maxItems: 20, items: { type: 'object', additionalProperties: false, required: ['id', 'name', 'left', 'right'], properties: {
-        id: { type: 'string', minLength: 1, maxLength: 30 }, name: text, emoji: { type: 'string', maxLength: 8 },
+        id: { type: 'string', minLength: 1, maxLength: 30 }, name: text,
         left: { type: 'integer', minimum: 0, maximum: 180 }, right: { type: 'integer', minimum: 0, maximum: 180 },
         legs: { type: 'string', enum: ['any', 'together', 'apart', 'oneUp'] } } } },
       time: pair(1500, 20000),         // time per pose: at the start, at the end

@@ -254,7 +254,7 @@ const newWorker=file=>new Worker(file,{type:'module'});
 function showRunning(on){
   $('btnRun').classList.toggle('stop',on);
   $('runText').textContent=t(on?'stop':'run');
-  $('runIcon').setAttribute('d',on?'M5 5m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z':'M7 4v16l13 -8z');
+  $('runIcon').querySelector('use').setAttribute('href',on?'../assets/icons.svg#player-stop':'../assets/icons.svg#player-play');
 }
 function status(key,vars,err){lastStatus=key?{key,vars,err}:null;setStatus(key?t(key,vars):'',err);}
 
@@ -380,14 +380,14 @@ $('examples').addEventListener('change',()=>{
   Tools.diag.log('example',{lang,i:Number(i)});
   Tools.menu.close();
 });
-const ICON_TRASH='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg>';
+const ICON_TRASH='<svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg>';
 function renderScripts(){
   const list=scripts.slice().sort((a,b)=>(b.t||0)-(a.t||0));
   $('scripts').innerHTML=list.map(s=>{
     const when=new Date(s.t||0).toLocaleString(Tools.locale(),{dateStyle:'short',timeStyle:'short'});
     return `<li data-id="${esc(s.id)}">
       <button type="button" class="open"><span class="name">${esc(s.name)}</span><span class="meta">${esc(LABEL[s.lang])} · ${esc(when)} · ${esc(t('chars',{n:Tools.fmt(s.code.length,0)}))}</span></button>
-      <button type="button" class="icon-btn" data-act="delete" aria-label="${esc(t('deleteN',{name:s.name}))}" title="${esc(t('delete'))}">${ICON_TRASH}</button>
+      <button type="button" class="btn icon" data-act="delete" aria-label="${esc(t('deleteN',{name:s.name}))}" title="${esc(t('delete'))}">${ICON_TRASH}</button>
     </li>`;}).join('')||`<li class="muted">${esc(t('noScripts'))}</li>`;
 }
 const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);

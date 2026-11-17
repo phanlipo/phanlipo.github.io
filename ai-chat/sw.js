@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "ai-chat";
-const VERSION = '2163191e16a3';
+const VERSION = '734b30d5f74b';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -16,7 +16,8 @@ const FILES = [
   "sampling.mjs",
   "worker.js",
   "../assets/base.css",
-  "../assets/common.js"
+  "../assets/common.js",
+  "../assets/icons.svg"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
 const RUNTIME = {

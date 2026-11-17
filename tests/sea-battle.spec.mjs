@@ -115,7 +115,7 @@ test('two devices connect, place ships, play to the end and start a rematch', as
   // All guest ships are sunk
   await expect(host.locator('#enemyBoard .cell.sunk')).toHaveCount(17);
   await expect(host.locator('#enemyFleet li.down')).toHaveCount(5);
-  await expect(host.locator('#turn')).toHaveText('Gewonnen! 🎉');
+  await expect(host.locator('#turn')).toHaveText('Gewonnen!');
   await expect(guest.locator('#turn')).toHaveText('Verloren – alle Schiffe versenkt.');
   await expect(guest.locator('#ownFleet li.down')).toHaveCount(5);
   // The loser sees the winner's ships (none of them was hit)

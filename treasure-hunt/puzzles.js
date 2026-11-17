@@ -1,6 +1,6 @@
 /* Treasure hunt – puzzle types. Exposes window.HuntPuzzles.
    A new type is one entry in TYPES (plus its texts in I18N):
-     icon        emoji for lists and the editor
+     icon        Tabler icon name for lists and the editor (shared sprite assets/icons.svg)
      sensor      'mic' | 'gps' | null – shown in the editor ("needs the microphone")
      defaults()  new puzzle of this type (without "type")
      clean(p, h) puzzle from an imported/edited object (h: helpers str, num, int, list, image, MAX_TEXT)
@@ -121,8 +121,8 @@ window.HuntPuzzles = (function () {
   const setMeter = (el, v) => { v = Math.max(0, Math.min(1, v)); el.firstElementChild.style.width = (v * 100).toFixed(1) + '%'; el.setAttribute('aria-valuenow', String(Math.round(v * 100))); };
 
   // Shared: a start button (sensors need a tap, iPhone), then the measurement; errors lead to the fallback
-  function sensorTask(p, c, text, startLabel, run) {
-    c.box.innerHTML = `${c.say(text)}<div class="pz-sensor"><button type="button" class="btn primary huge" data-pz="start">${esc(startLabel)}</button></div>`;
+  function sensorTask(p, c, text, startIcon, startLabel, run) {
+    c.box.innerHTML = `${c.say(text)}<div class="pz-sensor"><button type="button" class="btn primary huge" data-pz="start">${startIcon}${esc(startLabel)}</button></div>`;
     c.box.querySelector('[data-pz="start"]').addEventListener('click', async e => {
       e.currentTarget.disabled = true;
       try { await run(c.box.querySelector('.pz-sensor')); }
@@ -145,7 +145,7 @@ window.HuntPuzzles = (function () {
 
   const TYPES = {
     quiz: {
-      icon: '❓', sensor: null,
+      icon: 'help-circle', sensor: null,
       defaults: () => ({ question: '', image: '', answers: ['', '', '', ''], correct: 0, bonus: 3 }),
       clean: (p, h) => {
         const answers = (Array.isArray(p.answers) ? p.answers : []).slice(0, 4).map(a => h.str(a, 200));
@@ -180,7 +180,7 @@ window.HuntPuzzles = (function () {
     },
 
     riddle: {
-      icon: '🧠', sensor: null,
+      icon: 'brain', sensor: null,
       defaults: () => ({ question: '', image: '', answers: '', hint: '', bonus: 3 }),
       clean: (p, h) => ({ type: 'riddle', question: h.str(p.question, h.MAX_TEXT), image: h.image(p.image), answers: h.str(p.answers, 300), hint: h.str(p.hint, 500), bonus: h.int(p.bonus, 3, 0, 99) }),
       edit: (p, F) => F.area(p, 'puzzle.question', t('pz.question')) + F.img(p, 'puzzle.image', t('pz.image'))
@@ -199,7 +199,7 @@ window.HuntPuzzles = (function () {
         c.box.querySelector('form').addEventListener('submit', e => {
           e.preventDefault();
           if (over || !input.value.trim()) return;
-          if (ok.includes(norm(input.value))) { over = true; c.sound('win'); msg.textContent = '🎉'; setTimeout(() => c.done(true), 600); return; }
+          if (ok.includes(norm(input.value))) { over = true; c.sound('win'); msg.innerHTML = Tools.icon('confetti'); setTimeout(() => c.done(true), 600); return; }
           wrong++; c.sound('lose');
           msg.textContent = t('pz.wrong') + (wrong >= 2 && p.hint ? ' ' + t('pz.hintIs', { h: p.hint }) : '');
           input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
@@ -209,18 +209,18 @@ window.HuntPuzzles = (function () {
     },
 
     task: {
-      icon: '⭐', sensor: null,
-      variants: { team: '🤝', search: '🔍', picture: '🖼️', move: '🤸', think: '💡' },
+      icon: 'star', sensor: null,
+      variants: { team: Tools.icon('users-group'), search: Tools.icon('search'), picture: Tools.icon('photo'), move: Tools.icon('run'), think: Tools.icon('bulb') },
       defaults: () => ({ variant: 'team', task: '', image: '', seconds: 0, bonus: 3 }),
       clean: (p, h) => ({ type: 'task', variant: ['team', 'search', 'picture', 'move', 'think'].includes(p.variant) ? p.variant : 'team',
         task: h.str(p.task, h.MAX_TEXT), image: h.image(p.image), seconds: h.int(p.seconds, 0, 0, 3600), bonus: h.int(p.bonus, 3, 0, 99) }),
-      edit: (p, F) => F.select(p, 'puzzle.variant', t('pz.variant'), Object.keys(TYPES.task.variants).map(v => [v, TYPES.task.variants[v] + ' ' + t('pz.v.' + v)]))
+      edit: (p, F) => F.select(p, 'puzzle.variant', t('pz.variant'), Object.keys(TYPES.task.variants).map(v => [v, t('pz.v.' + v)]))
         + F.area(p, 'puzzle.task', t('pz.task.text')) + F.img(p, 'puzzle.image', t('pz.image'))
         + F.num(p, 'puzzle.seconds', t('pz.seconds'), 0, 3600, true),
       play(p, c) {
-        c.box.innerHTML = `<div class="pz-icon" aria-hidden="true">${TYPES.task.variants[p.variant] || '⭐'}</div>${c.say(p.task)}${p.image ? c.img(p.image) : ''}
+        c.box.innerHTML = `<div class="pz-icon" aria-hidden="true">${TYPES.task.variants[p.variant] || Tools.icon('star')}</div>${c.say(p.task)}${p.image ? c.img(p.image) : ''}
           ${p.seconds ? `<p class="pz-timer" role="timer" aria-live="off">${esc(t('pz.timeLeft', { n: p.seconds }))}</p>` : ''}
-          <div class="pz-buttons"><button type="button" class="btn primary huge" data-pz="ok">✓ ${esc(t('pz.done'))}</button>
+          <div class="pz-buttons"><button type="button" class="btn primary huge" data-pz="ok">${Tools.icon('check')}${esc(t('pz.done'))}</button>
           <button type="button" class="btn" data-pz="no">${esc(t('pz.notDone'))}</button></div>`;
         let over = false;
         if (p.seconds) {
@@ -239,13 +239,13 @@ window.HuntPuzzles = (function () {
     },
 
     loud: {
-      icon: '📣', sensor: 'mic',
+      icon: 'speakerphone', sensor: 'mic',
       defaults: () => ({ task: t('pz.def.loud'), seconds: 2, level: 'medium', bonus: 3 }),
       clean: (p, h) => ({ type: 'loud', task: h.str(p.task, h.MAX_TEXT), seconds: h.num(p.seconds, 2, 0.5, 20), level: LEVELS[p.level] ? p.level : 'medium', bonus: h.int(p.bonus, 3, 0, 99) }),
       edit: (p, F) => F.area(p, 'puzzle.task', t('pz.task.text')) + F.num(p, 'puzzle.seconds', t('pz.loud.seconds'), 0.5, 20)
         + F.select(p, 'puzzle.level', t('pz.level'), Object.keys(LEVELS).map(k => [k, t('pz.lv.' + k)])),
       play(p, c) {
-        sensorTask(p, c, p.task, '🎤 ' + t('pz.startMic'), async area => {
+        sensorTask(p, c, p.task, Tools.icon('microphone'), t('pz.startMic'), async area => {
           const mic = await c.mic();
           area.innerHTML = `<p class="pz-msg">${esc(t('pz.listening'))}</p>${meter(t('pz.levelLabel'))}<div class="progress">${meter(t('pz.progress'))}</div>`;
           const [lvl, prog] = area.querySelectorAll('.meter');
@@ -268,12 +268,12 @@ window.HuntPuzzles = (function () {
     },
 
     clap: {
-      icon: '👏', sensor: 'mic',
+      icon: 'hand-click', sensor: 'mic',
       defaults: () => ({ task: t('pz.def.clap'), count: 5, bonus: 3 }),
       clean: (p, h) => ({ type: 'clap', task: h.str(p.task, h.MAX_TEXT), count: h.int(p.count, 5, 1, 50), bonus: h.int(p.bonus, 3, 0, 99) }),
       edit: (p, F) => F.area(p, 'puzzle.task', t('pz.task.text')) + F.num(p, 'puzzle.count', t('pz.claps'), 1, 50, true),
       play(p, c) {
-        sensorTask(p, c, p.task, '🎤 ' + t('pz.startMic'), async area => {
+        sensorTask(p, c, p.task, Tools.icon('microphone'), t('pz.startMic'), async area => {
           const mic = await c.mic();
           area.innerHTML = `<p class="pz-count" aria-live="polite">${esc(t('pz.claps.count', { n: 0, m: p.count }))}</p>${meter(t('pz.levelLabel'))}`;
           const out = area.querySelector('.pz-count'), lvl = area.querySelector('.meter');
@@ -298,13 +298,13 @@ window.HuntPuzzles = (function () {
     },
 
     run: {
-      icon: '🏃', sensor: 'gps',
+      icon: 'run', sensor: 'gps',
       defaults: () => ({ task: t('pz.def.run'), meters: 30, seconds: 60, bonus: 3 }),
       clean: (p, h) => ({ type: 'run', task: h.str(p.task, h.MAX_TEXT), meters: h.int(p.meters, 30, 10, 2000), seconds: h.int(p.seconds, 60, 5, 3600), bonus: h.int(p.bonus, 3, 0, 99) }),
       edit: (p, F) => F.area(p, 'puzzle.task', t('pz.task.text')) + F.num(p, 'puzzle.meters', t('pz.meters'), 10, 2000, true)
         + F.num(p, 'puzzle.seconds', t('pz.run.seconds'), 5, 3600, true),
       play(p, c) {
-        sensorTask(p, c, p.task, '🏁 ' + t('pz.start'), async area => {
+        sensorTask(p, c, p.task, Tools.icon('flag'), t('pz.start'), async area => {
           const geo = c.geo();
           if (!geo.supported()) throw new Error('no gps');
           area.innerHTML = `<p class="pz-count" aria-live="polite">${esc(t('pz.run.wait'))}</p><p class="pz-timer"></p><div class="progress">${meter(t('pz.progress'))}</div>`;
@@ -320,7 +320,7 @@ window.HuntPuzzles = (function () {
             }
             if (pos && pos.acc <= 40) best = Math.max(best, c.distance(start, pos));
             const left = Math.max(0, Math.ceil(p.meters - best));
-            out.textContent = left ? t('pz.run.left', { n: left }) : '🎉';
+            if (left) out.textContent = t('pz.run.left', { n: left }); else out.innerHTML = Tools.icon('confetti');
             setMeter(prog, best / p.meters);
             const secs = Math.ceil((end - Date.now()) / 1000);
             timer.textContent = secs > 0 ? t('pz.timeLeft', { n: secs }) : t('pz.timeUp');
@@ -338,5 +338,7 @@ window.HuntPuzzles = (function () {
   // Battle bonus field for every type (only used when the scene is a battle)
   const bonusField = (p, F) => F.num(p, 'puzzle.bonus', t('pz.bonus'), 0, 99, true);
 
-  return { TYPES, I18N, F, bonusField, openMic, LEVELS };
+  // Icon of a puzzle type (markup)
+  const icon = type => TYPES[type] ? Tools.icon(TYPES[type].icon) : Tools.icon('puzzle');
+  return { TYPES, I18N, F, bonusField, openMic, LEVELS, icon };
 })();

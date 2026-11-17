@@ -1,6 +1,12 @@
 // PDF ansehen: full-screen PDF viewer. Test PDFs are built by pdf-tools.mjs, so every page is recognised
 // by its own text; rendering is checked by reading pixels back from the canvas.
 import { test, expect, openMenu, closeMenu, switchLang, mockAndroidShare, mockLaunchQueue } from './helpers.mjs';
+
+/** Opens the menu at its settings page ("Anzeige", a sub page of the menu) */
+async function openSettings(page) {
+  await openMenu(page);
+  if (!(await page.locator('#setPage').evaluate(d => d.open))) await page.locator('#setPage > summary').click();
+}
 import { makePdf } from './pdf-tools.mjs';
 
 const URL_ = '/pdf-viewer/';
@@ -78,7 +84,7 @@ test('bars hide by themselves and while scrolling; a tap brings them back and hi
 
 test('with automatic hiding turned off the bars stay until tapped', async ({ page }) => {
   await page.goto(URL_);
-  await openMenu(page);
+  await openSettings(page);
   await page.locator('#optAutoHide').uncheck();
   await closeMenu(page);
   await openPdf(page);
@@ -106,7 +112,7 @@ test('hiding the bars by tap also hides the system bars (full screen); button an
   await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(false);
   await expect(page.locator('#btnFs')).toHaveAttribute('aria-pressed', 'false');
   // turned off: hiding the bars leaves the system bars alone
-  await openMenu(page);
+  await openSettings(page);
   await page.locator('#optSystem').uncheck();
   await closeMenu(page);
   await tap(page);
@@ -262,7 +268,7 @@ test('closing the PDF, turning keeping off and deleting all data remove the kept
   await expect(page.locator('#btnPick')).toBeVisible();
   await expect(pages(page)).toHaveCount(0);
   // the setting off: not kept
-  await openMenu(page);
+  await openSettings(page);
   await page.locator('#optKeep').uncheck();
   await closeMenu(page);
   await openPdf(page);
@@ -273,11 +279,12 @@ test('closing the PDF, turning keeping off and deleting all data remove the kept
   await expect(pages(page)).toHaveCount(0);
   // on again: the open PDF is kept right away
   await openPdf(page);
-  await openMenu(page);
+  await openSettings(page);
   await page.locator('#optKeep').check();
   await expect.poll(() => kept(page)).not.toBeNull();
-  // "Alle Daten löschen" removes it too
+  // "Alle Daten löschen" removes it too (back from the settings page to the menu list first)
   page.once('dialog', d => d.accept());
+  await page.locator('#setPage > summary').click();
   await page.locator('#appMenu details.data summary').click();
   await page.locator('[data-data="clear"]').click();
   await page.waitForURL(/pdf-viewer/);
@@ -330,7 +337,7 @@ test('zoom: double tap, keys, page width button; sharper canvas when zoomed', as
 test('night mode inverts the pages', async ({ page }) => {
   await page.goto(URL_);
   await openPdf(page);
-  await openMenu(page);
+  await openSettings(page);
   await page.locator('#optNight').check();
   await closeMenu(page);
   await expect(pages(page).first()).toHaveCSS('filter', /invert\(1\)/);

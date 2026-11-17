@@ -10,9 +10,10 @@ Statische Web-Tools auf GitHub Pages (https://phanlipo.github.io/), ohne Server 
 - `assets/shared/`: Skripte, die mehrere Apps nutzen (TTS, WebRTC `p2p.js`, HEIC, Lieder, Cast …).
 - `assets/vendor/`: Fremdbibliotheken – generiert aus `scripts/vendor.json`, nie von Hand ändern.
 - `scripts/build.mjs`: erzeugt Startseite, `<head>` (CSP, noindex, Icons), Fußzeile, `manifest.webmanifest` und `sw.js` je App, `NOTICE.md`, `sbom.cdx.json`. Läuft im Git-Hook (`git config core.hooksPath .githooks`; Cloud-Sessions erledigen das per `.claude/hooks/session-start.sh`).
+- `UI-KONZEPT.md`: Bedienelemente, Icon-Lexikon, Menüaufbau (Regeln kurz unter „Bedienelemente & Icons“).
 - `IDEAS.md`: geplante und verworfene Ideen mit Begründung – **vor neuen Apps lesen**; Ideen, die nicht passen (z. B. brauchen Server), dort eintragen statt umsetzen.
 
-**Generiert, nie von Hand bearbeiten:** Bereiche zwischen `<!-- tools/head/footer/data:start -->` und `…:end -->`, `manifest.webmanifest`, `sw.js`, Icons, `NOTICE.md`, `sbom.cdx.json`, `assets/vendor/`, `quartet/decks.js`, `laser-mirrors/levels.js`.
+**Generiert, nie von Hand bearbeiten:** Bereiche zwischen `<!-- tools/head/footer/data:start -->` und `…:end -->`, `manifest.webmanifest`, `sw.js`, Icons (auch `assets/icons.svg`), `NOTICE.md`, `sbom.cdx.json`, `assets/vendor/`, `quartet/decks.js`, `laser-mirrors/levels.js`.
 
 ## Neue App
 
@@ -39,11 +40,12 @@ Nicht gelistete Seiten (z. B. Weiterleitungen): `<meta name="tool:hidden" conten
 ## Aufbau einer App
 
 - **Basis:** `../assets/base.css` zuerst, `../assets/common.js` vor dem Seiten-Script. Seiten-CSS nur für Seitenspezifisches.
-- **Kopfleiste:** nur Icon, Titel und ☰ (setzt `common.js`). Selten Gebrauchtes (Einstellungen, Verlauf) mit `data-menu` ins Menü, ständig Gebrauchtes bleibt auf der Seite. Menü-Aktionen, die zur App zurückführen, rufen `Tools.menu.close()`.
-- **Layout: Karten oder Bühne.** Standard: Karten untereinander, die Seite scrollt. Apps, die den ganzen Bildschirm brauchen (Malen, Chat, Spiele, Kamera), nutzen `<body class="stage">` (Hinweise in `template/`); höchstens zwei Schnellaktionen in der Kopfleiste (Platz für ↻ bei Updates), Bedienelemente unten (Daumen).
+- **Kopfleiste:** App-Icon, Titel, Schnellaktionen und ☰ (setzt `common.js`). Selten Gebrauchtes (Einstellungen, Verlauf) mit `data-menu` ins Menü, ständig Gebrauchtes bleibt auf der Seite. Menü-Aktionen, die zur App zurückführen, rufen `Tools.menu.close()`.
+- **Layout: Karten oder Bühne.** Standard: Karten untereinander, die Seite scrollt. Apps, die den ganzen Bildschirm brauchen (Malen, Chat, Spiele, Kamera), nutzen `<body class="stage">` (Hinweise in `template/`); Schnellaktionen in der Kopfleiste nach Bedarf (siehe „Bedienelemente & Icons“), Bedienelemente unten (Daumen).
 - **Vollbild & ausblendende Leisten** (Feature `Vollbild`, Beispiel `pdf-viewer`): für Apps zum Lesen/Anzeigen. Eigene Leisten gleiten weg und kommen per Tippen zurück; `Tools.fullscreen.enter()` nur direkt nach einem Tippen (Browser-Regel); installiert startet die App im Manifest-Modus `fullscreen`.
 - **Einrichtung vs. Inhalt:** Braucht eine App erst eine Eingabe (Feed, Playlist, Konfiguration), zeigt sie beim ersten Start nur dieses Formular. Danach steht der Inhalt im Vordergrund: Verwalten (Liste, Bearbeiten, Löschen) mit `data-menu` ins Menü, „Weitere … hinzufügen“ dort hinter einem Knopf; nach dem Hinzufügen Menü schließen und das Neue zeigen. Beispiele `rss-reader`, `playlist-player`.
-- **Formulare:** Felder mit `.form-field` aus `base.css` (kleine Beschriftung über dem Feld, volle Breite, ≥ 44 px), Knöpfe dahinter in `.row`, Meldungen in `.form-error`. Kein eigenes Feld-CSS in neuen Apps; ältere Apps mit eigenem `.field` beim Erweitern umstellen.
+- **Formulare:** Felder mit `.form-field` aus `base.css` (kleine Beschriftung über dem Feld, volle Breite, ≥ 44 px), Knöpfe dahinter in `.row`, Meldungen in `.form-error`. Kein eigenes Feld-CSS.
+- **Mehrzeilige Textfelder:** jedes `textarea` bekommt seinen Stil aus `base.css` (Breite, Abstände, Fokus, 16 px auf dem Handy); Seiten setzen höchstens `min-height`. `.mono` für Codes/JSON, Vollbild-Editoren in `<div class="editor-area">`.
 - **Hilfe:** `<details class="help card">` am Seitenende (landet im Menü), mit dem Block *Fehlersuche* aus der Vorlage. App-Infos (was gespeichert wird, Bibliotheken) gehören in die Hilfe, nicht in die Fußzeile; Fußzeilentext nur in `scripts/partials/footer.html`.
 - **Fehlersuche:** wichtige Schritte, Berechtigungen, Geräte-APIs, Downloads, Worker mit `Tools.diag.log(…)`, Zustand mit `Tools.diag.info(() => ({…}))`. **Nie Nutzerinhalte** protokollieren (Texte, Passwörter, Dateien, Standorte). Bestehende Apps ohne Block bekommen ihn erst, wenn sie erweitert werden.
 - **Größere Apps aufteilen:** Logik ohne DOM in eigene Skripte im App-Ordner, Architektur in `<app>/README.md` (Beispiele `treasure-hunt`, `card-games`, `quartet`, `laser-mirrors`, `move-play`).
@@ -53,6 +55,19 @@ Nicht gelistete Seiten (z. B. Weiterleitungen): `<meta name="tool:hidden" conten
 - **Fotos lesen:** HEIC über `assets/shared/heic.js` + `heic-worker.js` im App-Ordner, `accept="image/*,.heic,.heif"` (Beispiel `image-converter`).
 - **Dateien teilen/öffnen:** `tool:share-target` (Dateien; Endungen müssen in `FILE_TYPES` stehen) bzw. `tool:share-text` (Links/Text), in der Seite `Tools.takeSharedFile(s)()`/`Tools.takeSharedText()`. Zurückspeichern per File System Access API nur mit Ausweichweg (Beispiel `markdown-editor`). iPhone kann beides nicht – in der Hilfe erklären.
 - **Benachrichtigungen:** nur per `registration.showNotification()`, kein Push (kein Server); Beispiel und Begründung der Android-Sonderwege in `reminders`.
+
+## Bedienelemente & Icons
+
+Gleiche Handlungen sehen in jeder App gleich aus. Begründung, Lexikon und Bausteine stehen in `UI-KONZEPT.md`.
+
+- **Icons nur aus dem Sprite** `assets/icons.svg` (Tabler Outline): `<svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg>`, im Script `Tools.icon('download')`. Namen **wörtlich** schreiben (auch in Datenlisten als `icon: 'name'`), sonst fehlen sie im Sprite. Neuer Name → `node scripts/build-icons.mjs --sprite`; `build.mjs --check` schlägt fehl, solange das Sprite nicht passt. Keine kopierten SVG-Pfade.
+- **Ein Wort, ein Icon:** Bedeutung → Icon nach dem Lexikon in `UI-KONZEPT.md` (Abschnitt 3); Icon-Knöpfe ohne Text werden in `tests/ui.spec.mjs` dagegen geprüft.
+- **Keine Emoji in der Oberfläche** – weder als Symbol noch als Bild oder Spielinhalt. Stattdessen Tabler-Icon, eigene SVG-Zeichnung oder nur Text. Ausnahmen: Nutzereingaben und Datensätze, deren Zweck Emoji sind (Element mit `data-emoji-content`).
+- **Bausteine aus `base.css`** statt eigenem CSS: `.btn` mit Icon, `.btn.block` (Hauptaktion), `.btn.icon`, `.seg` (2–4 Optionen), `.chips` (viele Optionen/Ansichten), `.tiles` (Optionen mit Bild), `.toolbar` (Werkzeuge unten), `.dropzone` (Datei wählen), `.empty-state`, `.step`, `.notice`, `.stat-box`, `.menu-list`. Auswahl immer per `aria-pressed`/`aria-selected` bzw. Radio.
+- **Beschriftung, wenn Platz ist:** Knöpfe, Umschalter, Kacheln, Menüzeilen immer mit Text. `.toolbar` zeigt das Wort ab 64 px je Eintrag, sonst nur das Icon (macht `base.css`); Kopfleiste nur Icons mit `aria-label` und `title`.
+- **Schnellaktionen nach Bedarf:** was während der Hauptaufgabe ständig gebraucht wird. Bei 375 px mit sichtbarem ↻ darf der Titel nicht abgeschnitten werden (Test); was nicht passt, kommt ins Menü.
+- **Pro Ansicht eine Hauptaktion** (`.btn.primary`, auf dem Handy volle Breite). Gesperrte Knöpfe sind grau; daneben steht, was fehlt.
+- **Menü:** Aktionen als `<div class="menu-list" data-menu>` (Gefährliches am Ende, `danger`), Bereiche mit `data-icon`, große Bereiche (lange Einstellungen, Listen zum Verwalten) als Unterseite `<details class="card" data-menu data-menu-page data-icon="…">`. `Tools.menu.open('id')` öffnet direkt eine Unterseite.
 
 ## Speicher & „Daten sichern“
 

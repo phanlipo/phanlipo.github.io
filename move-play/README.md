@@ -20,12 +20,13 @@ Eine JSON-Datei in `games/` anlegen und in `BUILTIN` eintragen – ohne Code, so
   "format": "moveplay-game", "version": 1, "id": "squat-race",
   "title": { "de": "Kniebeugen-Rennen", "en": "Squat Race" },
   "description": { "de": "…", "en": "…" },
-  "emoji": "🏋️", "mechanic": "count", "needs": "full", "space": "small",
+  "icon": "stretching", "mechanic": "count", "needs": "full", "space": "small",
   "duration": 30, "lives": 0, "scoring": { "hit": 1 },
   "params": { "event": "squat" }
 }
 ```
 
+- `icon`: Name eines Tabler-Icons (wird ins Sprite `assets/icons.svg` übernommen, siehe UI-KONZEPT.md) – keine Emoji.
 - `needs`: `full` (Kopf bis Fuß im Bild) oder `upper` (Kopf bis Hüfte). `space`: `small` blendet den Platz-Hinweis aus. `players` (optional, Standard 2): höchstens so viele Spieler.
 - Posen (`pose`): `left`/`right` = Winkel des linken/rechten Arms des Spielers (0° hängt, 90° seitlich, 180° oben), `legs`: `any`, `together`, `apart`, `oneUp` (ein Knie hoch).
 - `lives`: 0 = ohne Leben. `scoring.hit` Punkte je Treffer, `streakBonus` zusätzlich je Treffer in Folge, `penalty` Abzug bei Fehlern.

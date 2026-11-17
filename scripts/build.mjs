@@ -41,7 +41,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
-import { ROOT, decode, meta, allPages, vendorProblems, isPublished } from './lib.mjs';
+import { ROOT, decode, meta, allPages, vendorProblems, isPublished, usedIcons, spriteIcons, ICON_SPRITE } from './lib.mjs';
 import { renderSbom, SBOM_FILE } from './sbom.mjs';
 
 const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules', 'tests']);
@@ -382,7 +382,7 @@ function precacheList(p) {
   const own = new Set(filesIn(p.folder).filter(f => f !== p.file && !f.endsWith('/sw.js') && (p.folder === 'template' || isPublished(f))));
   own.add(`${p.folder}/manifest.webmanifest`);
   const files = [p.file, ...[...own].sort()];
-  files.push('assets/base.css', 'assets/common.js', ...sharedOf(p));
+  files.push('assets/base.css', 'assets/common.js', ICON_SPRITE, ...sharedOf(p));
   // Whole vendor package if the app uses any file of it (fonts, .wasm are loaded indirectly) –
   // except large ones marked "precache": false, which are cached on first use (see runtimeVendors)
   for (const v of vendorsOf(p)) if (VENDOR[v]?.precache !== false) files.push(...filesIn(`assets/vendor/${v}`).sort());
@@ -563,6 +563,20 @@ put('NOTICE.md', renderNotice());
 // SBOM: which app ships which library (same detection as the offline cache)
 put(SBOM_FILE, renderSbom(VENDOR, tools.map(p => ({ folder: p.folder, title: p.title, vendors: vendorsOf(p) }))
   .sort((a, b) => a.folder.localeCompare(b.folder))));
+
+// UI icon sprite: exactly the icons the pages use (written by scripts/build-icons.mjs --sprite, needs network)
+{
+  const used = usedIcons();
+  const have = existsSync(join(ROOT, ICON_SPRITE)) ? spriteIcons(readFileSync(join(ROOT, ICON_SPRITE), 'utf8')) : new Set();
+  const missing = [...used.keys()].filter(n => !have.has(n));
+  const unused = [...have].filter(n => !used.has(n));
+  if (missing.length || unused.length) {
+    console.error(`${ICON_SPRITE} is outdated – run: node scripts/build-icons.mjs --sprite` +
+      (missing.length ? `\n  missing: ${missing.map(n => `${n} (${[...used.get(n)].join(', ')})`).join('; ')}` : '') +
+      (unused.length ? `\n  unused: ${unused.join(', ')}` : ''));
+    process.exit(1);
+  }
+}
 
 const changed = [];
 for (const [file, content] of pending) {

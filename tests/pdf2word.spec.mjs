@@ -57,7 +57,10 @@ test('rebuilds paragraphs, indents, columns, page breaks and page numbers', asyn
   const f = fixture();
   await page.goto(URL_);
   await expect(page.locator('#btnRun')).toBeDisabled();
+  // Disabled main action says what is missing (UI-KONZEPT.md)
+  await expect(page.locator('#runHint')).toHaveText('Erst oben eine PDF-Datei wählen.');
   const { name, files, paras } = await convert(page, f.pdf);
+  await expect(page.locator('#runHint')).toBeHidden();
   expect(name).toBe('vertrag.docx');
 
   // Text of every paragraph – page numbers are not part of the body

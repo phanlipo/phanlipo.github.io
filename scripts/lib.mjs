@@ -1,5 +1,5 @@
 // Helpers shared by the build scripts.
-import { readdirSync, existsSync } from 'node:fs';
+import { readdirSync, existsSync, readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -142,6 +142,34 @@ export function publishedFiles(dir = '') {
   }
   return out.sort();
 }
+
+/* ---------- UI icons: one sprite for all pages (assets/icons.svg, see UI-KONZEPT.md) ----------
+   Tabler Outline icons, used as <svg class="ic"><use href="../assets/icons.svg#name"/></svg> or Tools.icon('name').
+   The sprite holds exactly the icons the pages use; scripts/build-icons.mjs --sprite writes it (needs the npm
+   registry), build.mjs --check compares it with usedIcons() without network. Names are found only when they are
+   written literally: icons.svg#name, icon('name') (Tools.icon), data-icon="name", icon: 'name' (data lists),
+   "icon": "name" (JSON data, e.g. move-play/games). */
+export const ICON_SPRITE = 'assets/icons.svg';
+const ICON_PATTERNS = [/\bicons\.svg#([a-z0-9-]+)/g, /\bicon\(\s*['"]([a-z0-9-]+)['"]/g,
+  /\bdata-icon=["']([a-z0-9-]+)["']/g, /\bicon:\s*['"]([a-z0-9-]+)['"]/g, /"icon":\s*"([a-z0-9-]+)"/g];
+export function usedIcons() {
+  const files = [...publishedFiles(), ...publishedTemplate()]
+    .filter(f => /\.(html|m?js|json)$/.test(f) && !f.startsWith('assets/vendor/') && !f.endsWith('/sw.js'));
+  const used = new Map();
+  for (const f of files) {
+    const text = readFileSync(join(ROOT, f), 'utf8');
+    for (const re of ICON_PATTERNS) for (const m of text.matchAll(re)) {
+      if (!used.has(m[1])) used.set(m[1], new Set());
+      used.get(m[1]).add(f);
+    }
+  }
+  return new Map([...used].sort(([a], [b]) => a.localeCompare(b)));
+}
+function publishedTemplate() {
+  return readdirSync(join(ROOT, 'template')).filter(f => /\.(html|m?js)$/.test(f)).map(f => `template/${f}`);
+}
+// Symbol ids in the sprite file
+export const spriteIcons = text => new Set([...text.matchAll(/<symbol id="([a-z0-9-]+)"/g)].map(m => m[1]));
 
 /* ---------- Health of the vendor libraries (vendor.mjs --check) ----------
    Pure rules, so tests can check them without network. Facts per library:

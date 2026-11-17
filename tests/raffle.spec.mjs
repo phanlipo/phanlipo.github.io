@@ -77,7 +77,7 @@ test('prizes: main prize last, then all given out; first-to-last order when swit
   await expect(page.locator('#count')).toHaveText('0 von 50 Losen gezogen · 3 Preise übrig');
   for (const p of ['3. Preis: Tasse', '2. Preis: Gutschein', '1. Preis: Fahrrad']) {
     await page.click('#btnDraw');
-    await expect(page.locator('#prize')).toHaveText('🎉 ' + p);
+    await expect(page.locator('#prize')).toHaveText(p);
   }
   await expect(page.locator('#btnDraw')).toBeDisabled();
   await expect(page.locator('#count')).toHaveText('Alle Preise sind vergeben');
@@ -86,7 +86,7 @@ test('prizes: main prize last, then all given out; first-to-last order when swit
   await setup(page, { mainLast: false });
   await expect(page.locator('#prize')).toHaveText('Als Nächstes: 1. Preis: Fahrrad');
   await page.click('#btnDraw');
-  await expect(page.locator('#prize')).toHaveText('🎉 1. Preis: Fahrrad');
+  await expect(page.locator('#prize')).toHaveText('1. Preis: Fahrrad');
 });
 
 test('check a ticket, redraw a forfeited one, undo, copy, kept after reload', async ({ page }) => {
@@ -94,7 +94,7 @@ test('check a ticket, redraw a forfeited one, undo, copy, kept after reload', as
   await page.click('#btnDraw');
   const a = Number(await num(page));
   await page.fill('#checkIn', String(a));
-  await expect(page.locator('#checkOut')).toHaveText(`🎉 Los ${a} hat gewonnen: 2. Preis: Tasse`);
+  await expect(page.locator('#checkOut')).toHaveText(`Los ${a} hat gewonnen: 2. Preis: Tasse`);
   await page.fill('#checkIn', '13');
   await expect(page.locator('#checkOut')).toHaveText('Los 13 ist nicht im Spiel');
   const other = a === 1 ? 2 : 1;
@@ -105,7 +105,7 @@ test('check a ticket, redraw a forfeited one, undo, copy, kept after reload', as
   await page.click(`[aria-label="Los ${a} neu ziehen"]`);
   const b = Number(await num(page));
   expect(b).not.toBe(a);
-  await expect(page.locator('#prize')).toHaveText('🎉 2. Preis: Tasse');
+  await expect(page.locator('#prize')).toHaveText('2. Preis: Tasse');
   await expect(page.locator('#list li.void .no')).toHaveText(String(a));
   await expect(page.locator('#winCount')).toHaveText('1');
   await page.fill('#checkIn', String(a));
@@ -113,7 +113,7 @@ test('check a ticket, redraw a forfeited one, undo, copy, kept after reload', as
 
   // Undo the redraw: ticket a holds the prize again
   await page.click('#btnUndo');
-  await expect(page.locator('#checkOut')).toHaveText(`🎉 Los ${a} hat gewonnen: 2. Preis: Tasse`);
+  await expect(page.locator('#checkOut')).toHaveText(`Los ${a} hat gewonnen: 2. Preis: Tasse`);
   await expect(page.locator('#list li')).toHaveCount(1);
 
   await page.click('#btnDraw');
@@ -142,7 +142,7 @@ test('animated draw shows the result only at the end', async ({ page }) => {
   await page.click('#btnDraw');
   await expect(page.locator('#btnDraw')).toBeDisabled();
   await expect(page.locator('#prize')).toHaveText('Wird gezogen …');
-  await expect(page.locator('#prize')).toHaveText('🎉 Gezogen');
+  await expect(page.locator('#prize')).toHaveText('Gezogen');
   await expect(page.locator('#list .no')).toHaveText(await num(page));
 });
 
@@ -152,11 +152,11 @@ test.describe('English', () => {
     await setup(page, { tickets: '1-2000', prizes: ['Bike'] });
     await expect(page.locator('#count')).toHaveText('0 of 2,000 tickets drawn · 1 prize left');
     await page.click('#btnDraw');
-    await expect(page.locator('#prize')).toHaveText('🎉 Prize 1: Bike');
+    await expect(page.locator('#prize')).toHaveText('Prize 1: Bike');
     const n = await num(page);
     await page.fill('#checkIn', n);
-    await expect(page.locator('#checkOut')).toHaveText(`🎉 Ticket ${n} has won: Prize 1: Bike`);
+    await expect(page.locator('#checkOut')).toHaveText(`Ticket ${n} has won: Prize 1: Bike`);
     await switchLang(page, 'de');
-    await expect(page.locator('#checkOut')).toHaveText(`🎉 Los ${n} hat gewonnen: 1. Preis: Bike`);
+    await expect(page.locator('#checkOut')).toHaveText(`Los ${n} hat gewonnen: 1. Preis: Bike`);
   });
 });

@@ -2,6 +2,12 @@
 // text export/import, picture export, kept after reload.
 import { test, expect, openMenu, closeMenu, clipboardText } from './helpers.mjs';
 
+/** Opens the menu at its sub page "Aus Text erstellen" */
+async function openImport(page) {
+  await openMenu(page);
+  if (!(await page.locator('#importPage').evaluate(d => d.open))) await page.locator('#importPage > summary').click();
+}
+
 const item = (page, name) => page.getByRole('treeitem', { name, exact: true });
 
 /** Adds a point with the button (child or sibling) and types its text */
@@ -20,7 +26,7 @@ async function outline(page) {
   return clipboardText(page);
 }
 async function importOutline(page, text) {
-  await openMenu(page);
+  await openImport(page);
   await page.fill('#importText', text);
   await page.click('#btnImport');
   await expect(page.locator('#appMenu')).toBeHidden();
@@ -229,7 +235,7 @@ test('import: indented outlines, bullets, numbers and Markdown headings', async 
   await importOutline(page, 'Eins\nZwei\n  Zwei-a');
   expect(await outline(page)).toBe('Zentrales Thema\n- Eins\n- Zwei\n  - Zwei-a');
   // Empty text: nothing happens
-  await openMenu(page);
+  await openImport(page);
   await page.fill('#importText', '  \n ');
   await page.click('#btnImport');
   await expect(page.locator('#toast')).toHaveText('Erst eine Gliederung einfügen');

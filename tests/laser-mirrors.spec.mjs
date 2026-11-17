@@ -165,7 +165,7 @@ test('first puzzle: place the piece by tapping, turn it, drag it, switch on the 
   await expect(cell(1, 4)).toHaveAttribute('data-r', '0');
   // Turn the mirror back: solved
   await cell(0, 4).click();
-  await expect(page.locator('#status')).toHaveText('🎉 Geschafft! Alle Ziele leuchten.');
+  await expect(page.locator('#status')).toHaveText('Geschafft! Alle Ziele leuchten.');
   await expect(cell(1, 4)).toHaveClass(/lit/);
   await expect(page.locator('.goal .dot.on')).toHaveCount(1);
   await expect(page.locator('#btnNext')).toBeVisible();
@@ -282,7 +282,7 @@ for (const d of ['easy', 'medium', 'hard', 'expert', 'walls']) {
       }
       await expect(page.locator('#status'), l.id).toHaveText('Alles richtig – schalte den Laser ein!');
       await page.click('#btnLaser');
-      await expect(page.locator('#status'), l.id).toHaveText('🎉 Geschafft! Alle Ziele leuchten.');
+      await expect(page.locator('#status'), l.id).toHaveText('Geschafft! Alle Ziele leuchten.');
       await expect(page.locator('.goal .dot.on')).toHaveCount(l.t);
     }
     await page.click('#btnLevels');

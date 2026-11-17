@@ -371,7 +371,7 @@ test('two phones and a computer play; each sees only its own card; forged moves 
   await host.click('#btnAddBot');
   await expect(g.page.locator('#waitPlayers li')).toHaveCount(3);
   await expect(g.page.locator('#waitPlayers')).toContainText('Ada');
-  await expect(g.page.locator('#waitDeck')).toHaveText('Kartensatz: 🏙️ Deutsche Großstädte');
+  await expect(g.page.locator('#waitDeck')).toHaveText('Kartensatz: Deutsche Großstädte');
 
   await host.click('#btnStart');
   for (const p of [host, g.page]) {
@@ -476,7 +476,7 @@ test.describe('English', () => {
     await settings(page, { speed: 'fast', deck: 'dinosaurs' });
     await page.goto(URL_);
     await expect(page.locator('#btnCpu')).toHaveText('Against the computer');
-    await expect(page.locator('#deckSel option:checked')).toHaveText('🦖 Dinosaurs (12 cards)');
+    await expect(page.locator('#deckSel option:checked')).toHaveText('Dinosaurs (12 cards)');
     await page.click('#btnCpu');
     await expect(page.locator('#table .qcard .sn').first()).toHaveText('Size');
     await expect(page.locator('#table .qcard .ctext')).toHaveCount(0);

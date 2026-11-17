@@ -87,7 +87,7 @@ test.describe('table tennis', () => {
     await expect(side(page, 0).locator('.done')).toHaveText('11');
     await expect(side(page, 1).locator('.done')).toHaveText('0');
     await tap(page, 0);
-    await expect(page.locator('#info')).toHaveText('🏆 Stützer gewinnt!');
+    await expect(page.locator('#info')).toHaveText('Stützer gewinnt!');
     await expect(mini(page, 0, 'Sätze')).toHaveText('2');
     await expect(side(page, 0).locator('.tile')).toHaveClass(/won/);
     expect(await serving(page)).toBe(null);
@@ -571,7 +571,7 @@ test.describe('darts', () => {
   test('winner disables the pad', async ({ page }) => {
     await page.evaluate(k => localStorage.setItem(k, JSON.stringify({ sport: 'darts', m: { darts: { cfg: { start: 301, legs: 1 }, pts: [180, 0, 121] } } })), LS);
     await page.reload();
-    await expect(page.locator('#info')).toHaveText('🏆 Spieler 1 gewinnt!');
+    await expect(page.locator('#info')).toHaveText('Spieler 1 gewinnt!');
     await expect(page.locator('#pad [data-k="ok"]')).toBeDisabled();
   });
 });

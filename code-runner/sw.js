@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "code-runner";
-const VERSION = '9f3e0c910394';
+const VERSION = '7b256091167e';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -18,7 +18,8 @@ const FILES = [
   "manifest.webmanifest",
   "py-worker.mjs",
   "../assets/base.css",
-  "../assets/common.js"
+  "../assets/common.js",
+  "../assets/icons.svg"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
 const RUNTIME = {

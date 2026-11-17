@@ -73,6 +73,10 @@ for (const app of apps()) {
       for (const sel of ['details.data', 'details.help', 'footer', '[data-menu]'])
         expect(await page.locator(sel).evaluateAll(els => els.every(el => !!el.closest('#appMenu'))), sel).toBe(true);
       expect(await page.locator('#appMenu details.help, #appMenu details.data, #appMenu footer').count()).toBe(3);
+      // Standard sections: one list of rows, each with its icon (UI-KONZEPT.md)
+      const rows = page.locator('#appMenu .menu-group > details > summary');
+      expect(await rows.count()).toBeGreaterThanOrEqual(2);
+      for (const r of await rows.all()) await expect(r.locator('.menu-ico svg.ic use')).toHaveCount(1);
 
       // Close button
       await btn.click();
@@ -184,3 +188,68 @@ for (const app of apps()) {
     });
   });
 }
+
+// Sub pages of the menu (UI-KONZEPT.md, "Unterseiten"): a row with › opens a page that fills the sheet;
+// its summary is the back row, "back" and Escape return to the list first, ✕ closes everything.
+test.describe('menu sub pages', () => {
+  const url = '/dice-coin/';
+  const isOpen = (page, sel) => page.locator(sel).evaluate(d => d.open);
+  const states = page => page.evaluate(() => ({ menu: !!(history.state && history.state.toolsMenu), page: !!(history.state && history.state.toolsMenuPage) }));
+
+  test('open, back row, back gesture, Escape and ✕', async ({ page }) => {
+    await page.setViewportSize(PHONES.portrait);
+    await page.goto(url);
+    await page.locator('.menu-btn').click();
+    const data = page.locator('#appMenu details.data'), help = page.locator('#appMenu details.help');
+    // Row → page, covering the list below the menu head
+    await data.locator('summary').click();
+    expect(await isOpen(page, '#appMenu details.data')).toBe(true);
+    const [d, b] = [await data.boundingBox(), await page.locator('#appMenu .menu-body').boundingBox()];
+    expect(Math.abs(d.y - b.y) + Math.abs(d.height - b.height)).toBeLessThanOrEqual(2);
+    await expect(page.locator('[data-data="export"]')).toBeVisible();
+    expect(await states(page)).toEqual({ menu: true, page: true });
+    // Back row: list again, menu stays open, the page's history entry is gone
+    await data.locator('summary').click();
+    expect(await isOpen(page, '#appMenu details.data')).toBe(false);
+    await expect(page.locator('#appMenu')).toBeVisible();
+    await expect.poll(() => states(page)).toEqual({ menu: true, page: false });
+    // Back gesture: first the page, then the menu
+    await help.locator('summary').click();
+    await expect.poll(() => states(page)).toEqual({ menu: true, page: true });
+    await page.goBack();
+    await expect.poll(() => isOpen(page, '#appMenu details.help')).toBe(false);
+    await expect(page.locator('#appMenu')).toBeVisible();
+    await page.goBack();
+    await expect(page.locator('#appMenu')).toBeHidden();
+    // Escape: first the page, then the menu
+    await page.locator('.menu-btn').click();
+    await data.locator('summary').click();
+    await page.keyboard.press('Escape');
+    await expect.poll(() => isOpen(page, '#appMenu details.data')).toBe(false);
+    await expect(page.locator('#appMenu')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#appMenu')).toBeHidden();
+    // ✕ on a page closes the whole menu and leaves no history entry behind
+    await page.locator('.menu-btn').click();
+    await help.locator('summary').click();
+    await page.getByRole('button', { name: 'Menü schließen' }).click();
+    await expect(page.locator('#appMenu')).toBeHidden();
+    await expect.poll(() => states(page)).toEqual({ menu: false, page: false });
+    // Opened again: the list, not the last page
+    await page.locator('.menu-btn').click();
+    expect(await isOpen(page, '#appMenu details.help')).toBe(false);
+    await expect(page.locator('#appMenu .menu-group')).toBeVisible();
+  });
+
+  test('only one page at a time; Tools.menu.open(id) opens a page directly', async ({ page }) => {
+    await page.goto(url);
+    await page.evaluate(() => Tools.menu.open('menuInstall'));
+    await expect.poll(() => isOpen(page, '#menuInstall')).toBe(true);
+    await expect(page.locator('#menuInstallInfo')).toBeVisible();
+    await page.evaluate(() => { document.querySelector('#appMenu details.help').open = true; });
+    await expect.poll(() => isOpen(page, '#menuInstall')).toBe(false);
+    await page.goBack();
+    await expect.poll(() => isOpen(page, '#appMenu details.help')).toBe(false);
+    await expect(page.locator('#appMenu')).toBeVisible();
+  });
+});

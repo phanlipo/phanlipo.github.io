@@ -40,7 +40,7 @@ async function tempoMode(page, { countIn = true, click = true } = {}) {
 async function recordFree(page, ms = 1200) {
   await page.click('#btnRec');
   await state(page, 'recording');
-  await expect(page.locator('#btnRec')).toHaveText('⏹️ Stopp');
+  await expect(page.locator('#btnRec')).toHaveText('Stopp');
   await page.waitForTimeout(ms);
   await page.click('#btnRec');
   await state(page, 'playing');
@@ -66,9 +66,9 @@ test('free loop: the first recording sets the length and loops right away', asyn
   const peak1 = Number(await page.locator('#tracks li.track').first().getAttribute('data-peak'));
   expect(peak1).toBeGreaterThan(AMP * 0.9);
   expect(peak1).toBeLessThan(AMP * 1.1);
-  await expect(page.locator('#btnRec')).toHaveText('🔴 Neue Spur');
-  await expect(page.locator('#btnPlay')).toHaveText('⏸️ Pause');
-  await expect(page.locator('#status')).toHaveText('▶️ Läuft – „Neue Spur“ legt etwas darüber.');
+  await expect(page.locator('#btnRec')).toHaveText('Neue Spur');
+  await expect(page.locator('#btnPlay')).toHaveText('Pause');
+  await expect(page.locator('#status')).toHaveText('Läuft – „Neue Spur“ legt etwas darüber.');
   // Position runs round and round
   const pos = () => page.locator('#tracks').evaluate(el => Number(el.style.getPropertyValue('--pos')));
   const seen = new Set();
@@ -103,7 +103,7 @@ test('new tracks: end after one round, undo/redo, delete and bring back, at most
   await page.click('#btnRec');
   await state(page, 'overdub');
   await expect(page.locator('#recRow')).toContainText('Spur 2 – Aufnahme …');
-  await expect(page.locator('#status')).toHaveText('🔴 Spur 2 – endet nach einer Runde oder mit Stopp.');
+  await expect(page.locator('#status')).toHaveText('Spur 2 – endet nach einer Runde oder mit Stopp.');
   await tracks(page, 2);
   expect(Date.now() - t0).toBeGreaterThan(loopMs * 0.9);
   await state(page, 'playing');
@@ -130,7 +130,7 @@ test('new tracks: end after one round, undo/redo, delete and bring back, at most
     await tracks(page, n);
   }
   await expect(page.locator('#btnRec')).toBeDisabled();
-  await expect(page.locator('#status')).toHaveText('▶️ Läuft – 8 Spuren voll. Lösche eine, um weiter aufzunehmen.');
+  await expect(page.locator('#status')).toHaveText('Läuft – 8 Spuren voll. Lösche eine, um weiter aufzunehmen.');
   // Deleting everything asks first
   page.once('dialog', d => d.dismiss());
   await page.click('#btnClear');
@@ -157,9 +157,9 @@ test('in time: counts in one bar, records exactly one bar, metronome clicks; tem
   await expect(page.locator('#beatDots i')).toHaveCount(4);
   await page.click('#btnRec');
   await state(page, 'countin');
-  await expect(page.locator('#btnRec')).toHaveText('✖️ Abbrechen');
+  await expect(page.locator('#btnRec')).toHaveText('Abbrechen');
   await state(page, 'recording', 3000);
-  await expect(page.locator('#status')).toHaveText('🔴 Aufnahme – endet von selbst nach 1 Takt.');
+  await expect(page.locator('#status')).toHaveText('Aufnahme – endet von selbst nach 1 Takt.');
   // Stops by itself and loops
   await state(page, 'playing', 4000);
   await tracks(page, 1);
@@ -303,17 +303,17 @@ test.describe('English', () => {
     await fakeMic(page);
     await page.goto('/loop-station/');
     await expect(page.locator('h1')).toHaveText('Loop Station');
-    await expect(page.locator('#btnRec')).toHaveText('🔴 Record');
+    await expect(page.locator('#btnRec')).toHaveText('Record');
     await expect(page.locator('#status')).toHaveText('Tap “Record” and start playing – the first recording sets the length of the loop.');
     await page.click('#btnRec');
     await state(page, 'recording');
     await page.waitForTimeout(600);
     await page.click('#btnRec');
     await state(page, 'playing');
-    await expect(page.locator('#btnRec')).toHaveText('🔴 New track');
+    await expect(page.locator('#btnRec')).toHaveText('New track');
     await expect(page.locator('#tracks [aria-label="Mute track 1"]')).toBeVisible();
     await switchLang(page, 'de');
-    await expect(page.locator('#btnRec')).toHaveText('🔴 Neue Spur');
+    await expect(page.locator('#btnRec')).toHaveText('Neue Spur');
     await expect(page.locator('#tracks [aria-label="Spur 1 stumm"]')).toBeVisible();
   });
 });

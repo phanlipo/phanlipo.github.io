@@ -638,7 +638,7 @@ test.describe('reminders tools', () => {
     expect((await call(page, 'reminders_list_reminders', {})).result.scheduled[0]).toMatchObject({ text: 'Tabletten (abends)', repeat: 'daily' });
     const u = await call(page, 'reminders_update_reminder', { id: reminder.id, repeat: 'none' });
     expect(u.result.reminder).toMatchObject({ repeat: 'none', at: '2026-10-30T12:01' });
-    await expect(page.locator('#upList .rel')).not.toContainText('🔁');
+    await expect(page.locator('#upList .rel use[href$="#repeat"]')).toHaveCount(0);
   });
 });
 
@@ -993,7 +993,7 @@ test.describe('spin-the-bottle tools', () => {
     expect(result).toEqual({ player: ['Anna', 'Ben', 'Cem', 'Dora'][seat], seat_index: seat,
       angle_degrees: result.angle_degrees, total_spins: 1 });
     await expect(page.locator('.name.hit')).toHaveText(result.player);
-    await expect(page.locator('#status')).toHaveText(`🍾 ${result.player} ist dran!`);
+    await expect(page.locator('#status')).toHaveText(`${result.player} ist dran!`);
     await expect(page.locator('#toast')).toHaveText('KI-Agent: Flasche gedreht');
     const { result: info } = await call(page, 'spin_the_bottle_get_players', {});
     expect(info).toEqual({ players: ['Anna', 'Ben', 'Cem', 'Dora'], last_player: result.player, total_spins: 1, spinning: false,
@@ -1120,7 +1120,7 @@ test.describe('camera-effects tools', () => {
     await startCamera(page);
     expect((await call(page, 'camera_effects_get_people', {})).result).toMatchObject({ camera_on: true, detecting: false, count: 0 });
     await page.click('#btnDetect');
-    await expect(page.locator('#badge')).toHaveText('👤 2 Personen');
+    await expect(page.locator('#badge')).toHaveText('2 Personen');
     const r = (await call(page, 'camera_effects_get_people', {})).result;
     expect(r).toMatchObject({ camera_on: true, detecting: true, count: 2 });
     // Fake worker: camera x 0.1, width 0.3 → mirrored selfie shows it at 1 − 0.1 − 0.3 = 0.6
@@ -1847,7 +1847,7 @@ test.describe('lucky-wheel tools', () => {
     expect(result.candidates).toContain(result.winner);
     expect(result.candidates[result.position - 1]).toBe(result.winner);
     expect(result).toMatchObject({ totalEntries: 3, removedFromWheel: false });
-    await expect(page.locator('#result')).toHaveText('🎉 ' + result.winner);
+    await expect(page.locator('#result')).toHaveText(result.winner);
     await expect(page.locator('#count')).toHaveText('3 Einträge auf dem Rad');
     await expect(page.locator('#toast')).toHaveText('KI-Agent: Rad gedreht');
     // The pointer stands on the winner (segment i starts at i·360°/n clockwise from the top)
@@ -2253,7 +2253,7 @@ test.describe('laser-mirrors tools', () => {
     // A double mirror at rotation 0 ("\") turns the beam coming down to the right, onto B5's target side
     expect(r.result).toMatchObject({ solved: true, beam: { targets_lit: 1, problems: [] } });
     expect(r.result.pieces[1].lit).toBe(true);
-    await expect(page.locator('#status')).toHaveText('🎉 Geschafft! Alle Ziele leuchten.');
+    await expect(page.locator('#status')).toHaveText('Geschafft! Alle Ziele leuchten.');
     expect((await call(page, 'laser_mirrors_rotate_piece', { square: 'A5', rotation: 1 })).error).toBe('The puzzle is already solved.');
     r = await call(page, 'laser_mirrors_list_puzzles', {});
     expect(r.result.puzzles[0].solved).toBe(true);

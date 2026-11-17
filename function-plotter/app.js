@@ -24,7 +24,7 @@ Tools.i18n({
   en: {
     title: 'Function Plotter', sub: 'Plot functions, change parameters with sliders', fit: 'Fit y axis', png: 'Save as image',
     cvLabel: 'Graph of the functions. Drag to pan, two fingers or mouse wheel to zoom, tap to show values.',
-    hideValues: 'Hide values', zoomIn: 'Zoom in', zoomOut: 'Zoom out', fnsH: 'Functions', add: '+ Function', examplesL: 'Load example',
+    hideValues: 'Hide values', zoomIn: 'Zoom in', zoomOut: 'Zoom out', fnsH: 'Functions', add: 'Function', examplesL: 'Load example',
     examples: 'Load example …', paramsH: 'Parameters', viewH: 'View', x0: 'x from', x1: 'x to', y0: 'y from', y1: 'y to',
     apply: 'Apply', reset: 'Default view', optPoints: 'Mark zeros and extrema', optEqual: 'Same scale for x and y (circles stay round)',
     period: 'Duration of one run with ▶ (seconds)',
@@ -138,7 +138,7 @@ function renderFns() {
     Object.assign(inp, { autocomplete: 'off', spellcheck: false });
     inp.setAttribute('autocapitalize', 'off'); inp.setAttribute('autocorrect', 'off');
     const del = document.createElement('button');
-    del.type = 'button'; del.className = 'icon-btn'; del.dataset.del = i; del.textContent = '×';
+    del.type = 'button'; del.className = 'icon-btn'; del.dataset.del = i; del.innerHTML = Tools.icon('x');
     del.setAttribute('aria-label', t('remove', { n: i + 1 }));
     const msg = document.createElement('p');
     msg.className = 'fn-err'; msg.id = 'fnmsg-' + i; msg.hidden = true;
@@ -221,7 +221,7 @@ function paramRow(n) {
   el.className = 'param'; el.dataset.p = n;
   el.innerHTML = `<div class="p-top"><label for="${id}-v"></label><span aria-hidden="true">=</span>
     <input type="text" id="${id}-v" inputmode="decimal" autocomplete="off" data-role="v">
-    <button type="button" class="icon-btn" data-role="play" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13 -8z"/></svg></button></div>
+    <button type="button" class="icon-btn" data-role="play" aria-pressed="false">${Tools.icon('player-play', 'filled')}</button></div>
     <div class="p-bot"><input type="text" inputmode="decimal" autocomplete="off" data-role="min">
     <input type="range" min="0" max="${STEPS}" step="1" data-role="range">
     <input type="text" inputmode="decimal" autocomplete="off" data-role="max"></div>`;
@@ -237,8 +237,8 @@ function labelParam(el, n) {
   play.setAttribute('aria-label', t(anim.has(n) ? 'pause' : 'play', { p: n }));
   play.setAttribute('aria-pressed', String(anim.has(n)));
   play.innerHTML = anim.has(n)
-    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v14h-3z"/><path d="M14 5h3v14h-3z"/></svg>'
-    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13 -8z"/></svg>';
+    ? Tools.icon('player-pause', 'filled')
+    : Tools.icon('player-play', 'filled');
 }
 const paramEl = n => [...$('params').children].find(el => el.dataset.p === n);
 function syncParam(n, skipRange) {
@@ -586,6 +586,7 @@ $('optPeriod').addEventListener('input', () => { const v = Tools.parseNum($('opt
 
 /* ---------- Save as PNG ---------- */
 $('btnPng').addEventListener('click', () => {
+  Tools.menu.close();
   const k = 2, out = document.createElement('canvas');
   out.width = Math.round(W * k); out.height = Math.round(H * k);
   paint(out.getContext('2d'), W, H, k);

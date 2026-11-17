@@ -10,6 +10,7 @@ const URL_ = '/voice-transcriber/';
 test('decodes an Ogg Opus voice message with the browser decoder', async ({ page }) => {
   await page.goto(URL_);
   await expect(page.locator('#btnRun')).toBeDisabled();
+  await expect(page.locator('#runHint')).toHaveText('Erst oben eine Audiodatei wählen.');
   await page.setInputFiles('#file', TONE);
   const info = page.locator('#fileInfo');
   await expect(info).toHaveAttribute('data-decoder', 'browser');
@@ -17,6 +18,7 @@ test('decodes an Ogg Opus voice message with the browser decoder', async ({ page
   await expect(info).toContainText('tone.opus');
   await expect(page.locator('#player')).toBeVisible();
   await expect(page.locator('#btnRun')).toBeEnabled();
+  await expect(page.locator('#runHint')).toBeHidden();
 });
 
 test('falls back to the Opus decoder when the browser cannot decode', async ({ page }) => {

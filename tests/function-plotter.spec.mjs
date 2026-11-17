@@ -227,6 +227,8 @@ test.describe('German', () => {
   });
 
   test('graph saved as PNG', async ({ page }) => {
+    // In the menu (the header keeps only the quick action the title leaves room for)
+    await openMenu(page);
     const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Als Bild speichern' }).click()]);
     expect(dl.suggestedFilename()).toMatch(/^funktionsplot-\d{4}-\d\d-\d\d\.png$/);
     const { readFileSync } = await import('node:fs');
@@ -255,7 +257,7 @@ test.describe('English', () => {
 
   test('interface, numbers and error messages in English; decimal point', async ({ page }) => {
     await page.goto('/function-plotter/');
-    await expect(page.locator('#add')).toHaveText('+ Function');
+    await expect(page.locator('#add')).toHaveText('Function');
     await fnInput(page, 0).fill('x² - 2,25 # comma works too');
     await fnInput(page, 1).fill('q = 1.5');
     await expect(page.locator('#fnmsg-1')).toHaveText('q = 1.5');
@@ -269,7 +271,7 @@ test.describe('English', () => {
     await page.locator('#examples').selectOption({ label: 'Projectile motion' });
     await expect(fnInput(page, 0)).toHaveValue('g = 9.81');
     await switchLang(page, 'de');
-    await expect(page.locator('#add')).toHaveText('+ Funktion');
+    await expect(page.locator('#add')).toHaveText('Funktion');
     await expect(page.locator('#fnmsg-0')).toHaveText('g = 9,81');
   });
 });

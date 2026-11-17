@@ -27,7 +27,7 @@ test('each sound plays with its length, is loud enough and never clips', async (
       expect(peak, kind).toBeLessThanOrEqual(1);
     }
   }
-  await expect(page.locator('#status')).toHaveText('💨 Stotterer!');
+  await expect(page.locator('#status')).toHaveText('Stotterer!');
 });
 
 test('random picks different sounds', async ({ page }) => {
@@ -47,12 +47,12 @@ test('time fuse: counts down, farts after the delay, can be cancelled', async ({
   await page.goto('/whoopee-cushion/');
   await page.click('#delays [data-d="3"]');
   await cushion(page).click();
-  await expect(page.locator('#status')).toHaveText('💣 Pupst in 3 s – Handy hinlegen!');
+  await expect(page.locator('#status')).toHaveText('Pupst in 3 s – Handy hinlegen!');
   await expect(cushion(page)).toHaveAttribute('aria-disabled', 'true');
   // Taps while armed do nothing (Playwright waits on aria-disabled, so dispatch the click)
   await cushion(page).dispatchEvent('click');
   await page.clock.runFor(2000);
-  await expect(page.locator('#status')).toHaveText('💣 Pupst in 1 s – Handy hinlegen!');
+  await expect(page.locator('#status')).toHaveText('Pupst in 1 s – Handy hinlegen!');
   await expect(page.locator('#count')).toHaveText('0');
   await page.clock.runFor(1200);
   await expect(page.locator('#count')).toHaveText('1');
@@ -94,7 +94,7 @@ test.describe('English', () => {
     await page.click('#sounds [data-s="squeaky"]');
     await expect(page.locator('#sounds [data-s="squeaky"]')).toContainText('Squeaker');
     await cushion(page).click();
-    await expect(page.locator('#status')).toHaveText('💨 Squeaker!');
+    await expect(page.locator('#status')).toHaveText('Squeaker!');
     await expect(page.locator('#cushionLabel')).toHaveText('Press me!');
   });
 });
