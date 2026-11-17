@@ -2752,6 +2752,43 @@ test.describe('tic-tac-toe tools', () => {
   });
 });
 
+test.describe('dots-and-boxes tools', () => {
+  test('make_move draws lines, a closed box moves again, get_game reads it back, new_round', async ({ page }) => {
+    await open(page, '/dots-and-boxes/');
+    let r = await call(page, 'dots_and_boxes_get_game', {});
+    expect(r.result).toMatchObject({ size: 4, status: 'playing', to_move: 'a', lines_drawn: 0, opponent: 'two_players' });
+    expect(r.result.free_lines).toHaveLength(40);
+    for (const line of ['A1-B1', 'A1-A2', 'B1-B2']) r = await call(page, 'dots_and_boxes_make_move', { line });
+    expect(r.result.to_move).toBe('b');
+    await expect(page.locator('#board .edge[data-line="B1-B2"]')).toBeDisabled();
+    r = await call(page, 'dots_and_boxes_make_move', { line: 'b2-a2' });
+    expect(r.result.boxes[0][0]).toBe('b');
+    expect(r.result.to_move).toBe('b');
+    expect(r.result.boxes_won).toEqual({ a: 0, b: 1 });
+    expect(r.result.last_turn).toEqual(['A2-B2']);
+    await expect(page.locator('#ptsB')).toHaveText('1');
+    expect((await call(page, 'dots_and_boxes_make_move', { line: 'A1-B1' })).error).toMatch(/already drawn/);
+    expect((await call(page, 'dots_and_boxes_make_move', { line: 'A1-B2' })).error).toMatch(/not a line/);
+    expect((await call(page, 'dots_and_boxes_make_move', { line: 'A1-F1' })).error).toMatch(/not a line/);
+    expect((await call(page, 'dots_and_boxes_make_move', { line: 'nope' })).ok).toBe(false);
+    r = await call(page, 'dots_and_boxes_new_round', {});
+    expect(r.result).toMatchObject({ status: 'playing', starter: 'b', to_move: 'b', lines_drawn: 0 });
+  });
+
+  test('against the computer it plays its whole turn within the same call', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('dots-and-boxes.state.v1', JSON.stringify({ opp: 'cpu', level: 'medium', n: 3, size: 3 })));
+    await open(page, '/dots-and-boxes/');
+    let r = await call(page, 'dots_and_boxes_make_move', { line: 'A1-B1' });
+    expect(r.result).toMatchObject({ opponent: 'computer', computer_level: 'medium', to_move: 'a', lines_drawn: 2 });
+    // Play until the end: the agent always takes the first free line
+    while (r.result.status === 'playing') r = await call(page, 'dots_and_boxes_make_move', { line: r.result.free_lines[0] });
+    expect(r.result.free_lines).toEqual([]);
+    expect(r.result.boxes_won.a + r.result.boxes_won.b).toBe(9);
+    expect((await call(page, 'dots_and_boxes_make_move', { line: 'A1-B1' })).error).toMatch(/round is over/);
+    await expect(page.locator('#btnNext')).toBeVisible();
+  });
+});
+
 test.describe('playlist-player tools', () => {
   // Fake YouTube (routed; the service worker would pass requests past the routes)
   test.use({ serviceWorkers: 'block', allowedProblems: /^external request: https:\/\/www\.youtube-nocookie\.com\/(embed\/|oembed\?)/ });

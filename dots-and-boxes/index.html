@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Käsekästchen</title>
+<meta name="description" content="Linien ziehen, Kästchen schließen – zu zweit an einem Handy oder gegen den Computer, mit Punktestand.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="get_game, make_move, new_round">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann den Spielstand lesen, eine Linie ziehen und eine neue Runde starten; jeder Zug erscheint im Spielfeld.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the game, draw a line and start a new round; every move shows up on the board.">
+<meta name="tool:icon" content="grid-dots">
+<meta name="tool:color" content="#0e7490">
+<meta name="tool:short-name" content="Käsekästchen">
+<meta name="tool:title-en" content="Dots and Boxes">
+<meta name="tool:description-en" content="Draw lines, close boxes – two players on one phone or against the computer, with a running score.">
+<meta name="tool:short-name-en" content="Dots & Boxes">
+<meta name="tool:storage" content="dots-and-boxes.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-FkHygT+23aUYf85AgMGihWARnb7rYZ/bcpZKIHMEhQw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Käsekästchen">
+<meta name="theme-color" content="#0e7490">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0e7490;--accent-text:#ffffff;--pa:var(--accent);--pb:var(--warn)}
+@media (prefers-color-scheme: dark){:root{--accent:#67c3d9;--accent-text:#06232b}}
+/* Stage layout: score on top, the board fills the rest, status and button at the thumb */
+main{max-width:560px;margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:12px}
+
+/* ---------- Score ---------- */
+.score{flex:none;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:stretch}
+.player{display:flex;align-items:center;gap:6px;min-width:0;padding:6px 8px;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);transition:border-color .2s,box-shadow .2s}
+.player.b{flex-direction:row-reverse;text-align:end}
+.player.turn{border-color:var(--pc);box-shadow:inset 0 0 0 1px var(--pc)}
+.player.a,.pa{--pc:var(--pa)}.player.b,.pb{--pc:var(--pb)}
+.player .sym{flex:none;width:26px;height:26px}
+.player .who{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.player .pname{font-weight:600;overflow-wrap:break-word;hyphens:auto;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.player .pts,.rounds .pts{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.rounds{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 4px;color:var(--muted);font-size:13px;line-height:1.2}
+.rounds .pts{color:var(--text);font-size:18px}
+.sym path,.sym circle,.mk{fill:none;stroke:var(--pc);stroke-linecap:round}
+.sym path,.sym circle{stroke-width:12}
+
+/* ---------- Board ---------- */
+.board-wrap{flex:1;min-height:200px;container-type:size;display:grid;place-items:center}
+.board{position:relative;width:min(100cqw,100cqh);aspect-ratio:1;touch-action:manipulation}
+.board .art{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;overflow:visible}
+.dot{fill:var(--text)}
+.ln{stroke:transparent;stroke-width:.1;stroke-linecap:round}
+.ln.on{stroke:var(--text)}
+.ln.on.last{stroke:var(--pc);stroke-width:.13}
+.ln.on.new{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .25s ease-out forwards}
+.ln.preview:not(.on){stroke:var(--muted);opacity:.55}
+.bx{fill:transparent}
+.bx.pa,.bx.pb{fill:var(--pc);fill-opacity:.2}
+.mk{stroke-width:.08}
+.bx.new,.mk.new{animation:pop .3s ease-out}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes pop{from{opacity:0}}
+@media (prefers-reduced-motion: reduce){.ln.on.new,.bx.new,.mk.new{animation:none;stroke-dashoffset:0}}
+/* Every line has a diamond-shaped tap area between its two dots and the two box centres – together
+   they cover the whole board, so a tap anywhere picks the nearest line */
+.edge{position:absolute;transform:translate(-50%,-50%) rotate(45deg);border:0;margin:0;padding:0;background:transparent;cursor:pointer;border-radius:4px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.edge:disabled{cursor:default}
+.edge:focus-visible{outline:3px solid var(--accent);outline-offset:-4px}
+
+.status{flex:none;text-align:center;min-height:28px;margin:0;font-weight:600;font-size:18px;overflow-wrap:anywhere}
+.actions{flex:none;display:grid}
+.actions .btn{min-height:52px;font-size:17px;font-weight:600}
+
+/* ---------- Settings ---------- */
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-child{margin-top:0}
+.names{margin-top:14px}
+.info{color:var(--muted);margin:6px 0 0}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Käsekästchen</span></h1>
+  <p class="sub" data-i18n="sub">Linien ziehen, Kästchen schließen</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnUndo" aria-label="Zug zurücknehmen" title="Zug zurücknehmen" data-i18n-attr="aria-label:undo; title:undo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrow-back-up"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card play" aria-label="Spielfeld" data-i18n-attr="aria-label:boardLabel">
+    <div class="score">
+      <div class="player a" id="pA"><svg class="sym" viewBox="0 0 100 100" aria-hidden="true"><path d="M20 20L80 80"/><path d="M80 20L20 80"/></svg><span class="who"><span class="pname" id="nameA"></span><span class="pts" id="ptsA">0</span></span></div>
+      <div class="rounds"><span data-i18n="rounds">Runden</span><span class="pts" id="ptsR">0 : 0</span></div>
+      <div class="player b" id="pB"><svg class="sym" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="32"/></svg><span class="who"><span class="pname" id="nameB"></span><span class="pts" id="ptsB">0</span></span></div>
+    </div>
+    <div class="board-wrap">
+      <div class="board" id="board" role="group" aria-label="Spielfeld" data-i18n-attr="aria-label:boardLabel"></div>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="actions">
+      <button type="button" class="btn primary" id="btnNext" data-i18n="next">Nächste Runde</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu data-icon="settings">
+    <h2 id="h-settings" data-i18n="settings">Spiel &amp; Einstellungen</h2>
+    <h3 id="h-opp" data-i18n="opponent">Gegner</h3>
+    <div class="seg" id="opp" role="group" aria-labelledby="h-opp">
+      <button type="button" data-o="human"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span data-i18n="opp.human">Zu zweit</span></button>
+      <button type="button" data-o="cpu"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#device-desktop"/></svg><span data-i18n="opp.cpu">Computer</span></button>
+    </div>
+    <div id="levelBox">
+      <h3 id="h-level" data-i18n="level">Stärke des Computers</h3>
+      <div class="seg" id="levels" role="group" aria-labelledby="h-level">
+        <button type="button" data-l="easy" data-i18n="level.easy">Leicht</button>
+        <button type="button" data-l="medium" data-i18n="level.medium">Mittel</button>
+        <button type="button" data-l="hard" data-i18n="level.hard">Schwer</button>
+      </div>
+    </div>
+    <h3 id="h-size" data-i18n="size">Spielfeld (Kästchen)</h3>
+    <div class="seg" id="sizes" role="group" aria-labelledby="h-size">
+      <button type="button" data-s="3">3 × 3</button>
+      <button type="button" data-s="4">4 × 4</button>
+      <button type="button" data-s="5">5 × 5</button>
+      <button type="button" data-s="6">6 × 6</button>
+    </div>
+    <p class="info" id="sizeInfo" data-i18n="sizeNext" hidden>Die neue Größe gilt ab der nächsten Runde.</p>
+    <div class="names">
+      <div class="form-field"><label for="inA" data-i18n="nameA">Spieler 1</label><input type="text" id="inA" maxlength="20" autocomplete="off" spellcheck="false"></div>
+      <div class="form-field" id="fieldB"><label for="inB" data-i18n="nameB">Spieler 2</label><input type="text" id="inB" maxlength="20" autocomplete="off" spellcheck="false"></div>
+    </div>
+    <p class="info" data-i18n="startInfo">Wer beginnt, wechselt jede Runde. Ein Wechsel des Gegners startet einen neuen Punktestand.</p>
+    <div class="row" style="margin-top:10px"><button type="button" class="btn" id="btnReset"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="resetScore">Runden auf 0 setzen</span></button></div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Das Spiel mit Punkten und Linien für zwei an einem Handy: Abwechselnd zieht ihr eine Linie zwischen zwei benachbarten Punkten. Wer die vierte Seite eines Kästchens zieht, bekommt das Kästchen (✕ bzw. ◯) und ist <b>gleich nochmal dran</b>. Sind alle Linien gezogen, gewinnt, wer mehr Kästchen hat.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Tippe zwischen zwei Punkte, um die Linie dort zu ziehen – die ganze Fläche zählt, getroffen wird die nächste Linie. Die Linien des letzten Zugs sind farbig, oben leuchtet auf, wer dran ist, und es zählt die Kästchen dieser Runde.</li>
+    <li><b>Nächste Runde</b> leert das Feld; wer beginnt, wechselt ab. In der Mitte oben stehen die gewonnenen Runden.</li>
+    <li><b>↶ Zug zurücknehmen</b> (oben) nimmt die letzte Linie zurück – gegen den Computer auch seine Antwort. Nach dem Ende einer Runde geht das nicht mehr.</li>
+    <li>Im Menü ☰: <b>Gegner</b> (zu zweit oder gegen den Computer, der spielt ◯), seine <b>Stärke</b>, die <b>Größe des Spielfelds</b> (3 × 3 bis 6 × 6 Kästchen), <b>Namen</b> und <b>Runden auf 0 setzen</b>.</li>
+  </ul>
+  <h3>Der Computer</h3>
+  <ul>
+    <li><b>Leicht</b> nimmt jedes Kästchen, das er bekommen kann, zieht sonst aber irgendeine Linie.</li>
+    <li><b>Mittel</b> verschenkt nichts, solange es geht, und gibt dann so wenig wie möglich ab.</li>
+    <li><b>Schwer</b> rechnet am Ende Ketten und Ringe durch: Er öffnet die günstigste und lässt dir manchmal absichtlich zwei Kästchen übrig, damit du die nächste lange Kette öffnen musst.</li>
+    <li>Tipp: Gegen „Schwer“ hilft es, mitzuzählen, wie viele lange Ketten (ab drei Kästchen) entstehen – wer die erste öffnen muss, verliert meistens.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Gespeichert werden nur die laufende Runde, der Punktestand, die Namen und die Einstellungen – in diesem Browser. Alles funktioniert offline.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>The game of dots and lines for two on one phone: take turns drawing a line between two neighbouring dots. Whoever draws the fourth side of a box wins it (✕ or ◯) and <b>moves again</b> right away. Once every line is drawn, whoever has more boxes wins.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li>Tap between two dots to draw the line there – the whole board counts, the nearest line is taken. The lines of the last turn are coloured, the top shows whose turn it is and counts the boxes of this round.</li>
+    <li><b>Next round</b> clears the board; who starts alternates. The middle of the top shows the rounds won.</li>
+    <li><b>↶ Undo move</b> (top) takes back the last line – against the computer its reply as well. Once a round is over, undo is no longer possible.</li>
+    <li>In the menu ☰: <b>Opponent</b> (two players or the computer, which plays ◯), its <b>strength</b>, the <b>board size</b> (3 × 3 to 6 × 6 boxes), <b>names</b> and <b>Reset rounds</b>.</li>
+  </ul>
+  <h3>The computer</h3>
+  <ul>
+    <li><b>Easy</b> takes every box it can get, but otherwise draws any line.</li>
+    <li><b>Medium</b> gives nothing away as long as it can, and then as little as possible.</li>
+    <li><b>Hard</b> works out the chains and loops at the end: it opens the cheapest one and sometimes leaves you two boxes on purpose, so you have to open the next long chain.</li>
+    <li>Tip: against “Hard” it helps to count how many long chains (three boxes or more) form – whoever has to open the first one usually loses.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Only the current round, the score, the names and the settings are stored – in this browser. Everything works offline.</li>
+  </ul>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann den Spielstand lesen, eine Linie ziehen und eine neue Runde starten; jeder Zug erscheint im Spielfeld. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the game, draw a line and start a new round; every move shows up on the board. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 0ac5eba66377</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="game.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    defA:'Spieler 1',defB:'Spieler 2',cpuName:'Computer',
+    turn:'{name} ist dran',again:'{name} ist nochmal dran',cpuThinks:'Computer zieht …',
+    won:'{name} gewinnt {a} : {b}!',draw:'Unentschieden {a} : {b}',
+    line:'Linie {l}',lineOn:'Linie {l}, gezogen',
+    undone:'Zug zurückgenommen',scoreReset:'Runden auf 0 gesetzt',sizeLater:'Die neue Größe gilt ab der nächsten Runde.',
+    'mcp.move':'Linie gezogen','mcp.new':'Neue Runde'
+  },
+  en:{
+    title:'Dots and Boxes',sub:'Draw lines, close boxes',undo:'Undo move',boardLabel:'Game board',rounds:'Rounds',next:'Next round',
+    settings:'Game & settings',opponent:'Opponent','opp.human':'Two players','opp.cpu':'Computer',
+    level:'Computer strength','level.easy':'Easy','level.medium':'Medium','level.hard':'Hard',
+    size:'Board (boxes)',sizeNext:'The new size applies from the next round.',
+    nameA:'Player 1',nameB:'Player 2',
+    startInfo:'Who starts alternates every round. Changing the opponent starts a new score.',resetScore:'Reset rounds',
+    defA:'Player 1',defB:'Player 2',cpuName:'Computer',
+    turn:'{name}’s turn',again:'{name} moves again',cpuThinks:'Computer is moving …',
+    won:'{name} wins {a} : {b}!',draw:'Draw {a} : {b}',
+    line:'Line {l}',lineOn:'Line {l}, drawn',
+    undone:'Move undone',scoreReset:'Rounds reset',sizeLater:'The new size applies from the next round.',
+    'mcp.move':'Line drawn','mcp.new':'New round'
+  }
+});
+const t=Tools.t,G=window.DotsBoxes;
+const LS='dots-and-boxes.state.v1';
+const OPPS=['human','cpu'],LEVELS=['easy','medium','hard'];
+// n: size of the round on the board, size: chosen size (applies from the next round if a round is running)
+const fresh=()=>({n:4,size:4,moves:[],starter:'a',opp:'human',level:'medium',names:{a:'',b:''},score:{a:0,b:0,draw:0}});
+function sane(s){
+  const d=fresh();
+  if(!s||typeof s!=='object')return d;
+  if(OPPS.includes(s.opp))d.opp=s.opp;
+  if(LEVELS.includes(s.level))d.level=s.level;
+  if(G.SIZES.includes(s.n))d.n=s.n;
+  d.size=G.SIZES.includes(s.size)?s.size:d.n;
+  if(s.starter==='b')d.starter='b';
+  if(s.names&&typeof s.names==='object')for(const k of ['a','b'])if(typeof s.names[k]==='string')d.names[k]=s.names[k].slice(0,20);
+  if(s.score&&typeof s.score==='object')for(const k of ['a','b','draw'])if(Number.isInteger(s.score[k])&&s.score[k]>=0)d.score[k]=s.score[k];
+  if(Array.isArray(s.moves))d.moves=G.replay(d.n,d.starter,s.moves).moves; // drops anything that isn't a legal game
+  return d;
+}
+const state=sane(Tools.load(LS,null));
+const save=()=>Tools.save(LS,state);
+let cpuTimer=0,lastCount=-1;
+
+const game=()=>G.replay(state.n,state.starter,state.moves);
+const isCpu=p=>state.opp==='cpu'&&p==='b';
+const nameOf=p=>isCpu(p)?t('cpuName'):(state.names[p].trim()||t(p==='a'?'defA':'defB'));
+const lineLabel=e=>G.lineName(state.n,e).replace('-','–');
+
+// ---------- Board ----------
+const boardEl=Tools.$('board'),NS='http://www.w3.org/2000/svg';
+let built=0,edges=[],lineEls=[],boxEls=[],markEls=[];
+const svgEl=(tag,attrs,parent)=>{const el=document.createElementNS(NS,tag);for(const k in attrs)el.setAttribute(k,attrs[k]);parent.appendChild(el);return el;};
+function build(){
+  const n=state.n,g=G.geom(n),U=n+1,pc=v=>`${(v+.5)/U*100}%`;
+  boardEl.textContent='';edges=[];lineEls=[];boxEls=[];markEls=[];
+  const art=svgEl('svg',{class:'art',viewBox:`-0.5 -0.5 ${U} ${U}`,'aria-hidden':'true'},boardEl);
+  const gb=svgEl('g',{},art),gl=svgEl('g',{},art),gd=svgEl('g',{},art);
+  for(let b=0;b<g.boxes;b++){
+    const r=Math.floor(b/n),c=b%n;
+    boxEls.push(svgEl('rect',{class:'bx',x:c,y:r,width:1,height:1},gb));
+    markEls.push(svgEl('path',{class:'mk',d:''},gb));
+  }
+  const side=`${100/U/Math.SQRT2}%`;
+  for(let e=0;e<g.E;e++){
+    const [[x1,y1],[x2,y2]]=G.ends(n,e);
+    lineEls.push(svgEl('line',{class:'ln',x1,y1,x2,y2},gl));
+    const btn=document.createElement('button');
+    btn.type='button';btn.className='edge';btn.dataset.e=String(e);btn.dataset.line=G.lineName(n,e);
+    Object.assign(btn.style,{left:pc((x1+x2)/2),top:pc((y1+y2)/2),width:side,height:side});
+    btn.addEventListener('click',()=>humanMove(e));
+    const hint=on=>lineEls[e].classList.toggle('preview',on);
+    btn.addEventListener('pointerenter',ev=>{if(ev.pointerType==='mouse')hint(true);});
+    btn.addEventListener('pointerleave',()=>hint(false));
+    btn.addEventListener('focus',()=>hint(btn.matches(':focus-visible')));
+    btn.addEventListener('blur',()=>hint(false));
+    boardEl.appendChild(btn);edges.push(btn);
+  }
+  for(let r=0;r<=n;r++)for(let c=0;c<=n;c++)svgEl('circle',{class:'dot',cx:c,cy:r,r:.08},gd);
+  built=n;lastCount=-1;
+}
+const MARK={a:(c,r)=>`M${c+.3} ${r+.3}L${c+.7} ${r+.7}M${c+.7} ${r+.3}L${c+.3} ${r+.7}`,
+  b:(c,r)=>`M${c+.5} ${r+.28}a.22 .22 0 1 1 0 .44a.22 .22 0 1 1 0-.44`};
+
+function render(){
+  if(built!==state.n)build();
+  const {pos,movers}=game(),res=G.result(pos),p=pos.turn,busy=!res&&isCpu(p),n=state.n;
+  // Lines of the last turn (a run of moves by the same player) are coloured
+  const m=state.moves,last=new Map();
+  for(let i=m.length-1;i>=0&&movers[i]===movers[m.length-1];i--)last.set(m[i],movers[i]);
+  const newLine=lastCount>=0&&m.length===lastCount+1?m[m.length-1]:-1;
+  lineEls.forEach((el,e)=>{
+    const on=!!pos.lines[e],who=last.get(e);
+    el.setAttribute('class',`ln${on?' on':''}${who?' last p'+who:''}${e===newLine?' new':''}`);
+    if(e===newLine)el.setAttribute('pathLength','1');
+    const btn=edges[e];
+    btn.disabled=on||!!res||busy;
+    btn.setAttribute('aria-label',t(on?'lineOn':'line',{l:lineLabel(e)}));
+  });
+  const newBoxes=new Set(newLine>=0?G.geom(n).lineBoxes[newLine]:[]);
+  pos.owner.forEach((o,b)=>{
+    const r=Math.floor(b/n),c=b%n,isNew=o&&newBoxes.has(b)?' new':'';
+    boxEls[b].setAttribute('class',`bx${o?' p'+o:''}${isNew}`);
+    markEls[b].setAttribute('class',`mk${o?' p'+o:''}${isNew}`);
+    markEls[b].setAttribute('d',o?MARK[o](c,r):'');
+    boxEls[b].dataset.owner=o||'';
+  });
+  lastCount=m.length;
+  boardEl.dataset.result=res?res.winner||'draw':'';
+  Tools.$('nameA').textContent=nameOf('a');Tools.$('nameB').textContent=nameOf('b');
+  Tools.$('ptsA').textContent=Tools.fmt(pos.score.a,0);Tools.$('ptsB').textContent=Tools.fmt(pos.score.b,0);
+  Tools.$('ptsR').textContent=`${Tools.fmt(state.score.a,0)} : ${Tools.fmt(state.score.b,0)}`;
+  Tools.$('pA').classList.toggle('turn',!res&&p==='a');Tools.$('pB').classList.toggle('turn',!res&&p==='b');
+  const st=Tools.$('status'),again=m.length&&movers[m.length-1]===p;
+  const sc={a:Tools.fmt(pos.score.a,0),b:Tools.fmt(pos.score.b,0)};
+  st.textContent=res?(res.winner?t('won',{name:nameOf(res.winner),...(res.winner==='a'?sc:{a:sc.b,b:sc.a})}):t('draw',sc))
+    :busy?t('cpuThinks'):t(again?'again':'turn',{name:nameOf(p)});
+  st.dataset.state=res?'over':busy?'cpu':'turn';
+  Tools.$('btnNext').hidden=!res;
+  Tools.$('btnUndo').disabled=!!res||!undoableCount();
+  // Settings
+  document.querySelectorAll('#opp button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.o===state.opp)));
+  document.querySelectorAll('#levels button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.l===state.level)));
+  document.querySelectorAll('#sizes button').forEach(x=>x.setAttribute('aria-pressed',String(Number(x.dataset.s)===state.size)));
+  Tools.$('sizeInfo').hidden=state.size===state.n;
+  Tools.$('levelBox').hidden=state.opp!=='cpu';Tools.$('fieldB').hidden=state.opp==='cpu';
+  const inA=Tools.$('inA'),inB=Tools.$('inB');
+  inA.placeholder=t('defA');inB.placeholder=t('defB');
+  if(document.activeElement!==inA)inA.value=state.names.a;
+  if(document.activeElement!==inB)inB.value=state.names.b;
+}
+
+// How many lines undo removes: one, against the computer back to (and including) the last own line
+function undoableCount(){
+  if(!state.moves.length)return 0;
+  if(state.opp!=='cpu')return 1;
+  const {movers}=game();
+  const i=movers.lastIndexOf('a');
+  return i<0?0:movers.length-i;
+}
+
+function place(e){
+  const {pos}=game();
+  if(G.over(pos))throw new Error('round_over');
+  if(pos.lines[e])throw new Error('taken');
+  state.moves.push(e);
+  const res=G.result(game().pos);
+  if(res){state.score[res.winner||'draw']++;Tools.diag.log('round over',{result:res.winner||'draw',size:state.n,opp:state.opp});
+    if(res.winner&&'vibrate' in navigator)try{navigator.vibrate(60);}catch{/* ignore */}}
+  save();render();
+  return res;
+}
+function humanMove(e){
+  if(isCpu(game().pos.turn))return;
+  try{place(e);}catch{return;}
+  scheduleCpu();
+}
+const cpuTurn=()=>{const {pos}=game();return !G.over(pos)&&isCpu(pos.turn);};
+function scheduleCpu(){
+  clearTimeout(cpuTimer);cpuTimer=0;
+  if(!cpuTurn())return;
+  // A little slower for the first line of a turn, faster while it takes a chain
+  const {movers}=game(),cont=movers.length&&isCpu(movers[movers.length-1]);
+  cpuTimer=setTimeout(()=>{cpuTimer=0;if(cpuTurn()){place(G.cpuMove(game().pos,state.level));scheduleCpu();}},cont?280:500);
+}
+// Plays the computer's whole turn at once (WebMCP)
+function cpuNow(){clearTimeout(cpuTimer);cpuTimer=0;while(cpuTurn())place(G.cpuMove(game().pos,state.level));}
+function newRound(){
+  clearTimeout(cpuTimer);cpuTimer=0;
+  if(state.moves.length)state.starter=G.other(state.starter);
+  state.n=state.size;state.moves=[];save();render();scheduleCpu();
+  Tools.diag.log('new round',{starter:state.starter,size:state.n,opp:state.opp,level:state.level});
+}
+Tools.$('btnNext').addEventListener('click',newRound);
+Tools.$('btnUndo').addEventListener('click',()=>{
+  const k=undoableCount();if(!k||G.over(game().pos))return;
+  clearTimeout(cpuTimer);cpuTimer=0;
+  state.moves.splice(-k,k);save();render();scheduleCpu();
+  Tools.toast(t('undone'));
+});
+Tools.$('btnReset').addEventListener('click',()=>{state.score={a:0,b:0,draw:0};save();render();Tools.toast(t('scoreReset'));});
+document.querySelectorAll('#opp button').forEach(x=>x.addEventListener('click',()=>{
+  if(state.opp===x.dataset.o)return;
+  clearTimeout(cpuTimer);cpuTimer=0;
+  state.opp=x.dataset.o;state.score={a:0,b:0,draw:0};state.moves=[];state.starter='a';state.n=state.size;
+  save();render();Tools.diag.log('opponent',{opp:state.opp});
+}));
+document.querySelectorAll('#levels button').forEach(x=>x.addEventListener('click',()=>{state.level=x.dataset.l;save();render();Tools.diag.log('level',{level:state.level});}));
+document.querySelectorAll('#sizes button').forEach(x=>x.addEventListener('click',()=>{
+  state.size=Number(x.dataset.s);
+  // Nothing drawn yet (or the round is over and waits for the next one): new board right away
+  if(!state.moves.length)state.n=state.size;
+  save();render();Tools.diag.log('size',{size:state.size,now:state.n===state.size});
+  if(state.size!==state.n)Tools.toast(t('sizeLater'));
+}));
+for(const p of ['a','b'])Tools.$('in'+p.toUpperCase()).addEventListener('input',e=>{state.names[p]=e.target.value.slice(0,20);save();render();});
+
+Tools.onLang(render);
+Tools.diag.info(()=>({opp:state.opp,level:state.level,size:state.n,nextSize:state.size,moves:state.moves.length,starter:state.starter,score:state.score}));
+render();
+scheduleCpu();
+
+// ---------- WebMCP ----------
+const ROUND_OVER='The round is over – start a new one with new_round.';
+const view=()=>{
+  const {pos,moves,movers}=game(),res=G.result(pos),n=state.n;
+  const lastTurn=[];
+  for(let i=moves.length-1;i>=0&&movers[i]===movers[moves.length-1];i--)lastTurn.unshift(G.lineName(n,moves[i]));
+  return {size:n,dots:`${n+1}×${n+1} dots: columns A-${String.fromCharCode(65+n)} from the left, rows 1-${n+1} from the top; a line joins two neighbouring dots, e.g. "A1-B1"`,
+    boxes:Array.from({length:n},(_,r)=>pos.owner.slice(r*n,r*n+n).map(o=>o||'')),
+    free_lines:G.free(pos).map(e=>G.lineName(n,e)),lines_drawn:moves.length,last_turn:lastTurn,
+    opponent:state.opp==='cpu'?'computer':'two_players',computer_level:state.opp==='cpu'?state.level:null,
+    to_move:res?null:pos.turn,status:res?(res.winner?res.winner+'_wins':'draw'):'playing',
+    boxes_won:{...pos.score},starter:state.starter,rounds:{a:state.score.a,b:state.score.b,draws:state.score.draw}};
+};
+Tools.mcp.register({
+  name:'get_game',title:'Read the game',readOnly:true,
+  description:'Reads the current dots-and-boxes round: the size (n×n boxes), the boxes (rows from the top, "a", "b" or "" for open), the free lines (named by their two dots, e.g. "A1-B1"; columns are letters from the left, rows numbers from the top), the lines of the last turn, whose turn it is (a or b), the status (playing, a_wins, b_wins, draw), boxes won in this round, the opponent (two_players or computer, which plays b) and the rounds won.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>view()
+});
+Tools.mcp.register({
+  name:'make_move',title:'Draw a line',label:'mcp.move',
+  description:'Draws a line for the player whose turn it is, given by its two neighbouring dots, e.g. "A1-B1" (columns are letters from the left, rows numbers from the top). Closing a box gives it to that player, who then moves again. Against the computer only a can be moved; the computer then plays its whole turn right away. Shows the line in the app and returns the game afterwards (same as get_game).',
+  inputSchema:{type:'object',properties:{line:{type:'string',minLength:5,maxLength:7,pattern:'^[A-Ga-g][1-7]-[A-Ga-g][1-7]$',description:'Two neighbouring dots joined by "-", e.g. "A1-B1" or "C2-C3".'}},required:['line'],additionalProperties:false},
+  execute:({line})=>{
+    const e=G.parseLine(state.n,line);
+    if(e<0)throw new Error(`${line} is not a line between two neighbouring dots on the ${state.n}×${state.n} board.`);
+    if(G.over(game().pos))throw new Error(ROUND_OVER);
+    cpuNow();
+    if(G.over(game().pos))throw new Error(ROUND_OVER);
+    if(game().pos.lines[e])throw new Error(`Line ${G.lineName(state.n,e)} is already drawn.`);
+    place(e);
+    cpuNow();
+    return view();
+  }
+});
+Tools.mcp.register({
+  name:'new_round',title:'Start a new round',label:'mcp.new',
+  description:'Clears the board and starts the next round (with the chosen board size); who starts alternates (if the computer starts, it moves right away). The rounds won are kept. Returns the new game (same as get_game).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{newRound();cpuNow();return view();}
+});
+})();
+</script>
+</body>
+</html>
