@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Medizin-Rechner</title>
+<meta name="description" content="Formelhilfe für die Praxis: BMI und Körperoberfläche, eGFR (CKD-EPI 2021) und Kreatinin-Clearance, Schwangerschaftstermin und SSW, Laborwerte in SI-Einheiten – jeweils mit Formel und Erklärung. Werte werden nicht gespeichert.">
+<meta name="tool:tags" content="Arbeit, Medizin, Rechner">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="stethoscope">
+<meta name="tool:color" content="#0b7a75">
+<meta name="tool:short-name" content="Med-Rechner">
+<meta name="tool:title-en" content="Medical Calculator">
+<meta name="tool:description-en" content="Formula aid for the practice: BMI and body surface area, eGFR (CKD-EPI 2021) and creatinine clearance, pregnancy due date and gestational age, lab values in SI units – each with formula and explanation. Values are not stored.">
+<meta name="tool:short-name-en" content="Med Calc">
+<meta name="tool:storage" content="medical-calculator.">
+<meta name="tool:webmcp" content="body_measures, kidney_function, pregnancy_dates, convert_lab_value">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann alle vier Rechner benutzen (Körpermaße, Nierenfunktion, Schwangerschaft, Laborwerte). Die Werte erscheinen hier in den Eingabefeldern, das Ergebnis wird wie gewohnt berechnet; gespeichert wird nichts davon.">
+<meta name="tool:webmcp-help-en" content="An AI agent can use all four calculators (body measures, kidney function, pregnancy, lab values). The values appear here in the input fields and the result is calculated as usual; none of it is stored.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ZrbDXbBQAy54YY223rN1PHH9Bjanm6cLKA/iQ2Mh3Ok='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Med-Rechner">
+<meta name="theme-color" content="#0b7a75">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<style>
+:root{--accent:#0b7a75;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#5cc9c2;--accent-text:#06201f}}
+nav.calcs{position:sticky;inset-block-start:0;z-index:5;background:var(--bg);border-block-end:1px solid var(--border);padding:8px 12px}
+main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
+.card{scroll-margin-top:70px}
+.card h2{font-size:18px;margin:0 0 4px;display:block}
+.card .intro{color:var(--muted);font-size:14px;margin:0 0 14px}
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.inp{display:flex;align-items:stretch;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)}
+.inp:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+.inp input,.inp select{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font:inherit;font-size:17px;padding:0 10px;min-height:46px;outline:none}
+.inp .unit{display:flex;align-items:center;padding-inline:10px;background:var(--surface-2);color:var(--muted);font-size:14px;border-inline-start:1px solid var(--border);white-space:nowrap}
+select{appearance:auto}
+.span-all{grid-column:1/-1}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-block:16px 4px}
+.res{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.res .k{font-size:13px;color:var(--muted);font-weight:600}
+.res .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.25}
+.res .v.txt{font-size:17px}
+.res .v small{font-size:14px;font-weight:600;color:var(--muted)}
+.res.main{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.msg{margin-block-start:10px;padding:8px 12px;border-radius:8px;font-size:14px}
+.msg.warn{background:var(--warn-bg);color:var(--warn)}
+.msg.err{background:var(--err-bg);color:var(--err)}
+.msg.hint{color:var(--muted);padding-inline:0}
+details.math{margin-block-start:12px;border-block-start:1px solid var(--border);padding-block-start:8px}
+details.math summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+.f{overflow-x:auto;overflow-y:hidden;padding:4px 2px;-webkit-overflow-scrolling:touch}
+.f .katex{font-size:1.08em}
+.f.fallback{font-family:var(--mono);font-size:13px;white-space:pre-wrap;color:var(--muted)}
+.mathgrid h3{font-size:14px;margin:14px 0 4px;color:var(--muted)}
+.mathgrid p{margin:4px 0;font-size:14px;color:var(--muted)}
+.legend{font-size:13px;color:var(--muted);margin:6px 0 0;padding-inline-start:18px}
+.legend li{margin-block:2px}
+@media (max-width:500px){.f .katex{font-size:.95em}.card{padding:14px}}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Medizin-Rechner</span></h1>
+  <p class="sub" data-i18n="sub">Formelhilfe für die Praxis – mit Formeln und Erklärung.</p>
+</header>
+<nav class="calcs chips" aria-label="Rechner" data-i18n-attr="aria-label:nav">
+  <a href="#koerper" data-i18n="nav.1">1 · Körpermaße</a>
+  <a href="#niere" data-i18n="nav.2">2 · Nierenfunktion</a>
+  <a href="#schwanger" data-i18n="nav.3">3 · Schwangerschaft</a>
+  <a href="#labor" data-i18n="nav.4">4 · Laborwerte</a>
+</nav>
+
+<main>
+<p class="notice info"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="disclaimer">Nur zur Information und Gegenkontrolle – ersetzt keine ärztliche Beurteilung. Keine Dosierungen. Eingegebene Werte werden nicht gespeichert.</span></p>
+
+<!-- ===================== 1. Körpermaße ===================== -->
+<section class="card" id="koerper">
+  <h2 data-i18n="b.title">1 · Körpermaße: BMI und Körperoberfläche</h2>
+  <p class="intro" data-i18n="b.intro">Body-Mass-Index mit WHO-Einteilung, Körperoberfläche (Mosteller, Du Bois) und – mit Taillenumfang – das Taille-zu-Größe-Verhältnis.</p>
+  <div class="form">
+    <label class="form-field"><span data-i18n="b.h">Größe h</span><div class="inp"><input data-key="b.h" inputmode="decimal" autocomplete="off"><span class="unit">cm</span></div></label>
+    <label class="form-field"><span data-i18n="b.m">Gewicht m</span><div class="inp"><input data-key="b.m" inputmode="decimal" autocomplete="off"><span class="unit">kg</span></div></label>
+    <label class="form-field"><span data-i18n="b.u">Taillenumfang u (optional)</span><div class="inp"><input data-key="b.u" inputmode="decimal" autocomplete="off"><span class="unit">cm</span></div></label>
+  </div>
+  <div class="results" id="bRes"></div>
+  <div id="bMsg"></div>
+  <details class="math">
+    <summary data-i18n="math">Formeln &amp; Erklärung</summary>
+    <div class="mathgrid" id="bMath"></div>
+  </details>
+</section>
+
+<!-- ===================== 2. Nierenfunktion ===================== -->
+<section class="card" id="niere">
+  <h2 data-i18n="k.title">2 · Nierenfunktion: eGFR und Kreatinin-Clearance</h2>
+  <p class="intro" data-i18n="k.intro">Geschätzte glomeruläre Filtrationsrate nach CKD-EPI 2021 mit KDIGO-Stadium; mit Gewicht zusätzlich die Kreatinin-Clearance nach Cockcroft-Gault. Für Erwachsene.</p>
+  <div class="form">
+    <label class="form-field"><span data-i18n="k.A">Alter A</span><div class="inp"><input data-key="k.A" inputmode="numeric" autocomplete="off"><span class="unit" data-i18n="years">Jahre</span></div></label>
+    <div class="form-field"><span id="kSexL" data-i18n="k.sex">Geschlecht (für die Formel)</span>
+      <div class="seg" data-key="k.sex" role="group" aria-labelledby="kSexL">
+        <button type="button" data-v="f" data-i18n="k.f">weiblich</button>
+        <button type="button" data-v="m" data-i18n="k.m">männlich</button>
+      </div>
+    </div>
+    <label class="form-field"><span data-i18n="k.S">Serum-Kreatinin S</span><div class="inp"><input data-key="k.S" inputmode="decimal" autocomplete="off"><span class="unit" id="kUnit">mg/dl</span></div></label>
+    <div class="form-field"><span id="kUnitL" data-i18n="k.unit">Einheit Kreatinin</span>
+      <div class="seg" data-key="k.unit" role="group" aria-labelledby="kUnitL">
+        <button type="button" data-v="mg">mg/dl</button>
+        <button type="button" data-v="umol">µmol/l</button>
+      </div>
+    </div>
+    <label class="form-field"><span data-i18n="k.m2">Gewicht m (optional, für Cockcroft-Gault)</span><div class="inp"><input data-key="k.w" inputmode="decimal" autocomplete="off"><span class="unit">kg</span></div></label>
+  </div>
+  <div class="results" id="kRes"></div>
+  <div id="kMsg"></div>
+  <details class="math">
+    <summary data-i18n="math">Formeln &amp; Erklärung</summary>
+    <div class="mathgrid" id="kMath"></div>
+  </details>
+</section>
+
+<!-- ===================== 3. Schwangerschaft ===================== -->
+<section class="card" id="schwanger">
+  <h2 data-i18n="p.title">3 · Schwangerschaft: Termin und SSW</h2>
+  <p class="intro" data-i18n="p.intro">Errechneter Geburtstermin nach der erweiterten Naegele-Regel und die heutige Schwangerschaftswoche aus der letzten Periode.</p>
+  <div class="form">
+    <label class="form-field"><span data-i18n="p.L">Erster Tag der letzten Periode</span><div class="inp"><input type="date" data-key="p.L" autocomplete="off"></div></label>
+    <label class="form-field"><span data-i18n="p.z">Zykluslänge z</span><div class="inp"><input data-key="p.z" inputmode="numeric" autocomplete="off"><span class="unit" data-i18n="days">Tage</span></div></label>
+  </div>
+  <div class="results" id="pRes"></div>
+  <div id="pMsg"></div>
+  <details class="math">
+    <summary data-i18n="math">Formeln &amp; Erklärung</summary>
+    <div class="mathgrid" id="pMath"></div>
+  </details>
+</section>
+
+<!-- ===================== 4. Laborwerte ===================== -->
+<section class="card" id="labor">
+  <h2 data-i18n="l.title">4 · Laborwerte umrechnen</h2>
+  <p class="intro" data-i18n="l.intro">Konventionelle Einheiten (mg/dl, %) in SI-Einheiten (mmol/l, µmol/l, mmol/mol) und zurück.</p>
+  <div class="form">
+    <label class="form-field"><span data-i18n="l.a">Laborwert</span><div class="inp"><select data-key="l.a">
+      <option value="glucose" data-i18n="an.glucose">Glukose</option>
+      <option value="hba1c" data-i18n="an.hba1c">HbA1c</option>
+      <option value="cholesterol" data-i18n="an.cholesterol">Cholesterin (gesamt, HDL, LDL)</option>
+      <option value="triglycerides" data-i18n="an.triglycerides">Triglyceride</option>
+      <option value="creatinine" data-i18n="an.creatinine">Kreatinin</option>
+    </select></div></label>
+    <div class="form-field"><span id="lDirL" data-i18n="l.from">Eingabe in</span>
+      <div class="seg" data-key="l.dir" role="group" aria-labelledby="lDirL">
+        <button type="button" data-v="conv" id="lConv">mg/dl</button>
+        <button type="button" data-v="si" id="lSi">mmol/l</button>
+      </div>
+    </div>
+    <label class="form-field"><span data-i18n="l.x">Wert</span><div class="inp"><input data-key="l.x" inputmode="decimal" autocomplete="off"><span class="unit" id="lUnit">mg/dl</span></div></label>
+  </div>
+  <div class="results" id="lRes"></div>
+  <div id="lMsg"></div>
+  <details class="math">
+    <summary data-i18n="math">Formeln &amp; Erklärung</summary>
+    <div class="mathgrid" id="lMath"></div>
+  </details>
+</section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Vier Rechner für den Praxisalltag. Unter „Formeln &amp; Erklärung“ steht zu jedem Rechner, wie gerechnet wird – mit Variablen, Konstanten und Quellen. Dezimalkomma und -punkt funktionieren beide. Die Einteilungen (WHO, KDIGO) beziehen sich auf den angezeigten, gerundeten Wert.</p>
+  <h3>1 · Körpermaße</h3>
+  <ul>
+    <li>BMI = Gewicht ÷ Größe² (in Metern) mit WHO-Einteilung für Erwachsene. Für Kinder und Jugendliche gelten stattdessen BMI-Perzentilen.</li>
+    <li>Körperoberfläche nach Mosteller und nach Du Bois – beide Formeln sind üblich und liegen meist nahe beieinander.</li>
+    <li>Mit Taillenumfang: Taille-zu-Größe-Verhältnis (WHtR); ab 0,5 gilt das Risiko für Herz-Kreislauf- und Stoffwechselkrankheiten als erhöht.</li>
+  </ul>
+  <h3>2 · Nierenfunktion</h3>
+  <ul>
+    <li>eGFR nach CKD-EPI 2021 (ohne Ethnie-Faktor) aus Alter, Geschlecht und Serum-Kreatinin (mg/dl oder µmol/l) in ml/min/1,73 m², dazu das Stadium G1–G5 nach KDIGO.</li>
+    <li>Mit Gewicht zusätzlich die Kreatinin-Clearance nach Cockcroft-Gault (ml/min, nicht auf die Körperoberfläche bezogen).</li>
+    <li>Ungenau bei sehr viel oder wenig Muskelmasse, Amputationen, Schwangerschaft und rasch wechselnder Nierenfunktion. Eine chronische Nierenkrankheit wird erst über mindestens 3 Monate und mit weiteren Befunden (z. B. Albuminurie) festgestellt.</li>
+  </ul>
+  <h3>3 · Schwangerschaft</h3>
+  <ul>
+    <li>Errechneter Termin = erster Tag der letzten Periode + 280 Tage, korrigiert um die Abweichung der Zykluslänge von 28 Tagen (erweiterte Naegele-Regel).</li>
+    <li>Schwangerschaftswoche heute als „Wochen+Tage“ (z. B. 12+3) mit Trimester und Tagen bis zum Termin.</li>
+    <li>Eine Datierung per Ultraschall im ersten Trimester ist genauer und hat Vorrang.</li>
+  </ul>
+  <h3>4 · Laborwerte</h3>
+  <ul>
+    <li>Glukose, Cholesterin, Triglyceride und Kreatinin über die molare Masse; HbA1c über die IFCC-Gleichung zwischen % (NGSP/DCCT) und mmol/mol.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Eingegebene Werte (Größe, Gewicht, Laborwerte, Daten) werden <strong>nicht</strong> gespeichert – nach dem Neuladen sind die Felder leer. Nur die gewählte Kreatinin-Einheit und der gewählte Laborwert bleiben in diesem Browser. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  <p class="note">Nur zur Information und Gegenkontrolle, ersetzt keine ärztliche Beurteilung und enthält keine Dosierungsempfehlungen – Angaben ohne Gewähr.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Four calculators for everyday practice. Under “Formulas &amp; explanation” each calculator shows how it calculates – with variables, constants and sources. Decimal comma and point both work. The classifications (WHO, KDIGO) refer to the displayed, rounded value.</p>
+  <h3>1 · Body measures</h3>
+  <ul>
+    <li>BMI = weight ÷ height² (in metres) with the WHO classification for adults. For children and adolescents, BMI percentiles apply instead.</li>
+    <li>Body surface area according to Mosteller and Du Bois – both formulas are common and usually close to each other.</li>
+    <li>With waist circumference: waist-to-height ratio (WHtR); from 0.5 the cardiometabolic risk is considered increased.</li>
+  </ul>
+  <h3>2 · Kidney function</h3>
+  <ul>
+    <li>eGFR according to CKD-EPI 2021 (without race coefficient) from age, sex and serum creatinine (mg/dl or µmol/l) in ml/min/1.73 m², plus the KDIGO stage G1–G5.</li>
+    <li>With weight, also the creatinine clearance according to Cockcroft-Gault (ml/min, not indexed to body surface area).</li>
+    <li>Inaccurate with very high or low muscle mass, amputations, pregnancy and rapidly changing kidney function. Chronic kidney disease is only diagnosed over at least 3 months and with further findings (e.g. albuminuria).</li>
+  </ul>
+  <h3>3 · Pregnancy</h3>
+  <ul>
+    <li>Due date = first day of the last period + 280 days, corrected by the difference of the cycle length from 28 days (extended Naegele’s rule).</li>
+    <li>Gestational age today as “weeks+days” (e.g. 12+3) with trimester and days until the due date.</li>
+    <li>Dating by ultrasound in the first trimester is more accurate and takes precedence.</li>
+  </ul>
+  <h3>4 · Lab values</h3>
+  <ul>
+    <li>Glucose, cholesterol, triglycerides and creatinine via the molar mass; HbA1c via the IFCC equation between % (NGSP/DCCT) and mmol/mol.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Entered values (height, weight, lab values, dates) are <strong>not</strong> stored – after a reload the fields are empty. Only the chosen creatinine unit and the chosen lab value stay in this browser. Nothing is sent to a server; the app also works offline.</p>
+  <p class="note">For information and cross-checking only; it does not replace a medical assessment and contains no dosing recommendations – no warranty.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann alle vier Rechner benutzen (Körpermaße, Nierenfunktion, Schwangerschaft, Laborwerte). Die Werte erscheinen hier in den Eingabefeldern, das Ergebnis wird wie gewohnt berechnet; gespeichert wird nichts davon. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can use all four calculators (body measures, kidney function, pregnancy, lab values). The values appear here in the input fields and the result is calculated as usual; none of it is stored. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 6eb43ec61d3f</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/vendor/katex/katex.min.js"></script>
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const fmt=Tools.fmt;
+
+/* ---------- Texts (German in the HTML; dynamic texts here) ---------- */
+Tools.i18n({
+de:{
+  years:'Jahre',days:'Tage',
+  'r.bmi':'BMI','r.who':'WHO-Einteilung','r.bsaM':'KOF Mosteller','r.bsaD':'KOF Du Bois','r.whtr':'Taille/Größe',
+  'who.0':'Untergewicht','who.1':'Normalgewicht','who.2':'Präadipositas','who.3':'Adipositas Grad I','who.4':'Adipositas Grad II','who.5':'Adipositas Grad III',
+  'whtr.ok':'unter 0,5','whtr.high':'ab 0,5: erhöht',
+  'e.b':'Bitte Größe (50–250 cm) und Gewicht (2–400 kg) eingeben.','e.u':'Taillenumfang unplausibel (30–250 cm) – ohne Taille gerechnet.',
+  'w.child':'Größe unter 140 cm: Bei Kindern und Jugendlichen gelten BMI-Perzentilen statt der WHO-Einteilung.',
+  'r.egfr':'eGFR (CKD-EPI 2021)','r.stage':'KDIGO-Stadium','r.crcl':'CrCl Cockcroft-Gault','r.Smg':'Kreatinin in mg/dl','r.Sumol':'Kreatinin in µmol/l',
+  'g.1':'G1 normal oder hoch','g.2':'G2 leicht vermindert','g.3a':'G3a leicht bis mäßig vermindert','g.3b':'G3b mäßig bis stark vermindert','g.4':'G4 stark vermindert','g.5':'G5 Nierenversagen',
+  'e.k':'Bitte Alter (18–120 Jahre), Geschlecht und Kreatinin eingeben.','e.kS':'Kreatinin unplausibel (0,1–20 mg/dl bzw. 9–1768 µmol/l).','e.kW':'Gewicht unplausibel (2–400 kg) – ohne Cockcroft-Gault gerechnet.',
+  'n.k':'G1/G2 bedeuten nur zusammen mit weiteren Befunden (z. B. Albuminurie) eine Nierenkrankheit. Einstufung erst bei Werten über mindestens 3 Monate.',
+  'r.due':'Errechneter Termin','r.ga':'SSW heute','r.tri':'Trimester','r.toDue':'Bis zum Termin','r.conc':'Empfängnis etwa',
+  'tri.1':'1. Trimester','tri.2':'2. Trimester','tri.3':'3. Trimester','r.daysN':'{n} Tage','r.over':'{n} Tage drüber',
+  'e.p':'Bitte das Datum der letzten Periode und eine Zykluslänge von 21–45 Tagen eingeben.','e.pFuture':'Das Datum liegt in der Zukunft.',
+  'w.pLong':'Mehr als 44 Wochen – stimmt das Datum?','w.pEarly':'Rechnerisch noch keine Schwangerschaft (Zyklus länger als 28 Tage).',
+  'n.p':'Eine Datierung per Ultraschall im ersten Trimester ist genauer und hat Vorrang.',
+  'r.out':'Ergebnis','r.in':'Eingabe',
+  'e.l':'Bitte einen Wert größer 0 eingeben.','e.lHba1c':'HbA1c unplausibel (erwartet etwa 3–20 % bzw. 9–195 mmol/mol).',
+  'f.bmi':'Body-Mass-Index','f.bmi.l1':'<i>m</i> Gewicht in kg, <i>h</i> Größe in cm (÷ 100 = Meter)','f.bmi.l2':'WHO-Einteilung (Erwachsene): unter 18,5 Untergewicht · 18,5 bis unter 25 Normalgewicht · 25 bis unter 30 Präadipositas · 30 bis unter 35 Adipositas Grad I · 35 bis unter 40 Grad II · ab 40 Grad III',
+  'f.most':'Körperoberfläche nach Mosteller (1987)','f.most.l':'Ergebnis in m²; <i>h</i> in cm, <i>m</i> in kg; 3600 = Konstante, damit das Ergebnis in m² herauskommt',
+  'f.dub':'Körperoberfläche nach Du Bois &amp; Du Bois (1916)','f.dub.l':'Konstante und Exponenten aus Messungen an Probanden; <i>h</i> in cm, <i>m</i> in kg, Ergebnis in m²',
+  'f.whtr':'Taille-zu-Größe-Verhältnis (WHtR)','f.whtr.l':'<i>u</i> Taillenumfang in cm (Mitte zwischen Rippenbogen und Beckenkamm); ab 0,5 erhöhtes Risiko (Ashwell)',
+  'f.conv':'Umrechnung µmol/l → mg/dl','f.conv.l':'88,4 µmol/l entsprechen 1 mg/dl (molare Masse Kreatinin 113,12 g/mol)',
+  'f.ckd':'eGFR nach CKD-EPI 2021','f.ckd.p':'Neu angepasste Gleichung ohne Ethnie-Faktor (Inker et al., NEJM 2021); Ergebnis in ml/min je 1,73 m² Körperoberfläche.',
+  'f.ckd.l1':'<i>S</i> Serum-Kreatinin in mg/dl, <i>A</i> Alter in Jahren','f.ckd.l2':'<i>κ</i> = 0,7 (Frauen) bzw. 0,9 (Männer) – Knickpunkt der Kurve in mg/dl',
+  'f.ckd.l3':'<i>α</i> = −0,241 (Frauen) bzw. −0,302 (Männer) – Steigung unterhalb des Knickpunkts; −1,200 oberhalb','f.ckd.l4':'0,9938 – Abnahme je Lebensjahr; <i>f</i> = 1,012 für Frauen, sonst 1',
+  'f.kdigo':'Stadium nach KDIGO 2012','f.kdigo.l':'G1 ≥ 90 · G2 60–89 · G3a 45–59 · G3b 30–44 · G4 15–29 · G5 unter 15 ml/min/1,73 m²',
+  'f.cg':'Kreatinin-Clearance nach Cockcroft-Gault (1976)','f.cg.l1':'<i>m</i> Gewicht in kg, <i>S</i> in mg/dl, Ergebnis in ml/min (nicht auf 1,73 m² bezogen)','f.cg.l2':'<i>f</i> = 0,85 für Frauen, sonst 1; 72 und 140 sind Konstanten der Originalarbeit',
+  'f.ega':'Errechneter Termin (erweiterte Naegele-Regel)','f.ega.l1':'<i>L</i> erster Tag der letzten Periode, <i>z</i> Zykluslänge in Tagen','f.ega.l2':'280 Tage = 40 Wochen ab der letzten Periode bei einem Zyklus von 28 Tagen; längere Zyklen verschieben den Eisprung und damit den Termin nach hinten',
+  'f.ssw':'Schwangerschaftsalter heute','f.ssw.l1':'<i>D</i> heutiges Datum, <i>t</i> Tage seit der (korrigierten) letzten Periode','f.ssw.l2':'Angabe als Wochen+Tage, z. B. 12+3 = 12 abgeschlossene Wochen und 3 Tage; Trimester: bis 13+6, 14+0 bis 27+6, ab 28+0',
+  'f.conc':'Empfängnis etwa','f.conc.l':'Eisprung etwa 14 Tage vor der nächsten Periode',
+  'f.mol':'Umrechnung über die molare Masse','f.mol.l1':'<i>M</i> molare Masse in g/mol; mg/dl × 10 = mg/l, ÷ <i>M</i> = mmol/l','f.mol.l2':'{name}: <i>M</i> = {M} g/mol → Faktor {F}',
+  'f.hba1c':'HbA1c: IFCC-Gleichung','f.hba1c.l':'NGSP/DCCT in %, IFCC in mmol/mol (Hoelzel et al. 2004, „Master Equation“)',
+  'an.glucose':'Glukose','an.hba1c':'HbA1c','an.cholesterol':'Cholesterin','an.triglycerides':'Triglyceride (Triolein)','an.creatinine':'Kreatinin',
+  'mcp.body':'Körpermaße berechnet','mcp.kidney':'Nierenfunktion berechnet','mcp.preg':'Termin berechnet','mcp.lab':'Laborwert umgerechnet'
+},
+en:{
+  title:'Medical Calculator',sub:'Formula aid for the practice – with formulas and explanation.',nav:'Calculators',
+  'nav.1':'1 · Body measures','nav.2':'2 · Kidney function','nav.3':'3 · Pregnancy','nav.4':'4 · Lab values',
+  disclaimer:'For information and cross-checking only – it does not replace a medical assessment. No dosing. Entered values are not stored.',
+  math:'Formulas & explanation',years:'years',days:'days',
+  'b.title':'1 · Body measures: BMI and body surface area','b.intro':'Body mass index with WHO classification, body surface area (Mosteller, Du Bois) and – with waist circumference – the waist-to-height ratio.',
+  'b.h':'Height h','b.m':'Weight m','b.u':'Waist circumference u (optional)',
+  'k.title':'2 · Kidney function: eGFR and creatinine clearance','k.intro':'Estimated glomerular filtration rate according to CKD-EPI 2021 with KDIGO stage; with weight also the creatinine clearance according to Cockcroft-Gault. For adults.',
+  'k.A':'Age A','k.sex':'Sex (for the formula)','k.f':'female','k.m':'male','k.S':'Serum creatinine S','k.unit':'Creatinine unit','k.m2':'Weight m (optional, for Cockcroft-Gault)',
+  'p.title':'3 · Pregnancy: due date and gestational age','p.intro':'Due date according to the extended Naegele’s rule and today’s gestational age from the last menstrual period.',
+  'p.L':'First day of the last period','p.z':'Cycle length z',
+  'l.title':'4 · Convert lab values','l.intro':'Conventional units (mg/dl, %) to SI units (mmol/l, µmol/l, mmol/mol) and back.','l.a':'Lab value','l.from':'Input in','l.x':'Value',
+  'r.bmi':'BMI','r.who':'WHO class','r.bsaM':'BSA Mosteller','r.bsaD':'BSA Du Bois','r.whtr':'Waist/height',
+  'who.0':'Underweight','who.1':'Normal weight','who.2':'Pre-obesity','who.3':'Obesity class I','who.4':'Obesity class II','who.5':'Obesity class III',
+  'whtr.ok':'below 0.5','whtr.high':'0.5 or more: increased',
+  'e.b':'Please enter height (50–250 cm) and weight (2–400 kg).','e.u':'Implausible waist circumference (30–250 cm) – calculated without it.',
+  'w.child':'Height below 140 cm: for children and adolescents BMI percentiles apply instead of the WHO classes.',
+  'r.egfr':'eGFR (CKD-EPI 2021)','r.stage':'KDIGO stage','r.crcl':'CrCl Cockcroft-Gault','r.Smg':'Creatinine in mg/dl','r.Sumol':'Creatinine in µmol/l',
+  'g.1':'G1 normal or high','g.2':'G2 mildly decreased','g.3a':'G3a mildly to moderately decreased','g.3b':'G3b moderately to severely decreased','g.4':'G4 severely decreased','g.5':'G5 kidney failure',
+  'e.k':'Please enter age (18–120 years), sex and creatinine.','e.kS':'Implausible creatinine (0.1–20 mg/dl or 9–1768 µmol/l).','e.kW':'Implausible weight (2–400 kg) – calculated without Cockcroft-Gault.',
+  'n.k':'G1/G2 only indicate kidney disease together with further findings (e.g. albuminuria). Staging only with values over at least 3 months.',
+  'r.due':'Due date','r.ga':'Gestational age today','r.tri':'Trimester','r.toDue':'Until the due date','r.conc':'Conception about',
+  'tri.1':'1st trimester','tri.2':'2nd trimester','tri.3':'3rd trimester','r.daysN':'{n} days','r.over':'{n} days past',
+  'e.p':'Please enter the date of the last period and a cycle length of 21–45 days.','e.pFuture':'The date is in the future.',
+  'w.pLong':'More than 44 weeks – is the date right?','w.pEarly':'Arithmetically no pregnancy yet (cycle longer than 28 days).',
+  'n.p':'Dating by ultrasound in the first trimester is more accurate and takes precedence.',
+  'r.out':'Result','r.in':'Input',
+  'e.l':'Please enter a value greater than 0.','e.lHba1c':'Implausible HbA1c (expected about 3–20 % or 9–195 mmol/mol).',
+  'f.bmi':'Body mass index','f.bmi.l1':'<i>m</i> weight in kg, <i>h</i> height in cm (÷ 100 = metres)','f.bmi.l2':'WHO classification (adults): below 18.5 underweight · 18.5 to below 25 normal weight · 25 to below 30 pre-obesity · 30 to below 35 obesity class I · 35 to below 40 class II · 40 or more class III',
+  'f.most':'Body surface area according to Mosteller (1987)','f.most.l':'Result in m²; <i>h</i> in cm, <i>m</i> in kg; 3600 = constant so the result comes out in m²',
+  'f.dub':'Body surface area according to Du Bois &amp; Du Bois (1916)','f.dub.l':'Constant and exponents from measurements on subjects; <i>h</i> in cm, <i>m</i> in kg, result in m²',
+  'f.whtr':'Waist-to-height ratio (WHtR)','f.whtr.l':'<i>u</i> waist circumference in cm (midway between lowest rib and iliac crest); 0.5 or more means increased risk (Ashwell)',
+  'f.conv':'Conversion µmol/l → mg/dl','f.conv.l':'88.4 µmol/l equal 1 mg/dl (molar mass of creatinine 113.12 g/mol)',
+  'f.ckd':'eGFR according to CKD-EPI 2021','f.ckd.p':'Refitted equation without race coefficient (Inker et al., NEJM 2021); result in ml/min per 1.73 m² body surface area.',
+  'f.ckd.l1':'<i>S</i> serum creatinine in mg/dl, <i>A</i> age in years','f.ckd.l2':'<i>κ</i> = 0.7 (women) or 0.9 (men) – knee of the curve in mg/dl',
+  'f.ckd.l3':'<i>α</i> = −0.241 (women) or −0.302 (men) – slope below the knee; −1.200 above','f.ckd.l4':'0.9938 – decrease per year of age; <i>f</i> = 1.012 for women, otherwise 1',
+  'f.kdigo':'Stage according to KDIGO 2012','f.kdigo.l':'G1 ≥ 90 · G2 60–89 · G3a 45–59 · G3b 30–44 · G4 15–29 · G5 below 15 ml/min/1.73 m²',
+  'f.cg':'Creatinine clearance according to Cockcroft-Gault (1976)','f.cg.l1':'<i>m</i> weight in kg, <i>S</i> in mg/dl, result in ml/min (not indexed to 1.73 m²)','f.cg.l2':'<i>f</i> = 0.85 for women, otherwise 1; 72 and 140 are constants of the original paper',
+  'f.ega':'Due date (extended Naegele’s rule)','f.ega.l1':'<i>L</i> first day of the last period, <i>z</i> cycle length in days','f.ega.l2':'280 days = 40 weeks from the last period with a 28-day cycle; longer cycles move ovulation and thus the due date later',
+  'f.ssw':'Gestational age today','f.ssw.l1':'<i>D</i> today’s date, <i>t</i> days since the (corrected) last period','f.ssw.l2':'Given as weeks+days, e.g. 12+3 = 12 completed weeks and 3 days; trimesters: up to 13+6, 14+0 to 27+6, from 28+0',
+  'f.conc':'Conception about','f.conc.l':'Ovulation about 14 days before the next period',
+  'f.mol':'Conversion via the molar mass','f.mol.l1':'<i>M</i> molar mass in g/mol; mg/dl × 10 = mg/l, ÷ <i>M</i> = mmol/l','f.mol.l2':'{name}: <i>M</i> = {M} g/mol → factor {F}',
+  'f.hba1c':'HbA1c: IFCC equation','f.hba1c.l':'NGSP/DCCT in %, IFCC in mmol/mol (Hoelzel et al. 2004, “master equation”)',
+  'an.glucose':'Glucose','an.hba1c':'HbA1c','an.cholesterol':'Cholesterol (total, HDL, LDL)','an.triglycerides':'Triglycerides (triolein)','an.creatinine':'Creatinine',
+  'mcp.body':'body measures calculated','mcp.kidney':'kidney function calculated','mcp.preg':'due date calculated','mcp.lab':'lab value converted'
+}});
+const t=Tools.t;
+
+/* ---------- State: input values are never stored (patient data), only the two settings ---------- */
+const LS='medical-calculator.settings.v1';
+const S={'b.h':'','b.m':'','b.u':'','k.A':'','k.sex':'','k.S':'','k.unit':'mg','k.w':'','p.L':'','p.z':'28','l.a':'glucose','l.dir':'conv','l.x':''};
+{const o=Tools.load(LS,null);if(o&&typeof o==='object'){
+  if(o.creatinineUnit==='mg'||o.creatinineUnit==='umol')S['k.unit']=o.creatinineUnit;
+  if(typeof o.lab==='string'&&['glucose','hba1c','cholesterol','triglycerides','creatinine'].includes(o.lab))S['l.a']=o.lab;
+}}
+const save=()=>Tools.save(LS,{creatinineUnit:S['k.unit'],lab:S['l.a']});
+const num=k=>Tools.parseNum(S[k]);
+const round=(x,d)=>Math.round(x*10**d)/10**d;
+const inR=(x,lo,hi)=>Number.isFinite(x)&&x>=lo&&x<=hi;
+
+/* ---------- Rendering helpers (as in brew-calculator) ---------- */
+function math(el,tex){
+  const div=document.createElement('div');div.className='f';
+  if(window.katex){try{katex.render(tex,div,{displayMode:true,throwOnError:false});}catch(_){div.textContent=tex;div.classList.add('fallback');}}
+  else{div.textContent=tex;div.classList.add('fallback');}
+  el.append(div);
+}
+function block(host,parts){
+  host.textContent='';
+  for(const p of parts){
+    if(p.h){const h=document.createElement('h3');h.innerHTML=p.h;host.append(h);}
+    if(p.p){const q=document.createElement('p');q.innerHTML=p.p;host.append(q);}
+    if(p.m)math(host,p.m);
+    if(p.legend){const ul=document.createElement('ul');ul.className='legend';ul.innerHTML=p.legend.map(x=>'<li>'+x+'</li>').join('');host.append(ul);}
+  }
+}
+function results(host,items){
+  host.innerHTML=items.map(i=>'<div class="res'+(i.main?' main':'')+'"><div class="k">'+i.k+'</div><div class="v'+(i.txt?' txt':'')+'">'+Tools.esc(i.v)+(i.u?' <small>'+i.u+'</small>':'')+'</div></div>').join('');
+}
+function msg(host,list){host.innerHTML=list.filter(m=>m&&m[1]).map(([kind,text])=>'<div class="msg '+kind+'">'+text+'</div>').join('');}
+// Decimal numbers inside TeX: comma in German ({,} keeps KaTeX from adding a space)
+const dec=s=>Tools.lang()==='de'?String(s).replace(/\./g,'{,}'):String(s);
+
+/* ---------- 1. Body measures ---------- */
+const bmiOf=(h,m)=>m/(h/100)**2;
+const bsaMosteller=(h,m)=>Math.sqrt(h*m/3600);
+const bsaDuBois=(h,m)=>0.007184*m**0.425*h**0.725;
+// WHO class from the displayed value (1 decimal)
+const whoClass=b=>{const r=round(b,1);return r<18.5?0:r<25?1:r<30?2:r<35?3:r<40?4:5;};
+const WHO_EN=['underweight','normal weight','pre-obesity','obesity class I','obesity class II','obesity class III'];
+function bodyMath(hasU){
+  const p=[
+    {h:t('f.bmi'),m:'\\mathrm{BMI}=\\frac{m}{\\left(\\frac{h}{100}\\right)^{2}}\\;\\left[\\frac{\\text{kg}}{\\text{m}^2}\\right]',legend:[t('f.bmi.l1'),t('f.bmi.l2')]},
+    {h:t('f.most'),m:'\\mathrm{KOF}_{\\text{Mosteller}}=\\sqrt{\\frac{h\\cdot m}{3600}}',legend:[t('f.most.l')]},
+    {h:t('f.dub'),m:'\\mathrm{KOF}_{\\text{Du Bois}}='+dec('0.007184')+'\\cdot m^{'+dec('0.425')+'}\\cdot h^{'+dec('0.725')+'}',legend:[t('f.dub.l')]}
+  ];
+  if(hasU)p.push({h:t('f.whtr'),m:'\\mathrm{WHtR}=\\frac{u}{h}',legend:[t('f.whtr.l')]});
+  if(Tools.lang()==='en')for(const x of p)if(x.m)x.m=x.m.replace(/KOF/g,'BSA');
+  return p;
+}
+function calcBody(){
+  const h=num('b.h'),m=num('b.m'),u=num('b.u'),uOk=inR(u,30,250),uBad=S['b.u'].trim()!==''&&!uOk;
+  block($('bMath'),bodyMath(uOk));
+  if(!inR(h,50,250)||!inR(m,2,400)){results($('bRes'),[]);msg($('bMsg'),[[(S['b.h']||S['b.m'])?'err':'hint',t('e.b')]]);return;}
+  const b=bmiOf(h,m),res=[
+    {k:t('r.bmi'),v:fmt(b,1),u:'kg/m²',main:true},
+    {k:t('r.who'),v:t('who.'+whoClass(b)),txt:true},
+    {k:t('r.bsaM'),v:fmt(bsaMosteller(h,m),2),u:'m²'},
+    {k:t('r.bsaD'),v:fmt(bsaDuBois(h,m),2),u:'m²'}
+  ];
+  if(uOk){const w=u/h;res.push({k:t('r.whtr'),v:fmt(w,2),u:t(round(w,2)>=0.5?'whtr.high':'whtr.ok')});}
+  results($('bRes'),res);
+  msg($('bMsg'),[['warn',h<140?t('w.child'):''],['warn',uBad?t('e.u'):'']]);
+}
+
+/* ---------- 2. Kidney function ---------- */
+const UMOL_PER_MG=88.4;
+function egfrCkdEpi(A,female,S){
+  const k=female?0.7:0.9,a=female?-0.241:-0.302,r=S/k;
+  return 142*Math.min(r,1)**a*Math.max(r,1)**-1.2*0.9938**A*(female?1.012:1);
+}
+const crclCG=(A,female,S,m)=>(140-A)*m/(72*S)*(female?0.85:1);
+const kdigo=e=>{const r=Math.round(e);return r>=90?'1':r>=60?'2':r>=45?'3a':r>=30?'3b':r>=15?'4':'5';};
+function kidneyMath(umol,hasW){
+  const p=[];
+  if(umol)p.push({h:t('f.conv'),m:'S_{\\text{mg/dl}}=\\frac{S_{\\mu\\text{mol/l}}}{'+dec('88.4')+'}',legend:[t('f.conv.l')]});
+  p.push({h:t('f.ckd'),p:t('f.ckd.p'),
+    m:'\\mathrm{eGFR}=142\\cdot\\min\\left(\\tfrac{S}{\\kappa},1\\right)^{\\alpha}\\cdot\\max\\left(\\tfrac{S}{\\kappa},1\\right)^{-'+dec('1.200')+'}\\cdot '+dec('0.9938')+'^{A}\\cdot f',
+    legend:[1,2,3,4].map(i=>t('f.ckd.l'+i))});
+  p.push({h:t('f.kdigo'),legend:[t('f.kdigo.l')]});
+  if(hasW)p.push({h:t('f.cg'),m:'\\mathrm{CrCl}=\\frac{(140-A)\\cdot m}{72\\cdot S}\\cdot f',legend:[t('f.cg.l1'),t('f.cg.l2')]});
+  return p;
+}
+function kidney(A,female,Sv,umol,w){
+  const Smg=umol?Sv/UMOL_PER_MG:Sv,e=egfrCkdEpi(A,female,Smg),out={Smg,egfr:e,stage:kdigo(e)};
+  if(w!=null)out.crcl=crclCG(A,female,Smg,w);
+  return out;
+}
+function calcKidney(){
+  const umol=S['k.unit']==='umol',A=num('k.A'),Sv=num('k.S'),w=num('k.w'),sex=S['k.sex'];
+  const wOk=inR(w,2,400),wBad=S['k.w'].trim()!==''&&!wOk;
+  $('kUnit').textContent=umol?'µmol/l':'mg/dl';
+  block($('kMath'),kidneyMath(umol,wOk));
+  const any=S['k.A']||S['k.S'];
+  if(!inR(A,18,120)||!sex||!Number.isFinite(Sv)){results($('kRes'),[]);msg($('kMsg'),[[any?'err':'hint',t('e.k')]]);return;}
+  if(umol?!inR(Sv,9,1768):!inR(Sv,0.1,20)){results($('kRes'),[]);msg($('kMsg'),[['err',t('e.kS')]]);return;}
+  const r=kidney(A,sex==='f',Sv,umol,wOk?w:null),res=[
+    {k:t('r.egfr'),v:fmt(r.egfr,0),u:'ml/min/1,73 m²'.replace(',',Tools.lang()==='en'?'.':','),main:true},
+    {k:t('r.stage'),v:t('g.'+r.stage),txt:true}
+  ];
+  if(r.crcl!=null)res.push({k:t('r.crcl'),v:fmt(r.crcl,0),u:'ml/min'});
+  res.push(umol?{k:t('r.Smg'),v:fmt(r.Smg,2),u:'mg/dl'}:{k:t('r.Sumol'),v:fmt(Sv*UMOL_PER_MG,0),u:'µmol/l'});
+  results($('kRes'),res);
+  msg($('kMsg'),[['warn',wBad?t('e.kW'):''],['hint',t('n.k')]]);
+}
+
+/* ---------- 3. Pregnancy (whole calendar days in UTC) ---------- */
+const DAY=86400000;
+const parseDate=s=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||'');if(!m)return NaN;const d=Date.UTC(+m[1],+m[2]-1,+m[3]);
+  return new Date(d).getUTCDate()===+m[3]?d:NaN;};
+const today=()=>{const d=new Date();return Date.UTC(d.getFullYear(),d.getMonth(),d.getDate());};
+const iso=d=>new Date(d).toISOString().slice(0,10);
+const showDate=d=>new Date(d).toLocaleDateString(Tools.locale(),{timeZone:'UTC',weekday:'short',day:'numeric',month:'long',year:'numeric'});
+function pregnancy(L,z,D){
+  const shift=z-28,due=L+(280+shift)*DAY,conc=L+(z-14)*DAY,ga=Math.round((D-L)/DAY)-shift;
+  const w=Math.floor(ga/7),d=ga-7*w;
+  return {due,conc,ga,w,d,tri:ga<14*7?1:ga<28*7?2:3,toDue:Math.round((due-D)/DAY)};
+}
+function pregMath(){
+  return [
+    {h:t('f.ega'),m:'\\mathrm{ET}=L+280\\,\\text{d}+(z-28)\\,\\text{d}',legend:[t('f.ega.l1'),t('f.ega.l2')]},
+    {h:t('f.ssw'),m:'\\begin{aligned}t&=D-L-(z-28)\\,\\text{d}\\\\\\mathrm{SSW}&=\\left\\lfloor\\tfrac{t}{7}\\right\\rfloor+\\left(t\\bmod 7\\right)\\end{aligned}',legend:[t('f.ssw.l1'),t('f.ssw.l2')]},
+    {h:t('f.conc'),m:'L+(z-14)\\,\\text{d}',legend:[t('f.conc.l')]}
+  ];
+}
+function calcPreg(){
+  const L=parseDate(S['p.L']),z=num('p.z'),D=today();
+  block($('pMath'),pregMath());
+  if(!Number.isFinite(L)||!inR(z,21,45)||!Number.isInteger(z)){results($('pRes'),[]);msg($('pMsg'),[[S['p.L']?'err':'hint',t('e.p')]]);return;}
+  if(L>D){results($('pRes'),[]);msg($('pMsg'),[['err',t('e.pFuture')]]);return;}
+  const r=pregnancy(L,z,D),res=[{k:t('r.due'),v:showDate(r.due),txt:true,main:true}];
+  if(r.ga>=0){
+    res.push({k:t('r.ga'),v:r.w+'+'+r.d});
+    res.push({k:t('r.tri'),v:t('tri.'+r.tri),txt:true});
+    res.push({k:t('r.toDue'),v:r.toDue>=0?t('r.daysN',{n:fmt(r.toDue,0)}):t('r.over',{n:fmt(-r.toDue,0)}),txt:true});
+  }
+  res.push({k:t('r.conc'),v:showDate(r.conc),txt:true});
+  results($('pRes'),res);
+  msg($('pMsg'),[['warn',r.ga>44*7?t('w.pLong'):r.ga<0?t('w.pEarly'):''],['hint',t('n.p')]]);
+}
+
+/* ---------- 4. Lab values ---------- */
+// M: molar mass in g/mol; conv/si: units; digits for display. HbA1c uses the IFCC equation instead.
+const LAB={
+  glucose:{M:180.16,conv:'mg/dl',si:'mmol/l',dc:0,ds:2},
+  cholesterol:{M:386.65,conv:'mg/dl',si:'mmol/l',dc:0,ds:2},
+  triglycerides:{M:885.7,conv:'mg/dl',si:'mmol/l',dc:0,ds:2},
+  creatinine:{M:113.12,conv:'mg/dl',si:'µmol/l',dc:2,ds:0,f:88.4},
+  hba1c:{conv:'%',si:'mmol/mol',dc:1,ds:0}
+};
+// Factor conventional → SI: mmol/l = mg/dl · 10 / M (creatinine: fixed 88.4 µmol/l per mg/dl)
+const factor=a=>LAB[a].f||10/LAB[a].M;
+function convert(a,x,toSi){
+  if(a==='hba1c')return toSi?(x-2.15)*10.929:x/10.929+2.15;
+  return toSi?x*factor(a):x/factor(a);
+}
+function labMath(a){
+  if(a==='hba1c')return [{h:t('f.hba1c'),m:'\\mathrm{IFCC}=(\\mathrm{NGSP}-'+dec('2.15')+')\\cdot '+dec('10.929'),legend:[t('f.hba1c.l')]}];
+  const L=LAB[a],name=t('an.'+a);
+  if(a==='creatinine')return [{h:t('f.mol'),m:'c_{\\mu\\text{mol/l}}=c_{\\text{mg/dl}}\\cdot '+dec('88.4'),
+    legend:[t('f.conv.l')]}];
+  const F=String(+(L.M/10).toFixed(4));
+  return [{h:t('f.mol'),m:'c_{\\text{mmol/l}}=\\frac{c_{\\text{mg/dl}}\\cdot 10}{M}=\\frac{c_{\\text{mg/dl}}}{'+dec(F)+'}',
+    legend:[t('f.mol.l1'),t('f.mol.l2',{name,M:fmt(L.M,2),F:'÷ '+fmt(+F,F.split('.')[1]?.length||0)})]}];
+}
+function calcLab(){
+  const a=S['l.a'],L=LAB[a],toSi=S['l.dir']==='conv',x=num('l.x');
+  $('lConv').textContent=L.conv;$('lSi').textContent=L.si;$('lUnit').textContent=toSi?L.conv:L.si;
+  block($('lMath'),labMath(a));
+  if(!(x>0)){results($('lRes'),[]);msg($('lMsg'),[[S['l.x']?'err':'hint',t('e.l')]]);return;}
+  if(a==='hba1c'&&!(toSi?inR(x,3,20):inR(x,9,195))){results($('lRes'),[]);msg($('lMsg'),[['err',t('e.lHba1c')]]);return;}
+  const y=convert(a,x,toSi);
+  results($('lRes'),[
+    {k:t('r.out'),v:fmt(y,toSi?L.ds:L.dc),u:toSi?L.si:L.conv,main:true},
+    {k:t('r.in'),v:fmt(x,toSi?L.dc:L.ds),u:toSi?L.conv:L.si}
+  ]);
+  msg($('lMsg'),[]);
+}
+
+/* ---------- UI wiring ---------- */
+function syncInputs(){
+  document.querySelectorAll('[data-key]').forEach(el=>{
+    const k=el.dataset.key;
+    if(el.classList.contains('seg'))el.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===S[k])));
+    else if(document.activeElement!==el)el.value=S[k];
+  });
+}
+function update(){syncInputs();calcBody();calcKidney();calcPreg();calcLab();save();}
+document.querySelectorAll('[data-key]').forEach(el=>{
+  const k=el.dataset.key;
+  if(el.classList.contains('seg'))el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    // switching the unit converts the value already entered, so the calculation stays the same
+    if(k==='k.unit'&&b.dataset.v!==S[k]){const x=num('k.S');if(Number.isFinite(x))S['k.S']=b.dataset.v==='umol'?fmt(x*UMOL_PER_MG,0):fmt(x/UMOL_PER_MG,2);}
+    if(k==='l.dir'&&b.dataset.v!==S[k]){const x=num('l.x'),L=LAB[S['l.a']];if(x>0)S['l.x']=fmt(convert(S['l.a'],x,b.dataset.v==='si'),b.dataset.v==='si'?L.ds:L.dc);}
+    S[k]=b.dataset.v;Tools.diag.log('option',{key:k,value:b.dataset.v});update();});
+  else el.addEventListener(el.tagName==='SELECT'||el.type==='date'?'change':'input',()=>{S[k]=el.value;update();});
+  if(el.type==='date')el.addEventListener('input',()=>{S[k]=el.value;update();});
+});
+update();
+/* ---------- Jump bar (.chips from base.css): the calculator in view gets aria-current ---------- */
+{
+  const nav=document.querySelector('nav.calcs'),links=[...nav.querySelectorAll('a')];
+  const secs=links.map(a=>document.getElementById(a.getAttribute('href').slice(1)));
+  let cur=-1,raf=0;
+  const mark=()=>{
+    raf=0;
+    const line=nav.getBoundingClientRect().bottom+40,last=secs[secs.length-1];
+    let i=0;secs.forEach((s,j)=>{if(s.getBoundingClientRect().top<=line)i=j;});
+    // at the very bottom a short last section never reaches the line
+    if(window.innerHeight+window.scrollY>=document.documentElement.scrollHeight-2&&last.getBoundingClientRect().top<window.innerHeight)i=secs.length-1;
+    if(i===cur)return;cur=i;
+    links.forEach((a,j)=>{if(j===i)a.setAttribute('aria-current','true');else a.removeAttribute('aria-current');});
+    // keep the marked chip visible in the horizontally scrolling bar
+    const a=links[i];
+    if(a.offsetLeft<nav.scrollLeft)nav.scrollLeft=a.offsetLeft-12;
+    else if(a.offsetLeft+a.offsetWidth>nav.scrollLeft+nav.clientWidth)nav.scrollLeft=a.offsetLeft+a.offsetWidth-nav.clientWidth+12;
+  };
+  const queue=()=>{if(!raf)raf=requestAnimationFrame(mark);};
+  window.addEventListener('scroll',queue,{passive:true});
+  window.addEventListener('resize',queue);
+  mark();
+}
+
+// Diagnostics: which inputs are filled, never the values
+Tools.diag.info(()=>({filled:Object.keys(S).filter(k=>!['k.unit','l.a','l.dir','p.z'].includes(k)&&S[k]!=='').join(',')||'none',creatinineUnit:S['k.unit'],lab:S['l.a'],labDir:S['l.dir']}));
+Tools.onLang(update);
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
+   English; the values are filled into the calculator so the user sees the same calculation. Nothing is stored. */
+const put=(k,v)=>{S[k]=v==null?'':String(v).replace('.',Tools.lang()==='en'?'.':',');};
+Tools.mcp.register({
+  name:'body_measures',title:'BMI and body surface area',label:'mcp.body',
+  description:'Calculates the body mass index with the WHO class for adults, the body surface area (Mosteller and Du Bois) and, with a waist circumference, the waist-to-height ratio. Formula aid only, no diagnosis. The values are filled into the body measures calculator of the app.',
+  inputSchema:{type:'object',properties:{
+    height_cm:{type:'number',minimum:50,maximum:250,description:'Body height in cm.'},
+    weight_kg:{type:'number',minimum:2,maximum:400,description:'Body weight in kg.'},
+    waist_cm:{type:'number',minimum:30,maximum:250,description:'Optional waist circumference in cm.'}
+  },required:['height_cm','weight_kg'],additionalProperties:false},
+  execute:i=>{
+    put('b.h',i.height_cm);put('b.m',i.weight_kg);put('b.u',i.waist_cm);update();
+    const h=i.height_cm,m=i.weight_kg,b=bmiOf(h,m);
+    const out={bmi:round(b,1),who_class:WHO_EN[whoClass(b)],bsa_mosteller_m2:round(bsaMosteller(h,m),2),bsa_dubois_m2:round(bsaDuBois(h,m),2)};
+    if(i.waist_cm!=null)out.waist_to_height_ratio=round(i.waist_cm/h,2);
+    if(h<140)out.note='WHO classes apply to adults; use BMI percentiles for children and adolescents.';
+    return out;
+  }
+});
+Tools.mcp.register({
+  name:'kidney_function',title:'eGFR and creatinine clearance',label:'mcp.kidney',
+  description:'Estimates the glomerular filtration rate with the CKD-EPI 2021 equation (no race coefficient, adults) and gives the KDIGO G stage; with a body weight also the Cockcroft-Gault creatinine clearance. Formula aid only, no dosing. The values are filled into the kidney calculator of the app.',
+  inputSchema:{type:'object',properties:{
+    age_years:{type:'integer',minimum:18,maximum:120,description:'Age in years (adults only).'},
+    sex:{type:'string',enum:['female','male'],description:'Sex as used by the equations.'},
+    creatinine:{type:'number',minimum:0.1,maximum:1768,description:'Serum creatinine in the given unit.'},
+    creatinine_unit:{type:'string',enum:['mg_dl','umol_l'],description:'Unit of the creatinine: mg_dl (default) or umol_l.'},
+    weight_kg:{type:'number',minimum:2,maximum:400,description:'Optional body weight in kg for the Cockcroft-Gault clearance.'}
+  },required:['age_years','sex','creatinine'],additionalProperties:false},
+  execute:i=>{
+    const umol=i.creatinine_unit==='umol_l';
+    if(umol?!inR(i.creatinine,9,1768):!inR(i.creatinine,0.1,20))throw new Error('Implausible creatinine – expected 0.1–20 mg/dl or 9–1768 µmol/l.');
+    S['k.unit']=umol?'umol':'mg';S['k.sex']=i.sex==='female'?'f':'m';put('k.A',i.age_years);put('k.S',i.creatinine);put('k.w',i.weight_kg);update();
+    const r=kidney(i.age_years,i.sex==='female',i.creatinine,umol,i.weight_kg==null?null:i.weight_kg);
+    const out={egfr_ml_min_1_73m2:Math.round(r.egfr),kdigo_stage:'G'+r.stage,creatinine_mg_dl:round(r.Smg,2)};
+    if(r.crcl!=null)out.creatinine_clearance_ml_min=Math.round(r.crcl);
+    return out;
+  }
+});
+Tools.mcp.register({
+  name:'pregnancy_dates',title:'Due date and gestational age',label:'mcp.preg',
+  description:'Calculates the due date from the first day of the last menstrual period (extended Naegele’s rule, corrected for the cycle length), the approximate conception date and today’s gestational age in weeks+days with trimester. Ultrasound dating takes precedence. The values are filled into the pregnancy calculator of the app.',
+  inputSchema:{type:'object',properties:{
+    last_period:{type:'string',pattern:'^\\d{4}-\\d{2}-\\d{2}$',description:'First day of the last menstrual period as YYYY-MM-DD (not in the future).'},
+    cycle_days:{type:'integer',minimum:21,maximum:45,description:'Cycle length in days. Default 28.'}
+  },required:['last_period'],additionalProperties:false},
+  execute:i=>{
+    const L=parseDate(i.last_period),z=i.cycle_days==null?28:i.cycle_days,D=today();
+    if(!Number.isFinite(L))throw new Error('last_period is not a valid date (YYYY-MM-DD).');
+    if(L>D)throw new Error('last_period is in the future.');
+    S['p.L']=i.last_period;S['p.z']=String(z);update();
+    const r=pregnancy(L,z,D),out={due_date:iso(r.due),conception_date_approx:iso(r.conc),days_until_due:r.toDue};
+    if(r.ga>=0)Object.assign(out,{gestational_age:r.w+'+'+r.d,gestational_age_days:r.ga,trimester:r.tri});
+    if(r.ga>44*7)out.note='More than 44 weeks – check the date.';
+    return out;
+  }
+});
+Tools.mcp.register({
+  name:'convert_lab_value',title:'Convert a lab value',label:'mcp.lab',
+  description:'Converts a lab value between conventional and SI units: glucose, cholesterol and triglycerides mg/dl ↔ mmol/l, creatinine mg/dl ↔ µmol/l, HbA1c % (NGSP) ↔ mmol/mol (IFCC). The values are filled into the lab calculator of the app.',
+  inputSchema:{type:'object',properties:{
+    analyte:{type:'string',enum:['glucose','hba1c','cholesterol','triglycerides','creatinine'],description:'Which lab value.'},
+    value:{type:'number',exclusiveMinimum:0,maximum:100000,description:'The value to convert.'},
+    from:{type:'string',enum:['conventional','si'],description:'Unit of the given value: conventional (mg/dl, %) or si (mmol/l, µmol/l, mmol/mol). Default conventional.'}
+  },required:['analyte','value'],additionalProperties:false},
+  execute:i=>{
+    const toSi=i.from!=='si',L=LAB[i.analyte];
+    if(i.analyte==='hba1c'&&!(toSi?inR(i.value,3,20):inR(i.value,9,195)))throw new Error('Implausible HbA1c – expected about 3–20 % or 9–195 mmol/mol.');
+    S['l.a']=i.analyte;S['l.dir']=toSi?'conv':'si';put('l.x',i.value);update();
+    const y=convert(i.analyte,i.value,toSi);
+    return {value:i.value,unit:toSi?L.conv:L.si,converted:round(y,toSi?Math.max(L.ds,1):Math.max(L.dc,1)),converted_unit:toSi?L.si:L.conv};
+  }
+});
+})();
+</script>
+</body>
+</html>
