@@ -106,6 +106,21 @@ for (const app of apps()) {
       expect(m.headerOverflow, 'header overflows').toBe(false);
     });
 
+    test('multi-line text fields follow the standard (16 px text on phones, padding, 44 px, inside the screen)', async ({ page }) => {
+      await page.setViewportSize(VIEWPORTS.mobile);
+      await page.goto(url);
+      const fields = await page.evaluate(() => [...document.querySelectorAll('textarea')].filter(el => el.checkVisibility()).map(el => {
+        const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+        return { id: el.id || el.className, font: parseFloat(cs.fontSize), pad: parseFloat(cs.paddingInlineStart), h: r.height, right: r.right };
+      }));
+      for (const f of fields) {
+        expect(f.font, `${f.id}: font size (iOS zooms below 16 px)`).toBeGreaterThanOrEqual(16);
+        expect(f.pad, `${f.id}: padding`).toBeGreaterThanOrEqual(8);
+        expect(f.h, `${f.id}: height`).toBeGreaterThanOrEqual(43.5);
+        expect(f.right, `${f.id}: inside the screen`).toBeLessThanOrEqual(375.5);
+      }
+    });
+
     test('icon-only buttons: name, sprite icon of the lexicon, 44 px', async ({ page }) => {
       await page.setViewportSize(VIEWPORTS.mobile);
       await page.goto(url);
