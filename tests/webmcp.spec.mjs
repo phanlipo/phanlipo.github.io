@@ -3051,3 +3051,34 @@ test.describe('finance-calculator tools', () => {
     await expect(page.locator('#tab-iconv')).toHaveAttribute('aria-selected', 'true');
   });
 });
+
+test.describe('unit-converter tools', () => {
+  test.use({ locale: 'de-DE' });
+  test.beforeEach(async ({ page }) => open(page, '/unit-converter/'));
+
+  test('convert_unit by id or symbol opens the converter with the values', async ({ page }) => {
+    const r = await call(page, 'unit_converter_convert_unit', { value: 100, from: '°C', to: 'degF' });
+    expect(r.ok).toBe(true);
+    expect(r.result).toMatchObject({ quantity: 'temperature', result: 212, from: { id: 'degC', symbol: '°C', si: true }, to: { id: 'degF', si: false } });
+    await expect(page.locator('#p-temperature')).toBeVisible();
+    await expect(page.locator('#p-temperature .calc-result.main .v')).toHaveText('212 °F');
+    // 1 mile = 1.609344 km exactly; psi by symbol; "rad" needs the quantity to tell angle from dose
+    expect((await call(page, 'unit_converter_convert_unit', { value: 1, from: 'mi', to: 'km' })).result.result).toBe(1.609344);
+    expect((await call(page, 'unit_converter_convert_unit', { value: 1, from: 'bar', to: 'psi' })).result.result).toBeCloseTo(1e5 / (0.45359237 * 9.80665 / 0.0254 ** 2), 9);
+    expect((await call(page, 'unit_converter_convert_unit', { value: Math.PI, from: 'rad', to: 'deg', quantity: 'angle' })).result.result).toBeCloseTo(180, 9);
+    expect((await call(page, 'unit_converter_convert_unit', { value: 1, from: 'kg', to: 'm' })).error).toContain('different quantities');
+    expect((await call(page, 'unit_converter_convert_unit', { value: 1, from: 'furlong', to: 'm' })).error).toContain('Unknown unit');
+    expect((await call(page, 'unit_converter_convert_unit', { value: 0, from: 'l100km', to: 'mpgUS' })).ok).toBe(false);
+  });
+
+  test('list_units lists quantities and units, read only', async ({ page }) => {
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'unit_converter_list_units').annotations.readOnlyHint).toBe(true);
+    const all = (await call(page, 'unit_converter_list_units', {})).result;
+    expect(all.quantities).toHaveLength(34);
+    expect(all.quantities.find(q => q.id === 'length').units).toContain('ft');
+    const p = (await call(page, 'unit_converter_list_units', { quantity: 'pressure' })).result;
+    expect(p.si_unit).toBe('Pa');
+    expect(p.units.find(u => u.id === 'psi')).toEqual({ id: 'psi', symbol: 'psi', name: 'pound-force per square inch', si: false });
+  });
+});

@@ -20,7 +20,7 @@
 <meta name="tool:storage" content="finance-calculator.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-24BC5yENH8p/o5l4iYu09uD+BGKnIG8EZFO1TZyoLIY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-0O6m0dAOtwTE4zITKCr0qbvAGEEgX3M8/ozxx+woCpU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -431,7 +431,7 @@ table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeri
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 23313bdb22ef</p>
+  <p class="footer-version">Version dfbc29c1a1fb</p>
   <!-- footer:end -->
 </footer>
 
@@ -539,7 +539,7 @@ const LS='finance-calculator.inputs.v1';
 
 /* ---------- Inputs: one flat object of strings (as typed), saved as a whole ---------- */
 const DEF={
-  view:'overview',tab:'save',
+  view:'overview',tab:'save',lang:'de', // lang: language the numbers below are written in
   's.mode':'end','s.start':'5000','s.rate':'100','s.target':'100000','s.ret':'7','s.years':'20','s.dyn':'0','s.cost':'0,2','s.infl':'2','s.timing':'begin',
   'l.amount':'300000','l.rate':'3,5','l.mode':'tilgung','l.tilgung':'2','l.payment':'1500','l.years':'30','l.fixed':'10','l.extra':'',
   't.n':'360','t.iy':'6','t.pv':'200000','t.pmt':'','t.fv':'0','t.py':'12','t.cy':'12','t.timing':'end','t.p1':'1','t.p2':'12','t.last':'',
@@ -560,9 +560,9 @@ let rows=DEF_ROWS.map(r=>Object.assign({},r));
 const save=()=>Tools.save(LS,Object.assign({},S,{rows}));
 
 // Numbers as typed: comma or point, a minus sign, thousands separators of the language ("200.000" / "200,000")
-function parse(s){
+function parse(s,lang=Tools.lang()){
   let x=String(s==null?'':s).trim().replace(/[\s'’]/g,'').replace(/[−–]/g,'-');
-  if(Tools.lang()==='en'){ if(/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(x))x=x.replace(/,/g,''); }
+  if(lang==='en'){ if(/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(x))x=x.replace(/,/g,''); }
   else if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(x))x=x.replace(/\./g,'');
   return Tools.parseNum(x);
 }
@@ -882,10 +882,13 @@ $('btnReset').addEventListener('click',()=>{
   Tools.undo(t('resetDone'),()=>{Object.assign(S,before);rows=beforeRows;renderCfRows();update();});
 });
 // Language: re-render the texts written here; numbers in the fields get the decimal separator of the language
+// Numbers in the fields are read in the language they were typed in and written in the current one
+let lastLang=S.lang; // language of the saved numbers (the defaults are German)
 function decimals(){
-  const fix=s=>/^-?\d+[.,]\d+$/.test(s)?(Tools.lang()==='en'?s.replace(',','.'):s.replace('.',',')):s;
+  const fix=s=>{if(!/\d/.test(s)||/^\d{4}-\d\d-\d\d$/.test(s))return s;const x=parse(s,lastLang);if(!Number.isFinite(x))return s;const r=String(x);return Tools.lang()==='en'?r:r.replace('.',',');};
   for(const k in S)if(typeof S[k]==='string'&&!k.startsWith('dt.'))S[k]=fix(S[k]);
   for(const r of rows){r.cf=fix(r.cf);}
+  lastLang=S.lang=Tools.lang();
   for(const k in tvmExact)tvmExact[k].shown=S[k];
 }
 Tools.onLang(()=>{decimals();renderTvmRows();renderCfRows();update();});

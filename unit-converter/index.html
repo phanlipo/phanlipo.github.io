@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Einheitenrechner</title>
+<meta name="description" content="Einheiten umrechnen: alle SI-Basisgrößen und abgeleiteten SI-Einheiten mit Präfixen, dazu bekannte andere Einheiten wie Zoll, Meile, Pfund, °F, Gallone, psi, PS, kcal, mpg und Gibibyte – mit Tabelle aller Einheiten und Suche.">
+<meta name="tool:tags" content="Alltag, Rechner, Messen">
+<meta name="tool:features" content="Kopieren, KI-Agent">
+<meta name="tool:webmcp" content="convert_unit, list_units">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann einen Wert von einer Einheit in eine andere umrechnen (der Rechner öffnet sich mit diesen Werten) und die vorhandenen Größen und Einheiten auflisten.">
+<meta name="tool:webmcp-help-en" content="An AI agent can convert a value from one unit to another (the converter opens with these values) and list the quantities and units available.">
+<meta name="tool:icon" content="ruler-measure">
+<meta name="tool:color" content="#5b4bb7">
+<meta name="tool:short-name" content="Einheiten">
+<meta name="tool:title-en" content="Unit Converter">
+<meta name="tool:description-en" content="Convert units: all SI base quantities and derived SI units with prefixes, plus well-known other units such as inch, mile, pound, °F, gallon, psi, horsepower, kcal, mpg and gibibyte – with a table of all units and search.">
+<meta name="tool:short-name-en" content="Units">
+<meta name="tool:storage" content="unit-converter.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-9O0yOBDUdMAJoScpXlGXgF1mAaRlsryDTNIYEkMGDAM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Einheiten">
+<meta name="theme-color" content="#5b4bb7">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Overview, tab bar, fields and result fields come from base.css (UI-KONZEPT.md "Werkzeugkasten", "Rechner") */
+:root{--accent:#5b4bb7;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#b4a9f2;--accent-text:#16112e}}
+main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.panel>h2{font-size:18px;margin-block-end:4px}
+.intro{color:var(--muted);font-size:14px;margin:0 0 12px}
+select{appearance:auto}
+/* value field with the sign key */
+.calc-results>.main{grid-column:1/-1}
+.val-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.search{margin-block-end:4px}
+.scroll{overflow-x:auto}
+table.tbl{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+.tbl th,.tbl td{padding:6px 8px;border-block-end:1px solid var(--border);text-align:start;vertical-align:baseline}
+.tbl td.num{text-align:end;white-space:nowrap}
+.tbl th[scope=colgroup]{color:var(--muted);font-size:13px;font-weight:600;padding-block-start:12px}
+.tbl tr.cur td{font-weight:700}
+.tbl .sym{color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Einheitenrechner</span></h1>
+  <p class="sub" data-i18n="sub">SI-Einheiten und bekannte andere Einheiten umrechnen.</p>
+</header>
+
+<main>
+<section class="tool-overview" id="overview" aria-label="Übersicht" data-i18n-attr="aria-label:ov">
+  <div class="form-field search">
+    <label for="q" data-i18n="search">Größe oder Einheit suchen</label>
+    <input type="search" id="q" autocomplete="off" placeholder="z. B. psi, Zoll, kWh" data-i18n-attr="placeholder:searchPh">
+  </div>
+  <div id="groups"></div>
+  <div class="empty-state" id="noHit" hidden>
+    <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#search"/></svg>
+    <p data-i18n="noHit">Keine passende Größe oder Einheit.</p>
+  </div>
+</section>
+
+<div class="tabbar" id="tabbar" hidden>
+  <button type="button" class="back" data-overview><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg><span data-i18n="ov">Übersicht</span></button>
+  <div class="tabs" role="tablist" aria-label="Größe wählen" data-i18n-attr="aria-label:tabs" id="tabs"></div>
+</div>
+<div id="panels" hidden></div>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnReset" class="danger" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="reset">Diese Umrechnung zurücksetzen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Einheiten umrechnen – nach Größen geordnet. Auf der Übersicht eine Größe antippen (oder oben suchen, z. B. „psi“ oder „Zoll“), dann Wert, „Von“ und „Nach“ wählen. Das Ergebnis erscheint sofort, darunter steht der Wert in allen Einheiten der Größe. Oben wechselst du zu den Nachbargrößen derselben Gruppe, „Übersicht“ (oder die Zurück-Taste) führt zurück.</p>
+  <h3>Was es gibt</h3>
+  <ul>
+    <li><b>SI-Basisgrößen:</b> Länge, Masse, Zeit, Temperatur, Stromstärke, Stoffmenge, Lichtstärke – und die SI-Präfixe von Quetta (10<sup>30</sup>) bis Quekto (10<sup>−30</sup>).</li>
+    <li><b>Abgeleitete SI-Einheiten:</b> Fläche, Volumen, Geschwindigkeit, Beschleunigung, Kraft, Druck, Energie, Leistung, Drehmoment, Dichte, Winkel, Frequenz, Ladung, Spannung, Widerstand, Kapazität, Induktivität, magnetischer Fluss und Flussdichte, Lichtstrom, Beleuchtungsstärke, Radioaktivität, Energie- und Äquivalentdosis, katalytische Aktivität.</li>
+    <li><b>Andere Einheiten</b> stehen in den Auswahllisten unter den SI-Einheiten: angloamerikanische (Zoll, Fuß, Meile, Pfund, Gallone, psi, °F …), ältere (Kilopond, Kalorie, PS, Torr, Curie, Gauß …) und CGS-Einheiten.</li>
+    <li><b>Alltag:</b> Datenmenge (dezimal kB/MB/GB und binär KiB/MiB/GiB) und Kraftstoffverbrauch (l/100 km, km/l, mpg).</li>
+  </ul>
+  <h3>Gut zu wissen</h3>
+  <ul>
+    <li>Die Umrechnungsfaktoren sind die festgelegten Werte (z. B. 1 Zoll = 2,54 cm, 1 Pfund = 0,45359237 kg, 1 PS = 735,49875 W, 1 kcal = 4,184 kJ). Ausnahmen mit Näherungswerten sind gekennzeichnet (≈).</li>
+    <li>Temperatur rechnet Temperaturwerte um (20 °C = 68 °F). Für Temperatur<i>unterschiede</i> gilt: 1 K = 1 °C = 1,8 °F.</li>
+    <li>Verbrauch: Liter pro 100 km und Meilen pro Gallone verhalten sich umgekehrt – weniger Liter heißt mehr Meilen.</li>
+    <li>Ergebnisse zeigen bis zu 10 gültige Stellen, sehr große und sehr kleine Zahlen als Zehnerpotenz. „Kopieren“ übernimmt die Zahl ohne Tausendertrennzeichen.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Die letzten Werte und Einheiten je Größe bleiben nur in diesem Browser gespeichert (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Convert units, sorted by quantity. Tap a quantity on the overview (or search at the top, e.g. “psi” or “inch”), then choose the value, “From” and “To”. The result shows right away, below it the value in every unit of the quantity. The bar at the top switches to the other quantities of the same group, “Overview” (or the back key) returns.</p>
+  <h3>What is there</h3>
+  <ul>
+    <li><b>SI base quantities:</b> length, mass, time, temperature, electric current, amount of substance, luminous intensity – and the SI prefixes from quetta (10<sup>30</sup>) to quecto (10<sup>−30</sup>).</li>
+    <li><b>Derived SI units:</b> area, volume, speed, acceleration, force, pressure, energy, power, torque, density, angle, frequency, charge, voltage, resistance, capacitance, inductance, magnetic flux and flux density, luminous flux, illuminance, radioactivity, absorbed and equivalent dose, catalytic activity.</li>
+    <li><b>Other units</b> follow the SI units in the lists: imperial and US units (inch, foot, mile, pound, gallon, psi, °F …), older ones (kilogram-force, calorie, metric horsepower, torr, curie, gauss …) and CGS units.</li>
+    <li><b>Everyday:</b> data size (decimal kB/MB/GB and binary KiB/MiB/GiB) and fuel consumption (l/100 km, km/l, mpg).</li>
+  </ul>
+  <h3>Good to know</h3>
+  <ul>
+    <li>The factors are the defined values (e.g. 1 inch = 2.54 cm, 1 pound = 0.45359237 kg, 1 metric horsepower = 735.49875 W, 1 kcal = 4.184 kJ). Customary approximations are marked (≈).</li>
+    <li>Temperature converts temperature values (20 °C = 68 °F). For temperature <i>differences</i>: 1 K = 1 °C = 1.8 °F.</li>
+    <li>Fuel: litres per 100 km and miles per gallon are inverse – fewer litres means more miles.</li>
+    <li>Results show up to 10 significant digits, very large and very small numbers as powers of ten. “Copy” copies the number without thousands separators.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The last values and units per quantity stay only in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann einen Wert von einer Einheit in eine andere umrechnen (der Rechner öffnet sich mit diesen Werten) und die vorhandenen Größen und Einheiten auflisten. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can convert a value from one unit to another (the converter opens with these values) and list the quantities and units available. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 37ecd502d605</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/shared/toolbox.js"></script>
+<script src="units.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    value:'Wert',from:'Von',to:'Nach',swap:'Tauschen',copyRes:'Kopieren',copied:'Kopiert',copyFail:'Kopieren nicht möglich',
+    sign:'Vorzeichen wechseln',all:'Alle Einheiten',unit:'Einheit',si:'SI-Einheiten',other:'Andere Einheiten',approx:'Näherungswert',
+    resIn:'Ergebnis in {u}',factor:'Umrechnung',ref:'SI-Einheit: {u}',refOther:'Bezugseinheit: {u}',
+    missing:'Bitte einen Wert eingeben.',invalid:'Diese Umrechnung ist für den Wert nicht möglich (z. B. 0 bei Verbrauch).',
+    belowZero:'Unter dem absoluten Nullpunkt (0 K) – diese Temperatur gibt es nicht.',
+    'p.title':'SI-Präfixe','p.intro':'Ein Präfix vervielfacht eine Einheit mit einer Zehnerpotenz: 1 km = 10³ m. Hier lässt sich ein Wert zwischen zwei Präfixen umrechnen – für jede Einheit.',
+    'p.list':'Alle SI-Präfixe','p.name':'Präfix','p.sym':'Zeichen','p.factor':'Faktor',resetDone:'Zurückgesetzt',
+    'mcp.convert':'Einheit umgerechnet'
+  },
+  en:{
+    title:'Unit Converter',sub:'Convert SI units and well-known other units.',ov:'Overview',tabs:'Choose quantity',search:'Search quantity or unit',
+    searchPh:'e.g. psi, inch, kWh',noHit:'No matching quantity or unit.',reset:'Reset this conversion',
+    value:'Value',from:'From',to:'To',swap:'Swap',copyRes:'Copy',copied:'Copied',copyFail:'Copying not possible',
+    sign:'Change sign',all:'All units',unit:'Unit',si:'SI units',other:'Other units',approx:'approximate value',
+    resIn:'Result in {u}',factor:'Conversion',ref:'SI unit: {u}',refOther:'Reference unit: {u}',
+    missing:'Please enter a value.',invalid:'This conversion is not possible for the value (e.g. 0 for fuel consumption).',
+    belowZero:'Below absolute zero (0 K) – this temperature does not exist.',
+    'p.title':'SI prefixes','p.intro':'A prefix multiplies a unit by a power of ten: 1 km = 10³ m. Convert a value between two prefixes here – for any unit.',
+    'p.list':'All SI prefixes','p.name':'Prefix','p.sym':'Symbol','p.factor':'Factor',resetDone:'Reset',
+    'mcp.convert':'unit converted'
+  }
+});
+const t=Tools.t, $=Tools.$, U=window.Units, esc=Tools.esc;
+const L=o=>o[Tools.lang()==='en'?'en':'de'];
+const LS='unit-converter.state.v1';
+
+/* ---------- State: per quantity the value as typed and the two units ---------- */
+const S={view:'overview',tab:'length',lang:Tools.lang(),c:{},p:{v:'5',from:'k',to:''}};
+{
+  const o=Tools.load(LS,null);
+  if(o&&typeof o==='object'){
+    if(o.view==='tool')S.view='tool';
+    if(typeof o.tab==='string')S.tab=o.tab;
+    if(o.lang==='de'||o.lang==='en')S.lang=o.lang; // language the saved numbers are written in
+    if(o.c&&typeof o.c==='object')for(const c of U.CATEGORIES){
+      const x=o.c[c.id];
+      if(x&&typeof x.v==='string'&&U.unitOf(c.id,x.from)&&U.unitOf(c.id,x.to))S.c[c.id]={v:x.v,from:x.from,to:x.to};
+    }
+    if(o.p&&typeof o.p.v==='string'&&U.PREFIXES.some(p=>p.sym===o.p.from)&&U.PREFIXES.some(p=>p.sym===o.p.to))S.p={v:o.p.v,from:o.p.from,to:o.p.to};
+  }
+}
+const st=id=>S.c[id]||(S.c[id]={v:U.byId[id].value||'1',from:U.byId[id].from,to:U.byId[id].to});
+const save=()=>Tools.save(LS,S);
+
+/* ---------- Numbers ---------- */
+// Typed numbers: comma or point, minus sign, thousands separators of the language ("1.000.000" / "1,000,000"), "1e-9"
+function parse(s,lang=Tools.lang()){
+  let x=String(s==null?'':s).trim().replace(/[\s'’]/g,'').replace(/[−–]/g,'-').replace(/[×x]10\^?/i,'e');
+  if(lang==='en'){ if(/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(x))x=x.replace(/,/g,''); }
+  else if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(x))x=x.replace(/\./g,'');
+  return Tools.parseNum(x);
+}
+const SUP={'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
+// Up to 10 significant digits in the format of the language; very large/small as a power of ten
+function fmtNum(x){
+  if(!Number.isFinite(x))return '–';
+  if(x===0)return '0';
+  const a=Math.abs(x);
+  if(a>=1e15||a<1e-6){
+    let e=Math.floor(Math.log10(a)),m=x/10**e;
+    if(Math.abs(Number(m.toPrecision(7)))>=10){m/=10;e++;}
+    return Number(m.toPrecision(7)).toLocaleString(Tools.locale(),{maximumFractionDigits:6})+' × 10'+String(e).replace(/./g,c=>SUP[c]);
+  }
+  return Number(x.toPrecision(10)).toLocaleString(Tools.locale(),{maximumFractionDigits:12});
+}
+// For the clipboard: no grouping, decimal separator of the language, E-notation for very large/small
+function copyNum(x){
+  const a=Math.abs(x);
+  const s=a!==0&&(a>=1e15||a<1e-6)?Number(x.toPrecision(12)).toExponential().replace('e+','E').replace('e','E'):String(Number(x.toPrecision(12)));
+  return Tools.lang()==='en'?s:s.replace('.',',');
+}
+const unitName=u=>L(u)+' ('+u.sym+')'+(u.approx?' ≈':'');
+
+/* ---------- Building the overview, the tabs and one panel per quantity ---------- */
+const ALL=[...U.CATEGORIES.slice(0,7),{id:'prefix',group:'base',icon:'superscript',de:'SI-Präfixe',en:'SI prefixes',prefix:true},...U.CATEGORIES.slice(7)];
+function build(){
+  $('groups').innerHTML=U.GROUPS.map(g=>'<h2 data-g="'+g.id+'"></h2><div class="tiles" data-g="'+g.id+'">'+
+    ALL.filter(c=>c.group===g.id).map(c=>'<button type="button" data-open="'+c.id+'">'+Tools.icon(c.icon)+'<span></span></button>').join('')+'</div>').join('');
+  $('tabs').innerHTML=ALL.map(c=>'<button type="button" role="tab" id="tab-'+c.id+'" aria-controls="p-'+c.id+'" data-tab="'+c.id+'" data-group="'+c.group+'">'+Tools.icon(c.icon)+'<span></span></button>').join('');
+  $('panels').outerHTML=ALL.map(c=>c.prefix?prefixPanel():panel(c)).join('');
+}
+function panel(c){
+  const id=c.id;
+  return '<section class="card panel" id="p-'+id+'" role="tabpanel" aria-labelledby="tab-'+id+'" data-cat="'+id+'" hidden>'+
+    '<h2></h2><p class="intro" data-ref></p>'+
+    '<div class="calc-fields">'+
+      '<div class="form-field"><label for="v-'+id+'" data-t="value"></label><div class="val-row"><input type="text" inputmode="decimal" id="v-'+id+'" data-in="v" autocomplete="off">'+
+        '<button type="button" class="btn icon" data-sign>'+Tools.icon('plus-minus')+'</button></div></div>'+
+      '<label class="form-field"><span data-t="from"></span><select data-in="from"></select></label>'+
+      '<label class="form-field"><span data-t="to"></span><select data-in="to"></select></label>'+
+    '</div>'+
+    '<div class="row"><button type="button" class="btn" data-swap>'+Tools.icon('arrows-left-right')+'<span data-t="swap"></span></button>'+
+      '<button type="button" class="btn" data-copy>'+Tools.icon('copy')+'<span data-t="copyRes"></span></button></div>'+
+    '<div class="calc-results" role="status" data-res></div><div data-msg></div>'+
+    '<details class="sub" open><summary data-t="all"></summary><div class="scroll" data-all></div></details>'+
+  '</section>';
+}
+function prefixPanel(){
+  return '<section class="card panel" id="p-prefix" role="tabpanel" aria-labelledby="tab-prefix" hidden>'+
+    '<h2 data-t="p.title"></h2><p class="intro" data-t="p.intro"></p>'+
+    '<div class="calc-fields">'+
+      '<div class="form-field"><label for="v-prefix" data-t="value"></label><div class="val-row"><input type="text" inputmode="decimal" id="v-prefix" data-in="v" autocomplete="off">'+
+        '<button type="button" class="btn icon" data-sign>'+Tools.icon('plus-minus')+'</button></div></div>'+
+      '<label class="form-field"><span data-t="from"></span><select data-in="from"></select></label>'+
+      '<label class="form-field"><span data-t="to"></span><select data-in="to"></select></label>'+
+    '</div>'+
+    '<div class="row"><button type="button" class="btn" data-swap>'+Tools.icon('arrows-left-right')+'<span data-t="swap"></span></button>'+
+      '<button type="button" class="btn" data-copy>'+Tools.icon('copy')+'<span data-t="copyRes"></span></button></div>'+
+    '<div class="calc-results" role="status" data-res></div><div data-msg></div>'+
+    '<details class="sub" open><summary data-t="p.list"></summary><div class="scroll" data-all></div></details>'+
+  '</section>';
+}
+const pfxName=p=>p.sym?L(p)+' ('+p.sym+')':L(p);
+const pow10=e=>'10'+String(e).replace(/./g,c=>SUP[c]);
+// Texts that depend on the language (also after switching it)
+function texts(){
+  document.querySelectorAll('#groups h2[data-g]').forEach(h=>{h.textContent=L(U.GROUPS.find(g=>g.id===h.dataset.g));});
+  for(const c of ALL){
+    document.querySelector('#groups [data-open="'+c.id+'"] span').textContent=L(c);
+    $('tab-'+c.id).querySelector('span').textContent=L(c);
+    const p=$('p-'+c.id);
+    p.querySelectorAll('[data-t]').forEach(el=>{el.textContent=t(el.dataset.t);});
+    p.querySelector('[data-sign]').setAttribute('aria-label',t('sign'));
+    p.querySelector('[data-sign]').title=t('sign');
+    if(c.prefix){
+      const opts=U.PREFIXES.map(x=>'<option value="'+esc(x.sym)+'">'+esc(pfxName(x))+' · '+pow10(x.exp)+'</option>').join('');
+      p.querySelectorAll('select').forEach(s=>{s.innerHTML=opts;});
+      continue;
+    }
+    p.querySelector('h2').textContent=L(c);
+    const ref=U.unitOf(c.id,c.ref);
+    p.querySelector('[data-ref]').textContent=t(ref.si&&!c.siLabel?'ref':'refOther',{u:unitName(ref)});
+    const groups=[[c.siLabel?L(c.siLabel):t('si'),c.units.filter(x=>x.si)],[c.otherLabel?L(c.otherLabel):t('other'),c.units.filter(x=>!x.si)]].filter(g=>g[1].length);
+    const opts=groups.map(([lab,list])=>'<optgroup label="'+esc(lab)+'">'+list.map(x=>'<option value="'+esc(x.id)+'">'+esc(unitName(x))+'</option>').join('')+'</optgroup>').join('');
+    p.querySelectorAll('select').forEach(s=>{s.innerHTML=opts;});
+  }
+}
+
+/* ---------- Calculating ---------- */
+function note(host,kind,text){host.innerHTML=text?'<p class="notice '+kind+'">'+Tools.icon(kind==='err'?'alert-circle':'info-circle')+'<span>'+esc(text)+'</span></p>':'';}
+const results={}; // last result per quantity (for copying and WebMCP)
+function calc(c){
+  const p=$('p-'+c.id),s=st(c.id),a=U.unitOf(c.id,s.from),b=U.unitOf(c.id,s.to),v=parse(s.v);
+  const res=p.querySelector('[data-res]'),msg=p.querySelector('[data-msg]'),all=p.querySelector('[data-all]');
+  results[c.id]=null;
+  if(!Number.isFinite(v)){res.innerHTML='';all.innerHTML='';note(msg,'info',t('missing'));return;}
+  const ref=U.toRef(a,v);
+  if(!Number.isFinite(ref)){res.innerHTML='';all.innerHTML='';note(msg,'err',t('invalid'));return;}
+  const x=U.fromRef(b,ref);
+  if(!Number.isFinite(x)){res.innerHTML='';all.innerHTML='';note(msg,'err',t('invalid'));return;}
+  results[c.id]=x;
+  const items=['<div class="calc-result main"><span class="k">'+esc(t('resIn',{u:L(b)}))+'</span><b class="v">'+esc(fmtNum(x))+' <small>'+esc(b.sym)+'</small></b></div>'];
+  // the factor "1 a = … b" for proportional units (not for temperatures and fuel consumption)
+  if(!a.o&&!b.o&&!a.inv&&!b.inv&&a!==b)items.push('<div class="calc-result"><span class="k">'+esc(t('factor'))+'</span><b class="v txt">1 '+esc(a.sym)+' = '+esc(fmtNum(a.f/b.f))+' '+esc(b.sym)+'</b></div>');
+  res.innerHTML=items.join('');
+  note(msg,c.id==='temperature'&&ref<0?'err':'',c.id==='temperature'&&ref<0?t('belowZero'):'');
+  const rows=list=>list.map(u=>'<tr'+(u===b?' class="cur"':'')+'><td>'+esc(L(u))+(u.approx?' ≈':'')+' <span class="sym">'+esc(u.sym)+'</span></td><td class="num">'+esc(fmtNum(U.fromRef(u,ref)))+'</td></tr>').join('');
+  const si=c.units.filter(u=>u.si),other=c.units.filter(u=>!u.si);
+  all.innerHTML='<table class="tbl"><tbody>'+
+    (si.length?'<tr><th scope="colgroup" colspan="2">'+esc(c.siLabel?L(c.siLabel):t('si'))+'</th></tr>'+rows(si):'')+
+    (other.length?'<tr><th scope="colgroup" colspan="2">'+esc(c.otherLabel?L(c.otherLabel):t('other'))+'</th></tr>'+rows(other):'')+'</tbody></table>';
+}
+function calcPrefix(){
+  const p=$('p-prefix'),s=S.p,v=parse(s.v),a=U.PREFIXES.find(x=>x.sym===s.from),b=U.PREFIXES.find(x=>x.sym===s.to);
+  const res=p.querySelector('[data-res]'),msg=p.querySelector('[data-msg]');
+  results.prefix=null;
+  if(!Number.isFinite(v)){res.innerHTML='';note(msg,'info',t('missing'));}
+  else{
+    const x=v*10**(a.exp-b.exp);
+    results.prefix=x;
+    res.innerHTML='<div class="calc-result main"><span class="k">'+esc(t('resIn',{u:pfxName(b)}))+'</span><b class="v">'+esc(fmtNum(x))+(b.sym?' <small>'+esc(b.sym)+'…</small>':'')+'</b></div>'+
+      '<div class="calc-result"><span class="k">'+esc(t('factor'))+'</span><b class="v txt">1 '+esc(a.sym||'·')+' = '+pow10(a.exp-b.exp)+' '+esc(b.sym||'·')+'</b></div>';
+    note(msg,'','');
+  }
+  p.querySelector('[data-all]').innerHTML='<table class="tbl"><thead><tr><th scope="col">'+esc(t('p.name'))+'</th><th scope="col">'+esc(t('p.sym'))+'</th><th scope="col" class="num">'+esc(t('p.factor'))+'</th></tr></thead><tbody>'+
+    U.PREFIXES.filter(x=>x.sym).map(x=>'<tr'+(x===b?' class="cur"':'')+'><td>'+esc(L(x))+'</td><td>'+esc(x.sym)+'</td><td class="num">'+pow10(x.exp)+'</td></tr>').join('')+'</tbody></table>';
+}
+function sync(id){
+  const p=$('p-'+id),s=id==='prefix'?S.p:st(id);
+  const v=p.querySelector('[data-in="v"]');
+  if(document.activeElement!==v)v.value=s.v;
+  p.querySelector('[data-in="from"]').value=s.from;
+  p.querySelector('[data-in="to"]').value=s.to;
+}
+function update(id){
+  if(!id)return;
+  sync(id);
+  if(id==='prefix')calcPrefix();else calc(U.byId[id]);
+  save();
+}
+
+/* ---------- Search on the overview: by quantity, unit name or symbol ---------- */
+function search(){
+  const q=$('q').value.trim().toLowerCase();
+  let hits=0;
+  for(const c of ALL){
+    const words=[c.de,c.en,...(c.units||[]).flatMap(u=>[u.de,u.en,u.sym,u.id])].map(w=>w.toLowerCase());
+    const hit=!q||words.some(w=>w.includes(q));
+    document.querySelector('#groups [data-open="'+c.id+'"]').hidden=!hit;
+    if(hit)hits++;
+  }
+  document.querySelectorAll('#groups .tiles').forEach(g=>{const any=[...g.children].some(b=>!b.hidden);g.hidden=!any;g.previousElementSibling.hidden=!any;});
+  $('noHit').hidden=hits>0;
+}
+
+/* ---------- Wiring ---------- */
+if(S.lang!==Tools.lang())toLang();
+build();
+texts();
+$('q').addEventListener('input',search);
+document.querySelectorAll('section.panel').forEach(p=>{
+  const id=p.id.slice(2),s=()=>id==='prefix'?S.p:st(id);
+  p.querySelector('[data-in="v"]').addEventListener('input',e=>{s().v=e.target.value;update(id);});
+  p.querySelectorAll('select').forEach(sel=>sel.addEventListener('change',()=>{s()[sel.dataset.in]=sel.value;update(id);}));
+  p.querySelector('[data-swap]').addEventListener('click',()=>{const x=s();[x.from,x.to]=[x.to,x.from];update(id);});
+  p.querySelector('[data-sign]').addEventListener('click',()=>{
+    const x=s(),v=x.v.trim().replace(/^[−–]/,'-');
+    if(!v||parse(v)===0)return;
+    x.v=v.startsWith('-')?v.slice(1):'-'+v;update(id);
+  });
+  p.querySelector('[data-copy]').addEventListener('click',async()=>{
+    const r=results[id];
+    if(r==null)return;
+    const ok=await Tools.copyText(copyNum(r));
+    Tools.toast(t(ok?'copied':'copyFail'));
+  });
+});
+const box=Toolbox.init({
+  state:{view:S.view,tab:S.tab},
+  onChange:x=>{S.view=x.view;S.tab=x.tab;$('btnReset').hidden=x.view!=='tool';save();},
+  onSelect:(id,{gesture})=>{if(gesture)Tools.diag.log('open',id);update(id);}
+});
+$('btnReset').addEventListener('click',()=>{
+  const id=box.current();if(!id)return;
+  const before=JSON.parse(JSON.stringify(id==='prefix'?S.p:st(id)));
+  if(id==='prefix')S.p={v:'5',from:'k',to:''};else delete S.c[id];
+  update(id);Tools.menu.close();
+  Tools.undo(t('resetDone'),()=>{if(id==='prefix')S.p=before;else S.c[id]=before;update(id);});
+});
+// Numbers typed in the fields are read in the language they were written in and written in the current one
+// ("1,000" stays a thousand) – after a language switch and for saved values from the other language
+function toLang(){
+  const old=S.lang;
+  const fix=v=>{const x=parse(v,old);if(!Number.isFinite(x))return v;const r=String(x);return Tools.lang()==='en'?r:r.replace('.',',');};
+  for(const k in S.c)S.c[k].v=fix(S.c[k].v);
+  S.p.v=fix(S.p.v);
+  S.lang=Tools.lang();
+}
+Tools.onLang(()=>{toLang();texts();search();const id=box.current();if(id)update(id);});
+Tools.diag.info(()=>({view:box.current()||'overview',quantities:Object.keys(S.c).length}));
+
+/* ---------- WebMCP: tools for AI agents (see AGENTS.md "WebMCP") ---------- */
+const unitInfo=(c,u)=>({id:u.id,symbol:u.sym,name:u.en,si:!!u.si,...(u.approx?{approximate:true}:{})});
+Tools.mcp.register({
+  name:'convert_unit',title:'Convert a unit',label:'mcp.convert',
+  description:'Converts a value from one unit to another unit of the same quantity (length, mass, temperature, pressure, energy, data size, fuel consumption …). Units are given by id or symbol as listed by list_units, e.g. "km", "mi", "degC", "°F", "psi", "kWh", "GiB", "mpgUS". The converter opens with these values so the user sees the result.',
+  inputSchema:{type:'object',properties:{
+    value:{type:'number',minimum:-1e300,maximum:1e300,description:'The value to convert.'},
+    from:{type:'string',minLength:1,maxLength:40,description:'Unit of the value (id or symbol).'},
+    to:{type:'string',minLength:1,maxLength:40,description:'Target unit (id or symbol).'},
+    quantity:{type:'string',enum:U.CATEGORIES.map(c=>c.id),description:'Optional quantity, to resolve symbols used by several quantities (e.g. "rad").'}
+  },required:['value','from','to'],additionalProperties:false},
+  execute:i=>{
+    let a=U.find(i.from,i.quantity);
+    if(!a)throw new Error('Unknown unit "'+i.from+'". Use list_units to see the units.');
+    const b=U.find(i.to,i.quantity||a.cat)||U.find(i.to);
+    if(!b)throw new Error('Unknown unit "'+i.to+'". Use list_units to see the units.');
+    if(b.cat!==a.cat){const a2=U.find(i.from,b.cat);if(a2)a=a2;else throw new Error('"'+i.from+'" and "'+i.to+'" measure different quantities ('+a.cat+', '+b.cat+').');}
+    const c=U.byId[a.cat];
+    S.c[c.id]={v:String(i.value).replace('.',Tools.lang()==='en'?'.':','),from:a.unit,to:b.unit};
+    box.open(c.id);update(c.id);
+    const r=results[c.id];
+    if(r==null)throw new Error('This conversion is not possible for the value.');
+    return {quantity:c.id,value:i.value,from:unitInfo(c,U.unitOf(c.id,a.unit)),to:unitInfo(c,U.unitOf(c.id,b.unit)),result:Number(r.toPrecision(12))};
+  }
+});
+Tools.mcp.register({
+  name:'list_units',title:'List quantities and units',readOnly:true,
+  description:'Lists the quantities of the converter with their units (id, symbol, English name, whether it is an SI unit). Without a quantity it lists all quantities with their unit ids only.',
+  inputSchema:{type:'object',properties:{
+    quantity:{type:'string',enum:U.CATEGORIES.map(c=>c.id),description:'Quantity to list in detail.'}
+  },additionalProperties:false},
+  execute:i=>i.quantity
+    ?{quantity:i.quantity,name:U.byId[i.quantity].en,si_unit:U.byId[i.quantity].ref,units:U.byId[i.quantity].units.map(u=>unitInfo(U.byId[i.quantity],u))}
+    :{quantities:U.CATEGORIES.map(c=>({id:c.id,name:c.en,units:c.units.map(u=>u.id)}))}
+});
+})();
+</script>
+</body>
+</html>

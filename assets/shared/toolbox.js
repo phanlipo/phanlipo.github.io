@@ -2,7 +2,9 @@
    Markup and look: base.css ("Apps with several tools"), rule: UI-KONZEPT.md "Werkzeugkasten".
      #overview            the overview; tiles are buttons with data-open="<name>"
      #tabbar              the bar shown inside a tool: a button with data-overview ("‹ Übersicht") and
-                          tabs (role="tab", data-tab="<name>", aria-controls="<id of the tool's panel>")
+                          tabs (role="tab", data-tab="<name>", aria-controls="<id of the tool's panel>");
+                          with many tools give the tabs data-group="<group>": the bar then shows only the tabs
+                          of the open tool's group (like the groups on the overview)
    The phone's back key returns from a tool to the overview (one history entry for "in a tool"). The app keeps the
    state ({ view: 'overview' | 'tool', tab }) in its own storage, so the last tool opens again after a reload.
 
@@ -32,16 +34,20 @@
     const KEY = 'toolbox';
     const inTool = () => !!(history.state && history.state[KEY]);
 
+    const grouped = tabs.some(t => t.dataset.group);
+    const visible = () => tabs.filter(t => !t.hidden).map(t => t.dataset.tab);
+
     function select(name, { focus = false, gesture = false } = {}) {
       if (!names.includes(name)) name = names[0];
       const same = state.view === 'tool' && state.tab === name && !panel(name).hidden;
+      const act = tabs[names.indexOf(name)];
       for (const t of tabs) {
         const sel = t.dataset.tab === name;
         t.setAttribute('aria-selected', String(sel));
         t.tabIndex = sel ? 0 : -1;
+        if (grouped) t.hidden = t.dataset.group !== act.dataset.group;
         panel(t.dataset.tab).hidden = !sel;
       }
-      const act = tabs[names.indexOf(name)];
       if (focus) act.focus();
       // keep the open tab visible in the bar that scrolls sideways
       tablist.scrollLeft = act.offsetLeft - (tablist.clientWidth - act.offsetWidth) / 2;
@@ -81,10 +87,10 @@
       if (t) select(t.dataset.tab, { gesture: true });
     });
     tablist.addEventListener('keydown', e => {
-      const i = names.indexOf(state.tab);
+      const list = visible(), i = list.indexOf(state.tab);
       const k = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-      if (k) { e.preventDefault(); select(names[(i + k + names.length) % names.length], { focus: true, gesture: true }); }
-      else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); select(names[e.key === 'Home' ? 0 : names.length - 1], { focus: true, gesture: true }); }
+      if (k) { e.preventDefault(); select(list[(i + k + list.length) % list.length], { focus: true, gesture: true }); }
+      else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); select(list[e.key === 'Home' ? 0 : list.length - 1], { focus: true, gesture: true }); }
     });
     window.addEventListener('popstate', () => {
       if (inTool()) { if (state.view !== 'tool') { show('tool'); select(state.tab); } }
