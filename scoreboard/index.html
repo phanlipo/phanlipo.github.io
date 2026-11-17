@@ -21,7 +21,7 @@
 <meta name="tool:storage" content="scoreboard.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JIJL+CtGLEB0Gw59rhX0CAzDcGeH6HICaiWPBavmJ6c='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-7ZcCyHOztNFPGKdKDIINk0CsfNaBBgcN8QkTwQbfJ9k='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -344,7 +344,7 @@ body.stage>main{display:flex;flex-direction:column;padding:8px;padding-inline:ma
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 740f01e3e443</p>
+  <p class="footer-version">Version beffcb82ffa8</p>
   <!-- footer:end -->
 </footer>
 
@@ -717,24 +717,19 @@ $('btnNew').addEventListener('click',async ()=>{
 });
 
 /* ---------- Keep the screen on (Screen Wake Lock) ---------- */
-let lock=null;
-async function wake(){
-  if(!S.wake||document.visibilityState!=='visible'||lock||!('wakeLock' in navigator))return;
-  try{lock=await navigator.wakeLock.request('screen');lock.addEventListener('release',()=>{lock=null;});Tools.diag.log('wake lock on');}
-  catch(e){Tools.diag.log('wake lock failed',{error:e.name});}
-}
+const wake=()=>S.wake?Tools.wakeLock.hold('setting'):Tools.wakeLock.release('setting');
 $('wake').addEventListener('change',e=>{
   S.wake=e.target.checked;save();
-  if(S.wake)wake();else if(lock){lock.release().catch(()=>{});lock=null;}
+  wake();
 });
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){wake();if(S.sport==='football')renderClock();}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.sport==='football')renderClock();});
 wake();
 
 Tools.onLang(render);
 render();
 
 Tools.diag.info(()=>({sport:S.sport,players:count(),points:M().pts.length,swapped:M().swapped,clockRunning:M().clock.since!=null,
-  wakeLock:'wakeLock' in navigator?(lock?'on':'off'):'unsupported'}));
+  wakeLock:Tools.wakeLock.supported()?(Tools.wakeLock.active()?'on':'off'):'unsupported'}));
 
 /* ---------- WebMCP ---------- */
 function scoreJson(){

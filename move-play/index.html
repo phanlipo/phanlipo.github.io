@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can list the movement games and read the best scores. Playing is up to you.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-MdHd/Zm8oP+LrkZ/zhq1Qzt9hz+FW+i9mzvvhp+u+jA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-yH3QAo70C/fQtoWhNogqvx/P5CVR/UvWVXXNFTzCaGk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -295,7 +295,7 @@ main{max-width:1200px;width:100%;margin-inline:auto;padding:8px;display:flex;fle
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version c6957f0d62d9</p>
+  <p class="footer-version">Version c75f8bef5be6</p>
   <!-- footer:end -->
 </footer>
 
@@ -432,7 +432,7 @@ $('btnRetry').addEventListener('click',()=>{const r=retry;retry=null;if(r)r();})
 $('btnBack').addEventListener('click',toMenu);
 
 /* ---------- Camera ---------- */
-let stream=null,running=false,raf=0,wake=null,resume=false;
+let stream=null,running=false,raf=0,resume=false;
 async function startCamera(){
   if(running)return true;
   if(!navigator.mediaDevices?.getUserMedia){Tools.diag.log('camera: no getUserMedia');message(t('noCam'));return false;}
@@ -460,12 +460,7 @@ function stopCamera(){
   video.srcObject=null;lockScreen(false);
 }
 // Keep the screen on while the camera runs (nobody touches the phone while playing)
-async function lockScreen(on){
-  try{
-    if(on&&!wake&&'wakeLock' in navigator&&document.visibilityState==='visible'){wake=await navigator.wakeLock.request('screen');wake.addEventListener('release',()=>{wake=null;});}
-    else if(!on&&wake){await wake.release();wake=null;}
-  }catch(e){Tools.diag.log('wake lock',{name:e?.name});}
-}
+const lockScreen=on=>on?Tools.wakeLock.hold('camera'):Tools.wakeLock.release('camera');
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){if(running){stopCamera();resume=true;for(const p of players)p.game?.pause();musicOff();Tools.diag.log('camera paused (hidden)');}}
   else if(resume){resume=false;if(screen==='play'||screen==='calib'||screen==='result')startCamera();}

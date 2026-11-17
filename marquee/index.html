@@ -21,7 +21,7 @@
 <meta name="tool:storage" content="marquee.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-MimXqFDpP56J45dSKDhpnh3CGgaletEnci7rXyqykOo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-+oToqbbzw4nNfq/cdT5z6g/n6wSuQ8Ax7B8iKeQ8ukM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -205,7 +205,7 @@ body.showing{overflow:hidden}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 375a1c8bdbfc</p>
+  <p class="footer-version">Version 019c927982f5</p>
   <!-- footer:end -->
 </footer>
 
@@ -330,7 +330,7 @@ const renderPreview=()=>{if(!showing)prevSign.render(preview.clientWidth,preview
 /* ---------- Full-screen display ---------- */
 const show=$('show'),frame=$('frame'),showText=$('showText'),hint=$('showHint');
 const showSign=Sign(frame,showText);
-let showing=false,wake=null,hintTimer=0,locked=false,fsSession=false,backPending=false,afterBack=null;
+let showing=false,hintTimer=0,locked=false,fsSession=false,backPending=false,afterBack=null;
 function layoutShow(){
   if(!showing)return;
   const W=window.innerWidth,H=window.innerHeight;
@@ -341,12 +341,7 @@ function layoutShow(){
   frame.style.width=fw+'px';frame.style.height=fh+'px';
   showSign.render(fw,fh);
 }
-async function requestWake(){
-  if(!('wakeLock' in navigator))return;
-  try{wake=await navigator.wakeLock.request('screen');Tools.diag.log('wake lock on');
-    wake.addEventListener('release',()=>{wake=null;});}
-  catch(e){Tools.diag.log('wake lock failed',e);}
-}
+const requestWake=()=>Tools.wakeLock.hold('show');
 function openShow(){
   if(showing)return;
   showing=true;prevSign.stop();
@@ -386,7 +381,7 @@ function closeShow(fromHistory){
   if(locked&&screen.orientation&&screen.orientation.unlock)try{screen.orientation.unlock();}catch(_){}
   locked=false;fsSession=false;
   exitFs();
-  if(wake){wake.release().catch(()=>{});wake=null;}
+  Tools.wakeLock.release('show');
   afterBack=null;
   if(!fromHistory&&history.state&&history.state.marqueeShow){backPending=true;history.back();}
   Tools.diag.log('closed');
@@ -404,7 +399,6 @@ document.addEventListener('fullscreenchange',()=>{
   if(fsSession&&!fsOn&&showing)closeShow(false);
   else if(!fsOn&&!showing&&document.activeElement===document.body)$('btnShow').focus();
 });
-document.addEventListener('visibilitychange',()=>{if(showing&&document.visibilityState==='visible'&&!wake)requestWake();});
 $('btnShow').addEventListener('click',openShow);
 preview.addEventListener('click',openShow);
 
@@ -455,8 +449,8 @@ window.addEventListener('resize',()=>{renderPreview();layoutShow();});
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(renderPreview);
 Tools.onLang(()=>{renderControls();renderPreview();layoutShow();});
 Tools.diag.info(()=>({motion:s.motion,size:s.size,speed:s.speed,font:s.font,bold:s.bold,blink:s.blink,rotate:s.rotate,
-  textLength:s.text.length,history:hist.length,showing,fullscreen:!!document.fullscreenElement,wakeLock:!!wake,
-  wakeLockApi:'wakeLock' in navigator,orientationLocked:locked,viewport:`${window.innerWidth}x${window.innerHeight}`}));
+  textLength:s.text.length,history:hist.length,showing,fullscreen:!!document.fullscreenElement,wakeLock:Tools.wakeLock.active(),
+  wakeLockApi:Tools.wakeLock.supported(),orientationLocked:locked,viewport:`${window.innerWidth}x${window.innerHeight}`}));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
 const settingsOut=()=>({text:s.text,size_percent:s.size,font:s.font,bold:s.bold,text_color:s.fg,background_color:s.bg,

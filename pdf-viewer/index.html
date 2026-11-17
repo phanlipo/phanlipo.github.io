@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-jOCZgccPI687r0G+4kTz8onRAUW/c5fb5oqJDiWBa7c='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-1rIq19TuXgvIpUXPvPXl3Wd80NcN9TxIHigdp65Wkqs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -240,7 +240,7 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version b969c9cfce8a</p>
+  <p class="footer-version">Version c80371a5179c</p>
   <!-- footer:end -->
 </footer>
 
@@ -279,7 +279,7 @@ const settings=Object.assign({autoHide:true,systemBars:true,night:false,keep:tru
 const saveSettings=()=>Tools.save(LS,settings);
 const view=$('view'), pagesEl=$('pages');
 const MIN_ZOOM=1, MAX_ZOOM=4, MAX_PIXELS=8e6, KEEP=2.5; // canvases further than KEEP screens away are dropped
-const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const clamp=Tools.clamp;
 const fmtSize=b=>b<1048576?Tools.fmt(Math.max(1,Math.round(b/1024)),0)+' KB':Tools.fmt(b/1048576,1)+' MB';
 
 /* ================= pdf.js (loaded on first use, cached offline by sw.js) ================= */
@@ -709,7 +709,7 @@ const pick=()=>{$('inPick').value='';$('inPick').click();};
 $('btnPick').addEventListener('click',pick);
 $('btnOpen').addEventListener('click',()=>{Tools.menu.close();pick();});
 $('inPick').addEventListener('change',e=>openFile(e.target.files[0]));
-const canShareFiles=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File([''],'x.pdf',{type:'application/pdf'})]}));}catch(_){return false;}})();
+const canShareFiles=Tools.canShareFile('x.pdf','application/pdf');
 $('btnShare').addEventListener('click',async()=>{
   if(!file) return;
   barsTouched=true; clearTimeout(hideTimer);
@@ -718,10 +718,7 @@ $('btnShare').addEventListener('click',async()=>{
 });
 $('btnDownload').addEventListener('click',()=>{
   if(!file) return;
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(file); a.download=file.name||'dokument.pdf';
-  document.body.append(a); a.click();
-  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  Tools.download(file,file.name||'dokument.pdf');
   Tools.diag.log('download');
 });
 $('btnClose').addEventListener('click',()=>{

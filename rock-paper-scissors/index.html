@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can play rounds and read the score. The computer has still chosen beforehand. With two players the agent picks your sign and waits for the other one; it cannot connect devices.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-cgvpHfRNvWf3/Kk44p636yVX8HoE+qgFoZorPRjAg1Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-2A3uQcWBLkYsf/eADyxxHVtae3IN1vnsmLY3oGFf5gw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -338,7 +338,7 @@ textarea.code{min-height:84px;word-break:break-all}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version f319fd72cb8f</p>
+  <p class="footer-version">Version 2ba340b4e47e</p>
   <!-- footer:end -->
 </footer>
 
@@ -632,7 +632,7 @@ function renderMode(){
 const setStatus=(id,msg,cls)=>{const el=$(id);el.textContent=msg||'';el.className='net-status'+(cls?' '+cls:'');};
 
 /* ---------- Connection (P2P.peer) ---------- */
-let peer=null,role=null,myCode='',connectTimer=null,wakeLock=null;
+let peer=null,role=null,myCode='',connectTimer=null;
 function connected(){return !!peer&&peer.isOpen();}
 function closeConn(){
   clearTimeout(connectTimer);
@@ -717,12 +717,8 @@ function leave(){
   stopScan();closeConn();endNet('disconnected');
   setStatus('lobbyStatus','');showPanel('connLobby');clearArena();renderAll();
 }
-async function keepAwake(){
-  try{if(navigator.wakeLock&&!wakeLock&&document.visibilityState==='visible'){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}
-  catch(e){Tools.diag.log('wake lock',e);}
-}
-function releaseWake(){if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null;}}
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&connected())keepAwake();});
+// Screen stays on during a game (Tools.wakeLock asks again when the app becomes visible)
+const keepAwake=()=>Tools.wakeLock.hold('game'),releaseWake=()=>Tools.wakeLock.release('game');
 
 /* ---------- Scanner (P2P.scanner: BarcodeDetector → zxing-wasm) ---------- */
 let scanExpect=null,lastHint=0;

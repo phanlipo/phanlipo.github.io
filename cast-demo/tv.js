@@ -22,19 +22,11 @@
   // Settings.ACTION_CAST_SETTINGS. Chrome may refuse to open system settings from a web page – watchLaunch tells.
   const CAST_SETTINGS = 'intent:#Intent;action=android.settings.CAST_SETTINGS;end';
 
-  let on = false, wake = null, landscape = false, fakeFull = false, el = null;
+  let on = false, landscape = false, fakeFull = false, el = null;
   const listeners = new Set();
   const emit = () => listeners.forEach(fn => { try { fn(on); } catch (e) { console.error(e); } });
 
-  async function lockWake() {
-    if (!('wakeLock' in navigator) || wake || document.visibilityState !== 'visible') return !!wake;
-    try {
-      wake = await navigator.wakeLock.request('screen');
-      wake.addEventListener('release', () => { wake = null; });
-      return true;
-    } catch (e) { log('tv: wake lock failed', { error: String(e && e.name) }); return false; }
-  }
-  document.addEventListener('visibilitychange', () => { if (on && document.visibilityState === 'visible') lockWake(); });
+  async function lockWake() { await Tools.wakeLock.hold('tv'); return Tools.wakeLock.active(); }
 
   async function enter(target) {
     el = target || document.documentElement;
@@ -60,7 +52,7 @@
     if (fakeFull && el) el.classList.remove('tv-fill');
     fakeFull = false;
     if (document.fullscreenElement || document.webkitFullscreenElement) await Tools.fullscreen.exit();
-    if (wake) { try { await wake.release(); } catch (_) {} wake = null; }
+    Tools.wakeLock.release('tv');
     log('tv off');
     emit();
   }
@@ -82,7 +74,7 @@
     CAST_SETTINGS, platform, enter, exit, watchLaunch,
     active: () => on,
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    info: () => ({ platform: platform(), active: on, fullscreen: fakeFull ? 'fill' : Tools.fullscreen.active(), landscape, wakeLock: !!wake,
-      orientationLock: !!(screen.orientation && screen.orientation.lock), wakeLockApi: 'wakeLock' in navigator }),
+    info: () => ({ platform: platform(), active: on, fullscreen: fakeFull ? 'fill' : Tools.fullscreen.active(), landscape, wakeLock: Tools.wakeLock.active(),
+      orientationLock: !!(screen.orientation && screen.orientation.lock), wakeLockApi: Tools.wakeLock.supported() }),
   };
 })();

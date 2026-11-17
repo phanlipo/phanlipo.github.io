@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "duty-roster";
-const VERSION = '6cda8e6565ec';
+const VERSION = 'e731eacb794f';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

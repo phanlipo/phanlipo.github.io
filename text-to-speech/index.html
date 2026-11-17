@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can write text into the text field, list the voices and choose a voice. You start the reading yourself.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-p0Q1tkm9PEwZoJK+Idp3QjctxQDpHyIRlIxSST91pmg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-HXybTcAwMpNgOhygN16DD8XoN2FmCmyu/OH52y2A5Io='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -245,7 +245,7 @@ select{min-height:44px;padding-inline:10px;width:100%;font-size:16px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 93b04f809aea</p>
+  <p class="footer-version">Version 689c2a52c094</p>
   <!-- footer:end -->
 </footer>
 
@@ -612,7 +612,7 @@ function ask(kind, msg, handlers = {}) {
 
 /* ---------- Reading aloud ---------- */
 let run = null;     // current run { id, stopped }
-let runCounter = 0, wakeLock = null;
+let runCounter = 0;
 const status = (msg, cls) => { const s = $('status'); s.textContent = msg; s.className = 'status' + (cls ? ' ' + cls : ''); };
 const mbStr = b => fmt(b / 1048576, b < 10485760 ? 1 : 0);
 const sec = s => fmt(s, s < 10 ? 1 : 0);
@@ -626,7 +626,7 @@ function setBusy(busy) {
 async function finish(msg, cls) {
   setBusy(false);
   if (msg != null) status(msg, cls);
-  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  Tools.wakeLock.release('work');
 }
 
 $('btnStop').addEventListener('click', () => {
@@ -645,7 +645,7 @@ $('btnSpeak').addEventListener('click', async () => {
   if (engine === 'browser') { speakBrowser(text); return; }
   audioCtx();   // create the audio output inside the tap (autoplay rules)
   if (!isDownloaded() && !await Tools.confirm(t('confirmDl', { name: ENGINES[engine].name(), mb: fmt(downloadMb(), 0) }), { action: 'download' })) return;
-  try { wakeLock = navigator.wakeLock ? await navigator.wakeLock.request('screen') : null; } catch (_) { wakeLock = null; }
+  await Tools.wakeLock.hold('work');
   speakModel(engine, text);
 });
 
@@ -745,7 +745,7 @@ async function speakModel(engine, text) {
   addClip({ label, device, synth, audioSec, rtf, sampleRate, samples: joinChunks(chunks, sampleRate), snippet: text.slice(0, 80) });
   addStat({ engine, voice, label, device, speed: settings.speed, steps: engine === 'supertonic' ? settings.steps : undefined, rtf, synth, audio: audioSec, first: firstAt });
   last.addEventListener('ended', () => { if (run === r && !r.stopped) finish(t('done'), 'ok'); });
-  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  Tools.wakeLock.release('work');
 }
 
 function joinChunks(chunks, sr) {
@@ -794,11 +794,7 @@ $('clips').addEventListener('click', e => {
     stopAudio(); setBusy(false);
     schedule(c.samples, c.sampleRate, 0);
   } else if (b.dataset.act === 'save') {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(wav(c.samples, c.sampleRate));
-    a.download = c.label.replace(/[^\wÀ-ɏ-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() + '.wav';
-    document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    Tools.download(wav(c.samples, c.sampleRate), c.label.replace(/[^\wÀ-ɏ-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() + '.wav');
   } else {
     clips.splice(clips.indexOf(c), 1);
     renderClips();

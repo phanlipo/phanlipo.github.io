@@ -27,7 +27,7 @@
 <meta name="tool:connect" content="https://www.youtube-nocookie.com">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dXI0IpBbxoHiJNEPHThcAx3v+69vLg/MGCFD11texFo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://www.youtube-nocookie.com; font-src 'self'; frame-src https://www.youtube-nocookie.com https://www.youtube.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ErmM9HSBpQTrN5c6EEte3VZhlCoMrm5E+xZB9ZfTbTY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://www.youtube-nocookie.com; font-src 'self'; frame-src https://www.youtube-nocookie.com https://www.youtube.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -317,7 +317,7 @@ main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 1a36cb077e5a</p>
+  <p class="footer-version">Version 8168be446c6e</p>
   <!-- footer:end -->
 </footer>
 
@@ -413,7 +413,7 @@ const dateFmt=ms=>new Date(ms).toLocaleString(Tools.locale(),{dateStyle:'medium'
 // adPlaying: the player reports a shorter length than the part's – an ad; userJump: the user (not the end of a
 // part) moved to another part
 let adPlaying=false, userJump=false;
-let player=null, state=-1, session=null, pendingSeek=null, sleep={mode:'off'}, wakeLock=null, startHint=0;
+let player=null, state=-1, session=null, pendingSeek=null, sleep={mode:'off'}, startHint=0;
 const playing=()=>!!player&&state===1;
 
 function setStatus(msg,err){ const s=$('status'); s.textContent=msg||''; s.classList.toggle('err',!!err); }
@@ -443,7 +443,7 @@ function start(index,video){
 function stopPlayer(){
   closeSession();
   if(player){ player.destroy(); player=null; persist(); Tools.diag.log('player: closed'); }
-  state=-1; pendingSeek=null; adPlaying=false; userJump=false; releaseWake();
+  state=-1; pendingSeek=null; adPlaying=false; userJump=false; syncWake();
   $('slot').replaceChildren();
   $('startBox').hidden=false;
 }
@@ -476,11 +476,11 @@ function onState(s){
   if(s===1){
     clearTimeout(startHint);
     if(!$('status').classList.contains('err')||prev!==1) setStatus('');
-    requestWake();
+    syncWake();
     openSession();
   } else if(s===2||s===0){
     if(list&&info) record(info);
-    closeSession(); releaseWake(); persist();
+    closeSession(); syncWake(); persist();
     if(list){ renderHead(); renderTracks(); }
   }
   if(s===0&&list){
@@ -601,16 +601,12 @@ setInterval(()=>{
 },1000);
 
 // Screen kept on: while playing if the setting is on, and always while the listening mode is open
-const wantWake=()=>listenOpen()||(set.wake&&playing());
-async function requestWake(){
-  if(!wantWake()||wakeLock||!('wakeLock' in navigator)) return;
-  try{ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ wakeLock=null; }); Tools.diag.log('wake lock: on'); }
-  catch(e){ Tools.diag.log('wake lock failed:',e&&e.name); }
+function syncWake(){
+  if(listenOpen()) Tools.wakeLock.hold('listen'); else Tools.wakeLock.release('listen');
+  if(set.wake&&playing()) Tools.wakeLock.hold('playing'); else Tools.wakeLock.release('playing');
 }
-function releaseWake(){ if(wakeLock&&!listenOpen()){ wakeLock.release().catch(()=>{}); wakeLock=null; Tools.diag.log('wake lock: off'); } }
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'){ requestWake(); }
-  else { const l=cur(); if(l&&player) record(player.info); persist(); }
+  if(document.visibilityState!=='visible'){ const l=cur(); if(l&&player) record(player.info); persist(); }
 });
 window.addEventListener('pagehide',()=>{ closeSession(); persist(); });
 
@@ -675,7 +671,7 @@ $('selRate').addEventListener('change',e=>{
 $('optWake').checked=!!set.wake;
 $('optWake').addEventListener('change',e=>{
   set.wake=e.target.checked; Tools.save(LS_SET,set);
-  if(set.wake&&playing()) requestWake(); else if(!set.wake) releaseWake();
+  syncWake();
 });
 // Player from youtube.com with the browser's YouTube sign-in (Premium) – a running player is reloaded at its position
 $('optAccount').checked=set.account;
@@ -874,7 +870,7 @@ function openListen(){
   history.pushState({listenMode:true},''); listenHist=true;
   Tools.fullscreen.enter();
   renderClock(); clockTimer=setInterval(renderClock,15000);
-  renderNow(); renderSleep(); requestWake();
+  renderNow(); renderSleep(); syncWake();
   $('lPlay').focus();
   Tools.diag.log('listening mode: on');
 }
@@ -886,7 +882,7 @@ $('listen').addEventListener('close',()=>{
   clearInterval(clockTimer);
   if(listenHist){ listenHist=false; if(history.state&&history.state.listenMode) history.back(); }
   if(Tools.fullscreen.active()&&!Tools.fullscreen.system()) Tools.fullscreen.exit();
-  if(!wantWake()) releaseWake();
+  syncWake();
   Tools.diag.log('listening mode: off');
   $('btnListen').focus();
 });
@@ -955,7 +951,7 @@ Tools.diag.info(()=>{
   const l=cur();
   return { playlists:Object.keys(data.lists).length, parts:l?l.tracks.length:0, heard:l?l.tracks.filter(x=>x.done).length:0,
     index:l?l.index:null, player:player?(player.ready?'ready':'loading'):'none', state, rate:set.rate, sleep:sleep.mode,
-    wake:set.wake?(wakeLock?'held':'wanted'):'off', account:set.account, history:hist.length, online:navigator.onLine };
+    wake:set.wake?(Tools.wakeLock.active()?'held':'wanted'):'off', account:set.account, history:hist.length, online:navigator.onLine };
 });
 
 /* ---------- WebMCP tools ---------- */

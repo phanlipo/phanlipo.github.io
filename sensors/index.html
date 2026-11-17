@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can read today’s steps and – while the compass is open – the current heading. It cannot start a measurement.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-BVqECi3WIbyUgymiGcjU58zzZ9+n3GP9dLtYp3X3eME='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-wvIbZ1U6SZrNExyikZmXcNIYioDP0lFvFUh3pEzpSRA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -913,7 +913,7 @@ video.cam{width:96px;height:96px;object-fit:cover;border-radius:50%;background:v
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 4f368de0937f</p>
+  <p class="footer-version">Version 94fd4b11cdb4</p>
   <!-- footer:end -->
 </footer>
 
@@ -1029,7 +1029,7 @@ S.spm = Object.assign({}, DEF.spm, S.spm); S.spm.cal = Object.assign({}, DEF.spm
 for (const k of ['level', 'compass', 'tuner', 'spectro', 'steps', 'tone', 'morse']) S[k] = Object.assign({}, DEF[k], S[k]);
 const store = () => save(LS, S);
 const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
-const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const clamp = Tools.clamp;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const TABS = ['compass', 'level', 'accel', 'vibro', 'steps', 'sound', 'spectro', 'tuner', 'tone', 'clap', 'torch', 'pulse', 'spm', 'speed'];
 const AC = window.AudioContext || window.webkitAudioContext;
@@ -1045,7 +1045,7 @@ function screenAngle(){
 }
 
 /* ---------- Running measurement: listeners, timers and resources are released on stop ---------- */
-let offs = [], running = null, watchdog = 0, wakeLock = null;
+let offs = [], running = null, watchdog = 0;
 function on(target, type, fn){ target.addEventListener(type, fn); offs.push(() => target.removeEventListener(type, fn)); }
 function loop(fn){
   let id = 0;
@@ -1062,10 +1062,7 @@ function setStatus(name, msg, cls){
 }
 const startBtn = name => document.querySelector(`[data-start="${name}"]`);
 
-async function requestWake(){
-  try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) { wakeLock = null; }
-}
-function releaseWake(){ try { if (wakeLock) wakeLock.release().catch(() => {}); } catch (_) {} wakeLock = null; }
+const requestWake = () => Tools.wakeLock.hold('measure'), releaseWake = () => Tools.wakeLock.release('measure');
 
 let userStopped = false, resumeTab = null;
 function stopRunning(byUser){
@@ -1185,11 +1182,7 @@ function beep(freq, ms){
 
 // CSV download (German: semicolon and decimal comma, English: comma and point; BOM for Excel)
 function downloadCsv(name, rows){
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['﻿' + rows.join('\r\n') + '\r\n'], {type: 'text/csv;charset=utf-8'}));
-  a.download = name;
-  document.body.append(a); a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  Tools.download(new Blob(['﻿' + rows.join('\r\n') + '\r\n'], {type: 'text/csv;charset=utf-8'}), name);
 }
 const csvNum = (v, d) => isEn() ? v.toFixed(d) : v.toFixed(d).replace('.', ',');
 const csvSep = () => isEn() ? ',' : ';';
@@ -1979,11 +1972,7 @@ const spectro = {
     c.drawImage(ax, 0, 0);
     out.toBlob(b => {
       if (!b) return;
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(b);
-      a.download = `${tr('fileSpectro')}-${stamp()}.png`;
-      document.body.append(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      Tools.download(b, `${tr('fileSpectro')}-${stamp()}.png`);
     }, 'image/png');
   },
 };
@@ -2966,10 +2955,7 @@ $('smCsv').addEventListener('click', () => spm.csv());
 $('smPng').addEventListener('click', () => {
   $('smGraph').toBlob(b => {
     if (!b) return;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(b); a.download = `${tr('fileSpm')}-${stamp()}.png`;
-    document.body.append(a); a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    Tools.download(b, `${tr('fileSpm')}-${stamp()}.png`);
   }, 'image/png');
 });
 
