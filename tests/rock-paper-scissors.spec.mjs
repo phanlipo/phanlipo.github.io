@@ -85,6 +85,9 @@ test('computer has chosen before the player – its move does not depend on the 
 });
 
 test('smart computer learns when the player always picks the same', async ({ page }) => {
+  // Fixed random numbers: the smart computer still plays by chance now and then (25 %), so real chance made
+  // the count wobble around the limit
+  await page.addInitScript(() => { let x = 12345; Math.random = () => ((x = (x * 16807) % 2147483647) / 2147483647); });
   await page.goto('/rock-paper-scissors/');
   await page.click('#modes [data-m="smart"]');
   const late = [];

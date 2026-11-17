@@ -387,7 +387,7 @@ test.describe('face accessories and distortions (fake worker)', () => {
     await page.click('#acc [data-id="clown"]');
     await expect(page.locator('#acc [data-id="clown"]')).toHaveAttribute('aria-pressed', 'true');
     // Engine 14.5 MB + face model 3.8 MB, asked once
-    expect(dialogs).toHaveLength(1);
+    await expect.poll(() => dialogs.length).toBe(1);
     expect(dialogs[0]).toContain('Gesichtserkennung');
     expect(dialogs[0]).toContain('ca. 18,3 MB');
     // Red nose on the nose tip (80, 100), radius 0.22 × eye distance 80 = 17.6 px; nothing far from the face

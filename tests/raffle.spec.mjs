@@ -103,6 +103,7 @@ test('check a ticket, redraw a forfeited one, undo, copy, kept after reload', as
 
   // Nobody collects: redraw for the same prize, the old ticket is forfeited and never comes back
   await page.click(`[aria-label="Los ${a} neu ziehen"]`);
+  await expect(page.locator('#num')).not.toHaveText(String(a));   // after the question (Tools.confirm) is answered
   const b = Number(await num(page));
   expect(b).not.toBe(a);
   await expect(page.locator('#prize')).toHaveText('2. Preis: Tasse');
