@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "ai-chat";
-const VERSION = '5918b4d24ef5';
+const VERSION = '928fdbaf9a08';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
