@@ -215,7 +215,7 @@ test('absences: period, by the hour, assigned absent person is an error, lift on
   // Carla keeps her morning only
   await expect(personRow(page, MON, 'Carla').locator('select')).toHaveCount(1);
   await expect(personRow(page, MON, 'Carla').locator('.pname small')).toHaveText('4 h Arbeitszeit · Sonstiges 15:00–18:00');
-  await expect(mon.locator('.chips').last()).toHaveText('BenUrlaub');
+  await expect(mon.locator('.people').last()).toHaveText('BenUrlaub');
   await expect(personRow(page, TUE, 'Ben')).toHaveCount(0);
   await pick(sel(page, MON, 'Ben', '13:00–18:30'), '– kein Raum –');
   await expect(personRow(page, MON, 'Ben')).toHaveCount(0);
@@ -341,7 +341,7 @@ test('export: text to copy, CSV with semicolons, example data with room changes'
   await page.click('#btnExample');
   await expect(page.locator('#toast')).toHaveText('Beispiel geladen');
   await expect(page.locator('#weekStatus')).toHaveClass(/ok/);
-  await expect(day(page, WED).locator('.chips').last()).toHaveText('DoraFortbildung');
+  await expect(day(page, WED).locator('.people').last()).toHaveText('DoraFortbildung');
   await page.click('#btnCopy');
   await expect(page.locator('#toast')).toHaveText('Plan kopiert');
   const text = await clipboardText(page);

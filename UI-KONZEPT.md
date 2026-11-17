@@ -1,6 +1,6 @@
 # UI-Konzept: einheitliche Bedienelemente, Werkzeuglisten und Icons
 
-**Status:** abgestimmt (November 2026), die Entscheidungen stehen in Abschnitt 8. Umgesetzt ist noch nichts.
+**Status:** abgestimmt und umgesetzt (November 2026), die Entscheidungen stehen in Abschnitt 8. Die Regeln in Kurzform stehen in `AGENTS.md` unter „Bedienelemente & Icons“; die allgemeinen Prüfungen in `tests/ui.spec.mjs`.
 **Grundlage:** Screenshots aller 57 Apps und der Vorlage (375 px, hell, Deutsch; jeweils die Startansicht und das geöffnete Menü) sowie eine Auswertung des Codes (Knöpfe, Icons, eigenes CSS je App).
 
 Ziel: Wer eine App kennt, findet sich in jeder anderen sofort zurecht. Gleiche Handlungen sehen überall gleich aus, und Icons machen Knöpfe auf dem Handy schneller erkennbar.
@@ -161,10 +161,10 @@ Neue gemeinsame Klassen, damit Apps keine eigenen Varianten mehr bauen müssen. 
 | **Kacheln** `.tiles` | Raster mit Bild oben und Text darunter | Optionen mit Bild (Sensoren, Geräusche, Stimmen, Effekte). Bild = Tabler-Icon oder eigene SVG-Illustration, nie Emoji. Immer mit Text. 3 Spalten bei 375 px, Auswahl = Akzentfläche |
 | **Werkzeugleiste** `.toolbar` | unten in Bühnen-Apps, Knöpfe mit Icon, darunter ein kurzes Wort | **Beschriftung, wenn Platz ist:** Jeder Eintrag braucht mit Wort mindestens 64 px Breite, also bis zu 5 Einträge bei 375 px. Passen mehr hinein, zeigt die Leiste nur Icons (44 px, `aria-label` und `title`). Das macht `base.css` automatisch per Container-Abfrage, die App setzt immer beide (Icon und Wort). Werkzeuge, die nicht passen, kommen hinter „Mehr“ (`dots`). Aktives Werkzeug in Akzent |
 | **Ablagefläche** `.dropzone` | `<label class="dropzone">` mit Icon `file-upload`, „PDF wählen“ und „oder hierher ziehen“ | einziges Muster zum Datei-Wählen; Tippen öffnet die Dateiauswahl, Ziehen funktioniert auf dem PC. Kamera/Aufnahme als zweiter Knopf darunter |
-| **Leerzustand** `.empty` | Icon 44 px (gedämpft), ein Satz, optional Hauptaktion | statt freiem Text oder Emoji-Bild; Kinder-Apps dürfen eine Illustration nehmen |
+| **Leerzustand** `.empty-state` | Icon 44 px (gedämpft), ein Satz, optional Hauptaktion | statt freiem Text oder Emoji-Bild; Kinder-Apps dürfen eine Illustration nehmen |
 | **Schritt** `.step` | `<h2><span class="step">1</span>Video wählen</h2>` | für feste Abläufe (Datei → Einstellung → Ergebnis), runder Zahlpunkt in Akzent |
 | **Hinweis** `.notice` (`.info`, `.warn`, `.err`, `.ok`) | Icon aus dem Abschnitt „Status“ + Text | ersetzt Randbalken, Emoji-Status und graue Kästen; Fehler mit `role="alert"` |
-| **Kennzahl** `.stat` | große Zahl + kleine Beschriftung | Punkte, Ergebnisse (`reaction-game`, `rock-paper-scissors`, `brew-calculator`) |
+| **Kennzahl** `.stat-box` | große Zahl + kleine Beschriftung | Punkte, Ergebnisse (`reaction-game`, `rock-paper-scissors`, `brew-calculator`) |
 | **Gesperrt** | `.btn:disabled` grau statt blasser Akzent, dazu `.notice.info` mit Grund | Leitlinie 8 |
 
 Die Bildtafel „Bausteine“ (siehe unten) zeigt Menü, Datei-App, Bühnen-App und Spiel als Entwurf.
@@ -229,36 +229,49 @@ Markup: `<section data-menu data-menu-page data-icon="settings" aria-labelledby=
 
 ### Icon-Sprite statt kopierter SVGs
 
-- **`assets/icons.svg`**: ein generiertes Sprite mit `<symbol id="…">` für genau die Icons, die irgendwo verwendet werden (geschätzt 80–100 Icons, etwa 25–35 KB, einmal im Cache für alle Apps).
-- **Erzeugen:** `node scripts/build-icons.mjs --sprite` liest alle Namen aus `href="../assets/icons.svg#name"` und `Tools.icon('name')` (Namen immer **wörtlich**, wie bei den Vendor-Pfaden), holt die Tabler-Dateien in der Version aus `vendor.json` (wie heute schon für die App-Icons) und schreibt das Sprite. Die Datei wird wie die App-Icons eingecheckt und gilt als generiert.
-- **Prüfen:** `node scripts/build.mjs --check` meldet ohne Netz einen Fehler, wenn ein verwendeter Name im Sprite fehlt oder nicht im Lexikon steht.
-- **Offline:** `build.mjs` nimmt `../assets/icons.svg` in jedes `sw.js` auf (wie `base.css`).
-- **CSP:** Das Sprite kommt vom eigenen Ursprung; `<use href>` auf eine gleich-originige Datei braucht keine neue Ausnahme. Safari, Firefox und Chrome unterstützen das.
-- **`Tools.icon(name)`** in `common.js` gibt das `<svg class="ic" aria-hidden="true"><use …/></svg>` als Text zurück – für Knöpfe, die per Script entstehen (z. B. `treasure-hunt`, `calc-pad`).
-- **Lexikon als Daten:** `scripts/icons.json` (Bedeutung → Tabler-Name, Text DE/EN). Daraus entstehen die Bildtafel und die Prüfung.
+- **`assets/icons.svg`**: generiertes Sprite mit `<symbol id="…">` für genau die verwendeten Icons (derzeit rund 175), einmal im Cache für alle Apps. Die Symbole tragen keine eigenen Strich-/Füll-Attribute; das macht `.ic` in `base.css` (`.ic.filled` für gefüllte Icons).
+- **Erzeugen:** `node scripts/build-icons.mjs --sprite` sucht die Namen wörtlich in allen veröffentlichten HTML-, JS- und JSON-Dateien und in `template/`: `icons.svg#name`, `icon('name')` (`Tools.icon`), `data-icon="name"`, `icon: 'name'` (Datenlisten) und `"icon": "name"` (JSON, z. B. `move-play/games`). Version aus `scripts/vendor.json` (`tabler-icons`). Die Datei ist eingecheckt und generiert.
+- **Prüfen:** `node scripts/build.mjs --check` schlägt ohne Netz fehl, wenn ein verwendeter Name im Sprite fehlt oder ein Symbol nicht mehr gebraucht wird.
+- **Offline:** `build.mjs` nimmt `assets/icons.svg` in jedes `sw.js` auf (wie `base.css`).
+- **CSP:** Das Sprite kommt vom eigenen Ursprung; `<use href>` braucht keine Ausnahme.
+- **`Tools.icon(name, cls)`** in `common.js` gibt `<svg class="ic" aria-hidden="true"><use …/></svg>` als Text zurück – für Knöpfe und Inhalte, die per Script entstehen.
+- **Lexikon:** Abschnitt 3 dieses Dokuments; die für Icon-Knöpfe ohne Text prüfbaren Regeln stehen als `LEXICON` in `tests/ui.spec.mjs`.
 
-**Erwogen und verworfen:** Icons beim Build direkt ins HTML schreiben (wäre ohne zusätzlichen Abruf, bläht aber jede Seite auf und macht große Teile des handgeschriebenen HTML zu generierten Bereichen) und Icons per Script nachladen (kurzes Flackern, ohne Script keine Icons).
+**Erwogen und verworfen:** Icons beim Build direkt ins HTML schreiben (bläht jede Seite auf, macht handgeschriebenes HTML zu generierten Bereichen) und Icons per Script nachladen (Flackern, ohne Script keine Icons).
 
-### Allgemeine Tests (neu, z. B. `tests/ui.spec.mjs`)
+### Menü (`common.js`)
 
-- Jeder `.head-btn`- und `.toolbar`-Knopf hat ein `svg.ic` und einen zugänglichen Namen.
-- Kein Emoji im sichtbaren Text der Seite (geprüft im gerenderten DOM, hell und Englisch), außer in Nutzereingaben und in ausdrücklich markierten Datensätzen (`data-emoji-content`, z. B. das Emoji-Beispiel in `image-swipe`).
-- Kopfleiste bei 375 px mit sichtbarem ↻: Der Titel ist ≥ 96 px breit und nicht abgeschnitten, nichts läuft über.
-- Werkzeugleiste: Jeder Eintrag ist ≥ 44 px breit; ohne sichtbares Wort hat er `aria-label` und `title`.
-- Menü-Unterseiten: öffnen, Zurück-Knopf und Zurück-Geste führen zur Übersicht, ✕ schließt alles, der Fokus springt sinnvoll mit.
-- Gleiche Aktionen haben gleiche Icons: Wenn ein `aria-label` einem Lexikon-Wort entspricht (z. B. „Rückgängig“), muss das passende Icon verwendet sein.
-- Die Bausteine bestehen axe hell und dunkel (laufen über die vorhandenen a11y-Tests ohnehin mit).
+- App-Bereiche mit `data-menu` zuerst, dann eine Liste der Standardbereiche (Daten sichern, Anleitung, Als App installieren) als Unterseiten, dann Sprache und Fußzeile.
+- `data-icon` setzt ein Icon vor Überschrift bzw. Zeile; der Text kommt dabei in ein eigenes `<span class="menu-label">`, damit Übersetzungen die Icons nicht überschreiben.
+- Unterseiten sind `<details>` mit `data-menu-page`: geöffnet füllen sie das Sheet, die `summary` wird zur Zurück-Zeile; je Unterseite ein eigener History-Eintrag (Zurück-Taste, Escape und CloseWatcher führen erst zur Liste). `Tools.menu.open('id')` öffnet direkt eine Unterseite.
+
+### Allgemeine Tests (`tests/ui.spec.mjs`, `tests/menu.spec.mjs`)
+
+- Kein Emoji in Texten und Beschriftungen (Deutsch, Englisch, geöffnetes Menü), außer in Nutzereingaben und markierten Datensätzen (`data-emoji-content`).
+- Alle `<use>` verweisen auf vorhandene Symbole im Sprite.
+- Kopfleiste bei 375 px mit sichtbarem ↻: Titel nicht abgeschnitten, nichts überlappt oder läuft über.
+- Icon-Knöpfe (`.head-btn`, `.toolbar`, `.btn.icon`): zugänglicher Name, Icon aus dem Sprite, 44 px, Icon passend zum Lexikon.
+- Werkzeugleiste: Wörter sichtbar ab 64 px je Eintrag, sonst nur Icons (Wort bleibt zugänglicher Name).
+- Menü: Standardbereiche mit Icons; Unterseiten (öffnen, Zurück-Zeile, Zurück-Taste, Escape, ✕, `Tools.menu.open(id)`).
+- Die Bausteine laufen über die vorhandenen axe-Prüfungen (hell, dunkel, Englisch).
 
 ### Pflege
 
-- `AGENTS.md` bekommt nach der Abstimmung einen kurzen Abschnitt „Bedienelemente & Icons“ mit den Leitlinien aus Abschnitt 2 und einem Verweis auf das Lexikon.
-- `template/` zeigt alle Bausteine (Knopf mit Icon, `.seg`, `.dropzone`, `.empty`, `.notice`, Menü-Abschnitt mit `data-icon`).
+- `AGENTS.md`, Abschnitt „Bedienelemente & Icons“: die Regeln in Kurzform.
+- `template/` zeigt die Bausteine (Knopf mit Icon, `.seg`, `.empty-state`, `.notice`, `.step`, `.menu-list`, Menü-Bereich mit `data-icon`).
+
+### Bewusste Ausnahmen
+
+- **Nutzerinhalte bleiben, wie sie sind:** Emoji, die jemand in der Schatzsuche (Figuren, Stationen, Quiz-Antworten) oder in eigenen Datenquellen (`image-swipe`) eingibt; diese Stellen tragen `data-emoji-content`.
+- **Daten ohne Anzeige:** die Farbzuordnung von Emoji in `treasure-hunt/puzzles.js` (färbt Quiz-Kacheln nach dem Emoji des Nutzers) und das Feld `emoji` in `quartet/decks.js` (bleibt für ältere Spielraum-Codes; angezeigt wird ein Tabler-Icon je Kartensatz).
+- **Text zum Teilen:** Der Termin-Text von `calendar-events` für Messenger und Zwischenablage behält seine Symbole, weil er keine Oberfläche dieser App ist.
+- **Typografische Zeichen** wie ✕/◯ (Spielsteine in `tic-tac-toe`), ✓ und ♥ in Zähltexten sind keine Emoji und bleiben.
 
 ---
 
 ## 7. Umsetzung in Schritten
 
-Jeder Schritt ist ein eigener PR mit Vorher/Nachher-Screenshots (hell und dunkel, 375 px) und `npm run test:app` für die betroffenen Apps.
+Umgesetzt in dieser Reihenfolge, je Schritt eigene Commits; jede geänderte App mit `npm run test:app` geprüft und per Screenshot (375 px, hell/dunkel) angesehen.
 
 1. **Grundlage (sichtbar nur in der Vorlage):** Sprite-Erzeugung, `Tools.icon`, Lexikon, Bausteine in `base.css`, `template/`, Tests, Abschnitt in `AGENTS.md`.
 2. **Menü (wirkt auf alle Apps):** Icons für Standardbereiche, Installieren als Zeile ans Ende, `data-icon` für `data-menu`-Abschnitte, `.menu-list`, Unterseiten (`data-menu-page`). „Daten sichern & übertragen“ wird gleich zur Unterseite.
@@ -306,7 +319,7 @@ Gespeicherte Daten und Schlüssel bleiben dabei unverändert; es ändert sich nu
 | image-converter | Ablagefläche mit Knopf darin | `.dropzone` |
 | image-swipe | ♥ als Zeichen | `heart`; das Emoji-Beispiel bleibt (Datensatz, `data-emoji-content`) |
 | laser-mirrors | ⚡ Laser-Knopf | `.btn` mit Tabler-Icon |
-| loop-station | 🔴 Aufnehmen, ▶️ Start, Emoji im Leerzustand | `player-record`, `player-play`, `.toolbar`, `.empty` mit `vinyl` |
+| loop-station | 🔴 Aufnehmen, ▶️ Start, Emoji im Leerzustand | `player-record`, `player-play`, `.toolbar`, `.empty-state` mit `vinyl` |
 | lucky-wheel, raffle | gut | Sprite |
 | markdown-editor | Formatierung ohne Beschriftung | `.toolbar` mit Tooltips |
 | marquee | ok | `.seg` |
