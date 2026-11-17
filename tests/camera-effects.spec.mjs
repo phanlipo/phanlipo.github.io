@@ -2,7 +2,7 @@
 // people detection with a fake worker (boxes, count, effect only on people / background), download prompt,
 // photo, camera off in the background – and the real MediaPipe pipeline with the small selfie segmenter
 // (tests/fixtures/selfie_segmenter.tflite): network guard against the library's usage statistics, offline.
-import { test, expect, openMenu, closeMenu, switchLang, axe } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, axe, onDialog } from './helpers.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { fakeCamera, fakeWorker, pixel, URL_, LS } from './camera-fakes.mjs';
@@ -179,7 +179,7 @@ test.describe('people (fake detection worker)', () => {
     await page.goto(URL_);
     await startCamera(page);
     let msg = '';
-    page.once('dialog', d => { msg = d.message(); d.accept(); });
+    await onDialog(page, d => { msg = d.message(); d.accept(); }, { once: true });
     await page.click('#btnDetect');
     await expect(page.locator('#badge')).toHaveText('2 Personen');
     // Not cached yet: engine (14.5 MB) + model (4.6 MB)
@@ -205,7 +205,7 @@ test.describe('people (fake detection worker)', () => {
     await fakeCamera(page);
     await preset(page, { mirror: false, effect: 'invert' });
     await fakeWorker(page);
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.goto(URL_);
     await startCamera(page);
     await page.click('[data-scope="people"]');
@@ -226,7 +226,7 @@ test.describe('people (fake detection worker)', () => {
     await fakeCamera(page);
     await preset(page, { effect: 'invert', scope: 'people', detect: true });
     await fakeWorker(page);
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.goto(URL_);
     await startCamera(page);
     // Left half of the camera = right half of the mirrored screen
@@ -241,10 +241,10 @@ test.describe('people (fake detection worker)', () => {
     await fakeWorker(page);
     await page.goto(URL_);
     await startCamera(page);
-    page.once('dialog', d => d.dismiss());
+    await onDialog(page, d => d.dismiss(), { once: true });
     await page.click('[data-scope="background"]');
     await expect(page.locator('[data-scope="all"]')).toHaveAttribute('aria-pressed', 'true');
-    page.once('dialog', d => d.dismiss());
+    await onDialog(page, d => d.dismiss(), { once: true });
     await page.click('#btnDetect');
     await expect(page.locator('#btnDetect')).toHaveAttribute('aria-pressed', 'false');
     // No detection worker was started (the service worker only caches the file)
@@ -255,7 +255,7 @@ test.describe('people (fake detection worker)', () => {
   test('failed download: message, the choice goes back', async ({ page }) => {
     await fakeCamera(page);
     await fakeWorker(page, 'fail');
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.goto(URL_);
     await startCamera(page);
     await page.click('#btnDetect');
@@ -270,7 +270,7 @@ test.describe('people (fake detection worker)', () => {
       await fakeCamera(page);
       await fakeWorker(page);
       let msg = '';
-      page.on('dialog', d => { msg = d.message(); d.accept(); });
+      await onDialog(page, d => { msg = d.message(); d.accept(); });
       await page.goto(URL_);
       await expect(page.locator('#btnStart')).toHaveText('Start camera');
       await expect(page.locator('#fx button[data-fx="thermal"] .l')).toHaveText('Thermal');
@@ -303,7 +303,7 @@ test.describe('real detection engine (MediaPipe, small segmenter model)', () => 
     await fakeCamera(page);
     await preset(page, { mirror: false, effect: 'invert' });
     const dialogs = [];
-    page.on('dialog', d => { dialogs.push(d.message()); d.accept(); });
+    await onDialog(page, d => { dialogs.push(d.message()); d.accept(); });
     await page.goto(URL_);
     await startCamera(page);
     await page.click('[data-scope="people"]');
@@ -371,7 +371,7 @@ test.describe('face accessories and distortions (fake worker)', () => {
     await preset(page, { mirror: false, ...settings });
     await fakeWorker(page, mode);
     const dialogs = [];
-    page.on('dialog', d => { dialogs.push(d.message()); d.accept(); });
+    await onDialog(page, d => { dialogs.push(d.message()); d.accept(); });
     await page.goto(URL_);
     await startCamera(page);
     return dialogs;
@@ -465,7 +465,7 @@ test.describe('face accessories and distortions (fake worker)', () => {
     await page.goto(URL_);
     await startCamera(page);
     await page.click('#tabs [data-tab="face"]');
-    page.once('dialog', d => d.dismiss());
+    await onDialog(page, d => d.dismiss(), { once: true });
     await page.click('#warp [data-id="swirl"]');
     await expect(page.locator('#warp [data-id="none"]')).toHaveAttribute('aria-pressed', 'true');
     expect(page.workers().filter(x => x.url().endsWith('vision-worker.mjs'))).toEqual([]);

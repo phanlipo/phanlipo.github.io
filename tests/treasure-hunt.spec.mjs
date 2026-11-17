@@ -2,7 +2,7 @@
 // resume code on a second "device" (browser context), editor, import/export, microphone task, map tiles.
 // Expected values (distances, battle damage) are recomputed independently here.
 import { readFileSync } from 'node:fs';
-import { test, expect, axe, openMenu, closeMenu, switchLang } from './helpers.mjs';
+import { test, expect, axe, openMenu, closeMenu, switchLang, onDialog } from './helpers.mjs';
 
 const URL_ = '/treasure-hunt/';
 const R = 6371008.8, rad = d => d * Math.PI / 180;
@@ -16,7 +16,7 @@ function dest(p, d, deg) {
 const HOME = { latitude: 48.137154, longitude: 11.576124 };
 
 async function createExample(page, gps) {
-  page.once('dialog', d => (gps ? d.accept() : d.dismiss()));
+  await onDialog(page, d => (gps ? d.accept() : d.dismiss()), { once: true });
   await page.getByRole('button', { name: /Beispiel anlegen/ }).click();
   await expect(page.locator('.hunt')).toHaveCount(1);
 }
@@ -398,12 +398,12 @@ test('import: other files are rejected, an existing hunt can be kept as a copy',
   const hunt = { format: 'phanlipo-treasure-hunt', version: 1, id: 'h-test', title: 'Garten', stations: [{ name: 'Rutsche', scenes: [{ text: 'Hallo', win: { treasure: true } }] }] };
   await page.setInputFiles('#fileHunt', { name: 'g.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(hunt)) });
   await expect(page.locator('.hunt')).toHaveCount(1);
-  page.once('dialog', d => d.dismiss());
+  await onDialog(page, d => d.dismiss(), { once: true });
   await page.setInputFiles('#fileHunt', { name: 'g.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(hunt)) });
   await expect(page.locator('.hunt')).toHaveCount(2);
   await expect(page.locator('.hunt').filter({ hasText: 'Garten (Kopie)' })).toHaveCount(1);
   // Deleting removes hunt and progress
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.locator('.hunt').filter({ hasText: 'Garten (Kopie)' }).getByRole('button', { name: 'Löschen' }).click();
   await expect(page.locator('.hunt')).toHaveCount(1);
 });
@@ -574,7 +574,7 @@ test.describe('map', () => {
     await expect(page.getByText('Karte ist aus')).toBeVisible();
     await page.waitForTimeout(500);
     expect(asked, 'no tiles before the map is switched on').toEqual([]);
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.getByRole('button', { name: 'Karte einschalten' }).click();
     await expect.poll(() => asked.length).toBeGreaterThan(0);
     expect(asked.every(u => /^https:\/\/tile\.openstreetmap\.org\/1[5-8]\/\d+\/\d+\.png$/.test(u))).toBe(true);
@@ -602,7 +602,7 @@ test.describe('English', () => {
 
   test('example and game in English', async ({ page }) => {
     await page.goto(URL_);
-    page.once('dialog', d => d.dismiss());
+    await onDialog(page, d => d.dismiss(), { once: true });
     await page.getByRole('button', { name: /Create the example/ }).click();
     await expect(page.locator('.hunt')).toContainText('The Shadow Dragon');
     await expect(page.locator('.hunt')).toContainText('6 stations · 6 characters');
@@ -656,7 +656,7 @@ test('accessible: editor and game screens, light and dark', async ({ page }) => 
     await page.keyboard.press('Escape');
     // Start again for the next colour scheme
     await page.locator('#btnParent').click();
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.getByRole('button', { name: 'Spiel neu starten' }).click();
     await page.locator('#btnParent').click();
     await page.getByRole('button', { name: /Zur Übersicht/ }).click();
@@ -700,7 +700,7 @@ test.describe('AI reading voice', () => {
     await openMenu(page);
     await expect(page.locator('#rateBox')).toBeHidden();
     let asked = '';
-    page.once('dialog', d => { asked = d.message(); d.accept(); });
+    await onDialog(page, d => { asked = d.message(); d.accept(); }, { once: true });
     await page.selectOption('#setVoice', 'piper:de/de_DE/kerstin/low/de_DE-kerstin-low');
     await expect.poll(() => asked).toContain('Kerstin einmalig herunterladen (ca. 63 MB)');
     // Progress with text instead of toasts, visible above the open menu, gone once the voice is loaded
@@ -720,7 +720,7 @@ test.describe('AI reading voice', () => {
     expect(models).toContain('de_DE-kerstin-low.onnx');
 
     // Another speed: no second question, the length scale follows
-    page.on('dialog', d => { asked = 'again'; d.dismiss(); });
+    await onDialog(page, d => { asked = 'again'; d.dismiss(); });
     asked = '';
     await page.selectOption('#setRate', '1.5');
     await expect.poll(() => page.evaluate(() => window.__audio.length), { timeout: 30000 }).toBe(2);
@@ -759,7 +759,7 @@ test.describe('AI reading voice', () => {
     });
     await page.goto('/treasure-hunt/');
     await openMenu(page);
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.selectOption('#setVoice', 'piper:de/de_DE/kerstin/low/de_DE-kerstin-low');
     const box = page.locator('#aiDl'), bar = page.locator('#aiDlBar');
     await expect(box).toHaveText('KI-Stimme Kerstin wird geladen …');
@@ -783,7 +783,7 @@ test.describe('AI reading voice', () => {
     });
     await page.goto('/treasure-hunt/');
     await openMenu(page);
-    page.on('dialog', d => d.dismiss());
+    await onDialog(page, d => d.dismiss());
     await page.selectOption('#setVoice', 'piper:de/de_DE/kerstin/low/de_DE-kerstin-low');
     // Declined: nothing is downloaded; switching back to the automatic voice reads with the device
     await page.selectOption('#setVoice', '');

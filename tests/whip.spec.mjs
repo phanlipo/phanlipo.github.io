@@ -1,6 +1,6 @@
 // Peitsche: every crack has a plausible length with the loudest moment at the crack (not in the whoosh),
 // swing detection by acceleration (one crack per lash, sensitivity), settings persist, English.
-import { test, expect } from './helpers.mjs';
+import { test, expect, onDialog } from './helpers.mjs';
 
 // Written down independently of the page: whoosh length + tail (double: + gap between the two cracks)
 const RANGE = {
@@ -195,7 +195,7 @@ test('settings and counter persist; reset sets the counter to 0', async ({ page 
   await expect(page.locator('#sens [data-v="low"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#optVibrate')).not.toBeChecked();
   await expect(page.locator('#count')).toHaveText('2');
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnReset');
   await expect(page.locator('#count')).toHaveText('0');
   await page.reload();

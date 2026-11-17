@@ -2,7 +2,7 @@
 // invariants, a game against the computer through the UI, and two devices over real WebRTC
 // (separate browser contexts – like separate phones).
 import { deflateRawSync, crc32 } from 'node:zlib';
-import { test, expect, clipboardText, privateClipboard, openDetails, openMenu, closeMenu } from './helpers.mjs';
+import { test, expect, clipboardText, privateClipboard, openDetails, openMenu, closeMenu, onDialog } from './helpers.mjs';
 
 const URL_ = '/quartet/';
 const SET = 'quartet.settings.v1';
@@ -400,7 +400,7 @@ test('two phones and a computer play; each sees only its own card; forged moves 
   await expect(g.page.locator('#overText')).toContainText('Warte auf den Gastgeber');
 
   // Host ends: the guest is told
-  host.on('dialog', d => d.accept());
+  await onDialog(host, d => d.accept());
   await host.click('#btnEnd');
   await expect(g.page.locator('#lobbyStatus')).toHaveText('Der Gastgeber hat das Spiel beendet.');
   expect(g.problems).toEqual([]);
@@ -578,7 +578,7 @@ test.describe('own pictures', () => {
     await expect.poll(() => photo.first().evaluate(i => i.complete && i.naturalWidth)).toBeGreaterThan(0);
     await context.setOffline(false);
     // Removing the deck's pictures: emoji again
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await openMenu(page);
     await page.click('#imgDecks [data-deck="dinosaurs"]');
     await expect(page.locator('#imgDecks')).toHaveText('Noch keine eigenen Bilder.');

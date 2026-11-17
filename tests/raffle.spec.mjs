@@ -1,6 +1,6 @@
 // Tombola: tickets (ranges, leaving out unsold ones, leading zeros), every ticket only once, prizes in order
 // (main prize last), undo, redraw, checking a ticket, copying the list, reload, English, WebMCP see webmcp.spec.mjs.
-import { test, expect, openMenu, closeMenu, clipboardText, switchLang } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, clipboardText, switchLang, onDialog } from './helpers.mjs';
 
 async function setup(page, { tickets, exclude, prizes, mainLast } = {}) {
   await openMenu(page);
@@ -15,7 +15,7 @@ const num = page => page.locator('#num').textContent();
 const listed = async page => (await page.locator('#list .no').allTextContents()).reverse();
 
 test.beforeEach(async ({ page }) => {
-  page.on('dialog', d => d.accept());
+  await onDialog(page, d => d.accept());
   await page.goto('/raffle/');
   await openMenu(page);
   for (const id of ['#optAnim', '#optSound', '#optVibrate']) await page.uncheck(id);

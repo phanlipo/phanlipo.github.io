@@ -1,6 +1,6 @@
 // Sea battle: two devices connect over WebRTC by exchanging two codes (QR or copied), then play.
 // Every test uses two separate browser contexts – like two phones.
-import { test, expect, clipboardText, privateClipboard, openDetails } from './helpers.mjs';
+import { test, expect, clipboardText, privateClipboard, openDetails, onDialog } from './helpers.mjs';
 
 const URL_ = '/sea-battle/';
 const N = 10, COLS = 'ABCDEFGHIJ';
@@ -132,7 +132,7 @@ test('two devices connect, place ships, play to the end and start a rematch', as
   expect(await stats(guest)).toEqual({ wins: 0, losses: 1 });
 
   // Leaving tells the other device
-  host.once('dialog', d => d.accept());
+  await onDialog(host, d => d.accept(), { once: true });
   await host.click('#btnLeave');
   await expect(host.locator('#scrLobby')).toBeVisible();
   await expect(guest.locator('#scrLobby')).toBeVisible();

@@ -2,7 +2,7 @@
 // stand-in model worker, the real Piper pipeline (onnxruntime + eSpeak NG phonemizer) with a tiny test model,
 // download errors, offline use, deleting models, English.
 // The real voice models are not downloaded here (large, external) – see tests/manual/tts-e2e.mjs.
-import { test, expect, openMenu, closeMenu } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, onDialog } from './helpers.mjs';
 import { readFileSync } from 'node:fs';
 
 const URL_ = '/text-to-speech/';
@@ -168,13 +168,13 @@ test('AI voice: asks before the download, shows progress, plays sentence by sent
 
   // Declined: nothing happens
   let asked = '';
-  page.once('dialog', d => { asked = d.message(); d.dismiss(); });
+  await onDialog(page, d => { asked = d.message(); d.dismiss(); }, { once: true });
   await page.click('#btnSpeak');
   await expect.poll(() => asked).toContain('Supertonic 3 einmalig herunterladen (ca. 398 MB)');
   await expect(page.locator('#btnSpeak')).toBeEnabled();
   await expect(page.locator('#status')).toHaveText('');
 
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnSpeak');
   await expect(page.locator('#status')).toHaveText('Fertig.', { timeout: 15000 });
   await expect(page.locator('#meta')).toContainText('Supertonic 3 · Mann 2 · Prozessor');
@@ -216,7 +216,7 @@ test('AI voice: asks before the download, shows progress, plays sentence by sent
   await expect(page.locator('#clipsEmpty')).toBeVisible();
 
   // Second run of the same voice: one row, averaged over both; kept after reloading (the clips are not)
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnSpeak');
   await expect(row.locator('td').nth(3)).toHaveText('2', { timeout: 15000 });
   await expect(row.locator('td').nth(1)).toHaveText(rtf.toFixed(1).replace('.', ',') + '×');
@@ -224,7 +224,7 @@ test('AI voice: asks before the download, shows progress, plays sentence by sent
   await page.reload();
   await expect(page.locator('#clips li')).toHaveCount(0);
   await expect(page.locator('#stats tbody tr td').nth(3)).toHaveText('2');
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnClearStats');
   await expect(page.locator('#statsEmpty')).toBeVisible();
   await expect(page.locator('#stats')).toBeHidden();
@@ -234,7 +234,7 @@ test('AI voice: settings reach the model, stop ends playback', async ({ page }) 
   await fakeModelWorker(page);
   const logs = [];
   await page.goto(URL_);
-  page.on('dialog', d => d.accept());
+  await onDialog(page, d => d.accept());
   await page.fill('#text', Array.from({ length: 12 }, (_, i) => `Das ist der Satz Nummer ${i + 1} in diesem Test.`).join(' '));
   await page.check('input[name=engine][value=piper]');
   await page.selectOption('#voice', 'de/de_DE/thorsten_emotional/medium/de_DE-thorsten_emotional-medium#whisper');
@@ -261,7 +261,7 @@ test.describe('model not reachable', () => {
   test('shows a clear error and allows a retry', async ({ page }) => {
     await page.context().route(HF, r => r.abort());
     await page.goto(URL_);
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.click('#btnSample');
     await page.check('input[name=engine][value=piper]');
     await page.click('#btnSpeak');
@@ -312,7 +312,7 @@ test.describe('Piper pipeline', () => {
     await page.goto(URL_);
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload();                                   // page now controlled → libraries go through the offline cache
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.check('input[name=engine][value=piper]');
     await page.selectOption('#voice', 'de/de_DE/eva_k/x_low/de_DE-eva_k-x_low');
     let wav = await speakHallo(page);
@@ -378,7 +378,7 @@ test.describe('Kokoro German pipeline', () => {
       return r.abort();
     });
     await page.goto(URL_);
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.check('input[name=engine][value=kokoro]');
     await expect(page.locator('#voice')).toHaveValue('de:kerstin');
     await page.fill('#text', 'Hallo! Mein Haus zu.');

@@ -1,5 +1,5 @@
 // Lauftext: settings, preview, full-screen display (still / scrolling / rotated), history.
-import { test, expect, openMenu } from './helpers.mjs';
+import { test, expect, openMenu, onDialog } from './helpers.mjs';
 
 const show = page => page.locator('#show');
 const showText = page => page.locator('#showText');
@@ -199,7 +199,7 @@ test('history in the menu: newest first, no duplicates, reuse and clear', async 
   await page.reload();
   await openMenu(page);
   await expect(page.locator('#hist button')).toHaveText(['Eins', 'Zwei']);
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnHistClear');
   await expect(page.locator('#hist button')).toHaveCount(0);
   await expect(page.locator('#histEmpty')).toBeVisible();

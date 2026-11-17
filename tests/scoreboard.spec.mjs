@@ -1,6 +1,6 @@
 // Anzeigetafel: scoring rules (table tennis, tennis, padel, darts) worked out by hand, serve, football clock,
 // names, swapping sides, keyboard, one score per sport, new match, English.
-import { test, expect, openMenu, closeMenu, switchLang } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, onDialog } from './helpers.mjs';
 
 const LS = 'scoreboard.state.v1';
 // Side on the board (left/top = first .side), by player number 0/1
@@ -507,10 +507,10 @@ test.describe('darts', () => {
     await expect(page.locator('#name2')).toBeHidden();
     await expect(page.locator('#dartPlayers [data-players="2"]')).toHaveAttribute('aria-pressed', 'true');
     // Changing the count while a match runs asks first – cancelled, nothing changes
-    page.once('dialog', d => d.dismiss());
+    await onDialog(page, d => d.dismiss(), { once: true });
     await page.click('#dartPlayers [data-players="4"]');
     await expect(page.locator('#dartPlayers [data-players="2"]')).toHaveAttribute('aria-pressed', 'true');
-    page.once('dialog', d => { expect(d.message()).toContain('Spielerzahl'); d.accept(); });
+    await onDialog(page, d => { expect(d.message()).toContain('Spielerzahl'); d.accept(); }, { once: true });
     await page.click('#dartPlayers [data-players="4"]');
     await expect(page.locator('#name3')).toBeVisible();
     await expect(page.locator('#name4')).toBeHidden();
@@ -538,7 +538,7 @@ test.describe('darts', () => {
     await page.reload();
     await expect(page.locator('.side')).toHaveCount(4);
     await openMenu(page);
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.click('#dartPlayers [data-players="2"]');
     await closeMenu(page);
     await expect(page.locator('.side')).toHaveCount(2);
@@ -622,13 +622,13 @@ test('each sport keeps its own score; new match only after asking', async ({ pag
   await pickSport(page, 'tabletennis');
   await expect(pts(page, 0)).toHaveText('3');
   await openMenu(page);
-  page.once('dialog', d => d.dismiss());
+  await onDialog(page, d => d.dismiss(), { once: true });
   await page.click('#btnNew');
   await closeMenu(page);
   await expect(pts(page, 0)).toHaveText('3');
   await setNames(page, 'Anna', '');
   await openMenu(page);
-  page.once('dialog', d => { expect(d.message()).toBe('Spielstand für Tischtennis auf null setzen?'); d.accept(); });
+  await onDialog(page, d => { expect(d.message()).toBe('Spielstand für Tischtennis auf null setzen?'); d.accept(); }, { once: true });
   await page.click('#btnNew');
   await closeMenu(page);
   await expect(pts(page, 0)).toHaveText('0');

@@ -3,14 +3,14 @@
 // during the day, one room shared morning/afternoon) and its check, day changes, auto-fill, text/CSV export,
 // English, WebMCP, migration of older formats.
 import { readFileSync } from 'node:fs';
-import { test, expect, clipboardText, switchLang, openMenu, closeMenu, mockAndroidShare } from './helpers.mjs';
+import { test, expect, clipboardText, switchLang, openMenu, closeMenu, mockAndroidShare, onDialog } from './helpers.mjs';
 
 // Wednesday of calendar week 47/2026 (Mon 16.11. – Sun 22.11.)
 const NOW = new Date('2026-11-18T10:00:00');
 const MON = '2026-11-16', TUE = '2026-11-17', WED = '2026-11-18';
 
 test.beforeEach(async ({ page }) => {
-  page.on('dialog', d => d.accept());
+  await onDialog(page, d => d.accept());
   await page.clock.setFixedTime(NOW);
   await page.goto('/duty-roster/');
 });

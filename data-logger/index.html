@@ -19,7 +19,7 @@
 <meta name="tool:storage" content="data-logger.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-EZ1YU28CoUSla5bOkGQh1TU4iaAFaEDIC+4w8ee/XkM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-CKoBm5V0oI5DX37GoneVmwFE8YFMWauJVlbUCEI6Z5k='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -210,7 +210,7 @@ td.del button:hover{color:var(--err)}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 9d8d7186ad53</p>
+  <p class="footer-version">Version 585b50f50e3f</p>
   <!-- footer:end -->
 </footer>
 
@@ -223,7 +223,6 @@ Tools.i18n({
     profileN:'Profil {n}',metricN:'Messwert {n}',metricName:'Name',unit:'Einheit',unitPh:'z. B. kg',namePh:'z. B. Gewicht',
     delMetric:'Messwert löschen: {name}',delPoint:'Datenpunkt vom {time} löschen',time:'Zeitpunkt',
     confirmProfile:'Profil „{name}“ mit {n} Datenpunkten löschen?',confirmMetric:'Messwert „{name}“ mit {n} Werten löschen?',
-    confirmPoint:'Datenpunkt vom {time} löschen?',
     profileDeleted:'Profil gelöscht',metricDeleted:'Messwert gelöscht',pointDeleted:'Datenpunkt gelöscht',
     saved:'Datenpunkt gespeichert',errNum:'„{name}“ ist keine Zahl.',errEmpty:'Bitte mindestens einen Wert eintragen.',errTime:'Bitte einen gültigen Zeitpunkt wählen.',
     noData:'Keine Werte im gewählten Zeitraum.',noMetricsYet:'Lege zuerst einen Messwert an.',
@@ -248,7 +247,7 @@ Tools.i18n({
     profileN:'Profile {n}',metricN:'Measurement {n}',metricName:'Name',unit:'Unit',unitPh:'e.g. kg',namePh:'e.g. Weight',
     delMetric:'Delete measurement: {name}',delPoint:'Delete data point from {time}',time:'Time',
     confirmProfile:'Delete profile “{name}” with {n} data points?',confirmMetric:'Delete measurement “{name}” with {n} values?',
-    confirmPoint:'Delete data point from {time}?',
+    
     profileDeleted:'Profile deleted',metricDeleted:'Measurement deleted',pointDeleted:'Data point deleted',
     saved:'Data point saved',errNum:'“{name}” is not a number.',errEmpty:'Please enter at least one value.',errTime:'Please pick a valid time.',
     noData:'No values in the chosen period.',noMetricsYet:'Create a measurement first.',
@@ -591,9 +590,9 @@ function newProfile(){
   $('profileName').focus();
   Tools.diag.log('profile created',{profiles:store.profiles.length});
 }
-function delProfile(){
+async function delProfile(){
   const p=cur();if(!p)return;
-  if(!confirm(t('confirmProfile',{name:pName(p),n:Tools.fmt(p.points.length,0)})))return;
+  if(!await Tools.confirm(t('confirmProfile',{name:pName(p),n:Tools.fmt(p.points.length,0)}), { action: 'delete' }))return;
   store.profiles.splice(store.profiles.indexOf(p),1);set.active=store.profiles[0]?store.profiles[0].id:'';
   shownAll=false;save();saveSet();renderAll();Tools.toast(t('profileDeleted'));
   Tools.diag.log('profile deleted',{profiles:store.profiles.length});
@@ -606,9 +605,9 @@ function addMetric(){
   const i=$('metrics').querySelector(`input[data-metric="${m.id}"]`);if(i)i.focus();
   Tools.diag.log('metric added',{metrics:p.metrics.length});
 }
-function delMetric(p,m){
+async function delMetric(p,m){
   const n=p.points.filter(x=>m.id in x.v).length;
-  if(!confirm(t('confirmMetric',{name:mName(p,m),n:Tools.fmt(n,0)})))return;
+  if(!await Tools.confirm(t('confirmMetric',{name:mName(p,m),n:Tools.fmt(n,0)}), { action: 'delete' }))return;
   p.metrics.splice(p.metrics.indexOf(m),1);
   for(const x of p.points)delete x.v[m.id];
   p.points=p.points.filter(x=>Object.keys(x.v).length);
@@ -622,10 +621,12 @@ function addPoint(p,time,v){
   save();renderCharts();renderPoints();
   return x;
 }
+// At once, with undo (UI-KONZEPT.md: one entry → undo instead of asking)
 function delPoint(p,x){
-  if(!confirm(t('confirmPoint',{time:dateTime(x.t)})))return;
-  p.points.splice(p.points.indexOf(x),1);
-  save();renderCharts();renderPoints();Tools.toast(t('pointDeleted'));
+  const at=p.points.indexOf(x);
+  p.points.splice(at,1);
+  save();renderCharts();renderPoints();
+  Tools.undo(t('pointDeleted'),()=>{p.points.splice(Math.min(at,p.points.length),0,x);save();renderCharts();renderPoints();});
   Tools.diag.log('point deleted',{points:p.points.length});
 }
 // "YYYY-MM-DDTHH:MM[:SS]" in local time → ms, or NaN

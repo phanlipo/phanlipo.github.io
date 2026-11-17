@@ -83,7 +83,7 @@ window.HuntPuzzles = (function () {
     },
     check(o, path, label) {
       const id = fid();
-      return `<label class="chk" for="${id}"><input type="checkbox" id="${id}" data-f="${path}" data-t="bool" ${get(o, path) ? 'checked' : ''}><span>${esc(label)}</span></label>`;
+      return `<label class="check" for="${id}"><input type="checkbox" id="${id}" data-f="${path}" data-t="bool" ${get(o, path) ? 'checked' : ''}><span>${esc(label)}</span></label>`;
     },
     select(o, path, label, options, attrs) {
       const id = fid(), v = String(get(o, path) == null ? '' : get(o, path));

@@ -1,6 +1,6 @@
 // Liederbuch: shared song data (bars, lyrics), sheet music with scale numbers and note names, playback with
 // the highlighted note, tempo, tapping a note, MIDI file, the link to the Klavier app and back, persistence.
-import { test, expect, openMenu, closeMenu, switchLang, VIEWPORTS } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, VIEWPORTS, onDialog } from './helpers.mjs';
 
 const URL_ = '/songbook/';
 test.use({ viewport: VIEWPORTS.mobile });
@@ -266,7 +266,7 @@ CDEF|
     await expect(page.locator('#song')).toHaveValue(/^u-/);
 
     await page.click('#btnEdit');
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.click('#edDelete');
     await expect(page.locator('#toast')).toHaveText('„Mein neues Lied“ gelöscht');
     await expect(page.locator('#songTitle')).toHaveText('Alle meine Entchen');

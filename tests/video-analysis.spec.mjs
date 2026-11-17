@@ -4,7 +4,7 @@
 // centre x = 2·⌊(52 + 40t)/2⌋ + 8, y = 2·⌊(22 + 60t²)/2⌋ + 8. A black bar from x = 0 to 200 at y = 220…223 is the
 // scale (200 px = 1 m). Expected: vx = 40/200 = 0,2 m/s, a = −120/200 = −0,6 m/s² (y upwards).
 import { readFileSync } from 'node:fs';
-import { test, expect, switchLang, mockLaunchQueue } from './helpers.mjs';
+import { test, expect, switchLang, mockLaunchQueue, onDialog } from './helpers.mjs';
 
 const VIDEO = new URL('./fixtures/fall.webm', import.meta.url).pathname;
 const truth = k => { const t = k / 30; return { x: 2 * Math.floor((52 + 40 * t) / 2) + 8, y: 2 * Math.floor((22 + 60 * t * t) / 2) + 8 }; };
@@ -176,7 +176,7 @@ test.describe('German', () => {
     await expect(page.locator('#slow')).toHaveValue('8');
     // Zeitlupe 8: one frame is 1/240 s
     await expect(page.locator('#tbody tr').nth(1).locator('td').first()).toHaveText('0,004');
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.getByRole('button', { name: 'Video schließen' }).click();
     await expect(page.locator('#loadCard')).toBeVisible();
     await expect(page.locator('#videoCard')).toBeHidden();

@@ -18,6 +18,7 @@ export const test = base.extend({
   page: async ({ page, baseURL, allowedProblems }, use) => {
     await privateClipboard(page);
     const problems = [];
+    await dialogBridge(page, problems);
     page.on('pageerror', e => problems.push(`pageerror: ${e.message}`));
     page.on('console', m => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
     page.on('request', r => {
@@ -43,6 +44,60 @@ export const test = base.extend({
   },
 });
 export { expect };
+
+/*
+ * Questions of the apps (Tools.confirm / Tools.prompt, common.js) are dialogs in the page, not browser dialogs.
+ * onDialog(page, handler, { once }) answers them like page.on('dialog') would: the handler gets an object with
+ * type(), message(), defaultValue(), accept(text?) and dismiss(); it answers by clicking the dialog's buttons.
+ * Without a handler a question is dismissed (as Playwright does with browser dialogs), unless the test calls
+ * manualDialogs(page) to click them itself.
+ */
+const bridges = new WeakMap();
+async function dialogBridge(page, problems) {
+  if (bridges.has(page)) return bridges.get(page);
+  const st = { handlers: [], manual: false, problems };
+  bridges.set(page, st);
+  await page.exposeBinding('__toolsAsk', async (_src, d) => {
+    if (st.manual) return null;
+    const hs = st.handlers.slice();
+    st.handlers = st.handlers.filter(h => !h.once);
+    if (!hs.length) return { accept: false };
+    let answer = null;
+    const dialog = {
+      type: () => d.type, message: () => d.message, defaultValue: () => d.value,
+      accept: text => { answer = { accept: true, text }; }, dismiss: () => { answer = { accept: false }; },
+    };
+    for (const h of hs) {
+      try { await h.fn(dialog); } catch (e) {
+        if (st.problems) st.problems.push(`dialog handler: ${e.message}`); else setTimeout(() => { throw e; });
+      }
+    }
+    return answer;
+  });
+  const install = () => {
+    if (window.__toolsAskBridge) return;
+    window.__toolsAskBridge = true;
+    document.addEventListener('tools:ask', e => {
+      const { type, message, value, dialog } = e.detail;
+      window.__toolsAsk({ type, message, value }).then(r => {
+        if (!r || !dialog.open) return;
+        const input = dialog.querySelector('input');
+        if (r.accept && input && r.text != null) input.value = r.text;
+        dialog.querySelector(r.accept ? 'button[value="ok"]' : 'button[value=""]').click();
+      });
+    });
+  };
+  await page.addInitScript(install);
+  await page.evaluate(install).catch(() => {});
+  return st;
+}
+export async function onDialog(page, fn, { once = false } = {}) {
+  const st = await dialogBridge(page, null);
+  st.handlers.push({ fn, once });
+}
+export async function manualDialogs(page) {
+  (await dialogBridge(page, null)).manual = true;
+}
 
 /**
  * Replaces navigator.clipboard with an in-memory clipboard for this page. The real one is shared by

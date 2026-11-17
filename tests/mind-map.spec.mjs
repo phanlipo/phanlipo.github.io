@@ -1,6 +1,6 @@
 // Mindmap: add/edit/delete points, undo, fold, keyboard, drag & drop, several maps,
 // text export/import, picture export, kept after reload.
-import { test, expect, openMenu, closeMenu, clipboardText } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, clipboardText, onDialog } from './helpers.mjs';
 
 /** Opens the menu at its sub page "Aus Text erstellen" */
 async function openImport(page) {
@@ -122,10 +122,10 @@ test('delete removes the point with its sub-points after asking; fold hides and 
   await expect(page.getByRole('treeitem')).toHaveCount(6);
 
   // Declining the question keeps everything
-  page.once('dialog', d => d.dismiss());
+  await onDialog(page, d => d.dismiss(), { once: true });
   await page.click('#btnDelete');
   await expect(page.getByRole('treeitem')).toHaveCount(6);
-  page.once('dialog', d => { expect(d.message()).toBe('Diesen Punkt mit 3 Unterpunkten löschen?'); d.accept(); });
+  await onDialog(page, d => { expect(d.message()).toBe('Diesen Punkt mit 3 Unterpunkten löschen?'); d.accept(); }, { once: true });
   await page.click('#btnDelete');
   await expect(page.getByRole('treeitem')).toHaveCount(2);
   // No other branch on that side: the topic is selected
@@ -261,7 +261,7 @@ test('several maps: list, switch, new, delete; an untouched empty map is not kep
   await openMenu(page);
   await expect(page.locator('#mapList .map-item')).toHaveCount(3);
 
-  page.once('dialog', d => { expect(d.message()).toBe('Die Mindmap „Dritte“ löschen?'); d.accept(); });
+  await onDialog(page, d => { expect(d.message()).toBe('Die Mindmap „Dritte“ löschen?'); d.accept(); }, { once: true });
   await page.click('#btnDelMap');
   await expect(page.locator('#mapList .map-item')).toHaveCount(2);
   await closeMenu(page);

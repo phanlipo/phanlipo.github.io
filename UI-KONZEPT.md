@@ -168,6 +168,13 @@ Neue gemeinsame Klassen, damit Apps keine eigenen Varianten mehr bauen müssen. 
 | **Hinweis** `.notice` (`.info`, `.warn`, `.err`, `.ok`) | Icon aus dem Abschnitt „Status“ + Text | ersetzt Randbalken, Emoji-Status und graue Kästen; Fehler mit `role="alert"` |
 | **Kennzahl** `.stat-box` | große Zahl + kleine Beschriftung | Punkte, Ergebnisse (`reaction-game`, `rock-paper-scissors`, `brew-calculator`) |
 | **Gesperrt** | `.btn:disabled` grau statt blasser Akzent, dazu `.notice.info` mit Grund | Leitlinie 8 |
+| **Ankreuzfeld** `.check` | `<label class="check"><input type="checkbox"><span>Töne an<small>Erklärung</small></span></label>` | Kasten (22 px) links, Text rechts, Zeile 44 px; Erklärung als `<small>` darunter. Mehrere untereinander in `.checks`. Gilt auch für Radios mit Erklärung (Format-, Modellwahl); 2–4 kurze Optionen ohne Erklärung bleiben `.seg`. Test: jedes Ankreuzfeld steckt in `label.check` (oder `.seg`/`.chips`/`.tiles`) |
+| **Rückfrage** `Tools.confirm` / `Tools.prompt` | `if (!await Tools.confirm(t('delQ'), { action: 'delete' })) return;` | statt `confirm()`/`prompt()` des Browsers: Dialog im Stil der App (Blatt von unten auf dem Handy, kleines Fenster ab 641 px). `action` benennt den Knopf: `ok`, `delete`, `reset`, `leave` (rot), `replace`, `load`, `download`; `ok`/`cancel` für eigene Wörter. Kein `confirm()`/`prompt()` mehr im Code |
+| **Rückgängig** `Tools.undo(text, fn)` | Hinweis unten mit Knopf „Rückgängig“ (6 s) | **Einen einzelnen Eintrag** (Zettel, Datei, Skript, Vorlage, Datenpunkt) sofort löschen und Rückgängig anbieten statt nachzufragen. Rückfrage bleibt für Löschen von vielem (Verlauf leeren, alles zurücksetzen), für Downloads und für Verlassen einer Mehrspieler-Runde. `Tools.toast(text, { action: { label, icon, run } })` für andere Aktionen |
+| **Dialog** `dialog.dialog` | `.dialog-head` (Titel + ✕ mit `data-close`), `.dialog-body`, `.dialog-actions` | eigene Dialoge (Formular, Passwort, Bild, Anleitung) im selben Rahmen wie die Rückfrage: Blatt von unten auf dem Handy, Fenster ab 641 px, `.wide` bis 900 px, `.full` ganzer Bildschirm. `[data-close]` und Tippen auf den Hintergrund schließen (`data-keep` verhindert Letzteres). Hauptaktion rechts, Gefährliches `.danger` ganz links |
+| **Liste zum Verwalten** `.list-rows` | `<ul class="list-rows"><li><button class="open"><span class="name">…</span><span class="meta">…</span></button><button class="btn icon">trash</button></li></ul>` | gespeicherte Dinge (Dateien, Skripte, Zettel, Verlauf, Personen): eine Zeile je Eintrag, getrennt durch Linien, `.open` öffnet, `.name` mit … gekürzt (`.wrap` bricht um), `.meta` als kleine zweite Zeile, `li.current` fett; `.boxed` für Zeilen mit eigenem Kasten (Personen, Dateien eines Auftrags); `li.muted` für „Noch keine …“ |
+| **Schieberegler** `input[type=range]` | `<div class="form-field range"><label for="v">Lautstärke <output>80 %</output></label><input type="range" id="v"></div>` | jeder Regler volle Breite, 44 px zum Greifen, Akzentfarbe direkt aus `base.css`; Wert rechts neben der Beschriftung (Ziffern gleich breit). In einer `.row` nimmt der Regler den freien Platz |
+| **Fortschritt** `<progress>` / **Pegel** `.meter` | `<progress value="40" max="100">` · `<div class="meter"><i style="width:40%"></i></div>` | `progress` für laufende Arbeit (Download, Export), 8 px in Akzent; `.meter` für Live-Pegel (Mikrofon, Sensor), Farbe mit `.ok`/`.warn`/`.err`, Höhe darf die App ändern (Spielanzeige). Was passiert, steht als Text daneben |
 
 Die Bildtafel „Bausteine“ (siehe unten) zeigt Menü, Datei-App, Bühnen-App und Spiel als Entwurf.
 
@@ -254,6 +261,8 @@ Markup: `<section data-menu data-menu-page data-icon="settings" aria-labelledby=
 - Kopfleiste bei 375 px mit sichtbarem ↻: Titel nicht abgeschnitten, nichts überlappt oder läuft über.
 - Icon-Knöpfe (`.head-btn`, `.toolbar`, `.btn.icon`): zugänglicher Name, Icon aus dem Sprite, 44 px, Icon passend zum Lexikon.
 - Werkzeugleiste: Wörter sichtbar ab 64 px je Eintrag, sonst nur Icons (Wort bleibt zugänglicher Name).
+- Ankreuzfelder und Radios stecken in `label.check` (oder `.seg`/`.chips`/`.tiles`).
+- Rückfragen: `tests/dialog.spec.mjs` prüft `Tools.confirm`/`Tools.prompt` (Knöpfe, Escape, Handy und Breitbild) und `Tools.undo`; die fachlichen Tests beantworten Rückfragen mit `onDialog(page, d => d.accept())` aus `tests/helpers.mjs` (wie `page.on('dialog')`).
 - Menü: Standardbereiche mit Icons; Unterseiten (öffnen, Zurück-Zeile, Zurück-Taste, Escape, ✕, `Tools.menu.open(id)`).
 - Die Bausteine laufen über die vorhandenen axe-Prüfungen (hell, dunkel, Englisch).
 
@@ -281,6 +290,8 @@ Umgesetzt in dieser Reihenfolge, je Schritt eigene Commits; jede geänderte App 
 4. **Bühnen-Apps mit Werkzeugen:** `paint`, `mind-map`, `markdown-editor`, `loop-station`, `code-runner`, `business-card`, `calc-pad`, `songbook`, `piano`, `function-plotter`, `playlist-player` → `.toolbar`, kopierte SVGs durch das Sprite ersetzen.
 5. **Spiele & Spaß:** `card-games`, `quartet`, `sea-battle`, `tic-tac-toe`, `rock-paper-scissors`, `reaction-game`, `dice-coin`, `lucky-wheel`, `raffle`, `spin-the-bottle`, `scoreboard`, `move-play`, `laser-mirrors`, `plush-puzzle`, `treasure-hunt`, `whip`, `whoopee-cushion`, `talking-animal`, `camera-effects`, `image-swipe`, `wind-instruments` → alle Emoji durch Tabler-Icons, eigene Illustrationen oder Text ersetzen (Leitlinie 5), `.seg`/`.tiles`, ein gemeinsamer Mehrspieler-Startbildschirm. `treasure-hunt` (221 Emoji, auch in Figuren und Stationen) bekommt dafür einen eigenen PR.
 6. **Formular-Apps:** `api-check`, `brew-calculator`, `countdown`, `calendar-events`, `data-logger`, `reminders`, `rss-reader`, `qr-code`, `secret-santa`, `duty-roster`, `text-to-speech`, `marquee`, `ai-chat`, `sensors`, `cast-demo` → `.form-field` statt `.field`, `.seg`/`.chips`, `.notice`.
+
+7. **Weitere Bausteine (zweiter Durchgang):** `.check` (41 Apps hatten ein eigenes), `Tools.confirm`/`Tools.prompt` statt der 80 Browser-Rückfragen, `Tools.undo` beim Löschen einzelner Einträge (`calc-pad`, `markdown-editor`, `code-runner`, `dice-coin`, `data-logger`), `dialog.dialog` für die eigenen Dialoge, `.list-rows` für Listen zum Verwalten, Schieberegler, `progress` und `.meter` zentral.
 
 Gespeicherte Daten und Schlüssel bleiben dabei unverändert; es ändert sich nur die Darstellung.
 

@@ -1,7 +1,7 @@
 // PDF bearbeiten: merge, remove, rotate and reorder pages. The saved PDF is read back with a small
 // independent parser (pdf-tools.mjs) – page order from the page tree, rotation from /Rotate,
 // and each page is recognised by the text it shows.
-import { test, expect, switchLang } from './helpers.mjs';
+import { test, expect, switchLang, onDialog } from './helpers.mjs';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { makePdf, readPdfPages } from './pdf-tools.mjs';
@@ -164,7 +164,7 @@ test('rotate all, move and remove whole files, add more later, start over', asyn
   r = await save(page);
   expect(r.pages).toEqual(['A2@0', 'A1@0', 'A3@0']);
 
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnReset');
   await expect(thumbs(page)).toHaveCount(0);
   await expect(page.locator('#files li')).toHaveCount(0);
@@ -295,7 +295,7 @@ test('share target: several PDFs shared to the installed app are merged in order
 });
 
 test('the work survives a reload (app update, phone ending the app); "Start over" removes it', async ({ page }) => {
-  page.on('dialog', d => d.accept());
+  await onDialog(page, d => d.accept());
   await page.goto(URL_);
   await openFiles(page, [A(), B()], 5);
   await pageBtn(page, 1, 'rot').click();                 // A1 turned

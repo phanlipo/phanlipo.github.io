@@ -18,7 +18,7 @@
 <meta name="tool:storage" content="new-tool.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-rzIu3uR45NrCbtgKRVAcaK3mS/vavBWYykdNOEEd+Ik='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ah1xsl8Xvb42PZZIoPRmHLiDHuT6LLucah01sYyk6Ik='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -44,7 +44,11 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
      Bedienelemente & Icons (UI-KONZEPT.md): nur Tabler-Icons aus dem Sprite, nie Emoji:
        <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg> bzw. Tools.icon('download') im Script;
        neuer Name → node scripts/build-icons.mjs --sprite. Bausteine aus base.css: .btn mit Icon, .btn.block (Hauptaktion),
-       .seg (2–4 Optionen), .chips (viele), .tiles (mit Bild), .toolbar, .dropzone, .empty-state, .step, .notice, .stat-box.
+       .seg (2–4 Optionen), .chips (viele), .tiles (mit Bild), .toolbar, .dropzone, .empty-state, .step, .notice, .stat-box,
+       <label class="check"> (Ankreuzfeld mit Text), .list-rows (Listen zum Verwalten), <dialog class="dialog"> (eigene
+       Dialoge), .form-field.range (Regler mit Wert), <progress>, .meter.
+     Rückfragen: if (!await Tools.confirm(text, { action: 'delete' })) return; Eingabe: await Tools.prompt(text, { value }).
+       Einen einzelnen Eintrag ohne Rückfrage löschen und Tools.undo(text, () => …zurückholen) anbieten.
      Formulare: Felder als <div class="form-field"><label for="x">…</label><input type="text" id="x"></div> (base.css),
        Knöpfe dahinter in <div class="row">, Fehlermeldung als <p class="form-error" role="alert">.
        Mehrzeilig: <textarea> genauso (Stil kommt aus base.css, höchstens min-height setzen), class="mono" für Codes/JSON;
@@ -70,6 +74,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
       <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#mood-empty"/></svg>
       <p data-i18n="empty">Noch nichts geklickt.</p>
     </div>
+    <label class="check"><input type="checkbox" id="optSound"><span data-i18n="sound">Ton beim Klicken</span></label>
     <p class="notice info" id="hint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="hint">Hinweis mit Icon.</span></p>
     <button type="button" class="btn primary block" id="btnDemo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="demo">Beispiel</span></button>
   </section>
@@ -120,7 +125,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version a4e9e6f4e784</p>
+  <p class="footer-version">Version ecf04deca3de</p>
   <!-- footer:end -->
 </footer>
 
@@ -131,9 +136,9 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 // Texts: German stays in the HTML (data-i18n="key"); English for those keys plus all texts the
 // script creates (German and English). Call before rendering anything. See AGENTS.md "Sprachen".
 Tools.i18n({
-  de:{clicked:'Geklickt: {n}×'},
+  de:{clicked:'Geklickt: {n}×',resetQ:'Zähler ({n}×) auf null setzen?'},
   en:{title:'New Tool',sub:'Short subtitle.',section:'Section',demo:'Example',clicked:'Clicked: {n}×',
-    kind:'Kind',kindA:'Alone',kindB:'Two of us',empty:'Nothing clicked yet.',hint:'A hint with an icon.',reset:'Reset counter'}
+    kind:'Kind',kindA:'Alone',kindB:'Two of us',empty:'Nothing clicked yet.',hint:'A hint with an icon.',reset:'Reset counter',sound:'Sound on click',resetQ:'Set the counter ({n}×) back to zero?'}
 });
 const t=Tools.t;
 // localStorage key convention: <folder-name>.<what>.v1 – the prefix must match <meta name="tool:storage">
@@ -144,7 +149,9 @@ const render=()=>{ Tools.$('empty').hidden=settings.count>0; };
 for(const b of document.querySelectorAll('#kind button'))b.addEventListener('click',()=>{
   for(const o of document.querySelectorAll('#kind button'))o.setAttribute('aria-pressed',String(o===b));
 });
-Tools.$('btnReset').addEventListener('click',()=>{
+// Questions in the app's look (never confirm() of the browser); the button says what happens
+Tools.$('btnReset').addEventListener('click',async()=>{
+  if(settings.count&&!await Tools.confirm(t('resetQ',{n:settings.count}),{action:'reset'}))return;
   settings.count=0; Tools.save(LS,settings); render(); Tools.menu.close();
 });
 render();

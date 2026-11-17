@@ -20,7 +20,7 @@
 <meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-2ZKyvy9T4i5F+EVut3rTzeHEkT55BtYqGpkF1Kyhzn0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-DaGZzrv6Piva/v+yjVKVB4RniOjdurp6L4S2zHkVMGk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -48,9 +48,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 #status{min-height:1.4em;margin:8px 0 0}
 #status.err{color:var(--err)}
 /* Corner editor (full screen on phones) */
-dialog#editor{border:0;padding:0;background:var(--surface);color:var(--text);width:min(900px,100vw);max-width:100vw;max-height:100dvh;border-radius:var(--radius)}
-dialog#editor::backdrop{background:rgba(0,0,0,.6)}
-@media (max-width:640px){dialog#editor{width:100vw;height:100dvh;border-radius:0}}
+@media (max-width:640px){dialog#editor{height:100dvh;max-height:100dvh;border-radius:0}}
 .ed{display:flex;flex-direction:column;gap:10px;padding:12px;height:100%}
 .ed h2{font-size:16px;margin:0}
 .ed .hint{margin:0}
@@ -125,7 +123,7 @@ dialog#editor::backdrop{background:rgba(0,0,0,.6)}
   </section>
 </main>
 
-<dialog id="editor" aria-labelledby="edTitle">
+<dialog id="editor" class="dialog wide" data-keep aria-labelledby="edTitle">
   <div class="ed">
     <h2 id="edTitle"></h2>
     <p class="muted hint" data-i18n="ed.hint">Die vier Punkte auf die Ecken des Dokuments ziehen.</p>
@@ -256,7 +254,7 @@ dialog#editor::backdrop{background:rgba(0,0,0,.6)}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 0addcb835ce9</p>
+  <p class="footer-version">Version 98da6ed31c7a</p>
   <!-- footer:end -->
 </footer>
 
@@ -638,7 +636,7 @@ function render(){
   });
 }
 
-pageList.addEventListener('click',e=>{
+pageList.addEventListener('click',async e=>{
   const b=e.target.closest('button[data-act]'); if(!b) return;
   const id=Number(b.closest('li').dataset.id), i=pages.findIndex(p=>p.id===id);
   if(i<0) return;
@@ -650,7 +648,7 @@ pageList.addEventListener('click',e=>{
     const again=pageList.querySelector(`li[data-id="${id}"] [data-act="${act}"]`);
     (again&&!again.disabled?again:pageList.querySelector(`li[data-id="${id}"] .thumb`)).focus();
   }else if(act==='del'){
-    if(confirm(t('confirm.delete',{n:i+1}))) deletePage(i);
+    if(await Tools.confirm(t('confirm.delete',{n:i+1}), { action: 'delete' })) deletePage(i);
   }
 });
 
@@ -758,9 +756,9 @@ async function closeEditor(){
 dlg.addEventListener('cancel',e=>{e.preventDefault();closeEditor();});
 window.addEventListener('resize',()=>{if(editing)layoutStage();});
 $('edDone').addEventListener('click',closeEditor);
-$('edDelete').addEventListener('click',()=>{
+$('edDelete').addEventListener('click',async ()=>{
   const p=editing, i=pages.indexOf(p);
-  if(!confirm(t('confirm.delete',{n:i+1}))) return;
+  if(!await Tools.confirm(t('confirm.delete',{n:i+1}), { action: 'delete' })) return;
   editing=null; dlg.close(); deletePage(i);
 });
 $('edAuto').addEventListener('click',()=>{if(editing.auto){editing.quad=editing.auto.map(p=>({...p}));drawQuad();}});
@@ -933,8 +931,8 @@ async function restorePages(){
   invalidate();   // writes the state again without pages that could not be read
 }
 fileNameInput.addEventListener('input',persist);
-$('btnClear').addEventListener('click',()=>{
-  if(!pages.length||!confirm(t('confirm.clear',{n:pages.length}))) return;
+$('btnClear').addEventListener('click',async ()=>{
+  if(!pages.length||!await Tools.confirm(t('confirm.clear',{n:pages.length}), { action: 'delete' })) return;
   pages.forEach(p=>{if(p.thumbUrl) URL.revokeObjectURL(p.thumbUrl);});
   pages=[]; invalidate(); render();
   $('addInfo').textContent=''; status('');

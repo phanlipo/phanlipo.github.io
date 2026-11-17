@@ -25,7 +25,7 @@
 <meta name="tool:connect" content="https://www.youtube-nocookie.com">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dOYCWhMfenq7Vix4ZM/RIfmarckceJVUfRIkwS0NwY4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://www.youtube-nocookie.com; font-src 'self'; frame-src https://www.youtube-nocookie.com https://www.youtube.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dXI0IpBbxoHiJNEPHThcAx3v+69vLg/MGCFD11texFo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://www.youtube-nocookie.com; font-src 'self'; frame-src https://www.youtube-nocookie.com https://www.youtube.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -80,11 +80,7 @@ main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .track .bar{margin-top:4px}
 .track-done{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:64px;padding:6px;font-size:.8rem;color:var(--muted);border-left:1px solid var(--border);cursor:pointer}
 .track-done input{width:22px;height:22px;accent-color:var(--accent);margin:0}
-.hist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
-.hist li{border-bottom:1px solid var(--border);padding:4px 0 6px}
 .hist .when{font-size:.85rem;color:var(--muted)}
-.check{display:flex;gap:10px;align-items:center;min-height:44px}
-.check input{width:22px;height:22px;accent-color:var(--accent)}
 /* Listening mode: nearly black full screen (OLED: hardly any power), dim text, big buttons. Same in light and dark. */
 :root{--listen-bg:#000;--listen-fg:#a3a3a3;--listen-dim:#8c8c8c;--listen-btn:#141414;--listen-line:#2e2e2e;--listen-bar:#6b6b6b}
 .listen-open{display:flex;justify-content:center;margin:6px 0 2px}
@@ -216,7 +212,7 @@ main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <section class="card" data-menu data-icon="history" aria-labelledby="h-hist">
     <h2 id="h-hist" data-i18n="h.hist">Verlauf</h2>
     <p class="muted" id="histEmpty" data-i18n="hist.empty">Noch nichts gehört.</p>
-    <ol class="hist" id="hist"></ol>
+    <ol class="hist list-rows" id="hist"></ol>
   </section>
 </main>
 
@@ -311,7 +307,7 @@ main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version a2bb906ca42f</p>
+  <p class="footer-version">Version 3f2bd62c2cb9</p>
   <!-- footer:end -->
 </footer>
 
@@ -783,16 +779,16 @@ $('inName').addEventListener('input',e=>{
   const l=cur(); if(!l) return;
   l.name=e.target.value.trim().slice(0,80); persist(); renderHead(); renderLists(); renderHist();
 });
-$('btnRemove').addEventListener('click',()=>{
-  const l=cur(); if(!l||!confirm(t('removeAsk',{name:listName(l)}))) return;
+$('btnRemove').addEventListener('click',async ()=>{
+  const l=cur(); if(!l||!await Tools.confirm(t('removeAsk',{name:listName(l)}), { action: 'delete' })) return;
   stopPlayer();
   delete data.lists[l.id];
   hist=hist.filter(h=>h.list!==l.id); Tools.save(LS_HIST,hist);
   data.current=Object.keys(data.lists)[0]||null;
   persist(); render(); Tools.menu.close(); Tools.toast(t('removed'));
 });
-$('btnResetAll').addEventListener('click',()=>{
-  const l=cur(); if(!l||!confirm(t('resetAsk'))) return;
+$('btnResetAll').addEventListener('click',async ()=>{
+  const l=cur(); if(!l||!await Tools.confirm(t('resetAsk'), { action: 'reset' })) return;
   for(const tr of l.tracks){ tr.done=false; tr.doneAt=0; tr.pos=0; }
   l.index=0; persist(); render(); Tools.menu.close(); Tools.toast(t('resetDone'));
 });

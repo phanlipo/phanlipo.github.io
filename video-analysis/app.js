@@ -183,7 +183,7 @@ function closeVideo() {
   $('fileIn').value = ''; $('camIn').value = '';
 }
 for (const id of ['fileIn', 'camIn']) $(id).addEventListener('change', e => { const f = e.target.files[0]; if (f) openVideo(f); });
-$('closeVideo').addEventListener('click', () => { if (confirm(t('closeAsk'))) closeVideo(); });
+$('closeVideo').addEventListener('click', async () => { if (await Tools.confirm(t('closeAsk'))) closeVideo(); });
 
 /* ---------- Frames ---------- */
 let seekTarget = null, seeking = false;
@@ -644,8 +644,8 @@ $('copy').addEventListener('click', async () => {
   const ok = await Tools.copyText(tableText('\t', false));
   Tools.toast(t(ok === false ? 'copyFail' : 'copyOk'));
 });
-$('clearPts').addEventListener('click', () => {
-  if (!confirm(t('clearAsk'))) return;
+$('clearPts').addEventListener('click', async () => {
+  if (!await Tools.confirm(t('clearAsk'), { action: 'delete' })) return;
   A.points = {};
   renderResults(); drawOverlay(); keepState();
 });

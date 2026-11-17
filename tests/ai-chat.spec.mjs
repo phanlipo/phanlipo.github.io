@@ -2,7 +2,7 @@
 // safe rendering of answers, deleting only our model files, offline, English.
 // The model itself is replaced by a stand-in worker (tests/fake-llm.mjs) – the real Gemma download is
 // far too big for `npm test`; see tests/manual/chat-e2e.mjs.
-import { test, expect, clipboardText, openMenu, closeMenu } from './helpers.mjs';
+import { test, expect, clipboardText, openMenu, closeMenu, onDialog } from './helpers.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 import { samplingFilter } from '../ai-chat/sampling.mjs';
 
@@ -202,7 +202,7 @@ test('history: delete one chat, clear all', async ({ page }) => {
   await openMenu(page);
   await page.locator('#hist li').first().getByRole('button', { name: 'Chat löschen' }).click();
   await expect(page.locator('#hist .snip')).toHaveText(['Zweite Frage']);
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnClearHist');
   await expect(page.locator('#histCount')).toHaveText('0');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ai-chat.chats.v1')))).toEqual([]);
@@ -219,7 +219,7 @@ test('downloaded models: shown as downloaded, deleting keeps other apps\' models
   await openMenu(page);
   await page.locator('#settingsBox summary').click();
   await expect(page.locator('#modelList')).toContainText('Gemma 4 E2B');
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnDeleteModels');
   await expect(page.locator('#modelList')).toContainText('Noch kein Modell heruntergeladen.');
   await expect(page.locator('#modelInfo')).toContainText('Wird beim ersten Senden heruntergeladen');

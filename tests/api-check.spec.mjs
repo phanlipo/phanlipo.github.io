@@ -1,6 +1,6 @@
 // API Check: OpenAPI 3 (YAML) and Swagger 2 (JSON) become request forms; requests go to a stand-in API
 // (tests/api-mock.mjs, Playwright routes) and are checked as the server receives them.
-import { test, expect, clipboardText, openMenu, switchLang } from './helpers.mjs';
+import { test, expect, clipboardText, openMenu, switchLang, onDialog } from './helpers.mjs';
 import { ORIGIN, API_PROBLEMS, OPENAPI_YAML, PET_EXAMPLE, SWAGGER_JSON, mockApi, addYamlConfig } from './api-mock.mjs';
 
 const URL_ = '/api-check/';
@@ -328,7 +328,7 @@ test.describe('API Check', () => {
 
     // Clear (asks first)
     await openMenu(page);
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.click('#btnClearHist');
     await expect(page.locator('#histCount')).toHaveText('0');
     await expect(page.locator('#histEmpty')).toBeVisible();
@@ -345,10 +345,10 @@ test.describe('API Check', () => {
     await page.click('#btnReload');
     await expect(page.locator('#specInfo')).toHaveText('OpenAPI 3.0.3 · Test API Neu 1.2 · 5 Endpunkte');
     await page.locator('#cfgEdit summary').click();
-    page.once('dialog', d => d.dismiss());
+    await onDialog(page, d => d.dismiss(), { once: true });
     await page.click('#btnDelete');
     await expect(page.locator('#cfgSel option')).toHaveCount(2);
-    page.once('dialog', d => d.accept());
+    await onDialog(page, d => d.accept(), { once: true });
     await page.click('#btnDelete');
     await expect(page.locator('#cfgSel option')).toHaveText(['+ Neue Konfiguration']);
     await expect(page.locator('#opsCard')).toBeHidden();

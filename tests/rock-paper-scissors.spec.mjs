@@ -1,6 +1,6 @@
 // Schere, Stein, Papier: rules of all three variants, computer independent of the player's choice,
 // "smart" computer learns from history, score and persistence.
-import { test, expect, axe, switchLang, clipboardText, privateClipboard, openDetails } from './helpers.mjs';
+import { test, expect, axe, switchLang, clipboardText, privateClipboard, openDetails, onDialog } from './helpers.mjs';
 
 // Rules written down independently of the page: winner → losers
 const BEATS = {
@@ -107,7 +107,7 @@ test('score is kept per variant, survives reload and can be reset', async ({ pag
   await page.click('#variants [data-v="3"]');
   await expect(page.locator('#last li')).toHaveCount(0);
   await page.click('#variants [data-v="4"]');
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('#btnReset');
   await expect(page.locator('#last li')).toHaveCount(0);
   await expect(page.locator('#sWin')).toHaveText('0');
@@ -266,7 +266,7 @@ test('two devices: connect, both choose, results match the rules on both sides',
   await expect(guest.locator('#result .why')).toHaveText('Echse beißt Spock.');
 
   // Guest disconnects: host is told and back in the lobby
-  guest.once('dialog', d => d.accept());
+  await onDialog(guest, d => d.accept(), { once: true });
   await guest.click('#btnLeave');
   await expect(guest.locator('#connLobby')).toBeVisible();
   await expect(host.locator('#connLobby')).toBeVisible({ timeout: 10000 });

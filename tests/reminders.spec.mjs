@@ -1,7 +1,7 @@
 // Erinnerungen: create, fire on time (notification via the service worker), late after the app was closed,
 // edit and schedule again from the history, validation, permission states, English.
 // Time is controlled with Playwright's clock; notifications are recorded by a stand-in Notification API.
-import { test, expect, clipboardText, switchLang, openMenu } from './helpers.mjs';
+import { test, expect, clipboardText, switchLang, openMenu, onDialog } from './helpers.mjs';
 
 const KEY = 'reminders.list.v1';
 const START = new Date('2026-10-29T12:00:00+01:00'); // = 12:00 in Europe/Berlin (winter time)
@@ -435,7 +435,7 @@ test('delete a reminder and clear the history', async ({ page }) => {
   await add(page, 'Bleibt', '2026-10-29T15:00');
   await add(page, 'Gleich', '2026-10-29T12:01');
   await page.clock.runFor(2 * 60e3);
-  page.on('dialog', d => d.accept());
+  await onDialog(page, d => d.accept());
   await page.locator('#upList li', { hasText: 'Weg damit' }).locator('[data-act="del"]').click();
   await expect(page.locator('#upList li .text')).toHaveText(['Bleibt']);
   await page.click('#btnClearPast');

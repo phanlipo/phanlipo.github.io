@@ -244,7 +244,11 @@ test.describe('German', () => {
     await page.click('#btnNew');
     expect((await stored(page)).pads).toHaveLength(3);
     await openMenu(page);
-    page.once('dialog', d => d.accept());
+    // Deleting asks nothing but offers to take it back
+    await page.locator('#pads li', { hasText: 'Auto' }).locator('.del').click();
+    await expect(page.locator('#pads .name')).toHaveText(['Leerer Zettel', 'Urlaub']);
+    await page.getByRole('button', { name: 'Rückgängig' }).click();
+    await expect(page.locator('#pads li', { hasText: 'Auto' })).toHaveCount(1);
     await page.locator('#pads li', { hasText: 'Auto' }).locator('.del').click();
     await expect(page.locator('#pads .name')).toHaveText(['Leerer Zettel', 'Urlaub']);
     await closeMenu(page);

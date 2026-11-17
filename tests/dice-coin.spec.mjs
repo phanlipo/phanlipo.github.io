@@ -1,5 +1,5 @@
 // Würfel & Münze: value ranges, modes, holding, persistence and a rough fairness check.
-import { test, expect, openDetails, switchLang, openMenu } from './helpers.mjs';
+import { test, expect, openDetails, switchLang, openMenu, onDialog } from './helpers.mjs';
 
 /** Values of all dice in board order (null = not rolled yet) */
 async function dice(page) {
@@ -137,7 +137,7 @@ test('backup round trip: roll, export, clear, import', async ({ page }) => {
   const [download] = await Promise.all([page.waitForEvent('download'), page.click('[data-data="export"]')]);
   const path = await download.path();
 
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.click('[data-data="clear"]');
   await page.waitForEvent('load');
   await expect(page.locator('#board .die')).toHaveCount(2);          // back to defaults
@@ -146,7 +146,7 @@ test('backup round trip: roll, export, clear, import', async ({ page }) => {
   await openMenu(page);
 
   await page.locator('details.data summary').click();
-  page.once('dialog', d => d.accept());
+  await onDialog(page, d => d.accept(), { once: true });
   await page.setInputFiles('details.data input[type=file]', path);
   await page.waitForEvent('load');
   expect(await dice(page)).toEqual(rolled);

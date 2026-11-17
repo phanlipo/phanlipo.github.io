@@ -3,7 +3,7 @@
 // game descriptions (JSON) and their validation, the page with a fake camera and a fake pose worker
 // (download prompt, calibration, countdown, counting, pause when nobody is seen, result and best score, errors)
 // and the real MediaPipe worker: network guard, works offline.
-import { test, expect, openMenu, closeMenu, switchLang } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, onDialog } from './helpers.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { fakeCamera } from './camera-fakes.mjs';
@@ -696,7 +696,7 @@ test.describe('page', () => {
 
   test('jumping jacks: download prompt, calibration, countdown, counting, result and best score', async ({ page }) => {
     const dialogs = [];
-    page.on('dialog', d => { dialogs.push(d.message()); d.accept(); });
+    await onDialog(page, d => { dialogs.push(d.message()); d.accept(); });
     await page.goto(URL_);
     await pose(page, null);
     await page.click('[data-game="jumping-jacks"]');
@@ -751,7 +751,7 @@ test.describe('page', () => {
   });
 
   test('nobody in the picture: the game waits and goes on', async ({ page }) => {
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.goto(URL_);
     await pose(page, {});
     await page.click('[data-game="simon"]');
@@ -773,7 +773,7 @@ test.describe('page', () => {
   });
 
   test('upper body game in English: calibrates without the feet', async ({ page }) => {
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.goto(URL_);
     await switchLang(page, 'en');
     await expect(page.locator('#games .game .n')).toHaveText(['Simon Says', 'Jumping Jack Challenge', 'Duck & Jump', 'Catch the Bubbles', 'Freeze Dance', 'Copy the Pose']);
@@ -827,7 +827,7 @@ test.describe('page', () => {
   });
 
   test('two players: side by side, each counted, the winner is shown', async ({ page }) => {
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.goto(URL_);
     // Mirrored picture: the person at x + 0.22 in the camera picture stands on the left of the screen
     const L = o => ({ x: 0.22, scale: 0.8, ...o }), R = o => ({ x: -0.22, scale: 0.8, ...o });
@@ -865,7 +865,7 @@ test.describe('page', () => {
   });
 
   test('freeze dance: music while dancing, freeze when it stops', async ({ page }) => {
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.addInitScript(() => {
       // Count the notes started (music and sounds)
       window.__notes = 0;
@@ -905,7 +905,7 @@ test.describe('page', () => {
   });
 
   test('copy the pose: the figure is shown, holding it scores', async ({ page }) => {
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.goto(URL_);
     const def = await page.evaluate(async () => (await fetch('games/poses.json')).json());
     await pose(page, {});
@@ -922,7 +922,7 @@ test.describe('page', () => {
   });
 
   test('settings: easier detection and graphics chip are passed on', async ({ page }) => {
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.goto(URL_);
     await openMenu(page);
     await page.locator('#optEasy').check();
@@ -952,7 +952,7 @@ test.describe('page: problems', () => {
     await fakeCamera(page);
     await fakePoseWorker(page, 'fail');
     let accept = false;
-    page.on('dialog', d => (accept ? d.accept() : d.dismiss()));
+    await onDialog(page, d => (accept ? d.accept() : d.dismiss()));
     await page.goto(URL_);
     await page.click('[data-game="duck-jump"]');
     await expect(page.locator('#msgText')).toHaveText('Ohne Körpererkennung geht es leider nicht.');
@@ -982,7 +982,7 @@ test.describe('real pose worker (MediaPipe)', () => {
       return r.abort();
     });
     await fakeCamera(page);
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.goto(URL_);
     await page.click('[data-game="simon"]');
     await expect(page.locator('#msgText')).toHaveText('Die Körpererkennung ließ sich nicht starten.', { timeout: 60000 });
@@ -1018,7 +1018,7 @@ test.describe('real pose worker (MediaPipe)', () => {
 
     // Deleting removes both
     page.removeAllListeners('dialog');
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await page.click('#btnBack');
     await openMenu(page);
     await page.click('#btnDelModels');

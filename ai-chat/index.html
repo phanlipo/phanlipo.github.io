@@ -20,7 +20,7 @@
 <meta name="tool:webmcp" content="get_conversation, ask_model">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-EwfnWOPll4WW/QkYHdNFbk8FKzUvD+SEzPIrAdDF0ms='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-9f/SpvzVBXVbBSvkmReKwE+yEl+i8hXybKOuEAScUu4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -44,7 +44,6 @@ select{min-height:44px;padding-inline:10px;width:100%}
 .model-info{font-size:14px;color:var(--muted);margin:0}
 .model-info.ok{color:var(--ok)}
 .progress{margin-block-start:10px}
-progress{width:100%;height:10px;accent-color:var(--accent)}
 .status{font-size:14px;margin-block:6px 0;min-height:1.4em}
 .status.err{color:var(--err)}
 .status.ok{color:var(--ok)}
@@ -81,10 +80,7 @@ progress{width:100%;height:10px;accent-color:var(--accent)}
 .composer .btn{min-height:48px;min-width:52px;flex:none}
 textarea#system{min-height:72px}
 /* History */
-.hist{list-style:none;margin:0;padding:0}
-.hist li{display:flex;gap:8px;align-items:flex-start;border-block-end:1px solid var(--border);padding-block:8px}
-.hist .open{flex:1;min-width:0;min-height:44px;text-align:start;background:none;border:0;color:var(--text);font:inherit;cursor:pointer;padding:0}
-.hist .meta{display:block;font-size:12px;color:var(--muted)}
+.hist li{align-items:flex-start}
 .hist .snip{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hist li.current .snip{font-weight:600}
 .hist .btn{min-width:44px;min-height:44px}
@@ -147,7 +143,7 @@ textarea#system{min-height:72px}
 
   <section class="card" aria-labelledby="h-hist" data-menu data-icon="history">
     <h2 id="h-hist"><span data-i18n="history">Verlauf</span> <span class="badge" id="histCount">0</span></h2>
-    <ul class="hist" id="hist"></ul>
+    <ul class="hist list-rows" id="hist"></ul>
     <div class="row" style="margin-block-start:8px">
       <button type="button" class="btn small danger" id="btnClearHist"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearHist">Verlauf löschen</span></button>
     </div>
@@ -262,7 +258,7 @@ textarea#system{min-height:72px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 734b30d5f74b</p>
+  <p class="footer-version">Version 5e3dc598263b</p>
   <!-- footer:end -->
 </footer>
 
@@ -470,7 +466,7 @@ async function updateCached() {
 }
 $('settingsBox').addEventListener('toggle', () => { if ($('settingsBox').open) updateCached(); });
 $('btnDeleteModels').addEventListener('click', async () => {
-  if (busy || !confirm(t('confirmModels'))) return;
+  if (busy || !await Tools.confirm(t('confirmModels'), { action: 'delete' })) return;
   try {
     const c = await caches.open(MODEL_CACHE);
     for (const r of await c.keys()) if (Object.keys(MODELS).some(k => fileUrlOf(k, r.url))) await c.delete(r);
@@ -788,8 +784,8 @@ function renderHist() {
   });
   if (!chats.length) { const li = document.createElement('li'); li.className = 'muted'; li.textContent = t('noChats'); ul.append(li); }
 }
-$('btnClearHist').addEventListener('click', () => {
-  if (!chats.length || !confirm(t('confirmClear'))) return;
+$('btnClearHist').addEventListener('click', async () => {
+  if (!chats.length || !await Tools.confirm(t('confirmClear'), { action: 'delete' })) return;
   if (busy) return toast(t('busy'));
   chats = []; save(LS_CHATS, chats); chat = newChat(); renderChat(); renderHist();
 });

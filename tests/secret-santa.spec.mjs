@@ -1,6 +1,6 @@
 // Wichteln: participants, rules, the draw (everyone gives to exactly one other person, rules kept),
 // passing the phone around, secret links, English.
-import { test, expect, clipboardText, switchLang } from './helpers.mjs';
+import { test, expect, clipboardText, switchLang, onDialog } from './helpers.mjs';
 
 async function addNames(page, names) {
   for (const n of names) {
@@ -30,7 +30,7 @@ function expectValid(map, names) {
 }
 
 test.beforeEach(async ({ page }) => {
-  page.on('dialog', d => d.accept());
+  await onDialog(page, d => d.accept());
   await page.goto('/secret-santa/');
 });
 

@@ -2,7 +2,7 @@
 // Browsers do not ship it yet, so a stand-in modelContext records what the page registers;
 // the tests then call the tools like an agent would.
 import { readFileSync } from 'node:fs';
-import { test, expect, apps, openMenu, closeMenu } from './helpers.mjs';
+import { test, expect, apps, openMenu, closeMenu, onDialog } from './helpers.mjs';
 import { makePdf } from './pdf-tools.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 import { CLIPS, clip, wavInfo, mp3Info, toneHz, id3Tags, oggTags } from './audio-files.mjs';
@@ -1075,7 +1075,7 @@ test.describe('camera-effects tools', () => {
   test.beforeEach(async ({ page }) => {
     await fakeCamera(page);
     await fakeWorker(page);
-    page.on('dialog', d => d.accept());
+    await onDialog(page, d => d.accept());
     await open(page, '/camera-effects/');
   });
   const startCamera = async page => {
@@ -1101,7 +1101,7 @@ test.describe('camera-effects tools', () => {
 
   test('people/background only after the user loaded the separation; the agent cannot start the download', async ({ page }) => {
     const dialogs = [];
-    page.on('dialog', d => dialogs.push(d.message()));
+    await onDialog(page, d => dialogs.push(d.message()));
     const r = await call(page, 'camera_effects_set_effect', { effect: 'blur', applies_to: 'background' });
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/has to choose "People" or "Background" in the app first/);
@@ -1130,7 +1130,7 @@ test.describe('camera-effects tools', () => {
 
   test('set_face only after the user loaded face tracking; then accessory and distortion show up in the app', async ({ page }) => {
     const dialogs = [];
-    page.on('dialog', d => dialogs.push(d.message()));
+    await onDialog(page, d => dialogs.push(d.message()));
     const r = await call(page, 'camera_effects_set_face', { accessory: 'crown' });
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/choose an accessory or distortion in the "Face" section/);
