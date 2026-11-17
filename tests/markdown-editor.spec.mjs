@@ -166,6 +166,19 @@ test('pasting HTML into the view keeps formatting, drops scripts and handlers', 
   expect(await rawText(page)).toBe('## Kopiert\n\n**fett** ![A](https://example.org/a.png)');
 });
 
+test('pasted image: backslash, brackets and quotes in alt/title are escaped', async ({ page }) => {
+  await page.locator('#views [data-v="render"]').click();
+  await view(page).click();
+  await view(page).evaluate(el => {
+    const dt = new DataTransfer();
+    dt.setData('text/html', String.raw`<p><img src="https://example.org/a.png" alt="C:\x [1]" title='a\"b'></p>`);
+    dt.setData('text/plain', 'Bild');
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  // Each \ [ ] " gets its own backslash, so alt and title survive a round trip through Markdown
+  await expect.poll(() => rawText(page)).toBe(String.raw`![C:\\x \[1\]](https://example.org/a.png "a\\\"b")`);
+});
+
 test('files: new, list in the menu, open, delete – kept after reload', async ({ page }) => {
   await raw(page).fill('# Erste\n\nHallo');
   await expect(page.locator('#name')).toHaveAttribute('placeholder', 'Erste');

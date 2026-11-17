@@ -222,7 +222,7 @@ async function vulnerabilities(entries) {
 
 const daysSince = iso => (Date.now() - Date.parse(iso)) / 864e5;
 const dateDe = iso => iso ? iso.slice(0, 10) : '?';
-const cell = s => String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+const cell = s => String(s).replace(/[\\|]/g, '\\$&').replace(/\n/g, ' ');
 
 async function check() {
   const entries = Object.entries(config);

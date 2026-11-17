@@ -30,7 +30,7 @@ test.describe('SBOM', () => {
     for (const [name, e] of Object.entries(vendor)) {
       const c = libs.find(x => x['bom-ref'] === `vendor:${name}`);
       expect(c.version, name).toBe(e.version);
-      expect(c.purl).toBe(`pkg:npm/${e.package.replace('@', '%40')}@${e.version}`);
+      expect(c.purl).toBe(`pkg:npm/${e.package.replaceAll('@', '%40')}@${e.version}`);
       expect(c.licenses).toEqual([{ license: { id: e.license } }]);
       const dist = c.externalReferences.find(r => r.type === 'distribution');
       expect(dist.url).toMatch(/^https:\/\/registry\.npmjs\.org\/.+\.tgz$/);

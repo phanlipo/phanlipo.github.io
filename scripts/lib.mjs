@@ -68,7 +68,7 @@ const REGISTRY = 'https://registry.npmjs.org';
 
 // Metadata of one published version (tarball URL + integrity hash)
 export async function npmVersionInfo(pkg, version) {
-  const res = await fetch(`${REGISTRY}/${pkg.replace('/', '%2F')}/${version}`);
+  const res = await fetch(`${REGISTRY}/${pkg.replaceAll('/', '%2F')}/${version}`);
   if (!res.ok) throw new Error(`${pkg}@${version}: registry ${res.status}`);
   return res.json();
 }
