@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Reihengeschäft</title>
+<meta name="description" content="Umsatzsteuer bei Reihengeschäften mit 3 oder 4 Unternehmen: welche Lieferung bewegt ist, wo jede Lieferung stattfindet, ob sie steuerfrei ist, ob ein Dreiecksgeschäft greift, Einfuhr und Ausfuhr, wer sich wo registrieren muss – jeder Schritt mit ausführlicher Begründung und Paragrafen.">
+<meta name="tool:tags" content="Arbeit, Finanzen, Rechner">
+<meta name="tool:features" content="Kopieren, KI-Agent">
+<meta name="tool:webmcp" content="analyze_chain, get_analysis">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann einen Fall eintragen (Länder, USt-IdNrn., wer transportiert, wer bei der Einfuhr anmeldet) und die Auswertung lesen: bewegte Lieferung, Ort und Behandlung jeder Lieferung, Dreiecksgeschäft, Einfuhrumsatzsteuer und nötige Registrierungen. Der Fall erscheint hier in den Eingabefeldern, die Auswertung wie gewohnt darunter.">
+<meta name="tool:webmcp-help-en" content="An AI agent can enter a case (countries, VAT IDs, who transports, who declares the import) and read the assessment: moved supply, place and treatment of every supply, triangulation, import VAT and the registrations needed. The case appears here in the input fields and the assessment below as usual.">
+<meta name="tool:icon" content="truck-delivery">
+<meta name="tool:color" content="#8a4b14">
+<meta name="tool:short-name" content="Lieferkette">
+<meta name="tool:title-en" content="Chain Transaction">
+<meta name="tool:description-en" content="VAT on chain transactions with 3 or 4 companies: which supply is the moved one, where each supply takes place, whether it is exempt, whether triangulation applies, imports and exports, who has to register where – every step explained in detail with the legal provisions.">
+<meta name="tool:short-name-en" content="Chain VAT">
+<meta name="tool:storage" content="chain-transaction.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-eG5GUZk4ZVTqw/29WGlZuxQJDHd70tHSN2TjkBHsQkA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Lieferkette">
+<meta name="theme-color" content="#8a4b14">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#8a4b14;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#e8a565;--accent-text:#1d1206}}
+main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.intro{color:var(--muted);font-size:14px;margin:0 0 12px}
+.parties{display:grid;gap:12px}
+.party-set{border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin:0;min-width:0}
+.party-set>legend{font-weight:600;padding-inline:4px}
+.pair{display:grid;gap:8px}
+@media (min-width:560px){.pair{grid-template-columns:1fr 1fr}}
+.field-hint{font-size:13px;color:var(--muted);margin:4px 0 0}
+.block-gap{display:grid;gap:12px}
+/* The chain: companies as boxes, supplies as arrows between them (thick in accent = moved supply) */
+.route{margin:0 0 10px;font-size:15px}
+.chain{list-style:none;margin:0;padding:0}
+.chain .party{border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;background:var(--surface-2);display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.chain .party.transporter{border:2px solid var(--accent)}
+.chain .party b{font-size:16px}
+.chain .supply{margin-inline-start:22px;padding:8px 0 8px 16px;border-inline-start:2px dashed var(--border);display:grid;gap:2px}
+.chain .supply.moved{border-inline-start:5px solid var(--accent);padding-inline-start:13px}
+.chain .supply .head{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-weight:600}
+.chain .supply .head .ic{color:var(--muted)}
+.chain .supply.moved .head .ic{color:var(--accent)}
+.chain .supply .what{font-size:14px}
+.summary{display:grid;gap:8px;margin-block-start:12px}
+.why h3,.duties h3{margin:16px 0 6px;font-size:16px}
+.why h3:first-of-type,.duties h3:first-of-type{margin-block-start:4px}
+.why p,.duties p{margin:6px 0}
+.law{color:var(--muted);font-size:13px}
+.checks{list-style:none;margin:8px 0;padding:0;display:grid;gap:6px}
+.checks li{display:flex;gap:8px;align-items:flex-start}
+.checks li .ic{flex:none;margin-block-start:2px}
+.checks li.ok .ic{color:var(--ok)}
+.checks li.no .ic{color:var(--err)}
+.duty{border:1px solid var(--border);border-radius:var(--radius);padding:4px 12px 8px;margin-block-start:10px}
+.duty ul{margin:4px 0;padding-inline-start:20px}
+.duty li{margin-block:4px}
+.duty h4{margin:10px 0 2px;font-size:14px;color:var(--muted)}
+.alt-list{display:grid;gap:8px}
+.alt{display:grid;gap:4px;text-align:start;width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font:inherit;cursor:pointer}
+.alt[aria-current="true"]{border:2px solid var(--accent);cursor:default}
+.alt:not([aria-current="true"]):hover{background:var(--surface-2)}
+.alt .t{font-weight:600}
+.alt .d{font-size:14px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Reihengeschäft</span></h1>
+  <p class="sub" data-i18n="sub">Umsatzsteuer bei Lieferketten – mit Begründung jedes Schritts.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-parties">
+    <h2 id="h-parties"><span class="step">1</span><span data-i18n="h.parties">Beteiligte Unternehmen</span></h2>
+    <p class="intro" data-i18n="parties.intro">In der Reihenfolge der Rechnungen: U1 verkauft an U2, U2 an U3 und so weiter. Die Ware selbst geht in einem einzigen Transport direkt vom ersten zum letzten Unternehmen.</p>
+    <div class="block-gap">
+      <div class="seg" role="group" aria-label="Anzahl der Unternehmen" data-i18n-attr="aria-label:count.label" id="count">
+        <button type="button" aria-pressed="true" data-n="3"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span data-i18n="count.3">3 Unternehmen</span></button>
+        <button type="button" aria-pressed="false" data-n="4"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users-group"/></svg><span data-i18n="count.4">4 Unternehmen</span></button>
+      </div>
+      <div class="parties" id="parties"></div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-goods">
+    <h2 id="h-goods"><span class="step">2</span><span data-i18n="h.goods">Warenweg und Transport</span></h2>
+    <div class="block-gap">
+      <div class="pair">
+        <div class="form-field"><label for="from" data-i18n="from">Ware startet in</label><select id="from"></select></div>
+        <div class="form-field"><label for="to" data-i18n="to">Ware endet in</label><select id="to"></select></div>
+      </div>
+      <fieldset class="seg-group">
+        <legend data-i18n="transport">Wer befördert oder versendet die Ware?</legend>
+        <div class="seg" id="transport"></div>
+        <p class="field-hint" data-i18n="transport.hint">Gemeint ist, wer selbst fährt oder den Spediteur beauftragt und dabei das Risiko für die Ware trägt. Wer die Fracht bezahlt, spielt meist keine Rolle.</p>
+      </fieldset>
+      <fieldset class="seg-group" id="importerBox" hidden>
+        <legend data-i18n="importer">Wer meldet die Ware bei der Einfuhr zum freien Verkehr an?</legend>
+        <div class="seg" id="importer"></div>
+        <p class="field-hint" data-i18n="importer.hint">Wer bei der Zollanmeldung als Anmelder auftritt (selbst oder über einen Spediteur in indirekter Vertretung). Er schuldet die Einfuhrumsatzsteuer.</p>
+      </fieldset>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-result">
+    <h2 id="h-result"><span class="step">3</span><span data-i18n="h.result">Ergebnis</span></h2>
+    <div id="result" aria-live="polite"></div>
+    <div class="row"><button type="button" class="btn" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Auswertung kopieren</span></button></div>
+  </section>
+
+  <section class="card why" aria-labelledby="h-why">
+    <h2 id="h-why" data-i18n="h.why">Begründung Schritt für Schritt</h2>
+    <div id="why"></div>
+  </section>
+
+  <section class="card duties" aria-labelledby="h-duties">
+    <h2 id="h-duties" data-i18n="h.duties">Was jedes Unternehmen tun muss</h2>
+    <p class="intro" data-i18n="duties.intro">Registrierung, Rechnung und Meldungen aus Sicht jedes Beteiligten. Kennzahlen stehen dabei, wenn die Meldung in Deutschland abzugeben ist.</p>
+    <div id="duties"></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-alt">
+    <h2 id="h-alt" data-i18n="h.alt">Was wäre, wenn …?</h2>
+    <p class="intro" data-i18n="alt.intro">Derselbe Fall mit einem anderen Transportverantwortlichen. Oft lässt sich so vermeiden, dass sich jemand im Ausland registrieren muss. Antippen übernimmt die Variante.</p>
+    <div class="alt-list" id="alts"></div>
+  </section>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" data-example="triangle"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#book"/></svg><span data-i18n="ex.triangle">Beispiel: Dreiecksgeschäft DE → AT → IT</span></button>
+  <button type="button" data-example="supplier"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#book"/></svg><span data-i18n="ex.supplier">Beispiel: Zwischenhändler mit deutscher USt-IdNr.</span></button>
+  <button type="button" data-example="export"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#book"/></svg><span data-i18n="ex.export">Beispiel: Ausfuhr in die Schweiz</span></button>
+  <button type="button" data-example="import"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#book"/></svg><span data-i18n="ex.import">Beispiel: Einfuhr aus China</span></button>
+  <button type="button" data-example="four"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#book"/></svg><span data-i18n="ex.four">Beispiel: vier Unternehmen, Dreieck am Anfang</span></button>
+  <button type="button" id="btnReset" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="reset">Neu beginnen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein <b>Reihengeschäft</b> liegt vor, wenn mehrere Unternehmen über dieselbe Ware Kaufverträge abschließen und die Ware in einem einzigen Transport direkt vom ersten Lieferer zum letzten Abnehmer gelangt. Umsatzsteuerlich gibt es dann so viele Lieferungen wie Rechnungen – aber nur eine davon ist die „bewegte“ Lieferung, und nur diese kann als innergemeinschaftliche Lieferung oder Ausfuhr steuerfrei sein. Der Rechner bestimmt die bewegte Lieferung, den Ort und die Behandlung jeder Lieferung, prüft das Dreiecksgeschäft und zeigt, wer sich wo registrieren muss. Jeder Schritt wird mit Gründen und Paragrafen erklärt.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Beteiligte:</b> Für jedes Unternehmen das Sitzland und die USt-IdNr., mit der es auftritt. Meist ist das die des Sitzlands. Wer in mehreren Ländern registriert ist, wählt die tatsächlich verwendete – davon hängt viel ab.</li>
+    <li><b>Warenweg:</b> Startet die Ware nicht im Sitzland von U1 (z. B. aus einem Lager im Ausland) oder endet sie woanders als beim letzten Abnehmer, die Länder umstellen.</li>
+    <li><b>Transport:</b> Wer befördert oder versendet. Bei einer Einfuhr zusätzlich, wer die Ware beim Zoll anmeldet.</li>
+    <li><b>Was wäre, wenn …?</b> zeigt den Fall mit jedem anderen Transportverantwortlichen und für Zwischenhändler beide Möglichkeiten (als Abnehmer oder als Lieferer). Antippen übernimmt die Variante.</li>
+    <li>Im Menü stehen Beispiele zum Ausprobieren. „Auswertung kopieren“ kopiert Ergebnis, Begründung und Pflichten als Text.</li>
+  </ul>
+  <h3>Was der Rechner annimmt</h3>
+  <ul>
+    <li>Lieferungen von Waren zwischen Unternehmen (keine Privatkunden, keine Dienstleistungen, keine Werklieferungen), Ware zum Normalsteuersatz ohne Sonderregeln (keine Fahrzeuge, verbrauchsteuerpflichtigen Waren, Schrott o. Ä.).</li>
+    <li>Ein einziger Transport, nicht von mehreren Beteiligten aufgeteilt (kein „gebrochener“ Transport); kein Konsignations- oder Zolllager, kein Kommissionsgeschäft.</li>
+    <li>Wer den Transport übernimmt, hat beim Grenzübertritt die Verfügungsmacht und trägt das Risiko. Nachweise (Gelangensbestätigung, Ausfuhrnachweis) liegen vor.</li>
+    <li>Die Beurteilung folgt dem deutschen Umsatzsteuergesetz und dem Umsatzsteuer-Anwendungserlass. Die Regeln zum Reihengeschäft und zum Dreiecksgeschäft sind EU-weit einheitlich (Mehrwertsteuersystemrichtlinie seit den „Quick Fixes“ 2020); bei Ausfuhr und Einfuhr gelten die deutschen Regeln (§ 3 Abs. 6a Satz 6 und 7, § 3 Abs. 8 UStG) so, als würden sie überall gelten. Andere Länder können im Detail abweichen.</li>
+    <li>Was im Drittland passiert, prüft der Rechner nicht. Fälle nur zwischen Drittländern liegen außerhalb des EU-Rechts.</li>
+    <li>Steuersätze: Normalsätze Stand 2026, ohne Gewähr. Nordirland zählt für Waren wie ein EU-Land (USt-IdNr. mit XI).</li>
+  </ul>
+  <h3>Dreiecksgeschäft bei vier Unternehmen</h3>
+  <p>Die deutsche Finanzverwaltung erkennt in längeren Ketten ein Dreiecksgeschäft nur an, wenn die drei Unternehmen am Ende der Kette stehen (Abschnitt 25b.1 Abs. 2 UStAE). Das Gericht der EU hat am 3. Dezember 2025 entschieden, dass es auch am Anfang der Kette möglich ist (Rechtssache T-646/24). Der Rechner folgt standardmäßig der Verwaltung; wo es darauf ankommt, lässt sich die Auswertung nach dem Urteil einschalten.</p>
+  <h3>Keine Steuerberatung</h3>
+  <p>Die Auswertung beschreibt Standardfälle und ersetzt keine Steuerberatung. Schon kleine Abweichungen – eine andere USt-IdNr., eine Niederlassung im Bestimmungsland, ein geteilter Transport – können zu einem ganz anderen Ergebnis führen. Wichtige Fälle bitte mit einer Steuerberaterin oder einem Steuerberater klären.</p>
+  <h3>Gespeichert</h3>
+  <p>Der zuletzt eingegebene Fall bleibt nur in diesem Browser gespeichert (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A <b>chain transaction</b> exists when several companies sell the same goods one after the other and the goods travel in a single transport directly from the first supplier to the last customer. For VAT there are as many supplies as invoices – but only one of them is the “moved” supply, and only that one can be exempt as an intra-Community supply or an export. The calculator determines the moved supply, the place and treatment of every supply, checks triangulation and shows who has to register where. Every step is explained with reasons and legal provisions.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Companies:</b> for each company its country and the VAT ID it uses. Usually that is the one of its own country. Companies registered in several countries pick the one they actually use – a lot depends on it.</li>
+    <li><b>Route:</b> if the goods do not start in U1's country (e.g. from a warehouse abroad) or end somewhere other than at the last customer, change the countries.</li>
+    <li><b>Transport:</b> who carries or ships the goods. For an import also who declares the goods to customs.</li>
+    <li><b>What if …?</b> shows the case with every other company transporting, and for intermediaries both options (as customer or as supplier). Tap to take over the variant.</li>
+    <li>The menu has examples to try. “Copy assessment” copies result, reasoning and duties as text.</li>
+  </ul>
+  <h3>What the calculator assumes</h3>
+  <ul>
+    <li>Supplies of goods between businesses (no consumers, no services, no work and materials), goods at the standard rate without special rules (no vehicles, excise goods, scrap and the like).</li>
+    <li>A single transport, not split between several parties; no consignment stock or customs warehouse, no commission sales.</li>
+    <li>Whoever handles the transport holds the right to dispose of the goods at the border and bears the risk. The evidence (proof of arrival, export evidence) is available.</li>
+    <li>The assessment follows the German VAT Act (UStG) and the German VAT guidelines (UStAE). The rules on chain transactions and triangulation are the same across the EU (VAT Directive since the 2020 “quick fixes”); for exports and imports the German rules (§ 3 (6a) sentences 6 and 7, § 3 (8) UStG) are applied as if they held everywhere. Other countries may differ in detail.</li>
+    <li>What happens in a non-EU country is not checked. Cases only between non-EU countries are outside EU law.</li>
+    <li>VAT rates: standard rates as of 2026, without guarantee. Northern Ireland counts as an EU country for goods (VAT ID with XI).</li>
+  </ul>
+  <h3>Triangulation with four companies</h3>
+  <p>The German tax authorities accept triangulation in longer chains only if the three companies are at the end of the chain (UStAE 25b.1 (2)). On 3 December 2025 the EU General Court ruled that it is also possible at the start of the chain (case T-646/24). By default the calculator follows the authorities; where it matters, the assessment under the ruling can be switched on.</p>
+  <h3>Not tax advice</h3>
+  <p>The assessment describes standard cases and does not replace tax advice. Small differences – another VAT ID, an establishment in the country of arrival, a split transport – can lead to a completely different result. Please clarify important cases with a tax adviser.</p>
+  <h3>Stored</h3>
+  <p>The last case entered stays only in this browser (back it up or move it under “Back up data”). Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann einen Fall eintragen (Länder, USt-IdNrn., wer transportiert, wer bei der Einfuhr anmeldet) und die Auswertung lesen: bewegte Lieferung, Ort und Behandlung jeder Lieferung, Dreiecksgeschäft, Einfuhrumsatzsteuer und nötige Registrierungen. Der Fall erscheint hier in den Eingabefeldern, die Auswertung wie gewohnt darunter. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can enter a case (countries, VAT IDs, who transports, who declares the import) and read the assessment: moved supply, place and treatment of every supply, triangulation, import VAT and the registrations needed. The case appears here in the input fields and the assessment below as usual. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version a8d9a8f23bf5</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="chain.js"></script>
+<script>
+(function(){
+'use strict';
+/* Texts: German stays in the HTML; the script builds the assessment from the facts of Chain.evaluate().
+   Placeholders: {p}/{q}/{r} company labels (U1 …), {c} country name, {from}/{to} countries of departure/arrival,
+   {k} number of the supply, {rate} VAT rate. Country names are constant data, so the texts may contain HTML. */
+Tools.i18n({
+  de:{
+    'count.label':'Anzahl der Unternehmen',
+    'role.first':'erster Lieferer','role.mid':'Zwischenhändler','role.last':'letzter Abnehmer',
+    'party.legend':'{p} · {role}','party.country':'Sitz von {p}','party.vat':'{p} tritt auf mit USt-IdNr. aus',
+    'vat.none':'keine USt-IdNr.','grp.eu':'EU','grp.third':'Drittländer','same.first':'wie Sitz von U1 ({c})','same.last':'wie Sitz von {p} ({c})',
+    'vatShort':'USt-IdNr. {v}','vatShort.none':'ohne USt-IdNr.','seat':'Sitz {c}',
+    'transportBy':'{p} transportiert','transporter':'transportiert','declares':'meldet Einfuhr an',
+    'supply':'Lieferung {k}: {p} → {q}','movedTag':'bewegt','restingTag':'ruhend',
+    'route':'Warenweg: <b>{from} → {to}</b> ({kind}), Transport durch <b>{p}</b>.',
+    'kind.intra':'innergemeinschaftlich','kind.domestic':'innerhalb eines Landes','kind.export':'Ausfuhr','kind.import':'Einfuhr','kind.outside':'nur Drittländer',
+    'tr.ic':'Ort {c} · steuerfreie innergemeinschaftliche Lieferung','tr.ic-fail':'Ort {c} · nicht steuerfrei: {rate} Umsatzsteuer {c}',
+    'tr.export':'Ort {c} · steuerfreie Ausfuhrlieferung','tr.export-fail':'Ort {c} · nicht steuerfrei: {rate} Umsatzsteuer {c}',
+    'tr.taxable':'Ort {c} · steuerpflichtig: {rate} Umsatzsteuer {c}','tr.triangle':'Ort {c} · Dreiecksgeschäft: {q} schuldet {rate} Umsatzsteuer {c}',
+    'tr.outside':'Ort {c} (Drittland) · in der EU nicht steuerbar',
+    'sum.moved':'Bewegte Lieferung ist <b>Lieferung {k}</b> von {p} an {q}.',
+    'sum.none':'Niemand muss sich außerhalb seines Sitzlands registrieren.',
+    'sum.reg':'<b>{p}</b> muss sich in <b>{c}</b> umsatzsteuerlich registrieren.','sum.regHas':'{p} braucht eine Registrierung in {c} – vorhanden, denn {p} verwendet die USt-IdNr. {v}.',
+    'sum.triangle':'Die Vereinfachung für Dreiecksgeschäfte greift: {b} braucht keine Registrierung in {to}.',
+    'sum.outside':'Die Ware bewegt sich nur zwischen Drittländern. In der EU ist nichts zu versteuern und nichts zu melden.',
+    'warn.icFail':'Die bewegte Lieferung ist nicht steuerfrei, weil {p} keine USt-IdNr. eines anderen Mitgliedstaats als {from} verwendet. Zusätzlich droht im Bestimmungsland eine Erwerbsbesteuerung – also doppelte Steuer.',
+    'warn.exportFail':'Die Ausfuhr ist nicht steuerfrei, weil {p} die Ware selbst abholt und im Abgangsland {from} ansässig ist.',
+    'warn.doubleAcq':'{p} verwendet die USt-IdNr. aus {c} statt aus {to}: Der Erwerb gilt dann zusätzlich in {c} als bewirkt (Doppelerwerb).',
+    'warn.eustNoDeduct':'{p} schuldet die Einfuhrumsatzsteuer, darf sie aber nicht als Vorsteuer abziehen – die Verfügungsmacht hat bei der Einfuhr {q}.',
+    's1.h':'1. Liegt ein Reihengeschäft vor?',
+    's1':'{n} Unternehmen schließen über dieselbe Ware Kaufverträge ab ({chain}), und die Ware gelangt in einem einzigen Transport unmittelbar vom ersten Lieferer {first} zum letzten Abnehmer {last}. Das ist ein Reihengeschäft (§ 3 Abs. 6a Satz 1 UStG, Art. 36a MwStSystRL).',
+    's1b':'Umsatzsteuerlich zählt trotzdem jede Rechnung als eigene Lieferung – hier also {k} Lieferungen. Der Knackpunkt: Die Ware bewegt sich nur einmal, deshalb kann nur <b>eine</b> dieser Lieferungen die „bewegte“ sein. Nur sie kann als innergemeinschaftliche Lieferung oder Ausfuhr steuerfrei sein. Alle anderen sind „ruhende“ Lieferungen und ganz normal im Abgangs- oder Bestimmungsland steuerpflichtig. Deshalb lohnt es sich, genau zu wissen, welche Lieferung bewegt ist.',
+    's2.h':'2. Wohin geht die Ware?',
+    's2.intra':'Die Ware beginnt in {from} und endet in {to} – in zwei verschiedenen EU-Mitgliedstaaten. Es geht also um eine innergemeinschaftliche Warenbewegung. Das System dahinter: Die bewegte Lieferung ist im Abgangsland steuerfrei, und ihr Abnehmer versteuert dafür im Bestimmungsland einen innergemeinschaftlichen Erwerb. So landet die Steuer in dem Land, in dem die Ware ankommt und verwendet wird.',
+    's2.domestic':'Die Ware bleibt in {from}; sie überquert keine Grenze. Damit gibt es auch keine Steuerbefreiung: Alle Lieferungen sind in {from} steuerpflichtig. Die bewegte Lieferung wird der Vollständigkeit halber bestimmt, ändert hier aber nichts. Wichtig ist nur: Wer in {from} liefert und dort nicht ansässig ist, braucht dort in der Regel eine Registrierung.',
+    's2.export':'Die Ware verlässt die EU: Sie beginnt in {from} und endet im Drittland {to}. Die bewegte Lieferung kann als Ausfuhrlieferung steuerfrei sein (§ 4 Nr. 1 Buchst. a, § 6 UStG; Art. 146 MwStSystRL), denn verbraucht wird die Ware außerhalb der EU. Lieferungen davor bleiben in {from} steuerpflichtig, Lieferungen danach finden im Drittland statt und richten sich nach dessen Recht.',
+    's2.import':'Die Ware kommt aus dem Drittland {from} in die EU nach {to}. Bei der Einfuhr entsteht Einfuhrumsatzsteuer, die der Anmelder schuldet. Lieferungen, die noch im Drittland stattfinden, sind in der EU nicht steuerbar; Lieferungen nach der Einfuhr sind in {to} steuerpflichtig. Wer die Ware beim Zoll anmeldet, entscheidet hier mit, welche Lieferung bewegt ist und wo sie stattfindet.',
+    's2.outside':'Die Ware bewegt sich nur zwischen Drittländern ({from} → {to}) und berührt die EU nicht. Die EU-Regeln zum Reihengeschäft greifen dann nicht; es gilt allein das Recht der beteiligten Länder. Der Rechner zeigt deshalb nur, dass in der EU nichts zu versteuern ist.',
+    's2.startElsewhere':'Die Ware liegt zu Beginn nicht im Sitzland von U1 ({c}), sondern in {from} – etwa in einem Lager. Maßgeblich ist immer, wo der Transport tatsächlich beginnt. U1 liefert deshalb aus {from} und braucht dort eine Registrierung.',
+    's2.endElsewhere':'Die Ware endet nicht im Sitzland von {p} ({c}), sondern in {to}. Maßgeblich ist das Land, in dem der Transport tatsächlich endet.',
+    's3.h':'3. Welche Lieferung ist die bewegte?',
+    's3.def':'„Transportieren“ heißt: selbst befördern oder einen Spediteur oder Frachtführer beauftragen. Entscheidend ist, wer den Transport veranlasst und dabei die Gefahr für die Ware trägt – nicht, wer die Frachtkosten zahlt.',
+    's3.first':'{p} ist der erste Lieferer und transportiert selbst. Dann gehört die Warenbewegung zu seiner eigenen Lieferung, also zu Lieferung 1 an {q} (§ 3 Abs. 6a Satz 2 UStG). Das ist folgerichtig: Wer liefert und dabei selbst transportiert, gibt die Ware erst am Ende des Transports aus der Hand – alle späteren Lieferungen können erst danach stattfinden.',
+    's3.last':'{p} ist der letzte Abnehmer und holt die Ware ab bzw. lässt sie abholen. Dann gehört die Warenbewegung zur Lieferung an ihn, also zu Lieferung {k} von {q} (§ 3 Abs. 6a Satz 3 UStG). Folgerichtig: {p} übernimmt die Ware schon beim Abholen, alle Lieferungen davor sind zu diesem Zeitpunkt bereits „ruhend“ erledigt.',
+    's3.mid':'{p} ist Zwischenhändler: kauft von {q} und verkauft an {r}. Für Zwischenhändler, die transportieren, gilt eine gesetzliche Vermutung: Die Bewegung gehört zur Lieferung <b>an</b> ihn, hier also zu Lieferung {k} von {q} an {p} (§ 3 Abs. 6a Satz 4, 1. Halbsatz UStG; Art. 36a Abs. 1 MwStSystRL). Er wird damit wie ein Abnehmer behandelt, der die Ware abholt.',
+    's3.mid.vat':'Widerlegen lässt sich die Vermutung nur, wenn {p} gegenüber seinem Lieferer {q} vor Beginn des Transports die USt-IdNr. des Abgangslands {from} verwendet ({law}). {p} verwendet hier {vt} – deshalb bleibt es bei der Vermutung.',
+    's3.mid.vatExport':'Widerlegen lässt sich die Vermutung nur, wenn {p} gegenüber seinem Lieferer {q} vor Beginn des Transports eine USt-IdNr. oder Steuernummer des Abgangslands {from} verwendet (§ 3 Abs. 6a Satz 6 UStG). {p} verwendet hier {vt} – deshalb bleibt es bei der Vermutung.',
+    's3.mid.import':'Bei einer Einfuhr lässt sich die Vermutung nur widerlegen, wenn die Ware im Namen von {p} (oder in indirekter Vertretung für seine Rechnung) zum zollrechtlich freien Verkehr angemeldet wird (§ 3 Abs. 6a Satz 7 UStG). Angemeldet wird hier durch {imp} – deshalb bleibt es bei der Vermutung.',
+    's3.mid.outside':'Für Fälle nur zwischen Drittländern gibt es keine EU-Regel; der Rechner folgt der Grundregel.',
+    's3.sup.vat':'{p} ist Zwischenhändler und transportiert. Er verwendet gegenüber seinem Lieferer {q} die USt-IdNr. aus {from}, also aus dem Land, in dem der Transport beginnt. Damit zeigt er, dass er „als Lieferer“ transportiert: Die Bewegung gehört zu seiner eigenen Lieferung, Lieferung {k} von {p} an {r} (§ 3 Abs. 6a Satz 4, 2. Halbsatz und {law}). Diese Wahl ist bewusst gestaltbar. {p} sollte sie {q} vor Beginn des Transports nachweisbar mitteilen (Abschnitt 3.14 Abs. 10 UStAE).',
+    's3.sup.vatExport':'{p} ist Zwischenhändler und transportiert. Er verwendet gegenüber seinem Lieferer {q} die USt-IdNr. aus {from}, also aus dem Land, in dem der Transport beginnt. Damit transportiert er „als Lieferer“: Die Bewegung gehört zu seiner eigenen Lieferung, Lieferung {k} von {p} an {r} (§ 3 Abs. 6a Satz 4, 2. Halbsatz und Satz 6 UStG). {p} sollte das {q} vor Beginn des Transports nachweisbar mitteilen.',
+    's3.sup.import':'{p} ist Zwischenhändler, transportiert und meldet die Ware selbst zum freien Verkehr an. Damit tritt er als Lieferer auf: Die Bewegung gehört zu seiner eigenen Lieferung, Lieferung {k} von {p} an {r} (§ 3 Abs. 6a Satz 4, 2. Halbsatz und Satz 7 UStG).',
+    'law.s5':'Satz 5 UStG; Art. 36a Abs. 2 MwStSystRL',
+    's3.why':'Warum das zählt: Nur die bewegte Lieferung kann steuerfrei sein. Wer den Transport übernimmt – und mit welcher USt-IdNr. ein Zwischenhändler auftritt –, entscheidet damit, wo die anderen Beteiligten Steuer zahlen und sich registrieren müssen. Unter „Was wäre, wenn …?“ stehen die Alternativen.',
+    's4.h':'4. Wo findet jede Lieferung statt?',
+    's4.moved':'<b>Lieferung {k}</b> ({p} → {q}) ist die bewegte Lieferung. Sie gilt dort als ausgeführt, wo der Transport beginnt: in {c} (§ 3 Abs. 6 Satz 1 UStG; Art. 32 MwStSystRL).',
+    's4.shifted':'<b>Lieferung {k}</b> ({p} → {q}) ist die bewegte Lieferung. Eigentlich läge ihr Ort im Drittland {from}, wo der Transport beginnt. Weil aber {p} als Lieferer die Ware selbst zur Einfuhr anmeldet und die Einfuhrumsatzsteuer schuldet, verlagert sich der Ort ins Einfuhrland {to} (§ 3 Abs. 8 UStG; Art. 32 Abs. 2 MwStSystRL). Dahinter steht: Wer die Ware in der EU verzollt, liefert sie auch dort.',
+    's4.noShift':'Eine Verlagerung des Orts nach {to} (§ 3 Abs. 8 UStG) gibt es hier nicht, weil nicht der Lieferer {p}, sondern {imp} die Ware zur Einfuhr anmeldet.',
+    's4.before':'<b>Lieferung {k}</b> ({p} → {q}) kommt vor der bewegten Lieferung. Sie ist ruhend und findet dort statt, wo der Transport beginnt: in {c} (§ 3 Abs. 7 Satz 2 Nr. 1 UStG; Art. 31 MwStSystRL). Zu diesem Zeitpunkt liegt die Ware noch dort.',
+    's4.after':'<b>Lieferung {k}</b> ({p} → {q}) folgt der bewegten Lieferung. Sie ist ruhend und findet dort statt, wo der Transport endet: in {c} (§ 3 Abs. 7 Satz 2 Nr. 2 UStG; Art. 31 MwStSystRL). Die Ware ist dann schon angekommen.',
+    's5.h':'5. Steuerfrei oder steuerpflichtig?',
+    's5.ic':'<b>Lieferung {k}</b> ist eine steuerfreie innergemeinschaftliche Lieferung (§ 4 Nr. 1 Buchst. b, § 6a UStG; Art. 138 MwStSystRL). Die Ware gelangt von {from} nach {to}, und {q} verwendet eine USt-IdNr. aus {v} – einem anderen Mitgliedstaat als dem Abgangsland. Das ist seit 2020 eine echte Voraussetzung, keine Formsache. Außerdem muss {p} die Lieferung in der Zusammenfassenden Meldung angeben und nachweisen, dass die Ware angekommen ist (Gelangensbestätigung oder Belege nach Art. 45a MwSt-Durchführungsverordnung).',
+    's5.ic-fail.noVat':'<b>Lieferung {k}</b> wäre als bewegte Lieferung grundsätzlich steuerfrei, aber {q} verwendet keine USt-IdNr. Ohne USt-IdNr. eines anderen Mitgliedstaats gibt es keine Steuerbefreiung (§ 6a Abs. 1 Satz 1 Nr. 4 UStG; Art. 138 Abs. 1 Buchst. b MwStSystRL): {p} muss die Lieferung in {c} mit {rate} versteuern. Abhilfe: {q} lässt sich registrieren und teilt seine USt-IdNr. vor der Lieferung mit.',
+    's5.ic-fail.sameVat':'<b>Lieferung {k}</b> wäre als bewegte Lieferung grundsätzlich steuerfrei, aber {q} verwendet die USt-IdNr. des Abgangslands {from}. Steuerfrei ist nur eine Lieferung an einen Abnehmer mit USt-IdNr. eines <b>anderen</b> Mitgliedstaats (§ 6a Abs. 1 Satz 1 Nr. 4 UStG): {p} muss in {c} mit {rate} versteuern. Abhilfe: {q} verwendet seine USt-IdNr. aus einem anderen Land, am besten aus {to}.',
+    's5.export.supplier':'<b>Lieferung {k}</b> ist eine steuerfreie Ausfuhrlieferung (§ 4 Nr. 1 Buchst. a, § 6 Abs. 1 Satz 1 Nr. 1 UStG; Art. 146 Abs. 1 Buchst. a MwStSystRL): Der Lieferer {p} bringt die Ware selbst ins Drittland {to}. Nachweis ist der Ausgangsvermerk des Zolls zur elektronischen Ausfuhranmeldung.',
+    's5.export.customer':'<b>Lieferung {k}</b> ist eine steuerfreie Ausfuhrlieferung (§ 4 Nr. 1 Buchst. a, § 6 Abs. 1 Satz 1 Nr. 2 UStG; Art. 146 Abs. 1 Buchst. b MwStSystRL): Der Abnehmer {q} bringt die Ware selbst ins Drittland {to} und ist im Abgangsland {from} nicht ansässig („ausländischer Abnehmer“). Nachweis ist der Ausgangsvermerk des Zolls.',
+    's5.export-fail':'<b>Lieferung {k}</b> ist die bewegte Lieferung ins Drittland, aber der Abnehmer {q} holt die Ware selbst ab und ist im Abgangsland {from} ansässig. Dann gibt es keine Steuerbefreiung, denn § 6 Abs. 1 Satz 1 Nr. 2 UStG verlangt einen ausländischen Abnehmer: {p} versteuert in {c} mit {rate}. Abhilfe: {p} übernimmt den Transport selbst.',
+    's5.taxable':'<b>Lieferung {k}</b> ist in {c} steuerbar und steuerpflichtig – eine ganz normale Inlandslieferung dort. {p} stellt eine Rechnung mit {rate} Umsatzsteuer aus {c} aus und schuldet die Steuer; {q} kann sie als Vorsteuer abziehen.',
+    's5.taxable.foreign':'Weil {p} nicht in {c} ansässig ist, braucht {p} dort eine umsatzsteuerliche Registrierung. Manche Länder lassen bei ausländischen Lieferern stattdessen den Abnehmer die Steuer schulden – in Deutschland gilt das für reine Warenlieferungen nicht.',
+    's5.triangle':'<b>Lieferung {k}</b> ist in {c} steuerbar. Weil die Vereinfachung für Dreiecksgeschäfte greift (Schritt 6), schuldet nicht {p}, sondern der letzte Abnehmer {q} die Steuer (§ 25b Abs. 2 UStG; Art. 197 MwStSystRL). {p} stellt eine Rechnung ohne Umsatzsteuer mit Hinweis auf das Dreiecksgeschäft aus und braucht in {c} keine Registrierung.',
+    's5.outside':'<b>Lieferung {k}</b> findet im Drittland {c} statt und ist in der EU nicht steuerbar. Ob dort Steuer anfällt, richtet sich nach dem Recht von {c}; das prüft der Rechner nicht.',
+    's5.acq':'Als Gegenstück zur steuerfreien Lieferung versteuert {q} in {to} einen innergemeinschaftlichen Erwerb (§ 1a, § 3d Satz 1 UStG; Art. 20, 40 MwStSystRL): Erwerbsteuer anmelden und – bei vollem Vorsteuerabzug – im selben Zug als Vorsteuer abziehen. Unterm Strich kostet das meist nichts, aber {q} braucht dafür eine Registrierung in {to}.',
+    's5.acq.double':'Achtung: {q} verwendet die USt-IdNr. aus {v} statt aus {to}. Dann gilt der Erwerb zusätzlich in {v} als bewirkt, bis {q} nachweist, dass er in {to} besteuert wurde – und für diese zweite Erwerbsteuer gibt es keinen Vorsteuerabzug (§ 3d Satz 2 UStG; Art. 41 MwStSystRL; EuGH, Rs. C-536/08 und C-539/08). Besser: die USt-IdNr. aus {to} verwenden.',
+    's5.acq.deemed':'{q} erwirbt die Ware innergemeinschaftlich in {to}. Durch das Dreiecksgeschäft gilt dieser Erwerb als besteuert (§ 25b Abs. 3 UStG; Art. 42 MwStSystRL) – {q} muss in {to} weder Erwerbsteuer anmelden noch sich registrieren, und der Erwerb in {v} entfällt ebenfalls.',
+    's6.h':'6. Greift die Vereinfachung für Dreiecksgeschäfte?',
+    's6.none':'Ein Dreiecksgeschäft braucht nach der bewegten Lieferung noch eine weitere Lieferung an einen letzten Abnehmer. Hier ist die bewegte Lieferung schon die letzte Lieferung der Kette – die Vereinfachung kommt nicht in Betracht.',
+    's6.intro':'Ohne Vereinfachung müsste der mittlere Unternehmer {b} sich im Bestimmungsland {to} registrieren: Er erwirbt die Ware dort und verkauft sie dort weiter. Das Dreiecksgeschäft (§ 25b UStG; Art. 141 MwStSystRL) erspart ihm das, indem der letzte Abnehmer {c} die Steuer für die Lieferung von {b} übernimmt. Geprüft wird das Trio {a} → {b} → {c}:',
+    'c.transport.ok':'Den Transport übernimmt der erste Lieferer oder der erste Abnehmer des Trios ({t}).',
+    'c.transport.no':'Den Transport muss der erste Lieferer oder der erste Abnehmer des Trios übernehmen.',
+    'c.midVat.ok':'{b} verwendet die USt-IdNr. aus {v} – weder aus dem Abgangsland {from} noch aus dem Bestimmungsland {to}. So sind drei Mitgliedstaaten beteiligt (§ 25b Abs. 1 Nr. 2, Abs. 2 Nr. 2 UStG).',
+    'c.midVat.no':'{b} braucht eine USt-IdNr. aus einem dritten Mitgliedstaat – weder aus dem Abgangsland {from} noch aus dem Bestimmungsland {to} (§ 25b Abs. 2 Nr. 2 UStG). Verwendet wird: {vt}.',
+    'c.midNotEstablished.ok':'{b} ist im Bestimmungsland {to} nicht ansässig (Sitz in {pc}).',
+    'c.midNotEstablished.no':'{b} hat seinen Sitz im Bestimmungsland {to}. Dort ansässige Unternehmen können die Vereinfachung nicht nutzen (§ 25b Abs. 2 Nr. 2 UStG) – sie sind dort ohnehin registriert.',
+    'c.lastVat.ok':'{c} verwendet die USt-IdNr. des Bestimmungslands {to} und kann die Steuer dort anmelden (§ 25b Abs. 2 Nr. 4 UStG).',
+    'c.lastVat.no':'{c} muss die USt-IdNr. des Bestimmungslands {to} verwenden, um die Steuer übernehmen zu können (§ 25b Abs. 2 Nr. 4 UStG). Verwendet wird: {vt}.',
+    'c.position.three':'Die Kette besteht aus genau drei Unternehmen.',
+    'c.position.end':'Das Trio steht am Ende der Kette, so wie es die deutsche Finanzverwaltung bei längeren Ketten verlangt (Abschnitt 25b.1 Abs. 2 UStAE).',
+    'c.position.eug':'Das Trio steht am Anfang der Kette. Die deutsche Finanzverwaltung erkennt das bisher nicht an (Abschnitt 25b.1 Abs. 2 UStAE), das Gericht der EU aber schon (Urteil vom 3. Dezember 2025, T-646/24). Eingestellt ist, dem Urteil zu folgen – das am besten mit der Steuerberatung abstimmen.',
+    'c.position.no':'Das Trio steht nicht am Ende der Kette. Die deutsche Finanzverwaltung erkennt ein Dreiecksgeschäft in längeren Ketten nur für die letzten drei Unternehmen an (Abschnitt 25b.1 Abs. 2 UStAE). Das Gericht der EU sieht das anders (Urteil vom 3. Dezember 2025, T-646/24) – darunter lässt sich die Auswertung nach dem Urteil einschalten.',
+    'eug':'Nach dem EuG-Urteil T-646/24 auswerten (Dreieck auch am Anfang der Kette)',
+    's6.yes':'Alle Voraussetzungen sind erfüllt: <b>Die Vereinfachung greift.</b> Wichtig für {b}: Auf der Rechnung an {c} muss ausdrücklich auf das Dreiecksgeschäft und die Steuerschuld von {c} hingewiesen werden (§ 14a Abs. 7 UStG), und die Lieferung muss in der Zusammenfassenden Meldung als Dreiecksgeschäft gekennzeichnet sein. Fehlt der Rechnungshinweis, ist die Vereinfachung nach dem EuGH verloren und lässt sich auch nicht rückwirkend nachholen (Rs. C-247/21, Luxury Trust Automobil).',
+    's6.no':'Nicht alle Voraussetzungen sind erfüllt – <b>kein Dreiecksgeschäft</b>. {b} muss sich deshalb in {to} registrieren, dort den Erwerb versteuern und seine Lieferung an {c} mit Umsatzsteuer aus {to} abrechnen.',
+    's7.h':'7. Einfuhrumsatzsteuer',
+    's7':'{imp} meldet die Ware in {to} zum freien Verkehr an und schuldet die Einfuhrumsatzsteuer ({rate}; § 21 UStG; Art. 201 MwStSystRL).',
+    's7.ok':'Als Vorsteuer abziehen darf sie nur, wer bei der Einfuhr die Verfügungsmacht über die Ware hat (§ 15 Abs. 1 Satz 1 Nr. 2 UStG). Das ist hier {h} – der Anmelder selbst. Die Einfuhrumsatzsteuer ist damit für {imp} kein Kostenfaktor.',
+    's7.no':'Als Vorsteuer abziehen darf sie nur, wer bei der Einfuhr die Verfügungsmacht über die Ware hat (§ 15 Abs. 1 Satz 1 Nr. 2 UStG). Das ist hier {h}, nicht der Anmelder {imp}. {imp} bliebe deshalb auf der Einfuhrumsatzsteuer sitzen. Besser meldet {h} die Ware an.',
+    'd.party':'{p} · {role} · Sitz {c} · {vt}',
+    'd.reg':'Registrierung','d.buy':'Einkauf (Rechnung von {p})','d.sell':'Verkauf (Rechnung an {p})','d.imp':'Einfuhr',
+    'd.reg.none':'Keine Registrierung außerhalb des Sitzlands nötig.','d.reg.home':'Im Sitzland {c}: {why}.',
+    'd.reg.need':'<b>Registrierung in {c} nötig</b>: {why}.','d.reg.has':'Registrierung in {c} nötig: {why} – vorhanden, da {p} die USt-IdNr. {v} verwendet.',
+    'd.reg.third':'Im Drittland: richtet sich nach dem dortigen Recht.',
+    'reason.sale':'steuerpflichtige Lieferung dort','reason.icSupply':'steuerfreie innergemeinschaftliche Lieferung von dort','reason.export':'Ausfuhrlieferung von dort',
+    'reason.acquisition':'innergemeinschaftlicher Erwerb dort','reason.import':'Einfuhr dort','reason.triangleReport':'Zusammenfassende Meldung des Dreiecksgeschäfts','reason.triangleTax':'Steuer aus dem Dreiecksgeschäft',
+    'b.ic':'Rechnung ohne Umsatzsteuer. Innergemeinschaftlichen Erwerb in {to} anmelden: Erwerbsteuer ({rate}) und Vorsteuer in gleicher Höhe.',
+    'b.ic.de':'Deutsche Voranmeldung: Kennzahl 89 (Bemessungsgrundlage) und 61 (Vorsteuer aus dem Erwerb).',
+    'b.ic.intrastat':'Intrastat-Eingangsmeldung in {to}, wenn die Meldeschwelle überschritten ist.',
+    'b.deemed':'Rechnung ohne Umsatzsteuer. Der Erwerb in {to} gilt durch das Dreiecksgeschäft als besteuert – in {to} ist nichts anzumelden.',
+    'b.taxable':'Rechnung mit {rate} Umsatzsteuer aus {c}. Vorsteuerabzug über die Voranmeldung in {c}.',
+    'b.taxable.refund':'Rechnung mit {rate} Umsatzsteuer aus {c}. Ohne Registrierung dort: Vorsteuer im Vergütungsverfahren zurückholen (EU-Unternehmen über das Portal ihres Sitzlands, andere direkt in {c}).',
+    'b.taxable.de':'Deutsche Voranmeldung: Kennzahl 66 (Vorsteuer).',
+    'b.triangle':'Rechnung ohne Umsatzsteuer mit Hinweis auf das Dreiecksgeschäft. {p} schuldet die Steuer ({rate}) selbst, meldet sie in {c} an und zieht denselben Betrag als Vorsteuer ab.',
+    'b.triangle.de':'Deutsche Voranmeldung: Kennzahl 69 (Steuer nach § 25b Abs. 2 UStG) und 66 (Vorsteuer).',
+    'b.export':'Rechnung ohne Umsatzsteuer (Ausfuhr). Die Einfuhr in {to} richtet sich nach dem Recht von {to}.',
+    'b.outside':'Einkauf im Drittland {c} – richtet sich nach dem Recht von {c}.',
+    's.ic':'Rechnung ohne Umsatzsteuer mit dem Hinweis „Steuerfreie innergemeinschaftliche Lieferung“ (§ 4 Nr. 1 Buchst. b, § 6a UStG bzw. Art. 138 MwStSystRL) und beiden USt-IdNrn.: der eigenen aus {from} und der von {q} aus {v}. Zusammenfassende Meldung in {from}, Gelangensnachweis aufbewahren, Intrastat-Versendung, wenn meldepflichtig.',
+    's.ic.de':'Deutsche Voranmeldung: Kennzahl 41.',
+    's.export':'Rechnung ohne Umsatzsteuer mit dem Hinweis „Steuerfreie Ausfuhrlieferung“ (§ 4 Nr. 1 Buchst. a, § 6 UStG bzw. Art. 146 MwStSystRL). Ausgangsvermerk des Zolls als Nachweis aufbewahren.',
+    's.export.de':'Deutsche Voranmeldung: Kennzahl 43.',
+    's.taxable':'Rechnung mit {rate} Umsatzsteuer aus {c}, unter der eigenen USt-IdNr. aus {c}. Umsatz in {c} anmelden und die Steuer abführen.',
+    's.taxable.de':'Deutsche Voranmeldung: Kennzahl 81.',
+    's.triangle':'Rechnung ohne Umsatzsteuer, mit beiden USt-IdNrn. und dem Hinweis auf das innergemeinschaftliche Dreiecksgeschäft und die Steuerschuld von {q} (§ 14a Abs. 7 UStG, Art. 226 Nr. 11a MwStSystRL), etwa: „Innergemeinschaftliches Dreiecksgeschäft nach § 25b UStG / Art. 141 MwStSystRL – Steuerschuldner ist der Leistungsempfänger“. Zusammenfassende Meldung in {v} mit dem Kennzeichen für Dreiecksgeschäfte.',
+    's.triangle.de':'Deutsche Voranmeldung: Kennzahl 42.',
+    's.outside':'Verkauf im Drittland {c} – richtet sich nach dem Recht von {c}.',
+    's.abroad.de':'In der deutschen Voranmeldung als nicht steuerbarer Umsatz in Kennzahl 45.',
+    's.asSupplier':'{p} teilt {q} vor Beginn des Transports nachweisbar mit, dass {p} die USt-IdNr. aus {from} verwendet.',
+    'i.ok':'Zollanmeldung in {to}; {p} schuldet die Einfuhrumsatzsteuer und darf sie als Vorsteuer abziehen.',
+    'i.no':'Zollanmeldung in {to}; {p} schuldet die Einfuhrumsatzsteuer, darf sie aber nicht als Vorsteuer abziehen (Verfügungsmacht hat {q}).',
+    'i.de':'Deutsche Voranmeldung: Kennzahl 62 (entstandene Einfuhrumsatzsteuer).',
+    'alt.plain':'{p} transportiert','alt.asSupplier':'{p} transportiert als Lieferer','alt.asCustomer':'{p} transportiert als Abnehmer',
+    'alt.asSupplier.vat':'mit USt-IdNr. aus {from}','alt.asSupplier.import':'meldet die Einfuhr selbst an','alt.asCustomer.vat':'mit USt-IdNr. aus {c}','alt.asCustomer.import':'{imp} meldet die Einfuhr an',
+    'alt.current':'aktuelle Eingabe','alt.moved':'bewegt: Lieferung {k}','alt.exempt':'steuerfrei','alt.notExempt':'nicht steuerfrei','alt.triangle':'Dreiecksgeschäft',
+    'alt.noReg':'keine Registrierung im Ausland','alt.regs':'Registrierung: {list}','alt.in':'{p} in {c}',
+    'copied':'Auswertung kopiert','copyFail':'Kopieren nicht möglich','reset.done':'Neuer Fall','undo':'Rückgängig','example.done':'Beispiel geladen',
+    'mcp.analyze':'Fall eingetragen',
+  },
+  en:{
+    title:'Chain Transaction',sub:'VAT on supply chains – every step explained.',
+    'h.parties':'Companies involved','parties.intro':'In the order of the invoices: U1 sells to U2, U2 to U3 and so on. The goods themselves travel in a single transport directly from the first to the last company.',
+    'count.label':'Number of companies','count.3':'3 companies','count.4':'4 companies',
+    'h.goods':'Route and transport',from:'Goods start in',to:'Goods end in',transport:'Who carries or ships the goods?',
+    'transport.hint':'This means whoever drives or hires the forwarder and bears the risk for the goods. Who pays the freight usually does not matter.',
+    importer:'Who declares the goods for release into free circulation on import?',
+    'importer.hint':'Whoever acts as declarant in the customs declaration (directly or through a forwarder as indirect representative). This company owes the import VAT.',
+    'h.result':'Result',copy:'Copy assessment','h.why':'Reasoning step by step','h.duties':'What each company has to do',
+    'duties.intro':'Registration, invoice and returns from the point of view of each company. Box numbers are shown where the return is filed in Germany.',
+    'h.alt':'What if …?','alt.intro':'The same case with another company handling the transport. This often avoids a registration abroad. Tap to take over the variant.',
+    'ex.triangle':'Example: triangulation DE → AT → IT','ex.supplier':'Example: intermediary with German VAT ID','ex.export':'Example: export to Switzerland',
+    'ex.import':'Example: import from China','ex.four':'Example: four companies, triangle at the start',reset:'Start over',
+    'role.first':'first supplier','role.mid':'intermediary','role.last':'last customer',
+    'party.legend':'{p} · {role}','party.country':'Country of {p}','party.vat':'{p} uses the VAT ID of',
+    'vat.none':'no VAT ID','grp.eu':'EU','grp.third':'Non-EU countries','same.first':'as U1’s country ({c})','same.last':'as {p}’s country ({c})',
+    'vatShort':'VAT ID {v}','vatShort.none':'no VAT ID','seat':'based in {c}',
+    'transportBy':'{p} transports','transporter':'transports','declares':'declares import',
+    'supply':'Supply {k}: {p} → {q}','movedTag':'moved','restingTag':'resting',
+    'route':'Route: <b>{from} → {to}</b> ({kind}), transport by <b>{p}</b>.',
+    'kind.intra':'intra-Community','kind.domestic':'within one country','kind.export':'export','kind.import':'import','kind.outside':'non-EU only',
+    'tr.ic':'Place {c} · exempt intra-Community supply','tr.ic-fail':'Place {c} · not exempt: {rate} VAT of {c}',
+    'tr.export':'Place {c} · exempt export','tr.export-fail':'Place {c} · not exempt: {rate} VAT of {c}',
+    'tr.taxable':'Place {c} · taxable: {rate} VAT of {c}','tr.triangle':'Place {c} · triangulation: {q} owes {rate} VAT of {c}',
+    'tr.outside':'Place {c} (non-EU) · outside the scope of EU VAT',
+    'sum.moved':'The moved supply is <b>supply {k}</b> from {p} to {q}.',
+    'sum.none':'Nobody has to register outside their own country.',
+    'sum.reg':'<b>{p}</b> has to register for VAT in <b>{c}</b>.','sum.regHas':'{p} needs a registration in {c} – already there, as {p} uses the VAT ID {v}.',
+    'sum.triangle':'The triangulation simplification applies: {b} needs no registration in {to}.',
+    'sum.outside':'The goods only move between non-EU countries. Nothing has to be taxed or reported in the EU.',
+    'warn.icFail':'The moved supply is not exempt because {p} does not use a VAT ID of a member state other than {from}. On top, an acquisition may be taxed in the country of arrival – double taxation.',
+    'warn.exportFail':'The export is not exempt because {p} collects the goods itself and is established in the country of departure {from}.',
+    'warn.doubleAcq':'{p} uses the VAT ID of {c} instead of {to}: the acquisition is then also deemed to take place in {c} (double acquisition).',
+    'warn.eustNoDeduct':'{p} owes the import VAT but may not deduct it – at import the right to dispose of the goods lies with {q}.',
+    's1.h':'1. Is this a chain transaction?',
+    's1':'{n} companies sell the same goods one after the other ({chain}), and the goods travel in a single transport directly from the first supplier {first} to the last customer {last}. That is a chain transaction (§ 3 (6a) sentence 1 UStG, Art. 36a VAT Directive).',
+    's1b':'For VAT each invoice still counts as a supply of its own – {k} supplies here. The crux: the goods move only once, so only <b>one</b> of these supplies can be the “moved” one. Only that one can be exempt as an intra-Community supply or an export. All others are “resting” supplies, taxed normally in the country of departure or arrival. That is why it pays to know exactly which supply is moved.',
+    's2.h':'2. Where do the goods go?',
+    's2.intra':'The goods start in {from} and end in {to} – two different EU member states. So this is an intra-Community movement of goods. The system behind it: the moved supply is exempt in the country of departure, and its customer instead declares an intra-Community acquisition in the country of arrival. That way the tax ends up where the goods arrive and are used.',
+    's2.domestic':'The goods stay in {from}; they cross no border. So there is no exemption either: all supplies are taxable in {from}. The moved supply is determined for completeness but changes nothing here. What matters: whoever supplies in {from} without being established there usually needs a registration there.',
+    's2.export':'The goods leave the EU: they start in {from} and end in the non-EU country {to}. The moved supply can be exempt as an export (§ 4 No. 1 (a), § 6 UStG; Art. 146 VAT Directive), because the goods are consumed outside the EU. Supplies before it remain taxable in {from}; supplies after it take place in the non-EU country and follow its law.',
+    's2.import':'The goods come from the non-EU country {from} into the EU, to {to}. On import, import VAT arises, owed by the declarant. Supplies still taking place in the non-EU country are outside the scope of EU VAT; supplies after the import are taxable in {to}. Who declares the goods to customs helps decide which supply is moved and where it takes place.',
+    's2.outside':'The goods only move between non-EU countries ({from} → {to}) and do not touch the EU. The EU rules on chain transactions do not apply; only the law of the countries involved does. The calculator therefore only shows that nothing is taxed in the EU.',
+    's2.startElsewhere':'At the start the goods are not in U1’s country ({c}) but in {from} – e.g. in a warehouse. What counts is always where the transport actually starts. U1 therefore supplies from {from} and needs a registration there.',
+    's2.endElsewhere':'The goods do not end in {p}’s country ({c}) but in {to}. What counts is the country where the transport actually ends.',
+    's3.h':'3. Which supply is the moved one?',
+    's3.def':'“Transporting” means carrying the goods oneself or hiring a forwarder or carrier. What counts is who arranges the transport and bears the risk for the goods – not who pays the freight.',
+    's3.first':'{p} is the first supplier and transports itself. Then the movement belongs to its own supply, i.e. supply 1 to {q} (§ 3 (6a) sentence 2 UStG). That is logical: a supplier who transports itself only hands over the goods at the end of the transport – all later supplies can only happen afterwards.',
+    's3.last':'{p} is the last customer and collects the goods or has them collected. Then the movement belongs to the supply to it, i.e. supply {k} from {q} (§ 3 (6a) sentence 3 UStG). Logical: {p} takes over the goods when collecting them; all supplies before it are already “resting” at that time.',
+    's3.mid':'{p} is an intermediary: buys from {q} and sells to {r}. For intermediaries that transport there is a legal presumption: the movement belongs to the supply <b>to</b> it, here supply {k} from {q} to {p} (§ 3 (6a) sentence 4, first half UStG; Art. 36a (1) VAT Directive). It is treated like a customer collecting the goods.',
+    's3.mid.vat':'The presumption is rebutted only if {p} uses the VAT ID of the country of departure {from} towards its supplier {q} before the transport starts ({law}). {p} uses {vt} here – so the presumption stands.',
+    's3.mid.vatExport':'The presumption is rebutted only if {p} uses a VAT ID or tax number of the country of departure {from} towards its supplier {q} before the transport starts (§ 3 (6a) sentence 6 UStG). {p} uses {vt} here – so the presumption stands.',
+    's3.mid.import':'For an import the presumption is rebutted only if the goods are declared for release into free circulation in the name of {p} (or by an indirect representative on its behalf) (§ 3 (6a) sentence 7 UStG). Here {imp} declares – so the presumption stands.',
+    's3.mid.outside':'There is no EU rule for cases only between non-EU countries; the calculator follows the basic rule.',
+    's3.sup.vat':'{p} is an intermediary and transports. Towards its supplier {q} it uses the VAT ID of {from}, the country where the transport starts. That shows it transports “as supplier”: the movement belongs to its own supply, supply {k} from {p} to {r} (§ 3 (6a) sentence 4, second half and {law}). This choice can be made on purpose. {p} should tell {q} in a verifiable way before the transport starts (UStAE 3.14 (10)).',
+    's3.sup.vatExport':'{p} is an intermediary and transports. Towards its supplier {q} it uses the VAT ID of {from}, the country where the transport starts. So it transports “as supplier”: the movement belongs to its own supply, supply {k} from {p} to {r} (§ 3 (6a) sentence 4, second half and sentence 6 UStG). {p} should tell {q} in a verifiable way before the transport starts.',
+    's3.sup.import':'{p} is an intermediary, transports and declares the goods for free circulation itself. So it acts as supplier: the movement belongs to its own supply, supply {k} from {p} to {r} (§ 3 (6a) sentence 4, second half and sentence 7 UStG).',
+    'law.s5':'sentence 5 UStG; Art. 36a (2) VAT Directive',
+    's3.why':'Why this matters: only the moved supply can be exempt. Who handles the transport – and which VAT ID an intermediary uses – decides where the others pay tax and have to register. “What if …?” shows the alternatives.',
+    's4.h':'4. Where does each supply take place?',
+    's4.moved':'<b>Supply {k}</b> ({p} → {q}) is the moved supply. It takes place where the transport starts: in {c} (§ 3 (6) sentence 1 UStG; Art. 32 VAT Directive).',
+    's4.shifted':'<b>Supply {k}</b> ({p} → {q}) is the moved supply. Its place would be the non-EU country {from}, where the transport starts. But because the supplier {p} declares the import itself and owes the import VAT, the place shifts to the country of import {to} (§ 3 (8) UStG; Art. 32 (2) VAT Directive). The idea: whoever clears the goods in the EU also supplies them there.',
+    's4.noShift':'The place does not shift to {to} (§ 3 (8) UStG) because not the supplier {p} but {imp} declares the import.',
+    's4.before':'<b>Supply {k}</b> ({p} → {q}) comes before the moved supply. It is resting and takes place where the transport starts: in {c} (§ 3 (7) sentence 2 No. 1 UStG; Art. 31 VAT Directive). At that time the goods are still there.',
+    's4.after':'<b>Supply {k}</b> ({p} → {q}) follows the moved supply. It is resting and takes place where the transport ends: in {c} (§ 3 (7) sentence 2 No. 2 UStG; Art. 31 VAT Directive). The goods have already arrived.',
+    's5.h':'5. Exempt or taxable?',
+    's5.ic':'<b>Supply {k}</b> is an exempt intra-Community supply (§ 4 No. 1 (b), § 6a UStG; Art. 138 VAT Directive). The goods go from {from} to {to}, and {q} uses a VAT ID of {v} – a member state other than the country of departure. Since 2020 that is a real condition, not a formality. {p} also has to report the supply in the recapitulative statement and prove that the goods arrived (proof of arrival or evidence under Art. 45a of the VAT Implementing Regulation).',
+    's5.ic-fail.noVat':'<b>Supply {k}</b> would in principle be exempt as the moved supply, but {q} uses no VAT ID. Without a VAT ID of another member state there is no exemption (§ 6a (1) sentence 1 No. 4 UStG; Art. 138 (1) (b) VAT Directive): {p} has to charge {rate} VAT in {c}. Remedy: {q} registers and gives its VAT ID before the supply.',
+    's5.ic-fail.sameVat':'<b>Supply {k}</b> would in principle be exempt as the moved supply, but {q} uses the VAT ID of the country of departure {from}. Only a supply to a customer with a VAT ID of <b>another</b> member state is exempt (§ 6a (1) sentence 1 No. 4 UStG): {p} has to charge {rate} VAT in {c}. Remedy: {q} uses its VAT ID of another country, ideally {to}.',
+    's5.export.supplier':'<b>Supply {k}</b> is an exempt export (§ 4 No. 1 (a), § 6 (1) sentence 1 No. 1 UStG; Art. 146 (1) (a) VAT Directive): the supplier {p} takes the goods to the non-EU country {to} itself. Evidence is the customs exit confirmation of the electronic export declaration.',
+    's5.export.customer':'<b>Supply {k}</b> is an exempt export (§ 4 No. 1 (a), § 6 (1) sentence 1 No. 2 UStG; Art. 146 (1) (b) VAT Directive): the customer {q} takes the goods to the non-EU country {to} itself and is not established in the country of departure {from} (“foreign customer”). Evidence is the customs exit confirmation.',
+    's5.export-fail':'<b>Supply {k}</b> is the moved supply to the non-EU country, but the customer {q} collects the goods itself and is established in the country of departure {from}. Then there is no exemption, as § 6 (1) sentence 1 No. 2 UStG requires a foreign customer: {p} charges {rate} VAT in {c}. Remedy: {p} handles the transport itself.',
+    's5.taxable':'<b>Supply {k}</b> is taxable in {c} – an ordinary domestic supply there. {p} issues an invoice with {rate} VAT of {c} and owes the tax; {q} can deduct it as input VAT.',
+    's5.taxable.foreign':'As {p} is not established in {c}, {p} needs a VAT registration there. Some countries let the customer owe the tax instead when the supplier is foreign – Germany does not for plain supplies of goods.',
+    's5.triangle':'<b>Supply {k}</b> is taxable in {c}. Because the triangulation simplification applies (step 6), not {p} but the last customer {q} owes the tax (§ 25b (2) UStG; Art. 197 VAT Directive). {p} issues an invoice without VAT referring to triangulation and needs no registration in {c}.',
+    's5.outside':'<b>Supply {k}</b> takes place in the non-EU country {c} and is outside the scope of EU VAT. Whether tax arises there depends on the law of {c}; the calculator does not check that.',
+    's5.acq':'As the counterpart of the exempt supply, {q} declares an intra-Community acquisition in {to} (§ 1a, § 3d sentence 1 UStG; Art. 20, 40 VAT Directive): report the acquisition VAT and – with full input VAT deduction – deduct it at the same time. On balance this usually costs nothing, but {q} needs a registration in {to} for it.',
+    's5.acq.double':'Caution: {q} uses the VAT ID of {v} instead of {to}. The acquisition is then also deemed to take place in {v} until {q} proves it was taxed in {to} – and this second acquisition VAT cannot be deducted (§ 3d sentence 2 UStG; Art. 41 VAT Directive; CJEU C-536/08 and C-539/08). Better: use the VAT ID of {to}.',
+    's5.acq.deemed':'{q} acquires the goods intra-Community in {to}. Through triangulation this acquisition is deemed taxed (§ 25b (3) UStG; Art. 42 VAT Directive) – {q} neither declares acquisition VAT in {to} nor registers there, and the acquisition in {v} falls away too.',
+    's6.h':'6. Does the triangulation simplification apply?',
+    's6.none':'Triangulation needs one more supply to a last customer after the moved supply. Here the moved supply is already the last supply of the chain – the simplification is not possible.',
+    's6.intro':'Without the simplification the middle company {b} would have to register in the country of arrival {to}: it acquires the goods there and sells them on there. Triangulation (§ 25b UStG; Art. 141 VAT Directive) spares it that, as the last customer {c} takes over the tax for {b}’s supply. The trio {a} → {b} → {c} is checked:',
+    'c.transport.ok':'The transport is handled by the first supplier or the first customer of the trio ({t}).',
+    'c.transport.no':'The transport has to be handled by the first supplier or the first customer of the trio.',
+    'c.midVat.ok':'{b} uses the VAT ID of {v} – neither of the country of departure {from} nor of the country of arrival {to}. So three member states are involved (§ 25b (1) No. 2, (2) No. 2 UStG).',
+    'c.midVat.no':'{b} needs a VAT ID of a third member state – neither of the country of departure {from} nor of the country of arrival {to} (§ 25b (2) No. 2 UStG). Used: {vt}.',
+    'c.midNotEstablished.ok':'{b} is not established in the country of arrival {to} (based in {pc}).',
+    'c.midNotEstablished.no':'{b} is based in the country of arrival {to}. Companies established there cannot use the simplification (§ 25b (2) No. 2 UStG) – they are registered there anyway.',
+    'c.lastVat.ok':'{c} uses the VAT ID of the country of arrival {to} and can declare the tax there (§ 25b (2) No. 4 UStG).',
+    'c.lastVat.no':'{c} has to use the VAT ID of the country of arrival {to} to take over the tax (§ 25b (2) No. 4 UStG). Used: {vt}.',
+    'c.position.three':'The chain consists of exactly three companies.',
+    'c.position.end':'The trio is at the end of the chain, as the German tax authorities require for longer chains (UStAE 25b.1 (2)).',
+    'c.position.eug':'The trio is at the start of the chain. The German tax authorities do not accept that so far (UStAE 25b.1 (2)), but the EU General Court does (judgment of 3 December 2025, T-646/24). The setting is to follow the judgment – best agree this with your tax adviser.',
+    'c.position.no':'The trio is not at the end of the chain. The German tax authorities accept triangulation in longer chains only for the last three companies (UStAE 25b.1 (2)). The EU General Court disagrees (judgment of 3 December 2025, T-646/24) – below, the assessment under the judgment can be switched on.',
+    eug:'Assess under the General Court judgment T-646/24 (triangle also at the start of the chain)',
+    's6.yes':'All conditions are met: <b>the simplification applies.</b> Important for {b}: the invoice to {c} must expressly refer to triangulation and to {c} owing the tax (§ 14a (7) UStG), and the supply must be flagged as triangulation in the recapitulative statement. Without the invoice note the simplification is lost according to the CJEU and cannot be repaired afterwards (C-247/21, Luxury Trust Automobil).',
+    's6.no':'Not all conditions are met – <b>no triangulation</b>. {b} therefore has to register in {to}, declare the acquisition there and charge VAT of {to} on its supply to {c}.',
+    's7.h':'7. Import VAT',
+    's7':'{imp} declares the goods for free circulation in {to} and owes the import VAT ({rate}; § 21 UStG; Art. 201 VAT Directive).',
+    's7.ok':'Only the company holding the right to dispose of the goods at import may deduct it as input VAT (§ 15 (1) sentence 1 No. 2 UStG). Here that is {h} – the declarant itself. So the import VAT is no cost for {imp}.',
+    's7.no':'Only the company holding the right to dispose of the goods at import may deduct it as input VAT (§ 15 (1) sentence 1 No. 2 UStG). Here that is {h}, not the declarant {imp}. {imp} would therefore be stuck with the import VAT. Better have {h} declare the goods.',
+    'd.party':'{p} · {role} · based in {c} · {vt}',
+    'd.reg':'Registration','d.buy':'Purchase (invoice from {p})','d.sell':'Sale (invoice to {p})','d.imp':'Import',
+    'd.reg.none':'No registration needed outside its own country.','d.reg.home':'In its own country {c}: {why}.',
+    'd.reg.need':'<b>Registration in {c} needed</b>: {why}.','d.reg.has':'Registration in {c} needed: {why} – already there, as {p} uses the VAT ID {v}.',
+    'd.reg.third':'In the non-EU country: depends on the law there.',
+    'reason.sale':'taxable supply there','reason.icSupply':'exempt intra-Community supply from there','reason.export':'export from there',
+    'reason.acquisition':'intra-Community acquisition there','reason.import':'import there','reason.triangleReport':'recapitulative statement for triangulation','reason.triangleTax':'tax from triangulation',
+    'b.ic':'Invoice without VAT. Declare the intra-Community acquisition in {to}: acquisition VAT ({rate}) and input VAT of the same amount.',
+    'b.ic.de':'German VAT return: box 89 (taxable amount) and 61 (input VAT on the acquisition).',
+    'b.ic.intrastat':'Intrastat arrivals declaration in {to} if the threshold is exceeded.',
+    'b.deemed':'Invoice without VAT. Through triangulation the acquisition in {to} is deemed taxed – nothing to declare in {to}.',
+    'b.taxable':'Invoice with {rate} VAT of {c}. Input VAT deduction via the VAT return in {c}.',
+    'b.taxable.refund':'Invoice with {rate} VAT of {c}. Without a registration there: reclaim the input VAT in the refund procedure (EU companies via the portal of their own country, others directly in {c}).',
+    'b.taxable.de':'German VAT return: box 66 (input VAT).',
+    'b.triangle':'Invoice without VAT referring to triangulation. {p} owes the tax ({rate}) itself, declares it in {c} and deducts the same amount as input VAT.',
+    'b.triangle.de':'German VAT return: box 69 (tax under § 25b (2) UStG) and 66 (input VAT).',
+    'b.export':'Invoice without VAT (export). The import into {to} follows the law of {to}.',
+    'b.outside':'Purchase in the non-EU country {c} – follows the law of {c}.',
+    's.ic':'Invoice without VAT stating “Exempt intra-Community supply” (§ 4 No. 1 (b), § 6a UStG or Art. 138 VAT Directive) and both VAT IDs: its own of {from} and that of {q} of {v}. Recapitulative statement in {from}, keep the proof of arrival, Intrastat dispatch if required.',
+    's.ic.de':'German VAT return: box 41.',
+    's.export':'Invoice without VAT stating “Exempt export” (§ 4 No. 1 (a), § 6 UStG or Art. 146 VAT Directive). Keep the customs exit confirmation as evidence.',
+    's.export.de':'German VAT return: box 43.',
+    's.taxable':'Invoice with {rate} VAT of {c}, under its own VAT ID of {c}. Declare the sale in {c} and pay the tax.',
+    's.taxable.de':'German VAT return: box 81.',
+    's.triangle':'Invoice without VAT, with both VAT IDs and a reference to intra-Community triangulation and to {q} owing the tax (§ 14a (7) UStG, Art. 226 No. 11a VAT Directive), e.g. “Intra-Community triangular transaction, Art. 141 VAT Directive – reverse charge”. Recapitulative statement in {v} with the triangulation flag.',
+    's.triangle.de':'German VAT return: box 42.',
+    's.outside':'Sale in the non-EU country {c} – follows the law of {c}.',
+    's.abroad.de':'In the German VAT return as a sale outside the scope in box 45.',
+    's.asSupplier':'{p} tells {q} in a verifiable way before the transport starts that {p} uses the VAT ID of {from}.',
+    'i.ok':'Customs declaration in {to}; {p} owes the import VAT and may deduct it as input VAT.',
+    'i.no':'Customs declaration in {to}; {p} owes the import VAT but may not deduct it (the right to dispose lies with {q}).',
+    'i.de':'German VAT return: box 62 (import VAT incurred).',
+    'alt.plain':'{p} transports','alt.asSupplier':'{p} transports as supplier','alt.asCustomer':'{p} transports as customer',
+    'alt.asSupplier.vat':'with VAT ID of {from}','alt.asSupplier.import':'declares the import itself','alt.asCustomer.vat':'with VAT ID of {c}','alt.asCustomer.import':'{imp} declares the import',
+    'alt.current':'current input','alt.moved':'moved: supply {k}','alt.exempt':'exempt','alt.notExempt':'not exempt','alt.triangle':'triangulation',
+    'alt.noReg':'no registration abroad','alt.regs':'registration: {list}','alt.in':'{p} in {c}',
+    copied:'Assessment copied',copyFail:'Copying not possible','reset.done':'New case',undo:'Undo','example.done':'Example loaded',
+    'mcp.analyze':'Case entered',
+  }
+});
+const t=Tools.t, $=Tools.$, C=Chain.COUNTRIES;
+const LS='chain-transaction.case.v1';
+const DEFAULT={parties:[{country:'DE',vat:'DE'},{country:'AT',vat:'AT'},{country:'IT',vat:'IT'}],from:'',to:'',transport:0,importer:null,eug:false};
+const EXAMPLES={
+  triangle:DEFAULT,
+  supplier:{parties:[{country:'DE',vat:'DE'},{country:'NL',vat:'DE'},{country:'FR',vat:'FR'}],from:'',to:'',transport:1,importer:null,eug:false},
+  export:{parties:[{country:'DE',vat:'DE'},{country:'FR',vat:'FR'},{country:'CH',vat:''}],from:'',to:'',transport:1,importer:null,eug:false},
+  import:{parties:[{country:'CN',vat:''},{country:'DE',vat:'DE'},{country:'AT',vat:'AT'},{country:'FR',vat:'FR'}],from:'',to:'',transport:1,importer:null,eug:false},
+  four:{parties:[{country:'DE',vat:'DE'},{country:'AT',vat:'AT'},{country:'IT',vat:'IT'},{country:'IT',vat:'IT'}],from:'',to:'',transport:1,importer:null,eug:false},
+};
+const clone=o=>JSON.parse(JSON.stringify(o));
+// Saved case: only accepted if Chain.normalize can read it
+const loadCase=()=>{ const s=Tools.load(LS,null); return s&&!Chain.normalize(s).error?Object.assign(clone(DEFAULT),s):clone(DEFAULT); };
+let S=loadCase();
+const save=()=>Tools.save(LS,S);
+
+/* ---------- Helpers for texts ---------- */
+const lang=()=>Tools.lang()==='en'?'en':'de';
+const cn=code=>C[code]?C[code][lang()]:code;
+const U=i=>'U'+(i+1);
+const role=(i,n)=>t(i===0?'role.first':i===n-1?'role.last':'role.mid');
+const rate=x=>x==null?'':Tools.fmt(x,x%1?1:0)+' %';
+const vatText=v=>v?t('vatShort',{v:C[v].prefix}):t('vatShort.none');
+const P=(html,cls)=>`<p${cls?` class="${cls}"`:''}>${html}</p>`;
+const icon=name=>`<svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#${name}"/></svg>`;
+
+/* ---------- Inputs ---------- */
+function countryOptions(sel,value,first){
+  const groups=[['grp.eu',Chain.EU_CODES],['grp.third',Chain.THIRD_CODES]];
+  let html=first?`<option value="">${Tools.esc(first)}</option>`:'';
+  for(const [g,codes] of groups){
+    const sorted=codes.slice().sort((a,b)=>cn(a).localeCompare(cn(b),Tools.locale()));
+    html+=`<optgroup label="${Tools.esc(t(g))}">`+sorted.map(c=>`<option value="${c}">${Tools.esc(cn(c))}</option>`).join('')+'</optgroup>';
+  }
+  sel.innerHTML=html; sel.value=value;
+}
+function vatOptions(sel,value){
+  const sorted=Chain.EU_CODES.slice().sort((a,b)=>cn(a).localeCompare(cn(b),Tools.locale()));
+  sel.innerHTML=sorted.map(c=>`<option value="${c}">${Tools.esc(cn(c))} (${C[c].prefix})</option>`).join('')+`<option value="">${Tools.esc(t('vat.none'))}</option>`;
+  sel.value=value;
+}
+function renderInputs(){
+  const n=S.parties.length;
+  for(const b of document.querySelectorAll('#count button'))b.setAttribute('aria-pressed',String(+b.dataset.n===n));
+  const box=$('parties'); box.textContent='';
+  S.parties.forEach((p,i)=>{
+    const fs=document.createElement('fieldset'); fs.className='party-set';
+    fs.innerHTML=`<legend>${Tools.esc(t('party.legend',{p:U(i),role:role(i,n)}))}</legend><div class="pair">
+      <div class="form-field"><label for="pc${i}">${Tools.esc(t('party.country',{p:U(i)}))}</label><select id="pc${i}" data-i="${i}" data-f="country"></select></div>
+      <div class="form-field"><label for="pv${i}">${Tools.esc(t('party.vat',{p:U(i)}))}</label><select id="pv${i}" data-i="${i}" data-f="vat"></select></div></div>`;
+    box.appendChild(fs);
+    countryOptions(fs.querySelector('[data-f=country]'),p.country);
+    vatOptions(fs.querySelector('[data-f=vat]'),p.vat);
+  });
+  countryOptions($('from'),S.from,t('same.first',{c:cn(S.parties[0].country)}));
+  countryOptions($('to'),S.to,t('same.last',{p:U(n-1),c:cn(S.parties[n-1].country)}));
+  const segs=(id,cur)=>{ $(id).innerHTML=S.parties.map((_,i)=>`<button type="button" data-i="${i}" aria-pressed="${i===cur}">${U(i)}</button>`).join(''); };
+  segs('transport',S.transport);
+  const kind=Chain.kindOf(S.from||S.parties[0].country,S.to||S.parties[n-1].country);
+  $('importerBox').hidden=kind!=='import';
+  segs('importer',S.importer==null?S.transport:S.importer);
+}
+$('parties').addEventListener('change',e=>{
+  const el=e.target, i=+el.dataset.i, p=S.parties[i];
+  if(el.dataset.f==='country'){
+    // The VAT ID follows the country as long as it was the default (own country or none)
+    const wasDefault=p.vat===(Chain.isEU(p.country)?p.country:'');
+    p.country=el.value;
+    if(wasDefault)p.vat=Chain.isEU(p.country)?p.country:'';
+  }else p.vat=el.value;
+  changed();
+});
+$('from').addEventListener('change',e=>{ S.from=e.target.value; changed(); });
+$('to').addEventListener('change',e=>{ S.to=e.target.value; changed(); });
+for(const b of document.querySelectorAll('#count button'))b.addEventListener('click',()=>{
+  const n=+b.dataset.n;
+  if(n===S.parties.length)return;
+  if(n>S.parties.length)S.parties.splice(S.parties.length-1,0,clone(S.parties[S.parties.length-2])); // new intermediary
+  else S.parties.splice(S.parties.length-2,1);
+  if(S.transport>=n)S.transport=n-1;
+  if(S.importer!=null&&S.importer>=n)S.importer=null;
+  changed();
+});
+$('transport').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; S.transport=+b.dataset.i; S.importer=null; changed(); });
+$('importer').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; const i=+b.dataset.i; S.importer=i===S.transport?null:i; changed(); });
+
+/* ---------- Result ---------- */
+let R=null;
+function renderResult(){
+  const r=R, n=r.n, ps=r.case.parties, box=$('result');
+  let html=P(t('route',{from:cn(r.from),to:cn(r.to),kind:t('kind.'+r.kind),p:U(r.transport)}),'route');
+  html+='<ol class="chain">';
+  ps.forEach((p,i)=>{
+    const tags=[];
+    if(i===r.transport)tags.push(`<span class="badge">${icon('truck')} ${Tools.esc(t('transporter'))}</span>`);
+    if(r.import&&r.import.importer===i)tags.push(`<span class="badge">${icon('file-certificate')} ${Tools.esc(t('declares'))}</span>`);
+    html+=`<li class="party${i===r.transport?' transporter':''}"><b>${U(i)}</b><span>${Tools.esc(t('seat',{c:cn(p.country)}))} · ${Tools.esc(vatText(p.vat))}</span>${tags.join('')}</li>`;
+    if(i<n-1){
+      const s=r.supplies[i];
+      html+=`<li class="supply${s.moved?' moved':''}"><span class="head">${icon('arrow-down')}${Tools.esc(t('supply',{k:i+1,p:U(i),q:U(i+1)}))}<span class="badge${s.moved?' ok':''}">${Tools.esc(t(s.moved?'movedTag':'restingTag'))}</span></span>
+        <span class="what">${t('tr.'+s.treatment,{c:cn(s.place),rate:rate(s.rate),q:U(s.taxDebtor==null?i+1:s.taxDebtor)})}</span></li>`;
+    }
+  });
+  html+='</ol><div class="summary">';
+  if(r.kind==='outside')html+=notice('info',t('sum.outside'));
+  else{
+    const lines=[t('sum.moved',{k:r.moved+1,p:U(r.moved),q:U(r.moved+1)})];
+    const regs=Chain.foreignRegistrations(r);
+    const need=regs.filter(x=>!x.has), has=regs.filter(x=>x.has);
+    if(!regs.length)lines.push(t('sum.none'));
+    for(const x of need)lines.push(t('sum.reg',{p:U(x.party),c:cn(x.country)}));
+    for(const x of has)lines.push(t('sum.regHas',{p:U(x.party),c:cn(x.country),v:C[x.country].prefix}));
+    if(r.triangle&&r.triangle.applies)lines.push(t('sum.triangle',{b:U(r.triangle.b),to:cn(r.to)}));
+    html+=notice(need.length?'info':'ok',lines.join('<br>'));
+  }
+  for(const w of r.warnings)html+=notice('warn',warning(w,r));
+  html+='</div>';
+  box.innerHTML=html;
+}
+const notice=(kind,html)=>`<p class="notice ${kind}">${icon(kind==='warn'?'alert-triangle':kind==='ok'?'circle-check':'info-circle')}<span>${html}</span></p>`;
+function warning(w,r){
+  switch(w.code){
+    case 'icFail': return t('warn.icFail',{p:U(w.party),from:cn(r.from)});
+    case 'exportFail': return t('warn.exportFail',{p:U(w.party),from:cn(r.from)});
+    case 'doubleAcq': return t('warn.doubleAcq',{p:U(w.party),c:cn(w.country),to:cn(r.to)});
+    case 'eustNoDeduct': return t('warn.eustNoDeduct',{p:U(w.party),q:U(w.holder)});
+  }
+  return w.code;
+}
+
+/* ---------- Reasoning ---------- */
+function renderWhy(){
+  const r=R, n=r.n, ps=r.case.parties, m=r.moved, from=cn(r.from), to=cn(r.to);
+  let h=`<h3>${t('s1.h')}</h3>`;
+  h+=P(t('s1',{n,chain:ps.map((_,i)=>U(i)).join(' → '),first:U(0),last:U(n-1)}))+P(t('s1b',{k:n-1}));
+  h+=`<h3>${t('s2.h')}</h3>`+P(t('s2.'+r.kind,{from,to}));
+  if(r.from!==ps[0].country)h+=P(t('s2.startElsewhere',{c:cn(ps[0].country),from}));
+  if(r.to!==ps[n-1].country)h+=P(t('s2.endElsewhere',{p:U(n-1),c:cn(ps[n-1].country),to}));
+  if(r.kind==='outside'){ $('why').innerHTML=h; return; }
+  // 3. Moved supply
+  h+=`<h3>${t('s3.h')}</h3>`+P(t('s3.def'),'law');
+  const tp=r.transport, vars={p:U(tp),q:U(tp-1),r:U(tp+1),k:m+1,from,vt:tp>=0&&ps[tp]?vatText(ps[tp].vat):'',imp:U(r.importer==null?0:r.importer),law:t('law.s5')};
+  if(r.rule==='first')h+=P(t('s3.first',{p:U(0),q:U(1)}));
+  else if(r.rule==='last')h+=P(t('s3.last',{p:U(tp),q:U(tp-1),k:m+1}));
+  else if(r.rule==='intermediary'){
+    h+=P(t('s3.mid',vars));
+    const k=r.basis==='import'?'s3.mid.import':r.kind==='export'?'s3.mid.vatExport':r.kind==='domestic'||r.kind==='intra'?'s3.mid.vat':'s3.mid.outside';
+    h+=P(t(k,vars));
+  }else h+=P(t(r.basis==='import'?'s3.sup.import':r.kind==='export'?'s3.sup.vatExport':'s3.sup.vat',vars));
+  h+=P(t('s3.why'));
+  // 4. Places
+  h+=`<h3>${t('s4.h')}</h3>`;
+  for(const s of r.supplies){
+    const v={k:s.i+1,p:U(s.supplier),q:U(s.customer),c:cn(s.place),from,to,imp:U(r.importer==null?0:r.importer)};
+    if(s.moved){
+      h+=P(t(s.shifted?'s4.shifted':'s4.moved',v));
+      if(r.kind==='import'&&!s.shifted)h+=P(t('s4.noShift',v));
+    }else h+=P(t(s.position==='before'?'s4.before':'s4.after',v));
+  }
+  // 5. Treatment
+  h+=`<h3>${t('s5.h')}</h3>`;
+  for(const s of r.supplies){
+    const v={k:s.i+1,p:U(s.supplier),q:U(s.customer),c:cn(s.place),rate:rate(s.rate),from,to,v:ps[s.customer].vat?cn(ps[s.customer].vat):''};
+    let key='s5.'+s.treatment;
+    if(s.treatment==='ic-fail')key+='.'+s.failReason;
+    if(s.treatment==='export')key+='.'+s.exportCase;
+    if(s.treatment==='triangle')v.q=U(s.taxDebtor);
+    h+=P(t(key,v));
+    if(s.treatment==='taxable'&&ps[s.supplier].country!==s.place)h+=P(t('s5.taxable.foreign',v));
+    if(s.moved&&r.acquisition){
+      const a=r.acquisition, av={q:U(a.party),to,v:ps[a.party].vat?cn(ps[a.party].vat):''};
+      h+=P(t(a.deemed?'s5.acq.deemed':'s5.acq',av));
+      if(a.double)h+=P(t('s5.acq.double',{...av,v:cn(a.double)}));
+    }
+  }
+  // 6. Triangulation (only intra-Community)
+  if(r.kind==='intra'){
+    h+=`<h3>${t('s6.h')}</h3>`;
+    const tr=r.triangle;
+    if(!tr)h+=P(t('s6.none'));
+    else{
+      const v={a:U(tr.a),b:U(tr.b),c:U(tr.c),from,to,t:U(r.transport),v:ps[tr.b].vat?cn(ps[tr.b].vat):'',pc:cn(ps[tr.b].country)};
+      h+=P(t('s6.intro',v))+'<ul class="checks">';
+      for(const ch of tr.checks){
+        let key;
+        if(ch.id==='position')key=!tr.longChain?'c.position.three':ch.atEnd?'c.position.end':ch.eug?'c.position.eug':'c.position.no';
+        else key=`c.${ch.id}.${ch.ok?'ok':'no'}`;
+        const vt=ch.id==='lastVat'?vatText(ps[tr.c].vat):vatText(ps[tr.b].vat);
+        h+=`<li class="${ch.ok?'ok':'no'}">${icon(ch.ok?'circle-check':'circle-x')}<span>${t(key,{...v,vt})}</span></li>`;
+      }
+      h+='</ul>';
+      if(tr.longChain&&!tr.atEnd)h+=`<label class="check"><input type="checkbox" id="optEug"${r.case.eug?' checked':''}><span>${Tools.esc(t('eug'))}</span></label>`;
+      h+=P(t(tr.applies?'s6.yes':'s6.no',v));
+    }
+  }
+  // 7. Import VAT
+  if(r.import){
+    const i=r.import, v={imp:U(i.importer),to,h:U(i.holder),rate:rate(C[r.to].rate)};
+    h+=`<h3>${t('s7.h')}</h3>`+P(t('s7',v))+P(t(i.deductible?'s7.ok':'s7.no',v));
+  }
+  $('why').innerHTML=h;
+}
+$('why').addEventListener('change',e=>{ if(e.target.id==='optEug'){ S.eug=e.target.checked; changed(); } });
+
+/* ---------- Duties per company ---------- */
+function renderDuties(){
+  const r=R, n=r.n, ps=r.case.parties, from=cn(r.from), to=cn(r.to);
+  if(r.kind==='outside'){ $('duties').innerHTML=P(t('sum.outside')); return; }
+  let h='';
+  ps.forEach((p,i)=>{
+    const de=code=>code==='DE';
+    h+=`<div class="duty"><h3>${Tools.esc(t('d.party',{p:U(i),role:role(i,n),c:cn(p.country),vt:vatText(p.vat)}))}</h3>`;
+    // Registration
+    const regs=r.registrations[i];
+    const items=regs.map(x=>{
+      const why=x.reasons.map(k=>t('reason.'+k)).join(', ');
+      if(x.home)return t('d.reg.home',{c:cn(x.country),why});
+      return t(x.has?'d.reg.has':'d.reg.need',{c:cn(x.country),why,p:U(i),v:C[x.country].prefix});
+    });
+    if(!regs.some(x=>!x.home))items.unshift(t('d.reg.none'));
+    h+=`<h4>${t('d.reg')}</h4><ul>${items.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+    const registeredIn=code=>p.country===code||p.vat===code||regs.some(x=>x.country===code);
+    // Purchase
+    if(i>0){
+      const s=r.supplies[i-1], list=[], v={p:U(i),c:cn(s.place),rate:rate(s.rate),to};
+      if(s.treatment==='ic'){
+        if(r.acquisition.deemed)list.push(t('b.deemed',v));
+        else{ list.push(t('b.ic',{...v,rate:rate(C[r.to].rate)})); if(de(r.to))list.push(t('b.ic.de')); list.push(t('b.ic.intrastat',v)); }
+      }else if(s.treatment==='triangle'){ list.push(t('b.triangle',v)); if(de(s.place))list.push(t('b.triangle.de')); }
+      else if(s.treatment==='export')list.push(t('b.export',v));
+      else if(s.treatment==='outside')list.push(t('b.outside',v));
+      else{ list.push(t(registeredIn(s.place)?'b.taxable':'b.taxable.refund',v)); if(de(s.place)&&registeredIn('DE'))list.push(t('b.taxable.de')); }
+      h+=`<h4>${t('d.buy',{p:U(i-1)})}</h4><ul>${list.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+    }
+    // Sale
+    if(i<n-1){
+      const s=r.supplies[i], list=[], cv=ps[i+1].vat, v={q:U(i+1),c:cn(s.place),rate:rate(s.rate),from,v:cv?cn(cv):'',p:U(i)};
+      if(s.treatment==='ic'){ list.push(t('s.ic',v)); if(de(s.place))list.push(t('s.ic.de')); }
+      else if(s.treatment==='export'){ list.push(t('s.export',v)); if(de(s.place))list.push(t('s.export.de')); }
+      else if(s.treatment==='triangle'){ list.push(t('s.triangle',{...v,v:p.vat?cn(p.vat):''})); if(p.vat==='DE')list.push(t('s.triangle.de')); }
+      else if(s.treatment==='outside')list.push(t('s.outside',v));
+      else{ list.push(t('s.taxable',v)); if(de(s.place))list.push(t('s.taxable.de')); }
+      if(s.treatment!=='triangle'&&!de(s.place)&&(p.country==='DE'||p.vat==='DE'))list.push(t('s.abroad.de'));
+      if(r.rule==='intermediary-supplier'&&r.basis==='vat'&&i===r.transport)list.push(t('s.asSupplier',{p:U(i),q:U(i-1),from}));
+      h+=`<h4>${t('d.sell',{p:U(i+1)})}</h4><ul>${list.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+    }
+    // Import
+    if(r.import&&r.import.importer===i){
+      const list=[t(r.import.deductible?'i.ok':'i.no',{p:U(i),q:U(r.import.holder),to})];
+      if(de(r.to))list.push(t('i.de'));
+      h+=`<h4>${t('d.imp')}</h4><ul>${list.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+    }
+    h+='</div>';
+  });
+  $('duties').innerHTML=h;
+}
+
+/* ---------- What if ---------- */
+let ALTS=[];
+function renderAlts(){
+  ALTS=Chain.alternatives(S);
+  const r=R;
+  $('alts').innerHTML=ALTS.map((a,idx)=>{
+    const p=U(a.transport), ac=a.case;
+    let title=t(a.variant==='asSupplier'?'alt.asSupplier':a.variant==='asCustomer'?'alt.asCustomer':'alt.plain',{p});
+    if(a.variant==='asSupplier')title+=' · '+t(r.kind==='import'?'alt.asSupplier.import':'alt.asSupplier.vat',{from:cn(r.from)});
+    if(a.variant==='asCustomer')title+=' · '+(r.kind==='import'?t('alt.asCustomer.import',{imp:U(ac.importer)}):t('alt.asCustomer.vat',{c:cn(ac.parties[a.transport].vat)}));
+    if(a.variant==='current'&&r.rule==='intermediary-supplier')title=t('alt.asSupplier',{p});
+    const bits=[t('alt.moved',{k:a.moved+1})];
+    if(r.kind!=='domestic'&&r.kind!=='outside')bits.push(t(a.exempt?'alt.exempt':'alt.notExempt'));
+    if(a.triangle)bits.push(t('alt.triangle'));
+    bits.push(a.newRegistrations.length?t('alt.regs',{list:a.newRegistrations.map(x=>t('alt.in',{p:U(x.party),c:cn(x.country)})).join(', ')}):t('alt.noReg'));
+    const cur=a.variant==='current';
+    return `<button type="button" class="alt" data-alt="${idx}"${cur?' aria-current="true"':''}><span class="t">${Tools.esc(title)}${cur?` · ${Tools.esc(t('alt.current'))}`:''}</span><span class="d">${Tools.esc(bits.join(' · '))}</span></button>`;
+  }).join('');
+}
+$('alts').addEventListener('click',e=>{
+  const b=e.target.closest('[data-alt]'); if(!b)return;
+  const a=ALTS[+b.dataset.alt]; if(!a||a.variant==='current')return;
+  const ac=a.case;
+  S={parties:clone(ac.parties),from:S.from,to:S.to,transport:ac.transport,importer:ac.importer===ac.transport?null:ac.importer,eug:S.eug};
+  changed();
+  Tools.diag.log('variant taken',{transport:ac.transport,variant:a.variant});
+  $('h-result').scrollIntoView({behavior:Tools.reducedMotion()?'auto':'smooth'});
+});
+
+/* ---------- Everything ---------- */
+function render(){
+  R=Chain.evaluate(S);
+  if(R.error){ Tools.diag.log('invalid case, reset',R.error); S=clone(DEFAULT); R=Chain.evaluate(S); }
+  renderInputs(); renderResult(); renderWhy(); renderDuties(); renderAlts();
+}
+function changed(){ save(); render(); }
+
+$('btnCopy').addEventListener('click',async()=>{
+  const parts=[$('h-result'),$('result'),$('h-why'),$('why'),$('h-duties'),$('duties')].map(el=>el.innerText.trim());
+  const ok=await Tools.copyText(parts.join('\n\n'));
+  Tools.toast(t(ok?'copied':'copyFail'));
+});
+for(const b of document.querySelectorAll('[data-example]'))b.addEventListener('click',()=>{
+  S=clone(EXAMPLES[b.dataset.example]); changed(); Tools.menu.close(); Tools.toast(t('example.done'));
+  Tools.diag.log('example',b.dataset.example);
+});
+$('btnReset').addEventListener('click',()=>{
+  const before=clone(S);
+  S=clone(DEFAULT); changed(); Tools.menu.close();
+  Tools.undo(t('reset.done'),()=>{ S=before; changed(); });
+});
+
+render();
+Tools.diag.info(()=>({parties:S.parties.length,kind:R&&R.kind,transport:S.transport,moved:R&&R.moved,triangle:!!(R&&R.triangle&&R.triangle.applies)}));
+Tools.onLang(render);
+
+/* ---------- WebMCP ---------- */
+const TREAT_EN={ic:'exempt intra-Community supply','ic-fail':'taxable (intra-Community exemption not available)',export:'exempt export','export-fail':'taxable (export exemption not available)',
+  taxable:'taxable',triangle:'taxable, tax due by the last customer (triangulation)',outside:'outside the scope of EU VAT'};
+const KIND_EN={intra:'intra-Community',domestic:'domestic',export:'export',import:'import',outside:'non-EU only'};
+const CHECK_EN={transport:'transport by first supplier or first customer',midVat:'middle company uses a VAT ID of a third member state',
+  midNotEstablished:'middle company not established in the country of arrival',lastVat:'last customer uses the VAT ID of the country of arrival',
+  position:'trio at the end of the chain (UStAE 25b.1 (2)) or following EU General Court T-646/24'};
+function summary(r){
+  const out={movement:KIND_EN[r.kind],goods_from:r.from,goods_to:r.to,transported_by:U(r.transport),
+    moved_supply:{number:r.moved+1,supplier:U(r.moved),customer:U(r.moved+1),rule:r.rule},
+    supplies:r.supplies.map(s=>({number:s.i+1,supplier:U(s.supplier),customer:U(s.customer),moved:s.moved,place:s.place,
+      place_shifted_on_import:s.shifted,treatment:TREAT_EN[s.treatment],vat_rate_percent:s.rate,tax_due_by:s.taxDebtor==null?null:U(s.taxDebtor)}))};
+  if(r.acquisition)out.intra_community_acquisition={by:U(r.acquisition.party),country:r.acquisition.country,deemed_taxed:r.acquisition.deemed,also_deemed_in:r.acquisition.double};
+  if(r.kind==='intra')out.triangulation=r.triangle?{companies:[U(r.triangle.a),U(r.triangle.b),U(r.triangle.c)],applies:r.triangle.applies,
+    failed_conditions:r.triangle.checks.filter(c=>!c.ok).map(c=>CHECK_EN[c.id])}:{applies:false,reason:'the moved supply is the last supply of the chain'};
+  if(r.import)out.import={declared_by:U(r.import.importer),country:r.import.country,import_vat_deductible:r.import.deductible,right_to_dispose:U(r.import.holder)};
+  out.registrations_abroad=Chain.foreignRegistrations(r).map(x=>({company:U(x.party),country:x.country,already_uses_vat_id_there:x.has,
+    reasons:r.registrations[x.party].find(y=>y.country===x.country).reasons}));
+  out.warnings=r.warnings.map(w=>w.code);
+  return out;
+}
+const CODES=Object.keys(C);
+Tools.mcp.register({
+  name:'analyze_chain',title:'Analyze a chain transaction',label:'mcp.analyze',
+  description:'Enters a VAT chain transaction (3 or 4 companies selling the same goods in a row, goods transported once from the first to the last) into the app and returns the assessment under German VAT law and the EU VAT Directive: the moved supply, place and treatment of each supply, intra-Community acquisition, triangulation, import VAT and the VAT registrations needed abroad. The case is shown and saved in the app. Not tax advice.',
+  inputSchema:{type:'object',properties:{
+    companies:{type:'array',minItems:3,maxItems:4,description:'The companies in invoice order: U1 sells to U2, U2 to U3 and so on.',items:{type:'object',properties:{
+      country:{type:'string',enum:CODES,description:'Country where the company is based (ISO code, GR for Greece, XI for Northern Ireland, XX for another non-EU country).'},
+      vat_id_country:{type:'string',enum:[...Chain.EU_CODES,'none'],description:'Member state whose VAT ID the company uses. Default: its own country if in the EU, otherwise none.'}
+    },required:['country'],additionalProperties:false}},
+    goods_from:{type:'string',enum:CODES,description:'Country where the transport starts. Default: country of U1.'},
+    goods_to:{type:'string',enum:CODES,description:'Country where the transport ends. Default: country of the last company.'},
+    transported_by:{type:'integer',minimum:1,maximum:4,description:'Number of the company that carries or ships the goods (1 = U1).'},
+    import_declared_by:{type:'integer',minimum:1,maximum:4,description:'For imports only: number of the company declaring the goods for free circulation. Default: the transporting company.'},
+    follow_general_court_t646_24:{type:'boolean',description:'Accept triangulation at the start of a 4-company chain (EU General Court T-646/24) instead of only at the end (German guidelines). Default false.'}
+  },required:['companies','transported_by'],additionalProperties:false},
+  execute:a=>{
+    const n=a.companies.length;
+    if(a.transported_by>n)throw new Error('transported_by must be between 1 and the number of companies.');
+    if(a.import_declared_by!=null&&a.import_declared_by>n)throw new Error('import_declared_by must be between 1 and the number of companies.');
+    const cs={parties:a.companies.map(c=>({country:c.country,vat:c.vat_id_country==null?(Chain.isEU(c.country)?c.country:''):c.vat_id_country==='none'?'':c.vat_id_country})),
+      from:a.goods_from||'',to:a.goods_to||'',transport:a.transported_by-1,importer:a.import_declared_by==null?null:a.import_declared_by-1,eug:!!a.follow_general_court_t646_24};
+    const r=Chain.evaluate(cs);
+    if(r.error)throw new Error('Invalid case: '+r.error);
+    S=cs; changed();
+    return summary(R);
+  }
+});
+Tools.mcp.register({
+  name:'get_analysis',title:'Read the assessment',readOnly:true,
+  description:'Reads the chain transaction currently entered in the app with its assessment: moved supply, place and treatment of each supply, triangulation, import VAT and VAT registrations needed abroad.',
+  execute:()=>({companies:S.parties.map((p,i)=>({company:U(i),country:p.country,vat_id_country:p.vat||'none'})),...summary(R)})
+});
+})();
+</script>
+</body>
+</html>

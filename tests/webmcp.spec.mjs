@@ -360,6 +360,40 @@ test.describe('medical-calculator tools', () => {
   });
 });
 
+test.describe('chain-transaction tools', () => {
+  test.beforeEach(async ({ page }) => { await open(page, '/chain-transaction/'); });
+
+  test('analyze_chain fills the case and returns the assessment; get_analysis reads it', async ({ page }) => {
+    // Import CH → FR, U2 transports and declares: supply 2 is moved and shifts to France (§ 3 Abs. 8 UStG)
+    let r = await call(page, 'chain_transaction_analyze_chain', { companies: [{ country: 'CH' }, { country: 'DE' }, { country: 'AT' }, { country: 'FR' }], transported_by: 2 });
+    expect(r.ok).toBe(true);
+    expect(r.result).toMatchObject({
+      movement: 'import', goods_from: 'CH', goods_to: 'FR', transported_by: 'U2',
+      moved_supply: { number: 2, supplier: 'U2', customer: 'U3', rule: 'intermediary-supplier' },
+      import: { declared_by: 'U2', country: 'FR', import_vat_deductible: true, right_to_dispose: 'U2' },
+      registrations_abroad: [{ company: 'U2', country: 'FR', already_uses_vat_id_there: false, reasons: ['sale', 'import'] }, { company: 'U3', country: 'FR', already_uses_vat_id_there: false, reasons: ['sale'] }],
+    });
+    expect(r.result.supplies.map(s => [s.place, s.treatment, s.tax_due_by])).toEqual([
+      ['CH', 'outside the scope of EU VAT', null], ['FR', 'taxable', 'U2'], ['FR', 'taxable', 'U3']]);
+    await expect(page.locator('#pc0')).toHaveValue('CH');
+    await expect(page.locator('#count [data-n="4"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#result .supply.moved')).toContainText('Lieferung 2: U2 → U3');
+    // Triangle DE → AT → IT with U1 transporting
+    r = await call(page, 'chain_transaction_analyze_chain', { companies: [{ country: 'DE' }, { country: 'AT' }, { country: 'IT' }], transported_by: 1 });
+    expect(r.result.triangulation).toEqual({ companies: ['U1', 'U2', 'U3'], applies: true, failed_conditions: [] });
+    expect(r.result.supplies[1]).toMatchObject({ place: 'IT', vat_rate_percent: 22, tax_due_by: 'U3' });
+    r = await call(page, 'chain_transaction_get_analysis', {});
+    expect(r.result.companies).toEqual([{ company: 'U1', country: 'DE', vat_id_country: 'DE' }, { company: 'U2', country: 'AT', vat_id_country: 'AT' }, { company: 'U3', country: 'IT', vat_id_country: 'IT' }]);
+    expect(r.result.moved_supply.number).toBe(1);
+    // Wrong input changes nothing
+    expect((await call(page, 'chain_transaction_analyze_chain', { companies: [{ country: 'DE' }, { country: 'AT' }, { country: 'IT' }], transported_by: 4 })).error).toMatch(/transported_by/);
+    expect((await call(page, 'chain_transaction_analyze_chain', { companies: [{ country: 'DE' }, { country: 'AT' }], transported_by: 1 })).ok).toBe(false);
+    expect((await call(page, 'chain_transaction_analyze_chain', { companies: [{ country: 'DE', vat_id_country: 'CH' }, { country: 'AT' }, { country: 'IT' }], transported_by: 1 })).ok).toBe(false);
+    await expect(page.locator('#pc0')).toHaveValue('DE');
+    await expect(page.locator('#count [data-n="3"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
 test.describe('qr-code tools', () => {
   test.beforeEach(async ({ page }) => open(page, '/qr-code/'));
 
