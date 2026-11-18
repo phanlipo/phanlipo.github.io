@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Physik verstehen</title>
+<meta name="description" content="Physik zum Ausprobieren: Spiegel und Linsen mit Reglern für Krümmung und Abstand, Strahlengang, Bild und Formeln mit deinen Werten – zum Beispiel, warum das Spiegelbild im Löffel Kopf steht.">
+<meta name="tool:tags" content="Freizeit, Lernen">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="mirror_image, lens_image">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Spiegel und Linse einstellen (Krümmung bzw. Brechkraft und Gegenstandsweite) und bekommt Bildweite, Abbildungsmaßstab und Bildart zurück.">
+<meta name="tool:webmcp-help-en" content="An AI agent can set up the mirror and the lens (curvature or power and object distance) and gets back the image distance, magnification and kind of image.">
+<meta name="tool:icon" content="atom">
+<meta name="tool:color" content="#6a3fb5">
+<meta name="tool:short-name" content="Physik">
+<meta name="tool:title-en" content="Physics Explained">
+<meta name="tool:description-en" content="Physics to try out: mirrors and lenses with sliders for curvature and distance, ray diagram, image and formulas with your values – for example why your reflection in a spoon is upside down.">
+<meta name="tool:short-name-en" content="Physics">
+<meta name="tool:storage" content="physics-lab.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-oDhy12nwJ/uZISxlm3aQkf4t3AJrtC8+u1IA/j7y/wg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Physik">
+<meta name="theme-color" content="#6a3fb5">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<style>
+/* Overview, tab bar and result fields come from base.css (UI-KONZEPT.md "Werkzeugkasten") */
+:root{--accent:#6a3fb5;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#b79cf0;--accent-text:#1a0f2e}}
+main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
+.panel>h2{font-size:18px;margin-block-end:4px}
+.intro{color:var(--muted);font-size:14px;margin:0 0 12px}
+/* Drawing: pixel coordinates, see render(); vertical swipes still scroll the page */
+.scene{margin:12px 0 4px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2);overflow:hidden}
+.scene svg{display:block;width:100%;touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none}
+.scene .axis{stroke:var(--muted);stroke-width:1;stroke-dasharray:6 5;fill:none}
+.scene .plane{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 4;fill:none}
+.scene .el{stroke:var(--text);stroke-width:3;fill:none;stroke-linecap:round}
+.scene .hatch{stroke:var(--muted);stroke-width:1.2}
+.scene .glass{fill:var(--accent);fill-opacity:.18;stroke:var(--accent);stroke-width:2}
+.scene .mark{fill:var(--text)}
+.scene .lbl{fill:var(--muted);font:600 13px var(--font)}
+.scene .obj{stroke:var(--text);stroke-width:2.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.scene .img{stroke:var(--accent);stroke-width:2.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.scene .img.virtual{stroke-dasharray:4 3}
+.scene .ray{stroke-width:1.8;fill:none}
+.scene .ray.ext{stroke-dasharray:5 4;stroke-width:1.3;opacity:.85}
+.scene .arrow{stroke:none}
+.scene .inset{fill:var(--surface);stroke:var(--border)}
+.r-parallel{stroke:var(--err);fill:var(--err)}
+.r-focal{stroke:var(--ok);fill:var(--ok)}
+.r-central{stroke:var(--warn);fill:var(--warn)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 2px 10px;padding:0;list-style:none;font-size:13px;color:var(--muted)}
+.legend li{display:flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:18px;height:0;border-top:2px solid currentColor}
+.legend .dash{border-top-style:dashed;color:var(--muted)}
+.legend .sw-parallel{color:var(--err)}.legend .sw-focal{color:var(--ok)}.legend .sw-central{color:var(--warn)}
+.legend .sw-img{color:var(--accent)}
+.why{margin:12px 0 0}
+.f{overflow-x:auto;overflow-y:hidden;padding:4px 2px;-webkit-overflow-scrolling:touch}
+.f .katex{font-size:1.08em}
+.f.fallback{font-family:var(--mono);font-size:13px;white-space:pre-wrap;color:var(--muted)}
+.mathgrid h3{font-size:14px;margin:14px 0 4px;color:var(--muted)}
+.mathgrid p{margin:6px 0;font-size:15px}
+.mathgrid ul{font-size:13px;color:var(--muted);margin:6px 0 0;padding-inline-start:18px}
+@media (max-width:500px){.f .katex{font-size:.95em}.card{padding:14px}}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Physik verstehen</span></h1>
+  <p class="sub" data-i18n="sub">Ausprobieren, sehen, nachrechnen.</p>
+</header>
+
+<main>
+<section class="tool-overview" id="overview" aria-label="Übersicht" data-i18n-attr="aria-label:ov">
+  <h2 data-i18n="g.optics">Optik</h2>
+  <div class="tiles">
+    <button type="button" data-open="mirror"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#hemisphere"/></svg><span data-i18n="mirror">Gewölbter Spiegel</span></button>
+    <button type="button" data-open="lens"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#lens-convex"/></svg><span data-i18n="lens">Linse</span></button>
+  </div>
+</section>
+
+<div class="tabbar" id="tabbar" hidden>
+  <button type="button" class="back" data-overview><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg><span data-i18n="back">Übersicht</span></button>
+  <div class="tabs" role="tablist" aria-label="Versuch wählen" data-i18n-attr="aria-label:tabs">
+    <button type="button" role="tab" class="tab" id="tab-mirror" aria-controls="p-mirror" data-tab="mirror"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#hemisphere"/></svg><span data-i18n="mirror.short">Spiegel</span></button>
+    <button type="button" role="tab" class="tab" id="tab-lens" aria-controls="p-lens" data-tab="lens"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#lens-convex"/></svg><span data-i18n="lens">Linse</span></button>
+  </div>
+</div>
+
+<!-- Both experiments share one structure; the script finds the parts by data-part inside the panel -->
+<section class="card panel" id="p-mirror" role="tabpanel" aria-labelledby="tab-mirror" data-kind="mirror" hidden>
+  <h2 data-i18n="mirror">Gewölbter Spiegel</h2>
+  <p class="intro" data-i18n="mirror.intro">Hohlspiegel, ebener Spiegel und Wölbspiegel – wie die Innen- und die Außenseite eines Löffels. Zieh die Figur oder nimm die Regler.</p>
+  <div class="chips wrap" role="group" aria-label="Beispiele" data-i18n-attr="aria-label:examples" data-part="presets">
+    <button type="button" class="chip" aria-pressed="false" data-v="30" data-g="30" data-i18n="pre.spoonIn">Löffel innen</button>
+    <button type="button" class="chip" aria-pressed="false" data-v="-30" data-g="30" data-i18n="pre.spoonOut">Löffel außen</button>
+    <button type="button" class="chip" aria-pressed="false" data-v="2.5" data-g="10" data-i18n="pre.makeup">Kosmetikspiegel</button>
+    <button type="button" class="chip" aria-pressed="false" data-v="0" data-g="20" data-i18n="pre.plane">Ebener Spiegel</button>
+  </div>
+  <div class="scene"><svg data-part="svg" role="img"></svg></div>
+  <ul class="legend" data-part="legend"></ul>
+  <div class="form-field range"><label for="mV"><span data-i18n="mirror.curv">Krümmung</span> <output id="mVOut" for="mV" data-part="vOut"></output></label><input type="range" id="mV" data-part="v" min="-40" max="40" step="0.5"></div>
+  <div class="form-field range"><label for="mG"><span data-i18n="dist">Gegenstandsweite g</span> <output id="mGOut" for="mG" data-part="gOut"></output></label><input type="range" id="mG" data-part="g" min="1" max="50" step="0.5"></div>
+  <div class="calc-results" data-part="res"></div>
+  <p class="notice info why" data-part="why"></p>
+  <details class="sub"><summary data-i18n="math">Formeln mit deinen Werten</summary><div class="mathgrid" data-part="math"></div></details>
+  <details class="sub"><summary data-i18n="spoon.h">Warum steht das Bild im Löffel Kopf?</summary><div class="mathgrid" id="spoonMath"></div></details>
+</section>
+
+<section class="card panel" id="p-lens" role="tabpanel" aria-labelledby="tab-lens" data-kind="lens" hidden>
+  <h2 data-i18n="lens">Linse</h2>
+  <p class="intro" data-i18n="lens.intro">Sammellinse und Zerstreuungslinse – dieselbe Gleichung wie beim Spiegel, nur entsteht das echte Bild hinter der Linse.</p>
+  <div class="chips wrap" role="group" aria-label="Beispiele" data-i18n-attr="aria-label:examples" data-part="presets">
+    <button type="button" class="chip" aria-pressed="false" data-v="10" data-g="6" data-i18n="pre.magnifier">Lupe</button>
+    <button type="button" class="chip" aria-pressed="false" data-v="10" data-g="45" data-i18n="pre.camera">Kamera</button>
+    <button type="button" class="chip" aria-pressed="false" data-v="10" data-g="15" data-i18n="pre.projector">Projektor</button>
+    <button type="button" class="chip" aria-pressed="false" data-v="-4" data-g="40" data-i18n="pre.myopia">Brille (kurzsichtig)</button>
+  </div>
+  <div class="scene"><svg data-part="svg" role="img"></svg></div>
+  <ul class="legend" data-part="legend"></ul>
+  <div class="form-field range"><label for="lV"><span data-i18n="lens.power">Brechkraft</span> <output id="lVOut" for="lV" data-part="vOut"></output></label><input type="range" id="lV" data-part="v" min="-25" max="25" step="0.5"></div>
+  <div class="form-field range"><label for="lG"><span data-i18n="dist">Gegenstandsweite g</span> <output id="lGOut" for="lG" data-part="gOut"></output></label><input type="range" id="lG" data-part="g" min="1" max="50" step="0.5"></div>
+  <div class="calc-results" data-part="res"></div>
+  <p class="notice info why" data-part="why"></p>
+  <details class="sub"><summary data-i18n="math">Formeln mit deinen Werten</summary><div class="mathgrid" data-part="math"></div></details>
+</section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Physik zum Ausprobieren: Jeder Versuch zeigt eine Zeichnung, die sich sofort ändert, wenn du einen Regler bewegst, dazu das Ergebnis, eine Erklärung in Worten und die Formeln mit deinen Zahlen.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>In der Übersicht einen Versuch antippen; oben wechselst du direkt zwischen den Versuchen, <b>‹ Übersicht</b> (oder die Zurück-Taste) führt zurück.</li>
+    <li><b>Figur ziehen</b> (waagrecht über die Zeichnung wischen) oder den Regler <b>Gegenstandsweite</b> nutzen. Die Regler gehen auch mit den Pfeiltasten.</li>
+    <li><b>Krümmung</b> beim Spiegel: rechts hohl (wie der Löffel innen), in der Mitte eben, links gewölbt (wie der Löffel außen). Je weiter außen, desto stärker gekrümmt (kleinerer Radius r).</li>
+    <li><b>Brechkraft</b> bei der Linse in Dioptrien (dpt): plus = Sammellinse, minus = Zerstreuungslinse; f = 1/D.</li>
+    <li>Die <b>Beispiele</b> stellen typische Fälle ein: Löffel, Kosmetikspiegel, Lupe, Kamera, Projektor, Brille.</li>
+  </ul>
+  <h3>Die Zeichnung lesen</h3>
+  <ul>
+    <li>Drei besondere Strahlen genügen, um das Bild zu finden: der <b>Parallelstrahl</b> (läuft danach durch den Brennpunkt F), der <b>Brennpunktstrahl</b> (läuft danach parallel) und der Strahl durch die Mitte (<b>Scheitelstrahl</b> beim Spiegel, <b>Mittelpunktstrahl</b> bei der Linse). Wo sie sich treffen, entsteht das Bild.</li>
+    <li>Treffen sich die Strahlen wirklich, ist das Bild <b>reell</b> (man kann es auf einem Schirm auffangen). Laufen sie auseinander, treffen sich nur ihre gestrichelten Verlängerungen: ein <b>virtuelles</b> Bild (gestrichelte Figur), das man nur beim Hineinschauen sieht.</li>
+    <li>Ist das Bild sehr klein, zeigt ein Kästchen oben rechts es vergrößert gezeichnet (zum Beispiel „Bild ×17“) – mit der richtigen Richtung (aufrecht oder auf dem Kopf).</li>
+    <li>Vorzeichen: g und f sind positiv bei Hohlspiegel und Sammellinse, f ist negativ bei Wölbspiegel und Zerstreuungslinse. b positiv = reelles Bild, b negativ = virtuelles Bild. m = B/G negativ = Bild steht Kopf.</li>
+    <li>Gerechnet und gezeichnet wird mit der üblichen Näherung für achsennahe Strahlen: Die Strahlen knicken an der gepunkteten senkrechten Linie durch die Mitte ab. Bei echten, stark gekrümmten Spiegeln und dicken Linsen weichen Randstrahlen etwas ab.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Nur die Reglerstellungen und der zuletzt offene Versuch bleiben in diesem Browser gespeichert (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline. Formeln: KaTeX (MIT-Lizenz).</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Physics to try out: every experiment shows a drawing that changes as soon as you move a slider, together with the result, an explanation in words and the formulas with your numbers.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Tap an experiment in the overview; the bar at the top switches directly, <b>‹ Overview</b> (or the back button) leads back.</li>
+    <li><b>Drag the figure</b> (swipe sideways across the drawing) or use the <b>object distance</b> slider. The sliders also work with the arrow keys.</li>
+    <li><b>Curvature</b> of the mirror: right is concave (like the inside of a spoon), the middle is flat, left is convex (like the back of a spoon). The further out, the stronger the curvature (smaller radius r).</li>
+    <li><b>Power</b> of the lens in dioptres (D): plus = converging lens, minus = diverging lens; f = 1/D.</li>
+    <li>The <b>examples</b> set typical cases: spoon, make-up mirror, magnifier, camera, projector, glasses.</li>
+  </ul>
+  <h3>Reading the drawing</h3>
+  <ul>
+    <li>Three special rays are enough to find the image: the <b>parallel ray</b> (passes through the focal point F afterwards), the <b>focal ray</b> (runs parallel afterwards) and the ray through the middle (<b>vertex ray</b> for the mirror, <b>central ray</b> for the lens). Where they meet, the image forms.</li>
+    <li>If the rays really meet, the image is <b>real</b> (you could catch it on a screen). If they spread apart, only their dashed extensions meet: a <b>virtual</b> image (dashed figure) that you only see when looking into the mirror or lens.</li>
+    <li>If the image is very small, a box at the top right shows it drawn larger (for example “Image ×17”) – the right way round (upright or upside down).</li>
+    <li>Signs: g and f are positive for a concave mirror and a converging lens, f is negative for a convex mirror and a diverging lens. Positive b = real image, negative b = virtual image. Negative m = B/G = the image is upside down.</li>
+    <li>Calculations and drawing use the usual approximation for rays close to the axis: the rays bend at the dotted vertical line through the middle. With real, strongly curved mirrors and thick lenses, rays near the edge deviate a little.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Only the slider positions and the last experiment stay stored in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline. Formulas: KaTeX (MIT licence).</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann Spiegel und Linse einstellen (Krümmung bzw. Brechkraft und Gegenstandsweite) und bekommt Bildweite, Abbildungsmaßstab und Bildart zurück. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can set up the mirror and the lens (curvature or power and object distance) and gets back the image distance, magnification and kind of image. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version ce00144be63f</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/vendor/katex/katex.min.js"></script>
+<script src="../assets/shared/toolbox.js"></script>
+<script src="optics.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'v.concave':'hohl · r = {r} cm','v.convex':'gewölbt · r = {r} cm','v.flat':'eben',
+    'v.power':'{d} dpt · f = {f} cm','v.zero':'0 dpt',
+    'el.concave':'Hohlspiegel','el.convex':'Wölbspiegel','el.plane':'Ebener Spiegel',
+    'el.converging':'Sammellinse','el.diverging':'Zerstreuungslinse','el.flatLens':'Glasplatte (keine Brechkraft)',
+    'ray.parallel':'Parallelstrahl','ray.focal':'Brennpunktstrahl','ray.vertex':'Scheitelstrahl','ray.central':'Mittelpunktstrahl',
+    'lg.ext':'Verlängerung','lg.image':'Bild',
+    'res.image':'Bild','res.f':'Brennweite f','res.r':'Krümmungsradius r','res.b':'Bildweite b','res.m':'Abbildungsmaßstab m',
+    real:'reell',virtual:'virtuell',upright:'aufrecht',inverted:'umgekehrt',enlarged:'vergrößert',reduced:'verkleinert',same:'gleich groß',
+    noImage:'kein Bild (im Unendlichen)',infinite:'unendlich',
+    inset:'Bild ×{n}',
+    'svg.desc':'{el}, Gegenstand {g} cm entfernt. {img}.','svg.noimg':'Die Strahlen laufen parallel, es entsteht kein Bild',
+    'why.mirror.beyond2F':'Der Gegenstand steht weiter weg als der Krümmungsmittelpunkt M (g > 2f). Die Strahlen kreuzen sich vor dem Spiegel: ein echtes (reelles) Bild, umgekehrt und kleiner – so wie dein Gesicht im Löffel.',
+    'why.mirror.at2F':'Der Gegenstand steht genau im Krümmungsmittelpunkt M (g = 2f): Das Bild entsteht an derselben Stelle, umgekehrt und gleich groß.',
+    'why.mirror.between':'Der Gegenstand steht zwischen Brennpunkt F und Mittelpunkt M (f < g < 2f): Das reelle Bild ist umgekehrt und größer und liegt weiter weg als 2f.',
+    'why.mirror.atF':'Der Gegenstand steht genau im Brennpunkt (g = f): Alle Strahlen laufen nach dem Spiegel parallel und treffen sich nie – kein Bild (so funktionieren Scheinwerfer).',
+    'why.mirror.insideF':'Der Gegenstand steht innerhalb der Brennweite (g < f): Die Strahlen laufen nach dem Spiegel auseinander. Nur ihre Verlängerungen treffen sich hinter dem Spiegel – ein virtuelles Bild, aufrecht und vergrößert, wie im Kosmetikspiegel.',
+    'why.mirror.negative':'Ein Wölbspiegel streut das Licht auseinander (f < 0). Die Verlängerungen der Strahlen treffen sich immer hinter dem Spiegel: Das Bild ist stets virtuell, aufrecht und verkleinert – wie auf der Rückseite des Löffels oder im Verkehrsspiegel.',
+    'why.mirror.plane':'Ein ebener Spiegel ist gar nicht gekrümmt (f unendlich): Das Bild ist virtuell, aufrecht, gleich groß und steht genauso weit hinter dem Spiegel wie der Gegenstand davor.',
+    'why.lens.beyond2F':'Der Gegenstand steht weiter weg als 2f. Die Strahlen kreuzen sich hinter der Linse: ein reelles Bild, umgekehrt und kleiner – so entsteht das Bild auf dem Sensor einer Kamera (und auf der Netzhaut im Auge).',
+    'why.lens.at2F':'Der Gegenstand steht genau bei 2f: Das reelle Bild entsteht bei 2f hinter der Linse, umgekehrt und gleich groß.',
+    'why.lens.between':'Der Gegenstand steht zwischen f und 2f: Das reelle Bild ist umgekehrt und größer – so vergrößert ein Projektor ein kleines Bild auf die Leinwand (deshalb steckt das Dia auf dem Kopf im Projektor).',
+    'why.lens.atF':'Der Gegenstand steht genau im Brennpunkt (g = f): Die Strahlen laufen hinter der Linse parallel – kein Bild (Taschenlampe, Leuchtturm).',
+    'why.lens.insideF':'Der Gegenstand steht innerhalb der Brennweite (g < f): Die Strahlen laufen hinter der Linse auseinander, nur ihre Verlängerungen treffen sich vor der Linse – ein virtuelles, aufrechtes, vergrößertes Bild: die Lupe.',
+    'why.lens.negative':'Eine Zerstreuungslinse lenkt das Licht auseinander (f < 0): Das Bild ist immer virtuell, aufrecht und verkleinert. Brillen für Kurzsichtige sind solche Linsen.',
+    'why.lens.plane':'Ohne Brechkraft geht das Licht gerade durch – du siehst den Gegenstand so, wie er ist.',
+    'm.f':'Brennweite','m.eq':'Abbildungsgleichung','m.b':'Nach b umgestellt','m.m':'Abbildungsmaßstab',
+    'm.flatF':'Ein ebener Spiegel ist unendlich wenig gekrümmt: r und f sind unendlich, 1/f ist null.',
+    'm.zeroD':'Ohne Brechkraft ist f unendlich und 1/f null.',
+    'm.atF':'Mit g = f wird 1/b = 0: Das Bild liegt im Unendlichen.',
+    'm.l.sign':'m < 0: Bild steht Kopf; m > 0: aufrecht.','m.l.size':'|m| < 1: kleiner; |m| > 1: größer.',
+    'm.l.b':'b > 0: reelles Bild; b < 0: virtuelles Bild.',
+    'sp.p1':'Die Innenseite eines Esslöffels ist ein kleiner Hohlspiegel mit einem Krümmungsradius von etwa {r} cm. Seine Brennweite ist nur halb so groß:',
+    'sp.p2':'Dein Gesicht ist etwa {g} cm entfernt – viel weiter als die Brennweite. Die Abbildungsgleichung ergibt:',
+    'sp.p3':'Das Minuszeichen bei m heißt: Das Bild steht auf dem Kopf, und es ist nur etwa {p} so groß wie du. Anschaulich: Licht von der Stirn trifft den Löffel oben und wird nach unten gelenkt, Licht vom Kinn trifft unten und wird nach oben gelenkt. Die Strahlen kreuzen sich kurz vor dem Löffel – dahinter sind oben und unten vertauscht.',
+    'sp.p4':'Die Außenseite ist ein Wölbspiegel (f < 0). Dann ist b immer negativ und m liegt zwischen 0 und 1: Das Bild ist aufrecht und kleiner. Probier beides mit den Beispielen „Löffel innen“ und „Löffel außen“.',
+    'mcp.mirror':'Spiegel eingestellt','mcp.lens':'Linse eingestellt'
+  },
+  en:{
+    title:'Physics Explained',sub:'Try it, see it, work it out.',ov:'Overview',back:'Overview',tabs:'Choose an experiment',
+    'g.optics':'Optics',mirror:'Curved mirror','mirror.short':'Mirror',lens:'Lens',examples:'Examples',
+    'mirror.intro':'Concave, flat and convex mirror – like the inside and the back of a spoon. Drag the figure or use the sliders.',
+    'lens.intro':'Converging and diverging lens – the same equation as for the mirror, but the real image forms behind the lens.',
+    'pre.spoonIn':'Spoon, inside','pre.spoonOut':'Spoon, back','pre.makeup':'Make-up mirror','pre.plane':'Flat mirror',
+    'pre.magnifier':'Magnifier','pre.camera':'Camera','pre.projector':'Projector','pre.myopia':'Glasses (short-sighted)',
+    'mirror.curv':'Curvature','lens.power':'Power',dist:'Object distance g',math:'Formulas with your values',
+    'spoon.h':'Why is the image in a spoon upside down?',
+    'v.concave':'concave · r = {r} cm','v.convex':'convex · r = {r} cm','v.flat':'flat',
+    'v.power':'{d} D · f = {f} cm','v.zero':'0 D',
+    'el.concave':'Concave mirror','el.convex':'Convex mirror','el.plane':'Flat mirror',
+    'el.converging':'Converging lens','el.diverging':'Diverging lens','el.flatLens':'Glass plate (no power)',
+    'ray.parallel':'Parallel ray','ray.focal':'Focal ray','ray.vertex':'Vertex ray','ray.central':'Central ray',
+    'lg.ext':'Extension','lg.image':'Image',
+    'res.image':'Image','res.f':'Focal length f','res.r':'Radius of curvature r','res.b':'Image distance b','res.m':'Magnification m',
+    real:'real',virtual:'virtual',upright:'upright',inverted:'upside down',enlarged:'enlarged',reduced:'reduced',same:'same size',
+    noImage:'no image (at infinity)',infinite:'infinite',
+    inset:'Image ×{n}',
+    'svg.desc':'{el}, object {g} cm away. {img}.','svg.noimg':'The rays run parallel, no image forms',
+    'why.mirror.beyond2F':'The object is further away than the centre of curvature M (g > 2f). The rays cross in front of the mirror: a real image, upside down and smaller – just like your face in a spoon.',
+    'why.mirror.at2F':'The object stands exactly at the centre of curvature M (g = 2f): the image forms at the same place, upside down and the same size.',
+    'why.mirror.between':'The object stands between the focal point F and the centre M (f < g < 2f): the real image is upside down and larger and lies further away than 2f.',
+    'why.mirror.atF':'The object stands exactly at the focal point (g = f): after the mirror all rays run parallel and never meet – no image (this is how headlights work).',
+    'why.mirror.insideF':'The object is inside the focal length (g < f): after the mirror the rays spread apart. Only their extensions meet behind the mirror – a virtual image, upright and enlarged, as in a make-up mirror.',
+    'why.mirror.negative':'A convex mirror spreads the light (f < 0). The extensions of the rays always meet behind the mirror: the image is always virtual, upright and reduced – like on the back of a spoon or in a traffic mirror.',
+    'why.mirror.plane':'A flat mirror is not curved at all (f infinite): the image is virtual, upright, the same size and as far behind the mirror as the object is in front of it.',
+    'why.lens.beyond2F':'The object is further away than 2f. The rays cross behind the lens: a real image, upside down and smaller – this is how the image on a camera sensor (and on the retina of the eye) forms.',
+    'why.lens.at2F':'The object stands exactly at 2f: the real image forms at 2f behind the lens, upside down and the same size.',
+    'why.lens.between':'The object stands between f and 2f: the real image is upside down and larger – this is how a projector enlarges a small picture onto the screen (which is why the slide sits upside down in the projector).',
+    'why.lens.atF':'The object stands exactly at the focal point (g = f): behind the lens the rays run parallel – no image (torch, lighthouse).',
+    'why.lens.insideF':'The object is inside the focal length (g < f): behind the lens the rays spread apart, only their extensions meet in front of the lens – a virtual, upright, enlarged image: the magnifier.',
+    'why.lens.negative':'A diverging lens spreads the light (f < 0): the image is always virtual, upright and reduced. Glasses for short-sighted people use such lenses.',
+    'why.lens.plane':'Without power the light goes straight through – you see the object as it is.',
+    'm.f':'Focal length','m.eq':'Lens and mirror equation','m.b':'Solved for b','m.m':'Magnification',
+    'm.flatF':'A flat mirror is infinitely little curved: r and f are infinite, 1/f is zero.',
+    'm.zeroD':'Without power f is infinite and 1/f is zero.',
+    'm.atF':'With g = f, 1/b = 0: the image lies at infinity.',
+    'm.l.sign':'m < 0: the image is upside down; m > 0: upright.','m.l.size':'|m| < 1: smaller; |m| > 1: larger.',
+    'm.l.b':'b > 0: real image; b < 0: virtual image.',
+    'sp.p1':'The inside of a tablespoon is a small concave mirror with a radius of curvature of about {r} cm. Its focal length is only half of that:',
+    'sp.p2':'Your face is about {g} cm away – much further than the focal length. The mirror equation gives:',
+    'sp.p3':'The minus sign of m means: the image is upside down, and it is only about {p} of your size. Picture it like this: light from your forehead hits the spoon at the top and is turned downwards, light from your chin hits it at the bottom and is turned upwards. The rays cross just in front of the spoon – beyond that point, top and bottom are swapped.',
+    'sp.p4':'The back is a convex mirror (f < 0). Then b is always negative and m lies between 0 and 1: the image is upright and smaller. Try both with the examples “Spoon, inside” and “Spoon, back”.',
+    'mcp.mirror':'mirror set','mcp.lens':'lens set'
+  }
+});
+const t=Tools.t;
+const O=window.Optics;
+const G=8; // object height in cm
+const LIMITS={mirror:{min:-40,max:40},lens:{min:-25,max:25},g:{min:1,max:50}};
+const STEP=0.5;
+const snap=(x,lo,hi)=>Math.min(hi,Math.max(lo,Math.round(x/STEP)*STEP));
+
+/* ---------- Settings: slider positions and the open experiment ---------- */
+const LS='physics-lab.settings.v1';
+const S={view:'overview',tab:'mirror',mirror:{v:30,g:30},lens:{v:10,g:6}};
+{const o=Tools.load(LS,null);if(o&&typeof o==='object'){
+  if(o.view==='tool')S.view='tool';
+  if(o.tab==='mirror'||o.tab==='lens')S.tab=o.tab;
+  for(const k of ['mirror','lens'])if(o[k]&&typeof o[k]==='object'){
+    if(Number.isFinite(o[k].v))S[k].v=snap(o[k].v,LIMITS[k].min,LIMITS[k].max);
+    if(Number.isFinite(o[k].g))S[k].g=snap(o[k].g,LIMITS.g.min,LIMITS.g.max);
+  }
+}}
+const save=()=>Tools.save(LS,S);
+
+/* ---------- Number helpers ---------- */
+const nf=(x,d=1)=>Number.isFinite(x)?Tools.fmt(x,d):'∞';
+const signed=(x,d=1)=>(x>0?'+':'')+Tools.fmt(x,d);
+// Decimal numbers inside TeX: comma in German ({,} keeps KaTeX from adding a space), minus as −
+const dec=s=>Tools.lang()==='de'?String(s).replace(/\./g,'{,}'):String(s);
+const tx=(x,d=1)=>{const v=Math.round(x*10**d)/10**d;return dec((Object.is(v,-0)?0:v).toFixed(d));};
+const par=(x,d=1)=>x<0?'('+tx(x,d)+')':tx(x,d);
+// = or ≈ before a rounded result
+const eq=(x,d=1)=>(Math.abs(x-Math.round(x*10**d)/10**d)>1e-9?'\\approx ':'=')+tx(x,d);
+// m with enough digits to be non-zero (spoon: −0,06)
+const mDigits=m=>Math.abs(m)>=0.1||m===0?2:3;
+
+function math(host,tex){
+  const div=document.createElement('div');div.className='f';
+  if(window.katex){try{katex.render(tex,div,{displayMode:true,throwOnError:false});}catch(_){div.textContent=tex;div.classList.add('fallback');}}
+  else{div.textContent=tex;div.classList.add('fallback');}
+  host.append(div);
+}
+function block(host,parts){
+  host.textContent='';
+  for(const p of parts){
+    if(p.h){const h=document.createElement('h3');h.textContent=p.h;host.append(h);}
+    if(p.p){const q=document.createElement('p');q.textContent=p.p;host.append(q);}
+    if(p.m)math(host,p.m);
+    if(p.legend){const ul=document.createElement('ul');for(const x of p.legend){const li=document.createElement('li');li.textContent=x;ul.append(li);}host.append(ul);}
+  }
+}
+
+/* ---------- One experiment panel ---------- */
+const panels={};
+for(const sec of document.querySelectorAll('.panel[data-kind]')){
+  const kind=sec.dataset.kind, part=n=>sec.querySelector('[data-part="'+n+'"]');
+  panels[kind]={kind,sec,svg:part('svg'),v:part('v'),g:part('g'),vOut:part('vOut'),gOut:part('gOut'),
+    res:part('res'),why:part('why'),math:part('math'),legend:part('legend'),presets:[...part('presets').querySelectorAll('button')]};
+}
+
+function current(kind){const s=S[kind];return O.setup(kind,s.v,s.g,G);}
+
+function elName(st){
+  if(st.kind==='lens'&&st.element==='plane')return t('el.flatLens');
+  return t('el.'+st.element);
+}
+function imageWords(st){
+  if(st.infinite)return t('noImage');
+  const i=st.info;
+  return [t(i.real?'real':'virtual'),t(i.upright?'upright':'inverted'),t(i.size)].join(' · ');
+}
+
+function renderControls(P,st){
+  const s=S[P.kind];
+  P.v.value=String(s.v);P.g.value=String(s.g);
+  if(P.kind==='mirror'){
+    P.vOut.textContent=s.v===0?t('v.flat'):t(s.v>0?'v.concave':'v.convex',{r:nf(Math.abs(st.r))});
+  }else{
+    P.vOut.textContent=s.v===0?t('v.zero'):t('v.power',{d:signed(s.v),f:nf(st.f)});
+  }
+  P.gOut.textContent=Tools.fmt(s.g,1)+' cm';
+  for(const b of P.presets)b.setAttribute('aria-pressed',String(Number(b.dataset.v)===s.v&&Number(b.dataset.g)===s.g));
+}
+
+function renderResults(P,st){
+  const items=[{k:t('res.image'),v:imageWords(st),txt:true,main:true}];
+  if(P.kind==='mirror')items.push({k:t('res.r'),v:Number.isFinite(st.r)?Tools.fmt(st.r,1):t('infinite'),u:Number.isFinite(st.r)?'cm':''});
+  items.push({k:t('res.f'),v:Number.isFinite(st.f)?Tools.fmt(st.f,1):t('infinite'),u:Number.isFinite(st.f)?'cm':''});
+  items.push({k:t('res.b'),v:st.infinite?t('infinite'):Tools.fmt(st.b,1),u:st.infinite?'':'cm'});
+  if(!st.infinite)items.push({k:t('res.m'),v:Tools.fmt(st.m,mDigits(st.m))});
+  P.res.innerHTML=items.map(i=>'<div class="calc-result'+(i.main?' main':'')+'"><span class="k">'+Tools.esc(i.k)+'</span><b class="v'+(i.txt?' txt':'')+'">'+Tools.esc(i.v)+(i.u?' <small>'+i.u+'</small>':'')+'</b></div>').join('');
+  P.why.innerHTML=Tools.icon('info-circle')+'<span></span>';
+  P.why.querySelector('span').textContent=t('why.'+P.kind+'.'+O.regime(st.f,st.g));
+}
+
+function renderMath(P,st){
+  const s=S[P.kind],parts=[];
+  const cm='\\,\\text{cm}';
+  if(P.kind==='mirror'){
+    parts.push({h:t('m.f'),m:Number.isFinite(st.f)?'f=\\frac{r}{2}=\\frac{'+tx(st.r)+cm+'}{2}'+eq(st.f)+cm:'r\\to\\infty\\;\\Rightarrow\\;f\\to\\infty',p:Number.isFinite(st.f)?null:t('m.flatF')});
+  }else{
+    const D=dec(String(s.v));
+    parts.push({h:t('m.f'),m:Number.isFinite(st.f)?'f=\\frac{1}{D}=\\frac{1}{'+D+'\\,\\text{dpt}}=\\frac{100'+cm+'}{'+D+'}'+eq(st.f)+cm:'D=0\\;\\Rightarrow\\;f\\to\\infty',p:Number.isFinite(st.f)?null:t('m.zeroD')});
+  }
+  parts.push({h:t('m.eq'),m:'\\frac{1}{f}=\\frac{1}{g}+\\frac{1}{b}'});
+  if(!Number.isFinite(st.f))parts.push({h:t('m.b'),m:'\\frac{1}{b}=-\\frac{1}{g}\\;\\Rightarrow\\;b=-g=-'+tx(s.g)+cm,legend:[t('m.l.b')]});
+  else if(st.infinite)parts.push({h:t('m.b'),m:'g=f\\;\\Rightarrow\\;\\frac{1}{b}=\\frac{1}{f}-\\frac{1}{g}=0\\;\\Rightarrow\\;b\\to\\infty',p:t('m.atF')});
+  else parts.push({h:t('m.b'),m:'b=\\frac{f\\cdot g}{g-f}=\\frac{'+par(st.f)+'\\cdot '+tx(s.g)+'}{'+tx(s.g)+'-'+par(st.f)+'}'+cm+eq(st.b)+cm,legend:[t('m.l.b')]});
+  if(!st.infinite){
+    const d=mDigits(st.m);
+    parts.push({h:t('m.m'),m:'m=\\frac{B}{G}=-\\frac{b}{g}=-\\frac{'+par(st.b)+'}{'+tx(s.g)+'}'+eq(st.m,d),legend:[t('m.l.sign'),t('m.l.size')]});
+  }
+  block(P.math,parts);
+}
+
+/* ---------- Drawing (SVG in pixels, world in cm; x to the right, y up) ---------- */
+const VIEW={mirror:{x0:-52,x1:28},lens:{x0:-52,x1:52}};
+let geo={};
+function frame(P){
+  const W=Math.max(280,Math.round(P.svg.getBoundingClientRect().width||343));
+  const v=VIEW[P.kind],s=W/(v.x1-v.x0);
+  const H=Math.round(Math.min(440,Math.max(210,W*0.56)));
+  return {W,H,s,X:x=>(x-v.x0)*s,Y:y=>H/2-y*s,half:H/2/s};
+}
+const pt=(F,[x,y])=>F.X(x).toFixed(1)+','+F.Y(y).toFixed(1);
+const line=(F,a,b,cls)=>'<line x1="'+F.X(a[0]).toFixed(1)+'" y1="'+F.Y(a[1]).toFixed(1)+'" x2="'+F.X(b[0]).toFixed(1)+'" y2="'+F.Y(b[1]).toFixed(1)+'" class="'+cls+'"/>';
+// small arrowhead on a ray, at fraction q of the visible part from a to b (pixels)
+function arrow(F,a,b,cls,q){
+  let ax=F.X(a[0]),ay=F.Y(a[1]),bx=F.X(b[0]),by=F.Y(b[1]);
+  const len=Math.hypot(bx-ax,by-ay);if(len<30)return '';
+  const vis=Math.min(len,F.W*0.9);
+  const ux=(bx-ax)/len,uy=(by-ay)/len,cx=ax+ux*vis*q,cy=ay+uy*vis*q;
+  const p=[[cx+ux*6,cy+uy*6],[cx-ux*5-uy*4.5,cy-uy*5+ux*4.5],[cx-ux*5+uy*4.5,cy-uy*5-ux*4.5]];
+  return '<polygon class="arrow '+cls+'" points="'+p.map(([x,y])=>x.toFixed(1)+','+y.toFixed(1)).join(' ')+'"/>';
+}
+// stick figure, height h (cm, negative = upside down), standing on the axis at x; width scales with |h|
+function figure(F,x,h,cls){
+  const a=Math.abs(h),P=(u,v)=>pt(F,[x+u*a,v*h]);
+  const hx=F.X(x),hy=F.Y(0.86*h),hr=Math.max(0.6,0.14*a*F.s);
+  return '<g class="'+cls+'"><polyline points="'+P(-0.2,0)+' '+P(0,0.4)+' '+P(0.2,0)+'"/>'
+    +'<polyline points="'+P(0,0.4)+' '+P(0,0.72)+'"/>'
+    +'<polyline points="'+P(-0.24,0.5)+' '+P(0,0.64)+' '+P(0.24,0.5)+'"/>'
+    +'<circle cx="'+hx.toFixed(1)+'" cy="'+hy.toFixed(1)+'" r="'+hr.toFixed(1)+'"/></g>';
+}
+// a point on the axis; its label only if it does not overlap the element or another label
+function mark(F,x,label){
+  const v=VIEW[F.kind];if(!Number.isFinite(x)||x<v.x0+1||x>v.x1-1)return '';
+  const px=F.X(x),free=px>12&&px<F.W-12&&[F.X(0)].concat(F.labels).every(o=>Math.abs(o-px)>18);
+  let out='<circle class="mark" cx="'+px.toFixed(1)+'" cy="'+F.Y(0).toFixed(1)+'" r="3.5"/>';
+  if(free){F.labels.push(px);out+='<text class="lbl" x="'+px.toFixed(1)+'" y="'+(F.Y(0)+20).toFixed(1)+'" text-anchor="middle">'+label+'</text>';}
+  return out;
+}
+function element(F,st){
+  const h=F.half*0.82;let out='';
+  if(st.kind==='mirror'){
+    if(st.element==='plane'){
+      out+=line(F,[0,-h],[0,h],'el');
+      for(let y=-h+1.5;y<h;y+=2.5)out+=line(F,[0,y],[1.4,y+1.4],'hatch');
+      return out;
+    }
+    // parabola x = -y²/2r (the paraxial shape), aperture limited so the bowl stays at most 6 cm deep
+    const r=st.r,ap=Math.min(h,Math.sqrt(2*Math.abs(r)*6)),pts=[];
+    for(let i=0;i<=40;i++){const y=-ap+2*ap*i/40;pts.push([-y*y/(2*r),y]);}
+    out+=line(F,[0,-F.half],[0,F.half],'plane');
+    out+='<polyline class="el" points="'+pts.map(p=>pt(F,p)).join(' ')+'"/>';
+    for(let i=1;i<40;i+=3){const [x,y]=pts[i];out+=line(F,[x,y],[x+1.4,y+1.4],'hatch');}
+    return out;
+  }
+  const T=Math.min(3.2,0.4+Math.abs(st.value)*0.11),X=F.X,Y=F.Y;
+  out+=line(F,[0,-F.half],[0,F.half],'plane');
+  if(st.element==='plane')return out+'<rect class="glass" x="'+(X(-0.4)).toFixed(1)+'" y="'+Y(h).toFixed(1)+'" width="'+(0.8*F.s).toFixed(1)+'" height="'+(2*h*F.s).toFixed(1)+'"/>';
+  if(st.element==='converging')
+    return out+'<path class="glass" d="M'+pt(F,[0,h])+' Q'+pt(F,[2*T,0])+' '+pt(F,[0,-h])+' Q'+pt(F,[-2*T,0])+' '+pt(F,[0,h])+'Z"/>';
+  // diverging: thick edges, thin middle (quadratic curves with their middle at ±0.15 T)
+  return out+'<path class="glass" d="M'+pt(F,[-T,h])+' L'+pt(F,[T,h])+' Q'+pt(F,[-0.7*T,0])+' '+pt(F,[T,-h])+' L'+pt(F,[-T,-h])+' Q'+pt(F,[0.7*T,0])+' '+pt(F,[-T,h])+'Z"/>';
+}
+function render(kind){
+  const P=panels[kind];if(!P||P.sec.hidden)return;
+  const st=current(kind);
+  renderControls(P,st);renderResults(P,st);renderMath(P,st);
+  const F=frame(P);F.kind=kind;F.labels=[];geo[kind]=F;
+  let svg='';
+  svg+=line(F,[VIEW[kind].x0,0],[VIEW[kind].x1,0],'axis');
+  svg+=element(F,st);
+  // focal points and centre of curvature
+  if(Number.isFinite(st.f)){
+    if(kind==='mirror'){svg+=mark(F,-st.f,'F')+mark(F,-st.r,'M');}
+    else{svg+=mark(F,-st.f,'F')+mark(F,st.f,'F′')+mark(F,-2*st.f,'2F')+mark(F,2*st.f,'2F′');}
+  }
+  // rays: dashed extensions first, so the solid rays stay on top
+  for(const r of st.rays){
+    const c='r-'+r.id;
+    if(r.pre)svg+=line(F,r.pre[0],r.pre[1],'ray ext '+c);
+    if(r.back)svg+=line(F,r.back[0],r.back[1],'ray ext '+c);
+  }
+  for(const r of st.rays){
+    const c='r-'+r.id;
+    svg+=line(F,r.inc[0],r.inc[1],'ray '+c)+line(F,r.out[0],r.out[1],'ray '+c);
+    svg+=arrow(F,r.inc[0],r.inc[1],c,0.5)+arrow(F,r.out[0],r.out[1],c,0.3);
+  }
+  svg+=figure(F,-S[kind].g,G,'obj');
+  if(!st.infinite&&Math.abs(st.imageH)<F.half*20){
+    svg+=figure(F,st.imageX,st.imageH,'img'+(st.info.real?'':' virtual'));
+    // very small image: an inset draws it larger, the right way round
+    if(Math.abs(st.imageH)*F.s<22){
+      const bw=80,bh=88,bx=F.W-bw-6,by=6,hh=48,foot=by+bh-10;
+      const sub={s:1,X:x=>bx+bw/2+x,Y:y=>foot-(st.info.upright?0:hh)-y};
+      svg+='<rect class="inset" x="'+bx+'" y="'+by+'" width="'+bw+'" height="'+bh+'" rx="8"/>';
+      svg+='<text class="lbl" x="'+(bx+bw/2)+'" y="'+(by+16)+'" text-anchor="middle" font-size="11">'+Tools.esc(t('inset',{n:Tools.fmt(Math.max(2,Math.round(hh/(Math.abs(st.imageH)*F.s))),0)}))+'</text>';
+      svg+=figure(sub,0,st.info.upright?hh:-hh,'img'+(st.info.real?'':' virtual'));
+    }
+  }
+  P.svg.setAttribute('viewBox','0 0 '+F.W+' '+F.H);
+  P.svg.setAttribute('height',String(F.H));
+  P.svg.innerHTML=svg;
+  P.svg.setAttribute('aria-label',t('svg.desc',{el:elName(st),g:Tools.fmt(S[kind].g,1),img:st.infinite?t('svg.noimg'):imageWords(st)}));
+  P.legend.innerHTML=[
+    ['sw-parallel',t('ray.parallel')],['sw-focal',t('ray.focal')],['sw-central',t(kind==='mirror'?'ray.vertex':'ray.central')],
+    ['dash',t('lg.ext')],['sw-img',t('lg.image')]
+  ].map(([c,l])=>'<li><i class="'+c+'"></i>'+Tools.esc(l)+'</li>').join('');
+}
+let raf=0;
+const schedule=kind=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;render(kind);});};
+
+function set(kind,{v,g}={}){
+  const lim=LIMITS[kind];
+  if(v!=null)S[kind].v=snap(v,lim.min,lim.max);
+  if(g!=null)S[kind].g=snap(g,LIMITS.g.min,LIMITS.g.max);
+  save();
+}
+
+for(const P of Object.values(panels)){
+  P.v.addEventListener('input',()=>{set(P.kind,{v:Number(P.v.value)});schedule(P.kind);});
+  P.g.addEventListener('input',()=>{set(P.kind,{g:Number(P.g.value)});schedule(P.kind);});
+  for(const b of P.presets)b.addEventListener('click',()=>{
+    set(P.kind,{v:Number(b.dataset.v),g:Number(b.dataset.g)});render(P.kind);
+    Tools.diag.log('preset',{kind:P.kind,v:S[P.kind].v,g:S[P.kind].g});
+  });
+  // drag the object sideways across the drawing
+  let drag=null;
+  const toG=e=>{const F=geo[P.kind];if(!F)return null;const r=P.svg.getBoundingClientRect();
+    const x=(e.clientX-r.left)*(F.W/r.width)/F.s+VIEW[P.kind].x0;return -x;};
+  P.svg.addEventListener('pointerdown',e=>{
+    const g=toG(e);if(g==null||g<0.5)return;
+    drag={id:e.pointerId,x:e.clientX,y:e.clientY,on:false};
+  });
+  P.svg.addEventListener('pointermove',e=>{
+    if(!drag||drag.id!==e.pointerId)return;
+    if(!drag.on){
+      const dx=Math.abs(e.clientX-drag.x),dy=Math.abs(e.clientY-drag.y);
+      if(dy>dx&&dy>6){drag=null;return;}       // vertical swipe: the page scrolls
+      if(dx<4)return;
+      drag.on=true;try{P.svg.setPointerCapture(e.pointerId);}catch(_){}
+    }
+    const g=toG(e);if(g!=null){set(P.kind,{g});schedule(P.kind);}
+  });
+  const end=e=>{if(drag&&drag.id===e.pointerId){if(drag.on)Tools.diag.log('dragged',{kind:P.kind,g:S[P.kind].g});drag=null;}};
+  P.svg.addEventListener('pointerup',e=>{
+    if(drag&&!drag.on){const g=toG(e);if(g!=null&&g>=0.5){set(P.kind,{g});render(P.kind);}}
+    end(e);
+  });
+  P.svg.addEventListener('pointercancel',end);
+}
+if('ResizeObserver' in window){
+  const ro=new ResizeObserver(()=>{for(const k in panels)schedule(k);});
+  for(const P of Object.values(panels))ro.observe(P.svg.parentNode);
+}else window.addEventListener('resize',()=>{for(const k in panels)schedule(k);});
+
+/* ---------- Spoon explanation: worked example with the values of the preset "Spoon, inside" ---------- */
+function renderSpoon(){
+  const b=panels.mirror.presets[0],k=Number(b.dataset.v),g=Number(b.dataset.g);
+  const st=O.setup('mirror',k,g,G),cm='\\,\\text{cm}',d=mDigits(st.m);
+  const pct=Math.round(Math.abs(st.m)*100);
+  block(Tools.$('spoonMath'),[
+    {p:t('sp.p1',{r:Tools.fmt(st.r,1)}),m:'f=\\frac{r}{2}=\\frac{'+tx(st.r)+cm+'}{2}\\approx'+tx(st.f)+cm},
+    {p:t('sp.p2',{g:Tools.fmt(g,0)}),m:'b=\\frac{f\\cdot g}{g-f}=\\frac{'+tx(st.f)+'\\cdot '+tx(g,0)+'}{'+tx(g,0)+'-'+tx(st.f)+'}'+cm+'\\approx'+tx(st.b)+cm},
+    {m:'m=-\\frac{b}{g}=-\\frac{'+tx(st.b)+'}{'+tx(g,0)+'}\\approx'+tx(st.m,d)},
+    {p:t('sp.p3',{p:Tools.fmt(pct,0)+' %'})},
+    {p:t('sp.p4')}
+  ]);
+}
+
+/* ---------- Overview ↔ experiment (assets/shared/toolbox.js) ---------- */
+const box=Toolbox.init({
+  state:{view:S.view,tab:S.tab},
+  onChange:st=>{S.view=st.view;S.tab=st.tab;save();},
+  onSelect:name=>{render(name);Tools.diag.log('open',{tab:name});},
+});
+renderSpoon();
+Tools.onLang(()=>{renderSpoon();for(const k in panels)render(k);});
+Tools.diag.info(()=>({view:S.view,tab:S.tab,mirror:S.mirror,lens:S.lens,katex:!!window.katex}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+function report(kind){
+  const st=current(kind),r1=x=>Number.isFinite(x)?Math.round(x*100)/100:null;
+  const out={element:st.element,object_distance_cm:S[kind].g,object_height_cm:G,focal_length_cm:r1(st.f)};
+  if(kind==='mirror'){out.curvature_per_m=S.mirror.v;out.radius_cm=r1(st.r);}else out.power_dpt=S.lens.v;
+  if(st.infinite)Object.assign(out,{image_distance_cm:null,magnification:null,image:'none (rays leave parallel, image at infinity)'});
+  else Object.assign(out,{image_distance_cm:r1(st.b),magnification:Math.round(st.m*1000)/1000,
+    image:{real:st.info.real,upright:st.info.upright,size:st.info.size}});
+  out.explanation=t('why.'+kind+'.'+O.regime(st.f,st.g));
+  return out;
+}
+const distProp={type:'number',minimum:LIMITS.g.min,maximum:LIMITS.g.max,description:'Object distance g in cm from the vertex of the mirror or the centre of the lens (1–50, rounded to steps of 0.5).'};
+Tools.mcp.register({
+  name:'mirror_image',title:'Set up the curved mirror',label:'mcp.mirror',
+  description:'Opens the curved mirror experiment, sets the curvature and/or the object distance like the sliders, and returns the image: radius r and focal length f = r/2 (positive = concave like the inside of a spoon, negative = convex like its back, curvature 0 = flat mirror), image distance b (positive = real image in front of the mirror, negative = virtual image behind it), magnification m = -b/g (negative = upside down) and an explanation in the language of the app. Omitted values stay as they are.',
+  inputSchema:{type:'object',properties:{
+    curvature_per_m:{type:'number',minimum:LIMITS.mirror.min,maximum:LIMITS.mirror.max,description:'Curvature 1/r in 1/m (−40 … 40, steps of 0.5): positive = concave, negative = convex, 0 = flat. Example: 30 ≈ a tablespoon (r ≈ 3.3 cm).'},
+    object_distance_cm:distProp
+  },additionalProperties:false},
+  execute:({curvature_per_m,object_distance_cm})=>{
+    set('mirror',{v:curvature_per_m,g:object_distance_cm});box.open('mirror');render('mirror');return report('mirror');
+  }
+});
+Tools.mcp.register({
+  name:'lens_image',title:'Set up the lens',label:'mcp.lens',
+  description:'Opens the lens experiment, sets the power and/or the object distance like the sliders, and returns the image: focal length f = 1/D (positive = converging, negative = diverging), image distance b (positive = real image behind the lens, negative = virtual image in front of it), magnification m = -b/g (negative = upside down) and an explanation in the language of the app. Omitted values stay as they are.',
+  inputSchema:{type:'object',properties:{
+    power_dpt:{type:'number',minimum:LIMITS.lens.min,maximum:LIMITS.lens.max,description:'Power D in dioptres (−25 … 25, steps of 0.5): positive = converging lens, negative = diverging lens.'},
+    object_distance_cm:distProp
+  },additionalProperties:false},
+  execute:({power_dpt,object_distance_cm})=>{
+    set('lens',{v:power_dpt,g:object_distance_cm});box.open('lens');render('lens');return report('lens');
+  }
+});
+})();
+</script>
+</body>
+</html>

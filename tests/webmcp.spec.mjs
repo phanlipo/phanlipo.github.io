@@ -360,6 +360,31 @@ test.describe('medical-calculator tools', () => {
   });
 });
 
+test.describe('physics-lab tools', () => {
+  test.beforeEach(async ({ page }) => { await open(page, '/physics-lab/'); });
+
+  test('mirror_image and lens_image set the sliders and return the image', async ({ page }) => {
+    let r = await call(page, 'physics_lab_mirror_image', { curvature_per_m: 30, object_distance_cm: 30 });
+    const f = 100 / 30 / 2, b = 1 / (1 / f - 1 / 30);
+    expect(r.result).toMatchObject({ element: 'concave', curvature_per_m: 30, object_distance_cm: 30,
+      radius_cm: Math.round(200 * f) / 100, focal_length_cm: Math.round(100 * f) / 100, image_distance_cm: Math.round(100 * b) / 100,
+      magnification: Math.round(-b / 30 * 1000) / 1000, image: { real: true, upright: false, size: 'reduced' } });
+    await expect(page.locator('#p-mirror')).toBeVisible();
+    await expect(page.locator('#p-mirror [data-part="v"]')).toHaveValue('30');
+    // only the distance: the curvature stays, values snap to the slider steps
+    r = await call(page, 'physics_lab_mirror_image', { object_distance_cm: 10.3 });
+    expect(r.result).toMatchObject({ curvature_per_m: 30, object_distance_cm: 10.5 });
+    r = await call(page, 'physics_lab_mirror_image', { curvature_per_m: 10, object_distance_cm: 5 });
+    expect(r.result).toMatchObject({ image_distance_cm: null, magnification: null });
+    expect((await call(page, 'physics_lab_mirror_image', { curvature_per_m: 50 })).ok).toBe(false);
+    r = await call(page, 'physics_lab_lens_image', { power_dpt: 10, object_distance_cm: 15 });
+    expect(r.result).toMatchObject({ element: 'converging', power_dpt: 10, focal_length_cm: 10, image_distance_cm: 30, magnification: -2,
+      image: { real: true, upright: false, size: 'enlarged' } });
+    await expect(page.locator('#p-lens')).toBeVisible();
+    await expect(page.locator('#p-lens .calc-result.main .v')).toHaveText('reell · umgekehrt · vergrößert');
+  });
+});
+
 test.describe('chain-transaction tools', () => {
   test.beforeEach(async ({ page }) => { await open(page, '/chain-transaction/'); });
 
