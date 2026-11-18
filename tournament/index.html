@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Turnier</title>
+<meta name="description" content="Turnier planen, z. B. Kicker auf der Weihnachtsfeier: Teams auslosen, Spielplan jeder gegen jeden oder K.-o., Ergebnisse eintragen und Tabelle anzeigen.">
+<meta name="tool:tags" content="Freizeit, Sport, Zufall">
+<meta name="tool:features" content="Kopieren, KI-Agent">
+<meta name="tool:webmcp" content="get_tournament, set_result">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Spielplan, Ergebnisse und Tabelle lesen und das Ergebnis eines Spiels eintragen; das erscheint sofort im Spielplan und in der Tabelle.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the schedule, results and table and enter the result of a match; it shows up in the schedule and the table right away.">
+<meta name="tool:icon" content="tournament">
+<meta name="tool:color" content="#9a3412">
+<meta name="tool:short-name" content="Turnier">
+<meta name="tool:title-en" content="Tournament">
+<meta name="tool:description-en" content="Plan a tournament, e.g. table football at the office party: draw teams, round robin or knockout schedule, enter results and show the table.">
+<meta name="tool:short-name-en" content="Tournament">
+<meta name="tool:storage" content="tournament.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-F3q4Kg0UT5jWqrZ0ZVOs0MEfvrTwOfjw/FDXXBeqILI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Turnier">
+<meta name="theme-color" content="#9a3412">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#9a3412;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#fdba74;--accent-text:#2a1205}}
+main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+main>div{display:grid;gap:12px;min-width:0}
+.add{display:flex;gap:8px;align-items:flex-end}
+.add .form-field{flex:1;min-width:0;margin:0}
+.seg{margin-block-end:10px}
+.team-list .name{font-weight:600}
+.games h3{margin:14px 0 4px;font-size:15px}
+.games h3:first-child{margin-block-start:0}
+.game{display:flex;align-items:center;gap:8px;width:100%}
+.game .no{flex:none;min-width:2.2em;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.game .who{flex:1;min-width:0;display:grid;gap:2px}
+.game .who span{overflow-wrap:anywhere}
+.game .who .win{font-weight:700}
+.game .who .tbd{color:var(--muted);font-style:italic}
+.game .res{flex:none;font-weight:700;font-variant-numeric:tabular-nums;min-width:3.5em;text-align:end}
+.game .res.open{font-weight:400;color:var(--muted);font-size:14px}
+.list-rows>li.next{background:var(--surface-2)}
+.next-box{display:grid;gap:10px}
+.next-box .vs{margin:0;font-size:20px;font-weight:700;overflow-wrap:anywhere}
+.next-box .vs small{display:block;font-size:13px;font-weight:400;color:var(--muted)}
+.next-box .later{margin:0}
+.champion{display:flex;align-items:center;gap:12px}
+.champion .ic{width:44px;height:44px;flex:none;color:var(--accent)}
+.champion p{margin:0}
+.champion b{display:block;font-size:20px;overflow-wrap:anywhere}
+.table-wrap{overflow-x:auto}
+table.standings{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+.standings th,.standings td{padding:8px 4px;text-align:end;border-block-end:1px solid var(--border)}
+.standings th{font-size:12px;color:var(--muted);font-weight:600}
+.standings abbr{text-decoration:none}
+.standings .team{text-align:start;width:100%;overflow-wrap:anywhere}
+.standings td.pts{font-weight:700}
+.standings tbody tr:first-child td{font-weight:700}
+.score-fields{display:grid;gap:12px}
+.score-row{display:flex;align-items:flex-end;gap:8px}
+.score-row .form-field{flex:1;min-width:0;margin:0}
+.score-row input{text-align:center;font-size:20px;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Turnier</span></h1>
+  <p class="sub" data-i18n="sub">Teams auslosen, Spielplan, Tabelle</p>
+</header>
+
+<main>
+  <!-- Setup: only shown while no tournament is running -->
+  <div id="setup">
+    <section class="card" aria-labelledby="h-players">
+      <h2 id="h-players"><span class="step">1</span><span data-i18n="players">Mitspieler</span> <span class="badge" id="playerCount">0</span></h2>
+      <form class="add" id="addForm">
+        <div class="form-field">
+          <label for="nameIn" data-i18n="nameLabel">Name</label>
+          <input type="text" id="nameIn" maxlength="300" autocomplete="off" enterkeyhint="done" placeholder="z. B. Anna, Ben" data-i18n-attr="placeholder:namePh">
+        </div>
+        <button type="submit" class="btn primary"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="add">Hinzufügen</span></button>
+      </form>
+      <p class="form-error" id="addError" role="alert" hidden></p>
+      <ul class="list-rows wrap" id="players"></ul>
+    </section>
+
+    <section class="card" aria-labelledby="h-teams">
+      <h2 id="h-teams"><span class="step">2</span><span data-i18n="teams">Teams</span></h2>
+      <div class="seg" role="group" aria-label="Personen je Team" data-i18n-attr="aria-label:sizeLabel" id="size">
+        <button type="button" aria-pressed="false" data-size="1"><span data-i18n="size1">Einzeln</span></button>
+        <button type="button" aria-pressed="true" data-size="2"><span data-i18n="size2">2er</span></button>
+        <button type="button" aria-pressed="false" data-size="3"><span data-i18n="size3">3er</span></button>
+        <button type="button" aria-pressed="false" data-size="4"><span data-i18n="size4">4er</span></button>
+      </div>
+      <label class="check"><input type="checkbox" id="optRandom" checked><span><span data-i18n="random">Teams zufällig auslosen</span><small data-i18n="randomInfo">Sonst bilden die Mitspieler in der eingetragenen Reihenfolge die Teams.</small></span></label>
+      <p class="notice info" id="teamNote" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span></span></p>
+      <ul class="list-rows wrap team-list" id="teamPreview"></ul>
+      <div class="row" id="shuffleRow">
+        <button type="button" class="btn" id="btnShuffle"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-shuffle"/></svg><span data-i18n="shuffle">Neu auslosen</span></button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h-mode">
+      <h2 id="h-mode"><span class="step">3</span><span data-i18n="mode">Spielmodus</span></h2>
+      <div class="checks" role="radiogroup" aria-labelledby="h-mode" id="modes">
+        <label class="check"><input type="radio" name="mode" value="rr" checked><span><span data-i18n="modeRr">Jeder gegen jeden</span><small data-mode-info="rr"></small></span></label>
+        <label class="check"><input type="radio" name="mode" value="rr2"><span><span data-i18n="modeRr2">Hin- und Rückspiel</span><small data-mode-info="rr2"></small></span></label>
+        <label class="check"><input type="radio" name="mode" value="ko"><span><span data-i18n="modeKo">K.-o.-System</span><small data-mode-info="ko"></small></span></label>
+      </div>
+      <p class="notice info" id="startNote" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="needTeams">Für ein Turnier braucht es mindestens 2 Teams – trag weitere Mitspieler ein.</span></p>
+      <button type="button" class="btn primary block" id="btnStart"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span data-i18n="start">Turnier starten</span></button>
+    </section>
+  </div>
+
+  <!-- Running tournament -->
+  <div id="play" hidden>
+    <section class="card" id="champCard" hidden>
+      <div class="champion">
+        <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trophy"/></svg>
+        <p><span data-i18n="champion">Turniersieger</span><b id="champName"></b></p>
+      </div>
+    </section>
+
+    <section class="card next-box" id="nextCard" aria-labelledby="h-next" hidden>
+      <h2 id="h-next" data-i18n="next">Nächstes Spiel</h2>
+      <p class="vs" id="nextVs"></p>
+      <button type="button" class="btn primary block" id="btnNext"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#pencil"/></svg><span data-i18n="enter">Ergebnis eintragen</span></button>
+      <p class="muted later" id="nextLater" hidden></p>
+    </section>
+
+    <div class="seg" role="group" aria-label="Ansicht" data-i18n-attr="aria-label:viewLabel" id="view">
+      <button type="button" aria-pressed="true" data-view="games"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#list-numbers"/></svg><span data-i18n="viewGames">Spiele</span></button>
+      <button type="button" aria-pressed="false" data-view="table"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#table"/></svg><span data-i18n="viewTable">Tabelle</span></button>
+    </div>
+
+    <section class="card" id="gamesCard" aria-labelledby="h-games">
+      <h2 id="h-games"><span data-i18n="games">Spielplan</span> <span class="badge" id="gamesDone"></span></h2>
+      <div class="games" id="games"></div>
+    </section>
+
+    <section class="card" id="tableCard" aria-labelledby="h-table" hidden>
+      <h2 id="h-table" data-i18n="table">Tabelle</h2>
+      <div class="table-wrap">
+        <table class="standings">
+          <thead><tr>
+            <th scope="col"><abbr title="Platz" data-i18n-attr="title:colPlaceL" data-i18n="colPlace">Pl.</abbr></th>
+            <th scope="col" class="team" data-i18n="colTeam">Team</th>
+            <th scope="col"><abbr title="Spiele" data-i18n-attr="title:colPlayedL" data-i18n="colPlayed">Sp</abbr></th>
+            <th scope="col"><abbr title="Siege" data-i18n-attr="title:colWonL" data-i18n="colWon">S</abbr></th>
+            <th scope="col"><abbr title="Unentschieden" data-i18n-attr="title:colDrawnL" data-i18n="colDrawn">U</abbr></th>
+            <th scope="col"><abbr title="Niederlagen" data-i18n-attr="title:colLostL" data-i18n="colLost">N</abbr></th>
+            <th scope="col"><abbr title="Tore" data-i18n-attr="title:colGoalsL" data-i18n="colGoals">Tore</abbr></th>
+            <th scope="col"><abbr title="Tordifferenz" data-i18n-attr="title:colDiffL" data-i18n="colDiff">Diff</abbr></th>
+            <th scope="col"><abbr title="Punkte" data-i18n-attr="title:colPtsL" data-i18n="colPts">Pkt</abbr></th>
+          </tr></thead>
+          <tbody id="standings"></tbody>
+        </table>
+      </div>
+      <p class="muted" data-i18n="tableRule">Sieg 3 Punkte, Unentschieden 1 Punkt. Bei Gleichstand zählen Tordifferenz, dann geschossene Tore.</p>
+    </section>
+  </div>
+</main>
+
+<dialog id="scoreDlg" class="dialog" aria-labelledby="scoreH">
+  <form id="scoreForm" novalidate>
+    <div class="dialog-head">
+      <h2 id="scoreH"></h2>
+      <button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close; title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button>
+    </div>
+    <div class="dialog-body score-fields">
+      <div class="score-row">
+        <button type="button" class="btn icon" data-step="a" data-d="-1" aria-label="Ein Tor weniger" title="Ein Tor weniger" data-i18n-attr="aria-label:minus; title:minus"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#minus"/></svg></button>
+        <div class="form-field"><label for="scoreA" id="labelA"></label><input type="text" id="scoreA" inputmode="numeric" maxlength="3" autocomplete="off"></div>
+        <button type="button" class="btn icon" data-step="a" data-d="1" aria-label="Ein Tor mehr" title="Ein Tor mehr" data-i18n-attr="aria-label:plus; title:plus"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg></button>
+      </div>
+      <div class="score-row">
+        <button type="button" class="btn icon" data-step="b" data-d="-1" aria-label="Ein Tor weniger" title="Ein Tor weniger" data-i18n-attr="aria-label:minus; title:minus"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#minus"/></svg></button>
+        <div class="form-field"><label for="scoreB" id="labelB"></label><input type="text" id="scoreB" inputmode="numeric" maxlength="3" autocomplete="off"></div>
+        <button type="button" class="btn icon" data-step="b" data-d="1" aria-label="Ein Tor mehr" title="Ein Tor mehr" data-i18n-attr="aria-label:plus; title:plus"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg></button>
+      </div>
+      <p class="form-error" id="scoreError" role="alert" hidden></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn danger" id="btnClear"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearResult">Ergebnis löschen</span></button>
+      <button type="submit" class="btn primary"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#check"/></svg><span data-i18n="saveResult">Speichern</span></button>
+    </div>
+  </form>
+</dialog>
+
+<details class="card" data-menu data-menu-page data-icon="users" id="teamsPage" hidden>
+  <summary data-i18n="teamsPage">Teams</summary>
+  <ul class="list-rows wrap team-list" id="teamList"></ul>
+</details>
+
+<div class="menu-list" data-menu id="playMenu" hidden>
+  <button type="button" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Spielplan &amp; Tabelle kopieren</span></button>
+  <button type="button" id="btnNew" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="newT">Neues Turnier</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Für kleine Turniere ohne Papierkram, z. B. Kicker, Tischtennis oder Darts auf der Weihnachtsfeier: Teams auslosen, Spielplan erzeugen, Ergebnisse eintragen – die Tabelle rechnet sich selbst.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Mitspieler</b> eintragen – mehrere auf einmal mit Komma getrennt. Einzelne Namen entfernt der Papierkorb (rückgängig möglich).</li>
+    <li><b>Teams:</b> Einzeln oder 2er-, 3er-, 4er-Teams. Die App lost zufällig aus; „Neu auslosen“ mischt noch einmal. Geht es nicht auf, bekommen einzelne Teams eine Person mehr (die wechseln sich z. B. ab).</li>
+    <li><b>Jeder gegen jeden:</b> Jedes Team spielt einmal gegen jedes andere, bei „Hin- und Rückspiel“ zweimal. Bei ungerader Teamzahl hat in jeder Runde ein Team spielfrei. Die Runden sind so verteilt, dass niemand lange warten muss.</li>
+    <li><b>K.-o.-System:</b> Wer verliert, scheidet aus. Bei einer Teamzahl, die keine Zweierpotenz ist (z. B. 6), kommen einige Teams per Freilos direkt in die zweite Runde. Unentschieden gibt es hier nicht.</li>
+    <li><b>Ergebnisse:</b> „Ergebnis eintragen“ beim nächsten Spiel oder ein Spiel im Spielplan antippen. Ein eingetragenes Ergebnis lässt sich jederzeit ändern oder löschen; im K.-o.-System werden dann spätere Spiele des betroffenen Zweigs zurückgesetzt.</li>
+    <li><b>Tabelle</b> (jeder gegen jeden): Sieg 3 Punkte, Unentschieden 1 Punkt; bei Punktgleichheit entscheidet die Tordifferenz, dann die Zahl der Tore.</li>
+    <li>Im Menü: <b>Teams</b> mit ihren Mitgliedern, <b>Spielplan &amp; Tabelle kopieren</b> (als Text, z. B. für den Team-Chat) und <b>Neues Turnier</b> – die Mitspieler bleiben eingetragen.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Mitspieler, Teams, Spielplan und Ergebnisse bleiben nur in diesem Browser gespeichert (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>For small tournaments without paperwork, e.g. table football, table tennis or darts at the office party: draw teams, create the schedule, enter results – the table works itself out.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Enter the <b>players</b> – several at once separated by commas. The bin removes a single name (can be undone).</li>
+    <li><b>Teams:</b> singles or teams of 2, 3 or 4. The app draws them at random; “Draw again” shuffles once more. If it does not add up, some teams get one person more (who take turns, for example).</li>
+    <li><b>Round robin:</b> every team plays every other team once, with “Home and away” twice. With an odd number of teams one team sits out each round. Rounds are spread so nobody waits long.</li>
+    <li><b>Knockout:</b> whoever loses is out. If the number of teams is not a power of two (e.g. 6), some teams get a bye straight into the second round. There are no draws here.</li>
+    <li><b>Results:</b> “Enter result” for the next match, or tap any match in the schedule. A result can be changed or deleted at any time; in a knockout, later matches of that branch are reset.</li>
+    <li><b>Table</b> (round robin): a win is 3 points, a draw 1 point; on equal points the goal difference decides, then goals scored.</li>
+    <li>In the menu: <b>Teams</b> with their members, <b>Copy schedule &amp; table</b> (as text, e.g. for the team chat) and <b>New tournament</b> – the players stay entered.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Players, teams, schedule and results stay only in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann Spielplan, Ergebnisse und Tabelle lesen und das Ergebnis eines Spiels eintragen; das erscheint sofort im Spielplan und in der Tabelle. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the schedule, results and table and enter the result of a match; it shows up in the schedule and the table right away. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version e61e52b00629</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="tournament.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{nTeams:'{n} Teams',teamNote:'{p} Personen ergeben {n} Teams – {x} davon mit einer Person mehr.',
+    infoRr:'{g} Spiele in {r} Runden',infoKo:'{g} Spiele, wer verliert, scheidet aus',
+    round:'Runde {n}',final:'Finale',semi:'Halbfinale',quarter:'Viertelfinale',r16:'Achtelfinale',
+    gameNo:'Spiel {n}',winnerOf:'Sieger Spiel {n}',bye:'Spielfrei: {t}',koBye:'Freilos: {t}',
+    open:'offen',done:'{d} von {n}',laterGame:'Danach: {a} gegen {b}',vs:'{a} gegen {b}',
+    dupName:'„{name}“ ist schon eingetragen.',tooMany:'Höchstens {n} Mitspieler.',
+    removed:'„{name}“ entfernt',noPlayers:'Noch keine Mitspieler.',scoreBad:'Bitte für beide Teams eine Zahl von 0 bis 999 eintragen.',
+    noDraw:'Im K.-o.-System braucht es einen Sieger – kein Unentschieden.',resultCleared:'Ergebnis von Spiel {n} gelöscht',
+    reset:'Spätere Spiele dieses Zweigs zurückgesetzt.',newQ:'Neues Turnier anfangen? Spielplan und Ergebnisse dieses Turniers gehen verloren; die Mitspieler bleiben.',
+    newOk:'Neues Turnier',copied:'Kopiert',copyFail:'Kopieren nicht möglich',scheduleH:'Spielplan',
+    'mcp.result':'Ergebnis eingetragen'},
+  en:{title:'Tournament',sub:'Draw teams, schedule, table',players:'Players',nameLabel:'Name',namePh:'e.g. Anna, Ben',add:'Add',
+    teams:'Teams',sizeLabel:'People per team',size1:'Singles',size2:'Pairs',size3:'Threes',size4:'Fours',
+    random:'Draw teams at random',randomInfo:'Otherwise the players form teams in the order entered.',shuffle:'Draw again',
+    mode:'Format',modeRr:'Round robin',modeRr2:'Home and away',modeKo:'Knockout',
+    needTeams:'A tournament needs at least 2 teams – add more players.',start:'Start tournament',
+    champion:'Tournament winner',next:'Next match',enter:'Enter result',viewLabel:'View',viewGames:'Matches',viewTable:'Table',
+    games:'Schedule',table:'Table',colPlace:'#',colPlaceL:'Place',colTeam:'Team',colPlayed:'P',colPlayedL:'Played',colWon:'W',colWonL:'Won',
+    colDrawn:'D',colDrawnL:'Drawn',colLost:'L',colLostL:'Lost',colGoals:'Goals',colGoalsL:'Goals',colDiff:'GD',colDiffL:'Goal difference',colPts:'Pts',colPtsL:'Points',
+    tableRule:'A win is 3 points, a draw 1 point. On equal points goal difference decides, then goals scored.',
+    close:'Close',minus:'One goal less',plus:'One goal more',clearResult:'Delete result',saveResult:'Save',
+    teamsPage:'Teams',copy:'Copy schedule & table',newT:'New tournament',
+    nTeams:'{n} teams',teamNote:'{p} people make {n} teams – {x} of them with one person more.',
+    infoRr:'{g} matches in {r} rounds',infoKo:'{g} matches, whoever loses is out',
+    round:'Round {n}',final:'Final',semi:'Semi-finals',quarter:'Quarter-finals',r16:'Round of 16',
+    gameNo:'Match {n}',winnerOf:'Winner match {n}',bye:'Sits out: {t}',koBye:'Bye: {t}',
+    open:'open',done:'{d} of {n}',laterGame:'After that: {a} vs {b}',vs:'{a} vs {b}',
+    dupName:'“{name}” is already entered.',tooMany:'At most {n} players.',
+    removed:'“{name}” removed',noPlayers:'No players yet.',scoreBad:'Please enter a number from 0 to 999 for both teams.',
+    noDraw:'A knockout needs a winner – no draw.',resultCleared:'Result of match {n} deleted',
+    reset:'Later matches of this branch were reset.',newQ:'Start a new tournament? The schedule and results of this tournament are lost; the players stay.',
+    newOk:'New tournament',copied:'Copied',copyFail:'Copying not possible',scheduleH:'Schedule',
+    'mcp.result':'result entered'}
+});
+const t=Tools.t, T=window.Tournament, $=Tools.$;
+const MAX_PLAYERS=64;
+// Keys: tournament.setup.v1 (players and choices), tournament.current.v1 (the running tournament)
+const LS_SETUP='tournament.setup.v1', LS_CUR='tournament.current.v1';
+const setup=Object.assign({players:[],size:2,random:true,seed:T.newSeed(),mode:'rr'},Tools.load(LS_SETUP,{}));
+let cur=Tools.load(LS_CUR,null);
+if(cur&&!T.valid(cur)){ Tools.diag.log('stored tournament invalid – discarded'); cur=null; }
+const saveSetup=()=>Tools.save(LS_SETUP,setup);
+const saveCur=()=>{ if(cur)Tools.save(LS_CUR,cur); else Tools.remove(LS_CUR); };
+const fmtN=n=>Tools.fmt(n,0);
+
+const previewTeams=()=>T.makeTeams(setup.players,setup.size,setup.random?setup.seed:null);
+const teamName=team=>T.teamName(team);
+
+function modeInfo(mode,n){
+  if(n<2)return '';
+  const s=T.stats(mode,n);
+  return mode==='ko'?t('infoKo',{g:fmtN(s.games)}):t('infoRr',{g:fmtN(s.games),r:fmtN(s.rounds)});
+}
+
+/* ---------- Setup ---------- */
+function renderSetup(){
+  $('playerCount').textContent=fmtN(setup.players.length);
+  const ul=$('players'); ul.textContent='';
+  if(!setup.players.length){
+    const li=document.createElement('li'); li.className='muted'; li.textContent=t('noPlayers'); ul.append(li);
+  }
+  setup.players.forEach((name,i)=>{
+    const li=document.createElement('li');
+    const s=document.createElement('span'); s.className='name'; s.textContent=name; s.style.flex='1';
+    const b=document.createElement('button'); b.type='button'; b.className='btn icon'; b.innerHTML=Tools.icon('trash');
+    b.setAttribute('aria-label',Tools.t('ask.delete')+': '+name); b.title=Tools.t('ask.delete');
+    b.addEventListener('click',()=>removePlayer(i));
+    li.append(s,b); ul.append(li);
+  });
+  for(const b of document.querySelectorAll('#size button'))b.setAttribute('aria-pressed',String(+b.dataset.size===setup.size));
+  $('optRandom').checked=setup.random;
+  const teams=previewTeams();
+  const pv=$('teamPreview'); pv.textContent='';
+  if(setup.size>1||setup.random)for(const team of teams)pv.append(teamRow(team));
+  pv.hidden=!pv.children.length;
+  $('shuffleRow').hidden=!setup.random||teams.length<2;
+  const big=teams.filter(x=>x.members.length>setup.size).length;
+  $('teamNote').hidden=!big;
+  $('teamNote').lastChild.textContent=big?t('teamNote',{p:fmtN(setup.players.length),n:fmtN(teams.length),x:fmtN(big)}):'';
+  for(const r of document.querySelectorAll('input[name=mode]'))r.checked=r.value===setup.mode;
+  for(const s of document.querySelectorAll('[data-mode-info]'))s.textContent=modeInfo(s.dataset.modeInfo,teams.length);
+  const ok=teams.length>=2;
+  $('btnStart').disabled=!ok; $('startNote').hidden=ok;
+}
+function teamRow(team){
+  const li=document.createElement('li');
+  const s=document.createElement('span'); s.className='name'; s.textContent=teamName(team);
+  li.append(s); return li;
+}
+function addPlayers(text){
+  const err=$('addError'); err.hidden=true;
+  const names=text.split(/[,;\n]/).map(s=>s.trim().replace(/\s+/g,' ').slice(0,40)).filter(Boolean);
+  if(!names.length)return false;
+  for(const name of names){
+    if(setup.players.some(p=>p.toLowerCase()===name.toLowerCase())){ err.textContent=t('dupName',{name}); err.hidden=false; continue; }
+    if(setup.players.length>=MAX_PLAYERS){ err.textContent=t('tooMany',{n:fmtN(MAX_PLAYERS)}); err.hidden=false; break; }
+    setup.players.push(name);
+  }
+  saveSetup(); renderSetup();
+  Tools.diag.log('players added',{count:setup.players.length});
+  return err.hidden;
+}
+function removePlayer(i){
+  const [name]=setup.players.splice(i,1);
+  saveSetup(); renderSetup();
+  Tools.undo(t('removed',{name}),()=>{ setup.players.splice(Math.min(i,setup.players.length),0,name); saveSetup(); renderSetup(); });
+}
+$('addForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const inp=$('nameIn');
+  if(addPlayers(inp.value))inp.value='';
+  inp.focus();
+});
+for(const b of document.querySelectorAll('#size button'))b.addEventListener('click',()=>{ setup.size=+b.dataset.size; saveSetup(); renderSetup(); });
+$('optRandom').addEventListener('change',e=>{ setup.random=e.target.checked; saveSetup(); renderSetup(); });
+$('btnShuffle').addEventListener('click',()=>{ setup.seed=T.newSeed(); saveSetup(); renderSetup(); Tools.diag.log('teams shuffled'); });
+for(const r of document.querySelectorAll('input[name=mode]'))r.addEventListener('change',()=>{ if(r.checked){ setup.mode=r.value; saveSetup(); renderSetup(); } });
+$('btnStart').addEventListener('click',()=>{
+  const teams=previewTeams();
+  if(teams.length<2)return;
+  cur=T.create(setup.mode,teams,setup.random?setup.seed:null);
+  cur.view='games';
+  saveCur(); render();
+  window.scrollTo(0,0);
+  Tools.diag.log('tournament started',{mode:cur.mode,teams:teams.length,games:T.games(cur).length});
+});
+
+/* ---------- Running tournament ---------- */
+function roundTitle(r){
+  if(cur.mode!=='ko')return t('round',{n:fmtN(r)});
+  const left=T.koRounds(cur)-r;
+  return [t('final'),t('semi'),t('quarter'),t('r16')][left]||t('round',{n:fmtN(r)});
+}
+const nameOf=i=>teamName(cur.teams[i]);
+function sideText(g,side){
+  const ti=g[side];
+  if(ti!=null)return nameOf(ti);
+  const from=g[side==='a'?'fromA':'fromB'];
+  return t('winnerOf',{n:fmtN(from)});
+}
+function render(){
+  const playing=!!cur;
+  $('setup').hidden=playing; $('play').hidden=!playing;
+  $('teamsPage').hidden=!playing; $('playMenu').hidden=!playing;
+  if(!playing){ renderSetup(); return; }
+  const games=T.games(cur), done=games.filter(g=>g.score).length;
+  // Champion
+  const champ=T.champion(cur);
+  $('champCard').hidden=champ==null;
+  if(champ!=null)$('champName').textContent=nameOf(champ);
+  // Next match (and the one after, so the next team can get ready)
+  const open=games.filter(g=>!g.score&&g.a!=null&&g.b!=null);
+  $('nextCard').hidden=!open.length;
+  if(open.length){
+    const g=open[0];
+    $('nextVs').innerHTML='';
+    const small=document.createElement('small'); small.textContent=t('gameNo',{n:fmtN(g.no)})+' · '+roundTitle(g.round);
+    $('nextVs').append(small,document.createTextNode(t('vs',{a:nameOf(g.a),b:nameOf(g.b)})));
+    $('btnNext').dataset.no=g.no;
+    $('nextLater').hidden=open.length<2;
+    if(open.length>1)$('nextLater').textContent=t('laterGame',{a:nameOf(open[1].a),b:nameOf(open[1].b)});
+  }
+  // View switch: the table only for round robin
+  const rr=cur.mode!=='ko';
+  const view=rr?cur.view||'games':'games';
+  $('view').hidden=!rr;
+  for(const b of document.querySelectorAll('#view button'))b.setAttribute('aria-pressed',String(b.dataset.view===view));
+  $('gamesCard').hidden=view!=='games'; $('tableCard').hidden=view!=='table';
+  $('gamesDone').textContent=t('done',{d:fmtN(done),n:fmtN(games.length)});
+  renderGames(games,open[0]);
+  if(rr)renderTable();
+  // Teams page in the menu
+  const tl=$('teamList'); tl.textContent='';
+  for(const team of cur.teams)tl.append(teamRow(team));
+}
+function renderGames(games,next){
+  const box=$('games'); box.textContent='';
+  const rounds=new Map();
+  for(const g of games){ if(!rounds.has(g.round))rounds.set(g.round,[]); rounds.get(g.round).push(g); }
+  for(const [r,list] of rounds){
+    const h=document.createElement('h3'); h.textContent=roundTitle(r); box.append(h);
+    const ul=document.createElement('ul'); ul.className='list-rows';
+    for(const g of list){
+      const li=document.createElement('li'); if(next&&g.no===next.no)li.className='next';
+      const ready=g.a!=null&&g.b!=null;
+      const b=document.createElement('button'); b.type='button'; b.className='open game'; b.dataset.no=g.no; b.disabled=!ready;
+      const no=document.createElement('span'); no.className='no'; no.textContent=fmtN(g.no);
+      const who=document.createElement('span'); who.className='who';
+      const w=g.score?(g.score[0]>g.score[1]?'a':g.score[1]>g.score[0]?'b':''):'';
+      for(const side of ['a','b']){
+        // Hidden separator: screen readers hear "Anna – Ben"
+        if(side==='b'){ const sep=document.createElement('span'); sep.className='sr-only'; sep.textContent=' – '; who.append(sep); }
+        const s=document.createElement('span'); s.textContent=sideText(g,side);
+        if(g[side]==null)s.className='tbd'; else if(w===side)s.className='win';
+        who.append(s);
+      }
+      const res=document.createElement('span'); res.className='res'+(g.score?'':' open');
+      res.textContent=g.score?fmtN(g.score[0])+' : '+fmtN(g.score[1]):t('open');
+      b.append(no,who,res); li.append(b); ul.append(li);
+    }
+    for(const ti of T.sitsOut(cur,r)){
+      const li=document.createElement('li'); li.className='muted';
+      li.textContent=t(cur.mode==='ko'?'koBye':'bye',{t:nameOf(ti)}); ul.append(li);
+    }
+    box.append(ul);
+  }
+}
+function renderTable(){
+  const tb=$('standings'); tb.textContent='';
+  for(const row of T.standings(cur)){
+    const tr=document.createElement('tr');
+    const cells=[fmtN(row.place),nameOf(row.team),fmtN(row.played),fmtN(row.won),fmtN(row.drawn),fmtN(row.lost),
+      fmtN(row.gf)+':'+fmtN(row.ga),(row.gf-row.ga>0?'+':'')+fmtN(row.gf-row.ga),fmtN(row.points)];
+    cells.forEach((c,i)=>{ const td=document.createElement('td'); td.textContent=c; if(i===1)td.className='team'; if(i===8)td.className='pts'; tr.append(td); });
+    tb.append(tr);
+  }
+}
+for(const b of document.querySelectorAll('#view button'))b.addEventListener('click',()=>{ cur.view=b.dataset.view; saveCur(); render(); });
+$('games').addEventListener('click',e=>{ const b=e.target.closest('button.game'); if(b&&!b.disabled)openScore(+b.dataset.no); });
+$('btnNext').addEventListener('click',()=>openScore(+$('btnNext').dataset.no));
+
+/* ---------- Entering a result ---------- */
+let editing=null;
+function openScore(no){
+  const g=T.games(cur).find(x=>x.no===no);
+  if(!g||g.a==null||g.b==null)return;
+  editing=no;
+  $('scoreH').textContent=t('gameNo',{n:fmtN(no)})+' · '+roundTitle(g.round);
+  $('labelA').textContent=nameOf(g.a); $('labelB').textContent=nameOf(g.b);
+  $('scoreA').value=g.score?String(g.score[0]):''; $('scoreB').value=g.score?String(g.score[1]):'';
+  $('scoreError').hidden=true; $('btnClear').hidden=!g.score;
+  $('scoreDlg').showModal(); $('scoreA').focus();
+}
+for(const b of document.querySelectorAll('[data-step]'))b.addEventListener('click',()=>{
+  const inp=$(b.dataset.step==='a'?'scoreA':'scoreB');
+  const v=Tools.parseNum(inp.value);
+  inp.value=String(Tools.clamp((Number.isFinite(v)?Math.round(v):0)+(+b.dataset.d),0,999));
+});
+const readScore=id=>{ const s=$(id).value.trim(); return /^\d{1,3}$/.test(s)?+s:NaN; };
+function setResult(no,a,b){
+  const r=T.setResult(cur,no,a,b);
+  if(r.error)return r;
+  saveCur(); render();
+  Tools.diag.log('result saved',{game:no,reset:r.reset.length});
+  if(r.reset.length)Tools.toast(t('reset'));
+  return r;
+}
+$('scoreForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const a=readScore('scoreA'), b=readScore('scoreB');
+  const err=$('scoreError');
+  if(!Number.isFinite(a)||!Number.isFinite(b)){ err.textContent=t('scoreBad'); err.hidden=false; return; }
+  const r=setResult(editing,a,b);
+  if(r.error){ err.textContent=t(r.error); err.hidden=false; return; }
+  $('scoreDlg').close();
+});
+$('btnClear').addEventListener('click',()=>{
+  const no=editing, before=JSON.parse(JSON.stringify(cur.results));
+  T.clearResult(cur,no); saveCur(); render(); $('scoreDlg').close();
+  Tools.diag.log('result cleared',{game:no});
+  Tools.undo(t('resultCleared',{n:fmtN(no)}),()=>{ cur.results=before; saveCur(); render(); });
+});
+
+/* ---------- Menu ---------- */
+function asText(){
+  const lines=[], games=T.games(cur);
+  const champ=T.champion(cur);
+  if(champ!=null)lines.push(t('champion')+': '+nameOf(champ),'');
+  if(cur.mode!=='ko'){
+    lines.push(t('table'));
+    for(const r of T.standings(cur))lines.push(`${fmtN(r.place)}. ${nameOf(r.team)} – ${fmtN(r.points)} (${fmtN(r.gf)}:${fmtN(r.ga)})`);
+    lines.push('');
+  }
+  lines.push(t('scheduleH'));
+  let round=0;
+  for(const g of games){
+    if(g.round!==round){ round=g.round; lines.push('',roundTitle(round)); }
+    lines.push(`${fmtN(g.no)}. ${sideText(g,'a')} – ${sideText(g,'b')}  ${g.score?fmtN(g.score[0])+':'+fmtN(g.score[1]):'–'}`);
+  }
+  return lines.join('\n');
+}
+$('btnCopy').addEventListener('click',async()=>{
+  const ok=await Tools.copyText(asText());
+  Tools.toast(t(ok?'copied':'copyFail'));
+  Tools.menu.close();
+});
+$('btnNew').addEventListener('click',async()=>{
+  const any=T.games(cur).some(g=>g.score);
+  if(any&&!await Tools.confirm(t('newQ'),{action:'reset',ok:t('newOk')}))return;
+  cur=null; saveCur(); setup.seed=T.newSeed(); saveSetup(); render(); Tools.menu.close(); window.scrollTo(0,0);
+  Tools.diag.log('new tournament');
+});
+
+render();
+Tools.onLang(render);
+Tools.diag.info(()=>({players:setup.players.length,size:setup.size,random:setup.random,mode:cur?cur.mode:setup.mode,
+  running:!!cur,teams:cur?cur.teams.length:0,games:cur?T.games(cur).length:0,results:cur?Object.keys(cur.results).length:0}));
+
+/* ---------- WebMCP ---------- */
+function stateForAgent(){
+  if(!cur)return {running:false,players:setup.players.slice(),teamSize:setup.size,format:setup.mode};
+  const name=i=>i==null?null:nameOf(i);
+  const out={running:true,format:{rr:'round_robin',rr2:'home_and_away',ko:'knockout'}[cur.mode],
+    teams:cur.teams.map(x=>({name:teamName(x),members:x.members.slice()})),
+    matches:T.games(cur).map(g=>({match:g.no,round:g.round,teamA:name(g.a),teamB:name(g.b),
+      score:g.score?{teamA:g.score[0],teamB:g.score[1]}:null})),
+    winner:T.champion(cur)==null?null:name(T.champion(cur))};
+  if(cur.mode!=='ko')out.table=T.standings(cur).map(r=>({place:r.place,team:name(r.team),played:r.played,won:r.won,drawn:r.drawn,lost:r.lost,
+    goalsFor:r.gf,goalsAgainst:r.ga,points:r.points}));
+  return out;
+}
+Tools.mcp.register({
+  name:'get_tournament',title:'Read tournament',readOnly:true,
+  description:'Reads the tournament: whether one is running, the teams with their members, every match with its number, round, teams and score (null while open), the winner once decided and, for round robin, the table. Without a running tournament it returns the entered players and the chosen format.',
+  execute:stateForAgent
+});
+Tools.mcp.register({
+  name:'set_result',title:'Enter match result',label:'mcp.result',
+  description:'Enters or changes the score of one match of the running tournament, as if the user typed it in. Use the match number from get_tournament; both teams must be known. In a knockout a draw is not allowed and later matches of a changed branch are reset. Returns the match and the updated tournament.',
+  inputSchema:{type:'object',properties:{
+    match:{type:'integer',minimum:1,maximum:1000,description:'Match number as shown in the schedule.'},
+    scoreA:{type:'integer',minimum:0,maximum:999,description:'Goals or points of the first team (teamA).'},
+    scoreB:{type:'integer',minimum:0,maximum:999,description:'Goals or points of the second team (teamB).'}
+  },required:['match','scoreA','scoreB'],additionalProperties:false},
+  execute:({match,scoreA,scoreB})=>{
+    if(!cur)throw new Error('No tournament is running. The user has to start one first.');
+    const g=T.games(cur).find(x=>x.no===match);
+    if(!g)throw new Error(`There is no match ${match}.`);
+    if(g.a==null||g.b==null)throw new Error(`The teams of match ${match} are not known yet.`);
+    if($('scoreDlg').open)$('scoreDlg').close();
+    const r=setResult(match,scoreA,scoreB);
+    if(r.error)throw new Error('A knockout match needs a winner; a draw is not allowed.');
+    return {match,resetMatches:r.reset,tournament:stateForAgent()};
+  }
+});
+})();
+</script>
+</body>
+</html>

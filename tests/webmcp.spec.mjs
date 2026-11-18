@@ -3265,3 +3265,56 @@ test.describe('collage-maker tools', () => {
     expect((await call(page, 'collage_maker_get_collage', {})).result).toMatchObject({ mode: 'auto', gap_percent: 0, background: '#ffffff' });
   });
 });
+
+test.describe('tournament tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/tournament/');
+  });
+
+  test('get_tournament and set_result: read the schedule, enter a score, the table follows', async ({ page }) => {
+    // Nothing running yet: the players and the chosen format
+    expect(await call(page, 'tournament_set_result', { match: 1, scoreA: 1, scoreB: 0 }))
+      .toEqual({ ok: false, error: 'No tournament is running. The user has to start one first.' });
+    await page.fill('#nameIn', 'Ann, Bob, Cy');
+    await page.click('#addForm button[type=submit]');
+    await page.locator('#size [data-size="1"]').click();
+    await page.uncheck('#optRandom');
+    expect((await call(page, 'tournament_get_tournament', {})).result)
+      .toEqual({ running: false, players: ['Ann', 'Bob', 'Cy'], teamSize: 1, format: 'rr' });
+    await page.click('#btnStart');
+
+    const { result } = await call(page, 'tournament_get_tournament', {});
+    expect(result.format).toBe('round_robin');
+    expect(result.teams).toEqual([{ name: 'Ann', members: ['Ann'] }, { name: 'Bob', members: ['Bob'] }, { name: 'Cy', members: ['Cy'] }]);
+    expect(result.matches[0]).toEqual({ match: 1, round: 1, teamA: 'Bob', teamB: 'Cy', score: null });
+    expect(result.winner).toBeNull();
+
+    const set = await call(page, 'tournament_set_result', { match: 1, scoreA: 10, scoreB: 7 });
+    expect(set.ok).toBe(true);
+    expect(set.result.match).toBe(1);
+    expect(set.result.tournament.matches[0].score).toEqual({ teamA: 10, teamB: 7 });
+    expect(set.result.tournament.table[0]).toEqual({ place: 1, team: 'Bob', played: 1, won: 1, drawn: 0, lost: 0, goalsFor: 10, goalsAgainst: 7, points: 3 });
+    await expect(page.locator('#games button.game[data-no="1"] .res')).toHaveText('10 : 7');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Ergebnis eingetragen');
+
+    expect(await call(page, 'tournament_set_result', { match: 9, scoreA: 1, scoreB: 0 })).toEqual({ ok: false, error: 'There is no match 9.' });
+    expect((await call(page, 'tournament_set_result', { match: 1, scoreA: -1, scoreB: 0 })).ok).toBe(false);
+  });
+
+  test('set_result in a knockout: no draws, unknown teams refused', async ({ page }) => {
+    await page.fill('#nameIn', 'A, B, C');
+    await page.click('#addForm button[type=submit]');
+    await page.locator('#size [data-size="1"]').click();
+    await page.locator('input[name=mode][value="ko"]').check();
+    await page.click('#btnStart');
+    expect(await call(page, 'tournament_set_result', { match: 1, scoreA: 3, scoreB: 3 }))
+      .toEqual({ ok: false, error: 'A knockout match needs a winner; a draw is not allowed.' });
+    expect(await call(page, 'tournament_set_result', { match: 2, scoreA: 3, scoreB: 1 }))
+      .toEqual({ ok: false, error: 'The teams of match 2 are not known yet.' });
+    expect((await call(page, 'tournament_set_result', { match: 1, scoreA: 3, scoreB: 1 })).ok).toBe(true);
+    const { result } = await call(page, 'tournament_set_result', { match: 2, scoreA: 0, scoreB: 2 });
+    expect(result.tournament.winner).toBe(result.tournament.matches[1].teamB);
+    await expect(page.locator('#champName')).toHaveText(result.tournament.winner);
+  });
+});
