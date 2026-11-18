@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-2iqN0ujF3zzMLPMFg7ue3fpzhe5zGcXJgoAPuQKnAeQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-Zj42Pt03lQL+/RsObcT9qiETLHsPDZbaBz04q5arceM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -294,7 +294,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version f32ab4c98d62</p>
+  <p class="footer-version">Version 9d35ee5490b2</p>
   <!-- footer:end -->
 </footer>
 
@@ -322,6 +322,7 @@ Tools.i18n({
     'save.video':'Video speichern','save.gif':'GIF speichern',
     'export.busy':'Bild {i} von {n} …','export.done':'Gespeichert: {name} ({size}).','export.shared':'Geteilt: {name} ({size}).','export.cancelled':'Abgebrochen.',
     'export.fail':'Erstellen fehlgeschlagen: {msg}','export.noCodec':'Ein Video in dieser Größe kann dieser Browser nicht erstellen – kleinere Größe oder GIF wählen.',
+    'export.photo':'Foto {n} ließ sich nicht lesen. Bitte entfernen und neu hinzufügen oder eine kleinere Größe wählen.',
     'export.shareAgain':'Fertig – zum Teilen bitte nochmal tippen.','export.shareFail':'Teilen hat nicht geklappt.',
     'file':'Zeitraffer','mb':'{n} MB','kb':'{n} KB',
     'ed.title':'Foto {n} von {total}','ed.faces':'Anderes Gesicht ({i}/{n})','ed.found':'{n} Gesicht(er) gefunden.','ed.notFound':'Kein Gesicht gefunden – Augen von Hand setzen.','ed.unchecked':'Noch nicht durchsucht.',
@@ -357,6 +358,7 @@ Tools.i18n({
     'save.video':'Save video','save.gif':'Save GIF',
     'export.busy':'Frame {i} of {n} …','export.done':'Saved: {name} ({size}).','export.shared':'Shared: {name} ({size}).','export.cancelled':'Cancelled.',
     'export.fail':'Creating failed: {msg}','export.noCodec':'This browser cannot create a video of this size – choose a smaller size or GIF.',
+    'export.photo':'Photo {n} could not be read. Please remove it and add it again, or choose a smaller size.',
     'export.shareAgain':'Ready – please tap again to share.','export.shareFail':'Sharing did not work.',
     'file':'Timelapse','mb':'{n} MB','kb':'{n} KB',
     'ed.title':'Photo {n} of {total}','ed.faces':'Other face ({i}/{n})','ed.found':'{n} face(s) found.','ed.notFound':'No face found – set the eyes by hand.','ed.unchecked':'Not searched yet.',
@@ -393,10 +395,23 @@ let photos=[], nextId=1, fileCache=null;
 const usable=()=>photos.filter(p=>p.eyes);
 
 function canvas(w,h){const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w));c.height=Math.max(1,Math.round(h));return c;}
-// Decodes a photo (EXIF orientation applied by the browser); HEIC via assets/shared/heic.js where the browser cannot
-async function loadImage(blob){
+// Decodes a photo (EXIF orientation applied by the browser); HEIC via assets/shared/heic.js where the browser cannot.
+// ImageBitmap first: decodes straight to the size asked for and frees its memory on close() – big photos one after
+// another through <img> wait for the garbage collector, and Chrome on Android then fails to decode ("decode failed").
+// size = {w, h} wanted (oriented picture); a result in another aspect ratio (orientation applied after the resize)
+// is decoded again at full size. Falls back to <img> (older Safari knows no imageOrientation 'from-image').
+async function loadImage(blob,size){
   const heic=await Heic.load(blob);
   if(heic)return heic;
+  if('createImageBitmap' in window){
+    try{
+      const o={imageOrientation:'from-image'};
+      if(size)Object.assign(o,{resizeWidth:size.w,resizeHeight:size.h,resizeQuality:'high'});
+      const b=await createImageBitmap(blob,o);
+      if(!size||Math.abs(b.width/b.height-size.w/size.h)<0.02)return b;
+      b.close();return await createImageBitmap(blob,{imageOrientation:'from-image'});
+    }catch(e){if(!bitmapFailed){bitmapFailed=true;Tools.diag.log('bitmap decode failed, using <img>',{type:blob.type||'?'},e);}}
+  }
   return new Promise((resolve,reject)=>{
     const url=URL.createObjectURL(blob),img=new Image();
     img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
@@ -404,6 +419,7 @@ async function loadImage(blob){
     img.src=url;
   });
 }
+let bitmapFailed=false;
 const sizeOf=img=>[img.naturalWidth||img.width,img.naturalHeight||img.height];
 function scaled(img,max){
   const [w,h]=sizeOf(img),k=Math.min(1,max/Math.max(w,h));
@@ -657,7 +673,8 @@ const editor=$('editor'),stage=$('stage'),edCanvas=$('edCanvas'),loupe=$('loupe'
 const handles=[...stage.querySelectorAll('.handle')];
 let ed=null;   // {p, src (canvas), eyes, faces, face, manual}
 async function openEditor(p){
-  const img=await loadImage(p.file).catch(()=>null);
+  const k=Math.min(1,EDIT_MAX/Math.max(p.w,p.h));
+  const img=await loadImage(p.file,k<0.9?{w:Math.round(p.w*k),h:Math.round(p.h*k)}:null).catch(()=>null);
   const src=img?scaled(img,EDIT_MAX):p.prev;img?.close?.();
   const eyes=p.eyes?{l:[...p.eyes.l],r:[...p.eyes.r]}:{l:[0.4,0.42],r:[0.6,0.42]};
   ed={p,src,eyes,face:p.face,manual:p.manual};
@@ -860,6 +877,26 @@ function renderExport(){
 const status=(msg,err)=>{$('status').textContent=msg;$('status').className='muted'+(err?' err':'');};
 const today=()=>{const d=new Date(),z=x=>String(x).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;};
 let exporting=false,cancelled=false;
+// A photo for the export: decoded only as big as the result needs (eye distance in the result vs. in the photo,
+// with a margin), from the kept copy if the chosen file cannot be read any more; one more try after a short pause
+// (memory). Throws { code: 'photo', n } with the position of the photo in the list.
+async function exportImage(p,W){
+  const eyesPx=Math.hypot((p.eyes.r[0]-p.eyes.l[0])*p.w,(p.eyes.r[1]-p.eyes.l[1])*p.h);
+  const k=Math.min(1,(s.face/100*W/TL.FACE_PER_EYES)/Math.max(1,eyesPx)*1.25);
+  const size=k<0.9?{w:Math.max(1,Math.round(p.w*k)),h:Math.max(1,Math.round(p.h*k))}:null;
+  let last;
+  for(let attempt=0;attempt<2;attempt++){
+    for(const src of [p.file,attempt?await Tools.keep.get('photo-'+p.id):null]){
+      if(!src)continue;
+      try{return await loadImage(src,size);}
+      catch(e){last=e;}
+    }
+    await new Promise(r=>setTimeout(r,400));
+  }
+  const n=photos.indexOf(p)+1;
+  Tools.diag.log('photo not readable',{n,w:p.w,h:p.h,type:p.file.type||'?',bytes:p.file.size,size},last);
+  throw Object.assign(new Error('photo '+n),{code:'photo',n});
+}
 async function makeFile(){
   const key=JSON.stringify([s.format,s.face,s.secs,s.fade,s.date,s.out,s.size,Tools.lang(),usable().map(p=>[p.id,p.eyes])]);
   if(fileCache&&fileCache.key===key)return fileCache.file;
@@ -868,7 +905,7 @@ async function makeFile(){
   const sched=TL.schedule(items.length,s.secs,s.fade,fps);
   const out=canvas(W,H),ctx=out.getContext('2d',{willReadFrequently:gif});
   let A=canvas(W,H),B=canvas(W,H),aI=-1,bI=-1;
-  const render=async(i,c)=>{const p=items[i],img=await loadImage(p.file);TL.draw(c.getContext('2d'),img,p.eyes,W,H,drawOpts(label(p)));img.close?.();};
+  const render=async(i,c)=>{const p=items[i],img=await exportImage(p,W);TL.draw(c.getContext('2d'),img,p.eyes,W,H,drawOpts(label(p)));img.close?.();};
   const t0=performance.now(),name=t('file')+' '+today();
   let writer;
   if(gif){
@@ -917,6 +954,7 @@ async function run(fn){
     Tools.diag.log('export failed',{code:e.code},e);
     if(e.code==='cancelled')status(t('export.cancelled'));
     else if(e.code==='noCodec')status(t('export.noCodec'),true);
+    else if(e.code==='photo')status(t('export.photo',{n:e.n}),true);
     else status(t('export.fail',{msg:e.message||String(e)}),true);
   }finally{exporting=false;$('btnCancel').hidden=true;Tools.wakeLock.release('export');renderExport();}
 }

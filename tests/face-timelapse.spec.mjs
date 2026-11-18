@@ -274,6 +274,43 @@ test.describe('with the fake worker', () => {
     expect(await page.evaluate(() => Tools.diag.text())).toMatch(/file built \{"kind":"video","photos":3,"frames":3,"w":480,"h":600/);
   });
 
+  test('big photos are decoded only as big as needed; an unreadable photo is named', async ({ page }) => {
+    await onDialog(page, d => d.accept());
+    // 2400 × 1800 with eyes 400 px apart: in a 480 px result they are 0.55 × 480 / 2.5 = 105.6 px apart,
+    // so the photo is decoded at 105.6 / 400 × 1.25 = 33 % → 792 × 594
+    await add(page, [
+      png('big.png', await photo(page, { w: 2400, h: 1800, bg: '#3050a0', eyes: [[1000, 800], [1400, 800]] })),
+      png('b.png', await photo(page, { bg: '#30a050', eyes: [[160, 120], [240, 120]] })),
+    ]);
+    await page.locator('input[name="out"][value="gif"]').check({ force: true });
+    await page.selectOption('#optSize', '480');
+    await page.evaluate(() => {
+      const orig = window.createImageBitmap;
+      window.__sizes = [];
+      window.createImageBitmap = async (src, o) => { const b = await orig(src, o); if (src instanceof Blob) window.__sizes.push([b.width, b.height]); return b; };
+    });
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btnSave')]);
+    expect(await page.evaluate(() => window.__sizes)).toEqual([[792, 594], [400, 300]]);
+    const first = await page.evaluate(async b64 => {
+      const dec = new ImageDecoder({ data: Uint8Array.from(atob(b64), c => c.charCodeAt(0)), type: 'image/gif' });
+      const { image } = await dec.decode({ frameIndex: 0 });
+      const c = new OffscreenCanvas(image.displayWidth, image.displayHeight), g = c.getContext('2d');
+      g.drawImage(image, 0, 0);
+      return [0.39, 0.61].map(fx => [...g.getImageData(Math.floor(fx * c.width), Math.floor(0.4 * c.height), 1, 1).data.slice(0, 3)]);
+    }, readFileSync(await dl.path()).toString('base64'));
+    for (const px of first) expect(near(px, RED, 12)).toBe(true);
+    // A photo that cannot be decoded any more (neither the chosen file nor the kept copy): message names it
+    await page.evaluate(() => {
+      window.createImageBitmap = async () => { throw new DOMException('broken', 'InvalidStateError'); };
+      Object.defineProperty(HTMLImageElement.prototype, 'src', { set() { setTimeout(() => this.onerror?.(), 0); } });
+    });
+    await page.locator('#optSecs').fill('1');
+    await page.click('#btnSave');
+    await expect(page.locator('#status')).toHaveText('Foto 1 ließ sich nicht lesen. Bitte entfernen und neu hinzufügen oder eine kleinere Größe wählen.');
+    expect(await page.evaluate(() => Tools.diag.text())).toContain('photo not readable {"n":1,"w":2400,"h":1800');
+    await expect(page.locator('#btnSave')).toBeEnabled();
+  });
+
   test('download declined: eyes by hand, later "find faces" looks for them', async ({ page }) => {
     let accept = false;
     await onDialog(page, d => (accept ? d.accept() : d.dismiss()));
