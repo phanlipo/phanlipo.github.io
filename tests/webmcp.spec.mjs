@@ -3208,3 +3208,60 @@ test.describe('face-timelapse tools', () => {
     expect((await call(page, 'face_timelapse_list_photos', {})).result.options).toMatchObject({ size: 720, face_width: 55, seconds_per_photo: 0.5 });
   });
 });
+
+test.describe('collage-maker tools', () => {
+  // Two one-colour photos (landscape 2:1 and square), drawn in the browser
+  test.beforeEach(async ({ page }) => {
+    await open(page, '/collage-maker/');
+    const files = await page.evaluate(() => [[200, 100, '#f00'], [120, 120, '#00f']].map(([w, h, c]) => {
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const g = cv.getContext('2d'); g.fillStyle = c; g.fillRect(0, 0, w, h);
+      return cv.toDataURL('image/png').split(',')[1];
+    }));
+    await page.setInputFiles('#inPick', files.map((b, i) => ({ name: `p${i}.png`, mimeType: 'image/png', buffer: Buffer.from(b, 'base64') })));
+    await expect(page.locator('#collage > button')).toHaveCount(2);
+  });
+
+  test('get_collage, set_layout and set_export; changes appear in the app', async ({ page }) => {
+    let r = await call(page, 'collage_maker_get_collage', {});
+    expect(r.result).toMatchObject({ images: 2, mode: 'auto', aspect: 'free', gap_percent: 0, background: '#ffffff', export: { size: 'full', format: 'jpg' } });
+    expect(r.result.max_crop_percent).toBe(0);
+    // Free: side by side gives 3:1 (too wide), stacked 2:3 – the app takes the stacked one, nothing cropped
+    expect(r.result.cells.map(c => c.image).sort()).toEqual([1, 2]);
+    expect(JSON.stringify(r.result)).not.toContain('p0.png');
+
+    r = await call(page, 'collage_maker_set_layout', { mode: 'rows', aspect: '1:1', gap_percent: 1, background: '#00FF00' });
+    expect(r.result).toMatchObject({ mode: 'rows', aspect: '1:1', gap_percent: 1, background: '#00ff00' });
+    await expect(page.locator('.toast')).toContainText('KI-Agent: Anordnung geändert');
+    await expect(page.locator('#mode [data-mode="rows"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#aspect [data-aspect="1:1"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#gapOut')).toHaveText('1,0 %');
+    expect(r.result.export.width).toBe(r.result.export.height);
+    // Gap 1 % of the side: first cell starts there
+    expect(r.result.cells[0].x).toBe(Math.round(r.result.export.width * 0.01));
+
+    r = await call(page, 'collage_maker_set_export', { size: '4000', format: 'png' });
+    expect(r.result.export).toMatchObject({ size: '4000', format: 'png', width: 4000, height: 4000, megapixels: 16 });
+    await expect(page.locator('#format [data-format="png"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#exportInfo')).toHaveText('Ergebnis: 4.000 × 4.000 Pixel (16 Megapixel)');
+
+    // Rearranged: the photos change places (numbers follow the new order, so compare the cell shapes)
+    const shapes = cells => cells.map(c => `${c.width}x${c.height}`).join();
+    const before = shapes((await call(page, 'collage_maker_get_collage', {})).result.cells);
+    let changed = false;
+    for (let i = 0; i < 10 && !changed; i++) {
+      r = await call(page, 'collage_maker_set_layout', { rearrange: true });
+      changed = shapes(r.result.cells) !== before;
+    }
+    expect(changed).toBe(true);
+  });
+
+  test('wrong input is rejected', async ({ page }) => {
+    for (const [input, msg] of [
+      [{ mode: 'grid' }, /mode/], [{ gap_percent: 5 }, /gap_percent/], [{ background: 'red' }, /background/],
+      [{ background: '#12345g' }, /background/], [{ extra: 1 }, /not allowed/],
+    ]) expect((await call(page, 'collage_maker_set_layout', input)).error).toMatch(msg);
+    expect((await call(page, 'collage_maker_set_export', { size: '3000' })).error).toMatch(/size/);
+    expect((await call(page, 'collage_maker_get_collage', {})).result).toMatchObject({ mode: 'auto', gap_percent: 0, background: '#ffffff' });
+  });
+});
