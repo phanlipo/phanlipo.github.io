@@ -189,3 +189,25 @@ test.describe('page', () => {
     await expect(page.locator('#duties')).toContainText('box 41');
   });
 });
+
+test('print / PDF: report with the case table, inputs and buttons left out', async ({ page }) => {
+  await page.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
+  await page.locator('#transport button', { hasText: 'U2' }).click();
+  await page.click('#btnPrint');
+  expect(await page.evaluate(() => window.__printed)).toBe(1);
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('#report')).toBeVisible();
+  await expect(page.locator('#reportCase')).toContainText('U2 · Zwischenhändler');
+  await expect(page.locator('#reportCase')).toContainText('Deutschland → Italien (innergemeinschaftlich)');
+  await expect(page.locator('#reportCase')).toContainText('U2 transportiert');
+  await expect(page.locator('#reportDate')).toContainText('Erstellt am');
+  for (const sel of ['#h-parties', '#h-goods', '#btnCopy', '#btnPrint', 'header', 'details.help'])
+    await expect(page.locator(sel).first()).toBeHidden();
+  await expect(page.locator('#why')).toBeVisible();
+  await expect(page.locator('#duties')).toBeVisible();
+  // A real PDF comes out of it (Chromium print engine)
+  const pdf = await page.pdf({ format: 'A4' });
+  expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+  await page.emulateMedia({ media: 'screen' });
+  await expect(page.locator('#report')).toBeHidden();
+});

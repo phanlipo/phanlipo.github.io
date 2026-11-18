@@ -20,7 +20,7 @@
 <meta name="tool:storage" content="chain-transaction.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-eG5GUZk4ZVTqw/29WGlZuxQJDHd70tHSN2TjkBHsQkA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-TGREJddVjXdItxZqb7H/782EX0b42FzRAED+q/LWfcE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -73,6 +73,23 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .alt:not([aria-current="true"]):hover{background:var(--surface-2)}
 .alt .t{font-weight:600}
 .alt .d{font-size:14px;color:var(--muted)}
+/* Print / PDF: a report with the case on top; inputs, buttons and menu stay out */
+.print-only{display:none}
+.case-table{width:100%;border-collapse:collapse;font-size:14px;margin-block:8px}
+.case-table :is(th,td){border:1px solid var(--border);padding:4px 8px;text-align:start;vertical-align:top}
+@page{size:A4;margin:15mm}
+@media print{
+  :root{--bg:#fff;--surface:#fff;--surface-2:#f4f4f4;--text:#000;--muted:#444;--border:#999;--accent:#8a4b14;--accent-text:#fff;--ok:#1d7a3a;--ok-bg:#fff;--warn:#a35a00;--warn-bg:#fff;--err:#b3261e;--err-bg:#fff;color-scheme:light}
+  body>*:not(main),main>.no-print,.row.no-print,#optEugBox{display:none!important}
+  body,main{background:#fff;color:#000;padding:0;margin:0;display:block;max-width:none}
+  .print-only{display:block}
+  main>section{border:0;box-shadow:none;padding:0;margin:0 0 6mm;background:#fff}
+  .chain li,.duty,.checks li,.alt,.notice,h3{break-inside:avoid}
+  h2,h3{break-after:avoid}
+  h2 .step{display:none}
+  .alt{border:1px solid #999}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 </style>
 </head>
 <body>
@@ -82,7 +99,14 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 </header>
 
 <main>
-  <section class="card" aria-labelledby="h-parties">
+  <section class="print-only" id="report" aria-labelledby="h-report">
+    <h2 id="h-report" data-i18n="report.h">Reihengeschäft – umsatzsteuerliche Auswertung</h2>
+    <p id="reportDate"></p>
+    <table class="case-table"><tbody id="reportCase"></tbody></table>
+    <p class="law" data-i18n="report.note">Beurteilung nach deutschem UStG/UStAE und der Mehrwertsteuersystemrichtlinie für einen Standardfall (Lieferungen zwischen Unternehmen, ein Transport). Keine Steuerberatung – Abweichungen vom Standardfall können zu einem anderen Ergebnis führen.</p>
+  </section>
+
+  <section class="card no-print" aria-labelledby="h-parties">
     <h2 id="h-parties"><span class="step">1</span><span data-i18n="h.parties">Beteiligte Unternehmen</span></h2>
     <p class="intro" data-i18n="parties.intro">In der Reihenfolge der Rechnungen: U1 verkauft an U2, U2 an U3 und so weiter. Die Ware selbst geht in einem einzigen Transport direkt vom ersten zum letzten Unternehmen.</p>
     <div class="block-gap">
@@ -94,7 +118,7 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     </div>
   </section>
 
-  <section class="card" aria-labelledby="h-goods">
+  <section class="card no-print" aria-labelledby="h-goods">
     <h2 id="h-goods"><span class="step">2</span><span data-i18n="h.goods">Warenweg und Transport</span></h2>
     <div class="block-gap">
       <div class="pair">
@@ -117,7 +141,7 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <section class="card" aria-labelledby="h-result">
     <h2 id="h-result"><span class="step">3</span><span data-i18n="h.result">Ergebnis</span></h2>
     <div id="result" aria-live="polite"></div>
-    <div class="row"><button type="button" class="btn" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Auswertung kopieren</span></button></div>
+    <div class="row no-print"><button type="button" class="btn" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Auswertung kopieren</span></button><button type="button" class="btn" id="btnPrint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#printer"/></svg><span data-i18n="print">Drucken / PDF</span></button></div>
   </section>
 
   <section class="card why" aria-labelledby="h-why">
@@ -170,7 +194,7 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li><b>Warenweg:</b> Startet die Ware nicht im Sitzland von U1 (z. B. aus einem Lager im Ausland) oder endet sie woanders als beim letzten Abnehmer, die Länder umstellen.</li>
     <li><b>Transport:</b> Wer befördert oder versendet. Bei einer Einfuhr zusätzlich, wer die Ware beim Zoll anmeldet.</li>
     <li><b>Was wäre, wenn …?</b> zeigt den Fall mit jedem anderen Transportverantwortlichen und für Zwischenhändler beide Möglichkeiten (als Abnehmer oder als Lieferer). Antippen übernimmt die Variante.</li>
-    <li>Im Menü stehen Beispiele zum Ausprobieren. „Auswertung kopieren“ kopiert Ergebnis, Begründung und Pflichten als Text.</li>
+    <li>Im Menü stehen Beispiele zum Ausprobieren. „Auswertung kopieren“ kopiert Ergebnis, Begründung und Pflichten als Text. „Drucken / PDF“ druckt die Auswertung mit dem Fall als Tabelle obenauf – im Druckdialog „Als PDF speichern“ wählen, um eine PDF-Datei zu erhalten.</li>
   </ul>
   <h3>Was der Rechner annimmt</h3>
   <ul>
@@ -179,7 +203,8 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li>Wer den Transport übernimmt, hat beim Grenzübertritt die Verfügungsmacht und trägt das Risiko. Nachweise (Gelangensbestätigung, Ausfuhrnachweis) liegen vor.</li>
     <li>Die Beurteilung folgt dem deutschen Umsatzsteuergesetz und dem Umsatzsteuer-Anwendungserlass. Die Regeln zum Reihengeschäft und zum Dreiecksgeschäft sind EU-weit einheitlich (Mehrwertsteuersystemrichtlinie seit den „Quick Fixes“ 2020); bei Ausfuhr und Einfuhr gelten die deutschen Regeln (§ 3 Abs. 6a Satz 6 und 7, § 3 Abs. 8 UStG) so, als würden sie überall gelten. Andere Länder können im Detail abweichen.</li>
     <li>Was im Drittland passiert, prüft der Rechner nicht. Fälle nur zwischen Drittländern liegen außerhalb des EU-Rechts.</li>
-    <li>Steuersätze: Normalsätze Stand 2026, ohne Gewähr. Nordirland zählt für Waren wie ein EU-Land (USt-IdNr. mit XI).</li>
+    <li>Steuersätze: Normalsätze Stand 2026, ohne Gewähr (aktuelle Sätze in der Datenbank „Taxes in Europe“ der EU-Kommission). Nordirland zählt für Waren wie ein EU-Land (USt-IdNr. mit XI).</li>
+    <li>Kennzahlen der deutschen Voranmeldung nach dem Vordruckmuster USt 1 A 2026 (BMF-Schreiben vom 29. Dezember 2025).</li>
   </ul>
   <h3>Dreiecksgeschäft bei vier Unternehmen</h3>
   <p>Die deutsche Finanzverwaltung erkennt in längeren Ketten ein Dreiecksgeschäft nur an, wenn die drei Unternehmen am Ende der Kette stehen (Abschnitt 25b.1 Abs. 2 UStAE). Das Gericht der EU hat am 3. Dezember 2025 entschieden, dass es auch am Anfang der Kette möglich ist (Rechtssache T-646/24). Der Rechner folgt standardmäßig der Verwaltung; wo es darauf ankommt, lässt sich die Auswertung nach dem Urteil einschalten.</p>
@@ -196,7 +221,7 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li><b>Route:</b> if the goods do not start in U1's country (e.g. from a warehouse abroad) or end somewhere other than at the last customer, change the countries.</li>
     <li><b>Transport:</b> who carries or ships the goods. For an import also who declares the goods to customs.</li>
     <li><b>What if …?</b> shows the case with every other company transporting, and for intermediaries both options (as customer or as supplier). Tap to take over the variant.</li>
-    <li>The menu has examples to try. “Copy assessment” copies result, reasoning and duties as text.</li>
+    <li>The menu has examples to try. “Copy assessment” copies result, reasoning and duties as text. “Print / PDF” prints the assessment with the case as a table on top – choose “Save as PDF” in the print dialog to get a PDF file.</li>
   </ul>
   <h3>What the calculator assumes</h3>
   <ul>
@@ -205,7 +230,8 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li>Whoever handles the transport holds the right to dispose of the goods at the border and bears the risk. The evidence (proof of arrival, export evidence) is available.</li>
     <li>The assessment follows the German VAT Act (UStG) and the German VAT guidelines (UStAE). The rules on chain transactions and triangulation are the same across the EU (VAT Directive since the 2020 “quick fixes”); for exports and imports the German rules (§ 3 (6a) sentences 6 and 7, § 3 (8) UStG) are applied as if they held everywhere. Other countries may differ in detail.</li>
     <li>What happens in a non-EU country is not checked. Cases only between non-EU countries are outside EU law.</li>
-    <li>VAT rates: standard rates as of 2026, without guarantee. Northern Ireland counts as an EU country for goods (VAT ID with XI).</li>
+    <li>VAT rates: standard rates as of 2026, without guarantee (current rates in the European Commission’s “Taxes in Europe” database). Northern Ireland counts as an EU country for goods (VAT ID with XI).</li>
+    <li>Box numbers of the German VAT return follow form USt 1 A 2026 (Federal Ministry of Finance letter of 29 December 2025).</li>
   </ul>
   <h3>Triangulation with four companies</h3>
   <p>The German tax authorities accept triangulation in longer chains only if the three companies are at the end of the chain (UStAE 25b.1 (2)). On 3 December 2025 the EU General Court ruled that it is also possible at the start of the chain (case T-646/24). By default the calculator follows the authorities; where it matters, the assessment under the ruling can be switched on.</p>
@@ -234,7 +260,7 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version a8d9a8f23bf5</p>
+  <p class="footer-version">Version 79613efd209e</p>
   <!-- footer:end -->
 </footer>
 
@@ -375,6 +401,8 @@ Tools.i18n({
     'alt.noReg':'keine Registrierung im Ausland','alt.regs':'Registrierung: {list}','alt.in':'{p} in {c}',
     'copied':'Auswertung kopiert','copyFail':'Kopieren nicht möglich','reset.done':'Neuer Fall','undo':'Rückgängig','example.done':'Beispiel geladen',
     'mcp.analyze':'Fall eingetragen',
+    'report.date':'Erstellt am {d}','report.route':'Warenweg','report.transport':'Transport','report.importer':'Anmeldung zur Einfuhr','report.view':'Dreieck in 4er-Ketten',
+    'report.ustae':'nach Verwaltung (Abschnitt 25b.1 Abs. 2 UStAE)','report.eug':'nach EuG, Urteil T-646/24',
   },
   en:{
     title:'Chain Transaction',sub:'VAT on supply chains – every step explained.',
@@ -515,6 +543,10 @@ Tools.i18n({
     'alt.noReg':'no registration abroad','alt.regs':'registration: {list}','alt.in':'{p} in {c}',
     copied:'Assessment copied',copyFail:'Copying not possible','reset.done':'New case',undo:'Undo','example.done':'Example loaded',
     'mcp.analyze':'Case entered',
+    print:'Print / PDF','report.h':'Chain transaction – VAT assessment',
+    'report.note':'Assessment under the German UStG/UStAE and the EU VAT Directive for a standard case (supplies between businesses, one transport). Not tax advice – departures from the standard case can lead to a different result.',
+    'report.date':'Created on {d}','report.route':'Route','report.transport':'Transport','report.importer':'Import declared by','report.view':'Triangle in 4-company chains',
+    'report.ustae':'per German authorities (UStAE 25b.1 (2))','report.eug':'per General Court, T-646/24',
   }
 });
 const t=Tools.t, $=Tools.$, C=Chain.COUNTRIES;
@@ -708,7 +740,7 @@ function renderWhy(){
         h+=`<li class="${ch.ok?'ok':'no'}">${icon(ch.ok?'circle-check':'circle-x')}<span>${t(key,{...v,vt})}</span></li>`;
       }
       h+='</ul>';
-      if(tr.longChain&&!tr.atEnd)h+=`<label class="check"><input type="checkbox" id="optEug"${r.case.eug?' checked':''}><span>${Tools.esc(t('eug'))}</span></label>`;
+      if(tr.longChain&&!tr.atEnd)h+=`<label class="check" id="optEugBox"><input type="checkbox" id="optEug"${r.case.eug?' checked':''}><span>${Tools.esc(t('eug'))}</span></label>`;
       h+=P(t(tr.applies?'s6.yes':'s6.no',v));
     }
   }
@@ -807,9 +839,24 @@ $('alts').addEventListener('click',e=>{
 function render(){
   R=Chain.evaluate(S);
   if(R.error){ Tools.diag.log('invalid case, reset',R.error); S=clone(DEFAULT); R=Chain.evaluate(S); }
-  renderInputs(); renderResult(); renderWhy(); renderDuties(); renderAlts();
+  renderInputs(); renderResult(); renderWhy(); renderDuties(); renderAlts(); renderReport();
 }
 function changed(){ save(); render(); }
+
+/* Print / PDF: the case as a table above the assessment (only visible when printing) */
+function renderReport(){
+  const r=R, n=r.n, rows=[];
+  const row=(k,v)=>`<tr><th scope="row">${Tools.esc(k)}</th><td>${Tools.esc(v)}</td></tr>`;
+  r.case.parties.forEach((p,i)=>rows.push(row(`${U(i)} · ${role(i,n)}`,`${t('seat',{c:cn(p.country)})} · ${vatText(p.vat)}`)));
+  rows.push(row(t('report.route'),`${cn(r.from)} → ${cn(r.to)} (${t('kind.'+r.kind)})`));
+  rows.push(row(t('report.transport'),t('transportBy',{p:U(r.transport)})));
+  if(r.import)rows.push(row(t('report.importer'),U(r.import.importer)));
+  if(n>3)rows.push(row(t('report.view'),t(r.case.eug?'report.eug':'report.ustae')));
+  $('reportCase').innerHTML=rows.join('');
+  $('reportDate').textContent=t('report.date',{d:new Date().toLocaleString(Tools.locale(),{dateStyle:'long',timeStyle:'short'})});
+}
+$('btnPrint').addEventListener('click',()=>{ renderReport(); Tools.diag.log('print'); window.print(); });
+addEventListener('beforeprint',renderReport);
 
 $('btnCopy').addEventListener('click',async()=>{
   const parts=[$('h-result'),$('result'),$('h-why'),$('why'),$('h-duties'),$('duties')].map(el=>el.innerText.trim());
