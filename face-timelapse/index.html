@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-Zj42Pt03lQL+/RsObcT9qiETLHsPDZbaBz04q5arceM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-c9pCKWJpkkQyA8q276Ip38wl9lyzABd6fs0r9BZ8Xpo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -56,10 +56,10 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 #status.err{color:var(--err)}
 /* Eye editor (full screen on phones) */
 @media (max-width:640px){dialog#editor{height:100dvh;max-height:100dvh;border-radius:0}}
-.ed{display:flex;flex-direction:column;gap:10px;padding:12px;height:100%;min-height:0}
+.ed{display:flex;flex-direction:column;gap:10px;padding:12px;height:100%;min-height:0;overflow:auto}
 .ed h2{font-size:16px;margin:0}
 .ed .hint{margin:0}
-.ed-main{display:flex;gap:10px;flex:1;min-height:0;align-items:flex-start;justify-content:center}
+.ed-main{display:flex;gap:10px;flex:none;align-items:flex-start;justify-content:center}
 .stage{position:relative;touch-action:none;user-select:none;-webkit-user-select:none;max-width:100%}
 .stage canvas{display:block;width:100%;height:100%}
 .handle{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;padding:0;border:0;background:transparent;cursor:grab;touch-action:none;border-radius:50%}
@@ -69,6 +69,10 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 #loupe{position:absolute;inset-block-start:8px;inset-inline-start:8px;width:120px;height:120px;border-radius:50%;border:3px solid #22d3ee;box-shadow:0 2px 8px rgba(0,0,0,.5);pointer-events:none;background:#000}
 #edPreview{width:96px;height:auto;aspect-ratio:var(--ar,1);background:#000;border-radius:6px;flex:none}
 .ed .row .btn{flex:1 1 auto}
+.zoom-row{align-items:center}
+#edZoom{min-width:4em;font-variant-numeric:tabular-nums}
+.stage{overflow:hidden}
+.stage canvas#edCanvas{cursor:grab}
 .ed .form-field{max-width:12em}
 .ed-foot{margin-block-start:auto}
 </style>
@@ -169,7 +173,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 <dialog id="editor" class="dialog wide" data-keep aria-labelledby="edTitle">
   <div class="ed">
     <h2 id="edTitle"></h2>
-    <p class="muted hint" data-i18n="ed.hint">Die beiden Kreise auf die Mitte der Augen ziehen – hellblau links, gelb rechts im Bild.</p>
+    <p class="muted hint" data-i18n="ed.hint">Die beiden Kreise auf die Mitte der Augen ziehen – hellblau links, gelb rechts im Bild. Mit zwei Fingern vergrößern, mit einem Finger verschieben.</p>
     <div class="ed-main">
       <div class="stage" id="stage">
         <canvas id="edCanvas" width="10" height="10"></canvas>
@@ -178,6 +182,12 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
         <canvas id="loupe" width="120" height="120" hidden></canvas>
       </div>
       <canvas id="edPreview" width="96" height="96" role="img" aria-label="So sieht das Foto im Zeitraffer aus" data-i18n-attr="aria-label:ed.preview"></canvas>
+    </div>
+    <div class="row zoom-row">
+      <button type="button" class="btn small" id="edZoomOut"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#zoom-out"/></svg><span data-i18n="ed.zoomOut">Verkleinern</span></button>
+      <button type="button" class="btn small" id="edZoomIn"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#zoom-in"/></svg><span data-i18n="ed.zoomIn">Vergrößern</span></button>
+      <button type="button" class="btn small" id="edFocus"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#focus-2"/></svg><span data-i18n="ed.focus">Auf die Augen</span></button>
+      <span class="muted" id="edZoom"></span>
     </div>
     <p class="muted" id="edInfo" role="status"></p>
     <div class="row">
@@ -214,7 +224,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <ol>
     <li><b>Fotos wählen</b> (auch viele auf einmal, höchstens 300) oder aus der Galerie hierher teilen. HEIC-Fotos (iPhone) gehen auch: Safari öffnet sie selbst, sonst lädt die App beim ersten HEIC-Foto einen Decoder (libheif, ca. 1,5 MB) aus ihren eigenen Dateien.</li>
     <li>In jedem Foto wird das Gesicht gesucht. Sind mehrere Personen auf dem Bild, nimmt die App das größte Gesicht. Die Vorschaubilder zeigen schon das ausgerichtete Ergebnis.</li>
-    <li><b>Korrigieren:</b> ein Vorschaubild antippen. Die beiden Kreise auf die Mitte der Augen ziehen (beim Ziehen zeigt eine Lupe die Stelle), <i>Anderes Gesicht</i> wählt eine andere Person, <i>Automatisch</i> nimmt wieder das erkannte Gesicht. Mit der Tastatur: Kreis auswählen und mit den Pfeiltasten verschieben (mit Umschalt in großen Schritten).</li>
+    <li><b>Korrigieren:</b> ein Vorschaubild antippen. Die beiden Kreise auf die Mitte der Augen ziehen (beim Ziehen zeigt eine Lupe die Stelle). Kleine Gesichter: mit zwei Fingern, dem Mausrad oder <i>Vergrößern</i> heranzoomen, mit einem Finger verschieben, <i>Auf die Augen</i> springt zu den Augen – ist das Gesicht klein, öffnet das Foto schon vergrößert. <i>Anderes Gesicht</i> wählt eine andere Person, <i>Automatisch</i> nimmt wieder das erkannte Gesicht. Mit der Tastatur: Kreis auswählen und mit den Pfeiltasten verschieben (mit Umschalt in großen Schritten).</li>
     <li>Fotos ohne erkanntes Gesicht sind markiert und kommen nicht in den Zeitraffer, bis die Augen von Hand gesetzt sind.</li>
     <li><b>Reihenfolge:</b> mit ← und → unter dem Vorschaubild verschieben, beim Korrigieren eine <i>Position</i> wählen, <i>Nach Datum sortieren</i> (Aufnahmedatum aus dem Foto, sonst Datum der Datei) oder <i>Reihenfolge umdrehen</i>.</li>
     <li><b>Ausrichtung &amp; Tempo:</b> Format (Quadrat, Hochformat 4:5, Story 9:16), <i>Gesichtsgröße</i> (Breite des Gesichts im Verhältnis zur Bildbreite), <i>Zeit pro Foto</i>, weiches Überblenden und das Aufnahmedatum unten im Bild. Das letzte Foto bleibt mindestens eine Sekunde stehen.</li>
@@ -238,7 +248,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <ol>
     <li><b>Choose photos</b> (many at once, up to 300) or share them from the gallery to the app. HEIC photos (iPhone) work too: Safari opens them itself, elsewhere the app loads a decoder (libheif, about 1.5 MB) from its own files with the first HEIC photo.</li>
     <li>The face is looked for in every photo. With several people in a picture the app takes the biggest face. The previews already show the aligned result.</li>
-    <li><b>Correct:</b> tap a preview. Drag the two circles onto the centre of the eyes (a magnifier shows the spot while dragging), <i>Other face</i> picks another person, <i>Automatic</i> goes back to the face that was found. With a keyboard: select a circle and move it with the arrow keys (with Shift in big steps).</li>
+    <li><b>Correct:</b> tap a preview. Drag the two circles onto the centre of the eyes (a magnifier shows the spot while dragging). Small faces: zoom in with two fingers, the mouse wheel or <i>Zoom in</i>, move with one finger, <i>Onto the eyes</i> jumps to the eyes – a photo with a small face opens zoomed in already. <i>Other face</i> picks another person, <i>Automatic</i> goes back to the face that was found. With a keyboard: select a circle and move it with the arrow keys (with Shift in big steps).</li>
     <li>Photos without a face found are marked and stay out of the timelapse until the eyes are set by hand.</li>
     <li><b>Order:</b> move with ← and → below the preview, choose a <i>Position</i> while correcting, <i>Sort by date</i> (date taken from the photo, otherwise the file date) or <i>Reverse order</i>.</li>
     <li><b>Alignment &amp; speed:</b> format (square, portrait 4:5, story 9:16), <i>Face size</i> (width of the face compared to the width of the picture), <i>Time per photo</i>, smooth crossfade and the date taken at the bottom of the picture. The last photo stays for at least one second.</li>
@@ -294,7 +304,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 9d35ee5490b2</p>
+  <p class="footer-version">Version 01b5cc0eaaf6</p>
   <!-- footer:end -->
 </footer>
 
@@ -326,7 +336,7 @@ Tools.i18n({
     'export.shareAgain':'Fertig – zum Teilen bitte nochmal tippen.','export.shareFail':'Teilen hat nicht geklappt.',
     'file':'Zeitraffer','mb':'{n} MB','kb':'{n} KB',
     'ed.title':'Foto {n} von {total}','ed.faces':'Anderes Gesicht ({i}/{n})','ed.found':'{n} Gesicht(er) gefunden.','ed.notFound':'Kein Gesicht gefunden – Augen von Hand setzen.','ed.unchecked':'Noch nicht durchsucht.',
-    'ed.manual':'Augen von Hand gesetzt.',
+    'ed.manual':'Augen von Hand gesetzt.','ed.zoom':'{n} %',
     confirmDl:'Für die Gesichtserkennung lädt die App einmalig ca. {mb} MB herunter (Rechenprogramm von dieser Seite, Modell von Google). Die Fotos bleiben auf dem Gerät. Jetzt herunterladen? WLAN empfohlen.',
     loadingEngine:'Gesichtserkennung wird gestartet …','loadingModel':'Gesichtserkennung wird geladen … {p} %',
     dlFail:'Download fehlgeschlagen – Internetverbindung prüfen.',engineFail:'Die Gesichtserkennung ließ sich auf diesem Gerät nicht starten.',
@@ -341,7 +351,7 @@ Tools.i18n({
     out:'Save as','out.video':'Video','out.gif':'GIF',size:'Size','size.480':'Small (480 px wide)','size.720':'Medium (720 px wide)','size.1080':'Large (1080 px wide)',
     noVideo:'This browser cannot create videos – GIF always works.',share:'Share …',cancel:'Cancel',
     'photos.clear':'Remove all photos','models.h':'Face detection','models.delete':'Delete downloaded detection',
-    'ed.hint':'Drag the two circles onto the centre of the eyes – light blue on the left, yellow on the right of the picture.','ed.eyeL':'Eye on the left of the picture','ed.eyeR':'Eye on the right of the picture',
+    'ed.hint':'Drag the two circles onto the centre of the eyes – light blue on the left, yellow on the right of the picture. Zoom with two fingers, move with one.','ed.zoomOut':'Zoom out','ed.zoomIn':'Zoom in','ed.focus':'Onto the eyes','ed.zoom':'{n} %','ed.eyeL':'Eye on the left of the picture','ed.eyeR':'Eye on the right of the picture',
     'ed.preview':'This is how the photo looks in the timelapse','ed.auto':'Automatic','ed.pos':'Position','ed.delete':'Remove photo','ed.done':'Done',
     'add.loading':'Loading photo {i} of {n} …','add.heic':'HEIC photo: loading the decoder …','add.done':'{n} photo(s) added.',
     'add.fail':'Could not open “{name}”.','add.heicFail':'Could not read the HEIC photo “{name}”. The HEIC decoder needs the internet the first time.',
@@ -389,7 +399,7 @@ function sanitize(){
 sanitize();
 const save=()=>Tools.save(LS,s);
 
-const MAX_PHOTOS=300, PREV_MAX=720, DETECT_MAX=1280, EDIT_MAX=1600, THUMB_W=200;
+const MAX_PHOTOS=300, PREV_MAX=720, DETECT_MAX=1280, EDIT_MAX=4096, THUMB_W=200;
 let photos=[], nextId=1, fileCache=null;
 // Photos that go into the timelapse (eyes found or set)
 const usable=()=>photos.filter(p=>p.eyes);
@@ -503,15 +513,37 @@ async function doEnsure(){
     return false;
   }finally{loadWait=null;$('addInfo').textContent='';}
 }
-// Faces in an image → [{l, r}] (eyes 0…1)
+// Faces in an image → [{l, r}] (eyes 0…1 of the whole image). The detector sees at most DETECT_MAX pixels – a small
+// face in a big photo (group photo, person far away) gets lost. If nothing is found, look again in 9 overlapping
+// quarters of the photo, each at twice the detail.
 async function findFaces(img){
-  const c=scaled(img,DETECT_MAX);
+  const [w,h]=sizeOf(img),t0=performance.now();
+  let faces=await detectIn(img,0,0,w,h,w,h);
+  let tiles=0;
+  if(!faces.length&&Math.max(w,h)>DETECT_MAX*1.2){
+    for(const oy of [0,0.25,0.5])for(const ox of [0,0.25,0.5]){
+      tiles++;
+      for(const e of await detectIn(img,ox*w,oy*h,w/2,h/2,w,h)){
+        const d=Math.hypot((e.r[0]-e.l[0])*w,(e.r[1]-e.l[1])*h),m=[(e.l[0]+e.r[0])/2*w,(e.l[1]+e.r[1])/2*h];
+        // The same face seen in two overlapping quarters counts once
+        if(!faces.some(o=>Math.hypot((o.l[0]+o.r[0])/2*w-m[0],(o.l[1]+o.r[1])/2*h-m[1])<d*0.5))faces.push(e);
+      }
+    }
+  }
+  Tools.diag.log('faces',{n:faces.length,tiles,ms:Math.round(performance.now()-t0)});
+  return faces;
+}
+// Faces in the part x, y, cw × ch of an image of w × h pixels, eyes as 0…1 of the whole image
+async function detectIn(img,x,y,cw,ch,w,h){
+  const k=Math.min(1,DETECT_MAX/Math.max(cw,ch));
+  const c=canvas(cw*k,ch*k),g=c.getContext('2d');
+  g.imageSmoothingQuality='high';g.drawImage(img,x,y,cw,ch,0,0,c.width,c.height);
   const bitmap=await createImageBitmap(c);
   c.width=c.height=0;
   const id=++reqId;
   const d=await new Promise(res=>{waiting.set(id,res);getWorker().postMessage({type:'detect',id,bitmap},[bitmap]);});
-  Tools.diag.log('faces',{n:d.faces.length,ms:d.ms});
-  return d.faces.map(f=>TL.eyesFromLandmarks(f));
+  const back=([ex,ey])=>[(x+ex*cw)/w,(y+ey*ch)/h];
+  return d.faces.map(f=>{const e=TL.eyesFromLandmarks(f);return {l:back(e.l),r:back(e.r)};});
 }
 async function detect(p,img){
   p.faces=await findFaces(img);
@@ -668,18 +700,20 @@ $('btnClear').addEventListener('click',async()=>{
   Tools.toast(t('photos.cleared'));Tools.diag.log('photos cleared');
 });
 
-/* ---------- Eye editor ---------- */
+/* ---------- Eye editor ----------
+   The photo is shown in a view that can be zoomed (buttons, two fingers, mouse wheel) and moved (one finger on the
+   photo): view = {z (1 = whole photo), cx, cy (centre, 0…1 of the photo)}. Eyes stay in photo coordinates (0…1). */
 const editor=$('editor'),stage=$('stage'),edCanvas=$('edCanvas'),loupe=$('loupe');
 const handles=[...stage.querySelectorAll('.handle')];
-let ed=null;   // {p, src (canvas), eyes, faces, face, manual}
+const ZOOM_MAX=16;
+let ed=null;   // {p, src (canvas), eyes, face, manual, view}
 async function openEditor(p){
-  const k=Math.min(1,EDIT_MAX/Math.max(p.w,p.h));
-  const img=await loadImage(p.file,k<0.9?{w:Math.round(p.w*k),h:Math.round(p.h*k)}:null).catch(()=>null);
+  // Full resolution for zooming in on small faces (at most 4096 px and 16 MP: iOS refuses bigger canvases)
+  const k=Math.min(1,EDIT_MAX/Math.max(p.w,p.h),Math.sqrt(16e6/(p.w*p.h)));
+  const img=await loadImage(p.file,k<0.98?{w:Math.round(p.w*k),h:Math.round(p.h*k)}:null).catch(()=>null);
   const src=img?scaled(img,EDIT_MAX):p.prev;img?.close?.();
   const eyes=p.eyes?{l:[...p.eyes.l],r:[...p.eyes.r]}:{l:[0.4,0.42],r:[0.6,0.42]};
-  ed={p,src,eyes,face:p.face,manual:p.manual};
-  edCanvas.width=src.width;edCanvas.height=src.height;
-  edCanvas.getContext('2d').drawImage(src,0,0);
+  ed={p,src,eyes,face:p.face,manual:p.manual,view:{z:1,cx:0.5,cy:0.5}};
   const i=photos.indexOf(p);
   $('edTitle').textContent=t('ed.title',{n:i+1,total:photos.length});
   const pos=$('edPos');pos.textContent='';
@@ -687,20 +721,57 @@ async function openEditor(p){
   pos.value=String(i);
   $('edPreview').style.setProperty('--ar',String(1/TL.FORMATS[s.format]));
   if(!editor.open)editor.showModal();
-  fitStage();edRender();
-  Tools.diag.log('editor open',{faces:p.faces.length,manual:p.manual,checked:p.checked});
+  fitStage();
+  // A small face: start zoomed in on the eyes
+  if(p.eyes&&eyeShare()<0.12)focusEyes();
+  edRender();
+  Tools.diag.log('editor open',{faces:p.faces.length,manual:p.manual,checked:p.checked,w:src.width,h:src.height,zoom:Math.round(ed.view.z*10)/10});
 }
+// Eye distance as a share of the photo width
+const eyeShare=()=>Math.hypot((ed.eyes.r[0]-ed.eyes.l[0])*ed.src.width,(ed.eyes.r[1]-ed.eyes.l[1])*ed.src.height)/ed.src.width;
 function fitStage(){
   if(!ed)return;
   const box=stage.parentElement.getBoundingClientRect();
-  const maxW=Math.max(120,box.width-106),maxH=Math.max(160,Math.min(window.innerHeight*0.62,window.innerHeight-300));
+  const maxW=Math.max(120,box.width-106),maxH=Math.max(160,Math.min(window.innerHeight*0.6,window.innerHeight-420));
   const k=Math.min(maxW/ed.src.width,maxH/ed.src.height);
   stage.style.width=Math.round(ed.src.width*k)+'px';stage.style.height=Math.round(ed.src.height*k)+'px';
+  drawView();
 }
 window.addEventListener('resize',fitStage);
+// View helpers: photo (0…1) ↔ stage (0…1)
+function setView(z,cx,cy){
+  const v=ed.view;v.z=Tools.clamp(z,1,ZOOM_MAX);
+  const h=0.5/v.z;v.cx=Tools.clamp(cx,h,1-h);v.cy=Tools.clamp(cy,h,1-h);
+}
+const toStage=([x,y])=>{const v=ed.view;return [(x-v.cx)*v.z+0.5,(y-v.cy)*v.z+0.5];};
+const toPhoto=(fx,fy)=>{const v=ed.view;return [v.cx+(fx-0.5)/v.z,v.cy+(fy-0.5)/v.z];};
+// Zoom by factor f keeping the photo point under stage point (fx, fy) in place
+function zoomAt(f,fx=0.5,fy=0.5){
+  const [x,y]=toPhoto(fx,fy),z=Tools.clamp(ed.view.z*f,1,ZOOM_MAX);
+  setView(z,x-(fx-0.5)/z,y-(fy-0.5)/z);edRender();
+}
+function focusEyes(){
+  const share=Math.max(1e-3,eyeShare());
+  setView(0.3/share,(ed.eyes.l[0]+ed.eyes.r[0])/2,(ed.eyes.l[1]+ed.eyes.r[1])/2);
+}
+function drawView(){
+  const r=stage.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1);
+  const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));
+  if(edCanvas.width!==w||edCanvas.height!==h){edCanvas.width=w;edCanvas.height=h;}
+  const g=edCanvas.getContext('2d'),v=ed.view,W=ed.src.width,H=ed.src.height;
+  g.imageSmoothingQuality='high';
+  g.drawImage(ed.src,(v.cx-0.5/v.z)*W,(v.cy-0.5/v.z)*H,W/v.z,H/v.z,0,0,w,h);
+}
 function edRender(){
   const {p,eyes}=ed;
-  handles.forEach(h=>{const e=eyes[h.dataset.eye];h.style.left=(e[0]*100)+'%';h.style.top=(e[1]*100)+'%';});
+  drawView();
+  handles.forEach(h=>{
+    const [fx,fy]=toStage(eyes[h.dataset.eye]);
+    h.hidden=fx<0||fx>1||fy<0||fy>1;
+    h.style.left=(fx*100)+'%';h.style.top=(fy*100)+'%';
+  });
+  $('edZoom').textContent=t('ed.zoom',{n:Tools.fmt(ed.view.z*100,0)});
+  $('edZoomOut').disabled=ed.view.z<=1;$('edZoomIn').disabled=ed.view.z>=ZOOM_MAX;
   const c=$('edPreview'),{w,h}=TL.dims(s.format,192);
   c.width=w;c.height=h;
   TL.draw(c.getContext('2d'),ed.src,eyes,w,h,drawOpts(''));
@@ -709,10 +780,11 @@ function edRender(){
   $('edAuto').disabled=p.checked&&!p.faces.length;
   $('edInfo').textContent=ed.manual?t('ed.manual'):!p.checked?t('ed.unchecked'):p.faces.length?t('ed.found',{n:p.faces.length}):t('ed.notFound');
 }
-$('edNext').addEventListener('click',()=>{
-  const n=ed.p.faces.length;if(n<2)return;
-  ed.face=(ed.face+1)%n;const f=ed.p.faces[ed.face];ed.eyes={l:[...f.l],r:[...f.r]};ed.manual=false;edRender();
-});
+$('edZoomIn').addEventListener('click',()=>zoomAt(2));
+$('edZoomOut').addEventListener('click',()=>zoomAt(0.5));
+$('edFocus').addEventListener('click',()=>{focusEyes();edRender();});
+const pickFace=i=>{ed.face=i;const f=ed.p.faces[i];ed.eyes={l:[...f.l],r:[...f.r]};ed.manual=false;if(ed.view.z>1||eyeShare()<0.12)focusEyes();edRender();};
+$('edNext').addEventListener('click',()=>{const n=ed.p.faces.length;if(n>=2)pickFace((ed.face+1)%n);});
 $('edAuto').addEventListener('click',async()=>{
   const p=ed.p;
   if(!p.checked){
@@ -720,7 +792,7 @@ $('edAuto').addEventListener('click',async()=>{
     const img=await loadImage(p.file);await detect(p,img);img.close?.();
   }
   if(!p.faces.length){edRender();return;}
-  ed.face=TL.largestFace(p.faces,p.w,p.h);const f=p.faces[ed.face];ed.eyes={l:[...f.l],r:[...f.r]};ed.manual=false;edRender();
+  pickFace(TL.largestFace(p.faces,p.w,p.h));
 });
 function closeEditor(){if(editor.open)editor.close();ed=null;loupe.hidden=true;}
 $('edCancel').addEventListener('click',closeEditor);
@@ -740,10 +812,11 @@ $('edDelete').addEventListener('click',()=>{const i=photos.indexOf(ed.p);closeEd
 editor.addEventListener('close',()=>{ed=null;loupe.hidden=true;});
 function showLoupe(eye){
   const e=ed.eyes[eye],src=ed.src,R=60,Z=3;
-  const scale=edCanvas.getBoundingClientRect().width/src.width,half=R/(Z*scale);
+  const scale=stage.getBoundingClientRect().width*ed.view.z/src.width,half=R/(Z*scale);
   loupe.hidden=false;
   // On the other side of the picture than the finger
-  loupe.style.insetInlineStart=e[0]<0.5?'auto':'8px';loupe.style.insetInlineEnd=e[0]<0.5?'8px':'auto';
+  const fx=toStage(e)[0];
+  loupe.style.insetInlineStart=fx<0.5?'auto':'8px';loupe.style.insetInlineEnd=fx<0.5?'8px':'auto';
   const g=loupe.getContext('2d');
   g.fillStyle='#000';g.fillRect(0,0,120,120);
   g.drawImage(src,e[0]*src.width-half,e[1]*src.height-half,half*2,half*2,0,0,120,120);
@@ -754,21 +827,24 @@ let drag=null;
 for(const h of handles){
   const eye=h.dataset.eye;
   h.addEventListener('pointerdown',e=>{
-    e.preventDefault();h.setPointerCapture(e.pointerId);
-    const r=stage.getBoundingClientRect(),q=ed.eyes[eye];
-    drag={id:e.pointerId,dx:q[0]*r.width-(e.clientX-r.left),dy:q[1]*r.height-(e.clientY-r.top)};
+    e.preventDefault();e.stopPropagation();h.setPointerCapture(e.pointerId);
+    const r=stage.getBoundingClientRect(),[fx,fy]=toStage(ed.eyes[eye]);
+    // Keep the offset between finger and circle so the circle does not jump
+    drag={id:e.pointerId,dx:fx-(e.clientX-r.left)/r.width,dy:fy-(e.clientY-r.top)/r.height};
     showLoupe(eye);
   });
   h.addEventListener('pointermove',e=>{
     if(!drag||drag.id!==e.pointerId)return;
     const r=stage.getBoundingClientRect();
-    ed.eyes[eye]=[Tools.clamp((e.clientX-r.left+drag.dx)/r.width,0,1),Tools.clamp((e.clientY-r.top+drag.dy)/r.height,0,1)];
+    const [x,y]=toPhoto((e.clientX-r.left)/r.width+drag.dx,(e.clientY-r.top)/r.height+drag.dy);
+    ed.eyes[eye]=[Tools.clamp(x,0,1),Tools.clamp(y,0,1)];
     ed.manual=true;edRender();showLoupe(eye);
   });
   const end=e=>{if(!drag||drag.id!==e.pointerId)return;drag=null;loupe.hidden=true;};
   h.addEventListener('pointerup',end);h.addEventListener('pointercancel',end);
   h.addEventListener('keydown',e=>{
-    const step=e.shiftKey?0.02:0.003,mv={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+    // Smaller steps when zoomed in
+    const step=(e.shiftKey?0.02:0.003)/ed.view.z,mv={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
     if(!mv)return;
     e.preventDefault();
     const q=ed.eyes[eye];
@@ -776,6 +852,42 @@ for(const h of handles){
     ed.manual=true;edRender();
   });
 }
+// Move with one finger, zoom with two (on the photo, not on the circles)
+const touches=new Map();let gesture=null;
+const stagePt=e=>{const r=stage.getBoundingClientRect();return [(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height];};
+function startGesture(){
+  const pts=[...touches.values()];
+  gesture=pts.length>=2
+    ?{mid:[(pts[0][0]+pts[1][0])/2,(pts[0][1]+pts[1][1])/2],dist:Math.hypot(pts[0][0]-pts[1][0],pts[0][1]-pts[1][1]),view:{...ed.view}}
+    :pts.length===1?{pt:pts[0],view:{...ed.view}}:null;
+}
+edCanvas.addEventListener('pointerdown',e=>{
+  if(!ed)return;
+  e.preventDefault();edCanvas.setPointerCapture(e.pointerId);
+  touches.set(e.pointerId,stagePt(e));startGesture();
+});
+edCanvas.addEventListener('pointermove',e=>{
+  if(!ed||!touches.has(e.pointerId)||!gesture)return;
+  touches.set(e.pointerId,stagePt(e));
+  const pts=[...touches.values()],g=gesture;
+  if(pts.length>=2&&g.dist){
+    const mid=[(pts[0][0]+pts[1][0])/2,(pts[0][1]+pts[1][1])/2],dist=Math.hypot(pts[0][0]-pts[1][0],pts[0][1]-pts[1][1]);
+    const z=Tools.clamp(g.view.z*dist/g.dist,1,ZOOM_MAX);
+    // The photo point under the first midpoint follows the fingers
+    const x=g.view.cx+(g.mid[0]-0.5)/g.view.z,y=g.view.cy+(g.mid[1]-0.5)/g.view.z;
+    setView(z,x-(mid[0]-0.5)/z,y-(mid[1]-0.5)/z);
+  }else if(g.pt){
+    setView(g.view.z,g.view.cx-(pts[0][0]-g.pt[0])/g.view.z,g.view.cy-(pts[0][1]-g.pt[1])/g.view.z);
+  }
+  edRender();
+});
+const touchEnd=e=>{if(touches.delete(e.pointerId))startGesture();};
+edCanvas.addEventListener('pointerup',touchEnd);edCanvas.addEventListener('pointercancel',touchEnd);
+stage.addEventListener('wheel',e=>{
+  if(!ed)return;
+  e.preventDefault();
+  const [fx,fy]=stagePt(e);zoomAt(e.deltaY<0?1.25:0.8,fx,fy);
+},{passive:false});
 
 /* ---------- Alignment & speed ---------- */
 function setRadio(name,value){const r=document.querySelector(`input[name="${name}"][value="${value}"]`);if(r)r.checked=true;}

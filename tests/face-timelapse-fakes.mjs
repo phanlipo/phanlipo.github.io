@@ -4,7 +4,7 @@ export const URL_ = '/face-timelapse/';
 export const LS = 'face-timelapse.settings.v1';
 
 // Fake worker: every pure red blob is an eye; blobs sorted from left to right make faces in pairs
-// (first + second = face 1 …). Modes: 'ok', 'fail' (download fails), 'slow' (each answer after 300 ms).
+// (first + second = face 1 …), faces with eyes less than 3 % of the width apart are missed. Modes: 'ok', 'fail' (download fails), 'slow' (each answer after 300 ms).
 const FAKE_WORKER = `
 const MODE = %MODE%;
 function eyes(bitmap) {
@@ -35,6 +35,8 @@ self.onmessage = ({ data }) => {
     const b = eyes(data.bitmap), faces = [];
     data.bitmap.close();
     for (let i = 0; i + 1 < b.length; i += 2) {
+      // Like the real detector: faces with eyes closer than 3 % of the picture width are missed
+      if (b[i + 1][0] - b[i][0] < 0.03) continue;
       const f = new Float32Array(478 * 2);
       f[2 * 468] = b[i][0]; f[2 * 468 + 1] = b[i][1]; f[2 * 473] = b[i + 1][0]; f[2 * 473 + 1] = b[i + 1][1];
       faces.push(f);
@@ -51,16 +53,16 @@ export async function fakeWorker(page, mode = 'ok') {
   return hits;
 }
 
-/** Test photo w×h in colour bg with red eye dots (radius 7) at the given pixel positions → PNG/JPEG Buffer */
-export async function photo(page, { w = 400, h = 300, bg = '#808080', eyes = [], type = 'image/png' } = {}) {
-  const b64 = await page.evaluate(({ w, h, bg, eyes, type }) => {
+/** Test photo w×h in colour bg with red eye dots (radius r) at the given pixel positions → PNG/JPEG Buffer */
+export async function photo(page, { w = 400, h = 300, bg = '#808080', eyes = [], type = 'image/png', r = 7 } = {}) {
+  const b64 = await page.evaluate(({ w, h, bg, eyes, type, r }) => {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const g = c.getContext('2d');
     g.fillStyle = bg; g.fillRect(0, 0, w, h);
     g.fillStyle = '#ff0000';
-    for (const [x, y] of eyes) { g.beginPath(); g.arc(x, y, 7, 0, Math.PI * 2); g.fill(); }
+    for (const [x, y] of eyes) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
     return c.toDataURL(type, 0.95).split(',')[1];
-  }, { w, h, bg, eyes, type });
+  }, { w, h, bg, eyes, type, r });
   return Buffer.from(b64, 'base64');
 }
 
