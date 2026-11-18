@@ -7,7 +7,8 @@
 (function (root) {
   'use strict';
 
-  // code (ISO 3166, GR for Greece), VAT ID prefix, standard VAT rate in % (2026), German and English name
+  // code (ISO 3166, GR for Greece), VAT ID prefix, standard VAT rate in % (checked against the EU "Taxes in Europe"
+  // database, situation on 1 July 2026), German and English name
   const EU = [
     ['AT', 'AT', 20, 'Österreich', 'Austria'], ['BE', 'BE', 21, 'Belgien', 'Belgium'], ['BG', 'BG', 20, 'Bulgarien', 'Bulgaria'],
     ['CY', 'CY', 19, 'Zypern', 'Cyprus'], ['CZ', 'CZ', 21, 'Tschechien', 'Czechia'], ['DE', 'DE', 19, 'Deutschland', 'Germany'],

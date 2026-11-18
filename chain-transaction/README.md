@@ -23,8 +23,14 @@ Umsatzsteuerliche Beurteilung von Reihengeschäften mit 3 oder 4 Unternehmen: be
 - **Andere Länder (Schritt 8):** nur, wenn eine Lieferung außerhalb Deutschlands stattfindet. Hinweis auf die örtliche Umkehr der Steuerschuld (`RC_COUNTRIES` = BE, ES, FR, IT, NL) bei steuerpflichtigen Lieferungen nicht ansässiger Unternehmer an Unternehmer; engere Auslegung des Dreiecksgeschäfts; Nordirland/HMRC. Bewusst nur Hinweise, keine geänderte Auswertung.
 - Icons: `truck` (transportiert), `file-certificate` (meldet Einfuhr an), `arrow-down` (Lieferung), `circle-check`/`circle-x` (Voraussetzungen), `book` (Beispiele im Menü), `printer` (Drucken / PDF).
 
+## Quellen (geprüft November 2026)
+
+- Normalsätze: EU-Datenbank „Taxes in Europe“ (`ec.europa.eu/taxation_customs/tedb`, Stand 1. 7. 2026).
+- Kennzahlen: Vordruckmuster USt 1 A 2026 mit Anleitung (BMF-Schreiben vom 29. 12. 2025).
+- Intrastat-Schwellen (1 Mio. € Versendung, 3 Mio. € Eingang seit 2025): Statistisches Bundesamt, wiedergegeben von den IHKs.
+
 ## Offene Erweiterungen
 
 - Gebrochener Transport, Konsignationslager, Lohnveredelung.
 - Kennzahlen und Fristen anderer Länder; Intrastat für Fernverkäufe.
-- Frühere Rechtsstände (vor den Quick Fixes 2020, vor der OSS-Reform Juli 2021) – siehe Entscheidung im PR #227.
+- Frühere Rechtsstände (vor den Quick Fixes 2020, vor der OSS-Reform Juli 2021) – hoher Aufwand und Fehlerrisiko bei geringem Nutzen (nur für Prüfungen alter Jahre).
