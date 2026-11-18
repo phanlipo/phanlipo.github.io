@@ -9,6 +9,7 @@ import { CLIPS, clip, wavInfo, mp3Info, toneHz, id3Tags, oggTags } from './audio
 import { ORIGIN, API_PROBLEMS, mockApi, addYamlConfig } from './api-mock.mjs';
 import { testSong } from './midi-files.mjs';
 import { fakeCamera, fakeWorker } from './camera-fakes.mjs';
+import { fakeWorker as fakeFaceWorker, photo as facePhoto, withExifDate } from './face-timelapse-fakes.mjs';
 import { fakeYoutube, playerFrame, LIST, LIST_TITLE, VIDEOS } from './fake-youtube.mjs';
 import { FEED_ORIGIN, FEED_PROBLEMS, mockFeeds } from './feed-mock.mjs';
 
@@ -3134,5 +3135,76 @@ test.describe('unit-converter tools', () => {
     const p = (await call(page, 'unit_converter_list_units', { quantity: 'pressure' })).result;
     expect(p.si_unit).toBe('Pa');
     expect(p.units.find(u => u.id === 'psi')).toEqual({ id: 'psi', symbol: 'psi', name: 'pound-force per square inch', si: false });
+  });
+});
+
+test.describe('face-timelapse tools', () => {
+  test.use({ reducedMotion: 'reduce' });
+  test.beforeEach(async ({ page }) => {
+    await fakeFaceWorker(page);
+    await onDialog(page, d => d.accept());
+    await open(page, '/face-timelapse/');
+    const eyes = [[160, 120], [240, 120]];
+    await page.setInputFiles('#inPick', [
+      { name: 'new.png', mimeType: 'image/png', buffer: await facePhoto(page, { eyes }) },
+      { name: 'old.jpg', mimeType: 'image/jpeg', buffer: withExifDate(await facePhoto(page, { eyes, type: 'image/jpeg' }), '2018:06:01 12:00:00') },
+      { name: 'none.png', mimeType: 'image/png', buffer: await facePhoto(page) },
+    ]);
+    await expect(page.locator('#addInfo')).toHaveText('3 Foto(s) hinzugefügt.');
+  });
+  const order = page => page.evaluate(() => [...document.querySelectorAll('#photos li')].map(li => li.dataset.id).join(','));
+
+  test('list_photos reads photos and options without changing anything', async ({ page }) => {
+    const r = (await call(page, 'face_timelapse_list_photos', {})).result;
+    expect(r).toMatchObject({ count: 3, usable: 2, options: { format: 'square', face_width: 55, seconds_per_photo: 0.5, crossfade: true, show_date: false, output: 'video', size: 720 } });
+    expect(r.photos.map(p => [p.position, p.face, p.faces_found, p.date_source])).toEqual([[1, 'found', 1, 'file'], [2, 'found', 1, 'exif'], [3, 'none', 0, 'file']]);
+    expect(r.photos[1].date).toBe(await page.evaluate(() => new Date(2018, 5, 1, 12).toISOString()));
+    // No file names (user content) in the result
+    expect(JSON.stringify(r)).not.toMatch(/new|old|none\.png/);
+    expect(await order(page)).toBe('1,2,3');
+  });
+
+  test('move_photo and sort_photos change the order shown in the app', async ({ page }) => {
+    let r = await call(page, 'face_timelapse_move_photo', { from: 3, to: 1 });
+    expect(r.result.photos.map(p => p.face)).toEqual(['none', 'found', 'found']);
+    await expect.poll(() => order(page)).toBe('3,1,2');
+    await expect(page.locator('.toast')).toContainText('KI-Agent: Foto verschoben');
+    // Expected order from the dates the tool reports (stable for equal dates): 2018 (EXIF) first, then the file dates
+    const ids = (await order(page)).split(',');
+    const expected = r.result.photos.map((p, i) => [Date.parse(p.date), i, ids[i]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]).join(',');
+    expect(expected.startsWith('2,')).toBe(true);
+    r = await call(page, 'face_timelapse_sort_photos', { by: 'date' });
+    expect(r.result.photos.map(p => p.date_source)).toEqual(['exif', 'file', 'file']);
+    await expect.poll(() => order(page)).toBe(expected);
+    await call(page, 'face_timelapse_sort_photos', { by: 'reverse' });
+    await expect.poll(() => order(page)).toBe(expected.split(',').reverse().join(','));
+  });
+
+  test('set_options changes only the given options, shown and saved in the app', async ({ page }) => {
+    const r = await call(page, 'face_timelapse_set_options', { format: 'story', face_width: 72, seconds_per_photo: 1.24, output: 'gif', show_date: true });
+    expect(r.result).toEqual({ format: 'story', face_width: 70, seconds_per_photo: 1.2, crossfade: true, show_date: true, output: 'gif', size: 720 });
+    await expect(page.locator('input[name="format"][value="story"]')).toBeChecked();
+    await expect(page.locator('#faceOut')).toHaveText('70 %');
+    await expect(page.locator('#secsOut')).toHaveText('1,2 s');
+    await expect(page.locator('#optDate')).toBeChecked();
+    await expect(page.locator('#saveLabel')).toHaveText('GIF speichern');
+    // 1.2 s for the first photo, the last one stays 1.2 s too (at least 1 s)
+    await expect(page.locator('#exportHintText')).toHaveText('2 Fotos · 2,4 s · 720 × 1280 px');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('face-timelapse.settings.v1')))).toMatchObject({ format: 'story', face: 70, secs: 1.2, out: 'gif', date: true });
+  });
+
+  test('invalid input is rejected and changes nothing', async ({ page }) => {
+    for (const [name, input, msg] of [
+      ['face_timelapse_move_photo', { from: 1, to: 4 }, /only 3 photos/],
+      ['face_timelapse_move_photo', { from: 0, to: 1 }, />= 1/],
+      ['face_timelapse_move_photo', { from: 1 }, /required/],
+      ['face_timelapse_sort_photos', { by: 'name' }, /one of/],
+      ['face_timelapse_set_options', { size: 600 }, /one of/],
+      ['face_timelapse_set_options', { face_width: 120 }, /<= 100/],
+      ['face_timelapse_set_options', { seconds_per_photo: 0 }, />= 0.1/],
+      ['face_timelapse_set_options', { speed: 2 }, /not allowed/],
+    ]) expect((await call(page, name, input)).error, name).toMatch(msg);
+    expect(await order(page)).toBe('1,2,3');
+    expect((await call(page, 'face_timelapse_list_photos', {})).result.options).toMatchObject({ size: 720, face_width: 55, seconds_per_photo: 0.5 });
   });
 });

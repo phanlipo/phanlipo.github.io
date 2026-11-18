@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Gesichter-Zeitraffer</title>
+<meta name="description" content="Fotos wählen – das Gesicht wird in jedem Bild erkannt, gerade gerückt und gleich groß in die Mitte gesetzt. Reihenfolge ändern und als Video oder GIF speichern: ein Zeitraffer, wie jemand über die Jahre wächst.">
+<meta name="tool:tags" content="Freizeit, KI">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent, Download nötig">
+<meta name="tool:icon" content="face-id">
+<meta name="tool:color" content="#0e6e8c">
+<meta name="tool:short-name" content="Zeitraffer">
+<meta name="tool:title-en" content="Face Timelapse">
+<meta name="tool:description-en" content="Choose photos – the face is found in every picture, straightened and placed in the middle at the same size. Change the order and save as a video or GIF: a timelapse of someone growing up over the years.">
+<meta name="tool:short-name-en" content="Timelapse">
+<meta name="tool:storage" content="face-timelapse.">
+<meta name="tool:webmcp" content="list_photos, move_photo, sort_photos, set_options">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann die Fotoliste lesen (Position, Gesicht gefunden, Datum), Fotos verschieben, nach Datum sortieren oder umdrehen und Format, Gesichtsgröße, Tempo, Überblenden, Datum, Video/GIF und Größe einstellen. Fotos wählen, löschen oder das Video speichern kann er nicht.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the photo list (position, face found, date), move photos, sort them by date or reverse them, and set the format, face size, speed, crossfade, date, video/GIF and size. It cannot choose or delete photos or save the video.">
+<meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-2iqN0ujF3zzMLPMFg7ue3fpzhe5zGcXJgoAPuQKnAeQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Zeitraffer">
+<meta name="theme-color" content="#0e6e8c">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0e6e8c;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#6cc4e0;--accent-text:#06222c}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.add .dropzone{min-height:96px}
+#photos{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+#photos li{border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:4px;display:grid;gap:4px;min-width:0}
+.thumb{display:block;width:100%;aspect-ratio:var(--ar,1);padding:0;border:1px solid var(--border);border-radius:6px;background:#000;cursor:pointer;overflow:hidden;position:relative}
+.thumb canvas{width:100%;height:100%;display:block}
+.thumb .num{position:absolute;inset-block-start:4px;inset-inline-start:4px;background:var(--accent);color:var(--accent-text);border-radius:999px;font-size:13px;font-weight:600;min-width:24px;padding-inline:6px;line-height:24px;text-align:center}
+.thumb .flag{position:absolute;inset:auto 0 0 0;display:flex;align-items:center;justify-content:center;gap:4px;padding:4px;background:rgba(0,0,0,.72);color:#fff;font-size:12px;line-height:1.2}
+.thumb .flag .ic{width:16px;height:16px;color:#fbbf24}
+.pbtns{display:flex;gap:2px}
+.pbtns .btn{flex:1;padding-inline:0;min-width:0;min-height:44px;display:grid;place-items:center}
+.sort-row{margin-top:12px}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 16px;align-items:start}
+.seg-group{margin:0}
+.preview-wrap{display:grid;justify-items:center;gap:8px}
+#preview{display:block;width:100%;max-width:360px;height:auto;aspect-ratio:var(--ar,1);background:#000;border-radius:8px}
+.preview-wrap .row{justify-content:center;align-items:center}
+#frameInfo{margin:0;min-width:9em;text-align:center;font-variant-numeric:tabular-nums}
+.export .opts{margin-block:12px}
+#status{min-height:1.4em;margin:8px 0 0}
+#status.err{color:var(--err)}
+/* Eye editor (full screen on phones) */
+@media (max-width:640px){dialog#editor{height:100dvh;max-height:100dvh;border-radius:0}}
+.ed{display:flex;flex-direction:column;gap:10px;padding:12px;height:100%;min-height:0}
+.ed h2{font-size:16px;margin:0}
+.ed .hint{margin:0}
+.ed-main{display:flex;gap:10px;flex:1;min-height:0;align-items:flex-start;justify-content:center}
+.stage{position:relative;touch-action:none;user-select:none;-webkit-user-select:none;max-width:100%}
+.stage canvas{display:block;width:100%;height:100%}
+.handle{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;padding:0;border:0;background:transparent;cursor:grab;touch-action:none;border-radius:50%}
+.handle::after{content:"";position:absolute;inset:14px;border-radius:50%;border:3px solid #22d3ee;box-shadow:0 0 0 2px rgba(0,0,0,.55)}
+.handle[data-eye="r"]::after{border-color:#facc15}
+.handle:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+#loupe{position:absolute;inset-block-start:8px;inset-inline-start:8px;width:120px;height:120px;border-radius:50%;border:3px solid #22d3ee;box-shadow:0 2px 8px rgba(0,0,0,.5);pointer-events:none;background:#000}
+#edPreview{width:96px;height:auto;aspect-ratio:var(--ar,1);background:#000;border-radius:6px;flex:none}
+.ed .row .btn{flex:1 1 auto}
+.ed .form-field{max-width:12em}
+.ed-foot{margin-block-start:auto}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Gesichter-Zeitraffer</span></h1>
+  <p class="sub" data-i18n="sub">Gesichter ausrichten, als Video oder GIF speichern – alles bleibt auf dem Gerät.</p>
+</header>
+
+<main>
+  <section class="card add" aria-labelledby="h-photos">
+    <h2 id="h-photos"><span class="step">1</span><span data-i18n="photos.h">Fotos</span> <span class="badge" id="photoCount">0</span></h2>
+    <button type="button" class="dropzone" id="btnPick"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#photo"/></svg><strong data-i18n="add.pick">Fotos wählen</strong><span class="dz-hint" data-i18n="add.hint">oder hierher ziehen – mehrere auf einmal</span></button>
+    <input type="file" id="inPick" accept="image/*,.heic,.heif" multiple hidden>
+    <p class="muted" id="addInfo" role="status" aria-live="polite"></p>
+    <progress id="addProg" max="1" value="0" hidden></progress>
+    <p class="notice warn" id="noFaceHint" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#alert-triangle"/></svg><span id="noFaceText"></span></p>
+    <div class="row" id="detectRow" hidden><button type="button" class="btn" id="btnDetect"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#user-scan"/></svg><span data-i18n="detect.run">Gesichter erkennen</span></button></div>
+    <div class="row sort-row" id="sortRow" hidden>
+      <button type="button" class="btn small" id="btnSortDate"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calendar"/></svg><span data-i18n="sort.date">Nach Datum sortieren</span></button>
+      <button type="button" class="btn small" id="btnReverse"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-down-up"/></svg><span data-i18n="sort.reverse">Reihenfolge umdrehen</span></button>
+    </div>
+    <ol id="photos"></ol>
+  </section>
+
+  <section class="card" aria-labelledby="h-look">
+    <h2 id="h-look"><span class="step">2</span><span data-i18n="look.h">Ausrichtung &amp; Tempo</span></h2>
+    <div class="opts">
+      <fieldset class="seg-group">
+        <legend data-i18n="format">Format</legend>
+        <div class="seg" id="formatSeg">
+          <label><input type="radio" name="format" value="square"><span data-i18n="format.square">Quadrat</span></label>
+          <label><input type="radio" name="format" value="portrait"><span data-i18n="format.portrait">Hoch 4:5</span></label>
+          <label><input type="radio" name="format" value="story"><span data-i18n="format.story">Story 9:16</span></label>
+        </div>
+      </fieldset>
+      <div class="form-field range">
+        <label for="optFace"><span data-i18n="face">Gesichtsgröße</span> <output id="faceOut" for="optFace"></output></label>
+        <input type="range" id="optFace" min="25" max="100" step="5">
+      </div>
+      <div class="form-field range">
+        <label for="optSecs"><span data-i18n="secs">Zeit pro Foto</span> <output id="secsOut" for="optSecs"></output></label>
+        <input type="range" id="optSecs" min="0.1" max="2" step="0.1">
+      </div>
+      <div>
+        <label class="check"><input type="checkbox" id="optFade"><span data-i18n="fade">Weich überblenden</span></label>
+        <label class="check"><input type="checkbox" id="optDate"><span data-i18n="date">Aufnahmedatum einblenden</span></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="card export" aria-labelledby="h-export">
+    <h2 id="h-export"><span class="step">3</span><span data-i18n="export.h">Vorschau &amp; speichern</span></h2>
+    <div class="preview-wrap">
+      <canvas id="preview" width="360" height="360" role="img" aria-label="Vorschau des Zeitraffers" data-i18n-attr="aria-label:preview.label"></canvas>
+      <div class="row">
+        <button type="button" class="btn" id="btnPlay" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span data-i18n="play">Abspielen</span></button>
+        <p class="muted" id="frameInfo"></p>
+      </div>
+    </div>
+    <div class="opts">
+      <fieldset class="seg-group">
+        <legend data-i18n="out">Speichern als</legend>
+        <div class="seg">
+          <label><input type="radio" name="out" value="video"><span data-i18n="out.video">Video</span></label>
+          <label><input type="radio" name="out" value="gif"><span data-i18n="out.gif">GIF</span></label>
+        </div>
+      </fieldset>
+      <label class="form-field"><span data-i18n="size">Größe</span>
+        <select id="optSize">
+          <option value="480" data-i18n="size.480">Klein (480 px breit)</option>
+          <option value="720" data-i18n="size.720">Mittel (720 px breit)</option>
+          <option value="1080" data-i18n="size.1080">Groß (1080 px breit)</option>
+        </select></label>
+    </div>
+    <p class="notice info" id="noVideo" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="noVideo">Dieser Browser kann keine Videos erstellen – GIF geht immer.</span></p>
+    <p class="notice info" id="exportHint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span id="exportHintText"></span></p>
+    <progress id="expProg" max="1" value="0" hidden></progress>
+    <div class="row">
+      <button type="button" class="btn primary block" id="btnSave" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span id="saveLabel" data-i18n="save.video">Video speichern</span></button>
+      <button type="button" class="btn" id="btnShare" hidden disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="share">Teilen …</span></button>
+      <button type="button" class="btn" id="btnCancel" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+    </div>
+    <p class="muted" id="status" role="status" aria-live="polite"></p>
+  </section>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnClear" class="danger" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="photos.clear">Alle Fotos entfernen</span></button>
+</div>
+<section class="card" aria-labelledby="h-models" data-menu data-icon="user-scan">
+  <h2 id="h-models" data-i18n="models.h">Gesichtserkennung</h2>
+  <p class="muted" id="modelsInfo" data-i18n="models.none">Noch nicht heruntergeladen.</p>
+  <div class="row"><button type="button" class="btn" id="btnDelModels" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="models.delete">Heruntergeladene Erkennung löschen</span></button></div>
+</section>
+
+<dialog id="editor" class="dialog wide" data-keep aria-labelledby="edTitle">
+  <div class="ed">
+    <h2 id="edTitle"></h2>
+    <p class="muted hint" data-i18n="ed.hint">Die beiden Kreise auf die Mitte der Augen ziehen – hellblau links, gelb rechts im Bild.</p>
+    <div class="ed-main">
+      <div class="stage" id="stage">
+        <canvas id="edCanvas" width="10" height="10"></canvas>
+        <button type="button" class="handle" data-eye="l" aria-label="Auge links im Bild" data-i18n-attr="aria-label:ed.eyeL"></button>
+        <button type="button" class="handle" data-eye="r" aria-label="Auge rechts im Bild" data-i18n-attr="aria-label:ed.eyeR"></button>
+        <canvas id="loupe" width="120" height="120" hidden></canvas>
+      </div>
+      <canvas id="edPreview" width="96" height="96" role="img" aria-label="So sieht das Foto im Zeitraffer aus" data-i18n-attr="aria-label:ed.preview"></canvas>
+    </div>
+    <p class="muted" id="edInfo" role="status"></p>
+    <div class="row">
+      <button type="button" class="btn small" id="edAuto"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#wand"/></svg><span data-i18n="ed.auto">Automatisch</span></button>
+      <button type="button" class="btn small" id="edNext" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span id="edNextLabel"></span></button>
+      <label class="form-field"><span data-i18n="ed.pos">Position</span><select id="edPos"></select></label>
+    </div>
+    <div class="row ed-foot">
+      <button type="button" class="btn danger" id="edDelete"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="ed.delete">Foto entfernen</span></button>
+      <button type="button" class="btn" id="edCancel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+      <button type="button" class="btn primary" id="edDone"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#check"/></svg><span data-i18n="ed.done">Fertig</span></button>
+    </div>
+  </div>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Macht aus vielen Fotos derselben Person einen Zeitraffer: das Gesicht steht in jedem Bild an derselben Stelle, gleich groß und gerade. So sieht man z. B., wie ein Kind über die Jahre wächst, ein Bart wächst oder ein Selfie-Projekt „jeden Tag ein Foto“ aussieht.</p>
+  <h3>Bedienung</h3>
+  <ol>
+    <li><b>Fotos wählen</b> (auch viele auf einmal, höchstens 300) oder aus der Galerie hierher teilen. HEIC-Fotos (iPhone) gehen auch: Safari öffnet sie selbst, sonst lädt die App beim ersten HEIC-Foto einen Decoder (libheif, ca. 1,5 MB) aus ihren eigenen Dateien.</li>
+    <li>In jedem Foto wird das Gesicht gesucht. Sind mehrere Personen auf dem Bild, nimmt die App das größte Gesicht. Die Vorschaubilder zeigen schon das ausgerichtete Ergebnis.</li>
+    <li><b>Korrigieren:</b> ein Vorschaubild antippen. Die beiden Kreise auf die Mitte der Augen ziehen (beim Ziehen zeigt eine Lupe die Stelle), <i>Anderes Gesicht</i> wählt eine andere Person, <i>Automatisch</i> nimmt wieder das erkannte Gesicht. Mit der Tastatur: Kreis auswählen und mit den Pfeiltasten verschieben (mit Umschalt in großen Schritten).</li>
+    <li>Fotos ohne erkanntes Gesicht sind markiert und kommen nicht in den Zeitraffer, bis die Augen von Hand gesetzt sind.</li>
+    <li><b>Reihenfolge:</b> mit ← und → unter dem Vorschaubild verschieben, beim Korrigieren eine <i>Position</i> wählen, <i>Nach Datum sortieren</i> (Aufnahmedatum aus dem Foto, sonst Datum der Datei) oder <i>Reihenfolge umdrehen</i>.</li>
+    <li><b>Ausrichtung &amp; Tempo:</b> Format (Quadrat, Hochformat 4:5, Story 9:16), <i>Gesichtsgröße</i> (Breite des Gesichts im Verhältnis zur Bildbreite), <i>Zeit pro Foto</i>, weiches Überblenden und das Aufnahmedatum unten im Bild. Das letzte Foto bleibt mindestens eine Sekunde stehen.</li>
+    <li><b>Video speichern</b> erstellt eine MP4-Datei (wenn der Browser das kann, sonst WebM), <b>GIF</b> eine Endlos-Animation. <i>Teilen …</i> (Handy) schickt die Datei direkt an eine andere App. Große GIFs mit vielen Fotos werden schnell mehrere MB groß – dann <i>Klein</i> wählen oder als Video speichern.</li>
+  </ol>
+  <h3>Tipps</h3>
+  <ul>
+    <li>Am besten funktionieren Fotos, auf denen das Gesicht von vorn und nicht zu klein zu sehen ist. Ganz kleine Gesichter (Gruppenfoto) oder stark zur Seite gedrehte Köpfe werden oft nicht erkannt – dann die Augen von Hand setzen.</li>
+    <li>Fotos werden nur gedreht, verschoben und vergrößert, nicht verzerrt. Wo das Foto nicht bis zum Rand reicht, bleibt der Hintergrund schwarz.</li>
+  </ul>
+  <h3>Gesichtserkennung</h3>
+  <p>Beim ersten Mal lädt die App nach Rückfrage die Erkennung herunter: das Rechenprogramm (MediaPipe, ca. 14 MB) von dieser Seite und das Gesichtsmodell (ca. 3,8 MB) von Google (storage.googleapis.com). Danach funktioniert alles offline. Die Fotos werden nur auf dem Gerät untersucht und nie verschickt. Die Bibliothek MediaPipe würde von sich aus Nutzungsstatistiken an Google senden – die App sperrt das: außer der Modelldatei darf die Erkennung nichts aus dem Internet laden. Ohne Download geht es auch: dann die Augen in jedem Foto von Hand setzen. Löschen unter <i>Gesichtserkennung</i> im Menü.</p>
+  <h3>Gespeichert</h3>
+  <p>Die Fotos und was mit ihnen gemacht wurde (Reihenfolge, Augen) bleiben im Speicher des Browsers auf diesem Gerät, bis du sie entfernst – auch nach einem Neuladen oder Update. <i>Alle Fotos entfernen</i> im Menü oder <i>Alle Daten löschen</i> entfernt sie. In die Sicherungsdatei kommen nur die Einstellungen (Format, Größe, Tempo …), nicht die Fotos. Nichts wird an einen Server geschickt.</p>
+  <h3>Bibliotheken</h3>
+  <p><a href="https://ai.google.dev/edge/mediapipe/solutions/guide">MediaPipe</a> (Apache-2.0) mit dem Face-Landmarker-Modell von Google für die Gesichter, <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) für das Video. Den GIF-Encoder bringt die App selbst mit.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Turns many photos of the same person into a timelapse: the face is at the same spot in every picture, the same size and level. See how a child grows over the years, a beard grows, or what a “one photo every day” selfie project looks like.</p>
+  <h3>How to use</h3>
+  <ol>
+    <li><b>Choose photos</b> (many at once, up to 300) or share them from the gallery to the app. HEIC photos (iPhone) work too: Safari opens them itself, elsewhere the app loads a decoder (libheif, about 1.5 MB) from its own files with the first HEIC photo.</li>
+    <li>The face is looked for in every photo. With several people in a picture the app takes the biggest face. The previews already show the aligned result.</li>
+    <li><b>Correct:</b> tap a preview. Drag the two circles onto the centre of the eyes (a magnifier shows the spot while dragging), <i>Other face</i> picks another person, <i>Automatic</i> goes back to the face that was found. With a keyboard: select a circle and move it with the arrow keys (with Shift in big steps).</li>
+    <li>Photos without a face found are marked and stay out of the timelapse until the eyes are set by hand.</li>
+    <li><b>Order:</b> move with ← and → below the preview, choose a <i>Position</i> while correcting, <i>Sort by date</i> (date taken from the photo, otherwise the file date) or <i>Reverse order</i>.</li>
+    <li><b>Alignment &amp; speed:</b> format (square, portrait 4:5, story 9:16), <i>Face size</i> (width of the face compared to the width of the picture), <i>Time per photo</i>, smooth crossfade and the date taken at the bottom of the picture. The last photo stays for at least one second.</li>
+    <li><b>Save video</b> creates an MP4 file (if the browser can, else WebM), <b>GIF</b> an endless animation. <i>Share …</i> (phone) sends the file straight to another app. Big GIFs with many photos quickly get several MB – then choose <i>Small</i> or save as a video.</li>
+  </ol>
+  <h3>Tips</h3>
+  <ul>
+    <li>Photos with the face seen from the front and not too small work best. Very small faces (group photo) or heads turned far to the side are often not found – then set the eyes by hand.</li>
+    <li>Photos are only turned, moved and enlarged, never distorted. Where a photo does not reach the edge, the background stays black.</li>
+  </ul>
+  <h3>Face detection</h3>
+  <p>The first time the app asks and then downloads the detection: the engine (MediaPipe, about 14 MB) from this site and the face model (about 3.8 MB) from Google (storage.googleapis.com). After that everything works offline. The photos are only analysed on the device and never sent anywhere. The MediaPipe library would send usage statistics to Google on its own – the app blocks that: apart from the model file the detection may not load anything from the internet. It also works without the download: then set the eyes by hand in every photo. Delete it under <i>Face detection</i> in the menu.</p>
+  <h3>Stored</h3>
+  <p>The photos and what was done with them (order, eyes) stay in the browser’s storage on this device until you remove them – also after a reload or an update. <i>Remove all photos</i> in the menu or <i>Delete all data</i> removes them. The backup file holds only the settings (format, size, speed …), not the photos. Nothing is sent to a server.</p>
+  <h3>Libraries</h3>
+  <p><a href="https://ai.google.dev/edge/mediapipe/solutions/guide">MediaPipe</a> (Apache-2.0) with Google’s face landmarker model for the faces, <a href="https://mediabunny.dev">Mediabunny</a> (MPL-2.0) for the video. The app brings its own GIF encoder.</p>
+  </div>
+  <!-- files:start -->
+  <div data-lang="de">
+  <h3>Dateien an die App geben</h3>
+  <ul>
+    <li><b>Android:</b> App installieren (☰ → <i>Als App installieren</i>). Dann die Datei in Galerie, Dateien-, Mail- oder Messenger-App <i>teilen</i> und „Zeitraffer“ wählen – das klappt auch offline.</li>
+    <li><b>Windows/Computer:</b> Als installierte App (Chrome oder Edge) steht sie unter <i>Öffnen mit</i> (Rechtsklick auf die Datei); als Standard-App öffnet sie Dateien per Doppelklick. Mit Edge erscheint sie auch im Teilen-Menü von Windows.</li>
+    <li><b>iPhone/iPad:</b> Teilen an Web-Apps und <i>Öffnen mit</i> gibt es dort nicht – die Datei hier in der App auswählen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>Giving files to the app</h3>
+  <ul>
+    <li><b>Android:</b> install the app (☰ → <i>Install as an app</i>). Then <i>share</i> the file from the gallery, files, mail or messenger app and pick “Timelapse” – this works offline too.</li>
+    <li><b>Windows/computer:</b> as an installed app (Chrome or Edge) it is listed under <i>Open with</i> (right-click the file); set as default app, it opens files with a double-click. With Edge it also appears in the Windows share menu.</li>
+    <li><b>iPhone/iPad:</b> sharing to web apps and <i>Open with</i> do not exist there – choose the file here in the app.</li>
+  </ul>
+  </div>
+  <!-- files:end -->
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann die Fotoliste lesen (Position, Gesicht gefunden, Datum), Fotos verschieben, nach Datum sortieren oder umdrehen und Format, Gesichtsgröße, Tempo, Überblenden, Datum, Video/GIF und Größe einstellen. Fotos wählen, löschen oder das Video speichern kann er nicht. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the photo list (position, face found, date), move photos, sort them by date or reverse them, and set the format, face size, speed, crossfade, date, video/GIF and size. It cannot choose or delete photos or save the video. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version f32ab4c98d62</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/shared/heic.js"></script>
+<script src="timelapse.js"></script>
+<script src="gif.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'add.loading':'Foto {i} von {n} wird geladen …','add.heic':'HEIC-Foto: Decoder wird geladen …','add.done':'{n} Foto(s) hinzugefügt.',
+    'add.fail':'„{name}“ konnte nicht geöffnet werden.','add.heicFail':'HEIC-Foto „{name}“ konnte nicht gelesen werden. Der HEIC-Decoder braucht beim ersten Mal Internet.',
+    'add.max':'Höchstens {n} Fotos – die übrigen wurden nicht hinzugefügt.','add.manual':'Ohne Gesichtserkennung: Fotos antippen und die Augen von Hand setzen.',
+    'detect.busy':'Gesichter werden gesucht … ({i}/{n})','detect.none':'{n} Foto(s) ohne erkanntes Gesicht – antippen und die Augen setzen, sonst kommen sie nicht in den Zeitraffer.',
+    'detect.unchecked':'{n} Foto(s) noch nicht durchsucht.',
+    'photo.edit':'Foto {n} korrigieren','photo.edit.none':'Foto {n} korrigieren – kein Gesicht gefunden','photo.earlier':'Foto {n} nach vorn','photo.later':'Foto {n} nach hinten','photo.delete':'Foto {n} entfernen',
+    'photo.flag':'Kein Gesicht','photo.removed':'Foto {n} entfernt.','photos.clearQ':'Alle {n} Fotos entfernen? Die auf dem Gerät behaltenen Fotos sind dann auch weg.','photos.cleared':'Alle Fotos entfernt.',
+    'keep.loading':'Fotos vom letzten Mal werden geladen … ({i}/{n})','keep.restored':'{n} Foto(s) vom letzten Mal wieder da.',
+    'sorted.date':'Nach Aufnahmedatum sortiert.','sorted.reverse':'Reihenfolge umgedreht.',
+    'faceOut':'{n} %','secsOut':'{n} s',
+    'frame':'Foto {i} von {n}','pause':'Anhalten','play':'Abspielen',
+    'hint.few':'Erst oben mindestens zwei Fotos mit Gesicht wählen.','hint.ready':'{n} Fotos · {s} s · {w} × {h} px',
+    'save.video':'Video speichern','save.gif':'GIF speichern',
+    'export.busy':'Bild {i} von {n} …','export.done':'Gespeichert: {name} ({size}).','export.shared':'Geteilt: {name} ({size}).','export.cancelled':'Abgebrochen.',
+    'export.fail':'Erstellen fehlgeschlagen: {msg}','export.noCodec':'Ein Video in dieser Größe kann dieser Browser nicht erstellen – kleinere Größe oder GIF wählen.',
+    'export.shareAgain':'Fertig – zum Teilen bitte nochmal tippen.','export.shareFail':'Teilen hat nicht geklappt.',
+    'file':'Zeitraffer','mb':'{n} MB','kb':'{n} KB',
+    'ed.title':'Foto {n} von {total}','ed.faces':'Anderes Gesicht ({i}/{n})','ed.found':'{n} Gesicht(er) gefunden.','ed.notFound':'Kein Gesicht gefunden – Augen von Hand setzen.','ed.unchecked':'Noch nicht durchsucht.',
+    'ed.manual':'Augen von Hand gesetzt.',
+    confirmDl:'Für die Gesichtserkennung lädt die App einmalig ca. {mb} MB herunter (Rechenprogramm von dieser Seite, Modell von Google). Die Fotos bleiben auf dem Gerät. Jetzt herunterladen? WLAN empfohlen.',
+    loadingEngine:'Gesichtserkennung wird gestartet …','loadingModel':'Gesichtserkennung wird geladen … {p} %',
+    dlFail:'Download fehlgeschlagen – Internetverbindung prüfen.',engineFail:'Die Gesichtserkennung ließ sich auf diesem Gerät nicht starten.',
+    'models.none':'Noch nicht heruntergeladen.','models.have':'Heruntergeladen: {list} ({mb} MB).','models.engine':'Rechenprogramm','models.model':'Gesichtsmodell',
+    confirmDel:'Heruntergeladene Gesichtserkennung löschen? Beim nächsten Mal wird sie neu geladen.','deleted':'Gelöscht.',
+    'mcp.move':'Foto verschoben','mcp.sort':'Fotos sortiert','mcp.options':'Einstellungen geändert'
+  },
+  en:{title:'Face Timelapse',sub:'Align faces, save as a video or GIF – everything stays on the device.',
+    'photos.h':'Photos','add.pick':'Choose photos','add.hint':'or drag them here – several at once','detect.run':'Find faces',
+    'sort.date':'Sort by date','sort.reverse':'Reverse order','look.h':'Alignment & speed','format':'Format','format.square':'Square','format.portrait':'Portrait 4:5','format.story':'Story 9:16',
+    face:'Face size',secs:'Time per photo',fade:'Smooth crossfade',date:'Show date taken','export.h':'Preview & save','preview.label':'Preview of the timelapse',
+    out:'Save as','out.video':'Video','out.gif':'GIF',size:'Size','size.480':'Small (480 px wide)','size.720':'Medium (720 px wide)','size.1080':'Large (1080 px wide)',
+    noVideo:'This browser cannot create videos – GIF always works.',share:'Share …',cancel:'Cancel',
+    'photos.clear':'Remove all photos','models.h':'Face detection','models.delete':'Delete downloaded detection',
+    'ed.hint':'Drag the two circles onto the centre of the eyes – light blue on the left, yellow on the right of the picture.','ed.eyeL':'Eye on the left of the picture','ed.eyeR':'Eye on the right of the picture',
+    'ed.preview':'This is how the photo looks in the timelapse','ed.auto':'Automatic','ed.pos':'Position','ed.delete':'Remove photo','ed.done':'Done',
+    'add.loading':'Loading photo {i} of {n} …','add.heic':'HEIC photo: loading the decoder …','add.done':'{n} photo(s) added.',
+    'add.fail':'Could not open “{name}”.','add.heicFail':'Could not read the HEIC photo “{name}”. The HEIC decoder needs the internet the first time.',
+    'add.max':'At most {n} photos – the rest were not added.','add.manual':'Without face detection: tap the photos and set the eyes by hand.',
+    'detect.busy':'Looking for faces … ({i}/{n})','detect.none':'{n} photo(s) without a face found – tap and set the eyes, otherwise they stay out of the timelapse.',
+    'detect.unchecked':'{n} photo(s) not searched yet.',
+    'photo.edit':'Correct photo {n}','photo.edit.none':'Correct photo {n} – no face found','photo.earlier':'Move photo {n} forward','photo.later':'Move photo {n} back','photo.delete':'Remove photo {n}',
+    'photo.flag':'No face','photo.removed':'Photo {n} removed.','photos.clearQ':'Remove all {n} photos? The photos kept on the device are gone then, too.','photos.cleared':'All photos removed.',
+    'keep.loading':'Loading the photos from last time … ({i}/{n})','keep.restored':'{n} photo(s) from last time are back.',
+    'sorted.date':'Sorted by date taken.','sorted.reverse':'Order reversed.',
+    'faceOut':'{n} %','secsOut':'{n} s',
+    'frame':'Photo {i} of {n}','pause':'Pause','play':'Play',
+    'hint.few':'First choose at least two photos with a face above.','hint.ready':'{n} photos · {s} s · {w} × {h} px',
+    'save.video':'Save video','save.gif':'Save GIF',
+    'export.busy':'Frame {i} of {n} …','export.done':'Saved: {name} ({size}).','export.shared':'Shared: {name} ({size}).','export.cancelled':'Cancelled.',
+    'export.fail':'Creating failed: {msg}','export.noCodec':'This browser cannot create a video of this size – choose a smaller size or GIF.',
+    'export.shareAgain':'Ready – please tap again to share.','export.shareFail':'Sharing did not work.',
+    'file':'Timelapse','mb':'{n} MB','kb':'{n} KB',
+    'ed.title':'Photo {n} of {total}','ed.faces':'Other face ({i}/{n})','ed.found':'{n} face(s) found.','ed.notFound':'No face found – set the eyes by hand.','ed.unchecked':'Not searched yet.',
+    'ed.manual':'Eyes set by hand.',
+    confirmDl:'For face detection the app downloads about {mb} MB once (engine from this site, model from Google). The photos stay on the device. Download now? Wi-Fi recommended.',
+    loadingEngine:'Starting face detection …','loadingModel':'Loading face detection … {p} %',
+    dlFail:'Download failed – check the internet connection.',engineFail:'Face detection could not be started on this device.',
+    'models.none':'Not downloaded yet.','models.have':'Downloaded: {list} ({mb} MB).','models.engine':'engine','models.model':'face model',
+    confirmDel:'Delete the downloaded face detection? It is loaded again next time.','deleted':'Deleted.',
+    'mcp.move':'Photo moved','mcp.sort':'Photos sorted','mcp.options':'Settings changed'
+  }
+});
+const t=Tools.t,$=Tools.$,TL=window.Timelapse;
+
+/* ---------- Settings ---------- */
+const LS='face-timelapse.settings.v1';
+const DEF={format:'square',face:55,secs:0.5,fade:true,date:false,out:'video',size:720};
+const s=Object.assign({},DEF,Tools.load(LS,{}));
+const clampStep=(v,lo,hi,st,d)=>Number.isFinite(+v)?Math.round(Tools.clamp(+v,lo,hi)/st)*st:d;
+function sanitize(){
+  if(!(s.format in TL.FORMATS))s.format=DEF.format;
+  s.face=clampStep(s.face,25,100,5,DEF.face);
+  s.secs=Math.round(clampStep(s.secs,0.1,2,0.1,DEF.secs)*10)/10;
+  s.fade=!!s.fade;s.date=!!s.date;
+  if(!['video','gif'].includes(s.out))s.out=DEF.out;
+  if(!TL.SIZES.includes(+s.size))s.size=DEF.size;else s.size=+s.size;
+}
+sanitize();
+const save=()=>Tools.save(LS,s);
+
+const MAX_PHOTOS=300, PREV_MAX=720, DETECT_MAX=1280, EDIT_MAX=1600, THUMB_W=200;
+let photos=[], nextId=1, fileCache=null;
+// Photos that go into the timelapse (eyes found or set)
+const usable=()=>photos.filter(p=>p.eyes);
+
+function canvas(w,h){const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w));c.height=Math.max(1,Math.round(h));return c;}
+// Decodes a photo (EXIF orientation applied by the browser); HEIC via assets/shared/heic.js where the browser cannot
+async function loadImage(blob){
+  const heic=await Heic.load(blob);
+  if(heic)return heic;
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(blob),img=new Image();
+    img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('decode failed'));};
+    img.src=url;
+  });
+}
+const sizeOf=img=>[img.naturalWidth||img.width,img.naturalHeight||img.height];
+function scaled(img,max){
+  const [w,h]=sizeOf(img),k=Math.min(1,max/Math.max(w,h));
+  const c=canvas(w*k,h*k),g=c.getContext('2d');
+  g.imageSmoothingQuality='high';g.drawImage(img,0,0,c.width,c.height);
+  return c;
+}
+// Date taken (EXIF of JPEG files), else the date of the file
+async function photoDate(f){
+  try{
+    const head=new Uint8Array(await f.slice(0,262144).arrayBuffer());
+    const ms=TL.exifDate(head);
+    if(ms)return {date:ms,dateFrom:'exif'};
+  }catch(e){Tools.diag.log('exif failed',e);}
+  return {date:Number.isFinite(f.lastModified)&&f.lastModified>0?f.lastModified:null,dateFrom:'file'};
+}
+const label=p=>s.date&&p.date?new Date(p.date).toLocaleDateString(Tools.locale(),{year:'numeric',month:'2-digit',day:'2-digit'}):'';
+const drawOpts=lbl=>({face:s.face/100,label:lbl});
+const fmtSize=b=>b>=1048576?t('mb',{n:Tools.fmt(b/1048576,1)}):t('kb',{n:Tools.fmt(Math.max(1,b/1024),0)});
+
+/* ---------- Face detection: worker (MediaPipe), model downloaded once after asking ---------- */
+const MODEL={url:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',mb:3.8};
+const ENGINE={url:new URL('../assets/vendor/mediapipe/wasm/vision_wasm_module_internal.wasm',location.href).href,mb:14.5};
+const ENGINE_CACHE='vendor:mediapipe@',MODEL_CACHE='face-timelapse-models';
+let worker=null,modelReady=false,loadWait=null,ensuring=null,reqId=0;
+const waiting=new Map();
+function getWorker(){
+  if(worker)return worker;
+  worker=new Worker('face-worker.mjs',{type:'module'});
+  worker.onmessage=({data:d})=>{
+    if(d.type==='faces'){
+      const w=waiting.get(d.id);waiting.delete(d.id);
+      if(d.error)Tools.diag.log('detect error',{e:String(d.error).slice(0,200)});
+      w?.(d);
+    }else if(d.type==='progress'){
+      $('addInfo').textContent=t('loadingModel',{p:Math.round(d.loaded/d.total*100)});
+    }else if(d.type==='loaded'){
+      modelReady=true;loadWait?.res();refreshModels();
+    }else if(d.type==='error'){
+      Tools.diag.log('model error',{code:d.code,e:String(d.message||'').slice(0,200)});
+      loadWait?.rej(d.code);refreshModels();
+    }else if(d.type==='log')Tools.diag.log('worker: '+d.msg,d.data);
+  };
+  worker.onerror=e=>{
+    Tools.diag.log('worker error',{e:String(e.message||'').slice(0,200)});e.preventDefault?.();
+    loadWait?.rej('engine');
+    for(const [id,w] of waiting){waiting.delete(id);w({faces:[],error:'worker'});}
+  };
+  return worker;
+}
+async function neededMb(){
+  let mb=0;
+  try{
+    if(!await caches.match(MODEL.url))mb+=MODEL.mb;
+    if(!await caches.match(ENGINE.url))mb+=ENGINE.mb;
+  }catch{mb=MODEL.mb+ENGINE.mb;}
+  return mb;
+}
+// On the very first visit the service worker may not control the page yet – a worker started now would load the
+// engine past its cache, and it would be missing offline. Wait for it a moment (not forever: no service worker, private mode).
+async function offlineReady(){
+  const sw=navigator.serviceWorker;
+  if(!sw||sw.controller)return;
+  const got=await Promise.race([new Promise(r=>sw.addEventListener('controllerchange',()=>r(true),{once:true})),new Promise(r=>setTimeout(()=>r(false),5000))]);
+  Tools.diag.log('service worker',{controls:got});
+}
+// Loads the detection once; asks before the first download. Resolves false if declined or failed.
+function ensureModel(){return ensuring??=doEnsure().finally(()=>{ensuring=null;});}
+async function doEnsure(){
+  if(modelReady)return true;
+  const mb=await neededMb();
+  if(mb>0.01&&!await Tools.confirm(t('confirmDl',{mb:Tools.fmt(mb,1)}),{action:'download'})){Tools.diag.log('download declined');return false;}
+  $('addInfo').textContent=t('loadingEngine');
+  Tools.diag.log('loading model',{mb:Math.round(mb*10)/10});
+  await offlineReady();
+  try{
+    await new Promise((res,rej)=>{loadWait={res,rej};getWorker().postMessage({type:'load'});});
+    return true;
+  }catch(code){
+    Tools.toast(t(code==='download'?'dlFail':'engineFail'),6000);
+    return false;
+  }finally{loadWait=null;$('addInfo').textContent='';}
+}
+// Faces in an image → [{l, r}] (eyes 0…1)
+async function findFaces(img){
+  const c=scaled(img,DETECT_MAX);
+  const bitmap=await createImageBitmap(c);
+  c.width=c.height=0;
+  const id=++reqId;
+  const d=await new Promise(res=>{waiting.set(id,res);getWorker().postMessage({type:'detect',id,bitmap},[bitmap]);});
+  Tools.diag.log('faces',{n:d.faces.length,ms:d.ms});
+  return d.faces.map(f=>TL.eyesFromLandmarks(f));
+}
+async function detect(p,img){
+  p.faces=await findFaces(img);
+  p.checked=true;
+  if(!p.manual){p.face=TL.largestFace(p.faces,p.w,p.h);p.eyes=p.face>=0?p.faces[p.face]:null;}
+}
+
+/* ---------- Photo list ---------- */
+const list=$('photos');
+function changed(){fileCache=null;persist();renderAll();}
+function renderThumb(p,c){
+  const {w,h}=TL.dims(s.format,THUMB_W);
+  if(c.width!==w||c.height!==h){c.width=w;c.height=h;}
+  TL.draw(c.getContext('2d'),p.eyes?p.prev:null,p.eyes,w,h,drawOpts(label(p)));
+  if(!p.eyes){const g=c.getContext('2d');g.globalAlpha=.55;const k=Math.min(w/p.prev.width,h/p.prev.height);g.drawImage(p.prev,(w-p.prev.width*k)/2,(h-p.prev.height*k)/2,p.prev.width*k,p.prev.height*k);g.globalAlpha=1;}
+}
+function renderList(){
+  list.style.setProperty('--ar',String(1/TL.FORMATS[s.format]));
+  const old=new Map([...list.children].map(li=>[Number(li.dataset.id),li]));
+  list.textContent='';
+  photos.forEach((p,i)=>{
+    const n=i+1;
+    let li=old.get(p.id);
+    if(!li){
+      li=document.createElement('li');li.dataset.id=p.id;
+      li.innerHTML=`<button type="button" class="thumb" data-act="edit"><canvas aria-hidden="true"></canvas><span class="num" aria-hidden="true"></span><span class="flag" aria-hidden="true" hidden>${Tools.icon('alert-triangle')}<span></span></span><span class="sr-only"></span></button>
+      <div class="pbtns">
+        <button type="button" class="btn" data-act="up">${Tools.icon('arrow-left')}<span class="sr-only"></span></button>
+        <button type="button" class="btn" data-act="down">${Tools.icon('arrow-right')}<span class="sr-only"></span></button>
+        <button type="button" class="btn danger" data-act="del">${Tools.icon('trash')}<span class="sr-only"></span></button>
+      </div>`;
+      renderThumb(p,li.querySelector('canvas'));
+    }
+    li.querySelector('.num').textContent=n;
+    const flag=li.querySelector('.flag');flag.hidden=!!p.eyes;flag.lastElementChild.textContent=t('photo.flag');
+    const sr=li.querySelectorAll('.sr-only');
+    sr[0].textContent=t(p.eyes?'photo.edit':'photo.edit.none',{n});sr[1].textContent=t('photo.earlier',{n});sr[2].textContent=t('photo.later',{n});sr[3].textContent=t('photo.delete',{n});
+    li.querySelector('[data-act="up"]').disabled=i===0;
+    li.querySelector('[data-act="down"]').disabled=i===photos.length-1;
+    list.append(li);
+  });
+}
+function rerenderThumbs(){for(const li of list.children){const p=photos.find(x=>x.id===Number(li.dataset.id));if(p)renderThumb(p,li.querySelector('canvas'));}}
+function renderAll(){
+  renderList();
+  $('photoCount').textContent=photos.length;
+  const none=photos.filter(p=>p.checked&&!p.eyes).length,unchecked=photos.filter(p=>!p.checked&&!p.eyes).length;
+  $('noFaceHint').hidden=!none&&!unchecked;
+  $('noFaceText').textContent=[none?t('detect.none',{n:none}):'',unchecked?t('detect.unchecked',{n:unchecked}):''].filter(Boolean).join(' ');
+  $('detectRow').hidden=!unchecked||adding;
+  $('sortRow').hidden=photos.length<2;
+  $('btnClear').disabled=!photos.length;
+  renderExport();
+  restartPreview();
+}
+list.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-act]');if(!b)return;
+  const id=Number(b.closest('li').dataset.id),i=photos.findIndex(p=>p.id===id);
+  if(i<0)return;
+  const act=b.dataset.act;
+  if(act==='edit')openEditor(photos[i]);
+  else if(act==='up'||act==='down'){
+    movePhoto(i,act==='up'?i-1:i+1);
+    const again=list.querySelector(`li[data-id="${id}"] [data-act="${act}"]`);
+    (again&&!again.disabled?again:list.querySelector(`li[data-id="${id}"] .thumb`)).focus();
+  }else if(act==='del')removePhoto(i);
+});
+function movePhoto(from,to){
+  if(to<0||to>=photos.length||from===to)return false;
+  const [p]=photos.splice(from,1);photos.splice(to,0,p);
+  Tools.diag.log('move photo',{from:from+1,to:to+1});
+  changed();return true;
+}
+function removePhoto(i){
+  const [p]=photos.splice(i,1);
+  Tools.diag.log('remove photo',{left:photos.length});
+  changed();
+  Tools.undo(t('photo.removed',{n:i+1}),()=>{photos.splice(Math.min(i,photos.length),0,p);p.kept=false;changed();});
+}
+function sortByDate(){
+  // Stable: photos without a date keep their place relative to each other at the end
+  const idx=new Map(photos.map((p,i)=>[p.id,i]));
+  photos.sort((a,b)=>(a.date??Infinity)-(b.date??Infinity)||idx.get(a.id)-idx.get(b.id));
+  Tools.diag.log('sort by date',{n:photos.length,exif:photos.filter(p=>p.dateFrom==='exif').length});
+  changed();
+}
+function reverse(){photos.reverse();Tools.diag.log('reverse');changed();}
+$('btnSortDate').addEventListener('click',()=>{sortByDate();Tools.toast(t('sorted.date'));});
+$('btnReverse').addEventListener('click',()=>{reverse();Tools.toast(t('sorted.reverse'));});
+
+/* ---------- Adding photos ---------- */
+let adding=false;
+async function addFiles(files){
+  files=[...files];if(!files.length)return;
+  const room=MAX_PHOTOS-photos.length;
+  if(files.length>room){Tools.toast(t('add.max',{n:MAX_PHOTOS}),5000);files=files.slice(0,Math.max(0,room));}
+  if(!files.length)return;
+  adding=true;
+  const info=$('addInfo'),prog=$('addProg');
+  const auto=await ensureModel();
+  prog.hidden=false;prog.max=files.length;prog.value=0;
+  let added=0;
+  try{
+    for(let i=0;i<files.length;i++){
+      const f=files[i];
+      info.textContent=t('add.loading',{i:i+1,n:files.length});
+      const heic=await Heic.isHeicFile(f);
+      try{
+        if(heic&&!Heic.info().worker&&Heic.info().native!==true)info.textContent=t('add.heic');
+        const img=await loadImage(f);
+        const [w,h]=sizeOf(img);
+        const p={id:nextId++,file:f,w,h,...await photoDate(f),faces:[],face:-1,eyes:null,manual:false,checked:false,prev:scaled(img,PREV_MAX),kept:false};
+        if(auto){info.textContent=t('detect.busy',{i:i+1,n:files.length});await detect(p,img);}
+        img.close?.();
+        photos.push(p);added++;
+        Tools.diag.log('photo added',{w,h,type:f.type||'?',heic,bytes:f.size,faces:p.faces.length,date:p.dateFrom});
+        renderAll();
+      }catch(e){
+        Tools.diag.log('add failed',{type:f.type||'?',heic,bytes:f.size},e);
+        Tools.toast(t(heic?'add.heicFail':'add.fail',{name:f.name||'?'}),heic?6000:4000);
+      }
+      prog.value=i+1;
+    }
+  }finally{adding=false;prog.hidden=true;}
+  info.textContent=added?t('add.done',{n:added})+(auto?'':' '+t('add.manual')):'';
+  changed();
+}
+// Looks for faces in the photos that were added without detection
+async function detectMissing(){
+  if(adding||!await ensureModel())return;
+  const todo=photos.filter(p=>!p.checked&&!p.eyes);
+  adding=true;renderAll();
+  const info=$('addInfo');
+  try{
+    for(const [i,p] of todo.entries()){
+      info.textContent=t('detect.busy',{i:i+1,n:todo.length});
+      try{const img=await loadImage(p.file);await detect(p,img);img.close?.();}
+      catch(e){Tools.diag.log('detect failed',e);}
+    }
+  }finally{adding=false;info.textContent='';}
+  changed();
+}
+$('btnDetect').addEventListener('click',detectMissing);
+$('btnPick').addEventListener('click',()=>{$('inPick').value='';$('inPick').click();});
+$('inPick').addEventListener('change',e=>addFiles(e.target.files));
+$('btnPick').addEventListener('dragover',e=>{e.preventDefault();$('btnPick').classList.add('over');});
+$('btnPick').addEventListener('dragleave',()=>$('btnPick').classList.remove('over'));
+$('btnPick').addEventListener('drop',e=>{e.preventDefault();$('btnPick').classList.remove('over');if(e.dataTransfer.files.length)addFiles(e.dataTransfer.files);});
+$('btnClear').addEventListener('click',async()=>{
+  Tools.menu.close();
+  if(!photos.length||!await Tools.confirm(t('photos.clearQ',{n:photos.length}),{action:'delete'}))return;
+  photos=[];changed();
+  $('addInfo').textContent='';status('');
+  Tools.toast(t('photos.cleared'));Tools.diag.log('photos cleared');
+});
+
+/* ---------- Eye editor ---------- */
+const editor=$('editor'),stage=$('stage'),edCanvas=$('edCanvas'),loupe=$('loupe');
+const handles=[...stage.querySelectorAll('.handle')];
+let ed=null;   // {p, src (canvas), eyes, faces, face, manual}
+async function openEditor(p){
+  const img=await loadImage(p.file).catch(()=>null);
+  const src=img?scaled(img,EDIT_MAX):p.prev;img?.close?.();
+  const eyes=p.eyes?{l:[...p.eyes.l],r:[...p.eyes.r]}:{l:[0.4,0.42],r:[0.6,0.42]};
+  ed={p,src,eyes,face:p.face,manual:p.manual};
+  edCanvas.width=src.width;edCanvas.height=src.height;
+  edCanvas.getContext('2d').drawImage(src,0,0);
+  const i=photos.indexOf(p);
+  $('edTitle').textContent=t('ed.title',{n:i+1,total:photos.length});
+  const pos=$('edPos');pos.textContent='';
+  photos.forEach((_,j)=>pos.append(new Option(String(j+1),String(j))));
+  pos.value=String(i);
+  $('edPreview').style.setProperty('--ar',String(1/TL.FORMATS[s.format]));
+  if(!editor.open)editor.showModal();
+  fitStage();edRender();
+  Tools.diag.log('editor open',{faces:p.faces.length,manual:p.manual,checked:p.checked});
+}
+function fitStage(){
+  if(!ed)return;
+  const box=stage.parentElement.getBoundingClientRect();
+  const maxW=Math.max(120,box.width-106),maxH=Math.max(160,Math.min(window.innerHeight*0.62,window.innerHeight-300));
+  const k=Math.min(maxW/ed.src.width,maxH/ed.src.height);
+  stage.style.width=Math.round(ed.src.width*k)+'px';stage.style.height=Math.round(ed.src.height*k)+'px';
+}
+window.addEventListener('resize',fitStage);
+function edRender(){
+  const {p,eyes}=ed;
+  handles.forEach(h=>{const e=eyes[h.dataset.eye];h.style.left=(e[0]*100)+'%';h.style.top=(e[1]*100)+'%';});
+  const c=$('edPreview'),{w,h}=TL.dims(s.format,192);
+  c.width=w;c.height=h;
+  TL.draw(c.getContext('2d'),ed.src,eyes,w,h,drawOpts(''));
+  $('edNext').hidden=p.faces.length<2;
+  $('edNextLabel').textContent=t('ed.faces',{i:Math.max(1,ed.face+1),n:p.faces.length});
+  $('edAuto').disabled=p.checked&&!p.faces.length;
+  $('edInfo').textContent=ed.manual?t('ed.manual'):!p.checked?t('ed.unchecked'):p.faces.length?t('ed.found',{n:p.faces.length}):t('ed.notFound');
+}
+$('edNext').addEventListener('click',()=>{
+  const n=ed.p.faces.length;if(n<2)return;
+  ed.face=(ed.face+1)%n;const f=ed.p.faces[ed.face];ed.eyes={l:[...f.l],r:[...f.r]};ed.manual=false;edRender();
+});
+$('edAuto').addEventListener('click',async()=>{
+  const p=ed.p;
+  if(!p.checked){
+    if(!await ensureModel())return;
+    const img=await loadImage(p.file);await detect(p,img);img.close?.();
+  }
+  if(!p.faces.length){edRender();return;}
+  ed.face=TL.largestFace(p.faces,p.w,p.h);const f=p.faces[ed.face];ed.eyes={l:[...f.l],r:[...f.r]};ed.manual=false;edRender();
+});
+function closeEditor(){if(editor.open)editor.close();ed=null;loupe.hidden=true;}
+$('edCancel').addEventListener('click',closeEditor);
+$('edDone').addEventListener('click',()=>{
+  const p=ed.p;
+  // l is the eye further left in the picture
+  if(ed.eyes.l[0]>ed.eyes.r[0])ed.eyes={l:ed.eyes.r,r:ed.eyes.l};
+  p.eyes=ed.eyes;p.face=ed.manual?-1:ed.face;p.manual=ed.manual;
+  const from=photos.indexOf(p),to=Number($('edPos').value);
+  closeEditor();
+  if(Number.isInteger(to)&&to!==from&&to>=0&&to<photos.length){const [x]=photos.splice(from,1);photos.splice(to,0,x);}
+  const li=list.querySelector(`li[data-id="${p.id}"]`);if(li)renderThumb(p,li.querySelector('canvas'));
+  Tools.diag.log('editor done',{manual:p.manual,moved:to!==from});
+  changed();
+});
+$('edDelete').addEventListener('click',()=>{const i=photos.indexOf(ed.p);closeEditor();if(i>=0)removePhoto(i);});
+editor.addEventListener('close',()=>{ed=null;loupe.hidden=true;});
+function showLoupe(eye){
+  const e=ed.eyes[eye],src=ed.src,R=60,Z=3;
+  const scale=edCanvas.getBoundingClientRect().width/src.width,half=R/(Z*scale);
+  loupe.hidden=false;
+  // On the other side of the picture than the finger
+  loupe.style.insetInlineStart=e[0]<0.5?'auto':'8px';loupe.style.insetInlineEnd=e[0]<0.5?'8px':'auto';
+  const g=loupe.getContext('2d');
+  g.fillStyle='#000';g.fillRect(0,0,120,120);
+  g.drawImage(src,e[0]*src.width-half,e[1]*src.height-half,half*2,half*2,0,0,120,120);
+  g.strokeStyle=eye==='l'?'#22d3ee':'#facc15';g.lineWidth=1.5;
+  g.beginPath();g.moveTo(60,46);g.lineTo(60,74);g.moveTo(46,60);g.lineTo(74,60);g.stroke();
+}
+let drag=null;
+for(const h of handles){
+  const eye=h.dataset.eye;
+  h.addEventListener('pointerdown',e=>{
+    e.preventDefault();h.setPointerCapture(e.pointerId);
+    const r=stage.getBoundingClientRect(),q=ed.eyes[eye];
+    drag={id:e.pointerId,dx:q[0]*r.width-(e.clientX-r.left),dy:q[1]*r.height-(e.clientY-r.top)};
+    showLoupe(eye);
+  });
+  h.addEventListener('pointermove',e=>{
+    if(!drag||drag.id!==e.pointerId)return;
+    const r=stage.getBoundingClientRect();
+    ed.eyes[eye]=[Tools.clamp((e.clientX-r.left+drag.dx)/r.width,0,1),Tools.clamp((e.clientY-r.top+drag.dy)/r.height,0,1)];
+    ed.manual=true;edRender();showLoupe(eye);
+  });
+  const end=e=>{if(!drag||drag.id!==e.pointerId)return;drag=null;loupe.hidden=true;};
+  h.addEventListener('pointerup',end);h.addEventListener('pointercancel',end);
+  h.addEventListener('keydown',e=>{
+    const step=e.shiftKey?0.02:0.003,mv={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+    if(!mv)return;
+    e.preventDefault();
+    const q=ed.eyes[eye];
+    ed.eyes[eye]=[Tools.clamp(q[0]+mv[0]*step,0,1),Tools.clamp(q[1]+mv[1]*step,0,1)];
+    ed.manual=true;edRender();
+  });
+}
+
+/* ---------- Alignment & speed ---------- */
+function setRadio(name,value){const r=document.querySelector(`input[name="${name}"][value="${value}"]`);if(r)r.checked=true;}
+function renderSettings(){
+  setRadio('format',s.format);setRadio('out',s.out);
+  $('optFace').value=s.face;$('faceOut').textContent=t('faceOut',{n:Tools.fmt(s.face,0)});
+  $('optSecs').value=s.secs;$('secsOut').textContent=t('secsOut',{n:Tools.fmt(s.secs,1)});
+  $('optFade').checked=s.fade;$('optDate').checked=s.date;
+  $('optSize').value=String(s.size);
+}
+function settingChanged(thumbs){save();fileCache=null;renderSettings();if(thumbs)rerenderThumbs();renderAll();}
+for(const r of document.querySelectorAll('input[name="format"]'))r.addEventListener('change',()=>{s.format=r.value;settingChanged(true);});
+for(const r of document.querySelectorAll('input[name="out"]'))r.addEventListener('change',()=>{s.out=r.value;settingChanged(false);});
+$('optFace').addEventListener('input',e=>{s.face=Number(e.target.value);settingChanged(true);});
+$('optSecs').addEventListener('input',e=>{s.secs=Math.round(Number(e.target.value)*10)/10;settingChanged(false);});
+$('optFade').addEventListener('change',e=>{s.fade=e.target.checked;settingChanged(false);});
+$('optDate').addEventListener('change',e=>{s.date=e.target.checked;settingChanged(true);});
+$('optSize').addEventListener('change',e=>{s.size=Number(e.target.value);settingChanged(false);});
+
+/* ---------- Preview (loops in the page, from the small copies) ---------- */
+const pv=$('preview');
+let playing=false,userPaused=false,raf=0,pvSched=[],pvPhotos=[],pvPos=0,pvAt=0,pvLast=-1;
+const pvA=canvas(1,1),pvB=canvas(1,1);
+function restartPreview(){
+  pvPhotos=usable();
+  pvSched=TL.schedule(pvPhotos.length,s.secs,s.fade,30);
+  const {w,h}=TL.dims(s.format,360);
+  pv.width=w;pv.height=h;pv.style.setProperty('--ar',String(w/h));
+  pvA.width=pvB.width=w;pvA.height=pvB.height=h;
+  pvPos=Math.min(pvPos,Math.max(0,pvSched.length-1));pvLast=-1;
+  $('btnPlay').disabled=pvPhotos.length<2;
+  if(pvPhotos.length<2&&playing)setPlaying(false);
+  // Plays by itself once there is something to show – unless paused by the user or reduced motion is wanted
+  else if(!playing&&!userPaused&&!exporting&&pvPhotos.length>=2&&!Tools.reducedMotion())setPlaying(true);
+  drawPreview();
+}
+function drawPreview(){
+  const g=pv.getContext('2d'),W=pv.width,H=pv.height;
+  if(!pvPhotos.length){g.fillStyle='#000';g.fillRect(0,0,W,H);$('frameInfo').textContent='';return;}
+  const seg=pvSched[pvPos]||pvSched[0];
+  const p=pvPhotos[seg.i];
+  TL.draw(g,p.prev,p.eyes,W,H,drawOpts(label(p)));
+  if(seg.t>0){
+    const q=pvPhotos[seg.j];
+    TL.draw(pvB.getContext('2d'),q.prev,q.eyes,W,H,drawOpts(label(q)));
+    g.globalAlpha=seg.t;g.drawImage(pvB,0,0);g.globalAlpha=1;
+  }
+  if(seg.i!==pvLast){pvLast=seg.i;$('frameInfo').textContent=t('frame',{i:seg.i+1,n:pvPhotos.length});}
+}
+function tick(now){
+  if(!playing)return;
+  if(!pvAt)pvAt=now;
+  let seg=pvSched[pvPos];
+  while(seg&&now-pvAt>=seg.dur*1000){pvAt+=seg.dur*1000;pvPos=(pvPos+1)%pvSched.length;seg=pvSched[pvPos];if(now-pvAt>5000)pvAt=now;}
+  drawPreview();
+  raf=requestAnimationFrame(tick);
+}
+function setPlaying(on){
+  playing=on&&pvPhotos.length>=2;
+  cancelAnimationFrame(raf);pvAt=0;
+  const b=$('btnPlay');
+  b.querySelector('use').setAttribute('href','../assets/icons.svg#'+(playing?'player-pause':'player-play'));
+  b.querySelector('span').textContent=t(playing?'pause':'play');
+  if(playing)raf=requestAnimationFrame(tick);
+}
+$('btnPlay').addEventListener('click',()=>{userPaused=playing;setPlaying(!playing);});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&playing)setPlaying(false);});
+
+/* ---------- Export: video (Mediabunny, WebCodecs) or GIF (gif.js) ---------- */
+let videoOk=null;   // null = not known yet
+const loadMB=()=>import('../assets/vendor/mediabunny/mediabunny.min.mjs');
+// First container + codec this browser can encode at this size: MP4 (H.264 …), else WebM
+async function videoFormat(MB,W,H){
+  if(!('VideoEncoder' in window))return null;
+  for(const [Fmt,ext,mime,codecs] of [[MB.Mp4OutputFormat,'mp4','video/mp4',['avc','vp9','av1','hevc']],[MB.WebMOutputFormat,'webm','video/webm',['vp9','vp8','av1']]]){
+    const codec=await MB.getFirstEncodableVideoCodec(codecs,{width:W,height:H}).catch(()=>null);
+    if(codec)return {format:new Fmt(ext==='mp4'?{fastStart:'in-memory'}:{}),ext,mime,codec};
+  }
+  return null;
+}
+async function checkVideo(){
+  try{const MB=await loadMB();videoOk=!!await videoFormat(MB,720,720);}
+  catch(e){videoOk=false;Tools.diag.log('video check failed',e);}
+  Tools.diag.log('video support',{ok:videoOk});
+  if(!videoOk&&s.out==='video'){s.out='gif';renderSettings();}
+  renderExport();
+}
+function renderExport(){
+  const n=usable().length,{w,h}=TL.dims(s.format,s.size);
+  const vr=document.querySelector('input[name="out"][value="video"]');
+  vr.disabled=videoOk===false;$('noVideo').hidden=videoOk!==false;
+  const total=TL.schedule(n,s.secs,s.fade,30).reduce((a,x)=>a+x.dur,0);
+  $('exportHintText').textContent=n<2?t('hint.few'):t('hint.ready',{n,s:Tools.fmt(total,Math.abs(total-Math.round(total))<0.01?0:1),w,h});
+  $('saveLabel').textContent=t(s.out==='gif'?'save.gif':'save.video');
+  $('btnSave').querySelector('use').setAttribute('href','../assets/icons.svg#download');
+  $('btnSave').disabled=$('btnShare').disabled=n<2||exporting;
+  $('btnShare').hidden=!Tools.canShareFile('x.'+(s.out==='gif'?'gif':'mp4'),s.out==='gif'?'image/gif':'video/mp4')||exporting;
+}
+const status=(msg,err)=>{$('status').textContent=msg;$('status').className='muted'+(err?' err':'');};
+const today=()=>{const d=new Date(),z=x=>String(x).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;};
+let exporting=false,cancelled=false;
+async function makeFile(){
+  const key=JSON.stringify([s.format,s.face,s.secs,s.fade,s.date,s.out,s.size,Tools.lang(),usable().map(p=>[p.id,p.eyes])]);
+  if(fileCache&&fileCache.key===key)return fileCache.file;
+  const items=usable(),gif=s.out==='gif',fps=gif?15:30;
+  const {w:W,h:H}=TL.dims(s.format,s.size);
+  const sched=TL.schedule(items.length,s.secs,s.fade,fps);
+  const out=canvas(W,H),ctx=out.getContext('2d',{willReadFrequently:gif});
+  let A=canvas(W,H),B=canvas(W,H),aI=-1,bI=-1;
+  const render=async(i,c)=>{const p=items[i],img=await loadImage(p.file);TL.draw(c.getContext('2d'),img,p.eyes,W,H,drawOpts(label(p)));img.close?.();};
+  const t0=performance.now(),name=t('file')+' '+today();
+  let writer;
+  if(gif){
+    const enc=GifEncoder(W,H);let tAcc=0,cs=0;
+    writer={add:async dur=>{tAcc+=dur;const d=Math.round(tAcc*100)-cs;cs+=d;enc.frame(ctx.getImageData(0,0,W,H).data,d);},
+      finish:async()=>new File([enc.finish()],name+'.gif',{type:'image/gif'})};
+  }else{
+    const MB=await loadMB(),pick=await videoFormat(MB,W,H);
+    if(!pick)throw Object.assign(new Error('no codec'),{code:'noCodec'});
+    const output=new MB.Output({format:pick.format,target:new MB.BufferTarget()});
+    const src=new MB.CanvasSource(out,{codec:pick.codec,bitrate:MB.QUALITY_HIGH,keyFrameInterval:2});
+    output.addVideoTrack(src,{frameRate:fps});
+    await output.start();
+    let frames=0;
+    writer={add:async dur=>{const n=Math.max(1,Math.round(dur*fps));await src.add(frames/fps,n/fps);frames+=n;},
+      finish:async()=>{src.close();await output.finalize();return new File([output.target.buffer],name+'.'+pick.ext,{type:pick.mime});},
+      cancel:()=>output.cancel?.()};
+    Tools.diag.log('video codec',{codec:pick.codec,ext:pick.ext});
+  }
+  const prog=$('expProg');prog.hidden=false;prog.max=sched.length;prog.value=0;
+  try{
+    for(const [k,seg] of sched.entries()){
+      if(cancelled)throw Object.assign(new Error('cancelled'),{code:'cancelled'});
+      if(seg.i!==aI){if(seg.i===bI){[A,B]=[B,A];aI=bI;bI=-1;}else{await render(seg.i,A);aI=seg.i;}}
+      if(seg.t>0&&seg.j!==bI){await render(seg.j,B);bI=seg.j;}
+      ctx.globalAlpha=1;ctx.drawImage(A,0,0);
+      if(seg.t>0){ctx.globalAlpha=seg.t;ctx.drawImage(B,0,0);ctx.globalAlpha=1;}
+      await writer.add(seg.dur);
+      prog.value=k+1;status(t('export.busy',{i:k+1,n:sched.length}));
+      if(k%4===3)await new Promise(r=>setTimeout(r,0));
+    }
+    const file=await writer.finish();
+    Tools.diag.log('file built',{kind:s.out,photos:items.length,frames:sched.length,w:W,h:H,bytes:file.size,ms:Math.round(performance.now()-t0)});
+    fileCache={key,file};
+    return file;
+  }catch(e){await writer.cancel?.();throw e;}
+  finally{prog.hidden=true;A.width=B.width=out.width=0;}
+}
+async function run(fn){
+  if(exporting)return;
+  exporting=true;cancelled=false;setPlaying(false);
+  $('btnCancel').hidden=false;renderExport();
+  Tools.wakeLock.hold('export');
+  try{await fn();}
+  catch(e){
+    Tools.diag.log('export failed',{code:e.code},e);
+    if(e.code==='cancelled')status(t('export.cancelled'));
+    else if(e.code==='noCodec')status(t('export.noCodec'),true);
+    else status(t('export.fail',{msg:e.message||String(e)}),true);
+  }finally{exporting=false;$('btnCancel').hidden=true;Tools.wakeLock.release('export');renderExport();}
+}
+$('btnCancel').addEventListener('click',()=>{cancelled=true;});
+$('btnSave').addEventListener('click',()=>run(async()=>{
+  const file=await makeFile();
+  Tools.download(file);
+  status(t('export.done',{name:file.name,size:fmtSize(file.size)}));
+}));
+$('btnShare').addEventListener('click',()=>run(async()=>{
+  const ready=!!fileCache;
+  const file=await makeFile();
+  try{
+    await navigator.share({files:[file],title:file.name});
+    status(t('export.shared',{name:file.name,size:fmtSize(file.size)}));
+  }catch(e){
+    Tools.diag.log('share',e);
+    if(e.name==='AbortError')status('');
+    else if(e.name==='NotAllowedError'&&!ready)status(t('export.shareAgain'));
+    else status(t('export.shareFail'),true);
+  }
+}));
+
+/* ---------- Kept photos (Tools.keep): photos, order and eyes survive a reload ----------
+   "photo-<id>" = the file as chosen, "state" = order, faces, eyes, date. "Alle Fotos entfernen" and
+   "Alle Daten löschen" remove them. */
+let keepTimer=0,restoring=false,keepRun=Promise.resolve();
+function persist(){if(restoring)return;clearTimeout(keepTimer);keepTimer=setTimeout(()=>{keepRun=keepRun.then(doPersist).catch(e=>Tools.diag.log('keep photos failed',e));},300);}
+async function doPersist(){
+  if(!Tools.keep.supported())return;
+  if(!photos.length){await Tools.keep.clear();return;}
+  for(const p of photos)if(!p.kept&&await Tools.keep.put('photo-'+p.id,p.file))p.kept=true;
+  await Tools.keep.putJson('state',{v:1,nextId,photos:photos.map(p=>({id:p.id,w:p.w,h:p.h,date:p.date,dateFrom:p.dateFrom,faces:p.faces,face:p.face,eyes:p.eyes,manual:p.manual,checked:p.checked}))});
+  const ids=new Set(photos.map(p=>'photo-'+p.id));
+  for(const n of await Tools.keep.names())if(n.startsWith('photo-')&&!ids.has(n))await Tools.keep.remove(n);
+}
+const ptOk=a=>Array.isArray(a)&&a.length===2&&a.every(v=>Number.isFinite(v)&&v>=-0.5&&v<=1.5);
+const eyesOk=e=>e&&ptOk(e.l)&&ptOk(e.r)?{l:[e.l[0],e.l[1]],r:[e.r[0],e.r[1]]}:null;
+async function restore(){
+  const st=await Tools.keep.json('state',null);
+  if(!st||!Array.isArray(st.photos)||!st.photos.length)return;
+  restoring=true;
+  const info=$('addInfo');let n=0;
+  try{
+    for(const [i,x] of st.photos.entries()){
+      if(!x||!Number.isInteger(x.id)||photos.some(p=>p.id===x.id))continue;
+      info.textContent=t('keep.loading',{i:i+1,n:st.photos.length});
+      const f=await Tools.keep.get('photo-'+x.id);if(!f)continue;
+      try{
+        const img=await loadImage(f),[w,h]=sizeOf(img);
+        const faces=Array.isArray(x.faces)?x.faces.map(eyesOk).filter(Boolean):[];
+        photos.push({id:x.id,file:f,w,h,date:Number.isFinite(x.date)?x.date:null,dateFrom:x.dateFrom==='exif'?'exif':'file',
+          faces,face:Number.isInteger(x.face)&&x.face<faces.length?x.face:-1,eyes:eyesOk(x.eyes),manual:!!x.manual,checked:!!x.checked,prev:scaled(img,PREV_MAX),kept:true});
+        img.close?.();n++;
+      }catch(e){Tools.diag.log('restore photo failed',e);}
+    }
+    nextId=Math.max(nextId,Number.isInteger(st.nextId)?st.nextId:1,...photos.map(p=>p.id+1));
+  }finally{restoring=false;}
+  info.textContent=n?t('keep.restored',{n}):'';
+  Tools.diag.log('photos restored',{photos:n,of:st.photos.length});
+  changed();   // writes the state again without photos that could not be read
+}
+
+/* ---------- Downloaded detection (menu) ---------- */
+async function refreshModels(){
+  const have=[];let mb=0;
+  try{
+    if(await caches.match(ENGINE.url)){have.push(t('models.engine'));mb+=ENGINE.mb;}
+    if(await caches.match(MODEL.url)){have.push(t('models.model'));mb+=MODEL.mb;}
+  }catch{}
+  $('modelsInfo').textContent=have.length?t('models.have',{list:have.join(', '),mb:Tools.fmt(mb,1)}):t('models.none');
+  $('btnDelModels').disabled=!have.length;
+}
+$('btnDelModels').addEventListener('click',async()=>{
+  if(!await Tools.confirm(t('confirmDel'),{action:'delete'}))return;
+  await caches.delete(MODEL_CACHE);
+  for(const k of await caches.keys())if(k.startsWith(ENGINE_CACHE))await caches.delete(k);
+  if(worker){worker.terminate();worker=null;}
+  modelReady=false;
+  Tools.diag.log('models deleted');Tools.toast(t('deleted'));refreshModels();
+});
+
+/* ---------- Start ---------- */
+renderSettings();renderAll();refreshModels();checkVideo();
+// Photos from last time first (Tools.keep), then photos shared to the installed app (Android share menu)
+Tools.takeSharedFiles().then(async files=>{
+  await restore();
+  if(!files.length)return;
+  Tools.diag.log('shared files',{count:files.length});
+  addFiles(files);
+});
+Tools.onLang(()=>{renderSettings();renderAll();rerenderThumbs();setPlaying(playing);refreshModels();if(ed)edRender();});
+Tools.diag.info(()=>({photos:photos.length,usable:usable().length,manual:photos.filter(p=>p.manual).length,unchecked:photos.filter(p=>!p.checked).length,
+  model:modelReady,video:videoOk,format:s.format,face:s.face,secs:s.secs,fade:s.fade,date:s.date,out:s.out,size:s.size,heic:Heic.info(),kept:Tools.keep.supported()}));
+
+/* ---------- WebMCP ---------- */
+const photoInfo=()=>({count:photos.length,usable:usable().length,photos:photos.map((p,i)=>({position:i+1,
+  face:p.eyes?(p.manual?'set_by_hand':'found'):(p.checked?'none':'not_checked'),faces_found:p.faces.length,
+  date:p.date?new Date(p.date).toISOString():null,date_source:p.dateFrom}))});
+Tools.mcp.register({
+  name:'list_photos',title:'List photos',readOnly:true,
+  description:'Lists the photos of the timelapse in their order: position (1-based), whether a face was found or the eyes were set by hand (photos without a face are left out of the video), how many faces were found and the date the photo was taken (from the photo, else the file date). Also returns the current options.',
+  execute:()=>({...photoInfo(),options:{format:s.format,face_width:s.face,seconds_per_photo:s.secs,crossfade:s.fade,show_date:s.date,output:s.out,size:s.size}})
+});
+Tools.mcp.register({
+  name:'move_photo',title:'Move a photo',label:'mcp.move',
+  description:'Moves one photo to another position in the timelapse, as with the arrow buttons. Positions are 1-based (see list_photos). Returns the new photo list.',
+  inputSchema:{type:'object',properties:{
+    from:{type:'integer',minimum:1,maximum:MAX_PHOTOS,description:'Current position of the photo.'},
+    to:{type:'integer',minimum:1,maximum:MAX_PHOTOS,description:'New position of the photo.'}
+  },required:['from','to'],additionalProperties:false},
+  execute:({from,to})=>{
+    if(from>photos.length||to>photos.length)throw new Error(`There are only ${photos.length} photos.`);
+    movePhoto(from-1,to-1);return photoInfo();
+  }
+});
+Tools.mcp.register({
+  name:'sort_photos',title:'Sort photos',label:'mcp.sort',
+  description:'Sorts all photos by the date they were taken (oldest first; photos without a date go to the end) or reverses the current order. Returns the new photo list.',
+  inputSchema:{type:'object',properties:{
+    by:{type:'string',enum:['date','reverse'],description:'date = oldest first, reverse = turn the current order around.'}
+  },required:['by'],additionalProperties:false},
+  execute:({by})=>{if(photos.length<2)throw new Error('Choose at least two photos first.');by==='date'?sortByDate():reverse();return photoInfo();}
+});
+Tools.mcp.register({
+  name:'set_options',title:'Set options',label:'mcp.options',
+  description:'Changes how the timelapse looks and is saved, as in the app: picture format, face width (percent of the picture width), seconds per photo, smooth crossfade, date label, video or GIF, and width in pixels. Only the given options change. Returns all options.',
+  inputSchema:{type:'object',properties:{
+    format:{type:'string',enum:['square','portrait','story'],description:'square = 1:1, portrait = 4:5, story = 9:16.'},
+    face_width:{type:'integer',minimum:25,maximum:100,description:'Width of the face in percent of the picture width (rounded to steps of 5).'},
+    seconds_per_photo:{type:'number',minimum:0.1,maximum:2,description:'How long each photo is shown, in seconds (rounded to 0.1 s).'},
+    crossfade:{type:'boolean',description:'Blend smoothly into the next photo.'},
+    show_date:{type:'boolean',description:'Show the date taken at the bottom of the picture.'},
+    output:{type:'string',enum:['video','gif'],description:'File type when the user saves.'},
+    size:{type:'integer',enum:[480,720,1080],description:'Width of the result in pixels.'}
+  },additionalProperties:false},
+  execute:a=>{
+    if(a.output==='video'&&videoOk===false)throw new Error('This browser cannot create videos; use gif.');
+    if(a.format!==undefined)s.format=a.format;
+    if(a.face_width!==undefined)s.face=a.face_width;
+    if(a.seconds_per_photo!==undefined)s.secs=a.seconds_per_photo;
+    if(a.crossfade!==undefined)s.fade=a.crossfade;
+    if(a.show_date!==undefined)s.date=a.show_date;
+    if(a.output!==undefined)s.out=a.output;
+    if(a.size!==undefined)s.size=a.size;
+    sanitize();settingChanged(true);
+    return {format:s.format,face_width:s.face,seconds_per_photo:s.secs,crossfade:s.fade,show_date:s.date,output:s.out,size:s.size};
+  }
+});
+})();
+</script>
+</body>
+</html>
