@@ -530,6 +530,22 @@ test('contact QR code from the card texts: scannable vCard, changeable, saved as
   await expect(page.locator('#contactName')).toHaveText('Erika M. · Muster & Partner');
 });
 
+test('contact QR code skips sample texts left from the template once the card has own texts', async ({ page }) => {
+  // Only the name was changed: „Muster & Partner“ on the back must not become the company
+  await item(page, 'Erika Mustermann').click();
+  await page.fill('#pText', 'Hausarztpraxis am Großen Weghaus');
+  await saved(page, d => d.sides.front.els.some(e => e.text === 'Hausarztpraxis am Großen Weghaus'));
+  await item(page, '+49 30 1234567').click();
+  await page.fill('#pText', '0177 7423401\nwww.praxis-beispiel.de');
+  await saved(page, d => d.sides.front.els.some(e => e.text === '0177 7423401\nwww.praxis-beispiel.de'));
+  await page.click('#btnContact');
+  await expect(page.locator('#contactName')).toHaveText('Hausarztpraxis am Großen Weghaus');
+  expect((await readQr(page, { selector: '#contactQr' })).split('\r\n')).toEqual([
+    'BEGIN:VCARD', 'VERSION:3.0', 'N:Weghaus;Hausarztpraxis am Großen;;;', 'FN:Hausarztpraxis am Großen Weghaus',
+    'TEL;TYPE=WORK,VOICE:0177 7423401', 'URL:https://www.praxis-beispiel.de', 'END:VCARD',
+  ]);
+});
+
 test('contact QR code opens in the QR Code Generator with the same content', async ({ page }) => {
   await page.click('#btnContact');
   const href = await page.locator('#contactQrApp').getAttribute('href');
