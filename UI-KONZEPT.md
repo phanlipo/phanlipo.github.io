@@ -142,6 +142,7 @@ Verbindliche Zuordnung von Bedeutung zu Tabler-Name. Alle Namen sind gegen `@tab
 | Fehlersuche | `bug` |
 | Als App installieren | `device-mobile-down` |
 | Sprache | `language` |
+| Darstellung: Hell / Dunkel / System | `sun` / `moon` / `sun-moon` |
 | Alle Tools | `apps` |
 
 App-eigene Listen im Menü (Meine Mindmaps, Feeds, Playlists, Profile) bekommen ein passendes Icon aus derselben Bibliothek, das in der App-README festgehalten wird.
@@ -229,15 +230,16 @@ Das Menü ist der Ort für alles, was selten gebraucht wird. Es soll in jeder Ap
 │ │ ?  Anleitung & Hinweise            ⌄ │ │
 │ │ 📱 Als App installieren            ⌄ │ │  4. Installieren: eine Zeile statt großer Karte
 │ └──────────────────────────────────────┘ │
-│        [ Deutsch | English ]             │  5. Sprache, Fußzeile
+│        Alle Tools · Lizenzen             │  5. Fußzeile
 └──────────────────────────────────────────┘
 ```
 (Die Zeichen stehen hier nur für die Tabler-Icons.)
 
 **Regeln:**
 
-- **Reihenfolge:** Aktionen → App-Bereiche → Einstellungen → Verlauf → Daten sichern → Anleitung → Installieren → Sprache/Fußzeile. Die Installations-Karte rückt also vom Anfang ans Ende und wird zu einer aufklappbaren Zeile (in der installierten App ist sie wie bisher ausgeblendet).
-- **Abschnitte** sind `<details class="card" data-menu data-icon="settings">` mit `<summary>`. `common.js` setzt das Icon und den Pfeil (`chevron-down`) ein. Die Standardbereiche (Daten sichern, Anleitung, Installieren, Sprache) bekommen ihr Icon zentral – **das ändert alle Apps auf einmal**, ohne dass eine App angepasst werden muss.
+- **Reihenfolge:** Aktionen → App-Bereiche → Einstellungen → Verlauf → Daten sichern → Anleitung → Installieren → Fußzeile. Die Installations-Karte rückt also vom Anfang ans Ende und wird zu einer aufklappbaren Zeile (in der installierten App ist sie wie bisher ausgeblendet).
+- **Einstellungen – ein Ort je App:** Sprache (`Deutsch | English`) und Darstellung (`Hell | Dunkel | System`) gelten für alle Apps gemeinsam (`tools.lang.v1`, `tools.theme.v1`) und sehen überall gleich aus: zwei `.seg` unter der Überschrift „Allgemein“. Hat die App einen eigenen Bereich mit `data-icon="settings"`, hängt `common.js` den Block an dessen Ende; sonst gibt es die Unterseite „Einstellungen“ als erste Zeile der Standardliste. Apps bauen keine eigenen Sprach- oder Farbumschalter. Die Startseite (ohne Menü) zeigt beide Umschalter in der Fußzeile.
+- **Abschnitte** sind `<details class="card" data-menu data-icon="settings">` mit `<summary>`. `common.js` setzt das Icon und den Pfeil (`chevron-down`) ein. Die Standardbereiche (Einstellungen, Daten sichern, Anleitung, Installieren) bekommen ihr Icon zentral – **das ändert alle Apps auf einmal**, ohne dass eine App angepasst werden muss.
 - **Aktionen** im Menü stehen als `.menu-list` mit `<button data-icon="…">` untereinander, nicht als verstreute Text-Knöpfe. „Löschen/Schließen/Verwerfen“ stehen am Ende, in `--err`, mit `trash` bzw. `x`.
 - **Überschriften** innerhalb eines Abschnitts sind einheitlich `h3` (16 px). Unterbereiche wie „Personenerkennung“ werden zu eigenen Abschnitten oder zu `h4`.
 - **Nach einer Aktion, die zur App zurückführt:** `Tools.menu.close()` (wie bisher).
@@ -269,7 +271,7 @@ Markup: `<section data-menu data-menu-page data-icon="settings" aria-labelledby=
 
 ### Menü (`common.js`)
 
-- App-Bereiche mit `data-menu` zuerst, dann eine Liste der Standardbereiche (Daten sichern, Anleitung, Als App installieren) als Unterseiten, dann Sprache und Fußzeile.
+- App-Bereiche mit `data-menu` zuerst, dann eine Liste der Standardbereiche (Einstellungen – falls die App keinen eigenen Einstellungsbereich hat –, Daten sichern, Anleitung, Als App installieren) als Unterseiten, dann die Fußzeile. Sprache und Darstellung stehen in den Einstellungen.
 - `data-icon` setzt ein Icon vor Überschrift bzw. Zeile; der Text kommt dabei in ein eigenes `<span class="menu-label">`, damit Übersetzungen die Icons nicht überschreiben.
 - Unterseiten sind `<details>` mit `data-menu-page`: geöffnet füllen sie das Sheet, die `summary` wird zur Zurück-Zeile; je Unterseite ein eigener History-Eintrag (Zurück-Taste, Escape und CloseWatcher führen erst zur Liste). `Tools.menu.open('id')` öffnet direkt eine Unterseite.
 

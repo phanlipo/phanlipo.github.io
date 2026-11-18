@@ -75,7 +75,7 @@ test.describe('browser language English', () => {
     test(`${app.folder}: not translated yet – stays German, no language switch`, async ({ page }) => {
       await page.goto(`/${app.folder}/`);
       await expect(page.locator('html')).toHaveAttribute('lang', 'de');
-      await expect(page.locator('.footer-lang')).toBeHidden();
+      await expect(page.locator('.lang-switch')).toBeHidden();
       await expect(page.locator('footer .footer-common')).toContainText('KI-generiert');
     });
   }

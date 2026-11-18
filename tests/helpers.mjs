@@ -33,8 +33,8 @@ export const test = base.extend({
         const m = document.querySelector('meta[name="tool:storage"]');
         if (!m) return [];
         const prefixes = m.content.split(',').map(s => s.trim()).filter(Boolean);
-        // Shared by all apps on purpose (language choice, see AGENTS.md) – not part of any app's backup
-        const shared = ['tools.lang.v1'];
+        // Shared by all apps on purpose (language and appearance, see AGENTS.md) – not part of any app's backup
+        const shared = ['tools.lang.v1', 'tools.theme.v1'];
         return Object.keys(localStorage).filter(k => !shared.includes(k) && !prefixes.some(p => k.startsWith(p)));
       }).catch(() => []);
       problems.push(...undeclared.map(k => `undeclared localStorage key: ${k}`));
@@ -206,10 +206,26 @@ export async function closeMenu(page) {
   await expect.poll(() => page.evaluate(() => !(history.state && history.state.toolsMenu))).toBe(true);
 }
 
+/** Opens the menu where the shared settings are (language, appearance): the app's own settings section or the
+ *  sub page "Settings" – like a user, by tapping the row of a sub page that is still closed */
+export async function openSettings(page) {
+  await openMenu(page);
+  const page_ = page.locator('#appMenu details.menu-page:has(#menuTheme)');
+  if (await page_.count() && !(await page_.evaluate(d => d.open))) await page_.locator(':scope > summary').click();
+  await page.locator('#menuTheme').scrollIntoViewIfNeeded();
+}
+
 /** Switches the language with the switch in the app menu ('de' | 'en') and closes the menu again */
 export async function switchLang(page, lang) {
-  await openMenu(page);
-  await page.locator(`[data-set-lang="${lang}"]`).click();
+  await openSettings(page);
+  await page.locator(`#appMenu [data-set-lang="${lang}"]`).click();
+  await closeMenu(page);
+}
+
+/** Picks the appearance in the app menu ('light' | 'dark' | 'system') and closes the menu again */
+export async function switchTheme(page, theme) {
+  await openSettings(page);
+  await page.locator(`#appMenu [data-set-theme="${theme}"]`).click();
   await closeMenu(page);
 }
 

@@ -522,8 +522,9 @@ self.addEventListener('notificationclick', event => {
 
 /* ---------- Run ---------- */
 const footer = readFileSync(join(ROOT, 'scripts/partials/footer.html'), 'utf8').trim();
-// The start page needs no link to itself
-const footerFor = p => p.folder ? footer : footer.split('\n').filter(l => !l.includes('footer-home')).join('\n');
+// The start page needs no link to itself. Apps have language and appearance in the menu ("Settings", common.js),
+// only the start page (no menu) shows both switches in its footer.
+const footerFor = p => footer.split('\n').filter(l => !l.includes(p.folder ? 'footer-lang' : 'footer-home')).join('\n');
 const dataBlock = readFileSync(join(ROOT, 'scripts/partials/data.html'), 'utf8').trim();
 const agentBlock = readFileSync(join(ROOT, 'scripts/partials/help-agent.html'), 'utf8').trim();
 const filesBlock = readFileSync(join(ROOT, 'scripts/partials/help-files.html'), 'utf8').trim();
