@@ -383,6 +383,21 @@ test.describe('physics-lab tools', () => {
     await expect(page.locator('#p-lens')).toBeVisible();
     await expect(page.locator('#p-lens .calc-result.main .v')).toHaveText('reell · umgekehrt · vergrößert');
   });
+
+  test('slit_pattern lists the bright fringes', async ({ page }) => {
+    const r = await call(page, 'physics_lab_slit_pattern', { slits: 3, wavelength_nm: 500, slit_spacing_um: 10, slit_width_um: 2 });
+    const ord = k => {
+      const s = k * 0.05, beta = Math.PI * 2 * s / 0.5;
+      return { order: k, angle_deg: Math.round(Math.asin(s) * 180 / Math.PI * 100) / 100, x_cm: Math.round(100 * Math.tan(Math.asin(s)) * 100) / 100,
+        relative_intensity: Math.round((k ? (Math.sin(beta) / beta) ** 2 : 1) * 1000) / 1000 };
+    };
+    expect(r.result).toMatchObject({ slits: 3, wavelength_nm: 500, slit_spacing_um: 10, slit_width_um: 2, screen_distance_m: 1, secondary_maxima_between: 1,
+      central_fringe_width_cm: Math.round(2 * 100 * Math.tan(Math.asin(0.05 / 3)) * 100) / 100 });
+    expect(r.result.principal_maxima).toEqual([0, 1, 2, 3].map(ord));
+    await expect(page.locator('#p-waves')).toBeVisible();
+    await expect(page.locator('#wN')).toHaveValue('3');
+    expect((await call(page, 'physics_lab_slit_pattern', { slits: 21 })).ok).toBe(false);
+  });
 });
 
 test.describe('chain-transaction tools', () => {

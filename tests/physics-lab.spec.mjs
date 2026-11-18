@@ -127,6 +127,106 @@ test.describe('curved mirror', () => {
   });
 });
 
+// ---- light through slits: reference (Fraunhofer, independent from waves.js) ----
+const slitI = (n, lamNm, d, a, sin) => {
+  const lam = lamNm / 1000, delta = 2 * Math.PI * d * sin / lam, beta = Math.PI * a * sin / lam;
+  const env = beta === 0 ? 1 : (Math.sin(beta) / beta) ** 2;
+  const s2 = Math.sin(delta / 2);
+  const grat = n === 1 || Math.abs(s2) < 1e-12 ? 1 : (Math.sin(n * delta / 2) / (n * s2)) ** 2;
+  return env * grat;
+};
+const xOf = sin => 100 * Math.tan(Math.asin(sin)); // cm on a screen 1 m away
+async function slits(page, { n, l, d, a, p }) {
+  await open(page, 'waves');
+  for (const [id, v] of [['wN', n], ['wL', l], ['wD', d], ['wA', a], ['wP', p]]) if (v != null) await page.locator(`#${id}`).fill(String(v));
+}
+const wres = (page, label) => page.locator('#wRes .calc-result', { has: page.locator('.k', { hasText: label }) }).locator('.v');
+
+test.describe('light through slits', () => {
+  test('double slit: fringe spacing, width and brightness at the marker', async ({ page }) => {
+    await slits(page, { n: 2, l: 650, d: 10, a: 2, p: 30 });
+    await expect(page.locator('#wPresets button', { hasText: 'Doppelspalt' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(wres(page, 'Abstand')).toContainText(de(xOf(0.065), 1));             // 6,5 cm
+    await expect(wres(page, 'Breite')).toContainText(de(2 * xOf(0.065 / 2), 1));      // 6,5 cm
+    await expect(wres(page, 'Nebenmaxima')).toHaveText('0');
+    // marker at 30 % of the half width shown (3.5 orders)
+    const X = xOf(3.5 * 0.065), x = 0.3 * X, sin = Math.sin(Math.atan(x / 100));
+    await expect(page.locator('#wPOut')).toHaveText(`x = ${de(x, 1)} cm`);
+    await expect(wres(page, 'Helligkeit')).toHaveText(`${Math.round(slitI(2, 650, 10, 2, sin) * 100)} %`);
+    await expect(wres(page, 'Gangunterschied')).toHaveText(`${de(10 * sin / 0.65, 2)} λ`);
+    await expect(page.locator('#wGraph text', { hasText: /^−?[0-3]$/ })).toHaveCount(7); // orders −3 … 3
+  });
+
+  test('the phasors explain bright and dark', async ({ page }) => {
+    const X = xOf(3.5 * 0.065);
+    // on the first order: Δs = λ, all phasors aligned
+    const p1 = Math.round(xOf(0.065) / X * 100);
+    await slits(page, { n: 4, l: 650, d: 10, a: 2, p: p1 });
+    await expect(page.locator('#wWhy')).toContainText('k = 1');
+    await expect(page.locator('#wPhasor line.chain')).toHaveCount(4);
+    await expect(page.locator('#wPhasor line.sum')).toHaveCount(1);
+    // first dark spot next to the centre: Δs = λ/N → the 4 phasors close into a square
+    // (the slider moves in steps of 1 % of the half width: the nearest step is 7 %, Δs = 0.252 λ)
+    const zero = xOf(0.065 / 4) / X;
+    await page.locator('#wP').fill(String(Math.round(zero * 100)));
+    // |sin(4·δ/2) / (4·sin(δ/2))| < 1 % there: the explanation calls it dark
+    await expect(page.locator('#wWhy')).toContainText('geschlossenen Vieleck');
+    await expect(page.locator('#wPhasorCap')).toContainText(/Δφ = (8\d|9\d)°/);
+    // halfway between dark and bright the phasors only partly cancel
+    await page.locator('#wP').fill('20');
+    await expect(page.locator('#wWhy')).toContainText('teilweise');
+    // with 20 slits the central fringe is 5 times narrower than with 4
+    await page.locator('#wN').fill('20');
+    await expect(wres(page, 'Breite')).toContainText(de(2 * xOf(0.065 / 20), 1));
+    await expect(wres(page, 'Nebenmaxima')).toHaveText('18');
+  });
+
+  test('missing order where the single slit is dark (d = 2a)', async ({ page }) => {
+    const X = xOf(3.5 * 0.065), p2 = xOf(2 * 0.065) / X * 100;
+    await slits(page, { n: 2, l: 650, d: 10, a: 5 });
+    await page.locator('#wP').fill(String(Math.round(p2))); // Δs = 1.994 λ: on the 2nd order
+    await expect(wres(page, 'Helligkeit')).toHaveText('0 %');
+    await expect(page.locator('#wWhy')).toContainText('k = 2 fehlt');
+  });
+
+  test('the slit width is limited to the spacing', async ({ page }) => {
+    await slits(page, { n: 2, l: 650, d: 10, a: 8 });
+    await page.locator('#wD').fill('4');
+    await expect(page.locator('#wAOut')).toHaveText('4,0 µm');
+  });
+
+  test('formulas, explanation and screen image', async ({ page }) => {
+    await slits(page, { n: 2, l: 500, d: 10, a: 2, p: 0 });
+    await page.click('#p-waves summary:has-text("Formeln")');
+    const tex = (await page.locator('#wMath annotation').allTextContents()).join(' ');
+    expect(tex).toContain('\\sin\\alpha_1=\\frac{0{,}500\\,\\mu\\text{m}}{10{,}0\\,\\mu\\text{m}}=0{,}0500');
+    expect(tex).toContain('x_1=L\\cdot\\tan\\alpha_1' + '\\approx ' + de(xOf(0.05), 1).replace(',', '{,}'));
+    await expect(page.locator('#wMath .fallback')).toHaveCount(0);
+    await page.click('#p-waves summary:has-text("Warum")');
+    await expect(page.locator('#wExplain .katex')).toHaveCount(2);
+    // the screen is bright in the middle (green light) and dark at the first minimum
+    const px = await page.evaluate(() => {
+      const c = document.getElementById('wBand'), g = c.getContext('2d'), w = c.width;
+      return [g.getImageData(Math.floor(w / 2), 5, 1, 1).data[1], g.getImageData(Math.round(w / 2 + w / 2 * (100 * Math.tan(Math.asin(0.025)) / (100 * Math.tan(Math.asin(0.175))))), 20, 1, 1).data[1]];
+    });
+    expect(px[0]).toBeGreaterThan(200);
+    expect(px[1]).toBeLessThan(40);
+  });
+
+  test('dragging across the screen moves the marker', async ({ page }) => {
+    await slits(page, { n: 2, l: 650, d: 10, a: 2, p: 0 });
+    const sc = page.locator('#wScene');
+    await sc.scrollIntoViewIfNeeded();
+    const box = await sc.boundingBox(), y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width / 2, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.6, y, { steps: 4 });
+    await page.mouse.move(box.x + box.width * 0.75, y, { steps: 4 });
+    await page.mouse.up();
+    await expect(page.locator('#wP')).toHaveValue('50');
+  });
+});
+
 test.describe('lens', () => {
   test('projector, magnifier and glasses', async ({ page }) => {
     await open(page, 'lens');
@@ -149,7 +249,7 @@ test.describe('lens', () => {
 });
 
 test('open experiments with formulas have no accessibility violations', async ({ page }) => {
-  for (const kind of ['mirror', 'lens']) {
+  for (const kind of ['mirror', 'lens', 'waves']) {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();

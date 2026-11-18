@@ -1,10 +1,13 @@
 # Physik verstehen – Aufbau
 
-Physik zum Ausprobieren: je Versuch eine Zeichnung, die sofort auf Regler reagiert, das Ergebnis, eine Erklärung in Worten und die Formeln mit den eigenen Zahlen (KaTeX). Werkzeugkasten nach `UI-KONZEPT.md` 4b – jeder Versuch ist ein Werkzeug; Gruppen auf der Übersicht nach Gebiet (bisher „Optik“). (`.md` wird nicht veröffentlicht.)
+Physik zum Ausprobieren: je Versuch eine Zeichnung, die sofort auf Regler reagiert, das Ergebnis, eine Erklärung in Worten und die Formeln mit den eigenen Zahlen (KaTeX). Werkzeugkasten nach `UI-KONZEPT.md` 4b – jeder Versuch ist ein Werkzeug; Gruppen auf der Übersicht nach Gebiet (Optik, Wellen, …). (`.md` wird nicht veröffentlicht.)
+
+**Leitsatz: Jeder Versuch beantwortet eine Warum-Frage** (als aufklappbarer Abschnitt mit durchgerechnetem Beispiel). Die Frage bestimmt, welche Regler und Anzeigen der Versuch braucht – nicht mehr.
 
 ```
 index.html   Oberfläche: Übersicht/Tabs (assets/shared/toolbox.js), je Versuch Zeichnung (SVG), Regler, Ergebnisse, Formeln, WebMCP
 optics.js    window.Optics: Abbildungsgleichung und Strahlengang ohne DOM
+waves.js     window.Waves: Licht durch N Spalte (Intensität, Hauptmaxima, Zeigerkette, Farbe einer Wellenlänge)
 ```
 
 ## Optik (optics.js)
@@ -16,18 +19,36 @@ optics.js    window.Optics: Abbildungsgleichung und Strahlengang ohne DOM
 - Spiegel-Zeichnung: Parabel x = −y²/2r (die paraxiale Form), Öffnung so begrenzt, dass die Schale höchstens 6 cm tief ist.
 - Sehr kleine Bilder (< 22 px) zeigt ein Kästchen oben rechts vergrößert, mit richtiger Richtung („Bild ×n“).
 
+## Licht durch Spalte (waves.js)
+
+- Fraunhofer-Näherung, Schirm L = 1 m. λ in nm (380 … 750), Spaltabstand d und Spaltbreite a in µm, N = 1 … 20; a ≤ d (wird beim Einstellen begrenzt).
+- I/I0 = (sin β/β)² · (sin(NΔφ/2) / (N sin(Δφ/2)))², Δφ = 2π d sinα/λ, β = π a sinα/λ.
+- Gezeigter Ausschnitt: ±3,5 Ordnungen (sin α ≤ 0,95), unabhängig von N – so lassen sich 1, 2, 20 Spalte direkt vergleichen. Die Markierung („Stelle auf dem Schirm“) wird als Anteil dieses Ausschnitts gespeichert.
+- Schirmbild als Canvas (Helligkeit je Pixel über 4 Stellen gemittelt, damit schmale Gitterstreifen nicht zwischen Stützstellen fallen), Helligkeitskurve und Zeigerdiagramm als SVG. Das Zeigerdiagramm füllt seinen Kasten (Pfeil höchstens 50 px), damit auch ein geschlossenes Vieleck sichtbar bleibt; die Länge der Summe steht als % darunter.
+- Erklärung je Stelle: Hauptmaximum (Δs ganzzahlig, ±0,01 λ), fehlende Ordnung (dort Minimum des Einzelspalts), dunkel (Zeigersumme < 1 %), sonst teilweise.
+
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g } }` – nur Reglerstellungen und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p } }` – nur Reglerstellungen und offener Versuch.
 
 ## Erweitern
 
 Neuer Versuch = Kachel + Tab + `section.card.panel`; Logik ohne DOM in eine eigene Datei im App-Ordner (wie `optics.js`), fachliche Tests mit unabhängig nachgerechneten Werten in `tests/physics-lab.spec.mjs`. Ab etwa 6 Versuchen Gruppen auf der Übersicht (h2 je Gebiet).
 
-Mögliche nächste Versuche (passen zur Architektur: rein rechnend, offline):
+Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame` nur, solange der Versuch offen und die Seite sichtbar ist (anhalten in `onOverview`, bei `visibilitychange` und beim Tab-Wechsel), `prefers-reduced-motion` beachten (dann Start per Knopf); in Tests feste Zeit (`page.clock`) und festgelegter Zufall.
 
-- **Brechung** (Snellius, Totalreflexion, Prisma/Regenbogen) – Optik.
-- **Schiefer Wurf** mit und ohne Luftwiderstand – Mechanik.
-- **Pendel / Federschwinger** (Periodendauer, Energie) – Mechanik.
-- **Wellen**: Überlagerung, Interferenz am Doppelspalt, Doppler-Effekt.
-- **Stromkreis**: Reihen-/Parallelschaltung, Ohmsches Gesetz.
+## Plan (Reihenfolge) mit Warum-Fragen
+
+| # | Gebiet | Versuch | Warum-Frage | Stand |
+|---|---|---|---|---|
+| 1 | Optik | Gewölbter Spiegel, Linse | Warum steht das Bild im Löffel Kopf? | fertig |
+| 2 | Wellen | Licht durch N Spalte | Warum wird das Muster mit mehr Spalten schärfer? | fertig |
+| 3 | Schwingungen | Fadenpendel, Federpendel, gekoppelte Pendel (Schwebung) | Warum hängt die Schwingungsdauer nicht von der Masse ab? Warum wandert die Energie zwischen gekoppelten Pendeln hin und her? | geplant |
+| 4 | Mechanik | Schiefer Wurf mit/ohne Luftwiderstand | Warum fliegt der Ball mit Luftwiderstand unter weniger als 45° am weitesten? | geplant |
+| 5 | Optik | Brechung, Totalreflexion, Prisma | Warum sieht ein Stab im Wasser geknickt aus? | geplant |
+| 6 | Atomphysik | Radioaktiver Zerfall; Spektrallinien (Bohr) | Warum gibt es eine Halbwertszeit, obwohl jeder Zerfall Zufall ist? Warum leuchtet jedes Element in eigenen Farben? | geplant |
+| 7 | Magnetismus | Lorentzkraft, Feldlinien | Warum fliegen geladene Teilchen im Magnetfeld im Kreis (Polarlicht)? | geplant |
+| 8 | Thermodynamik | Gasteilchen in der Box (p, V, T) | Warum steigt der Druck, wenn das Gas warm wird? | geplant |
+| 9 | Elektrizität | Stromkreis mit festen Schaltungen (Reihe, parallel, Spannungsteiler) | Warum leuchten zwei Lämpchen in Reihe schwächer? | geplant |
+
+Später/eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
