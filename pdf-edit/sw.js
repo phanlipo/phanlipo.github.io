@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "pdf-edit";
-const VERSION = '56c5fb4f3ae4';
+const VERSION = '185e6925719c';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
