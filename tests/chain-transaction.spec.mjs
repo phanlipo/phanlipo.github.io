@@ -85,12 +85,12 @@ test.describe('assessment logic', () => {
     expect(brief(r)).toEqual({
       kind: 'import', moved: 1, supplies: ['CH:outside', 'FR:taxable*@1', 'FR:taxable@2'], abroad: ['U2:FR', 'U3:FR'], triangle: null, warnings: [],
     });
-    expect(r.import).toEqual({ importer: 1, country: 'FR', holder: 1, deductible: true });
-    expect(r.registrations[1]).toEqual([{ country: 'FR', reasons: ['sale', 'import'], home: false, has: false }]);
+    expect(r.import).toEqual({ importer: 1, country: 'FR', holder: 1, deductible: true, privateImporter: false });
+    expect(r.registrations[1]).toEqual([{ country: 'FR', reasons: ['sale', 'import'], home: false, has: false, oss: false }]);
     // U2 transports, U3 declares: presumption stays (supply 1 moved, in CH); U3 cannot deduct the import VAT
     r = await evaluate(page, { parties: P('CH', 'DE', 'AT', 'FR'), transport: 1, importer: 2 });
     expect(brief(r)).toMatchObject({ moved: 0, supplies: ['CH:outside', 'FR:taxable@1', 'FR:taxable@2'], warnings: ['eustNoDeduct'] });
-    expect(r.import).toEqual({ importer: 2, country: 'FR', holder: 1, deductible: false });
+    expect(r.import).toEqual({ importer: 2, country: 'FR', holder: 1, deductible: false, privateImporter: false });
     // Domestic: everything in DE, the French intermediary needs a German registration
     expect(brief(await evaluate(page, { parties: P('DE', 'FR', 'DE'), transport: 1 }))).toMatchObject({
       kind: 'domestic', supplies: ['DE:taxable@0', 'DE:taxable@1'], abroad: ['U2:DE'],
@@ -131,7 +131,7 @@ test.describe('page', () => {
     await expect(page.locator('#transport button[aria-pressed="true"]')).toHaveText('U3');
     await expect(page.locator('#pv1')).toHaveValue('DE');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('chain-transaction.case.v1'))))
-      .toEqual({ parties: [{ country: 'DE', vat: 'DE' }, { country: 'AT', vat: 'DE' }, { country: 'IT', vat: 'IT' }], from: '', to: '', transport: 2, importer: null, eug: false });
+      .toEqual({ parties: [{ country: 'DE', vat: 'DE' }, { country: 'AT', vat: 'DE' }, { country: 'IT', vat: 'IT' }], from: '', to: '', transport: 2, importer: null, eug: false, b2c: false });
   });
 
   test('country change moves a default VAT ID along; import shows the declarant choice', async ({ page }) => {
@@ -210,4 +210,50 @@ test('print / PDF: report with the case table, inputs and buttons left out', asy
   expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
   await page.emulateMedia({ media: 'screen' });
   await expect(page.locator('#report')).toBeHidden();
+});
+
+test.describe('private last customer (B2C)', () => {
+  test('distance sale, collection, resting supply to the consumer, no triangle', async ({ page }) => {
+    // FR → IT, the German intermediary uses its French ID and ships: its own supply to the consumer is moved
+    // → intra-Community distance sale, taxed in Italy, reportable via OSS (§ 3c Abs. 1, § 18j UStG)
+    let r = await evaluate(page, { parties: P('FR', ['DE', 'FR'], 'IT'), transport: 1, b2c: true });
+    expect(brief(r)).toEqual({ kind: 'intra', moved: 1, supplies: ['FR:taxable@0', 'IT:distance@1'], abroad: ['U2:IT'], triangle: null, warnings: [] });
+    expect(r.registrations[1].find(x => x.country === 'IT')).toMatchObject({ reasons: ['distanceSale'], oss: true });
+    expect(r.registrations[2]).toEqual([]);
+    // The consumer collects: no exemption, no distance sale – taxed in France
+    r = await evaluate(page, { parties: P('FR', 'DE', 'IT'), transport: 2, b2c: true });
+    expect(brief(r)).toMatchObject({ moved: 1, supplies: ['FR:taxable@0', 'FR:taxable@1'], abroad: ['U2:FR'], warnings: [] });
+    expect(r.supplies[1].privatePickup).toBe(true);
+    // U1 ships to the intermediary: supply to the consumer rests in Italy → registration there, no OSS; no triangle
+    r = await evaluate(page, { parties: P('FR', 'DE', 'IT'), transport: 0, b2c: true });
+    expect(brief(r)).toMatchObject({ moved: 0, supplies: ['FR:ic', 'IT:taxable@1'], abroad: ['U2:IT'], triangle: false });
+    expect(r.triangle.checks.filter(c => !c.ok).map(c => c.id)).toEqual(['lastBusiness']);
+    // A VAT ID for the consumer is ignored
+    expect((await evaluate(page, { parties: P('FR', 'DE', ['IT', 'IT']), transport: 0, b2c: true })).case.parties[2].vat).toBe('');
+  });
+
+  test('import cleared by the consumer: import VAT is its final cost, no warning', async ({ page }) => {
+    const r = await evaluate(page, { parties: P('CN', 'DE', 'FR'), transport: 2, b2c: true });
+    expect(brief(r)).toEqual({ kind: 'import', moved: 1, supplies: ['CN:outside', 'CN:outside'], abroad: [], triangle: null, warnings: [] });
+    expect(r.import).toEqual({ importer: 2, country: 'FR', holder: 2, deductible: false, privateImporter: true });
+  });
+
+  test('page: checkbox switches to P3, explains the distance sale and the OSS', async ({ page }) => {
+    await openMenu(page);
+    await page.click('[data-example="distance"]');
+    await expect(page.locator('#optB2c')).toBeChecked();
+    await expect(page.locator('#pv2')).toBeDisabled();
+    await expect(page.locator('#parties legend').nth(2)).toHaveText('P3 · Privatperson');
+    await expect(page.locator('#result .supply.moved')).toContainText('Lieferung 2: U2 → P3');
+    await expect(page.locator('#result .supply.moved')).toContainText('innergemeinschaftlicher Fernverkauf: 22 % Umsatzsteuer Italien');
+    await expect(page.locator('#result')).toContainText('U2 versteuert in Italien, kann das aber über den One-Stop-Shop (OSS)');
+    await expect(page.locator('#why')).toContainText('§ 3c Abs. 1 UStG');
+    await expect(page.locator('#duties')).toContainText('Als Privatperson keine umsatzsteuerlichen Pflichten');
+    await expect(page.locator('#duties')).toContainText('über den OSS im eigenen Land, keine Registrierung in Italien nötig');
+    await expect(page.locator('.alt', { hasText: 'Fernverkauf (OSS)' })).toHaveCount(1);
+    await page.uncheck('#optB2c');
+    await expect(page.locator('#pv2')).toBeEnabled();
+    await expect(page.locator('#pv2')).toHaveValue('IT');
+    await expect(page.locator('#parties legend').nth(2)).toHaveText('U3 · letzter Abnehmer');
+  });
 });

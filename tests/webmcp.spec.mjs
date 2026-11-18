@@ -391,6 +391,12 @@ test.describe('chain-transaction tools', () => {
     expect((await call(page, 'chain_transaction_analyze_chain', { companies: [{ country: 'DE', vat_id_country: 'CH' }, { country: 'AT' }, { country: 'IT' }], transported_by: 1 })).ok).toBe(false);
     await expect(page.locator('#pc0')).toHaveValue('DE');
     await expect(page.locator('#count [data-n="3"]')).toHaveAttribute('aria-pressed', 'true');
+    // Private last customer: distance sale via OSS
+    r = await call(page, 'chain_transaction_analyze_chain', { companies: [{ country: 'FR' }, { country: 'DE', vat_id_country: 'FR' }, { country: 'IT' }], transported_by: 2, last_customer_private: true });
+    expect(r.result.last_customer_private).toBe(true);
+    expect(r.result.supplies[1]).toMatchObject({ customer: 'P3', place: 'IT', treatment: 'intra-Community distance sale, taxable where the goods arrive (OSS possible)', tax_due_by: 'U2' });
+    expect(r.result.registrations_abroad).toContainEqual({ company: 'U2', country: 'IT', already_uses_vat_id_there: false, via_one_stop_shop: true, reasons: ['distanceSale'] });
+    await expect(page.locator('#optB2c')).toBeChecked();
   });
 });
 

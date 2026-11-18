@@ -37,7 +37,8 @@
       from/to: where the goods start/end ('' = country of the first/last company), transport: index of the company
       that transports or commissions the transport, importer: index of the company that declares the goods for
       release into free circulation (only for imports; null = the transporter), eug: accept a triangular transaction
-      at the start of a 4-party chain (EU General Court T-646/24). */
+      at the start of a 4-party chain (EU General Court T-646/24), b2c: the last customer is a private person
+      (consumer without VAT ID; then its vat is always ''). */
   function normalize(input) {
     const src = input || {};
     const parties = Array.isArray(src.parties) ? src.parties : [];
@@ -50,13 +51,15 @@
       ps.push({ country: p.country, vat });
     }
     const n = ps.length;
+    const b2c = !!src.b2c;
+    if (b2c) ps[n - 1].vat = '';
     const from = src.from || ps[0].country, to = src.to || ps[n - 1].country;
     if (!COUNTRIES[from] || !COUNTRIES[to]) return { error: 'country' };
     const transport = src.transport;
     if (!Number.isInteger(transport) || transport < 0 || transport >= n) return { error: 'transport' };
     let importer = src.importer == null ? transport : src.importer;
     if (!Number.isInteger(importer) || importer < 0 || importer >= n) return { error: 'importer' };
-    return { case: { parties: ps, from, to, transport, importer, eug: !!src.eug } };
+    return { case: { parties: ps, from, to, transport, importer, eug: !!src.eug, b2c } };
   }
 
   function kindOf(from, to) {
@@ -72,6 +75,7 @@
     if (norm.error) return norm;
     const c = norm.case, P = c.parties, n = P.length, { from, to, transport: t } = c;
     const kind = kindOf(from, to);
+    const priv = c.b2c ? n - 1 : -1; // index of the private person, -1 = none
 
     /* 1. Moved supply (§ 3 Abs. 6a UStG, Art. 36a MwStSystRL). Supply i goes from company i to company i+1. */
     let m, rule, basis = null;
@@ -98,7 +102,13 @@
       if (kind === 'import' && i === m && c.importer === m) { s.place = to; s.shifted = true; } // § 3 Abs. 8 UStG
       s.taxDebtor = null;
       if (!isEU(s.place)) s.treatment = 'outside';
-      else if (i === m && kind === 'intra') {
+      else if (i === m && kind === 'intra' && i + 1 === priv) {
+        // To a private person: the supplier ships → intra-Community distance sale, taxed where the goods arrive
+        // (§ 3c Abs. 1 UStG, Art. 33 a MwStSystRL; OSS possible). The private person collects → no exemption, taxed
+        // where the goods are handed over.
+        if (t === i) { s.treatment = 'distance'; s.place = to; }
+        else { s.treatment = 'taxable'; s.privatePickup = true; }
+      } else if (i === m && kind === 'intra') {
         const v = P[i + 1].vat;
         if (v && v !== from) s.treatment = 'ic';
         else { s.treatment = 'ic-fail'; s.failReason = v ? 'sameVat' : 'noVat'; }
@@ -108,7 +118,8 @@
         else s.treatment = 'export';
         s.exportCase = t === i ? 'supplier' : 'customer';
       } else s.treatment = 'taxable';
-      if (s.treatment === 'taxable' || s.treatment === 'ic-fail' || s.treatment === 'export-fail') s.taxDebtor = i;
+      if (['taxable', 'ic-fail', 'export-fail', 'distance'].includes(s.treatment)) s.taxDebtor = i;
+      s.toPrivate = i + 1 === priv;
       s.rate = isEU(s.place) ? COUNTRIES[s.place].rate : null;
       supplies.push(s);
     }
@@ -133,7 +144,8 @@
         { id: 'transport', ok: t === a || t === b },
         { id: 'midVat', ok: !!P[b].vat && P[b].vat !== from && P[b].vat !== to },
         { id: 'midNotEstablished', ok: P[b].country !== to },
-        { id: 'lastVat', ok: P[cc].vat === to },
+        // Only between businesses: a private last customer cannot owe the tax (§ 25b Abs. 1 Nr. 1 UStG)
+        cc === priv ? { id: 'lastBusiness', ok: false } : { id: 'lastVat', ok: P[cc].vat === to },
       ];
       const atEnd = cc === n - 1;
       // UStAE 25b.1 Abs. 2: only the last three of a longer chain; EuG T-646/24 (3 Dec 2025) also accepts the first three
@@ -154,8 +166,10 @@
     let imp = null;
     if (kind === 'import') {
       const holder = moved.shifted ? m : m + 1;
-      imp = { importer: c.importer, country: to, holder, deductible: c.importer === holder };
-      if (!imp.deductible) warnings.push({ code: 'eustNoDeduct', party: c.importer, holder });
+      const privateImporter = c.importer === priv;
+      imp = { importer: c.importer, country: to, holder, deductible: c.importer === holder && !privateImporter, privateImporter };
+      // A private person pays the import VAT as a final cost – that is how it should be, no warning
+      if (!imp.deductible && !privateImporter) warnings.push({ code: 'eustNoDeduct', party: c.importer, holder });
     }
 
     /* 6. Where each company has to be registered for VAT, and why */
@@ -168,24 +182,26 @@
     for (const s of supplies) {
       if (s.treatment === 'outside') continue;
       if (s.treatment === 'ic') add(s.supplier, s.place, 'icSupply');
+      else if (s.treatment === 'distance') add(s.supplier, s.place, 'distanceSale');
       else if (s.treatment === 'export') add(s.supplier, s.place, 'export');
       else if (s.treatment === 'triangle') { add(s.supplier, P[s.supplier].vat, 'triangleReport'); add(s.taxDebtor, s.place, 'triangleTax'); }
       else add(s.supplier, s.place, 'sale');
     }
     if (acquisition && !acquisition.deemed) add(acquisition.party, acquisition.country, 'acquisition');
-    if (imp) add(imp.importer, imp.country, 'import');
-    const registrations = P.map((p, i) => [...regs[i]].map(([country, reasons]) => ({
-      country, reasons, home: country === p.country, has: p.vat === country,
+    if (imp && !imp.privateImporter) add(imp.importer, imp.country, 'import');
+    // oss: everything there can be declared via the One-Stop-Shop of the home country instead of a registration
+    const registrations = P.map((p, i) => i === priv ? [] : [...regs[i]].map(([country, reasons]) => ({
+      country, reasons, home: country === p.country, has: p.vat === country, oss: reasons.every(x => x === 'distanceSale'),
     })));
 
     return {
       case: c, n, kind, from, to, transport: t, importer: kind === 'import' ? c.importer : null,
-      moved: m, rule, basis, supplies, acquisition, triangle, import: imp, registrations, warnings,
+      b2c: c.b2c, private: priv, moved: m, rule, basis, supplies, acquisition, triangle, import: imp, registrations, warnings,
     };
   }
 
   /** Foreign registrations a company needs (outside its own country), for the summary and the comparison */
-  const foreignRegistrations = r => r.registrations.flatMap((list, party) => list.filter(x => !x.home).map(x => ({ party, country: x.country, has: x.has })));
+  const foreignRegistrations = r => r.registrations.flatMap((list, party) => list.filter(x => !x.home).map(x => ({ party, country: x.country, has: x.has, oss: x.oss })));
 
   /** What if: the same case with every other company transporting, plus for intermediaries the variant
       "acts as supplier" (VAT ID of the country of departure, or declares the import itself). */
@@ -202,7 +218,8 @@
         transport, variant, moved: r.moved,
         exempt: ['ic', 'export'].includes(r.supplies[r.moved].treatment),
         triangle: !!(r.triangle && r.triangle.applies),
-        newRegistrations: regsF.filter(x => !x.has),
+        newRegistrations: regsF.filter(x => !x.has && !x.oss),
+        oss: regsF.filter(x => x.oss),
         current: cs === input, case: r.case,
       });
     };
