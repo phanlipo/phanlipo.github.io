@@ -398,6 +398,24 @@ test.describe('physics-lab tools', () => {
     await expect(page.locator('#wN')).toHaveValue('3');
     expect((await call(page, 'physics_lab_slit_pattern', { slits: 21 })).ok).toBe(false);
   });
+
+  test('pendulum_period and coupled_pendulums', async ({ page }) => {
+    let r = await call(page, 'physics_lab_pendulum_period', { kind: 'string', length_m: 1, mass_left_g: 100, mass_right_g: 900, displacement: 5, place: 'moon' });
+    expect(r.result).toMatchObject({ kind: 'string', gravity_m_s2: 1.62, depends_on_mass: false,
+      period_small_angle_s: Math.round(2 * Math.PI * Math.sqrt(1 / 1.62) * 1000) / 1000 });
+    expect(r.result.period_s).toBeGreaterThan(r.result.period_small_angle_s);
+    await expect(page.locator('#p-pendulum')).toBeVisible();
+    await expect(page.locator('#pM2')).toHaveValue('900');
+    r = await call(page, 'physics_lab_pendulum_period', { kind: 'spring', spring_constant_n_per_m: 20, displacement: 10 });
+    expect(r.result).toMatchObject({ depends_on_mass: true, period_left_s: Math.round(2 * Math.PI * Math.sqrt(0.1 / 20) * 1000) / 1000,
+      period_right_s: Math.round(2 * Math.PI * Math.sqrt(0.9 / 20) * 1000) / 1000, displacement_cm: 10 });
+    r = await call(page, 'physics_lab_coupled_pendulums', { length_m: 0.5, coupling_percent: 20, start: 'one' });
+    const w1 = Math.sqrt(9.81 / 0.5), w2 = Math.sqrt(9.81 / 0.5 * 1.4);
+    expect(r.result).toMatchObject({ period_in_phase_s: Math.round(2 * Math.PI / w1 * 1000) / 1000,
+      energy_moved_over_after_s: Math.round(Math.PI / (w2 - w1) * 1000) / 1000 });
+    await expect(page.locator('#p-coupled')).toBeVisible();
+    expect((await call(page, 'physics_lab_coupled_pendulums', { start: 'same' })).result.energy_moved_over_after_s).toBe(null);
+  });
 });
 
 test.describe('chain-transaction tools', () => {

@@ -227,6 +227,113 @@ test.describe('light through slits', () => {
   });
 });
 
+// ---- oscillations: reference (independent from mechanics.js) ----
+// exact period of a pendulum as a series: T = T0 · Σ [(2n)! / (2^2n · n!²)]² · k^2n with k = sin(φ0/2)
+const pendulumT = (l, g, deg) => {
+  const k2 = Math.sin(deg * Math.PI / 360) ** 2;
+  let sum = 0, c = 1;
+  for (let n = 0; n < 60; n++) { if (n) c *= (2 * n - 1) / (2 * n); sum += c * c * k2 ** n; }
+  return 2 * Math.PI * Math.sqrt(l / g) * sum;
+};
+const secs = x => `${de(x, 2)} s`;
+const pres = (page, id, label) => page.locator(`#${id} .calc-result`, { has: page.locator('.k', { hasText: label }) }).locator('.v');
+
+test.describe('pendulum', () => {
+  test('simple pendulum: the period does not depend on the mass', async ({ page }) => {
+    await open(page, 'pendulum');
+    await page.locator('#pL').fill('1');
+    await page.locator('#pA').fill('20');
+    await expect(pres(page, 'pRes', 'beide')).toHaveText(secs(pendulumT(1, 9.81, 20)));           // 2,02 s
+    await expect(pres(page, 'pRes', 'kleine Winkel')).toHaveText(secs(2 * Math.PI * Math.sqrt(1 / 9.81))); // 2,01 s
+    for (const m of ['100', '1000']) {
+      await page.locator('#pM2').fill(m);
+      await expect(pres(page, 'pRes', 'beide')).toHaveText(secs(pendulumT(1, 9.81, 20)));
+    }
+    await expect(page.locator('#pWhy')).toContainText('Das rechte Pendel ist 10-mal so schwer wie das linke');
+    await page.locator('#pM1').fill('500'); await page.locator('#pM2').fill('250');
+    await expect(page.locator('#pWhy')).toContainText('Das linke Pendel ist 2-mal so schwer wie das rechte');
+    await page.locator('#pA').fill('80');
+    await expect(pres(page, 'pRes', 'beide')).toHaveText(secs(pendulumT(1, 9.81, 80)));
+    await page.click('#pGrav button:has-text("Mond")');
+    await expect(pres(page, 'pRes', 'kleine Winkel')).toHaveText(secs(2 * Math.PI * Math.sqrt(1 / 1.62)));
+  });
+
+  test('mass on a spring: heavier is slower, gravity does not matter', async ({ page }) => {
+    await open(page, 'pendulum');
+    await page.click('#pKind button:has-text("Federpendel")');
+    await expect(page.locator('#pLField')).toBeHidden();
+    await page.locator('#pK').fill('10'); await page.locator('#pM1').fill('100'); await page.locator('#pM2').fill('400');
+    const T = m => 2 * Math.PI * Math.sqrt(m / 10);
+    await expect(pres(page, 'pRes', 'links')).toHaveText(secs(T(0.1)));
+    await expect(pres(page, 'pRes', 'rechts')).toHaveText(secs(T(0.4)));
+    await expect(pres(page, 'pRes', 'Verhältnis')).toHaveText('2,00');
+    await page.click('#pGrav button:has-text("Mond")');
+    await expect(pres(page, 'pRes', 'rechts')).toHaveText(secs(T(0.4)));
+    await expect(page.locator('#pWhy')).toContainText('Auf dem Mond schwingt das Federpendel genauso schnell');
+  });
+
+  test('the animation measures the period like a stopwatch', async ({ page }) => {
+    await page.clock.install();
+    await page.goto('/physics-lab/');
+    await open(page, 'pendulum');
+    await page.locator('#pL').fill('0.5'); await page.locator('#pA').fill('40');
+    await expect(page.locator('#pMeasured')).toHaveText('Gestoppt wird nach der ersten ganzen Schwingung.');
+    await page.click('#pPlay');
+    await expect(page.locator('#pPlay')).toHaveText('Anhalten');
+    const T = pendulumT(0.5, 9.81, 40);
+    await page.clock.runFor(Math.ceil(T * 1.9 * 1000));
+    await expect(page.locator('#pMeasured')).toHaveText(`Gestoppt: links ${secs(T)} · rechts ${secs(T)}`);
+    // leaving the experiment stops the motion
+    await page.click('[data-overview]');
+    await open(page, 'pendulum');
+    await expect(page.locator('#pPlay')).toHaveText('Loslassen');
+  });
+
+  test('formulas show the cancelled mass', async ({ page }) => {
+    await open(page, 'pendulum');
+    await page.locator('#pL').fill('1');
+    await page.click('#p-pendulum summary:has-text("Formeln")');
+    const tex = (await page.locator('#pMath annotation').allTextContents()).join(' ');
+    expect(tex).toContain('\\cancel{m}\\cdot a=-\\cancel{m}\\cdot g\\cdot\\sin\\varphi\\;\\Rightarrow');
+    expect(tex).toContain('=2\\pi\\sqrt{\\frac{1{,}00\\,\\text{m}}{9{,}81\\,\\text{m/s}^2}}\\approx 2{,}01\\,\\text{s}');
+    await expect(page.locator('#pMath .fallback')).toHaveCount(0);
+    await page.click('#p-pendulum summary:has-text("Warum")');
+    await expect(page.locator('#pExplain .katex')).toHaveCount(4);
+  });
+});
+
+test.describe('coupled pendulums', () => {
+  test('beat period and the energy that moves over', async ({ page }) => {
+    await page.clock.install();
+    await page.goto('/physics-lab/');
+    await open(page, 'coupled');
+    await page.locator('#cL').fill('1'); await page.locator('#cQ').fill('10');
+    const w1 = Math.sqrt(9.81), w2 = Math.sqrt(9.81 * 1.2), beat = 2 * Math.PI / (w2 - w1);
+    await expect(pres(page, 'cRes', 'drüben')).toHaveText(secs(beat / 2));                  // 10,51 s
+    await expect(pres(page, 'cRes', 'gleichsinnig')).toHaveText(secs(2 * Math.PI / w1));
+    await expect(pres(page, 'cRes', 'gegensinnig')).toHaveText(secs(2 * Math.PI / w2));
+    await expect(pres(page, 'cRes', 'Schwebung')).toHaveText(secs(beat));
+    await expect(page.locator('#cE1Lbl')).toHaveText('Energie links: 100 %');
+    await page.click('#cPlay');
+    await page.clock.runFor(Math.round(beat / 2 * 1000));
+    await page.click('#cPlay'); // pause
+    await expect(page.locator('#cE1Lbl')).toHaveText(/Energie links: [01] %/);
+    await expect(page.locator('#cE2Lbl')).toHaveText(/Energie rechts: (99|100) %/);
+  });
+
+  test('normal modes keep their energy', async ({ page }) => {
+    await page.clock.install();
+    await page.goto('/physics-lab/');
+    await open(page, 'coupled');
+    await page.click('#cStart button:has-text("Gleichsinnig")');
+    await expect(pres(page, 'cRes', 'drüben')).toHaveText('nie');
+    await page.click('#cPlay');
+    await page.clock.runFor(7000);
+    await expect(page.locator('#cE1Lbl')).toHaveText('Energie links: 50 %');
+    await expect(page.locator('#cWhy')).toContainText('Feder wird nie gedehnt');
+  });
+});
+
 test.describe('lens', () => {
   test('projector, magnifier and glasses', async ({ page }) => {
     await open(page, 'lens');
@@ -249,7 +356,7 @@ test.describe('lens', () => {
 });
 
 test('open experiments with formulas have no accessibility violations', async ({ page }) => {
-  for (const kind of ['mirror', 'lens', 'waves']) {
+  for (const kind of ['mirror', 'lens', 'waves', 'pendulum', 'coupled']) {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();

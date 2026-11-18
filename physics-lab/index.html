@@ -8,9 +8,9 @@
 <meta name="description" content="Physik zum Ausprobieren: Spiegel, Linsen und Licht durch Spalte mit Reglern, Zeichnung und Formeln mit deinen Werten – jeder Versuch beantwortet eine Warum-Frage, etwa warum das Spiegelbild im Löffel Kopf steht.">
 <meta name="tool:tags" content="Freizeit, Lernen">
 <meta name="tool:features" content="KI-Agent">
-<meta name="tool:webmcp" content="mirror_image, lens_image, slit_pattern">
-<meta name="tool:webmcp-help" content="Ein KI-Agent kann Spiegel und Linse einstellen (Krümmung bzw. Brechkraft und Gegenstandsweite) und bekommt Bildweite, Abbildungsmaßstab und Bildart zurück. Beim Versuch mit den Spalten stellt er Zahl der Spalte, Wellenlänge, Spaltabstand und Spaltbreite ein und bekommt die Lage der hellen Streifen.">
-<meta name="tool:webmcp-help-en" content="An AI agent can set up the mirror and the lens (curvature or power and object distance) and gets back the image distance, magnification and kind of image. In the slit experiment it sets the number of slits, wavelength, slit spacing and slit width and gets the positions of the bright fringes.">
+<meta name="tool:webmcp" content="mirror_image, lens_image, slit_pattern, pendulum_period, coupled_pendulums">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Spiegel und Linse einstellen (Krümmung bzw. Brechkraft und Gegenstandsweite) und bekommt Bildweite, Abbildungsmaßstab und Bildart zurück. Beim Versuch mit den Spalten stellt er Zahl der Spalte, Wellenlänge, Spaltabstand und Spaltbreite ein und bekommt die Lage der hellen Streifen. Bei den Pendeln stellt er Art, Länge oder Federhärte, Massen, Auslenkung und Ort bzw. die Kopplung ein und bekommt Schwingungsdauern und die Zeit, bis die Energie hinübergewandert ist.">
+<meta name="tool:webmcp-help-en" content="An AI agent can set up the mirror and the lens (curvature or power and object distance) and gets back the image distance, magnification and kind of image. In the slit experiment it sets the number of slits, wavelength, slit spacing and slit width and gets the positions of the bright fringes. For the pendulums it sets the kind, length or spring constant, masses, displacement and place, or the coupling, and gets the periods and the time until the energy has moved over.">
 <meta name="tool:icon" content="atom">
 <meta name="tool:color" content="#6a3fb5">
 <meta name="tool:short-name" content="Physik">
@@ -20,7 +20,7 @@
 <meta name="tool:storage" content="physics-lab.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-2PkjnMfwYGsursBE1CTU/sdP5/Fk6P0JSGQmH5naWbM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-l35a6f3Ww+EnKH9NHyefZ8K1hzlAbBaRz20gvIRoKKs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -69,6 +69,25 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
 .mathgrid h3{font-size:14px;margin:14px 0 4px;color:var(--muted)}
 .mathgrid p{margin:6px 0;font-size:15px}
 .mathgrid ul{font-size:13px;color:var(--muted);margin:6px 0 0;padding-inline-start:18px}
+/* Oscillations: pendulums (SVG, animated while running), time graphs, energy meters */
+.osc svg{display:block;width:100%;touch-action:auto;cursor:default}
+.osc .ceil{stroke:var(--muted);stroke-width:2}
+.osc .thread{stroke:var(--text);stroke-width:1.5}
+.osc .spring{stroke:var(--text);stroke-width:1.6;fill:none;stroke-linejoin:round}
+.osc .bob1{fill:var(--accent)}
+.osc .bob2{fill:var(--warn)}
+.osc .blbl{fill:var(--text);font:600 12px var(--font)}
+.osc .scale{stroke:var(--muted);stroke-width:1.5}
+.osc .tr1{fill:none;stroke:var(--accent);stroke-width:2}
+.osc .tr2{fill:none;stroke:var(--warn);stroke-width:2;stroke-dasharray:6 3}
+.osc .cursor{stroke:var(--text);stroke-width:1.2;stroke-dasharray:3 3}
+.osc.graph{margin-top:12px}
+.play-row{margin:10px 0 0}
+.measured{font-size:14px;color:var(--muted);margin:0 2px 12px;font-variant-numeric:tabular-nums}
+.lbl-like{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.energy{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0 0;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.energy .meter{margin-top:4px}
+.legend .sw-b{color:var(--warn)}.legend .sw-b i{border-top-style:dashed}
 /* Light through slits: screen (canvas), intensity graph, phasor diagram */
 .wscene canvas{display:block;width:100%;height:48px;background:#000}
 .wscene .curve{fill:var(--accent);fill-opacity:.16;stroke:var(--accent);stroke-width:2;stroke-linejoin:round}
@@ -102,6 +121,11 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
     <button type="button" data-open="mirror"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#hemisphere"/></svg><span data-i18n="mirror">Gewölbter Spiegel</span></button>
     <button type="button" data-open="lens"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#lens-convex"/></svg><span data-i18n="lens">Linse</span></button>
   </div>
+  <h2 data-i18n="g.osc">Schwingungen</h2>
+  <div class="tiles">
+    <button type="button" data-open="pendulum"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#pendulum"/></svg><span data-i18n="pend">Pendel</span></button>
+    <button type="button" data-open="coupled"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-exchange"/></svg><span data-i18n="coup">Gekoppelte Pendel</span></button>
+  </div>
   <h2 data-i18n="g.waves">Wellen</h2>
   <div class="tiles">
     <button type="button" data-open="waves"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#wave-sine"/></svg><span data-i18n="waves">Licht durch Spalte</span></button>
@@ -113,6 +137,8 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
   <div class="tabs" role="tablist" aria-label="Versuch wählen" data-i18n-attr="aria-label:tabs">
     <button type="button" role="tab" class="tab" id="tab-mirror" aria-controls="p-mirror" data-tab="mirror"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#hemisphere"/></svg><span data-i18n="mirror.short">Spiegel</span></button>
     <button type="button" role="tab" class="tab" id="tab-lens" aria-controls="p-lens" data-tab="lens"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#lens-convex"/></svg><span data-i18n="lens">Linse</span></button>
+    <button type="button" role="tab" class="tab" id="tab-pendulum" aria-controls="p-pendulum" data-tab="pendulum"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#pendulum"/></svg><span data-i18n="pend.short">Pendel</span></button>
+    <button type="button" role="tab" class="tab" id="tab-coupled" aria-controls="p-coupled" data-tab="coupled"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-exchange"/></svg><span data-i18n="coup.short">Gekoppelt</span></button>
     <button type="button" role="tab" class="tab" id="tab-waves" aria-controls="p-waves" data-tab="waves"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#wave-sine"/></svg><span data-i18n="waves.short">Spalte</span></button>
   </div>
 </div>
@@ -153,6 +179,66 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
   <div class="calc-results" data-part="res"></div>
   <p class="notice info why" data-part="why"></p>
   <details class="sub"><summary data-i18n="math">Formeln mit deinen Werten</summary><div class="mathgrid" data-part="math"></div></details>
+</section>
+
+<section class="card panel" id="p-pendulum" role="tabpanel" aria-labelledby="tab-pendulum" hidden>
+  <h2 data-i18n="pend">Pendel</h2>
+  <p class="intro" data-i18n="pend.intro">Zwei Pendel nebeneinander, rechts mit anderer Masse. Lass sie los und vergleiche: Schwingen sie im Takt?</p>
+  <div class="seg" role="group" aria-label="Art des Pendels" data-i18n-attr="aria-label:pend.kind" id="pKind">
+    <button type="button" aria-pressed="true" data-v="string"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#pendulum"/></svg><span data-i18n="pend.string">Fadenpendel</span></button>
+    <button type="button" aria-pressed="false" data-v="spring"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-exchange"/></svg><span data-i18n="pend.spring">Federpendel</span></button>
+  </div>
+  <div class="scene osc"><svg id="pSvg" viewBox="0 0 360 250" role="img"></svg></div>
+  <div class="row play-row">
+    <button type="button" class="btn primary" id="pPlay"></button>
+    <button type="button" class="btn" id="pReset"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-skip-back"/></svg><span data-i18n="toStart">Zum Anfang</span></button>
+  </div>
+  <div class="scene osc graph"><svg id="pGraph" role="img"></svg></div>
+  <ul class="legend" id="pLegend"></ul>
+  <p class="measured" id="pMeasured"></p>
+  <div class="form-field range" id="pLField"><label for="pL"><span data-i18n="pend.l">Fadenlänge l</span> <output id="pLOut" for="pL"></output></label><input type="range" id="pL" min="0.2" max="2" step="0.05"></div>
+  <div class="form-field range" id="pKField"><label for="pK"><span data-i18n="pend.k">Federhärte k</span> <output id="pKOut" for="pK"></output></label><input type="range" id="pK" min="2" max="50" step="1"></div>
+  <div class="form-field range"><label for="pM1"><span data-i18n="pend.m1">Masse links m₁</span> <output id="pM1Out" for="pM1"></output></label><input type="range" id="pM1" min="50" max="1000" step="50"></div>
+  <div class="form-field range"><label for="pM2"><span data-i18n="pend.m2">Masse rechts m₂</span> <output id="pM2Out" for="pM2"></output></label><input type="range" id="pM2" min="50" max="1000" step="50"></div>
+  <div class="form-field range"><label for="pA"><span data-i18n="pend.a">Auslenkung beim Loslassen</span> <output id="pAOut" for="pA"></output></label><input type="range" id="pA" min="5" max="80" step="5"></div>
+  <div class="form-field" id="pGField"><span class="lbl-like" id="pGLbl" data-i18n="pend.g">Ort</span>
+    <div class="seg" role="group" aria-labelledby="pGLbl" id="pGrav">
+      <button type="button" aria-pressed="true" data-v="earth"><span data-i18n="earth">Erde</span></button>
+      <button type="button" aria-pressed="false" data-v="moon"><span data-i18n="moon">Mond</span></button>
+      <button type="button" aria-pressed="false" data-v="mars"><span data-i18n="mars">Mars</span></button>
+    </div>
+  </div>
+  <div class="calc-results" id="pRes"></div>
+  <p class="notice info why" id="pWhy"></p>
+  <details class="sub"><summary data-i18n="math">Formeln mit deinen Werten</summary><div class="mathgrid" id="pMath"></div></details>
+  <details class="sub"><summary data-i18n="pend.whyH">Warum hängt die Schwingungsdauer beim Fadenpendel nicht von der Masse ab?</summary><div class="mathgrid" id="pExplain"></div></details>
+</section>
+
+<section class="card panel" id="p-coupled" role="tabpanel" aria-labelledby="tab-coupled" hidden>
+  <h2 data-i18n="coup">Gekoppelte Pendel</h2>
+  <p class="intro" data-i18n="coup.intro">Zwei gleiche Pendel, verbunden mit einer weichen Feder. Stößt man eines an, wandert die Bewegung langsam zum anderen – und wieder zurück.</p>
+  <div class="seg" role="group" aria-label="Start" data-i18n-attr="aria-label:coup.start" id="cStart">
+    <button type="button" aria-pressed="true" data-v="one"><span data-i18n="coup.one">Links angestoßen</span></button>
+    <button type="button" aria-pressed="false" data-v="same"><span data-i18n="coup.same">Gleichsinnig</span></button>
+    <button type="button" aria-pressed="false" data-v="opposite"><span data-i18n="coup.opp">Gegensinnig</span></button>
+  </div>
+  <div class="scene osc"><svg id="cSvg" viewBox="0 0 360 230" role="img"></svg></div>
+  <div class="energy">
+    <div><span id="cE1Lbl"></span><div class="meter"><i id="cE1"></i></div></div>
+    <div><span id="cE2Lbl"></span><div class="meter warn"><i id="cE2"></i></div></div>
+  </div>
+  <div class="row play-row">
+    <button type="button" class="btn primary" id="cPlay"></button>
+    <button type="button" class="btn" id="cReset"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-skip-back"/></svg><span data-i18n="toStart">Zum Anfang</span></button>
+  </div>
+  <div class="scene osc graph"><svg id="cGraph" role="img"></svg></div>
+  <ul class="legend" id="cLegend"></ul>
+  <div class="form-field range"><label for="cL"><span data-i18n="pend.l">Fadenlänge l</span> <output id="cLOut" for="cL"></output></label><input type="range" id="cL" min="0.3" max="1.5" step="0.05"></div>
+  <div class="form-field range"><label for="cQ"><span data-i18n="coup.q">Kopplung (Federhärte)</span> <output id="cQOut" for="cQ"></output></label><input type="range" id="cQ" min="2" max="50" step="1"></div>
+  <div class="calc-results" id="cRes"></div>
+  <p class="notice info why" id="cWhy"></p>
+  <details class="sub"><summary data-i18n="math">Formeln mit deinen Werten</summary><div class="mathgrid" id="cMath"></div></details>
+  <details class="sub"><summary data-i18n="coup.whyH">Warum wandert die Energie hin und her?</summary><div class="mathgrid" id="cExplain"></div></details>
 </section>
 
 <section class="card panel" id="p-waves" role="tabpanel" aria-labelledby="tab-waves" hidden>
@@ -208,6 +294,8 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
     <li><b>Krümmung</b> beim Spiegel: rechts hohl (wie der Löffel innen), in der Mitte eben, links gewölbt (wie der Löffel außen). Je weiter außen, desto stärker gekrümmt (kleinerer Radius r).</li>
     <li><b>Brechkraft</b> bei der Linse in Dioptrien (dpt): plus = Sammellinse, minus = Zerstreuungslinse; f = 1/D.</li>
     <li>Die <b>Beispiele</b> stellen typische Fälle ein: Löffel, Kosmetikspiegel, Lupe, Kamera, Projektor, Brille.</li>
+    <li><b>Pendel:</b> Mit <b>Loslassen</b> startet die Bewegung, <b>Zum Anfang</b> setzt sie zurück; beim Ändern eines Reglers beginnt sie neu. Die Kurve zeigt die Auslenkung der letzten 8 Sekunden, darunter die gestoppte Schwingungsdauer. Das Fadenpendel wird exakt gerechnet (auch große Winkel), die Massen sind als Punktmassen am masselosen Faden gedacht. Die Animation läuft nur, solange der Versuch offen und die Seite sichtbar ist.</li>
+    <li><b>Gekoppelte Pendel:</b> Die Kopplung gibt an, wie stark die Feder im Vergleich zur Schwerkraft zieht (in % von g/l). Die Energiebalken zeigen die Energie jedes Pendels (ohne den kleinen Anteil in der Feder), die Kurve den ganzen Verlauf mit einer Linie für „jetzt“.</li>
     <li><b>Licht durch Spalte:</b> Oben siehst du das Schirmbild, darunter die Helligkeit als Kurve. Zieh über beide oder nimm den Regler <b>Stelle auf dem Schirm</b>: Das Zeigerdiagramm zeigt für diese Stelle je Spalt einen Zeiger – zeigen alle gleich, ist es hell; schließen sie sich zum Vieleck, ist es dunkel. Die gestrichelte Kurve ist der Einfluss der Spaltbreite (Einzelspalt), er dämpft die äußeren Streifen.</li>
   </ul>
   <h3>Die Zeichnung lesen</h3>
@@ -231,6 +319,8 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
     <li><b>Curvature</b> of the mirror: right is concave (like the inside of a spoon), the middle is flat, left is convex (like the back of a spoon). The further out, the stronger the curvature (smaller radius r).</li>
     <li><b>Power</b> of the lens in dioptres (D): plus = converging lens, minus = diverging lens; f = 1/D.</li>
     <li>The <b>examples</b> set typical cases: spoon, make-up mirror, magnifier, camera, projector, glasses.</li>
+    <li><b>Pendulum:</b> <b>Let go</b> starts the motion, <b>Back to start</b> resets it; changing a slider starts over. The curve shows the displacement over the last 8 seconds, below it the timed period. The simple pendulum is calculated exactly (large angles too), the masses are point masses on a massless string. The animation only runs while the experiment is open and the page is visible.</li>
+    <li><b>Coupled pendulums:</b> the coupling says how strongly the spring pulls compared with gravity (in % of g/l). The energy bars show the energy of each pendulum (without the small share in the spring), the curve the whole course with a line for “now”.</li>
     <li><b>Light through slits:</b> at the top you see the screen image, below it the brightness as a curve. Drag across both or use the <b>position on the screen</b> slider: the phasor diagram shows one phasor per slit for that spot – if they all point the same way it is bright; if they close into a polygon it is dark. The dashed curve is the effect of the slit width (single slit), which dims the outer fringes.</li>
   </ul>
   <h3>Reading the drawing</h3>
@@ -248,11 +338,11 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
   <!-- agent:start -->
   <div data-lang="de">
   <h3>KI-Agenten (WebMCP)</h3>
-  <p>Ein KI-Agent kann Spiegel und Linse einstellen (Krümmung bzw. Brechkraft und Gegenstandsweite) und bekommt Bildweite, Abbildungsmaßstab und Bildart zurück. Beim Versuch mit den Spalten stellt er Zahl der Spalte, Wellenlänge, Spaltabstand und Spaltbreite ein und bekommt die Lage der hellen Streifen. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  <p>Ein KI-Agent kann Spiegel und Linse einstellen (Krümmung bzw. Brechkraft und Gegenstandsweite) und bekommt Bildweite, Abbildungsmaßstab und Bildart zurück. Beim Versuch mit den Spalten stellt er Zahl der Spalte, Wellenlänge, Spaltabstand und Spaltbreite ein und bekommt die Lage der hellen Streifen. Bei den Pendeln stellt er Art, Länge oder Federhärte, Massen, Auslenkung und Ort bzw. die Kopplung ein und bekommt Schwingungsdauern und die Zeit, bis die Energie hinübergewandert ist. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
   <h3>AI agents (WebMCP)</h3>
-  <p>An AI agent can set up the mirror and the lens (curvature or power and object distance) and gets back the image distance, magnification and kind of image. In the slit experiment it sets the number of slits, wavelength, slit spacing and slit width and gets the positions of the bright fringes. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  <p>An AI agent can set up the mirror and the lens (curvature or power and object distance) and gets back the image distance, magnification and kind of image. In the slit experiment it sets the number of slits, wavelength, slit spacing and slit width and gets the positions of the bright fringes. For the pendulums it sets the kind, length or spring constant, masses, displacement and place, or the coupling, and gets the periods and the time until the energy has moved over. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
   </div>
   <!-- agent:end -->
   <h3 data-i18n="diag.h">Fehlersuche</h3>
@@ -265,7 +355,7 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
   <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 512b537e5379</p>
+  <p class="footer-version">Version 9dc0f232032b</p>
   <!-- footer:end -->
 </footer>
 
@@ -274,6 +364,7 @@ main{max-width:920px;margin-inline:auto;padding:12px;display:grid;gap:14px}
 <script src="../assets/shared/toolbox.js"></script>
 <script src="optics.js"></script>
 <script src="waves.js"></script>
+<script src="mechanics.js"></script>
 <script>
 (function(){
 'use strict';
@@ -417,6 +508,96 @@ Tools.i18n({
     'mcp.waves':'slits set'
   }
 });
+// Oscillations
+Tools.i18n({
+  de:{
+    play:'Loslassen',pause:'Anhalten','play.c':'Anstoßen',
+    'p.m':'{m} g','p.l':'{l} m','p.k':'{k} N/m','p.deg':'{a}°','p.cm':'{a} cm','p.q':'{q} %',
+    'p.lg.1':'links (m₁)','p.lg.2':'rechts (m₂)','p.lg.t':'Auslenkung über der Zeit',
+    'p.meas':'Gestoppt: links {a} · rechts {b}','p.measWait':'Gestoppt wird nach der ersten ganzen Schwingung.','p.s':'{t} s',
+    'p.svg':'{kind}: links {m1} g, rechts {m2} g','p.graph':'Auslenkung beider Pendel in den letzten 8 Sekunden',
+    'p.res.both':'Schwingungsdauer T (beide)','p.res.small':'Formel für kleine Winkel','p.res.more':'Länger durch großen Winkel',
+    'p.res.T1':'Schwingungsdauer links','p.res.T2':'Schwingungsdauer rechts','p.res.ratio':'Verhältnis T₂ : T₁',
+    'p.why.sEq':'Beide Massen sind gleich. Stell rechts eine andere Masse ein – die Pendel bleiben trotzdem im Takt.',
+    'side.r':'rechte','side.l':'linke',
+    'p.why.sDiff':'Das {h} Pendel ist {r}-mal so schwer wie das {o} – und schwingt trotzdem genau im Takt. Die Schwerkraft zieht an der schweren Kugel zwar stärker, aber sie ist auch genauso viel träger: Die Masse kürzt sich heraus.',
+    'p.why.big':'Bei {a}° braucht das Pendel {p} länger, als die einfache Formel sagt – sie gilt nur für kleine Winkel.',
+    'p.why.fEq':'Beide Massen sind gleich. Stell verschiedene Massen ein – beim Federpendel macht das einen Unterschied.',
+    'p.why.fDiff':'Das {h} Pendel ist {r}-mal so schwer wie das {o} und schwingt langsamer: Die Feder zieht beide mit derselben Kraft k·x, aber die schwere Kugel ist träger. T wächst mit der Wurzel der Masse.',
+    'p.why.fG':'Auf {place} schwingt das Federpendel genauso schnell wie auf der Erde – g kommt in seiner Formel nicht vor.',
+    'p.place.moon':'dem Mond','p.place.mars':'dem Mars',
+    'p.m.force':'Rückstellkraft','p.m.newton':'Newton: Masse mal Beschleunigung','p.m.T':'Schwingungsdauer','p.m.big':'Großer Winkel (Näherung, die App rechnet exakt)',
+    'p.m.l.cancel':'m steht auf beiden Seiten und kürzt sich heraus.','p.m.l.small':'Für kleine Winkel ist sin φ ≈ φ (φ im Bogenmaß).',
+    'p.m.l.spring':'Hier kürzt sich m nicht: Die Federkraft hängt nicht von der Masse ab.',
+    'p.x.p1':'Die Schwerkraft zieht an einer schweren Kugel stärker als an einer leichten – doppelte Masse, doppelte Kraft. Den Faden entlang wirkt davon nur der Teil, der die Kugel zur Mitte zurückzieht:',
+    'p.x.p2':'Um eine doppelt so schwere Kugel gleich schnell zu bewegen, braucht man aber auch die doppelte Kraft (Trägheit). Nach Newton gilt:',
+    'p.x.p3':'Die Masse steht auf beiden Seiten und fällt weg. Jede Kugel bekommt bei gleichem Winkel dieselbe Beschleunigung – genau wie beim freien Fall, wo ein schwerer und ein leichter Stein (ohne Luft) gleich schnell fallen. Deshalb hängt die Schwingungsdauer nur von Länge und Schwerkraft ab:',
+    'p.x.p4':'Beim Federpendel ist das anders: Die Feder zieht mit k·x, egal wie schwer die Kugel ist. Eine schwere Kugel wird davon langsamer beschleunigt:',
+    'p.x.p5':'Dafür ist dem Federpendel die Schwerkraft egal – es schwingt auf dem Mond genauso schnell wie auf der Erde. Probier beides aus.',
+    'c.e':'Energie {side}: {p}','c.left':'links','c.right':'rechts',
+    'c.lg.1':'linkes Pendel','c.lg.2':'rechtes Pendel','c.lg.t':'Senkrechte Linie: jetzt',
+    'c.svg':'Zwei Pendel mit Feder, {start}','c.graph':'Auslenkung beider Pendel über {s} Sekunden',
+    'c.res.T1':'Schwingungsdauer gleichsinnig','c.res.T2':'Schwingungsdauer gegensinnig','c.res.beat':'Schwebungsdauer','c.res.half':'Energie ganz drüben nach','c.never':'nie',
+    'c.why.one':'Links angestoßen: Diese Bewegung ist eine Mischung aus den zwei Eigenschwingungen – gleichsinnig (T₁) und gegensinnig (T₂, etwas schneller). Sie laufen langsam auseinander: Nach {h} heben sie sich beim linken Pendel auf, und die ganze Energie steckt im rechten. Dann geht es zurück.',
+    'c.why.same':'Gleichsinnig: Die Feder wird nie gedehnt und überträgt nichts. Jedes Pendel behält seine Energie – das ist die erste Eigenschwingung.',
+    'c.why.opp':'Gegensinnig: Die Feder zieht beide Pendel zusätzlich zur Mitte, deshalb schwingen sie etwas schneller (T₂ < T₁). Auch hier bleibt die Energie, wo sie ist – das ist die zweite Eigenschwingung.',
+    'c.m.w':'Eigenschwingungen','c.m.beat':'Schwebung','c.m.sol':'Lösung für „links angestoßen“',
+    'c.m.l.kappa':'κ: Kopplung durch die Feder (hier {q} % von g/l).','c.m.l.sol':'Der erste Faktor ändert sich langsam: Er verteilt die Bewegung zwischen den beiden Pendeln.',
+    'c.x.p1':'Zwei gekoppelte Pendel haben zwei besondere Bewegungen, bei denen nichts wandert: gleichsinnig (die Feder bleibt locker, Kreisfrequenz ω₁) und gegensinnig (die Feder zieht mit, etwas schneller, ω₂):',
+    'c.x.p2':'Stößt man nur das linke an, ist das die Summe aus beiden, halb und halb. Weil ω₂ etwas größer ist, gerät die gegensinnige Schwingung langsam aus dem Takt. Mit einer Formel aus der Trigonometrie wird daraus:',
+    'c.x.p3':'Der schnelle Faktor ist das Schwingen, der langsame Faktor davor bestimmt, wie weit jedes Pendel ausschlägt. Ist cos(Δω t/2) = 0, steht das linke Pendel still und das rechte schwingt voll – die Energie ist ganz hinübergewandert. Das passiert nach einer halben Schwebungsdauer:',
+    'c.x.p4':'Je schwächer die Feder, desto ähnlicher sind ω₁ und ω₂ – und desto länger dauert das Hinüberwandern. Probier eine schwache und eine starke Kopplung aus, und stoße die Pendel gleichsinnig oder gegensinnig an: Dann wandert nichts.',
+    'mcp.pend':'Pendel eingestellt','mcp.coup':'Gekoppelte Pendel eingestellt'
+  },
+  en:{
+    'g.osc':'Oscillations',pend:'Pendulum','pend.short':'Pendulum',coup:'Coupled pendulums','coup.short':'Coupled',
+    'pend.intro':'Two pendulums side by side, the right one with a different mass. Let them go and compare: do they swing in step?',
+    'pend.kind':'Kind of pendulum','pend.string':'Simple pendulum','pend.spring':'Mass on a spring',
+    toStart:'Back to start','pend.l':'Length l','pend.k':'Spring constant k','pend.m1':'Mass left m₁','pend.m2':'Mass right m₂','pend.a':'Displacement when let go',
+    'pend.g':'Place',earth:'Earth',moon:'Moon',mars:'Mars',
+    'pend.whyH':'Why does the period of a simple pendulum not depend on the mass?',
+    'coup.intro':'Two equal pendulums joined by a soft spring. Push one and its motion slowly moves over to the other – and back again.',
+    'coup.start':'Start','coup.one':'Left pushed','coup.same':'In phase','coup.opp':'Opposite','coup.q':'Coupling (spring stiffness)',
+    'coup.whyH':'Why does the energy move back and forth?',
+    play:'Let go',pause:'Pause','play.c':'Push',
+    'p.m':'{m} g','p.l':'{l} m','p.k':'{k} N/m','p.deg':'{a}°','p.cm':'{a} cm','p.q':'{q} %',
+    'p.lg.1':'left (m₁)','p.lg.2':'right (m₂)','p.lg.t':'Displacement over time',
+    'p.meas':'Timed: left {a} · right {b}','p.measWait':'Timing starts after the first full swing.','p.s':'{t} s',
+    'p.svg':'{kind}: left {m1} g, right {m2} g','p.graph':'Displacement of both pendulums over the last 8 seconds',
+    'p.res.both':'Period T (both)','p.res.small':'Formula for small angles','p.res.more':'Longer due to large angle',
+    'p.res.T1':'Period left','p.res.T2':'Period right','p.res.ratio':'Ratio T₂ : T₁',
+    'p.why.sEq':'Both masses are equal. Set a different mass on the right – the pendulums still stay in step.',
+    'side.r':'right','side.l':'left',
+    'p.why.sDiff':'The {h} pendulum is {r} times as heavy as the {o} one – and still swings exactly in step. Gravity pulls harder on the heavy ball, but it is also just as much more sluggish: the mass cancels out.',
+    'p.why.big':'At {a}° the pendulum takes {p} longer than the simple formula says – it only holds for small angles.',
+    'p.why.fEq':'Both masses are equal. Set different masses – for a mass on a spring it makes a difference.',
+    'p.why.fDiff':'The {h} pendulum is {r} times as heavy as the {o} one and swings more slowly: the spring pulls both with the same force k·x, but the heavy ball is more sluggish. T grows with the square root of the mass.',
+    'p.why.fG':'On {place} the mass on a spring swings just as fast as on Earth – g does not appear in its formula.',
+    'p.place.moon':'the Moon','p.place.mars':'Mars',
+    'p.m.force':'Restoring force','p.m.newton':'Newton: mass times acceleration','p.m.T':'Period','p.m.big':'Large angle (approximation, the app calculates exactly)',
+    'p.m.l.cancel':'m is on both sides and cancels out.','p.m.l.small':'For small angles sin φ ≈ φ (φ in radians).',
+    'p.m.l.spring':'Here m does not cancel: the spring force does not depend on the mass.',
+    'p.x.p1':'Gravity pulls harder on a heavy ball than on a light one – double the mass, double the force. Along the string only the part that pulls the ball back to the middle counts:',
+    'p.x.p2':'But to move a ball twice as heavy just as fast, you also need twice the force (inertia). Newton says:',
+    'p.x.p3':'The mass is on both sides and drops out. At the same angle every ball gets the same acceleration – just like in free fall, where a heavy and a light stone (without air) fall equally fast. That is why the period only depends on length and gravity:',
+    'p.x.p4':'A mass on a spring is different: the spring pulls with k·x, however heavy the ball is. A heavy ball is accelerated more slowly by it:',
+    'p.x.p5':'In return, gravity does not matter to the spring – it swings on the Moon just as fast as on Earth. Try both.',
+    'c.e':'Energy {side}: {p}','c.left':'left','c.right':'right',
+    'c.lg.1':'left pendulum','c.lg.2':'right pendulum','c.lg.t':'Vertical line: now',
+    'c.svg':'Two pendulums with a spring, {start}','c.graph':'Displacement of both pendulums over {s} seconds',
+    'c.res.T1':'Period in phase','c.res.T2':'Period opposite','c.res.beat':'Beat period','c.res.half':'All energy on the other side after','c.never':'never',
+    'c.why.one':'Left pushed: this motion is a mix of the two normal modes – in phase (T₁) and opposite (T₂, a little faster). They slowly drift apart: after {h} they cancel for the left pendulum and all the energy is in the right one. Then it goes back.',
+    'c.why.same':'In phase: the spring is never stretched and passes nothing on. Each pendulum keeps its energy – this is the first normal mode.',
+    'c.why.opp':'Opposite: the spring also pulls both pendulums towards the middle, so they swing a little faster (T₂ < T₁). Here too the energy stays where it is – this is the second normal mode.',
+    'c.m.w':'Normal modes','c.m.beat':'Beat','c.m.sol':'Solution for “left pushed”',
+    'c.m.l.kappa':'κ: coupling by the spring (here {q} % of g/l).','c.m.l.sol':'The first factor changes slowly: it shares the motion between the two pendulums.',
+    'c.x.p1':'Two coupled pendulums have two special motions in which nothing moves over: in phase (the spring stays slack, angular frequency ω₁) and opposite (the spring joins in, a little faster, ω₂):',
+    'c.x.p2':'Pushing only the left one is the sum of both, half and half. Because ω₂ is a little larger, the opposite motion slowly gets out of step. A trigonometric identity turns this into:',
+    'c.x.p3':'The fast factor is the swinging, the slow factor in front decides how far each pendulum swings. When cos(Δω t/2) = 0 the left pendulum stands still and the right one swings fully – the energy has moved over completely. This happens after half a beat period:',
+    'c.x.p4':'The softer the spring, the closer ω₁ and ω₂ – and the longer the energy takes to move over. Try a weak and a strong coupling, and push the pendulums in phase or opposite: then nothing moves over.',
+    'mcp.pend':'pendulum set','mcp.coup':'coupled pendulums set'
+  }
+});
 const t=Tools.t;
 const O=window.Optics;
 const G=8; // object height in cm
@@ -429,7 +610,7 @@ const LS='physics-lab.settings.v1';
 const S={view:'overview',tab:'mirror',mirror:{v:30,g:30},lens:{v:10,g:6},waves:{n:2,l:650,d:10,a:2,p:0.3}};
 {const o=Tools.load(LS,null);if(o&&typeof o==='object'){
   if(o.view==='tool')S.view='tool';
-  if(['mirror','lens','waves'].includes(o.tab))S.tab=o.tab;
+  if(['mirror','lens','waves','pendulum','coupled'].includes(o.tab))S.tab=o.tab;
   if(o.waves&&typeof o.waves==='object')for(const k of Object.keys(S.waves))if(Number.isFinite(o.waves[k]))S.waves[k]=o.waves[k];
   for(const k of ['mirror','lens'])if(o[k]&&typeof o[k]==='object'){
     if(Number.isFinite(o[k].v))S[k].v=snap(o[k].v,LIMITS[k].min,LIMITS[k].max);
@@ -677,11 +858,11 @@ for(const P of Object.values(panels)){
   });
   P.svg.addEventListener('pointercancel',end);
 }
-const resized=()=>{for(const k in panels)schedule(k);scheduleWaves();};
+const resized=()=>{for(const k in panels)schedule(k);scheduleWaves();if(!anim.run){renderPend();renderCoup();}};
 if('ResizeObserver' in window){
   const ro=new ResizeObserver(resized);
   for(const P of Object.values(panels))ro.observe(P.svg.parentNode);
-  ro.observe(Tools.$('wScene'));
+  ro.observe(Tools.$('wScene'));ro.observe(Tools.$('pGraph').parentNode);ro.observe(Tools.$('cGraph').parentNode);
 }else window.addEventListener('resize',resized);
 
 /* ---------- Spoon explanation: worked example with the values of the preset "Spoon, inside" ---------- */
@@ -881,16 +1062,267 @@ for(const c of document.querySelectorAll('#wPresets button'))c.addEventListener(
   sc.addEventListener('pointercancel',()=>{drag=null;});
 }
 
+/* ---------- Oscillations (mechanics.js): pendulum and coupled pendulums ---------- */
+const Mx=window.Mechanics;
+const GRAV={earth:9.81,moon:1.62,mars:3.71};
+const PLIM={l:[0.2,2,0.05],k:[2,50,1],m1:[50,1000,50],m2:[50,1000,50],aS:[5,80,5],aF:[2,15,1]};
+const CLIM={l:[0.3,1.5,0.05],q:[2,50,1]};
+const lsnap=(lim,x)=>{const [lo,hi,st]=lim;return Math.round(Math.min(hi,Math.max(lo,Math.round(x/st)*st))*100)/100;};
+{const o=Tools.load(LS,null)||{};
+  S.pend={kind:'string',grav:'earth',l:1,k:10,m1:100,m2:500,aS:20,aF:10};
+  S.coup={l:1,q:10,start:'one'};
+  if(o.pend&&typeof o.pend==='object'){
+    if(o.pend.kind==='spring')S.pend.kind='spring';
+    if(GRAV[o.pend.grav])S.pend.grav=o.pend.grav;
+    for(const k in PLIM)if(Number.isFinite(o.pend[k]))S.pend[k]=lsnap(PLIM[k],o.pend[k]);
+  }
+  if(o.coup&&typeof o.coup==='object'){
+    if(['one','same','opposite'].includes(o.coup.start))S.coup.start=o.coup.start;
+    for(const k in CLIM)if(Number.isFinite(o.coup[k]))S.coup[k]=lsnap(CLIM[k],o.coup[k]);
+  }
+}
+const secs=x=>t('p.s',{t:Tools.fmt(x,2)});
+
+/* one animation loop for the experiment that runs; it stops when the page is hidden or the experiment closed */
+const anim={kind:null,run:false,last:null,raf:0};
+function animFrame(ts){
+  if(!anim.run)return;
+  const dt=anim.last==null?0:Math.min(0.05,(ts-anim.last)/1000);anim.last=ts;
+  if(anim.kind==='pendulum'){PS.a.advance(dt);PS.b.advance(dt);PS.trace.push([PS.a.t,PS.a.y,PS.b.y]);
+    while(PS.trace.length&&PS.trace[0][0]<PS.a.t-8.2)PS.trace.shift();drawPend();}
+  else{CS.t+=dt;drawCoup();}
+  anim.raf=requestAnimationFrame(animFrame);
+}
+function playBtn(id,running,word){
+  const b=Tools.$(id);b.innerHTML=Tools.icon(running?'player-pause':'player-play')+'<span></span>';
+  b.querySelector('span').textContent=running?t('pause'):t(word);
+}
+function setRun(kind,on){
+  if(on){anim.kind=kind;anim.run=true;anim.last=null;cancelAnimationFrame(anim.raf);anim.raf=requestAnimationFrame(animFrame);Tools.diag.log('run',{kind});}
+  else if(anim.run&&(!kind||anim.kind===kind)){anim.run=false;cancelAnimationFrame(anim.raf);}
+  playBtn('pPlay',anim.run&&anim.kind==='pendulum','play');
+  playBtn('cPlay',anim.run&&anim.kind==='coupled','play.c');
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)setRun(null,false);});
+
+/* ---------- Pendulum ---------- */
+let PS=null;
+const pg=()=>GRAV[S.pend.grav];
+const amp0=()=>S.pend.kind==='string'?S.pend.aS*Math.PI/180:S.pend.aF/100;
+function resetPend(){
+  const p=S.pend,par=m=>p.kind==='string'?{l:p.l,g:pg()}:{k:p.k,m:m/1000};
+  PS={a:Mx.oscillator(p.kind,par(p.m1),amp0()),b:Mx.oscillator(p.kind,par(p.m2),amp0()),trace:[[0,amp0(),amp0()]]};
+}
+const bobR=m=>6+12*Math.cbrt(m/1000);
+function zigzag(x1,y1,x2,y2,n,w){
+  const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,pts=[[x1,y1]];
+  const a=len*0.12,b=len*0.88;
+  pts.push([x1+ux*a,y1+uy*a]);
+  for(let i=0;i<n;i++){const s=a+(b-a)*(i+0.5)/n,sg=i%2?-1:1;pts.push([x1+ux*s-uy*w*sg,y1+uy*s+ux*w*sg]);}
+  pts.push([x1+ux*b,y1+uy*b],[x2,y2]);
+  return '<polyline class="spring" points="'+pts.map(q=>q[0].toFixed(1)+','+q[1].toFixed(1)).join(' ')+'"/>';
+}
+function drawPend(){
+  const p=S.pend,svg=Tools.$('pSvg');let out='<line class="ceil" x1="20" y1="14" x2="340" y2="14"/>';
+  const xs=[105,255],ms=[p.m1,p.m2],ys=[PS.a.y,PS.b.y];
+  if(p.kind==='string'){
+    // px per metre: as large as fits (the swing must stay in its half and in the box)
+    const sc=Math.min(105,205/p.l,68/(p.l*Math.sin(Math.min(Math.PI/2,amp0()))));
+    for(let i=0;i<2;i++){
+      const L=p.l*sc,bx=xs[i]+L*Math.sin(ys[i]),by=14+L*Math.cos(ys[i]),r=bobR(ms[i]);
+      out+='<line class="thread" x1="'+xs[i]+'" y1="14" x2="'+bx.toFixed(1)+'" y2="'+by.toFixed(1)+'"/>';
+      out+='<circle class="bob'+(i+1)+'" cx="'+bx.toFixed(1)+'" cy="'+by.toFixed(1)+'" r="'+r.toFixed(1)+'"/>';
+    }
+    const bar=sc*0.5;
+    out+='<line class="scale" x1="'+(345-bar).toFixed(1)+'" y1="240" x2="345" y2="240"/><text class="lbl" x="'+(345-bar/2).toFixed(1)+'" y="234" text-anchor="middle" font-size="11">'+Tools.esc(Tools.fmt(0.5,1)+' m')+'</text>';
+  }else{
+    const sc=400; // px per metre of displacement
+    for(let i=0;i<2;i++){
+      const r=bobR(ms[i]),by=125+ys[i]*sc;
+      out+=zigzag(xs[i],14,xs[i],by-r,12,10);
+      out+='<circle class="bob'+(i+1)+'" cx="'+xs[i]+'" cy="'+by.toFixed(1)+'" r="'+r.toFixed(1)+'"/>';
+    }
+    out+='<line class="scale" x1="'+(345-sc*0.05)+'" y1="240" x2="345" y2="240"/><text class="lbl" x="'+(345-sc*0.025)+'" y="234" text-anchor="middle" font-size="11">5 cm</text>';
+  }
+  for(let i=0;i<2;i++)out+='<text class="blbl" x="'+xs[i]+'" y="244" text-anchor="middle">'+Tools.esc(t('p.m',{m:Tools.fmt(ms[i],0)}))+'</text>';
+  svg.innerHTML=out;
+  svg.setAttribute('aria-label',t('p.svg',{kind:t(p.kind==='string'?'pend.string':'pend.spring'),m1:Tools.fmt(p.m1,0),m2:Tools.fmt(p.m2,0)}));
+  drawTrace();
+  Tools.$('pMeasured').textContent=PS.a.period&&PS.b.period?t('p.meas',{a:secs(PS.a.period),b:secs(PS.b.period)}):t('p.measWait');
+}
+function drawTrace(){
+  const svg=Tools.$('pGraph'),w=Math.max(240,Math.round(svg.getBoundingClientRect().width||343)),h=120,mid=h/2,A=amp0();
+  const t1=Math.max(8,PS.a.t),t0=t1-8,X=tt=>(tt-t0)/8*w,Y=y=>mid-y/A*(mid-8);
+  const line=(i,cls)=>'<polyline class="'+cls+'" points="'+PS.trace.filter(q=>q[0]>=t0-0.05).map(q=>X(q[0]).toFixed(1)+','+Y(q[i]).toFixed(1)).join(' ')+'"/>';
+  let out='<line class="base" x1="0" y1="'+mid+'" x2="'+w+'" y2="'+mid+'" style="stroke:var(--border)"/>';
+  for(let s=Math.ceil(t0);s<=t1;s++){const x=X(s);out+='<text class="lbl" x="'+x.toFixed(1)+'" y="'+(h-2)+'" text-anchor="'+(x<8?'start':x>w-8?'end':'middle')+'" font-size="10">'+s+' s</text>';}
+  out+=line(1,'tr1')+line(2,'tr2');
+  svg.setAttribute('viewBox','0 0 '+w+' '+h);svg.setAttribute('height',String(h));svg.innerHTML=out;
+  svg.setAttribute('aria-label',t('p.graph'));
+}
+function renderPend(){
+  if(Tools.$('p-pendulum').hidden)return;
+  const p=S.pend,str=p.kind==='string';
+  for(const b of document.querySelectorAll('#pKind button'))b.setAttribute('aria-pressed',String(b.dataset.v===p.kind));
+  for(const b of document.querySelectorAll('#pGrav button'))b.setAttribute('aria-pressed',String(b.dataset.v===p.grav));
+  Tools.$('pLField').hidden=!str;Tools.$('pKField').hidden=str;
+  const A=Tools.$('pA'),lim=PLIM[str?'aS':'aF'];A.min=lim[0];A.max=lim[1];A.step=lim[2];A.value=String(str?p.aS:p.aF);
+  for(const k of ['l','k','m1','m2'])Tools.$('p'+k.toUpperCase()).value=String(p[k]);
+  Tools.$('pLOut').textContent=t('p.l',{l:Tools.fmt(p.l,2)});
+  Tools.$('pKOut').textContent=t('p.k',{k:Tools.fmt(p.k,0)});
+  Tools.$('pM1Out').textContent=t('p.m',{m:Tools.fmt(p.m1,0)});Tools.$('pM2Out').textContent=t('p.m',{m:Tools.fmt(p.m2,0)});
+  Tools.$('pAOut').textContent=str?t('p.deg',{a:Tools.fmt(p.aS,0)}):t('p.cm',{a:Tools.fmt(p.aF,0)});
+  Tools.$('pLegend').innerHTML=[['sw-img',t('p.lg.1')],['sw-b',t('p.lg.2')],['',t('p.lg.t')]].map(([c,l])=>'<li class="'+c+'">'+(c?'<i></i>':'')+Tools.esc(l)+'</li>').join('');
+  // results and explanation
+  const g=pg(),items=[],r=p.m2/p.m1,ratio=Tools.fmt(r>=1?r:1/r,r===Math.round(r)||1/r===Math.round(1/r)?0:1);
+  // the heavier one is named first
+  const sides={r:ratio,h:t(r>=1?'side.r':'side.l'),o:t(r>=1?'side.l':'side.r')};
+  let why;
+  if(str){
+    const T0=Mx.periodSmall(p.l,g),T=Mx.periodExact(p.l,g,amp0()),more=T/T0-1;
+    items.push({k:t('p.res.both'),v:secs(T),main:true},{k:t('p.res.small'),v:secs(T0)});
+    if(p.aS>=10)items.push({k:t('p.res.more'),v:'+'+Tools.fmt(more*100,1)+' %'});
+    why=t(p.m1===p.m2?'p.why.sEq':'p.why.sDiff',sides);
+    if(p.aS>=20)why+=' '+t('p.why.big',{a:Tools.fmt(p.aS,0),p:Tools.fmt(more*100,1)+' %'});
+  }else{
+    const T1=Mx.periodSpring(p.m1/1000,p.k),T2=Mx.periodSpring(p.m2/1000,p.k);
+    items.push({k:t('p.res.T1'),v:secs(T1),main:true},{k:t('p.res.T2'),v:secs(T2),main:true},{k:t('p.res.ratio'),v:Tools.fmt(T2/T1,2)});
+    why=t(p.m1===p.m2?'p.why.fEq':'p.why.fDiff',sides);
+    if(p.grav!=='earth')why+=' '+t('p.why.fG',{place:t('p.place.'+p.grav)});
+  }
+  Tools.$('pRes').innerHTML=items.map(i=>'<div class="calc-result'+(i.main?' main':'')+'"><span class="k">'+Tools.esc(i.k)+'</span><b class="v">'+Tools.esc(i.v)+'</b></div>').join('');
+  Tools.$('pWhy').innerHTML=Tools.icon('info-circle')+'<span></span>';Tools.$('pWhy').querySelector('span').textContent=why;
+  renderPendMath();
+  drawPend();playBtn('pPlay',anim.run&&anim.kind==='pendulum','play');
+}
+function renderPendMath(){
+  const p=S.pend,g=pg(),parts=[],kg=m=>tx(m/1000,2)+'\\,\\text{kg}';
+  if(p.kind==='string'){
+    const T0=Mx.periodSmall(p.l,g),a=amp0();
+    parts.push({h:t('p.m.force'),m:'F=-m\\cdot g\\cdot\\sin\\varphi'});
+    parts.push({h:t('p.m.newton'),m:'\\cancel{m}\\cdot a=-\\cancel{m}\\cdot g\\cdot\\sin\\varphi\\;\\Rightarrow\\;a=-g\\cdot\\sin\\varphi',legend:[t('p.m.l.cancel')]});
+    parts.push({h:t('p.m.T'),m:'T_0=2\\pi\\sqrt{\\frac{l}{g}}=2\\pi\\sqrt{\\frac{'+tx(p.l,2)+'\\,\\text{m}}{'+tx(g,2)+'\\,\\text{m/s}^2}}'+eq(T0,2)+'\\,\\text{s}',legend:[t('p.m.l.small')]});
+    if(p.aS>=10)parts.push({h:t('p.m.big'),m:'T\\approx T_0\\left(1+\\frac{\\varphi_0^2}{16}\\right)='+tx(T0,2)+'\\,\\text{s}\\cdot\\left(1+\\frac{'+tx(a,3)+'^2}{16}\\right)'+eq(T0*(1+a*a/16),2)+'\\,\\text{s}'});
+  }else{
+    parts.push({h:t('p.m.force'),m:'F=-k\\cdot x'});
+    parts.push({h:t('p.m.newton'),m:'m\\cdot a=-k\\cdot x\\;\\Rightarrow\\;a=-\\frac{k}{m}\\cdot x',legend:[t('p.m.l.spring')]});
+    parts.push({h:t('p.m.T'),m:'T=2\\pi\\sqrt{\\frac{m}{k}}'});
+    for(const [i,m] of [[1,p.m1],[2,p.m2]])parts.push({m:'T_'+i+'=2\\pi\\sqrt{\\frac{'+kg(m)+'}{'+tx(p.k,0)+'\\,\\text{N/m}}}'+eq(Mx.periodSpring(m/1000,p.k),2)+'\\,\\text{s}'});
+  }
+  block(Tools.$('pMath'),parts);
+}
+function renderPendExplain(){
+  block(Tools.$('pExplain'),[
+    {p:t('p.x.p1'),m:'F=m\\cdot g\\cdot\\sin\\varphi'},
+    {p:t('p.x.p2'),m:'\\cancel{m}\\cdot a=\\cancel{m}\\cdot g\\cdot\\sin\\varphi\\quad\\Rightarrow\\quad a=g\\cdot\\sin\\varphi'},
+    {p:t('p.x.p3'),m:'T=2\\pi\\sqrt{\\frac{l}{g}}'},
+    {p:t('p.x.p4'),m:'a=-\\frac{k}{m}\\cdot x\\quad\\Rightarrow\\quad T=2\\pi\\sqrt{\\frac{m}{k}}'},
+    {p:t('p.x.p5')}
+  ]);
+}
+function pendChanged(){setRun('pendulum',false);resetPend();save();renderPend();}
+for(const b of document.querySelectorAll('#pKind button'))b.addEventListener('click',()=>{S.pend.kind=b.dataset.v;pendChanged();});
+for(const b of document.querySelectorAll('#pGrav button'))b.addEventListener('click',()=>{S.pend.grav=b.dataset.v;pendChanged();});
+for(const k of ['l','k','m1','m2'])Tools.$('p'+k.toUpperCase()).addEventListener('input',e=>{S.pend[k]=lsnap(PLIM[k],Number(e.target.value));pendChanged();});
+Tools.$('pA').addEventListener('input',e=>{const k=S.pend.kind==='string'?'aS':'aF';S.pend[k]=lsnap(PLIM[k],Number(e.target.value));pendChanged();});
+Tools.$('pPlay').addEventListener('click',()=>setRun('pendulum',!(anim.run&&anim.kind==='pendulum')));
+Tools.$('pReset').addEventListener('click',()=>{const was=anim.run&&anim.kind==='pendulum';resetPend();drawPend();if(was)setRun('pendulum',true);});
+
+/* ---------- Coupled pendulums (exact solution, the time is the only state) ---------- */
+const CS={t:0};
+const C_AMP=10*Math.PI/180;
+const csys=()=>Mx.coupled(S.coup.l,GRAV.earth,S.coup.q/100);
+function drawCoup(){
+  const c=S.coup,sys=csys(),st=sys.at(c.start,C_AMP,CS.t),svg=Tools.$('cSvg');
+  const sc=130,L=c.l*sc,xs=[120,240],ps=[st.p1,st.p2],b=[];
+  let out='<line class="ceil" x1="40" y1="14" x2="320" y2="14"/>';
+  for(let i=0;i<2;i++)b.push([xs[i]+L*Math.sin(ps[i]),14+L*Math.cos(ps[i])]);
+  out+=zigzag(b[0][0]+11,b[0][1],b[1][0]-11,b[1][1],10,5);
+  for(let i=0;i<2;i++){
+    out+='<line class="thread" x1="'+xs[i]+'" y1="14" x2="'+b[i][0].toFixed(1)+'" y2="'+b[i][1].toFixed(1)+'"/>';
+    out+='<circle class="bob'+(i+1)+'" cx="'+b[i][0].toFixed(1)+'" cy="'+b[i][1].toFixed(1)+'" r="11"/>';
+  }
+  svg.innerHTML=out;
+  svg.setAttribute('aria-label',t('c.svg',{start:t({one:'coup.one',same:'coup.same',opposite:'coup.opp'}[c.start])}));
+  const tot=st.e1+st.e2||1,e1=st.e1/tot,e2=st.e2/tot;
+  Tools.$('cE1').style.width=(e1*100).toFixed(1)+'%';Tools.$('cE2').style.width=(e2*100).toFixed(1)+'%';
+  Tools.$('cE1Lbl').textContent=t('c.e',{side:t('c.left'),p:wpct(e1)});
+  Tools.$('cE2Lbl').textContent=t('c.e',{side:t('c.right'),p:wpct(e2)});
+  drawCoupGraph(sys);
+}
+// the whole course is known in advance: draw one beat period (at most 90 s) and move a line along it
+function coupWindow(sys){return Math.min(90,Math.max(sys.beat,4*sys.T1));}
+let cgCache='';
+function drawCoupGraph(sys){
+  const svg=Tools.$('cGraph'),w=Math.max(240,Math.round(svg.getBoundingClientRect().width||343)),h=150,W=coupWindow(sys);
+  const key=[w,S.coup.l,S.coup.q,S.coup.start].join();
+  if(key!==cgCache){
+    cgCache=key;
+    const lane=[h*0.27,h*0.73],amp=h*0.2,N=1600,pts=[[],[]];
+    for(let i=0;i<=N;i++){const tt=W*i/N,s=sys.at(S.coup.start,C_AMP,tt),x=(w*i/N).toFixed(1);
+      pts[0].push(x+','+(lane[0]-s.p1/C_AMP*amp).toFixed(1));pts[1].push(x+','+(lane[1]-s.p2/C_AMP*amp).toFixed(1));}
+    let out='';
+    for(let s=0;s<=W;s+=W>40?10:W>15?5:2)out+='<text class="lbl" x="'+(s/W*w).toFixed(1)+'" y="'+(h-2)+'" text-anchor="'+(s?(s/W*w>w-20?'end':'middle'):'start')+'" font-size="10">'+s+' s</text>';
+    out+='<polyline class="tr1" points="'+pts[0].join(' ')+'"/><polyline class="tr2" points="'+pts[1].join(' ')+'"/>';
+    out+='<line class="cursor" id="cCursor" x1="0" y1="2" x2="0" y2="'+(h-14)+'"/>';
+    svg.setAttribute('viewBox','0 0 '+w+' '+h);svg.setAttribute('height',String(h));svg.innerHTML=out;
+    svg.setAttribute('aria-label',t('c.graph',{s:Tools.fmt(W,0)}));
+  }
+  const cx=((CS.t%W)/W*w).toFixed(1),cur=Tools.$('cCursor');cur.setAttribute('x1',cx);cur.setAttribute('x2',cx);
+}
+function renderCoup(){
+  if(Tools.$('p-coupled').hidden)return;
+  const c=S.coup,sys=csys();
+  for(const b of document.querySelectorAll('#cStart button'))b.setAttribute('aria-pressed',String(b.dataset.v===c.start));
+  Tools.$('cL').value=String(c.l);Tools.$('cQ').value=String(c.q);
+  Tools.$('cLOut').textContent=t('p.l',{l:Tools.fmt(c.l,2)});Tools.$('cQOut').textContent=t('p.q',{q:Tools.fmt(c.q,0)});
+  const one=c.start==='one';
+  Tools.$('cRes').innerHTML=[
+    {k:t('c.res.half'),v:one?secs(sys.beat/2):t('c.never'),main:true},
+    {k:t('c.res.T1'),v:secs(sys.T1)},{k:t('c.res.T2'),v:secs(sys.T2)},{k:t('c.res.beat'),v:secs(sys.beat)}
+  ].map(i=>'<div class="calc-result'+(i.main?' main':'')+'"><span class="k">'+Tools.esc(i.k)+'</span><b class="v">'+Tools.esc(i.v)+'</b></div>').join('');
+  Tools.$('cWhy').innerHTML=Tools.icon('info-circle')+'<span></span>';
+  Tools.$('cWhy').querySelector('span').textContent=t({one:'c.why.one',same:'c.why.same',opposite:'c.why.opp'}[c.start],{h:secs(sys.beat/2)});
+  Tools.$('cLegend').innerHTML=[['sw-img',t('c.lg.1')],['sw-b',t('c.lg.2')],['',t('c.lg.t')]].map(([cl,l])=>'<li class="'+cl+'">'+(cl?'<i></i>':'')+Tools.esc(l)+'</li>').join('');
+  const g=GRAV.earth,dw=sys.w2-sys.w1;
+  block(Tools.$('cMath'),[
+    {h:t('c.m.w'),m:'\\omega_1=\\sqrt{\\frac{g}{l}}=\\sqrt{\\frac{'+tx(g,2)+'}{'+tx(c.l,2)+'}}\\,\\tfrac{1}{\\text{s}}'+eq(sys.w1,3)+'\\,\\tfrac{1}{\\text{s}}'},
+    {m:'\\omega_2=\\sqrt{\\frac{g}{l}+2\\kappa}'+eq(sys.w2,3)+'\\,\\tfrac{1}{\\text{s}}',legend:[t('c.m.l.kappa',{q:Tools.fmt(c.q,0)})]},
+    {h:t('c.m.beat'),m:'T_S=\\frac{2\\pi}{\\omega_2-\\omega_1}=\\frac{2\\pi}{'+tx(dw,4)+'\\,\\tfrac{1}{\\text{s}}}'+eq(sys.beat,1)+'\\,\\text{s}'},
+    {h:t('c.m.sol'),m:'\\varphi_1=\\varphi_0\\cos\\!\\left(\\tfrac{\\Delta\\omega}{2}t\\right)\\cos(\\bar\\omega t),\\quad\\varphi_2=\\varphi_0\\sin\\!\\left(\\tfrac{\\Delta\\omega}{2}t\\right)\\sin(\\bar\\omega t)',legend:[t('c.m.l.sol')]}
+  ]);
+  cgCache='';drawCoup();playBtn('cPlay',anim.run&&anim.kind==='coupled','play.c');
+}
+function renderCoupExplain(){
+  block(Tools.$('cExplain'),[
+    {p:t('c.x.p1'),m:'\\omega_1=\\sqrt{\\frac{g}{l}},\\qquad\\omega_2=\\sqrt{\\frac{g}{l}+2\\kappa}'},
+    {p:t('c.x.p2'),m:'\\varphi_1=\\tfrac{\\varphi_0}{2}\\left(\\cos\\omega_1t+\\cos\\omega_2t\\right)=\\varphi_0\\,\\cos\\!\\left(\\tfrac{\\omega_2-\\omega_1}{2}\\,t\\right)\\cos\\!\\left(\\tfrac{\\omega_1+\\omega_2}{2}\\,t\\right)'},
+    {p:t('c.x.p3'),m:'t=\\frac{T_S}{2}=\\frac{\\pi}{\\omega_2-\\omega_1}'},
+    {p:t('c.x.p4')}
+  ]);
+}
+function coupChanged(){setRun('coupled',false);CS.t=0;save();renderCoup();}
+for(const b of document.querySelectorAll('#cStart button'))b.addEventListener('click',()=>{S.coup.start=b.dataset.v;coupChanged();});
+for(const k of ['l','q'])Tools.$('c'+k.toUpperCase()).addEventListener('input',e=>{S.coup[k]=lsnap(CLIM[k],Number(e.target.value));coupChanged();});
+Tools.$('cPlay').addEventListener('click',()=>setRun('coupled',!(anim.run&&anim.kind==='coupled')));
+Tools.$('cReset').addEventListener('click',()=>{CS.t=0;drawCoup();});
+resetPend();
+
 /* ---------- Overview ↔ experiment (assets/shared/toolbox.js) ---------- */
 const box=Toolbox.init({
   state:{view:S.view,tab:S.tab},
   onChange:st=>{S.view=st.view;S.tab=st.tab;save();},
-  onSelect:name=>{if(name==='waves')renderWaves();else render(name);Tools.diag.log('open',{tab:name});},
+  onSelect:name=>{
+    if(anim.kind!==name)setRun(null,false); // only the open experiment may move
+    if(name==='waves')renderWaves();else if(name==='pendulum')renderPend();else if(name==='coupled')renderCoup();else render(name);
+    Tools.diag.log('open',{tab:name});
+  },
+  onOverview:()=>setRun(null,false),
 });
 renderSpoon();
-renderWaveExplain();
-Tools.onLang(()=>{renderSpoon();renderWaveExplain();for(const k in panels)render(k);renderWaves();});
-Tools.diag.info(()=>({view:S.view,tab:S.tab,mirror:S.mirror,lens:S.lens,waves:S.waves,katex:!!window.katex}));
+renderWaveExplain();renderPendExplain();renderCoupExplain();
+Tools.onLang(()=>{renderSpoon();renderWaveExplain();renderPendExplain();renderCoupExplain();for(const k in panels)render(k);renderWaves();renderPend();renderCoup();});
+Tools.diag.info(()=>({view:S.view,tab:S.tab,mirror:S.mirror,lens:S.lens,waves:S.waves,pend:S.pend,coup:S.coup,running:anim.run?anim.kind:null,katex:!!window.katex}));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
 function report(kind){
@@ -942,6 +1374,48 @@ Tools.mcp.register({
       principal_maxima:p.n>1?W.orders(p).map(o=>({order:o.k,angle_deg:r(Math.asin(o.sin)*180/Math.PI),x_cm:r(o.x),relative_intensity:Math.round(o.intensity*1000)/1000})):[],
       central_fringe_width_cm:zs<1?r(2*W.xOfSin(zs)):null,
       secondary_maxima_between:p.n>1?p.n-2:null};
+  }
+});
+Tools.mcp.register({
+  name:'pendulum_period',title:'Set up the pendulums',label:'mcp.pend',
+  description:'Opens the pendulum experiment (two pendulums side by side with masses m1 and m2), sets it up like the controls (omitted values stay; values snap to the slider steps) and returns the periods: for a simple pendulum the exact period for the displacement (the same for both masses) and the small-angle formula 2π√(l/g); for a mass on a spring T = 2π√(m/k) for each mass (independent of gravity). Does not start the animation.',
+  inputSchema:{type:'object',properties:{
+    kind:{type:'string',enum:['string','spring'],description:'string = simple pendulum (bob on a string), spring = mass on a spring.'},
+    length_m:{type:'number',minimum:0.2,maximum:2,description:'Length of the string in m (simple pendulum), steps of 0.05.'},
+    spring_constant_n_per_m:{type:'number',minimum:2,maximum:50,description:'Spring constant k in N/m (mass on a spring), whole numbers.'},
+    mass_left_g:{type:'number',minimum:50,maximum:1000,description:'Mass m1 of the left pendulum in g, steps of 50.'},
+    mass_right_g:{type:'number',minimum:50,maximum:1000,description:'Mass m2 of the right pendulum in g, steps of 50.'},
+    displacement:{type:'number',minimum:2,maximum:80,description:'Displacement when let go: degrees for the simple pendulum (5–80, steps of 5), cm for the spring (2–15).'},
+    place:{type:'string',enum:['earth','moon','mars'],description:'Gravity: earth 9.81, moon 1.62, mars 3.71 m/s².'}
+  },additionalProperties:false},
+  execute:({kind,length_m,spring_constant_n_per_m,mass_left_g,mass_right_g,displacement,place})=>{
+    const p=S.pend;
+    if(kind)p.kind=kind;if(place)p.grav=place;
+    for(const [k,v] of [['l',length_m],['k',spring_constant_n_per_m],['m1',mass_left_g],['m2',mass_right_g]])if(v!=null)p[k]=lsnap(PLIM[k],v);
+    if(displacement!=null){const k=p.kind==='string'?'aS':'aF';p[k]=lsnap(PLIM[k],displacement);}
+    pendChanged();box.open('pendulum');
+    const g=pg(),r=x=>Math.round(x*1000)/1000,out={kind:p.kind,place:p.grav,gravity_m_s2:g,mass_left_g:p.m1,mass_right_g:p.m2};
+    if(p.kind==='string')Object.assign(out,{length_m:p.l,displacement_deg:p.aS,period_s:r(Mx.periodExact(p.l,g,amp0())),period_small_angle_s:r(Mx.periodSmall(p.l,g)),depends_on_mass:false});
+    else Object.assign(out,{spring_constant_n_per_m:p.k,displacement_cm:p.aF,period_left_s:r(Mx.periodSpring(p.m1/1000,p.k)),period_right_s:r(Mx.periodSpring(p.m2/1000,p.k)),depends_on_mass:true});
+    return out;
+  }
+});
+Tools.mcp.register({
+  name:'coupled_pendulums',title:'Set up the coupled pendulums',label:'mcp.coup',
+  description:'Opens the experiment with two equal pendulums joined by a spring, sets length, coupling (spring stiffness as a percentage of g/l) and how they start (one = only the left one pushed, same = both in phase, opposite = in opposite directions), and returns the periods of the two normal modes, the beat period and after how many seconds all the energy has moved to the other pendulum (only when one is pushed). Does not start the animation.',
+  inputSchema:{type:'object',properties:{
+    length_m:{type:'number',minimum:0.3,maximum:1.5,description:'Length of both strings in m, steps of 0.05.'},
+    coupling_percent:{type:'number',minimum:2,maximum:50,description:'Coupling κ as a percentage of g/l (2–50, whole numbers): small = soft spring.'},
+    start:{type:'string',enum:['one','same','opposite']}
+  },additionalProperties:false},
+  execute:({length_m,coupling_percent,start})=>{
+    if(length_m!=null)S.coup.l=lsnap(CLIM.l,length_m);
+    if(coupling_percent!=null)S.coup.q=lsnap(CLIM.q,coupling_percent);
+    if(start)S.coup.start=start;
+    coupChanged();box.open('coupled');
+    const sys=csys(),r=x=>Math.round(x*1000)/1000;
+    return {length_m:S.coup.l,coupling_percent:S.coup.q,start:S.coup.start,period_in_phase_s:r(sys.T1),period_opposite_s:r(sys.T2),
+      beat_period_s:r(sys.beat),energy_moved_over_after_s:S.coup.start==='one'?r(sys.beat/2):null};
   }
 });
 })();

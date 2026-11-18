@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "talking-animal";
-const VERSION = '2f991088c0e7';
+const VERSION = 'b9df5539ec85';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
