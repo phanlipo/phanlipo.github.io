@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "calc-pad";
-const VERSION = 'e15ba4111f97';
+const VERSION = '7b9b96abcdda';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

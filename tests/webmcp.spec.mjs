@@ -427,6 +427,17 @@ test.describe('physics-lab tools', () => {
     expect(r.result.range_m).toBeLessThan(r.result.range_without_air_m);
     expect((await call(page, 'physics_lab_throw_ball', { angle_deg: 90 })).ok).toBe(false);
   });
+
+  test('refraction', async ({ page }) => {
+    let r = await call(page, 'physics_lab_refraction', { material: 'water', direction: 'in', angle_deg: 60 });
+    expect(r.result).toMatchObject({ refractive_index: 1.33, total_internal_reflection: false, critical_angle_deg: null,
+      angle_of_refraction_deg: Math.round(Math.asin(Math.sin(Math.PI / 3) / 1.33) * 180 / Math.PI * 100) / 100 });
+    await expect(page.locator('#p-refr')).toBeVisible();
+    r = await call(page, 'physics_lab_refraction', { material: 'glass', direction: 'out', angle_deg: 45 });
+    expect(r.result).toMatchObject({ angle_of_refraction_deg: null, total_internal_reflection: true, reflected_share: 1,
+      critical_angle_deg: Math.round(Math.asin(1 / 1.5) * 180 / Math.PI * 100) / 100 });
+    expect((await call(page, 'physics_lab_refraction', { angle_deg: 90 })).ok).toBe(false);
+  });
 });
 
 test.describe('chain-transaction tools', () => {

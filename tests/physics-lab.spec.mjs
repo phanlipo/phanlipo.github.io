@@ -412,6 +412,89 @@ test.describe('projectile', () => {
   });
 });
 
+// ---- refraction: reference ----
+const snellRef = (n1, n2, a) => { const s = n1 * Math.sin(a * Math.PI / 180) / n2; return s > 1 ? null : Math.asin(s) * 180 / Math.PI; };
+
+test.describe('refraction', () => {
+  test('into water: bends towards the normal', async ({ page }) => {
+    await open(page, 'refr');
+    await page.click('#rMode button[data-v="ray"]');
+    await page.click('#rMed button[data-v="water"]');
+    await page.click('#rDir button[data-v="in"]');
+    await page.locator('#rA').fill('40');
+    await expect(pres(page, 'rRes', 'Brechungswinkel')).toHaveText(`${de(snellRef(1, 1.33, 40), 1)}°`); // 28,9°
+    await expect(pres(page, 'rRes', 'Grenzwinkel')).toHaveText('keiner');
+    // Fresnel at normal incidence: ((n-1)/(n+1))² = 2 %
+    await page.locator('#rA').fill('0');
+    await expect(pres(page, 'rRes', 'Gespiegelter Anteil')).toHaveText(`${Math.round(((0.33 / 2.33) ** 2) * 100)} %`);
+    await expect(page.locator('#rWhy')).toContainText('ohne Knick');
+    await expect(pres(page, 'rRes', 'Lichtgeschwindigkeit')).toHaveText(`${(Math.round(299792 / 1.33 / 1000) * 1000).toLocaleString('de-DE')} km/s`);
+  });
+
+  test('out of diamond: total internal reflection beyond the critical angle', async ({ page }) => {
+    await open(page, 'refr');
+    await page.click('#rMode button[data-v="ray"]');
+    await page.click('#rMed button[data-v="diamond"]');
+    await page.click('#rDir button[data-v="out"]');
+    const crit = Math.asin(1 / 2.42) * 180 / Math.PI; // 24,4°
+    await expect(pres(page, 'rRes', 'Grenzwinkel')).toHaveText(`${de(crit, 1)}°`);
+    await page.locator('#rA').fill('20');
+    await expect(pres(page, 'rRes', 'Brechungswinkel')).toHaveText(`${de(snellRef(2.42, 1, 20), 1)}°`);
+    await page.locator('#rA').fill('25');
+    await expect(pres(page, 'rRes', 'Brechungswinkel')).toHaveText('Totalreflexion');
+    await expect(pres(page, 'rRes', 'Gespiegelter Anteil')).toHaveText('100 %');
+    await expect(page.locator('#rWhy')).toContainText('Diamant');
+  });
+
+  test('stick: the tip seems lifted, about depth/n from above', async ({ page }) => {
+    await open(page, 'refr');
+    await page.click('#rMode button[data-v="stick"]');
+    await page.click('#rMed button[data-v="water"]');
+    await expect(page.locator('#rAField')).toBeHidden();
+    await page.locator('#rT').fill('10'); await page.locator('#rE').fill('90');
+    const d0 = 18 * Math.cos(10 * Math.PI / 180);
+    await expect(pres(page, 'rRes', 'Spitze wirklich')).toHaveText(`${de(d0, 1)} cm tief`);
+    // looking straight down: apparent depth ≈ d0 / n (the tip is 3 cm off-axis, so only roughly)
+    const seen = num(await pres(page, 'rRes', 'scheint').textContent());
+    expect(Math.abs(seen - d0 / 1.33)).toBeLessThan(0.4);
+    // a flatter view lifts it more
+    await page.locator('#rE').fill('20');
+    await expect.poll(async () => num(await pres(page, 'rRes', 'scheint').textContent())).toBeLessThan(seen - 2);
+    await expect(page.locator('#rWhy')).toContainText('flacher');
+  });
+
+  test('swiping across the drawing aims the ray', async ({ page }) => {
+    await open(page, 'refr');
+    await page.click('#rMode button[data-v="ray"]');
+    await page.click('#rDir button[data-v="in"]');
+    const svg = page.locator('#rSvg');
+    await svg.scrollIntoViewIfNeeded();
+    const b = await svg.boundingBox(), cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    // a point 60 px left of and 60 px above the hit point: 45°
+    await page.mouse.move(cx - 20, cy - 60);
+    await page.mouse.down();
+    await page.mouse.move(cx - 40, cy - 60, { steps: 3 });
+    await page.mouse.move(cx - 60, cy - 60, { steps: 3 });
+    await page.mouse.up();
+    await expect(page.locator('#rA')).toHaveValue('45');
+  });
+
+  test('formulas with the values', async ({ page }) => {
+    await open(page, 'refr');
+    await page.click('#rMode button[data-v="ray"]');
+    await page.click('#rMed button[data-v="glass"]');
+    await page.click('#rDir button[data-v="out"]');
+    await page.locator('#rA').fill('30');
+    await page.click('#p-refr summary:has-text("Formeln")');
+    const tex = (await page.locator('#rMath annotation').allTextContents()).join(' ');
+    expect(tex).toContain('\\sin\\beta=\\frac{1{,}50\\cdot\\sin 30^\\circ}{1{,}00}=0{,}750');
+    expect(tex).toContain('\\alpha_G\\approx ' + de(Math.asin(1 / 1.5) * 180 / Math.PI, 1).replace(',', '{,}'));
+    await expect(page.locator('#rMath .fallback')).toHaveCount(0);
+    await page.click('#p-refr summary:has-text("Warum")');
+    await expect(page.locator('#rExplain .katex')).toHaveCount(2);
+  });
+});
+
 test.describe('lens', () => {
   test('projector, magnifier and glasses', async ({ page }) => {
     await open(page, 'lens');
@@ -434,7 +517,7 @@ test.describe('lens', () => {
 });
 
 test('open experiments with formulas have no accessibility violations', async ({ page }) => {
-  for (const kind of ['mirror', 'lens', 'waves', 'pendulum', 'coupled', 'throw']) {
+  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw']) {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();

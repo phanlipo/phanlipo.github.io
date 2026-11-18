@@ -6,7 +6,7 @@ Physik zum Ausprobieren: je Versuch eine Zeichnung, die sofort auf Regler reagie
 
 ```
 index.html   Oberfläche: Übersicht/Tabs (assets/shared/toolbox.js), je Versuch Zeichnung (SVG), Regler, Ergebnisse, Formeln, WebMCP
-optics.js    window.Optics: Abbildungsgleichung und Strahlengang ohne DOM
+optics.js    window.Optics: Abbildungsgleichung und Strahlengang, Brechung (Snellius, Fresnel, scheinbarer Ort unter Wasser) ohne DOM
 waves.js     window.Waves: Licht durch N Spalte (Intensität, Hauptmaxima, Zeigerkette, Farbe einer Wellenlänge)
 mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
 ```
@@ -19,6 +19,11 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 - Strahlen: Parallelstrahl, Brennpunktstrahl, Strahl durch die Mitte (Spiegel: Scheitelstrahl, Linse: Mittelpunktstrahl). Näherung für achsennahe Strahlen: Knick an der senkrechten Linie x = 0. Der Spiegel wird als „gefaltete Linse“ gerechnet (`fold`: alles nach dem Element an x = 0 gespiegelt) – eine Rechnung für beide Versuche.
 - Spiegel-Zeichnung: Parabel x = −y²/2r (die paraxiale Form), Öffnung so begrenzt, dass die Schale höchstens 6 cm tief ist.
 - Sehr kleine Bilder (< 22 px) zeigt ein Kästchen oben rechts vergrößert, mit richtiger Richtung („Bild ×n“).
+
+## Brechung (optics.js)
+
+- Stoffe: Wasser 1,33, Glas 1,50, Diamant 2,42; Luft 1,00. Snellius, Grenzwinkel arcsin(n₂/n₁), gespiegelter Anteil nach Fresnel für unpolarisiertes Licht (Dicke und Deckkraft des gespiegelten Strahls).
+- Stab im Wasser: Der Stab taucht bei x = 0 ein (18 cm darüber und darunter), das Auge sitzt 32 cm entfernt unter dem eingestellten Blickwinkel. Für jeden Punkt unter Wasser wird der echte Strahlweg zum Auge gesucht (Austrittspunkt per Bisektion), dann zwei Strahlen zu den Rändern einer 4-mm-Pupille geradlinig zurückverlängert – ihr Schnittpunkt ist der Ort, an dem das Auge den Punkt sieht. Senkrecht von oben ergibt das h/n.
 
 ## Licht durch Spalte (waves.js)
 
@@ -42,7 +47,7 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air } }` – nur Reglerstellungen und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t } }` – nur Reglerstellungen und offener Versuch.
 
 ## Erweitern
 
@@ -58,7 +63,7 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 2 | Wellen | Licht durch N Spalte | Warum wird das Muster mit mehr Spalten schärfer? | fertig |
 | 3 | Schwingungen | Fadenpendel, Federpendel, gekoppelte Pendel (Schwebung) | Warum hängt die Schwingungsdauer beim Fadenpendel nicht von der Masse ab (beim Federpendel aber schon)? Warum wandert die Energie zwischen gekoppelten Pendeln hin und her? | fertig |
 | 4 | Mechanik | Schiefer Wurf mit/ohne Luftwiderstand | Warum fliegt der Ball mit Luftwiderstand unter weniger als 45° am weitesten? | fertig |
-| 5 | Optik | Brechung, Totalreflexion, Prisma | Warum sieht ein Stab im Wasser geknickt aus? | geplant |
+| 5 | Optik | Brechung, Totalreflexion (Prisma/Regenbogen später) | Warum sieht ein Stab im Wasser geknickt aus? | fertig |
 | 6 | Atomphysik | Radioaktiver Zerfall; Spektrallinien (Bohr) | Warum gibt es eine Halbwertszeit, obwohl jeder Zerfall Zufall ist? Warum leuchtet jedes Element in eigenen Farben? | geplant |
 | 7 | Magnetismus | Lorentzkraft, Feldlinien | Warum fliegen geladene Teilchen im Magnetfeld im Kreis (Polarlicht)? | geplant |
 | 8 | Thermodynamik | Gasteilchen in der Box (p, V, T) | Warum steigt der Druck, wenn das Gas warm wird? | geplant |

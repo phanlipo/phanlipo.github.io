@@ -106,5 +106,41 @@
     return g < 2 * f ? 'between' : 'beyond2F';
   }
 
-  root.Optics = { radiusOf, mirrorFocal, lensFocal, image, describe, lensRays, setup, regime, FAR };
+  /* ---------- Refraction (angles in degrees from the normal) ---------- */
+  // Snell: n1·sin α = n2·sin β; null = total internal reflection
+  function snell(n1, n2, alpha) {
+    const s = n1 * Math.sin(alpha * Math.PI / 180) / n2;
+    return s > 1 ? null : Math.asin(s) * 180 / Math.PI;
+  }
+  const critical = (n1, n2) => (n1 > n2 ? Math.asin(n2 / n1) * 180 / Math.PI : null);
+  // share of reflected light for unpolarised light (Fresnel); 1 at total internal reflection
+  function reflectance(n1, n2, alpha) {
+    const beta = snell(n1, n2, alpha);
+    if (beta == null) return 1;
+    const ci = Math.cos(alpha * Math.PI / 180), ct = Math.cos(beta * Math.PI / 180);
+    const rs = (n1 * ci - n2 * ct) / (n1 * ci + n2 * ct), rp = (n2 * ci - n1 * ct) / (n2 * ci + n1 * ct);
+    return (rs * rs + rp * rp) / 2;
+  }
+  /* Where light from a point P under water (y < 0) leaves the surface (y = 0) on its way to the eye E (y > 0):
+     n·sin(angle in water) = sin(angle in air), solved by bisection. */
+  function exitPoint(n, P, E) {
+    const f = s => n * (s - P[0]) / Math.hypot(s - P[0], P[1]) - (E[0] - s) / Math.hypot(E[0] - s, E[1]);
+    let lo = Math.min(P[0], E[0]), hi = Math.max(P[0], E[0]);
+    for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (f(m) > 0) hi = m; else lo = m; }
+    return (lo + hi) / 2;
+  }
+  /* Where the eye sees P: the eye extends the rays it receives straight back. Two rays to the two edges of
+     the pupil (±w/2 across the line of sight) meet in the apparent point. */
+  function apparent(n, P, E, w = 0.4) {
+    const s0 = exitPoint(n, P, E), dx = E[0] - s0, dy = E[1], l = Math.hypot(dx, dy);
+    const off = [-dy / l * w / 2, dx / l * w / 2];
+    const line = e => { const s = exitPoint(n, P, e); return { p: [s, 0], d: [s - e[0], -e[1]] }; };
+    const a = line([E[0] + off[0], E[1] + off[1]]), b = line([E[0] - off[0], E[1] - off[1]]);
+    const den = a.d[0] * b.d[1] - a.d[1] * b.d[0];
+    if (Math.abs(den) < 1e-12) return { exit: s0, point: P.slice() };
+    const tt = ((b.p[0] - a.p[0]) * b.d[1] - (b.p[1] - a.p[1]) * b.d[0]) / den;
+    return { exit: s0, point: [a.p[0] + a.d[0] * tt, a.p[1] + a.d[1] * tt] };
+  }
+
+  root.Optics = { radiusOf, mirrorFocal, lensFocal, image, describe, lensRays, setup, regime, FAR, snell, critical, reflectance, exitPoint, apparent };
 })(typeof window !== 'undefined' ? window : globalThis);

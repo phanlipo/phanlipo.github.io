@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "collage-maker";
-const VERSION = '8e285c0d0a5e';
+const VERSION = 'e5bd9e8c9767';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
