@@ -438,6 +438,21 @@ test.describe('physics-lab tools', () => {
       critical_angle_deg: Math.round(Math.asin(1 / 1.5) * 180 / Math.PI * 100) / 100 });
     expect((await call(page, 'physics_lab_refraction', { angle_deg: 90 })).ok).toBe(false);
   });
+
+  test('radioactive_decay and spectral_lines', async ({ page }) => {
+    let r = await call(page, 'physics_lab_radioactive_decay', { substance: 'carbon', atoms: 2500, half_lives: 2 });
+    expect(r.result).toMatchObject({ half_life: 5730, unit: 'years', atoms: 2500, time: 11460, expected_left: 625,
+      standard_deviation: Math.round(Math.sqrt(2500 * 0.25 * 0.75) * 100) / 100, chance_one_atom_survives: 0.25 });
+    await expect(page.locator('#p-decay')).toBeVisible();
+    await expect(page.locator('#dN button[data-v="2500"]')).toHaveAttribute('aria-pressed', 'true');
+    r = await call(page, 'physics_lab_spectral_lines', { element: 'hydrogen', upper_level: 4 });
+    const nm = Math.round(1e9 / (1.0967758e7 * (1 / 4 - 1 / 16)) * 10) / 10;
+    expect(r.result.jump).toMatchObject({ from_level: 4, to_level: 2, wavelength_nm: nm });
+    expect(r.result.lines_nm.map(l => l.nm)).toContain(nm);
+    await expect(page.locator('#p-spectrum')).toBeVisible();
+    r = await call(page, 'physics_lab_spectral_lines', { element: 'sodium' });
+    expect(r.result).toEqual({ element: 'sodium', lines_nm: [{ nm: 589, colour: 'yellow' }, { nm: 589.6, colour: 'yellow' }] });
+  });
 });
 
 test.describe('chain-transaction tools', () => {

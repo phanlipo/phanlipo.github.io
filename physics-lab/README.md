@@ -8,6 +8,7 @@ Physik zum Ausprobieren: je Versuch eine Zeichnung, die sofort auf Regler reagie
 index.html   Oberfläche: Übersicht/Tabs (assets/shared/toolbox.js), je Versuch Zeichnung (SVG), Regler, Ergebnisse, Formeln, WebMCP
 optics.js    window.Optics: Abbildungsgleichung und Strahlengang, Brechung (Snellius, Fresnel, scheinbarer Ort unter Wasser) ohne DOM
 waves.js     window.Waves: Licht durch N Spalte (Intensität, Hauptmaxima, Zeigerkette, Farbe einer Wellenlänge)
+atomic.js    window.Atomic: radioaktiver Zerfall (Lebensdauern mit festem Zufall), Wasserstoff nach Bohr, Linien der Elemente
 mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
 ```
 
@@ -45,9 +46,14 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 - Weite über Winkel: Simulation für 1 … 89°, bester Winkel auf 0,1° verfeinert; zwischengespeichert für Ball, Geschwindigkeit und Luft (der Winkel-Regler rechnet nur die eine Bahn neu).
 - Der Ball fliegt nach „Werfen“ in echter Zeit über dieselbe Animationsschleife wie die Pendel.
 
+## Atomphysik (atomic.js)
+
+- **Zerfall:** Jedes Atom bekommt beim Auslosen eine Lebensdauer t = −log₂(U) Halbwertszeiten (exponentialverteilt, ohne Gedächtnis); gezählt wird über die sortierte Liste. Die Zeit ist der einzige Zustand – eine Halbwertszeit dauert 3 s, Ende nach 8. Zufall: eigener Generator (mulberry32), Startwert aus `Date.now()` und Laufnummer – in Tests mit `page.clock.install({ time })` fest. Beispiele mit echten Halbwertszeiten (Radon-220 55,6 s, Iod-131 8,02 d, C-14 5730 a) ändern nur die Zeitangaben.
+- **Spektrallinien:** Wasserstoff nach Bohr (E_n = −13,6 eV/n², Rydberg mit reduzierter Masse, Vakuum-Wellenlängen), Balmer-Serie 3…6 → 2 mit Energiestufen-Bild (Höhe ∝ 1/n). Helium, Natrium, Neon, Quecksilber: hellste sichtbare Linien (gemessene Werte in Luft, gerundet). Farben der Linien wie bei den Spalten (`Waves.rgb`).
+
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t } }` – nur Reglerstellungen und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t }, decay: { n, ex }, spec: { el, up } }` – nur Reglerstellungen und offener Versuch.
 
 ## Erweitern
 
@@ -64,7 +70,7 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 3 | Schwingungen | Fadenpendel, Federpendel, gekoppelte Pendel (Schwebung) | Warum hängt die Schwingungsdauer beim Fadenpendel nicht von der Masse ab (beim Federpendel aber schon)? Warum wandert die Energie zwischen gekoppelten Pendeln hin und her? | fertig |
 | 4 | Mechanik | Schiefer Wurf mit/ohne Luftwiderstand | Warum fliegt der Ball mit Luftwiderstand unter weniger als 45° am weitesten? | fertig |
 | 5 | Optik | Brechung, Totalreflexion (Prisma/Regenbogen später) | Warum sieht ein Stab im Wasser geknickt aus? | fertig |
-| 6 | Atomphysik | Radioaktiver Zerfall; Spektrallinien (Bohr) | Warum gibt es eine Halbwertszeit, obwohl jeder Zerfall Zufall ist? Warum leuchtet jedes Element in eigenen Farben? | geplant |
+| 6 | Atomphysik | Radioaktiver Zerfall; Spektrallinien (Bohr) | Warum gibt es eine Halbwertszeit, obwohl jeder Zerfall Zufall ist? Warum leuchtet jedes Element in eigenen Farben? | fertig |
 | 7 | Magnetismus | Lorentzkraft, Feldlinien | Warum fliegen geladene Teilchen im Magnetfeld im Kreis (Polarlicht)? | geplant |
 | 8 | Thermodynamik | Gasteilchen in der Box (p, V, T) | Warum steigt der Druck, wenn das Gas warm wird? | geplant |
 | 9 | Elektrizität | Stromkreis mit festen Schaltungen (Reihe, parallel, Spannungsteiler) | Warum leuchten zwei Lämpchen in Reihe schwächer? | geplant |

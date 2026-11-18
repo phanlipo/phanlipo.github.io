@@ -495,6 +495,79 @@ test.describe('refraction', () => {
   });
 });
 
+// ---- atomic physics: reference ----
+const balmer = n => 1e9 / (1.0967758e7 * (1 / 4 - 1 / (n * n))); // nm (vacuum)
+
+test.describe('radioactive decay', () => {
+  test('about half is left after one half-life, within the random spread', async ({ page }) => {
+    await page.clock.install({ time: new Date(2026, 10, 18, 12, 0) }); // also fixes the random seed
+    await page.goto('/physics-lab/');
+    await open(page, 'decay');
+    await page.click('#dN button[data-v="2500"]');
+    await page.click('#dEx button[data-v="radon"]');
+    await expect(pres(page, 'dRes', 'Noch vorhanden')).toHaveText('2.500');
+    await expect(page.locator('#dWhy')).toContainText('50 %');
+    await page.click('#dPlay');
+    await page.clock.runFor(3000); // one half-life lasts 3 s
+    await page.click('#dPlay');
+    const k = num(await pres(page, 'dRes', /^Halbwertszeiten$/).textContent());
+    const left = num((await pres(page, 'dRes', 'Noch vorhanden').textContent()).replace('.', ''));
+    const exp = 2500 * 2 ** -k, sd = Math.sqrt(2500 * 2 ** -k * (1 - 2 ** -k));
+    expect(k).toBeGreaterThan(0.95);
+    expect(Math.abs(left - exp)).toBeLessThan(5 * sd); // 5 σ: practically never outside
+    // k is shown rounded to 0,01: the expected count may differ by a few atoms from one calculated with it
+    expect(Math.abs(num((await pres(page, 'dRes', 'Erwartet').textContent()).replace('.', '')) - exp)).toBeLessThan(5);
+    await expect(pres(page, 'dRes', /^Halbwertszeit$/)).toHaveText('55,6 s');
+    await expect(page.locator('#dWhy')).toContainText(`±${Math.round(sd)} Atome`);
+    // the time runs in the unit of the substance
+    await page.click('#dEx button[data-v="carbon"]');
+    await expect(pres(page, 'dRes', 'Vergangene Zeit')).toHaveText(/^[\d.]+ Jahre$/);
+    expect(Math.abs(num((await pres(page, 'dRes', 'Vergangene Zeit').textContent()).replace('.', '')) - k * 5730)).toBeLessThan(5730 * 0.006);
+  });
+
+  test('a run ends after 8 half-lives; a new random run starts at full count', async ({ page }) => {
+    await page.clock.install({ time: new Date(2026, 10, 18, 12, 0) });
+    await page.goto('/physics-lab/');
+    await open(page, 'decay');
+    await page.click('#dN button[data-v="100"]');
+    await page.click('#dPlay');
+    await page.clock.runFor(26000);
+    await expect(page.locator('#dPlay')).toHaveText('Start');
+    await page.click('#dNew');
+    await expect(pres(page, 'dRes', 'Noch vorhanden')).toHaveText('100');
+    await page.click('#p-decay summary:has-text("Formeln")');
+    await expect(page.locator('#dMath .katex')).toHaveCount(3);
+    await expect(page.locator('#dMath .fallback')).toHaveCount(0);
+  });
+});
+
+test.describe('spectral lines', () => {
+  test('hydrogen: Balmer lines from the energy levels', async ({ page }) => {
+    await open(page, 'spectrum');
+    await page.click('#sEl button[data-v="hydrogen"]');
+    for (const [n, colour] of [[3, 'rot'], [4, 'türkis'], [5, 'violett'], [6, 'violett']]) {
+      await page.click(`#sJump button[data-v="${n}"]`);
+      await expect(pres(page, 'sRes', 'Wellenlänge')).toHaveText(`${de(balmer(n), 1)} nm`);
+      await expect(pres(page, 'sRes', 'Farbe')).toHaveText(colour);
+      await expect(pres(page, 'sRes', 'Energie')).toHaveText(`${de(13.6057 * (1 / 4 - 1 / (n * n)), 2)} eV`);
+    }
+    await expect(page.locator('#sLevels .jump')).toHaveCount(1);
+    await page.click('#p-spectrum summary:has-text("Formeln")');
+    await expect(page.locator('#sMath .katex')).toHaveCount(4);
+  });
+
+  test('other elements show their own lines', async ({ page }) => {
+    await open(page, 'spectrum');
+    await page.click('#sEl button[data-v="sodium"]');
+    await expect(page.locator('#sLevelsBox')).toBeHidden();
+    await expect(pres(page, 'sRes', 'Sichtbare Linien')).toHaveText('589,0 · 589,6');
+    await expect(page.locator('#sWhy')).toContainText('gelb');
+    await page.click('#sEl button[data-v="helium"]');
+    await expect(page.locator('#sWhy')).toContainText('1868');
+    await expect(page.locator('#sBand')).toHaveAttribute('aria-label', /587,6/);
+  });
+});
+
 test.describe('lens', () => {
   test('projector, magnifier and glasses', async ({ page }) => {
     await open(page, 'lens');
@@ -517,7 +590,7 @@ test.describe('lens', () => {
 });
 
 test('open experiments with formulas have no accessibility violations', async ({ page }) => {
-  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw']) {
+  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum']) {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();
