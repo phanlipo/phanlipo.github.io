@@ -125,6 +125,49 @@ test.describe('with the fake worker', () => {
     expect(eyes.eyes.r[1] * 300).toBeCloseTo(149, -0.5);
   });
 
+  test('small face: found in the quarters of the photo, editor opens zoomed in; zoom, move and drag while zoomed', async ({ page }) => {
+    await onDialog(page, d => d.accept());
+    // 3000 × 2000, eyes 60 px apart (2 % of the width – too small for the detector on the whole photo)
+    await add(page, [png('far.png', await photo(page, { w: 3000, h: 2000, r: 12, eyes: [[2100, 1400], [2160, 1400]] }))]);
+    expect(await page.evaluate(() => Tools.diag.text())).toContain('faces {"n":1,"tiles":9');
+    await expect(page.locator('#photos li .flag:visible')).toHaveCount(0);
+    await page.locator('#photos .thumb').click();
+    // Zoom so the eyes are 30 % of the view apart: 0.3 / 0.02 = 15×, centred between the eyes (found eyes ± 1 px)
+    const zoom = async () => Number((await page.locator('#edZoom').textContent()).replace(/\D/g, ''));
+    await expect.poll(zoom).toBeGreaterThan(1480);
+    expect(await zoom()).toBeLessThan(1520);
+    const handles = () => page.evaluate(() => [...document.querySelectorAll('.handle')].map(h => [parseFloat(h.style.left), parseFloat(h.style.top)].map(v => Math.round(v))));
+    expect(await handles()).toEqual([[35, 50], [65, 50]]);
+    await page.click('#edZoomOut');
+    expect(Math.abs(await zoom() - 750)).toBeLessThan(10);
+    expect(await handles()).toEqual([[43, 50], [58, 50]]);
+    // Move the photo with one finger: 10 % of the stage to the left → photo centre 0.1 / 7.5 further right
+    const box = await page.locator('#stage').boundingBox();
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.8);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.8, { steps: 4 });
+    await page.mouse.up();
+    expect(await handles()).toEqual([[33, 50], [48, 50]]);
+    // Drag the right circle 10 % of the stage to the right: 0.1 / 7.5 × 3000 = 40 px in the photo
+    const h = await page.locator('.handle[data-eye="r"]').boundingBox();
+    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(h.x + h.width / 2 + box.width * 0.1, h.y + h.height / 2, { steps: 4 });
+    await page.mouse.up();
+    // Mouse wheel zooms out around the pointer; "Onto the eyes" zooms in again
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 100);
+    await expect.poll(async () => Math.abs(await zoom() - 600)).toBeLessThan(10);
+    await page.click('#edFocus');
+    await expect.poll(zoom).toBeGreaterThan(900);
+    await page.click('#edDone');
+    await expect.poll(() => page.evaluate(async () => (await Tools.keep.json('state', { photos: [] })).photos[0]?.manual)).toBe(true);
+    const e = (await page.evaluate(async () => (await Tools.keep.json('state')).photos[0])).eyes;
+    expect(e.l[0] * 3000).toBeCloseTo(2100, -0.5);
+    expect(e.r[0] * 3000).toBeCloseTo(2200, -0.5);
+    expect(e.r[1] * 2000).toBeCloseTo(1400, -0.5);
+  });
+
   test('several faces: the biggest is taken, "other face" picks the next', async ({ page }) => {
     await onDialog(page, d => d.accept());
     // Small face on the left (eyes 40 px apart), big face on the right (100 px apart, eyes 2 px wide red marks differ)
@@ -134,9 +177,12 @@ test.describe('with the fake worker', () => {
     await expect(page.locator('#edNext')).toHaveText('Anderes Gesicht (2/2)');
     const handleAt = () => page.evaluate(() => [...document.querySelectorAll('.handle')].map(h => [parseFloat(h.style.left), parseFloat(h.style.top)].map(v => Math.round(v))));
     expect(await handleAt()).toEqual([[Math.round(350 / 6), 50], [75, 50]]);
+    await expect(page.locator('#edZoom')).toHaveText('100 %');
     await page.click('#edNext');
     await expect(page.locator('#edNext')).toHaveText('Anderes Gesicht (1/2)');
-    expect(await handleAt()).toEqual([[10, 33], [Math.round(100 / 6), 33]]);
+    // The small face (eyes 40 px = 6,7 % of the width apart) is shown zoomed in: 0.3 / (40 / 600) = 4.5×, centred
+    await expect(page.locator('#edZoom')).toHaveText('450 %');
+    expect(await handleAt()).toEqual([[35, 50], [65, 50]]);
     await page.click('#edAuto');
     await expect(page.locator('#edNext')).toHaveText('Anderes Gesicht (2/2)');
     await page.click('#edNext');
