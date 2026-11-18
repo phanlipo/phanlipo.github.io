@@ -257,3 +257,28 @@ test.describe('private last customer (B2C)', () => {
     await expect(page.locator('#parties legend').nth(2)).toHaveText('U3 · letzter Abnehmer');
   });
 });
+
+test('ZM and Intrastat in the duties; notes on other countries', async ({ page }) => {
+  // DE → IT, last customer collects: U2 (AT) sells exempt from DE, U3 declares the arrival in Italy
+  await page.locator('#transport button', { hasText: 'U3' }).click();
+  const u2 = page.locator('.duty').nth(1), u3 = page.locator('.duty').nth(2);
+  await expect(u2).toContainText('Zusammenfassende Meldung in Deutschland: USt-IdNr. von U3 (IT)');
+  await expect(u2).toContainText('bis zum 25. Tag nach Ablauf jedes Monats');
+  await expect(u2).toContainText('Intrastat-Versendung in Deutschland: Bestimmungsland Italien');
+  await expect(u2).toContainText('ab 1 Mio. € Versendungen');
+  await expect(u3).toContainText('Intrastat-Eingang in Italien: Versendungsland Deutschland. Die Meldeschwellen legt jedes Land selbst fest.');
+  // Both supplies take place in Germany: no notes on other countries
+  await expect(page.locator('#why')).not.toContainText('8. Was in anderen Ländern');
+  // Triangle: middle company needs no Intrastat in Italy, the last customer declares the arrival
+  await page.locator('#transport button', { hasText: 'U1' }).click();
+  await expect(page.locator('.duty').nth(1)).toContainText('Keine Intrastat-Meldung in Italien');
+  await expect(page.locator('.duty').nth(2)).toContainText('Intrastat-Eingang in Italien durch U3');
+  await expect(page.locator('#why')).toContainText('Die Auslegung in Italien sollte geprüft werden.');
+  // DE-AT-IT without triangle (U3 uses a French ID): U2 sells in Italy → local reverse charge note
+  await page.selectOption('#pv2', 'FR');
+  await expect(page.locator('#why')).toContainText('Italien: Liefert ein dort nicht ansässiges Unternehmen an einen in Italien registrierten Unternehmer');
+  // Purely German: no country notes
+  await page.selectOption('#pc1', 'DE');
+  await page.selectOption('#pc2', 'DE');
+  await expect(page.locator('#why')).not.toContainText('8. Was in anderen Ländern');
+});

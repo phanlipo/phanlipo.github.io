@@ -19,9 +19,12 @@ Umsatzsteuerliche Beurteilung von Reihengeschäften mit 3 oder 4 Unternehmen: be
 - **Registrierungen:** Gründe `sale`, `icSupply`, `export`, `acquisition`, `import`, `triangleReport`, `triangleTax`; „vorhanden“, wenn das Unternehmen die USt-IdNr. dieses Lands verwendet. Für den Vorsteuerabzug als Abnehmer allein wird keine Registrierung verlangt (Vergütungsverfahren).
 - **Privatperson als letzter Abnehmer (`b2c`):** heißt P3/P4, hat nie eine USt-IdNr. Ist die bewegte Lieferung die an sie und transportiert der Lieferer → innergemeinschaftlicher Fernverkauf (`distance`, Ort Bestimmungsland, § 3c Abs. 1; Meldung über OSS, Registrierung `oss: true` zählt nicht als Registrierungspflicht). Holt sie ab → steuerpflichtig im Abgangsland. Ruhende Lieferung an sie → Registrierung im Bestimmungsland (Hinweis auf mittelbare Beteiligung am Transport, Art. 5a MwStVO). Kein Dreieck (`lastBusiness`). Annahmen: Lieferschwelle 10.000 € überschritten, bei Einfuhr Sachwert über 150 € (IOSS nur als Hinweis); EUSt der Privatperson ist Endbelastung, keine Warnung.
 - **Druck/PDF:** `window.print()` mit Druck-CSS; oben eine nur gedruckte Tabelle des Falls (`#report`), Eingaben, Knöpfe und Menü fallen weg. Fernverkäufe deutscher Lieferer gehören laut Anleitung USt 1 A 2026 in Kennzahl 45.
+- **ZM und Intrastat:** Angaben je Unternehmen (USt-IdNr. des Partners, Bestimmungs-/Versendungsland, Ursprungsland seit 2022); Fristen und Schwellen nur für Deutschland (§ 18a UStG; Intrastat 1 Mio. € Versendung / 3 Mio. € Eingang, Stand 2026), sonst Hinweis, dass jedes Land eigene Schwellen hat. Beim Dreieck meldet der letzte Abnehmer den Eingang.
+- **Andere Länder (Schritt 8):** nur, wenn eine Lieferung außerhalb Deutschlands stattfindet. Hinweis auf die örtliche Umkehr der Steuerschuld (`RC_COUNTRIES` = BE, ES, FR, IT, NL) bei steuerpflichtigen Lieferungen nicht ansässiger Unternehmer an Unternehmer; engere Auslegung des Dreiecksgeschäfts; Nordirland/HMRC. Bewusst nur Hinweise, keine geänderte Auswertung.
 - Icons: `truck` (transportiert), `file-certificate` (meldet Einfuhr an), `arrow-down` (Lieferung), `circle-check`/`circle-x` (Voraussetzungen), `book` (Beispiele im Menü), `printer` (Drucken / PDF).
 
 ## Offene Erweiterungen
 
 - Gebrochener Transport, Konsignationslager, Lohnveredelung.
-- Zusammenfassende Meldung und Intrastat mit Feldern im Detail, Kennzahlen anderer Länder.
+- Kennzahlen und Fristen anderer Länder; Intrastat für Fernverkäufe.
+- Frühere Rechtsstände (vor den Quick Fixes 2020, vor der OSS-Reform Juli 2021) – siehe Entscheidung im PR #227.
