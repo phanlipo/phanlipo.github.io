@@ -80,5 +80,45 @@
     };
   }
 
-  root.Mechanics = { TAU, DT, agm, periodSmall, periodExact, periodSpring, oscillator, coupled };
+  /* Throw from the ground with air drag F = ½·ρ·c_w·A·v² against the direction of flight (RK4, step 2 ms).
+     ball { m (kg), d (m), cw }, air: false = vacuum. Returns the path [[t, x, y], …] up to the landing
+     (interpolated to y = 0), the range, the flight time and the highest point. */
+  const RHO = 1.2;
+  const dragFactor = ball => RHO * ball.cw * Math.PI * ball.d * ball.d / 8 / ball.m; // k/m in 1/m
+  function projectile(ball, v, deg, g, air, keep = true) {
+    const h = 0.002, c = air ? dragFactor(ball) : 0, a = deg * Math.PI / 180;
+    // state x, y, vx, vy; the derivative of (vx, vy) is (-c·|v|·vx, -g - c·|v|·vy)
+    const ax = (u, w) => -c * Math.hypot(u, w) * u, ay = (u, w) => -g - c * Math.hypot(u, w) * w;
+    let x = 0, y = 0, u = v * Math.cos(a), w = v * Math.sin(a), t = 0, hMax = 0;
+    const pts = [[0, 0, 0]];
+    for (let i = 0; i < 200000; i++) {
+      const k1u = ax(u, w), k1w = ay(u, w);
+      const u2 = u + h / 2 * k1u, w2 = w + h / 2 * k1w, k2u = ax(u2, w2), k2w = ay(u2, w2);
+      const u3 = u + h / 2 * k2u, w3 = w + h / 2 * k2w, k3u = ax(u3, w3), k3w = ay(u3, w3);
+      const u4 = u + h * k3u, w4 = w + h * k3w, k4u = ax(u4, w4), k4w = ay(u4, w4);
+      const nx = x + h / 6 * (u + 2 * u2 + 2 * u3 + u4), ny = y + h / 6 * (w + 2 * w2 + 2 * w3 + w4);
+      const nu = u + h / 6 * (k1u + 2 * k2u + 2 * k3u + k4u), nw = w + h / 6 * (k1w + 2 * k2w + 2 * k3w + k4w);
+      if (ny < 0 && i > 0) {
+        const q = y / (y - ny), end = [t + h * q, x + (nx - x) * q, 0];
+        if (keep) pts.push(end);
+        return { pts, range: end[1], time: end[0], hMax };
+      }
+      x = nx; y = ny; u = nu; w = nw; t += h; if (y > hMax) hMax = y;
+      if (keep && i % 5 === 4) pts.push([t, x, y]);
+    }
+    return { pts, range: x, time: t, hMax };
+  }
+  // range for every whole angle 1 … 89° and the best angle (refined to 0.1°)
+  function rangeCurve(ball, v, g, air) {
+    const curve = [];
+    for (let d = 1; d <= 89; d++) curve.push([d, projectile(ball, v, d, g, air, false).range]);
+    let best = curve.reduce((b, p) => (p[1] > b[1] ? p : b));
+    for (let d = best[0] - 1; d <= best[0] + 1 + 1e-9; d += 0.1) {
+      const r = projectile(ball, v, d, g, air, false).range;
+      if (r > best[1]) best = [Math.round(d * 10) / 10, r];
+    }
+    return { curve, best: best[0], bestRange: best[1] };
+  }
+
+  root.Mechanics = { TAU, DT, agm, periodSmall, periodExact, periodSpring, oscillator, coupled, RHO, dragFactor, projectile, rangeCurve };
 })(typeof window !== 'undefined' ? window : globalThis);

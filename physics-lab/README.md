@@ -8,7 +8,7 @@ Physik zum Ausprobieren: je Versuch eine Zeichnung, die sofort auf Regler reagie
 index.html   Oberfläche: Übersicht/Tabs (assets/shared/toolbox.js), je Versuch Zeichnung (SVG), Regler, Ergebnisse, Formeln, WebMCP
 optics.js    window.Optics: Abbildungsgleichung und Strahlengang ohne DOM
 waves.js     window.Waves: Licht durch N Spalte (Intensität, Hauptmaxima, Zeigerkette, Farbe einer Wellenlänge)
-mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung)
+mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
 ```
 
 ## Optik (optics.js)
@@ -34,9 +34,15 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 - **Gekoppelte Pendel:** kleine Winkel (10°), Kopplung κ = q·g/l (q = Regler in %); Eigenkreisfrequenzen ω₁ = √(g/l), ω₂ = √(g/l + 2κ), exakt gelöst – die Zeit ist der einzige Zustand. Energiebalken: Energie jedes Pendels ohne den Anteil der Feder (ein ruhendes Pendel zeigt genau 0 %). Die Kurve zeigt eine Schwebungsdauer (höchstens 90 s) im Voraus, eine Linie läuft mit.
 - Animation: eine Schleife (`anim`) für den laufenden Versuch; sie hält an bei Übersicht, Wechsel des Versuchs und verborgener Seite. Start nur per Knopf (kein Autostart, damit auch „weniger Bewegung“ respektiert ist). Tests mit `page.clock.install()` und `runFor`.
 
+## Schiefer Wurf (mechanics.js)
+
+- Abwurf vom Boden, Luftwiderstand F = ½·ρ·c_w·A·v² gegen die Flugrichtung (ρ = 1,2 kg/m³), RK4 mit 2 ms, Landung auf y = 0 interpoliert. Bälle (m, d, c_w): Stoßkugel 7,26 kg / 12 cm / 0,45; Fußball 430 g / 22 cm / 0,25; Tennisball 58 g / 6,7 cm / 0,55; Tischtennisball 2,7 g / 4 cm / 0,45 – typische Werte, ohne Drall (Magnus-Effekt).
+- Weite über Winkel: Simulation für 1 … 89°, bester Winkel auf 0,1° verfeinert; zwischengespeichert für Ball, Geschwindigkeit und Luft (der Winkel-Regler rechnet nur die eine Bahn neu).
+- Der Ball fliegt nach „Werfen“ in echter Zeit über dieselbe Animationsschleife wie die Pendel.
+
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start } }` – nur Reglerstellungen und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air } }` – nur Reglerstellungen und offener Versuch.
 
 ## Erweitern
 
@@ -51,7 +57,7 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 1 | Optik | Gewölbter Spiegel, Linse | Warum steht das Bild im Löffel Kopf? | fertig |
 | 2 | Wellen | Licht durch N Spalte | Warum wird das Muster mit mehr Spalten schärfer? | fertig |
 | 3 | Schwingungen | Fadenpendel, Federpendel, gekoppelte Pendel (Schwebung) | Warum hängt die Schwingungsdauer beim Fadenpendel nicht von der Masse ab (beim Federpendel aber schon)? Warum wandert die Energie zwischen gekoppelten Pendeln hin und her? | fertig |
-| 4 | Mechanik | Schiefer Wurf mit/ohne Luftwiderstand | Warum fliegt der Ball mit Luftwiderstand unter weniger als 45° am weitesten? | geplant |
+| 4 | Mechanik | Schiefer Wurf mit/ohne Luftwiderstand | Warum fliegt der Ball mit Luftwiderstand unter weniger als 45° am weitesten? | fertig |
 | 5 | Optik | Brechung, Totalreflexion, Prisma | Warum sieht ein Stab im Wasser geknickt aus? | geplant |
 | 6 | Atomphysik | Radioaktiver Zerfall; Spektrallinien (Bohr) | Warum gibt es eine Halbwertszeit, obwohl jeder Zerfall Zufall ist? Warum leuchtet jedes Element in eigenen Farben? | geplant |
 | 7 | Magnetismus | Lorentzkraft, Feldlinien | Warum fliegen geladene Teilchen im Magnetfeld im Kreis (Polarlicht)? | geplant |

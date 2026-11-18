@@ -416,6 +416,17 @@ test.describe('physics-lab tools', () => {
     await expect(page.locator('#p-coupled')).toBeVisible();
     expect((await call(page, 'physics_lab_coupled_pendulums', { start: 'same' })).result.energy_moved_over_after_s).toBe(null);
   });
+
+  test('throw_ball', async ({ page }) => {
+    let r = await call(page, 'physics_lab_throw_ball', { ball: 'football', angle_deg: 30, speed_m_s: 20, air: false });
+    expect(r.result).toMatchObject({ ball: 'football', air: false, range_m: Math.round(400 * Math.sin(Math.PI / 3) / 9.81 * 100) / 100,
+      best_angle_deg: 45, drag_to_weight_at_launch: 0 });
+    await expect(page.locator('#p-throw')).toBeVisible();
+    r = await call(page, 'physics_lab_throw_ball', { ball: 'pingpong', air: true });
+    expect(r.result.best_angle_deg).toBeLessThan(40);
+    expect(r.result.range_m).toBeLessThan(r.result.range_without_air_m);
+    expect((await call(page, 'physics_lab_throw_ball', { angle_deg: 90 })).ok).toBe(false);
+  });
 });
 
 test.describe('chain-transaction tools', () => {

@@ -334,6 +334,84 @@ test.describe('coupled pendulums', () => {
   });
 });
 
+// ---- projectile: reference (independent from mechanics.js: midpoint method, step 0.2 ms) ----
+const BALL = { shot: [7.26, 0.12, 0.45], football: [0.43, 0.22, 0.25], tennis: [0.058, 0.067, 0.55], pingpong: [0.0027, 0.04, 0.45] };
+function flight(ball, v, deg, air) {
+  const [m, d, cw] = BALL[ball], c = air ? 1.2 * cw * Math.PI * d * d / 4 / 2 / m : 0, h = 0.0002, a = deg * Math.PI / 180;
+  let x = 0, y = 0, u = v * Math.cos(a), w = v * Math.sin(a);
+  const acc = (u, w) => { const s = Math.hypot(u, w); return [-c * s * u, -9.81 - c * s * w]; };
+  for (;;) {
+    const [au, aw] = acc(u, w), um = u + au * h / 2, wm = w + aw * h / 2, [bu, bw] = acc(um, wm);
+    const nx = x + um * h, ny = y + wm * h;
+    if (ny < 0) return x + (nx - x) * y / (y - ny);
+    x = nx; y = ny; u += bu * h; w += bw * h;
+  }
+}
+const bestAngle = (ball, v) => { let b = [0, 0]; for (let d = 20; d <= 50; d += 0.1) { const r = flight(ball, v, d, true); if (r > b[1]) b = [d, r]; } return b; };
+const num = txt => Number(txt.replace(/[^\d,.-]/g, '').replace(',', '.'));
+
+test.describe('projectile', () => {
+  test('without air: 45° is best, 30° and 60° fly equally far', async ({ page }) => {
+    await open(page, 'throw');
+    if (await page.locator('#tAir').isChecked()) await page.locator('#tAir').uncheck();
+    await page.locator('#tV').fill('20');
+    for (const a of ['30', '60']) {
+      await page.locator('#tA').fill(a);
+      await expect(pres(page, 'tRes', 'Weite')).toHaveText(`${de(400 * Math.sin(Math.PI / 3) / 9.81, 1)} m`); // 35,3 m
+    }
+    await expect(pres(page, 'tRes', 'Bester Winkel')).toHaveText(`45,0° (${de(400 / 9.81, 1)} m)`);
+    await expect(page.locator('#tWhy')).toContainText('45° ist am besten');
+  });
+
+  test('with air the best angle is lower – the more, the lighter the ball', async ({ page }) => {
+    await open(page, 'throw');
+    if (!await page.locator('#tAir').isChecked()) await page.locator('#tAir').check();
+    await page.locator('#tV').fill('30'); await page.locator('#tA').fill('60');
+    await page.click('#tBall button:has-text("Tennisball")');
+    await expect.poll(async () => Math.abs(num(await pres(page, 'tRes', /^Weite$/).textContent()) - flight('tennis', 30, 60, true))).toBeLessThan(0.06);
+    const best = {};
+    for (const ball of ['shot', 'tennis', 'pingpong']) {
+      await page.click(`#tBall button[data-v="${ball}"]`);
+      const [ref, refRange] = bestAngle(ball, 30);
+      // the values are drawn in the next frame: wait for the range of this ball
+      await expect.poll(async () => Math.abs(num((await pres(page, 'tRes', 'Bester Winkel').textContent()).split('(')[1]) - refRange), ball).toBeLessThan(0.06);
+      const shown = num((await pres(page, 'tRes', 'Bester Winkel').textContent()).split('°')[0]);
+      expect(Math.abs(shown - ref), ball).toBeLessThanOrEqual(0.3);
+      best[ball] = shown;
+    }
+    expect(best.pingpong).toBeLessThan(best.tennis);
+    expect(best.tennis).toBeLessThan(best.shot);
+    expect(best.shot).toBeLessThanOrEqual(45);
+    await expect(page.locator('#tWhy')).toContainText('flacher geht weiter');
+  });
+
+  test('the ball flies in real time and lands', async ({ page }) => {
+    await page.clock.install();
+    await page.goto('/physics-lab/');
+    await open(page, 'throw');
+    await page.locator('#tV').fill('10'); await page.locator('#tA').fill('45');
+    if (await page.locator('#tAir').isChecked()) await page.locator('#tAir').uncheck();
+    await page.click('#tPlay');
+    await expect(page.locator('#tPlay')).toHaveText('Anhalten');
+    await page.clock.runFor(Math.ceil(2 * 10 * Math.SQRT1_2 / 9.81 * 1000) + 300); // flight time 1,44 s
+    await expect(page.locator('#tPlay')).toHaveText('Werfen');
+  });
+
+  test('formulas with the values', async ({ page }) => {
+    await open(page, 'throw');
+    if (!await page.locator('#tAir').isChecked()) await page.locator('#tAir').check();
+    await page.click('#tBall button[data-v="tennis"]');
+    await page.locator('#tV').fill('20'); await page.locator('#tA').fill('45');
+    await page.click('#p-throw summary:has-text("Formeln")');
+    const tex = (await page.locator('#tMath annotation').allTextContents()).join(' ');
+    expect(tex).toContain('\\sin(90^\\circ)');
+    expect(tex).toContain('\\approx 40{,}8\\,\\text{m}');
+    const ratio = 1.2 * 0.55 * Math.PI * 0.067 ** 2 / 4 * 400 / 2 / (0.058 * 9.81);
+    expect(tex).toContain(de(ratio, 2).replace(',', '{,}'));
+    await expect(page.locator('#tMath .fallback')).toHaveCount(0);
+  });
+});
+
 test.describe('lens', () => {
   test('projector, magnifier and glasses', async ({ page }) => {
     await open(page, 'lens');
@@ -356,7 +434,7 @@ test.describe('lens', () => {
 });
 
 test('open experiments with formulas have no accessibility violations', async ({ page }) => {
-  for (const kind of ['mirror', 'lens', 'waves', 'pendulum', 'coupled']) {
+  for (const kind of ['mirror', 'lens', 'waves', 'pendulum', 'coupled', 'throw']) {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();
