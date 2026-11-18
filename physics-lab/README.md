@@ -1,0 +1,91 @@
+# Physik verstehen – Aufbau
+
+Physik zum Ausprobieren: je Versuch eine Zeichnung, die sofort auf Regler reagiert, das Ergebnis, eine Erklärung in Worten und die Formeln mit den eigenen Zahlen (KaTeX). Werkzeugkasten nach `UI-KONZEPT.md` 4b – jeder Versuch ist ein Werkzeug; Gruppen auf der Übersicht nach Gebiet (Optik, Wellen, …). (`.md` wird nicht veröffentlicht.)
+
+**Leitsatz: Jeder Versuch beantwortet eine Warum-Frage** (als aufklappbarer Abschnitt mit durchgerechnetem Beispiel). Die Frage bestimmt, welche Regler und Anzeigen der Versuch braucht – nicht mehr.
+
+```
+index.html   Oberfläche: Übersicht/Tabs (assets/shared/toolbox.js), je Versuch Zeichnung (SVG), Regler, Ergebnisse, Formeln, WebMCP
+optics.js    window.Optics: Abbildungsgleichung und Strahlengang, Brechung (Snellius, Fresnel, scheinbarer Ort unter Wasser) ohne DOM
+waves.js     window.Waves: Licht durch N Spalte (Intensität, Hauptmaxima, Zeigerkette, Farbe einer Wellenlänge)
+atomic.js    window.Atomic: radioaktiver Zerfall (Lebensdauern mit festem Zufall), Wasserstoff nach Bohr, Linien der Elemente
+electro.js   window.Electro: Lorentzkraft (Kreisbahn, Umlaufzeit), Stromkreise mit Lämpchen (eins, Reihe, parallel)
+thermo.js    window.Thermo: ideales Gas in 2D (Teilchen, Wandstöße, gemessener Druck)
+mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
+```
+
+## Optik (optics.js)
+
+- Einheiten cm; Spiegel bzw. Linse bei x = 0, Gegenstand bei x = −g, y nach oben.
+- Vorzeichen wie in der Schule („reell = positiv“): g > 0; f > 0 Hohlspiegel/Sammellinse, f < 0 Wölbspiegel/Zerstreuungslinse, f = ∞ ebener Spiegel; b > 0 reelles Bild, b < 0 virtuelles Bild; m = B/G = −b/g, m < 0 = Bild steht Kopf.
+- Regler: Spiegel-Krümmung 1/r in 1/m (−40 … 40, Schritt 0,5; r = 100/k cm, f = r/2), Linsen-Brechkraft D in dpt (−25 … 25; f = 100/D cm), Gegenstandsweite 1 … 50 cm. Gegenstandshöhe fest 8 cm.
+- Strahlen: Parallelstrahl, Brennpunktstrahl, Strahl durch die Mitte (Spiegel: Scheitelstrahl, Linse: Mittelpunktstrahl). Näherung für achsennahe Strahlen: Knick an der senkrechten Linie x = 0. Der Spiegel wird als „gefaltete Linse“ gerechnet (`fold`: alles nach dem Element an x = 0 gespiegelt) – eine Rechnung für beide Versuche.
+- Spiegel-Zeichnung: Parabel x = −y²/2r (die paraxiale Form), Öffnung so begrenzt, dass die Schale höchstens 6 cm tief ist.
+- Sehr kleine Bilder (< 22 px) zeigt ein Kästchen oben rechts vergrößert, mit richtiger Richtung („Bild ×n“).
+
+## Brechung (optics.js)
+
+- Stoffe: Wasser 1,33, Glas 1,50, Diamant 2,42; Luft 1,00. Snellius, Grenzwinkel arcsin(n₂/n₁), gespiegelter Anteil nach Fresnel für unpolarisiertes Licht (Dicke und Deckkraft des gespiegelten Strahls).
+- Prisma und Regentropfen: Brechzahl nach Cauchy, n = A + B/λ² (Kronglas BK7: 1,5046 + 4200/λ², Wasser: 1,3240 + 3046/λ², λ in nm), sieben Farben von 680 bis 410 nm einzeln verfolgt (Snellius in Vektorform). Prisma gleichseitig (60°), Strahl trifft die Mitte der linken Fläche; Totalreflexion innen wird gespiegelt weiterverfolgt. Tropfen: Eintritt, eine Spiegelung, Austritt; Rückkehrwinkel θ zur Sonnenrichtung, Regenbogen = größtes θ (Suche über 2000 Höhen, entspricht cos²α = (n²−1)/3).
+- Stab im Wasser: Der Stab taucht bei x = 0 ein (18 cm darüber und darunter), das Auge sitzt 32 cm entfernt unter dem eingestellten Blickwinkel. Für jeden Punkt unter Wasser wird der echte Strahlweg zum Auge gesucht (Austrittspunkt per Bisektion), dann zwei Strahlen zu den Rändern einer 4-mm-Pupille geradlinig zurückverlängert – ihr Schnittpunkt ist der Ort, an dem das Auge den Punkt sieht. Senkrecht von oben ergibt das h/n.
+
+## Licht durch Spalte (waves.js)
+
+- Fraunhofer-Näherung, Schirm L = 1 m. λ in nm (380 … 750), Spaltabstand d und Spaltbreite a in µm, N = 1 … 20; a ≤ d (wird beim Einstellen begrenzt).
+- I/I0 = (sin β/β)² · (sin(NΔφ/2) / (N sin(Δφ/2)))², Δφ = 2π d sinα/λ, β = π a sinα/λ.
+- Gezeigter Ausschnitt: ±3,5 Ordnungen (sin α ≤ 0,95), unabhängig von N – so lassen sich 1, 2, 20 Spalte direkt vergleichen. Die Markierung („Stelle auf dem Schirm“) wird als Anteil dieses Ausschnitts gespeichert.
+- Schirmbild als Canvas (Helligkeit je Pixel über 4 Stellen gemittelt, damit schmale Gitterstreifen nicht zwischen Stützstellen fallen), Helligkeitskurve und Zeigerdiagramm als SVG. Das Zeigerdiagramm füllt seinen Kasten (Pfeil höchstens 50 px), damit auch ein geschlossenes Vieleck sichtbar bleibt; die Länge der Summe steht als % darunter.
+- Erklärung je Stelle: Hauptmaximum (Δs ganzzahlig, ±0,01 λ), fehlende Ordnung (dort Minimum des Einzelspalts), dunkel (Zeigersumme < 1 %), sonst teilweise.
+
+## Schwingungen (mechanics.js)
+
+- **Pendel:** zwei Pendel nebeneinander (Massen m₁, m₂), Fadenpendel exakt φ'' = −(g/l)·sin φ, Federpendel x'' = −(k/m)·x; RK4 mit festem Schritt 1 ms, unabhängig von der Bildrate. Die „Stoppuhr“ misst die Zeit zwischen zwei Nulldurchgängen nach oben (interpoliert). Exakte Periode zum Vergleich: T = T₀ / AGM(1, cos(φ₀/2)). Ort: Erde 9,81, Mond 1,62, Mars 3,71 m/s².
+- **Gekoppelte Pendel:** kleine Winkel (10°), Kopplung κ = q·g/l (q = Regler in %); Eigenkreisfrequenzen ω₁ = √(g/l), ω₂ = √(g/l + 2κ), exakt gelöst – die Zeit ist der einzige Zustand. Energiebalken: Energie jedes Pendels ohne den Anteil der Feder (ein ruhendes Pendel zeigt genau 0 %). Die Kurve zeigt eine Schwebungsdauer (höchstens 90 s) im Voraus, eine Linie läuft mit.
+- Animation: eine Schleife (`anim`) für den laufenden Versuch; sie hält an bei Übersicht, Wechsel des Versuchs und verborgener Seite. Start nur per Knopf (kein Autostart, damit auch „weniger Bewegung“ respektiert ist). Tests mit `page.clock.install()` und `runFor`.
+
+## Schiefer Wurf (mechanics.js)
+
+- Abwurf vom Boden, Luftwiderstand F = ½·ρ·c_w·A·v² gegen die Flugrichtung (ρ = 1,2 kg/m³), RK4 mit 2 ms, Landung auf y = 0 interpoliert. Bälle (m, d, c_w): Stoßkugel 7,26 kg / 12 cm / 0,45; Fußball 430 g / 22 cm / 0,25; Tennisball 58 g / 6,7 cm / 0,55; Tischtennisball 2,7 g / 4 cm / 0,45 – typische Werte, ohne Drall (Magnus-Effekt).
+- Weite über Winkel: Simulation für 1 … 89°, bester Winkel auf 0,1° verfeinert; zwischengespeichert für Ball, Geschwindigkeit und Luft (der Winkel-Regler rechnet nur die eine Bahn neu).
+- Der Ball fliegt nach „Werfen“ in echter Zeit über dieselbe Animationsschleife wie die Pendel.
+
+## Atomphysik (atomic.js)
+
+- **Zerfall:** Jedes Atom bekommt beim Auslosen eine Lebensdauer t = −log₂(U) Halbwertszeiten (exponentialverteilt, ohne Gedächtnis); gezählt wird über die sortierte Liste. Die Zeit ist der einzige Zustand – eine Halbwertszeit dauert 3 s, Ende nach 8. Zufall: eigener Generator (mulberry32), Startwert aus `Date.now()` und Laufnummer – in Tests mit `page.clock.install({ time })` fest. Beispiele mit echten Halbwertszeiten (Radon-220 55,6 s, Iod-131 8,02 d, C-14 5730 a) ändern nur die Zeitangaben.
+- **Spektrallinien:** Wasserstoff nach Bohr (E_n = −13,6 eV/n², Rydberg mit reduzierter Masse, Vakuum-Wellenlängen), Balmer-Serie 3…6 → 2 mit Energiestufen-Bild (Höhe ∝ 1/n). Helium, Natrium, Neon, Quecksilber: hellste sichtbare Linien (gemessene Werte in Luft, gerundet). Farben der Linien wie bei den Spalten (`Waves.rgb`).
+
+## Elektrizität & Magnetismus (electro.js)
+
+- **Teilchen im Magnetfeld:** Elektron, Proton, Alphateilchen; v = 1 … 10 · 10⁶ m/s, B = 1 … 10 mT, Feld in den oder aus dem Bildschirm. r = m·v/(|q|·B), T = 2π·m/(|q|·B). Maßstab je Teilchen fest (größter Kreis passt ins Bild), damit v und B die Kreisgröße sichtbar ändern. Die Animation ist verlangsamt: 3 s je Umlauf bei 5 mT, proportional zum echten T (hängt nur von B ab, nicht von v). Drehsinn aus F = q·v×B.
+- **Feldlinien:** Jeder Stabmagnet als zwei Pole (±1, Feld ∝ 1/r²) an seinen Enden; Linien starten auf einem kleinen Kreis um jeden Nordpol (14 je Pol) und werden mit dem Mittelpunktverfahren verfolgt, bis sie einen Südpol erreichen oder das Bild verlassen. Anordnungen: ein Magnet, N gegenüber S, N gegenüber N.
+- **Stromkreis:** Batterie ohne Innenwiderstand, ohmsche Lämpchen (2 … 50 Ω), Schaltungen eins/Reihe/parallel und Spannungsteiler (zwei Widerstände, Messgerät an R₂ ohne Stromverbrauch). Helligkeit = Leistung im Verhältnis zum selben Lämpchen allein an derselben Batterie. Die Punkte auf den Drähten sind eine CSS-Animation (Tempo ∝ Strom), bei „weniger Bewegung“ stehen sie still.
+
+## Wärme (thermo.js)
+
+- **Gas in der Box:** 30/80/200 Teilchen der Masse 1 in einem 10 × 8 großen Kasten, nur Wandstöße (ideales Gas). Startgeschwindigkeiten aus der 2D-Maxwell-Verteilung, so skaliert, dass ⟨v²⟩ = 2·T/300 genau stimmt. Heizen skaliert alle Geschwindigkeiten mit √(T_neu/T_alt), die rechte Wand ist verschiebbar. Gemessener Druck = Impuls an die Wände pro Zeit und Wandlänge, gemittelt über 8 Zeiteinheiten; verglichen mit p·A = N·T (beide bezogen auf 300 K und vollen Kasten). Simulation 4-mal schneller als echte Zeit, Schritt 0,004.
+
+## Speicher
+
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v } }` – nur Reglerstellungen und offener Versuch.
+
+## Erweitern
+
+Neuer Versuch = Kachel + Tab + `section.card.panel`; Logik ohne DOM in eine eigene Datei im App-Ordner (wie `optics.js`), fachliche Tests mit unabhängig nachgerechneten Werten in `tests/physics-lab.spec.mjs`. Ab etwa 6 Versuchen Gruppen auf der Übersicht (h2 je Gebiet).
+
+Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame` nur, solange der Versuch offen und die Seite sichtbar ist (anhalten in `onOverview`, bei `visibilitychange` und beim Tab-Wechsel), `prefers-reduced-motion` beachten (dann Start per Knopf); in Tests feste Zeit (`page.clock`) und festgelegter Zufall.
+
+## Plan (Reihenfolge) mit Warum-Fragen
+
+| # | Gebiet | Versuch | Warum-Frage | Stand |
+|---|---|---|---|---|
+| 1 | Optik | Gewölbter Spiegel, Linse | Warum steht das Bild im Löffel Kopf? | fertig |
+| 2 | Wellen | Licht durch N Spalte | Warum wird das Muster mit mehr Spalten schärfer? | fertig |
+| 3 | Schwingungen | Fadenpendel, Federpendel, gekoppelte Pendel (Schwebung) | Warum hängt die Schwingungsdauer beim Fadenpendel nicht von der Masse ab (beim Federpendel aber schon)? Warum wandert die Energie zwischen gekoppelten Pendeln hin und her? | fertig |
+| 4 | Mechanik | Schiefer Wurf mit/ohne Luftwiderstand | Warum fliegt der Ball mit Luftwiderstand unter weniger als 45° am weitesten? | fertig |
+| 5 | Optik | Brechung, Totalreflexion (Prisma/Regenbogen später) | Warum sieht ein Stab im Wasser geknickt aus? | fertig |
+| 6 | Atomphysik | Radioaktiver Zerfall; Spektrallinien (Bohr) | Warum gibt es eine Halbwertszeit, obwohl jeder Zerfall Zufall ist? Warum leuchtet jedes Element in eigenen Farben? | fertig |
+| 7 | Magnetismus | Lorentzkraft (Feldlinien später) | Warum fliegen geladene Teilchen im Magnetfeld im Kreis (Polarlicht)? | fertig |
+| 8 | Thermodynamik | Gasteilchen in der Box (p, V, T) | Warum steigt der Druck, wenn das Gas warm wird? | fertig |
+| 9 | Elektrizität | Stromkreis mit festen Schaltungen (eins, Reihe, parallel) | Warum leuchten zwei Lämpchen in Reihe schwächer? | fertig |
+
+Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien (zu #7), Spannungsteiler (zu #9). Ab etwa 15 Versuchen Tabs mit `data-group` (wie `unit-converter`). Eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.

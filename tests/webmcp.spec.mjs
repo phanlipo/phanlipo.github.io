@@ -360,6 +360,129 @@ test.describe('medical-calculator tools', () => {
   });
 });
 
+test.describe('physics-lab tools', () => {
+  test.beforeEach(async ({ page }) => { await open(page, '/physics-lab/'); });
+
+  test('mirror_image and lens_image set the sliders and return the image', async ({ page }) => {
+    let r = await call(page, 'physics_lab_mirror_image', { curvature_per_m: 30, object_distance_cm: 30 });
+    const f = 100 / 30 / 2, b = 1 / (1 / f - 1 / 30);
+    expect(r.result).toMatchObject({ element: 'concave', curvature_per_m: 30, object_distance_cm: 30,
+      radius_cm: Math.round(200 * f) / 100, focal_length_cm: Math.round(100 * f) / 100, image_distance_cm: Math.round(100 * b) / 100,
+      magnification: Math.round(-b / 30 * 1000) / 1000, image: { real: true, upright: false, size: 'reduced' } });
+    await expect(page.locator('#p-mirror')).toBeVisible();
+    await expect(page.locator('#p-mirror [data-part="v"]')).toHaveValue('30');
+    // only the distance: the curvature stays, values snap to the slider steps
+    r = await call(page, 'physics_lab_mirror_image', { object_distance_cm: 10.3 });
+    expect(r.result).toMatchObject({ curvature_per_m: 30, object_distance_cm: 10.5 });
+    r = await call(page, 'physics_lab_mirror_image', { curvature_per_m: 10, object_distance_cm: 5 });
+    expect(r.result).toMatchObject({ image_distance_cm: null, magnification: null });
+    expect((await call(page, 'physics_lab_mirror_image', { curvature_per_m: 50 })).ok).toBe(false);
+    r = await call(page, 'physics_lab_lens_image', { power_dpt: 10, object_distance_cm: 15 });
+    expect(r.result).toMatchObject({ element: 'converging', power_dpt: 10, focal_length_cm: 10, image_distance_cm: 30, magnification: -2,
+      image: { real: true, upright: false, size: 'enlarged' } });
+    await expect(page.locator('#p-lens')).toBeVisible();
+    await expect(page.locator('#p-lens .calc-result.main .v')).toHaveText('reell · umgekehrt · vergrößert');
+  });
+
+  test('slit_pattern lists the bright fringes', async ({ page }) => {
+    const r = await call(page, 'physics_lab_slit_pattern', { slits: 3, wavelength_nm: 500, slit_spacing_um: 10, slit_width_um: 2 });
+    const ord = k => {
+      const s = k * 0.05, beta = Math.PI * 2 * s / 0.5;
+      return { order: k, angle_deg: Math.round(Math.asin(s) * 180 / Math.PI * 100) / 100, x_cm: Math.round(100 * Math.tan(Math.asin(s)) * 100) / 100,
+        relative_intensity: Math.round((k ? (Math.sin(beta) / beta) ** 2 : 1) * 1000) / 1000 };
+    };
+    expect(r.result).toMatchObject({ slits: 3, wavelength_nm: 500, slit_spacing_um: 10, slit_width_um: 2, screen_distance_m: 1, secondary_maxima_between: 1,
+      central_fringe_width_cm: Math.round(2 * 100 * Math.tan(Math.asin(0.05 / 3)) * 100) / 100 });
+    expect(r.result.principal_maxima).toEqual([0, 1, 2, 3].map(ord));
+    await expect(page.locator('#p-waves')).toBeVisible();
+    await expect(page.locator('#wN')).toHaveValue('3');
+    expect((await call(page, 'physics_lab_slit_pattern', { slits: 21 })).ok).toBe(false);
+  });
+
+  test('pendulum_period and coupled_pendulums', async ({ page }) => {
+    let r = await call(page, 'physics_lab_pendulum_period', { kind: 'string', length_m: 1, mass_left_g: 100, mass_right_g: 900, displacement: 5, place: 'moon' });
+    expect(r.result).toMatchObject({ kind: 'string', gravity_m_s2: 1.62, depends_on_mass: false,
+      period_small_angle_s: Math.round(2 * Math.PI * Math.sqrt(1 / 1.62) * 1000) / 1000 });
+    expect(r.result.period_s).toBeGreaterThan(r.result.period_small_angle_s);
+    await expect(page.locator('#p-pendulum')).toBeVisible();
+    await expect(page.locator('#pM2')).toHaveValue('900');
+    r = await call(page, 'physics_lab_pendulum_period', { kind: 'spring', spring_constant_n_per_m: 20, displacement: 10 });
+    expect(r.result).toMatchObject({ depends_on_mass: true, period_left_s: Math.round(2 * Math.PI * Math.sqrt(0.1 / 20) * 1000) / 1000,
+      period_right_s: Math.round(2 * Math.PI * Math.sqrt(0.9 / 20) * 1000) / 1000, displacement_cm: 10 });
+    r = await call(page, 'physics_lab_coupled_pendulums', { length_m: 0.5, coupling_percent: 20, start: 'one' });
+    const w1 = Math.sqrt(9.81 / 0.5), w2 = Math.sqrt(9.81 / 0.5 * 1.4);
+    expect(r.result).toMatchObject({ period_in_phase_s: Math.round(2 * Math.PI / w1 * 1000) / 1000,
+      energy_moved_over_after_s: Math.round(Math.PI / (w2 - w1) * 1000) / 1000 });
+    await expect(page.locator('#p-coupled')).toBeVisible();
+    expect((await call(page, 'physics_lab_coupled_pendulums', { start: 'same' })).result.energy_moved_over_after_s).toBe(null);
+  });
+
+  test('throw_ball', async ({ page }) => {
+    let r = await call(page, 'physics_lab_throw_ball', { ball: 'football', angle_deg: 30, speed_m_s: 20, air: false });
+    expect(r.result).toMatchObject({ ball: 'football', air: false, range_m: Math.round(400 * Math.sin(Math.PI / 3) / 9.81 * 100) / 100,
+      best_angle_deg: 45, drag_to_weight_at_launch: 0 });
+    await expect(page.locator('#p-throw')).toBeVisible();
+    r = await call(page, 'physics_lab_throw_ball', { ball: 'pingpong', air: true });
+    expect(r.result.best_angle_deg).toBeLessThan(40);
+    expect(r.result.range_m).toBeLessThan(r.result.range_without_air_m);
+    expect((await call(page, 'physics_lab_throw_ball', { angle_deg: 90 })).ok).toBe(false);
+  });
+
+  test('refraction', async ({ page }) => {
+    let r = await call(page, 'physics_lab_refraction', { material: 'water', direction: 'in', angle_deg: 60 });
+    expect(r.result).toMatchObject({ refractive_index: 1.33, total_internal_reflection: false, critical_angle_deg: null,
+      angle_of_refraction_deg: Math.round(Math.asin(Math.sin(Math.PI / 3) / 1.33) * 180 / Math.PI * 100) / 100 });
+    await expect(page.locator('#p-refr')).toBeVisible();
+    r = await call(page, 'physics_lab_refraction', { material: 'glass', direction: 'out', angle_deg: 45 });
+    expect(r.result).toMatchObject({ angle_of_refraction_deg: null, total_internal_reflection: true, reflected_share: 1,
+      critical_angle_deg: Math.round(Math.asin(1 / 1.5) * 180 / Math.PI * 100) / 100 });
+    expect((await call(page, 'physics_lab_refraction', { angle_deg: 90 })).ok).toBe(false);
+  });
+
+  test('radioactive_decay and spectral_lines', async ({ page }) => {
+    let r = await call(page, 'physics_lab_radioactive_decay', { substance: 'carbon', atoms: 2500, half_lives: 2 });
+    expect(r.result).toMatchObject({ half_life: 5730, unit: 'years', atoms: 2500, time: 11460, expected_left: 625,
+      standard_deviation: Math.round(Math.sqrt(2500 * 0.25 * 0.75) * 100) / 100, chance_one_atom_survives: 0.25 });
+    await expect(page.locator('#p-decay')).toBeVisible();
+    await expect(page.locator('#dN button[data-v="2500"]')).toHaveAttribute('aria-pressed', 'true');
+    r = await call(page, 'physics_lab_spectral_lines', { element: 'hydrogen', upper_level: 4 });
+    const nm = Math.round(1e9 / (1.0967758e7 * (1 / 4 - 1 / 16)) * 10) / 10;
+    expect(r.result.jump).toMatchObject({ from_level: 4, to_level: 2, wavelength_nm: nm });
+    expect(r.result.lines_nm.map(l => l.nm)).toContain(nm);
+    await expect(page.locator('#p-spectrum')).toBeVisible();
+    r = await call(page, 'physics_lab_spectral_lines', { element: 'sodium' });
+    expect(r.result).toEqual({ element: 'sodium', lines_nm: [{ nm: 589, colour: 'yellow' }, { nm: 589.6, colour: 'yellow' }] });
+  });
+
+  test('magnetic_circle, circuit and gas_pressure', async ({ page }) => {
+    let r = await call(page, 'physics_lab_magnetic_circle', { particle: 'proton', speed_million_m_s: 2, field_mt: 4, field_direction: 'in' });
+    expect(r.result.radius_m).toBeCloseTo(1.67262192e-27 * 2e6 / (1.602176634e-19 * 4e-3), 6);
+    expect(r.result.period_s).toBeCloseTo(2 * Math.PI * 1.67262192e-27 / (1.602176634e-19 * 4e-3), 12);
+    expect(r.result.rotation_on_screen).toBe('anticlockwise');
+    await expect(page.locator('#p-lorentz')).toBeVisible();
+    r = await call(page, 'physics_lab_circuit', { kind: 'series', voltage_v: 6, resistance_1_ohm: 10, resistance_2_ohm: 10 });
+    expect(r.result).toMatchObject({ total_resistance_ohm: 20, current_a: 0.3 });
+    expect(r.result.bulbs.map(b => b.brightness_vs_alone)).toEqual([0.25, 0.25]);
+    r = await call(page, 'physics_lab_circuit', { kind: 'parallel' });
+    expect(r.result).toMatchObject({ total_resistance_ohm: 5, current_a: 1.2 });
+    r = await call(page, 'physics_lab_gas_pressure', { temperature_k: 600, volume_percent: 50 });
+    expect(r.result).toMatchObject({ pressure_relative: 4, speed_factor: Math.round(Math.SQRT2 * 1000) / 1000 });
+    await expect(page.locator('#p-gas')).toBeVisible();
+  });
+
+  test('dispersion and the voltage divider', async ({ page }) => {
+    let r = await call(page, 'physics_lab_dispersion', { view: 'drop', angle_or_height: 50 });
+    expect(r.result.rainbow_red_deg).toBeGreaterThan(42);
+    expect(r.result.rainbow_violet_deg).toBeLessThan(r.result.rainbow_red_deg);
+    await expect(page.locator('#rChartBox')).toBeVisible();
+    r = await call(page, 'physics_lab_dispersion', { view: 'prism', angle_or_height: 50 });
+    expect(r.result.deviation_violet_deg).toBeGreaterThan(r.result.deviation_red_deg);
+    expect((await call(page, 'physics_lab_dispersion', { view: 'prism', angle_or_height: 10 })).ok).toBe(false);
+    r = await call(page, 'physics_lab_circuit', { kind: 'divider', voltage_v: 9, resistance_1_ohm: 20, resistance_2_ohm: 10 });
+    expect(r.result).toMatchObject({ output_voltage_v: 3, current_a: 0.3, total_resistance_ohm: 30 });
+  });
+});
+
 test.describe('chain-transaction tools', () => {
   test.beforeEach(async ({ page }) => { await open(page, '/chain-transaction/'); });
 
