@@ -26,6 +26,7 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 ## Brechung (optics.js)
 
 - Stoffe: Wasser 1,33, Glas 1,50, Diamant 2,42; Luft 1,00. Snellius, Grenzwinkel arcsin(n₂/n₁), gespiegelter Anteil nach Fresnel für unpolarisiertes Licht (Dicke und Deckkraft des gespiegelten Strahls).
+- Prisma und Regentropfen: Brechzahl nach Cauchy, n = A + B/λ² (Kronglas BK7: 1,5046 + 4200/λ², Wasser: 1,3240 + 3046/λ², λ in nm), sieben Farben von 680 bis 410 nm einzeln verfolgt (Snellius in Vektorform). Prisma gleichseitig (60°), Strahl trifft die Mitte der linken Fläche; Totalreflexion innen wird gespiegelt weiterverfolgt. Tropfen: Eintritt, eine Spiegelung, Austritt; Rückkehrwinkel θ zur Sonnenrichtung, Regenbogen = größtes θ (Suche über 2000 Höhen, entspricht cos²α = (n²−1)/3).
 - Stab im Wasser: Der Stab taucht bei x = 0 ein (18 cm darüber und darunter), das Auge sitzt 32 cm entfernt unter dem eingestellten Blickwinkel. Für jeden Punkt unter Wasser wird der echte Strahlweg zum Auge gesucht (Austrittspunkt per Bisektion), dann zwei Strahlen zu den Rändern einer 4-mm-Pupille geradlinig zurückverlängert – ihr Schnittpunkt ist der Ort, an dem das Auge den Punkt sieht. Senkrecht von oben ergibt das h/n.
 
 ## Licht durch Spalte (waves.js)
@@ -56,7 +57,8 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 ## Elektrizität & Magnetismus (electro.js)
 
 - **Teilchen im Magnetfeld:** Elektron, Proton, Alphateilchen; v = 1 … 10 · 10⁶ m/s, B = 1 … 10 mT, Feld in den oder aus dem Bildschirm. r = m·v/(|q|·B), T = 2π·m/(|q|·B). Maßstab je Teilchen fest (größter Kreis passt ins Bild), damit v und B die Kreisgröße sichtbar ändern. Die Animation ist verlangsamt: 3 s je Umlauf bei 5 mT, proportional zum echten T (hängt nur von B ab, nicht von v). Drehsinn aus F = q·v×B.
-- **Stromkreis:** Batterie ohne Innenwiderstand, ohmsche Lämpchen (2 … 50 Ω), Schaltungen eins/Reihe/parallel. Helligkeit = Leistung im Verhältnis zum selben Lämpchen allein an derselben Batterie. Die Punkte auf den Drähten sind eine CSS-Animation (Tempo ∝ Strom), bei „weniger Bewegung“ stehen sie still.
+- **Feldlinien:** Jeder Stabmagnet als zwei Pole (±1, Feld ∝ 1/r²) an seinen Enden; Linien starten auf einem kleinen Kreis um jeden Nordpol (14 je Pol) und werden mit dem Mittelpunktverfahren verfolgt, bis sie einen Südpol erreichen oder das Bild verlassen. Anordnungen: ein Magnet, N gegenüber S, N gegenüber N.
+- **Stromkreis:** Batterie ohne Innenwiderstand, ohmsche Lämpchen (2 … 50 Ω), Schaltungen eins/Reihe/parallel und Spannungsteiler (zwei Widerstände, Messgerät an R₂ ohne Stromverbrauch). Helligkeit = Leistung im Verhältnis zum selben Lämpchen allein an derselben Batterie. Die Punkte auf den Drähten sind eine CSS-Animation (Tempo ∝ Strom), bei „weniger Bewegung“ stehen sie still.
 
 ## Wärme (thermo.js)
 
@@ -64,7 +66,7 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b }, circ: { kind, u, r1, r2 }, gas: { n, t, v } }` – nur Reglerstellungen und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v } }` – nur Reglerstellungen und offener Versuch.
 
 ## Erweitern
 
@@ -86,4 +88,4 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 8 | Thermodynamik | Gasteilchen in der Box (p, V, T) | Warum steigt der Druck, wenn das Gas warm wird? | fertig |
 | 9 | Elektrizität | Stromkreis mit festen Schaltungen (eins, Reihe, parallel) | Warum leuchten zwei Lämpchen in Reihe schwächer? | fertig |
 
-Später: Prisma und Regenbogen (zu #5), Feldlinien von Magneten (zu #7), Spannungsteiler (zu #9). Ab etwa 15 Versuchen Tabs mit `data-group` (wie `unit-converter`). Eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
+Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien (zu #7), Spannungsteiler (zu #9). Ab etwa 15 Versuchen Tabs mit `data-group` (wie `unit-converter`). Eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.

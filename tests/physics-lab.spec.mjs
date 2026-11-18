@@ -455,8 +455,8 @@ test.describe('refraction', () => {
     const d0 = 18 * Math.cos(10 * Math.PI / 180);
     await expect(pres(page, 'rRes', 'Spitze wirklich')).toHaveText(`${de(d0, 1)} cm tief`);
     // looking straight down: apparent depth ≈ d0 / n (the tip is 3 cm off-axis, so only roughly)
+    await expect.poll(async () => Math.abs(num(await pres(page, 'rRes', 'scheint').textContent()) - d0 / 1.33)).toBeLessThan(0.4);
     const seen = num(await pres(page, 'rRes', 'scheint').textContent());
-    expect(Math.abs(seen - d0 / 1.33)).toBeLessThan(0.4);
     // a flatter view lifts it more
     await page.locator('#rE').fill('20');
     await expect.poll(async () => num(await pres(page, 'rRes', 'scheint').textContent())).toBeLessThan(seen - 2);
@@ -666,6 +666,85 @@ test.describe('gas in a box', () => {
   });
 });
 
+// ---- prism, raindrop, field lines, divider ----
+const nGlassRef = l => 1.5046 + 4200 / (l * l), nWaterRef = l => 1.3240 + 3046 / (l * l);
+// rainbow angle (Descartes): θ = 4β − 2α at its maximum, cos²α = (n² − 1)/3
+const rainbowRef = n => { const a = Math.acos(Math.sqrt((n * n - 1) / 3)), b = Math.asin(Math.sin(a) / n); return (4 * b - 2 * a) * 180 / Math.PI; };
+// minimum deviation of a 60° prism at symmetric passage: D = 2·asin(n·sin 30°) − 60°
+const minDevRef = n => 2 * Math.asin(n * 0.5) * 180 / Math.PI - 60;
+
+test.describe('prism and raindrop', () => {
+  test('prism: violet is bent more than red', async ({ page }) => {
+    await open(page, 'refr');
+    await page.click('#rMode button[data-v="prism"]');
+    await expect(page.locator('#rMed')).toBeHidden();
+    // symmetric passage (minimum deviation) for red: angle of incidence = (D_min + 60°)/2
+    const nr = nGlassRef(680), inc = Math.round((minDevRef(nr) + 60) / 2); // 49°
+    await page.locator('#rX').fill(String(inc));
+    const devR = num(await pres(page, 'rRes', 'Ablenkung Rot').textContent());
+    expect(Math.abs(devR - minDevRef(nr))).toBeLessThan(0.1);
+    const devV = num(await pres(page, 'rRes', 'Ablenkung Violett').textContent());
+    expect(devV).toBeGreaterThan(devR + 1);
+    await expect(pres(page, 'rRes', 'Brechzahl')).toHaveText(`${de(nr, 4)} / ${de(nGlassRef(410), 4)}`);
+    await expect(page.locator('#rWhy')).toContainText('Violett');
+    await expect(page.locator('#rRainBox')).toBeVisible();
+    await expect(page.locator('#rExplainBox')).toBeHidden();
+  });
+
+  test('raindrop: the rainbow at about 42° (red) and 41° (violet)', async ({ page }) => {
+    await open(page, 'refr');
+    await page.click('#rMode button[data-v="drop"]');
+    await expect(page.locator('#rChartBox')).toBeVisible();
+    await expect(pres(page, 'rRes', 'Regenbogen')).toHaveText(`${de(rainbowRef(nWaterRef(680)), 1)}° / ${de(rainbowRef(nWaterRef(410)), 1)}°`);
+    // at half height: θ = 4β − 2α
+    await page.locator('#rX').fill('50');
+    const th = (4 * Math.asin(0.5 / nWaterRef(680)) - 2 * Math.asin(0.5)) * 180 / Math.PI;
+    await expect(pres(page, 'rRes', 'Rückkehrwinkel Rot')).toHaveText(`${de(th, 1)}°`);
+    await page.click('#p-refr summary:has-text("Regenbogen")');
+    await expect(page.locator('#rRain .katex')).toHaveCount(3);
+  });
+});
+
+test.describe('magnetic field lines', () => {
+  test('one magnet, attracting and repelling pairs', async ({ page }) => {
+    await open(page, 'lorentz');
+    await page.click('#mgMode button[data-v="field"]');
+    await expect(page.locator('#mgPart')).toBeHidden();
+    await expect(page.locator('#mgField .fline')).toHaveCount(14);
+    await page.click('#mgCfg button[data-v="attract"]');
+    await expect(page.locator('#mgField .fline')).toHaveCount(28);
+    await expect(page.locator('#mgFWhy')).toContainText('ziehen sich an');
+    await page.click('#mgCfg button[data-v="repel"]');
+    await expect(page.locator('#mgFWhy')).toContainText('stoßen sich ab');
+    await expect(page.locator('#mgField .mlbl', { hasText: 'N' })).toHaveCount(2);
+    // the field model: between N and S the field points from N to S, between two N it vanishes in the middle
+    const r = await page.evaluate(() => {
+      const E = window.Electro;
+      return { att: E.field(E.poles('attract'), 0, 0), rep: E.field(E.poles('repel'), 0, 0) };
+    });
+    expect(r.att[0]).toBeGreaterThan(0);
+    expect(Math.hypot(...r.rep)).toBeLessThan(1e-9);
+    await page.click('#mgMode button[data-v="particle"]');
+    await expect(page.locator('#mgPart')).toBeVisible();
+  });
+});
+
+test.describe('voltage divider', () => {
+  test('the output follows the ratio of the resistors', async ({ page }) => {
+    await open(page, 'circuit');
+    await page.click('#cKind button[data-v="divider"]');
+    await expect(page.locator('#ccR1Lbl')).toHaveText('Widerstand R₁');
+    await page.locator('#ccU').fill('9'); await page.locator('#ccR1').fill('20'); await page.locator('#ccR2').fill('10');
+    await expect(pres(page, 'ccRes', 'Spannung an R₂')).toHaveText(`${de(9 * 10 / 30, 2)} V`);
+    await expect(pres(page, 'ccRes', 'Anteil')).toHaveText('33 %');
+    await expect(page.locator('#ccSvg .res')).toHaveCount(2);
+    await expect(page.locator('#ccWhy')).toContainText('Lautstärkeregler');
+    await page.click('#p-circuit summary:has-text("Formeln")');
+    const tex = (await page.locator('#ccMath annotation').allTextContents()).join(' ');
+    expect(tex).toContain('U_2=U\\cdot\\frac{R_2}{R_1+R_2}');
+  });
+});
+
 test.describe('lens', () => {
   test('projector, magnifier and glasses', async ({ page }) => {
     await open(page, 'lens');
@@ -690,9 +769,20 @@ test.describe('lens', () => {
 test('open experiments with formulas have no accessibility violations', async ({ page }) => {
   for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas']) {
     await open(page, kind);
-    for (const s of await page.locator(`${panel(kind)} details.sub > summary`).all()) await s.click();
+    for (const s of await page.locator(`${panel(kind)} details.sub:visible > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();
     expect((await axe(page).include(panel(kind)).analyze()).violations).toEqual([]);
+  }
+});
+
+test('the extra views have no accessibility violations', async ({ page }) => {
+  for (const [kind, sel] of [['refr', '#rMode button[data-v="prism"]'], ['refr', '#rMode button[data-v="drop"]'], ['lorentz', '#mgMode button[data-v="field"]'], ['circuit', '#cKind button[data-v="divider"]']]) {
+    await open(page, kind);
+    await page.click(sel);
+    // open every closed section (the list shrinks with each click)
+    const closed = page.locator(`${panel(kind)} details.sub:visible:not([open]) > summary`);
+    while (await closed.count()) await closed.first().click();
+    expect((await axe(page).include(panel(kind)).analyze()).violations, sel).toEqual([]);
   }
 });
 

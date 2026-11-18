@@ -469,6 +469,18 @@ test.describe('physics-lab tools', () => {
     expect(r.result).toMatchObject({ pressure_relative: 4, speed_factor: Math.round(Math.SQRT2 * 1000) / 1000 });
     await expect(page.locator('#p-gas')).toBeVisible();
   });
+
+  test('dispersion and the voltage divider', async ({ page }) => {
+    let r = await call(page, 'physics_lab_dispersion', { view: 'drop', angle_or_height: 50 });
+    expect(r.result.rainbow_red_deg).toBeGreaterThan(42);
+    expect(r.result.rainbow_violet_deg).toBeLessThan(r.result.rainbow_red_deg);
+    await expect(page.locator('#rChartBox')).toBeVisible();
+    r = await call(page, 'physics_lab_dispersion', { view: 'prism', angle_or_height: 50 });
+    expect(r.result.deviation_violet_deg).toBeGreaterThan(r.result.deviation_red_deg);
+    expect((await call(page, 'physics_lab_dispersion', { view: 'prism', angle_or_height: 10 })).ok).toBe(false);
+    r = await call(page, 'physics_lab_circuit', { kind: 'divider', voltage_v: 9, resistance_1_ohm: 20, resistance_2_ohm: 10 });
+    expect(r.result).toMatchObject({ output_voltage_v: 3, current_a: 0.3, total_resistance_ohm: 30 });
+  });
 });
 
 test.describe('chain-transaction tools', () => {

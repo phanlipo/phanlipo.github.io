@@ -142,5 +142,71 @@
     return { exit: s0, point: [a.p[0] + a.d[0] * tt, a.p[1] + a.d[1] * tt] };
   }
 
-  root.Optics = { radiusOf, mirrorFocal, lensFocal, image, describe, lensRays, setup, regime, FAR, snell, critical, reflectance, exitPoint, apparent };
+  /* ---------- Dispersion: prism and raindrop (lengths in arbitrary units, λ in nm) ---------- */
+  // Cauchy: n = A + B/λ² (crown glass BK7 and water, good to about ±0.002 in the visible range)
+  const nGlass = l => 1.5046 + 4200 / (l * l);
+  const nWater = l => 1.3240 + 3046 / (l * l);
+  const COLORS = [680, 620, 580, 540, 490, 450, 410];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+  // vector form of Snell; nrm points to the side the light comes from; null = total internal reflection
+  function refractVec(d, nrm, eta) {
+    const ci = -dot(nrm, d), k = 1 - eta * eta * (1 - ci * ci);
+    if (k < 0) return null;
+    const f = eta * ci - Math.sqrt(k);
+    return [eta * d[0] + f * nrm[0], eta * d[1] + f * nrm[1]];
+  }
+  const reflectVec = (d, nrm) => { const k = 2 * dot(d, nrm); return [d[0] - k * nrm[0], d[1] - k * nrm[1]]; };
+  // ray from p along d against segment a–b: distance or Infinity
+  function hitSeg(p, d, a, b) {
+    const e = [b[0] - a[0], b[1] - a[1]], den = d[0] * e[1] - d[1] * e[0];
+    if (Math.abs(den) < 1e-12) return Infinity;
+    const w = [a[0] - p[0], a[1] - p[1]], s = (w[0] * e[1] - w[1] * e[0]) / den, u = (w[0] * d[1] - w[1] * d[0]) / den;
+    return s > 1e-9 && u >= 0 && u <= 1 ? s : Infinity;
+  }
+  /* Equilateral prism with side 10 (base on y = 0, apex up). White light hits the middle of the left face at the
+     angle of incidence alpha (degrees). Per wavelength: points of the path, the direction it leaves, the deviation. */
+  const PRISM = [[-5, 0], [0, 5 * Math.sqrt(3)], [5, 0]];
+  function prism(alpha, lambda) {
+    const n = nGlass(lambda), out = [0.5 * -Math.sqrt(3), 0.5]; // outward normal of the left face
+    const a0 = Math.atan2(-out[1], -out[0]) + alpha * Math.PI / 180; // turn the inward normal by alpha
+    const d0 = [Math.cos(a0), Math.sin(a0)], M = [-2.5, 2.5 * Math.sqrt(3)];
+    const pts = [[M[0] - 9 * d0[0], M[1] - 9 * d0[1]], M];
+    let d = refractVec(d0, out, 1 / n), p = M;
+    const faces = [[PRISM[1], PRISM[2], [Math.sqrt(3) / 2, 0.5]], [PRISM[0], PRISM[2], [0, -1]], [PRISM[0], PRISM[1], out]];
+    for (let bounce = 0; bounce < 3; bounce++) {
+      let best = null;
+      for (const f of faces) { const s = hitSeg(p, d, f[0], f[1]); if (s < Infinity && (!best || s < best.s)) best = { s, f }; }
+      if (!best) break;
+      p = [p[0] + best.s * d[0], p[1] + best.s * d[1]]; pts.push(p);
+      const inward = [-best.f[2][0], -best.f[2][1]], o = refractVec(d, inward, n);
+      if (o) {
+        pts.push([p[0] + 12 * o[0], p[1] + 12 * o[1]]);
+        const dev = Math.atan2(d0[0] * o[1] - d0[1] * o[0], dot(d0, o)) * 180 / Math.PI;
+        return { lambda, n, pts, out: o, deviation: -dev, tir: false };
+      }
+      d = reflectVec(d, inward);
+    }
+    return { lambda, n, pts, out: null, deviation: null, tir: true };
+  }
+  /* Raindrop (radius 1, centre 0): sunlight comes from the left at height b (0…1), is refracted, reflected once
+     inside and refracted out. theta = angle between the light leaving and the direction back to the sun –
+     the angle at which an observer with the sun behind them sees this colour (primary rainbow). */
+  function drop(b, lambda) {
+    const n = nWater(lambda), P1 = [-Math.sqrt(1 - b * b), b], d0 = [1, 0];
+    const t1 = refractVec(d0, P1, 1 / n);
+    const P2 = [P1[0] - 2 * dot(P1, t1) * t1[0], P1[1] - 2 * dot(P1, t1) * t1[1]];
+    const r = reflectVec(t1, [-P2[0], -P2[1]]);
+    const P3 = [P2[0] - 2 * dot(P2, r) * r[0], P2[1] - 2 * dot(P2, r) * r[1]];
+    const o = refractVec(r, [-P3[0], -P3[1]], n);
+    const theta = Math.acos(Math.max(-1, Math.min(1, -o[0]))) * 180 / Math.PI;
+    return { lambda, n, pts: [[-2.2, b], P1, P2, P3, [P3[0] + 2 * o[0], P3[1] + 2 * o[1]]], out: o, theta };
+  }
+  // the largest angle over all heights b: where the light piles up (the rainbow)
+  function rainbowAngle(lambda) {
+    let best = [0, 0];
+    for (let i = 0; i <= 2000; i++) { const b = i / 2000 * 0.9999, th = drop(b, lambda).theta; if (th > best[1]) best = [b, th]; }
+    return { b: best[0], theta: best[1] };
+  }
+
+  root.Optics = { nGlass, nWater, COLORS, refractVec, prism, PRISM, drop, rainbowAngle, radiusOf, mirrorFocal, lensFocal, image, describe, lensRays, setup, regime, FAR, snell, critical, reflectance, exitPoint, apparent };
 })(typeof window !== 'undefined' ? window : globalThis);
