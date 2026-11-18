@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "lucky-wheel";
-const VERSION = 'bd9f880d775d';
+const VERSION = '11720c49ccf9';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
