@@ -568,6 +568,104 @@ test.describe('spectral lines', () => {
   });
 });
 
+// ---- magnetism, circuit, gas: reference ----
+const QE = 1.602176634e-19, ME = 9.1093837e-31, MP = 1.67262192e-27;
+
+test.describe('particle in a magnetic field', () => {
+  test('radius and period of the circle; the period does not depend on the speed', async ({ page }) => {
+    await open(page, 'lorentz');
+    await page.click('#mgP button[data-v="electron"]');
+    await page.locator('#mgV').fill('5'); await page.locator('#mgB').fill('5');
+    await expect(page.locator('#mgVOut')).toHaveText('5,0 · 10⁶ m/s');
+    const r = ME * 5e6 / (QE * 5e-3), T = 2 * Math.PI * ME / (QE * 5e-3);
+    await expect(pres(page, 'mgRes', 'Radius')).toHaveText(`${de(r * 1000, 2)} mm`);   // 5,69 mm
+    await expect(pres(page, 'mgRes', 'Umlauf')).toHaveText(`${de(T * 1e9, 1)} ns`);    // 7,1 ns
+    await page.locator('#mgV').fill('10');
+    await expect(pres(page, 'mgRes', 'Radius')).toHaveText(`${de(2 * r * 100, 1)} cm`);
+    await expect(pres(page, 'mgRes', 'Umlauf')).toHaveText(`${de(T * 1e9, 1)} ns`);
+    // a proton at the same speed: a much larger circle
+    await page.click('#mgP button[data-v="proton"]');
+    await expect(pres(page, 'mgRes', 'Radius')).toHaveText(`${de(MP * 1e7 / (QE * 5e-3), 2)} m`);
+    await expect(page.locator('#mgWhy')).toContainText('viel schwerer');
+  });
+
+  test('electron and proton circle in opposite directions', async ({ page }) => {
+    await open(page, 'lorentz');
+    await page.click('#mgDir button[data-v="in"]');
+    await page.click('#mgP button[data-v="proton"]');
+    await expect(page.locator('#mgSvg')).toHaveAttribute('aria-label', /gegen den Uhrzeigersinn/);
+    await page.click('#mgP button[data-v="electron"]');
+    await expect(page.locator('#mgSvg')).toHaveAttribute('aria-label', /, im Uhrzeigersinn/);
+    await page.click('#mgDir button[data-v="out"]');
+    await expect(page.locator('#mgSvg')).toHaveAttribute('aria-label', /gegen den Uhrzeigersinn/);
+    await page.click('#p-lorentz summary:has-text("Formeln")');
+    await expect(page.locator('#mgMath .katex')).toHaveCount(3);
+    await expect(page.locator('#mgMath .fallback')).toHaveCount(0);
+  });
+});
+
+test.describe('circuit', () => {
+  test('two equal bulbs in series get a quarter of the power, in parallel the full power', async ({ page }) => {
+    await open(page, 'circuit');
+    await page.locator('#ccU').fill('6'); await page.locator('#ccR1').fill('10');
+    await page.click('#cKind button[data-v="one"]');
+    await expect(pres(page, 'ccRes', 'Strom')).toHaveText('0,60 A');
+    await expect(pres(page, 'ccRes', 'Lämpchen 1')).toHaveText('6,00 V · 0,60 A · 3,60 W');
+    await page.click('#cKind button[data-v="series"]');
+    await page.locator('#ccR2').fill('10');
+    await expect(pres(page, 'ccRes', 'Strom')).toHaveText('0,30 A');
+    await expect(pres(page, 'ccRes', 'Gesamtwiderstand')).toHaveText('20,0 Ω');
+    await expect(pres(page, 'ccRes', 'Lämpchen 2')).toHaveText('3,00 V · 0,30 A · 0,90 W');
+    await expect(pres(page, 'ccRes', 'Helligkeit')).toHaveText('25 % · 25 %');
+    await page.click('#cKind button[data-v="parallel"]');
+    await expect(pres(page, 'ccRes', 'Strom')).toHaveText('1,20 A');
+    await expect(pres(page, 'ccRes', 'Gesamtwiderstand')).toHaveText('5,0 Ω');
+    await expect(pres(page, 'ccRes', 'Helligkeit')).toHaveText('100 % · 100 %');
+    await expect(page.locator('#ccSvg .flow')).toHaveCount(2);
+  });
+
+  test('in series the bulb with the larger resistance glows brighter', async ({ page }) => {
+    await open(page, 'circuit');
+    await page.click('#cKind button[data-v="series"]');
+    await page.locator('#ccU').fill('12'); await page.locator('#ccR1').fill('10'); await page.locator('#ccR2').fill('30');
+    const I = 12 / 40;
+    await expect(pres(page, 'ccRes', 'Lämpchen 1')).toHaveText(`${de(I * 10, 2)} V · ${de(I, 2)} A · ${de(I * I * 10, 2)} W`);
+    await expect(pres(page, 'ccRes', 'Lämpchen 2')).toHaveText(`${de(I * 30, 2)} V · ${de(I, 2)} A · ${de(I * I * 30, 2)} W`);
+    await expect(page.locator('#ccWhy')).toContainText('mit dem größeren Widerstand heller');
+    await page.click('#p-circuit summary:has-text("Formeln")');
+    const tex = (await page.locator('#ccMath annotation').allTextContents()).join(' ');
+    expect(tex).toContain('R=R_1+R_2=10\\,\\Omega+30\\,\\Omega=40\\,\\Omega');
+  });
+});
+
+test.describe('gas in a box', () => {
+  test('the measured pressure follows the gas law', async ({ page }) => {
+    await page.clock.install({ time: new Date(2026, 10, 18, 12, 0) });
+    await page.goto('/physics-lab/');
+    await open(page, 'gas');
+    await page.click('#gN button[data-v="200"]');
+    await page.locator('#gT').fill('300'); await page.locator('#gV').fill('100');
+    await expect(pres(page, 'gRes', 'Druck nach')).toHaveText('1,00-fach');
+    await expect(pres(page, 'gRes', 'Helium')).toHaveText(`${Math.round(Math.sqrt(8 * 1.380649e-23 * 300 / (Math.PI * 6.6464731e-27))).toLocaleString('de-DE')} m/s`);
+    await page.click('#gPlay');
+    await page.clock.runFor(4000);
+    const fach = async () => parseFloat((await pres(page, 'gRes', 'Druck gemessen').textContent()).replace(',', '.')); // "1,02-fach"
+    let pm = await fach();
+    expect(Math.abs(pm - 1)).toBeLessThan(0.15);
+    // twice the temperature, half the volume: four times the pressure
+    await page.locator('#gT').fill('600'); await page.locator('#gV').fill('50');
+    await expect(pres(page, 'gRes', 'Druck nach')).toHaveText('4,00-fach');
+    await page.clock.runFor(4000);
+    pm = await fach();
+    expect(Math.abs(pm - 4) / 4).toBeLessThan(0.15);
+    await expect(page.locator('#gWhy')).toContainText('1,41-mal so schnell');
+    await page.click('#gPlay');
+    await page.click('#p-gas summary:has-text("Formeln")');
+    await expect(page.locator('#gMath .katex')).toHaveCount(4);
+    await expect(page.locator('#gMath .fallback')).toHaveCount(0);
+  });
+});
+
 test.describe('lens', () => {
   test('projector, magnifier and glasses', async ({ page }) => {
     await open(page, 'lens');
@@ -590,7 +688,7 @@ test.describe('lens', () => {
 });
 
 test('open experiments with formulas have no accessibility violations', async ({ page }) => {
-  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum']) {
+  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas']) {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();

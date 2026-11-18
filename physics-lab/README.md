@@ -9,6 +9,8 @@ index.html   Oberfläche: Übersicht/Tabs (assets/shared/toolbox.js), je Versuch
 optics.js    window.Optics: Abbildungsgleichung und Strahlengang, Brechung (Snellius, Fresnel, scheinbarer Ort unter Wasser) ohne DOM
 waves.js     window.Waves: Licht durch N Spalte (Intensität, Hauptmaxima, Zeigerkette, Farbe einer Wellenlänge)
 atomic.js    window.Atomic: radioaktiver Zerfall (Lebensdauern mit festem Zufall), Wasserstoff nach Bohr, Linien der Elemente
+electro.js   window.Electro: Lorentzkraft (Kreisbahn, Umlaufzeit), Stromkreise mit Lämpchen (eins, Reihe, parallel)
+thermo.js    window.Thermo: ideales Gas in 2D (Teilchen, Wandstöße, gemessener Druck)
 mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
 ```
 
@@ -51,9 +53,18 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 - **Zerfall:** Jedes Atom bekommt beim Auslosen eine Lebensdauer t = −log₂(U) Halbwertszeiten (exponentialverteilt, ohne Gedächtnis); gezählt wird über die sortierte Liste. Die Zeit ist der einzige Zustand – eine Halbwertszeit dauert 3 s, Ende nach 8. Zufall: eigener Generator (mulberry32), Startwert aus `Date.now()` und Laufnummer – in Tests mit `page.clock.install({ time })` fest. Beispiele mit echten Halbwertszeiten (Radon-220 55,6 s, Iod-131 8,02 d, C-14 5730 a) ändern nur die Zeitangaben.
 - **Spektrallinien:** Wasserstoff nach Bohr (E_n = −13,6 eV/n², Rydberg mit reduzierter Masse, Vakuum-Wellenlängen), Balmer-Serie 3…6 → 2 mit Energiestufen-Bild (Höhe ∝ 1/n). Helium, Natrium, Neon, Quecksilber: hellste sichtbare Linien (gemessene Werte in Luft, gerundet). Farben der Linien wie bei den Spalten (`Waves.rgb`).
 
+## Elektrizität & Magnetismus (electro.js)
+
+- **Teilchen im Magnetfeld:** Elektron, Proton, Alphateilchen; v = 1 … 10 · 10⁶ m/s, B = 1 … 10 mT, Feld in den oder aus dem Bildschirm. r = m·v/(|q|·B), T = 2π·m/(|q|·B). Maßstab je Teilchen fest (größter Kreis passt ins Bild), damit v und B die Kreisgröße sichtbar ändern. Die Animation ist verlangsamt: 3 s je Umlauf bei 5 mT, proportional zum echten T (hängt nur von B ab, nicht von v). Drehsinn aus F = q·v×B.
+- **Stromkreis:** Batterie ohne Innenwiderstand, ohmsche Lämpchen (2 … 50 Ω), Schaltungen eins/Reihe/parallel. Helligkeit = Leistung im Verhältnis zum selben Lämpchen allein an derselben Batterie. Die Punkte auf den Drähten sind eine CSS-Animation (Tempo ∝ Strom), bei „weniger Bewegung“ stehen sie still.
+
+## Wärme (thermo.js)
+
+- **Gas in der Box:** 30/80/200 Teilchen der Masse 1 in einem 10 × 8 großen Kasten, nur Wandstöße (ideales Gas). Startgeschwindigkeiten aus der 2D-Maxwell-Verteilung, so skaliert, dass ⟨v²⟩ = 2·T/300 genau stimmt. Heizen skaliert alle Geschwindigkeiten mit √(T_neu/T_alt), die rechte Wand ist verschiebbar. Gemessener Druck = Impuls an die Wände pro Zeit und Wandlänge, gemittelt über 8 Zeiteinheiten; verglichen mit p·A = N·T (beide bezogen auf 300 K und vollen Kasten). Simulation 4-mal schneller als echte Zeit, Schritt 0,004.
+
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t }, decay: { n, ex }, spec: { el, up } }` – nur Reglerstellungen und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b }, circ: { kind, u, r1, r2 }, gas: { n, t, v } }` – nur Reglerstellungen und offener Versuch.
 
 ## Erweitern
 
@@ -71,8 +82,8 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 4 | Mechanik | Schiefer Wurf mit/ohne Luftwiderstand | Warum fliegt der Ball mit Luftwiderstand unter weniger als 45° am weitesten? | fertig |
 | 5 | Optik | Brechung, Totalreflexion (Prisma/Regenbogen später) | Warum sieht ein Stab im Wasser geknickt aus? | fertig |
 | 6 | Atomphysik | Radioaktiver Zerfall; Spektrallinien (Bohr) | Warum gibt es eine Halbwertszeit, obwohl jeder Zerfall Zufall ist? Warum leuchtet jedes Element in eigenen Farben? | fertig |
-| 7 | Magnetismus | Lorentzkraft, Feldlinien | Warum fliegen geladene Teilchen im Magnetfeld im Kreis (Polarlicht)? | geplant |
-| 8 | Thermodynamik | Gasteilchen in der Box (p, V, T) | Warum steigt der Druck, wenn das Gas warm wird? | geplant |
-| 9 | Elektrizität | Stromkreis mit festen Schaltungen (Reihe, parallel, Spannungsteiler) | Warum leuchten zwei Lämpchen in Reihe schwächer? | geplant |
+| 7 | Magnetismus | Lorentzkraft (Feldlinien später) | Warum fliegen geladene Teilchen im Magnetfeld im Kreis (Polarlicht)? | fertig |
+| 8 | Thermodynamik | Gasteilchen in der Box (p, V, T) | Warum steigt der Druck, wenn das Gas warm wird? | fertig |
+| 9 | Elektrizität | Stromkreis mit festen Schaltungen (eins, Reihe, parallel) | Warum leuchten zwei Lämpchen in Reihe schwächer? | fertig |
 
-Später/eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
+Später: Prisma und Regenbogen (zu #5), Feldlinien von Magneten (zu #7), Spannungsteiler (zu #9). Ab etwa 15 Versuchen Tabs mit `data-group` (wie `unit-converter`). Eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.

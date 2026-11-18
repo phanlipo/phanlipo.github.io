@@ -453,6 +453,22 @@ test.describe('physics-lab tools', () => {
     r = await call(page, 'physics_lab_spectral_lines', { element: 'sodium' });
     expect(r.result).toEqual({ element: 'sodium', lines_nm: [{ nm: 589, colour: 'yellow' }, { nm: 589.6, colour: 'yellow' }] });
   });
+
+  test('magnetic_circle, circuit and gas_pressure', async ({ page }) => {
+    let r = await call(page, 'physics_lab_magnetic_circle', { particle: 'proton', speed_million_m_s: 2, field_mt: 4, field_direction: 'in' });
+    expect(r.result.radius_m).toBeCloseTo(1.67262192e-27 * 2e6 / (1.602176634e-19 * 4e-3), 6);
+    expect(r.result.period_s).toBeCloseTo(2 * Math.PI * 1.67262192e-27 / (1.602176634e-19 * 4e-3), 12);
+    expect(r.result.rotation_on_screen).toBe('anticlockwise');
+    await expect(page.locator('#p-lorentz')).toBeVisible();
+    r = await call(page, 'physics_lab_circuit', { kind: 'series', voltage_v: 6, resistance_1_ohm: 10, resistance_2_ohm: 10 });
+    expect(r.result).toMatchObject({ total_resistance_ohm: 20, current_a: 0.3 });
+    expect(r.result.bulbs.map(b => b.brightness_vs_alone)).toEqual([0.25, 0.25]);
+    r = await call(page, 'physics_lab_circuit', { kind: 'parallel' });
+    expect(r.result).toMatchObject({ total_resistance_ohm: 5, current_a: 1.2 });
+    r = await call(page, 'physics_lab_gas_pressure', { temperature_k: 600, volume_percent: 50 });
+    expect(r.result).toMatchObject({ pressure_relative: 4, speed_factor: Math.round(Math.SQRT2 * 1000) / 1000 });
+    await expect(page.locator('#p-gas')).toBeVisible();
+  });
 });
 
 test.describe('chain-transaction tools', () => {
