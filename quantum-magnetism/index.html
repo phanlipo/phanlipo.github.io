@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Quantenmagnetismus</title>
+<meta name="description" content="Ising-Modell zum Zuschauen: Spins auf Quadrat-, Dreiecks- und Kagome-Gitter, ferro- oder antiferromagnetisch, mit Temperatur und Magnetfeld. Phasenübergang, Frustration, Hysterese – und eine exakt gelöste Quanten-Kette im Querfeld.">
+<meta name="tool:tags" content="Arbeit, Physik">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="set_classical, run_sweeps, get_classical, set_quantum">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Gitter, Kopplung, Temperatur und Feld einstellen, Monte-Carlo-Schritte rechnen lassen, die Messwerte lesen und die Quanten-Kette einstellen und auswerten.">
+<meta name="tool:webmcp-help-en" content="An AI agent can set lattice, coupling, temperature and field, run Monte Carlo sweeps, read the measurements and set up and evaluate the quantum chain.">
+<meta name="tool:icon" content="magnet">
+<meta name="tool:color" content="#1d4ed8">
+<meta name="tool:short-name" content="Magnetismus">
+<meta name="tool:title-en" content="Quantum Magnetism">
+<meta name="tool:description-en" content="The Ising model to watch: spins on square, triangular and kagome lattices, ferro- or antiferromagnetic, with temperature and magnetic field. Phase transition, frustration, hysteresis – and an exactly solved quantum chain in a transverse field.">
+<meta name="tool:short-name-en" content="Magnetism">
+<meta name="tool:storage" content="quantum-magnetism.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Magnetismus">
+<meta name="theme-color" content="#1d4ed8">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#1d4ed8;--accent-text:#ffffff;
+  --up:#dc2626;--down:#1d4ed8;--arrow:#ffffff;--frust:#f59e0b;--bond:rgba(0,0,0,.18);
+  --c1:#1d4ed8;--c2:#c2410c;--c3:#047857;--c4:#7c3aed;--c5:#be185d;
+  --grid:rgba(0,0,0,.08);--axis:rgba(0,0,0,.55)}
+@media (prefers-color-scheme: dark){:root{--accent:#93b4fb;--accent-text:#0b1530;
+  --up:#f87171;--down:#60a5fa;--arrow:#0b1020;--frust:#fbbf24;--bond:rgba(255,255,255,.2);
+  --c1:#93b4fb;--c2:#fb923c;--c3:#34d399;--c4:#c4b5fd;--c5:#f472b6;
+  --grid:rgba(255,255,255,.08);--axis:rgba(255,255,255,.6)}}
+main{display:flex;flex-direction:column}
+.view{position:relative;flex:1 1 48%;min-height:180px;background:var(--surface);border-block-end:1px solid var(--border)}
+.view canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.view canvas:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.badge{position:absolute;inset-block-start:8px;inset-inline-start:8px;max-width:calc(100% - 16px);background:var(--surface-2);border:1px solid var(--border);
+  border-radius:8px;padding:4px 10px;font-size:14px;font-variant-numeric:tabular-nums;box-shadow:var(--shadow);pointer-events:none}
+.toolbar{flex:none;padding:4px 6px;border-block-end:1px solid var(--border);background:var(--surface)}
+.panel{flex:1 1 52%;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:10px 12px 12px;display:flex;flex-direction:column;gap:12px}
+.panel>*{flex:none}
+.panel h2{font-size:15px;margin:0;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.stats .stat-box{padding:6px 4px}
+.stats .stat-box>b{font-size:19px}
+.stats .stat-box>span{font-size:12px;line-height:1.2}
+.chart{position:relative;height:170px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.chart canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.chart .empty-state{position:absolute;inset:0;margin:0;padding:8px;font-size:14px}
+.legend{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-inline-end:6px;vertical-align:middle}
+.legend i.dash{background:repeating-linear-gradient(90deg,currentColor 0 4px,transparent 4px 7px)!important;color:var(--muted)}
+.field-row{display:flex;gap:8px;align-items:flex-end}
+.field-row .form-field{flex:1;min-width:0}
+.controls{display:grid;gap:10px}
+.configs{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.configs li{display:grid;grid-template-columns:minmax(0,auto) 1fr 4.2em;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:14px}
+.configs .ket{font-family:var(--mono);font-size:16px;letter-spacing:1px;white-space:nowrap}
+.configs .ket .u{color:var(--up)}
+.configs .ket .d{color:var(--down)}
+.configs .bar{height:10px;border-radius:5px;background:var(--surface-2);overflow:hidden}
+.configs .bar>span{display:block;height:100%;background:var(--accent)}
+.configs .pct{text-align:end}
+.help code{font-family:var(--mono);background:var(--surface-2);padding:0 4px;border-radius:4px}
+@media (min-width:900px){
+  main{display:grid;grid-template-columns:400px 1fr;grid-template-rows:1fr auto}
+  .panel{grid-column:1;grid-row:1 / 3;border-inline-end:1px solid var(--border)}
+  .view{grid-column:2;grid-row:1;border-block-end:0}
+  .toolbar{grid-column:2;grid-row:2;border-block-start:1px solid var(--border);border-block-end:0}
+}
+@media (orientation:landscape) and (max-height:500px){
+  main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:1fr auto}
+  .panel{grid-column:1;grid-row:1 / 3;border-inline-end:1px solid var(--border)}
+  .view{grid-column:2;grid-row:1;border-block-end:0}
+  .toolbar{grid-column:2;grid-row:2;border-block-start:1px solid var(--border);border-block-end:0}
+}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Quantenmagnetismus</span></h1>
+  <p class="sub" data-i18n="sub">Ising-Modell auf Gittern und als Quanten-Kette</p>
+</header>
+
+<main>
+  <div class="view" id="view">
+    <canvas id="cv" tabindex="0" role="img" aria-label="Spins auf dem Gitter: rot nach oben, blau nach unten. Tippen oder Ziehen dreht Spins um." data-i18n-attr="aria-label:cvLabel"></canvas>
+    <p class="badge" id="badge" aria-live="off"></p>
+  </div>
+  <div class="toolbar" id="tb">
+    <button type="button" id="btnRun" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span class="tb-label" data-i18n="run">Start</span></button>
+    <button type="button" id="btnHot"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#dice-5"/></svg><span class="tb-label" data-i18n="hot">Zufällig</span></button>
+    <button type="button" id="btnCold"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrow-up"/></svg><span class="tb-label" data-i18n="cold">Geordnet</span></button>
+    <button type="button" id="btnScan" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#temperature"/></svg><span class="tb-label" data-i18n="scan">T-Scan</span></button>
+    <button type="button" id="btnFrust" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#triangle"/></svg><span class="tb-label" data-i18n="frust">Frustration</span></button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="seg" role="group" aria-label="Modell" data-i18n-attr="aria-label:modeL" id="mode">
+      <button type="button" aria-pressed="true" data-mode="classic"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#grid-dots"/></svg><span data-i18n="modeC">Gitter (klassisch)</span></button>
+      <button type="button" aria-pressed="false" data-mode="quantum"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#atom"/></svg><span data-i18n="modeQ">Quanten-Kette</span></button>
+    </div>
+
+    <!-- ---------- Classical Ising model ---------- -->
+    <section id="classic" class="controls" aria-labelledby="h-classic">
+      <h2 id="h-classic" class="sr-only" data-i18n="classicH">Ising-Modell auf dem Gitter</h2>
+      <div class="stats" id="stats">
+        <div class="stat-box"><b id="sM">–</b><span data-i18n="sM">Magnetisierung</span></div>
+        <div class="stat-box"><b id="sMs">–</b><span data-i18n="sMs">Untergitter-Ordnung</span></div>
+        <div class="stat-box"><b id="sE">–</b><span data-i18n="sE">Energie je Spin</span></div>
+        <div class="stat-box"><b id="sF">–</b><span data-i18n="sF">frustrierte Bindungen</span></div>
+      </div>
+      <div class="chips" role="group" aria-label="Diagramm" data-i18n-attr="aria-label:chartL" id="chartMode">
+        <button type="button" aria-pressed="true" data-chart="time"><span data-i18n="chTime">Verlauf</span></button>
+        <button type="button" aria-pressed="false" data-chart="loop"><span data-i18n="chLoop">Hysterese</span></button>
+        <button type="button" aria-pressed="false" data-chart="scan"><span data-i18n="chScan">Temperatur-Scan</span></button>
+      </div>
+      <div class="chart"><canvas id="chart" role="img" aria-label="Diagramm" data-i18n-attr="aria-label:chartL"></canvas>
+        <p class="empty-state" id="chartEmpty" hidden></p></div>
+      <ul class="legend" id="legend"></ul>
+
+      <fieldset class="seg-group"><legend data-i18n="latticeL">Gitter</legend>
+        <div class="seg" id="lattice">
+          <button type="button" aria-pressed="true" data-v="square"><span data-i18n="square">Quadrat</span></button>
+          <button type="button" aria-pressed="false" data-v="triangular"><span data-i18n="triangular">Dreieck</span></button>
+          <button type="button" aria-pressed="false" data-v="kagome"><span data-i18n="kagome">Kagome</span></button>
+        </div>
+      </fieldset>
+      <fieldset class="seg-group"><legend data-i18n="couplingL">Wechselwirkung</legend>
+        <div class="seg" id="coupling">
+          <button type="button" aria-pressed="true" data-v="1"><span data-i18n="ferro">Ferro (J &gt; 0)</span></button>
+          <button type="button" aria-pressed="false" data-v="-1"><span data-i18n="antiferro">Antiferro (J &lt; 0)</span></button>
+        </div>
+      </fieldset>
+      <div class="form-field range"><label for="rT"><span data-i18n="tempL">Temperatur T</span> <output id="oT" for="rT"></output></label>
+        <input type="range" id="rT" min="0.05" max="6" step="0.01"></div>
+      <div class="field-row">
+        <div class="form-field range"><label for="rH"><span data-i18n="fieldL">Magnetfeld h</span> <output id="oH" for="rH"></output></label>
+          <input type="range" id="rH" min="-6" max="6" step="0.05"></div>
+        <button type="button" class="btn icon" id="btnOsc" aria-pressed="false" aria-label="Feld hin und her schwingen lassen" title="Feld hin und her schwingen lassen" data-i18n-attr="aria-label:osc; title:osc"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg></button>
+      </div>
+      <fieldset class="seg-group"><legend data-i18n="sizeL">Größe</legend>
+        <div class="seg" id="size">
+          <button type="button" aria-pressed="false" data-v="0"><span data-i18n="small">Klein</span></button>
+          <button type="button" aria-pressed="true" data-v="1"><span data-i18n="medium">Mittel</span></button>
+          <button type="button" aria-pressed="false" data-v="2"><span data-i18n="large">Groß</span></button>
+        </div>
+      </fieldset>
+      <div class="form-field range"><label for="rSpeed"><span data-i18n="speedL">Tempo</span> <output id="oSpeed" for="rSpeed"></output></label>
+        <input type="range" id="rSpeed" min="0" max="8" step="1"></div>
+      <div class="form-field"><label for="examples" data-i18n="examplesL">Beispiel laden</label>
+        <select id="examples"><option value="" data-i18n="examples">Beispiel wählen …</option></select></div>
+      <p class="notice info" id="facts"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span id="factsText"></span></p>
+    </section>
+
+    <!-- ---------- Quantum Ising chain ---------- -->
+    <section id="quantum" class="controls" aria-labelledby="h-quantum" hidden>
+      <h2 id="h-quantum" class="sr-only" data-i18n="quantumH">Quanten-Ising-Kette im Querfeld</h2>
+      <div class="stats">
+        <div class="stat-box"><b id="qE">–</b><span data-i18n="qE">Energie je Spin</span></div>
+        <div class="stat-box"><b id="qGap">–</b><span data-i18n="qGap">Energielücke</span></div>
+        <div class="stat-box"><b id="qX">–</b><span data-i18n="qX">⟨σˣ⟩ quer</span></div>
+        <div class="stat-box"><b id="qS">–</b><span data-i18n="qS">Verschränkung (bit)</span></div>
+      </div>
+      <div class="chips" role="group" aria-label="Diagramm" data-i18n-attr="aria-label:chartL" id="qChartMode">
+        <button type="button" aria-pressed="true" data-chart="spectrum"><span data-i18n="chSpec">Spektrum</span></button>
+        <button type="button" aria-pressed="false" data-chart="order"><span data-i18n="chOrder">Ordnung &amp; Verschränkung</span></button>
+        <button type="button" aria-pressed="false" data-chart="corr"><span data-i18n="chCorr">Korrelationen</span></button>
+      </div>
+      <div class="chart"><canvas id="qchart" role="img" aria-label="Diagramm" data-i18n-attr="aria-label:chartL"></canvas></div>
+      <ul class="legend" id="qlegend"></ul>
+      <div class="form-field range"><label for="rN"><span data-i18n="nL">Anzahl Spins N</span> <output id="oN" for="rN"></output></label>
+        <input type="range" id="rN" min="3" max="10" step="1"></div>
+      <fieldset class="seg-group"><legend data-i18n="couplingL">Wechselwirkung</legend>
+        <div class="seg" id="qCoupling">
+          <button type="button" aria-pressed="true" data-v="1"><span data-i18n="ferro">Ferro (J &gt; 0)</span></button>
+          <button type="button" aria-pressed="false" data-v="-1"><span data-i18n="antiferro">Antiferro (J &lt; 0)</span></button>
+        </div>
+      </fieldset>
+      <div class="field-row">
+        <div class="form-field range"><label for="rG"><span data-i18n="gammaL">Querfeld Γ</span> <output id="oG" for="rG"></output></label>
+          <input type="range" id="rG" min="0" max="3" step="0.01"></div>
+        <button type="button" class="btn icon" id="btnSweepG" aria-pressed="false" aria-label="Querfeld durchfahren" title="Querfeld durchfahren" data-i18n-attr="aria-label:sweepG; title:sweepG"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg></button>
+      </div>
+      <div class="form-field range"><label for="rQh"><span data-i18n="qFieldL">Längsfeld h</span> <output id="oQh" for="rQh"></output></label>
+        <input type="range" id="rQh" min="-2" max="2" step="0.01"></div>
+      <h2 data-i18n="configsH">Wahrscheinlichste Einstellungen der Spins</h2>
+      <ul class="configs" id="configs"></ul>
+      <p class="notice info"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span id="qFacts"></span></p>
+    </section>
+  </div>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Magnetismus entsteht, weil sich die winzigen magnetischen Momente der Elektronen – die <b>Spins</b> – gegenseitig ausrichten. Das <b>Ising-Modell</b> ist das einfachste Bild dafür: Jeder Spin zeigt nur nach oben (rot, s = +1) oder nach unten (blau, s = −1), und Nachbarn beeinflussen sich. Seine Energie ist</p>
+  <p><code>H = −J Σ s<sub>i</sub> s<sub>j</sub> − h Σ s<sub>i</sub></code> (erste Summe über Nachbarpaare).</p>
+  <h3>Gitter (klassisch)</h3>
+  <ul>
+    <li><b>Ferro (J &gt; 0):</b> Nachbarn wollen gleich stehen. Bei tiefer Temperatur entstehen große Bereiche gleicher Richtung (Domänen), über der <b>kritischen Temperatur T<sub>c</sub></b> zerfällt die Ordnung. Beim Quadratgitter hat Lars Onsager 1944 T<sub>c</sub> = 2/ln(1+√2) ≈ 2,269 |J| exakt ausgerechnet; im Temperatur-Scan ist seine Kurve gestrichelt eingezeichnet.</li>
+    <li><b>Antiferro (J &lt; 0):</b> Nachbarn wollen entgegengesetzt stehen. Auf dem Quadratgitter klappt das perfekt (Schachbrett, „Néel-Ordnung“ – die Untergitter-Ordnung geht gegen 1, die Magnetisierung bleibt 0).</li>
+    <li><b>Frustration:</b> Auf Dreieck und Kagome bestehen die Gitter aus Dreiecken. Zwei Spins eines Dreiecks können entgegengesetzt stehen – der dritte nicht zu beiden. Mindestens eine Bindung je Dreieck bleibt unzufrieden (Knopf <i>Frustration</i> zeigt sie gelb). Es gibt riesig viele gleich gute Anordnungen, deshalb ordnet sich das System bis zum absoluten Nullpunkt nicht (Restentropie 0,338 bzw. 0,502 k<sub>B</sub> je Spin).</li>
+    <li><b>Magnetfeld h:</b> zieht die Spins nach oben (h &gt; 0) oder unten. Im Dreieck-Antiferromagneten entsteht bei 0 &lt; h &lt; 6|J| ein Plateau mit m = 1/3: zwei Spins hoch, einer runter je Dreieck. Der Knopf neben dem Regler lässt das Feld hin und her schwingen – unter T<sub>c</sub> hinkt die Magnetisierung hinterher und zeichnet eine <b>Hystereseschleife</b>.</li>
+    <li><b>Temperatur-Scan:</b> kühlt das Gitter Schritt für Schritt ab und misst bei jeder Temperatur Ordnung, Wärmekapazität C und Suszeptibilität χ (beide auf ihr Maximum skaliert). Am Phasenübergang haben C und χ eine Spitze.</li>
+    <li><b>Spins drehen:</b> Tippen oder Ziehen auf dem Gitter malt Spins (die Richtung entgegengesetzt zum ersten angetippten). So lassen sich Domänen von Hand anlegen und beim Zerfallen beobachten.</li>
+  </ul>
+  <h3>Wie gerechnet wird</h3>
+  <p>Monte Carlo mit dem Metropolis-Verfahren: Ein zufälliger Spin wird probeweise umgedreht; sinkt die Energie, bleibt es so, sonst nur mit der Wahrscheinlichkeit e<sup>−ΔE/T</sup>. Ein <i>Durchlauf</i> sind so viele Versuche, wie es Spins gibt. Die Ränder sind periodisch (was rechts hinausgeht, kommt links wieder herein). Temperatur und Feld in Einheiten von |J| (k<sub>B</sub> = 1). Nahe T<sub>c</sub> wird das Verfahren langsam („kritische Verlangsamung“), und kleine Gitter verwischen den Übergang – das ist echte Physik, kein Fehler.</p>
+  <h3>Quanten-Kette</h3>
+  <p>In der Quantenmechanik ist ein Spin nicht nur oben oder unten, sondern kann in einer <b>Überlagerung</b> beider stehen. Das Querfeld Γ dreht die Spins zur Seite (σ<sup>x</sup>) und konkurriert mit der Kopplung J: <code>H = −J Σ σᶻᵢσᶻᵢ₊₁ − Γ Σ σˣᵢ − h Σ σᶻᵢ</code> auf einem Ring aus N Spins. Die App rechnet den Grundzustand <b>exakt</b> aus (alle 2<sup>N</sup> Einstellungen, Lanczos-Verfahren).</p>
+  <ul>
+    <li>Bei T = 0 gibt es einen <b>Quanten-Phasenübergang</b> bei Γ = |J|: darunter geordnet, darüber zeigen alle Spins zur Seite. Im Spektrum schließt sich unterhalb die Lücke zwischen den zwei niedrigsten Zuständen, und die Verschränkung hat am Übergang ihr Maximum.</li>
+    <li>Die Pfeile im Kreis zeigen, wohin jeder Spin im Mittel zeigt (oben = σᶻ, rechts = σˣ). Ein kurzer Pfeil heißt: Der Spin hat allein keine Richtung, er ist mit den anderen <b>verschränkt</b>. Bei kleinem Γ ist der Grundzustand eine „Katze“ aus „alle oben“ und „alle unten“ zugleich – die Liste der wahrscheinlichsten Einstellungen zeigt das.</li>
+    <li>Antiferro mit ungerader Anzahl Spins ist auf dem Ring frustriert: Eine Bindung muss unzufrieden bleiben, und es gibt N gleich gute Stellen dafür.</li>
+    <li>Das Längsfeld h bricht die Symmetrie zwischen oben und unten.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Nur die Einstellungen bleiben in diesem Browser (sichern und übertragen unter „Daten sichern“), nicht die Spins oder Messkurven. Alles wird auf dem Gerät gerechnet, nichts wird gesendet; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Magnetism arises because the tiny magnetic moments of the electrons – the <b>spins</b> – align each other. The <b>Ising model</b> is the simplest picture of this: each spin points only up (red, s = +1) or down (blue, s = −1), and neighbours influence each other. Its energy is</p>
+  <p><code>H = −J Σ s<sub>i</sub> s<sub>j</sub> − h Σ s<sub>i</sub></code> (first sum over neighbouring pairs).</p>
+  <h3>Lattice (classical)</h3>
+  <ul>
+    <li><b>Ferro (J &gt; 0):</b> neighbours want to point the same way. At low temperature large regions of the same direction (domains) form; above the <b>critical temperature T<sub>c</sub></b> the order breaks down. For the square lattice Lars Onsager computed T<sub>c</sub> = 2/ln(1+√2) ≈ 2.269 |J| exactly in 1944; the temperature scan shows his curve dashed.</li>
+    <li><b>Antiferro (J &lt; 0):</b> neighbours want to point opposite ways. On the square lattice this works perfectly (chessboard, “Néel order” – the sublattice order goes to 1, the magnetisation stays 0).</li>
+    <li><b>Frustration:</b> the triangular and kagome lattices are made of triangles. Two spins of a triangle can point opposite ways – the third cannot oppose both. At least one bond per triangle stays unhappy (the <i>Frustration</i> button shows them in yellow). There are vastly many equally good arrangements, so the system does not order down to absolute zero (residual entropy 0.338 and 0.502 k<sub>B</sub> per spin).</li>
+    <li><b>Magnetic field h:</b> pulls the spins up (h &gt; 0) or down. In the triangular antiferromagnet a plateau with m = 1/3 forms for 0 &lt; h &lt; 6|J|: two spins up, one down per triangle. The button next to the slider swings the field back and forth – below T<sub>c</sub> the magnetisation lags behind and draws a <b>hysteresis loop</b>.</li>
+    <li><b>Temperature scan:</b> cools the lattice step by step and measures order, heat capacity C and susceptibility χ (both scaled to their maximum) at every temperature. At the phase transition C and χ peak.</li>
+    <li><b>Flip spins:</b> tapping or dragging on the lattice paints spins (opposite to the first one touched). That way you can lay out domains by hand and watch them dissolve.</li>
+  </ul>
+  <h3>How it is computed</h3>
+  <p>Monte Carlo with the Metropolis method: a random spin is flipped on trial; if the energy drops it stays flipped, otherwise only with probability e<sup>−ΔE/T</sup>. One <i>sweep</i> is as many trials as there are spins. The edges are periodic (what leaves on the right comes back on the left). Temperature and field in units of |J| (k<sub>B</sub> = 1). Close to T<sub>c</sub> the method becomes slow (“critical slowing down”), and small lattices smear out the transition – that is real physics, not a bug.</p>
+  <h3>Quantum chain</h3>
+  <p>In quantum mechanics a spin is not just up or down but can be in a <b>superposition</b> of both. The transverse field Γ turns the spins sideways (σ<sup>x</sup>) and competes with the coupling J: <code>H = −J Σ σᶻᵢσᶻᵢ₊₁ − Γ Σ σˣᵢ − h Σ σᶻᵢ</code> on a ring of N spins. The app computes the ground state <b>exactly</b> (all 2<sup>N</sup> configurations, Lanczos method).</p>
+  <ul>
+    <li>At T = 0 there is a <b>quantum phase transition</b> at Γ = |J|: below it ordered, above it all spins point sideways. In the spectrum the gap between the two lowest states closes below it, and the entanglement peaks at the transition.</li>
+    <li>The arrows in the circle show where each spin points on average (up = σᶻ, right = σˣ). A short arrow means: the spin has no direction on its own, it is <b>entangled</b> with the others. At small Γ the ground state is a “cat” of “all up” and “all down” at once – the list of the most likely configurations shows it.</li>
+    <li>Antiferro with an odd number of spins is frustrated on the ring: one bond has to stay unhappy, and there are N equally good places for it.</li>
+    <li>The longitudinal field h breaks the symmetry between up and down.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Only the settings stay in this browser (back them up or move them under “Back up data”), not the spins or the curves. Everything is computed on the device, nothing is sent; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann Gitter, Kopplung, Temperatur und Feld einstellen, Monte-Carlo-Schritte rechnen lassen, die Messwerte lesen und die Quanten-Kette einstellen und auswerten. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can set lattice, coupling, temperature and field, run Monte Carlo sweeps, read the measurements and set up and evaluate the quantum chain. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 81ebcc0aba41</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="lattice.js"></script>
+<script src="chain.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

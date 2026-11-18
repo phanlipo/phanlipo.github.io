@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "qr-code";
-const VERSION = 'cd4f8bf30626';
+const VERSION = '9a6b590ef1ad';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

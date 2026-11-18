@@ -3481,3 +3481,85 @@ test.describe('tournament tools', () => {
     await expect(page.locator('#champName')).toHaveText(result.tournament.winner);
   });
 });
+
+test.describe('quantum-magnetism tools', () => {
+  test.use({ reducedMotion: 'reduce' });
+  test.beforeEach(async ({ page }) => open(page, '/quantum-magnetism/'));
+
+  test('set_classical and run_sweeps: settings shown in the app, exact values, ordered ferromagnet stays ordered', async ({ page }) => {
+    let r = await call(page, 'quantum_magnetism_set_classical', { lattice: 'square', coupling: 'ferro', temperature: 0.5, field: 0, size: 'small', start: 'ordered' });
+    expect(r.ok).toBe(true);
+    expect(r.result.settings).toEqual({ lattice: 'square', coupling: 'ferro', temperature: 0.5, field: 0, size: 'small', sites: 144, sweeps: 0 });
+    // Onsager: Tc = 2 / ln(1 + √2)
+    expect(r.result.exact).toEqual({ critical_temperature: Math.round(2 / Math.log(1 + Math.SQRT2) * 1e4) / 1e4, ground_energy_per_spin: -2, residual_entropy_per_spin: 0 });
+    expect(r.result.measurements).toEqual({ magnetization: 1, staggered_order: 0, energy_per_spin: -2, frustrated_bonds: 0 });
+    await expect(page.locator('#size [data-v="0"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#oT')).toHaveText('0,50');
+    r = await call(page, 'quantum_magnetism_run_sweeps', { sweeps: 50 });
+    expect(r.ok).toBe(true);
+    expect(r.result.settings.sweeps).toBe(50);
+    expect(r.result.averages.abs_magnetization).toBeGreaterThan(0.99);
+    expect(r.result.averages.energy_per_spin).toBeLessThan(-1.98);
+    await expect(page.locator('#badge')).toContainText('Durchlauf 50');
+    const bad = await call(page, 'quantum_magnetism_set_classical', { temperature: 9 });
+    expect(bad).toEqual({ ok: false, error: 'input.temperature must be <= 6' });
+    expect((await call(page, 'quantum_magnetism_run_sweeps', {})).ok).toBe(false);
+  });
+
+  test('set_classical on the frustrated triangular antiferromagnet; get_classical reads it without changes', async ({ page }) => {
+    const r = await call(page, 'quantum_magnetism_set_classical', { lattice: 'triangular', coupling: 'antiferro', size: 'small', start: 'ordered' });
+    // Two up, one down per triangle: a third of all bonds unhappy, energy −3 + 2 = −1 per spin
+    expect(r.result.measurements).toEqual({ magnetization: 0.3333, staggered_order: 1, energy_per_spin: -1, frustrated_bonds: 0.3333 });
+    expect(r.result.exact).toEqual({ critical_temperature: null, ground_energy_per_spin: -1, residual_entropy_per_spin: 0.3383 });
+    await expect(page.locator('#coupling [data-v="-1"]')).toHaveAttribute('aria-pressed', 'true');
+    const g = await call(page, 'quantum_magnetism_get_classical', {});
+    expect(g.result.settings.lattice).toBe('triangular');
+    expect(g.result.measurements).toEqual(r.result.measurements);
+    expect(g.result.temperature_scan).toBe(null);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'quantum_magnetism_get_classical').annotations.readOnlyHint).toBe(true);
+  });
+
+  test('get_classical returns the points of a finished temperature scan', async ({ page }) => {
+    await call(page, 'quantum_magnetism_set_classical', { lattice: 'square', coupling: 'ferro', field: 0, size: 'small' });
+    await page.click('#btnScan');
+    await expect(page.locator('#btnScan')).toHaveAttribute('aria-pressed', 'false', { timeout: 60000 });
+    const { result } = await call(page, 'quantum_magnetism_get_classical', {});
+    const pts = result.temperature_scan.points;
+    expect(pts).toHaveLength(30);
+    expect(pts[0].temperature).toBe(4);
+    expect(pts[29].temperature).toBe(0.2);
+    // Hot: disordered; cold: ordered, energy close to the ground state −2
+    expect(pts[0].order).toBeLessThan(0.35);
+    expect(pts[29].order).toBeGreaterThan(0.97);
+    expect(pts[29].energy_per_spin).toBeLessThan(-1.95);
+    // The heat capacity peaks near Tc = 2.27 (small lattice: within ±0.6)
+    const peak = pts.reduce((a, b) => b.heat_capacity > a.heat_capacity ? b : a);
+    expect(Math.abs(peak.temperature - 2.269)).toBeLessThan(0.6);
+  });
+
+  test('set_quantum: exact energy, cat state, odd antiferro ring; shown in the app', async ({ page }) => {
+    let r = await call(page, 'quantum_magnetism_set_quantum', { spins: 6, coupling: 'ferro', transverse_field: 1, field: 0 });
+    expect(r.ok).toBe(true);
+    // Free fermions: E0 = −Σ_k √(J² + Γ² − 2JΓ cos k), k = (2n+1)π/N
+    let e0 = 0;
+    for (let n = 0; n < 6; n++) e0 -= Math.sqrt(2 - 2 * Math.cos(Math.PI * (2 * n + 1) / 6));
+    expect(r.result.energy_per_spin).toBeCloseTo(e0 / 6, 4);
+    expect(r.result.exact_energy_per_spin).toBeCloseTo(e0 / 6, 4);
+    expect(r.result.correlations[0]).toBe(1);
+    expect(r.result.correlations).toHaveLength(4);
+    expect(r.result.entanglement_bits).toBeGreaterThan(0.5);
+    await expect(page.locator('#quantum')).toBeVisible();
+    await expect(page.locator('#oN')).toHaveText('6');
+    r = await call(page, 'quantum_magnetism_set_quantum', { transverse_field: 0 });
+    expect(r.result.top_configurations).toEqual([{ spins: 'dddddd', probability: 0.5 }, { spins: 'uuuuuu', probability: 0.5 }]);
+    expect(r.result.entanglement_bits).toBe(1);
+    expect(r.result.transverse_magnetization).toBe(0);
+    r = await call(page, 'quantum_magnetism_set_quantum', { spins: 5, coupling: 'antiferro' });
+    expect(r.result.energy_per_spin).toBe(-0.6);
+    expect(r.result.exact_energy_per_spin).toBe(null);
+    await expect(page.locator('#qCoupling [data-v="-1"]')).toHaveAttribute('aria-pressed', 'true');
+    const bad = await call(page, 'quantum_magnetism_set_quantum', { spins: 14 });
+    expect(bad).toEqual({ ok: false, error: 'input.spins must be <= 10' });
+  });
+});
