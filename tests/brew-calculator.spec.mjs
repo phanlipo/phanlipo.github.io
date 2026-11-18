@@ -236,8 +236,8 @@ test('overview: tiles open a calculator, tabs switch, the back key returns', asy
   await expect(page.locator('#alkohol')).toBeHidden();
 });
 
-// Examples marked "fabier.de" are the results of the calculators on https://fabier.de/biercalcs.html for the same
-// inputs – an independent implementation; small differences come from other constants (noted at each test).
+// Values marked "other calculator" come from an independent online brewing calculator with the same inputs;
+// small differences come from other constants (noted at each test).
 test.describe('4 · Plato, Brix and SG', () => {
   test('°Plato to SG and Brix', async ({ page }) => {
     await set(page, 'c.x', 12);
@@ -261,10 +261,10 @@ test.describe('5 · alcohol', () => {
     await set(page, 'a.og', 12);
     await set(page, 'a.fg', '2,5');
     const r = balling(12, 2.5, sgFromP(2.5));
-    await expect(main(page, 'aRes')).toContainText(de(r.abv, 2)); // ≈ 5,13 (fabier.de 4,99 with ABV = ABW / 0,795)
-    await expect(result(page, 'aRes', 'Scheinbarer Vergärungsgrad')).toContainText('79,2'); // fabier.de 79,17
+    await expect(main(page, 'aRes')).toContainText(de(r.abv, 2)); // ≈ 5,13 (other calculator 4,99 with ABV = ABW / 0,795)
+    await expect(result(page, 'aRes', 'Scheinbarer Vergärungsgrad')).toContainText('79,2'); // other calculator 79,17
     await expect(result(page, 'aRes', 'Wirklicher Vergärungsgrad')).toContainText(de(r.rdf, 1));
-    await expect(result(page, 'aRes', 'Wirklicher Restextrakt')).toContainText(de(r.Ew, 2)); // fabier.de 4,31 (factor 0,81)
+    await expect(result(page, 'aRes', 'Wirklicher Restextrakt')).toContainText(de(r.Ew, 2)); // other calculator 4,31 (factor 0,81)
     expect(r.abv).toBeGreaterThan(4.9);
     expect(r.abv).toBeLessThan(5.3);
   });
@@ -296,7 +296,7 @@ test.describe('6 · brewhouse efficiency', () => {
     await set(page, 'y.T', 100);
     await set(page, 'y.m', 4);
     const mE = 20 * rhoW(100) / rhoW(20) * sgFromP(12) * rhoW(20) / 1000 * 0.12;
-    await expect(main(page, 'yRes')).toContainText(de(mE / 4 * 100, 1)); // 60,3 (fabier.de 60,27 with factor 0,96)
+    await expect(main(page, 'yRes')).toContainText(de(mE / 4 * 100, 1)); // 60,3 (other calculator 60,27 with factor 0,96)
   });
 
   test('grain needed for an efficiency, volume measured at 20 °C', async ({ page }) => {
@@ -325,7 +325,7 @@ test.describe('7 · mixing cross', () => {
     await set(page, 'm.x1', 15);
     await set(page, 'm.x2', 0);
     await set(page, 'm.xz', 12);
-    await expect(main(page, 'mRes')).toContainText('5,00'); // fabier.de 5 L
+    await expect(main(page, 'mRes')).toContainText('5,00'); // other calculator 5 L
     await set(page, 'm.xz', 20);
     await expect(page.locator('#mMsg .notice.err')).toBeVisible();
   });
@@ -340,7 +340,7 @@ test.describe('8 · hops', () => {
     await set(page, 'h.ibu', 45);
     await set(page, 'h.U', 30);
     await set(page, 'h.V', 20);
-    await expect(main(page, 'hRes')).toContainText('30,0'); // fabier.de 30 g
+    await expect(main(page, 'hRes')).toContainText('30,0'); // other calculator 30 g
     await expect(result(page, 'hRes', 'je Liter')).toContainText('1,50');
   });
 
@@ -376,9 +376,9 @@ test.describe('9 · brewing water', () => {
     await set(page, 'w.V', 20);
     const caH = 68 / 40.078 / 0.17832, mgH = 31.3 / 24.305 / 0.17832, kh = 6.17 / (2 * 0.17832);
     const ra = kh - (caH + mgH / 2) / 3.5, la = ra * 2 * 0.17832 * 20 / (1.2 * 0.8 / 90.08 * 1000);
-    await expect(main(page, 'wRes')).toContainText(de(ra, 2)); // 13,55 (fabier.de 13,57)
-    await expect(result(page, 'wRes', 'Milchsäure')).toContainText(de(la, 1)); // 9,1 mL (fabier.de 9,05)
-    await expect(result(page, 'wRes', 'Magnesiumhärte')).toContainText('7,22'); // fabier.de 7,22
+    await expect(main(page, 'wRes')).toContainText(de(ra, 2)); // 13,55 (other calculator 13,57)
+    await expect(result(page, 'wRes', 'Milchsäure')).toContainText(de(la, 1)); // 9,1 mL (other calculator 9,05)
+    await expect(result(page, 'wRes', 'Magnesiumhärte')).toContainText('7,22'); // other calculator 7,22
     expect(Math.abs(la - 9.05)).toBeLessThan(0.1);
   });
 
@@ -398,7 +398,7 @@ test.describe('10 · CO₂ pressure', () => {
     await set(page, 'd.C', 5);
     await set(page, 'd.T', 7);
     const p = 5 / co2(7, 1) - 1.013;
-    await expect(main(page, 'dRes')).toContainText(de(p, 2)); // 1,01 bar (fabier.de 1,01)
+    await expect(main(page, 'dRes')).toContainText(de(p, 2)); // 1,01 bar (other calculator 1,01)
     await page.click('[data-key="d.mode"] [data-v="c"]');
     await set(page, 'd.p', 1);
     await expect(main(page, 'dRes')).toContainText(de(co2(7, 2.013), 2));
@@ -416,7 +416,7 @@ test('priming with wort (Speise) includes the added volume', async ({ page }) =>
   const kS = 10 * sgFromP(12) * (12 - (0.1808 * 12 + 0.8192 * 2.5)) * 0.9565 / 2.0665, rest = co2(19.5, 1.013);
   const x = (5 - rest) / (kS - 5);
   await expect(main(page, 'zRes')).toContainText(de(x * 20, 2));
-  await expect(result(page, 'zRes', 'je Liter')).toContainText(de(x * 1000, 0)); // ≈ 101 mL (fabier.de 89 mL without the added volume)
+  await expect(result(page, 'zRes', 'je Liter')).toContainText(de(x * 1000, 0)); // ≈ 101 mL (other calculator 89 mL without the added volume)
   expect(Math.abs((5 - rest) / kS * 1000 - 89.2)).toBeLessThan(3);
   await expect(result(page, 'zRes', 'je Flasche')).toContainText(de(500 * x / (1 + x), 0));
   await page.selectOption('[data-key="z.sugar"]', 'sucrose');
