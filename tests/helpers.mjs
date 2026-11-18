@@ -210,8 +210,9 @@ export async function closeMenu(page) {
  *  sub page "Settings" – like a user, by tapping the row of a sub page that is still closed */
 export async function openSettings(page) {
   await openMenu(page);
-  const page_ = page.locator('#appMenu details.menu-page:has(#menuTheme)');
-  if (await page_.count() && !(await page_.evaluate(d => d.open))) await page_.locator(':scope > summary').click();
+  // Sub page or section that folds open (e.g. ai-chat): tap its row if it is still closed
+  const box = page.locator('#appMenu details:has(#menuTheme)');
+  if (await box.count() && !(await box.evaluate(d => d.open))) await box.locator(':scope > summary').click();
   await page.locator('#menuTheme').scrollIntoViewIfNeeded();
 }
 

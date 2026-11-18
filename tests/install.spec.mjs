@@ -1,6 +1,6 @@
 // "Install as app": the last row of the menu's standard list, a sub page (every app), see Tools.menu in common.js.
 // Chrome's own banner depends on its engagement rules – the menu offers installing at any time.
-import { test, expect, apps, openMenu } from './helpers.mjs';
+import { test, expect, apps, openMenu, openSettings } from './helpers.mjs';
 
 const fakePrompt = page => page.evaluate(() => {
   const e = new Event('beforeinstallprompt', { cancelable: true });
@@ -67,8 +67,9 @@ test.describe('platforms', () => {
       await page.locator('#menuInstall summary').click();
       await expect(page.locator('#menuInstall summary')).toHaveText('Install as an app');
       await expect(page.locator('#menuInstallInfo')).toContainText('“Install app”');
-      // Back to the list (the language switch is below it)
+      // Back to the list, then the language switch in the settings
       await page.locator('#menuInstall summary').click();
+      await openSettings(page);
       await page.getByRole('button', { name: 'Deutsch' }).click();
       await expect(page.locator('#menuInstall summary')).toHaveText('Als App installieren');
       await expect(page.locator('#menuInstallInfo')).toContainText('„App installieren“');
