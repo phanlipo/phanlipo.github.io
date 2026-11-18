@@ -133,7 +133,7 @@ for (const app of apps()) {
       // The next "back" leaves the app as usual
       await page.goBack();
       await expect(page).toHaveURL(/\/$/);
-      await expect(page.locator('.menu-btn')).toHaveCount(0);
+      await expect(page.locator('.tool').first()).toBeVisible();
     });
 
     test('messages stay visible while the menu is open', async ({ page }) => {
@@ -324,16 +324,28 @@ test.describe('appearance: light, dark, system', () => {
     await closeMenu(page);
   });
 
-  test('start page: both switches in the footer', async ({ page }) => {
+  test('start page: the same menu with settings, install and footer', async ({ page }) => {
+    await page.setViewportSize(PHONES.portrait);
     await page.emulateMedia({ colorScheme: 'light' });
     await page.goto('/');
+    const btn = page.locator('body > header .menu-btn');
+    await expect(btn).toBeVisible();
+    // Next to the title, inside the screen
+    const [b, h] = [await btn.boundingBox(), await page.locator('header h1').boundingBox()];
+    expect(b.x + b.width).toBeLessThanOrEqual(375);
+    expect(Math.abs((b.y + b.height / 2) - (h.y + h.height / 2))).toBeLessThanOrEqual(8);
+    await openSettings(page);
+    await expect(page.locator('#appMenu > .menu-body > footer')).toBeAttached();
+    await expect(page.locator('#menuInstall')).toBeAttached();
     await page.getByRole('button', { name: 'Dunkel' }).click();
     expect(await bg(page)).toBe(DARK);
     await expect(page.getByRole('button', { name: 'Dunkel' })).toHaveAttribute('aria-pressed', 'true');
     await page.getByRole('button', { name: 'English' }).click();
-    await expect(page.getByRole('button', { name: 'System' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#menuSettings > summary')).toContainText('Settings');
     await page.getByRole('button', { name: 'System' }).click();
     expect(await bg(page)).toBe(LIGHT);
+    await closeMenu(page);
+    await expectNoHorizontalScroll(page);
   });
 });
 

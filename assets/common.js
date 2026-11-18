@@ -286,7 +286,7 @@ window.Tools = (function () {
     translated = true;
     lang = preferredLang();
     applyI18n();
-    document.querySelectorAll('.footer-lang, .lang-switch').forEach(el => { el.hidden = false; });
+    document.querySelectorAll('.lang-switch').forEach(el => { el.hidden = false; });
   }
   // Static keys (German in the HTML or dictionary) without an English text – used by the tests
   function i18nMissing() {
@@ -729,11 +729,11 @@ window.Tools = (function () {
   else setupDataUi();
 
   /* ---------- App menu (every app) and stage layout ----------
-     Every app (page with <details class="help">) gets a menu button (☰) at the right of its header. It opens a
+     Every app (page with <details class="help">) and the start page (<body data-app-menu>) get a menu button (☰) at the right of its header. It opens a
      modal <dialog> – a bottom sheet on phones, a side panel on wide screens – laid out as a tool list (UI-KONZEPT.md):
        1. every element with data-menu, in page order: actions (<div class="menu-list">), app sections (cards)
        2. one list of standard sections: data backup, help, "install as app" – each a sub page
-       3. the footer (language switch, links)
+       3. the footer (links)
      Sections: data-icon="settings" (Tabler name) puts a Tabler icon in front of the section's summary or first heading.
      Sub pages: <details class="card" data-menu data-menu-page data-icon="history"><summary>Title</summary>…</details>
      shows as a row with › and, tapped, fills the sheet (summary = back row with ‹). One level only; the back
@@ -908,7 +908,8 @@ window.Tools = (function () {
   }
 
   function setupMenu() {
-    if (menuEl || !document.querySelector('details.help')) return;
+    // Apps (with help) and the start page (<body data-app-menu>: settings, install, footer)
+    if (menuEl || !document.querySelector('details.help, body[data-app-menu]')) return;
     const header = document.querySelector('body > header');
     if (!header) return;
     const appParts = [...document.querySelectorAll('[data-menu]')];

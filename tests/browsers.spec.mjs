@@ -17,11 +17,9 @@ for (const app of pages) {
       await page.goto(url);
       await expect(page.locator('h1').first()).toBeVisible();
       await expectNoHorizontalScroll(page);
-      if (app.folder) {
-        await openMenu(page);
-        await expect(page.locator('#appMenu details.help')).toBeAttached();
-        await expectNoHorizontalScroll(page);
-      }
+      await openMenu(page);
+      await expect(page.locator(app.folder ? '#appMenu details.help' : '#appMenu #menuTheme')).toBeAttached();
+      await expectNoHorizontalScroll(page);
     });
 
     if (app.folder) {

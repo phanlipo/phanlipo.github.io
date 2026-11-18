@@ -2,7 +2,7 @@
 // German is the default and is covered by all other tests; here the English side.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, tools, apps, translatedApps, VIEWPORTS, expectNoHorizontalScroll, openMenu } from './helpers.mjs';
+import { test, expect, tools, apps, translatedApps, VIEWPORTS, expectNoHorizontalScroll, openMenu, switchLang } from './helpers.mjs';
 import { ROOT, meta } from '../scripts/lib.mjs';
 
 const translated = translatedApps().map(a => a.folder);
@@ -87,7 +87,7 @@ test.describe('language switch', () => {
     expect(app, 'at least one translated app').toBeTruthy();
     await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
-    await page.getByRole('button', { name: 'English' }).click();
+    await switchLang(page, 'en');
     await expect(page.locator('h1')).toHaveText('App Shelf');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     expect(await storedLang(page)).toBe('"en"');

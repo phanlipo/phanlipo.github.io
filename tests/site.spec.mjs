@@ -1,5 +1,5 @@
 // Generic checks that run automatically for every page – a new tool is covered without extra work.
-import { test, expect, tools, apps, VIEWPORTS, expectNoHorizontalScroll, openMenu, onDialog } from './helpers.mjs';
+import { test, expect, tools, apps, VIEWPORTS, expectNoHorizontalScroll, openMenu, onDialog, switchLang } from './helpers.mjs';
 import { allPages } from '../scripts/lib.mjs';
 
 test('robots.txt allows crawling so search engines can see the noindex tag', async ({ request }) => {
@@ -84,10 +84,10 @@ test.describe('start page', () => {
     await page.goto('/');
     const de = tools().map(t => t.title).sort((a, b) => a.localeCompare(b, 'de'));
     expect(await titles()).toEqual(de);
-    await page.locator('[data-set-lang="en"]').click();
+    await switchLang(page, 'en');
     const en = tools().map(t => t.titleEn).sort((a, b) => a.localeCompare(b, 'en'));
     expect(await titles()).toEqual(en);
-    await page.locator('[data-set-lang="de"]').click();
+    await switchLang(page, 'de');
     expect(await titles()).toEqual(de);
   });
 
@@ -158,7 +158,7 @@ test.describe('start page', () => {
     await page.locator('body').click({ position: { x: 5, y: 5 } });
     await page.keyboard.press('/');
     await expect(search).toBeFocused();
-    await page.locator('[data-set-lang="en"]').click();
+    await switchLang(page, 'en');
     await expect(page.getByRole('searchbox', { name: 'Search apps' })).toHaveAttribute('placeholder', 'Search apps');
   });
 
