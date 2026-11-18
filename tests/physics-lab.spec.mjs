@@ -645,7 +645,7 @@ test.describe('gas in a box', () => {
     await open(page, 'gas');
     await page.click('#gN button[data-v="200"]');
     await page.locator('#gT').fill('300'); await page.locator('#gV').fill('100');
-    await expect(pres(page, 'gRes', 'Druck nach')).toHaveText('1,00-fach');
+    await expect(pres(page, 'gRes', 'Druck nach')).toHaveText('1,00‑fach');
     await expect(pres(page, 'gRes', 'Helium')).toHaveText(`${Math.round(Math.sqrt(8 * 1.380649e-23 * 300 / (Math.PI * 6.6464731e-27))).toLocaleString('de-DE')} m/s`);
     await page.click('#gPlay');
     await page.clock.runFor(4000);
@@ -654,7 +654,7 @@ test.describe('gas in a box', () => {
     expect(Math.abs(pm - 1)).toBeLessThan(0.15);
     // twice the temperature, half the volume: four times the pressure
     await page.locator('#gT').fill('600'); await page.locator('#gV').fill('50');
-    await expect(pres(page, 'gRes', 'Druck nach')).toHaveText('4,00-fach');
+    await expect(pres(page, 'gRes', 'Druck nach')).toHaveText('4,00‑fach');
     await page.clock.runFor(4000);
     pm = await fach();
     expect(Math.abs(pm - 4) / 4).toBeLessThan(0.15);
@@ -726,6 +726,25 @@ test.describe('magnetic field lines', () => {
     expect(Math.hypot(...r.rep)).toBeLessThan(1e-9);
     await page.click('#mgMode button[data-v="particle"]');
     await expect(page.locator('#mgPart')).toBeVisible();
+  });
+});
+
+test.describe('gas meter labels on a phone', () => {
+  test.use({ viewport: { width: 375, height: 800 } });
+  test('the labels above the pressure bars stay on one line', async ({ page }) => {
+    await page.clock.install({ time: new Date(2026, 10, 18, 12, 0) });
+    await page.goto('/physics-lab/');
+    await open(page, 'gas');
+    await page.locator('#gT').fill('150');
+    await page.click('#gPlay');
+    await page.clock.runFor(3000);
+    await expect(page.locator('#gPLbl')).toContainText('Gemessen');
+    // one line: the label is not taller than its line height, and "‑fach" never breaks from the number
+    for (const id of ['gPLbl', 'gPthLbl']) {
+      const r = await page.locator('#' + id).evaluate(el => ({ h: el.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(el).lineHeight) || 20 }));
+      expect(r.h, id).toBeLessThanOrEqual(r.lh + 1);
+    }
+    await expect(page.locator('#gPthLbl')).toHaveText('Gasgesetz: 0,50‑fach');
   });
 });
 
