@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Quantenputt</title>
+<meta name="description" content="Minigolf mit einem Quanten-Ball: Der Ball läuft als Welle über die Bahn, beugt sich um Hindernisse, tunnelt durch Wände und ist an vielen Orten zugleich – erst beim Messen entscheidet sich, wo er liegt. Zehn Bahnen mit Linse, Doppelspalt, Kristall und Tunnel.">
+<meta name="tool:tags" content="Freizeit, Spiele, Physik">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="list_courses, start_course, shoot, measure, get_state">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann die Bahnen auflisten und starten, den Ball mit Richtung und Stärke schlagen, die Position messen und den Spielstand lesen.">
+<meta name="tool:webmcp-help-en" content="An AI agent can list and start the courses, hit the ball with a direction and strength, measure its position and read the game state.">
+<meta name="tool:icon" content="golf">
+<meta name="tool:color" content="#0f766e">
+<meta name="tool:short-name" content="Quantenputt">
+<meta name="tool:title-en" content="Quantum Putt">
+<meta name="tool:description-en" content="Minigolf with a quantum ball: the ball runs across the course as a wave, bends around obstacles, tunnels through walls and is in many places at once – only measuring decides where it lies. Ten courses with a lens, double slit, crystal and tunnel.">
+<meta name="tool:short-name-en" content="Quantum Putt">
+<meta name="tool:storage" content="quantum-putt.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Quantenputt">
+<meta name="theme-color" content="#0f766e">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0f766e;--accent-text:#ffffff;--good:#15803d}
+@media (prefers-color-scheme: dark){:root{--accent:#5eead4;--accent-text:#042f2c;--good:#4ade80}}
+main{display:flex;flex-direction:column}
+
+/* ---------- Course choice ---------- */
+.pick{flex:1;min-height:0;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;max-width:700px;width:100%;margin-inline:auto}
+.pick h2{margin:0;font-size:17px}
+.pick .total{margin:0;color:var(--muted)}
+.courses{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.course{width:100%;min-height:56px;display:grid;grid-template-columns:2.2em 1fr auto;gap:10px;align-items:center;text-align:start;
+  padding:8px 12px;border:2px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);font:inherit;cursor:pointer}
+.course:hover,.course:focus-visible{border-color:var(--accent)}
+.course:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.course .no{font-size:20px;font-weight:700;color:var(--muted);text-align:center}
+.course .name{font-weight:600;display:block}
+.course .what{font-size:14px;color:var(--muted);display:block}
+.course .score{font-size:14px;text-align:end;font-variant-numeric:tabular-nums;white-space:nowrap}
+.course .score .ic{width:16px;height:16px;vertical-align:-3px;color:var(--good)}
+.course.done{border-color:color-mix(in srgb,var(--good) 55%,var(--border))}
+
+/* ---------- Game ---------- */
+.game{flex:1;min-height:0;display:flex;flex-direction:column}
+.info{flex:none;display:flex;align-items:center;gap:10px;padding:6px 12px;font-weight:600;font-variant-numeric:tabular-nums}
+.info .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.info .strokes{white-space:nowrap}
+.view{position:relative;flex:1;min-height:200px}
+.view canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;-webkit-tap-highlight-color:transparent}
+.view canvas:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.bottom{flex:none;display:grid;gap:8px;padding:8px 12px 10px;border-block-start:1px solid var(--border);background:var(--surface)}
+.status{margin:0;min-height:2.6em;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:600;line-height:1.3;font-variant-numeric:tabular-nums}
+.status.ok{color:var(--good)}
+.chance{display:grid;grid-template-columns:auto 1fr 3.4em;gap:8px;align-items:center;font-size:14px;font-variant-numeric:tabular-nums}
+.chance .meter{height:10px}
+.chance .meter>i{transition:none}
+.chance b{text-align:end}
+.actions{display:flex;gap:8px}
+.actions .btn.primary{flex:1;min-height:52px;font-size:17px;font-weight:600}
+@media (orientation:landscape) and (max-height:560px){
+  .game{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,40%);grid-template-rows:auto 1fr}
+  .info{grid-column:2;grid-row:1}
+  .view{grid-column:1;grid-row:1 / 3;min-height:0}
+  .bottom{grid-column:2;grid-row:2;border-block-start:0;border-inline-start:1px solid var(--border);align-content:end}
+}
+.help code{font-family:var(--mono);background:var(--surface-2);padding:0 4px;border-radius:4px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Quantenputt</span></h1>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnRestart" aria-label="Bahn neu beginnen" title="Bahn neu beginnen" data-i18n-attr="aria-label:restart; title:restart"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg></button>
+    <button type="button" class="head-btn" id="btnCourses" aria-label="Bahn wählen" title="Bahn wählen" data-i18n-attr="aria-label:courses; title:courses"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#layout-grid"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="pick" id="pick" aria-labelledby="h-pick" hidden>
+    <h2 id="h-pick" data-i18n="pickH">Bahn wählen</h2>
+    <p class="total" id="total"></p>
+    <ul class="courses" id="courseList"></ul>
+  </section>
+
+  <section class="game" id="game" aria-label="Spiel" data-i18n-attr="aria-label:gameL">
+    <div class="info"><span class="name" id="courseName"></span><span class="strokes" id="strokes"></span></div>
+    <div class="view" id="view">
+      <canvas id="cv" tabindex="0" role="img" aria-label="Minigolf-Bahn" data-i18n-attr="aria-label:cvLabel"></canvas>
+    </div>
+    <div class="bottom">
+      <p class="status" id="status" role="status"></p>
+      <div class="chance" id="chance" hidden>
+        <span data-i18n="chanceL">Im Loch</span>
+        <div class="meter ok" aria-hidden="true"><i id="chanceBar"></i></div>
+        <b id="chanceVal"></b>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn primary block" id="btnMain"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#golf"/></svg><span data-i18n="shoot">Schlagen</span></button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="card" data-menu data-icon="settings" aria-labelledby="h-settings">
+  <h2 id="h-settings" data-i18n="settingsH">Einstellungen</h2>
+  <fieldset class="seg-group"><legend data-i18n="sizeL">Breite des Balls (Welle)</legend>
+    <div class="seg" id="optSize">
+      <button type="button" aria-pressed="false" data-v="small"><span data-i18n="small">Schmal</span></button>
+      <button type="button" aria-pressed="true" data-v="medium"><span data-i18n="medium">Mittel</span></button>
+      <button type="button" aria-pressed="false" data-v="large"><span data-i18n="large">Breit</span></button>
+    </div>
+  </fieldset>
+  <fieldset class="seg-group"><legend data-i18n="speedL">Tempo</legend>
+    <div class="seg" id="optSpeed">
+      <button type="button" aria-pressed="false" data-v="slow"><span data-i18n="slow">Langsam</span></button>
+      <button type="button" aria-pressed="true" data-v="normal"><span data-i18n="normal">Normal</span></button>
+      <button type="button" aria-pressed="false" data-v="fast"><span data-i18n="fast">Schnell</span></button>
+    </div>
+  </fieldset>
+  <label class="check"><input type="checkbox" id="optGhost"><span data-i18n="ghost">Klassische Kugel zum Vergleich zeigen</span></label>
+  <label class="check"><input type="checkbox" id="optPhase"><span data-i18n="phase">Phase der Welle als Farbe zeigen</span></label>
+</section>
+<div class="menu-list" data-menu>
+  <button type="button" id="btnClearScores" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearScores">Bestwerte löschen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Minigolf, aber der Ball gehorcht der <b>Quantenmechanik</b>: Nach dem Schlag ist er kein Punkt mehr, sondern eine <b>Welle</b>, die sich ausbreitet, an Wänden abprallt, sich um Hindernisse beugt und mit sich selbst überlagert. Die Helligkeit zeigt, wie wahrscheinlich der Ball an dieser Stelle ist. Wo er wirklich liegt, entscheidet sich erst, wenn du <b>misst</b>.</p>
+  <h3>Spielen</h3>
+  <ul>
+    <li><b>Zielen:</b> Auf die Bahn tippen oder ziehen – der Pfeil zeigt vom Ball zum Finger. Je weiter weg, desto fester der Schlag. Mit der Tastatur: Pfeile links/rechts drehen, hoch/runter ändern die Stärke, Eingabe schlägt.</li>
+    <li><b>Schlagen</b>, dann im richtigen Moment <b>Messen</b> (Knopf oder auf die Bahn tippen). Die Leiste „Im Loch“ zeigt die Wahrscheinlichkeit, dass die Messung den Ball im Loch findet.</li>
+    <li>Liegt er nicht im Loch, geht es von dort mit dem nächsten Schlag weiter. Ziel: mit möglichst wenigen Schlägen einlochen (Par = Vorgabe). Die besten Ergebnisse je Bahn bleiben gespeichert.</li>
+    <li>Der helle Ring zeigt auf Wunsch, wo eine gewöhnliche (klassische) Kugel mit demselben Schlag wäre – sie kommt nie durch eine Wand und nie über einen zu hohen Hügel.</li>
+  </ul>
+  <h3>Die Bahnen</h3>
+  <ul>
+    <li><b>Linse:</b> In der Mulde ist der Ball schneller, die Welle wird dort kürzer – wie Licht in Glas. Die runde Mulde bündelt sie zum Loch hin.</li>
+    <li><b>Rampe:</b> Ist der Schlag zu schwach, rollt die Welle zurück. Ein Teil kommt knapp unter der nötigen Stärke trotzdem hinauf, ein Teil prallt knapp darüber noch ab.</li>
+    <li><b>Hügel</b> (sandfarben): zu hoch für die Kugel. Die Welle teilt sich und läuft links und rechts herum.</li>
+    <li><b>Trichter</b> und <b>Doppelspalt:</b> Hinter engen Öffnungen breitet sich die Welle fächerförmig aus (Beugung), hinter zwei Spalten entstehen Streifen (Interferenz) – genau in der Mitte hinter der Trennwand ist ein heller Streifen.</li>
+    <li><b>Um die Ecke</b> und <b>Zickzack:</b> über Banden spielen; die Welle kommt auch ein Stück um Ecken herum.</li>
+    <li><b>Kristall:</b> An den regelmäßigen Pfosten wird die Welle in bestimmte Richtungen gestreut (Bragg-Streuung).</li>
+    <li><b>Tunnel:</b> Die schmale sandfarbene Schwelle ist höher, als der Ball je Energie hat – klassisch unüberwindbar. Die Welle tunnelt trotzdem zu einem Teil hindurch.</li>
+  </ul>
+  <h3>Wie gerechnet wird</h3>
+  <p>Die App löst die <b>Schrödinger-Gleichung</b> <code>i ∂ψ/∂t = −∇²ψ + V ψ</code> auf einem Gitter aus 128 × 256 Punkten (ħ = 1, Masse ½) mit dem Split-Operator-Verfahren: abwechselnd ein Zeitschritt der Bewegung im Impulsraum (schnelle Fourier-Transformation) und einer des Geländes V im Ortsraum. Der Schlag erzeugt ein Gaußsches Wellenpaket; die Stärke legt den Impuls fest, die eingestellte Breite die Unschärfe. Ein schmaler Ball ist genauer am Ort, läuft dafür schneller auseinander (Unschärferelation). Wände sind eine Stufe, viel höher als jede erreichbare Energie. Die Messung wählt einen Punkt mit der Wahrscheinlichkeit |ψ|² (Bornsche Regel).</p>
+  <p>Die Spielidee stammt von „Quantum Minigolf“ (Friedemann Reinhard, 2007); Rechnung, Bahnen und Grafik dieser App sind eigene.</p>
+  <h3>Gespeichert</h3>
+  <p>Einstellungen, die besten Ergebnisse je Bahn und der laufende Stand (Bahn, Schläge, Lage des Balls) bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“), nicht die Welle selbst. Alles wird auf dem Gerät gerechnet, nichts wird gesendet; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Minigolf, but the ball obeys <b>quantum mechanics</b>: after the hit it is no longer a point but a <b>wave</b> that spreads out, bounces off walls, bends around obstacles and overlaps with itself. The brightness shows how likely the ball is at that spot. Where it really lies is only decided when you <b>measure</b>.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li><b>Aim:</b> tap or drag on the course – the arrow points from the ball to your finger. The further away, the harder the hit. With the keyboard: left/right arrows turn, up/down change the strength, Enter hits.</li>
+    <li><b>Hit</b>, then <b>measure</b> at the right moment (button or tap on the course). The “In the hole” bar shows the probability that the measurement finds the ball in the hole.</li>
+    <li>If it is not in the hole, the next hit starts from there. Goal: sink the ball with as few hits as possible (par = target). The best results per course are saved.</li>
+    <li>If you like, the light ring shows where an ordinary (classical) ball with the same hit would be – it never gets through a wall and never over a hill that is too high.</li>
+  </ul>
+  <h3>The courses</h3>
+  <ul>
+    <li><b>Lens:</b> in the hollow the ball is faster, so the wave gets shorter there – like light in glass. The round hollow focuses it towards the hole.</li>
+    <li><b>Ramp:</b> if the hit is too weak, the wave rolls back. Part of it still gets up just below the needed strength, part of it still bounces back just above it.</li>
+    <li><b>Hill</b> (sand-coloured): too high for the ball. The wave splits and runs around it left and right.</li>
+    <li><b>Funnel</b> and <b>double slit:</b> behind narrow openings the wave fans out (diffraction), behind two slits stripes appear (interference) – right in the middle behind the divider there is a bright stripe.</li>
+    <li><b>Round the corner</b> and <b>zigzag:</b> play off the cushions; the wave also gets a little way round corners.</li>
+    <li><b>Crystal:</b> the regular posts scatter the wave in particular directions (Bragg scattering).</li>
+    <li><b>Tunnel:</b> the narrow sand-coloured sill is higher than any energy the ball can have – impassable for a classical ball. The wave still tunnels through in part.</li>
+  </ul>
+  <h3>How it is computed</h3>
+  <p>The app solves the <b>Schrödinger equation</b> <code>i ∂ψ/∂t = −∇²ψ + V ψ</code> on a grid of 128 × 256 points (ħ = 1, mass ½) with the split-operator method: alternately one time step of the motion in momentum space (fast Fourier transform) and one of the terrain V in position space. The hit creates a Gaussian wave packet; the strength sets the momentum, the chosen width the uncertainty. A narrow ball is more precisely placed but spreads faster (uncertainty principle). Walls are a step far higher than any reachable energy. The measurement picks a point with probability |ψ|² (Born rule).</p>
+  <p>The game idea comes from “Quantum Minigolf” (Friedemann Reinhard, 2007); the computation, courses and graphics of this app are its own.</p>
+  <h3>Stored</h3>
+  <p>Settings, the best result per course and the current game (course, hits, position of the ball) stay only in this browser (back them up or move them under “Back up data”), not the wave itself. Everything is computed on the device, nothing is sent; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann die Bahnen auflisten und starten, den Ball mit Richtung und Stärke schlagen, die Position messen und den Spielstand lesen. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can list and start the courses, hit the ball with a direction and strength, measure its position and read the game state. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 7b7d62c7e4fc</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
