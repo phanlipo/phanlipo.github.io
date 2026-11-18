@@ -282,3 +282,17 @@ test('ZM and Intrastat in the duties; notes on other countries', async ({ page }
   await page.selectOption('#pc2', 'DE');
   await expect(page.locator('#why')).not.toContainText('8. Was in anderen Ländern');
 });
+
+test('the page shows the data state (rates, last comparison, form year)', async ({ page }) => {
+  const D = await page.evaluate(() => window.Chain.DATA);
+  const long = iso => new Date(iso + 'T12:00:00').toLocaleDateString('de-DE', { dateStyle: 'long' });
+  await expect(page.locator('#dataState')).toContainText(`Steuersätze vom ${long(D.ratesAsOf)}`);
+  await expect(page.locator('#dataState')).toContainText(`zuletzt abgeglichen am ${long(D.ratesChecked)}`);
+  await expect(page.locator('#dataState')).toContainText(`nach dem Vordruck ${D.formYear}`);
+  // A new year without a checked form says so
+  await page.clock.setFixedTime(new Date(D.formYear + 1, 1, 1, 12));
+  await page.reload();
+  await expect(page.locator('#dataState')).toContainText(`Für ${D.formYear + 1} noch nicht geprüft.`);
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('#dataState')).toBeVisible();
+});
