@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Collage</title>
+<meta name="description" content="Aus beliebig vielen Fotos eine lückenlose Collage bauen – ohne Zwischenräume, fast ohne Beschnitt, als riesiges Bild in voller Auflösung speichern. Alles bleibt auf dem Gerät.">
+<meta name="tool:tags" content="Freizeit, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
+<meta name="tool:webmcp" content="get_collage, set_layout, set_export">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann die Collage lesen (Bilder, Anordnung, Größe), Anordnung, Seitenverhältnis, Abstand und Hintergrund einstellen, neu anordnen lassen sowie Größe und Format zum Speichern wählen. Bilder auswählen und die Collage speichern kannst nur du.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the collage (images, arrangement, size), set the arrangement, aspect ratio, spacing and background, rearrange it and choose size and format for saving. Only you can choose images and save the collage.">
+<meta name="tool:icon" content="layout-collage">
+<meta name="tool:color" content="#ad2f6e">
+<meta name="tool:short-name" content="Collage">
+<meta name="tool:title-en" content="Collage Maker">
+<meta name="tool:description-en" content="Turn any number of photos into a seamless collage – no gaps, hardly any cropping, saved as a huge image in full resolution. Everything stays on your device.">
+<meta name="tool:short-name-en" content="Collage">
+<meta name="tool:storage" content="collage-maker.">
+<meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif, .avif, .gif">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-5gE+aaQzBAgdLPG4j3xfzzFjIkRT5wAfMGEP5ajcgzQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Collage">
+<meta name="theme-color" content="#ad2f6e">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#ad2f6e;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f29cc6;--accent-text:#3a0a22}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.preview-wrap{display:flex;justify-content:center;min-width:0}
+.collage{position:relative;overflow:hidden;box-shadow:0 1px 4px rgb(0 0 0 / .25);touch-action:manipulation}
+.collage>button{position:absolute;margin:0;padding:0;border:0;border-radius:0;background:var(--surface-2);overflow:hidden;cursor:pointer;min-height:0;min-width:0}
+.collage>button img{display:block;width:100%;height:100%;object-fit:cover;pointer-events:none}
+.collage>button:focus-visible{outline:3px solid var(--accent);outline-offset:-3px;z-index:2}
+.collage>button[aria-pressed="true"]::after{content:"";position:absolute;inset:0;border:4px solid var(--accent);box-shadow:inset 0 0 0 2px var(--accent-text);pointer-events:none}
+.stats{margin:8px 0 0;font-size:14px;color:var(--muted);text-align:center}
+#selBar .row{margin-top:6px}
+.opts{display:grid;gap:12px}
+.opts .seg-group{margin:0}
+.color-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.color-row .form-field{margin:0}
+.color-row .chips{flex:1 1 200px}
+.swatch{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);display:inline-block}
+#exportInfo{margin:8px 0}
+#progressRow{display:grid;gap:6px;margin-top:8px}
+#progressRow progress{width:100%}
+#exportStatus{margin:8px 0 0;min-height:1.3em}
+#exportStatus.err{color:var(--err)}
+#addInfo{margin:8px 0 0;min-height:1.3em}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Collage</span></h1>
+  <p class="sub" data-i18n="sub">Fotos lückenlos zusammensetzen und riesig speichern.</p>
+</header>
+
+<main>
+  <!-- First start: only choosing images -->
+  <section class="card" id="setup" aria-labelledby="h-setup">
+    <h2 id="h-setup"><span class="step">1</span><span data-i18n="setup.h">Bilder wählen</span></h2>
+    <button type="button" class="dropzone" id="btnPick"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#photo"/></svg><strong data-i18n="setup.pick">Bilder wählen</strong>
+      <span class="dz-hint" data-i18n="setup.hint">Beliebig viele – oder hierher ziehen bzw. einfügen. JPG, PNG, HEIC (iPhone), WebP, AVIF, GIF.</span></button>
+    <p id="addInfo" class="muted" role="status"></p>
+  </section>
+  <input type="file" id="inPick" multiple accept="image/*,.heic,.heif,.avif" hidden>
+
+  <section class="card" id="previewCard" aria-labelledby="h-preview" hidden>
+    <h2 id="h-preview" data-i18n="preview.h">Collage</h2>
+    <div class="preview-wrap" id="previewWrap">
+      <div class="collage" id="collage" role="group" aria-label="Collage-Vorschau" data-i18n-attr="aria-label:preview.label"></div>
+    </div>
+    <p class="stats" id="stats"></p>
+    <div class="notice info" id="selBar" hidden>
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg>
+      <div>
+        <p id="selText"></p>
+        <div class="row">
+          <button type="button" class="btn" id="btnRemove"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="sel.remove">Bild entfernen</span></button>
+          <button type="button" class="btn" id="btnUnselect"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="sel.cancel">Auswahl aufheben</span></button>
+        </div>
+      </div>
+    </div>
+    <p class="muted" id="tapHint" data-i18n="preview.tap">Tippe ein Bild und dann ein zweites an, um beide zu tauschen.</p>
+    <div class="row">
+      <button type="button" class="btn" id="btnShuffle"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-shuffle"/></svg><span data-i18n="preview.shuffle">Neu anordnen</span></button>
+      <button type="button" class="btn" id="btnAdd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="preview.add">Bilder hinzufügen</span></button>
+    </div>
+    <p id="addInfo2" class="muted" role="status"></p>
+  </section>
+
+  <section class="card" id="layoutCard" aria-labelledby="h-layout" hidden>
+    <h2 id="h-layout" data-i18n="layout.h">Anordnung</h2>
+    <div class="opts">
+      <fieldset class="seg-group">
+        <legend data-i18n="layout.mode">Aufteilung</legend>
+        <div class="chips wrap" id="mode">
+          <button type="button" data-mode="auto" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#layout-collage"/></svg><span data-i18n="mode.auto">Automatisch</span></button>
+          <button type="button" data-mode="rows" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#layout-rows"/></svg><span data-i18n="mode.rows">Reihen</span></button>
+          <button type="button" data-mode="cols" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#layout-columns"/></svg><span data-i18n="mode.cols">Spalten</span></button>
+        </div>
+      </fieldset>
+      <fieldset class="seg-group">
+        <legend data-i18n="layout.aspect">Seitenverhältnis</legend>
+        <div class="chips wrap" id="aspect"></div>
+      </fieldset>
+      <div class="form-field range">
+        <label for="gap"><span data-i18n="layout.gap">Abstand zwischen den Bildern</span> <output id="gapOut" for="gap"></output></label>
+        <input type="range" id="gap" min="0" max="40" step="1" value="0">
+      </div>
+      <div class="color-row" id="bgRow">
+        <div class="form-field">
+          <label for="bg" data-i18n="layout.bg">Farbe der Abstände</label>
+          <input type="color" id="bg" value="#ffffff">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="exportCard" aria-labelledby="h-export" hidden>
+    <h2 id="h-export" data-i18n="export.h">Speichern</h2>
+    <div class="opts">
+      <fieldset class="seg-group">
+        <legend data-i18n="export.size">Größe (längste Seite)</legend>
+        <div class="chips wrap" id="size"></div>
+      </fieldset>
+      <fieldset class="seg-group">
+        <legend data-i18n="export.format">Format</legend>
+        <div class="seg" id="format">
+          <button type="button" data-format="jpg" aria-pressed="true"><span data-i18n="export.jpg">JPG – kleinere Datei</span></button>
+          <button type="button" data-format="png" aria-pressed="false"><span data-i18n="export.png">PNG – jede Größe</span></button>
+        </div>
+      </fieldset>
+    </div>
+    <p id="exportInfo"></p>
+    <p class="notice warn" id="exportWarn" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#alert-triangle"/></svg><span id="exportWarnText"></span></p>
+    <button type="button" class="btn primary block" id="btnSave"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="export.save">Collage speichern</span></button>
+    <div id="progressRow" hidden>
+      <progress id="progress" max="1" value="0" aria-labelledby="exportStatus"></progress>
+      <div class="row"><button type="button" class="btn" id="btnCancel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="export.cancel">Abbrechen</span></button></div>
+    </div>
+    <p id="exportStatus" role="status"></p>
+    <div class="row" id="doneRow" hidden>
+      <button type="button" class="btn" id="btnShare"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="export.share">Teilen …</span></button>
+    </div>
+  </section>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnMenuAdd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="preview.add">Bilder hinzufügen</span></button>
+  <button type="button" id="btnClear" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clear">Alle Bilder entfernen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Setzt beliebig viele Fotos zu einer Collage zusammen, die das Bild <strong>ganz ohne Zwischenräume</strong> füllt – Hoch- und Querformate gemischt, ohne die Fotos zu verzerren. Gespeichert wird in <strong>voller Auflösung</strong>, auf Wunsch als riesiges Bild weit über 100 Megapixel. Die Fotos werden <strong>nicht hochgeladen</strong>: alles passiert im Browser, auch offline.</p>
+  <h3>Bedienung</h3>
+  <ol>
+    <li><strong>Bilder wählen</strong> (beliebig viele, bis 200), hierher ziehen oder mit Strg+V einfügen. Auf dem Handy auch aus der Galerie an die App teilen.</li>
+    <li>Die App ordnet sie sofort an. <strong>Neu anordnen</strong> probiert eine andere Aufteilung. Ein Bild antippen und dann ein zweites: beide tauschen die Plätze. Ein angetipptes Bild lässt sich auch entfernen.</li>
+    <li><strong>Größe und Format</strong> wählen und <strong>Collage speichern</strong> – danach auf dem Handy auch teilen.</li>
+  </ol>
+  <h3>Anordnung</h3>
+  <ul>
+    <li><strong>Automatisch</strong> teilt die Fläche immer wieder waagerecht oder senkrecht und sucht die Aufteilung, bei der alle Bilder ähnlich groß sind und das Seitenverhältnis passt. Jedes Foto behält dabei seine Form – es gibt <strong>keine Lücken und keinen Beschnitt</strong>.</li>
+    <li><strong>Reihen</strong> und <strong>Spalten</strong> behalten die Reihenfolge, jede Reihe (Spalte) geht genau von Rand zu Rand.</li>
+    <li><strong>Frei</strong> nimmt das Seitenverhältnis, das sich ergibt (zwischen 2:3 und 3:2) – dann wird gar nichts abgeschnitten. Bei einem festen Verhältnis (z. B. 1:1 für Instagram) wird die Collage passend gemacht; dafür werden die Fotos ein wenig beschnitten. Wie viel höchstens, steht unter der Vorschau.</li>
+    <li>Ein <strong>Abstand</strong> ist möglich (in Prozent der längsten Seite), Standard ist 0. Mit Abstand werden die Fotos etwas mehr beschnitten.</li>
+  </ul>
+  <h3>Riesige Bilder</h3>
+  <ul>
+    <li><strong>Volle Auflösung</strong> wählt die Größe so, dass die Fotos im Mittel in ihrer Originalgröße erscheinen – höchstens 250 Megapixel.</li>
+    <li><strong>PNG</strong> geht in jeder Größe: Die App rechnet das Bild in Streifen und packt es Stück für Stück, so passt es auch auf dem Handy in den Speicher. PNG-Dateien von Fotos sind aber groß (oft 1 bis 2 MB je Megapixel).</li>
+    <li><strong>JPG</strong> ist viel kleiner, muss aber als Ganzes in einem Bild-Speicher des Browsers Platz haben. Auf dem iPhone sind das etwa 16 Megapixel, in Chrome am Computer meist über 200. Ist es zu groß, bietet die App PNG an.</li>
+    <li>Große Collagen brauchen Zeit – der Fortschritt steht unter dem Knopf, <strong>Abbrechen</strong> geht jederzeit.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Die gewählten Fotos und die Anordnung bleiben auf diesem Gerät (im Speicher der App), damit sie ein Neuladen oder ein Update überstehen – „Alle Bilder entfernen“ im Menü löscht sie. Einstellungen bleiben in diesem Browser (sichern und übertragen unter „Daten sichern“, die Fotos gehören nicht dazu). Nichts wird an einen Server geschickt.</p>
+  <p>HEIC-Fotos öffnet der Browser meist nicht selbst; dann lädt die App beim ersten HEIC-Bild einen Decoder (libheif, ca. 1,5 MB) aus ihren eigenen Dateien – danach geht es auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Puts any number of photos together into a collage that fills the picture <strong>without any gaps</strong> – portrait and landscape mixed, without distorting the photos. It is saved in <strong>full resolution</strong>, if you like as a huge image of well over 100 megapixels. The photos are <strong>not uploaded</strong>: everything happens in the browser, offline too.</p>
+  <h3>How to use</h3>
+  <ol>
+    <li><strong>Choose images</strong> (as many as you like, up to 200), drag them here or paste them with Ctrl+V. On a phone you can also share them from the gallery to the app.</li>
+    <li>The app arranges them right away. <strong>Rearrange</strong> tries another layout. Tap one image and then a second one: they swap places. A tapped image can also be removed.</li>
+    <li>Choose <strong>size and format</strong> and <strong>Save collage</strong> – then share it on a phone if you like.</li>
+  </ol>
+  <h3>Arrangement</h3>
+  <ul>
+    <li><strong>Automatic</strong> splits the area again and again horizontally or vertically and looks for the split where all images are about the same size and the aspect ratio fits. Every photo keeps its shape – there are <strong>no gaps and no cropping</strong>.</li>
+    <li><strong>Rows</strong> and <strong>Columns</strong> keep the order, every row (column) runs exactly from edge to edge.</li>
+    <li><strong>Free</strong> takes the aspect ratio that comes out (between 2:3 and 3:2) – then nothing is cropped at all. With a fixed ratio (e.g. 1:1 for Instagram) the collage is made to fit, and the photos are cropped a little for it. The most it crops is shown below the preview.</li>
+    <li><strong>Spacing</strong> is possible (in percent of the longest side), the default is 0. With spacing the photos are cropped a bit more.</li>
+  </ul>
+  <h3>Huge images</h3>
+  <ul>
+    <li><strong>Full resolution</strong> picks the size so that the photos appear in their original size on average – at most 250 megapixels.</li>
+    <li><strong>PNG</strong> works in any size: the app draws the image in strips and compresses it piece by piece, so it fits into the memory of a phone too. PNG files of photos are big, though (often 1 to 2 MB per megapixel).</li>
+    <li><strong>JPG</strong> is much smaller, but has to fit as a whole into one image buffer of the browser. On an iPhone that is about 16 megapixels, in Chrome on a computer usually more than 200. If it is too big, the app offers PNG.</li>
+    <li>Big collages take time – the progress is shown below the button, <strong>Cancel</strong> works at any time.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The chosen photos and the arrangement stay on this device (in the app's storage) so they survive a reload or an update – “Remove all images” in the menu deletes them. Settings stay in this browser (back them up or move them under “Back up data”; the photos are not part of it). Nothing is sent to a server.</p>
+  <p>Most browsers cannot open HEIC photos themselves; then the app loads a decoder (libheif, about 1.5 MB) from its own files for the first HEIC image – after that it works offline too.</p>
+  </div>
+  <!-- files:start -->
+  <div data-lang="de">
+  <h3>Dateien an die App geben</h3>
+  <ul>
+    <li><b>Android:</b> App installieren (☰ → <i>Als App installieren</i>). Dann die Datei in Galerie, Dateien-, Mail- oder Messenger-App <i>teilen</i> und „Collage“ wählen – das klappt auch offline.</li>
+    <li><b>Windows/Computer:</b> Als installierte App (Chrome oder Edge) steht sie unter <i>Öffnen mit</i> (Rechtsklick auf die Datei); als Standard-App öffnet sie Dateien per Doppelklick. Mit Edge erscheint sie auch im Teilen-Menü von Windows.</li>
+    <li><b>iPhone/iPad:</b> Teilen an Web-Apps und <i>Öffnen mit</i> gibt es dort nicht – die Datei hier in der App auswählen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>Giving files to the app</h3>
+  <ul>
+    <li><b>Android:</b> install the app (☰ → <i>Install as an app</i>). Then <i>share</i> the file from the gallery, files, mail or messenger app and pick “Collage” – this works offline too.</li>
+    <li><b>Windows/computer:</b> as an installed app (Chrome or Edge) it is listed under <i>Open with</i> (right-click the file); set as default app, it opens files with a double-click. With Edge it also appears in the Windows share menu.</li>
+    <li><b>iPhone/iPad:</b> sharing to web apps and <i>Open with</i> do not exist there – choose the file here in the app.</li>
+  </ul>
+  </div>
+  <!-- files:end -->
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann die Collage lesen (Bilder, Anordnung, Größe), Anordnung, Seitenverhältnis, Abstand und Hintergrund einstellen, neu anordnen lassen sowie Größe und Format zum Speichern wählen. Bilder auswählen und die Collage speichern kannst nur du. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the collage (images, arrangement, size), set the arrangement, aspect ratio, spacing and background, rearrange it and choose size and format for saving. Only you can choose images and save the collage. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-lang" role="group" aria-label="Sprache" data-i18n-attr="aria-label:lang.label" hidden><button type="button" data-set-lang="de" lang="de" aria-pressed="true">Deutsch</button><button type="button" data-set-lang="en" lang="en" aria-pressed="false">English</button></p>
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 3d8170f40622</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/shared/heic.js"></script>
+<script src="layout.js"></script>
+<script src="png.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    cell:'Bild {n}',cellSel:'Bild {n}, ausgewählt',
+    'sel.text':'Bild {n} ausgewählt – tippe ein anderes Bild an, um die beiden zu tauschen.',
+    stats:'{n} Bilder',stats1:'1 Bild','stats.noGaps':'keine Lücken',
+    'stats.crop0':'nichts abgeschnitten','stats.crop':'höchstens {p} % abgeschnitten',
+    'aspect.free':'Frei','size.full':'Volle Auflösung',
+    'export.info':'Ergebnis: {w} × {h} Pixel ({mp} Megapixel)',
+    'export.capped':'Auf {max} Megapixel begrenzt.',
+    'export.jpgBig':'So große JPG-Dateien schafft nicht jeder Browser (iPhone: bis etwa 16 Megapixel). Klappt es nicht, bietet die App PNG an – das geht in jeder Größe.',
+    'export.noStream':'Dieser Browser kann PNG nicht in Streifen packen – die Größe ist auf das begrenzt, was er auf einmal schafft.',
+    'export.drawing':'Zeichne Bild {i} von {n} …','export.strips':'Rechne und packe … {p} %','export.encoding':'Packe die Datei …',
+    'export.done':'Gespeichert: {name} ({size})','export.cancelled':'Abgebrochen.',
+    'export.fail':'Speichern hat nicht geklappt. Eine kleinere Größe wählen.',
+    'export.jpgTooBig':'Für JPG ist {w} × {h} Pixel in diesem Browser zu groß. Stattdessen als PNG speichern? Das geht in jeder Größe, die Datei wird aber größer.',
+    'export.saveAs':'Als PNG speichern',
+    loading:'Lese Bild {i} von {n} …',heic:'Lade HEIC-Decoder …',
+    added:'{n} Bilder hinzugefügt.',added1:'1 Bild hinzugefügt.',
+    fail:'„{name}“ ließ sich nicht öffnen.',heicFail:'Das HEIC-Foto „{name}“ ließ sich nicht öffnen. Tipp: auf dem iPhone unter Einstellungen › Kamera › Formate „Maximale Kompatibilität“ wählen.',
+    tooMany:'Höchstens {n} Bilder – der Rest wurde weggelassen.',
+    removed:'Bild entfernt.',cleared:'Alle Bilder entfernt.',
+    clearQ:'Alle {n} Bilder aus der Collage entfernen?',
+    restoring:'Hole die Bilder vom letzten Mal … {i} von {n}',restored:'{n} Bilder vom letzten Mal.',
+    'mcp.layout':'Anordnung geändert','mcp.export':'Speichern eingestellt'
+  },
+  en:{
+    title:'Collage Maker',sub:'Put photos together without gaps and save them huge.',
+    'setup.h':'Choose images','setup.pick':'Choose images',
+    'setup.hint':'As many as you like – or drag them here or paste them. JPG, PNG, HEIC (iPhone), WebP, AVIF, GIF.',
+    'preview.h':'Collage','preview.label':'Collage preview',
+    'preview.tap':'Tap one image and then a second one to swap them.',
+    'preview.shuffle':'Rearrange','preview.add':'Add images',
+    'sel.remove':'Remove image','sel.cancel':'Clear selection',
+    'layout.h':'Arrangement','layout.mode':'Layout','mode.auto':'Automatic','mode.rows':'Rows','mode.cols':'Columns',
+    'layout.aspect':'Aspect ratio','layout.gap':'Spacing between images','layout.bg':'Colour of the spacing',
+    'export.h':'Save','export.size':'Size (longest side)','export.format':'Format',
+    'export.jpg':'JPG – smaller file','export.png':'PNG – any size',
+    'export.save':'Save collage','export.cancel':'Cancel','export.share':'Share …',
+    clear:'Remove all images',
+    cell:'Image {n}',cellSel:'Image {n}, selected',
+    'sel.text':'Image {n} selected – tap another image to swap the two.',
+    stats:'{n} images',stats1:'1 image','stats.noGaps':'no gaps',
+    'stats.crop0':'nothing cropped','stats.crop':'at most {p}% cropped',
+    'aspect.free':'Free','size.full':'Full resolution',
+    'export.info':'Result: {w} × {h} pixels ({mp} megapixels)',
+    'export.capped':'Limited to {max} megapixels.',
+    'export.jpgBig':'Not every browser manages JPG files this big (iPhone: about 16 megapixels). If it fails, the app offers PNG – that works in any size.',
+    'export.noStream':'This browser cannot compress PNG in strips – the size is limited to what it manages in one go.',
+    'export.drawing':'Drawing image {i} of {n} …','export.strips':'Drawing and compressing … {p}%','export.encoding':'Compressing the file …',
+    'export.done':'Saved: {name} ({size})','export.cancelled':'Cancelled.',
+    'export.fail':'Saving did not work. Choose a smaller size.',
+    'export.jpgTooBig':'{w} × {h} pixels is too big for JPG in this browser. Save as PNG instead? That works in any size, but the file gets bigger.',
+    'export.saveAs':'Save as PNG',
+    loading:'Reading image {i} of {n} …',heic:'Loading HEIC decoder …',
+    added:'{n} images added.',added1:'1 image added.',
+    fail:'“{name}” could not be opened.',heicFail:'The HEIC photo “{name}” could not be opened. Tip: on the iPhone choose Settings › Camera › Formats “Most Compatible”.',
+    tooMany:'At most {n} images – the rest was left out.',
+    removed:'Image removed.',cleared:'All images removed.',
+    clearQ:'Remove all {n} images from the collage?',
+    restoring:'Getting the images from last time … {i} of {n}',restored:'{n} images from last time.',
+    'mcp.layout':'arrangement changed','mcp.export':'saving set up'
+  }
+});
+const t=Tools.t, $=Tools.$;
+const L=window.CollageLayout, Png=window.CollagePng;
+
+/* ---------- Settings ---------- */
+const LS='collage-maker.settings.v1';
+const MODES=['auto','rows','cols'];
+const ASPECTS={free:null,'1:1':1,'4:3':4/3,'3:4':3/4,'3:2':3/2,'2:3':2/3,'16:9':16/9,'9:16':9/16};
+const SIZES=['full',2000,4000,8000,16000];
+const MAX_IMAGES=200, MAX_PX=250e6, MAX_SIDE=65000, THUMB=800, JPG_SAFE=16.7e6, JPG_QUALITY=0.92;
+const settings=Object.assign({mode:'auto',aspect:'free',gap:0,bg:'#ffffff',size:'full',format:'jpg'},Tools.load(LS,{}));
+if(!MODES.includes(settings.mode)) settings.mode='auto';
+if(!(settings.aspect in ASPECTS)) settings.aspect='free';
+if(!Number.isInteger(settings.gap)||settings.gap<0||settings.gap>40) settings.gap=0;
+if(!/^#[0-9a-f]{6}$/i.test(settings.bg)) settings.bg='#ffffff';
+if(!SIZES.includes(settings.size)) settings.size='full';
+if(!['jpg','png'].includes(settings.format)) settings.format='jpg';
+const save=()=>Tools.save(LS,settings);
+
+/* ---------- State ---------- */
+let images=[];          // { id, file, w, h, thumb (object URL), kept }
+let tree=null;          // slicing tree of the automatic layout (ids in the leaves)
+let seed=1;
+let layout=null;        // { A, cells: [{ id, x, y, w, h }] } in fractions
+let selected=null;
+const byId=id=>images.find(i=>i.id===id);
+const aspectOf=id=>{const im=byId(id);return im.w/im.h;};
+const target=()=>ASPECTS[settings.aspect];
+const ratio=()=>target()||(layout?layout.A:1);   // width / height of the result
+
+function relayout(fresh){
+  const ids=images.map(i=>i.id);
+  if(!ids.length){tree=null;layout=null;return;}
+  if(settings.mode==='auto'){
+    if(fresh||!L.validTree(tree,ids)) tree=L.search(ids,aspectOf,target(),seed);
+    layout=L.geometry(tree,aspectOf);
+  }else layout=L.rows(ids,aspectOf,target(),settings.mode==='cols');
+}
+
+/* ---------- Geometry in pixels (shared by preview and export) ---------- */
+// Cell edges are rounded once, so neighbouring cells share their edge exactly – no seams, no overlap.
+// The spacing is a full gap at the outer edge and between two cells.
+function rects(W,H,gap){
+  const E=1e-9;
+  const inset=outer=>outer?gap:gap/2;
+  return layout.cells.map(c=>{
+    const x0=Math.round(c.x*W+inset(c.x<E)), x1=Math.round((c.x+c.w)*W-inset(c.x+c.w>1-E));
+    const y0=Math.round(c.y*H+inset(c.y<E)), y1=Math.round((c.y+c.h)*H-inset(c.y+c.h>1-E));
+    return {id:c.id,x:x0,y:y0,w:Math.max(1,x1-x0),h:Math.max(1,y1-y0)};
+  });
+}
+const gapPx=(W,H)=>settings.gap/1000*Math.max(W,H);
+function maxCrop(rs){
+  let m=0;
+  for(const r of rs){const im=byId(r.id), ia=im.w/im.h, ca=r.w/r.h; m=Math.max(m,1-Math.min(ca/ia,ia/ca));}
+  return m;
+}
+function dims(long){
+  const R=ratio();
+  return R>=1?{W:long,H:Math.max(1,Math.round(long/R))}:{W:Math.max(1,Math.round(long*R)),H:long};
+}
+// "Volle Auflösung": every image as many pixels as it has (median over the images)
+function fullLong(){
+  const R=ratio(), w1=R>=1?1:R, h1=R>=1?1/R:1;
+  const need=layout.cells.map(c=>{const im=byId(c.id);return Math.sqrt(im.w*im.h/(c.w*c.h*w1*h1));}).sort((a,b)=>a-b);
+  return Math.round(need[Math.floor(need.length/2)]);
+}
+function outSize(){
+  let long=settings.size==='full'?fullLong():settings.size;
+  long=Math.min(long,MAX_SIDE);
+  let {W,H}=dims(long), capped=false;
+  const max=Png.supported()||settings.format==='jpg'?MAX_PX:JPG_SAFE;
+  if(W*H>max){capped=true; const s=Math.sqrt(max/(W*H)); ({W,H}=dims(Math.floor(long*s)));}
+  return {W,H,capped,max};
+}
+
+/* ---------- Rendering ---------- */
+const mp=px=>Tools.fmt(px/1e6,px<1e7?1:0);
+function render(){
+  const has=images.length>0;
+  $('setup').hidden=has;
+  for(const id of ['previewCard','layoutCard','exportCard']) $(id).hidden=!has;
+  for(const b of document.querySelectorAll('#mode button')) b.setAttribute('aria-pressed',String(b.dataset.mode===settings.mode));
+  const ac=$('aspect'); ac.textContent='';
+  for(const k of Object.keys(ASPECTS)){
+    const b=document.createElement('button'); b.type='button'; b.dataset.aspect=k;
+    b.textContent=k==='free'?t('aspect.free'):k; b.setAttribute('aria-pressed',String(k===settings.aspect));
+    ac.append(b);
+  }
+  $('gap').value=settings.gap; $('gapOut').textContent=Tools.fmt(settings.gap/10,1)+' %';
+  $('bg').value=settings.bg; $('bgRow').hidden=!settings.gap;
+  for(const b of document.querySelectorAll('#format button')) b.setAttribute('aria-pressed',String(b.dataset.format===settings.format));
+  renderPreview(); renderExport();
+}
+function renderPreview(){
+  const box=$('collage');
+  box.textContent='';
+  if(!layout) return;
+  const R=ratio(), wrap=$('previewWrap').clientWidth||300;
+  const maxH=Math.min(window.innerHeight*0.65,900);
+  const pw=Math.max(60,Math.min(wrap,maxH*R)), ph=pw/R;
+  box.style.width=pw+'px'; box.style.height=ph+'px'; box.style.background=settings.bg;
+  const order=new Map(images.map((im,i)=>[im.id,i]));
+  for(const r of rects(pw,ph,gapPx(pw,ph))){
+    const im=byId(r.id), n=order.get(r.id)+1, sel=selected===r.id;
+    const b=document.createElement('button'); b.type='button'; b.dataset.id=r.id;
+    b.style.cssText=`left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px`;
+    b.setAttribute('aria-pressed',String(sel)); b.setAttribute('aria-label',t('cell',{n}));
+    const img=document.createElement('img'); img.src=im.thumb; img.alt=''; img.draggable=false;
+    b.append(img); box.append(b);
+  }
+  const {W,H}=outSize(), crop=maxCrop(rects(W,H,gapPx(W,H)));
+  const pct=Math.round(crop*1000)/10;
+  $('stats').textContent=(images.length===1?t('stats1'):t('stats',{n:images.length}))+' · '
+    +(settings.gap?'':t('stats.noGaps')+' · ')
+    +(pct<0.5?t('stats.crop0'):t('stats.crop',{p:Tools.fmt(pct,pct<10?1:0)}));
+  $('selBar').hidden=!selected||!byId(selected);
+  $('tapHint').hidden=images.length<2||!$('selBar').hidden;
+  if(selected&&byId(selected)) $('selText').textContent=t('sel.text',{n:order.get(selected)+1});
+  $('btnShuffle').disabled=images.length<2;
+}
+function renderExport(){
+  if(!layout) return;
+  const sc=$('size'); sc.textContent='';
+  const full=dims(Math.min(fullLong(),MAX_SIDE));
+  for(const s of SIZES){
+    const b=document.createElement('button'); b.type='button'; b.dataset.size=s;
+    b.textContent=s==='full'?t('size.full'):Tools.fmt(s,0)+' px';
+    b.setAttribute('aria-pressed',String(s===settings.size));
+    sc.append(b);
+  }
+  const {W,H,capped,max}=outSize();
+  $('exportInfo').textContent=t('export.info',{w:Tools.fmt(W,0),h:Tools.fmt(H,0),mp:mp(W*H)})
+    +(capped?' '+t('export.capped',{max:Tools.fmt(max/1e6,0)}):'');
+  let warn='';
+  if(settings.format==='jpg'&&W*H>JPG_SAFE) warn=t('export.jpgBig');
+  else if(settings.format==='png'&&!Png.supported()&&full.W*full.H>JPG_SAFE) warn=t('export.noStream');
+  $('exportWarn').hidden=!warn; $('exportWarnText').textContent=warn;
+  const busy=!!job;
+  $('btnSave').disabled=busy; $('progressRow').hidden=!busy;
+  for(const b of document.querySelectorAll('#size button, #format button, #mode button, #aspect button, #btnShuffle, #btnAdd, #btnMenuAdd, #btnClear, #btnRemove')) if(busy) b.disabled=true; else if(b.id!=='btnShuffle') b.disabled=false;
+  $('gap').disabled=busy;
+  $('doneRow').hidden=busy||!lastFile||!Tools.canShareFile(lastFile.name,lastFile.type);
+}
+new ResizeObserver(()=>renderPreview()).observe($('previewWrap'));
+
+/* ---------- Choosing options ---------- */
+function changeLayout(fresh){ selected=null; relayout(fresh); lastFile=null; persist(); render(); }
+$('mode').addEventListener('click',e=>{const b=e.target.closest('button[data-mode]'); if(!b) return;
+  settings.mode=b.dataset.mode; save(); changeLayout(false); Tools.diag.log('mode',settings.mode);});
+$('aspect').addEventListener('click',e=>{const b=e.target.closest('button[data-aspect]'); if(!b) return;
+  settings.aspect=b.dataset.aspect; save(); changeLayout(true); Tools.diag.log('aspect',settings.aspect);});
+$('gap').addEventListener('input',e=>{settings.gap=Tools.clamp(Math.round(Number(e.target.value)),0,40); save(); lastFile=null; render();});
+$('bg').addEventListener('input',e=>{settings.bg=e.target.value; save(); lastFile=null; renderPreview();});
+$('size').addEventListener('click',e=>{const b=e.target.closest('button[data-size]'); if(!b) return;
+  settings.size=b.dataset.size==='full'?'full':Number(b.dataset.size); save(); render();});
+$('format').addEventListener('click',e=>{const b=e.target.closest('button[data-format]'); if(!b) return;
+  settings.format=b.dataset.format; save(); render();});
+function shuffle(){
+  if(images.length<2) return;
+  seed=1+Tools.randomInt(1e9);
+  if(settings.mode!=='auto'){
+    for(let i=images.length-1;i>0;i--){const k=Tools.randomInt(i+1); [images[i],images[k]]=[images[k],images[i]];}
+  }
+  changeLayout(true); Tools.diag.log('rearranged',{mode:settings.mode});
+}
+$('btnShuffle').addEventListener('click',shuffle);
+
+/* ---------- Tapping cells: select, swap ---------- */
+$('collage').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-id]'); if(!b||job) return;
+  const id=b.dataset.id;
+  if(!selected||!byId(selected)) selected=id;
+  else if(selected===id) selected=null;
+  else { swap(selected,id); selected=null; }
+  renderPreview();
+  const again=$('collage').querySelector(`button[data-id="${CSS.escape(id)}"]`); if(again) again.focus();
+});
+function swap(a,b){
+  if(settings.mode==='auto'&&tree){
+    tree=L.refit(L.swapLeaves(tree,a,b),aspectOf,target());
+  }
+  const i=images.findIndex(x=>x.id===a), k=images.findIndex(x=>x.id===b);
+  [images[i],images[k]]=[images[k],images[i]];
+  relayout(false); lastFile=null; persist(); renderExport();
+  Tools.diag.log('swapped');
+}
+$('btnUnselect').addEventListener('click',()=>{selected=null; renderPreview();});
+$('btnRemove').addEventListener('click',()=>{
+  const id=selected, idx=images.findIndex(x=>x.id===id); if(idx<0) return;
+  const img=images[idx], oldTree=tree;
+  images.splice(idx,1); img.kept=false; selected=null;
+  if(settings.mode==='auto'&&tree) tree=images.length?L.refit(L.removeLeaf(tree,id),aspectOf,target()):null;
+  relayout(false); lastFile=null; persist(); render();
+  Tools.diag.log('image removed',{left:images.length});
+  Tools.undo(t('removed'),()=>{
+    if(byId(img.id)) return;
+    images.splice(Math.min(idx,images.length),0,img); tree=oldTree;
+    relayout(false); persist(); render();
+  });
+});
+
+/* ---------- Adding images ---------- */
+// EXIF orientation: 'from-image' is the default nowadays; older browsers do not know the option at all
+async function decode(blob,opts){
+  try{ return await createImageBitmap(blob,Object.assign({imageOrientation:'from-image'},opts||{})); }
+  catch(e){ if(!opts) return await createImageBitmap(blob); try{ return await createImageBitmap(blob,opts); }catch(_){ return await createImageBitmap(blob); } }
+}
+function canvasBlob(c,type,q){return new Promise(res=>c.toBlob(res,type,q));}
+async function makeThumb(bmp){
+  const s=Math.min(1,THUMB/Math.max(bmp.width,bmp.height));
+  const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(bmp.width*s)); c.height=Math.max(1,Math.round(bmp.height*s));
+  const ctx=c.getContext('2d'); ctx.imageSmoothingQuality='high'; ctx.drawImage(bmp,0,0,c.width,c.height);
+  const b=await canvasBlob(c,'image/jpeg',0.85);
+  c.width=c.height=0;
+  if(!b) throw new Error('thumbnail failed');
+  return URL.createObjectURL(b);
+}
+// HEIC that the browser cannot read itself is turned into a JPG once, at full size
+async function heicToJpeg(bmp,name){
+  const c=document.createElement('canvas'); c.width=bmp.width; c.height=bmp.height;
+  c.getContext('2d').drawImage(bmp,0,0);
+  const b=await canvasBlob(c,'image/jpeg',0.95); c.width=c.height=0;
+  if(!b) throw new Error('heic to jpeg failed');
+  return new File([b],(name||'photo').replace(/\.[^.]*$/,'')+'.jpg',{type:'image/jpeg'});
+}
+async function readImage(f,id,info){
+  let file=f, bmp;
+  const heic=await Heic.isHeicFile(f);
+  if(heic){
+    if(Heic.info().native!==true&&!Heic.info().worker) info(t('heic'));
+    bmp=await Heic.decode(f);
+    if(Heic.info().native!==true) file=await heicToJpeg(bmp,f.name);
+  }else bmp=await decode(f);
+  try{
+    const w=bmp.width,h=bmp.height;
+    if(!w||!h) throw new Error('empty image');
+    return {id:id||Tools.uid('i'),file,w,h,thumb:await makeThumb(bmp),kept:false,heic};
+  }finally{ if(bmp.close) bmp.close(); }
+}
+let adding=Promise.resolve();
+function addFiles(list){ const files=[...list]; adding=adding.then(()=>doAdd(files)); return adding; }
+async function doAdd(list){
+  let files=list.filter(f=>f&&f.size);
+  if(!files.length) return;
+  const info=m=>{$('addInfo').textContent=m; $('addInfo2').textContent=m;};
+  if(images.length+files.length>MAX_IMAGES){ files=files.slice(0,Math.max(0,MAX_IMAGES-images.length)); Tools.toast(t('tooMany',{n:MAX_IMAGES}),5000); }
+  let added=0;
+  for(const [i,f] of files.entries()){
+    info(t('loading',{i:i+1,n:files.length}));
+    let heic=false;
+    try{
+      heic=await Heic.isHeicFile(f);
+      const im=await readImage(f,null,info);
+      images.push(im); added++;
+      Tools.diag.log('image added',{w:im.w,h:im.h,type:f.type||'?',heic,bytes:f.size});
+    }catch(e){
+      Tools.diag.log('add failed',{type:f.type||'?',heic,bytes:f.size},e);
+      Tools.toast(t(heic?'heicFail':'fail',{name:f.name||'?'}),heic?7000:4000);
+    }
+  }
+  info(added?(added===1?t('added1'):t('added',{n:added})):'');
+  if(added){ selected=null; relayout(true); lastFile=null; persist(); render(); }
+}
+const pick=()=>{ if(job) return; $('inPick').value=''; $('inPick').click(); };
+$('btnPick').addEventListener('click',pick);
+$('btnAdd').addEventListener('click',pick);
+$('btnMenuAdd').addEventListener('click',()=>{Tools.menu.close(); pick();});
+$('inPick').addEventListener('change',e=>addFiles(e.target.files));
+$('btnPick').addEventListener('dragover',e=>{e.preventDefault();$('btnPick').classList.add('over');});
+$('btnPick').addEventListener('dragleave',()=>$('btnPick').classList.remove('over'));
+document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault();});
+document.addEventListener('drop',e=>{
+  if(!e.dataTransfer||!e.dataTransfer.files.length) return;
+  e.preventDefault(); $('btnPick').classList.remove('over');
+  if(!job) addFiles(e.dataTransfer.files);
+});
+document.addEventListener('paste',e=>{
+  if(job||e.target.closest&&e.target.closest('input,textarea,[contenteditable]')) return;
+  const files=[...(e.clipboardData?e.clipboardData.files:[])].filter(f=>/^image\//.test(f.type));
+  if(files.length){ e.preventDefault(); addFiles(files); }
+});
+$('btnClear').addEventListener('click',async()=>{
+  if(!images.length||!await Tools.confirm(t('clearQ',{n:images.length}),{action:'delete'})) return;
+  for(const im of images) URL.revokeObjectURL(im.thumb);
+  images=[]; tree=null; layout=null; selected=null; lastFile=null;
+  persist(); render(); Tools.menu.close();
+  $('addInfo').textContent=''; Tools.toast(t('cleared')); Tools.diag.log('images cleared');
+});
+
+/* ---------- Kept images (Tools.keep): the photos and the arrangement survive a reload ----------
+   "img-<id>" = the photo (HEIC already as JPG), "state" = order, tree and seed. */
+let keepTimer=0, restoring=false, persistRun=Promise.resolve();
+function persist(){ if(restoring) return; clearTimeout(keepTimer); keepTimer=setTimeout(()=>{persistRun=persistRun.then(doPersist).catch(e=>Tools.diag.log('keep failed',e));},300); }
+async function doPersist(){
+  if(!Tools.keep.supported()) return;
+  if(!images.length){ await Tools.keep.clear(); return; }
+  for(const im of images) if(!im.kept&&await Tools.keep.put('img-'+im.id,im.file)) im.kept=true;
+  await Tools.keep.putJson('state',{v:1,order:images.map(i=>i.id),tree:tree&&JSON.parse(JSON.stringify(tree,(k,v)=>k==='A'?undefined:v)),seed});
+  const ids=new Set(images.map(i=>'img-'+i.id));
+  for(const n of await Tools.keep.names()) if(n.startsWith('img-')&&!ids.has(n)) await Tools.keep.remove(n);
+}
+async function restore(){
+  const st=await Tools.keep.json('state',null);
+  if(!st||!Array.isArray(st.order)||!st.order.length) return;
+  restoring=true;
+  const info=m=>{$('addInfo').textContent=m; $('addInfo2').textContent=m;};
+  let n=0;
+  try{
+    for(const [i,id] of st.order.entries()){
+      if(typeof id!=='string'||byId(id)) continue;
+      info(t('restoring',{i:i+1,n:st.order.length}));
+      const f=await Tools.keep.get('img-'+id); if(!f) continue;
+      try{ const im=await readImage(f,id,info); im.kept=true; images.push(im); n++; }
+      catch(e){ Tools.diag.log('restore image failed',e); await Tools.keep.remove('img-'+id); }
+    }
+    if(Number.isInteger(st.seed)) seed=st.seed;
+    tree=st.tree||null;
+  }finally{ restoring=false; }
+  info(n?t('restored',{n}):'');
+  Tools.diag.log('images restored',{images:n,of:st.order.length});
+  if(n){ relayout(false); persist(); render(); }
+}
+
+/* ---------- Export ---------- */
+let job=null, lastFile=null;
+// Decoded at the size the cell needs (never larger than the photo) – a huge collage never holds all
+// photos in full size at once
+async function decodeCell(im,r){
+  const s=Math.max(r.w/im.w,r.h/im.h);
+  if(s<1){
+    const rw=Math.max(1,Math.ceil(im.w*s)), rh=Math.max(1,Math.ceil(im.h*s));
+    try{
+      const b=await decode(im.file,{resizeWidth:rw,resizeHeight:rh,resizeQuality:'high'});
+      if(Math.abs(b.width/b.height-im.w/im.h)<=0.02*im.w/im.h) return b;
+      b.close();   // resized before turning by EXIF – take the full picture instead
+    }catch(_){ /* resize options unknown: full size */ }
+  }
+  return decode(im.file);
+}
+// Fills the cell, cut evenly on both sides (object-fit: cover)
+function drawCell(ctx,bmp,r){
+  const s=Math.max(r.w/bmp.width,r.h/bmp.height), sw=r.w/s, sh=r.h/s;
+  ctx.drawImage(bmp,(bmp.width-sw)/2,(bmp.height-sh)/2,sw,sh,r.x,r.y,r.w,r.h);
+}
+const progress=(v,msg)=>{$('progress').value=v; status(msg);};
+function status(msg,err){const s=$('exportStatus'); s.textContent=msg||''; s.classList.toggle('err',!!err);}
+const pause=()=>new Promise(r=>setTimeout(r,0));
+class Cancelled extends Error{}
+class CanvasTooBig extends Error{}
+
+async function renderJpgOrSmallPng(W,H,rs,type){
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const ctx=c.getContext('2d');
+  try{
+    if(!ctx) throw new CanvasTooBig();
+    ctx.fillStyle=settings.bg; ctx.fillRect(0,0,W,H);
+    if(ctx.getImageData(W-1,H-1,1,1).data[3]!==255) throw new CanvasTooBig();
+    ctx.imageSmoothingQuality='high';
+    for(const [i,r] of rs.entries()){
+      if(job.cancel) throw new Cancelled();
+      progress(i/rs.length,t('export.drawing',{i:i+1,n:rs.length}));
+      const bmp=await decodeCell(byId(r.id),r);
+      drawCell(ctx,bmp,r); bmp.close();
+    }
+    progress(1,t('export.encoding')); await pause();
+    const blob=await canvasBlob(c,type,JPG_QUALITY);
+    if(!blob) throw new CanvasTooBig();
+    return blob;
+  }finally{ c.width=c.height=0; }
+}
+
+// PNG of any size: strips of rows, each drawn in tiles of at most 4096 px width, then compressed
+async function renderPngStrips(W,H,rs){
+  const TILE=4096, tw0=Math.min(W,TILE);
+  const SH=Math.max(8,Math.min(2048,Math.floor(16e6/W)));
+  const c=document.createElement('canvas'), ctx=c.getContext('2d',{willReadFrequently:true});
+  if(!ctx) throw new CanvasTooBig();
+  const png=Png.writer(W,H);
+  const cache=new Map();   // index of the cell → bitmap, only while strips cross it
+  const strip=W>tw0?new Uint8ClampedArray(W*SH*4):null;
+  try{
+    for(let y0=0;y0<H;y0+=SH){
+      if(job.cancel) throw new Cancelled();
+      const sh=Math.min(SH,H-y0), y1=y0+sh;
+      const here=rs.map((r,i)=>i).filter(i=>rs[i].y<y1&&rs[i].y+rs[i].h>y0);
+      for(const i of here) if(!cache.has(i)) cache.set(i,await decodeCell(byId(rs[i].id),rs[i]));
+      let rowData=null;
+      for(let x0=0;x0<W;x0+=TILE){
+        const tw=Math.min(TILE,W-x0);
+        if(c.width!==tw||c.height!==sh){ c.width=tw; c.height=sh; }
+        ctx.setTransform(1,0,0,1,0,0);
+        ctx.fillStyle=settings.bg; ctx.fillRect(0,0,tw,sh);
+        ctx.setTransform(1,0,0,1,-x0,-y0); ctx.imageSmoothingQuality='high';
+        for(const i of here){ const r=rs[i]; if(r.x<x0+tw&&r.x+r.w>x0) drawCell(ctx,cache.get(i),r); }
+        const d=ctx.getImageData(0,0,tw,sh).data;
+        if(!strip){ rowData=d; break; }
+        for(let y=0;y<sh;y++) strip.set(d.subarray(y*tw*4,(y+1)*tw*4),(y*W+x0)*4);
+      }
+      await png.rows(strip||rowData,sh);
+      for(const [i,b] of cache) if(rs[i].y+rs[i].h<=y1){ b.close(); cache.delete(i); }
+      progress(y1/H,t('export.strips',{p:Tools.fmt(Math.floor(y1/H*100),0)}));
+      await pause();
+    }
+    progress(1,t('export.encoding'));
+    return await png.finish();
+  }catch(e){ png.abort(); throw e; }
+  finally{ for(const b of cache.values()) b.close(); c.width=c.height=0; }
+}
+
+async function exportCollage(){
+  if(!layout||job) return;
+  const {W,H}=outSize(), rs=rects(W,H,gapPx(W,H)), fmt=settings.format;
+  const type=fmt==='png'?'image/png':'image/jpeg';
+  job={cancel:false}; lastFile=null; renderExport(); Tools.wakeLock.hold('export');
+  const t0=performance.now();
+  Tools.diag.log('export start',{w:W,h:H,format:fmt,images:rs.length,stream:Png.supported()});
+  let retryPng=false;
+  try{
+    const blob=fmt==='png'&&Png.supported()?await renderPngStrips(W,H,rs):await renderJpgOrSmallPng(W,H,rs,type);
+    const name=`collage-${W}x${H}.${fmt}`;
+    lastFile=new File([blob],name,{type});
+    Tools.download(lastFile,name);
+    status(t('export.done',{name,size:Tools.fmt(blob.size/1048576,1)+' MB'}));
+    Tools.diag.log('export done',{w:W,h:H,format:fmt,bytes:blob.size,ms:Math.round(performance.now()-t0)});
+  }catch(e){
+    if(e instanceof Cancelled){ status(t('export.cancelled')); Tools.diag.log('export cancelled'); }
+    else{
+      Tools.diag.log('export failed',{w:W,h:H,format:fmt,tooBig:e instanceof CanvasTooBig},e);
+      retryPng=e instanceof CanvasTooBig&&fmt==='jpg'&&Png.supported();
+      status(retryPng?'':t('export.fail'),!retryPng);
+    }
+  }finally{
+    job=null; Tools.wakeLock.release('export'); renderExport();
+  }
+  // JPG needs one canvas of the full size – too big for this browser: PNG works in strips
+  if(retryPng&&await Tools.confirm(t('export.jpgTooBig',{w:Tools.fmt(W,0),h:Tools.fmt(H,0)}),{action:'download',ok:t('export.saveAs')})){
+    settings.format='png'; save(); render(); return exportCollage();
+  }
+}
+$('btnSave').addEventListener('click',()=>exportCollage());
+$('btnCancel').addEventListener('click',()=>{ if(job) job.cancel=true; });
+$('btnShare').addEventListener('click',async()=>{
+  if(!lastFile) return;
+  try{ await navigator.share({files:[lastFile]}); Tools.diag.log('shared'); }
+  catch(e){ if(e.name!=='AbortError') Tools.diag.log('share failed',e); }
+});
+
+/* ---------- Start ---------- */
+render();
+Tools.onLang(render);
+// Images from last time first, then images shared to the installed app
+Tools.takeSharedFiles().then(async files=>{
+  await restore();
+  if(files.length){ Tools.diag.log('shared files',{count:files.length}); await addFiles(files); }
+});
+Tools.diag.info(()=>({
+  images:images.length,
+  mode:settings.mode,aspect:settings.aspect,gap:settings.gap,size:settings.size,format:settings.format,
+  out:layout?outSize():null,
+  compressionStream:Png.supported(),
+  heic:Heic.info(),
+  kept:Tools.keep.supported(),
+  busy:!!job
+}));
+
+/* ---------- WebMCP ---------- */
+const MODE_NAMES={auto:'auto',rows:'rows',cols:'columns'};
+function state(){
+  const s={images:images.length,mode:MODE_NAMES[settings.mode],aspect:settings.aspect,
+    gap_percent:settings.gap/10,background:settings.bg,
+    export:{size:String(settings.size),format:settings.format}};
+  if(layout){
+    const {W,H}=outSize(), rs=rects(W,H,gapPx(W,H)), order=new Map(images.map((im,i)=>[im.id,i+1]));
+    Object.assign(s.export,{width:W,height:H,megapixels:Math.round(W*H/1e5)/10});
+    s.max_crop_percent=Math.round(maxCrop(rs)*1000)/10;
+    s.cells=rs.map(r=>({image:order.get(r.id),x:r.x,y:r.y,width:r.w,height:r.h}));
+  }
+  return s;
+}
+Tools.mcp.register({
+  name:'get_collage',title:'Read the collage',readOnly:true,
+  description:'Reads the collage: number of images, layout mode, aspect ratio, spacing, background, export size and format with the resulting pixel size, the largest share cropped from any photo, and every cell with its image number and position in pixels of the saved image.',
+  execute:()=>state()
+});
+Tools.mcp.register({
+  name:'set_layout',title:'Arrange the collage',label:'mcp.layout',
+  description:'Changes how the chosen images are arranged, as in the "Arrangement" card: mode (auto = gapless split without cropping, rows or columns keep the order), aspect ratio of the collage (free or fixed), spacing in percent of the longest side (0 = no gaps), colour of the spacing, and rearrange = try a new arrangement. Returns the new state like get_collage.',
+  inputSchema:{type:'object',properties:{
+    mode:{type:'string',enum:['auto','rows','columns']},
+    aspect:{type:'string',enum:Object.keys(ASPECTS)},
+    gap_percent:{type:'number',minimum:0,maximum:4,description:'0 to 4 in steps of 0.1'},
+    background:{type:'string',minLength:7,maxLength:7,description:'Colour as #rrggbb'},
+    rearrange:{type:'boolean'}
+  },additionalProperties:false},
+  execute:({mode,aspect,gap_percent,background,rearrange})=>{
+    if(job) throw new Error('The collage is being saved right now');
+    if(background!==undefined&&!/^#[0-9a-fA-F]{6}$/.test(background)) throw new Error('background must look like #rrggbb');
+    if(rearrange&&images.length<2) throw new Error('Rearranging needs at least two images');
+    let fresh=false;
+    if(mode!==undefined) settings.mode=mode==='columns'?'cols':mode;
+    if(aspect!==undefined&&aspect!==settings.aspect){ settings.aspect=aspect; fresh=true; }
+    if(gap_percent!==undefined) settings.gap=Math.round(gap_percent*10);
+    if(background!==undefined) settings.bg=background.toLowerCase();
+    save();
+    if(rearrange) shuffle(); else changeLayout(fresh);
+    return state();
+  }
+});
+Tools.mcp.register({
+  name:'set_export',title:'Set up saving',label:'mcp.export',
+  description:'Chooses the size (longest side in pixels, or full = the photos at about their original resolution, at most 250 megapixels) and the format (jpg = smaller file, png = any size) for saving the collage. Saving itself is done by the user. Returns the new state like get_collage.',
+  inputSchema:{type:'object',properties:{
+    size:{type:'string',enum:SIZES.map(String)},
+    format:{type:'string',enum:['jpg','png']}
+  },additionalProperties:false},
+  execute:({size,format})=>{
+    if(job) throw new Error('The collage is being saved right now');
+    if(size!==undefined) settings.size=size==='full'?'full':Number(size);
+    if(format!==undefined) settings.format=format;
+    save(); render();
+    return state();
+  }
+});
+})();
+</script>
+</body>
+</html>
