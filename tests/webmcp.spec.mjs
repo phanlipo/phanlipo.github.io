@@ -3607,3 +3607,64 @@ test.describe('quantum-putt tools', () => {
     expect((await call(page, 'quantum_putt_start_course', { course: 'golf' })).ok).toBe(false);
   });
 });
+
+test.describe('sudoku tools', () => {
+  test('get_game, set_cell and new_game: shown on the board, givens and progress protected', async ({ page }) => {
+    await open(page, '/sudoku/');
+    let r = await call(page, 'sudoku_get_game', {});
+    expect(r.result).toMatchObject({ difficulty: 'easy', status: 'playing', empty_squares: 41, rule_conflicts: [], hints_used: 0 });
+    expect(r.result.board).toHaveLength(9);
+    expect(r.result.board.every(row => /^[1-9.]{9}$/.test(row))).toBe(true);
+    expect(r.result.board).toEqual(r.result.givens);
+    expect(JSON.stringify(r.result)).not.toMatch(/solution"/);
+    const g = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku.game.v1')));
+    // A new game is allowed while nothing is entered
+    r = await call(page, 'sudoku_new_game', { difficulty: 'medium' });
+    expect(r.result).toMatchObject({ difficulty: 'medium', empty_squares: 49 });
+    await expect(page.locator('#lvl')).toHaveText('Mittel');
+    const m = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku.game.v1')));
+    expect(m.puzzle).not.toBe(g.puzzle);
+    // Enter the right digit in the first empty square
+    const i = m.puzzle.indexOf('0'), row = Math.floor(i / 9) + 1, column = (i % 9) + 1, d = Number(m.solution[i]);
+    r = await call(page, 'sudoku_set_cell', { row, column, digit: d });
+    expect(r.result.board[row - 1][column - 1]).toBe(String(d));
+    expect(r.result.empty_squares).toBe(48);
+    await expect(page.locator(`#board .cell[data-i="${i}"]`)).toHaveAttribute('data-v', String(d));
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Zahl eingetragen');
+    // A digit already in the row breaks a rule
+    const j = m.puzzle.indexOf('0', i + 1), jr = Math.floor(j / 9);
+    if (jr === row - 1) {
+      r = await call(page, 'sudoku_set_cell', { row: jr + 1, column: (j % 9) + 1, digit: d });
+      expect(r.result.rule_conflicts).toEqual(expect.arrayContaining([{ row, column }, { row: jr + 1, column: (j % 9) + 1 }]));
+      await call(page, 'sudoku_set_cell', { row: jr + 1, column: (j % 9) + 1, digit: 0 });
+    }
+    // Givens stay, limits like the UI, progress is not discarded
+    const k = m.puzzle.search(/[1-9]/);
+    expect((await call(page, 'sudoku_set_cell', { row: Math.floor(k / 9) + 1, column: (k % 9) + 1, digit: 1 })).error).toMatch(/given digit/);
+    expect((await call(page, 'sudoku_set_cell', { row: 10, column: 1, digit: 1 })).ok).toBe(false);
+    expect((await call(page, 'sudoku_set_cell', { row: 1, column: 1, digit: 10 })).ok).toBe(false);
+    expect((await call(page, 'sudoku_new_game', { difficulty: 'expert' })).ok).toBe(false);
+    expect((await call(page, 'sudoku_new_game', {})).error).toMatch(/only the user can discard/);
+    // Clearing again
+    r = await call(page, 'sudoku_set_cell', { row, column, digit: 0 });
+    expect(r.result.empty_squares).toBe(49);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'sudoku_get_game').annotations.readOnlyHint).toBe(true);
+    expect(tools.find(t => t.name === 'sudoku_set_cell').annotations.readOnlyHint).toBe(false);
+  });
+
+  test('solving through set_cell ends the game; new_game is allowed again', async ({ page }) => {
+    await open(page, '/sudoku/');
+    const g = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku.game.v1')));
+    let r;
+    for (let i = 0; i < 81; i++) {
+      if (g.puzzle[i] !== '0') continue;
+      r = await call(page, 'sudoku_set_cell', { row: Math.floor(i / 9) + 1, column: (i % 9) + 1, digit: Number(g.solution[i]) });
+    }
+    expect(r.result).toMatchObject({ status: 'solved', empty_squares: 0 });
+    await expect(page.locator('#status')).toHaveText(/^Gelöst in/);
+    expect((await call(page, 'sudoku_set_cell', { row: 1, column: 1, digit: 0 })).error).toMatch(/solved/);
+    r = await call(page, 'sudoku_new_game', {});
+    expect(r.result).toMatchObject({ difficulty: 'easy', status: 'playing' });
+  });
+});
