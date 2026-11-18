@@ -269,6 +269,60 @@ test.describe('brew-calculator tools', () => {
     expect(g.result.sugar_g).toBeCloseTo((5 - rest) * 20 / (2 * 44.0095 / 198.171), 1);
     await expect(page.locator('[data-key="z.sugar"]')).toHaveValue('dextrose');
   });
+
+  test('priming_sugar with wort (Speise)', async ({ page }) => {
+    const r = await call(page, 'brew_calculator_priming_sugar', { beer_volume_l: 20, max_temperature_c: 20, target_co2_g_per_l: 5, sugar: 'wort', wort_plato: 12, final_gravity_plato: 2.5 });
+    const kS = 10 * sgFromP(12) * (12 - (0.1808 * 12 + 0.8192 * 2.5)) * 0.9565 / 2.0665, x = (5 - co2(20, 1.013)) / (kS - 5);
+    expect(r.result.wort_l).toBeCloseTo(x * 20, 3);
+    expect(r.result.sugar_g).toBeUndefined();
+    await expect(page.locator('[data-key="z.sugar"]')).toHaveValue('speise');
+    expect((await call(page, 'brew_calculator_priming_sugar', { beer_volume_l: 20, max_temperature_c: 20, target_co2_g_per_l: 5, sugar: 'wort' })).error).toMatch(/wort_plato/);
+  });
+
+  test('convert_gravity and alcohol_content', async ({ page }) => {
+    let r = await call(page, 'brew_calculator_convert_gravity', { value: 12.48, unit: 'brix' });
+    expect(r.result.plato).toBeCloseTo(12, 2);
+    expect(r.result.sg).toBeCloseTo(sgFromP(12), 4);
+    await expect(page.locator('#umrechnen')).toBeVisible();
+    r = await call(page, 'brew_calculator_alcohol_content', { original: 12, final: 2.5 });
+    const Ew = 0.1808 * 12 + 0.8192 * 2.5, abw = (12 - Ew) / (2.0665 - 0.010665 * 12);
+    expect(r.result.abw_pct).toBeCloseTo(abw, 2);
+    expect(r.result.abv_pct).toBeCloseTo(abw * sgFromP(2.5) * 0.998207 / 0.78924, 2);
+    expect(r.result.apparent_attenuation_pct).toBeCloseTo(79.2, 1);
+    await expect(page.locator('#aRes .calc-result.main .v')).toContainText('5,1');
+    expect((await call(page, 'brew_calculator_alcohol_content', { original: 10, final: 12 })).error).toMatch(/lower/);
+  });
+
+  test('brewhouse_efficiency and mix_to_target', async ({ page }) => {
+    let r = await call(page, 'brew_calculator_brewhouse_efficiency', { original_gravity_plato: 12, wort_volume_l: 20, grain_kg: 4 });
+    const mE = 20 * rhoW(100) / rhoW(20) * sgFromP(12) * rhoW(20) / 1000 * 0.12;
+    expect(r.result.efficiency_pct).toBeCloseTo(mE / 4 * 100, 1);
+    r = await call(page, 'brew_calculator_brewhouse_efficiency', { original_gravity_plato: 12, wort_volume_l: 20, efficiency_pct: 60 });
+    expect(r.result.grain_kg).toBeCloseTo(mE / 0.6, 2);
+    expect((await call(page, 'brew_calculator_brewhouse_efficiency', { original_gravity_plato: 12, wort_volume_l: 20 })).ok).toBe(false);
+    r = await call(page, 'brew_calculator_mix_to_target', { by: 'temperature', volume_l: 20, current: 15, addition: 0, target: 12 });
+    expect(r.result.addition_l).toBeCloseTo(5, 3);
+    await expect(page.locator('#mischen')).toBeVisible();
+    expect((await call(page, 'brew_calculator_mix_to_target', { volume_l: 20, current: 15, addition: 0, target: 16 })).ok).toBe(false);
+  });
+
+  test('hop_bitterness, hop_substitute, water_alkalinity, co2_pressure', async ({ page }) => {
+    let r = await call(page, 'brew_calculator_hop_bitterness', { alpha_pct: 10, volume_l: 20, target_ibu: 45, utilization_pct: 30 });
+    expect(r.result.hop_g).toBeCloseTo(30, 1);
+    r = await call(page, 'brew_calculator_hop_bitterness', { alpha_pct: 12, volume_l: 20, hop_g: 25 });
+    const U = 1.65 * 0.000125 ** (sgFromP(12) - 1) * (1 - Math.exp(-0.04 * 60)) / 4.15;
+    expect(r.result.ibu).toBeCloseTo(U * 0.12 * 25 * 1000 / 20, 1);
+    await expect(page.locator('[data-key="h.mode"] [data-v="ibu"]')).toHaveAttribute('aria-pressed', 'true');
+    expect((await call(page, 'brew_calculator_hop_substitute', { recipe_alpha_pct: 10, recipe_hop_g: 30, own_alpha_pct: 8 })).result.own_hop_g).toBe(37.5);
+    r = await call(page, 'brew_calculator_water_alkalinity', { calcium_mg_l: 68, magnesium_mg_l: 31.3, acid_capacity_mmol_l: 6.17, water_l: 20 });
+    expect(r.result.residual_alkalinity_dh).toBeCloseTo(13.55, 1);
+    expect(r.result.lactic_acid_80_ml).toBeCloseTo(9.07, 1);
+    await expect(page.locator('#wasser')).toBeVisible();
+    r = await call(page, 'brew_calculator_co2_pressure', { temperature_c: 7, co2_g_per_l: 5 });
+    expect(r.result.pressure_bar).toBeCloseTo(5 / co2(7, 1) - 1.013, 2);
+    r = await call(page, 'brew_calculator_co2_pressure', { temperature_c: 7, pressure_bar: 1 });
+    expect(r.result.co2_g_per_l).toBeCloseTo(co2(7, 2.013), 2);
+  });
 });
 
 test.describe('medical-calculator tools', () => {
