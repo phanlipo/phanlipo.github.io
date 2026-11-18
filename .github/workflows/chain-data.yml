@@ -1,0 +1,49 @@
+# Checks the data of the app "Reihengeschäft" (chain-transaction/chain.js) with `node scripts/chain-data.mjs`:
+#   - standard VAT rates against the EU "Taxes in Europe" database
+#   - from 15 December: the German VAT return form of the next year (box numbers, Intrastat thresholds)
+# Monthly: one issue "Reihengeschäft: Daten prüfen" only when something needs a look (updated each month,
+# closed when nothing is left). Nothing is changed automatically; the app shows its data state on the page.
+name: Daten Reihengeschäft prüfen
+
+on:
+  schedule:
+    - cron: '41 5 5 * *'   # 5th of every month, 05:41 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  monthly:
+    name: Daten prüfen
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Check rates and form year
+        run: node scripts/chain-data.mjs --markdown report.md
+      - name: Open, update or close the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Reihengeschäft: Daten prüfen"
+          existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ ! -s report.md ]; then
+            echo "Nothing to do: rates match the EU database, no new form due."
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" --comment "Alles erledigt: Steuersätze stimmen mit der EU-Datenbank überein, kein neuer Vordruck fällig."
+            fi
+            exit 0
+          fi
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file report.md
+          else
+            gh issue create --title "$title" --body-file report.md
+          fi

@@ -7,6 +7,13 @@
 (function (root) {
   'use strict';
 
+  // State of the data, shown on the page. Update together with the data; the monthly workflow
+  // (.github/workflows/chain-data.yml, scripts/chain-data.mjs) opens an issue when something needs checking.
+  //   ratesAsOf:   date of the rates in the EU "Taxes in Europe" database the rates below match
+  //   ratesChecked: day they were last compared with it by hand
+  //   formYear:    year of the German VAT return form (USt 1 A) the box numbers and Intrastat thresholds follow
+  const DATA = { ratesAsOf: '2026-07-01', ratesChecked: '2026-11-18', formYear: 2026 };
+
   // code (ISO 3166, GR for Greece), VAT ID prefix, standard VAT rate in % (checked against the EU "Taxes in Europe"
   // database, situation on 1 July 2026), German and English name
   const EU = [
@@ -245,5 +252,5 @@
     return rows;
   }
 
-  root.Chain = { COUNTRIES, EU_CODES: EU.map(x => x[0]), THIRD_CODES: THIRD.map(x => x[0]), isEU, kindOf, normalize, evaluate, alternatives, foreignRegistrations };
+  root.Chain = { DATA, COUNTRIES, EU_CODES: EU.map(x => x[0]), THIRD_CODES: THIRD.map(x => x[0]), isEU, kindOf, normalize, evaluate, alternatives, foreignRegistrations };
 })(typeof window !== 'undefined' ? window : globalThis);

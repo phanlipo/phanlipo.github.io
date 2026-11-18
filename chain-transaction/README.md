@@ -29,6 +29,12 @@ Umsatzsteuerliche Beurteilung von Reihengeschäften mit 3 oder 4 Unternehmen: be
 - Kennzahlen: Vordruckmuster USt 1 A 2026 mit Anleitung (BMF-Schreiben vom 29. 12. 2025).
 - Intrastat-Schwellen (1 Mio. € Versendung, 3 Mio. € Eingang seit 2025): Statistisches Bundesamt, wiedergegeben von den IHKs.
 
+## Datenstand und monatliche Prüfung
+
+- `Chain.DATA` in `chain.js` (`ratesAsOf`, `ratesChecked`, `formYear`) – die Seite zeigt es unter dem Ergebnis (auch im Druck), ab dem Folgejahr mit dem Hinweis „noch nicht geprüft“. Bei jeder Datenänderung mit anpassen.
+- `.github/workflows/chain-data.yml` ruft monatlich `scripts/chain-data.mjs` auf: vergleicht die Normalsätze mit der EU-Datenbank (dieselbe Anfrage wie deren Webseite; Länder-IDs aus deren Konfiguration) und meldet ab 15. Dezember den Vordruck des Folgejahrs. Nur dann (oder wenn die Datenbank nicht lesbar ist) gibt es eine Issue „Reihengeschäft: Daten prüfen“; sie wird aktualisiert bzw. geschlossen, wenn nichts mehr offen ist. Nichts wird automatisch geändert. Eine Live-Abfrage aus der App geht nicht: Die Datenbank erlaubt Browser-Anfragen nur von ihrer eigenen Entwicklungsadresse (CORS), und Apps schicken nichts an fremde Server.
+- Lokal: `NODE_USE_ENV_PROXY=1 node scripts/chain-data.mjs` (hinter einem Proxy), `--today 2026-12-20` simuliert ein Datum. Tests ohne Netz: `tests/chain-data.spec.mjs`.
+
 ## Offene Erweiterungen
 
 - Gebrochener Transport, Konsignationslager, Lohnveredelung.
