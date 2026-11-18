@@ -3440,3 +3440,47 @@ test.describe('quantum-magnetism tools', () => {
     expect(bad).toEqual({ ok: false, error: 'input.spins must be <= 10' });
   });
 });
+
+test.describe('quantum-putt tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.clock.install({ time: 0 });   // the wave only runs through the tools' steps
+    await page.clock.pauseAt(1000);   // time stands still: no animation frames on their own
+    await open(page, '/quantum-putt/');
+  });
+
+  test('list_courses, start_course and get_state', async ({ page }) => {
+    let r = await call(page, 'quantum_putt_list_courses', {});
+    expect(r.result.courses).toHaveLength(10);
+    expect(r.result.courses[8]).toEqual({ id: 'tunnel', number: 9, name: 'Tunnel', par: 4, best: null });
+    r = await call(page, 'quantum_putt_start_course', { course: 'slits' });
+    expect(r.result).toMatchObject({ course: { id: 'slits', number: 6, name: 'Doppelspalt', par: 3, best: null }, phase: 'aim', strokes: 0,
+      ball: { x: 64, y: 230 }, hole: { x: 64, y: 64, radius: 14 }, aim: { angle: 0, strength: 0.6 }, chance_in_hole: null, field: { width: 128, height: 256 } });
+    await expect(page.locator('#courseName')).toHaveText('Bahn 6: Doppelspalt');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Bahn gestartet');
+    expect(await call(page, 'quantum_putt_get_state', {})).toEqual(r);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'quantum_putt_get_state').annotations.readOnlyHint).toBe(true);
+    expect(tools.find(t => t.name === 'quantum_putt_shoot').annotations.readOnlyHint).toBe(false);
+  });
+
+  test('shoot and measure: the found point decides about the hole; errors in the wrong phase', async ({ page }) => {
+    await call(page, 'quantum_putt_start_course', { course: 'open' });
+    expect((await call(page, 'quantum_putt_measure', {})).error).toBe('Nothing to measure – hit the ball with shoot first.');
+    let r = await call(page, 'quantum_putt_shoot', { angle: 0, strength: 1 });
+    expect(r.result).toMatchObject({ phase: 'fly', strokes: 1, ball: null, aim: { angle: 0, strength: 1 }, wave_time: 0 });
+    await expect(page.locator('#btnMain')).toHaveText('Messen');
+    expect((await call(page, 'quantum_putt_shoot', { angle: 0, strength: 1 })).error).toBe('The ball is already running as a wave – call measure first.');
+    await page.evaluate(() => { Math.random = () => 0.5; });
+    // 136 steps = 68 time units: the packet (speed 2 · 1.3 cells per unit) has run from y 226 to about the hole at y 50
+    r = await call(page, 'quantum_putt_measure', { steps: 136 });
+    expect(r.result.chance_in_hole).toBeGreaterThan(0.4);
+    const { x, y } = r.result.found;
+    expect(r.result.in_hole).toBe(Math.hypot(x - 64, y - 50) <= 14);
+    expect(r.result.in_hole).toBe(true);
+    expect(r.result.state).toMatchObject({ phase: 'holed', strokes: 1, course: { best: 1 } });
+    await expect(page.locator('#status')).toHaveText('Eingelocht mit 1 Schlag – 1 unter Par! Neuer Bestwert.');
+    expect((await call(page, 'quantum_putt_shoot', { angle: 0, strength: 1 })).error).toBe('The ball is already sunk – start the next course with start_course.');
+    expect((await call(page, 'quantum_putt_shoot', { angle: 200, strength: 1 })).ok).toBe(false);
+    expect((await call(page, 'quantum_putt_start_course', { course: 'golf' })).ok).toBe(false);
+  });
+});
