@@ -3004,6 +3004,44 @@ test.describe('tic-tac-toe tools', () => {
   });
 });
 
+test.describe('four-in-a-row tools', () => {
+  test('drop_disc plays on the board, get_game reads it back, full column, win, new_round', async ({ page }) => {
+    await open(page, '/four-in-a-row/');
+    let r = await call(page, 'four_in_a_row_drop_disc', { column: 4 });
+    expect(r.ok).toBe(true);
+    expect(r.result.board[5][3]).toBe('red');
+    expect(r.result.to_move).toBe('yellow');
+    await expect(page.locator('#board .slot[data-i="38"] .disc')).toHaveAttribute('data-v', 'r');
+    expect((await call(page, 'four_in_a_row_drop_disc', { column: 8 })).ok).toBe(false);
+    for (const c of [4, 4, 4, 4]) await call(page, 'four_in_a_row_drop_disc', { column: c });
+    r = await call(page, 'four_in_a_row_drop_disc', { column: 4 });
+    expect(r.result.playable_columns).toEqual([1, 2, 3, 5, 6, 7]);
+    expect((await call(page, 'four_in_a_row_drop_disc', { column: 4 })).error).toBe('Column 4 is full.');
+    // column 4 holds red at the bottom; red 1 2 3 next to it (yellow plays 7) makes four across
+    for (const c of [1, 7, 2, 7]) await call(page, 'four_in_a_row_drop_disc', { column: c });
+    r = await call(page, 'four_in_a_row_drop_disc', { column: 3 });
+    expect(r.result.status).toBe('red_wins');
+    expect(r.result.winning_cells).toEqual([1, 2, 3, 4].map(column => ({ row: 6, column })));
+    expect(r.result.score).toEqual({ red: 1, yellow: 0, draws: 0 });
+    expect((await call(page, 'four_in_a_row_drop_disc', { column: 5 })).error).toMatch(/round is over/);
+    expect((await call(page, 'four_in_a_row_get_game', {})).result.status).toBe('red_wins');
+    await expect(page.locator('#status')).toHaveText('Rot gewinnt!');
+    r = await call(page, 'four_in_a_row_new_round', {});
+    expect(r.result).toMatchObject({ status: 'playing', starter: 'yellow', to_move: 'yellow', moves: 0 });
+    expect(r.result.score.red).toBe(1);
+  });
+
+  test('against the computer it replies within the same call', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('four-in-a-row.state.v1', JSON.stringify({ opp: 'cpu', level: 'medium', moves: [0, 6, 1, 6] })));
+    await open(page, '/four-in-a-row/');
+    const r = await call(page, 'four_in_a_row_drop_disc', { column: 3 });
+    expect(r.result.opponent).toBe('computer');
+    expect(r.result.board[5][3]).toBe('yellow'); // blocked red 1-2-3
+    expect(r.result.to_move).toBe('red');
+    expect(r.result.moves).toBe(6);
+  });
+});
+
 test.describe('hangman tools', () => {
   const seed = (page, game, extra = {}) => page.addInitScript(([g, e]) => localStorage.setItem('hangman.state.v1',
     JSON.stringify({ mode: 'solo', level: 'medium', ...e, game: g && { lang: 'de', cat: 'animals', source: 'list', lives: 8, guessed: [], ...g } })), [game, extra]);
