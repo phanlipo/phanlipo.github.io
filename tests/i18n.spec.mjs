@@ -2,7 +2,7 @@
 // German is the default and is covered by all other tests; here the English side.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, tools, apps, translatedApps, VIEWPORTS, expectNoHorizontalScroll, openMenu } from './helpers.mjs';
+import { test, expect, tools, apps, translatedApps, VIEWPORTS, expectNoHorizontalScroll, openMenu, openSettings, switchLang } from './helpers.mjs';
 import { ROOT, meta } from '../scripts/lib.mjs';
 
 const translated = translatedApps().map(a => a.folder);
@@ -20,7 +20,7 @@ test.describe('browser language English', () => {
     await expect(page).toHaveTitle('phanlipo – App Shelf');
     await expect(page.locator('h1')).toHaveText('App Shelf');
     await expect(page.locator('footer .footer-common')).toContainText('AI-generated');
-    await expect(page.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#menuLang [data-set-lang="en"]')).toHaveAttribute('aria-pressed', 'true');
     // Nothing chosen yet: the browser language is used, nothing is stored
     expect(await storedLang(page)).toBeNull();
 
@@ -75,7 +75,7 @@ test.describe('browser language English', () => {
     test(`${app.folder}: not translated yet – stays German, no language switch`, async ({ page }) => {
       await page.goto(`/${app.folder}/`);
       await expect(page.locator('html')).toHaveAttribute('lang', 'de');
-      await expect(page.locator('.footer-lang')).toBeHidden();
+      await expect(page.locator('.lang-switch')).toBeHidden();
       await expect(page.locator('footer .footer-common')).toContainText('KI-generiert');
     });
   }
@@ -87,7 +87,7 @@ test.describe('language switch', () => {
     expect(app, 'at least one translated app').toBeTruthy();
     await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
-    await page.getByRole('button', { name: 'English' }).click();
+    await switchLang(page, 'en');
     await expect(page.locator('h1')).toHaveText('App Shelf');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     expect(await storedLang(page)).toBe('"en"');
@@ -96,7 +96,7 @@ test.describe('language switch', () => {
 
     await page.goto(`/${app}/`);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-    await openMenu(page); // stage apps: the language switch is in the menu
+    await openSettings(page); // the language switch is in the menu (Settings)
     await page.getByRole('button', { name: 'Deutsch' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
     await expect(page.locator('details.help summary')).toHaveText('Anleitung & Hinweise');
@@ -107,6 +107,7 @@ test.describe('language switch', () => {
   test('an explicit choice replaces ?lang= in the address', async ({ page }) => {
     await page.goto('/?lang=en');
     await expect(page.locator('h1')).toHaveText('App Shelf');
+    await openSettings(page);
     await page.getByRole('button', { name: 'Deutsch' }).click();
     await expect(page).toHaveURL(/\/$/);
     await page.reload();
@@ -115,7 +116,8 @@ test.describe('language switch', () => {
 
   test('the switch meets the touch-target size', async ({ page }) => {
     await page.goto('/');
-    for (const name of ['Deutsch', 'English']) {
+    await openSettings(page);
+    for (const name of ['Deutsch', 'English', 'Hell', 'Dunkel', 'System']) {
       const box = await page.getByRole('button', { name }).boundingBox();
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
@@ -124,7 +126,7 @@ test.describe('language switch', () => {
   for (const folder of translated) {
     test(`${folder}: language is not part of the app backup and survives deleting the app data`, async ({ page }) => {
       await page.goto(`/${folder}/`);
-      await openMenu(page); // stage apps: the language switch is in the menu
+      await openSettings(page); // the language switch is in the menu (Settings)
       await page.getByRole('button', { name: 'English' }).click();
       const exported = await page.evaluate(() => Tools.data.exportData());
       expect(Object.keys(exported.data)).not.toContain('tools.lang.v1');

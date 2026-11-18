@@ -522,7 +522,7 @@ self.addEventListener('notificationclick', event => {
 
 /* ---------- Run ---------- */
 const footer = readFileSync(join(ROOT, 'scripts/partials/footer.html'), 'utf8').trim();
-// The start page needs no link to itself
+// The start page needs no link to itself. Language and appearance are in the menu ("Settings", common.js).
 const footerFor = p => p.folder ? footer : footer.split('\n').filter(l => !l.includes('footer-home')).join('\n');
 const dataBlock = readFileSync(join(ROOT, 'scripts/partials/data.html'), 'utf8').trim();
 const agentBlock = readFileSync(join(ROOT, 'scripts/partials/help-agent.html'), 'utf8').trim();

@@ -1,7 +1,7 @@
 // App menu (☰, every app) and stage layout (<body class="stage">), see AGENTS.md "Layout: Karten oder Bühne".
 // Every app: settings/history marked data-menu, data backup, help and footer are in the menu, which "back" closes.
 // Stage apps additionally fill the screen, the page does not scroll.
-import { test, expect, apps, stageApps, VIEWPORTS, expectNoHorizontalScroll, animationsDone } from './helpers.mjs';
+import { test, expect, apps, stageApps, VIEWPORTS, expectNoHorizontalScroll, animationsDone, openSettings, switchTheme, closeMenu } from './helpers.mjs';
 
 const list = stageApps();
 
@@ -103,6 +103,23 @@ for (const app of apps()) {
       await expect.poll(() => page.evaluate(() => history.state && history.state.toolsMenu)).toBeFalsy();
     });
 
+    test('settings: one place with language and appearance', async ({ page }) => {
+      await page.setViewportSize(PHONES.portrait);
+      await page.goto(url);
+      // At most one settings section of the app; the shared block sits in it or in the sub page "Settings"
+      expect(await page.locator('[data-menu][data-icon="settings"]').count()).toBeLessThanOrEqual(1);
+      await expect(page.locator('#menuTheme')).toHaveCount(1);
+      await expect(page.locator('#menuLang')).toHaveCount(1);
+      expect(await page.locator('#menuTheme').evaluate(el => !!el.closest('#appMenu [data-menu][data-icon="settings"], #appMenu #menuSettings'))).toBe(true);
+      if (await page.locator('[data-menu][data-icon="settings"]').count()) await expect(page.locator('#menuSettings')).toHaveCount(0);
+      await expect(page.locator('footer [data-set-lang], footer [data-set-theme]')).toHaveCount(0);
+      await openSettings(page);
+      for (const v of ['light', 'dark', 'system']) await expect(page.locator(`#menuTheme [data-set-theme="${v}"]`)).toBeVisible();
+      await expect(page.locator('#menuTheme [data-set-theme="system"]')).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('#menuLang [data-set-lang="de"]')).toBeVisible();
+      await expectNoHorizontalScroll(page);
+    });
+
     test('back closes the menu instead of leaving the app', async ({ page }) => {
       await page.goto('/');
       await page.goto(url);
@@ -116,7 +133,7 @@ for (const app of apps()) {
       // The next "back" leaves the app as usual
       await page.goBack();
       await expect(page).toHaveURL(/\/$/);
-      await expect(page.locator('.menu-btn')).toHaveCount(0);
+      await expect(page.locator('.tool').first()).toBeVisible();
     });
 
     test('messages stay visible while the menu is open', async ({ page }) => {
@@ -180,7 +197,8 @@ for (const app of apps()) {
         await btn.click();
         await expect(page.getByRole('heading', { name: 'Menu', exact: true })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Close menu' })).toBeVisible();
-        // Switching the language inside the menu translates the menu too
+        // Switching the language inside the menu (Settings) translates the menu too
+        await openSettings(page);
         await page.getByRole('button', { name: 'Deutsch' }).click();
         await expect(page.getByRole('heading', { name: 'Menü', exact: true })).toBeVisible();
         await expect(page.locator('.menu-btn')).toHaveAttribute('aria-label', 'Menü');
@@ -251,6 +269,83 @@ test.describe('menu sub pages', () => {
     await page.goBack();
     await expect.poll(() => isOpen(page, '#appMenu details.help')).toBe(false);
     await expect(page.locator('#appMenu')).toBeVisible();
+  });
+});
+
+test.describe('appearance: light, dark, system', () => {
+  const bg = page => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const LIGHT = 'rgb(244, 246, 249)', DARK = 'rgb(17, 22, 29)';
+
+  for (const url of ['/dice-coin/', '/code-runner/']) {
+    test(`${url}: choice wins over the system, is shared and survives a reload`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: 'light' });
+      await page.goto(url);
+      expect(await bg(page)).toBe(LIGHT);
+      await switchTheme(page, 'dark');
+      expect(await bg(page)).toBe(DARK);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+      await expect(page.locator('meta[name="color-scheme"]')).toHaveAttribute('content', 'dark');
+      expect(await page.evaluate(() => [Tools.theme.get(), Tools.theme.dark(), localStorage.getItem('tools.theme.v1')])).toEqual(['dark', true, '"dark"']);
+      // Page styles too (rules of the page's own <style>, not only base.css)
+      const pageRules = await page.evaluate(() => [...document.styleSheets].filter(s => !s.href).flatMap(s => [...s.cssRules])
+        .filter(r => r.media && /prefers-color-scheme/.test(r.media.mediaText)).length);
+      expect(pageRules).toBe(0);
+      await page.reload();
+      expect(await bg(page)).toBe(DARK);
+      // Light on a dark system
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await switchTheme(page, 'light');
+      expect(await bg(page)).toBe(LIGHT);
+      // Another app of the domain takes the choice along
+      await page.goto('/raffle/');
+      expect(await bg(page)).toBe(LIGHT);
+      // System: follows the system again, also when it changes
+      await switchTheme(page, 'system');
+      expect(await bg(page)).toBe(DARK);
+      expect(await page.evaluate(() => localStorage.getItem('tools.theme.v1'))).toBeNull();
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme', /./);
+      await page.emulateMedia({ colorScheme: 'light' });
+      await expect.poll(() => bg(page)).toBe(LIGHT);
+    });
+  }
+
+  test('Tools.theme.onChange reports the switch; the English menu is translated', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/dice-coin/');
+    await page.evaluate(() => { window.__themes = []; Tools.theme.onChange(v => window.__themes.push(v)); });
+    await switchTheme(page, 'dark');
+    await switchTheme(page, 'system');
+    expect(await page.evaluate(() => window.__themes)).toEqual(['dark', 'light']);
+    await openSettings(page);
+    await page.locator('#appMenu [data-set-lang="en"]').click();
+    await expect(page.locator('#menuSettings > summary')).toContainText('Settings');
+    await expect(page.locator('#menuTheme legend')).toHaveText('Appearance');
+    await expect(page.locator('#menuTheme [data-set-theme="dark"]')).toHaveText('Dark');
+    await closeMenu(page);
+  });
+
+  test('start page: the same menu with settings, install and footer', async ({ page }) => {
+    await page.setViewportSize(PHONES.portrait);
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/');
+    const btn = page.locator('body > header .menu-btn');
+    await expect(btn).toBeVisible();
+    // Next to the title, inside the screen
+    const [b, h] = [await btn.boundingBox(), await page.locator('header h1').boundingBox()];
+    expect(b.x + b.width).toBeLessThanOrEqual(375);
+    expect(Math.abs((b.y + b.height / 2) - (h.y + h.height / 2))).toBeLessThanOrEqual(8);
+    await openSettings(page);
+    await expect(page.locator('#appMenu > .menu-body > footer')).toBeAttached();
+    await expect(page.locator('#menuInstall')).toBeAttached();
+    await page.getByRole('button', { name: 'Dunkel' }).click();
+    expect(await bg(page)).toBe(DARK);
+    await expect(page.getByRole('button', { name: 'Dunkel' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'English' }).click();
+    await expect(page.locator('#menuSettings > summary')).toContainText('Settings');
+    await page.getByRole('button', { name: 'System' }).click();
+    expect(await bg(page)).toBe(LIGHT);
+    await closeMenu(page);
+    await expectNoHorizontalScroll(page);
   });
 });
 

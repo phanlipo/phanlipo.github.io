@@ -180,6 +180,8 @@ window.Tools = (function () {
     'diag.copied': 'Diagnose kopiert', 'diag.fail': 'Kopieren nicht möglich',
     'ask.ok': 'OK', 'ask.cancel': 'Abbrechen', 'ask.delete': 'Löschen', 'ask.reset': 'Zurücksetzen', 'ask.leave': 'Verlassen',
     'ask.replace': 'Ersetzen', 'ask.load': 'Laden', 'ask.download': 'Herunterladen', 'ask.undo': 'Rückgängig',
+    'lang.label': 'Sprache', 'settings.h': 'Einstellungen', 'settings.general': 'Allgemein',
+    'theme.label': 'Darstellung', 'theme.light': 'Hell', 'theme.dark': 'Dunkel', 'theme.system': 'System',
   });
   Object.assign(dict.en, {
     'sw.updated': 'New version loaded – tap ↻ at the top to update',
@@ -209,6 +211,8 @@ window.Tools = (function () {
     'diag.copy': 'Copy diagnostics', 'diag.copied': 'Diagnostics copied', 'diag.fail': 'Copying not possible',
     'ask.ok': 'OK', 'ask.cancel': 'Cancel', 'ask.delete': 'Delete', 'ask.reset': 'Reset', 'ask.leave': 'Leave',
     'ask.replace': 'Replace', 'ask.load': 'Load', 'ask.download': 'Download', 'ask.undo': 'Undo',
+    'settings.h': 'Settings', 'settings.general': 'General',
+    'theme.label': 'Appearance', 'theme.light': 'Light', 'theme.dark': 'Dark', 'theme.system': 'System',
   });
 
   function t(key, vars) {
@@ -282,7 +286,7 @@ window.Tools = (function () {
     translated = true;
     lang = preferredLang();
     applyI18n();
-    document.querySelectorAll('.footer-lang').forEach(el => { el.hidden = false; });
+    document.querySelectorAll('.lang-switch').forEach(el => { el.hidden = false; });
   }
   // Static keys (German in the HTML or dictionary) without an English text – used by the tests
   function i18nMissing() {
@@ -302,6 +306,76 @@ window.Tools = (function () {
     });
   }
   setupLangSwitch();
+
+  /* ---------- Appearance: light, dark or like the system ----------
+     The choice is shared by all apps of the domain like the language: localStorage "tools.theme.v1"
+     ("light" | "dark"; missing = like the system). Pages keep writing their dark colours as
+     @media (prefers-color-scheme: dark){…} – with a fixed choice, common.js rewrites the condition of those rules
+     in every style sheet of the page (CSSOM), so no page needs its own theme CSS. <html data-theme="…"> and
+     <meta name="color-scheme"> follow (form controls, scroll bars). JS that needs the current look asks
+     Tools.theme.dark() and listens with Tools.theme.onChange(fn) instead of matchMedia. */
+  const THEMES = ['light', 'dark', 'system'];
+  const THEME_KEY = 'tools.theme.v1';
+  const MQ_SCHEME = /\(\s*prefers-color-scheme\s*:\s*(dark|light)\s*\)/gi;
+  const mqOriginal = new WeakMap();
+  const systemDark = () => { try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch (_) { return false; } };
+  const themeChoice = () => { const v = load(THEME_KEY, null); return v === 'light' || v === 'dark' ? v : 'system'; };
+  const themeDark = () => { const c = themeChoice(); return c === 'system' ? systemDark() : c === 'dark'; };
+  let themeApplied = null;
+
+  function themeRules(rules, forced) {
+    for (const r of rules) {
+      if (r.media && r.cssRules) {
+        let orig = mqOriginal.get(r);
+        if (orig == null) { orig = r.media.mediaText; mqOriginal.set(r, orig); }
+        if (MQ_SCHEME.test(orig)) {
+          MQ_SCHEME.lastIndex = 0;
+          // Always true resp. always false (a negative width never matches; older browsers: invalid = false)
+          const text = forced === 'system' ? orig : orig.replace(MQ_SCHEME, (m, v) => (v.toLowerCase() === forced ? '(min-width: 0px)' : '(max-width: -1px)'));
+          if (r.media.mediaText !== text) r.media.mediaText = text;
+        }
+        MQ_SCHEME.lastIndex = 0;
+      }
+      if (r.cssRules) themeRules(r.cssRules, forced);
+    }
+  }
+  function applyTheme() {
+    const choice = themeChoice();
+    for (const s of document.styleSheets) {
+      let rules = null;
+      try { rules = s.cssRules; } catch (_) { /* style sheet of another origin */ }
+      if (rules) themeRules(rules, choice);
+    }
+    const root = document.documentElement;
+    if (choice === 'system') root.removeAttribute('data-theme'); else root.dataset.theme = choice;
+    const meta = document.querySelector('meta[name="color-scheme"]');
+    if (meta) meta.content = choice === 'system' ? 'light dark' : choice;
+    document.querySelectorAll('[data-set-theme]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setTheme === choice)));
+    const dark = themeDark();
+    if (themeApplied !== null && themeApplied !== dark) document.dispatchEvent(new CustomEvent('tools:theme', { detail: dark ? 'dark' : 'light' }));
+    themeApplied = dark;
+  }
+  function setTheme(v) {
+    if (!THEMES.includes(v)) return;
+    if (v === 'system') remove(THEME_KEY); else save(THEME_KEY, v);
+    diagLog('theme: ' + v);
+    applyTheme();
+  }
+  const onTheme = fn => document.addEventListener('tools:theme', e => fn(e.detail));
+  function setupTheme() {
+    applyTheme();
+    document.addEventListener('click', e => {
+      const b = e.target.closest && e.target.closest('[data-set-theme]');
+      if (b) setTheme(b.dataset.setTheme);
+    });
+    // Another tab or app of this domain changed the choice
+    window.addEventListener('storage', e => { if (e.key === THEME_KEY || e.key === null) applyTheme(); });
+    try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); } catch (_) { /* old browsers */ }
+    // Style sheets parsed or loaded later (<style> after this script, late <link>)
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyTheme);
+    window.addEventListener('load', applyTheme);
+  }
+  setupTheme();
 
   /* ---------- Numbers (German or English format) ---------- */
   function fmt(x, digits) {
@@ -655,11 +729,11 @@ window.Tools = (function () {
   else setupDataUi();
 
   /* ---------- App menu (every app) and stage layout ----------
-     Every app (page with <details class="help">) gets a menu button (☰) at the right of its header. It opens a
+     Every app (page with <details class="help">) and the start page (<body data-app-menu>) get a menu button (☰) at the right of its header. It opens a
      modal <dialog> – a bottom sheet on phones, a side panel on wide screens – laid out as a tool list (UI-KONZEPT.md):
        1. every element with data-menu, in page order: actions (<div class="menu-list">), app sections (cards)
        2. one list of standard sections: data backup, help, "install as app" – each a sub page
-       3. the footer (language switch, links)
+       3. the footer (links)
      Sections: data-icon="settings" (Tabler name) puts a Tabler icon in front of the section's summary or first heading.
      Sub pages: <details class="card" data-menu data-menu-page data-icon="history"><summary>Title</summary>…</details>
      shows as a row with › and, tapped, fills the sheet (summary = back row with ‹). One level only; the back
@@ -686,8 +760,9 @@ window.Tools = (function () {
     }
     const target = typeof id === 'string' && id ? document.getElementById(id) : null;
     if (target && menuEl.contains(target)) {
-      if (target.matches('details.menu-page')) target.open = true;
-      else target.scrollIntoView({ block: 'start' });
+      const page = target.closest('details.menu-page');
+      if (page) page.open = true;
+      if (page !== target) target.scrollIntoView({ block: 'start' });
     }
   }
   function menuClose() { if (menuEl && menuEl.open) menuEl.close(); }
@@ -798,13 +873,49 @@ window.Tools = (function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupStageHeight);
   else setupStageHeight();
 
+  /* ---------- Settings (every app) ----------
+     Language and appearance are the same in every app: one block "General" with two .seg switches. It goes to the
+     end of the app's own settings section (the [data-menu] element with data-icon="settings") – so every app has
+     exactly one place "Settings" – or, without one, into its own sub page "Settings" at the top of the standard
+     list. The language switch stays hidden on pages that are not translated (Tools.i18n shows it). */
+  const THEME_ICONS = { light: icon('sun'), dark: icon('moon'), system: icon('sun-moon') };
+  function settingsFields() {
+    const f = document.createElement('div');
+    f.className = 'menu-settings';
+    const segBtn = (attr, v, label, extra) => `<button type="button" ${attr}="${v}" aria-pressed="false"${extra || ''}>${label}</button>`;
+    f.innerHTML = `<fieldset class="seg-group lang-switch" id="menuLang"${translated ? '' : ' hidden'}><legend data-i18n="lang.label">${esc(t('lang.label'))}</legend><div class="seg">`
+      + segBtn('data-set-lang', 'de', 'Deutsch', ' lang="de"') + segBtn('data-set-lang', 'en', 'English', ' lang="en"') + '</div></fieldset>'
+      + `<fieldset class="seg-group" id="menuTheme"><legend data-i18n="theme.label">${esc(t('theme.label'))}</legend><div class="seg">`
+      + THEMES.map(v => segBtn('data-set-theme', v, `${THEME_ICONS[v]}<span data-i18n="theme.${v}">${esc(t('theme.' + v))}</span>`)).join('')
+      + '</div></fieldset>';
+    f.querySelectorAll('[data-set-lang]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setLang === lang)));
+    f.querySelectorAll('[data-set-theme]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setTheme === themeChoice())));
+    return f;
+  }
+  function setupSettings(appParts) {
+    const own = appParts.find(el => el.dataset.icon === 'settings');
+    if (own) {
+      const h = document.createElement('h3');
+      h.className = 'menu-settings-h'; h.dataset.i18n = 'settings.general'; h.textContent = t('settings.general');
+      own.append(h, settingsFields());
+      return null;
+    }
+    const el = document.createElement('details');
+    el.className = 'card menu-settings-page'; el.id = 'menuSettings';
+    el.innerHTML = `<summary data-i18n="settings.h">${esc(t('settings.h'))}</summary>`;
+    el.append(settingsFields());
+    return el;
+  }
+
   function setupMenu() {
-    if (menuEl || !document.querySelector('details.help')) return;
+    // Apps (with help) and the start page (<body data-app-menu>: settings, install, footer)
+    if (menuEl || !document.querySelector('details.help, body[data-app-menu]')) return;
     const header = document.querySelector('body > header');
     if (!header) return;
     const appParts = [...document.querySelectorAll('[data-menu]')];
     const data = document.querySelector('details.data'), help = document.querySelector('details.help');
     const installEl = setupInstall();
+    const settingsEl = setupSettings(appParts);
     menuEl = document.createElement('dialog');
     menuEl.className = 'menu-sheet'; menuEl.id = 'appMenu';
     menuEl.setAttribute('aria-labelledby', 'appMenuTitle');
@@ -815,7 +926,7 @@ window.Tools = (function () {
     for (const el of appParts) if (el.matches('details[data-menu-page]')) el.classList.add('menu-page');
     const group = document.createElement('div');
     group.className = 'menu-group';
-    for (const std of [{ el: data, icon: 'database' }, { el: help, icon: 'help-circle' }, { el: installEl, icon: 'device-mobile-down' }]) {
+    for (const std of [{ el: settingsEl, icon: 'settings' }, { el: data, icon: 'database' }, { el: help, icon: 'help-circle' }, { el: installEl, icon: 'device-mobile-down' }]) {
       if (!std.el) continue;
       std.el.classList.add('menu-page');
       group.append(std.el);
@@ -1111,6 +1222,7 @@ window.Tools = (function () {
     add('standalone', matchMedia('(display-mode: standalone)').matches || navigator.standalone === true);
     add('fullscreen', fsEl() ? 'page' : fsSystem() ? 'app' : false);
     add('language', lang);
+    add('theme', themeChoice() + (themeDark() ? ' (dark)' : ' (light)'));
     add('online', navigator.onLine);
     const sw = navigator.serviceWorker;
     add('serviceWorker.controller', !!(sw && sw.controller));
@@ -1163,6 +1275,7 @@ window.Tools = (function () {
     audio: { context: audioContext, unlock: audioUnlock, ready: audioReady, tone },
     wakeLock: { hold: wakeHold, release: wakeRelease, active: () => !!wakeSentinel, supported: wakeSupported, reasons: () => [...wakeReasons] },
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
+    theme: { get: themeChoice, set: setTheme, dark: themeDark, onChange: onTheme, KEY: THEME_KEY },
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     menu: { open: menuOpen, close: menuClose, element: () => menuEl },
     keep: { supported: keepSupported, put: keepPut, putJson: keepPutJson, get: keepGet, json: keepJson, remove: keepRemove, clear: keepClear, names: keepNames },

@@ -118,7 +118,8 @@
       C[k] = cs.getPropertyValue('--' + k).trim() || '#888';
   };
   readColors();
-  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readColors(); draw(); }); } catch (_) { /* old browsers */ }
+  // System change or the choice in the menu (Settings → Appearance)
+  Tools.theme.onChange(() => { readColors(); draw(); });
 
   /* ---------- Classical simulation state ---------- */
   let lat, sim;

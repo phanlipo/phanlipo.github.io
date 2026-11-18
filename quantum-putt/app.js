@@ -224,7 +224,7 @@
   const octx = off.getContext('2d');
   const img = octx.createImageData(W, H);
   let baseImg = null, geo = { s: 1, ox: 0, oy: 0, dpr: 1 };
-  const dark = () => { try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch (_) { return false; } };
+  const dark = () => Tools.theme.dark();
   const PAL = {
     light: { grass: [47, 125, 74], grass2: [43, 116, 68], wall: [120, 92, 64], sand: [222, 190, 110], water: [40, 110, 170], wave: [255, 251, 214], bg: [233, 239, 235] },
     dark: { grass: [24, 72, 44], grass2: [21, 65, 40], wall: [92, 72, 52], sand: [168, 140, 76], water: [30, 84, 140], wave: [255, 247, 190], bg: [16, 22, 18] },
@@ -417,7 +417,8 @@
   loadCourse(savedIdx >= 0 ? savedIdx : 0, savedIdx >= 0 ? saved : null);
   renderSettings();
   try { new ResizeObserver(() => resize()).observe($('view')); } catch (_) { window.addEventListener('resize', resize); }
-  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { baseImg = null; draw(); }); } catch (_) {}
+  // System change or the choice in the menu (Settings → Appearance)
+  Tools.theme.onChange(() => { baseImg = null; draw(); });
   resize(); render();
   Tools.onLang(() => { render(); if (view === 'pick') renderPick(); });
   Tools.diag.info(() => ({ course: course().id, phase: game.phase, strokes: game.strokes, size: settings.size, speed: settings.speed,
