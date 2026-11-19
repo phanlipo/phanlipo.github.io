@@ -80,6 +80,18 @@ for (const app of apps()) {
       expect(missing, 'icons missing in assets/icons.svg').toEqual([]);
     });
 
+    test('choice switches (.seg) fit their texts at 375 px, on the page and in the menu', async ({ page }) => {
+      await page.setViewportSize(VIEWPORTS.mobile);
+      await page.goto(url);
+      // A button whose content is wider than the button overlaps its neighbours (e.g. five options in one row)
+      const squeezed = () => page.evaluate(() => [...document.querySelectorAll('.seg > :is(button, label, a)')]
+        .filter(el => el.getClientRects().length && el.scrollWidth > el.clientWidth + 1)
+        .map(el => `${el.closest('[id]')?.id || ''}: ${el.textContent.trim()}`));
+      expect(await squeezed(), 'on the page').toEqual([]);
+      await openMenu(page);
+      expect(await squeezed(), 'in the menu').toEqual([]);
+    });
+
     test('header: quick actions leave the title readable at 375 px, also with the update button', async ({ page }) => {
       await page.setViewportSize(VIEWPORTS.mobile);
       await page.goto(url);

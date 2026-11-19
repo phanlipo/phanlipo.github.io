@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Minensuche</title>
+<meta name="description" content="Felder aufdecken, Minen mit Fahnen markieren – drei Größen fürs Handy, der erste Tipp ist immer sicher, mit Bestzeiten.">
+<meta name="tool:tags" content="Freizeit, Spiele">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="bomb">
+<meta name="tool:color" content="#2f6b4a">
+<meta name="tool:short-name" content="Minensuche">
+<meta name="tool:title-en" content="Minesweeper">
+<meta name="tool:description-en" content="Uncover the squares, mark the mines with flags – three sizes for the phone, the first tap is always safe, with best times.">
+<meta name="tool:short-name-en" content="Mines">
+<meta name="tool:storage" content="minesweeper.">
+<meta name="tool:webmcp" content="get_game, open_cell, flag_cell, new_game">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann das Spielfeld lesen (wo die Minen liegen, erst nach dem Ende), Felder aufdecken, Fahnen setzen oder entfernen und ein neues Spiel starten. Jeder Zug erscheint sofort im Spielfeld.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the board (where the mines are only once the game is over), open squares, set or remove flags and start a new game. Every move shows up on the board right away.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-iepAsi3onOzqVyugw6soiVnPtJ/3bqloFA2pcLaJI4Y='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Minensuche">
+<meta name="theme-color" content="#2f6b4a">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#2f6b4a;--accent-text:#ffffff;
+  --cell-hidden:color-mix(in srgb,var(--accent) 20%,var(--surface));--cell-hidden-hi:color-mix(in srgb,var(--accent) 30%,var(--surface));
+  --n1:#1f5fb8;--n2:#1d7a3a;--n3:#b3261e;--n4:#5b2ea6;--n5:#8a3a00;--n6:#0d6b6b;--n7:#1b2430;--n8:#5d6b7c}
+@media (prefers-color-scheme: dark){:root{--accent:#8fd1aa;--accent-text:#0d1f15;
+  --cell-hidden:color-mix(in srgb,var(--accent) 22%,var(--surface));--cell-hidden-hi:color-mix(in srgb,var(--accent) 32%,var(--surface));
+  --n1:#8cbcff;--n2:#6fd38c;--n3:#ff8a80;--n4:#c9adff;--n5:#f0b35a;--n6:#6ad6d6;--n7:#e6ebf1;--n8:#9aa8b8}}
+/* Stage layout: counters on top, the board fills the rest, mode switch at the thumb */
+main{max-width:640px;margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:10px}
+
+/* ---------- Counters ---------- */
+.info-row{flex:none;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.info-row .count{display:flex;align-items:center;gap:6px}
+.info-row .count .ic{color:var(--err)}
+.info-row .clock{justify-content:flex-end}
+.info-row .clock .ic{color:var(--muted)}
+.info-row .lvl{color:var(--muted);font-size:14px;font-weight:400;text-align:center}
+
+/* ---------- Board ---------- */
+.board-wrap{flex:1;min-height:220px;container-type:size;display:grid;place-items:center}
+.board{--cell:min(100cqw / var(--cols),100cqh / var(--rows));display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));grid-template-rows:repeat(var(--rows),minmax(0,1fr));
+  width:calc(var(--cell) * var(--cols));height:calc(var(--cell) * var(--rows));gap:2px;
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+.board>[role=row]{display:contents}
+.cell{border:0;margin:0;padding:0;min-width:0;min-height:0;overflow:hidden;border-radius:max(3px,calc(var(--cell) * .14));display:grid;place-items:center;
+  font:inherit;font-weight:800;font-size:calc(var(--cell) * .58);line-height:1;color:var(--text);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;
+  background:var(--cell-hidden);box-shadow:inset 0 -3px 0 color-mix(in srgb,var(--accent) 28%,transparent)}
+.cell:hover{background:var(--cell-hidden-hi)}
+.cell:focus-visible{outline:3px solid var(--accent);outline-offset:-1px;z-index:1}
+.cell .ic{width:calc(var(--cell) * .6);height:calc(var(--cell) * .6)}
+.cell[data-v=flag] .ic,.cell[data-v=wrong-flag] .ic{color:var(--err)}
+.cell[data-v=wrong-flag]{background:var(--surface-2);box-shadow:none}
+.cell.open{background:var(--surface-2);box-shadow:none;cursor:default}
+.cell.open:hover{background:var(--surface-2)}
+.cell[data-v=mine]{background:var(--surface-2);box-shadow:none}
+.cell[data-v=hit]{background:var(--err-bg);box-shadow:inset 0 0 0 2px var(--err)}
+.cell[data-v=hit] .ic{color:var(--err)}
+.cell[data-v="1"]{color:var(--n1)}.cell[data-v="2"]{color:var(--n2)}.cell[data-v="3"]{color:var(--n3)}.cell[data-v="4"]{color:var(--n4)}
+.cell[data-v="5"]{color:var(--n5)}.cell[data-v="6"]{color:var(--n6)}.cell[data-v="7"]{color:var(--n7)}.cell[data-v="8"]{color:var(--n8)}
+.cell.pop{animation:pop .18s ease-out}
+@keyframes pop{from{transform:scale(.7);opacity:.4}}
+.board.won .cell[data-v=flag] .ic{color:var(--ok)}
+@media (prefers-reduced-motion: reduce){.cell.pop{animation:none}}
+
+.status{flex:none;text-align:center;min-height:24px;margin:0;font-weight:600;font-size:17px;overflow-wrap:anywhere}
+.status[data-state=won]{color:var(--ok)}.status[data-state=lost]{color:var(--err)}
+.actions{flex:none;display:grid}
+.actions .seg>button,.actions .btn{min-height:52px;font-size:17px}
+
+/* ---------- Settings & statistics ---------- */
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-of-type{margin-top:4px}
+.level-info{color:var(--muted);margin:6px 0 0;font-size:14px}
+.opts{display:grid;gap:4px;margin-top:10px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.stats .stat-box>b{font-size:22px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Minensuche</span></h1>
+  <p class="sub" data-i18n="sub">Alle Felder ohne Mine aufdecken</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnNew" aria-label="Neues Spiel" title="Neues Spiel" data-i18n-attr="aria-label:newGame; title:newGame"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card play" aria-label="Spielfeld" data-i18n-attr="aria-label:boardLabel">
+    <div class="info-row">
+      <span class="count" id="minesLeft" title="Minen übrig (Minen minus Fahnen)" data-i18n-attr="title:minesLeft"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#flag"/></svg><span id="minesLeftN">0</span></span>
+      <span class="lvl" id="lvlName"></span>
+      <span class="count clock" title="Zeit" data-i18n-attr="title:time"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#clock"/></svg><span id="timeN">0:00</span></span>
+    </div>
+    <div class="board-wrap">
+      <div class="board" id="board" role="grid" aria-label="Spielfeld" data-i18n-attr="aria-label:boardLabel"></div>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="actions">
+      <div class="seg" id="mode" role="group" aria-label="Tippen" data-i18n-attr="aria-label:tapMode">
+        <button type="button" data-m="open"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#shovel"/></svg><span data-i18n="mode.open">Aufdecken</span></button>
+        <button type="button" data-m="flag"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#flag"/></svg><span data-i18n="mode.flag">Fahne setzen</span></button>
+      </div>
+      <button type="button" class="btn primary" id="btnAgain" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="newGame">Neues Spiel</span></button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu data-icon="settings">
+    <h2 id="h-settings" data-i18n="settings">Spiel &amp; Einstellungen</h2>
+    <h3 id="h-level" data-i18n="level">Größe</h3>
+    <div class="seg" id="levels" role="group" aria-labelledby="h-level">
+      <button type="button" data-l="easy" data-i18n="level.easy">Leicht</button>
+      <button type="button" data-l="medium" data-i18n="level.medium">Mittel</button>
+      <button type="button" data-l="hard" data-i18n="level.hard">Schwer</button>
+    </div>
+    <p class="level-info" id="levelInfo"></p>
+    <div class="opts">
+      <label class="check"><input type="checkbox" id="optLong"><span data-i18n="optLong">Lange drücken setzt eine Fahne</span></label>
+      <label class="check"><input type="checkbox" id="optVibrate"><span data-i18n="optVibrate">Vibrieren bei Fahne und Mine</span></label>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-stats" data-menu data-icon="trophy">
+    <h2 id="h-stats"><span data-i18n="stats">Statistik</span> · <span id="statsLevel"></span></h2>
+    <div class="stats">
+      <div class="stat-box"><b id="stPlayed">0</b><span data-i18n="st.played">Gespielt</span></div>
+      <div class="stat-box"><b id="stWon">0</b><span data-i18n="st.won">Gewonnen</span></div>
+      <div class="stat-box"><b id="stRate">–</b><span data-i18n="st.rate">Quote</span></div>
+      <div class="stat-box"><b id="stBest">–</b><span data-i18n="st.best">Bestzeit</span></div>
+    </div>
+    <div class="row" style="margin-top:10px"><button type="button" class="btn" id="btnResetStats"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="resetStats">Statistik zurücksetzen</span></button></div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Unter einigen Feldern liegen Minen. Deckst du ein Feld ohne Mine auf, zeigt eine Zahl, wie viele Minen in den bis zu acht Nachbarfeldern liegen. Gewonnen hast du, wenn alle Felder ohne Mine offen sind – eine Mine aufzudecken beendet das Spiel.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Aufdecken</b> (unten gewählt): Tippen öffnet ein Feld. Felder ohne Minen in der Nähe öffnen ihre ganze Umgebung auf einmal. Der erste Tipp trifft nie eine Mine.</li>
+    <li><b>Fahne setzen</b>: Tippen markiert ein Feld als Mine bzw. nimmt die Fahne wieder weg. Felder mit Fahne lassen sich nicht versehentlich aufdecken. Schneller geht es mit <b>langem Drücken</b> (am Computer: Rechtsklick) – das setzt in beiden Arten eine Fahne.</li>
+    <li>Tippen auf eine offene Zahl, um die schon genauso viele Fahnen liegen, deckt alle übrigen Nachbarn auf. Liegt dabei eine Fahne falsch, triffst du eine Mine.</li>
+    <li>Oben links steht, wie viele Minen noch ohne Fahne sind, rechts die Zeit. Die Uhr läuft ab dem ersten Tipp und hält an, solange die App im Hintergrund ist.</li>
+    <li><b>+ Neues Spiel</b> (oben) mischt neu; ein angefangenes Spiel lässt sich danach kurz zurückholen. Im Menü ☰ wählst du die <b>Größe</b>: Leicht 8 × 9 Felder mit 10 Minen, Mittel 10 × 13 mit 22, Schwer 12 × 16 mit 38. Je größer, desto kleiner werden die Felder auf dem Handy.</li>
+    <li>Tastatur: Pfeiltasten wählen ein Feld, Eingabe oder Leertaste tippt, <kbd>F</kbd> setzt oder entfernt eine Fahne.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Das laufende Spiel, die Einstellungen und die Statistik je Größe (gespielt, gewonnen, Bestzeit) bleiben nur in diesem Browser – ein angefangenes Spiel geht beim Neuladen nicht verloren. Abgebrochene Spiele zählen nicht. Nichts wird an einen Server geschickt; das Spiel läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Some squares hide a mine. When you open a square without a mine, a number tells how many mines lie in its up to eight neighbours. You win once every square without a mine is open – opening a mine ends the game.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li><b>Open</b> (chosen at the bottom): a tap opens a square. Squares with no mines nearby open their whole surroundings at once. The first tap never hits a mine.</li>
+    <li><b>Place flag</b>: a tap marks a square as a mine or takes the flag away again. Flagged squares can’t be opened by accident. Quicker: a <b>long press</b> (on a computer: right-click) places a flag in either mode.</li>
+    <li>Tapping an open number that already has as many flags around it opens all its other neighbours. If one of those flags is wrong, you hit a mine.</li>
+    <li>Top left shows how many mines are still without a flag, top right the time. The clock starts with the first tap and pauses while the app is in the background.</li>
+    <li><b>+ New game</b> (top) deals a new board; a game you had started can be brought back for a moment afterwards. In the menu ☰ you choose the <b>size</b>: Easy 8 × 9 squares with 10 mines, Medium 10 × 13 with 22, Hard 12 × 16 with 38. The bigger, the smaller the squares on a phone.</li>
+    <li>Keyboard: arrow keys pick a square, Enter or Space taps it, <kbd>F</kbd> places or removes a flag.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The current game, the settings and the statistics per size (played, won, best time) stay only in this browser – a game in progress survives a reload. Abandoned games don’t count. Nothing is sent to a server; the game also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann das Spielfeld lesen (wo die Minen liegen, erst nach dem Ende), Felder aufdecken, Fahnen setzen oder entfernen und ein neues Spiel starten. Jeder Zug erscheint sofort im Spielfeld. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the board (where the mines are only once the game is over), open squares, set or remove flags and start a new game. Every move shows up on the board right away. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 8059cd3bd49d</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="game.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'lvl.easy':'Leicht','lvl.medium':'Mittel','lvl.hard':'Schwer',
+    levelInfo:'{c} × {r} Felder, {m} Minen',
+    ready:'Tippe ein Feld an – der erste Tipp ist sicher.',playing:'Noch {n} Felder ohne Mine',
+    won:'Geschafft in {t}!',wonBest:'Geschafft in {t} – neue Bestzeit!',lost:'Mine getroffen!',
+    cell:'Reihe {r}, Spalte {c}: {v}',hidden:'verdeckt',flag:'Fahne',empty:'leer',near1:'1 Mine daneben',nearN:'{n} Minen daneben',
+    mine:'Mine',hit:'getroffene Mine',wrongFlag:'falsche Fahne',
+    flaggedHint:'Das Feld hat eine Fahne – erst die Fahne wegnehmen.',
+    newStarted:'Neues Spiel',resetStatsQ:'Statistik aller Größen löschen?',statsReset:'Statistik zurückgesetzt',
+    'mcp.open':'Feld aufgedeckt','mcp.flag':'Fahne umgeschaltet','mcp.new':'Neues Spiel'
+  },
+  en:{
+    title:'Minesweeper',sub:'Open every square without a mine',newGame:'New game',boardLabel:'Game board',
+    minesLeft:'Mines left (mines minus flags)',time:'Time',tapMode:'Tap',
+    'mode.open':'Open','mode.flag':'Place flag',
+    settings:'Game & settings',level:'Size','level.easy':'Easy','level.medium':'Medium','level.hard':'Hard',
+    optLong:'Long press places a flag',optVibrate:'Vibrate on flag and mine',
+    stats:'Statistics','st.played':'Played','st.won':'Won','st.rate':'Rate','st.best':'Best time',resetStats:'Reset statistics',
+    'lvl.easy':'Easy','lvl.medium':'Medium','lvl.hard':'Hard',
+    levelInfo:'{c} × {r} squares, {m} mines',
+    ready:'Tap a square – the first tap is safe.',playing:'{n} squares without a mine to go',
+    won:'Cleared in {t}!',wonBest:'Cleared in {t} – new best time!',lost:'You hit a mine!',
+    cell:'Row {r}, column {c}: {v}',hidden:'hidden',flag:'flag',empty:'empty',near1:'1 mine nearby',nearN:'{n} mines nearby',
+    mine:'mine',hit:'mine hit',wrongFlag:'wrong flag',
+    flaggedHint:'This square has a flag – take the flag away first.',
+    newStarted:'New game',resetStatsQ:'Delete the statistics of all sizes?',statsReset:'Statistics reset',
+    'mcp.open':'Square opened','mcp.flag':'Flag toggled','mcp.new':'New game'
+  }
+});
+const t=Tools.t,M=window.Minesweeper;
+const LEVELS=Object.keys(M.LEVELS);
+const LS_GAME='minesweeper.game.v1',LS_SET='minesweeper.settings.v1',LS_STATS='minesweeper.stats.v1';
+
+// ---------- Settings, statistics, game ----------
+const settings={level:'easy',mode:'open',longPress:true,vibrate:true};
+{const s=Tools.load(LS_SET,{});
+  if(s&&typeof s==='object'){if(LEVELS.includes(s.level))settings.level=s.level;if(s.mode==='flag')settings.mode='flag';
+    if(typeof s.longPress==='boolean')settings.longPress=s.longPress;if(typeof s.vibrate==='boolean')settings.vibrate=s.vibrate;}}
+const saveSettings=()=>Tools.save(LS_SET,settings);
+
+const freshStats=()=>Object.fromEntries(LEVELS.map(l=>[l,{played:0,won:0,best:null}]));
+const stats=freshStats();
+{const s=Tools.load(LS_STATS,{});
+  if(s&&typeof s==='object')for(const l of LEVELS){const v=s[l];if(!v||typeof v!=='object')continue;
+    const nat=x=>Number.isInteger(x)&&x>=0;
+    if(nat(v.played))stats[l].played=v.played;if(nat(v.won)&&v.won<=stats[l].played)stats[l].won=v.won;
+    if(nat(v.best)&&v.best>0)stats[l].best=v.best;}}
+const saveStats=()=>Tools.save(LS_STATS,stats);
+
+const newGame=level=>{const L=M.LEVELS[level];return M.create(L.rows,L.cols,L.mines);};
+// The running game: {level, game, elapsed (ms)}; the clock part since `since` is added while it runs
+let cur=null;
+{const s=Tools.load(LS_GAME,null);
+  if(s&&typeof s==='object'&&LEVELS.includes(s.level)){const g=M.restore(s.game),L=M.LEVELS[s.level];
+    if(g&&g.rows===L.rows&&g.cols===L.cols&&g.mines===L.mines)
+      cur={level:s.level,game:g,elapsed:Number.isFinite(s.elapsed)&&s.elapsed>=0?s.elapsed:0};}}
+if(!cur)cur={level:settings.level,game:newGame(settings.level),elapsed:0};
+
+let since=0,popped=new Set(),lastBest=false;
+const now=()=>performance.now();
+const elapsed=()=>cur.elapsed+(since?now()-since:0);
+const running=()=>cur.game.status==='playing'&&!document.hidden;
+function startClock(){if(!since&&running())since=now();}
+function stopClock(){if(since){cur.elapsed+=now()-since;since=0;}}
+const saveGame=()=>Tools.save(LS_GAME,{level:cur.level,game:cur.game,elapsed:Math.round(elapsed())});
+const fmtTime=ms=>{const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+
+// ---------- Board ----------
+const boardEl=Tools.$('board');
+let cells=[],focusIdx=0,builtFor='';
+function build(){
+  const g=cur.game,key=g.rows+'x'+g.cols;
+  if(builtFor===key)return;
+  builtFor=key;boardEl.textContent='';cells=[];focusIdx=Math.min(focusIdx,g.rows*g.cols-1);
+  boardEl.style.setProperty('--cols',g.cols);boardEl.style.setProperty('--rows',g.rows);
+  for(let r=0;r<g.rows;r++){
+    const row=document.createElement('div');row.setAttribute('role','row');
+    for(let c=0;c<g.cols;c++){
+      const i=r*g.cols+c,b=document.createElement('button');
+      b.type='button';b.className='cell';b.dataset.i=String(i);b.setAttribute('role','gridcell');b.tabIndex=-1;
+      row.appendChild(b);cells.push(b);
+    }
+    boardEl.appendChild(row);
+  }
+}
+const ICON={flag:Tools.icon('flag'),'wrong-flag':Tools.icon('flag-off'),mine:Tools.icon('bomb'),hit:Tools.icon('bomb')};
+
+function cellLabel(v){
+  if(typeof v==='number')return v===0?t('empty'):v===1?t('near1'):t('nearN',{n:v});
+  return {hidden:t('hidden'),flag:t('flag'),mine:t('mine'),hit:t('hit'),'wrong-flag':t('wrongFlag')}[v];
+}
+
+function render(){
+  build();
+  const g=cur.game,over=M.isOver(g);
+  cells.forEach((el,i)=>{
+    const v=M.view(g,i),key=String(v);
+    if(el.dataset.v!==key){
+      el.dataset.v=key;
+      el.innerHTML=typeof v==='number'?(v?String(v):''):(ICON[v]||'');
+    }
+    el.classList.toggle('open',!!g.open[i]);
+    el.classList.toggle('pop',popped.has(i));
+    el.tabIndex=i===focusIdx?0:-1;
+    el.setAttribute('aria-label',t('cell',{r:Math.floor(i/g.cols)+1,c:i%g.cols+1,v:cellLabel(v)}));
+  });
+  boardEl.classList.toggle('won',g.status==='won');
+  boardEl.dataset.status=g.status;
+  Tools.$('minesLeftN').textContent=Tools.fmt(g.mines-M.flags(g),0);
+  Tools.$('lvlName').textContent=t('lvl.'+cur.level);
+  renderTime();
+  const st=Tools.$('status'),left=g.rows*g.cols-g.mines-g.open.reduce((s,x)=>s+x,0);
+  st.dataset.state=g.status;
+  st.textContent=g.status==='ready'?t('ready'):g.status==='playing'?t('playing',{n:Tools.fmt(left,0)})
+    :g.status==='won'?t(lastBest?'wonBest':'won',{t:fmtTime(cur.elapsed)}):t('lost');
+  Tools.$('mode').hidden=over;Tools.$('btnAgain').hidden=!over;
+  document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.m===settings.mode)));
+  // Settings and statistics
+  document.querySelectorAll('#levels button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.l===settings.level)));
+  const L=M.LEVELS[settings.level];
+  Tools.$('levelInfo').textContent=t('levelInfo',{c:L.cols,r:L.rows,m:L.mines});
+  Tools.$('optLong').checked=settings.longPress;Tools.$('optVibrate').checked=settings.vibrate;
+  const s=stats[settings.level];
+  Tools.$('statsLevel').textContent=t('lvl.'+settings.level);
+  Tools.$('stPlayed').textContent=Tools.fmt(s.played,0);Tools.$('stWon').textContent=Tools.fmt(s.won,0);
+  Tools.$('stRate').textContent=s.played?Tools.fmt(Math.round(s.won/s.played*100),0)+' %':'–';
+  Tools.$('stBest').textContent=s.best?fmtTime(s.best):'–';
+}
+function renderTime(){Tools.$('timeN').textContent=fmtTime(cur.game.status==='ready'?0:elapsed());}
+setInterval(()=>{if(since)renderTime();},250);
+
+function buzz(ms){if(settings.vibrate&&'vibrate' in navigator)try{navigator.vibrate(ms);}catch{/* ignore */}}
+
+// After every move: start/stop the clock, count finished games, store
+function afterMove(before,opened){
+  const g=cur.game;
+  popped=new Set(opened.length>1?opened:[]);
+  if(before==='ready'&&g.status!=='ready'){since=0;startClock();Tools.diag.log('first move',{level:cur.level});}
+  if(!M.isOver({status:before})&&M.isOver(g)){
+    stopClock();
+    const s=stats[cur.level];s.played++;lastBest=false;
+    if(g.status==='won'){s.won++;const ms=Math.max(1,Math.round(cur.elapsed));if(!s.best||ms<s.best){lastBest=s.best!==null;s.best=ms;}}
+    else buzz([40,60,120]);
+    saveStats();
+    Tools.diag.log('game over',{result:g.status,level:cur.level,seconds:Math.round(cur.elapsed/1000)});
+  }
+  saveGame();render();
+}
+function openAt(i){
+  const g=cur.game,before=g.status;
+  if(M.isOver(g))return [];
+  if(g.flag[i]){Tools.toast(t('flaggedHint'));return [];}
+  const opened=g.open[i]?M.chord(g,i):M.reveal(g,i);
+  afterMove(before,opened);
+  return opened;
+}
+function flagAt(i){
+  const g=cur.game,before=g.status;
+  if(M.isOver(g))return false;
+  if(g.open[i]){afterMove(before,M.chord(g,i));return false;}
+  if(!M.toggleFlag(g,i))return false;
+  buzz(25);afterMove(before,[]);
+  return true;
+}
+function tap(i){
+  focusIdx=i;
+  if(settings.mode==='flag')flagAt(i);else openAt(i);
+}
+
+// Pointer: tap = chosen mode; long press (touch/pen) or right-click (mouse) = flag
+let lp=null,lastPointer='mouse';
+const cellOf=e=>{const el=e.target.closest('.cell');return el&&boardEl.contains(el)?Number(el.dataset.i):-1;};
+boardEl.addEventListener('pointerdown',e=>{
+  lastPointer=e.pointerType;clearTimeout(lp&&lp.timer);lp=null;
+  const i=cellOf(e);
+  if(i<0||e.pointerType==='mouse'||!settings.longPress||M.isOver(cur.game))return;
+  lp={i,x:e.clientX,y:e.clientY,fired:false,timer:setTimeout(()=>{lp.fired=true;focusIdx=i;if(!cur.game.open[i])flagAt(i);},420)};
+});
+boardEl.addEventListener('pointermove',e=>{if(lp&&!lp.fired&&Math.hypot(e.clientX-lp.x,e.clientY-lp.y)>10){clearTimeout(lp.timer);lp=null;}});
+for(const ev of ['pointerup','pointercancel','pointerleave'])boardEl.addEventListener(ev,()=>{if(lp&&!lp.fired){clearTimeout(lp.timer);lp=null;}});
+boardEl.addEventListener('click',e=>{
+  const i=cellOf(e);if(i<0)return;
+  if(lp&&lp.fired&&lp.i===i){lp=null;return;}
+  tap(i);
+});
+boardEl.addEventListener('contextmenu',e=>{
+  const i=cellOf(e);if(i<0)return;
+  e.preventDefault();
+  if(lastPointer==='mouse'){focusIdx=i;flagAt(i);}
+});
+// Keyboard: one cell in the tab order, arrows move, F flags
+boardEl.addEventListener('keydown',e=>{
+  const i=cellOf(e);if(i<0)return;
+  const g=cur.game,r=Math.floor(i/g.cols),c=i%g.cols;
+  const moves={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};
+  let j=-1;
+  if(moves[e.key]){const [dr,dc]=moves[e.key],rr=r+dr,cc=c+dc;if(rr>=0&&rr<g.rows&&cc>=0&&cc<g.cols)j=rr*g.cols+cc;else j=i;}
+  else if(e.key==='Home')j=r*g.cols;else if(e.key==='End')j=r*g.cols+g.cols-1;
+  else if(e.key==='f'||e.key==='F'){e.preventDefault();focusIdx=i;flagAt(i);return;}
+  if(j<0)return;
+  e.preventDefault();focusIdx=j;cells[i].tabIndex=-1;cells[j].tabIndex=0;cells[j].focus();
+});
+
+// ---------- New game, level, mode, options ----------
+function startNew(level=settings.level,{undo=true}={}){
+  stopClock();
+  const prev=cur,started=prev.game.status==='playing';
+  cur={level,game:newGame(level),elapsed:0};popped=new Set();lastBest=false;
+  saveGame();render();
+  Tools.diag.log('new game',{level});
+  if(undo&&started)Tools.undo(t('newStarted'),()=>{stopClock();cur=prev;saveGame();startClock();render();});
+}
+Tools.$('btnNew').addEventListener('click',()=>startNew());
+Tools.$('btnAgain').addEventListener('click',()=>startNew());
+document.querySelectorAll('#mode button').forEach(b=>b.addEventListener('click',()=>{settings.mode=b.dataset.m;saveSettings();render();}));
+document.querySelectorAll('#levels button').forEach(b=>b.addEventListener('click',()=>{
+  const l=b.dataset.l;
+  settings.level=l;saveSettings();
+  if(cur.level!==l||cur.game.status!=='ready')startNew(l);else render();
+  Tools.menu.close();
+  Tools.diag.log('level',{level:l});
+}));
+Tools.$('optLong').addEventListener('change',e=>{settings.longPress=e.target.checked;saveSettings();});
+Tools.$('optVibrate').addEventListener('change',e=>{settings.vibrate=e.target.checked;saveSettings();});
+Tools.$('btnResetStats').addEventListener('click',async()=>{
+  if(!await Tools.confirm(t('resetStatsQ'),{action:'reset'}))return;
+  Object.assign(stats,freshStats());saveStats();render();Tools.toast(t('statsReset'));
+});
+
+document.addEventListener('visibilitychange',()=>{if(document.hidden){stopClock();saveGame();}else{startClock();renderTime();}});
+window.addEventListener('pagehide',()=>saveGame());
+
+Tools.onLang(render);
+Tools.diag.info(()=>({level:cur.level,status:cur.game.status,flags:M.flags(cur.game),opened:cur.game.open.reduce((s,x)=>s+x,0),
+  seconds:Math.round(elapsed()/1000),mode:settings.mode,longPress:settings.longPress}));
+render();
+startClock();
+
+// ---------- WebMCP ----------
+const SYM=v=>typeof v==='number'?(v?String(v):'.'):{hidden:'#',flag:'F',mine:'*',hit:'X','wrong-flag':'!'}[v];
+const view=()=>{
+  const g=cur.game,rows=[];
+  for(let r=0;r<g.rows;r++){let s='';for(let c=0;c<g.cols;c++)s+=SYM(M.view(g,r*g.cols+c));rows.push(s);}
+  return {level:cur.level,rows:g.rows,cols:g.cols,mines:g.mines,flags:M.flags(g),mines_left:g.mines-M.flags(g),
+    status:g.status,seconds:Math.floor((g.status==='ready'?0:elapsed())/1000),board:rows,
+    legend:'One string per row from the top, one character per column from the left: # hidden, F flag, . open without mines nearby, 1-8 mines among the 8 neighbours; once lost: * mine, X the mine that was hit, ! wrong flag. Rows and columns are numbered from 1.'};
+};
+const at=(row,col)=>{
+  const g=cur.game;
+  if(row>g.rows||col>g.cols)throw new Error(`The board has ${g.rows} rows and ${g.cols} columns.`);
+  if(M.isOver(g))throw new Error('The game is over – start a new one with new_game.');
+  return (row-1)*g.cols+col-1;
+};
+const cellSchema={type:'object',properties:{
+  row:{type:'integer',minimum:1,maximum:16,description:'Row from the top, starting at 1.'},
+  col:{type:'integer',minimum:1,maximum:12,description:'Column from the left, starting at 1.'}
+},required:['row','col'],additionalProperties:false};
+Tools.mcp.register({
+  name:'get_game',title:'Read the board',readOnly:true,
+  description:'Reads the current minesweeper game: size (rows, cols), number of mines and flags, status (ready = nothing opened yet, playing, won, lost), seconds played and the board as text. Hidden mines are only shown once the game is lost.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>view()
+});
+Tools.mcp.register({
+  name:'open_cell',title:'Open a square',label:'mcp.open',
+  description:'Opens a hidden square, as if the user tapped it in "Open" mode. The first square of a game is always safe. A square without mines nearby opens its surroundings. On an open number whose flags around it are complete, opens all other neighbours. Opening a mine loses the game. Flagged squares are refused. Returns the game afterwards (same as get_game).',
+  inputSchema:cellSchema,
+  execute:({row,col})=>{
+    const i=at(row,col);
+    if(cur.game.flag[i])throw new Error(`Row ${row}, column ${col} has a flag – remove it with flag_cell first.`);
+    focusIdx=i;openAt(i);return view();
+  }
+});
+Tools.mcp.register({
+  name:'flag_cell',title:'Toggle a flag',label:'mcp.flag',
+  description:'Places a flag on a hidden square, or removes the flag that is there. Open squares can’t be flagged. Returns the game afterwards (same as get_game).',
+  inputSchema:cellSchema,
+  execute:({row,col})=>{
+    const i=at(row,col);
+    if(cur.game.open[i])throw new Error(`Row ${row}, column ${col} is already open.`);
+    focusIdx=i;flagAt(i);return view();
+  }
+});
+Tools.mcp.register({
+  name:'new_game',title:'Start a new game',label:'mcp.new',
+  description:'Starts a new game with fresh mines. Optional size: easy (8 columns × 9 rows, 10 mines), medium (10 × 13, 22 mines) or hard (12 × 16, 38 mines); without it the current size stays. A game in progress is abandoned (it does not count in the statistics). Returns the new game (same as get_game).',
+  inputSchema:{type:'object',properties:{level:{type:'string',enum:LEVELS,description:'Size of the board.'}},additionalProperties:false},
+  execute:({level})=>{
+    if(level&&level!==settings.level){settings.level=level;saveSettings();}
+    startNew(settings.level);return view();
+  }
+});
+})();
+</script>
+</body>
+</html>

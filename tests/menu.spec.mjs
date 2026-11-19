@@ -115,6 +115,12 @@ for (const app of apps()) {
       await expect(page.locator('footer [data-set-lang], footer [data-set-theme]')).toHaveCount(0);
       await openSettings(page);
       for (const v of ['light', 'dark', 'system']) await expect(page.locator(`#menuTheme [data-set-theme="${v}"]`)).toBeVisible();
+      // The menu takes at least 3/4 of the screen (base.css), so sub pages stay readable when the list is short
+      await animationsDone(page.locator('#appMenu'));
+      const sheet = await page.locator('#appMenu').boundingBox();
+      expect(sheet.height, 'menu height').toBeGreaterThanOrEqual(PHONES.portrait.height * 0.75 - 1);
+      const theme = await page.locator('#menuTheme').boundingBox();
+      expect(theme.y + theme.height, 'appearance switch fully visible').toBeLessThanOrEqual(sheet.y + sheet.height);
       await expect(page.locator('#menuTheme [data-set-theme="system"]')).toHaveAttribute('aria-pressed', 'true');
       await expect(page.locator('#menuLang [data-set-lang="de"]')).toBeVisible();
       await expectNoHorizontalScroll(page);
@@ -335,6 +341,12 @@ test.describe('appearance: light, dark, system', () => {
     expect(b.x + b.width).toBeLessThanOrEqual(375);
     expect(Math.abs((b.y + b.height / 2) - (h.y + h.height / 2))).toBeLessThanOrEqual(8);
     await openSettings(page);
+    // The sheet takes at least 3/4 of the screen, so a sub page is readable even when the list is short
+    await animationsDone(page.locator('#appMenu'));
+    const sheet = await page.locator('#appMenu').boundingBox();
+    expect(sheet.height).toBeGreaterThanOrEqual(PHONES.portrait.height * 0.75 - 1);
+    const theme = await page.locator('#menuTheme').boundingBox();
+    expect(theme.y + theme.height, 'appearance switch fully visible').toBeLessThanOrEqual(sheet.y + sheet.height);
     await expect(page.locator('#appMenu > .menu-body > footer')).toBeAttached();
     await expect(page.locator('#menuInstall')).toBeAttached();
     await page.getByRole('button', { name: 'Dunkel' }).click();
