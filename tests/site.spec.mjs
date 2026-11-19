@@ -1,5 +1,5 @@
 // Generic checks that run automatically for every page – a new tool is covered without extra work.
-import { test, expect, tools, apps, VIEWPORTS, expectNoHorizontalScroll, openMenu, onDialog, switchLang } from './helpers.mjs';
+import { test, expect, axe, tools, apps, VIEWPORTS, expectNoHorizontalScroll, openMenu, onDialog, switchLang } from './helpers.mjs';
 import { allPages } from '../scripts/lib.mjs';
 
 test('robots.txt allows crawling so search engines can see the noindex tag', async ({ request }) => {
@@ -62,99 +62,147 @@ test.describe('start page', () => {
     await expect(page.locator('footer .footer-home')).toHaveCount(0);
   });
 
-  test('lists every tool with a working link', async ({ page }) => {
+  // Expected groups, worked out here independently of build.mjs: the area (first tag), games of the area
+  // Freizeit in their own group "Spiele" right after it
+  const groupOf = t => t.tags[0] === 'Freizeit' && t.tags.includes('Spiele') ? 'Spiele' : t.tags[0];
+  const row = (page, title) => page.locator('.app', { has: page.locator('.open', { hasText: title }) });
+  const visibleTitles = page => page.locator('.app:visible .open').allTextContents().then(a => a.map(x => x.trim()).sort());
+
+  test('lists every tool in one compact row with a working link', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.mobile);
     await page.goto('/');
     const list = tools();
-    await expect(page.locator('.tool')).toHaveCount(list.length);
+    await expect(page.locator('.app')).toHaveCount(list.length);
     for (const t of list) {
-      const card = page.locator('.tool', { has: page.locator('h2', { hasText: t.title }) });
-      await expect(card.getByRole('link', { name: t.title, exact: true })).toHaveAttribute('href', `${t.folder}/`);
-      // The link covers the whole card: a tap on the description opens the tool too
-      expect(await card.locator('p').evaluate(p => {
+      const item = page.locator(`.app[data-folder="${t.folder}"]`);
+      await expect(item.getByRole('link', { name: t.title, exact: true })).toHaveAttribute('href', `${t.folder}/`);
+      // The link covers the whole row: a tap on the description opens the tool too
+      expect(await item.locator('p').evaluate(p => {
         p.scrollIntoView({ block: 'center' });
         const r = p.getBoundingClientRect();
-        return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('a')?.getAttribute('href');
+        return document.elementFromPoint(r.left + 20, r.top + r.height / 2)?.closest('a')?.getAttribute('href');
       })).toBe(`${t.folder}/`);
-      await expect(card.locator('img')).toHaveAttribute('src', `${t.folder}/icon.svg`);
+      await expect(item.locator('img')).toHaveAttribute('src', `${t.folder}/icon.svg`);
+      // Compact: one row of at most 72 px, the description cut to one line
+      expect(await item.evaluate(el => el.getBoundingClientRect().height), t.folder).toBeLessThanOrEqual(72);
     }
+    // No tags on the rows; "KI-Agent" (every app has it) offers no filter
+    await expect(page.locator('.app .tag')).toHaveCount(0);
+    await expect(page.locator('.chip[data-tag="KI-Agent"]')).toHaveCount(0);
   });
 
-  test('lists the tools alphabetically – in English by their English titles', async ({ page }) => {
-    const titles = () => page.locator('.tool .open').allTextContents().then(a => a.map(x => x.trim()));
-    await page.goto('/');
-    const de = tools().map(t => t.title).sort((a, b) => a.localeCompare(b, 'de'));
-    expect(await titles()).toEqual(de);
-    await switchLang(page, 'en');
-    const en = tools().map(t => t.titleEn).sort((a, b) => a.localeCompare(b, 'en'));
-    expect(await titles()).toEqual(en);
-    await switchLang(page, 'de');
-    expect(await titles()).toEqual(de);
-  });
-
-  test('filters the list by category', async ({ page }) => {
+  test('groups the tools by area, games in their own group, alphabetical inside – in English by English titles', async ({ page }) => {
     await page.goto('/');
     const list = tools();
-    const all = page.getByRole('button', { name: 'Alle', exact: true });
-    await expect(all).toHaveAttribute('aria-pressed', 'true');
-    // Every category and feature of every tool has exactly one filter button
-    const tags = [...new Set(list.flatMap(t => [...t.tags, ...t.features]))];
-    await expect(page.locator('.filter .chip')).toHaveCount(tags.length + 1);
-    for (const tag of tags) {
-      const chip = page.getByRole('button', { name: tag, exact: true });
-      await chip.click();
-      await expect(chip).toHaveAttribute('aria-pressed', 'true');
-      await expect(all).toHaveAttribute('aria-pressed', 'false');
-      // One round trip per category instead of one per tool and category (that grew past the test timeout in CI)
-      const expected = Object.fromEntries(list.map(t => [t.title, t.tags.includes(tag) || t.features.includes(tag)]));
-      await expect.poll(() => page.evaluate(titles => Object.fromEntries(titles.map(title => {
-        const cards = [...document.querySelectorAll('.tool')].filter(c => [...c.querySelectorAll('h2')].some(h => h.textContent.includes(title)));
-        return [title, cards.length === 1 ? cards[0].checkVisibility() : `${cards.length} cards`];
-      })), Object.keys(expected)), { message: `filter ${tag}` }).toEqual(expected);
-      await expectNoHorizontalScroll(page);
-    }
-    // Tapping the active category again shows everything
-    const last = page.locator(`.filter .chip[data-tag="${tags.at(-1)}"]`);
-    await last.click();
-    await expect(page.locator('.tool:visible')).toHaveCount(list.length);
-    await expect(all).toHaveAttribute('aria-pressed', 'true');
+    const shown = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.group')].map(g =>
+      [g.dataset.group, [...g.querySelectorAll('.open')].map(a => a.textContent.trim())])));
+    const expected = (key, lang) => {
+      const out = {};
+      for (const g of ['Alltag', 'Arbeit', 'Freizeit', 'Spiele']) {
+        const titles = list.filter(t => groupOf(t) === g).map(t => t[key]).sort((a, b) => a.localeCompare(b, lang));
+        if (titles.length) out[g] = titles;
+      }
+      return out;
+    };
+    expect(Object.keys(await shown())).toEqual(Object.keys(expected('title', 'de')));
+    expect(await shown()).toEqual(expected('title', 'de'));
+    for (const [g, titles] of Object.entries(expected('title', 'de')))
+      await expect(page.locator(`.group[data-group="${g}"] h2 .count`)).toHaveText(String(titles.length));
+    await expect(page.locator('.group[data-group="Spiele"] h2')).toContainText('Spiele');
+    await switchLang(page, 'en');
+    expect(await shown()).toEqual(expected('titleEn', 'en'));
+    await expect(page.locator('.group[data-group="Spiele"] h2')).toContainText('Games');
+    await switchLang(page, 'de');
+    expect(await shown()).toEqual(expected('title', 'de'));
   });
 
-  test('search finds apps by title, description and tag – in German and English, combined with the category', async ({ page }) => {
+  test('area switch and filter: areas, topics with at least two apps, features that set apps apart', async ({ page }) => {
+    await page.goto('/');
+    const list = tools();
+    const all = page.locator('.seg.area').getByRole('button', { name: 'Alle', exact: true });
+    await expect(all).toHaveAttribute('aria-pressed', 'true');
+    // Areas: one button each, an area shows its apps (games included in Freizeit)
+    const areas = [...new Set(list.map(t => t.tags[0]))].sort((a, b) => a.localeCompare(b, 'de'));
+    await expect(page.locator('.seg.area button')).toHaveText(['Alle', ...areas]);
+    for (const area of areas) {
+      await page.locator('.seg.area').getByRole('button', { name: area, exact: true }).click();
+      expect(await visibleTitles(page), area).toEqual(list.filter(t => t.tags[0] === area).map(t => t.title).sort());
+      await expect(page.locator('.group:visible')).toHaveCount(new Set(list.filter(t => t.tags[0] === area).map(groupOf)).size);
+    }
+    await all.click();
+    await expect(page.locator('.app:visible')).toHaveCount(list.length);
+    // The filter panel opens with its button
+    const btn = page.getByRole('button', { name: 'Filter' });
+    await expect(page.locator('#filter-panel')).toBeHidden();
+    await btn.click();
+    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#filter-panel')).toBeVisible();
+    const count = x => list.filter(t => t.tags.includes(x) || t.features.includes(x)).length;
+    const topics = [...new Set(list.flatMap(t => t.tags.slice(1)))].filter(x => !areas.includes(x) && count(x) >= 2);
+    const features = [...new Set(list.flatMap(t => t.features))].filter(x => count(x) < list.length);
+    const values = [...topics, ...features];
+    await expect(page.locator('.filter-panel .chip')).toHaveCount(values.length);
+    for (const tag of values) {
+      const chip = page.locator(`.chip[data-tag="${tag}"]`);
+      await chip.click();
+      await expect(chip).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('.filter-count')).toHaveText('1');
+      expect(await visibleTitles(page), tag).toEqual(list.filter(t => t.tags.includes(tag) || t.features.includes(tag)).map(t => t.title).sort());
+      await expectNoHorizontalScroll(page);
+    }
+    // Tapping the active chip again shows everything
+    await page.locator(`.chip[data-tag="${values.at(-1)}"]`).click();
+    await expect(page.locator('.app:visible')).toHaveCount(list.length);
+    await expect(page.locator('.filter-count')).toBeHidden();
+    // Area and topic together; in an area only chips with apps there are offered
+    await page.locator('.seg.area').getByRole('button', { name: 'Freizeit', exact: true }).click();
+    await page.locator('.chip[data-tag="Kinder"]').click();
+    expect(await visibleTitles(page)).toEqual(list.filter(t => t.tags[0] === 'Freizeit' && t.tags.includes('Kinder')).map(t => t.title).sort());
+    const offered = await page.locator('.filter-panel .chip:visible').evaluateAll(cs => cs.map(c => c.dataset.tag));
+    expect(offered.sort()).toEqual(values.filter(x => list.some(t => t.tags[0] === 'Freizeit' && (t.tags.includes(x) || t.features.includes(x)))).sort());
+  });
+
+  test('search finds apps by title, description and tag – in German and English, combined with area and filter', async ({ page }) => {
     await page.goto('/');
     const list = tools();
     const search = page.getByRole('searchbox', { name: 'Apps durchsuchen' });
-    const visible = () => page.locator('.tool:visible .open').allTextContents().then(a => a.map(x => x.trim()).sort());
     const titles = pred => list.filter(pred).map(t => t.title).sort();
     const norm = s => s.toLowerCase().replace(/ß/g, 'ss').normalize('NFD').replace(/\p{M}/gu, '');
     // Every app is found by its own title
     for (const t of list) {
       await search.fill(t.title);
-      expect(await visible()).toContain(t.title);
+      expect(await visibleTitles(page)).toContain(t.title);
     }
     // Case and umlauts don't matter; several words must all appear
     const dice = list.find(t => t.folder === 'dice-coin');
     await search.fill('WURFEL munze');
-    expect(await visible()).toContain(dice.title);
+    expect(await visibleTitles(page)).toContain(dice.title);
     // English words find the app too, independently of the language shown
     await search.fill(dice.titleEn.split(' ')[0]);
-    expect(await visible()).toContain(dice.title);
+    expect(await visibleTitles(page)).toContain(dice.title);
+    // A tag without its own filter chip (a topic of one app) still finds the app
+    const single = list.find(t => t.tags.slice(1).some(x => list.filter(u => u.tags.includes(x)).length === 1));
+    const lone = single.tags.slice(1).find(x => list.filter(u => u.tags.includes(x)).length === 1);
+    await search.fill(lone);
+    expect(await visibleTitles(page)).toContain(single.title);
     // A word from a description
     await search.fill('pdf');
     const hay = t => norm([t.title, t.description, t.titleEn, t.descriptionEn, t.folder, ...t.tags, ...t.features].join(' '));
-    expect(await visible()).toEqual(titles(t => hay(t).includes('pdf')));
-    // Combined with a category
-    await page.getByRole('button', { name: 'Arbeit', exact: true }).click();
-    expect(await visible()).toEqual(titles(t => hay(t).includes('pdf') && t.tags.includes('Arbeit')));
-    await page.getByRole('button', { name: 'Alle', exact: true }).click();
-    // No match: a visible message
+    expect(await visibleTitles(page)).toEqual(titles(t => hay(t).includes('pdf')));
+    // Combined with an area
+    await page.locator('.seg.area').getByRole('button', { name: 'Arbeit', exact: true }).click();
+    expect(await visibleTitles(page)).toEqual(titles(t => hay(t).includes('pdf') && t.tags[0] === 'Arbeit'));
+    await page.locator('.seg.area').getByRole('button', { name: 'Alle', exact: true }).click();
+    // No match: a visible message, no empty groups
     await search.fill('xyzqwv');
-    await expect(page.locator('.tool:visible')).toHaveCount(0);
+    await expect(page.locator('.app:visible')).toHaveCount(0);
+    await expect(page.locator('.group:visible')).toHaveCount(0);
     await expect(page.locator('.filter-empty')).toBeVisible();
     await expectNoHorizontalScroll(page);
     // Escape clears the search
     await search.press('Escape');
     await expect(search).toHaveValue('');
-    await expect(page.locator('.tool:visible')).toHaveCount(list.length);
+    await expect(page.locator('.app:visible')).toHaveCount(list.length);
     await expect(page.locator('.filter-empty')).toBeHidden();
     // "/" jumps to the search field; English labels
     await page.locator('body').click({ position: { x: 5, y: 5 } });
@@ -164,7 +212,7 @@ test.describe('start page', () => {
     await expect(page.getByRole('searchbox', { name: 'Search apps' })).toHaveAttribute('placeholder', 'Search apps');
   });
 
-  test('phone: tapping the search field moves it to the top, also when nothing matches', async ({ page }) => {
+  test('phone: tapping the search field moves the bar to the top, also when nothing matches', async ({ page }) => {
     await page.setViewportSize(VIEWPORTS.mobile);
     await page.goto('/');
     const search = page.getByRole('searchbox', { name: 'Apps durchsuchen' });
@@ -173,31 +221,79 @@ test.describe('start page', () => {
     await search.click();
     await expect.poll(top).toBeLessThan(30);
     await search.fill('xyzqwv');
-    await expect(page.locator('.tool:visible')).toHaveCount(0);
+    await expect(page.locator('.app:visible')).toHaveCount(0);
     expect(await top()).toBeLessThan(30);
     await search.press('Enter'); // keyboard closes, results and field stay
     expect(await top()).toBeLessThan(30);
   });
 
-  test('phone: filter rows scroll sideways without a scroll bar, a faded edge shows there is more', async ({ page }) => {
+  test('phone: search, area switch and filter stay at the top while the list scrolls', async ({ page }) => {
     await page.setViewportSize(VIEWPORTS.mobile);
     await page.goto('/');
-    const row = page.locator('.filter .chips').first();
-    // Overlay or classic: no scroll bar is drawn (same height with and without scrollable content)
-    expect(await row.evaluate(r => [r.scrollWidth > r.clientWidth, getComputedStyle(r).scrollbarWidth, r.offsetHeight - r.clientHeight]))
-      .toEqual([true, 'none', 0]);
-    await expect(row).toHaveClass(/more-end/);
-    await expect(row).not.toHaveClass(/more-start/);
-    expect(await row.evaluate(r => getComputedStyle(r).maskImage)).toMatch(/linear-gradient/);
-    await row.evaluate(r => { r.scrollLeft = 60; });
-    await expect(row).toHaveClass(/more-start more-end|more-end more-start/);
-    await row.evaluate(r => { r.scrollLeft = r.scrollWidth; });
-    await expect(row).toHaveClass(/more-start/);
-    await expect(row).not.toHaveClass(/more-end/);
-    // Wide screens: rows wrap, nothing faded
-    await page.setViewportSize(VIEWPORTS.desktop);
-    await expect(row).not.toHaveClass(/more-end|more-start/);
-    expect(await row.evaluate(r => getComputedStyle(r).maskImage)).toBe('none');
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect.poll(() => page.locator('.filter').evaluate(el => Math.round(el.getBoundingClientRect().top))).toBe(0);
+    await expect(page.getByRole('searchbox', { name: 'Apps durchsuchen' })).toBeInViewport();
+    await expect(page.locator('.seg.area')).toBeInViewport();
+  });
+
+  test('favourites and recently used: stars on the rows, the apps note themselves', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.mobile);
+    const list = tools();
+    const [a, b, c] = ['dice-coin', 'qr-code', 'calc-pad'].map(f => list.find(t => t.folder === f));
+    await page.goto('/');
+    await expect(page.locator('#shelf-fav')).toBeHidden();
+    await expect(page.locator('#shelf-recent')).toBeHidden();
+    // Opening apps notes them (newest first); the template and hidden pages don't count
+    for (const t of [a, b]) await page.goto(`/${t.folder}/`);
+    await page.goto('/template/');
+    await page.goto('/');
+    const recent = page.locator('#shelf-recent .shelf-row a');
+    await expect(recent).toHaveCount(2);
+    expect(await recent.evaluateAll(as => as.map(x => x.getAttribute('href')))).toEqual([`${b.folder}/`, `${a.folder}/`]);
+    await expect(recent.first()).toHaveAccessibleName(b.title);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('tools.recent.v1')))).toEqual([b.folder, a.folder]);
+    // A star makes a favourite: on top, pressed, kept after reload, no longer under "recently used"
+    const star = row(page, c.title).getByRole('button', { name: `Favorit: ${c.title}` });
+    await expect(star).toHaveAttribute('aria-pressed', 'false');
+    await star.click();
+    await row(page, a.title).getByRole('button', { name: `Favorit: ${a.title}` }).click();
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    const favs = page.locator('#shelf-fav .shelf-row a');
+    await expect(favs).toHaveCount(2);
+    expect(await favs.evaluateAll(as => as.map(x => x.getAttribute('href')))).toEqual([`${c.folder}/`, `${a.folder}/`]);
+    await page.reload();
+    await expect(favs).toHaveCount(2);
+    expect(await recent.evaluateAll(as => as.map(x => x.getAttribute('href')))).toEqual([`${b.folder}/`]);
+    await expect(row(page, c.title).getByRole('button', { name: `Favorit: ${c.title}` })).toHaveAttribute('aria-pressed', 'true');
+    await expectNoHorizontalScroll(page);
+    // Accessible with filled shelves and the filter panel open
+    await page.getByRole('button', { name: 'Filter' }).click();
+    expect((await axe(page).analyze()).violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).slice(0, 3).join(' | ')}`)).toEqual([]);
+    await page.getByRole('button', { name: 'Filter' }).click();
+    // A tile opens its app
+    await favs.first().click();
+    await expect(page).toHaveURL(new RegExp(`/${c.folder}/$`));
+    await page.goBack();
+    // While searching or filtering, only the results show
+    await page.getByRole('searchbox', { name: 'Apps durchsuchen' }).fill('pdf');
+    await expect(page.locator('#shelf-fav')).toBeHidden();
+    await expect(page.locator('#shelf-recent')).toBeHidden();
+    await page.getByRole('searchbox', { name: 'Apps durchsuchen' }).fill('');
+    await expect(page.locator('#shelf-fav')).toBeVisible();
+    // Star again removes the favourite
+    await row(page, a.title).getByRole('button', { name: `Favorit: ${a.title}` }).click();
+    await expect(favs).toHaveCount(1);
+    // "Zuletzt benutzt" can be cleared from the menu (after a question); favourites stay
+    await openMenu(page);
+    await onDialog(page, d => d.accept(), { once: true });
+    await page.getByRole('button', { name: '„Zuletzt benutzt“ leeren' }).click();
+    await expect(page.locator('#shelf-recent')).toBeHidden();
+    await expect(favs).toHaveCount(1);
+    expect(await page.evaluate(() => localStorage.getItem('tools.recent.v1'))).toBe('[]');
+    // English
+    await switchLang(page, 'en');
+    await expect(page.locator('#shelf-fav h2')).toHaveText('Favourites');
+    await expect(row(page, c.titleEn).getByRole('button', { name: `Favourite: ${c.titleEn}` })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('home screen shortcut (Android): manifest with full-bleed icon, opens as a normal tab', async ({ page, request }) => {

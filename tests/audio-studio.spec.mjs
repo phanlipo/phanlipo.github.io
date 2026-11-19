@@ -413,7 +413,7 @@ test('format and bitrate are remembered, never the audio', async ({ page }) => {
   await page.check('input[value="wav"]');
   await expect(page.locator('#bitrateBox')).toBeHidden();
   await page.reload();
-  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['audio-studio.settings.v1']);
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(k => !k.startsWith('tools.')))).toEqual(['audio-studio.settings.v1']);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('audio-studio.settings.v1')))).toEqual({ format: 'wav', kbps: 96 });
   await expect(page.locator('#bitrate')).toHaveValue('96');
 });

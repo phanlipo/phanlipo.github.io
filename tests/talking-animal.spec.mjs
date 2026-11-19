@@ -147,7 +147,7 @@ test('pet, voice and automatic mode persist; the recording is not stored', async
   await done(page);
   await openMenu(page);
   await page.check('#optAuto');
-  const stored = await page.evaluate(() => Object.keys(localStorage));
+  const stored = await page.evaluate(() => Object.keys(localStorage).filter(k => !k.startsWith('tools.')));
   expect(stored).toEqual(['talking-animal.settings.v1']);
   await page.reload();
   await expect(page.locator('#animals [data-a="panda"]')).toHaveAttribute('aria-pressed', 'true');

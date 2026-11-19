@@ -102,6 +102,7 @@ Verbindliche Zuordnung von Bedeutung zu Tabler-Name. Alle Namen sind gegen `@tab
 | Alles zeigen, Einpassen | `focus-centered` | `mind-map` |
 | Vergrößern / Verkleinern | `zoom-in` / `zoom-out` | – („+“/„−“ als Text in `function-plotter`) |
 | Neu laden (Update) | `refresh` | `common.js` |
+| Favorit / Favourite (gefüllt = gesetzt) | `star` | Startseite |
 
 ### Spiel & Mitspieler
 

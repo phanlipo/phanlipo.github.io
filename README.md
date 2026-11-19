@@ -95,7 +95,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 ## Struktur
 
 ```
-index.html            Startseite (Kartenliste wird automatisch erzeugt)
+index.html            Startseite (App-Liste, Gruppen und Filter werden automatisch erzeugt)
 assets/base.css       gemeinsame Farben, Dark Mode, Karten, Buttons, Hilfe-Bereich
 assets/common.js      gemeinsame Helfer (window.Tools) + Registrierung des Service Workers
 assets/vendor/        Fremdbibliotheken mit Lizenz (Übersicht in NOTICE.md, Herkunft und Prüfsummen im SBOM sbom.cdx.json)

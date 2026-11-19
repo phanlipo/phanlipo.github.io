@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "treasure-hunt";
-const VERSION = '10ed027db7cb';
+const VERSION = 'e3f428cf5926';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

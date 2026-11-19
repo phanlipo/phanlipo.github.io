@@ -26,19 +26,18 @@ test.describe('browser language English', () => {
 
     const list = tools();
     for (const t of list) {
-      const card = page.locator('.tool', { has: page.locator('h2', { hasText: t.titleEn }) });
-      await expect(card.locator('p')).toHaveText(t.descriptionEn);
-      await expect(card.getByRole('link', { name: t.titleEn, exact: true })).toHaveAttribute('href', `${t.folder}/`);
+      const item = page.locator(`.app[data-folder="${t.folder}"]`);
+      await expect(item.locator('p')).toHaveText(t.descriptionEn);
+      await expect(item.getByRole('link', { name: t.titleEn, exact: true })).toHaveAttribute('href', `${t.folder}/`);
     }
-    // Filter by an English category; the German tag value behind it stays the same
-    await expect(page.getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    // Area switch and filter in English; the German values behind them stay the same
+    await expect(page.locator('.seg.area').getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.group[data-group="Alltag"] h2')).toContainText('Everyday');
+    await page.getByRole('button', { name: 'Filter' }).click();
     await page.getByRole('button', { name: 'Games', exact: true }).click();
-    for (const t of list) {
-      const card = page.locator('.tool', { has: page.locator('h2', { hasText: t.titleEn }) });
-      await expect(card).toBeVisible({ visible: t.tags.includes('Spiele') });
-    }
-    await expect(page.locator('.tool:visible .tag.match').first()).toHaveText('Games');
-    await expect(page.locator('.filter-status')).toHaveText(`${list.filter(t => t.tags.includes('Spiele')).length} of ${list.length} pages: Games`);
+    for (const t of list)
+      await expect(page.locator(`.app[data-folder="${t.folder}"]`)).toBeVisible({ visible: t.tags.includes('Spiele') });
+    await expect(page.locator('.filter-status')).toHaveText(`${list.filter(t => t.tags.includes('Spiele')).length} of ${list.length} apps`);
     await expectNoHorizontalScroll(page);
   });
 

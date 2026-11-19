@@ -163,52 +163,92 @@ function setBlock(file, name, content, required) {
   put(file, next);
 }
 
+// Start page groups: the area (first tag) of an app, with big areas split by one topic
+// (Freizeit → Spiele and the rest). The area switch (.seg) shows an area with its sub-groups.
+const SUBGROUPS = { Freizeit: 'Spiele' };
+// Topics with fewer apps get no filter chip (the search still finds them by the tag)
+const MIN_TOPIC = 2;
+const groupOf = t => SUBGROUPS[t.tags[0]] && t.tags.includes(SUBGROUPS[t.tags[0]]) ? SUBGROUPS[t.tags[0]] : t.tags[0];
+
 function renderCards() {
   if (!tools.length) return '\n  <p class="muted">Noch keine Seiten.</p>\n  ';
   for (const t of tools) for (const f of t.features)
     if (!FEATURES.includes(f)) throw new Error(`${t.file}: unknown tool:features value "${f}" – allowed: ${FEATURES.join(', ')}`);
   for (const t of tools) for (const x of [...t.tags, ...t.features])
     if (!TAGS_EN[x]) throw new Error(`${t.file}: no English name for tag "${x}" – add it to TAGS_EN in scripts/build.mjs`);
-  // Filter rows: every value once. Categories: the first tag of a tool is its area (Alltag, Arbeit, Freizeit …);
-  // areas come first, then the other tags, each alphabetically. Features in FEATURES order.
-  // Hidden until the page script runs (no JS = no filter).
-  const areas = new Set(tools.map(t => t.tags[0]).filter(Boolean));
   const byName = (a, b) => a.localeCompare(b, 'de');
-  const tags = [...areas].sort(byName)
-    .concat([...new Set(tools.flatMap(t => t.tags))].filter(x => !areas.has(x)).sort(byName));
-  const features = FEATURES.filter(f => tools.some(t => t.features.includes(f)));
-  const chip = (label, value, pressed) =>
-    `<button type="button" class="chip" data-tag="${escHtml(value)}" data-i18n="${value ? 'tag.' + escHtml(value) : 'filter.all'}" aria-pressed="${pressed}">${escHtml(label)}</button>`;
-  const row = (id, label, chips) => `    <div class="filter-row" role="group" aria-labelledby="${id}">
-      <span class="filter-label" id="${id}" data-i18n="${id}">${label}</span>
-      <div class="chips">
-        ${chips.join('\n        ')}
+  const count = x => tools.filter(t => t.tags.includes(x) || t.features.includes(x)).length;
+  // Areas: the first tag of every app (Alltag, Arbeit, Freizeit) – the .seg switch
+  const areas = [...new Set(tools.map(t => t.tags[0]).filter(Boolean))].sort(byName);
+  // Filter panel: topics (other tags) and features. Values every app has (e.g. KI-Agent) set nothing apart.
+  const topics = [...new Set(tools.flatMap(t => t.tags.slice(1)))].filter(x => !areas.includes(x) && count(x) >= MIN_TOPIC).sort(byName);
+  const features = FEATURES.filter(f => count(f) && count(f) < tools.length);
+  const chip = x => `<button type="button" class="chip" data-tag="${escHtml(x)}" data-i18n="tag.${escHtml(x)}" aria-pressed="false">${escHtml(x)}</button>`;
+  const row = (id, label, values) => values.length ? `      <div class="filter-row" role="group" aria-labelledby="${id}">
+        <span class="filter-label" id="${id}" data-i18n="${id}">${label}</span>
+        <div class="chips wrap">
+          ${values.map(chip).join('\n          ')}
+        </div>
       </div>
+` : '';
+  const icon = name => `<svg class="ic" aria-hidden="true"><use href="assets/icons.svg#${name}"/></svg>`;
+  // Search, area switch and filter: hidden until the page script runs (no JS = the plain grouped list).
+  // The bar sticks to the top while scrolling.
+  const filter = `  <div class="filter-anchor"></div>
+  <div class="filter" hidden>
+    <div class="search-row">
+      <div class="search">
+        ${icon('search')}
+        <input type="search" id="q" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Apps durchsuchen" aria-label="Apps durchsuchen" data-i18n-attr="placeholder:search; aria-label:search">
+      </div>
+      <button type="button" class="btn filter-btn" aria-expanded="false" aria-controls="filter-panel">${icon('filter')}<span data-i18n="filter">Filter</span><span class="filter-count" hidden></span></button>
     </div>
-`;
-  // Search field: matches titles, descriptions and tags in German and English (page script)
-  const search = `    <div class="search">
-      <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="m21 21-6-6"/></svg>
-      <input type="search" id="q" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Apps durchsuchen" aria-label="Apps durchsuchen" data-i18n-attr="placeholder:search; aria-label:search">
+    <div class="seg area" role="group" aria-label="Bereich" data-i18n-attr="aria-label:f-area">
+      <button type="button" data-area="" data-i18n="filter.all" aria-pressed="true">Alle</button>
+      ${areas.map(x => `<button type="button" data-area="${escHtml(x)}" data-i18n="tag.${escHtml(x)}" aria-pressed="false">${escHtml(x)}</button>`).join('\n      ')}
     </div>
-`;
-  const filter = tags.length || features.length ? `  <div class="filter" hidden>
-${search}${row('f-cat', 'Kategorie', [chip('Alle', '', true), ...tags.map(x => chip(x, x, false))])}${features.length ? row('f-feat', 'Funktion', features.map(x => chip(x, x, false))) : ''}  </div>
+    <div class="filter-panel" id="filter-panel" hidden>
+${row('f-topic', 'Thema', topics)}${row('f-feat', 'Funktion', features)}    </div>
+  </div>
   <p class="filter-status sr-only" aria-live="polite"></p>
   <p class="filter-empty muted" data-i18n="search.none" hidden>Keine passende App gefunden.</p>
-` : '';
-  const tag = (x, cls) => `<span class="${cls}" data-tag="${escHtml(x)}" data-i18n="tag.${escHtml(x)}">${escHtml(x)}</span>`;
-  const cards = tools.map(t => `    <article class="card tool" data-tags="${escHtml(JSON.stringify([...t.tags, ...t.features]))}">
-      <h2>${t.icon ? `<img src="${t.folder}/icon.svg" alt="" width="32" height="32">` : ''}<a class="open" href="${t.folder}/"><span data-i18n="card.${t.folder}.title">${escHtml(t.title)}</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.${t.folder}.desc">${escHtml(t.description)}</p>
-      <div class="tags">${t.tags.map(x => tag(x, 'tag')).join('')}${t.features.map(x => tag(x, 'tag feat')).join('')}</div>
-    </article>`).join('\n');
-  // English texts of the cards and filters for the start page script (Tools.i18n)
-  const en = { 'filter.all': 'All', 'f-cat': 'Category', 'f-feat': 'Feature', search: 'Search apps', 'search.none': 'No matching app found.' };
-  for (const x of [...tags, ...features]) en['tag.' + x] = TAGS_EN[x];
-  for (const t of tools) { en[`card.${t.folder}.title`] = t.titleEn; en[`card.${t.folder}.desc`] = t.descriptionEn; }
-  const json = JSON.stringify({ en }, null, 2).replace(/</g, '\\u003c').replace(/\n/g, '\n  ');
-  return `\n${filter}  <div class="grid">\n${cards}\n  </div>\n  <script type="application/json" id="i18n-cards">\n  ${json}\n  </script>\n  `;
+  <section class="shelf" id="shelf-fav" aria-labelledby="h-fav" hidden>
+    <h2 id="h-fav">${icon('star')}<span data-i18n="fav.h">Favoriten</span></h2>
+    <ul class="shelf-row"></ul>
+  </section>
+  <section class="shelf" id="shelf-recent" aria-labelledby="h-recent" hidden>
+    <h2 id="h-recent">${icon('history')}<span data-i18n="recent.h">Zuletzt benutzt</span></h2>
+    <ul class="shelf-row"></ul>
+  </section>
+`;
+  // Groups in area order; a sub-group follows its area
+  const order = areas.flatMap(a => SUBGROUPS[a] ? [a, SUBGROUPS[a]] : [a]);
+  const groups = order.map(g => [g, tools.filter(t => groupOf(t) === g)]).filter(([, list]) => list.length);
+  const item = t => `      <li class="app" data-folder="${t.folder}" data-tags="${escHtml(JSON.stringify([...t.tags, ...t.features]))}">
+        ${t.icon ? `<img src="${t.folder}/icon.svg" alt="" width="40" height="40">` : '<span class="noicon"></span>'}
+        <div class="app-text"><a class="open" href="${t.folder}/"><span data-i18n="card.${t.folder}.title">${escHtml(t.title)}</span></a>
+        <p data-i18n="card.${t.folder}.desc">${escHtml(t.description)}</p></div>
+      </li>`;
+  const list = groups.map(([g, ts]) => {
+    const area = ts[0].tags[0];
+    return `  <section class="group" data-group="${escHtml(g)}" data-area="${escHtml(area)}" aria-labelledby="g-${escHtml(g)}">
+    <h2 id="g-${escHtml(g)}"><span data-i18n="tag.${escHtml(g)}">${escHtml(g)}</span> <span class="count">${ts.length}</span></h2>
+    <ul class="apps">
+${ts.map(item).join('\n')}
+    </ul>
+  </section>`;
+  }).join('\n');
+  // English texts of the list and filters for the start page script (Tools.i18n)
+  const en = { 'filter.all': 'All', 'f-area': 'Area', 'f-topic': 'Topic', 'f-feat': 'Feature', filter: 'Filter',
+    search: 'Search apps', 'search.none': 'No matching app found.' };
+  for (const x of new Set([...tools.flatMap(t => [...t.tags, ...t.features]), ...order])) en['tag.' + x] = TAGS_EN[x];
+  for (const t of tools) {
+    en[`card.${t.folder}.title`] = t.titleEn; en[`card.${t.folder}.desc`] = t.descriptionEn;
+    en[`short.${t.folder}`] = t.shortNameEn;
+  }
+  const de = Object.fromEntries(tools.map(t => [`short.${t.folder}`, t.shortName]));
+  const json = JSON.stringify({ de, en }, null, 2).replace(/</g, '\\u003c').replace(/\n/g, '\n  ');
+  return `\n${filter}${list}\n  <script type="application/json" id="i18n-cards">\n  ${json}\n  </script>\n  `;
 }
 
 function renderTable() {
