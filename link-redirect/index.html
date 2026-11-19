@@ -22,7 +22,7 @@
 <meta name="tool:share-text" content="true">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-RNNH6Enmb9QBZIWnoabdcd5N3e8PbB5dJhofPHDweBo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-SmUuIfcFKXKmMgHnO20WzOgWNacLjG11tAU+xxCrLEM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -60,6 +60,8 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <h2 id="h-setup" data-i18n="setupH">Erste Weiterleitung einrichten</h2>
     <p data-i18n="setupIntro">Die geteilte Adresse wird zwischen Präfix und Suffix gesetzt. Beispiel: Präfix „https://test.de/?url=“ macht aus www.example.com den Link https://test.de/?url=www.example.com.</p>
     <div id="setupSlot"></div>
+    <p class="target-label" data-i18n="setupImport">Mehrere Weiterleitungen als Text (z. B. von einem anderen Gerät)?</p>
+    <div class="row"><button type="button" class="btn js-import"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#clipboard"/></svg><span data-i18n="import">Mehrere einfügen</span></button></div>
   </section>
 
   <section class="card" id="mainCard" aria-labelledby="h-main" hidden>
@@ -84,6 +86,8 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <ul class="list-rows wrap" id="ruleList"></ul>
     <div class="row" id="manageActions">
       <button type="button" class="btn" id="btnNew" aria-expanded="false" aria-controls="ruleForm"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="addMore">Weitere Weiterleitung hinzufügen</span></button>
+      <button type="button" class="btn js-import"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#clipboard"/></svg><span data-i18n="import">Mehrere einfügen</span></button>
+      <button type="button" class="btn" id="btnCopyAll"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copyAll">Alle als Text kopieren</span></button>
     </div>
     <div id="menuSlot">
       <form id="ruleForm" novalidate>
@@ -126,6 +130,25 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   </section>
 </main>
 
+<!-- Import: several redirects as text, one per line "Name = target link with {url}" (or the JSON of list_rules) -->
+<dialog class="dialog" id="importDlg" aria-labelledby="importH">
+  <form id="importForm" novalidate>
+    <div class="dialog-head"><h2 id="importH" data-i18n="importH">Weiterleitungen einfügen</h2><button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close;title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+    <div class="dialog-body">
+      <div class="form-field">
+        <label for="importText" data-i18n="importLabel">Eine Weiterleitung je Zeile</label>
+        <textarea id="importText" class="mono" rows="8" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Archiv = https://web.archive.org/web/{url}&#10;Test = https://test.de/?url={url:encode}"></textarea>
+        <p class="form-hint" data-i18n-html="importHint">Format: <code>Name = Ziel-Link</code>, an der Stelle der Adresse steht <code>{url}</code>. <code>{url:encode}</code> kodiert die Adresse, <code>{url:nohttps}</code> lässt „https://“ weg, beides: <code>{url:encode,nohttps}</code>. Ohne <code>{url}</code> wird die Adresse kodiert ans Ende gehängt. Name und „=“ sind optional, Zeilen mit # werden übersprungen. „Alle als Text kopieren“ liefert genau dieses Format.</p>
+      </div>
+      <p class="form-error" role="alert" id="importErr"></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn" data-close><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+      <button type="submit" class="btn primary" id="btnImport"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="importGo">Hinzufügen</span></button>
+    </div>
+  </form>
+</dialog>
+
 <!-- data:start -->
 <details class="data card">
   <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
@@ -150,6 +173,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li>Android, installierte App: einen Link aus einer anderen App an <strong>Weiterleiten</strong> teilen – die App öffnet sofort den Ziel-Link der gewählten Weiterleitung. Wer lieber erst schauen will: Menü ☰ → Einstellungen → <strong>Erst anzeigen</strong>.</li>
     <li>Ohne Teilen: Adresse einfügen, Weiterleitung wählen (bei mehreren), <strong>Weiterleiten</strong>, <strong>Link kopieren</strong> oder <strong>Teilen</strong>. Steht die Adresse in einem längeren Text, wird der erste Link darin genommen.</li>
     <li>Weitere Weiterleitungen, Bearbeiten und Löschen: Menü ☰ → <strong>Weiterleitungen verwalten</strong>. Die zuletzt gewählte gilt auch beim Teilen.</li>
+    <li>Viele auf einmal: <strong>Mehrere einfügen</strong> nimmt eine Liste als Text, eine Weiterleitung je Zeile, z. B. <code>Archiv = https://web.archive.org/web/{url}</code>. <code>{url}</code> steht für die Adresse; <code>{url:encode}</code> kodiert sie, <code>{url:nohttps}</code> lässt „https://“ weg. Schon vorhandene werden übersprungen; ist eine Zeile fehlerhaft, wird nichts übernommen und die Zeile genannt. <strong>Alle als Text kopieren</strong> liefert dasselbe Format – so lassen sich Weiterleitungen auch auf ein anderes Gerät bringen oder weitergeben.</li>
     <li>iPhone und Kurzbefehle: Teilen an Web-Apps geht dort nicht. Stattdessen <code>https://phanlipo.github.io/link-redirect/?url=</code> plus die Adresse öffnen (z. B. per Kurzbefehl) – das wirkt wie Teilen.</li>
   </ul>
   <h3>Sicherheit</h3>
@@ -166,6 +190,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li>Android, installed app: share a link from another app to <strong>Redirect</strong> – the app opens the target link of the selected redirect right away. To look first: menu ☰ → Settings → <strong>Show first</strong>.</li>
     <li>Without sharing: paste an address, pick a redirect (if there are several), then <strong>Redirect</strong>, <strong>Copy link</strong> or <strong>Share</strong>. If the address is part of a longer text, the first link in it is used.</li>
     <li>More redirects, editing and deleting: menu ☰ → <strong>Manage redirects</strong>. The one picked last is also used when sharing.</li>
+    <li>Many at once: <strong>Paste several</strong> takes a list as text, one redirect per line, e.g. <code>Archive = https://web.archive.org/web/{url}</code>. <code>{url}</code> stands for the address; <code>{url:encode}</code> encodes it, <code>{url:nohttps}</code> drops “https://”. Existing ones are skipped; if a line is wrong, nothing is added and the line is named. <strong>Copy all as text</strong> gives the same format – handy for another device or for passing redirects on.</li>
     <li>iPhone and Shortcuts: sharing to web apps is not possible there. Open <code>https://phanlipo.github.io/link-redirect/?url=</code> plus the address instead (e.g. from a shortcut) – it works like sharing.</li>
   </ul>
   <h3>Security</h3>
@@ -192,7 +217,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 20d1fa078a19</p>
+  <p class="footer-version">Version 3df33dad8ff7</p>
   <!-- footer:end -->
 </footer>
 
@@ -206,7 +231,10 @@ Tools.i18n({
     errHost:'Mit diesem Präfix landet der Link nicht sicher auf {host}. Endet es mit /, = oder ?',
     saveEdit:'Speichern',editH:'Weiterleitung bearbeiten',added:'Weiterleitung gespeichert',updated:'Weiterleitung geändert',
     deleted:'„{name}“ gelöscht',edit:'Bearbeiten',del:'Löschen',copied:'Link kopieren: erledigt',
-    encoded:'kodiert',plain:'nicht kodiert',stripped:'ohne https://','mcp.build':'Link gebaut'},
+    encoded:'kodiert',plain:'nicht kodiert',stripped:'ohne https://','mcp.build':'Link gebaut',
+    importEmpty:'Keine Weiterleitung im Text gefunden.',importLine:'Zeile {n}: {msg}',importMany:'Höchstens {n} Weiterleitungen auf einmal.',
+    errPlaceholder:'{url} darf nur einmal vorkommen; erlaubt sind {url}, {url:encode}, {url:nohttps}.',errJson:'Das JSON ist keine Liste von Weiterleitungen.',
+    imported:'{n} hinzugefügt',importedSkip:'{n} hinzugefügt, {s} schon vorhanden',importNone:'Alle {s} schon vorhanden',copiedAll:'Alle als Text kopieren: erledigt'},
   en:{title:'Link Redirect',sub:'Pass shared links straight on to your service.',leaveH:'Redirecting …',leaveLink:'If nothing happens: tap here',
     setupH:'Set up your first redirect',
     setupIntro:'The shared address goes between prefix and suffix. Example: the prefix “https://test.de/?url=” turns www.example.com into https://test.de/?url=www.example.com.',
@@ -222,7 +250,13 @@ Tools.i18n({
     errHost:'With this prefix the link does not reliably stay on {host}. Does it end with /, = or ?',
     saveEdit:'Save',editH:'Edit redirect',added:'Redirect saved',updated:'Redirect changed',
     deleted:'“{name}” deleted',edit:'Edit',del:'Delete',copied:'Copy link: done',
-    encoded:'encoded',plain:'not encoded',stripped:'without https://','mcp.build':'link built'}
+    encoded:'encoded',plain:'not encoded',stripped:'without https://','mcp.build':'link built',
+    setupImport:'Several redirects as text (e.g. from another device)?',import:'Paste several',copyAll:'Copy all as text',close:'Close',
+    importH:'Paste redirects',importLabel:'One redirect per line',importGo:'Add',
+    importHint:'Format: <code>Name = target link</code>, with <code>{url}</code> where the address goes. <code>{url:encode}</code> encodes the address, <code>{url:nohttps}</code> drops “https://”, both: <code>{url:encode,nohttps}</code>. Without <code>{url}</code> the encoded address is appended. Name and “=” are optional, lines starting with # are skipped. “Copy all as text” gives exactly this format.',
+    importEmpty:'No redirect found in the text.',importLine:'Line {n}: {msg}',importMany:'At most {n} redirects at once.',
+    errPlaceholder:'{url} may appear only once; allowed are {url}, {url:encode}, {url:nohttps}.',errJson:'The JSON is not a list of redirects.',
+    imported:'{n} added',importedSkip:'{n} added, {s} already there',importNone:'All {s} already there',copiedAll:'Copy all as text: done'}
 });
 const t=Tools.t, $=Tools.$;
 const LS_RULES='link-redirect.rules.v1', LS_SET='link-redirect.settings.v1';
@@ -410,6 +444,88 @@ function renderList(){
     ul.append(li);
   }
 }
+
+/* ---------- Import and export as text ----------
+   One redirect per line: "Name = target", where target is the finished link with {url} in place of the address.
+   {url:encode} / {url:nohttps} (German aliases kodiert / ohne-https) set the options; without {url} the line is a
+   prefix and the address is appended encoded (like the form's default). Also takes the JSON of list_rules. The
+   tokens stay English in every language, so a list copied in one language imports in the other. */
+const MAX_IMPORT=200;
+const PH=/\{url(?::([^}]*))?\}/gi;
+function parseTarget(target){
+  const all=[...target.matchAll(PH)];
+  if(!all.length)return /\{|\}/.test(target)?{error:'errPlaceholder'}:{prefix:target,suffix:'',encode:true,strip:false};
+  if(all.length>1)return {error:'errPlaceholder'};
+  const m=all[0], flags=(m[1]||'').split(',').map(f=>f.trim().toLowerCase()).filter(Boolean);
+  const encode=flags.some(f=>f==='encode'||f==='kodiert'), strip=flags.some(f=>f==='nohttps'||f==='ohne-https');
+  if(flags.some(f=>!['encode','kodiert','nohttps','ohne-https'].includes(f)))return {error:'errPlaceholder'};
+  const suffix=target.slice(m.index+m[0].length);
+  if(/\{|\}/.test(suffix))return {error:'errPlaceholder'};
+  return {prefix:target.slice(0,m.index),suffix,encode,strip};
+}
+function parseImport(text){
+  text=String(text||'').trim();
+  let items;
+  if(/^\[/.test(text)){
+    let data; try{ data=JSON.parse(text); }catch(_){ return {error:t('errJson')}; }
+    if(!Array.isArray(data)||data.some(x=>!x||typeof x.prefix!=='string'))return {error:t('errJson')};
+    items=data.map((x,i)=>({line:i+1,rule:{name:String(x.name||'').trim().slice(0,60),prefix:x.prefix.trim(),suffix:String(x.suffix||'').trim(),
+      encode:x.encode!==undefined?!!x.encode:true,strip:!!(x.strip||x.removeScheme)}}));
+  } else {
+    items=[];
+    text.split(/\r?\n/).forEach((raw,i)=>{
+      const l=raw.trim();
+      if(!l||l.startsWith('#'))return;
+      // "Name = target": split at the first " = " (a link itself may contain "=", but not with spaces around it)
+      const k=l.search(/\s=\s/);
+      const name=k>=0?l.slice(0,k).trim():'', target=(k>=0?l.slice(k).replace(/^\s=\s/,''):l).trim();
+      const r=parseTarget(target);
+      items.push({line:i+1,rule:r.error?null:Object.assign({name:name.slice(0,60)},r),error:r.error});
+    });
+  }
+  if(!items.length)return {error:t('importEmpty')};
+  if(items.length>MAX_IMPORT)return {error:t('importMany',{n:MAX_IMPORT})};
+  const errors=[];
+  for(const it of items){
+    if(!it.error){ const c=check(it.rule,build(it.rule,SAMPLE)); if(c.error){ it.error=c.error; it.host=c.host; } }
+    if(it.error)errors.push(t('importLine',{n:it.line,msg:t(it.error,{host:it.host})}));
+  }
+  return errors.length?{error:errors.slice(0,5).join('\n')}:{rules:items.map(it=>it.rule)};
+}
+function exportText(){
+  return rules.map(r=>{
+    const flags=[r.encode?'encode':'',r.strip?'nohttps':''].filter(Boolean).join(',');
+    return `${ruleName(r)} = ${r.prefix}{url${flags?':'+flags:''}}${r.suffix||''}`;
+  }).join('\n');
+}
+const sameRule=(a,b)=>a.prefix===b.prefix&&(a.suffix||'')===(b.suffix||'')&&!!a.encode===!!b.encode&&!!a.strip===!!b.strip;
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.js-import'))return;
+  $('importErr').textContent='';
+  $('importDlg').showModal();
+  $('importText').focus();
+});
+$('importText').addEventListener('input',()=>{ $('importErr').textContent=''; });
+$('importForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const r=parseImport($('importText').value);
+  if(r.error){ $('importErr').textContent=r.error; return; }
+  let added=0, skipped=0;
+  for(const rule of r.rules){
+    if(rules.some(x=>sameRule(x,rule))){ skipped++; continue; }
+    rule.id=newId(); rules.push(rule); added++;
+  }
+  if(added&&!rules.some(x=>x.id===settings.current)){ settings.current=rules[0].id; saveSettings(); }
+  saveRules();
+  $('importDlg').close(); $('importText').value='';
+  Tools.menu.close(); render();
+  Tools.toast(added?(skipped?t('importedSkip',{n:added,s:skipped}):t('imported',{n:added})):t('importNone',{s:skipped}));
+  Tools.diag.log('import',{added,skipped,rules:rules.length});
+});
+$('btnCopyAll').addEventListener('click',async()=>{
+  if(await Tools.copyText(exportText()))Tools.toast(t('copiedAll'));
+  Tools.diag.log('copied all',{rules:rules.length});
+});
 
 /* ---------- Settings ---------- */
 function renderSettings(){

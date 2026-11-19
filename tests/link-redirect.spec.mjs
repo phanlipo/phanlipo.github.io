@@ -149,3 +149,56 @@ test('switching the language re-renders texts written by the script', async ({ p
   await expect(page.locator('#targetLabel')).toHaveText('Target link (Archiv):');
   await expect(page.locator('#btnGo')).toHaveText('Redirect');
 });
+
+test('paste several: lines with {url} placeholders become redirects; duplicates are skipped; copy all gives the same text', async ({ page }) => {
+  await page.goto('/link-redirect/');
+  await page.locator('#setupCard .js-import').click();
+  await page.fill('#importText', [
+    '# Kommentar',
+    'Archiv = https://web.archive.org/web/{url}',
+    'Lesen = https://lesen.example/s?u={url:encode,nohttps}&x=1',
+    'https://test.de/?url=',
+    '',
+  ].join('\n'));
+  await page.click('#btnImport');
+  await expect(page.locator('#toast')).toHaveText('3 hinzugefügt');
+  await expect(page.locator('#ruleChips button')).toHaveText(['Archiv', 'Lesen', 'test.de']);
+  await expect(page.locator('#ruleChips button').first()).toHaveAttribute('aria-pressed', 'true');
+  await page.fill('#url', 'https://www.example.com/a?b=1');
+  await expect(page.locator('#target')).toHaveText('https://web.archive.org/web/https://www.example.com/a?b=1');
+  await page.locator('#ruleChips button').nth(1).click();
+  await expect(page.locator('#target')).toHaveText('https://lesen.example/s?u=www.example.com%2Fa%3Fb%3D1&x=1');
+  await page.locator('#ruleChips button').nth(2).click();
+  await expect(page.locator('#target')).toHaveText('https://test.de/?url=https%3A%2F%2Fwww.example.com%2Fa%3Fb%3D1');
+
+  await openMenu(page);
+  await page.locator('#manageCard > summary').click();
+  await page.click('#btnCopyAll');
+  const text = await clipboardText(page);
+  expect(text).toBe([
+    'Archiv = https://web.archive.org/web/{url}',
+    'Lesen = https://lesen.example/s?u={url:encode,nohttps}&x=1',
+    'test.de = https://test.de/?url={url:encode}',
+  ].join('\n'));
+  // The same list again (plus one new line): only the new one is added
+  await page.locator('#manageActions .js-import').click();
+  await page.fill('#importText', `${text}\nNeu = https://neu.example/{url}`);
+  await page.click('#btnImport');
+  await expect(page.locator('#toast')).toHaveText('1 hinzugefügt, 3 schon vorhanden');
+  await expect(page.locator('#ruleChips button')).toHaveCount(4);
+});
+
+test('paste several: a wrong line names its number and adds nothing; JSON from list_rules works too', async ({ page }) => {
+  await page.goto('/link-redirect/');
+  await page.locator('#setupCard .js-import').click();
+  await page.fill('#importText', 'Gut = https://gut.example/{url}\nBöse = https://boese.example{url}\nDoppelt = https://x.example/{url}/{url}');
+  await page.click('#btnImport');
+  await expect(page.locator('#importErr')).toContainText('Zeile 2: Mit diesem Präfix landet der Link nicht sicher auf boese.example');
+  await expect(page.locator('#importErr')).toContainText('Zeile 3: {url} darf nur einmal vorkommen');
+  expect(await page.evaluate(k => localStorage.getItem(k), RULES)).toBeNull();
+  await page.fill('#importText', JSON.stringify([{ name: 'J', prefix: 'https://j.example/', suffix: '', encode: false, removeScheme: true }]));
+  await page.click('#btnImport');
+  await expect(page.locator('#importDlg')).toBeHidden();
+  await page.fill('#url', 'https://www.example.com');
+  await expect(page.locator('#target')).toHaveText('https://j.example/www.example.com');
+});
