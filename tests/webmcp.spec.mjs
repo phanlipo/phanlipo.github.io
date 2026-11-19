@@ -3843,6 +3843,65 @@ test.describe('beer-tally tools', () => {
   });
 });
 
+test.describe('split-costs tools', () => {
+  const pad = n => String(n).padStart(2, '0');
+  const d = new Date();
+  const TODAY = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  test.beforeEach(async ({ page }) => {
+    await open(page, '/split-costs/');
+    await page.evaluate(() => localStorage.setItem('split-costs.group.v1', JSON.stringify({
+      currency: '€', people: [{ id: 'a', name: 'Anna' }, { id: 'b', name: 'Ben' }, { id: 'c', name: 'Carla' }], entries: [],
+    })));
+    await page.reload();
+  });
+
+  test('add_expense and add_payment change what the app shows; get_summary reads it', async ({ page }) => {
+    // 10 € paid by Ben for everyone: 3.34 / 3.33 / 3.33 (the extra cent goes to the first person)
+    expect(await call(page, 'split_costs_add_expense', { title: 'Pizza', amount: 10, paidBy: 'ben' })).toEqual({ ok: true, result: {
+      expense: { title: 'Pizza', amount: 10, paidBy: 'Ben', date: TODAY, shares: { Anna: 3.34, Ben: 3.33, Carla: 3.33 } },
+      balances: [
+        { name: 'Anna', paid: 0, share: 3.34, balance: -3.34 },
+        { name: 'Ben', paid: 10, share: 3.33, balance: 6.67 },
+        { name: 'Carla', paid: 0, share: 3.33, balance: -3.33 },
+      ],
+    } });
+    await expect(page.locator('#entries .name')).toHaveText(['Pizza']);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Ausgabe eingetragen');
+    // 6 € by Carla for Anna and Carla only, on another day
+    expect((await call(page, 'split_costs_add_expense', { title: 'Kino', amount: 6, paidBy: 'Carla', splitAmong: ['Anna', 'carla'], date: '2026-01-02' })).ok).toBe(true);
+    expect((await call(page, 'split_costs_add_payment', { from: 'Anna', to: 'Ben', amount: 3.34 })).result.balances[0])
+      .toEqual({ name: 'Anna', paid: 0, share: 6.34, balance: -3 });
+    await expect(page.locator('#balances .bal')).toHaveText(['-3,00 €', '3,33 €', '-0,33 €']);
+    expect(await call(page, 'split_costs_get_summary', {})).toEqual({ ok: true, result: {
+      currency: '€', totalSpent: 16,
+      balances: [
+        { name: 'Anna', paid: 0, share: 6.34, balance: -3 },
+        { name: 'Ben', paid: 10, share: 3.33, balance: 3.33 },
+        { name: 'Carla', paid: 6, share: 6.33, balance: -0.33 },
+      ],
+      settlement: [{ from: 'Anna', to: 'Ben', amount: 3 }, { from: 'Carla', to: 'Ben', amount: 0.33 }],
+      entries: [
+        { kind: 'transfer', date: TODAY, amount: 3.34, paidBy: 'Anna', shares: { Ben: 3.34 } },
+        { kind: 'expense', title: 'Pizza', date: TODAY, amount: 10, paidBy: 'Ben', shares: { Anna: 3.34, Ben: 3.33, Carla: 3.33 } },
+        { kind: 'expense', title: 'Kino', date: '2026-01-02', amount: 6, paidBy: 'Carla', shares: { Anna: 3, Carla: 3 } },
+      ],
+    } });
+  });
+
+  test('only people of the group, limits like the UI', async ({ page }) => {
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 5, paidBy: 'Dora' })).error).toBe('No person named "Dora" in the group. Known: Anna, Ben, Carla');
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 5, paidBy: 'Anna', splitAmong: ['Anna', 'Eve'] })).error).toMatch(/No person named "Eve"/);
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 5, paidBy: 'Anna', splitAmong: [] })).error).toBe('splitAmong must name at least one person');
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 0, paidBy: 'Anna' })).error).toBe('input.amount must be >= 0.01');
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 1000001, paidBy: 'Anna' })).ok).toBe(false);
+    expect((await call(page, 'split_costs_add_expense', { title: '  ', amount: 5, paidBy: 'Anna' })).error).toBe('title must not be empty');
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 5, paidBy: 'Anna', date: '2026-02-30' })).error).toBe('date must be a valid YYYY-MM-DD');
+    expect((await call(page, 'split_costs_add_payment', { from: 'Anna', to: 'anna', amount: 5 })).error).toBe('from and to must be different people');
+    expect((await call(page, 'split_costs_add_payment', { from: 'Anna', to: 'Ben', amount: 5, note: 'x' })).error).toBe('input.note is not allowed');
+    expect((await page.evaluate(() => JSON.parse(localStorage.getItem('split-costs.group.v1')))).entries).toEqual([]);
+  });
+});
+
 test.describe('minesweeper tools', () => {
   // Easy board with known mines: bottom row plus row 8, columns 1–2 (as in minesweeper.spec.mjs)
   const seed = page => page.addInitScript(() => {

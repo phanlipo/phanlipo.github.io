@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Kosten teilen</title>
+<meta name="description" content="Gemeinsame Ausgaben für Urlaub, WG oder Feier eintragen – die App rechnet aus, wer wem wie viel zahlt, mit möglichst wenigen Überweisungen.">
+<meta name="tool:tags" content="Alltag, Finanzen">
+<meta name="tool:features" content="Kopieren, KI-Agent">
+<meta name="tool:webmcp" content="add_expense, add_payment, get_summary">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann für eingetragene Personen Ausgaben und Zahlungen eintragen und die Salden mit dem Vorschlag, wer wem zahlt, lesen.">
+<meta name="tool:webmcp-help-en" content="An AI agent can add expenses and payments for people already in the group, and read the balances with the suggestion of who pays whom.">
+<meta name="tool:icon" content="receipt">
+<meta name="tool:color" content="#047857">
+<meta name="tool:short-name" content="Kosten">
+<meta name="tool:title-en" content="Split Costs">
+<meta name="tool:description-en" content="Enter shared expenses for a trip, flat share or party – the app works out who pays whom how much, with as few transfers as possible.">
+<meta name="tool:short-name-en" content="Split Costs">
+<meta name="tool:storage" content="split-costs.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-37o+97YLWDFNJlB0BZFNcVDlCcykGS3xxBUKq4VoSGo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Kosten">
+<meta name="theme-color" content="#047857">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#047857;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#34d399;--accent-text:#04261a}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.card>h2{margin-block-end:10px}
+.card>h3{margin:16px 0 6px;font-size:16px}
+.amt{flex:none;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bal{flex:none;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bal.neg{color:var(--err)}
+.bal.pos{color:var(--ok)}
+.transfers li>.open{cursor:default}
+.transfers .name{white-space:normal;overflow-wrap:anywhere}
+.total{margin:8px 0 0}
+.settle-empty{margin:0}
+#settleActions,#btnAdd{margin-block-start:12px}
+.parts{display:grid;gap:8px}
+.rest{margin:0;font-weight:600}
+.rest.bad{color:var(--err)}
+/* .seg hides its overflow, so the scrolling grid of the dialog would squeeze it to its border */
+.dialog-body>.seg{min-height:46px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Kosten teilen</span></h1>
+  <p class="sub" data-i18n="sub">Wer hat was bezahlt – und wer zahlt wem?</p>
+  <div class="stage-actions"><button type="button" class="head-btn" id="btnQuickAdd" hidden aria-label="Ausgabe hinzufügen" title="Ausgabe hinzufügen" data-i18n-attr="aria-label:addExpense;title:addExpense"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg></button></div>
+</header>
+
+<main>
+  <!-- First start: only the names -->
+  <section class="card" id="setup" aria-labelledby="h-setup" hidden>
+    <h2 id="h-setup"><span class="step">1</span><span data-i18n="setupH">Wer ist dabei?</span></h2>
+    <form id="setupForm" novalidate>
+      <div class="form-field"><label for="setupName" data-i18n="name">Name</label><input type="text" id="setupName" maxlength="30" autocomplete="off" enterkeyhint="done"></div>
+      <p class="form-error" role="alert" id="setupErr"></p>
+      <div class="row"><button type="submit" class="btn"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#user-plus"/></svg><span data-i18n="addPerson">Person hinzufügen</span></button></div>
+    </form>
+    <ul class="list-rows" id="setupList"></ul>
+    <p class="notice info" id="setupHint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="setupHint">Trag mindestens zwei Namen ein. Weitere Personen kannst du später im Menü ergänzen.</span></p>
+    <button type="button" class="btn primary block" id="btnStart" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#receipt"/></svg><span data-i18n="start">Abrechnung starten</span></button>
+  </section>
+
+  <section class="card" id="stateCard" aria-labelledby="h-state" hidden>
+    <h2 id="h-state" data-i18n="stateH">Stand</h2>
+    <ul class="list-rows" id="balances"></ul>
+    <p class="muted total" id="total"></p>
+    <h3 data-i18n="settleH">Wer zahlt wem?</h3>
+    <ul class="list-rows transfers" id="transfers"></ul>
+    <p class="muted settle-empty" id="settleEmpty" data-i18n="settled">Alles ausgeglichen – niemand muss etwas zahlen.</p>
+    <div class="row" id="settleActions"><button type="button" class="btn" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Ausgleich kopieren</span></button></div>
+  </section>
+
+  <section class="card" id="listCard" aria-labelledby="h-list" hidden>
+    <h2 id="h-list" data-i18n="listH">Ausgaben</h2>
+    <div class="empty-state" id="listEmpty">
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#receipt"/></svg>
+      <p data-i18n="listEmpty">Noch keine Ausgaben eingetragen.</p>
+    </div>
+    <ul class="list-rows" id="entries"></ul>
+    <button type="button" class="btn primary block" id="btnAdd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="addExpense">Ausgabe hinzufügen</span></button>
+  </section>
+
+  <section class="card" data-menu data-icon="settings" aria-labelledby="h-set">
+    <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <div class="form-field"><label for="currency" data-i18n="currencyL">Währung</label><input type="text" id="currency" maxlength="4" autocomplete="off"></div>
+    <p class="form-error" role="alert" id="currencyErr"></p>
+  </section>
+
+  <details class="card" data-menu data-menu-page data-icon="users" id="peoplePage">
+    <summary data-i18n="peopleH">Personen</summary>
+    <form id="peopleForm" novalidate>
+      <div class="form-field"><label for="peopleName" data-i18n="newName">Weitere Person</label><input type="text" id="peopleName" maxlength="30" autocomplete="off" enterkeyhint="done"></div>
+      <p class="form-error" role="alert" id="peopleErr"></p>
+      <div class="row"><button type="submit" class="btn"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#user-plus"/></svg><span data-i18n="addPerson">Person hinzufügen</span></button></div>
+    </form>
+    <ul class="list-rows" id="peopleList"></ul>
+  </details>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnCsv"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="csv">Als Tabelle speichern (CSV)</span></button>
+  <button type="button" id="btnClear" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearAll">Neue Abrechnung (Ausgaben löschen)</span></button>
+</div>
+
+<dialog class="dialog" id="entryDlg" aria-labelledby="entryDlgH">
+  <form id="entryForm" novalidate>
+    <div class="dialog-head"><h2 id="entryDlgH"></h2><button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close;title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+    <div class="dialog-body">
+      <div class="seg" role="group" aria-label="Art" data-i18n-attr="aria-label:kindL" id="kind">
+        <button type="button" aria-pressed="true" data-kind="expense"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#receipt"/></svg><span data-i18n="kindExpense">Ausgabe</span></button>
+        <button type="button" aria-pressed="false" data-kind="transfer"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-exchange"/></svg><span data-i18n="kindTransfer">Geld gegeben</span></button>
+      </div>
+      <div class="form-field" id="titleField"><label for="entryTitle" data-i18n="titleL">Wofür?</label><input type="text" id="entryTitle" maxlength="40" autocomplete="off"></div>
+      <div class="form-field"><label for="entryAmount" data-i18n="amount">Betrag</label>
+        <span class="input-unit"><input type="text" inputmode="decimal" id="entryAmount" autocomplete="off"><span class="unit" data-cur></span></span></div>
+      <div class="form-field"><label for="entryPayer" id="payerL" data-i18n="payerL">Bezahlt von</label><select id="entryPayer"></select></div>
+      <div class="form-field" id="toField"><label for="entryTo" data-i18n="toL">An</label><select id="entryTo"></select></div>
+      <div class="form-field"><label for="entryDate" data-i18n="date">Datum</label><input type="date" id="entryDate" required></div>
+      <div id="splitBox">
+        <div class="seg" role="group" aria-label="Aufteilen" data-i18n-attr="aria-label:splitL" id="split">
+          <button type="button" aria-pressed="true" data-split="equal"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span data-i18n="splitEqual">Gleich</span></button>
+          <button type="button" aria-pressed="false" data-split="exact"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calculator"/></svg><span data-i18n="splitExact">Beträge</span></button>
+        </div>
+        <p class="muted" id="splitHint"></p>
+        <div class="checks" id="withList"></div>
+        <div class="parts" id="partList"></div>
+        <p class="rest" id="rest" role="status"></p>
+      </div>
+      <p class="form-error" role="alert" id="entryErr"></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn danger" id="entryDelete"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="delete">Löschen</span></button>
+      <button type="button" class="btn" data-close><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+      <button type="submit" class="btn primary"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#device-floppy"/></svg><span data-i18n="save">Speichern</span></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Für alles, was eine Gruppe gemeinsam bezahlt – Urlaub, WG-Einkauf, Geburtstagsgeschenk: Jede Ausgabe wird mit dem eingetragen, der sie bezahlt hat, und auf die Beteiligten verteilt. Die App zeigt, wer im Plus oder Minus ist, und schlägt vor, wer wem wie viel überweist – mit möglichst wenigen Zahlungen.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Personen:</b> Beim ersten Start trägst du alle ein, die mitmachen. Weitere Personen, Umbenennen und Entfernen findest du später im Menü unter „Personen“. Wer schon in einer Ausgabe vorkommt, lässt sich erst entfernen, wenn diese Ausgaben gelöscht oder geändert sind.</li>
+    <li><b>Ausgabe:</b> „Ausgabe hinzufügen“ (auch oben über das Plus): wofür, wie viel, wer bezahlt hat und für wen. Mit „Gleich“ wird der Betrag auf die angekreuzten Personen verteilt; einzelne Cent, die nicht aufgehen, bekommen die ersten in der Liste. Mit „Beträge“ trägst du für jede Person ihren Anteil selbst ein – zusammen muss genau der Betrag herauskommen.</li>
+    <li><b>Geld gegeben:</b> Hat jemand einem anderen Geld zurückgezahlt oder vorgestreckt, trägst du das als „Geld gegeben“ ein. Am einfachsten tippst du unter „Wer zahlt wem?“ bei einer Zeile auf „Bezahlt“, sobald die Überweisung erledigt ist.</li>
+    <li><b>Ändern oder löschen:</b> Ein Tippen auf eine Ausgabe öffnet sie. Nach dem Löschen kannst du es direkt wieder rückgängig machen.</li>
+    <li><b>Stand:</b> Grün heißt, die Person bekommt noch Geld, rot, sie muss noch zahlen. „Ausgleich kopieren“ legt die Liste der Zahlungen in die Zwischenablage, etwa für den Gruppenchat.</li>
+    <li><b>Abschließen:</b> „Als Tabelle speichern (CSV)“ im Menü erzeugt eine Datei für Excel oder LibreOffice. „Neue Abrechnung“ löscht alle Ausgaben und Zahlungen, die Namen bleiben.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Namen, Ausgaben und Zahlungen bleiben nur in diesem Browser gespeichert (sichern und auf ein anderes Handy übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline. Mehrere Handys gleichen sich nicht von selbst ab – am besten führt ein Gerät die Abrechnung.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>For everything a group pays for together – a trip, flat-share shopping, a birthday present: every expense is entered with the person who paid it and split among those involved. The app shows who is up or down and suggests who transfers how much to whom – with as few payments as possible.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>People:</b> on the first start you enter everyone taking part. More people, renaming and removing are in the menu under “People” later. Someone who already appears in an expense can only be removed once those expenses are deleted or changed.</li>
+    <li><b>Expense:</b> “Add expense” (also via the plus at the top): what for, how much, who paid and for whom. “Equal” splits the amount among the ticked people; single cents that do not divide evenly go to the first ones in the list. With “Amounts” you enter each person’s share yourself – together they must add up to exactly the amount.</li>
+    <li><b>Money given:</b> if someone paid money back to another person or lent it, enter that as “Money given”. The easiest way: under “Who pays whom?” tap “Paid” on a line once the transfer is done.</li>
+    <li><b>Change or delete:</b> a tap on an expense opens it. After deleting you can undo it right away.</li>
+    <li><b>Balance:</b> green means the person still gets money, red means they still have to pay. “Copy settlement” puts the list of payments on the clipboard, e.g. for the group chat.</li>
+    <li><b>Finishing:</b> “Save as table (CSV)” in the menu creates a file for Excel or LibreOffice. “New settlement” deletes all expenses and payments, the names stay.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Names, expenses and payments stay only in this browser (back them up or move them to another phone under “Back up data”). Nothing is sent to a server; the app also works offline. Several phones do not sync by themselves – best keep the settlement on one device.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann für eingetragene Personen Ausgaben und Zahlungen eintragen und die Salden mit dem Vorschlag, wer wem zahlt, lesen. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can add expenses and payments for people already in the group, and read the balances with the suggestion of who pays whom. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 20d07e79a6c7</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="split.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{newExpense:'Ausgabe hinzufügen',editExpense:'Ausgabe ändern',newTransfer:'Geld gegeben',editTransfer:'Zahlung ändern',
+    payerFrom:'Von',forAll:'für alle',forSome:'für {names}',transferName:'{from} an {to}',transferMeta:'Geld gegeben · {date}',
+    entryMeta:'{payer} · {date} · {who}',balMeta:'bezahlt {paid} · Anteil {share}',
+    totalL:'Ausgaben zusammen: {sum}',owes:'{from} zahlt {to}',paidBtn:'Bezahlt',paidL:'{from} hat {to} {amount} gezahlt',
+    booked:'Zahlung eingetragen',shareEach:'{amount} je Person',rest:'Noch zu verteilen: {amount}',over:'Zu viel verteilt: {amount}',
+    restOk:'Passt genau.',equalHint:'Für wen? Der Betrag wird gleichmäßig verteilt.',exactHint:'Anteil jeder Person:',
+    errName:'Bitte einen Namen eingeben.',errDup:'„{name}“ ist schon dabei.',errAmount:'Bitte einen Betrag über 0 eingeben (höchstens 1.000.000).',
+    errTitle:'Bitte eintragen, wofür das Geld war.',errDate:'Bitte ein Datum wählen.',errWith:'Bitte mindestens eine Person ankreuzen.',
+    errParts:'Die Anteile ergeben zusammen nicht den Betrag.',errSame:'Bitte zwei verschiedene Personen wählen.',errCurrency:'Bitte ein Währungszeichen eingeben.',
+    errInUse:'{name} kommt noch in Ausgaben vor und kann nicht entfernt werden.',
+    personDel:'{name} entfernt',entryDel:'„{title}“ gelöscht',saved:'Gespeichert',
+    rename:'Neuer Name für {name}:',renameL:'{name} umbenennen',deleteL:'{name} löschen',noPeople:'Noch keine Personen.',
+    clearQ:'Alle {n} Einträge löschen und neu anfangen? Die Namen bleiben.',cleared:'Neue Abrechnung begonnen',
+    copied:'Ausgleich kopiert',copyFail:'Kopieren hat nicht geklappt.',copyHead:'Kosten teilen – wer zahlt wem?',copyNone:'Alles ausgeglichen.',
+    csvName:'kosten-teilen',csvDate:'Datum',csvTitle:'Wofür',csvPayer:'Bezahlt von',csvAmount:'Betrag',csvTransfer:'Geld gegeben an {to}',csvBal:'Saldo',
+    'mcp.expense':'Ausgabe eingetragen','mcp.payment':'Zahlung eingetragen'},
+  en:{title:'Split Costs',sub:'Who paid what – and who pays whom?',setupH:'Who is in?',name:'Name',addPerson:'Add person',
+    setupHint:'Enter at least two names. You can add more people later in the menu.',start:'Start settlement',
+    stateH:'Balance',settleH:'Who pays whom?',settled:'All settled – nobody has to pay anything.',copy:'Copy settlement',
+    listH:'Expenses',listEmpty:'No expenses yet.',addExpense:'Add expense',settings:'Settings',currencyL:'Currency',
+    peopleH:'People',newName:'Another person',csv:'Save as table (CSV)',clearAll:'New settlement (delete expenses)',close:'Close',
+    kindL:'Kind',kindExpense:'Expense',kindTransfer:'Money given',titleL:'What for?',amount:'Amount',payerL:'Paid by',toL:'To',date:'Date',
+    splitL:'Split',splitEqual:'Equal',splitExact:'Amounts',delete:'Delete',cancel:'Cancel',save:'Save',
+    newExpense:'Add expense',editExpense:'Change expense',newTransfer:'Money given',editTransfer:'Change payment',
+    payerFrom:'From',forAll:'for everyone',forSome:'for {names}',transferName:'{from} to {to}',transferMeta:'Money given · {date}',
+    entryMeta:'{payer} · {date} · {who}',balMeta:'paid {paid} · share {share}',
+    totalL:'Expenses together: {sum}',owes:'{from} pays {to}',paidBtn:'Paid',paidL:'{from} paid {to} {amount}',
+    booked:'Payment entered',shareEach:'{amount} per person',rest:'Still to split: {amount}',over:'Split too much: {amount}',
+    restOk:'Adds up exactly.',equalHint:'For whom? The amount is split evenly.',exactHint:'Share of each person:',
+    errName:'Please enter a name.',errDup:'“{name}” is already in.',errAmount:'Please enter an amount above 0 (at most 1,000,000).',
+    errTitle:'Please enter what the money was for.',errDate:'Please choose a date.',errWith:'Please tick at least one person.',
+    errParts:'The shares do not add up to the amount.',errSame:'Please choose two different people.',errCurrency:'Please enter a currency sign.',
+    errInUse:'{name} still appears in expenses and cannot be removed.',
+    personDel:'{name} removed',entryDel:'“{title}” deleted',saved:'Saved',
+    rename:'New name for {name}:',renameL:'Rename {name}',deleteL:'Delete {name}',noPeople:'No people yet.',
+    clearQ:'Delete all {n} entries and start over? The names stay.',cleared:'New settlement started',
+    copied:'Settlement copied',copyFail:'Copying did not work.',copyHead:'Split costs – who pays whom?',copyNone:'All settled.',
+    csvName:'split-costs',csvDate:'Date',csvTitle:'What for',csvPayer:'Paid by',csvAmount:'Amount',csvTransfer:'Money given to {to}',csvBal:'Balance',
+    'mcp.expense':'expense added','mcp.payment':'payment added'}
+});
+const t=Tools.t, $=Tools.$, esc=Tools.esc, S=window.SplitCosts;
+
+/* ---------- Data (format and arithmetic in split.js, amounts in cents) ---------- */
+const LS='split-costs.group.v1';
+let data=S.normalize(Tools.load(LS,null));
+const save=()=>Tools.save(LS,data);
+
+function today(){
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+const dateObj=s=>{ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+const dayShort=s=>dateObj(s).toLocaleDateString(Tools.locale(),{day:'2-digit',month:'2-digit',year:'numeric'});
+const money=c=>Tools.fmt(c/100,2)+' '+data.currency;
+const parseMoney=s=>{ const v=Tools.parseNum(s); return Number.isFinite(v)?Math.round(v*100):NaN; };
+const person=id=>data.people.find(p=>p.id===id);
+const nameOf=id=>(person(id)||{}).name||'?';
+const balClass=c=>c<0?'bal neg':c>0?'bal pos':'bal';
+const sortedEntries=()=>data.entries.map((e,i)=>[e,i]).sort((a,b)=>a[0].date<b[0].date?1:a[0].date>b[0].date?-1:b[1]-a[1]).map(x=>x[0]);
+
+/* ---------- Rendering ---------- */
+let setupOpen=data.people.length<2;
+
+function peopleRows(){
+  if(!data.people.length)return `<li class="muted">${esc(t('noPeople'))}</li>`;
+  return data.people.map(p=>`<li><span class="open"><span class="name">${esc(p.name)}</span></span>`+
+    `<button type="button" class="btn icon" data-rename="${p.id}" aria-label="${esc(t('renameL',{name:p.name}))}" title="${esc(t('renameL',{name:p.name}))}">${Tools.icon('pencil')}</button>`+
+    `<button type="button" class="btn icon" data-del="${p.id}" aria-label="${esc(t('deleteL',{name:p.name}))}" title="${esc(t('deleteL',{name:p.name}))}">${Tools.icon('trash')}</button></li>`).join('');
+}
+
+function whoText(e){
+  const ids=Object.keys(S.shares(e,data.people));
+  if(e.split==='equal'&&ids.length===data.people.length)return t('forAll');
+  return t('forSome',{names:ids.map(nameOf).join(', ')});
+}
+
+function renderState(){
+  const acc=S.accounts(data);
+  $('balances').innerHTML=data.people.map(p=>{
+    const a=acc[p.id];
+    return `<li><span class="open"><span class="name">${esc(p.name)}</span><span class="meta">${esc(t('balMeta',{paid:money(a.paid),share:money(a.share)}))}</span></span><span class="${balClass(a.balance)}">${esc(money(a.balance))}</span></li>`;
+  }).join('');
+  $('total').textContent=t('totalL',{sum:money(S.totalSpent(data))});
+  const tr=S.settle(data);
+  $('transfers').innerHTML=tr.map((x,i)=>{
+    const lab=t('owes',{from:nameOf(x.from),to:nameOf(x.to)});
+    return `<li><span class="open"><span class="name">${esc(lab)}</span><span class="meta">${esc(money(x.amount))}</span></span>`+
+      `<button type="button" class="btn" data-settle="${i}" aria-label="${esc(t('paidBtn'))}: ${esc(lab)} ${esc(money(x.amount))}">${Tools.icon('circle-check')}<span>${esc(t('paidBtn'))}</span></button></li>`;
+  }).join('');
+  $('transfers').hidden=!tr.length;
+  $('settleEmpty').hidden=tr.length>0;
+  $('settleActions').hidden=!tr.length;
+}
+
+function renderEntries(){
+  const list=sortedEntries();
+  $('listEmpty').hidden=list.length>0;
+  $('entries').hidden=!list.length;
+  $('entries').innerHTML=list.map(e=>{
+    const transfer=e.kind==='transfer';
+    const name=transfer?t('transferName',{from:nameOf(e.payer),to:nameOf(Object.keys(e.parts)[0])}):e.title;
+    const meta=transfer?t('transferMeta',{date:dayShort(e.date)}):t('entryMeta',{payer:nameOf(e.payer),date:dayShort(e.date),who:whoText(e)});
+    return `<li><button type="button" class="open" data-edit="${e.id}"><span class="name">${esc(name)}</span><span class="meta">${esc(meta)}</span></button><span class="amt">${esc(money(e.amount))}</span></li>`;
+  }).join('');
+}
+
+function render(){
+  const setup=setupOpen||data.people.length<2;
+  $('setup').hidden=!setup;
+  $('stateCard').hidden=setup;
+  $('listCard').hidden=setup;
+  $('btnQuickAdd').hidden=setup;
+  $('setupList').innerHTML=data.people.length?peopleRows():'';
+  $('btnStart').disabled=data.people.length<2;
+  $('setupHint').hidden=data.people.length>=2;
+  $('peopleList').innerHTML=peopleRows();
+  if(document.activeElement!==$('currency'))$('currency').value=data.currency;
+  for(const u of document.querySelectorAll('[data-cur]'))u.textContent=data.currency;
+  if(!setup){ renderState(); renderEntries(); }
+}
+
+/* ---------- People ---------- */
+const cleanName=v=>String(v||'').trim().replace(/\s+/g,' ').slice(0,30);
+function addPerson(name){
+  name=cleanName(name);
+  if(!name)return t('errName');
+  if(data.people.some(p=>p.name.toLowerCase()===name.toLowerCase()))return t('errDup',{name});
+  data.people.push({id:Tools.uid('u'),name});
+  save(); render();
+  Tools.diag.log('person added',{people:data.people.length});
+  return '';
+}
+for(const [form,input,err] of [['setupForm','setupName','setupErr'],['peopleForm','peopleName','peopleErr']]){
+  $(form).addEventListener('submit',e=>{
+    e.preventDefault();
+    const msg=addPerson($(input).value);
+    $(err).textContent=msg;
+    if(!msg){ $(input).value=''; if(form==='peopleForm')Tools.menu.close(); else $(input).focus(); }
+  });
+}
+$('btnStart').addEventListener('click',()=>{ setupOpen=false; render(); Tools.diag.log('setup done'); });
+
+document.addEventListener('click',async e=>{
+  const ren=e.target.closest('[data-rename]'), del=e.target.closest('[data-del]');
+  if(ren){
+    const p=person(ren.dataset.rename); if(!p)return;
+    const v=await Tools.prompt(t('rename',{name:p.name}),{value:p.name});
+    if(v==null)return;
+    const name=cleanName(v);
+    if(!name||data.people.some(o=>o!==p&&o.name.toLowerCase()===name.toLowerCase())){ Tools.toast(name?t('errDup',{name}):t('errName')); return; }
+    p.name=name; save(); render();
+  } else if(del){
+    const p=person(del.dataset.del); if(!p)return;
+    if(S.involved(data,p.id)){ Tools.toast(t('errInUse',{name:p.name})); return; }
+    const i=data.people.indexOf(p);
+    data.people.splice(i,1);
+    save(); render();
+    Tools.undo(t('personDel',{name:p.name}),()=>{ if(!person(p.id)){ data.people.splice(Math.min(i,data.people.length),0,p); save(); render(); } });
+  }
+});
+
+/* ---------- Expense / payment dialog ---------- */
+const dlg=$('entryDlg');
+let edit=null, kind='expense', split='equal';
+
+function personOptions(sel,value){
+  sel.innerHTML=data.people.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  if(value&&person(value))sel.value=value;
+}
+function syncKind(){
+  for(const b of document.querySelectorAll('#kind button'))b.setAttribute('aria-pressed',String(b.dataset.kind===kind));
+  for(const b of document.querySelectorAll('#split button'))b.setAttribute('aria-pressed',String(b.dataset.split===split));
+  const tr=kind==='transfer';
+  $('titleField').hidden=tr;
+  $('toField').hidden=!tr;
+  $('splitBox').hidden=tr;
+  $('payerL').textContent=tr?t('payerFrom'):t('payerL');
+  $('entryDlgH').textContent=t(edit?(tr?'editTransfer':'editExpense'):(tr?'newTransfer':'newExpense'));
+  $('withList').hidden=split!=='equal';
+  $('partList').hidden=split!=='exact';
+  $('splitHint').textContent=t(split==='equal'?'equalHint':'exactHint');
+  updateRest();
+}
+function buildSplit(withIds,parts){
+  $('withList').innerHTML=data.people.map(p=>`<label class="check"><input type="checkbox" data-with="${p.id}"${withIds.includes(p.id)?' checked':''}><span>${esc(p.name)}<small data-each="${p.id}"></small></span></label>`).join('');
+  $('partList').innerHTML=data.people.map(p=>`<div class="form-field"><label for="part-${p.id}">${esc(p.name)}</label>`+
+    `<span class="input-unit"><input type="text" inputmode="decimal" id="part-${p.id}" data-part="${p.id}" autocomplete="off" value="${parts[p.id]?esc(Tools.fmt(parts[p.id]/100,2)):''}"><span class="unit">${esc(data.currency)}</span></span></div>`).join('');
+}
+const checkedIds=()=>[...document.querySelectorAll('#withList [data-with]')].filter(c=>c.checked).map(c=>c.dataset.with);
+function readParts(){
+  const parts={}; let bad=false;
+  for(const i of document.querySelectorAll('#partList [data-part]')){
+    if(!i.value.trim())continue;
+    const c=parseMoney(i.value);
+    if(!Number.isFinite(c)||c<0)bad=true; else if(c>0)parts[i.dataset.part]=c;
+  }
+  return {parts,bad};
+}
+function updateRest(){
+  const amount=parseMoney($('entryAmount').value), r=$('rest');
+  r.classList.remove('bad');
+  if(kind!=='expense'){ r.textContent=''; return; }
+  if(split==='equal'){
+    const ids=checkedIds();
+    const sh=amount>0&&ids.length?S.shares({kind:'expense',split:'equal',amount,with:ids},data.people):{};
+    for(const s of document.querySelectorAll('#withList [data-each]'))s.textContent=sh[s.dataset.each]!=null?money(sh[s.dataset.each]):'';
+    r.textContent=amount>0&&ids.length?t('shareEach',{amount:money(Math.floor(amount/ids.length))}):'';
+    return;
+  }
+  const {parts}=readParts();
+  const left=(amount>0?amount:0)-Object.values(parts).reduce((a,b)=>a+b,0);
+  r.textContent=left===0?t('restOk'):t(left>0?'rest':'over',{amount:money(Math.abs(left))});
+  r.classList.toggle('bad',left!==0);
+}
+function openEntry(entry,preset){
+  edit=entry||null;
+  const e=edit||preset||{};
+  kind=e.kind||'expense';
+  split=e.split||'equal';
+  $('entryTitle').value=e.title||'';
+  $('entryAmount').value=e.amount?Tools.fmt(e.amount/100,2):'';
+  personOptions($('entryPayer'),e.payer);
+  const to=kind==='transfer'&&e.parts?Object.keys(e.parts)[0]:null;
+  personOptions($('entryTo'),to||(data.people.find(p=>p.id!==$('entryPayer').value)||{}).id);
+  $('entryDate').value=e.date||today();
+  buildSplit(e.with||data.people.map(p=>p.id),split==='exact'&&e.parts?e.parts:{});
+  $('entryDelete').hidden=!edit;
+  $('entryErr').textContent='';
+  syncKind();
+  dlg.showModal();
+  if(!edit)$(kind==='transfer'?'entryAmount':'entryTitle').focus();
+}
+for(const b of document.querySelectorAll('#kind button'))b.addEventListener('click',()=>{ kind=b.dataset.kind; $('entryErr').textContent=''; syncKind(); });
+for(const b of document.querySelectorAll('#split button'))b.addEventListener('click',()=>{
+  if(b.dataset.split==='exact'&&split==='equal'){
+    // Start the amounts from the even split, so only the differences have to be typed
+    const amount=parseMoney($('entryAmount').value), ids=checkedIds();
+    const {parts}=readParts();
+    if(amount>0&&ids.length&&!Object.keys(parts).length){
+      const sh=S.shares({kind:'expense',split:'equal',amount,with:ids},data.people);
+      for(const i of document.querySelectorAll('#partList [data-part]'))i.value=sh[i.dataset.part]?Tools.fmt(sh[i.dataset.part]/100,2):'';
+    }
+  }
+  split=b.dataset.split; $('entryErr').textContent=''; syncKind();
+});
+$('entryAmount').addEventListener('input',updateRest);
+$('withList').addEventListener('change',updateRest);
+$('partList').addEventListener('input',updateRest);
+$('btnAdd').addEventListener('click',()=>openEntry(null));
+$('btnQuickAdd').addEventListener('click',()=>openEntry(null));
+$('entries').addEventListener('click',e=>{
+  const b=e.target.closest('[data-edit]'); if(!b)return;
+  const entry=data.entries.find(x=>x.id===b.dataset.edit);
+  if(entry)openEntry(entry);
+});
+
+function readForm(){
+  const amount=parseMoney($('entryAmount').value), payer=$('entryPayer').value, date=$('entryDate').value;
+  if(!(amount>0&&amount<=S.MAX_AMOUNT))return {err:t('errAmount')};
+  if(!S.isDate(date))return {err:t('errDate')};
+  if(kind==='transfer'){
+    const to=$('entryTo').value;
+    if(!to||to===payer)return {err:t('errSame')};
+    return {entry:{kind:'transfer',title:'',amount,payer,date,split:'exact',parts:{[to]:amount}}};
+  }
+  const title=$('entryTitle').value.trim().replace(/\s+/g,' ').slice(0,40);
+  if(!title)return {err:t('errTitle')};
+  if(split==='equal'){
+    const ids=checkedIds();
+    if(!ids.length)return {err:t('errWith')};
+    return {entry:{kind:'expense',title,amount,payer,date,split:'equal',with:ids}};
+  }
+  const {parts,bad}=readParts();
+  if(bad||Object.values(parts).reduce((a,b)=>a+b,0)!==amount)return {err:t('errParts')};
+  return {entry:{kind:'expense',title,amount,payer,date,split:'exact',parts}};
+}
+function storeEntry(entry,old){
+  const clean=S.normalizeEntry(Object.assign({id:old?old.id:Tools.uid('e')},entry),new Set(data.people.map(p=>p.id)));
+  if(old)data.entries[data.entries.indexOf(old)]=clean; else data.entries.push(clean);
+  save(); render();
+  Tools.diag.log(old?'entry changed':'entry added',{kind:clean.kind,split:clean.split,entries:data.entries.length});
+  return clean;
+}
+$('entryForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const {err,entry}=readForm();
+  $('entryErr').textContent=err||'';
+  if(err)return;
+  storeEntry(entry,edit&&data.entries.includes(edit)?edit:null);
+  dlg.close();
+  Tools.toast(t('saved'));
+});
+$('entryDelete').addEventListener('click',()=>{
+  if(!edit)return;
+  const gone=edit, i=data.entries.indexOf(gone);
+  if(i<0){ dlg.close(); return; }
+  data.entries.splice(i,1);
+  save(); render(); dlg.close();
+  const title=gone.kind==='transfer'?t('transferName',{from:nameOf(gone.payer),to:nameOf(Object.keys(gone.parts)[0])}):gone.title;
+  Tools.undo(t('entryDel',{title}),()=>{ if(!data.entries.some(x=>x.id===gone.id)){ data.entries.splice(Math.min(i,data.entries.length),0,gone); save(); render(); } });
+});
+
+/* ---------- Settlement ---------- */
+function bookTransfer(from,to,amount){
+  return storeEntry({kind:'transfer',title:'',amount,payer:from,date:today(),split:'exact',parts:{[to]:amount}},null);
+}
+$('transfers').addEventListener('click',e=>{
+  const b=e.target.closest('[data-settle]'); if(!b)return;
+  const x=S.settle(data)[Number(b.dataset.settle)]; if(!x)return;
+  const added=bookTransfer(x.from,x.to,x.amount);
+  Tools.undo(t('paidL',{from:nameOf(x.from),to:nameOf(x.to),amount:money(x.amount)}),()=>{
+    const i=data.entries.findIndex(y=>y.id===added.id);
+    if(i>=0){ data.entries.splice(i,1); save(); render(); }
+  });
+});
+function settleText(){
+  const tr=S.settle(data);
+  const lines=tr.map(x=>`${t('owes',{from:nameOf(x.from),to:nameOf(x.to)})}: ${money(x.amount)}`);
+  return [t('copyHead'),...(lines.length?lines:[t('copyNone')])].join('\n');
+}
+$('btnCopy').addEventListener('click',async()=>{
+  const ok=await Tools.copyText(settleText());
+  Tools.toast(t(ok?'copied':'copyFail'));
+  Tools.diag.log('settlement copied',{ok,transfers:S.settle(data).length});
+});
+
+/* ---------- Settings ---------- */
+$('currency').addEventListener('change',()=>{
+  const v=$('currency').value.trim();
+  if(!v){ $('currencyErr').textContent=t('errCurrency'); return; }
+  $('currencyErr').textContent='';
+  data.currency=v.slice(0,4); save(); render();
+});
+
+/* ---------- Menu actions ---------- */
+$('btnCsv').addEventListener('click',()=>{
+  const de=Tools.lang()==='de', sep=de?';':',';
+  const num=c=>(c/100).toFixed(2).replace('.',de?',':'.');
+  const cell=v=>{ const s=String(v); return s.includes(sep)||/["\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const rows=[[t('csvDate'),t('csvTitle'),t('csvPayer'),`${t('csvAmount')} ${data.currency}`,...data.people.map(p=>p.name)]];
+  for(const e of sortedEntries().reverse()){
+    const sh=S.shares(e,data.people);
+    const title=e.kind==='transfer'?t('csvTransfer',{to:nameOf(Object.keys(e.parts)[0])}):e.title;
+    rows.push([e.date,title,nameOf(e.payer),num(e.amount),...data.people.map(p=>sh[p.id]?num(sh[p.id]):'')]);
+  }
+  const acc=S.accounts(data);
+  rows.push(['',t('csvBal'),'','',...data.people.map(p=>num(acc[p.id].balance))]);
+  const text='﻿'+rows.map(r=>r.map(cell).join(sep)).join('\r\n')+'\r\n';
+  Tools.download(new File([text],`${t('csvName')}-${today()}.csv`,{type:'text/csv'}));
+  Tools.diag.log('csv saved',{entries:data.entries.length,people:data.people.length});
+  Tools.menu.close();
+});
+$('btnClear').addEventListener('click',async()=>{
+  if(data.entries.length&&!await Tools.confirm(t('clearQ',{n:data.entries.length}),{action:'delete'}))return;
+  data.entries=[]; save(); render();
+  Tools.menu.close(); Tools.toast(t('cleared'));
+});
+
+render();
+Tools.onLang(()=>{ render(); if(dlg.open)syncKind(); });
+// Data restored from a backup or changed in another tab
+window.addEventListener('storage',e=>{ if(e.key===LS||e.key===null){ data=S.normalize(Tools.load(LS,null)); render(); } });
+Tools.diag.info(()=>({people:data.people.length,entries:data.entries.length,transfers:S.settle(data).length,setup:setupOpen,dialog:dlg.open?kind+'/'+split:null}));
+
+/* ---------- WebMCP ---------- */
+function findPerson(name){
+  const p=data.people.find(o=>o.name.toLowerCase()===String(name).trim().toLowerCase());
+  if(!p)throw new Error(`No person named "${name}" in the group. Known: ${data.people.map(o=>o.name).join(', ')||'none'}`);
+  return p;
+}
+function checkDate(date){
+  if(date==null)return today();
+  if(!S.isDate(date))throw new Error('date must be a valid YYYY-MM-DD');
+  return date;
+}
+const cents=v=>{
+  const c=Math.round(v*100);
+  if(!(c>0&&c<=S.MAX_AMOUNT))throw new Error('amount must be above 0 and at most 1000000');
+  return c;
+};
+const balancesOut=()=>{ const acc=S.accounts(data); return data.people.map(p=>({name:p.name,paid:acc[p.id].paid/100,share:acc[p.id].share/100,balance:acc[p.id].balance/100})); };
+Tools.mcp.register({
+  name:'add_expense',title:'Add expense',label:'mcp.expense',
+  description:'Adds a shared expense paid by one person of the group, split evenly among the given people (default: everyone), as if the user saved it in the app. Amounts are in the currency set in the app. Returns the stored expense and the new balances (positive = gets money back).',
+  inputSchema:{type:'object',properties:{
+    title:{type:'string',minLength:1,maxLength:40,description:'What the money was for, e.g. "Groceries".'},
+    amount:{type:'number',minimum:0.01,maximum:1000000,description:'Total amount, e.g. 42.5.'},
+    paidBy:{type:'string',minLength:1,maxLength:30,description:'Name of the person who paid (case does not matter).'},
+    splitAmong:{type:'array',maxItems:100,items:{type:'string',minLength:1,maxLength:30},description:'Names of the people who share the cost. Default: everyone in the group.'},
+    date:{type:'string',minLength:10,maxLength:10,description:'Date as YYYY-MM-DD. Default today.'}
+  },required:['title','amount','paidBy'],additionalProperties:false},
+  execute:({title,amount,paidBy,splitAmong,date})=>{
+    const payer=findPerson(paidBy), d=checkDate(date), c=cents(amount);
+    const name=String(title).trim().replace(/\s+/g,' ').slice(0,40);
+    if(!name)throw new Error('title must not be empty');
+    const ids=splitAmong?[...new Set(splitAmong.map(n=>findPerson(n).id))]:data.people.map(p=>p.id);
+    if(!ids.length)throw new Error('splitAmong must name at least one person');
+    const e=storeEntry({kind:'expense',title:name,amount:c,payer:payer.id,date:d,split:'equal',with:ids},null);
+    const sh=S.shares(e,data.people);
+    return {expense:{title:e.title,amount:e.amount/100,paidBy:payer.name,date:e.date,shares:Object.fromEntries(Object.entries(sh).map(([k,v])=>[nameOf(k),v/100]))},balances:balancesOut()};
+  }
+});
+Tools.mcp.register({
+  name:'add_payment',title:'Add payment',label:'mcp.payment',
+  description:'Records that one person of the group gave money to another (e.g. paying back their debt), dated today unless given. Returns the new balances.',
+  inputSchema:{type:'object',properties:{
+    from:{type:'string',minLength:1,maxLength:30,description:'Name of the person who gave the money.'},
+    to:{type:'string',minLength:1,maxLength:30,description:'Name of the person who received it.'},
+    amount:{type:'number',minimum:0.01,maximum:1000000,description:'Amount, e.g. 12.5.'},
+    date:{type:'string',minLength:10,maxLength:10,description:'Date as YYYY-MM-DD. Default today.'}
+  },required:['from','to','amount'],additionalProperties:false},
+  execute:({from,to,amount,date})=>{
+    const a=findPerson(from), b=findPerson(to), d=checkDate(date), c=cents(amount);
+    if(a===b)throw new Error('from and to must be different people');
+    storeEntry({kind:'transfer',title:'',amount:c,payer:a.id,date:d,split:'exact',parts:{[b.id]:c}},null);
+    return {balances:balancesOut()};
+  }
+});
+Tools.mcp.register({
+  name:'get_summary',title:'Read settlement',readOnly:true,
+  description:'Reads the group: currency, every person with paid, share and balance (positive = gets money back), the suggested transfers to settle up (as few as possible), and every expense and payment with its shares.',
+  execute:()=>({
+    currency:data.currency,
+    totalSpent:S.totalSpent(data)/100,
+    balances:balancesOut(),
+    settlement:S.settle(data).map(x=>({from:nameOf(x.from),to:nameOf(x.to),amount:x.amount/100})),
+    entries:sortedEntries().map(e=>({kind:e.kind,title:e.kind==='expense'?e.title:undefined,date:e.date,amount:e.amount/100,paidBy:nameOf(e.payer),
+      shares:Object.fromEntries(Object.entries(S.shares(e,data.people)).map(([k,v])=>[nameOf(k),v/100]))}))
+  })
+});
+})();
+</script>
+</body>
+</html>
