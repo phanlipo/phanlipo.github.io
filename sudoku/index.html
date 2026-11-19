@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Sudoku</title>
+<meta name="description" content="Zahlenrätsel in drei Stufen – immer neue Rätsel mit genau einer Lösung, mit Notizen, Tipps und Bestzeiten.">
+<meta name="tool:tags" content="Freizeit, Spiele">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="get_game, set_cell, new_game">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann das Rätsel lesen, Zahlen eintragen oder entfernen und – wenn noch nichts eingetragen oder das Rätsel gelöst ist – ein neues beginnen; jede Zahl erscheint im Spielfeld.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the puzzle, enter or remove digits and – while nothing is entered yet or once it is solved – start a new one; every digit shows up on the board.">
+<meta name="tool:icon" content="grid-3x3">
+<meta name="tool:color" content="#5b4a9e">
+<meta name="tool:short-name" content="Sudoku">
+<meta name="tool:title-en" content="Sudoku">
+<meta name="tool:description-en" content="Number puzzles in three levels – always new puzzles with exactly one solution, with notes, hints and best times.">
+<meta name="tool:short-name-en" content="Sudoku">
+<meta name="tool:storage" content="sudoku.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-qi7MOHBOBrKV6YfxCszPZmKGMrLZ1OCeRN9GGbBxTcg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Sudoku">
+<meta name="theme-color" content="#5b4a9e">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#5b4a9e;--accent-text:#ffffff;--line:var(--text)}
+@media (prefers-color-scheme: dark){:root{--accent:#b9acf0;--accent-text:#17122b;--line:var(--muted)}}
+/* Stage layout: info on top, the board fills the rest, notes/hint and the number pad at the thumb */
+main{max-width:560px;margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:10px}
+.info{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600;min-height:28px}
+.info .lvl{color:var(--muted)}
+.info .time{display:inline-flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.info .ic{width:18px;height:18px}
+
+/* ---------- Board ---------- */
+.board-wrap{flex:1;min-height:200px;container-type:size;display:grid;place-items:center}
+.board{--size:min(100cqw,100cqh);width:var(--size);aspect-ratio:1;display:grid;grid-template:repeat(9,1fr)/repeat(9,1fr);border:2px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface);touch-action:manipulation}
+.cell{position:relative;border:0;border-right:1px solid var(--border);border-bottom:1px solid var(--border);margin:0;padding:0;min-width:0;min-height:0;background:var(--surface);color:var(--text);
+  font:inherit;font-size:calc(var(--size) / 9 * .58);line-height:1;display:grid;place-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.cell.c9{border-right:0}.cell.r9{border-bottom:0}
+.cell.c3{border-right:2px solid var(--line)}.cell.r3{border-bottom:2px solid var(--line)}
+.cell:focus-visible{outline:3px solid var(--accent);outline-offset:-3px;z-index:1}
+.cell.peer{background:color-mix(in srgb,var(--accent) 9%,var(--surface))}
+.cell.same{background:color-mix(in srgb,var(--accent) 20%,var(--surface))}
+.cell.sel{background:color-mix(in srgb,var(--accent) 32%,var(--surface))}
+.cell.given{font-weight:700}
+.cell:not(.given) .val{color:var(--accent);font-weight:500}
+.cell.wrong .val{color:var(--err)}
+.cell.wrong{background:var(--err-bg)}
+.cell.wrong.sel{background:color-mix(in srgb,var(--err) 25%,var(--surface))}
+.notes{position:absolute;inset:6%;display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);font-size:calc(var(--size) / 9 * .27);color:var(--muted);font-weight:600}
+.notes span{display:grid;place-items:center}
+.notes span.hit{color:var(--accent)}
+.board.solved .cell{animation:pop .5s ease-out both;animation-delay:calc(var(--d) * 12ms)}
+@keyframes pop{50%{background:color-mix(in srgb,var(--accent) 30%,var(--surface))}}
+@media (prefers-reduced-motion: reduce){.board.solved .cell{animation:none}}
+
+.status{flex:none;text-align:center;margin:0;font-weight:600;min-height:22px;overflow-wrap:anywhere}
+.status[data-state="solved"]{font-size:18px}
+
+/* ---------- Controls ---------- */
+.toolbar{flex:none;border:1px solid var(--border);border-radius:var(--radius)}
+.pad{flex:none;display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.pad button{min-height:52px;min-width:44px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2);color:var(--text);font:inherit;font-size:24px;font-weight:600;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.pad button small{font-size:12px;font-weight:500;color:var(--muted);margin-top:2px}
+.pad button.full{color:var(--muted)}
+.pad button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pad .ic{width:24px;height:24px}
+.notesOn .pad button[data-d]{color:var(--accent)}
+@media (min-width:560px){.pad{grid-template-columns:repeat(10,1fr)}}
+.actions{flex:none;display:grid}
+.actions .btn{min-height:52px;font-size:17px;font-weight:600}
+
+/* ---------- Menu ---------- */
+.best{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.best .stat-box b{font-size:22px}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Sudoku</span></h1>
+  <p class="sub" data-i18n="sub">Zahlenrätsel</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnUndo" aria-label="Rückgängig" title="Rückgängig" data-i18n-attr="aria-label:undo; title:undo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrow-back-up"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card play" id="play" aria-label="Spielfeld" data-i18n-attr="aria-label:boardLabel">
+    <div class="info">
+      <span class="lvl" id="lvl"></span>
+      <span class="time"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#stopwatch"/></svg><span id="time">0:00</span></span>
+    </div>
+    <div class="board-wrap">
+      <div class="board" id="board" role="grid" aria-label="Sudoku" aria-describedby="status"></div>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="toolbar" id="tools">
+      <button type="button" id="btnNotes" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#pencil"/></svg><span class="tb-label" data-i18n="notes">Notizen</span></button>
+      <button type="button" id="btnHint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#bulb"/></svg><span class="tb-label" data-i18n="hint">Tipp</span></button>
+    </div>
+    <div class="pad" id="pad" role="group" aria-label="Zahlen" data-i18n-attr="aria-label:padLabel"></div>
+    <div class="actions" id="doneActions" hidden>
+      <button type="button" class="btn primary" id="btnNext"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="next">Nächstes Rätsel</span></button>
+    </div>
+  </section>
+
+  <div class="menu-list" data-menu>
+    <button type="button" data-new="easy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="new.easy">Neues Spiel: Leicht</span></button>
+    <button type="button" data-new="medium"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="new.medium">Neues Spiel: Mittel</span></button>
+    <button type="button" data-new="hard"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="new.hard">Neues Spiel: Schwer</span></button>
+    <button type="button" id="btnRestart" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="restart">Von vorn beginnen</span></button>
+  </div>
+
+  <section class="card" aria-labelledby="h-best" data-menu data-icon="trophy">
+    <h2 id="h-best" data-i18n="bestH">Bestzeiten</h2>
+    <div class="best" id="best"></div>
+    <p class="muted" data-i18n="bestInfo">Rätsel, bei denen ein Tipp genutzt wurde, zählen nicht als Bestzeit.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu data-icon="settings">
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <label class="check"><input type="checkbox" id="optErrors"><span data-i18n-html="optErrors">Fehler sofort zeigen<small>Zahlen, die nicht zur Lösung passen, werden rot.</small></span></label>
+    <label class="check"><input type="checkbox" id="optAutoNotes"><span data-i18n-html="optAutoNotes">Notizen automatisch streichen<small>Eine eingetragene Zahl entfernt sich aus den Notizen in Zeile, Spalte und Block.</small></span></label>
+    <label class="check"><input type="checkbox" id="optVibrate"><span data-i18n="optVibrate">Vibration beim Lösen (Handy)</span></label>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Fülle das Feld mit 9 × 9 Kästchen so, dass in jeder <b>Zeile</b>, jeder <b>Spalte</b> und jedem der neun <b>Blöcke</b> (3 × 3, dick umrandet) jede Zahl von 1 bis 9 genau einmal steht. Fett gedruckte Zahlen sind vorgegeben.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Ein Kästchen antippen, dann unten die Zahl. Dieselbe Zahl noch einmal tippen oder <b>Radieren</b> nimmt sie wieder heraus. Die kleine Zahl unter jeder Ziffer zeigt, wie oft sie noch fehlt.</li>
+    <li><b>Notizen</b> (Stift) schaltet auf Bleistift um: Dann merkst du dir mögliche Zahlen klein im Kästchen vor. Nochmal tippen schaltet zurück.</li>
+    <li><b>Tipp</b> (Glühbirne) trägt die richtige Zahl ins gewählte Kästchen ein – oder, wenn dort schon die richtige steht, in ein Kästchen, in das nur noch wenig passt. Falsche Zahlen werden dabei zuerst korrigiert.</li>
+    <li><b>Rückgängig</b> (oben) nimmt den letzten Schritt zurück, auch mehrere nacheinander.</li>
+    <li>Kästchen in derselben Zeile, Spalte und demselben Block sind leicht hinterlegt, gleiche Zahlen farbig.</li>
+    <li>Mit der Tastatur: Pfeiltasten wählen das Kästchen, 1–9 trägt ein, Entf, Rücktaste oder 0 radiert, N schaltet die Notizen um.</li>
+    <li>Im Menü ☰: <b>Neues Spiel</b> in drei Stufen, <b>Von vorn beginnen</b> (löscht deine Einträge in diesem Rätsel), <b>Bestzeiten</b> und <b>Einstellungen</b>.</li>
+  </ul>
+  <h3>Die Stufen</h3>
+  <ul>
+    <li><b>Leicht</b>: 40 vorgegebene Zahlen. <b>Mittel</b>: 32. Beide lassen sich ohne Raten lösen, indem man Kästchen sucht, in die nur eine Zahl passt, oder Zahlen, die in einer Zeile, Spalte oder einem Block nur einen Platz haben.</li>
+    <li><b>Schwer</b>: meist 22 bis 27 Zahlen; hier reicht das nicht mehr, du musst weiter vorausdenken.</li>
+    <li>Jedes Rätsel wird neu auf dem Gerät erzeugt und hat <b>genau eine Lösung</b>.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Die Uhr läuft nur, solange die App im Vordergrund ist.</li>
+    <li>Gespeichert werden das laufende Rätsel samt Notizen, die Bestzeiten und die Einstellungen – nur in diesem Browser (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Fill the 9 × 9 grid so that every <b>row</b>, every <b>column</b> and each of the nine <b>boxes</b> (3 × 3, thick border) holds every digit from 1 to 9 exactly once. Bold digits are given.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li>Tap a square, then a digit below. Tapping the same digit again or <b>Erase</b> takes it out. The small number under each digit shows how many of it are still missing.</li>
+    <li><b>Notes</b> (pencil) switches to pencil marks: jot down possible digits small in the square. Tap again to switch back.</li>
+    <li><b>Hint</b> (light bulb) enters the right digit in the selected square – or, if it already holds the right one, in a square with only few options left. Wrong digits are corrected first.</li>
+    <li><b>Undo</b> (top) takes back the last step, several in a row as well.</li>
+    <li>Squares in the same row, column and box are shaded lightly, equal digits in colour.</li>
+    <li>With a keyboard: arrow keys pick the square, 1–9 enters, Delete, Backspace or 0 erases, N toggles notes.</li>
+    <li>In the menu ☰: <b>New game</b> in three levels, <b>Start over</b> (clears your entries in this puzzle), <b>Best times</b> and <b>Settings</b>.</li>
+  </ul>
+  <h3>The levels</h3>
+  <ul>
+    <li><b>Easy</b>: 40 given digits. <b>Medium</b>: 32. Both can be solved without guessing, by looking for squares where only one digit fits, or digits that have only one place in a row, column or box.</li>
+    <li><b>Hard</b>: usually 22 to 27 digits; that is no longer enough, you have to think further ahead.</li>
+    <li>Every puzzle is made fresh on the device and has <b>exactly one solution</b>.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>The clock only runs while the app is in the foreground.</li>
+    <li>Stored are the current puzzle with its notes, the best times and the settings – only in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline.</li>
+  </ul>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann das Rätsel lesen, Zahlen eintragen oder entfernen und – wenn noch nichts eingetragen oder das Rätsel gelöst ist – ein neues beginnen; jede Zahl erscheint im Spielfeld. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the puzzle, enter or remove digits and – while nothing is entered yet or once it is solved – start a new one; every digit shows up on the board. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version cc7ce0fc0771</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="game.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    padMissing:', fehlt noch {n}×',erase:'Radieren',
+    'lvl.easy':'Leicht','lvl.medium':'Mittel','lvl.hard':'Schwer',
+    cell:'Zeile {r}, Spalte {c}: {v}',empty:'leer',givenMark:'vorgegeben',wrongMark:'falsch',notesMark:'Notizen {list}',
+    pick:'Tippe auf ein leeres Kästchen.',givenSel:'Diese Zahl ist vorgegeben.',
+    solved:'Gelöst in {time}!',solvedBest:'Gelöst in {time} – neue Bestzeit!',solvedHints:'Gelöst in {time} mit {n} Tipp(s).',
+    hintsUsed:'{n} Tipp(s)',noBest:'–',solvedCount:'{n}× gelöst',
+    newQ:'Das laufende Rätsel verwerfen und ein neues beginnen?',restartQ:'Alle deine Einträge in diesem Rätsel löschen und von vorn beginnen?',
+    undone:'Rückgängig gemacht',nothingToUndo:'Nichts zum Rückgängigmachen',newStarted:'Neues Rätsel: {lvl}',
+    'mcp.set':'Zahl eingetragen','mcp.new':'Neues Rätsel'
+  },
+  en:{
+    title:'Sudoku',sub:'Number puzzle',undo:'Undo',boardLabel:'Game board',notes:'Notes',hint:'Hint',padLabel:'Digits',next:'Next puzzle',
+    'new.easy':'New game: Easy','new.medium':'New game: Medium','new.hard':'New game: Hard',restart:'Start over',
+    bestH:'Best times',bestInfo:'Puzzles where a hint was used do not count as a best time.',settings:'Settings',
+    optErrors:'Show mistakes right away<small>Digits that don’t match the solution turn red.</small>',
+    optAutoNotes:'Strike notes automatically<small>An entered digit is removed from the notes in its row, column and box.</small>',
+    optVibrate:'Vibrate when solved (phone)',
+    padMissing:', {n}× still missing',erase:'Erase',
+    'lvl.easy':'Easy','lvl.medium':'Medium','lvl.hard':'Hard',
+    cell:'Row {r}, column {c}: {v}',empty:'empty',givenMark:'given',wrongMark:'wrong',notesMark:'notes {list}',
+    pick:'Tap an empty square.',givenSel:'This digit is given.',
+    solved:'Solved in {time}!',solvedBest:'Solved in {time} – new best time!',solvedHints:'Solved in {time} with {n} hint(s).',
+    hintsUsed:'{n} hint(s)',noBest:'–',solvedCount:'solved {n}×',
+    newQ:'Discard the current puzzle and start a new one?',restartQ:'Delete all your entries in this puzzle and start over?',
+    undone:'Undone',nothingToUndo:'Nothing to undo',newStarted:'New puzzle: {lvl}',
+    'mcp.set':'Digit entered','mcp.new':'New puzzle'
+  }
+});
+const t=Tools.t,S=window.Sudoku;
+const LS_GAME='sudoku.game.v1',LS_SET='sudoku.settings.v1',LS_STATS='sudoku.stats.v1';
+const MAX_HISTORY=500;
+
+// ---------- Stored state ----------
+const settings=Object.assign({level:'easy',showErrors:true,autoNotes:true,vibrate:true},Tools.load(LS_SET,{}));
+if(!S.LEVELS.includes(settings.level))settings.level='easy';
+for(const k of ['showErrors','autoNotes','vibrate'])settings[k]=settings[k]!==false;
+const saveSettings=()=>Tools.save(LS_SET,settings);
+
+function loadStats(){
+  const s=Tools.load(LS_STATS,{}),out={};
+  for(const l of S.LEVELS){const e=s&&s[l]||{};
+    out[l]={solved:Number.isInteger(e.solved)&&e.solved>=0?e.solved:0,best:Number.isInteger(e.best)&&e.best>0?e.best:null};}
+  return out;
+}
+const stats=loadStats();
+const saveStats=()=>Tools.save(LS_STATS,stats);
+
+// A game is only taken over if it is consistent: the solution is a valid grid, it matches the givens,
+// and the entries leave the givens alone. Anything else starts a new puzzle.
+function sane(g){
+  if(!g||typeof g!=='object'||!S.LEVELS.includes(g.level))return null;
+  const puzzle=S.parse(g.puzzle),solution=S.parse(g.solution),values=S.parse(g.values);
+  if(!puzzle||!solution||!values||!S.isComplete(solution))return null;
+  for(let i=0;i<81;i++){if(puzzle[i]&&(puzzle[i]!==solution[i]||values[i]!==puzzle[i]))return null;}
+  const notes=Array.isArray(g.notes)&&g.notes.length===81?g.notes.map(n=>Number.isInteger(n)?n&0x3fe:0):Array(81).fill(0);
+  const history=Array.isArray(g.history)?g.history.filter(e=>Array.isArray(e)&&e.every(c=>Array.isArray(c)&&c.length===3&&Number.isInteger(c[0])&&c[0]>=0&&c[0]<81&&!puzzle[c[0]]&&Number.isInteger(c[1])&&c[1]>=0&&c[1]<=9&&Number.isInteger(c[2]))).slice(-MAX_HISTORY):[];
+  return {level:g.level,puzzle:g.puzzle,solution:g.solution,values,notes,
+    elapsed:Number.isFinite(g.elapsed)&&g.elapsed>=0?Math.floor(g.elapsed):0,
+    hints:Number.isInteger(g.hints)&&g.hints>=0?g.hints:0,
+    done:values.join('')===g.solution,history};
+}
+const saveGame=()=>Tools.save(LS_GAME,{level:game.level,puzzle:game.puzzle,solution:game.solution,values:game.values.join(''),
+  notes:game.notes,elapsed:game.elapsed,hints:game.hints,history:game.history});
+
+function seed(){
+  if(window.crypto&&crypto.getRandomValues)return crypto.getRandomValues(new Uint32Array(1))[0];
+  return Math.floor(Math.random()*4294967296);
+}
+function fresh(level){
+  const t0=performance.now(),p=S.generate(level,seed());
+  Tools.diag.log('puzzle generated',{level,givens:[...p.puzzle].filter(c=>c!=='0').length,ms:Math.round(performance.now()-t0)});
+  return {level,puzzle:p.puzzle,solution:p.solution,values:S.parse(p.puzzle),notes:Array(81).fill(0),elapsed:0,hints:0,done:false,history:[]};
+}
+
+let game=sane(Tools.load(LS_GAME,null));
+if(!game){game=fresh(settings.level);saveGame();}
+let given=S.parse(game.puzzle),solution=S.parse(game.solution);
+let sel=-1,notesMode=false,justSolved=false;
+
+// ---------- Board ----------
+const boardEl=Tools.$('board'),cells=[];
+for(let r=0;r<9;r++){
+  const row=document.createElement('div');row.setAttribute('role','row');row.style.display='contents';
+  for(let c=0;c<9;c++){
+    const i=r*9+c,b=document.createElement('button');
+    b.type='button';b.className='cell'+(c===2||c===5?' c3':'')+(c===8?' c9':'')+(r===2||r===5?' r3':'')+(r===8?' r9':'');
+    b.dataset.i=String(i);b.setAttribute('role','gridcell');b.tabIndex=-1;b.style.setProperty('--d',String(r+c));
+    b.addEventListener('click',()=>select(i));
+    row.appendChild(b);cells.push(b);
+  }
+  boardEl.appendChild(row);
+}
+// Number pad: 1–9 and erase
+const padEl=Tools.$('pad'),padBtns=[];
+for(let d=1;d<=9;d++){
+  const b=document.createElement('button');b.type='button';b.dataset.d=String(d);
+  b.innerHTML=`<span>${d}</span><small aria-hidden="true"></small><span class="sr-only"></span>`;
+  b.addEventListener('click',()=>input(d));
+  padEl.appendChild(b);padBtns.push(b);
+}
+const eraseBtn=document.createElement('button');eraseBtn.type='button';eraseBtn.id='btnErase';
+eraseBtn.innerHTML=Tools.icon('eraser');
+eraseBtn.addEventListener('click',erase);
+padEl.appendChild(eraseBtn);
+
+const fmtTime=s=>{const h=Math.floor(s/3600),m=Math.floor(s/60)%60,x=String(s%60).padStart(2,'0');return h?`${h}:${String(m).padStart(2,'0')}:${x}`:`${m}:${x}`;};
+const isWrong=i=>settings.showErrors&&!given[i]&&game.values[i]&&game.values[i]!==solution[i];
+
+function render(){
+  const v=game.values,sv=sel>=0?v[sel]:0;
+  cells.forEach((el,i)=>{
+    const val=v[i],r=S.ROW[i],c=S.COL[i];
+    const key=val?'v'+val:'n'+game.notes[i];
+    if(el.dataset.k!==key){
+      el.dataset.k=key;
+      if(val)el.innerHTML=`<span class="val">${val}</span>`;
+      else if(game.notes[i])el.innerHTML='<span class="notes" aria-hidden="true">'+[1,2,3,4,5,6,7,8,9].map(d=>`<span data-n="${d}">${game.notes[i]&(1<<d)?d:''}</span>`).join('')+'</span>';
+      else el.innerHTML='';
+    }
+    el.dataset.v=String(val);
+    el.classList.toggle('given',!!given[i]);
+    el.classList.toggle('sel',i===sel);
+    el.classList.toggle('peer',sel>=0&&i!==sel&&(S.ROW[sel]===r||S.COL[sel]===c||S.BOX[sel]===S.BOX[i]));
+    el.classList.toggle('same',!!sv&&i!==sel&&val===sv);
+    el.classList.toggle('wrong',!!isWrong(i));
+    for(const n of el.querySelectorAll('.notes span'))n.classList.toggle('hit',!!sv&&Number(n.dataset.n)===sv);
+    el.setAttribute('aria-selected',String(i===sel));
+    el.tabIndex=i===(sel>=0?sel:0)?0:-1;
+    const parts=[val?String(val):t('empty')];
+    if(given[i])parts.push(t('givenMark'));else if(isWrong(i))parts.push(t('wrongMark'));
+    if(!val&&game.notes[i])parts.push(t('notesMark',{list:S.bits(game.notes[i]).join(' ')}));
+    el.setAttribute('aria-label',t('cell',{r:r+1,c:c+1,v:parts.join(', ')}));
+  });
+  boardEl.classList.toggle('solved',game.done&&justSolved);
+  // Pad: how many of each digit are still missing (counting only what is on the board)
+  const counts=Array(10).fill(0);for(const x of v)counts[x]++;
+  padBtns.forEach((b,k)=>{const d=k+1,left=Math.max(0,9-counts[d]);
+    b.querySelector('small').textContent=Tools.fmt(left,0);b.classList.toggle('full',left===0);
+    b.querySelector('.sr-only').textContent=t('padMissing',{n:Tools.fmt(left,0)});});
+  eraseBtn.setAttribute('aria-label',t('erase'));eraseBtn.title=t('erase');
+  Tools.$('btnNotes').setAttribute('aria-pressed',String(notesMode));
+  Tools.$('play').classList.toggle('notesOn',notesMode);
+  Tools.$('lvl').textContent=t('lvl.'+game.level)+(game.hints?' · '+t('hintsUsed',{n:Tools.fmt(game.hints,0)}):'');
+  renderTime();
+  const st=Tools.$('status');
+  if(game.done){
+    const time=fmtTime(game.elapsed);
+    st.textContent=game.hints?t('solvedHints',{time,n:Tools.fmt(game.hints,0)}):game.newBest?t('solvedBest',{time}):t('solved',{time});
+    st.dataset.state='solved';
+  }else{
+    st.textContent=sel<0?t('pick'):given[sel]?t('givenSel'):'';
+    st.dataset.state='playing';
+  }
+  for(const id of ['tools','pad'])Tools.$(id).hidden=game.done;
+  Tools.$('doneActions').hidden=!game.done;
+  Tools.$('btnUndo').disabled=game.done||!game.history.length;
+  // Menu
+  Tools.$('best').innerHTML=S.LEVELS.map(l=>`<div class="stat-box"><b>${stats[l].best?fmtTime(stats[l].best):t('noBest')}</b><span>${t('lvl.'+l)}</span><span>${t('solvedCount',{n:Tools.fmt(stats[l].solved,0)})}</span></div>`).join('');
+  Tools.$('optErrors').checked=settings.showErrors;
+  Tools.$('optAutoNotes').checked=settings.autoNotes;
+  Tools.$('optVibrate').checked=settings.vibrate;
+}
+const renderTime=()=>{Tools.$('time').textContent=fmtTime(game.elapsed);};
+
+// ---------- Moves ----------
+// Every change is a list of [cell, previous value, previous notes] – undo restores them in reverse
+function apply(changes){
+  if(!changes.length)return;
+  game.history.push(changes);
+  if(game.history.length>MAX_HISTORY)game.history.shift();
+}
+function select(i){
+  sel=i;render();
+  if(document.activeElement&&document.activeElement.classList.contains('cell')||document.activeElement===document.body)cells[i].focus({preventScroll:true});
+}
+// Sets digit d in cell i (0 clears); with autoNotes the digit is struck from the notes of the peers
+function setCell(i,d){
+  if(game.done||given[i])return false;
+  const changes=[[i,game.values[i],game.notes[i]]];
+  game.values[i]=d;game.notes[i]=0;
+  if(d&&settings.autoNotes)for(const j of S.PEERS[i])if(!game.values[j]&&game.notes[j]&(1<<d)){changes.push([j,0,game.notes[j]]);game.notes[j]&=~(1<<d);}
+  apply(changes);
+  checkSolved();
+  saveGame();render();
+  return true;
+}
+function toggleNote(i,d){
+  if(game.done||given[i]||game.values[i])return false;
+  apply([[i,0,game.notes[i]]]);
+  game.notes[i]^=1<<d;
+  saveGame();render();
+  return true;
+}
+function input(d){
+  if(sel<0||game.done||given[sel])return;
+  if(notesMode&&!game.values[sel])toggleNote(sel,d);
+  else setCell(sel,game.values[sel]===d?0:d);
+}
+function erase(){
+  if(sel<0||game.done||given[sel])return;
+  if(!game.values[sel]&&!game.notes[sel])return;
+  apply([[sel,game.values[sel],game.notes[sel]]]);
+  game.values[sel]=0;game.notes[sel]=0;
+  saveGame();render();
+}
+function undo(){
+  if(game.done)return;
+  const changes=game.history.pop();
+  if(!changes){Tools.toast(t('nothingToUndo'));return;}
+  for(let k=changes.length-1;k>=0;k--){const [i,v,n]=changes[k];game.values[i]=v;game.notes[i]=n;}
+  saveGame();render();
+  Tools.toast(t('undone'));
+}
+// Hint: the selected square if it is empty or wrong, else a wrong square, else the empty square with the fewest candidates
+function hintCell(){
+  if(sel>=0&&!given[sel]&&game.values[sel]!==solution[sel])return sel;
+  const wrong=game.values.findIndex((x,i)=>x&&x!==solution[i]);
+  if(wrong>=0)return wrong;
+  let best=-1,bestN=10;
+  for(let i=0;i<81;i++){if(game.values[i])continue;const n=S.count(S.candidates(game.values,i));if(n<bestN){best=i;bestN=n;}}
+  return best;
+}
+function hint(){
+  if(game.done)return -1;
+  const i=hintCell();
+  if(i<0)return -1;
+  game.hints++;sel=i;
+  setCell(i,solution[i]);
+  Tools.diag.log('hint',{hints:game.hints});
+  return i;
+}
+function checkSolved(){
+  if(game.done||game.values.join('')!==game.solution)return;
+  game.done=true;justSolved=true;game.history=[];
+  const s=stats[game.level];s.solved++;
+  game.newBest=!game.hints&&(!s.best||game.elapsed<s.best);
+  if(game.newBest)s.best=game.elapsed;
+  saveStats();
+  Tools.diag.log('solved',{level:game.level,seconds:game.elapsed,hints:game.hints,best:game.newBest});
+  if(settings.vibrate&&'vibrate' in navigator)try{navigator.vibrate([60,40,60]);}catch{/* ignore */}
+}
+const hasEntries=()=>game.values.some((x,i)=>x&&!given[i])||game.notes.some(Boolean);
+function startNew(level){
+  settings.level=level;saveSettings();
+  game=fresh(level);given=S.parse(game.puzzle);solution=S.parse(game.solution);
+  sel=-1;notesMode=false;justSolved=false;
+  saveGame();render();
+}
+
+// ---------- Controls ----------
+Tools.$('btnNotes').addEventListener('click',()=>{notesMode=!notesMode;render();});
+Tools.$('btnHint').addEventListener('click',hint);
+Tools.$('btnUndo').addEventListener('click',undo);
+Tools.$('btnNext').addEventListener('click',()=>{startNew(game.level);Tools.toast(t('newStarted',{lvl:t('lvl.'+game.level)}));});
+for(const b of document.querySelectorAll('[data-new]'))b.addEventListener('click',async()=>{
+  if(!game.done&&hasEntries()&&!await Tools.confirm(t('newQ'),{action:'ok'}))return;
+  startNew(b.dataset.new);Tools.menu.close();
+  Tools.toast(t('newStarted',{lvl:t('lvl.'+game.level)}));
+});
+Tools.$('btnRestart').addEventListener('click',async()=>{
+  if(hasEntries()&&!await Tools.confirm(t('restartQ'),{action:'reset'}))return;
+  game.values=S.parse(game.puzzle);game.notes=Array(81).fill(0);game.history=[];game.elapsed=0;game.hints=0;game.done=false;game.newBest=false;
+  sel=-1;justSolved=false;saveGame();render();Tools.menu.close();
+  Tools.diag.log('restart',{level:game.level});
+});
+Tools.$('optErrors').addEventListener('change',e=>{settings.showErrors=e.target.checked;saveSettings();render();});
+Tools.$('optAutoNotes').addEventListener('change',e=>{settings.autoNotes=e.target.checked;saveSettings();});
+Tools.$('optVibrate').addEventListener('change',e=>{settings.vibrate=e.target.checked;saveSettings();});
+
+// Keyboard: arrows move, 1–9 enter, 0/Backspace/Delete erase, N toggles notes (not while typing elsewhere or in the menu)
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  const tg=e.target;
+  if(tg&&tg.closest&&(tg.closest('input,textarea,select,dialog,[contenteditable]')||(tg!==document.body&&!tg.closest('#play'))))return;
+  const moves={ArrowUp:-9,ArrowDown:9,ArrowLeft:-1,ArrowRight:1};
+  if(e.key in moves){
+    e.preventDefault();
+    if(sel<0){select(0);return;}
+    const r=S.ROW[sel],c=S.COL[sel];
+    const nr=(r+(e.key==='ArrowUp'?-1:e.key==='ArrowDown'?1:0)+9)%9,nc=(c+(e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0)+9)%9;
+    sel=nr*9+nc;render();cells[sel].focus({preventScroll:true});return;
+  }
+  if(/^[1-9]$/.test(e.key)){e.preventDefault();input(Number(e.key));return;}
+  if(e.key==='0'||e.key==='Backspace'||e.key==='Delete'){e.preventDefault();erase();return;}
+  if(e.key==='n'||e.key==='N'){e.preventDefault();notesMode=!notesMode;render();}
+});
+
+// ---------- Clock: runs while the page is visible and the puzzle is open ----------
+let lastSave=0;
+setInterval(()=>{
+  if(game.done||document.visibilityState!=='visible')return;
+  game.elapsed++;renderTime();
+  if(++lastSave>=10){lastSave=0;saveGame();}
+},1000);
+const flush=()=>{lastSave=0;saveGame();};
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')flush();});
+window.addEventListener('pagehide',flush);
+
+Tools.onLang(render);
+Tools.diag.info(()=>({level:game.level,givens:given.filter(Boolean).length,filled:game.values.filter(Boolean).length,
+  elapsed:game.elapsed,hints:game.hints,done:game.done,history:game.history.length,notesMode,settings}));
+render();
+
+// ---------- WebMCP ----------
+const rowsOf=g=>[0,1,2,3,4,5,6,7,8].map(r=>g.slice(r*9,r*9+9).map(x=>x||'.').join(''));
+const view=()=>({
+  difficulty:game.level,
+  board:rowsOf(game.values),
+  givens:rowsOf(given),
+  format:'9 rows from the top, each 9 characters from the left; "." is an empty square',
+  status:game.done?'solved':'playing',
+  empty_squares:game.values.filter(x=>!x).length,
+  rule_conflicts:S.conflicts(game.values).map(i=>({row:S.ROW[i]+1,column:S.COL[i]+1})),
+  elapsed_seconds:game.elapsed,hints_used:game.hints
+});
+Tools.mcp.register({
+  name:'get_game',title:'Read the puzzle',readOnly:true,
+  description:'Reads the current sudoku: the board and the given digits as 9 strings of 9 characters ("." = empty), the difficulty (easy, medium, hard), the status (playing or solved), the number of empty squares, squares that break a rule (same digit twice in a row, column or box), the time so far and the hints used. The solution is not included.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>view()
+});
+Tools.mcp.register({
+  name:'set_cell',title:'Enter a digit',label:'mcp.set',
+  description:'Enters a digit 1-9 in a square, or clears it with 0, as if the user tapped it on the number pad (undo works the same). Given squares cannot be changed. Rows and columns count 1-9 from the top left. Shows the digit on the board and returns the puzzle afterwards (same as get_game).',
+  inputSchema:{type:'object',properties:{
+    row:{type:'integer',minimum:1,maximum:9,description:'Row 1-9 from the top.'},
+    column:{type:'integer',minimum:1,maximum:9,description:'Column 1-9 from the left.'},
+    digit:{type:'integer',minimum:0,maximum:9,description:'Digit 1-9, or 0 to clear the square.'}
+  },required:['row','column','digit'],additionalProperties:false},
+  execute:({row,column,digit})=>{
+    const i=(row-1)*9+(column-1);
+    if(game.done)throw new Error('The puzzle is solved – start a new one with new_game.');
+    if(given[i])throw new Error(`Row ${row}, column ${column} is a given digit and cannot be changed.`);
+    sel=i;
+    if(game.values[i]!==digit)setCell(i,digit);else render();
+    return view();
+  }
+});
+Tools.mcp.register({
+  name:'new_game',title:'Start a new puzzle',label:'mcp.new',
+  description:'Starts a new sudoku with exactly one solution. Only possible while the current puzzle has no entries of the user yet or is solved, so no progress is lost. Returns the new puzzle (same as get_game).',
+  inputSchema:{type:'object',properties:{
+    difficulty:{type:'string',enum:['easy','medium','hard'],description:'easy (40 givens), medium (32) or hard (about 22-27). Default: the last one used.'}
+  },additionalProperties:false},
+  execute:({difficulty}={})=>{
+    if(!game.done&&hasEntries())throw new Error('The current puzzle has entries – only the user can discard it (menu, New game).');
+    startNew(difficulty||settings.level);
+    return view();
+  }
+});
+})();
+</script>
+</body>
+</html>
