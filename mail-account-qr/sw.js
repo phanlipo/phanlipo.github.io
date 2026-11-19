@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "mail-account-qr";
-const VERSION = '30ded55d4019';
+const VERSION = '88bb2ea1f5b8';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

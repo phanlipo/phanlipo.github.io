@@ -265,6 +265,21 @@ test.describe('menu sub pages', () => {
     await expect(page.locator('#appMenu .menu-group')).toBeVisible();
   });
 
+  test('rows of the standard list: icons and texts line up', async ({ page }) => {
+    // mail-account-qr: own settings section in the list, then data, help (own gap rules) and install
+    await page.setViewportSize(PHONES.portrait);
+    await page.goto('/mail-account-qr/');
+    await page.locator('.menu-btn').click();
+    const rows = await page.locator('#appMenu .menu-group>details:not([hidden])>summary').evaluateAll(els => els.map(s => ({
+      text: s.textContent.trim(), ico: s.querySelector('.menu-ico').getBoundingClientRect().left, label: s.querySelector('.menu-label').getBoundingClientRect().left,
+    })));
+    expect(rows.map(r => r.text)).toEqual(['Einstellungen', 'Daten sichern & übertragen', 'Anleitung & Hinweise', 'Als App installieren']);
+    for (const r of rows) {
+      expect(r.ico, r.text).toBeCloseTo(rows[0].ico, 0);
+      expect(r.label, r.text).toBeCloseTo(rows[0].label, 0);
+    }
+  });
+
   test('only one page at a time; Tools.menu.open(id) opens a page directly', async ({ page }) => {
     await page.goto(url);
     await page.evaluate(() => Tools.menu.open('menuInstall'));
