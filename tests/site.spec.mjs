@@ -104,10 +104,12 @@ test.describe('start page', () => {
       await chip.click();
       await expect(chip).toHaveAttribute('aria-pressed', 'true');
       await expect(all).toHaveAttribute('aria-pressed', 'false');
-      for (const t of list) {
-        const card = page.locator('.tool', { has: page.locator('h2', { hasText: t.title }) });
-        await expect(card).toBeVisible({ visible: t.tags.includes(tag) || t.features.includes(tag) });
-      }
+      // One round trip per category instead of one per tool and category (that grew past the test timeout in CI)
+      const expected = Object.fromEntries(list.map(t => [t.title, t.tags.includes(tag) || t.features.includes(tag)]));
+      await expect.poll(() => page.evaluate(titles => Object.fromEntries(titles.map(title => {
+        const cards = [...document.querySelectorAll('.tool')].filter(c => [...c.querySelectorAll('h2')].some(h => h.textContent.includes(title)));
+        return [title, cards.length === 1 ? cards[0].checkVisibility() : `${cards.length} cards`];
+      })), Object.keys(expected)), { message: `filter ${tag}` }).toEqual(expected);
       await expectNoHorizontalScroll(page);
     }
     // Tapping the active category again shows everything
