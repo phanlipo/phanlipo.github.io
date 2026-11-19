@@ -1,4 +1,7 @@
 # Runs the browser tests (tests/, Playwright) for every pull request and every push to main.
+# Pull requests run only the tests their changes need (tests/select.mjs: one app → its tests, shared
+# basics → everything, documentation → none); pushes to main and manual runs always run everything,
+# so whatever the selection misses turns main red right after the merge.
 # In CI every test gets one retry (playwright.config.mjs); tests that pass only on the retry are listed
 # as warnings and in the job summary (tests/flaky-summary.mjs) – fix them like red tests.
 name: Tests
@@ -17,15 +20,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # The suite is split over 3 runners in parallel (Playwright --shard), each with 4 workers.
+  # Which tests to run: mode all | some (grep) | none, and over how many runners
+  select:
+    name: Tests auswählen
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mode: ${{ steps.select.outputs.mode }}
+      grep: ${{ steps.select.outputs.grep }}
+      shards: ${{ steps.select.outputs.shards }}
+      total: ${{ steps.select.outputs.total }}
+    steps:
+      # The merge commit of the PR: its first parent is the current main, so HEAD^1...HEAD are exactly
+      # the PR's changes
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # select.mjs reads every app's sw.js to see which shared files and libraries it uses
+      - run: node scripts/build.mjs
+      - name: Select tests
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            node tests/select.mjs --base HEAD^1
+          else
+            node tests/select.mjs --all
+          fi
+
+  # The suite is split over up to 3 runners in parallel (Playwright --shard), each with 4 workers.
   shard:
-    name: Tests ${{ matrix.shard }}/3
+    name: Tests ${{ matrix.shard }}/${{ needs.select.outputs.total }}
+    needs: select
+    if: needs.select.outputs.mode != 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: ${{ fromJSON(needs.select.outputs.shards) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,7 +82,10 @@ jobs:
       - name: Build generated files
         run: node scripts/build.mjs
       - name: Run tests
-        run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/3
+        env:
+          SHARD: ${{ matrix.shard }}/${{ needs.select.outputs.total }}
+          GREP: ${{ needs.select.outputs.grep }}
+        run: npx playwright test --project=chromium --shard="$SHARD" ${GREP:+--grep "$GREP"}
       - name: List flaky tests
         id: flaky
         if: always()
@@ -71,6 +112,8 @@ jobs:
   # its runner to itself, with 2 workers.
   engines:
     name: ${{ matrix.engine == 'webkit' && 'WebKit' || 'Firefox' }}
+    needs: select
+    if: needs.select.outputs.mode != 'none'
     runs-on: macos-latest
     timeout-minutes: 15
     strategy:
@@ -90,7 +133,9 @@ jobs:
       - name: Build generated files
         run: node scripts/build.mjs
       - name: Run tests
-        run: npx playwright test --project=${{ matrix.engine }} --workers=2
+        env:
+          GREP: ${{ needs.select.outputs.grep }}
+        run: npx playwright test --project=${{ matrix.engine }} --workers=2 ${GREP:+--grep "$GREP"}
       - name: List flaky tests
         id: flaky
         if: always()
@@ -121,18 +166,23 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run lint
 
-  # The check "test" that the branch protection of main requires: green only when every part is green.
+  # The check "test" that the branch protection of main requires: green only when every part is green
+  # (the browser tests may be skipped only when the selection needs none).
   test:
-    needs: [shard, engines, lint]
+    needs: [select, shard, engines, lint]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: All parts passed
         env:
+          SELECT: ${{ needs.select.result }}
+          MODE: ${{ needs.select.outputs.mode }}
           SHARDS: ${{ needs.shard.result }}
           ENGINES: ${{ needs.engines.result }}
           LINT: ${{ needs.lint.result }}
         run: |
-          echo "Chromium: $SHARDS, WebKit & Firefox: $ENGINES, ESLint: $LINT"
-          test "$SHARDS" = success && test "$ENGINES" = success && test "$LINT" = success
+          echo "Selection: $SELECT ($MODE), Chromium: $SHARDS, WebKit & Firefox: $ENGINES, ESLint: $LINT"
+          test "$SELECT" = success && test "$LINT" = success
+          if [ "$MODE" = none ]; then exit 0; fi
+          test "$SHARDS" = success && test "$ENGINES" = success
