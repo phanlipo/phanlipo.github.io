@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>4 gewinnt</title>
+<meta name="description" content="Steine einwerfen, vier in eine Reihe bringen – zu zweit an einem Handy oder gegen den Computer, mit Punktestand.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="circles">
+<meta name="tool:color" content="#1f56a8">
+<meta name="tool:short-name" content="4 gewinnt">
+<meta name="tool:title-en" content="Four in a Row">
+<meta name="tool:description-en" content="Drop discs, get four in a row – two players on one phone or against the computer, with a running score.">
+<meta name="tool:short-name-en" content="4 in a Row">
+<meta name="tool:storage" content="four-in-a-row.">
+<meta name="tool:webmcp" content="get_game, drop_disc, new_round">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann den Spielstand lesen, einen Stein in eine Spalte werfen und eine neue Runde starten; jeder Zug erscheint im Spielfeld.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the game, drop a disc into a column and start a new round; every move shows up on the board.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gZwaqRUuNcU7frpndVTzxqtSAmc0VQ3tXGbAdpRu2b0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="4 gewinnt">
+<meta name="theme-color" content="#1f56a8">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#1f56a8;--accent-text:#ffffff;--board:#1f56a8;--hole:var(--bg);--disc-r:#d32f2f;--disc-y:#f5b800}
+@media (prefers-color-scheme: dark){:root{--accent:#8ab4ec;--accent-text:#0d1828;--board:#24508f;--hole:#0d1218;--disc-r:#ef5350;--disc-y:#ffd54f}}
+/* Stage layout: score on top, the board fills the rest, status and button at the thumb */
+main{max-width:640px;margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:12px}
+
+/* ---------- Score ---------- */
+.score{flex:none;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:stretch}
+.player{display:flex;align-items:center;gap:8px;min-width:0;padding:6px 8px;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);transition:border-color .2s,box-shadow .2s}
+.player.y{flex-direction:row-reverse;text-align:end}
+.player.r{--pc:var(--disc-r)}.player.y{--pc:var(--disc-y)}
+.player.turn{border-color:var(--pc);box-shadow:inset 0 0 0 1px var(--pc)}
+.player .sym{flex:none;width:24px;height:24px;border-radius:50%;background:var(--pc);box-shadow:inset 0 0 0 2px rgba(0,0,0,.18)}
+.player .who{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.player .pname{font-weight:600;overflow-wrap:break-word;hyphens:auto;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.player .pts,.draws .pts{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.draws{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 4px;color:var(--muted);font-size:13px;line-height:1.2}
+.draws .pts{color:var(--text)}
+
+/* ---------- Board: 7 column buttons, each with 6 holes ---------- */
+.board-wrap{flex:1;min-height:180px;container-type:size;display:grid;place-items:center}
+.board{width:min(100cqw,calc(100cqh * 7 / 6));aspect-ratio:7/6;display:grid;grid-template-columns:repeat(7,1fr);padding:1.2%;background:var(--board);border-radius:14px;box-shadow:var(--shadow)}
+.col{border:0;margin:0;padding:0;background:none;display:grid;grid-template-rows:repeat(6,1fr);cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;min-width:0}
+.col:disabled{cursor:default}
+.col:focus-visible{outline:3px solid #fff;outline-offset:-2px}
+.slot{position:relative;display:block;min-height:0}
+.slot::before{content:"";position:absolute;inset:9%;border-radius:50%;background:var(--hole);box-shadow:inset 0 2px 4px rgba(0,0,0,.25)}
+.disc{position:absolute;inset:9%;border-radius:50%;box-shadow:inset 0 0 0 3px rgba(0,0,0,.16),inset 0 -4px 0 rgba(0,0,0,.12)}
+.disc.r{background:var(--disc-r)}.disc.y{background:var(--disc-y)}
+/* Newly dropped disc falls from above the board: --fall = rows it travels (disc = 82 % of a slot) */
+.disc.new{animation:fall calc(.12s + var(--fall) * .05s) cubic-bezier(.5,0,1,1)}
+@keyframes fall{from{transform:translateY(calc(var(--fall) * -122%))}}
+.disc.win{box-shadow:inset 0 0 0 3px rgba(0,0,0,.16),0 0 0 3px #fff}
+.board.over .disc:not(.win){opacity:.4;transition:opacity .3s}
+/* Preview of where the disc would land (only with a mouse – a finger would leave it behind) */
+@media (hover:hover){
+  .board[data-turn="r"] .col:not(:disabled):hover .slot.next::after,.board[data-turn="y"] .col:not(:disabled):hover .slot.next::after{content:"";position:absolute;inset:9%;border-radius:50%;opacity:.45}
+  .board[data-turn="r"] .col:hover .slot.next::after{background:var(--disc-r)}
+  .board[data-turn="y"] .col:hover .slot.next::after{background:var(--disc-y)}
+}
+@media (prefers-reduced-motion: reduce){.disc.new{animation:none}}
+
+.status{flex:none;text-align:center;min-height:28px;margin:0;font-weight:600;font-size:18px;overflow-wrap:anywhere}
+.actions{flex:none;display:grid}
+.actions .btn{min-height:52px;font-size:17px;font-weight:600}
+
+/* ---------- Settings ---------- */
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-child{margin-top:0}
+.info{color:var(--muted);margin:6px 0 0}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">4 gewinnt</span></h1>
+  <p class="sub" data-i18n="sub">Vier in einer Reihe</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnUndo" aria-label="Zug zurücknehmen" title="Zug zurücknehmen" data-i18n-attr="aria-label:undo; title:undo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrow-back-up"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card play" aria-label="Spielfeld" data-i18n-attr="aria-label:boardLabel">
+    <div class="score">
+      <div class="player r" id="pR"><span class="sym" aria-hidden="true"></span><span class="who"><span class="pname" id="nameR"></span><span class="pts" id="ptsR">0</span></span></div>
+      <div class="draws"><span data-i18n="draws">Remis</span><span class="pts" id="ptsD">0</span></div>
+      <div class="player y" id="pY"><span class="sym" aria-hidden="true"></span><span class="who"><span class="pname" id="nameY"></span><span class="pts" id="ptsY">0</span></span></div>
+    </div>
+    <div class="board-wrap">
+      <div class="board" id="board" role="group" aria-label="Spielfeld: eine Spalte antippen" data-i18n-attr="aria-label:boardHint"></div>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="actions">
+      <button type="button" class="btn primary" id="btnNext" data-i18n="next">Nächste Runde</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-settings" data-menu data-icon="settings">
+    <h2 id="h-settings" data-i18n="settings">Spiel &amp; Einstellungen</h2>
+    <h3 id="h-opp" data-i18n="opponent">Gegner</h3>
+    <div class="seg" id="opp" role="group" aria-labelledby="h-opp">
+      <button type="button" data-o="human"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span data-i18n="opp.human">Zu zweit</span></button>
+      <button type="button" data-o="cpu"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#device-desktop"/></svg><span data-i18n="opp.cpu">Computer</span></button>
+    </div>
+    <div id="levelBox">
+      <h3 id="h-level" data-i18n="level">Stärke des Computers</h3>
+      <div class="seg" id="levels" role="group" aria-labelledby="h-level">
+        <button type="button" data-l="easy" data-i18n="level.easy">Leicht</button>
+        <button type="button" data-l="medium" data-i18n="level.medium">Mittel</button>
+        <button type="button" data-l="hard" data-i18n="level.hard">Schwer</button>
+      </div>
+    </div>
+    <h3 data-i18n="namesH">Namen</h3>
+    <div class="form-field"><label for="inR" data-i18n="defR">Rot</label><input type="text" id="inR" maxlength="20" autocomplete="off" spellcheck="false"></div>
+    <div class="form-field" id="fieldY"><label for="inY" data-i18n="defY">Gelb</label><input type="text" id="inY" maxlength="20" autocomplete="off" spellcheck="false"></div>
+    <p class="info" data-i18n="startInfo">Wer beginnt, wechselt jede Runde. Ein Wechsel des Gegners startet einen neuen Punktestand.</p>
+    <div class="row" style="margin-top:10px"><button type="button" class="btn" id="btnReset"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="resetScore">Punkte auf 0 setzen</span></button></div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Das Spiel für zwei an einem Handy: Abwechselnd werft ihr einen roten oder gelben Stein in eine der sieben Spalten; er fällt bis ganz nach unten. Wer zuerst vier eigene Steine in einer Reihe hat – waagerecht, senkrecht oder diagonal –, gewinnt die Runde. Ist das Feld voll ohne Reihe, ist es unentschieden.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Irgendwo in eine Spalte tippen wirft den Stein dessen ein, der dran ist. Ist eine Spalte voll, lässt sie sich nicht mehr antippen. Oben leuchtet auf, wer am Zug ist, und zählt die gewonnenen Runden.</li>
+    <li>Mit der Tastatur: mit Tab zur Spalte, mit Enter oder Leertaste einwerfen.</li>
+    <li><b>Nächste Runde</b> leert das Feld. Wer beginnt, wechselt jede Runde ab.</li>
+    <li><b>Zug zurücknehmen</b> (Pfeil oben) nimmt den letzten Zug zurück – gegen den Computer auch seinen Antwortzug. Nach dem Ende einer Runde geht das nicht mehr.</li>
+    <li>Im Menü: <b>Gegner</b> (zu zweit oder gegen den Computer, der Gelb spielt), seine <b>Stärke</b> (Leicht spielt meist zufällig, Mittel gewinnt und blockt, wo er kann, Schwer rechnet sieben Züge voraus), <b>Namen</b> und <b>Punkte auf 0 setzen</b>.</li>
+    <li>Tipp: Die mittlere Spalte ist die wertvollste – durch sie laufen die meisten Reihen.</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Gespeichert werden nur die laufende Runde, der Punktestand, die Namen und die Einstellungen – in diesem Browser. Alles funktioniert offline.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>The game for two on one phone: take turns dropping a red or yellow disc into one of the seven columns; it falls all the way down. The first to get four of their discs in a row – across, down or diagonally – wins the round. If the board is full without a row, it’s a draw.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li>Tap anywhere in a column to drop the disc of whoever’s turn it is. A full column can no longer be tapped. The top shows whose turn it is and counts the rounds won.</li>
+    <li>With a keyboard: Tab to a column, Enter or Space to drop.</li>
+    <li><b>Next round</b> clears the board. Who starts alternates each round.</li>
+    <li><b>Undo move</b> (arrow at the top) takes back the last move – against the computer its reply as well. Once a round is over, undo is no longer possible.</li>
+    <li>In the menu: <b>Opponent</b> (two players or the computer, which plays yellow), its <b>strength</b> (Easy mostly plays at random, Medium wins and blocks when it can, Hard looks seven moves ahead), <b>names</b> and <b>Reset score</b>.</li>
+    <li>Tip: the middle column is the most valuable – most rows run through it.</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Only the current round, the score, the names and the settings are stored – in this browser. Everything works offline.</li>
+  </ul>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann den Spielstand lesen, einen Stein in eine Spalte werfen und eine neue Runde starten; jeder Zug erscheint im Spielfeld. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the game, drop a disc into a column and start a new round; every move shows up on the board. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 919485311b16</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="game.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    defR:'Rot',defY:'Gelb',cpuName:'Computer',
+    turn:'{name} ist dran',cpuThinks:'Computer überlegt …',
+    won:'{name} gewinnt!',draw:'Unentschieden',
+    col:'Spalte {c}: {discs}',colEmpty:'leer',colFree:'{n} frei',colFull:'voll',
+    discR:'Rot',discY:'Gelb',
+    undone:'Zug zurückgenommen',scoreReset:'Punkte auf 0 gesetzt',
+    'mcp.move':'Stein in Spalte {n}','mcp.new':'Neue Runde'
+  },
+  en:{
+    title:'Four in a Row',sub:'Four in a row wins',undo:'Undo move',boardLabel:'Game board',boardHint:'Game board: tap a column',draws:'Draws',next:'Next round',
+    settings:'Game & settings',opponent:'Opponent','opp.human':'Two players','opp.cpu':'Computer',
+    level:'Computer strength','level.easy':'Easy','level.medium':'Medium','level.hard':'Hard',
+    namesH:'Names',
+    startInfo:'Who starts alternates every round. Changing the opponent starts a new score.',resetScore:'Reset score',
+    defR:'Red',defY:'Yellow',cpuName:'Computer',
+    turn:'{name}’s turn',cpuThinks:'Computer is thinking …',
+    won:'{name} wins!',draw:'Draw',
+    col:'Column {c}: {discs}',colEmpty:'empty',colFree:'{n} free',colFull:'full',
+    discR:'red',discY:'yellow',
+    undone:'Move undone',scoreReset:'Score reset',
+    'mcp.move':'Disc in column {n}','mcp.new':'New round'
+  }
+});
+const t=Tools.t,G=window.FourInARow;
+const LS='four-in-a-row.state.v1';
+const OPPS=['human','cpu'],LEVELS=['easy','medium','hard'];
+const fresh=()=>({moves:[],starter:'r',opp:'human',level:'medium',names:{r:'',y:''},score:{r:0,y:0,draw:0}});
+function sane(s){
+  const d=fresh();
+  if(!s||typeof s!=='object')return d;
+  if(OPPS.includes(s.opp))d.opp=s.opp;
+  if(LEVELS.includes(s.level))d.level=s.level;
+  if(s.starter==='y')d.starter='y';
+  if(s.names&&typeof s.names==='object')for(const k of ['r','y'])if(typeof s.names[k]==='string')d.names[k]=s.names[k].slice(0,20);
+  if(s.score&&typeof s.score==='object')for(const k of ['r','y','draw'])if(Number.isInteger(s.score[k])&&s.score[k]>=0)d.score[k]=s.score[k];
+  // Replay the moves (columns 0-6): drops anything that isn't a legal game
+  if(Array.isArray(s.moves)){let b=G.empty(),p=d.starter;
+    for(const m of s.moves){if(!Number.isInteger(m)||m<0||m>6||G.result(b))break;const n=G.drop(b,m,p);if(!n)break;b=n.board;p=G.other(p);d.moves.push(m);}}
+  return d;
+}
+const state=sane(Tools.load(LS,null));
+const save=()=>Tools.save(LS,state);
+let cpuTimer=0,lastNew=-1;
+
+// Board after all moves, plus the cell of the last disc
+function boardOf(){let b=G.empty(),p=state.starter,last=-1;for(const m of state.moves){const n=G.drop(b,m,p);b=n.board;last=n.index;p=G.other(p);}return {b,last};}
+const toMove=()=>state.moves.length%2?G.other(state.starter):state.starter;
+const isCpu=p=>state.opp==='cpu'&&p==='y';
+const nameOf=p=>isCpu(p)?t('cpuName'):(state.names[p].trim()||t(p==='r'?'defR':'defY'));
+
+// ---------- Board ----------
+const boardEl=Tools.$('board'),cols=[],slots=[];
+for(let c=0;c<G.COLS;c++){
+  const b=document.createElement('button');
+  b.type='button';b.className='col';b.dataset.c=String(c);
+  b.addEventListener('click',()=>humanMove(c));
+  for(let r=0;r<G.ROWS;r++){const s=document.createElement('span');s.className='slot';s.dataset.i=String(G.at(r,c));b.appendChild(s);slots[G.at(r,c)]=s;}
+  boardEl.appendChild(b);cols.push(b);
+}
+
+function render(){
+  const {b}=boardOf(),res=G.result(b),p=toMove(),busy=!res&&isCpu(p);
+  const win=new Set(res&&res.line?res.line:[]);
+  slots.forEach((s,i)=>{
+    const v=b[i]||'';
+    let d=s.querySelector('.disc');
+    if(!v){d?.remove();}
+    else if(!d||d.dataset.v!==v||i===lastNew){
+      d?.remove();d=document.createElement('span');d.className='disc '+v;d.dataset.v=v;
+      if(i===lastNew){d.classList.add('new');d.style.setProperty('--fall',String(Math.floor(i/G.COLS)+1));}
+      s.appendChild(d);
+    }
+    if(d)d.classList.toggle('win',win.has(i));
+    s.classList.remove('next');
+  });
+  cols.forEach((el,c)=>{
+    const row=G.dropRow(b,c);
+    if(row>=0)slots[G.at(row,c)].classList.add('next');
+    el.disabled=row<0||!!res||busy;
+    el.dataset.free=String(row+1);
+    const discs=[];for(let r=G.ROWS-1;r>=0;r--){const v=b[G.at(r,c)];if(v)discs.push(t(v==='r'?'discR':'discY'));}
+    const list=discs.length?discs.join(', '):t('colEmpty');
+    el.setAttribute('aria-label',t('col',{c:c+1,discs:list})+' – '+(row<0?t('colFull'):t('colFree',{n:row+1})));
+  });
+  lastNew=-1;
+  boardEl.classList.toggle('over',!!res);
+  boardEl.dataset.result=res?res.winner||'draw':'';
+  boardEl.dataset.turn=res?'':p;
+  Tools.$('nameR').textContent=nameOf('r');Tools.$('nameY').textContent=nameOf('y');
+  Tools.$('ptsR').textContent=Tools.fmt(state.score.r,0);Tools.$('ptsY').textContent=Tools.fmt(state.score.y,0);Tools.$('ptsD').textContent=Tools.fmt(state.score.draw,0);
+  Tools.$('pR').classList.toggle('turn',!res&&p==='r');Tools.$('pY').classList.toggle('turn',!res&&p==='y');
+  const st=Tools.$('status');
+  st.textContent=res?(res.winner?t('won',{name:nameOf(res.winner)}):t('draw')):busy?t('cpuThinks'):t('turn',{name:nameOf(p)});
+  st.dataset.state=res?'over':busy?'cpu':'turn';
+  Tools.$('btnNext').hidden=!res;
+  Tools.$('btnUndo').disabled=!!res||!undoableCount();
+  // Settings
+  document.querySelectorAll('#opp button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.o===state.opp)));
+  document.querySelectorAll('#levels button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.l===state.level)));
+  Tools.$('levelBox').hidden=state.opp!=='cpu';Tools.$('fieldY').hidden=state.opp==='cpu';
+  const inR=Tools.$('inR'),inY=Tools.$('inY');
+  inR.placeholder=t('defR');inY.placeholder=t('defY');
+  if(document.activeElement!==inR)inR.value=state.names.r;
+  if(document.activeElement!==inY)inY.value=state.names.y;
+}
+
+// How many moves undo removes: against the computer back to the last human (red) move
+function undoableCount(){
+  if(state.opp!=='cpu')return state.moves.length?1:0;
+  let n=state.moves.length,k=0,p=toMove();
+  while(n>0){n--;k++;p=G.other(p);if(p==='r')return k;}
+  return 0;
+}
+
+function place(c){
+  const {b}=boardOf();
+  if(G.result(b))throw new Error('round_over');
+  const n=G.drop(b,c,toMove());
+  if(!n)throw new Error('full');
+  state.moves.push(c);lastNew=n.index;
+  const res=G.result(n.board);
+  if(res){state.score[res.winner||'draw']++;Tools.diag.log('round over',{result:res.winner||'draw',moves:state.moves.length,opp:state.opp});
+    if(navigator.vibrate&&res.winner)try{navigator.vibrate(60);}catch{/* ignore */}}
+  save();render();
+  return res;
+}
+function humanMove(c){
+  if(isCpu(toMove()))return;
+  try{place(c);}catch{return;}
+  scheduleCpu();
+}
+const cpuPick=()=>G.cpuMove(boardOf().b,'y',state.level);
+function scheduleCpu(){
+  clearTimeout(cpuTimer);
+  if(G.result(boardOf().b)||!isCpu(toMove()))return;
+  render();
+  cpuTimer=setTimeout(()=>{cpuTimer=0;if(!G.result(boardOf().b)&&isCpu(toMove()))place(cpuPick());},500);
+}
+function newRound(){
+  clearTimeout(cpuTimer);cpuTimer=0;
+  if(state.moves.length)state.starter=G.other(state.starter);
+  state.moves=[];lastNew=-1;save();render();scheduleCpu();
+  Tools.diag.log('new round',{starter:state.starter,opp:state.opp,level:state.level});
+}
+Tools.$('btnNext').addEventListener('click',newRound);
+Tools.$('btnUndo').addEventListener('click',()=>{
+  const k=undoableCount();if(!k||G.result(boardOf().b))return;
+  clearTimeout(cpuTimer);cpuTimer=0;
+  state.moves.splice(-k,k);lastNew=-1;save();render();scheduleCpu();
+  Tools.toast(t('undone'));
+});
+Tools.$('btnReset').addEventListener('click',()=>{const old=state.score;state.score={r:0,y:0,draw:0};save();render();Tools.undo(t('scoreReset'),()=>{state.score=old;save();render();});});
+document.querySelectorAll('#opp button').forEach(x=>x.addEventListener('click',()=>{
+  if(state.opp===x.dataset.o)return;
+  clearTimeout(cpuTimer);cpuTimer=0;
+  state.opp=x.dataset.o;state.score={r:0,y:0,draw:0};state.moves=[];state.starter='r';lastNew=-1;
+  save();render();Tools.diag.log('opponent',{opp:state.opp});
+}));
+document.querySelectorAll('#levels button').forEach(x=>x.addEventListener('click',()=>{state.level=x.dataset.l;save();render();Tools.diag.log('level',{level:state.level});}));
+for(const p of ['r','y'])Tools.$('in'+p.toUpperCase()).addEventListener('input',e=>{state.names[p]=e.target.value.slice(0,20);save();render();});
+
+Tools.onLang(render);
+Tools.diag.info(()=>({opp:state.opp,level:state.level,moves:state.moves.length,starter:state.starter,score:state.score}));
+render();
+scheduleCpu();
+
+// ---------- WebMCP ----------
+const NAME={r:'red',y:'yellow'};
+const view=()=>{
+  const {b}=boardOf(),res=G.result(b);
+  const rows=[];for(let r=0;r<G.ROWS;r++)rows.push(b.slice(r*G.COLS,r*G.COLS+G.COLS).map(v=>v?NAME[v]:''));
+  return {board:rows,board_layout:'6 rows from the top, 7 columns from the left; discs fall to the bottom',
+    playable_columns:res?[]:G.free(b).map(c=>c+1),
+    opponent:state.opp==='cpu'?'computer':'two_players',computer_level:state.opp==='cpu'?state.level:null,
+    to_move:res?null:NAME[toMove()],status:res?(res.winner?NAME[res.winner]+'_wins':'draw'):'playing',
+    winning_cells:res&&res.line?res.line.map(i=>({row:Math.floor(i/G.COLS)+1,column:i%G.COLS+1})):null,
+    moves:state.moves.length,starter:NAME[state.starter],
+    score:{red:state.score.r,yellow:state.score.y,draws:state.score.draw}};
+};
+const OVER='The round is over – start a new one with new_round.';
+Tools.mcp.register({
+  name:'get_game',title:'Read the game',readOnly:true,
+  description:'Reads the current four-in-a-row round: the board (6 rows from the top, 7 columns from the left, each "red", "yellow" or "" for empty), the columns that still take a disc, whose turn it is, the status (playing, red_wins, yellow_wins, draw), the four winning cells, the opponent (two_players or computer, which plays yellow) and the score.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>view()
+});
+Tools.mcp.register({
+  name:'drop_disc',title:'Drop a disc',label:'mcp.move',
+  description:'Drops the disc of the player whose turn it is into a column (1-7 from the left); it lands on the lowest free cell. Against the computer only red can be moved; the computer then answers right away. Shows the move in the app and returns the game afterwards (same as get_game).',
+  inputSchema:{type:'object',properties:{column:{type:'integer',minimum:1,maximum:7,description:'Column 1-7 from the left.'}},required:['column'],additionalProperties:false},
+  execute:({column})=>{
+    clearTimeout(cpuTimer);cpuTimer=0;
+    if(G.result(boardOf().b))throw new Error(OVER);
+    if(isCpu(toMove())){place(cpuPick());if(G.result(boardOf().b))throw new Error(OVER);}
+    if(G.dropRow(boardOf().b,column-1)<0)throw new Error(`Column ${column} is full.`);
+    place(column-1);
+    if(!G.result(boardOf().b)&&isCpu(toMove()))place(cpuPick());
+    return view();
+  }
+});
+Tools.mcp.register({
+  name:'new_round',title:'Start a new round',label:'mcp.new',
+  description:'Clears the board and starts the next round; who starts alternates (if the computer starts, it moves right away). The score is kept. Returns the new game (same as get_game).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{newRound();clearTimeout(cpuTimer);cpuTimer=0;if(isCpu(toMove()))place(cpuPick());return view();}
+});
+})();
+</script>
+</body>
+</html>
