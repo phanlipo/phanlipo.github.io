@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "font-creator";
-const VERSION = '85af71b8f6c8';
+const VERSION = 'd58a13b0b433';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
