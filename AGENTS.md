@@ -110,10 +110,11 @@ Ziel: keine ungepflegte oder verwundbare Bibliothek ausliefern. Einzige von Hand
 ## Tests
 
 - **Fehler nie durch Abschwächen, Überspringen oder Löschen eines Tests „beheben“.** Erwartete Werte unabhängig nachrechnen.
+- **Testauswahl im PR** (`tests/select.mjs`): Ist eine App von einer Datei abhängig, die die Regeln nicht sehen, und wird `main` deshalb erst nach dem Merge rot, die Regel in `select.mjs` ergänzen (mit Test in `select.spec.mjs`) – nicht auf die volle Suite zurückschalten.
 - In CI ein zweiter Versuch je Test; wer erst dann grün wird, ist **wackelig** und wird wie ein roter Test behandelt: Ursache beheben (auf Zustände statt feste Zeiten warten, Zufall festlegen), nie Retries oder Timeouts erhöhen.
 - Helfer aus `tests/helpers.mjs` nutzen: `openMenu`/`closeMenu`, `switchLang`, `clipboardText` (nie die echte Zwischenablage), `mockLaunchQueue`. Englische Tests mit `test.use({ locale: 'en-US' })`. Externe Dienste werden blockiert bzw. per Route simuliert; echte Downloads nur in `tests/manual/`.
 
-**Vor dem Commit** (die volle Suite läuft in CI, lokal > 10 Minuten):
+**Vor dem Commit** (in CI laufen bei PRs die Tests, die `tests/select.mjs` aus den geänderten Dateien auswählt, auf `main` die volle Suite; lokal > 10 Minuten):
 
 - Immer: `npm run lint` und `node scripts/build.mjs --check` („Up to date“). ESLint-Meldungen beheben statt Regeln abzuschalten.
 - App geändert: `npm run test:app -- <ordner>` (fachliche + alle allgemeinen Prüfungen für diese App).
