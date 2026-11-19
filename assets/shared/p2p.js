@@ -1,5 +1,5 @@
 /* Direct connections between devices (WebRTC data channels) without a server – window.P2P.
-   Used by card-games, quartet, sea-battle and rock-paper-scissors (all through p2p-connect.js: codes, scanner, texts). Do not change the format of the codes
+   Used by card-games, quartet, sea-battle and rock-paper-scissors (all through p2p-connect.js: codes, scanner, texts); mail-account-qr uses only drawQr, scanner and readImage. Do not change the format of the codes
    without still accepting the old one: devices with an older and a newer app version must still connect.
 
    Two codes are exchanged (QR code, link or copied text):
@@ -29,6 +29,8 @@
      P2P.scanner(video, { onText(text) → true to stop, onStatus(code, detail) })
        → { start(), stop(), active(), engine() }
        status codes: 'noCam', 'noDecoder', 'camDenied', 'camFail' (detail: error name), 'hint'
+     await P2P.readImage(source)      → text of the first QR code in a picture (ImageBitmap, canvas, img) or null;
+                                        Error('noDecoder') when neither decoder is there (used by mail-account-qr)
 */
 (function () {
   'use strict';
@@ -225,5 +227,24 @@
     return { start, stop, active: () => !!stream, engine: () => engine };
   }
 
-  window.P2P = { peer, check, link, drawQr, scanner, encode, decode, extract, kindOf };
+  /** QR code in a still picture (screenshot, photo): BarcodeDetector first, then zxing-wasm */
+  async function readImage(source) {
+    const det = await getDetector();
+    if (det) {
+      try { const r = await det.detect(source); if (r && r[0] && r[0].rawValue) return r[0].rawValue; } catch (e) { log('detect image', e); }
+    }
+    if (!(await prepareWasm())) { if (det) return null; throw new Error('noDecoder'); }
+    const W = source.width, H = source.height, sc = Math.min(1, 2400 / Math.max(W, H, 1));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(W * sc)); canvas.height = Math.max(1, Math.round(H * sc));
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    const res = await window.ZXingWASM.readBarcodes(ctx.getImageData(0, 0, canvas.width, canvas.height), { formats: ['QRCode'], tryHarder: true, maxNumberOfSymbols: 1 });
+    const hit = res && res.find(r => r.isValid !== false && r.text);
+    log('image read', { engine: det ? 'BarcodeDetector+zxing-wasm' : 'zxing-wasm', found: !!hit });
+    return hit ? hit.text : null;
+  }
+
+  window.P2P = { peer, check, link, drawQr, scanner, readImage, encode, decode, extract, kindOf };
 })();

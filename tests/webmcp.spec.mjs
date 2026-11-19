@@ -523,6 +523,48 @@ test.describe('chain-transaction tools', () => {
   });
 });
 
+test.describe('mail-account-qr tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/mail-account-qr/'));
+
+  test('add_account fills a known provider, shows the QR code; get_accounts reads it; never a password', async ({ page }) => {
+    const r = await call(page, 'mail_account_qr_add_account', { email: 'lena@web.de', display_name: 'Lena' });
+    expect(r).toEqual({ ok: true, result: { accounts: 1, qr_codes: 1, account: {
+      email: 'lena@web.de', display_name: 'Lena', account_name: '',
+      incoming: { protocol: 'imap', host: 'imap.web.de', port: 993, security: 'ssl', auth: 'password', username: 'lena@web.de' },
+      outgoing: { host: 'smtp.web.de', port: 587, security: 'starttls', auth: 'password', username: 'lena@web.de' } } } });
+    await expect(page.locator('#qrCard')).toBeVisible();
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Konto hinzugefügt');
+    expect(JSON.parse(await page.locator('#qr').getAttribute('data-text'))).toEqual([1, [1, 1],
+      [0, 'imap.web.de', 993, 3, 1, 'lena@web.de', '', ''], [[[0, 'smtp.web.de', 587, 2, 1, 'lena@web.de', ''], ['lena@web.de', 'Lena']]]]);
+    // Own server: hosts needed, ports follow the security
+    expect(await call(page, 'mail_account_qr_add_account', { email: 'x@example.com' }))
+      .toEqual({ ok: false, error: 'incoming_host is required for this provider' });
+    expect(await call(page, 'mail_account_qr_add_account', { email: 'x@example.com', password: 'p' }))
+      .toEqual({ ok: false, error: 'input.password is not allowed' });
+    const own = await call(page, 'mail_account_qr_add_account', { email: 'x@example.com', incoming_protocol: 'pop3', incoming_host: 'pop.example.com',
+      outgoing_host: 'smtp.example.com', outgoing_security: 'ssl', outgoing_username: 'smtp-x' });
+    expect(own.result.account.incoming).toMatchObject({ protocol: 'pop3', port: 995, security: 'ssl' });
+    expect(own.result.account.outgoing).toMatchObject({ port: 465, security: 'ssl', username: 'smtp-x' });
+    const list = await call(page, 'mail_account_qr_get_accounts', {});
+    expect(list.result.accounts.map(a => a.email)).toEqual(['lena@web.de', 'x@example.com']);
+    await expect(page.locator('#accList li')).toHaveCount(2);
+  });
+
+  test('get_scanned_accounts: what the user read, without passwords', async ({ page }) => {
+    expect(await call(page, 'mail_account_qr_get_scanned_accounts', {})).toEqual({ ok: true, result: { complete: false, codes_read: 0, codes_total: 0, accounts: [] } });
+    await page.locator('#viewSeg [data-view="read"]').click();
+    await page.locator('#readCard summary').click();
+    await page.fill('#pasteIn', JSON.stringify([1, [1, 1], [0, 'imap.example.org', 993, 3, 1, 'anna', 'Work', 'pw1'],
+      [[[0, 'smtp.example.org', 587, 2, 1, 'anna', 'pw1'], ['anna@example.org', 'Anna']]]]));
+    await page.click('#btnPaste');
+    const r = await call(page, 'mail_account_qr_get_scanned_accounts', {});
+    expect(JSON.stringify(r)).not.toContain('pw1');
+    expect(r.result).toMatchObject({ complete: true, codes_read: 1, codes_total: 1 });
+    expect(r.result.accounts[0]).toMatchObject({ email: 'anna@example.org', account_name: 'Work', has_password: true,
+      identities: [{ email: 'anna@example.org', name: 'Anna' }], incoming: { host: 'imap.example.org', username: 'anna' } });
+  });
+});
+
 test.describe('qr-code tools', () => {
   test.beforeEach(async ({ page }) => open(page, '/qr-code/'));
 

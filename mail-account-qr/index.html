@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Mail-Konto per QR</title>
+<meta name="description" content="E-Mail-Konten als QR-Code für Thunderbird auf dem Handy erstellen – und Thunderbird-QR-Codes per Kamera, Bild oder Text lesen, z. B. um die Daten in eine andere Mail-App zu übertragen.">
+<meta name="tool:tags" content="Alltag, Barcode">
+<meta name="tool:features" content="Kamera, Datei öffnen, Kopieren, KI-Agent">
+<meta name="tool:webmcp" content="add_account, get_accounts, get_scanned_accounts">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann ein E-Mail-Konto (ohne Passwort) zur Liste hinzufügen, damit hier der QR-Code entsteht, und die Konten lesen – auch die eines gelesenen Codes, aber nie Passwörter. Scannen, Bilder öffnen und Passwörter eingeben bleiben bei dir.">
+<meta name="tool:webmcp-help-en" content="An AI agent can add an email account (without password) to the list so the QR code is made here, and read the accounts – also those of a code you read, but never passwords. Scanning, opening pictures and typing passwords stay with you.">
+<meta name="tool:icon" content="mail-share">
+<meta name="tool:color" content="#1f5fa8">
+<meta name="tool:short-name" content="Konto-QR">
+<meta name="tool:title-en" content="Mail Account QR">
+<meta name="tool:description-en" content="Create QR codes of email accounts for Thunderbird on the phone – and read Thunderbird QR codes by camera, picture or text, e.g. to move the settings into another mail app.">
+<meta name="tool:short-name-en" content="Account QR">
+<meta name="tool:storage" content="mail-account-qr.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-5goMER/Lp371Vi/0XyA9tTQL9yflXjwm2bQ87ogO0PM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Konto-QR">
+<meta name="theme-color" content="#1f5fa8">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Page-specific styles only. Shared tokens and components live in assets/base.css. */
+:root{--accent:#1f5fa8;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#8cb8ec;--accent-text:#0d1826}}
+main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+main>.seg{margin:0}
+.card h2{display:flex;align-items:center;gap:8px}
+.card h3{margin:16px 0 8px;font-size:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+@media (max-width:420px){.grid2{grid-template-columns:1fr}}
+.steps{margin:0 0 12px;padding-inline-start:22px}
+.steps li{margin-block:2px}
+.qr-box{display:flex;flex-direction:column;align-items:center;gap:8px}
+.qr-box canvas{width:min(100%,360px);height:auto;aspect-ratio:1;image-rendering:pixelated;border:1px solid var(--border);border-radius:8px}
+.qr-nav{display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
+.qr-nav span{min-width:8em;text-align:center;font-weight:600}
+.scan-box{position:relative;display:grid;place-items:center;background:var(--surface-2);border-radius:var(--radius);overflow:hidden}
+.scan-box video{width:100%;max-height:60vh;object-fit:cover;display:block}
+.scan-box .frame{position:absolute;width:62%;aspect-ratio:1;border:3px solid var(--accent);border-radius:12px;box-shadow:0 0 0 999px rgb(0 0 0 / .35);pointer-events:none}
+.acc{border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-block:10px;background:var(--surface-2)}
+.acc h3{margin:0 0 6px;overflow-wrap:anywhere}
+.acc h4{margin:10px 0 4px;font-size:14px;color:var(--muted)}
+.kv{display:grid;grid-template-columns:minmax(6em,auto) 1fr;gap:2px 10px;margin:0;align-items:center}
+.kv dt{color:var(--muted);font-size:14px}
+.kv dd{margin:0;display:flex;align-items:center;gap:2px;min-width:0}
+.kv dd .v{flex:1;min-width:0;overflow-wrap:anywhere}
+.parts{font-weight:600}
+textarea#pasteIn{min-height:96px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Mail-Konto per QR</span></h1>
+  <p class="sub" data-i18n="sub">E-Mail-Konten als QR-Code für Thunderbird auf dem Handy – erstellen und lesen.</p>
+</header>
+
+<main>
+  <div class="seg" role="group" aria-label="Ansicht" data-i18n-attr="aria-label:viewLabel" id="viewSeg">
+    <button type="button" aria-pressed="true" data-view="make"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#qrcode"/></svg><span data-i18n="viewMake">Code erstellen</span></button>
+    <button type="button" aria-pressed="false" data-view="read"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#scan"/></svg><span data-i18n="viewRead">Code lesen</span></button>
+  </div>
+
+  <!-- ===== Create ===== -->
+  <section class="card" id="formCard" aria-labelledby="h-form" hidden>
+    <h2 id="h-form"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#mail"/></svg><span id="formTitle" data-i18n="formNew">Konto hinzufügen</span></h2>
+    <form id="accForm" novalidate>
+      <div class="form-field"><label for="fEmail" data-i18n="email">E-Mail-Adresse</label><input type="email" id="fEmail" autocomplete="email" inputmode="email" maxlength="254" required></div>
+      <p class="notice info" id="providerNote" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span></span></p>
+      <div class="grid2">
+        <div class="form-field"><label for="fName" data-i18n="displayName">Dein Name (Absender)</label><input type="text" id="fName" autocomplete="name" maxlength="120"></div>
+        <div class="form-field"><label for="fAccName" data-i18n="accountName">Kontoname (optional)</label><input type="text" id="fAccName" autocomplete="off" maxlength="120"></div>
+      </div>
+
+      <h3 data-i18n="incoming">Posteingang</h3>
+      <div class="form-field">
+        <span data-i18n="protocol">Protokoll</span>
+        <div class="seg" role="group" aria-label="Protokoll" data-i18n-attr="aria-label:protocol" id="fInProto">
+          <button type="button" aria-pressed="true" data-proto="0">IMAP</button>
+          <button type="button" aria-pressed="false" data-proto="1">POP3</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="form-field"><label for="fInHost" data-i18n="server">Server</label><input type="text" id="fInHost" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="253" placeholder="imap.example.com"></div>
+        <div class="form-field"><label for="fInPort" data-i18n="port">Port</label><input type="number" id="fInPort" inputmode="numeric" min="1" max="65535" step="1"></div>
+        <div class="form-field"><label for="fInSec" data-i18n="security">Verschlüsselung</label><select id="fInSec" data-kind="sec"></select></div>
+        <div class="form-field"><label for="fInAuth" data-i18n="auth">Anmeldung</label><select id="fInAuth" data-kind="auth"></select></div>
+        <div class="form-field"><label for="fInUser" data-i18n="username">Benutzername</label><input type="text" id="fInUser" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="254"></div>
+        <div class="form-field"><label for="fInPw" data-i18n="passwordOpt">Passwort (optional)</label><input type="password" id="fInPw" autocomplete="off" maxlength="500"></div>
+      </div>
+
+      <h3 data-i18n="outgoing">Postausgang (SMTP)</h3>
+      <div class="grid2">
+        <div class="form-field"><label for="fOutHost" data-i18n="server">Server</label><input type="text" id="fOutHost" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="253" placeholder="smtp.example.com"></div>
+        <div class="form-field"><label for="fOutPort" data-i18n="port">Port</label><input type="number" id="fOutPort" inputmode="numeric" min="1" max="65535" step="1"></div>
+        <div class="form-field"><label for="fOutSec" data-i18n="security">Verschlüsselung</label><select id="fOutSec" data-kind="sec"></select></div>
+        <div class="form-field"><label for="fOutAuth" data-i18n="auth">Anmeldung</label><select id="fOutAuth" data-kind="auth"></select></div>
+      </div>
+      <label class="check"><input type="checkbox" id="fSame" checked><span data-i18n="sameLogin">Gleicher Benutzername und gleiches Passwort wie beim Posteingang</span></label>
+      <div class="grid2" id="outLogin" hidden>
+        <div class="form-field"><label for="fOutUser" data-i18n="username">Benutzername</label><input type="text" id="fOutUser" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="254"></div>
+        <div class="form-field"><label for="fOutPw" data-i18n="passwordOpt">Passwort (optional)</label><input type="password" id="fOutPw" autocomplete="off" maxlength="500"></div>
+      </div>
+      <p class="form-hint" data-i18n="pwHint">Passwörter werden nie gespeichert – nur in den Code gepackt, solange die Seite offen ist. Ohne Passwort fragt Thunderbird auf dem Handy danach.</p>
+      <p class="form-error" id="formError" role="alert"></p>
+      <div class="row">
+        <button type="button" class="btn" id="btnFormCancel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+        <button type="submit" class="btn primary" id="btnFormSave"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#check"/></svg><span data-i18n="formSave">Übernehmen</span></button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card" id="qrCard" aria-labelledby="h-qr" hidden>
+    <h2 id="h-qr"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#qrcode"/></svg><span data-i18n="qrH">Mit Thunderbird auf dem Handy scannen</span></h2>
+    <ol class="steps">
+      <li data-i18n="step1">Thunderbird auf dem Handy öffnen.</li>
+      <li data-i18n-html="step2">Einstellungen öffnen und <strong>Einstellungen importieren</strong> wählen (beim ersten Start direkt auf der Willkommensseite).</li>
+      <li data-i18n-html="step3"><strong>QR-Code scannen</strong> tippen und das Handy über diesen Code halten.</li>
+    </ol>
+    <div class="qr-box">
+      <div class="qr-nav" id="qrNav" hidden>
+        <button type="button" class="btn icon" id="btnPrev" aria-label="Vorheriger Code" title="Vorheriger Code" data-i18n-attr="aria-label:prev;title:prev"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg></button>
+        <span id="qrCount" aria-live="polite"></span>
+        <button type="button" class="btn icon" id="btnNext" aria-label="Nächster Code" title="Nächster Code" data-i18n-attr="aria-label:next;title:next"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"/></svg></button>
+      </div>
+      <canvas id="qr" width="300" height="300" role="img" aria-label="QR-Code" data-i18n-attr="aria-label:qrAlt"></canvas>
+    </div>
+    <p class="notice warn" id="pwWarn" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#alert-triangle"/></svg><span data-i18n="pwWarn">Dieser Code enthält Passwörter. Zeig ihn nur deinem eigenen Handy und gib ihn nicht weiter.</span></p>
+    <p class="notice info" id="oauthNote" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="oauthNote">Konten mit OAuth2 (z. B. Gmail, Outlook) melden sich nach dem Scannen auf dem Handy im Browser an.</span></p>
+    <div class="row">
+      <button type="button" class="btn" id="btnSaveImg"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="saveImg">Als Bild speichern</span></button>
+      <button type="button" class="btn" id="btnCopyCode"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copyCode">Inhalt kopieren</span></button>
+    </div>
+  </section>
+
+  <section class="card" id="listCard" aria-labelledby="h-list" hidden>
+    <h2 id="h-list"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span data-i18n="listH">Konten im Code</span></h2>
+    <ul class="list-rows" id="accList"></ul>
+    <div class="row">
+      <button type="button" class="btn" id="btnAdd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="add">Konto hinzufügen</span></button>
+    </div>
+  </section>
+
+  <!-- ===== Read ===== -->
+  <section class="card" id="readCard" aria-labelledby="h-read" hidden>
+    <h2 id="h-read"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#scan"/></svg><span data-i18n="readH">Thunderbird-QR-Code lesen</span></h2>
+    <p data-i18n="readIntro">Liest den Code aus „Konten für Mobilgerät exportieren“ von Thunderbird am Computer – zum Prüfen oder um die Daten von Hand in eine andere Mail-App einzutragen.</p>
+    <div id="scanArea" hidden>
+      <div class="scan-box"><video id="video" playsinline muted></video><div class="frame"></div></div>
+      <p id="scanStatus" role="status"></p>
+      <div class="row"><button type="button" class="btn" id="btnScanStop"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="scanStop">Scannen beenden</span></button></div>
+    </div>
+    <div id="readStart">
+      <button type="button" class="btn primary block" id="btnScan"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#camera"/></svg><span data-i18n="scanCam">Mit Kamera scannen</span></button>
+      <p></p>
+      <label class="dropzone" id="dropzone"><input type="file" id="fileIn" class="sr-only" accept="image/*"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#photo"/></svg><strong data-i18n="pickImg">Bild wählen</strong><span class="dz-hint" data-i18n="pickHint">z. B. ein Bildschirmfoto des Codes</span></label>
+      <details>
+        <summary data-i18n="pasteH">Text einfügen</summary>
+        <div class="form-field"><label for="pasteIn" data-i18n="pasteLabel">Inhalt des QR-Codes</label><textarea id="pasteIn" class="mono" spellcheck="false" autocomplete="off"></textarea></div>
+        <div class="row"><button type="button" class="btn" id="btnPaste"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#check"/></svg><span data-i18n="pasteRead">Lesen</span></button></div>
+      </details>
+    </div>
+    <p class="notice err" id="readError" role="alert" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#alert-circle"/></svg><span></span></p>
+  </section>
+
+  <section class="card" id="resultCard" aria-labelledby="h-result" hidden>
+    <h2 id="h-result"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#circle-check"/></svg><span data-i18n="resultH">Gelesene Konten</span></h2>
+    <p class="parts" id="partsInfo" role="status"></p>
+    <div id="resultList"></div>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnTakeOver"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#qrcode"/></svg><span data-i18n="takeOver">In „Code erstellen“ übernehmen</span></button>
+      <button type="button" class="btn" id="btnDiscard"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eraser"/></svg><span data-i18n="discard">Ergebnis verwerfen</span></button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Thunderbird auf dem Handy (Android) kann E-Mail-Konten aus einem QR-Code übernehmen. Thunderbird am Computer erzeugt solche Codes unter <em>Einstellungen → Export für Mobilgeräte</em>. Diese App kann beides auch ohne Computer: Codes erstellen und Codes lesen.</p>
+  <h3>Code erstellen</h3>
+  <ul>
+    <li>E-Mail-Adresse eintragen. Für bekannte Anbieter (Gmail, Outlook/Hotmail, GMX, WEB.DE, T-Online, Posteo, mailbox.org) werden die Server automatisch eingetragen – bitte trotzdem prüfen, die Angaben sind ohne Gewähr.</li>
+    <li>Sonst Server, Port, Verschlüsselung und Anmeldung aus den Unterlagen deines Anbieters eintragen. Üblich: IMAP mit SSL/TLS auf Port 993, SMTP mit STARTTLS auf 587 oder SSL/TLS auf 465.</li>
+    <li>Mehrere Konten passen in einen Code; ab vier Konten entstehen mehrere Codes (je drei Konten, wie bei Thunderbird). Auf dem Handy nacheinander scannen.</li>
+    <li>Passwörter sind freiwillig. Ohne Passwort fragt Thunderbird auf dem Handy danach. Konten mit OAuth2 (Gmail, Outlook) brauchen kein Passwort im Code.</li>
+  </ul>
+  <h3>Code lesen</h3>
+  <ul>
+    <li>Den Code von Thunderbird am Computer mit der Kamera scannen, ein Bildschirmfoto davon wählen oder seinen Text einfügen.</li>
+    <li>Die Kontodaten erscheinen mit Server, Port und Benutzername – praktisch, um sie von Hand in eine andere Mail-App (z. B. auf dem iPhone) einzutragen. Jeder Wert lässt sich kopieren.</li>
+    <li>„In ‚Code erstellen‘ übernehmen“ legt die Konten in deine Liste, um sie anzupassen und neu als Code zu zeigen.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Die Liste der Konten (Adressen, Server, Benutzernamen) bleibt nur in diesem Browser gespeichert (sichern und übertragen unter „Daten sichern“). <strong>Passwörter werden nie gespeichert</strong> und gelesene Codes auch nicht – beides ist nach dem Schließen der Seite weg. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  <p>Achtung: Ein Code mit Passwort ist so geheim wie das Passwort selbst. Nicht fotografieren lassen und nicht teilen.</p>
+  <h3>Bibliotheken</h3>
+  <p>QR-Codes zeichnet <em>qrcode-generator</em> (MIT); Codes liest der Browser selbst (BarcodeDetector) oder <em>zxing-wasm</em> (MIT).</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Thunderbird on the phone (Android) can take email accounts from a QR code. Thunderbird on the computer makes such codes under <em>Settings → Export for Mobile</em>. This app does both without a computer: create codes and read codes.</p>
+  <h3>Create a code</h3>
+  <ul>
+    <li>Enter the email address. For well-known providers (Gmail, Outlook/Hotmail, GMX, WEB.DE, T-Online, Posteo, mailbox.org) the servers are filled in – please check them anyway, no guarantee.</li>
+    <li>Otherwise enter server, port, encryption and sign-in from your provider’s documents. Common: IMAP with SSL/TLS on port 993, SMTP with STARTTLS on 587 or SSL/TLS on 465.</li>
+    <li>Several accounts fit into one code; from four accounts on there are several codes (three accounts each, like Thunderbird). Scan them one after another on the phone.</li>
+    <li>Passwords are optional. Without one, Thunderbird on the phone asks for it. Accounts with OAuth2 (Gmail, Outlook) need no password in the code.</li>
+  </ul>
+  <h3>Read a code</h3>
+  <ul>
+    <li>Scan the code from Thunderbird on the computer with the camera, choose a screenshot of it or paste its text.</li>
+    <li>The account settings show up with server, port and user name – handy to enter them by hand in another mail app (e.g. on the iPhone). Every value can be copied.</li>
+    <li>“Use in Create code” puts the accounts into your list, to change them and show them as a new code.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The list of accounts (addresses, servers, user names) stays only in this browser (back it up or move it under “Back up data”). <strong>Passwords are never stored</strong>, and codes you read are not either – both are gone once the page is closed. Nothing is sent to a server; the app also works offline.</p>
+  <p>Careful: a code with a password is as secret as the password itself. Don’t let anyone photograph it and don’t share it.</p>
+  <h3>Libraries</h3>
+  <p><em>qrcode-generator</em> (MIT) draws the QR codes; the browser itself (BarcodeDetector) or <em>zxing-wasm</em> (MIT) reads codes.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann ein E-Mail-Konto (ohne Passwort) zur Liste hinzufügen, damit hier der QR-Code entsteht, und die Konten lesen – auch die eines gelesenen Codes, aber nie Passwörter. Scannen, Bilder öffnen und Passwörter eingeben bleiben bei dir. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can add an email account (without password) to the list so the QR code is made here, and read the accounts – also those of a code you read, but never passwords. Scanning, opening pictures and typing passwords stay with you. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version ef60dd1e6181</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/vendor/qrcode-generator/qrcode.js"></script>
+<script src="../assets/vendor/zxing-wasm/iife/reader/index.js"></script>
+<script src="../assets/common.js"></script>
+<script src="../assets/shared/p2p.js"></script>
+<script src="account-qr.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'sec.0':'Keine','sec.1':'STARTTLS, wenn möglich','sec.2':'STARTTLS','sec.3':'SSL/TLS',
+    'auth.0':'Keine','auth.1':'Passwort, normal','auth.2':'Passwort, verschlüsselt','auth.3':'Kerberos (GSSAPI)','auth.4':'NTLM','auth.5':'TLS-Zertifikat','auth.6':'OAuth2',
+    formEdit:'Konto bearbeiten',codeOf:'Code {i} von {n}',providerNote:'Server für {domain} eingetragen – bitte prüfen.',
+    'err.email':'Bitte eine gültige E-Mail-Adresse eintragen (nur Zeichen ohne Umlaute).','err.inHost':'Bitte den Server für den Posteingang eintragen.',
+    'err.inPort':'Port für den Posteingang: 1 bis 65535.','err.outHost':'Bitte den Server für den Postausgang eintragen.',
+    'err.outPort':'Port für den Postausgang: 1 bis 65535.','err.lineBreak':'Zeilenumbrüche sind nicht erlaubt.','err.max':'Höchstens {n} Konten.',
+    edit:'Bearbeiten: {name}',del:'Löschen: {name}',deleted:'Konto entfernt',copied:'Kopiert',copyFailed:'Kopieren nicht möglich',
+    saveQ:'Der Code enthält Passwörter. Wer das Bild hat, kann sich anmelden. Trotzdem als Bild speichern?',
+    imap:'IMAP',pop3:'POP3',smtp:'SMTP',noPw:'– (wird auf dem Handy gefragt)',hasPw:'••••••••',
+    showPw:'Passwort zeigen',hidePw:'Passwort verbergen',copyVal:'{what} kopieren',
+    'f.server':'Server','f.port':'Port','f.security':'Verschlüsselung','f.auth':'Anmeldung','f.username':'Benutzername','f.password':'Passwort',
+    'f.protocol':'Protokoll','f.email':'E-Mail','f.name':'Name','f.accountName':'Kontoname',
+    inH:'Posteingang',outH:'Postausgang {n}',outH1:'Postausgang',senders:'Absender',
+    partsAll:'{n} Konto/Konten gelesen.',partsSome:'Code {have} von {total} gelesen – noch {missing} fehlt/fehlen. Den nächsten Code scannen.',
+    unsupported:'Diese Anmeldung kann Thunderbird auf dem Handy nicht.',
+    'read.notThunderbird':'Das ist kein Konten-Code von Thunderbird.','read.version':'Dieser Code hat ein neueres Format, das die App noch nicht kennt.',
+    'read.invalid':'Der Code ist unvollständig oder beschädigt.','read.noCode':'Im Bild wurde kein QR-Code gefunden.','read.image':'Das Bild ließ sich nicht öffnen.',
+    'scan.hint':'Den QR-Code in den Rahmen halten.','scan.noCam':'Dieser Browser kann die Kamera nicht nutzen. Ein Bild wählen oder den Text einfügen.',
+    'scan.noDecoder':'Dieser Browser kann keine QR-Codes lesen.','scan.camDenied':'Kamera nicht erlaubt. In den Browser-Einstellungen freigeben.',
+    'scan.camFail':'Kamera ließ sich nicht starten.','scan.other':'Anderer QR-Code – bitte den Code von Thunderbird zeigen.','scan.next':'Code {have} von {total} gelesen – jetzt den nächsten zeigen.',
+    takenOver:'{n} Konto/Konten übernommen','mcp.added':'Konto hinzugefügt',restart:'Andere Codes erkannt – neu begonnen.'
+  },
+  en:{
+    title:'Mail Account QR',sub:'Email accounts as a QR code for Thunderbird on the phone – create and read.',
+    viewLabel:'View',viewMake:'Create code',viewRead:'Read code',
+    formNew:'Add account',formEdit:'Edit account',email:'Email address',displayName:'Your name (sender)',accountName:'Account name (optional)',
+    incoming:'Incoming mail',outgoing:'Outgoing mail (SMTP)',protocol:'Protocol',server:'Server',port:'Port',security:'Encryption',auth:'Sign-in',
+    username:'User name',passwordOpt:'Password (optional)',sameLogin:'Same user name and password as for incoming mail',
+    pwHint:'Passwords are never stored – only put into the code while the page is open. Without a password, Thunderbird on the phone asks for it.',
+    cancel:'Cancel',formSave:'Apply',
+    qrH:'Scan with Thunderbird on the phone',step1:'Open Thunderbird on the phone.',
+    step2:'Open the settings and choose <strong>Import settings</strong> (on first start right on the welcome screen).',
+    step3:'Tap <strong>Scan QR code</strong> and hold the phone over this code.',
+    prev:'Previous code',next:'Next code',qrAlt:'QR code',
+    pwWarn:'This code contains passwords. Only show it to your own phone and don’t pass it on.',
+    oauthNote:'Accounts with OAuth2 (e.g. Gmail, Outlook) sign in in the browser on the phone after scanning.',
+    saveImg:'Save as picture',copyCode:'Copy content',listH:'Accounts in the code',add:'Add account',
+    readH:'Read a Thunderbird QR code',
+    readIntro:'Reads the code from Thunderbird’s “Export for Mobile” on the computer – to check it or to enter the settings by hand in another mail app.',
+    scanStop:'Stop scanning',scanCam:'Scan with camera',pickImg:'Choose picture',pickHint:'e.g. a screenshot of the code',
+    pasteH:'Paste text',pasteLabel:'Content of the QR code',pasteRead:'Read',
+    resultH:'Accounts read',takeOver:'Use in “Create code”',discard:'Discard result',
+    'sec.0':'None','sec.1':'STARTTLS if possible','sec.2':'STARTTLS','sec.3':'SSL/TLS',
+    'auth.0':'None','auth.1':'Password, normal','auth.2':'Password, encrypted','auth.3':'Kerberos (GSSAPI)','auth.4':'NTLM','auth.5':'TLS certificate','auth.6':'OAuth2',
+    codeOf:'Code {i} of {n}',providerNote:'Servers for {domain} filled in – please check.',
+    'err.email':'Please enter a valid email address (no accented letters).','err.inHost':'Please enter the server for incoming mail.',
+    'err.inPort':'Port for incoming mail: 1 to 65535.','err.outHost':'Please enter the server for outgoing mail.',
+    'err.outPort':'Port for outgoing mail: 1 to 65535.','err.lineBreak':'Line breaks are not allowed.','err.max':'At most {n} accounts.',
+    edit:'Edit: {name}',del:'Delete: {name}',deleted:'Account removed',copied:'Copied',copyFailed:'Copying not possible',
+    saveQ:'The code contains passwords. Whoever has the picture can sign in. Save it as a picture anyway?',
+    imap:'IMAP',pop3:'POP3',smtp:'SMTP',noPw:'– (asked on the phone)',hasPw:'••••••••',
+    showPw:'Show password',hidePw:'Hide password',copyVal:'Copy {what}',
+    'f.server':'server','f.port':'port','f.security':'encryption','f.auth':'sign-in','f.username':'user name','f.password':'password',
+    'f.protocol':'protocol','f.email':'email','f.name':'name','f.accountName':'account name',
+    inH:'Incoming mail',outH:'Outgoing mail {n}',outH1:'Outgoing mail',senders:'Senders',
+    partsAll:'{n} account(s) read.',partsSome:'Code {have} of {total} read – {missing} still missing. Scan the next code.',
+    unsupported:'Thunderbird on the phone can’t do this sign-in.',
+    'read.notThunderbird':'This is not an account code from Thunderbird.','read.version':'This code has a newer format the app doesn’t know yet.',
+    'read.invalid':'The code is incomplete or damaged.','read.noCode':'No QR code found in the picture.','read.image':'The picture could not be opened.',
+    'scan.hint':'Hold the QR code inside the frame.','scan.noCam':'This browser can’t use the camera. Choose a picture or paste the text.',
+    'scan.noDecoder':'This browser can’t read QR codes.','scan.camDenied':'Camera not allowed. Allow it in the browser settings.',
+    'scan.camFail':'The camera could not be started.','scan.other':'Another QR code – please show the code from Thunderbird.','scan.next':'Code {have} of {total} read – now show the next one.',
+    takenOver:'{n} account(s) taken over','mcp.added':'account added',restart:'Other codes found – started again.'
+  }
+});
+const t=Tools.t, $=Tools.$, Q=window.AccountQr;
+qrcode.stringToBytes=qrcode.stringToBytesFuncs['UTF-8'];   // Thunderbird writes UTF-8 bytes
+
+/* ---------- State ---------- */
+// Accounts without passwords (AGENTS.md: passwords are never stored); passwords live only in memory
+const LS='mail-account-qr.accounts.v1', MAX=30;
+const valid=a=>a&&typeof a==='object'&&typeof a.id==='string'&&!Q.checkAccount(a);
+let accounts=(Tools.load(LS,[])||[]).filter(valid);
+const passwords={};               // id → { in, out }
+let view='make', editing=null, codeIdx=0, codes=[];
+let scanned={total:0,parts:new Map()};   // part number → scanned accounts
+const save=()=>Tools.save(LS,accounts);
+
+/* ---------- Form ---------- */
+const fill=(sel,values)=>{ const v=sel.value; sel.innerHTML=''; for(const n of values){ const o=document.createElement('option'); o.value=String(n); o.textContent=t(sel.dataset.kind+'.'+n); sel.append(o);} if(v!=='')sel.value=v; };
+const fillSelects=()=>{ for(const s of document.querySelectorAll('select[data-kind]'))fill(s,s.dataset.kind==='sec'?Q.SEC_SUPPORTED:Q.AUTH_SUPPORTED); };
+const num=id=>{ const v=Tools.parseNum($(id).value); return Number.isFinite(v)?v:NaN; };
+let inProto=0, serversTouched=false, lastAuto={};
+const setProto=p=>{ inProto=p; for(const b of document.querySelectorAll('#fInProto button'))b.setAttribute('aria-pressed',String(+b.dataset.proto===p)); };
+const kindIn=()=>inProto===1?'pop3':'imap';
+
+function formAccount(){
+  const same=$('fSame').checked;
+  return { id:editing&&editing!=='new'?editing:Tools.uid(),
+    email:$('fEmail').value.trim(), name:$('fName').value.trim(), accountName:$('fAccName').value.trim(),
+    inProto, inHost:$('fInHost').value.trim(), inPort:num('fInPort'), inSec:+$('fInSec').value, inAuth:+$('fInAuth').value, inUser:$('fInUser').value.trim(),
+    outHost:$('fOutHost').value.trim(), outPort:num('fOutPort'), outSec:+$('fOutSec').value, outAuth:+$('fOutAuth').value,
+    sameLogin:same, outUser:same?'':$('fOutUser').value.trim(),
+    extraIds:editing&&editing!=='new'?((accounts.find(a=>a.id===editing)||{}).extraIds||[]):[] };
+}
+function openForm(id){
+  editing=id||'new';
+  const a=accounts.find(x=>x.id===id)||{inProto:0,inSec:3,inAuth:1,outSec:2,outAuth:1,sameLogin:true,inPort:993,outPort:587};
+  const pw=passwords[id]||{};
+  $('formTitle').textContent=t(id?'formEdit':'formNew');
+  $('fEmail').value=a.email||''; $('fName').value=a.name||''; $('fAccName').value=a.accountName||'';
+  setProto(a.inProto===1?1:0);
+  $('fInHost').value=a.inHost||''; $('fInPort').value=a.inPort||''; $('fInSec').value=String(a.inSec); $('fInAuth').value=String(a.inAuth);
+  $('fInUser').value=a.inUser||''; $('fInPw').value=pw.in||'';
+  $('fOutHost').value=a.outHost||''; $('fOutPort').value=a.outPort||''; $('fOutSec').value=String(a.outSec); $('fOutAuth').value=String(a.outAuth);
+  $('fSame').checked=a.sameLogin!==false; $('fOutUser').value=a.outUser||''; $('fOutPw').value=pw.out||'';
+  $('outLogin').hidden=$('fSame').checked;
+  $('formError').textContent=''; $('providerNote').hidden=true;
+  serversTouched=!!id; lastAuto={email:a.email||''};
+  render();
+  if(id)$('formCard').scrollIntoView({block:'start'});
+  Tools.diag.log('form open',{edit:!!id});
+}
+function closeForm(){ editing=null; render(); }
+
+// Known provider: fill servers as long as the user did not change them; user name follows the email address
+function emailChanged(){
+  const email=$('fEmail').value.trim();
+  if(!$('fInUser').value||$('fInUser').value===lastAuto.email)$('fInUser').value=email;
+  lastAuto.email=email;
+  const p=Q.provider(email), note=$('providerNote');
+  if(!p||serversTouched){ note.hidden=true; return; }
+  setProto(0);
+  [$('fInHost').value,$('fInPort').value,$('fInSec').value,$('fInAuth').value]=[p.in[0],p.in[1],String(p.in[2]),String(p.in[3])];
+  [$('fOutHost').value,$('fOutPort').value,$('fOutSec').value,$('fOutAuth').value]=[p.out[0],p.out[1],String(p.out[2]),String(p.out[3])];
+  note.querySelector('span').textContent=t('providerNote',{domain:email.split('@').pop()});
+  note.hidden=false;
+  Tools.diag.log('provider filled');
+}
+$('fEmail').addEventListener('input',emailChanged);
+for(const id of ['fInHost','fInPort','fInSec','fInAuth','fOutHost','fOutPort','fOutSec','fOutAuth'])
+  $(id).addEventListener('input',()=>{ serversTouched=true; $('providerNote').hidden=true; });
+// Port follows the encryption/protocol while it is empty or one of the usual ports (not one the user typed)
+const isDefaultPort=(p,kind)=>!Number.isFinite(p)||Q.SEC.some(sec=>Q.defaultPort(kind,sec)===p);
+const followPort=(portId,secId,kind,oldKind)=>{ if(isDefaultPort(num(portId),oldKind||kind))$(portId).value=Q.defaultPort(kind,+$(secId).value); };
+$('fInSec').addEventListener('change',()=>followPort('fInPort','fInSec',kindIn()));
+$('fOutSec').addEventListener('change',()=>followPort('fOutPort','fOutSec','smtp'));
+for(const b of document.querySelectorAll('#fInProto button'))b.addEventListener('click',()=>{
+  const old=kindIn();
+  setProto(+b.dataset.proto); serversTouched=true;
+  followPort('fInPort','fInSec',kindIn(),old);
+});
+$('fSame').addEventListener('change',()=>{ $('outLogin').hidden=$('fSame').checked; });
+$('accForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const a=formAccount(), err=Q.checkAccount(a);
+  if(err){ $('formError').textContent=t('err.'+err); Tools.diag.log('form invalid',{err}); return; }
+  if(editing==='new'&&accounts.length>=MAX){ $('formError').textContent=t('err.max',{n:MAX}); return; }
+  passwords[a.id]={in:$('fInPw').value,out:a.sameLogin?'':$('fOutPw').value};
+  const i=accounts.findIndex(x=>x.id===a.id);
+  if(i>=0)accounts[i]=a; else accounts.push(a);
+  save(); editing=null; codeIdx=Math.floor(accounts.findIndex(x=>x.id===a.id)/Q.PER_CODE);
+  Tools.diag.log('account saved',{count:accounts.length});
+  render(); $('qrCard').scrollIntoView({block:'start'});
+});
+$('btnFormCancel').addEventListener('click',closeForm);
+$('btnAdd').addEventListener('click',()=>openForm(null));
+
+/* ---------- QR code ---------- */
+const hasPw=()=>accounts.some(a=>{ const p=passwords[a.id]; return p&&(p.in||p.out); });
+function renderQr(){
+  codes=accounts.length?Q.payloads(accounts,passwords):[];
+  if(!codes.length)return;
+  codeIdx=Tools.clamp(codeIdx,0,codes.length-1);
+  P2P.drawQr($('qr'),codes[codeIdx]);
+  $('qrNav').hidden=codes.length<2;
+  $('qrCount').textContent=t('codeOf',{i:codeIdx+1,n:codes.length});
+  $('btnPrev').disabled=codeIdx===0; $('btnNext').disabled=codeIdx===codes.length-1;
+  $('pwWarn').hidden=!hasPw();
+  $('oauthNote').hidden=!accounts.some(a=>a.inAuth===6||a.outAuth===6);
+  Tools.diag.log('qr drawn',{code:codeIdx+1,codes:codes.length,chars:codes[codeIdx].length,passwords:hasPw()});
+}
+$('btnPrev').addEventListener('click',()=>{ codeIdx--; renderQr(); });
+$('btnNext').addEventListener('click',()=>{ codeIdx++; renderQr(); });
+$('btnSaveImg').addEventListener('click',async()=>{
+  if(hasPw()&&!await Tools.confirm(t('saveQ'),{action:'download'}))return;
+  $('qr').toBlob(b=>{ if(b)Tools.download(b,'mail-account-qr'+(codes.length>1?'-'+(codeIdx+1):'')+'.png'); },'image/png');
+});
+$('btnCopyCode').addEventListener('click',async()=>{ Tools.toast(t(await Tools.copyText(codes[codeIdx]||'')?'copied':'copyFailed')); });
+
+function renderList(){
+  const ul=$('accList'); ul.innerHTML='';
+  for(const a of accounts){
+    const li=document.createElement('li'), label=a.accountName||a.email;
+    li.innerHTML='<button type="button" class="open"><span class="name"></span><span class="meta"></span></button>'+
+      '<button type="button" class="btn icon" data-act="edit">'+Tools.icon('pencil')+'</button>'+
+      '<button type="button" class="btn icon" data-act="del">'+Tools.icon('trash')+'</button>';
+    li.querySelector('.name').textContent=label;
+    li.querySelector('.meta').textContent=(a.inProto===1?'POP3':'IMAP')+' '+a.inHost+' · SMTP '+a.outHost;
+    const [, ed, dl]=li.querySelectorAll('button');
+    for(const [b,k] of [[ed,'edit'],[dl,'del']]){ b.setAttribute('aria-label',t(k,{name:label})); b.title=t(k,{name:label}); }
+    li.querySelector('.open').addEventListener('click',()=>openForm(a.id));
+    ed.addEventListener('click',()=>openForm(a.id));
+    dl.addEventListener('click',()=>{
+      const i=accounts.indexOf(a), pw=passwords[a.id];
+      accounts.splice(i,1); delete passwords[a.id]; save(); render();
+      Tools.undo(t('deleted'),()=>{ editing=null; accounts.splice(i,0,a); if(pw)passwords[a.id]=pw; save(); render(); });
+    });
+    ul.append(li);
+  }
+}
+
+/* ---------- Reading ---------- */
+const readErr=msg=>{ const n=$('readError'); n.hidden=!msg; n.querySelector('span').textContent=msg||''; };
+// Returns true when the code was a Thunderbird code (the camera then stops once all parts are there)
+function takeText(text,from){
+  let r;
+  try{ r=Q.parse(Q.fixUtf8(text)); }
+  catch(e){
+    Tools.diag.log('read failed',{from,why:e.message});
+    if(from==='camera'){ $('scanStatus').textContent=t('scan.other'); return false; }
+    readErr(t('read.'+(['version','invalid'].includes(e.message)?e.message:'notThunderbird'))); return false;
+  }
+  readErr('');
+  if(scanned.total!==r.total||!scanned.parts.size){ if(scanned.parts.size)Tools.toast(t('restart')); scanned={total:r.total,parts:new Map()}; }
+  scanned.parts.set(r.part,r.accounts);
+  Tools.diag.log('code read',{from,part:r.part,total:r.total,accounts:r.accounts.length});
+  renderResult();
+  if(from==='camera'&&scanned.parts.size<scanned.total){ $('scanStatus').textContent=t('scan.next',{have:scanned.parts.size,total:scanned.total}); return false; }
+  return true;
+}
+const scanner=P2P.scanner($('video'),{
+  onText:text=>{ const done=takeText(text,'camera'); if(done)stopScan(); return done; },
+  onStatus:(code)=>{
+    const msg=code==='hint'?t('scan.hint'):t('scan.'+code);
+    $('scanStatus').textContent=msg;
+    if(code!=='hint'){ stopScan(); readErr(msg); }
+  }
+});
+function stopScan(){ scanner.stop(); $('scanArea').hidden=true; $('readStart').hidden=false; }
+$('btnScan').addEventListener('click',()=>{
+  readErr(''); $('scanArea').hidden=false; $('readStart').hidden=true; $('scanStatus').textContent='';
+  Tools.diag.log('scan start'); scanner.start();
+});
+$('btnScanStop').addEventListener('click',stopScan);
+async function readFile(file){
+  if(!file)return;
+  readErr('');
+  let bmp;
+  try{ bmp=await createImageBitmap(file); }catch(e){ Tools.diag.log('image open failed',e); readErr(t('read.image')); return; }
+  try{
+    const text=await P2P.readImage(bmp);
+    if(!text){ readErr(t('read.noCode')); Tools.diag.log('image: no code'); return; }
+    takeText(text,'image');
+  }catch(e){ Tools.diag.log('image read failed',e); readErr(t(e.message==='noDecoder'?'scan.noDecoder':'read.image')); }
+  finally{ if(bmp.close)bmp.close(); }
+}
+$('fileIn').addEventListener('change',e=>{ readFile(e.target.files[0]); e.target.value=''; });
+const dz=$('dropzone');
+dz.addEventListener('dragover',e=>{ e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{ e.preventDefault(); dz.classList.remove('over'); readFile(e.dataTransfer.files[0]); });
+$('btnPaste').addEventListener('click',()=>{ const v=$('pasteIn').value.trim(); if(v&&takeText(v,'text'))$('pasteIn').value=''; });
+
+const scannedAccounts=()=>[...scanned.parts.keys()].sort((a,b)=>a-b).flatMap(k=>scanned.parts.get(k));
+function row(dl,label,value,opts){
+  opts=opts||{};
+  const dt=document.createElement('dt'), dd=document.createElement('dd'), v=document.createElement('span');
+  dt.textContent=label.charAt(0).toUpperCase()+label.slice(1); v.className='v'; dd.append(v);
+  const secret=!!opts.secret&&!!value;
+  const show=on=>{ v.textContent=secret&&!on?t('hasPw'):(value||opts.empty||''); };
+  show(false);
+  if(secret){
+    const b=document.createElement('button'); b.type='button'; b.className='btn icon'; let on=false;
+    const upd=()=>{ b.innerHTML=Tools.icon(on?'eye-off':'eye'); b.setAttribute('aria-label',t(on?'hidePw':'showPw')); b.title=t(on?'hidePw':'showPw'); b.setAttribute('aria-pressed',String(on)); };
+    b.addEventListener('click',()=>{ on=!on; show(on); upd(); }); upd(); dd.append(b);
+  }
+  if(value&&opts.copy!==false){
+    const c=document.createElement('button'); c.type='button'; c.className='btn icon'; c.innerHTML=Tools.icon('copy');
+    const name=t('copyVal',{what:opts.what||label}); c.setAttribute('aria-label',name); c.title=name;
+    c.addEventListener('click',async()=>{ Tools.toast(t(await Tools.copyText(String(value))?'copied':'copyFailed')); });
+    dd.append(c);
+  }
+  if(opts.note){ const n=document.createElement('small'); n.className='muted'; n.textContent=' '+opts.note; v.append(n); }
+  dl.append(dt,dd);
+}
+function serverRows(dl,s,proto){
+  row(dl,t('protocol'),proto,{copy:false});
+  row(dl,t('server'),s.host,{what:t('f.server')});
+  row(dl,t('port'),String(s.port),{what:t('f.port')});
+  row(dl,t('security'),t('sec.'+s.security),{copy:false});
+  row(dl,t('auth'),t('auth.'+s.auth),{copy:false,note:s.auth===3||s.auth===4?t('unsupported'):''});
+  row(dl,t('username'),s.username,{what:t('f.username')});
+  row(dl,t('f.password'),s.password,{secret:true,empty:t('noPw'),what:t('f.password')});
+}
+function renderResult(){
+  const list=$('resultList'); list.innerHTML='';
+  const card=$('resultCard'), n=scanned.parts.size;
+  card.hidden=view!=='read'||!n;
+  if(!n)return;
+  const missing=scanned.total-n, accs=scannedAccounts();
+  $('partsInfo').textContent=missing?t('partsSome',{have:n,total:scanned.total,missing}):t('partsAll',{n:accs.length});
+  for(const a of accs){
+    const box=document.createElement('div'); box.className='acc';
+    const h=document.createElement('h3'); h.textContent=a.accountName||a.outgoing[0].identities[0].email; box.append(h);
+    const h4=document.createElement('h4'); h4.textContent=t('inH'); box.append(h4);
+    let dl=document.createElement('dl'); dl.className='kv'; box.append(dl);
+    serverRows(dl,a.incoming,a.incoming.protocol===1?'POP3':'IMAP');
+    a.outgoing.forEach((o,i)=>{
+      const h=document.createElement('h4'); h.textContent=a.outgoing.length>1?t('outH',{n:i+1}):t('outH1'); box.append(h);
+      dl=document.createElement('dl'); dl.className='kv'; box.append(dl);
+      serverRows(dl,o,'SMTP');
+      for(const id of o.identities){
+        row(dl,t('f.email'),id.email,{what:t('f.email')});
+        if(id.name)row(dl,t('f.name'),id.name,{what:t('f.name')});
+      }
+    });
+    list.append(box);
+  }
+  $('btnTakeOver').disabled=!!missing;
+}
+$('btnDiscard').addEventListener('click',()=>{ scanned={total:0,parts:new Map()}; renderResult(); Tools.diag.log('result discarded'); });
+$('btnTakeOver').addEventListener('click',()=>{
+  const accs=scannedAccounts().slice(0,Math.max(0,MAX-accounts.length));
+  for(const s of accs){
+    const {account,passwords:pw}=Q.fromScanned(s);
+    account.id=Tools.uid();
+    if(Q.checkAccount(account))continue;
+    accounts.push(account); passwords[account.id]=pw;
+  }
+  save(); codeIdx=0; editing=null;
+  Tools.toast(t('takenOver',{n:accs.length}));
+  Tools.diag.log('taken over',{count:accs.length});
+  setView('make');
+});
+
+/* ---------- Views ---------- */
+function setView(v){
+  view=v;
+  if(v!=='read')stopScan();
+  render();
+}
+for(const b of document.querySelectorAll('#viewSeg button'))b.addEventListener('click',()=>setView(b.dataset.view));
+function render(){
+  for(const b of document.querySelectorAll('#viewSeg button'))b.setAttribute('aria-pressed',String(b.dataset.view===view));
+  const make=view==='make';
+  if(make&&!accounts.length&&!editing){ openForm(null); return; }   // first start: only the form
+  const form=make&&!!editing;
+  $('formCard').hidden=!form;
+  $('btnFormCancel').hidden=!accounts.length;
+  $('qrCard').hidden=!make||form||!accounts.length;
+  $('listCard').hidden=!make||form||!accounts.length;
+  $('readCard').hidden=make;
+  if(make&&!form&&accounts.length){ renderQr(); renderList(); }
+  renderResult();
+}
+fillSelects();
+render();
+Tools.onLang(()=>{ fillSelects(); if(editing)$('formTitle').textContent=t(editing==='new'?'formNew':'formEdit'); render(); });
+Tools.diag.info(()=>({view,accounts:accounts.length,codes:codes.length,editing:!!editing,scannedParts:scanned.parts.size,scannedTotal:scanned.total,
+  scanning:scanner.active(),engine:scanner.engine(),barcodeDetector:'BarcodeDetector' in window}));
+
+/* ---------- WebMCP ---------- */
+const SEC_NAMES={ssl:3,starttls:2,none:0}, AUTH_NAMES={password:1,encrypted_password:2,oauth2:6,tls_certificate:5,none:0};
+const name=(map,v)=>Object.keys(map).find(k=>map[k]===v)||'other';
+const summary=a=>({email:a.email,display_name:a.name,account_name:a.accountName,
+  incoming:{protocol:a.inProto===1?'pop3':'imap',host:a.inHost,port:a.inPort,security:name(SEC_NAMES,a.inSec),auth:name(AUTH_NAMES,a.inAuth),username:a.inUser},
+  outgoing:{host:a.outHost,port:a.outPort,security:name(SEC_NAMES,a.outSec),auth:name(AUTH_NAMES,a.outAuth),username:a.sameLogin?a.inUser:a.outUser}});
+const str=(d,max)=>({type:'string',maxLength:max,description:d});
+const port=d=>({type:'integer',minimum:1,maximum:65535,description:d});
+const secS=d=>({type:'string',enum:Object.keys(SEC_NAMES),description:d});
+const authS=d=>({type:'string',enum:Object.keys(AUTH_NAMES),description:d});
+Tools.mcp.register({
+  name:'add_account',title:'Add email account',label:'mcp.added',
+  description:'Adds an email account (IMAP or POP3 plus SMTP) to the list of this app, which shows it as a QR code that Thunderbird for Android can import (Settings > Import settings > Scan QR code). No password can be given; Thunderbird asks for it on the phone. For Gmail, Outlook/Hotmail, GMX, WEB.DE, T-Online, Posteo and mailbox.org the servers are filled in when left out; otherwise incoming_host and outgoing_host are required. Ports default to the usual port of the chosen security. Returns the account and the number of QR codes.',
+  inputSchema:{type:'object',required:['email'],additionalProperties:false,properties:{
+    email:str('Email address (ASCII only), also the default user name.',254),
+    display_name:str('Sender name shown to recipients.',120),
+    account_name:str('Name of the account in the mail app. Default: the email address.',120),
+    incoming_protocol:{type:'string',enum:['imap','pop3'],description:'Default imap.'},
+    incoming_host:str('Incoming server host name.',253),incoming_port:port('Incoming server port.'),
+    incoming_security:secS('Default ssl.'),incoming_auth:authS('Default password.'),
+    incoming_username:str('Default: the email address.',254),
+    outgoing_host:str('SMTP server host name.',253),outgoing_port:port('SMTP server port.'),
+    outgoing_security:secS('Default starttls.'),outgoing_auth:authS('Default password.'),
+    outgoing_username:str('Default: the incoming user name.',254)
+  }},
+  execute:i=>{
+    if(accounts.length>=MAX)throw new Error(`At most ${MAX} accounts`);
+    const p=Q.provider(i.email)||{in:[],out:[]};
+    const inProto=i.incoming_protocol==='pop3'?1:0, useP=!i.incoming_protocol||inProto===0;
+    const inSec=i.incoming_security?SEC_NAMES[i.incoming_security]:(useP&&p.in[2]!=null?p.in[2]:3);
+    const outSec=i.outgoing_security?SEC_NAMES[i.outgoing_security]:(p.out[2]!=null?p.out[2]:2);
+    const inUser=i.incoming_username!=null?i.incoming_username:i.email.trim();
+    const outUser=i.outgoing_username!=null?i.outgoing_username:inUser;
+    const a={id:Tools.uid(),email:i.email.trim(),name:i.display_name||'',accountName:i.account_name||'',inProto,
+      inHost:i.incoming_host||(useP&&p.in[0])||'',inPort:i.incoming_port||(useP&&!i.incoming_security&&p.in[1])||Q.defaultPort(inProto===1?'pop3':'imap',inSec),
+      inSec,inAuth:i.incoming_auth?AUTH_NAMES[i.incoming_auth]:(useP&&p.in[3]!=null?p.in[3]:1),inUser,
+      outHost:i.outgoing_host||p.out[0]||'',outPort:i.outgoing_port||(!i.outgoing_security&&p.out[1])||Q.defaultPort('smtp',outSec),
+      outSec,outAuth:i.outgoing_auth?AUTH_NAMES[i.outgoing_auth]:(p.out[3]!=null?p.out[3]:1),
+      sameLogin:outUser===inUser,outUser:outUser===inUser?'':outUser,extraIds:[]};
+    const err=Q.checkAccount(a);
+    if(err)throw new Error({email:'email must be a valid ASCII email address',inHost:'incoming_host is required for this provider',
+      outHost:'outgoing_host is required for this provider',lineBreak:'texts must not contain line breaks'}[err]||'invalid account: '+err);
+    accounts.push(a); save(); editing=null; view='make'; codeIdx=Math.floor((accounts.length-1)/Q.PER_CODE);
+    stopScan(); render();
+    return {account:summary(a),accounts:accounts.length,qr_codes:codes.length};
+  }
+});
+Tools.mcp.register({
+  name:'get_accounts',title:'Read accounts',readOnly:true,
+  description:'Reads the email accounts in the list of this app (the ones in the QR code), with servers, ports, security, sign-in and user names. Passwords are never returned.',
+  execute:()=>({accounts:accounts.map(summary),qr_codes:accounts.length?Math.ceil(accounts.length/Q.PER_CODE):0})
+});
+Tools.mcp.register({
+  name:'get_scanned_accounts',title:'Read scanned accounts',readOnly:true,untrusted:true,
+  description:'Reads the email accounts of the Thunderbird QR code(s) the user scanned, opened or pasted in "Read code": servers, ports, security, sign-in, user names and sender addresses. Passwords are never returned, only whether one is included. complete is false while codes of a multi-code export are missing.',
+  execute:()=>({complete:scanned.parts.size>0&&scanned.parts.size===scanned.total,codes_read:scanned.parts.size,codes_total:scanned.total,
+    accounts:scannedAccounts().map(s=>{ const {account,passwords:pw}=Q.fromScanned(s);
+      return Object.assign(summary(account),{identities:s.outgoing.flatMap(o=>o.identities.map(x=>({email:x.email,name:x.name}))),has_password:!!(pw.in||s.outgoing.some(o=>o.password))}); })})
+});
+})();
+</script>
+</body>
+</html>
