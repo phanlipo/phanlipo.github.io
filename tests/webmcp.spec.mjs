@@ -3004,6 +3004,90 @@ test.describe('tic-tac-toe tools', () => {
   });
 });
 
+test.describe('four-in-a-row tools', () => {
+  test('drop_disc plays on the board, get_game reads it back, full column, win, new_round', async ({ page }) => {
+    await open(page, '/four-in-a-row/');
+    let r = await call(page, 'four_in_a_row_drop_disc', { column: 4 });
+    expect(r.ok).toBe(true);
+    expect(r.result.board[5][3]).toBe('red');
+    expect(r.result.to_move).toBe('yellow');
+    await expect(page.locator('#board .slot[data-i="38"] .disc')).toHaveAttribute('data-v', 'r');
+    expect((await call(page, 'four_in_a_row_drop_disc', { column: 8 })).ok).toBe(false);
+    for (const c of [4, 4, 4, 4]) await call(page, 'four_in_a_row_drop_disc', { column: c });
+    r = await call(page, 'four_in_a_row_drop_disc', { column: 4 });
+    expect(r.result.playable_columns).toEqual([1, 2, 3, 5, 6, 7]);
+    expect((await call(page, 'four_in_a_row_drop_disc', { column: 4 })).error).toBe('Column 4 is full.');
+    // column 4 holds red at the bottom; red 1 2 3 next to it (yellow plays 7) makes four across
+    for (const c of [1, 7, 2, 7]) await call(page, 'four_in_a_row_drop_disc', { column: c });
+    r = await call(page, 'four_in_a_row_drop_disc', { column: 3 });
+    expect(r.result.status).toBe('red_wins');
+    expect(r.result.winning_cells).toEqual([1, 2, 3, 4].map(column => ({ row: 6, column })));
+    expect(r.result.score).toEqual({ red: 1, yellow: 0, draws: 0 });
+    expect((await call(page, 'four_in_a_row_drop_disc', { column: 5 })).error).toMatch(/round is over/);
+    expect((await call(page, 'four_in_a_row_get_game', {})).result.status).toBe('red_wins');
+    await expect(page.locator('#status')).toHaveText('Rot gewinnt!');
+    r = await call(page, 'four_in_a_row_new_round', {});
+    expect(r.result).toMatchObject({ status: 'playing', starter: 'yellow', to_move: 'yellow', moves: 0 });
+    expect(r.result.score.red).toBe(1);
+  });
+
+  test('against the computer it replies within the same call', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('four-in-a-row.state.v1', JSON.stringify({ opp: 'cpu', level: 'medium', moves: [0, 6, 1, 6] })));
+    await open(page, '/four-in-a-row/');
+    const r = await call(page, 'four_in_a_row_drop_disc', { column: 3 });
+    expect(r.result.opponent).toBe('computer');
+    expect(r.result.board[5][3]).toBe('yellow'); // blocked red 1-2-3
+    expect(r.result.to_move).toBe('red');
+    expect(r.result.moves).toBe(6);
+  });
+});
+
+test.describe('chess tools', () => {
+  test('two players: make_move takes SAN and UCI, refuses illegal moves, get_game reads the mate', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('chess.settings.v1', JSON.stringify({ opp: 'human' })));
+    await open(page, '/chess/');
+    let r = await call(page, 'chess_get_game', {});
+    expect(r.result).toMatchObject({ to_move: 'white', status: 'playing', result: '*', opponent: 'two_players', moves: [] });
+    expect(r.result.legal_moves).toHaveLength(20);
+    expect(r.result.board[7]).toBe('RNBQKBNR');
+    r = await call(page, 'chess_make_move', { move: 'f3' });
+    expect(r.result.moves).toEqual(['f3']);
+    await expect(page.locator('#board .sq[data-sq="f3"]')).toHaveAttribute('aria-label', 'f3, weißer Bauer');
+    expect((await call(page, 'chess_make_move', { move: 'Nf3' })).error).toMatch(/not a legal move/);
+    expect((await call(page, 'chess_make_move', { move: 'e2e4extra' })).ok).toBe(false);
+    await call(page, 'chess_make_move', { move: 'e7e5' });
+    await call(page, 'chess_make_move', { move: 'g4' });
+    r = await call(page, 'chess_make_move', { move: 'Qh4' });
+    expect(r.result).toMatchObject({ status: 'checkmate', result: '0-1', in_check: true, to_move: null, legal_moves: [], moves: ['f3', 'e5', 'g4', 'Qh4#'] });
+    await expect(page.locator('#status')).toHaveText('Schachmatt – Schwarz gewinnt');
+    expect((await call(page, 'chess_make_move', { move: 'a3' })).error).toMatch(/game is over/);
+    r = await call(page, 'chess_new_game', {});
+    expect(r.result).toMatchObject({ status: 'playing', moves: [] });
+    await call(page, 'chess_make_move', { move: 'e4' });
+    expect((await call(page, 'chess_new_game', {})).error).toMatch(/in progress/);
+    await expect(page.locator('#moves li')).toHaveCount(1);
+  });
+
+  test('against the computer it answers within the same call; playing black it opens on new_game', async ({ page }) => {
+    await page.addInitScript(() => {
+      if (!sessionStorage.getItem('seeded')) localStorage.setItem('chess.settings.v1', JSON.stringify({ opp: 'cpu', color: 'w', level: 'easy' }));
+      sessionStorage.setItem('seeded', '1');
+    });
+    await open(page, '/chess/');
+    let r = await call(page, 'chess_make_move', { move: 'e2e4' });
+    expect(r.result).toMatchObject({ opponent: 'computer', you_play: 'white', computer_level: 'easy', to_move: 'white', computer_thinking: false });
+    expect(r.result.moves).toHaveLength(2);
+    await expect(page.locator('#moves li')).toHaveCount(2);
+    await page.evaluate(() => localStorage.setItem('chess.settings.v1', JSON.stringify({ opp: 'cpu', color: 'b', level: 'easy' })));
+    await page.evaluate(() => localStorage.setItem('chess.game.v1', JSON.stringify({ opp: 'cpu', human: 'w', moves: [] })));
+    await page.reload();
+    r = await call(page, 'chess_new_game', {});
+    expect(r.result).toMatchObject({ you_play: 'black', to_move: 'black' });
+    expect(r.result.moves).toHaveLength(1);
+    expect((await call(page, 'chess_make_move', { move: 'Ke7' })).error).toMatch(/not a legal move/);
+  });
+});
+
 test.describe('hangman tools', () => {
   const seed = (page, game, extra = {}) => page.addInitScript(([g, e]) => localStorage.setItem('hangman.state.v1',
     JSON.stringify({ mode: 'solo', level: 'medium', ...e, game: g && { lang: 'de', cat: 'animals', source: 'list', lives: 8, guessed: [], ...g } })), [game, extra]);
@@ -3047,6 +3131,48 @@ test.describe('hangman tools', () => {
     expect(r.result).toMatchObject({ status: 'playing', pattern: '___-___', own_word: true, hint: 'kalt', word: null });
     await expect(page.locator('#play')).toBeVisible();
     await expect(page.locator('#topic')).toHaveText('Hinweis: kalt');
+  });
+});
+
+test.describe('code-breaker tools', () => {
+  const seed = (page, game, extra = {}) => page.addInitScript(([g, e]) => localStorage.setItem('code-breaker.state.v1',
+    JSON.stringify({ mode: 'solo', level: 'medium', ...e, game: g && { level: 'medium', source: 'random', guesses: [], ...g } })), [game, extra]);
+
+  test('get_game hides the code, make_guess plays on the board, the code shows once cracked', async ({ page }) => {
+    await seed(page, { secret: [0, 1, 2, 3] });
+    await open(page, '/code-breaker/');
+    let r = await call(page, 'code_breaker_get_game', {});
+    expect(r.result).toMatchObject({ mode: 'alone', status: 'playing', secret: null, guesses_made: 0, guesses_left: 10, possible_codes_left: 1296 });
+    expect(r.result.rules).toMatchObject({ places: 4, colors_may_repeat: true, max_guesses: 10 });
+    expect(r.result.rules.colors).toEqual(['red', 'blue', 'green', 'yellow', 'purple', 'orange']);
+    r = await call(page, 'code_breaker_make_guess', { code: ['yellow', 'green', 'blue', 'red'] });
+    expect(r.result).toMatchObject({ right_place: 0, wrong_place: 4, guesses_made: 1, possible_codes_left: 9 });
+    await expect(page.locator('#board li')).toHaveCount(1);
+    await expect(page.locator('#board li .pin.white')).toHaveCount(4);
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green'] })).error).toMatch(/exactly 4 colours/);
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green', 'pink'] })).error).toMatch(/Only these colours/);
+    expect((await call(page, 'code_breaker_new_game', {})).error).toMatch(/under way/);
+    r = await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green', 'yellow'] });
+    expect(r.result).toMatchObject({ status: 'won', right_place: 4, secret: ['red', 'blue', 'green', 'yellow'] });
+    expect(r.result.statistics).toMatchObject({ won: 1, tries: 2 });
+    await expect(page.locator('#status')).toHaveText('Geknackt in 2 Versuchen!');
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'red', 'red', 'red'] })).error).toMatch(/game is over/);
+    r = await call(page, 'code_breaker_new_game', {});
+    expect(r.result).toMatchObject({ status: 'playing', guesses_made: 0, secret: null });
+  });
+
+  test('new_game with a code for the user; two-player mode needs a code', async ({ page }) => {
+    await seed(page, null, { mode: 'duo', level: 'easy' });
+    await open(page, '/code-breaker/');
+    let r = await call(page, 'code_breaker_get_game', {});
+    expect(r.result.status).toBe('waiting_for_code');
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green', 'yellow'] })).error).toMatch(/no code yet/);
+    expect((await call(page, 'code_breaker_new_game', {})).error).toMatch(/two-player mode/);
+    expect((await call(page, 'code_breaker_new_game', { code: ['red', 'red', 'green', 'yellow'] })).error).toMatch(/only once/);
+    r = await call(page, 'code_breaker_new_game', { code: ['orange', 'red', 'green', 'yellow'] });
+    expect(r.result).toMatchObject({ status: 'playing', own_code: true, secret: null, difficulty: 'easy' });
+    await expect(page.locator('#board')).toBeVisible();
+    await expect(page.locator('#secretLine')).toHaveAttribute('aria-label', 'Geheimer Code mit 4 Farben');
   });
 });
 
@@ -3605,5 +3731,159 @@ test.describe('quantum-putt tools', () => {
     expect((await call(page, 'quantum_putt_shoot', { angle: 0, strength: 1 })).error).toBe('The ball is already sunk – start the next course with start_course.');
     expect((await call(page, 'quantum_putt_shoot', { angle: 200, strength: 1 })).ok).toBe(false);
     expect((await call(page, 'quantum_putt_start_course', { course: 'golf' })).ok).toBe(false);
+  });
+});
+
+test.describe('sudoku tools', () => {
+  test('get_game, set_cell and new_game: shown on the board, givens and progress protected', async ({ page }) => {
+    await open(page, '/sudoku/');
+    let r = await call(page, 'sudoku_get_game', {});
+    expect(r.result).toMatchObject({ difficulty: 'easy', status: 'playing', empty_squares: 41, rule_conflicts: [], hints_used: 0 });
+    expect(r.result.board).toHaveLength(9);
+    expect(r.result.board.every(row => /^[1-9.]{9}$/.test(row))).toBe(true);
+    expect(r.result.board).toEqual(r.result.givens);
+    expect(JSON.stringify(r.result)).not.toMatch(/solution"/);
+    const g = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku.game.v1')));
+    // A new game is allowed while nothing is entered
+    r = await call(page, 'sudoku_new_game', { difficulty: 'medium' });
+    expect(r.result).toMatchObject({ difficulty: 'medium', empty_squares: 49 });
+    await expect(page.locator('#lvl')).toHaveText('Mittel');
+    const m = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku.game.v1')));
+    expect(m.puzzle).not.toBe(g.puzzle);
+    // Enter the right digit in the first empty square
+    const i = m.puzzle.indexOf('0'), row = Math.floor(i / 9) + 1, column = (i % 9) + 1, d = Number(m.solution[i]);
+    r = await call(page, 'sudoku_set_cell', { row, column, digit: d });
+    expect(r.result.board[row - 1][column - 1]).toBe(String(d));
+    expect(r.result.empty_squares).toBe(48);
+    await expect(page.locator(`#board .cell[data-i="${i}"]`)).toHaveAttribute('data-v', String(d));
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Zahl eingetragen');
+    // A digit already in the row breaks a rule
+    const j = m.puzzle.indexOf('0', i + 1), jr = Math.floor(j / 9);
+    if (jr === row - 1) {
+      r = await call(page, 'sudoku_set_cell', { row: jr + 1, column: (j % 9) + 1, digit: d });
+      expect(r.result.rule_conflicts).toEqual(expect.arrayContaining([{ row, column }, { row: jr + 1, column: (j % 9) + 1 }]));
+      await call(page, 'sudoku_set_cell', { row: jr + 1, column: (j % 9) + 1, digit: 0 });
+    }
+    // Givens stay, limits like the UI, progress is not discarded
+    const k = m.puzzle.search(/[1-9]/);
+    expect((await call(page, 'sudoku_set_cell', { row: Math.floor(k / 9) + 1, column: (k % 9) + 1, digit: 1 })).error).toMatch(/given digit/);
+    expect((await call(page, 'sudoku_set_cell', { row: 10, column: 1, digit: 1 })).ok).toBe(false);
+    expect((await call(page, 'sudoku_set_cell', { row: 1, column: 1, digit: 10 })).ok).toBe(false);
+    expect((await call(page, 'sudoku_new_game', { difficulty: 'expert' })).ok).toBe(false);
+    expect((await call(page, 'sudoku_new_game', {})).error).toMatch(/only the user can discard/);
+    // Clearing again
+    r = await call(page, 'sudoku_set_cell', { row, column, digit: 0 });
+    expect(r.result.empty_squares).toBe(49);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'sudoku_get_game').annotations.readOnlyHint).toBe(true);
+    expect(tools.find(t => t.name === 'sudoku_set_cell').annotations.readOnlyHint).toBe(false);
+  });
+
+  test('solving through set_cell ends the game; new_game is allowed again', async ({ page }) => {
+    await open(page, '/sudoku/');
+    const g = await page.evaluate(() => JSON.parse(localStorage.getItem('sudoku.game.v1')));
+    let r;
+    for (let i = 0; i < 81; i++) {
+      if (g.puzzle[i] !== '0') continue;
+      r = await call(page, 'sudoku_set_cell', { row: Math.floor(i / 9) + 1, column: (i % 9) + 1, digit: Number(g.solution[i]) });
+    }
+    expect(r.result).toMatchObject({ status: 'solved', empty_squares: 0 });
+    await expect(page.locator('#status')).toHaveText(/^Gelöst in/);
+    expect((await call(page, 'sudoku_set_cell', { row: 1, column: 1, digit: 0 })).error).toMatch(/solved/);
+    r = await call(page, 'sudoku_new_game', {});
+    expect(r.result).toMatchObject({ difficulty: 'easy', status: 'playing' });
+  });
+});
+
+test.describe('beer-tally tools', () => {
+  const pad = n => String(n).padStart(2, '0');
+  const d = new Date();
+  const TODAY = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  test.beforeEach(async ({ page }) => {
+    await open(page, '/beer-tally/');
+    await page.evaluate(() => localStorage.setItem('beer-tally.list.v1', JSON.stringify({
+      price: 150, people: [{ id: 'a', name: 'Anna' }, { id: 'b', name: 'Ben' }], days: [], payments: [],
+    })));
+    await page.reload();
+  });
+
+  test('add_beers and add_payment change the list shown in the app; get_tally reads it', async ({ page }) => {
+    expect(await call(page, 'beer_tally_add_beers', { name: 'anna', count: 3 }))
+      .toEqual({ ok: true, result: { name: 'Anna', date: TODAY, beersThatDay: 3, balanceEur: -4.5 } });
+    await expect(page.locator(`#tally .cell[data-p="a"][data-d="${TODAY}"]`)).toHaveAttribute('aria-label', /: 3$/);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Striche gemacht');
+    expect(await call(page, 'beer_tally_add_beers', { name: 'Ben', date: '2026-01-02' }))
+      .toEqual({ ok: true, result: { name: 'Ben', date: '2026-01-02', beersThatDay: 1, balanceEur: -1.5 } });
+    expect(await call(page, 'beer_tally_add_payment', { name: 'Anna', amount: 10 }))
+      .toEqual({ ok: true, result: { name: 'Anna', amountEur: 10, balanceEur: 5.5 } });
+    await expect(page.locator('#tally tbody tr').first().locator('.bal')).toHaveText('5,50 €');
+    expect(await call(page, 'beer_tally_get_tally', {})).toEqual({ ok: true, result: {
+      pricePerBeerEur: 1.5,
+      people: [
+        { name: 'Anna', beers: 3, costEur: 4.5, paidEur: 10, balanceEur: 5.5 },
+        { name: 'Ben', beers: 1, costEur: 1.5, paidEur: 0, balanceEur: -1.5 },
+      ],
+      days: [
+        { date: TODAY, pricePerBeerEur: 1.5, beers: { Anna: 3 } },
+        { date: '2026-01-02', pricePerBeerEur: 1.5, beers: { Ben: 1 } },
+      ],
+    } });
+  });
+
+  test('only people on the list, limits like the UI', async ({ page }) => {
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Carla' })).error).toBe('No person named "Carla" on the list. Known: Anna, Ben');
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Anna', count: 51 })).error).toBe('input.count must be <= 50');
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Anna', date: '02.01.2026' })).error).toBe('date must be YYYY-MM-DD');
+    expect((await call(page, 'beer_tally_add_payment', { name: 'Anna', amount: 0 })).error).toBe('amount must not be 0');
+    expect((await call(page, 'beer_tally_add_payment', { name: 'Anna', amount: 10001 })).ok).toBe(false);
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Anna', remove: true })).error).toBe('input.remove is not allowed');
+    const s = await page.evaluate(() => JSON.parse(localStorage.getItem('beer-tally.list.v1')));
+    expect(s.days).toEqual([]);
+    expect(s.payments).toEqual([]);
+  });
+});
+
+test.describe('minesweeper tools', () => {
+  // Easy board with known mines: bottom row plus row 8, columns 1–2 (as in minesweeper.spec.mjs)
+  const seed = page => page.addInitScript(() => {
+    const mine = Array(72).fill(0);
+    for (const i of [56, 57, 64, 65, 66, 67, 68, 69, 70, 71]) mine[i] = 1;
+    localStorage.setItem('minesweeper.game.v1', JSON.stringify({ level: 'easy', elapsed: 0,
+      game: { rows: 9, cols: 8, mines: 10, mine, open: Array(72).fill(0), flag: Array(72).fill(0), status: 'playing', hit: -1 } }));
+  });
+
+  test('get_game hides the mines; flag_cell and open_cell play on the board; the mines show once lost', async ({ page }) => {
+    await seed(page);
+    await open(page, '/minesweeper/');
+    let r = await call(page, 'minesweeper_get_game', {});
+    expect(r.result).toMatchObject({ level: 'easy', rows: 9, cols: 8, mines: 10, flags: 0, status: 'playing' });
+    expect(r.result.board).toEqual(Array(9).fill('########'));
+    r = await call(page, 'minesweeper_flag_cell', { row: 8, col: 1 });
+    expect(r.result.board[7]).toBe('F#######');
+    expect(r.result.mines_left).toBe(9);
+    await expect(page.locator('#board .cell[data-i="56"]')).toHaveAttribute('data-v', 'flag');
+    expect((await call(page, 'minesweeper_open_cell', { row: 8, col: 1 })).error).toMatch(/has a flag/);
+    r = await call(page, 'minesweeper_open_cell', { row: 8, col: 3 });
+    expect(r.result.board[7]).toBe('F#4#####');
+    await expect(page.locator('#board .cell[data-i="58"]')).toHaveText('4');
+    expect((await call(page, 'minesweeper_flag_cell', { row: 8, col: 3 })).error).toMatch(/already open/);
+    expect((await call(page, 'minesweeper_open_cell', { row: 10, col: 1 })).error).toMatch(/9 rows and 8 columns/);
+    expect((await call(page, 'minesweeper_open_cell', { row: 0, col: 1 })).ok).toBe(false);
+    r = await call(page, 'minesweeper_open_cell', { row: 9, col: 8 });
+    expect(r.result.status).toBe('lost');
+    expect(r.result.board[8]).toBe('*******X');
+    expect(r.result.board[7]).toBe('F*4#####');
+    expect((await call(page, 'minesweeper_open_cell', { row: 1, col: 1 })).error).toMatch(/game is over/);
+  });
+
+  test('new_game deals a fresh board of the chosen size', async ({ page }) => {
+    await open(page, '/minesweeper/');
+    const r = await call(page, 'minesweeper_new_game', { level: 'medium' });
+    expect(r.result).toMatchObject({ level: 'medium', rows: 13, cols: 10, mines: 22, status: 'ready' });
+    await expect(page.locator('#board .cell')).toHaveCount(130);
+    const o = await call(page, 'minesweeper_open_cell', { row: 7, col: 5 });
+    expect(o.result.status).toBe('playing');
+    expect(o.result.board[6][4]).toBe('.');
+    expect((await call(page, 'minesweeper_new_game', { level: 'huge' })).ok).toBe(false);
   });
 });

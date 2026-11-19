@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Schach</title>
+<meta name="description" content="Schach gegen den Computer in vier Stärken oder zu zweit an einem Handy – mit allen Regeln, Tipps, Zugliste und Rücknahme.">
+<meta name="tool:tags" content="Freizeit, Spiele">
+<meta name="tool:features" content="Kopieren, KI-Agent">
+<meta name="tool:icon" content="chess-knight">
+<meta name="tool:color" content="#7a5230">
+<meta name="tool:short-name" content="Schach">
+<meta name="tool:title-en" content="Chess">
+<meta name="tool:description-en" content="Chess against the computer at four strengths or two players on one phone – with all the rules, hints, a move list and take-backs.">
+<meta name="tool:short-name-en" content="Chess">
+<meta name="tool:storage" content="chess.">
+<meta name="tool:webmcp" content="get_game, make_move, new_game">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann die Stellung und die erlaubten Züge lesen, einen Zug machen (der Computer antwortet dann) und nach dem Ende eine neue Partie beginnen; jeder Zug erscheint auf dem Brett.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the position and the legal moves, make a move (the computer then answers) and start a new game once one is over; every move shows up on the board.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-w1xYwxcuuhRd7JnITN6g8FULk2VliElA15p0AriOasw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Schach">
+<meta name="theme-color" content="#7a5230">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#7a5230;--accent-text:#ffffff;
+  --sq-light:#efdab9;--sq-dark:#b58863;
+  --mark-last:rgba(255,206,40,.42);--mark-sel:rgba(40,120,220,.5);--mark-hint:rgba(30,170,80,.5);--mark-dot:rgba(30,20,10,.3);--mark-check:rgba(220,30,30,.85)}
+@media (prefers-color-scheme: dark){:root{--accent:#dcae7e;--accent-text:#1f140a;
+  --sq-light:#cfb795;--sq-dark:#8d6748;--mark-dot:rgba(20,10,0,.38)}}
+/* Stage layout: player bars around the board, moves and status at the thumb */
+main{max-width:620px;margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;gap:4px;padding:8px}
+
+/* ---------- Player bars ---------- */
+.pbar{flex:none;display:flex;align-items:center;gap:8px;height:44px;padding:4px 8px;border:2px solid var(--border);border-radius:10px;background:var(--surface-2);transition:border-color .2s}
+.pbar.turn{border-color:var(--accent)}
+.pbar .side{flex:none;width:22px;height:22px}
+.pbar .pname{flex:0 1 auto;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pbar .caps{flex:1;min-width:0;display:flex;align-items:center;overflow:hidden;justify-content:flex-end}
+.pbar .caps svg{flex:none;width:18px;height:18px;margin-inline-start:-4px}
+/* Small pieces on the bar background: outline in the text colour, so black pieces stay visible in dark mode */
+.pbar .pc.b{stroke:var(--text)}
+.pbar .lead{flex:none;font-weight:700;font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}
+
+/* ---------- Board ---------- */
+/* Bars and board as one block, as large as the space allows (bars 44 px + gaps, coordinates 18 px) */
+.board-wrap{flex:1;min-height:300px;container-type:size;display:grid;place-items:center}
+.stack{--bs:min(calc(100cqw - 18px),calc(100cqh - 124px));width:calc(var(--bs) + 18px);display:flex;flex-direction:column;gap:6px}
+.stack .pbar{margin-inline-start:18px}
+.frame{display:grid;grid-template-columns:18px var(--bs);grid-template-rows:var(--bs) 18px}
+.ranks,.files{display:grid;color:var(--muted);font-size:12px;line-height:1;user-select:none}
+.ranks{grid-template-rows:repeat(8,1fr);align-items:center;justify-items:center}
+.files{grid-column:2;grid-template-columns:repeat(8,1fr);justify-items:center;align-items:end}
+.board{display:grid;grid-template:repeat(8,1fr)/repeat(8,1fr);width:var(--bs);height:var(--bs);border-radius:4px;overflow:hidden;box-shadow:0 0 0 1px var(--border);touch-action:manipulation}
+.sq{position:relative;border:0;margin:0;padding:0;min-width:0;min-height:0;background:var(--sq-light);cursor:pointer;-webkit-tap-highlight-color:transparent;color:inherit}
+.sq.dark{background:var(--sq-dark)}
+.sq:focus-visible{outline:3px solid var(--text);outline-offset:-3px;z-index:3}
+.sq::before,.sq::after{content:"";position:absolute;pointer-events:none}
+.sq.last::before{inset:0;background:var(--mark-last)}
+.sq.sel::before{inset:0;background:var(--mark-sel)}
+.sq.hint::before{inset:0;background:var(--mark-hint)}
+.sq.check::before{inset:0;background:radial-gradient(circle,var(--mark-check) 0,rgba(220,30,30,.45) 45%,transparent 72%)}
+.sq.target::after{inset:36%;border-radius:50%;background:var(--mark-dot)}
+.sq.target.occupied::after{inset:3%;background:none;border:5px solid var(--mark-dot)}
+.sq .pc{position:relative;z-index:1;display:block;width:100%;height:100%;pointer-events:none}
+.sq .pc.moving{z-index:4}
+.pc{stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+.pc.w{fill:#fbfaf7;stroke:#1d1a17;color:#1d1a17}
+.pc.b{fill:#2b2724;stroke:#0b0a09;color:#ebe6df}
+.board.busy .sq{cursor:progress}
+
+/* ---------- Moves, status, actions ---------- */
+.moves{flex:none;display:flex;gap:2px 6px;align-items:baseline;overflow-x:auto;white-space:nowrap;margin:0;padding:4px 2px;min-height:32px;list-style:none;scrollbar-width:thin;font-variant-numeric:tabular-nums}
+.moves:empty::before{content:attr(data-empty);color:var(--muted)}
+.moves li{display:flex;gap:4px}
+.moves .num{color:var(--muted)}
+.moves .mv.cur{background:var(--surface-2);border-radius:4px;padding-inline:3px;font-weight:600}
+.status{flex:none;text-align:center;min-height:26px;margin:0;font-weight:600;font-size:17px;overflow-wrap:anywhere}
+.actions{flex:none;display:grid}
+.actions .btn{min-height:50px;font-size:17px}
+
+/* ---------- Settings & promotion ---------- */
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-child{margin-top:0}
+.names{display:grid;gap:8px;margin-top:12px}
+.info{color:var(--muted);margin:6px 0 0}
+.promo-tiles{grid-template-columns:repeat(4,1fr)}
+.promo-tiles .pc{width:48px;height:48px}
+.defs{position:absolute;width:0;height:0;overflow:hidden}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Schach</span></h1>
+  <p class="sub" data-i18n="sub">Gegen den Computer oder zu zweit</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnHint" aria-label="Tipp" title="Tipp" data-i18n-attr="aria-label:hint; title:hint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#bulb"/></svg></button>
+    <button type="button" class="head-btn" id="btnFlip" aria-label="Brett drehen" title="Brett drehen" data-i18n-attr="aria-label:flip; title:flip"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-up-down"/></svg></button>
+    <button type="button" class="head-btn" id="btnUndo" aria-label="Zug zurücknehmen" title="Zug zurücknehmen" data-i18n-attr="aria-label:undo; title:undo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrow-back-up"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card play" aria-label="Partie" data-i18n-attr="aria-label:gameLabel">
+    <div class="board-wrap">
+      <div class="stack">
+        <div class="pbar" id="barTop"><svg class="side pc" viewBox="0 0 45 45" aria-hidden="true"><use href="#pc-k"/></svg><span class="pname"></span><span class="caps"></span><span class="lead"></span></div>
+        <div class="frame">
+          <div class="ranks" id="ranks" aria-hidden="true"></div>
+          <div class="board" id="board" role="group" aria-label="Schachbrett" data-i18n-attr="aria-label:boardLabel"></div>
+          <div class="files" id="files" aria-hidden="true"></div>
+        </div>
+        <div class="pbar" id="barBottom"><svg class="side pc" viewBox="0 0 45 45" aria-hidden="true"><use href="#pc-k"/></svg><span class="pname"></span><span class="caps"></span><span class="lead"></span></div>
+      </div>
+    </div>
+    <ol class="moves" id="moves" tabindex="0" aria-label="Züge" data-i18n-attr="aria-label:movesLabel; data-empty:noMoves" data-empty="Noch keine Züge"></ol>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <div class="actions">
+      <button type="button" class="btn primary" id="btnAgain" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="newGame">Neue Partie</span></button>
+    </div>
+  </section>
+
+  <div class="menu-list" data-menu>
+    <button type="button" id="btnNew"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="newGame">Neue Partie</span></button>
+    <button type="button" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copyPgn">Partie kopieren (PGN)</span></button>
+    <button type="button" id="btnDraw"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#scale"/></svg><span data-i18n="agreeDraw">Remis vereinbaren</span></button>
+    <button type="button" id="btnResign" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#flag"/></svg><span data-i18n="resign">Aufgeben</span></button>
+  </div>
+
+  <section class="card" aria-labelledby="h-settings" data-menu data-icon="settings">
+    <h2 id="h-settings" data-i18n="settings">Spiel &amp; Einstellungen</h2>
+    <h3 id="h-opp" data-i18n="opponent">Gegner</h3>
+    <div class="seg" id="opp" role="group" aria-labelledby="h-opp">
+      <button type="button" data-o="cpu"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#device-desktop"/></svg><span data-i18n="opp.cpu">Computer</span></button>
+      <button type="button" data-o="human"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span data-i18n="opp.human">Zu zweit</span></button>
+    </div>
+    <div id="cpuBox">
+      <h3 id="h-color" data-i18n="yourColor">Du spielst</h3>
+      <div class="seg" id="colors" role="group" aria-labelledby="h-color">
+        <button type="button" data-c="w" data-i18n="color.w">Weiß</button>
+        <button type="button" data-c="b" data-i18n="color.b">Schwarz</button>
+        <button type="button" data-c="random"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#dice-5"/></svg><span data-i18n="color.random">Zufall</span></button>
+      </div>
+      <h3 id="h-level" data-i18n="level">Stärke des Computers</h3>
+      <div class="seg" id="levels" role="group" aria-labelledby="h-level">
+        <button type="button" data-l="easy" data-i18n="level.easy">Leicht</button>
+        <button type="button" data-l="medium" data-i18n="level.medium">Mittel</button>
+        <button type="button" data-l="hard" data-i18n="level.hard">Stark</button>
+        <button type="button" data-l="expert" data-i18n="level.expert">Profi</button>
+      </div>
+    </div>
+    <div class="names" id="namesBox">
+      <div class="form-field"><label for="inW" data-i18n="nameW">Name Weiß</label><input type="text" id="inW" maxlength="20" autocomplete="off" spellcheck="false"></div>
+      <div class="form-field"><label for="inB" data-i18n="nameB">Name Schwarz</label><input type="text" id="inB" maxlength="20" autocomplete="off" spellcheck="false"></div>
+    </div>
+    <h3 data-i18n="board">Brett</h3>
+    <label class="check"><input type="checkbox" id="optHints"><span data-i18n="showMoves">Mögliche Züge zeigen</span></label>
+    <label class="check" id="autoFlipRow"><input type="checkbox" id="optAutoFlip"><span data-i18n="autoFlip">Brett nach jedem Zug drehen<small>Für zwei, die sich gegenübersitzen</small></span></label>
+    <p class="info" data-i18n="startInfo">Ein Wechsel von Gegner oder Farbe beginnt eine neue Partie (mit Rückgängig). Die Stärke gilt ab dem nächsten Zug.</p>
+  </section>
+</main>
+
+<dialog class="dialog" id="promoDlg" aria-labelledby="promoH">
+  <div class="dialog-head"><h2 id="promoH" data-i18n="promoTitle">Bauer umwandeln in …</h2><button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close; title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+  <div class="dialog-body"><div class="tiles promo-tiles" id="promoTiles"></div></div>
+</dialog>
+
+<!-- Pieces: own drawings (no emoji, no copied set). Fill and outline come from .pc.w / .pc.b, details use currentColor. -->
+<svg class="defs" aria-hidden="true" focusable="false">
+  <symbol id="pc-p" viewBox="0 0 45 45"><circle cx="22.5" cy="12.5" r="6"/><path d="M16.5 19h12l-1.8 2.6c1.8 4 4.2 7.6 7 11.4H11.3c2.8-3.8 5.2-7.4 7-11.4z"/><rect x="10" y="33" width="25" height="5.5" rx="1.5"/></symbol>
+  <symbol id="pc-n" viewBox="0 0 45 45"><path d="M13.5 33c0-6 2-9.6 6.6-12.6L13.4 24.6c-2 1.2-4.3.4-4.8-1.6-.4-2 .4-3.5 1.8-4.9L17 11.4l1-4.6 3.2 3 2.5-3.2 1.6 3.6c6.2 1.5 10.7 8.5 9.2 22.8z"/><circle cx="16.6" cy="15.4" r="1.4" fill="currentColor" stroke="none"/><path d="M26.5 12.5c3.2 3.4 4.6 9.4 4 17" fill="none" stroke="currentColor" stroke-width="1"/><rect x="9.5" y="33" width="26" height="5.5" rx="1.5"/></symbol>
+  <symbol id="pc-b" viewBox="0 0 45 45"><circle cx="22.5" cy="6.8" r="2.6"/><path d="M22.5 9.5c-5.6 4.6-8.6 9.1-8.6 13.6 0 3.5 2 6.1 4 7.5L16 33h13l-1.9-2.4c2-1.4 4-4 4-7.5 0-4.5-3-9-8.6-13.6z"/><path d="M25.8 15.2l-4.6 5.6M18.2 28h8.6" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="9.5" y="33" width="26" height="5.5" rx="1.5"/></symbol>
+  <symbol id="pc-r" viewBox="0 0 45 45"><path d="M11 8.5h5v3h3.5v-3h6v3H29v-3h5v9.5H11z"/><path d="M14.5 18h16l2 15h-20z"/><path d="M15 22h15" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="9.5" y="33" width="26" height="5.5" rx="1.5"/></symbol>
+  <symbol id="pc-q" viewBox="0 0 45 45"><path d="M12.5 30L9 13.5l6.2 8.7.4-11.4 4.6 10.6 2.3-12.6 2.3 12.6 4.6-10.6.4 11.4 6.2-8.7L32.5 30z"/><circle cx="9" cy="13" r="2"/><circle cx="15.6" cy="10.4" r="2"/><circle cx="22.5" cy="8.4" r="2"/><circle cx="29.4" cy="10.4" r="2"/><circle cx="36" cy="13" r="2"/><rect x="12" y="29.5" width="21" height="4" rx="1"/><rect x="9.5" y="33.5" width="26" height="5" rx="1.5"/></symbol>
+  <symbol id="pc-k" viewBox="0 0 45 45"><path d="M21 3.5h3v3h3v3h-3v4.5h-3V9.5h-3v-3h3z"/><path d="M12.4 29.5c-4-5-4.6-12 1.4-13.5 4-1 7.6 1.5 8.7 5 1.1-3.5 4.7-6 8.7-5 6 1.5 5.4 8.5 1.4 13.5z"/><path d="M22.5 21.5c-1.6-2.4-1.6-5.6 0-7.5 1.6 1.9 1.6 5.1 0 7.5z"/><rect x="12" y="29.5" width="21" height="4" rx="1"/><rect x="9.5" y="33.5" width="26" height="5" rx="1.5"/></symbol>
+</svg>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Schach gegen den Computer oder zu zweit an einem Handy – mit allen Regeln: Rochade, en passant, Umwandlung, Schach, Matt und Patt. Remis gibt es automatisch bei dreifacher Stellungswiederholung, nach 50 Zügen ohne Schlagen oder Bauernzug und wenn keiner mehr mattsetzen kann.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Tippe eine eigene Figur an – die Felder, auf die sie ziehen darf, bekommen einen Punkt (geschlagene Figuren einen Ring). Dann das Zielfeld antippen. Nochmal auf die Figur tippen hebt die Auswahl auf.</li>
+    <li>Kommt ein Bauer auf die letzte Reihe, fragt die App, in welche Figur er sich verwandelt.</li>
+    <li>Oben in der Leiste: <b>Tipp</b> markiert einen guten Zug, <b>Brett drehen</b> wechselt die Seite, <b>Zug zurücknehmen</b> nimmt den letzten Zug zurück – gegen den Computer auch seine Antwort. Auch nach Matt oder Aufgeben lässt sich so weiterspielen.</li>
+    <li>Neben den Namen stehen die geschlagenen Figuren und, wer wie viel Material mehr hat (Bauer 1, Springer und Läufer 3, Turm 5, Dame 9).</li>
+    <li>Unter dem Brett steht die Zugliste in deutscher Kurzschreibweise (K König, D Dame, T Turm, L Läufer, S Springer).</li>
+    <li>Im Menü ☰: <b>Neue Partie</b>, <b>Partie kopieren</b> (als PGN, das jedes Schachprogramm öffnet – immer mit englischen Figurenbuchstaben), <b>Remis vereinbaren</b> (zu zweit), <b>Aufgeben</b> und die Einstellungen: Gegner, deine Farbe, Stärke des Computers, Namen, Zugpunkte und ob sich das Brett zu zweit nach jedem Zug dreht.</li>
+  </ul>
+  <h3>Der Computer</h3>
+  <ul>
+    <li><b>Leicht</b> schaut nur einen Zug weit und spielt oft daneben – zum Lernen. <b>Mittel</b> rechnet zwei Züge und Schlagabtausche durch, <b>Stark</b> drei. <b>Profi</b> rechnet bis zu zwei Sekunden lang so tief wie möglich.</li>
+    <li>Der Computer denkt im Hintergrund, das Brett bleibt bedienbar. Mattzüge findet er auf jeder Stufe.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Die laufende Partie, die Namen und die Einstellungen bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Chess against the computer or two players on one phone – with all the rules: castling, en passant, promotion, check, checkmate and stalemate. A draw comes automatically on threefold repetition, after 50 moves without a capture or pawn move and when nobody can checkmate any more.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li>Tap one of your pieces – the squares it may move to get a dot (captures a ring). Then tap the target square. Tapping the piece again clears the selection.</li>
+    <li>When a pawn reaches the last rank, the app asks which piece it becomes.</li>
+    <li>In the top bar: <b>Hint</b> marks a good move, <b>Flip board</b> turns the board around, <b>Undo move</b> takes back the last move – against the computer its reply as well. That way you can play on even after checkmate or resigning.</li>
+    <li>Next to the names are the captured pieces and who is ahead in material (pawn 1, knight and bishop 3, rook 5, queen 9).</li>
+    <li>Below the board is the move list in short algebraic notation.</li>
+    <li>In the menu ☰: <b>New game</b>, <b>Copy game</b> (as PGN, which every chess program opens), <b>Agree a draw</b> (two players), <b>Resign</b> and the settings: opponent, your colour, computer strength, names, move dots and whether the board turns after every move for two players.</li>
+  </ul>
+  <h3>The computer</h3>
+  <ul>
+    <li><b>Easy</b> only looks one move ahead and often misses things – good for learning. <b>Medium</b> calculates two moves and exchanges, <b>Hard</b> three. <b>Expert</b> calculates as deep as it can for up to two seconds.</li>
+    <li>The computer thinks in the background, the board stays usable. It finds mating moves on every level.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The current game, the names and the settings stay only in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann die Stellung und die erlaubten Züge lesen, einen Zug machen (der Computer antwortet dann) und nach dem Ende eine neue Partie beginnen; jeder Zug erscheint auf dem Brett. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the position and the legal moves, make a move (the computer then answers) and start a new game once one is over; every move shows up on the board. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version da60b2a1d844</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="engine.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    gameLabel:'Partie',white:'Weiß',black:'Schwarz',you:'Du',cpuName:'Computer ({level})',
+    'lv.easy':'Leicht','lv.medium':'Mittel','lv.hard':'Stark','lv.expert':'Profi',
+    turn:'{name} ist am Zug',turnCheck:'Schach! {name} ist am Zug',turnYou:'Du bist am Zug',turnCheckYou:'Schach! Du bist am Zug',cpuThinks:'Computer überlegt …',
+    'end.checkmate':'Schachmatt – {name} gewinnt','end.resign':'{loser} gibt auf – {name} gewinnt','end.checkmateYou':'Schachmatt – du gewinnst','end.resignYou':'Du gibst auf – {name} gewinnt',
+    'end.stalemate':'Patt – Remis','end.material':'Remis – keiner kann mehr mattsetzen','end.repetition':'Remis durch dreifache Wiederholung',
+    'end.fifty':'Remis – 50 Züge ohne Schlagen oder Bauernzug','end.agreed':'Remis vereinbart',
+    sqEmpty:'{sq}, leer',sqPiece:'{sq}, {piece}',
+    'pc.w.p':'weißer Bauer','pc.w.n':'weißer Springer','pc.w.b':'weißer Läufer','pc.w.r':'weißer Turm','pc.w.q':'weiße Dame','pc.w.k':'weißer König',
+    'pc.b.p':'schwarzer Bauer','pc.b.n':'schwarzer Springer','pc.b.b':'schwarzer Läufer','pc.b.r':'schwarzer Turm','pc.b.q':'schwarze Dame','pc.b.k':'schwarzer König',
+    'promo.q':'Dame','promo.r':'Turm','promo.b':'Läufer','promo.n':'Springer','promo.p':'Bauer','promo.k':'König',
+    capsLabel:'Geschlagen: {list}',undone:'Zug zurückgenommen',resumed:'Partie geht weiter',started:'Neue Partie',restored:'Vorherige Partie zurückgeholt',
+    resigned:'Aufgegeben',drawn:'Remis vereinbart',copied:'Partie kopiert (PGN)',copyFail:'Kopieren nicht möglich',
+    hintMove:'Tipp: {san}',hintBusy:'Suche einen Tipp …',engineFail:'Der Computer konnte nicht rechnen.',
+    pieceLetters:'KDTLS','mcp.move':'Zug gemacht','mcp.new':'Neue Partie'
+  },
+  en:{
+    title:'Chess',gameLabel:'Game',sub:'Against the computer or two players',hint:'Hint',flip:'Flip board',undo:'Undo move',boardLabel:'Chessboard',
+    movesLabel:'Moves',noMoves:'No moves yet',newGame:'New game',copyPgn:'Copy game (PGN)',agreeDraw:'Agree a draw',resign:'Resign',
+    settings:'Game & settings',opponent:'Opponent','opp.cpu':'Computer','opp.human':'Two players',yourColor:'You play',
+    'color.w':'White','color.b':'Black','color.random':'Random',level:'Computer strength',
+    'level.easy':'Easy','level.medium':'Medium','level.hard':'Hard','level.expert':'Expert',
+    nameW:'Name White',nameB:'Name Black',board:'Board',showMoves:'Show possible moves',
+    autoFlip:'Turn the board after every move<small>For two players sitting opposite each other</small>',
+    startInfo:'Changing the opponent or colour starts a new game (with undo). The strength applies from the next move.',
+    promoTitle:'Promote pawn to …',close:'Close',
+    white:'White',black:'Black',you:'You',cpuName:'Computer ({level})',
+    'lv.easy':'Easy','lv.medium':'Medium','lv.hard':'Hard','lv.expert':'Expert',
+    turn:'{name} to move',turnCheck:'Check! {name} to move',turnYou:'Your move',turnCheckYou:'Check! Your move',cpuThinks:'Computer is thinking …',
+    'end.checkmate':'Checkmate – {name} wins','end.resign':'{loser} resigns – {name} wins','end.checkmateYou':'Checkmate – you win','end.resignYou':'You resign – {name} wins',
+    'end.stalemate':'Stalemate – draw','end.material':'Draw – nobody can checkmate','end.repetition':'Draw by threefold repetition',
+    'end.fifty':'Draw – 50 moves without a capture or pawn move','end.agreed':'Draw agreed',
+    sqEmpty:'{sq}, empty',sqPiece:'{sq}, {piece}',
+    'pc.w.p':'white pawn','pc.w.n':'white knight','pc.w.b':'white bishop','pc.w.r':'white rook','pc.w.q':'white queen','pc.w.k':'white king',
+    'pc.b.p':'black pawn','pc.b.n':'black knight','pc.b.b':'black bishop','pc.b.r':'black rook','pc.b.q':'black queen','pc.b.k':'black king',
+    'promo.q':'Queen','promo.r':'Rook','promo.b':'Bishop','promo.n':'Knight','promo.p':'Pawn','promo.k':'King',
+    capsLabel:'Captured: {list}',undone:'Move undone',resumed:'The game goes on',started:'New game',restored:'Previous game restored',
+    resigned:'Resigned',drawn:'Draw agreed',copied:'Game copied (PGN)',copyFail:'Copying not possible',
+    hintMove:'Hint: {san}',hintBusy:'Looking for a hint …',engineFail:'The computer could not calculate.',
+    pieceLetters:'KQRBN','mcp.move':'Move made','mcp.new':'New game'
+  }
+});
+const t=Tools.t,C=window.Chess;
+const LS_SET='chess.settings.v1',LS_GAME='chess.game.v1';
+const OPPS=['cpu','human'],COLORS=['w','b','random'],LEVELS=['easy','medium','hard','expert'];
+const other=c=>c==='w'?'b':'w';
+
+// ---------- Settings & game (stored) ----------
+function saneSettings(s){
+  const d={opp:'cpu',color:'w',level:'medium',hints:true,autoFlip:false,names:{w:'',b:''}};
+  if(!s||typeof s!=='object')return d;
+  if(OPPS.includes(s.opp))d.opp=s.opp;
+  if(COLORS.includes(s.color))d.color=s.color;
+  if(LEVELS.includes(s.level))d.level=s.level;
+  if(typeof s.hints==='boolean')d.hints=s.hints;
+  if(typeof s.autoFlip==='boolean')d.autoFlip=s.autoFlip;
+  if(s.names&&typeof s.names==='object')for(const k of ['w','b'])if(typeof s.names[k]==='string')d.names[k]=s.names[k].slice(0,20);
+  return d;
+}
+const settings=saneSettings(Tools.load(LS_SET,null));
+const saveSettings=()=>Tools.save(LS_SET,settings);
+
+// A game: mode at its start (opponent, colour of the human) and the moves in UCI; replaying drops anything illegal
+let game,meta;
+function loadGame(s){
+  meta={opp:settings.opp,human:settings.color==='b'?'b':'w',flip:false};
+  game=new C.Game();
+  if(!s||typeof s!=='object')return;
+  if(OPPS.includes(s.opp))meta.opp=s.opp;
+  if(s.human==='w'||s.human==='b')meta.human=s.human;
+  if(typeof s.flip==='boolean')meta.flip=s.flip;
+  try{if(typeof s.start==='string'&&s.start!==C.START)game=new C.Game(s.start);}catch{game=new C.Game();}
+  if(Array.isArray(s.moves))for(const u of s.moves){if(typeof u!=='string'||game.status().over)break;try{game.play(u);}catch{break;}}
+  if(s.ended&&typeof s.ended==='object'&&['1-0','0-1','1/2-1/2'].includes(s.ended.result)&&['resign','agreed'].includes(s.ended.reason)&&!game.status().over)game.ended={result:s.ended.result,reason:s.ended.reason};
+}
+const snapshot=()=>({opp:meta.opp,human:meta.human,flip:meta.flip,start:game.startFen,moves:game.log.map(C.uci),ended:game.ended});
+const saveGame=()=>Tools.save(LS_GAME,snapshot());
+loadGame(Tools.load(LS_GAME,null));
+
+const isCpuGame=()=>meta.opp==='cpu';
+const isCpuTurn=()=>isCpuGame()&&game.turn()!==meta.human&&!game.status().over;
+const levelName=()=>t('lv.'+settings.level);
+const isYou=c=>isCpuGame()&&c===meta.human;
+const nameOf=c=>isCpuGame()?(isYou(c)?t('you'):t('cpuName',{level:levelName()})):(settings.names[c].trim()||t(c==='w'?'white':'black'));
+const bottomColor=()=>{
+  const base=isCpuGame()?meta.human:(settings.autoFlip?game.turn():'w');
+  return meta.flip?other(base):base;
+};
+// SAN with the piece letters of the language (PGN export always stays English)
+const localSan=s=>{const L=t('pieceLetters');return s.replace(/[KQRBN]/g,ch=>L['KQRBN'.indexOf(ch)]);};
+
+// ---------- Board ----------
+const boardEl=Tools.$('board'),cells=[];
+for(let i=0;i<64;i++){
+  const b=document.createElement('button');
+  b.type='button';b.className='sq';b.tabIndex=-1;
+  b.addEventListener('click',()=>tap(b.dataset.sq));
+  boardEl.appendChild(b);cells.push(b);
+}
+let focusSq='e2',selected=null,hintMove=null,thinking=false,hintBusy=false;
+// visual index (0 = top left) → square name, depending on the side at the bottom
+const sqAt=(i,bottom)=>{const r=i>>3,f=i&7;return bottom==='w'?'abcdefgh'[f]+(8-r):'abcdefgh'[7-f]+(r+1);};
+const pieceSvg=(p,cls='')=>`<svg class="pc ${p.color}${cls}" viewBox="0 0 45 45" aria-hidden="true"><use href="#pc-${p.type}"/></svg>`;
+const VALUE={p:1,n:3,b:3,r:5,q:9,k:0};
+
+function targets(){
+  if(!selected)return [];
+  return game.legal().filter(m=>C.sqName(m.from)===selected);
+}
+function canMove(){return !game.status().over&&!isCpuTurn();}
+
+function render(){
+  const st=game.status(),bottom=bottomColor(),tg=targets(),tgSet=new Set(tg.map(m=>C.sqName(m.to)));
+  const last=game.log[game.log.length-1],lastSet=last?new Set([C.sqName(last.from),C.sqName(last.to)]):new Set();
+  const turnKing=st.check?findKing(game.turn()):null;
+  const hintSet=hintMove?new Set([hintMove.slice(0,2),hintMove.slice(2,4)]):new Set();
+  cells.forEach((el,i)=>{
+    const sq=sqAt(i,bottom),p=game.at(sq),dark=((i>>3)+(i&7))%2===1;
+    el.dataset.sq=sq;
+    const key=p?p.color+p.type:'';
+    if(el.dataset.p!==key){el.innerHTML=p?pieceSvg(p):'';el.dataset.p=key;}
+    el.classList.toggle('dark',dark);
+    el.classList.toggle('last',lastSet.has(sq));
+    el.classList.toggle('sel',sq===selected);
+    el.classList.toggle('hint',hintSet.has(sq));
+    el.classList.toggle('check',sq===turnKing);
+    el.classList.toggle('target',settings.hints&&tgSet.has(sq));
+    el.classList.toggle('occupied',!!p);
+    el.tabIndex=sq===focusSq?0:-1;
+    el.setAttribute('aria-label',p?t('sqPiece',{sq,piece:t(`pc.${p.color}.${p.type}`)}):t('sqEmpty',{sq}));
+    el.setAttribute('aria-pressed',String(sq===selected));
+  });
+  boardEl.classList.toggle('busy',thinking);
+  const files=bottom==='w'?'abcdefgh':'hgfedcba';
+  Tools.$('files').innerHTML=[...files].map(f=>`<span>${f}</span>`).join('');
+  Tools.$('ranks').innerHTML=[...(bottom==='w'?'87654321':'12345678')].map(r=>`<span>${r}</span>`).join('');
+  renderBars(st,bottom);
+  renderMoves();
+  // Status
+  const s=Tools.$('status');
+  if(st.over){
+    const name=st.winner?nameOf(st.winner):'',loser=st.winner?nameOf(other(st.winner)):'';
+    const you=(st.reason==='checkmate'&&isYou(st.winner))||(st.reason==='resign'&&isYou(other(st.winner)));
+    s.textContent=t('end.'+st.reason+(you?'You':''),{name,loser});
+  }else if(thinking)s.textContent=t('cpuThinks');
+  else s.textContent=t((st.check?'turnCheck':'turn')+(isYou(game.turn())?'You':''),{name:nameOf(game.turn())});
+  s.dataset.state=st.over?'over':thinking?'cpu':'turn';
+  Tools.$('btnAgain').hidden=!st.over;
+  Tools.$('btnUndo').disabled=!undoCount()&&!game.ended;
+  Tools.$('btnHint').disabled=!canMove()||hintBusy;
+  Tools.$('btnDraw').hidden=isCpuGame();
+  Tools.$('btnDraw').disabled=Tools.$('btnResign').disabled=st.over;
+  Tools.$('btnCopy').disabled=!game.log.length;
+  // Settings
+  document.querySelectorAll('#opp button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.o===settings.opp)));
+  document.querySelectorAll('#colors button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.c===settings.color)));
+  document.querySelectorAll('#levels button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.l===settings.level)));
+  Tools.$('cpuBox').hidden=settings.opp!=='cpu';
+  Tools.$('namesBox').hidden=settings.opp!=='human';
+  Tools.$('autoFlipRow').hidden=settings.opp!=='human';
+  Tools.$('optHints').checked=settings.hints;Tools.$('optAutoFlip').checked=settings.autoFlip;
+  for(const c of ['w','b']){const el=Tools.$('in'+c.toUpperCase());el.placeholder=t(c==='w'?'white':'black');if(document.activeElement!==el)el.value=settings.names[c];}
+}
+function findKing(c){for(const r of '12345678')for(const f of 'abcdefgh'){const p=game.at(f+r);if(p&&p.type==='k'&&p.color===c)return f+r;}return null;}
+
+function renderBars(st,bottom){
+  // Captured pieces per side (from the moves) and the material lead (from the board)
+  const caps={w:[],b:[]},mat={w:0,b:0};
+  for(const m of game.log)if(m.cap){const by=m.piece>0?'w':'b';caps[by].push('pnbrqk'[Math.abs(m.cap)-1]);}
+  for(const r of '12345678')for(const f of 'abcdefgh'){const p=game.at(f+r);if(p)mat[p.color]+=VALUE[p.type];}
+  for(const [id,c] of [['barTop',other(bottom)],['barBottom',bottom]]){
+    const bar=Tools.$(id),list=caps[c].sort((a,b)=>VALUE[a]-VALUE[b]||a.localeCompare(b));
+    bar.classList.toggle('turn',!st.over&&game.turn()===c);
+    bar.querySelector('.side').setAttribute('class','side pc '+c);
+    bar.querySelector('.pname').textContent=nameOf(c);
+    const capsEl=bar.querySelector('.caps');
+    capsEl.innerHTML=list.map(x=>pieceSvg({color:other(c),type:x})).join('');
+    if(list.length){capsEl.setAttribute('role','img');capsEl.setAttribute('aria-label',t('capsLabel',{list:list.map(x=>t('promo.'+x)).join(', ')}));}
+    else{capsEl.removeAttribute('role');capsEl.removeAttribute('aria-label');}
+    const lead=mat[c]-mat[other(c)];
+    bar.querySelector('.lead').textContent=lead>0?'+'+Tools.fmt(lead,0):'';
+  }
+}
+
+// The moves with their SAN and move number, replayed from the start position
+function sanList(){
+  const g=new C.Game(game.startFen);
+  return game.log.map(m=>{const u=C.uci(m),r={san:g.find(u).san,num:g.pos.full,white:g.pos.turn>0};g.play(u);return r;});
+}
+function renderMoves(){
+  const ol=Tools.$('moves');
+  let html='';
+  sanList().forEach((x,i,all)=>{
+    const num=x.white||i===0?`<span class="num">${x.num}${x.white?'.':'…'}</span>`:'';
+    const cur=i===all.length-1?' cur':'';
+    html+=`<li>${num}<span class="mv${cur}">${Tools.esc(localSan(x.san))}</span></li>`;
+  });
+  if(ol.dataset.html!==html){ol.innerHTML=html;ol.dataset.html=html;ol.scrollLeft=ol.scrollWidth;}
+}
+
+// Slide the moved piece from its old square (Web Animations; skipped for reduced motion)
+function animate(m){
+  if(!m||Tools.reducedMotion()||!Element.prototype.animate)return;
+  const idx=sq=>cells.findIndex(c=>c.dataset.sq===sq);
+  const slide=(from,to)=>{
+    const a=idx(from),b=idx(to),el=cells[b]&&cells[b].querySelector('.pc');
+    if(a<0||!el)return;
+    const dx=((a&7)-(b&7))*100,dy=((a>>3)-(b>>3))*100;
+    el.classList.add('moving');
+    const an=el.animate([{transform:`translate(${dx}%,${dy}%)`},{transform:'none'}],{duration:200,easing:'ease-out'});
+    an.onfinish=an.oncancel=()=>el.classList.remove('moving');
+  };
+  slide(C.sqName(m.from),C.sqName(m.to));
+  if(m.flag===3){const r=m.to>m.from?[m.from+3,m.from+1]:[m.from-4,m.from-1];slide(C.sqName(r[0]),C.sqName(r[1]));}
+}
+
+// ---------- Moves ----------
+function play(u,source){
+  const m=game.play(u);
+  selected=null;hintMove=null;focusSq=C.sqName(m.to);
+  saveGame();render();animate(m);
+  const st=game.status();
+  if(st.over){
+    Tools.diag.log('game over',{result:st.result,reason:st.reason,moves:game.log.length,opp:meta.opp,level:settings.level});
+    if(navigator.vibrate)try{navigator.vibrate(60);}catch{/* ignore */}
+  }
+  if(source!=='cpu')scheduleCpu();
+  return m;
+}
+
+function tap(sq){
+  focusSq=sq;
+  if(!canMove()){render();return;}
+  const p=game.at(sq);
+  if(selected){
+    const list=targets().filter(m=>C.sqName(m.to)===sq);
+    if(list.length){
+      if(list.length>1){askPromotion(list);return;}
+      play(list[0].uci,'tap');return;
+    }
+  }
+  selected=p&&p.color===game.turn()&&sq!==selected?sq:null;
+  render();
+}
+
+// Promotion: choose the piece in a dialog
+const promoDlg=Tools.$('promoDlg');
+let promoList=null;
+function askPromotion(list){
+  promoList=list;
+  const c=game.turn();
+  Tools.$('promoTiles').innerHTML=['q','r','b','n'].map(x=>`<button type="button" data-p="${x}">${pieceSvg({color:c,type:x})}<span>${Tools.esc(t('promo.'+x))}</span></button>`).join('');
+  promoDlg.showModal();
+}
+Tools.$('promoTiles').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-p]');
+  if(!b||!promoList)return;
+  const m=promoList.find(x=>x.uci.endsWith(b.dataset.p));
+  promoList=null;promoDlg.close();
+  if(m)play(m.uci,'tap');
+});
+promoDlg.addEventListener('close',()=>{if(promoList){promoList=null;selected=null;render();}});
+
+// Keyboard: arrows move between squares (one tab stop for the board)
+boardEl.addEventListener('keydown',e=>{
+  const d={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]}[e.key];
+  if(!d)return;
+  e.preventDefault();
+  const i=cells.findIndex(c=>c.dataset.sq===focusSq),r=Math.min(7,Math.max(0,(i>>3)+d[0])),f=Math.min(7,Math.max(0,(i&7)+d[1]));
+  const el=cells[r*8+f];focusSq=el.dataset.sq;render();el.focus();
+});
+
+// ---------- Computer (ai-worker.js; on the page if workers fail) ----------
+let worker=null,reqId=0;
+const pending=new Map();
+function engine(level){
+  const id=++reqId,msg={id,fen:game.startFen,moves:game.log.map(C.uci),level};
+  return new Promise((resolve,reject)=>{
+    const local=()=>setTimeout(()=>{try{const r=C.think(msg.fen,msg.moves,{level});r?resolve(r):reject(new Error('no_moves'));}catch(e){reject(e);}},30);
+    if(!('Worker' in window)){local();return;}
+    try{
+      if(!worker){
+        worker=new Worker('ai-worker.js');
+        worker.onmessage=e=>{const p=pending.get(e.data&&e.data.id);if(!p)return;pending.delete(e.data.id);e.data.error?p.reject(new Error(e.data.error)):p.resolve(e.data);};
+        worker.onerror=e=>{Tools.diag.log('worker error',{message:e.message||''});e.preventDefault();const list=[...pending.values()];pending.clear();worker.terminate();worker=null;list.forEach(p=>p.fallback());};
+      }
+      pending.set(id,{resolve,reject,fallback:local});
+      worker.postMessage(msg);
+    }catch(e){Tools.diag.log('worker failed',{error:String(e&&e.message)});local();}
+  });
+}
+// Stop a running search (undo, new game): the worker is replaced, its answer is never used
+function stopEngine(){
+  if(worker&&pending.size){worker.terminate();worker=null;}
+  for(const p of pending.values())p.reject(new Error('stopped'));
+  pending.clear();
+}
+
+let cpuPromise=null;
+function scheduleCpu(){
+  if(!isCpuTurn()){render();return Promise.resolve();}
+  if(cpuPromise)return cpuPromise;
+  thinking=true;render();
+  const ver=gameVersion,start=performance.now();
+  cpuPromise=engine(settings.level).then(r=>new Promise(res=>setTimeout(()=>res(r),Math.max(0,350-(performance.now()-start))))).then(r=>{
+    if(ver!==gameVersion)return;
+    cpuPromise=null;thinking=false;
+    if(!isCpuTurn())return render();
+    Tools.diag.log('computer move',{level:settings.level,depth:r.depth,nodes:r.nodes,ms:r.ms});
+    play(r.uci,'cpu');
+  },e=>{
+    if(ver!==gameVersion)return;
+    cpuPromise=null;thinking=false;
+    if(e.message!=='stopped'){Tools.diag.log('computer failed',{error:e.message});Tools.toast(t('engineFail'));}
+    render();
+  });
+  return cpuPromise;
+}
+// Raised on every undo / new game, so an answer for an older position is dropped
+let gameVersion=0;
+function cancelCpu(){gameVersion++;stopEngine();cpuPromise=null;thinking=false;}
+
+// ---------- Actions ----------
+// Undo: one move; against the computer back to the last own move
+function undoCount(){
+  const n=game.log.length;
+  if(!isCpuGame())return n?1:0;
+  if(!n)return 0;
+  if(game.turn()!==meta.human)return 1;           // own move, computer to answer (or own move ended the game)
+  return n>=2?2:0;                                // computer's answer plus the own move before it
+}
+function undo(){
+  if(game.ended){game.ended=null;saveGame();Tools.toast(t('resumed'));scheduleCpu();render();return;}
+  const k=undoCount();
+  if(!k)return;
+  cancelCpu();
+  for(let i=0;i<k;i++)game.undo();
+  selected=null;hintMove=null;
+  saveGame();render();Tools.toast(t('undone'));
+  scheduleCpu();
+}
+Tools.$('btnUndo').addEventListener('click',undo);
+
+// prevSettings: the settings before a change of opponent or colour (undo brings both back)
+function newGame(silent,prevSettings){
+  const before={settings:prevSettings||JSON.parse(JSON.stringify(settings)),game:snapshot()};
+  cancelCpu();
+  meta={opp:settings.opp,human:settings.color==='random'?(Math.random()<.5?'w':'b'):settings.color,flip:false};
+  game=new C.Game();selected=null;hintMove=null;focusSq=meta.human==='b'&&meta.opp==='cpu'?'e7':'e2';
+  saveGame();
+  Tools.diag.log('new game',{opp:meta.opp,human:meta.human,level:settings.level});
+  const hadMoves=before.game.moves.length&&!silent;
+  if(hadMoves)Tools.undo(t('started'),()=>{
+    cancelCpu();Object.assign(settings,before.settings);saveSettings();loadGame(before.game);saveGame();selected=null;render();Tools.toast(t('restored'));scheduleCpu();
+  });
+  render();
+  return scheduleCpu();
+}
+Tools.$('btnNew').addEventListener('click',()=>{Tools.menu.close();newGame();});
+Tools.$('btnAgain').addEventListener('click',()=>newGame());
+
+Tools.$('btnFlip').addEventListener('click',()=>{meta.flip=!meta.flip;saveGame();render();});
+
+Tools.$('btnHint').addEventListener('click',async()=>{
+  if(!canMove()||hintBusy)return;
+  hintBusy=true;render();
+  const ver=gameVersion,n=game.log.length;
+  try{
+    const r=await engine('hard');
+    if(ver!==gameVersion||n!==game.log.length)return;
+    hintMove=r.uci;
+    const m=game.find(r.uci);
+    Tools.toast(t('hintMove',{san:localSan(m?m.san:r.uci)}));
+    Tools.diag.log('hint',{depth:r.depth});
+  }catch(e){if(e.message!=='stopped')Tools.toast(t('engineFail'));}
+  finally{hintBusy=false;render();}
+});
+
+Tools.$('btnCopy').addEventListener('click',async()=>{
+  const ok=await Tools.copyText(pgn());
+  Tools.toast(t(ok?'copied':'copyFail'));
+  Tools.diag.log('copy pgn',{ok,moves:game.log.length});
+});
+function pgn(){
+  const d=new Date(),date=`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+  return game.pgn({Event:'Casual game',Date:date,White:nameOf('w'),Black:nameOf('b')});
+}
+
+Tools.$('btnResign').addEventListener('click',()=>{
+  if(game.status().over)return;
+  const who=isCpuGame()?meta.human:game.turn();
+  cancelCpu();game.resign(who);saveGame();render();Tools.menu.close();
+  Tools.diag.log('resign',{moves:game.log.length});
+  Tools.undo(t('resigned'),undo);
+});
+Tools.$('btnDraw').addEventListener('click',()=>{
+  if(game.status().over||isCpuGame())return;
+  game.agreeDraw();saveGame();render();Tools.menu.close();
+  Tools.undo(t('drawn'),undo);
+});
+
+// Settings: opponent and colour start a new game (undo brings the old one back), the level applies at once
+document.querySelectorAll('#opp button').forEach(x=>x.addEventListener('click',()=>{
+  if(settings.opp===x.dataset.o)return;
+  const prev=JSON.parse(JSON.stringify(settings));
+  settings.opp=x.dataset.o;saveSettings();newGame(false,prev);
+}));
+document.querySelectorAll('#colors button').forEach(x=>x.addEventListener('click',()=>{
+  if(settings.color===x.dataset.c)return;
+  const prev=JSON.parse(JSON.stringify(settings));
+  settings.color=x.dataset.c;saveSettings();newGame(false,prev);
+}));
+document.querySelectorAll('#levels button').forEach(x=>x.addEventListener('click',()=>{
+  settings.level=x.dataset.l;saveSettings();render();Tools.diag.log('level',{level:settings.level});
+}));
+Tools.$('optHints').addEventListener('change',e=>{settings.hints=e.target.checked;saveSettings();render();});
+Tools.$('optAutoFlip').addEventListener('change',e=>{settings.autoFlip=e.target.checked;saveSettings();render();});
+for(const c of ['w','b'])Tools.$('in'+c.toUpperCase()).addEventListener('input',e=>{settings.names[c]=e.target.value.slice(0,20);saveSettings();render();});
+
+Tools.onLang(render);
+Tools.diag.info(()=>({opp:meta.opp,human:meta.human,level:settings.level,moves:game.log.length,status:game.status().reason||'playing',thinking,worker:!!worker}));
+render();
+scheduleCpu();
+
+// ---------- WebMCP ----------
+const view=()=>{
+  const st=game.status(),rows=[];
+  for(const r of '87654321'){let s='';for(const f of 'abcdefgh'){const p=game.at(f+r);s+=p?(p.color==='w'?p.type.toUpperCase():p.type):'.';}rows.push(s);}
+  return {fen:game.fen(),board:rows,board_note:'Rows from rank 8 (top) to rank 1, files a-h; uppercase white, lowercase black, "." empty.',
+    to_move:st.over?null:(game.turn()==='w'?'white':'black'),in_check:st.check,
+    status:st.over?st.reason:'playing',result:st.result,
+    moves:sanList().map(x=>x.san),
+    legal_moves:st.over?[]:game.legal().map(m=>m.san),
+    opponent:isCpuGame()?'computer':'two_players',you_play:isCpuGame()?(meta.human==='w'?'white':'black'):null,
+    computer_level:isCpuGame()?settings.level:null,computer_thinking:thinking};
+};
+Tools.mcp.register({
+  name:'get_game',title:'Read the game',readOnly:true,
+  description:'Reads the current chess game: the position as FEN and as 8 rows, whose turn it is, check, the status (playing, checkmate, stalemate, repetition, fifty, material, resign, agreed) and PGN result, the moves so far and the legal moves in English SAN, the opponent (computer or two_players), which colour the user plays against the computer and its level.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>view()
+});
+Tools.mcp.register({
+  name:'make_move',title:'Make a move',label:'mcp.move',
+  description:'Plays a legal move for the side to move, in English SAN ("e4", "Nf3", "exd5", "O-O", "e8=Q") or UCI ("e2e4", "e7e8q"). Against the computer only the user\'s colour can be moved; the computer answers before the result is returned. Shows the move on the board and returns the game afterwards (same as get_game).',
+  inputSchema:{type:'object',properties:{move:{type:'string',minLength:2,maxLength:10,description:'The move in SAN or UCI.'}},required:['move'],additionalProperties:false},
+  execute:async({move})=>{
+    if(cpuPromise)await cpuPromise;
+    if(game.status().over)throw new Error('The game is over – start a new one with new_game.');
+    if(isCpuTurn())throw new Error('It is the computer\'s turn.');
+    const m=game.find(move);
+    if(!m)throw new Error(`"${move}" is not a legal move here. Legal moves: ${game.legal().map(x=>x.san).join(', ')}`);
+    play(m.uci,'agent');
+    if(cpuPromise)await cpuPromise;
+    return view();
+  }
+});
+Tools.mcp.register({
+  name:'new_game',title:'Start a new game',label:'mcp.new',
+  description:'Starts a new game with the current settings (opponent, colour, level) once the current game is over or has no moves yet – a game in progress is never thrown away. If the computer plays white it moves first before the result is returned. Returns the new game (same as get_game).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:async()=>{
+    if(cpuPromise)await cpuPromise;
+    if(game.log.length&&!game.status().over)throw new Error('A game is in progress – finish it first (or the user starts a new one in the app).');
+    await newGame(true);return view();
+  }
+});
+})();
+</script>
+</body>
+</html>
