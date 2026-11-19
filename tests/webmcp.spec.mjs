@@ -3042,6 +3042,52 @@ test.describe('four-in-a-row tools', () => {
   });
 });
 
+test.describe('chess tools', () => {
+  test('two players: make_move takes SAN and UCI, refuses illegal moves, get_game reads the mate', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('chess.settings.v1', JSON.stringify({ opp: 'human' })));
+    await open(page, '/chess/');
+    let r = await call(page, 'chess_get_game', {});
+    expect(r.result).toMatchObject({ to_move: 'white', status: 'playing', result: '*', opponent: 'two_players', moves: [] });
+    expect(r.result.legal_moves).toHaveLength(20);
+    expect(r.result.board[7]).toBe('RNBQKBNR');
+    r = await call(page, 'chess_make_move', { move: 'f3' });
+    expect(r.result.moves).toEqual(['f3']);
+    await expect(page.locator('#board .sq[data-sq="f3"]')).toHaveAttribute('aria-label', 'f3, weißer Bauer');
+    expect((await call(page, 'chess_make_move', { move: 'Nf3' })).error).toMatch(/not a legal move/);
+    expect((await call(page, 'chess_make_move', { move: 'e2e4extra' })).ok).toBe(false);
+    await call(page, 'chess_make_move', { move: 'e7e5' });
+    await call(page, 'chess_make_move', { move: 'g4' });
+    r = await call(page, 'chess_make_move', { move: 'Qh4' });
+    expect(r.result).toMatchObject({ status: 'checkmate', result: '0-1', in_check: true, to_move: null, legal_moves: [], moves: ['f3', 'e5', 'g4', 'Qh4#'] });
+    await expect(page.locator('#status')).toHaveText('Schachmatt – Schwarz gewinnt');
+    expect((await call(page, 'chess_make_move', { move: 'a3' })).error).toMatch(/game is over/);
+    r = await call(page, 'chess_new_game', {});
+    expect(r.result).toMatchObject({ status: 'playing', moves: [] });
+    await call(page, 'chess_make_move', { move: 'e4' });
+    expect((await call(page, 'chess_new_game', {})).error).toMatch(/in progress/);
+    await expect(page.locator('#moves li')).toHaveCount(1);
+  });
+
+  test('against the computer it answers within the same call; playing black it opens on new_game', async ({ page }) => {
+    await page.addInitScript(() => {
+      if (!sessionStorage.getItem('seeded')) localStorage.setItem('chess.settings.v1', JSON.stringify({ opp: 'cpu', color: 'w', level: 'easy' }));
+      sessionStorage.setItem('seeded', '1');
+    });
+    await open(page, '/chess/');
+    let r = await call(page, 'chess_make_move', { move: 'e2e4' });
+    expect(r.result).toMatchObject({ opponent: 'computer', you_play: 'white', computer_level: 'easy', to_move: 'white', computer_thinking: false });
+    expect(r.result.moves).toHaveLength(2);
+    await expect(page.locator('#moves li')).toHaveCount(2);
+    await page.evaluate(() => localStorage.setItem('chess.settings.v1', JSON.stringify({ opp: 'cpu', color: 'b', level: 'easy' })));
+    await page.evaluate(() => localStorage.setItem('chess.game.v1', JSON.stringify({ opp: 'cpu', human: 'w', moves: [] })));
+    await page.reload();
+    r = await call(page, 'chess_new_game', {});
+    expect(r.result).toMatchObject({ you_play: 'black', to_move: 'black' });
+    expect(r.result.moves).toHaveLength(1);
+    expect((await call(page, 'chess_make_move', { move: 'Ke7' })).error).toMatch(/not a legal move/);
+  });
+});
+
 test.describe('hangman tools', () => {
   const seed = (page, game, extra = {}) => page.addInitScript(([g, e]) => localStorage.setItem('hangman.state.v1',
     JSON.stringify({ mode: 'solo', level: 'medium', ...e, game: g && { lang: 'de', cat: 'animals', source: 'list', lives: 8, guessed: [], ...g } })), [game, extra]);

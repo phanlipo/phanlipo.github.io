@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "calendar-events";
-const VERSION = 'cce6c7eaa882';
+const VERSION = '03c96286ecce';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
