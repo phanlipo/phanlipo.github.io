@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Mailto-Generator</title>
+<meta name="description" content="Mailto-Links bauen: Empfänger, CC, BCC, Betreff und Text eintragen – als Link, HTML oder Markdown kopieren, teilen, als QR-Code zeigen oder vorhandene Links zerlegen.">
+<meta name="tool:tags" content="Arbeit, Werkzeug">
+<meta name="tool:features" content="Kopieren, Teilen an App, KI-Agent">
+<meta name="tool:share-text" content="true">
+<meta name="tool:webmcp" content="set_email, parse_link, get_link">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Empfänger, Betreff und Text eintragen, einen vorhandenen Mailto-Link zerlegen und den fertigen Link als Link, HTML oder Markdown lesen. Die Mail-App öffnen, Vorlagen löschen oder etwas verschicken kann er nicht.">
+<meta name="tool:webmcp-help-en" content="An AI agent can fill in recipients, subject and text, take apart an existing mailto link and read the finished link as a link, HTML or Markdown. It cannot open the mail app, delete templates or send anything.">
+<meta name="tool:icon" content="mail-forward">
+<meta name="tool:color" content="#1d6fa5">
+<meta name="tool:short-name" content="Mailto">
+<meta name="tool:title-en" content="Mailto Generator">
+<meta name="tool:description-en" content="Build mailto links: enter recipients, CC, BCC, subject and text – copy as a link, HTML or Markdown, share, show as a QR code or take existing links apart.">
+<meta name="tool:short-name-en" content="Mailto">
+<meta name="tool:storage" content="mailto-generator.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-AVSJtm5590MWjiGS61Dv+r/bQ2x1ptYukxl/VXnvsr4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Mailto">
+<meta name="theme-color" content="#1d6fa5">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#1d6fa5;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#7cc0ec;--accent-text:#0b2233}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+@media (min-width:900px){main{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}}
+#body{min-height:140px}
+#out{min-height:96px}
+.card>.row.actions{margin-block:10px}
+#tplList{margin-block-start:10px}
+.card>.form-field,.card>.seg,.card>.notice,.card>.row{margin-block:0 10px}
+.len{margin:0 0 10px;font-size:13px;color:var(--muted)}
+/* The code stays black on white in dark mode too – scanners need the contrast */
+#qr{display:block;margin:4px auto 10px;width:min(100%,280px);height:auto;aspect-ratio:1;background:#fff;border-radius:6px;image-rendering:pixelated}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Mailto-Generator</span></h1>
+  <p class="sub" data-i18n="sub">E-Mail vorbereiten, Link weitergeben.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-mail">
+    <h2 id="h-mail"><span class="step">1</span><span data-i18n="h.mail">E-Mail</span></h2>
+    <div class="form-field">
+      <label for="to" data-i18n="f.to">An</label>
+      <input type="text" id="to" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="2000" placeholder="name@example.org" aria-describedby="addrHint">
+    </div>
+    <div class="form-field">
+      <label for="cc" data-i18n="f.cc">CC</label>
+      <input type="text" id="cc" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2000">
+    </div>
+    <div class="form-field">
+      <label for="bcc" data-i18n="f.bcc">BCC</label>
+      <input type="text" id="bcc" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2000">
+    </div>
+    <p class="len" id="addrHint" data-i18n="f.addrHint">Mehrere Adressen mit Komma trennen.</p>
+    <p class="form-error" id="addrErr" role="alert" hidden></p>
+    <div class="form-field">
+      <label for="subject" data-i18n="f.subject">Betreff</label>
+      <input type="text" id="subject" maxlength="500">
+    </div>
+    <div class="form-field">
+      <label for="body" data-i18n="f.body">Text</label>
+      <textarea id="body" maxlength="10000"></textarea>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-link">
+    <h2 id="h-link"><span class="step">2</span><span data-i18n="h.link">Link</span></h2>
+    <div class="seg" role="group" aria-label="Format" data-i18n-attr="aria-label:format" id="format">
+      <button type="button" aria-pressed="true" data-format="link"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#link"/></svg><span data-i18n="fmt.link">Link</span></button>
+      <button type="button" aria-pressed="false" data-format="html"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#code"/></svg><span>HTML</span></button>
+      <button type="button" aria-pressed="false" data-format="md"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#markdown"/></svg><span>Markdown</span></button>
+    </div>
+    <div class="form-field" id="textField" hidden>
+      <label for="linkText" data-i18n="f.text">Linktext</label>
+      <input type="text" id="linkText" maxlength="200">
+    </div>
+    <div class="empty-state" id="empty">
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#mail"/></svg>
+      <p data-i18n="empty">Trage oben mindestens eine Adresse oder einen Betreff ein.</p>
+    </div>
+    <div class="form-field" id="outField" hidden>
+      <label for="out" data-i18n="f.out">Ergebnis</label>
+      <textarea id="out" class="mono" readonly></textarea>
+    </div>
+    <p class="len" id="len" hidden></p>
+    <p class="notice warn" id="longWarn" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#alert-triangle"/></svg><span id="longText"></span></p>
+    <button type="button" class="btn primary block" id="btnOpen" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#send"/></svg><span data-i18n="open">In Mail-App öffnen</span></button>
+    <div class="row actions">
+      <button type="button" class="btn" id="btnCopy" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Kopieren</span></button>
+      <button type="button" class="btn" id="btnShare" disabled hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="share">Teilen</span></button>
+      <button type="button" class="btn" id="btnQr" aria-pressed="false" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#qrcode"/></svg><span data-i18n="qr">QR-Code</span></button>
+    </div>
+    <div id="qrBox" hidden>
+      <canvas id="qr" role="img" aria-label="QR-Code des Mailto-Links" data-i18n-attr="aria-label:qrAria"></canvas>
+      <p class="notice err" id="qrErr" role="alert" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#alert-circle"/></svg><span data-i18n="qrLong">Zu lang für einen QR-Code – Text kürzen.</span></p>
+      <button type="button" class="btn" id="btnQrSave"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="qrSave">QR-Code speichern</span></button>
+    </div>
+  </section>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnParse"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#clipboard"/></svg><span data-i18n="parse">Mailto-Link einlesen</span></button>
+  <button type="button" id="btnClear" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eraser"/></svg><span data-i18n="clear">Felder leeren</span></button>
+</div>
+
+<details class="card" data-menu data-menu-page data-icon="bookmark" id="tplPage">
+  <summary data-i18n="tpl.h">Vorlagen</summary>
+  <p data-i18n="tpl.intro">Häufige E-Mails als Vorlage speichern und später wieder laden.</p>
+  <button type="button" class="btn block" id="btnTplSave"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="tpl.save">Aktuelle E-Mail als Vorlage speichern</span></button>
+  <ul class="list-rows" id="tplList"></ul>
+</details>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Mailto-Link öffnet beim Antippen die Mail-App mit schon ausgefüllten Empfängern, Betreff und Text – praktisch für Webseiten, Rundmails, QR-Codes auf Aushängen oder Anleitungen („schick uns eine Mail mit …“).</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Adressen bei <b>An</b>, <b>CC</b> und <b>BCC</b> mit Komma trennen; „Name &lt;adresse&gt;“ wird auf die Adresse gekürzt. Alle Felder sind freiwillig – ohne Empfänger fragt die Mail-App danach.</li>
+    <li><b>Link</b> ist der reine Mailto-Link, <b>HTML</b> und <b>Markdown</b> machen daraus einen klickbaren Link mit eigenem Linktext für Webseiten, Wikis oder Notizen.</li>
+    <li><b>QR-Code</b> zeigt den Link als Code zum Abscannen; speichern als PNG-Bild.</li>
+    <li><b>Mailto-Link einlesen</b> (Menü) zerlegt einen vorhandenen Link wieder in die Felder. Links, Adressen oder Texte lassen sich auch aus anderen Apps an diese App teilen.</li>
+    <li>Sehr lange Links (über 2000 Zeichen) schneiden manche Mail-Apps und Browser ab.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Die aktuelle E-Mail, das gewählte Format und deine Vorlagen bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App verschickt selbst keine E-Mails und läuft auch offline. QR-Codes erzeugt die Bibliothek qrcode-generator (MIT).</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A mailto link opens the mail app with recipients, subject and text already filled in – handy for websites, circulars, QR codes on notices or instructions (“send us a mail with …”).</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Separate addresses in <b>To</b>, <b>CC</b> and <b>BCC</b> with commas; “Name &lt;address&gt;” is cut down to the address. Every field is optional – without a recipient the mail app asks for one.</li>
+    <li><b>Link</b> is the plain mailto link, <b>HTML</b> and <b>Markdown</b> turn it into a clickable link with its own link text for websites, wikis or notes.</li>
+    <li><b>QR code</b> shows the link as a code to scan; save it as a PNG picture.</li>
+    <li><b>Read mailto link</b> (menu) takes an existing link apart into the fields. Links, addresses or texts can also be shared to this app from other apps.</li>
+    <li>Some mail apps and browsers cut off very long links (over 2000 characters).</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The current mail, the chosen format and your templates stay only in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app sends no mails itself and also works offline. QR codes are made by the library qrcode-generator (MIT).</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann Empfänger, Betreff und Text eintragen, einen vorhandenen Mailto-Link zerlegen und den fertigen Link als Link, HTML oder Markdown lesen. Die Mail-App öffnen, Vorlagen löschen oder etwas verschicken kann er nicht. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can fill in recipients, subject and text, take apart an existing mailto link and read the finished link as a link, HTML or Markdown. It cannot open the mail app, delete templates or send anything. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version a5d447b83c57</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/vendor/qrcode-generator/qrcode.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{len:'{n} Zeichen',long:'Sehr lang ({n} Zeichen) – manche Mail-Apps und Browser schneiden so lange Links ab.',
+    bad:'Keine gültige Adresse: {list}',copied:'Kopiert',copyFail:'Kopieren nicht möglich',defText:'E-Mail schreiben',
+    parseQ:'Mailto-Link oder E-Mail-Adresse einfügen:',parsed:'Link eingelesen',parseBad:'Kein Mailto-Link und keine Adresse gefunden',
+    cleared:'Felder geleert',undo:'Rückgängig',tplName:'Name der Vorlage:',tplSaved:'Vorlage gespeichert',tplEmpty:'Noch keine Vorlagen.',
+    tplLoaded:'Vorlage geladen: {name}',tplDeleted:'Vorlage gelöscht: {name}',tplDel:'Löschen: {name}',tplNone:'(ohne Empfänger)',
+    tplNoMail:'Erst etwas eintragen, dann speichern.',shared:'Geteilte Inhalte übernommen',
+    'mcp.set':'E-Mail eingetragen','mcp.parse':'Link eingelesen'},
+  en:{title:'Mailto Generator',sub:'Prepare a mail, pass on the link.','h.mail':'Mail','h.link':'Link',
+    'f.to':'To','f.cc':'CC','f.bcc':'BCC','f.addrHint':'Separate several addresses with commas.','f.subject':'Subject','f.body':'Text',
+    format:'Format','fmt.link':'Link','f.text':'Link text','f.out':'Result',empty:'Enter at least one address or a subject above.',
+    open:'Open in mail app',copy:'Copy',share:'Share',qr:'QR code',qrAria:'QR code of the mailto link',qrLong:'Too long for a QR code – shorten the text.',
+    qrSave:'Save QR code',parse:'Read mailto link',clear:'Clear fields','tpl.h':'Templates','tpl.intro':'Save frequent mails as templates and load them again later.',
+    'tpl.save':'Save current mail as a template',
+    len:'{n} characters',long:'Very long ({n} characters) – some mail apps and browsers cut off links this long.',
+    bad:'Not a valid address: {list}',copied:'Copied',copyFail:'Copying not possible',defText:'Write an email',
+    parseQ:'Paste a mailto link or an email address:',parsed:'Link read',parseBad:'No mailto link and no address found',
+    cleared:'Fields cleared',undo:'Undo',tplName:'Name of the template:',tplSaved:'Template saved',tplEmpty:'No templates yet.',
+    tplLoaded:'Template loaded: {name}',tplDeleted:'Template deleted: {name}',tplDel:'Delete: {name}',tplNone:'(no recipient)',
+    tplNoMail:'Enter something first, then save.',shared:'Shared content taken over',
+    'mcp.set':'mail filled in','mcp.parse':'link read'}
+});
+const t=Tools.t, $=Tools.$;
+qrcode.stringToBytes=qrcode.stringToBytesFuncs['UTF-8'];
+
+/* ---------- Storage ---------- */
+const LS_DRAFT='mailto-generator.draft.v1', LS_TPL='mailto-generator.templates.v1';
+const FIELDS=['to','cc','bcc','subject','body','text'];
+const LIMITS={to:2000,cc:2000,bcc:2000,subject:500,body:10000,text:200};
+const blank=()=>({to:'',cc:'',bcc:'',subject:'',body:'',text:'',format:'link',qr:false});
+const draft=Object.assign(blank(),Tools.load(LS_DRAFT,{}));
+let templates=Tools.load(LS_TPL,[]);
+if(!Array.isArray(templates)) templates=[];
+const saveDraft=()=>Tools.save(LS_DRAFT,draft);
+const saveTpl=()=>Tools.save(LS_TPL,templates);
+
+/* ---------- Mailto building (RFC 6068) ---------- */
+// "a@b.de, Name <c@d.de>; e@f.de" → ['a@b.de','c@d.de','e@f.de']
+function addresses(s){
+  return String(s||'').split(/[,;\n]+/).map(p=>{
+    p=p.trim();
+    const m=p.match(/<([^<>]*)>/);
+    return (m?m[1]:p).trim();
+  }).filter(Boolean);
+}
+const VALID=/^[^\s@,;<>()"[\]\\]+@[^\s@,;<>()"[\]\\]+\.[^\s@,;<>()"[\]\\.]+$/;
+const invalid=s=>addresses(s).filter(a=>!VALID.test(a));
+// encodeURIComponent leaves !'()* alone – encode them too, so the link survives in Markdown and HTML
+const enc=s=>encodeURIComponent(s).replace(/[!'()*]/g,c=>'%'+c.charCodeAt(0).toString(16).toUpperCase());
+const encAddr=a=>enc(a).replace(/%40/g,'@');
+function buildLink(d){
+  const q=[];
+  for(const k of ['cc','bcc']){ const list=addresses(d[k]); if(list.length) q.push(k+'='+list.map(encAddr).join(',')); }
+  if(d.subject) q.push('subject='+enc(d.subject));
+  if(d.body) q.push('body='+enc(String(d.body).replace(/\r?\n/g,'\r\n')));
+  return 'mailto:'+addresses(d.to).map(encAddr).join(',')+(q.length?'?'+q.join('&'):'');
+}
+const hasContent=d=>!!(addresses(d.to).length||addresses(d.cc).length||addresses(d.bcc).length||d.subject.trim()||d.body.trim());
+const escHtml=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const linkText=d=>d.text.trim()||addresses(d.to)[0]||t('defText');
+function output(d,format,link=buildLink(d)){
+  if(format==='html') return '<a href="'+escHtml(link)+'">'+escHtml(linkText(d))+'</a>';
+  if(format==='md') return '['+linkText(d).replace(/[[\]\\]/g,'\\$&')+']('+link+')';
+  return link;
+}
+// mailto:… → fields; also accepts a bare address. null if neither.
+function dec(s){ try{ return decodeURIComponent(s); }catch(_){ return s; } }
+function parseLink(raw){
+  const s=String(raw||'').trim();
+  const m=s.match(/mailto:[^\s"'<>]*/i);
+  if(!m){
+    const found=s.match(/[^\s@,;<>()"]+@[^\s@,;<>()"]+\.[^\s@,;<>()".]+/g);
+    return found?{to:found.join(', ')}:null;
+  }
+  const rest=m[0].slice(7), qi=rest.indexOf('?');
+  const path=qi<0?rest:rest.slice(0,qi), query=qi<0?'':rest.slice(qi+1);
+  const r={to:[],cc:[],bcc:[],subject:'',body:''};
+  r.to.push(...addresses(dec(path)));
+  // Not URLSearchParams: in mailto links "+" is a plus, not a space
+  for(const part of query.split('&')){
+    if(!part) continue;
+    const i=part.indexOf('='), k=dec(i<0?part:part.slice(0,i)).toLowerCase(), v=i<0?'':dec(part.slice(i+1));
+    if(k==='to'||k==='cc'||k==='bcc') r[k].push(...addresses(v));
+    else if(k==='subject') r.subject=v;
+    else if(k==='body') r.body=v.replace(/\r\n?/g,'\n');
+  }
+  return {to:r.to.join(', '),cc:r.cc.join(', '),bcc:r.bcc.join(', '),subject:r.subject,body:r.body};
+}
+
+/* ---------- QR ---------- */
+const QUIET=4;
+function makeQr(text){ try{ const q=qrcode(0,'M'); q.addData(text,'Byte'); q.make(); return q; }catch(_){ return null; } }
+function drawQr(canvas,q,scale){
+  const n=q.getModuleCount(), size=(n+2*QUIET)*scale;
+  canvas.width=canvas.height=size;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,size,size); ctx.fillStyle='#000';
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++) if(q.isDark(r,c)) ctx.fillRect((c+QUIET)*scale,(r+QUIET)*scale,scale,scale);
+}
+let qrNow=null;
+
+/* ---------- Rendering ---------- */
+const inputs=Object.fromEntries(FIELDS.map(k=>[k,$(k==='text'?'linkText':k)]));
+function fillInputs(){ for(const k of FIELDS) inputs[k].value=draft[k]; }
+function render(){
+  const ok=hasContent(draft), link=buildLink(draft);
+  const bad=[...invalid(draft.to),...invalid(draft.cc),...invalid(draft.bcc)];
+  $('addrErr').hidden=!bad.length;
+  $('addrErr').textContent=bad.length?t('bad',{list:bad.join(', ')}):'';
+  for(const k of ['to','cc','bcc']) inputs[k].setAttribute('aria-invalid',String(invalid(draft[k]).length>0));
+  for(const b of document.querySelectorAll('#format button')) b.setAttribute('aria-pressed',String(b.dataset.format===draft.format));
+  $('textField').hidden=draft.format==='link';
+  $('empty').hidden=ok;
+  $('outField').hidden=!ok;
+  $('out').value=ok?output(draft,draft.format,link):'';
+  $('len').hidden=!ok;
+  $('len').textContent=t('len',{n:Tools.fmt(link.length,0)});
+  $('longWarn').hidden=!ok||link.length<=2000;
+  $('longText').textContent=t('long',{n:Tools.fmt(link.length,0)});
+  for(const id of ['btnOpen','btnCopy','btnShare','btnQr']) $(id).disabled=!ok;
+  $('btnShare').hidden=!('share' in navigator);
+  const showQr=ok&&draft.qr;
+  $('btnQr').setAttribute('aria-pressed',String(showQr));
+  $('qrBox').hidden=!showQr;
+  if(showQr){
+    qrNow=makeQr(link);
+    $('qr').hidden=!qrNow; $('qrErr').hidden=!!qrNow; $('btnQrSave').hidden=!qrNow;
+    if(qrNow) drawQr($('qr'),qrNow,Math.max(2,Math.ceil(560/(qrNow.getModuleCount()+2*QUIET))));
+  } else qrNow=null;
+  renderTemplates();
+}
+function renderTemplates(){
+  const ul=$('tplList');
+  ul.textContent='';
+  if(!templates.length){ const li=document.createElement('li'); li.className='muted'; li.textContent=t('tplEmpty'); ul.append(li); return; }
+  for(const tp of templates){
+    const li=document.createElement('li');
+    const open=document.createElement('button');
+    open.type='button'; open.className='open'; open.dataset.id=tp.id;
+    const name=document.createElement('span'); name.className='name'; name.textContent=tp.name;
+    const meta=document.createElement('span'); meta.className='meta';
+    meta.textContent=[addresses(tp.to).join(', ')||t('tplNone'),tp.subject].filter(Boolean).join(' · ');
+    open.append(name,meta);
+    open.addEventListener('click',()=>loadTemplate(tp.id));
+    const del=document.createElement('button');
+    del.type='button'; del.className='btn icon'; del.innerHTML=Tools.icon('trash');
+    del.setAttribute('aria-label',t('tplDel',{name:tp.name})); del.title=t('tplDel',{name:tp.name});
+    del.addEventListener('click',()=>deleteTemplate(tp.id));
+    li.append(open,del); ul.append(li);
+  }
+}
+
+/* ---------- Actions ---------- */
+function setFields(f,{keepFormat=true}={}){
+  for(const k of FIELDS) if(f[k]!=null) draft[k]=String(f[k]).slice(0,LIMITS[k]);
+  if(!keepFormat&&f.format) draft.format=f.format;
+  saveDraft(); fillInputs(); render();
+}
+for(const k of FIELDS) inputs[k].addEventListener('input',()=>{ draft[k]=inputs[k].value; saveDraft(); render(); });
+for(const b of document.querySelectorAll('#format button')) b.addEventListener('click',()=>{
+  draft.format=b.dataset.format; saveDraft(); render(); Tools.diag.log('format',{format:draft.format});
+});
+$('btnOpen').addEventListener('click',()=>{
+  if(!hasContent(draft)) return;
+  Tools.diag.log('open mail app',{length:buildLink(draft).length});
+  location.href=buildLink(draft);
+});
+$('btnCopy').addEventListener('click',async()=>{
+  const ok=await Tools.copyText($('out').value);
+  Tools.diag.log('copy',{format:draft.format,ok});
+  Tools.toast(t(ok?'copied':'copyFail'));
+});
+$('btnShare').addEventListener('click',async()=>{
+  try{ await navigator.share({text:$('out').value}); Tools.diag.log('shared'); }
+  catch(e){ if(e&&e.name!=='AbortError') Tools.diag.log('share failed',e); }
+});
+$('btnQr').addEventListener('click',()=>{ draft.qr=!draft.qr; saveDraft(); render(); });
+$('btnQrSave').addEventListener('click',()=>{
+  if(!qrNow) return;
+  const c=document.createElement('canvas');
+  drawQr(c,qrNow,Math.max(4,Math.round(1024/(qrNow.getModuleCount()+2*QUIET))));
+  c.toBlob(b=>{ if(b){ Tools.download(b,'mailto-qr.png'); Tools.diag.log('qr saved'); } },'image/png');
+});
+$('btnParse').addEventListener('click',async()=>{
+  const s=await Tools.prompt(t('parseQ'),{value:''});
+  if(s==null) return;
+  const f=parseLink(s);
+  if(!f){ Tools.toast(t('parseBad')); return; }
+  setFields(Object.assign({to:'',cc:'',bcc:'',subject:'',body:''},f));
+  Tools.menu.close(); Tools.toast(t('parsed')); Tools.diag.log('link parsed');
+});
+$('btnClear').addEventListener('click',()=>{
+  const before=Object.assign({},draft);
+  setFields({to:'',cc:'',bcc:'',subject:'',body:'',text:''});
+  Tools.menu.close();
+  Tools.undo(t('cleared'),()=>setFields(before));
+});
+$('btnTplSave').addEventListener('click',async()=>{
+  if(!hasContent(draft)){ Tools.toast(t('tplNoMail')); return; }
+  const def=draft.subject.trim()||addresses(draft.to)[0]||'';
+  const name=await Tools.prompt(t('tplName'),{value:def.slice(0,80)});
+  if(name==null||!name.trim()) return;
+  const tp={id:Tools.uid('t'),name:name.trim().slice(0,80)};
+  for(const k of FIELDS) tp[k]=draft[k];
+  templates.unshift(tp); saveTpl(); renderTemplates();
+  Tools.toast(t('tplSaved')); Tools.diag.log('template saved',{count:templates.length});
+});
+function loadTemplate(id){
+  const tp=templates.find(x=>x.id===id);
+  if(!tp) return;
+  setFields(Object.fromEntries(FIELDS.map(k=>[k,tp[k]||''])));
+  Tools.menu.close(); Tools.toast(t('tplLoaded',{name:tp.name}));
+}
+function deleteTemplate(id){
+  const i=templates.findIndex(x=>x.id===id);
+  if(i<0) return;
+  const [tp]=templates.splice(i,1); saveTpl(); renderTemplates();
+  Tools.undo(t('tplDeleted',{name:tp.name}),()=>{ templates.splice(Math.min(i,templates.length),0,tp); saveTpl(); renderTemplates(); });
+}
+
+/* ---------- Start: shared text (Android share sheet) ---------- */
+fillInputs();
+const shared=Tools.takeSharedText();
+if(shared){
+  const all=[shared.url,shared.text,shared.title].join(' ');
+  const viaLink=/mailto:/i.test(all)?parseLink(all):null;
+  if(viaLink) setFields(Object.assign({to:'',cc:'',bcc:'',subject:'',body:''},viaLink));
+  else{
+    const found=parseLink(all);
+    const strip=s=>s.replace(/[^\s@,;<>()"]+@[^\s@,;<>()"]+\.[^\s@,;<>()".]+/g,'').trim();
+    setFields({to:found?found.to:'',cc:'',bcc:'',subject:strip(shared.title),body:[strip(shared.text),shared.url].filter(Boolean).join('\n')});
+  }
+  Tools.toast(t('shared')); Tools.diag.log('text shared',{mailto:!!viaLink});
+}
+render();
+Tools.diag.info(()=>({format:draft.format,to:addresses(draft.to).length,cc:addresses(draft.cc).length,bcc:addresses(draft.bcc).length,
+  subjectLength:draft.subject.length,bodyLength:draft.body.length,linkLength:buildLink(draft).length,qr:draft.qr,templates:templates.length,share:'share' in navigator}));
+Tools.onLang(render);
+
+/* ---------- WebMCP ---------- */
+const result=()=>{
+  const link=buildLink(draft);
+  return {to:addresses(draft.to),cc:addresses(draft.cc),bcc:addresses(draft.bcc),subject:draft.subject,body:draft.body,link_text:linkText(draft),
+    link,html:output(draft,'html',link),markdown:output(draft,'md',link),length:link.length,
+    invalid_addresses:[...invalid(draft.to),...invalid(draft.cc),...invalid(draft.bcc)],empty:!hasContent(draft)};
+};
+const addrSchema=d=>({type:'array',maxItems:50,items:{type:'string',minLength:3,maxLength:254},description:d});
+Tools.mcp.register({
+  name:'set_email',title:'Fill in the email',label:'mcp.set',
+  description:'Fills in the fields of the mailto link shown in the app: recipients (to, cc, bcc), subject, body and the link text for HTML/Markdown. Fields left out keep their current value; pass an empty list or string to clear one. Returns the finished mailto link, the HTML and Markdown versions and any invalid addresses.',
+  inputSchema:{type:'object',properties:{
+    to:addrSchema('Recipient addresses.'),cc:addrSchema('Copy addresses.'),bcc:addrSchema('Blind copy addresses.'),
+    subject:{type:'string',maxLength:500,description:'Subject line.'},
+    body:{type:'string',maxLength:10000,description:'Mail text; line breaks allowed.'},
+    link_text:{type:'string',maxLength:200,description:'Visible text of the HTML/Markdown link. Default: the first recipient.'},
+    format:{type:'string',enum:['link','html','markdown'],description:'Output shown in the app.'}
+  },additionalProperties:false},
+  execute:({to,cc,bcc,subject,body,link_text,format})=>{
+    const f={};
+    const join=l=>l.join(', ');
+    if(to) f.to=join(to); if(cc) f.cc=join(cc); if(bcc) f.bcc=join(bcc);
+    if(subject!=null) f.subject=subject; if(body!=null) f.body=body; if(link_text!=null) f.text=link_text;
+    if(format) f.format=format==='markdown'?'md':format;
+    if(f.to!=null&&f.to.length>LIMITS.to||f.cc!=null&&f.cc.length>LIMITS.cc||f.bcc!=null&&f.bcc.length>LIMITS.bcc)
+      throw new Error('Too many addresses: at most 2000 characters per field.');
+    setFields(f,{keepFormat:false});
+    return result();
+  }
+});
+Tools.mcp.register({
+  name:'parse_link',title:'Read a mailto link',label:'mcp.parse',
+  description:'Takes an existing mailto link (or a plain email address) apart and fills its recipients, subject and body into the app, replacing the current mail. Returns the fields and the rebuilt link.',
+  inputSchema:{type:'object',properties:{
+    link:{type:'string',minLength:3,maxLength:20000,description:'A mailto: link, e.g. mailto:a@example.org?subject=Hi, or an email address.'}
+  },required:['link'],additionalProperties:false},
+  execute:({link})=>{
+    const f=parseLink(link);
+    if(!f) throw new Error('No mailto link and no email address found.');
+    setFields(Object.assign({to:'',cc:'',bcc:'',subject:'',body:''},f));
+    return result();
+  }
+});
+Tools.mcp.register({
+  name:'get_link',title:'Read the mailto link',readOnly:true,
+  description:'Reads the mail currently entered in the app: recipients, subject, body, link text and the finished mailto link as a plain link, HTML and Markdown, its length and any invalid addresses.',
+  execute:()=>result()
+});
+})();
+</script>
+</body>
+</html>

@@ -577,6 +577,30 @@ test.describe('qr-code tools', () => {
   });
 });
 
+test.describe('mailto-generator tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/mailto-generator/'));
+
+  test('set_email fills the form and returns the link; parse_link and get_link agree', async ({ page }) => {
+    const r = await call(page, 'mailto_generator_set_email', { to: ['a@example.org', 'kaputt@'], subject: 'Hi (1)', body: 'Z1\nZ2', format: 'markdown' });
+    expect(r.ok).toBe(true);
+    // Written out by hand (RFC 6068)
+    expect(r.result.link).toBe('mailto:a@example.org,kaputt@?subject=Hi%20%281%29&body=Z1%0D%0AZ2');
+    expect(r.result.markdown).toBe(`[a@example.org](${r.result.link})`);
+    expect(r.result.invalid_addresses).toEqual(['kaputt@']);
+    await expect(page.locator('#to')).toHaveValue('a@example.org, kaputt@');
+    await expect(page.locator('#format [data-format="md"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: E-Mail eingetragen');
+    const p = await call(page, 'mailto_generator_parse_link', { link: 'mailto:x@example.org?bcc=y@example.org&subject=A+B' });
+    expect(p.result).toMatchObject({ to: ['x@example.org'], cc: [], bcc: ['y@example.org'], subject: 'A+B', body: '' });
+    await expect(page.locator('#subject')).toHaveValue('A+B');
+    expect((await call(page, 'mailto_generator_get_link', {})).result.link).toBe('mailto:x@example.org?bcc=y@example.org&subject=A%2BB');
+    expect(await call(page, 'mailto_generator_parse_link', { link: 'nothing here' }))
+      .toEqual({ ok: false, error: 'No mailto link and no email address found.' });
+    expect(await call(page, 'mailto_generator_set_email', { subject: 'x'.repeat(501) }))
+      .toEqual({ ok: false, error: 'input.subject must have at most 500 characters' });
+  });
+});
+
 test.describe('rock-paper-scissors tools', () => {
   test.beforeEach(async ({ page }) => open(page, '/rock-paper-scissors/'));
 
