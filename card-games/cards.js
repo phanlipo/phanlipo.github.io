@@ -4,30 +4,36 @@
   'use strict';
   // Card ids: suit + rank, e.g. "H10" = ten of hearts, "SA" = ace of spades
   const SUITS = ['C', 'S', 'H', 'D'];              // Kreuz/Clubs, Pik/Spades, Herz/Hearts, Karo/Diamonds
-  const RANKS = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  const RANKS = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];  // short decks (Mau Mau, Durak, Skat)
+  const RANKS_ALL = ['2', '3', '4', '5', ...RANKS];               // 52 cards (Solitaire, Rommé, Poker)
+  const JOKER = 'X*';                                             // Rommé; several jokers are equal
   const SYM = { C: '♣', S: '♠', H: '♥', D: '♦' };
   const NAMES = {
-    de: { suit: { C: 'Kreuz', S: 'Pik', H: 'Herz', D: 'Karo' }, rank: { J: 'Bube', Q: 'Dame', K: 'König', A: 'Ass' }, short: { J: 'B', Q: 'D', K: 'K', A: 'A' } },
-    en: { suit: { C: 'Clubs', S: 'Spades', H: 'Hearts', D: 'Diamonds' }, rank: { J: 'Jack', Q: 'Queen', K: 'King', A: 'Ace' }, short: { J: 'J', Q: 'Q', K: 'K', A: 'A' } },
+    de: { suit: { C: 'Kreuz', S: 'Pik', H: 'Herz', D: 'Karo' }, rank: { J: 'Bube', Q: 'Dame', K: 'König', A: 'Ass' }, short: { J: 'B', Q: 'D', K: 'K', A: 'A' }, joker: 'Joker' },
+    en: { suit: { C: 'Clubs', S: 'Spades', H: 'Hearts', D: 'Diamonds' }, rank: { J: 'Jack', Q: 'Queen', K: 'King', A: 'Ace' }, short: { J: 'J', Q: 'Q', K: 'K', A: 'A' }, joker: 'Joker' },
   };
   const suit = c => c[0];
   const rank = c => c.slice(1);
-  const value = c => RANKS.indexOf(rank(c));          // 6 → 0 … A → 8
-  const isCard = c => typeof c === 'string' && SUITS.includes(c[0]) && RANKS.includes(c.slice(1));
+  const value = c => RANKS.indexOf(rank(c));          // 6 → 0 … A → 8 (short decks)
+  const rankIdx = c => RANKS_ALL.indexOf(rank(c));    // 2 → 0 … A → 12
+  const isJoker = c => c === JOKER;
+  const isCard = c => typeof c === 'string' && (c === JOKER || (SUITS.includes(c[0]) && RANKS_ALL.includes(c.slice(1))));
   const red = c => suit(c) === 'H' || suit(c) === 'D';
-  /** Deck from the given lowest rank: '7' → 32 cards (Mau Mau), '6' → 36 cards (Durak) */
+  /** Deck from the given lowest rank: '7' → 32 cards (Mau Mau, Skat), '6' → 36 cards (Durak), '2' → 52 cards */
   function deck(from) {
     const out = [];
-    for (const s of SUITS) for (const r of RANKS.slice(RANKS.indexOf(from || '6'))) out.push(s + r);
+    for (const s of SUITS) for (const r of RANKS_ALL.slice(RANKS_ALL.indexOf(from || '6'))) out.push(s + r);
     return out;
   }
   /** "Herz 7" / "7 of Hearts" */
   function name(c, lang) {
-    const L = NAMES[lang] || NAMES.de, r = rank(c), rn = L.rank[r] || r;
+    const L = NAMES[lang] || NAMES.de;
+    if (c === JOKER) return L.joker;
+    const r = rank(c), rn = L.rank[r] || r;
     return lang === 'en' ? `${rn} of ${L.suit[suit(c)]}` : `${L.suit[suit(c)]} ${rn}`;
   }
   const suitName = (s, lang) => (NAMES[lang] || NAMES.de).suit[s];
-  const shortRank = (c, lang) => (NAMES[lang] || NAMES.de).short[rank(c)] || rank(c);
+  const shortRank = (c, lang) => c === JOKER ? '★' : (NAMES[lang] || NAMES.de).short[rank(c)] || rank(c);
 
   /* ---------- Random numbers: seeded and kept in the game state (state.rs) ----------
      A game is reproducible from its seed – the tests replay whole games. */
@@ -52,7 +58,9 @@
      game.moves(state, seat) – the host checks every move it gets, from its own page or another device. */
   const key = m => JSON.stringify(Object.keys(m).sort().reduce((o, k) => { o[k] = m[k]; return o; }, {}));
   function legal(game, st, seat, move) {
-    if (!move || typeof move !== 'object') return false;
+    if (!move || typeof move !== 'object' || Array.isArray(move)) return false;
+    // Games with too many possible moves to list (Rommé: which cards to lay down) check them themselves
+    if (game.allowed) return !!game.allowed(st, seat, move);
     const k = key(move);
     return game.moves(st, seat).some(m => key(m) === k);
   }
@@ -67,6 +75,6 @@
     games[g.id] = g;
   }
 
-  window.CardGames = { SUITS, RANKS, SYM, suit, rank, value, isCard, red, deck, name, suitName, shortRank,
+  window.CardGames = { SUITS, RANKS, RANKS_ALL, JOKER, SYM, rankIdx, isJoker, suit, rank, value, isCard, red, deck, name, suitName, shortRank,
     next, int, shuffle, seed, key, legal, register, games, list: () => Object.values(games) };
 })();

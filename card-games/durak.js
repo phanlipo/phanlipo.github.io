@@ -217,7 +217,7 @@
           x.el('span', 'tag trump ' + (C.red(v.trump + '7') ? 'red' : 'black'), x.t('dk.trump', { s: C.SYM[v.trump] + ' ' + C.suitName(v.trump, x.lang) })),
           x.el('span', 'pile-lbl', x.t('dk.discard', { n: v.discard })));
         const pairs = x.el('div', 'dk-pairs');
-        pairs.setAttribute('role', 'list');
+        if (v.table.length) pairs.setAttribute('role', 'list');
         v.table.forEach(p => {
           const pair = x.el('div', 'pair' + (p.d ? ' beaten' : ''));
           pair.setAttribute('role', 'listitem');

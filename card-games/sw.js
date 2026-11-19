@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "card-games";
-const VERSION = 'b10e8966ee44';
+const VERSION = '18698adf024f';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -16,6 +16,10 @@ const FILES = [
   "icon.svg",
   "manifest.webmanifest",
   "mau-mau.js",
+  "poker.js",
+  "rommee.js",
+  "skat.js",
+  "solitaire.js",
   "../assets/base.css",
   "../assets/common.js",
   "../assets/icons.svg",
