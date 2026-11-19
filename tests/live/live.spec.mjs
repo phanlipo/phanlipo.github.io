@@ -55,7 +55,7 @@ test.describe('start page', () => {
     await page.goto('/');
     await expect(page.locator('h1')).toHaveText('App-Regal');
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
-    await expect(page.locator('.tool')).toHaveCount(tools().length);
+    await expect(page.locator('.app')).toHaveCount(tools().length);
     await expectNoHorizontalScroll(page);
   });
 });
