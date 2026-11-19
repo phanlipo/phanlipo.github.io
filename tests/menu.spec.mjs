@@ -139,7 +139,7 @@ for (const app of apps()) {
       // The next "back" leaves the app as usual
       await page.goBack();
       await expect(page).toHaveURL(/\/$/);
-      await expect(page.locator('.tool').first()).toBeVisible();
+      await expect(page.locator('.app').first()).toBeVisible();
     });
 
     test('messages stay visible while the menu is open', async ({ page }) => {

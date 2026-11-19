@@ -12,7 +12,7 @@
 <meta name="tool:short-name-en" content="App Shelf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ld8qK4v55kWAxCVHw1QlfIXWN04vUWQbKwG61LTcc9c=' 'sha256-+ON/VTyut6MPfRAmX7gR31y8L5jy8rN/V/O9TTpe1LU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-aEEP4zRLePd/ODrxqFWvL0kX6JuaWY+6msz7HkX7ZdE=' 'sha256-g9gUtgs20JOMAvInl4DdZ4giibMbiKnZN+ksgxOCFJU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest" data-no-sw>
@@ -20,729 +20,927 @@
 <!-- head:end -->
 <link rel="stylesheet" href="assets/base.css">
 <style>
-.wrap{max-width:980px;margin-inline:auto;padding-inline:16px}
-header{padding-block:24px}
-header h1{font-size:26px;display:flex;align-items:center;gap:12px}
+body>:is(header,main).wrap,body>header>.wrap{max-width:980px;margin-inline:auto;padding-inline:16px}
+header{padding-block:16px 4px}
+header h1{font-size:24px;display:flex;align-items:center;gap:12px;margin-block:0 4px}
 header h1 img{flex:none;border-radius:10px}
-/* Menu button (common.js) next to the title, not in the middle of the tall header */
-body.has-menu:not(.stage)>header>.stage-actions{inset-block-start:22px;transform:none}
-main{padding-block:20px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-/* The whole card opens the tool: the title link stretches over the card */
-.tool{position:relative;display:flex;flex-direction:column;gap:8px;padding:18px}
-.tool:hover{border-color:var(--accent)}
-.tool:has(.open:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
-.tool h2{margin:0;display:flex;align-items:center;gap:10px}
-.tool .open{flex:1;min-width:0;color:inherit;text-decoration:none;outline:none}
-.tool .open::after{content:"";position:absolute;inset:0;border-radius:inherit}
-.tool .chevron{flex:none;font-size:24px;line-height:1;color:var(--muted)}
-.tool h2 img{flex:none;border-radius:8px}
-.tool p{margin:0;color:var(--muted);font-size:14px}
-.tags{display:flex;gap:6px;flex-wrap:wrap}
-.tag{font-size:12px;padding-inline:8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
-.tag.feat{background:transparent;border-style:dashed}
-.tag.match{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
-.common{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;color:var(--muted)}
-.common li::before{content:"✓ ";color:var(--ok);font-weight:700}
-/* Filter: each row scrolls sideways on phones and wraps on wider screens */
-.filter{display:grid;gap:10px;margin-block-end:16px;scroll-margin-block-start:8px}
-/* While searching, the page stays tall enough for the search field to sit at the top (also with few results) */
+header .sub{margin:0}
+/* Menu button (common.js) next to the title, not in the middle of the header */
+body.has-menu:not(.stage)>header>.stage-actions{inset-block-start:14px;transform:none}
+main{padding-block:8px 20px}
+/* Search, area switch and filter stick to the top while the list scrolls */
+.filter{position:sticky;top:0;z-index:3;display:grid;gap:8px;margin-inline:-16px;padding:8px 16px;background:var(--bg)}
+.filter-anchor{scroll-margin-block-start:0}
+/* While searching, the page stays tall enough for the search bar to sit at the top (also with few results) */
 body.searching main{min-height:100vh;min-height:100lvh}
-.filter-row{display:grid;gap:4px}
-.filter-label{font-size:13px;font-weight:600;color:var(--muted)}
-.chips{display:flex;gap:8px;overflow-x:auto;padding-block-end:4px;scrollbar-width:none;--fade:linear-gradient(to right,#000 calc(100% - 48px),transparent)}
-.chips::-webkit-scrollbar{display:none}
-/* No scroll bar: a faded edge shows that a row continues (classes set by the script) */
-.chips.more-end{-webkit-mask-image:var(--fade);mask-image:var(--fade)}
-.chips.more-start{--fade:linear-gradient(to right,transparent,#000 48px)}
-.chips.more-start.more-end{--fade:linear-gradient(to right,transparent,#000 48px,#000 calc(100% - 48px),transparent)}
-@media (min-width:700px){.chips{flex-wrap:wrap;overflow:visible}}
-.chip{flex:none;min-height:44px;padding-inline:16px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:15px}
-.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
-.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-/* Search field above the filter rows */
-.search{position:relative}
-.search svg{position:absolute;inset-inline-start:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.search-row{display:flex;gap:8px;align-items:center}
+.search{position:relative;flex:1;min-width:0}
+.search>.ic{position:absolute;inset-inline-start:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
 .search input{box-sizing:border-box;width:100%;min-height:44px;padding-block:8px;padding-inline:42px 12px;font-size:16px;border-radius:999px}
 .search input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.filter-btn{flex:none;border-radius:999px}
+.filter-btn[aria-expanded="true"]{border-color:var(--accent)}
+.filter-count{min-width:20px;padding-inline:6px;border-radius:999px;background:var(--accent);color:var(--accent-text);font-size:12px;font-weight:700;line-height:20px;text-align:center}
+.filter-panel{display:grid;gap:10px;max-height:50vh;max-height:50dvh;overflow-y:auto;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.filter-panel[hidden]{display:none}
+.filter-row{display:grid;gap:4px}
+.filter-label{font-size:13px;font-weight:600;color:var(--muted)}
+.chip{padding-inline:14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-size:15px}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .filter-empty{text-align:center;padding-block:24px}
+/* Favourites and recently used: a row of app icons like on a home screen */
+:is(.shelf,.group)>h2{display:flex;align-items:center;gap:6px;margin:16px 0 6px;font-size:14px;font-weight:600;color:var(--muted)}
+.group .count{font-weight:400}
+.shelf-row{list-style:none;margin:0;padding:0 0 2px;display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.shelf-row::-webkit-scrollbar{display:none}
+.shelf-row a{display:flex;flex-direction:column;align-items:center;gap:6px;width:84px;padding:8px 2px;border-radius:12px;color:var(--text);text-decoration:none;font-size:12px;line-height:1.25;text-align:center}
+.shelf-row a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.shelf-row img{width:48px;height:48px;border-radius:11px}
+.shelf-row span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;overflow-wrap:break-word;hyphens:auto}
+/* The list: one compact row per app, the whole row opens the app */
+.apps{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+@media (min-width:700px){.apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}}
+.app{position:relative;display:flex;align-items:center;gap:12px;min-height:64px;padding:8px 4px 8px 12px;border-block-end:1px solid var(--border);margin-block-end:-1px}
+.app:has(.open:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+.app>img,.app>.noicon{flex:none;width:40px;height:40px;border-radius:9px}
+.app-text{flex:1;min-width:0}
+.app .open{display:block;font-weight:600;color:inherit;text-decoration:none;outline:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app .open::after{content:"";position:absolute;inset:0}
+.app p{margin:0;font-size:13px;line-height:1.35;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fav{position:relative;z-index:1;flex:none;width:44px;height:44px;display:grid;place-items:center;padding:0;border:0;border-radius:999px;background:none;color:var(--muted);cursor:pointer}
+@media (hover:hover){.shelf-row a:hover,.app:hover{background:var(--surface-2)}.fav:hover{background:var(--surface)}}
+.fav:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.fav[aria-pressed="true"]{color:var(--accent)}
 </style>
 </head>
 <body data-app-menu>
 <header>
   <div class="wrap">
     <h1><img src="icon.svg" alt="" width="40" height="40"><span data-i18n="title">App-Regal</span></h1>
-    <p class="sub" data-i18n="sub">Kleine Web-Apps fürs Handy. Die Anleitung steht jeweils unten auf der Seite.</p>
-    <ul class="common">
-      <li data-i18n="c.offline">offline nutzbar</li><li data-i18n="c.install">als App installierbar</li><li data-i18n="c.local">Daten bleiben auf dem Gerät</li><li data-i18n="c.backup">Sicherung als Datei</li>
-    </ul>
+    <p class="sub" data-i18n="sub">Kleine Web-Apps fürs Handy: offline nutzbar, als App installierbar, die Daten bleiben auf dem Gerät.</p>
   </div>
 </header>
 
 <main class="wrap">
   <!-- tools:start -->
+  <div class="filter-anchor"></div>
   <div class="filter" hidden>
-    <div class="search">
-      <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="m21 21-6-6"/></svg>
-      <input type="search" id="q" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Apps durchsuchen" aria-label="Apps durchsuchen" data-i18n-attr="placeholder:search; aria-label:search">
-    </div>
-    <div class="filter-row" role="group" aria-labelledby="f-cat">
-      <span class="filter-label" id="f-cat" data-i18n="f-cat">Kategorie</span>
-      <div class="chips">
-        <button type="button" class="chip" data-tag="" data-i18n="filter.all" aria-pressed="true">Alle</button>
-        <button type="button" class="chip" data-tag="Alltag" data-i18n="tag.Alltag" aria-pressed="false">Alltag</button>
-        <button type="button" class="chip" data-tag="Arbeit" data-i18n="tag.Arbeit" aria-pressed="false">Arbeit</button>
-        <button type="button" class="chip" data-tag="Freizeit" data-i18n="tag.Freizeit" aria-pressed="false">Freizeit</button>
-        <button type="button" class="chip" data-tag="Apotheke" data-i18n="tag.Apotheke" aria-pressed="false">Apotheke</button>
-        <button type="button" class="chip" data-tag="Barcode" data-i18n="tag.Barcode" aria-pressed="false">Barcode</button>
-        <button type="button" class="chip" data-tag="Bierbrauen" data-i18n="tag.Bierbrauen" aria-pressed="false">Bierbrauen</button>
-        <button type="button" class="chip" data-tag="Dokumente" data-i18n="tag.Dokumente" aria-pressed="false">Dokumente</button>
-        <button type="button" class="chip" data-tag="Finanzen" data-i18n="tag.Finanzen" aria-pressed="false">Finanzen</button>
-        <button type="button" class="chip" data-tag="KI" data-i18n="tag.KI" aria-pressed="false">KI</button>
-        <button type="button" class="chip" data-tag="Kinder" data-i18n="tag.Kinder" aria-pressed="false">Kinder</button>
-        <button type="button" class="chip" data-tag="Lernen" data-i18n="tag.Lernen" aria-pressed="false">Lernen</button>
-        <button type="button" class="chip" data-tag="Medizin" data-i18n="tag.Medizin" aria-pressed="false">Medizin</button>
-        <button type="button" class="chip" data-tag="Messen" data-i18n="tag.Messen" aria-pressed="false">Messen</button>
-        <button type="button" class="chip" data-tag="Musik" data-i18n="tag.Musik" aria-pressed="false">Musik</button>
-        <button type="button" class="chip" data-tag="Physik" data-i18n="tag.Physik" aria-pressed="false">Physik</button>
-        <button type="button" class="chip" data-tag="Rechner" data-i18n="tag.Rechner" aria-pressed="false">Rechner</button>
-        <button type="button" class="chip" data-tag="Spiele" data-i18n="tag.Spiele" aria-pressed="false">Spiele</button>
-        <button type="button" class="chip" data-tag="Sport" data-i18n="tag.Sport" aria-pressed="false">Sport</button>
-        <button type="button" class="chip" data-tag="Sprache" data-i18n="tag.Sprache" aria-pressed="false">Sprache</button>
-        <button type="button" class="chip" data-tag="Werkzeug" data-i18n="tag.Werkzeug" aria-pressed="false">Werkzeug</button>
-        <button type="button" class="chip" data-tag="Zufall" data-i18n="tag.Zufall" aria-pressed="false">Zufall</button>
+    <div class="search-row">
+      <div class="search">
+        <svg class="ic" aria-hidden="true"><use href="assets/icons.svg#search"/></svg>
+        <input type="search" id="q" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Apps durchsuchen" aria-label="Apps durchsuchen" data-i18n-attr="placeholder:search; aria-label:search">
       </div>
+      <button type="button" class="btn filter-btn" aria-expanded="false" aria-controls="filter-panel"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#filter"/></svg><span data-i18n="filter">Filter</span><span class="filter-count" hidden></span></button>
     </div>
-    <div class="filter-row" role="group" aria-labelledby="f-feat">
-      <span class="filter-label" id="f-feat" data-i18n="f-feat">Funktion</span>
-      <div class="chips">
-        <button type="button" class="chip" data-tag="Kamera" data-i18n="tag.Kamera" aria-pressed="false">Kamera</button>
-        <button type="button" class="chip" data-tag="Mikrofon" data-i18n="tag.Mikrofon" aria-pressed="false">Mikrofon</button>
-        <button type="button" class="chip" data-tag="Bewegungssensor" data-i18n="tag.Bewegungssensor" aria-pressed="false">Bewegungssensor</button>
-        <button type="button" class="chip" data-tag="Standort" data-i18n="tag.Standort" aria-pressed="false">Standort</button>
-        <button type="button" class="chip" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen" aria-pressed="false">Datei öffnen</button>
-        <button type="button" class="chip" data-tag="Teilen an App" data-i18n="tag.Teilen an App" aria-pressed="false">Teilen an App</button>
-        <button type="button" class="chip" data-tag="Vollbild" data-i18n="tag.Vollbild" aria-pressed="false">Vollbild</button>
-        <button type="button" class="chip" data-tag="Benachrichtigung" data-i18n="tag.Benachrichtigung" aria-pressed="false">Benachrichtigung</button>
-        <button type="button" class="chip" data-tag="Kopieren" data-i18n="tag.Kopieren" aria-pressed="false">Kopieren</button>
-        <button type="button" class="chip" data-tag="Verlauf" data-i18n="tag.Verlauf" aria-pressed="false">Verlauf</button>
-        <button type="button" class="chip" data-tag="Schütteln" data-i18n="tag.Schütteln" aria-pressed="false">Schütteln</button>
-        <button type="button" class="chip" data-tag="KI-Agent" data-i18n="tag.KI-Agent" aria-pressed="false">KI-Agent</button>
-        <button type="button" class="chip" data-tag="Download nötig" data-i18n="tag.Download nötig" aria-pressed="false">Download nötig</button>
+    <div class="seg area" role="group" aria-label="Bereich" data-i18n-attr="aria-label:f-area">
+      <button type="button" data-area="" data-i18n="filter.all" aria-pressed="true">Alle</button>
+      <button type="button" data-area="Alltag" data-i18n="tag.Alltag" aria-pressed="false">Alltag</button>
+      <button type="button" data-area="Arbeit" data-i18n="tag.Arbeit" aria-pressed="false">Arbeit</button>
+      <button type="button" data-area="Freizeit" data-i18n="tag.Freizeit" aria-pressed="false">Freizeit</button>
+    </div>
+    <div class="filter-panel" id="filter-panel" hidden>
+      <div class="filter-row" role="group" aria-labelledby="f-topic">
+        <span class="filter-label" id="f-topic" data-i18n="f-topic">Thema</span>
+        <div class="chips wrap">
+          <button type="button" class="chip" data-tag="Barcode" data-i18n="tag.Barcode" aria-pressed="false">Barcode</button>
+          <button type="button" class="chip" data-tag="Dokumente" data-i18n="tag.Dokumente" aria-pressed="false">Dokumente</button>
+          <button type="button" class="chip" data-tag="Finanzen" data-i18n="tag.Finanzen" aria-pressed="false">Finanzen</button>
+          <button type="button" class="chip" data-tag="KI" data-i18n="tag.KI" aria-pressed="false">KI</button>
+          <button type="button" class="chip" data-tag="Kinder" data-i18n="tag.Kinder" aria-pressed="false">Kinder</button>
+          <button type="button" class="chip" data-tag="Messen" data-i18n="tag.Messen" aria-pressed="false">Messen</button>
+          <button type="button" class="chip" data-tag="Musik" data-i18n="tag.Musik" aria-pressed="false">Musik</button>
+          <button type="button" class="chip" data-tag="Physik" data-i18n="tag.Physik" aria-pressed="false">Physik</button>
+          <button type="button" class="chip" data-tag="Rechner" data-i18n="tag.Rechner" aria-pressed="false">Rechner</button>
+          <button type="button" class="chip" data-tag="Spiele" data-i18n="tag.Spiele" aria-pressed="false">Spiele</button>
+          <button type="button" class="chip" data-tag="Sport" data-i18n="tag.Sport" aria-pressed="false">Sport</button>
+          <button type="button" class="chip" data-tag="Sprache" data-i18n="tag.Sprache" aria-pressed="false">Sprache</button>
+          <button type="button" class="chip" data-tag="Werkzeug" data-i18n="tag.Werkzeug" aria-pressed="false">Werkzeug</button>
+          <button type="button" class="chip" data-tag="Zufall" data-i18n="tag.Zufall" aria-pressed="false">Zufall</button>
+        </div>
+      </div>
+      <div class="filter-row" role="group" aria-labelledby="f-feat">
+        <span class="filter-label" id="f-feat" data-i18n="f-feat">Funktion</span>
+        <div class="chips wrap">
+          <button type="button" class="chip" data-tag="Kamera" data-i18n="tag.Kamera" aria-pressed="false">Kamera</button>
+          <button type="button" class="chip" data-tag="Mikrofon" data-i18n="tag.Mikrofon" aria-pressed="false">Mikrofon</button>
+          <button type="button" class="chip" data-tag="Bewegungssensor" data-i18n="tag.Bewegungssensor" aria-pressed="false">Bewegungssensor</button>
+          <button type="button" class="chip" data-tag="Standort" data-i18n="tag.Standort" aria-pressed="false">Standort</button>
+          <button type="button" class="chip" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen" aria-pressed="false">Datei öffnen</button>
+          <button type="button" class="chip" data-tag="Teilen an App" data-i18n="tag.Teilen an App" aria-pressed="false">Teilen an App</button>
+          <button type="button" class="chip" data-tag="Vollbild" data-i18n="tag.Vollbild" aria-pressed="false">Vollbild</button>
+          <button type="button" class="chip" data-tag="Benachrichtigung" data-i18n="tag.Benachrichtigung" aria-pressed="false">Benachrichtigung</button>
+          <button type="button" class="chip" data-tag="Kopieren" data-i18n="tag.Kopieren" aria-pressed="false">Kopieren</button>
+          <button type="button" class="chip" data-tag="Verlauf" data-i18n="tag.Verlauf" aria-pressed="false">Verlauf</button>
+          <button type="button" class="chip" data-tag="Schütteln" data-i18n="tag.Schütteln" aria-pressed="false">Schütteln</button>
+          <button type="button" class="chip" data-tag="Download nötig" data-i18n="tag.Download nötig" aria-pressed="false">Download nötig</button>
+        </div>
       </div>
     </div>
   </div>
   <p class="filter-status sr-only" aria-live="polite"></p>
   <p class="filter-empty muted" data-i18n="search.none" hidden>Keine passende App gefunden.</p>
-  <div class="grid">
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="four-in-a-row/icon.svg" alt="" width="32" height="32"><a class="open" href="four-in-a-row/"><span data-i18n="card.four-in-a-row.title">4 gewinnt</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.four-in-a-row.desc">Steine einwerfen, vier in eine Reihe bringen – zu zweit an einem Handy oder gegen den Computer, mit Punktestand.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Sport&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="scoreboard/icon.svg" alt="" width="32" height="32"><a class="open" href="scoreboard/"><span data-i18n="card.scoreboard.title">Anzeigetafel</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.scoreboard.desc">Spielstand groß anzeigen für Fußball (mit Spieluhr), Tischtennis, Tennis, Padel und Darts – mit Aufschlag-Anzeige, Sätzen, Finish-Vorschlag und eigenen Namen.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Sport" data-i18n="tag.Sport">Sport</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="api-check/icon.svg" alt="" width="32" height="32"><a class="open" href="api-check/"><span data-i18n="card.api-check.title">API-Check</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.api-check.desc">REST-APIs ausprobieren: API-Adresse und OpenAPI/Swagger-Spezifikation (JSON oder YAML) angeben – daraus entsteht ein Formular für jede Anfrage. Konfigurationen bleiben gespeichert.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="audio-studio/icon.svg" alt="" width="32" height="32"><a class="open" href="audio-studio/"><span data-i18n="card.audio-studio.title">Audio Studio</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.audio-studio.desc">Audiodateien kürzen und schneiden, Lautstärke anpassen, ein- und ausblenden und als WAV, Opus oder AAC speichern – direkt im Browser, die Datei verlässt das Gerät nicht.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Finanzen&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="beer-tally/icon.svg" alt="" width="32" height="32"><a class="open" href="beer-tally/"><span data-i18n="card.beer-tally.title">Bierstrichliste</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.beer-tally.desc">Striche pro Person und Tag für jedes Bier, mit Kontostand und Einzahlungen in Euro – für Verein, WG oder Feier.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Finanzen" data-i18n="tag.Finanzen">Finanzen</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="image-swipe/icon.svg" alt="" width="32" height="32"><a class="open" href="image-swipe/"><span data-i18n="card.image-swipe.title">Bild-Swipe</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.image-swipe.desc">Bilder nach rechts liken oder nach links wegwischen – mit eigenen Datenquellen als JSON und mehreren Profilen.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="image-converter/icon.svg" alt="" width="32" height="32"><a class="open" href="image-converter/"><span data-i18n="card.image-converter.title">Bildkonverter</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.image-converter.desc">Bilder umwandeln und komprimieren – JPG, PNG, WebP, HEIC (iPhone), AVIF, GIF, BMP, ICO und SVG, auch mehrere auf einmal, mit Qualität, Größe und maximaler Dateigröße, ganz ohne Upload.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Mikrofon&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="wind-instruments/icon.svg" alt="" width="32" height="32"><a class="open" href="wind-instruments/"><span data-i18n="card.wind-instruments.title">Blasinstrumente</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.wind-instruments.desc">Ins Mikrofon pusten und spielen: Flöte, Blockflöte, Okarina, Panflöte und Trompete – mit echten Griffen, Überblasen und Grifftabelle.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Musik" data-i18n="tag.Musik">Musik</span><span class="tag feat" data-tag="Mikrofon" data-i18n="tag.Mikrofon">Mikrofon</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Bierbrauen&quot;,&quot;Rechner&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="brew-calculator/icon.svg" alt="" width="32" height="32"><a class="open" href="brew-calculator/"><span data-i18n="card.brew-calculator.title">Brau-Rechner</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.brew-calculator.desc">Rechner fürs Hobbybrauen: Brauwasser, Topfvolumen, Sudhausausbeute, Mischkreuz, Hopfen (IBU), Stammwürze-Korrektur, Plato/Brix/SG, Alkohol, Nachgärung mit Zucker oder Speise und CO₂-Druck – jeweils mit Formeln und Erklärung.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Bierbrauen" data-i18n="tag.Bierbrauen">Bierbrauen</span><span class="tag" data-tag="Rechner" data-i18n="tag.Rechner">Rechner</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Vollbild&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="cast-demo/icon.svg" alt="" width="32" height="32"><a class="open" href="cast-demo/"><span data-i18n="card.cast-demo.title">Cast-Demo</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.cast-demo.desc">Bild und Musik der App auf Chromecast oder Android TV zeigen – direkt gestreamt oder mit der Bildschirmübertragung des Handys.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Musik" data-i18n="tag.Musik">Musik</span><span class="tag feat" data-tag="Vollbild" data-i18n="tag.Vollbild">Vollbild</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;,&quot;Download nötig&quot;]">
-      <h2><img src="code-runner/icon.svg" alt="" width="32" height="32"><a class="open" href="code-runner/"><span data-i18n="card.code-runner.title">Code ausführen</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.code-runner.desc">Python und JavaScript direkt im Browser schreiben und ausführen – mit Ausgabe, Eingabe für input(), Beispielen und gespeicherten Skripten. Läuft offline, ohne Server.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span><span class="tag feat" data-tag="Download nötig" data-i18n="tag.Download nötig">Download nötig</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="collage-maker/icon.svg" alt="" width="32" height="32"><a class="open" href="collage-maker/"><span data-i18n="card.collage-maker.title">Collage</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.collage-maker.desc">Aus beliebig vielen Fotos eine lückenlose Collage bauen – ohne Zwischenräume, fast ohne Beschnitt, als riesiges Bild in voller Auflösung speichern. Alles bleibt auf dem Gerät.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Rechner&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="countdown/icon.svg" alt="" width="32" height="32"><a class="open" href="countdown/"><span data-i18n="card.countdown.title">Countdown</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.countdown.desc">Tage, Stunden, Minuten oder Sekunden bis zu einem Datum mit Uhrzeit – live ab jetzt oder ab einem eigenen Startdatum.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Rechner" data-i18n="tag.Rechner">Rechner</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Messen&quot;,&quot;Datei öffnen&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="data-logger/icon.svg" alt="" width="32" height="32"><a class="open" href="data-logger/"><span data-i18n="card.data-logger.title">Datensammler</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.data-logger.desc">Eigene Profile mit Messwerten und Einheiten anlegen, Werte mit Zeitpunkt erfassen und als Kurven auswerten – Export als Bild, JSON oder CSV.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Messen" data-i18n="tag.Messen">Messen</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="duty-roster/icon.svg" alt="" width="32" height="32"><a class="open" href="duty-roster/"><span data-i18n="card.duty-roster.title">Dienstplan</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.duty-roster.desc">Dienst- und Raumplan je Kalenderwoche, z. B. für die Arztpraxis: Arbeitszeiten (auch vormittags und nachmittags), Abwesenheiten auch stundenweise, Räume je Arbeitszeit – mit Prüfung, dass jede Person zu jeder Zeit genau einem Raum zugeteilt ist.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Kamera&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="doc-scanner/icon.svg" alt="" width="32" height="32"><a class="open" href="doc-scanner/"><span data-i18n="card.doc-scanner.title">Dokumentenscanner</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.doc-scanner.desc">Dokumente mit der Kamera oder aus Fotos scannen – Fotos auch aus der Galerie hierher teilen (Android): Ecken zuschneiden, Seiten sortieren, Schatten entfernen, als PDF speichern.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Dokumente" data-i18n="tag.Dokumente">Dokumente</span><span class="tag feat" data-tag="Kamera" data-i18n="tag.Kamera">Kamera</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Rechner&quot;,&quot;Messen&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="unit-converter/icon.svg" alt="" width="32" height="32"><a class="open" href="unit-converter/"><span data-i18n="card.unit-converter.title">Einheitenrechner</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.unit-converter.desc">Einheiten umrechnen: alle SI-Basisgrößen und abgeleiteten SI-Einheiten mit Präfixen, dazu bekannte andere Einheiten wie Zoll, Meile, Pfund, °F, Gallone, psi, PS, kcal, mpg und Gibibyte – mit Tabelle aller Einheiten und Suche.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Rechner" data-i18n="tag.Rechner">Rechner</span><span class="tag" data-tag="Messen" data-i18n="tag.Messen">Messen</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Benachrichtigung&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="reminders/icon.svg" alt="" width="32" height="32"><a class="open" href="reminders/"><span data-i18n="card.reminders.title">Erinnerungen</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.reminders.desc">Eigene Erinnerungen mit Zeitpunkt und Text – zur Zeit kommt eine Benachrichtigung, im Verlauf lassen sie sich anpassen.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Benachrichtigung" data-i18n="tag.Benachrichtigung">Benachrichtigung</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="code-breaker/icon.svg" alt="" width="32" height="32"><a class="open" href="code-breaker/"><span data-i18n="card.code-breaker.title">Farbcode</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.code-breaker.desc">Einen geheimen Farbcode knacken: Nach jedem Versuch zeigen Stifte, wie viele Farben richtig sind – allein gegen das Handy oder zu zweit.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Finanzen&quot;,&quot;Rechner&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="finance-calculator/icon.svg" alt="" width="32" height="32"><a class="open" href="finance-calculator/"><span data-i18n="card.finance-calculator.title">Finanzrechner</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.finance-calculator.desc">Zinseszins und Geld über die Zeit: Sparplan für Aktien und ETFs mit Dynamik, Kosten und Inflation, Kredit mit Tilgungsplan und Sondertilgung, Zeitwert-Rechner wie am Finanztaschenrechner (N, Zins, PV, PMT, FV), Kapitalwert und interner Zinsfuß, dazu Zinsumrechnung, Rendite p. a., Marge, Break-even, Abschreibung und Zinstage.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Finanzen" data-i18n="tag.Finanzen">Finanzen</span><span class="tag" data-tag="Rechner" data-i18n="tag.Rechner">Rechner</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Zufall&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="spin-the-bottle/icon.svg" alt="" width="32" height="32"><a class="open" href="spin-the-bottle/"><span data-i18n="card.spin-the-bottle.title">Flaschen drehen</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.spin-the-bottle.desc">Die Flasche entscheidet, wer dran ist – antippen oder mit Schwung drehen, mit euren Namen am Tisch.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Zufall" data-i18n="tag.Zufall">Zufall</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Rechner&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="function-plotter/icon.svg" alt="" width="32" height="32"><a class="open" href="function-plotter/"><span data-i18n="card.function-plotter.title">Funktionsplotter</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.function-plotter.desc">Funktionen zeichnen und mit Schiebereglern verändern: Jeder unbekannte Name wird zum Parameter, ▶ lässt ihn laufen. Nullstellen, Extrema, Ableitungen, Zoom mit zwei Fingern, Werte antippen.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Rechner" data-i18n="tag.Rechner">Rechner</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="whoopee-cushion/icon.svg" alt="" width="32" height="32"><a class="open" href="whoopee-cushion/"><span data-i18n="card.whoopee-cushion.title">Furzkissen</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.whoopee-cushion.desc">Drauftippen und pupsen lassen – sieben Geräusche, Zeitzünder für Streiche und Vibration.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="hangman/icon.svg" alt="" width="32" height="32"><a class="open" href="hangman/"><span data-i18n="card.hangman.title">Galgenmännchen</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.hangman.desc">Wörter raten, Buchstabe für Buchstabe – allein mit Wörtern aus sechs Themen oder zu zweit mit einem eigenen geheimen Wort.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;KI&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;,&quot;Download nötig&quot;]">
-      <h2><img src="face-timelapse/icon.svg" alt="" width="32" height="32"><a class="open" href="face-timelapse/"><span data-i18n="card.face-timelapse.title">Gesichter-Zeitraffer</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.face-timelapse.desc">Fotos wählen – das Gesicht wird in jedem Bild erkannt, gerade gerückt und gleich groß in die Mitte gesetzt. Reihenfolge ändern und als Video oder GIF speichern: ein Zeitraffer, wie jemand über die Jahre wächst.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="KI" data-i18n="tag.KI">KI</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span><span class="tag feat" data-tag="Download nötig" data-i18n="tag.Download nötig">Download nötig</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Zufall&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="lucky-wheel/icon.svg" alt="" width="32" height="32"><a class="open" href="lucky-wheel/"><span data-i18n="card.lucky-wheel.title">Glücksrad</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.lucky-wheel.desc">Glücksrad zum Auslosen: eigene Einträge eintragen, Rad drehen, fair per Zufall. Gewinner auf Wunsch entfernen, Verlauf der Ergebnisse.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Zufall" data-i18n="tag.Zufall">Zufall</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Messen&quot;,&quot;Werkzeug&quot;,&quot;Bewegungssensor&quot;,&quot;Mikrofon&quot;,&quot;Kamera&quot;,&quot;Standort&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="sensors/icon.svg" alt="" width="32" height="32"><a class="open" href="sensors/"><span data-i18n="card.sensors.title">Handy-Sensoren</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.sensors.desc">Kompass, Wasserwaage, Beschleunigung, Vibrometer, Schallpegel, Spektrogramm, Stimmgerät, Tacho, Schrittzähler, Tongenerator, Taschenlampe mit Morse, Puls, Spektrometer und Klatsch-Stoppuhr – mit den Sensoren des Handys.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Messen" data-i18n="tag.Messen">Messen</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Bewegungssensor" data-i18n="tag.Bewegungssensor">Bewegungssensor</span><span class="tag feat" data-tag="Mikrofon" data-i18n="tag.Mikrofon">Mikrofon</span><span class="tag feat" data-tag="Kamera" data-i18n="tag.Kamera">Kamera</span><span class="tag feat" data-tag="Standort" data-i18n="tag.Standort">Standort</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="calendar-events/icon.svg" alt="" width="32" height="32"><a class="open" href="calendar-events/"><span data-i18n="card.calendar-events.title">Kalender-Termin</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.calendar-events.desc">Termin mit Ort, Erinnerung und Wiederholung anlegen und in jeden Kalender übernehmen – als .ics-Datei, über Google oder Outlook oder als Link zum Teilen. Öffnet auch .ics-Dateien.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;KI&quot;,&quot;Kamera&quot;,&quot;KI-Agent&quot;,&quot;Download nötig&quot;]">
-      <h2><img src="camera-effects/icon.svg" alt="" width="32" height="32"><a class="open" href="camera-effects/"><span data-i18n="card.camera-effects.title">Kamera-Effekte</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.camera-effects.desc">Das Kamerabild live durch Effekte: Comic, Wärmebild, Nachtsicht, Skizze, Pixel, Kaleidoskop und mehr. Accessoires und Verzerrungen im Gesicht (Sonnenbrille, Katzenohren, Fischauge …). Erkennt Personen und legt Effekte nur auf Personen oder den Hintergrund.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="KI" data-i18n="tag.KI">KI</span><span class="tag feat" data-tag="Kamera" data-i18n="tag.Kamera">Kamera</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span><span class="tag feat" data-tag="Download nötig" data-i18n="tag.Download nötig">Download nötig</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kamera&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="card-games/icon.svg" alt="" width="32" height="32"><a class="open" href="card-games/"><span data-i18n="card.card-games.title">Kartenspiele</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.card-games.desc">Mau Mau, Durak, Skat, Rommé, Poker und Solitaire gegen den Computer oder mit mehreren Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag feat" data-tag="Kamera" data-i18n="tag.Kamera">Kamera</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="dots-and-boxes/icon.svg" alt="" width="32" height="32"><a class="open" href="dots-and-boxes/"><span data-i18n="card.dots-and-boxes.title">Käsekästchen</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.dots-and-boxes.desc">Linien ziehen, Kästchen schließen – zu zweit an einem Handy oder gegen den Computer, mit Punktestand.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;KI&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;Download nötig&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="ai-chat/icon.svg" alt="" width="32" height="32"><a class="open" href="ai-chat/"><span data-i18n="card.ai-chat.title">KI-Chat</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.ai-chat.desc">Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="KI" data-i18n="tag.KI">KI</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="Download nötig" data-i18n="tag.Download nötig">Download nötig</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="piano/icon.svg" alt="" width="32" height="32"><a class="open" href="piano/"><span data-i18n="card.piano.title">Klavier</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.piano.desc">Klavier zum Spielen mit den Fingern – MIDI-Dateien laden, die Noten fallen als Animation auf die Tasten. Spuren stummschalten und selbst mitspielen.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Musik" data-i18n="tag.Musik">Musik</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Finanzen&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="split-costs/icon.svg" alt="" width="32" height="32"><a class="open" href="split-costs/"><span data-i18n="card.split-costs.title">Kosten teilen</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.split-costs.desc">Gemeinsame Ausgaben für Urlaub, WG oder Feier eintragen – die App rechnet aus, wer wem wie viel zahlt, mit möglichst wenigen Überweisungen.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Finanzen" data-i18n="tag.Finanzen">Finanzen</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="plush-puzzle/icon.svg" alt="" width="32" height="32"><a class="open" href="plush-puzzle/"><span data-i18n="card.plush-puzzle.title">Kuscheltier-Puzzle</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.plush-puzzle.desc">Kuscheltiere aus Teilen zusammenbauen: Teile auf den Schatten ziehen, bis sie einrasten – mit Konfetti am Ende.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="laser-mirrors/icon.svg" alt="" width="32" height="32"><a class="open" href="laser-mirrors/"><span data-i18n="card.laser-mirrors.title">Laserspiegel</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.laser-mirrors.desc">Logikrätsel mit Laserstrahl: Spiegel, Strahlteiler und Kontrollpunkt so setzen und drehen, dass der Laser genau die richtigen Ziele trifft – Mauern stehen im Weg. 50 Rätsel in fünf Stufen.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="marquee/icon.svg" alt="" width="32" height="32"><a class="open" href="marquee/"><span data-i18n="card.marquee.title">Lauftext</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.marquee.desc">Text eingeben, Größe, Farben und Schrift wählen und bildschirmfüllend anzeigen – stehend, laufend oder blinkend.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="songbook/icon.svg" alt="" width="32" height="32"><a class="open" href="songbook/"><span data-i18n="card.songbook.title">Liederbuch</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.songbook.desc">Gemeinfreie Lieder als Noten mit farbigen Tonstufenzahlen und Liedtext – abspielen und mitlesen, Tempo wählen, im Klavier mit fallenden Noten üben, als MIDI speichern oder drucken.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Musik" data-i18n="tag.Musik">Musik</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="link-redirect/icon.svg" alt="" width="32" height="32"><a class="open" href="link-redirect/"><span data-i18n="card.link-redirect.title">Link-Weiterleitung</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.link-redirect.desc">Geteilte Links sofort an einen eigenen Dienst weiterleiten – mit Präfix und Suffix, z. B. test.de/?url=…</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Mikrofon&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="loop-station/icon.svg" alt="" width="32" height="32"><a class="open" href="loop-station/"><span data-i18n="card.loop-station.title">Loop-Station</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.loop-station.desc">Instrumente, Stimme, Klatschen … aufnehmen und als Schleifen übereinanderlegen – mit Metronom, Takt-Raster und WAV-Export.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Musik" data-i18n="tag.Musik">Musik</span><span class="tag feat" data-tag="Mikrofon" data-i18n="tag.Mikrofon">Mikrofon</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Barcode&quot;,&quot;Kamera&quot;,&quot;Datei öffnen&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="mail-account-qr/icon.svg" alt="" width="32" height="32"><a class="open" href="mail-account-qr/"><span data-i18n="card.mail-account-qr.title">Mail-Konto per QR</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.mail-account-qr.desc">E-Mail-Konten als QR-Code für Thunderbird auf dem Handy erstellen – und Thunderbird-QR-Codes per Kamera, Bild oder Text lesen, z. B. um die Daten in eine andere Mail-App zu übertragen.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Barcode" data-i18n="tag.Barcode">Barcode</span><span class="tag feat" data-tag="Kamera" data-i18n="tag.Kamera">Kamera</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Kopieren&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="mailto-generator/icon.svg" alt="" width="32" height="32"><a class="open" href="mailto-generator/"><span data-i18n="card.mailto-generator.title">Mailto-Generator</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.mailto-generator.desc">Mailto-Links bauen: Empfänger, CC, BCC, Betreff und Text eintragen – als Link, HTML oder Markdown kopieren, teilen, als QR-Code zeigen oder vorhandene Links zerlegen.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="paint/icon.svg" alt="" width="32" height="32"><a class="open" href="paint/"><span data-i18n="card.paint.title">Malen</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.paint.desc">Weiße Leinwand zum Malen mit dem Finger: 6 Farben, Stift, Pinsel, Marker, Spray, Farbtopf und Radierer – als Bild speichern oder teilen.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="markdown-editor/icon.svg" alt="" width="32" height="32"><a class="open" href="markdown-editor/"><span data-i18n="card.markdown-editor.title">Markdown-Editor</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.markdown-editor.desc">Markdown schreiben – als Text oder formatiert ansehen und bearbeiten, mit Knöpfen für Fett, Listen, Links und mehr. Dateien im Verlauf teilen, herunterladen oder löschen.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Dokumente" data-i18n="tag.Dokumente">Dokumente</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Medizin&quot;,&quot;Rechner&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="medical-calculator/icon.svg" alt="" width="32" height="32"><a class="open" href="medical-calculator/"><span data-i18n="card.medical-calculator.title">Medizin-Rechner</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.medical-calculator.desc">Formelhilfe für die Praxis: BMI und Körperoberfläche, eGFR (CKD-EPI 2021) und Kreatinin-Clearance, Schwangerschaftstermin und SSW, Laborwerte in SI-Einheiten – jeweils mit Formel und Erklärung. Werte werden nicht gespeichert.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Medizin" data-i18n="tag.Medizin">Medizin</span><span class="tag" data-tag="Rechner" data-i18n="tag.Rechner">Rechner</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="mind-map/icon.svg" alt="" width="32" height="32"><a class="open" href="mind-map/"><span data-i18n="card.mind-map.title">Mindmap</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.mind-map.desc">Gedanken als Mindmap sammeln: Thema in die Mitte, Äste und Unterpunkte antippen, verschieben, einklappen – als Text kopieren oder als Bild speichern.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="minesweeper/icon.svg" alt="" width="32" height="32"><a class="open" href="minesweeper/"><span data-i18n="card.minesweeper.title">Minensuche</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.minesweeper.desc">Felder aufdecken, Minen mit Fahnen markieren – drei Größen fürs Handy, der erste Tipp ist immer sicher, mit Bestzeiten.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;Kamera&quot;,&quot;KI-Agent&quot;,&quot;Download nötig&quot;]">
-      <h2><img src="move-play/icon.svg" alt="" width="32" height="32"><a class="open" href="move-play/"><span data-i18n="card.move-play.title">MovePlay</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.move-play.desc">Bewegungsspiele vor der Kamera für Kinder und Familien, allein oder zu zweit: Simon sagt, Hampelmann, Ducken &amp; Springen, Blasen fangen, Stopptanz, Posen nachmachen – die App erkennt Springen, Ducken, Armeheben und Klatschen.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="Kamera" data-i18n="tag.Kamera">Kamera</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span><span class="tag feat" data-tag="Download nötig" data-i18n="tag.Download nötig">Download nötig</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;Vollbild&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="pdf-viewer/icon.svg" alt="" width="32" height="32"><a class="open" href="pdf-viewer/"><span data-i18n="card.pdf-viewer.title">PDF ansehen</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.pdf-viewer.desc">PDF-Dateien im Vollbild lesen – Leisten blenden sich aus, ein Tippen holt Menü und Teilen zurück. Ohne Upload.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Dokumente" data-i18n="tag.Dokumente">Dokumente</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="Vollbild" data-i18n="tag.Vollbild">Vollbild</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="pdf-edit/icon.svg" alt="" width="32" height="32"><a class="open" href="pdf-edit/"><span data-i18n="card.pdf-edit.title">PDF bearbeiten</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.pdf-edit.desc">PDF-Dateien zusammenführen, Seiten entfernen, drehen und neu sortieren – direkt im Browser, ohne Upload.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Dokumente" data-i18n="tag.Dokumente">Dokumente</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="pdf2word/icon.svg" alt="" width="32" height="32"><a class="open" href="pdf2word/"><span data-i18n="card.pdf2word.title">PDF zu Word</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.pdf2word.desc">PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – mit Bildern und Texterkennung für gescannte Seiten, ohne Upload: Die Datei verlässt das Gerät nicht.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Dokumente" data-i18n="tag.Dokumente">Dokumente</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Schütteln&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="whip/icon.svg" alt="" width="32" height="32"><a class="open" href="whip/"><span data-i18n="card.whip.title">Peitsche</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.whip.desc">Handy schwingen oder tippen – und die Peitsche knallt. Fünf Knall-Arten, Empfindlichkeit einstellbar, Vibration.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag feat" data-tag="Schütteln" data-i18n="tag.Schütteln">Schütteln</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Physik&quot;,&quot;Lernen&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="physics-lab/icon.svg" alt="" width="32" height="32"><a class="open" href="physics-lab/"><span data-i18n="card.physics-lab.title">Physik verstehen</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.physics-lab.desc">Physik zum Ausprobieren: Spiegel, Linsen und Licht durch Spalte mit Reglern, Zeichnung und Formeln mit deinen Werten – jeder Versuch beantwortet eine Warum-Frage, etwa warum das Spiegelbild im Löffel Kopf steht.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Physik" data-i18n="tag.Physik">Physik</span><span class="tag" data-tag="Lernen" data-i18n="tag.Lernen">Lernen</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;Mikrofon&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="talking-animal/icon.svg" alt="" width="32" height="32"><a class="open" href="talking-animal/"><span data-i18n="card.talking-animal.title">Plappertier</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.talking-animal.desc">Ein Tier, das nachplappert: ins Mikrofon sprechen – es antwortet mit verzerrter Stimme und bewegt den Mund. Piepsig, tief, Roboter, Echo, rückwärts, Alien.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="Mikrofon" data-i18n="tag.Mikrofon">Mikrofon</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Teilen an App&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="playlist-player/icon.svg" alt="" width="32" height="32"><a class="open" href="playlist-player/"><span data-i18n="card.playlist-player.title">Playlist-Player</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.playlist-player.desc">YouTube-Playlists wie ein Hörbuch hören: Teil für Teil, mit Weiterhören an der letzten Stelle und Häkchen, was wann gehört wurde.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Musik" data-i18n="tag.Musik">Musik</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Barcode&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="qr-code/icon.svg" alt="" width="32" height="32"><a class="open" href="qr-code/"><span data-i18n="card.qr-code.title">QR-Code-Generator</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.qr-code.desc">QR-Codes für Links, Text, WLAN und Kontakte (vCard) erzeugen – Links direkt aus anderen Apps hierher teilen (Android), mit Verlauf.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Barcode" data-i18n="tag.Barcode">Barcode</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Physik&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="quantum-magnetism/icon.svg" alt="" width="32" height="32"><a class="open" href="quantum-magnetism/"><span data-i18n="card.quantum-magnetism.title">Quantenmagnetismus</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.quantum-magnetism.desc">Ising-Modell zum Zuschauen: Spins auf Quadrat-, Dreiecks- und Kagome-Gitter, ferro- oder antiferromagnetisch, mit Temperatur und Magnetfeld. Phasenübergang, Frustration, Hysterese – und eine exakt gelöste Quanten-Kette im Querfeld.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Physik" data-i18n="tag.Physik">Physik</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Physik&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="quantum-putt/icon.svg" alt="" width="32" height="32"><a class="open" href="quantum-putt/"><span data-i18n="card.quantum-putt.title">Quantenputt</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.quantum-putt.desc">Minigolf mit einem Quanten-Ball: Der Ball läuft als Welle über die Bahn, beugt sich um Hindernisse, tunnelt durch Wände und ist an vielen Orten zugleich – erst beim Messen entscheidet sich, wo er liegt. Zehn Bahnen mit Linse, Doppelspalt, Kristall und Tunnel.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Physik" data-i18n="tag.Physik">Physik</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kamera&quot;,&quot;Datei öffnen&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="quartet/icon.svg" alt="" width="32" height="32"><a class="open" href="quartet/"><span data-i18n="card.quartet.title">Quartett</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.quartet.desc">Quartett-Kartenspiel mit 17 Decks (Dinosaurier, Autos, Länder …) gegen den Computer oder mit mehreren Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag feat" data-tag="Kamera" data-i18n="tag.Kamera">Kamera</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="reaction-game/icon.svg" alt="" width="32" height="32"><a class="open" href="reaction-game/"><span data-i18n="card.reaction-game.title">Reaktionsspiel</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.reaction-game.desc">Schnell sein: Maulwürfe hauen, aufleuchtende Lampen antippen oder herumschwirrende Mücken erwischen – mit Punkten, Reaktionszeit und Bestwerten.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Rechner&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="calc-pad/icon.svg" alt="" width="32" height="32"><a class="open" href="calc-pad/"><span data-i18n="card.calc-pad.title">Rechenzettel</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.calc-pad.desc">Rechnen und Notizen auf einem Zettel: Jede Zeile mit einer Rechnung zeigt ihr Ergebnis, Text dazwischen stört nicht, mit „+ 20“ rechnest du weiter, Gleichungen wie x² = 2 werden gelöst, dazu sin, ln, Ableitung und Integral. Ergebnis antippen kopiert es.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Rechner" data-i18n="tag.Rechner">Rechner</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Finanzen&quot;,&quot;Rechner&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="chain-transaction/icon.svg" alt="" width="32" height="32"><a class="open" href="chain-transaction/"><span data-i18n="card.chain-transaction.title">Reihengeschäft</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.chain-transaction.desc">Umsatzsteuer bei Reihengeschäften mit 3 oder 4 Unternehmen: welche Lieferung bewegt ist, wo jede Lieferung stattfindet, ob sie steuerfrei ist, ob ein Dreiecksgeschäft greift, Einfuhr und Ausfuhr, wer sich wo registrieren muss – jeder Schritt mit ausführlicher Begründung und Paragrafen.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Finanzen" data-i18n="tag.Finanzen">Finanzen</span><span class="tag" data-tag="Rechner" data-i18n="tag.Rechner">Rechner</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="rss-reader/icon.svg" alt="" width="32" height="32"><a class="open" href="rss-reader/"><span data-i18n="card.rss-reader.title">RSS-Reader</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.rss-reader.desc">RSS- und Atom-Feeds lesen: Feed-Adressen eintragen und verwalten, Einträge durchsuchen, nach Kategorie filtern und gelesene markieren – auch offline.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Apotheke&quot;,&quot;Barcode&quot;,&quot;Kamera&quot;,&quot;Datei öffnen&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="securpharm-scanner/icon.svg" alt="" width="32" height="32"><a class="open" href="securpharm-scanner/"><span data-i18n="card.securpharm-scanner.title">Scan-Copy-SecurPharm</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.securpharm-scanner.desc">securPharm-DataMatrix von Arzneimittel-/Impfstoffpackungen scannen und einzelne Werte (PZN, Charge, Verfall, Seriennummer …) per Klick kopieren. Mit lokalem Verlauf.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Apotheke" data-i18n="tag.Apotheke">Apotheke</span><span class="tag" data-tag="Barcode" data-i18n="tag.Barcode">Barcode</span><span class="tag feat" data-tag="Kamera" data-i18n="tag.Kamera">Kamera</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="chess/icon.svg" alt="" width="32" height="32"><a class="open" href="chess/"><span data-i18n="card.chess.title">Schach</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.chess.desc">Schach gegen den Computer in vier Stärken oder zu zweit an einem Handy – mit allen Regeln, Tipps, Zugliste und Rücknahme.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Kinder&quot;,&quot;Spiele&quot;,&quot;Standort&quot;,&quot;Mikrofon&quot;,&quot;Bewegungssensor&quot;,&quot;Datei öffnen&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="treasure-hunt/icon.svg" alt="" width="32" height="32"><a class="open" href="treasure-hunt/"><span data-i18n="card.treasure-hunt.title">Schatzsuche</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.treasure-hunt.desc">Schatzsuche für Kindergeburtstage: Stationen mit GPS, Rätseln, Figuren und eigener Story selbst erstellen und auf dem Handy spielen.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag feat" data-tag="Standort" data-i18n="tag.Standort">Standort</span><span class="tag feat" data-tag="Mikrofon" data-i18n="tag.Mikrofon">Mikrofon</span><span class="tag feat" data-tag="Bewegungssensor" data-i18n="tag.Bewegungssensor">Bewegungssensor</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;Kamera&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="rock-paper-scissors/icon.svg" alt="" width="32" height="32"><a class="open" href="rock-paper-scissors/"><span data-i18n="card.rock-paper-scissors.title">Schere, Stein, Papier</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.rock-paper-scissors.desc">Gegen den Computer oder zu zweit auf zwei Handys – klassisch, mit Brunnen oder mit Echse und Spock.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="Kamera" data-i18n="tag.Kamera">Kamera</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kamera&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="sea-battle/icon.svg" alt="" width="32" height="32"><a class="open" href="sea-battle/"><span data-i18n="card.sea-battle.title">Schiffe versenken</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.sea-battle.desc">Zu zweit auf zwei Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag feat" data-tag="Kamera" data-i18n="tag.Kamera">Kamera</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Werkzeug&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="font-creator/icon.svg" alt="" width="32" height="32"><a class="open" href="font-creator/"><span data-i18n="card.font-creator.title">Schrift-Baukasten</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.font-creator.desc">Eigene Schrift gestalten: Buchstaben, Zahlen und Zeichen mit dem Finger zeichnen, sofort im Beispieltext sehen und als Schriftdatei (TTF) herunterladen.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;KI&quot;,&quot;Sprache&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;Download nötig&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="voice-transcriber/icon.svg" alt="" width="32" height="32"><a class="open" href="voice-transcriber/"><span data-i18n="card.voice-transcriber.title">Sprache zu Text</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.voice-transcriber.desc">Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="KI" data-i18n="tag.KI">KI</span><span class="tag" data-tag="Sprache" data-i18n="tag.Sprache">Sprache</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="Download nötig" data-i18n="tag.Download nötig">Download nötig</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="sudoku/icon.svg" alt="" width="32" height="32"><a class="open" href="sudoku/"><span data-i18n="card.sudoku.title">Sudoku</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.sudoku.desc">Zahlenrätsel in drei Stufen – immer neue Rätsel mit genau einer Lösung, mit Notizen, Tipps und Bestzeiten.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;KI&quot;,&quot;Sprache&quot;,&quot;Download nötig&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="text-to-speech/icon.svg" alt="" width="32" height="32"><a class="open" href="text-to-speech/"><span data-i18n="card.text-to-speech.title">Text zu Sprache</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.text-to-speech.desc">Text vorlesen lassen – mit den Stimmen des Geräts oder KI-Stimmen (Supertonic, Piper, Kokoro), die direkt im Browser laufen. Stimmen vergleichen und als WAV speichern.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="KI" data-i18n="tag.KI">KI</span><span class="tag" data-tag="Sprache" data-i18n="tag.Sprache">Sprache</span><span class="tag feat" data-tag="Download nötig" data-i18n="tag.Download nötig">Download nötig</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="tic-tac-toe/icon.svg" alt="" width="32" height="32"><a class="open" href="tic-tac-toe/"><span data-i18n="card.tic-tac-toe.title">Tic Tac Toe</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.tic-tac-toe.desc">Drei in einer Reihe – zu zweit an einem Handy oder gegen den Computer, mit Punktestand.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Kinder" data-i18n="tag.Kinder">Kinder</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Zufall&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="raffle/icon.svg" alt="" width="32" height="32"><a class="open" href="raffle/"><span data-i18n="card.raffle.title">Tombola</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.raffle.desc">Tombola-Lose ziehen: Losnummern und Preise eintragen, unverkaufte Lose ausnehmen, Gewinnnummern fair per Zufall ziehen, jede Nummer nur einmal. Lose prüfen, nachziehen, Liste kopieren.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Zufall" data-i18n="tag.Zufall">Zufall</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Sport&quot;,&quot;Zufall&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="tournament/icon.svg" alt="" width="32" height="32"><a class="open" href="tournament/"><span data-i18n="card.tournament.title">Turnier</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.tournament.desc">Turnier planen, z. B. Kicker auf der Weihnachtsfeier: Teams auslosen, Spielplan jeder gegen jeden oder K.-o., Ergebnisse eintragen und Tabelle anzeigen.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Sport" data-i18n="tag.Sport">Sport</span><span class="tag" data-tag="Zufall" data-i18n="tag.Zufall">Zufall</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="video-to-audio/icon.svg" alt="" width="32" height="32"><a class="open" href="video-to-audio/"><span data-i18n="card.video-to-audio.title">Video zu Audio</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.video-to-audio.desc">Die Tonspur aus einem Video speichern – als Original ohne Qualitätsverlust (z. B. .m4a) oder als WAV, direkt im Browser: das Video verlässt das Gerät nicht.</p>
-      <div class="tags"><span class="tag" data-tag="Alltag" data-i18n="tag.Alltag">Alltag</span><span class="tag" data-tag="Werkzeug" data-i18n="tag.Werkzeug">Werkzeug</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Messen&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="video-analysis/icon.svg" alt="" width="32" height="32"><a class="open" href="video-analysis/"><span data-i18n="card.video-analysis.title">Videoanalyse</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.video-analysis.desc">Bewegungen aus einem Handyvideo messen: Maßstab und Ursprung festlegen, das Objekt Bild für Bild antippen oder automatisch verfolgen lassen – Weg, Geschwindigkeit und Fit (linear, Wurf, Schwingung) mit Fehlern, Export als CSV.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Messen" data-i18n="tag.Messen">Messen</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="business-card/icon.svg" alt="" width="32" height="32"><a class="open" href="business-card/"><span data-i18n="card.business-card.title">Visitenkarten</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.business-card.desc">Visitenkarten gestalten: Texte, Bilder, Logos, Formen und QR-Code (auch vCard) frei anordnen, Farben wählen – als Bild oder A4-PDF mit Schnittmarken drucken, als Vorlage speichern und teilen.</p>
-      <div class="tags"><span class="tag" data-tag="Arbeit" data-i18n="tag.Arbeit">Arbeit</span><span class="tag" data-tag="Dokumente" data-i18n="tag.Dokumente">Dokumente</span><span class="tag feat" data-tag="Datei öffnen" data-i18n="tag.Datei öffnen">Datei öffnen</span><span class="tag feat" data-tag="Teilen an App" data-i18n="tag.Teilen an App">Teilen an App</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Zufall&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="secret-santa/icon.svg" alt="" width="32" height="32"><a class="open" href="secret-santa/"><span data-i18n="card.secret-santa.title">Wichteln</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.secret-santa.desc">Wichtel-Partner fair auslosen: Namen eintragen, Paare ausschließen, dann das Handy herumreichen oder jedem einen geheimen Link schicken.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Zufall" data-i18n="tag.Zufall">Zufall</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-    <article class="card tool" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Zufall&quot;,&quot;Verlauf&quot;,&quot;Kopieren&quot;,&quot;Schütteln&quot;,&quot;KI-Agent&quot;]">
-      <h2><img src="dice-coin/icon.svg" alt="" width="32" height="32"><a class="open" href="dice-coin/"><span data-i18n="card.dice-coin.title">Würfel &amp; Münze</span></a><span class="chevron" aria-hidden="true">›</span></h2>
-      <p data-i18n="card.dice-coin.desc">Würfel und Münzwurf für Spiele: Anzahl und Seiten frei wählbar, alle gleichzeitig oder einzeln würfeln, Würfel halten, Vorlagen. Einstellungen werden im Browser gespeichert.</p>
-      <div class="tags"><span class="tag" data-tag="Freizeit" data-i18n="tag.Freizeit">Freizeit</span><span class="tag" data-tag="Spiele" data-i18n="tag.Spiele">Spiele</span><span class="tag" data-tag="Zufall" data-i18n="tag.Zufall">Zufall</span><span class="tag feat" data-tag="Verlauf" data-i18n="tag.Verlauf">Verlauf</span><span class="tag feat" data-tag="Kopieren" data-i18n="tag.Kopieren">Kopieren</span><span class="tag feat" data-tag="Schütteln" data-i18n="tag.Schütteln">Schütteln</span><span class="tag feat" data-tag="KI-Agent" data-i18n="tag.KI-Agent">KI-Agent</span></div>
-    </article>
-  </div>
+  <section class="shelf" id="shelf-fav" aria-labelledby="h-fav" hidden>
+    <h2 id="h-fav"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#star"/></svg><span data-i18n="fav.h">Favoriten</span></h2>
+    <ul class="shelf-row"></ul>
+  </section>
+  <section class="shelf" id="shelf-recent" aria-labelledby="h-recent" hidden>
+    <h2 id="h-recent"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#history"/></svg><span data-i18n="recent.h">Zuletzt benutzt</span></h2>
+    <ul class="shelf-row"></ul>
+  </section>
+  <section class="group" data-group="Alltag" data-area="Alltag" aria-labelledby="g-Alltag">
+    <h2 id="g-Alltag"><span data-i18n="tag.Alltag">Alltag</span> <span class="count">19</span></h2>
+    <ul class="apps">
+      <li class="app" data-folder="audio-studio" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="audio-studio/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="audio-studio/"><span data-i18n="card.audio-studio.title">Audio Studio</span></a>
+        <p data-i18n="card.audio-studio.desc">Audiodateien kürzen und schneiden, Lautstärke anpassen, ein- und ausblenden und als WAV, Opus oder AAC speichern – direkt im Browser, die Datei verlässt das Gerät nicht.</p></div>
+      </li>
+      <li class="app" data-folder="image-converter" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="image-converter/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="image-converter/"><span data-i18n="card.image-converter.title">Bildkonverter</span></a>
+        <p data-i18n="card.image-converter.desc">Bilder umwandeln und komprimieren – JPG, PNG, WebP, HEIC (iPhone), AVIF, GIF, BMP, ICO und SVG, auch mehrere auf einmal, mit Qualität, Größe und maximaler Dateigröße, ganz ohne Upload.</p></div>
+      </li>
+      <li class="app" data-folder="countdown" data-tags="[&quot;Alltag&quot;,&quot;Rechner&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="countdown/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="countdown/"><span data-i18n="card.countdown.title">Countdown</span></a>
+        <p data-i18n="card.countdown.desc">Tage, Stunden, Minuten oder Sekunden bis zu einem Datum mit Uhrzeit – live ab jetzt oder ab einem eigenen Startdatum.</p></div>
+      </li>
+      <li class="app" data-folder="data-logger" data-tags="[&quot;Alltag&quot;,&quot;Messen&quot;,&quot;Datei öffnen&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="data-logger/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="data-logger/"><span data-i18n="card.data-logger.title">Datensammler</span></a>
+        <p data-i18n="card.data-logger.desc">Eigene Profile mit Messwerten und Einheiten anlegen, Werte mit Zeitpunkt erfassen und als Kurven auswerten – Export als Bild, JSON oder CSV.</p></div>
+      </li>
+      <li class="app" data-folder="unit-converter" data-tags="[&quot;Alltag&quot;,&quot;Rechner&quot;,&quot;Messen&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="unit-converter/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="unit-converter/"><span data-i18n="card.unit-converter.title">Einheitenrechner</span></a>
+        <p data-i18n="card.unit-converter.desc">Einheiten umrechnen: alle SI-Basisgrößen und abgeleiteten SI-Einheiten mit Präfixen, dazu bekannte andere Einheiten wie Zoll, Meile, Pfund, °F, Gallone, psi, PS, kcal, mpg und Gibibyte – mit Tabelle aller Einheiten und Suche.</p></div>
+      </li>
+      <li class="app" data-folder="reminders" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Benachrichtigung&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="reminders/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="reminders/"><span data-i18n="card.reminders.title">Erinnerungen</span></a>
+        <p data-i18n="card.reminders.desc">Eigene Erinnerungen mit Zeitpunkt und Text – zur Zeit kommt eine Benachrichtigung, im Verlauf lassen sie sich anpassen.</p></div>
+      </li>
+      <li class="app" data-folder="finance-calculator" data-tags="[&quot;Alltag&quot;,&quot;Finanzen&quot;,&quot;Rechner&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="finance-calculator/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="finance-calculator/"><span data-i18n="card.finance-calculator.title">Finanzrechner</span></a>
+        <p data-i18n="card.finance-calculator.desc">Zinseszins und Geld über die Zeit: Sparplan für Aktien und ETFs mit Dynamik, Kosten und Inflation, Kredit mit Tilgungsplan und Sondertilgung, Zeitwert-Rechner wie am Finanztaschenrechner (N, Zins, PV, PMT, FV), Kapitalwert und interner Zinsfuß, dazu Zinsumrechnung, Rendite p. a., Marge, Break-even, Abschreibung und Zinstage.</p></div>
+      </li>
+      <li class="app" data-folder="sensors" data-tags="[&quot;Alltag&quot;,&quot;Messen&quot;,&quot;Werkzeug&quot;,&quot;Bewegungssensor&quot;,&quot;Mikrofon&quot;,&quot;Kamera&quot;,&quot;Standort&quot;,&quot;KI-Agent&quot;]">
+        <img src="sensors/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="sensors/"><span data-i18n="card.sensors.title">Handy-Sensoren</span></a>
+        <p data-i18n="card.sensors.desc">Kompass, Wasserwaage, Beschleunigung, Vibrometer, Schallpegel, Spektrogramm, Stimmgerät, Tacho, Schrittzähler, Tongenerator, Taschenlampe mit Morse, Puls, Spektrometer und Klatsch-Stoppuhr – mit den Sensoren des Handys.</p></div>
+      </li>
+      <li class="app" data-folder="calendar-events" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="calendar-events/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="calendar-events/"><span data-i18n="card.calendar-events.title">Kalender-Termin</span></a>
+        <p data-i18n="card.calendar-events.desc">Termin mit Ort, Erinnerung und Wiederholung anlegen und in jeden Kalender übernehmen – als .ics-Datei, über Google oder Outlook oder als Link zum Teilen. Öffnet auch .ics-Dateien.</p></div>
+      </li>
+      <li class="app" data-folder="ai-chat" data-tags="[&quot;Alltag&quot;,&quot;KI&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;Download nötig&quot;,&quot;KI-Agent&quot;]">
+        <img src="ai-chat/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="ai-chat/"><span data-i18n="card.ai-chat.title">KI-Chat</span></a>
+        <p data-i18n="card.ai-chat.desc">Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht.</p></div>
+      </li>
+      <li class="app" data-folder="split-costs" data-tags="[&quot;Alltag&quot;,&quot;Finanzen&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="split-costs/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="split-costs/"><span data-i18n="card.split-costs.title">Kosten teilen</span></a>
+        <p data-i18n="card.split-costs.desc">Gemeinsame Ausgaben für Urlaub, WG oder Feier eintragen – die App rechnet aus, wer wem wie viel zahlt, mit möglichst wenigen Überweisungen.</p></div>
+      </li>
+      <li class="app" data-folder="marquee" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="marquee/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="marquee/"><span data-i18n="card.marquee.title">Lauftext</span></a>
+        <p data-i18n="card.marquee.desc">Text eingeben, Größe, Farben und Schrift wählen und bildschirmfüllend anzeigen – stehend, laufend oder blinkend.</p></div>
+      </li>
+      <li class="app" data-folder="link-redirect" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="link-redirect/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="link-redirect/"><span data-i18n="card.link-redirect.title">Link-Weiterleitung</span></a>
+        <p data-i18n="card.link-redirect.desc">Geteilte Links sofort an einen eigenen Dienst weiterleiten – mit Präfix und Suffix, z. B. test.de/?url=…</p></div>
+      </li>
+      <li class="app" data-folder="mail-account-qr" data-tags="[&quot;Alltag&quot;,&quot;Barcode&quot;,&quot;Kamera&quot;,&quot;Datei öffnen&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="mail-account-qr/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="mail-account-qr/"><span data-i18n="card.mail-account-qr.title">Mail-Konto per QR</span></a>
+        <p data-i18n="card.mail-account-qr.desc">E-Mail-Konten als QR-Code für Thunderbird auf dem Handy erstellen – und Thunderbird-QR-Codes per Kamera, Bild oder Text lesen, z. B. um die Daten in eine andere Mail-App zu übertragen.</p></div>
+      </li>
+      <li class="app" data-folder="qr-code" data-tags="[&quot;Alltag&quot;,&quot;Barcode&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="qr-code/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="qr-code/"><span data-i18n="card.qr-code.title">QR-Code-Generator</span></a>
+        <p data-i18n="card.qr-code.desc">QR-Codes für Links, Text, WLAN und Kontakte (vCard) erzeugen – Links direkt aus anderen Apps hierher teilen (Android), mit Verlauf.</p></div>
+      </li>
+      <li class="app" data-folder="calc-pad" data-tags="[&quot;Alltag&quot;,&quot;Rechner&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="calc-pad/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="calc-pad/"><span data-i18n="card.calc-pad.title">Rechenzettel</span></a>
+        <p data-i18n="card.calc-pad.desc">Rechnen und Notizen auf einem Zettel: Jede Zeile mit einer Rechnung zeigt ihr Ergebnis, Text dazwischen stört nicht, mit „+ 20“ rechnest du weiter, Gleichungen wie x² = 2 werden gelöst, dazu sin, ln, Ableitung und Integral. Ergebnis antippen kopiert es.</p></div>
+      </li>
+      <li class="app" data-folder="voice-transcriber" data-tags="[&quot;Alltag&quot;,&quot;KI&quot;,&quot;Sprache&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;Download nötig&quot;,&quot;KI-Agent&quot;]">
+        <img src="voice-transcriber/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="voice-transcriber/"><span data-i18n="card.voice-transcriber.title">Sprache zu Text</span></a>
+        <p data-i18n="card.voice-transcriber.desc">Sprachnachrichten (z. B. WhatsApp-Opus-Dateien) direkt im Browser in Text umwandeln – mit dem Whisper-Modell, ohne Upload: Das Audio verlässt das Gerät nicht.</p></div>
+      </li>
+      <li class="app" data-folder="text-to-speech" data-tags="[&quot;Alltag&quot;,&quot;KI&quot;,&quot;Sprache&quot;,&quot;Download nötig&quot;,&quot;KI-Agent&quot;]">
+        <img src="text-to-speech/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="text-to-speech/"><span data-i18n="card.text-to-speech.title">Text zu Sprache</span></a>
+        <p data-i18n="card.text-to-speech.desc">Text vorlesen lassen – mit den Stimmen des Geräts oder KI-Stimmen (Supertonic, Piper, Kokoro), die direkt im Browser laufen. Stimmen vergleichen und als WAV speichern.</p></div>
+      </li>
+      <li class="app" data-folder="video-to-audio" data-tags="[&quot;Alltag&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="video-to-audio/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="video-to-audio/"><span data-i18n="card.video-to-audio.title">Video zu Audio</span></a>
+        <p data-i18n="card.video-to-audio.desc">Die Tonspur aus einem Video speichern – als Original ohne Qualitätsverlust (z. B. .m4a) oder als WAV, direkt im Browser: das Video verlässt das Gerät nicht.</p></div>
+      </li>
+    </ul>
+  </section>
+  <section class="group" data-group="Arbeit" data-area="Arbeit" aria-labelledby="g-Arbeit">
+    <h2 id="g-Arbeit"><span data-i18n="tag.Arbeit">Arbeit</span> <span class="count">18</span></h2>
+    <ul class="apps">
+      <li class="app" data-folder="api-check" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="api-check/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="api-check/"><span data-i18n="card.api-check.title">API-Check</span></a>
+        <p data-i18n="card.api-check.desc">REST-APIs ausprobieren: API-Adresse und OpenAPI/Swagger-Spezifikation (JSON oder YAML) angeben – daraus entsteht ein Formular für jede Anfrage. Konfigurationen bleiben gespeichert.</p></div>
+      </li>
+      <li class="app" data-folder="code-runner" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;,&quot;Download nötig&quot;]">
+        <img src="code-runner/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="code-runner/"><span data-i18n="card.code-runner.title">Code ausführen</span></a>
+        <p data-i18n="card.code-runner.desc">Python und JavaScript direkt im Browser schreiben und ausführen – mit Ausgabe, Eingabe für input(), Beispielen und gespeicherten Skripten. Läuft offline, ohne Server.</p></div>
+      </li>
+      <li class="app" data-folder="duty-roster" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="duty-roster/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="duty-roster/"><span data-i18n="card.duty-roster.title">Dienstplan</span></a>
+        <p data-i18n="card.duty-roster.desc">Dienst- und Raumplan je Kalenderwoche, z. B. für die Arztpraxis: Arbeitszeiten (auch vormittags und nachmittags), Abwesenheiten auch stundenweise, Räume je Arbeitszeit – mit Prüfung, dass jede Person zu jeder Zeit genau einem Raum zugeteilt ist.</p></div>
+      </li>
+      <li class="app" data-folder="doc-scanner" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Kamera&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="doc-scanner/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="doc-scanner/"><span data-i18n="card.doc-scanner.title">Dokumentenscanner</span></a>
+        <p data-i18n="card.doc-scanner.desc">Dokumente mit der Kamera oder aus Fotos scannen – Fotos auch aus der Galerie hierher teilen (Android): Ecken zuschneiden, Seiten sortieren, Schatten entfernen, als PDF speichern.</p></div>
+      </li>
+      <li class="app" data-folder="function-plotter" data-tags="[&quot;Arbeit&quot;,&quot;Rechner&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="function-plotter/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="function-plotter/"><span data-i18n="card.function-plotter.title">Funktionsplotter</span></a>
+        <p data-i18n="card.function-plotter.desc">Funktionen zeichnen und mit Schiebereglern verändern: Jeder unbekannte Name wird zum Parameter, ▶ lässt ihn laufen. Nullstellen, Extrema, Ableitungen, Zoom mit zwei Fingern, Werte antippen.</p></div>
+      </li>
+      <li class="app" data-folder="mailto-generator" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Kopieren&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="mailto-generator/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="mailto-generator/"><span data-i18n="card.mailto-generator.title">Mailto-Generator</span></a>
+        <p data-i18n="card.mailto-generator.desc">Mailto-Links bauen: Empfänger, CC, BCC, Betreff und Text eintragen – als Link, HTML oder Markdown kopieren, teilen, als QR-Code zeigen oder vorhandene Links zerlegen.</p></div>
+      </li>
+      <li class="app" data-folder="markdown-editor" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="markdown-editor/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="markdown-editor/"><span data-i18n="card.markdown-editor.title">Markdown-Editor</span></a>
+        <p data-i18n="card.markdown-editor.desc">Markdown schreiben – als Text oder formatiert ansehen und bearbeiten, mit Knöpfen für Fett, Listen, Links und mehr. Dateien im Verlauf teilen, herunterladen oder löschen.</p></div>
+      </li>
+      <li class="app" data-folder="medical-calculator" data-tags="[&quot;Arbeit&quot;,&quot;Medizin&quot;,&quot;Rechner&quot;,&quot;KI-Agent&quot;]">
+        <img src="medical-calculator/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="medical-calculator/"><span data-i18n="card.medical-calculator.title">Medizin-Rechner</span></a>
+        <p data-i18n="card.medical-calculator.desc">Formelhilfe für die Praxis: BMI und Körperoberfläche, eGFR (CKD-EPI 2021) und Kreatinin-Clearance, Schwangerschaftstermin und SSW, Laborwerte in SI-Einheiten – jeweils mit Formel und Erklärung. Werte werden nicht gespeichert.</p></div>
+      </li>
+      <li class="app" data-folder="mind-map" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="mind-map/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="mind-map/"><span data-i18n="card.mind-map.title">Mindmap</span></a>
+        <p data-i18n="card.mind-map.desc">Gedanken als Mindmap sammeln: Thema in die Mitte, Äste und Unterpunkte antippen, verschieben, einklappen – als Text kopieren oder als Bild speichern.</p></div>
+      </li>
+      <li class="app" data-folder="pdf-viewer" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;Vollbild&quot;,&quot;KI-Agent&quot;]">
+        <img src="pdf-viewer/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="pdf-viewer/"><span data-i18n="card.pdf-viewer.title">PDF ansehen</span></a>
+        <p data-i18n="card.pdf-viewer.desc">PDF-Dateien im Vollbild lesen – Leisten blenden sich aus, ein Tippen holt Menü und Teilen zurück. Ohne Upload.</p></div>
+      </li>
+      <li class="app" data-folder="pdf-edit" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="pdf-edit/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="pdf-edit/"><span data-i18n="card.pdf-edit.title">PDF bearbeiten</span></a>
+        <p data-i18n="card.pdf-edit.desc">PDF-Dateien zusammenführen, Seiten entfernen, drehen und neu sortieren – direkt im Browser, ohne Upload.</p></div>
+      </li>
+      <li class="app" data-folder="pdf2word" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="pdf2word/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="pdf2word/"><span data-i18n="card.pdf2word.title">PDF zu Word</span></a>
+        <p data-i18n="card.pdf2word.desc">PDF-Dokumente direkt im Browser in eine bearbeitbare Word-Datei (.docx, auch für LibreOffice) umwandeln – mit Bildern und Texterkennung für gescannte Seiten, ohne Upload: Die Datei verlässt das Gerät nicht.</p></div>
+      </li>
+      <li class="app" data-folder="quantum-magnetism" data-tags="[&quot;Arbeit&quot;,&quot;Physik&quot;,&quot;KI-Agent&quot;]">
+        <img src="quantum-magnetism/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="quantum-magnetism/"><span data-i18n="card.quantum-magnetism.title">Quantenmagnetismus</span></a>
+        <p data-i18n="card.quantum-magnetism.desc">Ising-Modell zum Zuschauen: Spins auf Quadrat-, Dreiecks- und Kagome-Gitter, ferro- oder antiferromagnetisch, mit Temperatur und Magnetfeld. Phasenübergang, Frustration, Hysterese – und eine exakt gelöste Quanten-Kette im Querfeld.</p></div>
+      </li>
+      <li class="app" data-folder="chain-transaction" data-tags="[&quot;Arbeit&quot;,&quot;Finanzen&quot;,&quot;Rechner&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="chain-transaction/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="chain-transaction/"><span data-i18n="card.chain-transaction.title">Reihengeschäft</span></a>
+        <p data-i18n="card.chain-transaction.desc">Umsatzsteuer bei Reihengeschäften mit 3 oder 4 Unternehmen: welche Lieferung bewegt ist, wo jede Lieferung stattfindet, ob sie steuerfrei ist, ob ein Dreiecksgeschäft greift, Einfuhr und Ausfuhr, wer sich wo registrieren muss – jeder Schritt mit ausführlicher Begründung und Paragrafen.</p></div>
+      </li>
+      <li class="app" data-folder="rss-reader" data-tags="[&quot;Arbeit&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="rss-reader/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="rss-reader/"><span data-i18n="card.rss-reader.title">RSS-Reader</span></a>
+        <p data-i18n="card.rss-reader.desc">RSS- und Atom-Feeds lesen: Feed-Adressen eintragen und verwalten, Einträge durchsuchen, nach Kategorie filtern und gelesene markieren – auch offline.</p></div>
+      </li>
+      <li class="app" data-folder="securpharm-scanner" data-tags="[&quot;Arbeit&quot;,&quot;Apotheke&quot;,&quot;Barcode&quot;,&quot;Kamera&quot;,&quot;Datei öffnen&quot;,&quot;Kopieren&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="securpharm-scanner/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="securpharm-scanner/"><span data-i18n="card.securpharm-scanner.title">Scan-Copy-SecurPharm</span></a>
+        <p data-i18n="card.securpharm-scanner.desc">securPharm-DataMatrix von Arzneimittel-/Impfstoffpackungen scannen und einzelne Werte (PZN, Charge, Verfall, Seriennummer …) per Klick kopieren. Mit lokalem Verlauf.</p></div>
+      </li>
+      <li class="app" data-folder="video-analysis" data-tags="[&quot;Arbeit&quot;,&quot;Messen&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="video-analysis/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="video-analysis/"><span data-i18n="card.video-analysis.title">Videoanalyse</span></a>
+        <p data-i18n="card.video-analysis.desc">Bewegungen aus einem Handyvideo messen: Maßstab und Ursprung festlegen, das Objekt Bild für Bild antippen oder automatisch verfolgen lassen – Weg, Geschwindigkeit und Fit (linear, Wurf, Schwingung) mit Fehlern, Export als CSV.</p></div>
+      </li>
+      <li class="app" data-folder="business-card" data-tags="[&quot;Arbeit&quot;,&quot;Dokumente&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="business-card/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="business-card/"><span data-i18n="card.business-card.title">Visitenkarten</span></a>
+        <p data-i18n="card.business-card.desc">Visitenkarten gestalten: Texte, Bilder, Logos, Formen und QR-Code (auch vCard) frei anordnen, Farben wählen – als Bild oder A4-PDF mit Schnittmarken drucken, als Vorlage speichern und teilen.</p></div>
+      </li>
+    </ul>
+  </section>
+  <section class="group" data-group="Freizeit" data-area="Freizeit" aria-labelledby="g-Freizeit">
+    <h2 id="g-Freizeit"><span data-i18n="tag.Freizeit">Freizeit</span> <span class="count">19</span></h2>
+    <ul class="apps">
+      <li class="app" data-folder="scoreboard" data-tags="[&quot;Freizeit&quot;,&quot;Sport&quot;,&quot;KI-Agent&quot;]">
+        <img src="scoreboard/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="scoreboard/"><span data-i18n="card.scoreboard.title">Anzeigetafel</span></a>
+        <p data-i18n="card.scoreboard.desc">Spielstand groß anzeigen für Fußball (mit Spieluhr), Tischtennis, Tennis, Padel und Darts – mit Aufschlag-Anzeige, Sätzen, Finish-Vorschlag und eigenen Namen.</p></div>
+      </li>
+      <li class="app" data-folder="beer-tally" data-tags="[&quot;Freizeit&quot;,&quot;Finanzen&quot;,&quot;KI-Agent&quot;]">
+        <img src="beer-tally/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="beer-tally/"><span data-i18n="card.beer-tally.title">Bierstrichliste</span></a>
+        <p data-i18n="card.beer-tally.desc">Striche pro Person und Tag für jedes Bier, mit Kontostand und Einzahlungen in Euro – für Verein, WG oder Feier.</p></div>
+      </li>
+      <li class="app" data-folder="image-swipe" data-tags="[&quot;Freizeit&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="image-swipe/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="image-swipe/"><span data-i18n="card.image-swipe.title">Bild-Swipe</span></a>
+        <p data-i18n="card.image-swipe.desc">Bilder nach rechts liken oder nach links wegwischen – mit eigenen Datenquellen als JSON und mehreren Profilen.</p></div>
+      </li>
+      <li class="app" data-folder="wind-instruments" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Mikrofon&quot;,&quot;KI-Agent&quot;]">
+        <img src="wind-instruments/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="wind-instruments/"><span data-i18n="card.wind-instruments.title">Blasinstrumente</span></a>
+        <p data-i18n="card.wind-instruments.desc">Ins Mikrofon pusten und spielen: Flöte, Blockflöte, Okarina, Panflöte und Trompete – mit echten Griffen, Überblasen und Grifftabelle.</p></div>
+      </li>
+      <li class="app" data-folder="brew-calculator" data-tags="[&quot;Freizeit&quot;,&quot;Bierbrauen&quot;,&quot;Rechner&quot;,&quot;KI-Agent&quot;]">
+        <img src="brew-calculator/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="brew-calculator/"><span data-i18n="card.brew-calculator.title">Brau-Rechner</span></a>
+        <p data-i18n="card.brew-calculator.desc">Rechner fürs Hobbybrauen: Brauwasser, Topfvolumen, Sudhausausbeute, Mischkreuz, Hopfen (IBU), Stammwürze-Korrektur, Plato/Brix/SG, Alkohol, Nachgärung mit Zucker oder Speise und CO₂-Druck – jeweils mit Formeln und Erklärung.</p></div>
+      </li>
+      <li class="app" data-folder="cast-demo" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Vollbild&quot;,&quot;KI-Agent&quot;]">
+        <img src="cast-demo/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="cast-demo/"><span data-i18n="card.cast-demo.title">Cast-Demo</span></a>
+        <p data-i18n="card.cast-demo.desc">Bild und Musik der App auf Chromecast oder Android TV zeigen – direkt gestreamt oder mit der Bildschirmübertragung des Handys.</p></div>
+      </li>
+      <li class="app" data-folder="collage-maker" data-tags="[&quot;Freizeit&quot;,&quot;Werkzeug&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="collage-maker/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="collage-maker/"><span data-i18n="card.collage-maker.title">Collage</span></a>
+        <p data-i18n="card.collage-maker.desc">Aus beliebig vielen Fotos eine lückenlose Collage bauen – ohne Zwischenräume, fast ohne Beschnitt, als riesiges Bild in voller Auflösung speichern. Alles bleibt auf dem Gerät.</p></div>
+      </li>
+      <li class="app" data-folder="face-timelapse" data-tags="[&quot;Freizeit&quot;,&quot;KI&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;,&quot;Download nötig&quot;]">
+        <img src="face-timelapse/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="face-timelapse/"><span data-i18n="card.face-timelapse.title">Gesichter-Zeitraffer</span></a>
+        <p data-i18n="card.face-timelapse.desc">Fotos wählen – das Gesicht wird in jedem Bild erkannt, gerade gerückt und gleich groß in die Mitte gesetzt. Reihenfolge ändern und als Video oder GIF speichern: ein Zeitraffer, wie jemand über die Jahre wächst.</p></div>
+      </li>
+      <li class="app" data-folder="camera-effects" data-tags="[&quot;Freizeit&quot;,&quot;KI&quot;,&quot;Kamera&quot;,&quot;KI-Agent&quot;,&quot;Download nötig&quot;]">
+        <img src="camera-effects/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="camera-effects/"><span data-i18n="card.camera-effects.title">Kamera-Effekte</span></a>
+        <p data-i18n="card.camera-effects.desc">Das Kamerabild live durch Effekte: Comic, Wärmebild, Nachtsicht, Skizze, Pixel, Kaleidoskop und mehr. Accessoires und Verzerrungen im Gesicht (Sonnenbrille, Katzenohren, Fischauge …). Erkennt Personen und legt Effekte nur auf Personen oder den Hintergrund.</p></div>
+      </li>
+      <li class="app" data-folder="piano" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Datei öffnen&quot;,&quot;Teilen an App&quot;,&quot;KI-Agent&quot;]">
+        <img src="piano/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="piano/"><span data-i18n="card.piano.title">Klavier</span></a>
+        <p data-i18n="card.piano.desc">Klavier zum Spielen mit den Fingern – MIDI-Dateien laden, die Noten fallen als Animation auf die Tasten. Spuren stummschalten und selbst mitspielen.</p></div>
+      </li>
+      <li class="app" data-folder="songbook" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
+        <img src="songbook/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="songbook/"><span data-i18n="card.songbook.title">Liederbuch</span></a>
+        <p data-i18n="card.songbook.desc">Gemeinfreie Lieder als Noten mit farbigen Tonstufenzahlen und Liedtext – abspielen und mitlesen, Tempo wählen, im Klavier mit fallenden Noten üben, als MIDI speichern oder drucken.</p></div>
+      </li>
+      <li class="app" data-folder="loop-station" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Mikrofon&quot;,&quot;KI-Agent&quot;]">
+        <img src="loop-station/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="loop-station/"><span data-i18n="card.loop-station.title">Loop-Station</span></a>
+        <p data-i18n="card.loop-station.desc">Instrumente, Stimme, Klatschen … aufnehmen und als Schleifen übereinanderlegen – mit Metronom, Takt-Raster und WAV-Export.</p></div>
+      </li>
+      <li class="app" data-folder="paint" data-tags="[&quot;Freizeit&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
+        <img src="paint/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="paint/"><span data-i18n="card.paint.title">Malen</span></a>
+        <p data-i18n="card.paint.desc">Weiße Leinwand zum Malen mit dem Finger: 6 Farben, Stift, Pinsel, Marker, Spray, Farbtopf und Radierer – als Bild speichern oder teilen.</p></div>
+      </li>
+      <li class="app" data-folder="physics-lab" data-tags="[&quot;Freizeit&quot;,&quot;Physik&quot;,&quot;Lernen&quot;,&quot;KI-Agent&quot;]">
+        <img src="physics-lab/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="physics-lab/"><span data-i18n="card.physics-lab.title">Physik verstehen</span></a>
+        <p data-i18n="card.physics-lab.desc">Physik zum Ausprobieren: Spiegel, Linsen und Licht durch Spalte mit Reglern, Zeichnung und Formeln mit deinen Werten – jeder Versuch beantwortet eine Warum-Frage, etwa warum das Spiegelbild im Löffel Kopf steht.</p></div>
+      </li>
+      <li class="app" data-folder="playlist-player" data-tags="[&quot;Freizeit&quot;,&quot;Musik&quot;,&quot;Teilen an App&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="playlist-player/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="playlist-player/"><span data-i18n="card.playlist-player.title">Playlist-Player</span></a>
+        <p data-i18n="card.playlist-player.desc">YouTube-Playlists wie ein Hörbuch hören: Teil für Teil, mit Weiterhören an der letzten Stelle und Häkchen, was wann gehört wurde.</p></div>
+      </li>
+      <li class="app" data-folder="font-creator" data-tags="[&quot;Freizeit&quot;,&quot;Werkzeug&quot;,&quot;KI-Agent&quot;]">
+        <img src="font-creator/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="font-creator/"><span data-i18n="card.font-creator.title">Schrift-Baukasten</span></a>
+        <p data-i18n="card.font-creator.desc">Eigene Schrift gestalten: Buchstaben, Zahlen und Zeichen mit dem Finger zeichnen, sofort im Beispieltext sehen und als Schriftdatei (TTF) herunterladen.</p></div>
+      </li>
+      <li class="app" data-folder="raffle" data-tags="[&quot;Freizeit&quot;,&quot;Zufall&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="raffle/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="raffle/"><span data-i18n="card.raffle.title">Tombola</span></a>
+        <p data-i18n="card.raffle.desc">Tombola-Lose ziehen: Losnummern und Preise eintragen, unverkaufte Lose ausnehmen, Gewinnnummern fair per Zufall ziehen, jede Nummer nur einmal. Lose prüfen, nachziehen, Liste kopieren.</p></div>
+      </li>
+      <li class="app" data-folder="tournament" data-tags="[&quot;Freizeit&quot;,&quot;Sport&quot;,&quot;Zufall&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="tournament/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="tournament/"><span data-i18n="card.tournament.title">Turnier</span></a>
+        <p data-i18n="card.tournament.desc">Turnier planen, z. B. Kicker auf der Weihnachtsfeier: Teams auslosen, Spielplan jeder gegen jeden oder K.-o., Ergebnisse eintragen und Tabelle anzeigen.</p></div>
+      </li>
+      <li class="app" data-folder="secret-santa" data-tags="[&quot;Freizeit&quot;,&quot;Zufall&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="secret-santa/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="secret-santa/"><span data-i18n="card.secret-santa.title">Wichteln</span></a>
+        <p data-i18n="card.secret-santa.desc">Wichtel-Partner fair auslosen: Namen eintragen, Paare ausschließen, dann das Handy herumreichen oder jedem einen geheimen Link schicken.</p></div>
+      </li>
+    </ul>
+  </section>
+  <section class="group" data-group="Spiele" data-area="Freizeit" aria-labelledby="g-Spiele">
+    <h2 id="g-Spiele"><span data-i18n="tag.Spiele">Spiele</span> <span class="count">24</span></h2>
+    <ul class="apps">
+      <li class="app" data-folder="four-in-a-row" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
+        <img src="four-in-a-row/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="four-in-a-row/"><span data-i18n="card.four-in-a-row.title">4 gewinnt</span></a>
+        <p data-i18n="card.four-in-a-row.desc">Steine einwerfen, vier in eine Reihe bringen – zu zweit an einem Handy oder gegen den Computer, mit Punktestand.</p></div>
+      </li>
+      <li class="app" data-folder="code-breaker" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;KI-Agent&quot;]">
+        <img src="code-breaker/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="code-breaker/"><span data-i18n="card.code-breaker.title">Farbcode</span></a>
+        <p data-i18n="card.code-breaker.desc">Einen geheimen Farbcode knacken: Nach jedem Versuch zeigen Stifte, wie viele Farben richtig sind – allein gegen das Handy oder zu zweit.</p></div>
+      </li>
+      <li class="app" data-folder="spin-the-bottle" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Zufall&quot;,&quot;KI-Agent&quot;]">
+        <img src="spin-the-bottle/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="spin-the-bottle/"><span data-i18n="card.spin-the-bottle.title">Flaschen drehen</span></a>
+        <p data-i18n="card.spin-the-bottle.desc">Die Flasche entscheidet, wer dran ist – antippen oder mit Schwung drehen, mit euren Namen am Tisch.</p></div>
+      </li>
+      <li class="app" data-folder="whoopee-cushion" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
+        <img src="whoopee-cushion/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="whoopee-cushion/"><span data-i18n="card.whoopee-cushion.title">Furzkissen</span></a>
+        <p data-i18n="card.whoopee-cushion.desc">Drauftippen und pupsen lassen – sieben Geräusche, Zeitzünder für Streiche und Vibration.</p></div>
+      </li>
+      <li class="app" data-folder="hangman" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
+        <img src="hangman/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="hangman/"><span data-i18n="card.hangman.title">Galgenmännchen</span></a>
+        <p data-i18n="card.hangman.desc">Wörter raten, Buchstabe für Buchstabe – allein mit Wörtern aus sechs Themen oder zu zweit mit einem eigenen geheimen Wort.</p></div>
+      </li>
+      <li class="app" data-folder="lucky-wheel" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Zufall&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="lucky-wheel/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="lucky-wheel/"><span data-i18n="card.lucky-wheel.title">Glücksrad</span></a>
+        <p data-i18n="card.lucky-wheel.desc">Glücksrad zum Auslosen: eigene Einträge eintragen, Rad drehen, fair per Zufall. Gewinner auf Wunsch entfernen, Verlauf der Ergebnisse.</p></div>
+      </li>
+      <li class="app" data-folder="card-games" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kamera&quot;,&quot;KI-Agent&quot;]">
+        <img src="card-games/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="card-games/"><span data-i18n="card.card-games.title">Kartenspiele</span></a>
+        <p data-i18n="card.card-games.desc">Mau Mau, Durak, Skat, Rommé, Poker und Solitaire gegen den Computer oder mit mehreren Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server.</p></div>
+      </li>
+      <li class="app" data-folder="dots-and-boxes" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
+        <img src="dots-and-boxes/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="dots-and-boxes/"><span data-i18n="card.dots-and-boxes.title">Käsekästchen</span></a>
+        <p data-i18n="card.dots-and-boxes.desc">Linien ziehen, Kästchen schließen – zu zweit an einem Handy oder gegen den Computer, mit Punktestand.</p></div>
+      </li>
+      <li class="app" data-folder="plush-puzzle" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
+        <img src="plush-puzzle/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="plush-puzzle/"><span data-i18n="card.plush-puzzle.title">Kuscheltier-Puzzle</span></a>
+        <p data-i18n="card.plush-puzzle.desc">Kuscheltiere aus Teilen zusammenbauen: Teile auf den Schatten ziehen, bis sie einrasten – mit Konfetti am Ende.</p></div>
+      </li>
+      <li class="app" data-folder="laser-mirrors" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;KI-Agent&quot;]">
+        <img src="laser-mirrors/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="laser-mirrors/"><span data-i18n="card.laser-mirrors.title">Laserspiegel</span></a>
+        <p data-i18n="card.laser-mirrors.desc">Logikrätsel mit Laserstrahl: Spiegel, Strahlteiler und Kontrollpunkt so setzen und drehen, dass der Laser genau die richtigen Ziele trifft – Mauern stehen im Weg. 50 Rätsel in fünf Stufen.</p></div>
+      </li>
+      <li class="app" data-folder="minesweeper" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;KI-Agent&quot;]">
+        <img src="minesweeper/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="minesweeper/"><span data-i18n="card.minesweeper.title">Minensuche</span></a>
+        <p data-i18n="card.minesweeper.desc">Felder aufdecken, Minen mit Fahnen markieren – drei Größen fürs Handy, der erste Tipp ist immer sicher, mit Bestzeiten.</p></div>
+      </li>
+      <li class="app" data-folder="move-play" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;Kamera&quot;,&quot;KI-Agent&quot;,&quot;Download nötig&quot;]">
+        <img src="move-play/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="move-play/"><span data-i18n="card.move-play.title">MovePlay</span></a>
+        <p data-i18n="card.move-play.desc">Bewegungsspiele vor der Kamera für Kinder und Familien, allein oder zu zweit: Simon sagt, Hampelmann, Ducken &amp; Springen, Blasen fangen, Stopptanz, Posen nachmachen – die App erkennt Springen, Ducken, Armeheben und Klatschen.</p></div>
+      </li>
+      <li class="app" data-folder="whip" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Schütteln&quot;,&quot;KI-Agent&quot;]">
+        <img src="whip/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="whip/"><span data-i18n="card.whip.title">Peitsche</span></a>
+        <p data-i18n="card.whip.desc">Handy schwingen oder tippen – und die Peitsche knallt. Fünf Knall-Arten, Empfindlichkeit einstellbar, Vibration.</p></div>
+      </li>
+      <li class="app" data-folder="talking-animal" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;Mikrofon&quot;,&quot;KI-Agent&quot;]">
+        <img src="talking-animal/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="talking-animal/"><span data-i18n="card.talking-animal.title">Plappertier</span></a>
+        <p data-i18n="card.talking-animal.desc">Ein Tier, das nachplappert: ins Mikrofon sprechen – es antwortet mit verzerrter Stimme und bewegt den Mund. Piepsig, tief, Roboter, Echo, rückwärts, Alien.</p></div>
+      </li>
+      <li class="app" data-folder="quantum-putt" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Physik&quot;,&quot;KI-Agent&quot;]">
+        <img src="quantum-putt/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="quantum-putt/"><span data-i18n="card.quantum-putt.title">Quantenputt</span></a>
+        <p data-i18n="card.quantum-putt.desc">Minigolf mit einem Quanten-Ball: Der Ball läuft als Welle über die Bahn, beugt sich um Hindernisse, tunnelt durch Wände und ist an vielen Orten zugleich – erst beim Messen entscheidet sich, wo er liegt. Zehn Bahnen mit Linse, Doppelspalt, Kristall und Tunnel.</p></div>
+      </li>
+      <li class="app" data-folder="quartet" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kamera&quot;,&quot;Datei öffnen&quot;,&quot;KI-Agent&quot;]">
+        <img src="quartet/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="quartet/"><span data-i18n="card.quartet.title">Quartett</span></a>
+        <p data-i18n="card.quartet.desc">Quartett-Kartenspiel mit 17 Decks (Dinosaurier, Autos, Länder …) gegen den Computer oder mit mehreren Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server.</p></div>
+      </li>
+      <li class="app" data-folder="reaction-game" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
+        <img src="reaction-game/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="reaction-game/"><span data-i18n="card.reaction-game.title">Reaktionsspiel</span></a>
+        <p data-i18n="card.reaction-game.desc">Schnell sein: Maulwürfe hauen, aufleuchtende Lampen antippen oder herumschwirrende Mücken erwischen – mit Punkten, Reaktionszeit und Bestwerten.</p></div>
+      </li>
+      <li class="app" data-folder="chess" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kopieren&quot;,&quot;KI-Agent&quot;]">
+        <img src="chess/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="chess/"><span data-i18n="card.chess.title">Schach</span></a>
+        <p data-i18n="card.chess.desc">Schach gegen den Computer in vier Stärken oder zu zweit an einem Handy – mit allen Regeln, Tipps, Zugliste und Rücknahme.</p></div>
+      </li>
+      <li class="app" data-folder="treasure-hunt" data-tags="[&quot;Freizeit&quot;,&quot;Kinder&quot;,&quot;Spiele&quot;,&quot;Standort&quot;,&quot;Mikrofon&quot;,&quot;Bewegungssensor&quot;,&quot;Datei öffnen&quot;,&quot;KI-Agent&quot;]">
+        <img src="treasure-hunt/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="treasure-hunt/"><span data-i18n="card.treasure-hunt.title">Schatzsuche</span></a>
+        <p data-i18n="card.treasure-hunt.desc">Schatzsuche für Kindergeburtstage: Stationen mit GPS, Rätseln, Figuren und eigener Story selbst erstellen und auf dem Handy spielen.</p></div>
+      </li>
+      <li class="app" data-folder="rock-paper-scissors" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;Kamera&quot;,&quot;Verlauf&quot;,&quot;KI-Agent&quot;]">
+        <img src="rock-paper-scissors/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="rock-paper-scissors/"><span data-i18n="card.rock-paper-scissors.title">Schere, Stein, Papier</span></a>
+        <p data-i18n="card.rock-paper-scissors.desc">Gegen den Computer oder zu zweit auf zwei Handys – klassisch, mit Brunnen oder mit Echse und Spock.</p></div>
+      </li>
+      <li class="app" data-folder="sea-battle" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kamera&quot;,&quot;KI-Agent&quot;]">
+        <img src="sea-battle/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="sea-battle/"><span data-i18n="card.sea-battle.title">Schiffe versenken</span></a>
+        <p data-i18n="card.sea-battle.desc">Zu zweit auf zwei Handys – verbunden per QR-Code, direkt von Gerät zu Gerät, ohne Server.</p></div>
+      </li>
+      <li class="app" data-folder="sudoku" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;KI-Agent&quot;]">
+        <img src="sudoku/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="sudoku/"><span data-i18n="card.sudoku.title">Sudoku</span></a>
+        <p data-i18n="card.sudoku.desc">Zahlenrätsel in drei Stufen – immer neue Rätsel mit genau einer Lösung, mit Notizen, Tipps und Bestzeiten.</p></div>
+      </li>
+      <li class="app" data-folder="tic-tac-toe" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Kinder&quot;,&quot;KI-Agent&quot;]">
+        <img src="tic-tac-toe/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="tic-tac-toe/"><span data-i18n="card.tic-tac-toe.title">Tic Tac Toe</span></a>
+        <p data-i18n="card.tic-tac-toe.desc">Drei in einer Reihe – zu zweit an einem Handy oder gegen den Computer, mit Punktestand.</p></div>
+      </li>
+      <li class="app" data-folder="dice-coin" data-tags="[&quot;Freizeit&quot;,&quot;Spiele&quot;,&quot;Zufall&quot;,&quot;Verlauf&quot;,&quot;Kopieren&quot;,&quot;Schütteln&quot;,&quot;KI-Agent&quot;]">
+        <img src="dice-coin/icon.svg" alt="" width="40" height="40">
+        <div class="app-text"><a class="open" href="dice-coin/"><span data-i18n="card.dice-coin.title">Würfel &amp; Münze</span></a>
+        <p data-i18n="card.dice-coin.desc">Würfel und Münzwurf für Spiele: Anzahl und Seiten frei wählbar, alle gleichzeitig oder einzeln würfeln, Würfel halten, Vorlagen. Einstellungen werden im Browser gespeichert.</p></div>
+      </li>
+    </ul>
+  </section>
   <script type="application/json" id="i18n-cards">
   {
+    "de": {
+      "short.four-in-a-row": "4 gewinnt",
+      "short.scoreboard": "Anzeigetafel",
+      "short.api-check": "API-Check",
+      "short.audio-studio": "Audio Studio",
+      "short.beer-tally": "Strichliste",
+      "short.image-swipe": "Bild-Swipe",
+      "short.image-converter": "Konverter",
+      "short.wind-instruments": "Flöte & Co",
+      "short.brew-calculator": "Brau-Rechner",
+      "short.cast-demo": "Cast-Demo",
+      "short.code-runner": "Code",
+      "short.collage-maker": "Collage",
+      "short.countdown": "Countdown",
+      "short.data-logger": "Datensammler",
+      "short.duty-roster": "Dienstplan",
+      "short.doc-scanner": "Scanner",
+      "short.unit-converter": "Einheiten",
+      "short.reminders": "Erinnerung",
+      "short.code-breaker": "Farbcode",
+      "short.finance-calculator": "Finanzen",
+      "short.spin-the-bottle": "Flasche",
+      "short.function-plotter": "Plotter",
+      "short.whoopee-cushion": "Furzkissen",
+      "short.hangman": "Galgenmann",
+      "short.face-timelapse": "Zeitraffer",
+      "short.lucky-wheel": "Glücksrad",
+      "short.sensors": "Sensoren",
+      "short.calendar-events": "Termin",
+      "short.camera-effects": "Kamera-FX",
+      "short.card-games": "Karten",
+      "short.dots-and-boxes": "Käsekästchen",
+      "short.ai-chat": "KI-Chat",
+      "short.piano": "Klavier",
+      "short.split-costs": "Kosten",
+      "short.plush-puzzle": "Kuscheltier",
+      "short.laser-mirrors": "Laserspiegel",
+      "short.marquee": "Lauftext",
+      "short.songbook": "Liederbuch",
+      "short.link-redirect": "Weiterleiten",
+      "short.loop-station": "Loop-Station",
+      "short.mail-account-qr": "Konto-QR",
+      "short.mailto-generator": "Mailto",
+      "short.paint": "Malen",
+      "short.markdown-editor": "Markdown",
+      "short.medical-calculator": "Med-Rechner",
+      "short.mind-map": "Mindmap",
+      "short.minesweeper": "Minensuche",
+      "short.move-play": "MovePlay",
+      "short.pdf-viewer": "PDF ansehen",
+      "short.pdf-edit": "PDF bearb.",
+      "short.pdf2word": "PDF zu Word",
+      "short.whip": "Peitsche",
+      "short.physics-lab": "Physik",
+      "short.talking-animal": "Plappertier",
+      "short.playlist-player": "Playlist",
+      "short.qr-code": "QR-Code",
+      "short.quantum-magnetism": "Magnetismus",
+      "short.quantum-putt": "Quantenputt",
+      "short.quartet": "Quartett",
+      "short.reaction-game": "Reaktion",
+      "short.calc-pad": "Rechenzettel",
+      "short.chain-transaction": "Lieferkette",
+      "short.rss-reader": "RSS-Reader",
+      "short.securpharm-scanner": "SecurPharm",
+      "short.chess": "Schach",
+      "short.treasure-hunt": "Schatzsuche",
+      "short.rock-paper-scissors": "Schnick",
+      "short.sea-battle": "Schiffe",
+      "short.font-creator": "Schrift",
+      "short.voice-transcriber": "Transkript",
+      "short.sudoku": "Sudoku",
+      "short.text-to-speech": "Vorlesen",
+      "short.tic-tac-toe": "Tic Tac Toe",
+      "short.raffle": "Tombola",
+      "short.tournament": "Turnier",
+      "short.video-to-audio": "Video→Audio",
+      "short.video-analysis": "Videoanalyse",
+      "short.business-card": "Visitenkarte",
+      "short.secret-santa": "Wichteln",
+      "short.dice-coin": "Würfel"
+    },
     "en": {
       "filter.all": "All",
-      "f-cat": "Category",
+      "f-area": "Area",
+      "f-topic": "Topic",
       "f-feat": "Feature",
+      "filter": "Filter",
       "search": "Search apps",
       "search.none": "No matching app found.",
-      "tag.Alltag": "Everyday",
-      "tag.Arbeit": "Work",
       "tag.Freizeit": "Leisure",
-      "tag.Apotheke": "Pharmacy",
-      "tag.Barcode": "Barcode",
-      "tag.Bierbrauen": "Homebrewing",
-      "tag.Dokumente": "Documents",
-      "tag.Finanzen": "Finance",
-      "tag.KI": "AI",
-      "tag.Kinder": "Kids",
-      "tag.Lernen": "Learning",
-      "tag.Medizin": "Medicine",
-      "tag.Messen": "Measuring",
-      "tag.Musik": "Music",
-      "tag.Physik": "Physics",
-      "tag.Rechner": "Calculators",
       "tag.Spiele": "Games",
+      "tag.Kinder": "Kids",
+      "tag.KI-Agent": "AI agent",
       "tag.Sport": "Sports",
-      "tag.Sprache": "Speech",
+      "tag.Arbeit": "Work",
       "tag.Werkzeug": "Tools",
-      "tag.Zufall": "Random",
-      "tag.Kamera": "Camera",
-      "tag.Mikrofon": "Microphone",
-      "tag.Bewegungssensor": "Motion sensor",
-      "tag.Standort": "Location",
       "tag.Datei öffnen": "Open file",
-      "tag.Teilen an App": "Share to app",
-      "tag.Vollbild": "Full screen",
-      "tag.Benachrichtigung": "Notifications",
       "tag.Kopieren": "Copy",
       "tag.Verlauf": "History",
-      "tag.Schütteln": "Shake",
-      "tag.KI-Agent": "AI agent",
+      "tag.Alltag": "Everyday",
+      "tag.Teilen an App": "Share to app",
+      "tag.Finanzen": "Finance",
+      "tag.Musik": "Music",
+      "tag.Mikrofon": "Microphone",
+      "tag.Bierbrauen": "Homebrewing",
+      "tag.Rechner": "Calculators",
+      "tag.Vollbild": "Full screen",
       "tag.Download nötig": "Download needed",
+      "tag.Messen": "Measuring",
+      "tag.Dokumente": "Documents",
+      "tag.Kamera": "Camera",
+      "tag.Benachrichtigung": "Notifications",
+      "tag.Zufall": "Random",
+      "tag.KI": "AI",
+      "tag.Bewegungssensor": "Motion sensor",
+      "tag.Standort": "Location",
+      "tag.Barcode": "Barcode",
+      "tag.Medizin": "Medicine",
+      "tag.Schütteln": "Shake",
+      "tag.Physik": "Physics",
+      "tag.Lernen": "Learning",
+      "tag.Apotheke": "Pharmacy",
+      "tag.Sprache": "Speech",
       "card.four-in-a-row.title": "Four in a Row",
       "card.four-in-a-row.desc": "Drop discs, get four in a row – two players on one phone or against the computer, with a running score.",
+      "short.four-in-a-row": "4 in a Row",
       "card.scoreboard.title": "Scoreboard",
       "card.scoreboard.desc": "Show the score big for football (with match clock), table tennis, tennis, padel and darts – with serve indicator, sets, checkout hints and your own names.",
+      "short.scoreboard": "Scoreboard",
       "card.api-check.title": "API Check",
       "card.api-check.desc": "Try out REST APIs: enter the API address and an OpenAPI/Swagger spec (JSON or YAML) – you get a form for every request. Configurations are saved.",
+      "short.api-check": "API Check",
       "card.audio-studio.title": "Audio Studio",
       "card.audio-studio.desc": "Trim and cut audio files, adjust the volume, fade in and out and save as WAV, Opus or AAC – right in the browser, the file never leaves the device.",
+      "short.audio-studio": "Audio Studio",
       "card.beer-tally.title": "Beer Tally",
       "card.beer-tally.desc": "A stroke per beer for each person and day, with balance and payments in euros – for clubs, flat shares or parties.",
+      "short.beer-tally": "Beer Tally",
       "card.image-swipe.title": "Image Swipe",
       "card.image-swipe.desc": "Swipe pictures right to like or left to pass – with your own data sources as JSON and several profiles.",
+      "short.image-swipe": "Image Swipe",
       "card.image-converter.title": "Image Converter",
       "card.image-converter.desc": "Convert and compress images – JPG, PNG, WebP, HEIC (iPhone), AVIF, GIF, BMP, ICO and SVG, several at once, with quality, size and a maximum file size, without any upload.",
+      "short.image-converter": "Converter",
       "card.wind-instruments.title": "Wind Instruments",
       "card.wind-instruments.desc": "Blow into the microphone and play: flute, recorder, ocarina, pan flute and trumpet – with real fingerings, overblowing and a fingering chart.",
+      "short.wind-instruments": "Flute & Co",
       "card.brew-calculator.title": "Brewing Calculator",
       "card.brew-calculator.desc": "Homebrewing calculators: brewing water, pot volume, brewhouse efficiency, mixing, hops (IBU), gravity correction, Plato/Brix/SG, alcohol, priming with sugar or wort and CO₂ pressure – each with formulas and explanation.",
+      "short.brew-calculator": "Brewing",
       "card.cast-demo.title": "Cast Demo",
       "card.cast-demo.desc": "Show the app's picture and music on a Chromecast or Android TV – streamed directly or with the phone's screen casting.",
+      "short.cast-demo": "Cast Demo",
       "card.code-runner.title": "Run Code",
       "card.code-runner.desc": "Write and run Python and JavaScript right in the browser – with output, input for input(), examples and saved scripts. Works offline, without a server.",
+      "short.code-runner": "Run Code",
       "card.collage-maker.title": "Collage Maker",
       "card.collage-maker.desc": "Turn any number of photos into a seamless collage – no gaps, hardly any cropping, saved as a huge image in full resolution. Everything stays on your device.",
+      "short.collage-maker": "Collage",
       "card.countdown.title": "Countdown",
       "card.countdown.desc": "Days, hours, minutes or seconds until a date and time – live from now or from your own start date.",
+      "short.countdown": "Countdown",
       "card.data-logger.title": "Data Logger",
       "card.data-logger.desc": "Create your own profiles with measurements and units, record values with a timestamp and see them as curves – export as image, JSON or CSV.",
+      "short.data-logger": "Data Logger",
       "card.duty-roster.title": "Duty Roster",
       "card.duty-roster.desc": "Weekly staff and room plan, e.g. for a medical practice: working hours (also split into morning and afternoon), absences also by the hour, rooms per working time – checks that everyone is assigned to exactly one room at any time.",
+      "short.duty-roster": "Roster",
       "card.doc-scanner.title": "Document Scanner",
       "card.doc-scanner.desc": "Scan documents with the camera or from photos – share photos from the gallery straight to it (Android): crop the corners, sort pages, remove shadows, save as PDF.",
+      "short.doc-scanner": "Scanner",
       "card.unit-converter.title": "Unit Converter",
       "card.unit-converter.desc": "Convert units: all SI base quantities and derived SI units with prefixes, plus well-known other units such as inch, mile, pound, °F, gallon, psi, horsepower, kcal, mpg and gibibyte – with a table of all units and search.",
+      "short.unit-converter": "Units",
       "card.reminders.title": "Reminders",
       "card.reminders.desc": "Your own reminders with time and text – a notification arrives on time, and they can be changed in the history.",
+      "short.reminders": "Reminders",
       "card.code-breaker.title": "Code Breaker",
       "card.code-breaker.desc": "Crack a secret colour code: after every guess, pins show how many colours are right – alone against the phone or with two players.",
+      "short.code-breaker": "Code Breaker",
       "card.finance-calculator.title": "Finance Calculator",
       "card.finance-calculator.desc": "Compound interest and money over time: savings plan for stocks and ETFs with yearly increase, costs and inflation, loan with repayment schedule and extra payments, time value solver like on a financial calculator (N, rate, PV, PMT, FV), net present value and internal rate of return, plus rate conversion, yearly return, margin, break-even, depreciation and day count.",
+      "short.finance-calculator": "Finance",
       "card.spin-the-bottle.title": "Spin the Bottle",
       "card.spin-the-bottle.desc": "The bottle decides whose turn it is – tap it or give it a spin, with your names around the table.",
+      "short.spin-the-bottle": "Bottle",
       "card.function-plotter.title": "Function Plotter",
       "card.function-plotter.desc": "Plot functions and change them with sliders: every unknown name becomes a parameter, ▶ animates it. Zeros, extrema, derivatives, two-finger zoom, tap to read values.",
+      "short.function-plotter": "Plotter",
       "card.whoopee-cushion.title": "Whoopee Cushion",
       "card.whoopee-cushion.desc": "Tap it and let it rip – seven sounds, a time fuse for pranks and vibration.",
+      "short.whoopee-cushion": "Whoopee",
       "card.hangman.title": "Hangman",
       "card.hangman.desc": "Guess words letter by letter – alone with words from six topics, or two players with a secret word of your own.",
+      "short.hangman": "Hangman",
       "card.face-timelapse.title": "Face Timelapse",
       "card.face-timelapse.desc": "Choose photos – the face is found in every picture, straightened and placed in the middle at the same size. Change the order and save as a video or GIF: a timelapse of someone growing up over the years.",
+      "short.face-timelapse": "Timelapse",
       "card.lucky-wheel.title": "Lucky Wheel",
       "card.lucky-wheel.desc": "Spinning wheel for drawing lots: enter your own entries, spin the wheel, fair and random. Optionally remove winners, history of results.",
+      "short.lucky-wheel": "Spin Wheel",
       "card.sensors.title": "Phone Sensors",
       "card.sensors.desc": "Compass, spirit level, acceleration, vibrometer, sound level, spectrogram, tuner, speedometer, step counter, tone generator, flashlight with Morse, pulse, spectrometer and clap stopwatch – using the sensors of your phone.",
+      "short.sensors": "Sensors",
       "card.calendar-events.title": "Calendar Event",
       "card.calendar-events.desc": "Set up an event with place, reminder and repetition and add it to any calendar – as an .ics file, via Google or Outlook or as a link to share. Also opens .ics files.",
+      "short.calendar-events": "Event",
       "card.camera-effects.title": "Camera Effects",
       "card.camera-effects.desc": "Live camera through effects: comic, thermal, night vision, sketch, pixel, kaleidoscope and more. Face accessories and distortions (sunglasses, cat ears, fisheye …). Detects people and applies effects to people or the background only.",
+      "short.camera-effects": "Camera FX",
       "card.card-games.title": "Card Games",
       "card.card-games.desc": "Mau Mau, Durak, Skat, Rummy, Poker and Solitaire against the computer or with several phones – connected by QR code, directly device to device, without a server.",
+      "short.card-games": "Card Games",
       "card.dots-and-boxes.title": "Dots and Boxes",
       "card.dots-and-boxes.desc": "Draw lines, close boxes – two players on one phone or against the computer, with a running score.",
+      "short.dots-and-boxes": "Dots & Boxes",
       "card.ai-chat.title": "AI Chat",
       "card.ai-chat.desc": "Chat with Google’s Gemma language model – it runs right on the device, even offline. No account, no cloud: the conversation never leaves the device.",
+      "short.ai-chat": "AI Chat",
       "card.piano.title": "Piano",
       "card.piano.desc": "Play the piano with your fingers – load MIDI files and watch the notes fall onto the keys. Mute parts and play along yourself.",
+      "short.piano": "Piano",
       "card.split-costs.title": "Split Costs",
       "card.split-costs.desc": "Enter shared expenses for a trip, flat share or party – the app works out who pays whom how much, with as few transfers as possible.",
+      "short.split-costs": "Split Costs",
       "card.plush-puzzle.title": "Cuddly Toy Puzzle",
       "card.plush-puzzle.desc": "Build cuddly toys from their parts: drag each part onto the shadow until it snaps in – with confetti at the end.",
+      "short.plush-puzzle": "Toy Puzzle",
       "card.laser-mirrors.title": "Laser Mirrors",
       "card.laser-mirrors.desc": "Logic puzzles with a laser beam: place and turn mirrors, beam splitters and a checkpoint so the laser hits exactly the right targets – walls stand in the way. 50 puzzles in five levels.",
+      "short.laser-mirrors": "Laser Mirror",
       "card.marquee.title": "Scrolling Text",
       "card.marquee.desc": "Type a text, pick size, colours and font and show it full screen – still, scrolling or blinking.",
+      "short.marquee": "Marquee",
       "card.songbook.title": "Songbook",
       "card.songbook.desc": "Public domain songs as sheet music with coloured scale numbers and lyrics – play and follow along, choose the tempo, practise them on the piano with falling notes, save as MIDI or print.",
+      "short.songbook": "Songbook",
       "card.link-redirect.title": "Link Redirect",
       "card.link-redirect.desc": "Instantly forward shared links to a service of your choice – with prefix and suffix, e.g. test.de/?url=…",
+      "short.link-redirect": "Redirect",
       "card.loop-station.title": "Loop Station",
       "card.loop-station.desc": "Record instruments, voice, clapping … and layer them as loops – with metronome, bar grid and WAV export.",
+      "short.loop-station": "Loop Station",
       "card.mail-account-qr.title": "Mail Account QR",
       "card.mail-account-qr.desc": "Create QR codes of email accounts for Thunderbird on the phone – and read Thunderbird QR codes by camera, picture or text, e.g. to move the settings into another mail app.",
+      "short.mail-account-qr": "Account QR",
       "card.mailto-generator.title": "Mailto Generator",
       "card.mailto-generator.desc": "Build mailto links: enter recipients, CC, BCC, subject and text – copy as a link, HTML or Markdown, share, show as a QR code or take existing links apart.",
+      "short.mailto-generator": "Mailto",
       "card.paint.title": "Paint",
       "card.paint.desc": "A white canvas to paint on with your finger: 6 colours, pencil, brush, marker, spray, paint bucket and eraser – save or share as an image.",
+      "short.paint": "Paint",
       "card.markdown-editor.title": "Markdown Editor",
       "card.markdown-editor.desc": "Write Markdown – view and edit it as text or formatted, with buttons for bold, lists, links and more. Share, download or delete files from the history.",
+      "short.markdown-editor": "Markdown",
       "card.medical-calculator.title": "Medical Calculator",
       "card.medical-calculator.desc": "Formula aid for the practice: BMI and body surface area, eGFR (CKD-EPI 2021) and creatinine clearance, pregnancy due date and gestational age, lab values in SI units – each with formula and explanation. Values are not stored.",
+      "short.medical-calculator": "Med Calc",
       "card.mind-map.title": "Mind Map",
       "card.mind-map.desc": "Collect ideas as a mind map: topic in the middle, tap to add branches and sub-points, move, fold – copy as text or save as a picture.",
+      "short.mind-map": "Mind Map",
       "card.minesweeper.title": "Minesweeper",
       "card.minesweeper.desc": "Uncover the squares, mark the mines with flags – three sizes for the phone, the first tap is always safe, with best times.",
+      "short.minesweeper": "Mines",
       "card.move-play.title": "MovePlay",
       "card.move-play.desc": "Movement games in front of the camera for kids and families, alone or for two: Simon Says, jumping jacks, duck & jump, catch the bubbles, freeze dance, copy the pose – the app recognises jumping, ducking, raising arms and clapping.",
+      "short.move-play": "MovePlay",
       "card.pdf-viewer.title": "PDF Viewer",
       "card.pdf-viewer.desc": "Read PDF files full screen – the bars hide, one tap brings back the menu and sharing. No upload.",
+      "short.pdf-viewer": "PDF Viewer",
       "card.pdf-edit.title": "Edit PDF",
       "card.pdf-edit.desc": "Merge PDF files, remove, rotate and reorder pages – right in the browser, no upload.",
+      "short.pdf-edit": "Edit PDF",
       "card.pdf2word.title": "PDF to Word",
       "card.pdf2word.desc": "Convert PDF documents into an editable Word file (.docx, also for LibreOffice) right in the browser – with images and text recognition for scanned pages, no upload: the file never leaves the device.",
+      "short.pdf2word": "PDF to Word",
       "card.whip.title": "Whip",
       "card.whip.desc": "Swing your phone or tap – and the whip cracks. Five kinds of crack, adjustable sensitivity, vibration.",
+      "short.whip": "Whip",
       "card.physics-lab.title": "Physics Explained",
       "card.physics-lab.desc": "Physics to try out: mirrors, lenses and light through slits with sliders, drawing and formulas with your values – every experiment answers a why question, such as why your reflection in a spoon is upside down.",
+      "short.physics-lab": "Physics",
       "card.talking-animal.title": "Talking Pet",
       "card.talking-animal.desc": "A pet that talks back: speak into the microphone – it repeats it with a funny voice and moves its mouth. Squeaky, deep, robot, echo, backwards, alien.",
+      "short.talking-animal": "Talking Pet",
       "card.playlist-player.title": "Playlist Player",
       "card.playlist-player.desc": "Listen to YouTube playlists like an audiobook: part by part, resuming where you left off, with ticks for what you heard and when.",
+      "short.playlist-player": "Playlist",
       "card.qr-code.title": "QR Code Generator",
       "card.qr-code.desc": "Create QR codes for links, text, Wi-Fi and contacts (vCard) – share links straight from other apps (Android), with history.",
+      "short.qr-code": "QR Code",
       "card.quantum-magnetism.title": "Quantum Magnetism",
       "card.quantum-magnetism.desc": "The Ising model to watch: spins on square, triangular and kagome lattices, ferro- or antiferromagnetic, with temperature and magnetic field. Phase transition, frustration, hysteresis – and an exactly solved quantum chain in a transverse field.",
+      "short.quantum-magnetism": "Magnetism",
       "card.quantum-putt.title": "Quantum Putt",
       "card.quantum-putt.desc": "Minigolf with a quantum ball: the ball runs across the course as a wave, bends around obstacles, tunnels through walls and is in many places at once – only measuring decides where it lies. Ten courses with a lens, double slit, crystal and tunnel.",
+      "short.quantum-putt": "Quantum Putt",
       "card.quartet.title": "Trumps Quartet",
       "card.quartet.desc": "Card comparison game with 17 decks (dinosaurs, cars, countries …) against the computer or with several phones – connected by QR code, directly device to device, without a server.",
+      "short.quartet": "Quartet",
       "card.reaction-game.title": "Reaction Game",
       "card.reaction-game.desc": "Be quick: whack the moles, tap the lamps as they light up or catch the buzzing gnats – with points, reaction time and best scores.",
+      "short.reaction-game": "Reaction",
       "card.calc-pad.title": "Calc Pad",
       "card.calc-pad.desc": "Calculate and take notes on one pad: every line with a calculation shows its result, text in between is fine, “+ 20” carries on, equations like x² = 2 are solved, also sin, ln, derivative and integral. Tap a result to copy it.",
+      "short.calc-pad": "Calc Pad",
       "card.chain-transaction.title": "Chain Transaction",
       "card.chain-transaction.desc": "VAT on chain transactions with 3 or 4 companies: which supply is the moved one, where each supply takes place, whether it is exempt, whether triangulation applies, imports and exports, who has to register where – every step explained in detail with the legal provisions.",
+      "short.chain-transaction": "Chain VAT",
       "card.rss-reader.title": "RSS Reader",
       "card.rss-reader.desc": "Read RSS and Atom feeds: add and manage feed addresses, search entries, filter by category and mark them read – offline too.",
+      "short.rss-reader": "RSS Reader",
       "card.securpharm-scanner.title": "Scan-Copy-SecurPharm",
       "card.securpharm-scanner.desc": "Scan the securPharm DataMatrix code on medicine and vaccine packs and copy single values (PZN, batch, expiry, serial number …) with one click. With local history.",
+      "short.securpharm-scanner": "SecurPharm",
       "card.chess.title": "Chess",
       "card.chess.desc": "Chess against the computer at four strengths or two players on one phone – with all the rules, hints, a move list and take-backs.",
+      "short.chess": "Chess",
       "card.treasure-hunt.title": "Treasure Hunt",
       "card.treasure-hunt.desc": "Treasure hunt for kids’ parties: create stations with GPS, puzzles, characters and your own story, then play it on a phone.",
+      "short.treasure-hunt": "Treasure",
       "card.rock-paper-scissors.title": "Rock, Paper, Scissors",
       "card.rock-paper-scissors.desc": "Against the computer or two players on two phones – classic, with well or with lizard and Spock.",
+      "short.rock-paper-scissors": "RPS",
       "card.sea-battle.title": "Sea Battle",
       "card.sea-battle.desc": "Two players on two phones – connected by QR code, directly device to device, without a server.",
+      "short.sea-battle": "Sea Battle",
       "card.font-creator.title": "Font Creator",
       "card.font-creator.desc": "Design your own font: draw letters, digits and symbols with your finger, see them in a sample text right away and download a font file (TTF).",
+      "short.font-creator": "Font",
       "card.voice-transcriber.title": "Speech to Text",
       "card.voice-transcriber.desc": "Turn voice messages (e.g. WhatsApp Opus files) into text right in the browser – with the Whisper model, no upload: the audio never leaves the device.",
+      "short.voice-transcriber": "Transcript",
       "card.sudoku.title": "Sudoku",
       "card.sudoku.desc": "Number puzzles in three levels – always new puzzles with exactly one solution, with notes, hints and best times.",
+      "short.sudoku": "Sudoku",
       "card.text-to-speech.title": "Text to Speech",
       "card.text-to-speech.desc": "Have text read aloud – with the device's voices or AI voices (Supertonic, Piper, Kokoro) running right in the browser. Compare voices and save as WAV.",
+      "short.text-to-speech": "Read Aloud",
       "card.tic-tac-toe.title": "Tic Tac Toe",
       "card.tic-tac-toe.desc": "Three in a row – two players on one phone or against the computer, with a running score.",
+      "short.tic-tac-toe": "Tic Tac Toe",
       "card.raffle.title": "Raffle",
       "card.raffle.desc": "Draw raffle tickets: enter ticket numbers and prizes, leave out unsold tickets, draw winning numbers fair and at random, each number only once. Check tickets, redraw, copy the list.",
+      "short.raffle": "Raffle",
       "card.tournament.title": "Tournament",
       "card.tournament.desc": "Plan a tournament, e.g. table football at the office party: draw teams, round robin or knockout schedule, enter results and show the table.",
+      "short.tournament": "Tournament",
       "card.video-to-audio.title": "Video to Audio",
       "card.video-to-audio.desc": "Save the sound track of a video – as the original without quality loss (e.g. .m4a) or as WAV, right in the browser: the video never leaves the device.",
+      "short.video-to-audio": "Video→Audio",
       "card.video-analysis.title": "Video Analysis",
       "card.video-analysis.desc": "Measure motion from a phone video: set scale and origin, tap the object frame by frame or let it be tracked automatically – position, velocity and fits (linear, projectile, oscillation) with errors, export as CSV.",
+      "short.video-analysis": "Video Lab",
       "card.business-card.title": "Business Cards",
       "card.business-card.desc": "Design business cards: arrange text, pictures, logos, shapes and a QR code (vCard too), pick colours – print as an image or A4 PDF with crop marks, save and share as a template.",
+      "short.business-card": "Cards",
       "card.secret-santa.title": "Secret Santa",
       "card.secret-santa.desc": "Draw Secret Santa partners fairly: enter names, exclude couples, then pass the phone around or send everyone a secret link.",
+      "short.secret-santa": "Secret Santa",
       "card.dice-coin.title": "Dice & Coin",
-      "card.dice-coin.desc": "Dice and coin toss for games: any number of dice and sides, roll all at once or one by one, hold dice, presets. Settings are saved in the browser."
+      "card.dice-coin.desc": "Dice and coin toss for games: any number of dice and sides, roll all at once or one by one, hold dice, presets. Settings are saved in the browser.",
+      "short.dice-coin": "Dice"
     }
   }
   </script>
   <!-- tools:end -->
 </main>
+<div class="menu-list" data-menu>
+  <button type="button" id="btnClearRecent"><svg class="ic" aria-hidden="true"><use href="assets/icons.svg#eraser"/></svg><span data-i18n="recent.clear">„Zuletzt benutzt“ leeren</span></button>
+</div>
 <footer>
   <p data-i18n="hosted">phanlipo.github.io · gehostet mit GitHub Pages</p>
   <!-- footer:start -->
@@ -753,98 +951,167 @@ body.searching main{min-height:100vh;min-height:100lvh}
 <script>
 (() => {
   const cards = JSON.parse(document.getElementById('i18n-cards').textContent);
-  // Search text of each card in both languages, so a word from either one finds the app.
-  // Taken before Tools.i18n translates the page (the HTML is German).
   const norm = s => s.toLocaleLowerCase('de').replace(/ß/g, 'ss').normalize('NFD').replace(/\p{M}/gu, '');
-  const haystack = new Map([...document.querySelectorAll('.tool')].map(card => {
-    const keys = [...card.querySelectorAll('[data-i18n]')].map(el => el.dataset.i18n);
-    const href = card.querySelector('.open').getAttribute('href');
-    return [card, norm([card.textContent, href, ...keys.map(k => cards.en[k] || '')].join(' '))];
+  const items = [...document.querySelectorAll('.app')];
+  const tagsOf = new Map(items.map(li => [li, JSON.parse(li.dataset.tags)]));
+  // Search text of each app in both languages, so a word from either one finds it – also its tags,
+  // which the list doesn't show. Taken before Tools.i18n translates the page (the HTML is German).
+  const haystack = new Map(items.map(li => {
+    const f = li.dataset.folder, en = cards.en;
+    return [li, norm([li.textContent, f, en[`card.${f}.title`], en[`card.${f}.desc`],
+      ...tagsOf.get(li).flatMap(x => [x, en['tag.' + x] || ''])].join(' '))];
   }));
   Tools.i18n({
-    de: { 'status.all': 'Alle {n} Seiten', 'status.tag': '{shown} von {n} Seiten: {tag}', 'status.some': '{shown} von {n} Seiten' },
+    de: Object.assign({
+      'status.all': 'Alle {n} Apps', 'status.some': '{shown} von {n} Apps',
+      'fav.label': 'Favorit: {name}', 'recent.cleared': 'Liste geleert.',
+      'recent.clearQ': 'Die Liste „Zuletzt benutzt“ leeren? Favoriten bleiben.',
+    }, cards.de),
     en: Object.assign({
       title: 'App Shelf',
-      sub: 'Small web apps for your phone. Each app explains itself at the bottom of the page.',
-      'c.offline': 'works offline', 'c.install': 'installable as an app', 'c.local': 'data stays on the device',
-      'c.backup': 'backup as a file', hosted: 'phanlipo.github.io · hosted on GitHub Pages',
-      'status.all': 'All {n} pages', 'status.tag': '{shown} of {n} pages: {tag}', 'status.some': '{shown} of {n} pages',
+      sub: 'Small web apps for your phone: work offline, install as an app, your data stays on the device.',
+      hosted: 'phanlipo.github.io · hosted on GitHub Pages',
+      'status.all': 'All {n} apps', 'status.some': '{shown} of {n} apps',
+      'fav.h': 'Favourites', 'fav.label': 'Favourite: {name}',
+      'recent.h': 'Recently used', 'recent.clear': 'Clear “Recently used”', 'recent.cleared': 'List cleared.',
+      'recent.clearQ': 'Clear the list “Recently used”? Favourites stay.',
     }, cards.en),
   });
-  // Cards in alphabetical order of the shown titles (German order comes from build.mjs)
-  const grid = document.querySelector('.grid');
-  const sortCards = () => {
-    const els = [...grid.querySelectorAll('.tool')];
-    const title = el => el.querySelector('.open').textContent.trim();
-    els.sort((a, b) => title(a).localeCompare(title(b), Tools.locale())).forEach(el => grid.append(el));
+
+  /* ---------- Favourites and recently used ----------
+     Shared keys of all apps (AGENTS.md): every app notes itself in "tools.recent.v1" (common.js),
+     the stars here set "tools.favorites.v1". Both only in this browser. */
+  const FAV_KEY = 'tools.favorites.v1', RECENT_KEY = 'tools.recent.v1';
+  const byFolder = new Map(items.map(li => [li.dataset.folder, li]));
+  const stored = key => { const v = Tools.load(key, []); return Array.isArray(v) ? v.filter(f => byFolder.has(f)) : []; };
+  const title = li => li.querySelector('.open').textContent.trim();
+  const favBtns = new Map(items.map(li => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'fav';
+    b.innerHTML = Tools.icon('star');
+    b.addEventListener('click', () => {
+      const f = li.dataset.folder, favs = stored(FAV_KEY);
+      Tools.save(FAV_KEY, favs.includes(f) ? favs.filter(x => x !== f) : [...favs, f]);
+      renderShelves();
+    });
+    li.append(b);
+    return [li, b];
+  }));
+  const tile = f => {
+    const a = document.createElement('a');
+    a.href = f + '/';
+    const img = byFolder.get(f).querySelector('img');
+    if (img) a.append(Object.assign(img.cloneNode(), { width: 48, height: 48 }));
+    a.append(Object.assign(document.createElement('span'), { textContent: Tools.t('short.' + f) }));
+    a.setAttribute('aria-label', title(byFolder.get(f)));
+    const li = document.createElement('li');
+    li.append(a);
+    return li;
   };
-  if (grid) { sortCards(); Tools.onLang(sortCards); }
+  const shelfFav = document.getElementById('shelf-fav'), shelfRecent = document.getElementById('shelf-recent');
+  let filtering = false;
+  function renderShelves() {
+    const favs = stored(FAV_KEY);
+    const recent = stored(RECENT_KEY).filter(f => !favs.includes(f)).slice(0, 8);
+    for (const [li, b] of favBtns) {
+      const on = favs.includes(li.dataset.folder);
+      b.setAttribute('aria-pressed', String(on));
+      b.querySelector('.ic').classList.toggle('filled', on);
+      const label = Tools.t('fav.label', { name: title(li) });
+      b.setAttribute('aria-label', label); b.title = label;
+    }
+    for (const [shelf, list] of [[shelfFav, favs], [shelfRecent, recent]]) {
+      shelf.querySelector('.shelf-row').replaceChildren(...list.map(tile));
+      shelf.hidden = filtering || !list.length;
+    }
+  }
+  document.getElementById('btnClearRecent').addEventListener('click', async () => {
+    Tools.menu.close();
+    if (!stored(RECENT_KEY).length || !await Tools.confirm(Tools.t('recent.clearQ'), { action: 'delete' })) return;
+    Tools.save(RECENT_KEY, []);
+    renderShelves();
+    Tools.toast(Tools.t('recent.cleared'));
+  });
+  // Coming back from an app ("back", bfcache): show what was just used
+  window.addEventListener('pageshow', e => { if (e.persisted) renderShelves(); });
+
+  // Apps in each group in alphabetical order of the shown titles (German order comes from build.mjs)
+  const sortItems = () => {
+    for (const ul of document.querySelectorAll('.apps'))
+      [...ul.children].sort((a, b) => title(a).localeCompare(title(b), Tools.locale())).forEach(li => ul.append(li));
+  };
+  sortItems();
+
+  /* ---------- Search, area and filter: all three together ---------- */
   const bar = document.querySelector('.filter');
-  if (!bar) return;
+  const anchor = document.querySelector('.filter-anchor');
+  const areaBtns = [...bar.querySelectorAll('[data-area]')];
   const chips = [...bar.querySelectorAll('.chip')];
-  const cardEls = [...document.querySelectorAll('.tool')];
+  const panel = document.getElementById('filter-panel');
+  const filterBtn = bar.querySelector('.filter-btn');
+  const filterCount = bar.querySelector('.filter-count');
+  const groups = [...document.querySelectorAll('.group')];
   const status = document.querySelector('.filter-status');
   const empty = document.querySelector('.filter-empty');
   const input = document.getElementById('q');
-  let current = '';
-  // Category and search work together: a card must have the tag and contain every search word
-  function apply(tag) {
-    current = tag;
+  let area = '', tag = '';
+  function apply() {
     const words = norm(input.value).split(/\s+/).filter(Boolean);
-    let shown = 0;
+    for (const b of areaBtns) b.setAttribute('aria-pressed', String(b.dataset.area === area));
     for (const c of chips) c.setAttribute('aria-pressed', String(c.dataset.tag === tag));
-    for (const card of cardEls) {
-      const text = haystack.get(card);
-      const hit = (!tag || JSON.parse(card.dataset.tags).includes(tag)) && words.every(w => text.includes(w));
-      card.hidden = !hit;
+    filterCount.hidden = !tag;
+    filterCount.textContent = tag ? '1' : '';
+    let shown = 0;
+    for (const li of items) {
+      const tags = tagsOf.get(li);
+      const hit = (!area || tags[0] === area) && (!tag || tags.includes(tag)) && words.every(w => haystack.get(li).includes(w));
+      li.hidden = !hit;
       if (hit) shown++;
-      for (const t of card.querySelectorAll('.tag')) t.classList.toggle('match', !!tag && t.dataset.tag === tag);
     }
-    const n = cardEls.length;
+    for (const g of groups) {
+      const n = g.querySelectorAll('.app:not([hidden])').length;
+      g.hidden = !n;
+      g.querySelector('.count').textContent = Tools.fmt(n, 0);
+    }
+    // Only topics and features with apps in the chosen area (the active one always stays)
+    for (const c of chips) c.hidden = c.dataset.tag !== tag && !items.some(li => (!area || tagsOf.get(li)[0] === area) && tagsOf.get(li).includes(c.dataset.tag));
+    for (const r of panel.querySelectorAll('.filter-row')) r.hidden = !r.querySelector('.chip:not([hidden])');
+    filtering = !!(area || tag || words.length);
+    renderShelves();
+    const n = items.length;
     empty.hidden = shown > 0;
     status.textContent = shown === 0 ? Tools.t('search.none')
-      : tag ? Tools.t('status.tag', { shown, n, tag: Tools.t('tag.' + tag) })
-      : words.length ? Tools.t('status.some', { shown, n }) : Tools.t('status.all', { n });
+      : filtering ? Tools.t('status.some', { shown, n }) : Tools.t('status.all', { n });
   }
-  input.addEventListener('input', () => apply(current));
-  // Phones: on focus the search field moves to the top, so field and results stay visible above the keyboard
-  const toTop = () => {
+  input.addEventListener('input', apply);
+  // Phones: on focus the bar moves to the top, so field and results stay visible above the keyboard
+  input.addEventListener('focus', () => {
     document.body.classList.add('searching');
-    bar.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-  };
-  input.addEventListener('focus', toTop);
+    if (bar.getBoundingClientRect().top > 1)
+      anchor.scrollIntoView({ block: 'start', behavior: Tools.reducedMotion() ? 'auto' : 'smooth' });
+  });
   input.addEventListener('blur', () => { if (!input.value) document.body.classList.remove('searching'); });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') input.blur(); // hides the phone keyboard, the results stay
-    else if (e.key === 'Escape' && input.value) { e.preventDefault(); input.value = ''; apply(current); }
+    else if (e.key === 'Escape' && input.value) { e.preventDefault(); input.value = ''; apply(); }
   });
   // Desktop: "/" jumps to the search field
   document.addEventListener('keydown', e => {
-    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input, textarea, select, [contenteditable]')) return;
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input, textarea, select, [contenteditable], dialog')) return;
     e.preventDefault();
     input.focus();
   });
-  bar.addEventListener('click', e => {
-    const chip = e.target.closest('.chip');
-    if (!chip) return;
-    // Tapping the active category again shows everything
-    apply(chip.getAttribute('aria-pressed') === 'true' ? '' : chip.dataset.tag);
+  for (const b of areaBtns) b.addEventListener('click', () => { area = b.dataset.area; apply(); });
+  filterBtn.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    filterBtn.setAttribute('aria-expanded', String(!panel.hidden));
   });
-  // Faded edges where a chip row can scroll further (phones)
-  const rows = [...bar.querySelectorAll('.chips')];
-  const edges = () => {
-    for (const r of rows) {
-      r.classList.toggle('more-start', r.scrollLeft > 1);
-      r.classList.toggle('more-end', r.scrollLeft + r.clientWidth < r.scrollWidth - 1);
-    }
-  };
-  for (const r of rows) r.addEventListener('scroll', edges, { passive: true });
-  window.addEventListener('resize', edges);
-  Tools.onLang(() => { if (status.textContent) apply(current); edges(); });
+  // Tapping the active chip again removes the filter
+  for (const c of chips) c.addEventListener('click', () => { tag = tag === c.dataset.tag ? '' : c.dataset.tag; apply(); });
+  Tools.onLang(() => { sortItems(); apply(); });
   bar.hidden = false;
   // The browser may restore the field after "back": filter right away
-  if (input.value) apply(current);
-  edges();
+  apply();
 })();
 </script>
 </body>

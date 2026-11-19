@@ -20,6 +20,7 @@ export const LEXICON = [
   [/(schließen|^close.*)$/i, ['x']],
   [/(öffnen|^open.*)$/i, ['folder-open']],
   [/^(menü|menu)$/i, ['menu-2']],
+  [/^(favorit|favourite)/i, ['star']],
 ];
 
 // Texts and labels of the page that contain emoji (user input and marked data sets excepted)

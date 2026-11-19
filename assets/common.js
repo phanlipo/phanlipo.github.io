@@ -523,6 +523,21 @@ window.Tools = (function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', registerServiceWorker);
   else registerServiceWorker();
 
+  /* ---------- Recently used (start page) ----------
+     Every listed app notes its folder in "tools.recent.v1" (newest first, at most 12), read by the start page
+     for its row "Zuletzt benutzt". Shared by all apps like language and appearance, only in this browser,
+     not part of any app's backup. The favourites ("tools.favorites.v1") are set on the start page. */
+  const RECENT_KEY = 'tools.recent.v1';
+  function noteRecent() {
+    const id = appId();
+    if (id === 'start' || id === 'template' || !document.querySelector('details.help')
+      || document.querySelector('meta[name="tool:hidden"][content="true"]')) return;
+    const list = load(RECENT_KEY, []);
+    save(RECENT_KEY, [id, ...(Array.isArray(list) ? list : []).filter(x => typeof x === 'string' && x !== id)].slice(0, 12));
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', noteRecent);
+  else noteRecent();
+
   /* ---------- Data backup: export / import / clear (standard for every app) ----------
      Each app declares the localStorage key prefixes it owns:
        <meta name="tool:storage" content="wuerfelMuenze.">        (several: comma-separated)
