@@ -94,6 +94,8 @@ LIVE_URL=https://example.org npm run test:live   # andere Adresse
 
 Verglichen wird mit dem lokalen Stand – auf einem Branch mit Änderungen schlagen die Vergleiche deshalb erwartungsgemäß fehl. Die Action `.github/workflows/live-test.yml` läuft nach jeder Veröffentlichung (aus `pages.yml`) und auf Knopfdruck (Actions → „Live-Seite testen“ → Run workflow). Schlägt sie fehl, schickt GitHub eine E-Mail.
 
+GitHub Pages begrenzt Anfragen je IP-Adresse: Zu viele auf einmal beantwortet es mit **429** („Rate limit exceeded“) oder **503** – für zufällige Dateien, sodass es wie kaputte Apps aussieht. Darum lädt der Test jede App nur einmal (ein Test je App), fragt Dateien in kleinen Gruppen ab und läuft mit 2 Workern; ein 429 wird als „GitHub Pages rate limit“ gemeldet. Dagegen hilft weniger Last, nicht mehr Wiederholungen oder längere Timeouts.
+
 ## Manuelle Tests
 
 `tests/manual/` enthält Prüfungen, die bewusst **nicht** in `npm test` laufen, weil sie große Downloads oder private Dateien brauchen:

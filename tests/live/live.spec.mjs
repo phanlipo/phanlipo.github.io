@@ -9,15 +9,20 @@ import { ROOT, publishedFiles } from '../../scripts/lib.mjs';
 // Query parameter bypasses the CDN cache (GitHub Pages caches up to 10 minutes)
 const fresh = path => `${path}?live=${Date.now()}`;
 const local = f => readFileSync(join(ROOT, f));
+// GitHub Pages limits requests per IP: too many at once answer 429 ("Rate limit exceeded") or 503 – for
+// random files, so it looks like broken apps. The tests therefore keep the load low (few requests at a
+// time, each app loaded once, workers in playwright.live.config.mjs) and name the cause when it happens.
+const BATCH = 4;
+const pagesStatus = status => status === 429 ? '429 (GitHub Pages rate limit)' : String(status);
 
 test('every published file is live and identical to the repository', async ({ request }) => {
   test.setTimeout(300_000);
   const files = publishedFiles();
   const wrong = [];
-  for (let i = 0; i < files.length; i += 8) {
-    await Promise.all(files.slice(i, i + 8).map(async f => {
+  for (let i = 0; i < files.length; i += BATCH) {
+    await Promise.all(files.slice(i, i + BATCH).map(async f => {
       const res = await request.get(fresh(`/${f}`));
-      if (res.status() !== 200) wrong.push(`${f}: HTTP ${res.status()}`);
+      if (res.status() !== 200) wrong.push(`${f}: HTTP ${pagesStatus(res.status())}`);
       else if (!(await res.body()).equals(local(f))) wrong.push(`${f}: content differs from the repository`);
     }));
   }
@@ -60,19 +65,18 @@ for (const app of tools()) {
     const url = `/${app.folder}/`;
     const version = local(`${app.folder}/sw.js`).toString().match(/const VERSION = '([0-9a-f]+)'/)[1];
 
-    test('loads cleanly on a phone, not indexed, strict CSP, current version', async ({ page }) => {
+    // One test per app: every load installs the service worker, which downloads all of the app's files
+    test('loads cleanly on a phone, not indexed, strict CSP, current version, installable, works offline', async ({ page, context }) => {
       await page.setViewportSize(VIEWPORTS.mobile);
-      await page.goto(url);
+      const res = await page.goto(url);
+      expect(pagesStatus(res.status()), 'HTTP status of the page').toBe('200');
       await expect(page.locator('h1')).toBeVisible();
       await expect(page).toHaveTitle(app.title);
       await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
       await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute('content', /default-src 'self'/);
       await expect(page.locator('footer .footer-version')).toHaveText(`Version ${version}`);
       await expectNoHorizontalScroll(page);
-    });
 
-    test('installable and works offline', async ({ page, context }) => {
-      await page.goto(url);
       await page.evaluate(() => navigator.serviceWorker.ready);
       const cdp = await context.newCDPSession(page);
       const { installabilityErrors } = await cdp.send('Page.getInstallabilityErrors');
