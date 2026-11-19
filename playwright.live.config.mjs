@@ -15,7 +15,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   // Real network: one retry for a dropped connection (a real problem fails twice)
   retries: 1,
-  workers: 4,
+  // Few at a time: GitHub Pages answers too many requests from one IP with 429/503 (tests/live/live.spec.mjs)
+  workers: 2,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never', outputFolder: 'playwright-report-live' }]] : 'list',
   use: {
     baseURL: LIVE_URL,
