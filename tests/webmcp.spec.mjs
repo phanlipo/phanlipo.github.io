@@ -3050,6 +3050,48 @@ test.describe('hangman tools', () => {
   });
 });
 
+test.describe('code-breaker tools', () => {
+  const seed = (page, game, extra = {}) => page.addInitScript(([g, e]) => localStorage.setItem('code-breaker.state.v1',
+    JSON.stringify({ mode: 'solo', level: 'medium', ...e, game: g && { level: 'medium', source: 'random', guesses: [], ...g } })), [game, extra]);
+
+  test('get_game hides the code, make_guess plays on the board, the code shows once cracked', async ({ page }) => {
+    await seed(page, { secret: [0, 1, 2, 3] });
+    await open(page, '/code-breaker/');
+    let r = await call(page, 'code_breaker_get_game', {});
+    expect(r.result).toMatchObject({ mode: 'alone', status: 'playing', secret: null, guesses_made: 0, guesses_left: 10, possible_codes_left: 1296 });
+    expect(r.result.rules).toMatchObject({ places: 4, colors_may_repeat: true, max_guesses: 10 });
+    expect(r.result.rules.colors).toEqual(['red', 'blue', 'green', 'yellow', 'purple', 'orange']);
+    r = await call(page, 'code_breaker_make_guess', { code: ['yellow', 'green', 'blue', 'red'] });
+    expect(r.result).toMatchObject({ right_place: 0, wrong_place: 4, guesses_made: 1, possible_codes_left: 9 });
+    await expect(page.locator('#board li')).toHaveCount(1);
+    await expect(page.locator('#board li .pin.white')).toHaveCount(4);
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green'] })).error).toMatch(/exactly 4 colours/);
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green', 'pink'] })).error).toMatch(/Only these colours/);
+    expect((await call(page, 'code_breaker_new_game', {})).error).toMatch(/under way/);
+    r = await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green', 'yellow'] });
+    expect(r.result).toMatchObject({ status: 'won', right_place: 4, secret: ['red', 'blue', 'green', 'yellow'] });
+    expect(r.result.statistics).toMatchObject({ won: 1, tries: 2 });
+    await expect(page.locator('#status')).toHaveText('Geknackt in 2 Versuchen!');
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'red', 'red', 'red'] })).error).toMatch(/game is over/);
+    r = await call(page, 'code_breaker_new_game', {});
+    expect(r.result).toMatchObject({ status: 'playing', guesses_made: 0, secret: null });
+  });
+
+  test('new_game with a code for the user; two-player mode needs a code', async ({ page }) => {
+    await seed(page, null, { mode: 'duo', level: 'easy' });
+    await open(page, '/code-breaker/');
+    let r = await call(page, 'code_breaker_get_game', {});
+    expect(r.result.status).toBe('waiting_for_code');
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green', 'yellow'] })).error).toMatch(/no code yet/);
+    expect((await call(page, 'code_breaker_new_game', {})).error).toMatch(/two-player mode/);
+    expect((await call(page, 'code_breaker_new_game', { code: ['red', 'red', 'green', 'yellow'] })).error).toMatch(/only once/);
+    r = await call(page, 'code_breaker_new_game', { code: ['orange', 'red', 'green', 'yellow'] });
+    expect(r.result).toMatchObject({ status: 'playing', own_code: true, secret: null, difficulty: 'easy' });
+    await expect(page.locator('#board')).toBeVisible();
+    await expect(page.locator('#secretLine')).toHaveAttribute('aria-label', 'Geheimer Code mit 4 Farben');
+  });
+});
+
 test.describe('dots-and-boxes tools', () => {
   test('make_move draws lines, a closed box moves again, get_game reads it back, new_round', async ({ page }) => {
     await open(page, '/dots-and-boxes/');

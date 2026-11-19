@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Farbcode</title>
+<meta name="description" content="Einen geheimen Farbcode knacken: Nach jedem Versuch zeigen Stifte, wie viele Farben richtig sind – allein gegen das Handy oder zu zweit.">
+<meta name="tool:tags" content="Freizeit, Spiele">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:icon" content="circles">
+<meta name="tool:color" content="#5a3d8a">
+<meta name="tool:short-name" content="Farbcode">
+<meta name="tool:title-en" content="Code Breaker">
+<meta name="tool:description-en" content="Crack a secret colour code: after every guess, pins show how many colours are right – alone against the phone or with two players.">
+<meta name="tool:short-name-en" content="Code Breaker">
+<meta name="tool:storage" content="code-breaker.">
+<meta name="tool:webmcp" content="get_game, make_guess, new_game">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann das Spiel lesen (den geheimen Code erst nach dem Ende), einen Versuch abgeben und ein neues Spiel starten – auch mit einem eigenen Code, den du dann knackst. Jeder Versuch erscheint sofort auf dem Brett.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the game (the secret code only once it is over), make a guess and start a new game – also with a code of its own for you to crack. Every guess shows up on the board right away.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-SOlZSUPjI94yQEdll13zBj5tX7qByF4GOW65T98bcbk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Farbcode">
+<meta name="theme-color" content="#5a3d8a">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#5a3d8a;--accent-text:#ffffff;
+  /* Peg colours: game content, the same in light and dark (each peg also shows its number) */
+  --p0:#c62828;--p0t:#ffffff;--p1:#1d5bc8;--p1t:#ffffff;--p2:#157a35;--p2t:#ffffff;--p3:#f2c300;--p3t:#1a1a1a;
+  --p4:#7b3fc4;--p4t:#ffffff;--p5:#f07a10;--p5t:#1a1a1a;--p6:#19b5c9;--p6t:#1a1a1a;--p7:#f06fb0;--p7t:#1a1a1a}
+@media (prefers-color-scheme: dark){:root{--accent:#c4aef0;--accent-text:#1c1230}}
+main{max-width:560px;margin-inline:auto;padding:8px;display:flex;flex-direction:column}
+.play{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:10px}
+
+/* ---------- Pegs ---------- */
+.peg{--s:34px;width:var(--s);height:var(--s);flex:none;border-radius:50%;display:grid;place-items:center;
+  font-weight:700;font-size:calc(var(--s) * .45);line-height:1;border:2px solid transparent;box-sizing:border-box}
+.peg.empty{background:var(--surface-2);border:2px dashed var(--border);color:var(--muted)}
+.peg.hidden-peg{background:var(--surface-2);border-color:var(--border);color:var(--muted)}
+.peg[data-c]{border-color:rgba(0,0,0,.25)}
+.peg[data-c="0"]{background:var(--p0);color:var(--p0t)}.peg[data-c="1"]{background:var(--p1);color:var(--p1t)}
+.peg[data-c="2"]{background:var(--p2);color:var(--p2t)}.peg[data-c="3"]{background:var(--p3);color:var(--p3t)}
+.peg[data-c="4"]{background:var(--p4);color:var(--p4t)}.peg[data-c="5"]{background:var(--p5);color:var(--p5t)}
+.peg[data-c="6"]{background:var(--p6);color:var(--p6t)}.peg[data-c="7"]{background:var(--p7);color:var(--p7t)}
+.peg .ic{width:calc(var(--s) * .5);height:calc(var(--s) * .5)}
+
+/* ---------- Board ---------- */
+.secret-line{flex:none;display:flex;align-items:center;gap:6px;justify-content:center;padding-block-end:6px;border-block-end:1px solid var(--border)}
+.secret-line .label{font-size:14px;color:var(--muted);margin-inline-end:4px}
+.board{flex:1;min-height:60px;overflow-y:auto;margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.board li{display:flex;align-items:center;gap:6px;justify-content:center;padding:2px 0}
+.board .n{width:22px;text-align:end;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.board .pegs{display:flex;gap:5px}
+.board li.empty-row{opacity:.55}
+.board li.empty-row .peg{--s:24px;margin:4px}
+.pins{display:grid;grid-template-columns:repeat(var(--pc,2),10px);gap:3px;width:max-content;margin-inline-start:6px}
+.pin{width:10px;height:10px;border-radius:50%;box-sizing:border-box;background:var(--border);transform:scale(.55)}
+.pin.black{background:var(--text);transform:none}
+.pin.white{background:var(--surface);border:2px solid var(--text);transform:none}
+
+.status{flex:none;text-align:center;min-height:24px;margin:0;font-weight:600;font-size:16px}
+.status[data-state="won"]{color:var(--ok)}
+.status[data-state="lost"]{color:var(--err)}
+.possible{flex:none;text-align:center;margin:-4px 0 0;font-size:14px;color:var(--muted)}
+.setup-title{flex:none;margin:0;font-size:18px;text-align:center}
+.setup-intro{flex:1;margin:0;color:var(--muted);text-align:center}
+
+/* ---------- Entry: slots, colours, actions ---------- */
+.entry{flex:none;display:flex;align-items:center;justify-content:center;gap:6px}
+.slot{--s:46px;padding:0;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;font:inherit;font-weight:700;font-size:20px}
+.slot[aria-current="true"]{outline:3px solid var(--accent);outline-offset:2px}
+.slot:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.palette{flex:none;display:grid;grid-template-columns:repeat(var(--cols,6),minmax(44px,1fr));gap:6px}
+.color{min-height:48px;padding:0;margin:0;border-radius:10px;border:2px solid rgba(0,0,0,.25);font:inherit;font-size:20px;font-weight:700;
+  cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.color:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.color:disabled{opacity:.3;cursor:default}
+.color[data-c="0"]{background:var(--p0);color:var(--p0t)}.color[data-c="1"]{background:var(--p1);color:var(--p1t)}
+.color[data-c="2"]{background:var(--p2);color:var(--p2t)}.color[data-c="3"]{background:var(--p3);color:var(--p3t)}
+.color[data-c="4"]{background:var(--p4);color:var(--p4t)}.color[data-c="5"]{background:var(--p5);color:var(--p5t)}
+.color[data-c="6"]{background:var(--p6);color:var(--p6t)}.color[data-c="7"]{background:var(--p7);color:var(--p7t)}
+.actions{flex:none;display:flex;gap:8px}
+.actions .btn.primary{flex:1;min-height:52px;font-size:17px;font-weight:600}
+
+/* ---------- Menu cards ---------- */
+.card h3{font-size:16px;margin:14px 0 8px}
+.card h3:first-of-type{margin-top:4px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.stats .stat-box span{font-size:13px;color:var(--muted)}
+.muted-info{color:var(--muted);margin:8px 0 0;font-size:14px;display:block}
+.legend{display:flex;align-items:center;gap:8px;margin:6px 0}
+.legend .pin{transform:none;flex:none}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Farbcode</span></h1>
+  <p class="sub" data-i18n="sub">Den Code knacken</p>
+</header>
+
+<main>
+  <section class="card play" id="play" aria-label="Spiel" data-i18n-attr="aria-label:playLabel">
+    <div class="secret-line" id="secretLine" role="img" aria-label=""></div>
+    <ol class="board" id="board" aria-label="Versuche" data-i18n-attr="aria-label:boardLabel"></ol>
+    <h2 class="setup-title" id="setupTitle" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg> <span data-i18n="setupH">Geheimen Code wählen</span></h2>
+    <p class="setup-intro" id="setupIntro" data-i18n="setupIntro" hidden>Wer den Code festlegt, wählt ihn hier, ohne dass die anderen hinsehen. Dann das Handy weitergeben – die anderen raten.</p>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <p class="possible" id="possible" hidden></p>
+    <div class="entry" id="entry" role="group" aria-label="Dein Versuch" data-i18n-attr="aria-label:entryLabel"></div>
+    <div class="palette" id="palette" role="group" aria-label="Farben" data-i18n-attr="aria-label:paletteLabel"></div>
+    <div class="actions" id="entryActions">
+      <button type="button" class="btn icon" id="btnBack" aria-label="Letzte Farbe entfernen" title="Letzte Farbe entfernen" data-i18n-attr="aria-label:back; title:back"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#backspace"/></svg></button>
+      <button type="button" class="btn icon" id="btnShow" aria-label="Code zeigen" title="Code zeigen" data-i18n-attr="aria-label:show; title:show" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eye"/></svg></button>
+      <button type="button" class="btn primary" id="btnCheck"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#check"/></svg><span id="checkText" data-i18n="check">Prüfen</span></button>
+    </div>
+    <div class="actions" id="overActions" hidden>
+      <button type="button" class="btn primary" id="btnNext"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="next">Neues Spiel</span></button>
+    </div>
+  </section>
+
+  <section class="card" id="settingsCard" aria-labelledby="h-settings" data-menu data-icon="settings">
+    <h2 id="h-settings" data-i18n="settings">Spiel &amp; Einstellungen</h2>
+    <h3 id="h-mode" data-i18n="mode">Spielart</h3>
+    <div class="seg" id="mode" role="group" aria-labelledby="h-mode">
+      <button type="button" data-v="solo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#user"/></svg><span data-i18n="mode.solo">Allein</span></button>
+      <button type="button" data-v="duo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span data-i18n="mode.duo">Zu zweit</span></button>
+    </div>
+    <h3 id="h-level" data-i18n="level">Schwierigkeit</h3>
+    <div class="seg" id="levels" role="group" aria-labelledby="h-level">
+      <button type="button" data-v="easy" data-i18n="level.easy">Leicht</button>
+      <button type="button" data-v="medium" data-i18n="level.medium">Mittel</button>
+      <button type="button" data-v="hard" data-i18n="level.hard">Schwer</button>
+    </div>
+    <p class="muted-info" id="levelInfo"></p>
+    <h3 data-i18n="help">Hilfen</h3>
+    <label class="check"><input type="checkbox" id="optPossible"><span data-i18n="optPossible">Zeigen, wie viele Codes noch möglich sind</span></label>
+  </section>
+
+  <section class="card" id="statsCard" aria-labelledby="h-stats" data-menu data-icon="trophy">
+    <h2 id="h-stats" data-i18n="stats">Statistik (allein)</h2>
+    <div class="stats">
+      <div class="stat-box"><b id="stWon">0</b><span data-i18n="st.won">Geknackt</span></div>
+      <div class="stat-box"><b id="stLost">0</b><span data-i18n="st.lost">Nicht geknackt</span></div>
+      <div class="stat-box"><b id="stAvg">–</b><span data-i18n="st.avg">Ø Versuche</span></div>
+      <div class="stat-box"><b id="stBest">–</b><span data-i18n="st.best">Bestwert</span></div>
+    </div>
+    <div class="row" style="margin-top:10px"><button type="button" class="btn" id="btnResetStats"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="resetStats">Statistik zurücksetzen</span></button></div>
+  </section>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnGiveUp"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#flag"/></svg><span data-i18n="giveUp">Aufgeben und Code zeigen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Ratespiel für kluge Köpfe: Gesucht ist ein geheimer Code aus vier oder fünf Farben in einer bestimmten Reihenfolge. Nach jedem Versuch verraten kleine Stifte, wie nah du dran bist. Knacke den Code in höchstens 10 Versuchen.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Farben unten antippen – sie füllen die Plätze von links nach rechts (am Computer auch mit den Zifferntasten). Ein belegter Platz lässt sich antippen, um ihn neu zu wählen; die Rücktaste (Pfeil mit x) entfernt die letzte Farbe.</li>
+    <li>Sind alle Plätze belegt, mit <b>Prüfen</b> (oder Enter) den Versuch abgeben.</li>
+    <li>Jede Farbe trägt zusätzlich eine Nummer, damit sie sich auch ohne Farbsehen unterscheiden lässt.</li>
+    <li>Im Menü ☰: <b>Aufgeben</b> (zeigt den Code, zählt als nicht geknackt), die <b>Spielart</b>, die <b>Schwierigkeit</b>, eine Hilfe und die <b>Statistik</b>.</li>
+  </ul>
+  <h3>Die Stifte</h3>
+  <ul>
+    <li><b>Gefüllter Stift:</b> eine Farbe ist richtig und steht am richtigen Platz.</li>
+    <li><b>Ring:</b> eine Farbe kommt im Code vor, steht aber an einem anderen Platz.</li>
+    <li>Die Stifte sagen nicht, welche Farbe gemeint ist – das ist das Rätsel. Jede Farbe im Code zählt nur einmal.</li>
+  </ul>
+  <h3>Allein oder zu zweit</h3>
+  <ul>
+    <li><b>Allein:</b> Das Handy denkt sich einen zufälligen Code aus.</li>
+    <li><b>Zu zweit:</b> Einer wählt den Code verdeckt (mit dem Auge lässt er sich kurz zeigen) und tippt auf <b>Raten lassen</b>. Dann bekommen die anderen das Handy.</li>
+  </ul>
+  <h3>Schwierigkeit</h3>
+  <ul>
+    <li><b>Leicht:</b> 4 Plätze, 6 Farben, jede Farbe höchstens einmal.</li>
+    <li><b>Mittel:</b> 4 Plätze, 6 Farben, Farben dürfen sich wiederholen.</li>
+    <li><b>Schwer:</b> 5 Plätze, 8 Farben, Farben dürfen sich wiederholen.</li>
+  </ul>
+  <p>Die Hilfe „Wie viele Codes noch möglich sind“ zählt alle Codes, die zu allen bisherigen Stiften passen – bei nur noch einem ist der Code eindeutig.</p>
+  <h3>Gespeichert</h3>
+  <p>Das laufende Spiel (auch ein eigener Code), die Einstellungen und die Statistik der Spiele allein bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A guessing game for clever minds: there’s a secret code of four or five colours in a certain order. After every guess, small pins tell you how close you are. Crack the code in at most 10 guesses.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li>Tap colours at the bottom – they fill the places from left to right (on a computer also with the number keys). Tap a filled place to choose it again; the backspace key removes the last colour.</li>
+    <li>Once every place is filled, <b>Check</b> (or Enter) makes the guess.</li>
+    <li>Every colour also carries a number, so they can be told apart without seeing colour.</li>
+    <li>In the menu ☰: <b>Give up</b> (shows the code, counts as not cracked), the <b>mode</b>, the <b>difficulty</b>, a helper and the <b>statistics</b>.</li>
+  </ul>
+  <h3>The pins</h3>
+  <ul>
+    <li><b>Filled pin:</b> a colour is right and in the right place.</li>
+    <li><b>Ring:</b> a colour is in the code, but in another place.</li>
+    <li>The pins don’t say which colour they mean – that’s the puzzle. Each colour of the code counts only once.</li>
+  </ul>
+  <h3>Alone or two players</h3>
+  <ul>
+    <li><b>Alone:</b> the phone thinks of a random code.</li>
+    <li><b>Two players:</b> one picks the code hidden (the eye shows it for a moment) and taps <b>Let them guess</b>. Then the others get the phone.</li>
+  </ul>
+  <h3>Difficulty</h3>
+  <ul>
+    <li><b>Easy:</b> 4 places, 6 colours, each colour at most once.</li>
+    <li><b>Medium:</b> 4 places, 6 colours, colours may repeat.</li>
+    <li><b>Hard:</b> 5 places, 8 colours, colours may repeat.</li>
+  </ul>
+  <p>The helper “how many codes are still possible” counts every code that fits all pins so far – once only one is left, the code is certain.</p>
+  <h3>Stored</h3>
+  <p>The current game (including a code of your own), the settings and the statistics of games alone stay only in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann das Spiel lesen (den geheimen Code erst nach dem Ende), einen Versuch abgeben und ein neues Spiel starten – auch mit einem eigenen Code, den du dann knackst. Jeder Versuch erscheint sofort auf dem Brett. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the game (the secret code only once it is over), make a guess and start a new game – also with a code of its own for you to crack. Every guess shows up on the board right away. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 02ecac79d8b3</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="game.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'c.red':'Rot','c.blue':'Blau','c.green':'Grün','c.yellow':'Gelb','c.purple':'Lila','c.orange':'Orange','c.cyan':'Türkis','c.pink':'Rosa',
+    colorBtn:'{n} {c}',slotEmpty:'Platz {i}: leer',slotFilled:'Platz {i}: {c}',slotHidden:'Platz {i}: gewählt',
+    try:'Versuch {n} von {m}',lastTry:'Letzter Versuch!',
+    won:'Geknackt in {n} Versuchen!',wonOne:'Geknackt im ersten Versuch!',lost:'Nicht geknackt – das war der Code.',
+    row:'Versuch {n}: {code} – {b} richtig platziert, {w} richtige Farbe am falschen Platz',
+    secretHidden:'Geheimer Code mit {n} Farben',secretShown:'Der Code: {code}',secretL:'Code',
+    possible:'Noch {n} mögliche Codes',possibleOne:'Nur noch ein Code ist möglich!',
+    levelInfo:'{p} Plätze, {c} Farben, {r}. Gilt ab dem nächsten Spiel, wenn schon geraten wurde.',repeatYes:'Farben dürfen sich wiederholen',repeatNo:'jede Farbe höchstens einmal',
+    later:'Gilt ab dem nächsten Spiel',pick:'Farben wählen ({n} Plätze)',setupPick:'Code wählen ({n} Plätze)',
+    start:'Raten lassen',hide:'Code verbergen',
+    resetQ:'Statistik ({n} Spiele) auf null setzen?',statsReset:'Statistik zurückgesetzt',
+    'mcp.guess':'Versuch','mcp.new':'Neues Spiel'
+  },
+  en:{
+    title:'Code Breaker',sub:'Crack the code',playLabel:'Game',boardLabel:'Guesses',entryLabel:'Your guess',paletteLabel:'Colours',
+    back:'Remove last colour',show:'Show code',check:'Check',next:'New game',
+    setupH:'Choose a secret code',setupIntro:'Whoever sets the code picks it here while the others don’t look. Then pass the phone on – the others guess.',
+    settings:'Game & settings',mode:'Mode','mode.solo':'Alone','mode.duo':'Two players',
+    level:'Difficulty','level.easy':'Easy','level.medium':'Medium','level.hard':'Hard',help:'Helpers',optPossible:'Show how many codes are still possible',
+    stats:'Statistics (alone)','st.won':'Cracked','st.lost':'Not cracked','st.avg':'Avg. guesses','st.best':'Best',resetStats:'Reset statistics',
+    giveUp:'Give up and show the code',
+    'c.red':'Red','c.blue':'Blue','c.green':'Green','c.yellow':'Yellow','c.purple':'Purple','c.orange':'Orange','c.cyan':'Turquoise','c.pink':'Pink',
+    colorBtn:'{n} {c}',slotEmpty:'Place {i}: empty',slotFilled:'Place {i}: {c}',slotHidden:'Place {i}: chosen',
+    try:'Guess {n} of {m}',lastTry:'Last guess!',
+    won:'Cracked in {n} guesses!',wonOne:'Cracked with the first guess!',lost:'Not cracked – this was the code.',
+    row:'Guess {n}: {code} – {b} in the right place, {w} right colour in the wrong place',
+    secretHidden:'Secret code of {n} colours',secretShown:'The code: {code}',secretL:'Code',
+    possible:'{n} possible codes left',possibleOne:'Only one code is possible!',
+    levelInfo:'{p} places, {c} colours, {r}. Applies from the next game if a guess was made.',repeatYes:'colours may repeat',repeatNo:'each colour at most once',
+    later:'Applies from the next game',pick:'Pick colours ({n} places)',setupPick:'Choose the code ({n} places)',
+    start:'Let them guess',hide:'Hide code',
+    resetQ:'Set the statistics ({n} games) back to zero?',statsReset:'Statistics reset',
+    'mcp.guess':'Guess','mcp.new':'New game'
+  }
+});
+const t=Tools.t,C=window.CodeBreaker;
+const LS='code-breaker.state.v1';
+const MODES=['solo','duo'],LEVELS=Object.keys(C.LEVELS);
+const freshStats=()=>({won:0,lost:0,tries:0,best:0});
+const fresh=()=>({mode:'solo',level:'medium',showPossible:false,game:null,draft:[],stats:freshStats()});
+function saneGame(g){
+  if(!g||typeof g!=='object'||!LEVELS.includes(g.level)||C.check(g.secret,g.level))return null;
+  const out=C.create({secret:g.secret,level:g.level,source:g.source});
+  if(Array.isArray(g.guesses))for(const r of g.guesses){
+    if(C.status(out)!=='playing'||!r||C.check(r.code,out.level))break;
+    C.guess(out,r.code);
+  }
+  out.gaveUp=g.gaveUp===true;out.done=g.done===true;
+  return out;
+}
+function sane(s){
+  const d=fresh();
+  if(!s||typeof s!=='object')return d;
+  if(MODES.includes(s.mode))d.mode=s.mode;
+  if(LEVELS.includes(s.level))d.level=s.level;
+  d.showPossible=s.showPossible===true;
+  d.game=saneGame(s.game);
+  if(Array.isArray(s.draft))d.draft=s.draft.map(c=>Number.isInteger(c)&&c>=0&&c<8?c:null);
+  if(s.stats&&typeof s.stats==='object')for(const k of Object.keys(d.stats))if(Number.isInteger(s.stats[k])&&s.stats[k]>=0)d.stats[k]=s.stats[k];
+  return d;
+}
+const state=sane(Tools.load(LS,null));
+const save=()=>Tools.save(LS,state);
+let cursor=0,shown=false,lastRows=-1;
+
+const G=()=>state.game;
+const playing=()=>!!G()&&C.status(G())==='playing';
+const touched=()=>!!G()&&G().guesses.length>0;
+// The level of what is being entered: the game's, or the chosen one while a secret code is picked
+const L=()=>C.levelOf(G()?G().level:state.level);
+const colorName=c=>t('c.'+C.COLORS[c]);
+const codeText=code=>code.map(colorName).join(', ');
+
+// ---------- Draft (the row being entered) ----------
+function fitDraft(){
+  const n=L().pegs,d=state.draft.slice(0,n);
+  while(d.length<n)d.push(null);
+  for(let i=0;i<n;i++)if(d[i]!==null&&d[i]>=L().colors)d[i]=null;
+  state.draft=d;
+  if(cursor>=n||cursor<0)cursor=0;
+}
+const draftFull=()=>state.draft.every(c=>c!==null);
+const nextEmpty=from=>{const d=state.draft;for(let k=0;k<d.length;k++){const i=(from+k)%d.length;if(d[i]===null)return i;}return from;};
+function addColor(c){
+  const d=state.draft;
+  if(!L().repeat&&d.includes(c))return;
+  if(d[cursor]!==null)cursor=nextEmpty(cursor);
+  if(d[cursor]!==null)return; // full
+  d[cursor]=c;cursor=nextEmpty(cursor);
+  save();render();
+}
+function backspace(){
+  const d=state.draft;
+  let i=-1;for(let k=d.length-1;k>=0;k--)if(d[k]!==null){i=k;break;}
+  if(i<0)return;
+  d[i]=null;cursor=i;save();render();
+}
+
+// ---------- Games ----------
+function startRandom(){
+  state.game=C.create({secret:C.random(state.level),level:state.level,source:'random'});
+  state.draft=[];cursor=0;lastRows=-1;
+  Tools.diag.log('new game',{source:'random',level:state.level});
+}
+function startOwn(code){
+  state.game=C.create({secret:code,level:state.level,source:'own'});
+  state.draft=[];cursor=0;lastRows=-1;shown=false;
+  Tools.diag.log('new game',{source:'own',level:state.level});
+}
+function next(){
+  if(state.mode==='solo')startRandom();
+  else{state.game=null;state.draft=[];cursor=0;shown=false;}
+  save();render();
+}
+function finish(){
+  const g=G();
+  if(!g||g.done||C.status(g)==='playing')return;
+  g.done=true;
+  const won=C.status(g)==='won';
+  if(g.source==='random'){
+    const s=state.stats;
+    if(won){s.won++;s.tries+=g.guesses.length;s.best=s.best?Math.min(s.best,g.guesses.length):g.guesses.length;}
+    else s.lost++;
+  }
+  Tools.diag.log('game over',{result:won?'won':'lost',guesses:g.guesses.length,gaveUp:g.gaveUp,source:g.source,level:g.level});
+  if(!won&&navigator.vibrate)try{navigator.vibrate([60,60,60]);}catch{/* ignore */}
+}
+function makeGuess(code){
+  const r=C.guess(G(),code);
+  state.draft=[];cursor=0;
+  finish();save();render();
+  return r;
+}
+function submit(){
+  if(!draftFull())return;
+  if(!G()){startOwn(state.draft.slice());save();render();Tools.$('btnCheck').focus();return;}
+  if(!playing())return;
+  makeGuess(state.draft.slice());
+}
+
+// ---------- Rendering ----------
+function peg(c,size,cls){
+  const el=document.createElement('span');
+  el.className='peg'+(cls?' '+cls:'');
+  if(size)el.style.setProperty('--s',size+'px');
+  if(c===null||c===undefined)el.classList.add('empty');
+  else{el.dataset.c=String(c);el.textContent=String(c+1);}
+  el.setAttribute('aria-hidden','true');
+  return el;
+}
+function pins(r,n){
+  const box=document.createElement('span');box.className='pins';box.setAttribute('aria-hidden','true');
+  box.style.setProperty('--pc',String(Math.ceil(n/2)));
+  for(let i=0;i<n;i++){
+    const p=document.createElement('span');
+    p.className='pin'+(i<r.black?' black':i<r.black+r.white?' white':'');
+    box.appendChild(p);
+  }
+  return box;
+}
+const boardEl=Tools.$('board'),entryEl=Tools.$('entry'),palEl=Tools.$('palette'),secretEl=Tools.$('secretLine');
+function renderBoard(g){
+  boardEl.textContent='';
+  const n=g.secret.length;
+  g.guesses.forEach((r,k)=>{
+    const li=document.createElement('li');
+    li.setAttribute('aria-label',t('row',{n:Tools.fmt(k+1,0),code:codeText(r.code),b:Tools.fmt(r.black,0),w:Tools.fmt(r.white,0)}));
+    li.dataset.black=String(r.black);li.dataset.white=String(r.white);
+    const num=document.createElement('span');num.className='n';num.textContent=String(k+1);num.setAttribute('aria-hidden','true');
+    const pegs=document.createElement('span');pegs.className='pegs';pegs.setAttribute('aria-hidden','true');
+    for(const c of r.code)pegs.appendChild(peg(c));
+    li.append(num,pegs,pins(r,n));
+    boardEl.appendChild(li);
+  });
+  if(g.guesses.length!==lastRows){
+    lastRows=g.guesses.length;
+    requestAnimationFrame(()=>{boardEl.scrollTop=boardEl.scrollHeight;});
+  }
+}
+function renderSecret(g){
+  secretEl.textContent='';
+  const lab=document.createElement('span');lab.className='label';lab.textContent=t('secretL');lab.setAttribute('aria-hidden','true');
+  secretEl.appendChild(lab);
+  const over=C.status(g)!=='playing';
+  for(const c of g.secret){
+    if(over)secretEl.appendChild(peg(c,28));
+    else{const p=peg(null,28,'hidden-peg');p.classList.remove('empty');p.innerHTML=Tools.icon('lock');secretEl.appendChild(p);}
+  }
+  secretEl.setAttribute('aria-label',over?t('secretShown',{code:codeText(g.secret)}):t('secretHidden',{n:Tools.fmt(g.secret.length,0)}));
+}
+function renderEntry(setup){
+  fitDraft();
+  const d=state.draft,lv=L();
+  entryEl.textContent='';
+  d.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.type='button';
+    const hide=setup&&!shown&&c!==null;
+    b.className='peg slot'+(c===null?' empty':hide?' hidden-peg':'');
+    if(c!==null&&!hide){b.dataset.c=String(c);b.textContent=String(c+1);}
+    if(hide)b.innerHTML=Tools.icon('lock');
+    b.dataset.i=String(i);
+    b.setAttribute('aria-current',String(i===cursor&&!draftFull()));
+    b.setAttribute('aria-label',c===null?t('slotEmpty',{i:i+1}):hide?t('slotHidden',{i:i+1}):t('slotFilled',{i:i+1,c:colorName(c)}));
+    b.addEventListener('click',()=>{if(d[i]!==null){d[i]=null;save();}cursor=i;render();entryEl.children[i]?.focus();});
+    entryEl.appendChild(b);
+  });
+  if(palEl.children.length!==lv.colors){
+    palEl.textContent='';
+    for(let c=0;c<lv.colors;c++){
+      const b=document.createElement('button');
+      b.type='button';b.className='color';b.dataset.c=String(c);b.textContent=String(c+1);
+      b.addEventListener('click',()=>addColor(c));
+      palEl.appendChild(b);
+    }
+  }
+  palEl.style.setProperty('--cols',String(lv.colors>6?4:lv.colors));
+  for(const b of palEl.children){
+    const c=Number(b.dataset.c);
+    b.setAttribute('aria-label',t('colorBtn',{n:c+1,c:colorName(c)}));
+    b.title=colorName(c);
+    b.disabled=(!lv.repeat&&d.includes(c))||draftFull();
+  }
+  const chk=Tools.$('btnCheck');
+  chk.disabled=!draftFull();
+  Tools.$('checkText').textContent=setup?t('start'):t('check');
+  Tools.$('btnBack').disabled=d.every(c=>c===null);
+}
+function render(){
+  let g=G();
+  const setup=!g&&state.mode==='duo';
+  if(!g&&!setup){startRandom();save();g=G();}
+  for(const id of ['setupTitle','setupIntro'])Tools.$(id).hidden=!setup;
+  secretEl.hidden=setup;boardEl.hidden=setup;
+  const showBtn=Tools.$('btnShow');
+  showBtn.hidden=!setup;
+  showBtn.setAttribute('aria-pressed',String(shown));
+  const sk=shown?'hide':'show';
+  showBtn.setAttribute('data-i18n-attr',`aria-label:${sk}; title:${sk}`);showBtn.setAttribute('aria-label',t(sk));showBtn.title=t(sk);
+  showBtn.querySelector('use').setAttribute('href',shown?'../assets/icons.svg#eye-off':'../assets/icons.svg#eye');
+  const st=Tools.$('status'),pos=Tools.$('possible');
+  const over=!!g&&C.status(g)!=='playing';
+  if(setup){
+    st.dataset.state='';st.textContent=t('setupPick',{n:Tools.fmt(L().pegs,0)});pos.hidden=true;
+  }else{
+    renderSecret(g);renderBoard(g);
+    const s=C.status(g),n=g.guesses.length;
+    st.dataset.state=s;
+    st.textContent=s==='won'?(n===1?t('wonOne'):t('won',{n:Tools.fmt(n,0)})):s==='lost'?t('lost'):n===C.TRIES-1?t('lastTry'):t('try',{n:Tools.fmt(n+1,0),m:Tools.fmt(C.TRIES,0)});
+    pos.hidden=!(state.showPossible&&s==='playing'&&n>0);
+    if(!pos.hidden){const k=C.possible(g);pos.textContent=k===1?t('possibleOne'):t('possible',{n:Tools.fmt(k,0)});}
+  }
+  entryEl.hidden=palEl.hidden=Tools.$('entryActions').hidden=over;
+  Tools.$('overActions').hidden=!over;
+  if(!over)renderEntry(setup);
+  // Menu
+  Tools.$('btnGiveUp').hidden=!(playing()&&(touched()||G().source==='own'));
+  for(const b of document.querySelectorAll('#mode button'))b.setAttribute('aria-pressed',String(b.dataset.v===state.mode));
+  for(const b of document.querySelectorAll('#levels button'))b.setAttribute('aria-pressed',String(b.dataset.v===state.level));
+  const lv=C.LEVELS[state.level];
+  Tools.$('levelInfo').textContent=t('levelInfo',{p:Tools.fmt(lv.pegs,0),c:Tools.fmt(lv.colors,0),r:t(lv.repeat?'repeatYes':'repeatNo')});
+  Tools.$('optPossible').checked=state.showPossible;
+  const s=state.stats;
+  Tools.$('stWon').textContent=Tools.fmt(s.won,0);Tools.$('stLost').textContent=Tools.fmt(s.lost,0);
+  Tools.$('stAvg').textContent=s.won?Tools.fmt(s.tries/s.won,1):'–';
+  Tools.$('stBest').textContent=s.best?Tools.fmt(s.best,0):'–';
+}
+
+// ---------- Settings: apply right away unless a guess was made ----------
+function changed(){
+  if(touched()&&playing()){Tools.toast(t('later'));save();render();return;}
+  if(state.mode==='solo')startRandom();else{state.game=null;state.draft=[];cursor=0;}
+  save();render();
+}
+for(const b of document.querySelectorAll('#mode button'))b.addEventListener('click',()=>{
+  if(state.mode===b.dataset.v)return;
+  state.mode=b.dataset.v;Tools.diag.log('mode',{mode:state.mode});changed();
+});
+for(const b of document.querySelectorAll('#levels button'))b.addEventListener('click',()=>{
+  if(state.level===b.dataset.v)return;
+  state.level=b.dataset.v;Tools.diag.log('level',{level:state.level});changed();
+});
+Tools.$('optPossible').addEventListener('change',e=>{state.showPossible=e.target.checked;save();render();});
+
+// ---------- Actions ----------
+Tools.$('btnCheck').addEventListener('click',submit);
+Tools.$('btnBack').addEventListener('click',backspace);
+Tools.$('btnShow').addEventListener('click',()=>{shown=!shown;render();});
+Tools.$('btnNext').addEventListener('click',next);
+Tools.$('btnGiveUp').addEventListener('click',()=>{
+  const g=G();if(!g||!playing())return;
+  Tools.menu.close();
+  g.gaveUp=true;finish();save();render();
+});
+Tools.$('btnResetStats').addEventListener('click',async()=>{
+  const s=state.stats,n=s.won+s.lost;
+  if(n&&!await Tools.confirm(t('resetQ',{n:Tools.fmt(n,0)}),{action:'reset'}))return;
+  state.stats=freshStats();save();render();Tools.toast(t('statsReset'));
+});
+// Physical keyboard: 1–8 pick colours, Backspace deletes, Enter checks or starts the next game
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey||e.defaultPrevented)return;
+  const el=e.target instanceof Element?e.target:null;
+  if(document.querySelector('dialog[open]')||el&&el.closest('input,textarea,select,[contenteditable]'))return;
+  const g=G(),over=!!g&&!playing();
+  if(e.key==='Enter'&&!(el&&el.closest('button,a,summary'))){e.preventDefault();if(over)next();else submit();return;}
+  if(over)return;
+  if(e.key==='Backspace'){e.preventDefault();backspace();return;}
+  const k=Number(e.key);
+  if(/^[1-8]$/.test(e.key)&&k<=L().colors){e.preventDefault();addColor(k-1);}
+});
+
+Tools.onLang(render);
+Tools.diag.info(()=>{const g=G();return {mode:state.mode,level:state.level,status:g?C.status(g):'setup',source:g?g.source:null,guesses:g?g.guesses.length:null,showPossible:state.showPossible,stats:state.stats};});
+render();
+save(); // keeps the checked state (repaired or dropped game)
+
+// ---------- WebMCP ----------
+const COLOR_ENUM=C.COLORS;
+function view(){
+  const g=G();
+  if(!g)return {mode:'two_players',status:'waiting_for_code',difficulty:state.level,rules:rules(state.level),statistics:state.stats};
+  const st=C.status(g);
+  return {mode:state.mode==='solo'?'alone':'two_players',status:st,difficulty:g.level,rules:rules(g.level),own_code:g.source==='own',
+    guesses:g.guesses.map(r=>({code:r.code.map(c=>C.COLORS[c]),right_place:r.black,wrong_place:r.white})),
+    guesses_made:g.guesses.length,guesses_left:st==='playing'?C.TRIES-g.guesses.length:0,
+    possible_codes_left:st==='playing'?C.possible(g):null,
+    secret:st==='playing'?null:g.secret.map(c=>C.COLORS[c]),statistics:state.stats};
+}
+function rules(level){
+  const L=C.LEVELS[level];
+  return {places:L.pegs,colors:C.COLORS.slice(0,L.colors),colors_may_repeat:L.repeat,max_guesses:C.TRIES,
+    pins:'right_place = right colour in the right place; wrong_place = colour is in the code but in another place; each code peg counts once'};
+}
+function toCode(names,level){
+  const code=names.map(n=>C.COLORS.indexOf(String(n).toLowerCase()));
+  const err=C.check(code,level),L=C.LEVELS[level];
+  if(err==='length')throw new Error(`The code needs exactly ${L.pegs} colours.`);
+  if(err==='color')throw new Error(`Only these colours are allowed: ${C.COLORS.slice(0,L.colors).join(', ')}.`);
+  if(err==='repeat')throw new Error('In this difficulty each colour may appear only once.');
+  return code;
+}
+const codeSchema=desc=>({type:'array',minItems:4,maxItems:5,items:{type:'string',enum:COLOR_ENUM},description:desc});
+Tools.mcp.register({
+  name:'get_game',title:'Read the game',readOnly:true,
+  description:'Reads the current code breaker game: the rules (places, allowed colours, whether colours may repeat, max guesses), every guess so far with its pins (right_place, wrong_place), guesses left, how many codes still fit all pins, the status (playing, won, lost, or waiting_for_code while a player has to pick a secret code) and the statistics. The secret code is only included once the game is over.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>view()
+});
+Tools.mcp.register({
+  name:'make_guess',title:'Make a guess',label:'mcp.guess',
+  description:'Makes one guess at the secret code, as if the user entered it and pressed Check. Shows it on the board and returns the pins of this guess plus the game afterwards (same as get_game).',
+  inputSchema:{type:'object',properties:{code:codeSchema('The guessed colours from left to right; exactly as many as the game has places.')},required:['code'],additionalProperties:false},
+  execute:({code})=>{
+    const g=G();
+    if(!g)throw new Error('There is no code yet – a player has to pick a secret code first, or call new_game with a code.');
+    if(!playing())throw new Error('The game is over – start the next one with new_game.');
+    const r=makeGuess(toCode(code,g.level));
+    return Object.assign({right_place:r.black,wrong_place:r.white},view());
+  }
+});
+Tools.mcp.register({
+  name:'new_game',title:'Start a new game',label:'mcp.new',
+  description:'Starts the next game in the chosen difficulty. Without "code", the app picks a random secret code (alone mode). With "code", that code becomes the secret for the user to crack – in two-player mode a code is required. Not possible while a game is under way (at least one guess made). Returns the new game (same as get_game; the code stays hidden).',
+  inputSchema:{type:'object',properties:{code:codeSchema('A secret code for the user, colours from left to right.')},additionalProperties:false},
+  execute:({code})=>{
+    if(touched()&&playing())throw new Error('A game is under way – finish it or give up in the app first.');
+    if(code!==undefined)startOwn(toCode(code,state.level));
+    else{
+      if(state.mode==='duo')throw new Error('In two-player mode pass the secret code in "code".');
+      startRandom();
+    }
+    save();render();
+    return view();
+  }
+});
+})();
+</script>
+</body>
+</html>
