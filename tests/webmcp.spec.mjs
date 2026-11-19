@@ -3050,6 +3050,48 @@ test.describe('hangman tools', () => {
   });
 });
 
+test.describe('code-breaker tools', () => {
+  const seed = (page, game, extra = {}) => page.addInitScript(([g, e]) => localStorage.setItem('code-breaker.state.v1',
+    JSON.stringify({ mode: 'solo', level: 'medium', ...e, game: g && { level: 'medium', source: 'random', guesses: [], ...g } })), [game, extra]);
+
+  test('get_game hides the code, make_guess plays on the board, the code shows once cracked', async ({ page }) => {
+    await seed(page, { secret: [0, 1, 2, 3] });
+    await open(page, '/code-breaker/');
+    let r = await call(page, 'code_breaker_get_game', {});
+    expect(r.result).toMatchObject({ mode: 'alone', status: 'playing', secret: null, guesses_made: 0, guesses_left: 10, possible_codes_left: 1296 });
+    expect(r.result.rules).toMatchObject({ places: 4, colors_may_repeat: true, max_guesses: 10 });
+    expect(r.result.rules.colors).toEqual(['red', 'blue', 'green', 'yellow', 'purple', 'orange']);
+    r = await call(page, 'code_breaker_make_guess', { code: ['yellow', 'green', 'blue', 'red'] });
+    expect(r.result).toMatchObject({ right_place: 0, wrong_place: 4, guesses_made: 1, possible_codes_left: 9 });
+    await expect(page.locator('#board li')).toHaveCount(1);
+    await expect(page.locator('#board li .pin.white')).toHaveCount(4);
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green'] })).error).toMatch(/exactly 4 colours/);
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green', 'pink'] })).error).toMatch(/Only these colours/);
+    expect((await call(page, 'code_breaker_new_game', {})).error).toMatch(/under way/);
+    r = await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green', 'yellow'] });
+    expect(r.result).toMatchObject({ status: 'won', right_place: 4, secret: ['red', 'blue', 'green', 'yellow'] });
+    expect(r.result.statistics).toMatchObject({ won: 1, tries: 2 });
+    await expect(page.locator('#status')).toHaveText('Geknackt in 2 Versuchen!');
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'red', 'red', 'red'] })).error).toMatch(/game is over/);
+    r = await call(page, 'code_breaker_new_game', {});
+    expect(r.result).toMatchObject({ status: 'playing', guesses_made: 0, secret: null });
+  });
+
+  test('new_game with a code for the user; two-player mode needs a code', async ({ page }) => {
+    await seed(page, null, { mode: 'duo', level: 'easy' });
+    await open(page, '/code-breaker/');
+    let r = await call(page, 'code_breaker_get_game', {});
+    expect(r.result.status).toBe('waiting_for_code');
+    expect((await call(page, 'code_breaker_make_guess', { code: ['red', 'blue', 'green', 'yellow'] })).error).toMatch(/no code yet/);
+    expect((await call(page, 'code_breaker_new_game', {})).error).toMatch(/two-player mode/);
+    expect((await call(page, 'code_breaker_new_game', { code: ['red', 'red', 'green', 'yellow'] })).error).toMatch(/only once/);
+    r = await call(page, 'code_breaker_new_game', { code: ['orange', 'red', 'green', 'yellow'] });
+    expect(r.result).toMatchObject({ status: 'playing', own_code: true, secret: null, difficulty: 'easy' });
+    await expect(page.locator('#board')).toBeVisible();
+    await expect(page.locator('#secretLine')).toHaveAttribute('aria-label', 'Geheimer Code mit 4 Farben');
+  });
+});
+
 test.describe('dots-and-boxes tools', () => {
   test('make_move draws lines, a closed box moves again, get_game reads it back, new_round', async ({ page }) => {
     await open(page, '/dots-and-boxes/');
@@ -3666,5 +3708,98 @@ test.describe('sudoku tools', () => {
     expect((await call(page, 'sudoku_set_cell', { row: 1, column: 1, digit: 0 })).error).toMatch(/solved/);
     r = await call(page, 'sudoku_new_game', {});
     expect(r.result).toMatchObject({ difficulty: 'easy', status: 'playing' });
+  });
+});
+
+test.describe('beer-tally tools', () => {
+  const pad = n => String(n).padStart(2, '0');
+  const d = new Date();
+  const TODAY = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  test.beforeEach(async ({ page }) => {
+    await open(page, '/beer-tally/');
+    await page.evaluate(() => localStorage.setItem('beer-tally.list.v1', JSON.stringify({
+      price: 150, people: [{ id: 'a', name: 'Anna' }, { id: 'b', name: 'Ben' }], days: [], payments: [],
+    })));
+    await page.reload();
+  });
+
+  test('add_beers and add_payment change the list shown in the app; get_tally reads it', async ({ page }) => {
+    expect(await call(page, 'beer_tally_add_beers', { name: 'anna', count: 3 }))
+      .toEqual({ ok: true, result: { name: 'Anna', date: TODAY, beersThatDay: 3, balanceEur: -4.5 } });
+    await expect(page.locator(`#tally .cell[data-p="a"][data-d="${TODAY}"]`)).toHaveAttribute('aria-label', /: 3$/);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Striche gemacht');
+    expect(await call(page, 'beer_tally_add_beers', { name: 'Ben', date: '2026-01-02' }))
+      .toEqual({ ok: true, result: { name: 'Ben', date: '2026-01-02', beersThatDay: 1, balanceEur: -1.5 } });
+    expect(await call(page, 'beer_tally_add_payment', { name: 'Anna', amount: 10 }))
+      .toEqual({ ok: true, result: { name: 'Anna', amountEur: 10, balanceEur: 5.5 } });
+    await expect(page.locator('#tally tbody tr').first().locator('.bal')).toHaveText('5,50 €');
+    expect(await call(page, 'beer_tally_get_tally', {})).toEqual({ ok: true, result: {
+      pricePerBeerEur: 1.5,
+      people: [
+        { name: 'Anna', beers: 3, costEur: 4.5, paidEur: 10, balanceEur: 5.5 },
+        { name: 'Ben', beers: 1, costEur: 1.5, paidEur: 0, balanceEur: -1.5 },
+      ],
+      days: [
+        { date: TODAY, pricePerBeerEur: 1.5, beers: { Anna: 3 } },
+        { date: '2026-01-02', pricePerBeerEur: 1.5, beers: { Ben: 1 } },
+      ],
+    } });
+  });
+
+  test('only people on the list, limits like the UI', async ({ page }) => {
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Carla' })).error).toBe('No person named "Carla" on the list. Known: Anna, Ben');
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Anna', count: 51 })).error).toBe('input.count must be <= 50');
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Anna', date: '02.01.2026' })).error).toBe('date must be YYYY-MM-DD');
+    expect((await call(page, 'beer_tally_add_payment', { name: 'Anna', amount: 0 })).error).toBe('amount must not be 0');
+    expect((await call(page, 'beer_tally_add_payment', { name: 'Anna', amount: 10001 })).ok).toBe(false);
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Anna', remove: true })).error).toBe('input.remove is not allowed');
+    const s = await page.evaluate(() => JSON.parse(localStorage.getItem('beer-tally.list.v1')));
+    expect(s.days).toEqual([]);
+    expect(s.payments).toEqual([]);
+  });
+});
+
+test.describe('minesweeper tools', () => {
+  // Easy board with known mines: bottom row plus row 8, columns 1–2 (as in minesweeper.spec.mjs)
+  const seed = page => page.addInitScript(() => {
+    const mine = Array(72).fill(0);
+    for (const i of [56, 57, 64, 65, 66, 67, 68, 69, 70, 71]) mine[i] = 1;
+    localStorage.setItem('minesweeper.game.v1', JSON.stringify({ level: 'easy', elapsed: 0,
+      game: { rows: 9, cols: 8, mines: 10, mine, open: Array(72).fill(0), flag: Array(72).fill(0), status: 'playing', hit: -1 } }));
+  });
+
+  test('get_game hides the mines; flag_cell and open_cell play on the board; the mines show once lost', async ({ page }) => {
+    await seed(page);
+    await open(page, '/minesweeper/');
+    let r = await call(page, 'minesweeper_get_game', {});
+    expect(r.result).toMatchObject({ level: 'easy', rows: 9, cols: 8, mines: 10, flags: 0, status: 'playing' });
+    expect(r.result.board).toEqual(Array(9).fill('########'));
+    r = await call(page, 'minesweeper_flag_cell', { row: 8, col: 1 });
+    expect(r.result.board[7]).toBe('F#######');
+    expect(r.result.mines_left).toBe(9);
+    await expect(page.locator('#board .cell[data-i="56"]')).toHaveAttribute('data-v', 'flag');
+    expect((await call(page, 'minesweeper_open_cell', { row: 8, col: 1 })).error).toMatch(/has a flag/);
+    r = await call(page, 'minesweeper_open_cell', { row: 8, col: 3 });
+    expect(r.result.board[7]).toBe('F#4#####');
+    await expect(page.locator('#board .cell[data-i="58"]')).toHaveText('4');
+    expect((await call(page, 'minesweeper_flag_cell', { row: 8, col: 3 })).error).toMatch(/already open/);
+    expect((await call(page, 'minesweeper_open_cell', { row: 10, col: 1 })).error).toMatch(/9 rows and 8 columns/);
+    expect((await call(page, 'minesweeper_open_cell', { row: 0, col: 1 })).ok).toBe(false);
+    r = await call(page, 'minesweeper_open_cell', { row: 9, col: 8 });
+    expect(r.result.status).toBe('lost');
+    expect(r.result.board[8]).toBe('*******X');
+    expect(r.result.board[7]).toBe('F*4#####');
+    expect((await call(page, 'minesweeper_open_cell', { row: 1, col: 1 })).error).toMatch(/game is over/);
+  });
+
+  test('new_game deals a fresh board of the chosen size', async ({ page }) => {
+    await open(page, '/minesweeper/');
+    const r = await call(page, 'minesweeper_new_game', { level: 'medium' });
+    expect(r.result).toMatchObject({ level: 'medium', rows: 13, cols: 10, mines: 22, status: 'ready' });
+    await expect(page.locator('#board .cell')).toHaveCount(130);
+    const o = await call(page, 'minesweeper_open_cell', { row: 7, col: 5 });
+    expect(o.result.status).toBe('playing');
+    expect(o.result.board[6][4]).toBe('.');
+    expect((await call(page, 'minesweeper_new_game', { level: 'huge' })).ok).toBe(false);
   });
 });
