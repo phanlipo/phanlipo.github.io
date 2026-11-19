@@ -22,7 +22,7 @@
 <meta name="tool:share-text" content="true">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-rT6jSEfCSnzfmiEsypv4AV/J0TXVigI3QhQTV/uhsww='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-3WEIOAd5U63gTEA3PG4pPYfwTBx6K29HJtc0+lxFNNw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -240,6 +240,9 @@ select{min-height:44px;padding-inline:10px;width:100%}
   <p>An AI agent can create QR codes for text, links, Wi-Fi and contacts and read the history. The code appears here; sharing, saving and copying stay with you. From the history it only gets the network name of Wi-Fi codes, never the password. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
   </div>
   <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
 </details>
 
 <footer>
@@ -247,7 +250,7 @@ select{min-height:44px;padding-inline:10px;width:100%}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version c346849a43e0</p>
+  <p class="footer-version">Version cdcad6c97758</p>
   <!-- footer:end -->
 </footer>
 
@@ -393,7 +396,8 @@ function render() {
       if (entry.type === 'text' && /^https?:\/\//i.test(entry.data.trim()) && isLink(entry.data)) {
         $('link').href = entry.data.trim(); $('linkLine').hidden = false;
       }
-    } catch (_) {
+    } catch (e) {
+      Tools.diag.log('qr failed', { type: entry.type, bytes: new TextEncoder().encode(entry.data).length, ec: s.ec, error: String(e && e.message || e).slice(0, 80) });
       info.className = 'info err';
       info.textContent = tr('tooLong');
     }
@@ -445,7 +449,7 @@ if (navigator.clipboard && navigator.clipboard.readText) {
       const t = await navigator.clipboard.readText();
       if (!t) { toast(tr('clipEmpty')); return; }
       s.type = 'text'; s.text = t; fillForm(); changed();
-    } catch (_) { toast(tr('clipDenied')); }
+    } catch (e) { Tools.diag.log('clipboard read failed', { error: e && e.name }); toast(tr('clipDenied')); }
   });
 }
 
@@ -485,9 +489,11 @@ $('btnShare').addEventListener('click', async () => {
   try {
     const file = await pngFile();
     await navigator.share({ files: [file], title: tr('shareTitle') });
+    Tools.diag.log('png shared', { bytes: file.size });
     addHist(entry);
   } catch (e) {
     if (e && e.name === 'AbortError') return;
+    Tools.diag.log('share failed', { error: e && e.name });
     toast(tr('shareFail'));
   }
 });
@@ -497,8 +503,9 @@ $('btnSave').addEventListener('click', async () => {
   try {
     const file = await pngFile();
     Tools.download(file);
+    Tools.diag.log('png saved', { bytes: file.size });
     addHist(entry);
-  } catch (_) { toast(tr('saveFail')); }
+  } catch (e) { Tools.diag.log('save failed', { error: e && (e.name || e.message) }); toast(tr('saveFail')); }
 });
 if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
   $('btnCopy').hidden = false;
@@ -510,7 +517,7 @@ if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngFile() })]);
       toast(tr('imgCopied'));
       addHist(entry);
-    } catch (_) { toast(tr('copyFail')); }
+    } catch (e) { Tools.diag.log('copy image failed', { error: e && e.name }); toast(tr('copyFail')); }
   });
 }
 $('btnKeep').addEventListener('click', () => { if (shown) { addHist(shown.entry); toast(tr('kept')); } });
@@ -574,6 +581,7 @@ if (params.has('q')) {
   if (w) { s.type = 'wifi'; s.wifi = w; }
   else if (c && !VCard.empty(c)) { s.type = 'contact'; s.contact = c; }
   else { s.type = 'text'; s.text = q; }
+  Tools.diag.log('page link opened', { type: s.type, ec: ec || 'M' });
   if (ec && ec.length === 1 && 'LMQH'.includes(ec)) s.ec = ec;
   save(LS_SET, s);
   history.replaceState(null, '', location.pathname + location.hash);
@@ -587,10 +595,14 @@ if (shared) {
   sharedTitle = shared.title.trim() !== data ? shared.title.trim() : '';
   s.type = 'text'; s.text = data;
   save(LS_SET, s);
+  Tools.diag.log('shared text taken', { link: /^https?:\/\//i.test(data), withTitle: !!sharedTitle });
 }
 fillForm();
 render();
 renderHist();
+// Page state for the diagnostics report (type and sizes, never the content or WLAN password)
+Tools.diag.info(() => ({ type: s.type, ec: s.ec, shown: !!shown, modules: shown ? shown.qr.getModuleCount() : null,
+  history: hist.length, shareFiles: canShareFiles, clipboardImage: !!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) }));
 if (shared && shown) { addHist(shown.entry, sharedTitle); toast(tr('sharedTaken')); }
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------

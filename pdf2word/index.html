@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-zr4KyWcOJlhe1iOnFsUf3fL9w/wLDCG4yLw4t+PtXs0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-OOCjtmVw9RRFqP9SDDYTHl+qEZ3r1WYBugl4e6dnbVo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -213,13 +213,16 @@ select{min-height:44px;padding-inline:10px;width:100%;font-size:16px}
   <p>An AI agent can convert the PDF chosen here and read its text, e.g. to summarise it. Only you can choose a file. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
   </div>
   <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
 </details>
 
 <footer>
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 095bea21ca41</p>
+  <p class="footer-version">Version ebf2211faf1f</p>
   <!-- footer:end -->
 </footer>
 
@@ -290,6 +293,7 @@ function status(text, kind) {
 function takeFile(f) {
   if (!f || busy) return;
   file = f;
+  Tools.diag.log('file chosen', { type: f.type || '?', kb: Math.round(f.size / 1024) });
   $('runHint').hidden = true;
   result = null;
   $('result').hidden = true;
@@ -317,6 +321,8 @@ async function run() {
   const bar = $('progress');
   bar.hidden = false; bar.value = 0;
   status(t('reading'));
+  const started = Date.now();
+  Tools.diag.log('convert start', { ocr: $('optOcr').checked, lang: $('optLang').value, pageBreaks: $('optPages').checked, password: !!$('pw').value });
   try {
     lib = lib || await import('./convert.mjs');
     const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
@@ -336,16 +342,19 @@ async function run() {
     bar.value = 100;
     result = new File([blob], title + '.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
     showResult(model);
+    Tools.diag.log('convert done', { pages: model.pages, ocrPages: model.ocrPages || 0, ocrFailed: model.ocrFailed || 0, emptyPages: model.emptyPages || 0,
+      images: model.images, kb: Math.round(result.size / 1024), ms: Date.now() - started });
     const notes = [];
     if (model.ocrPages) notes.push(model.ocrPages === 1 ? t('ocrOne') : t('ocrMany', { n: model.ocrPages }));
     if (model.ocrFailed) notes.push(t('ocrFail', { off: navigator.onLine === false ? t('offline') : '', n: model.ocrFailed, pages: t(model.ocrFailed === 1 ? 'pageWas' : 'pagesWere') }));
     if (model.emptyPages) notes.push(t('empty', { n: model.emptyPages, total: model.pages }));
     const warn = model.ocrFailed || model.emptyPages;
     status(t('done') + (notes.length ? ' ' + notes.join(' ') : ''), warn ? 'warn' : 'ok');
-    if (model.ocrError) console.warn(model.ocrError);
+    if (model.ocrError) { console.warn(model.ocrError); Tools.diag.log('ocr error', { error: String(model.ocrError && model.ocrError.message || model.ocrError).slice(0, 120), online: navigator.onLine }); }
   } catch (e) {
     const msg = ['password', 'password-wrong', 'invalid', 'notext'].includes(e.code) ? t('e.' + e.code) : null;
     lastError = e.code || 'failed';
+    Tools.diag.log('convert failed', { code: lastError, error: msg ? undefined : String(e && e.message || e).slice(0, 120), ms: Date.now() - started });
     if (e.code === 'password' || e.code === 'password-wrong') { $('pwBox').hidden = false; $('pw').focus(); }
     if (!msg) console.warn(e);
     status(msg || t('failed', { m: e.message || e }), 'err');
@@ -412,10 +421,15 @@ $('btnSave').addEventListener('click', () => {
 });
 $('btnShare').addEventListener('click', async () => {
   if (!result) return;
-  try { await navigator.share({ files: [result], title: result.name }); } catch (e) { if (e.name !== 'AbortError') toast(t('shareFail')); }
+  try { await navigator.share({ files: [result], title: result.name }); Tools.diag.log('docx shared'); }
+  catch (e) { if (e.name !== 'AbortError') { Tools.diag.log('share failed', { error: e.name }); toast(t('shareFail')); } }
 });
 
-takeSharedFile().then(f => { if (f) takeFile(f); });
+takeSharedFile().then(f => { if (f) { Tools.diag.log('shared file taken'); takeFile(f); } });
+// Page state for the diagnostics report (sizes and settings, never file names or text)
+Tools.diag.info(() => ({ settings: { pageBreaks: settings.pageBreaks, ocr: settings.ocr, lang: settings.lang }, busy,
+  file: file ? { type: file.type || '?', kb: Math.round(file.size / 1024) } : null, libLoaded: !!lib, lastError,
+  result: lastModel ? { pages: lastModel.pages, ocrPages: lastModel.ocrPages || 0, ocrFailed: lastModel.ocrFailed || 0, images: lastModel.images } : null }));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
    Works on the PDF the user has chosen – agents cannot pick files. The document text is untrusted content. */

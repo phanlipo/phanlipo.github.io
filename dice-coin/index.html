@@ -20,7 +20,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can roll dice, flip coins and read the history. The result appears here and in the history; it does not change settings such as sound or shaking.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-NQy/iuBHAaasv5cZWWnZlA4FWwedGSjHpsancXLTfK4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ucaZOQqFIFDl8OKCRGBk2/qNy7WVVdFry6sEAGtgIL8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -305,12 +305,15 @@ details summary{cursor:pointer;font-weight:600;min-height:32px;display:flex;alig
   <p>An AI agent can roll dice, flip coins and read the history. The result appears here and in the history; it does not change settings such as sound or shaking. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
   </div>
   <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
 </details>
 <footer>
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version a0a822d8bdaa</p>
+  <p class="footer-version">Version 037d09096f26</p>
   <!-- footer:end -->
 </footer>
 
@@ -402,7 +405,7 @@ function fx(){
   if(!cfg.fx.sound)return;
   try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const ac=fx.ac||(fx.ac=new C());
     for(let i=0;i<3;i++){const o=ac.createOscillator(),g=ac.createGain(),t=ac.currentTime+i*.06;o.type='triangle';o.frequency.value=300+Math.random()*500;g.gain.setValueAtTime(.06,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);o.connect(g);g.connect(ac.destination);o.start(t);o.stop(t+.06);}
-  }catch(_){}
+  }catch(e){Tools.diag.log('sound failed',{error:String(e&&e.name||e)});}
 }
 function fitArrays(){
   const n=cfg.dice.count;
@@ -605,7 +608,7 @@ bindChk('optAnim',()=>cfg.fx,'anim');bindChk('optSound',()=>cfg.fx,'sound');bind
 
 // Shake to roll
 let lastShake=0,shakeOn=false;
-function onMotion(e){const a=e.accelerationIncludingGravity||e.acceleration;if(!a)return;const g=Math.sqrt((a.x||0)**2+(a.y||0)**2+(a.z||0)**2);const now=Date.now();if(g>24&&now-lastShake>1200){lastShake=now;roll();}}
+function onMotion(e){const a=e.accelerationIncludingGravity||e.acceleration;if(!a)return;const g=Math.sqrt((a.x||0)**2+(a.y||0)**2+(a.z||0)**2);const now=Date.now();if(g>24&&now-lastShake>1200){lastShake=now;Tools.diag.log('shake roll');roll();}}
 function setShake(on){
   if(on&&!shakeOn){window.addEventListener('devicemotion',onMotion);shakeOn=true;}
   if(!on&&shakeOn){window.removeEventListener('devicemotion',onMotion);shakeOn=false;}
@@ -613,14 +616,20 @@ function setShake(on){
 $('optShake').addEventListener('change',async e=>{
   let on=e.target.checked;
   if(on&&typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
-    try{on=(await DeviceMotionEvent.requestPermission())==='granted';}catch(_){on=false;}
+    let res;try{res=await DeviceMotionEvent.requestPermission();}catch(err){res='error: '+(err&&err.name||err);}
+    Tools.diag.log('motion permission',{result:res});
+    on=res==='granted';
     if(!on)toast(t('noMotion'));
-  }else if(on&&typeof DeviceMotionEvent==='undefined'){toast(t('noSensor'));on=false;}
+  }else if(on&&typeof DeviceMotionEvent==='undefined'){Tools.diag.log('no motion sensor');toast(t('noSensor'));on=false;}
   cfg.fx.shake=on;setShake(on);save();render();
 });
 // iOS needs a fresh permission per page load; other browsers can listen right away
 if(cfg.fx.shake&&!(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'))setShake(true);
 else if(cfg.fx.shake){cfg.fx.shake=false;}
+// Page state for the diagnostics report (settings and counts, no labels or presets)
+Tools.diag.info(()=>({tab:cfg.tab,dice:{count:cfg.dice.count,sides:cfg.dice.sides,mixed:cfg.dice.mixed,mode:cfg.dice.mode,hold:cfg.dice.hold},
+  coins:cfg.coin.count,fx:cfg.fx,shakeListening:shakeOn,motionApi:typeof DeviceMotionEvent!=='undefined',
+  history:hist.length,presets:Array.isArray(presets)?presets.length:0}));
 
 /* ---------- Presets ---------- */
 // Built-in presets carry a key: their name follows the language. Saved earlier without a key
