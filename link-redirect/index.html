@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Link-Weiterleitung</title>
+<meta name="description" content="Geteilte Links sofort an einen eigenen Dienst weiterleiten – mit Präfix und Suffix, z. B. test.de/?url=…">
+<meta name="tool:tags" content="Alltag, Werkzeug">
+<meta name="tool:features" content="Teilen an App, Kopieren, KI-Agent">
+<meta name="tool:webmcp" content="build_link, list_rules">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann die gespeicherten Weiterleitungen lesen und für eine Adresse den Ziel-Link bauen lassen; der Link erscheint hier in der App. Weiterleiten (also die Adresse an den Zieldienst schicken) kann nur der Nutzer selbst.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the saved redirects and have the target link built for an address; the link shows up here in the app. Only the user can actually redirect (that is, send the address to the target service).">
+<meta name="tool:icon" content="directions">
+<meta name="tool:color" content="#0e7c86">
+<meta name="tool:short-name" content="Weiterleiten">
+<meta name="tool:title-en" content="Link Redirect">
+<meta name="tool:description-en" content="Instantly forward shared links to a service of your choice – with prefix and suffix, e.g. test.de/?url=…">
+<meta name="tool:short-name-en" content="Redirect">
+<meta name="tool:storage" content="link-redirect.">
+<meta name="tool:share-text" content="true">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-RNNH6Enmb9QBZIWnoabdcd5N3e8PbB5dJhofPHDweBo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Weiterleiten">
+<meta name="theme-color" content="#0e7c86">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0e7c86;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#5cc6cf;--accent-text:#0b1a1c}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.target{margin:0 0 12px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;overflow-wrap:anywhere}
+.target-label{margin:10px 0 4px;font-size:13px;color:var(--muted)}
+#setupSlot #h-add{display:none}
+#btnGo{margin-bottom:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Link-Weiterleitung</span></h1>
+  <p class="sub" data-i18n="sub">Geteilte Links sofort an deinen Dienst weitergeben.</p>
+</header>
+
+<main>
+  <!-- Shown while the page leaves (shared link + "redirect at once"); the link is a fallback if the browser blocks it -->
+  <section class="card" id="leaveCard" aria-labelledby="h-leave" hidden>
+    <h2 id="h-leave" data-i18n="leaveH">Wird weitergeleitet …</h2>
+    <p class="target" id="leaveTarget"></p>
+    <a class="btn primary block" id="leaveLink" href="#"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#external-link"/></svg><span data-i18n="leaveLink">Falls nichts passiert: hier tippen</span></a>
+  </section>
+
+  <!-- First start (no redirect yet): only the form. Afterwards the page shows the address field; managing is in the menu. -->
+  <section class="card" id="setupCard" aria-labelledby="h-setup" hidden>
+    <h2 id="h-setup" data-i18n="setupH">Erste Weiterleitung einrichten</h2>
+    <p data-i18n="setupIntro">Die geteilte Adresse wird zwischen Präfix und Suffix gesetzt. Beispiel: Präfix „https://test.de/?url=“ macht aus www.example.com den Link https://test.de/?url=www.example.com.</p>
+    <div id="setupSlot"></div>
+  </section>
+
+  <section class="card" id="mainCard" aria-labelledby="h-main" hidden>
+    <h2 id="h-main" data-i18n="mainH">Adresse weiterleiten</h2>
+    <div class="form-field">
+      <label for="url" data-i18n="urlLabel">Adresse (oder Text mit Link)</label>
+      <input type="text" id="url" inputmode="url" autocomplete="off" spellcheck="false" autocapitalize="off" enterkeyhint="go" placeholder="https://www.example.com">
+    </div>
+    <div class="chips wrap" role="group" id="ruleChips" aria-label="Weiterleitung" data-i18n-attr="aria-label:ruleGroup"></div>
+    <p class="target-label" id="targetLabel"></p>
+    <p class="target" id="target" aria-live="polite"></p>
+    <p class="form-error" id="urlError" role="alert"></p>
+    <button type="button" class="btn primary block" id="btnGo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#external-link"/></svg><span data-i18n="go">Weiterleiten</span></button>
+    <div class="row">
+      <button type="button" class="btn" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Link kopieren</span></button>
+      <button type="button" class="btn" id="btnShare" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="share">Teilen</span></button>
+    </div>
+  </section>
+
+  <details class="card" data-menu data-menu-page data-icon="directions" id="manageCard">
+    <summary data-i18n="manage">Weiterleitungen verwalten</summary>
+    <ul class="list-rows wrap" id="ruleList"></ul>
+    <div class="row" id="manageActions">
+      <button type="button" class="btn" id="btnNew" aria-expanded="false" aria-controls="ruleForm"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="addMore">Weitere Weiterleitung hinzufügen</span></button>
+    </div>
+    <div id="menuSlot">
+      <form id="ruleForm" novalidate>
+        <h3 id="h-add" data-i18n="addH">Weiterleitung hinzufügen</h3>
+        <div class="form-field">
+          <label for="prefix" data-i18n="prefix">Präfix (Anfang des Ziel-Links)</label>
+          <input type="url" id="prefix" inputmode="url" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="https://test.de/?url=">
+        </div>
+        <div class="form-field">
+          <label for="suffix" data-i18n="suffix">Suffix (optional, Ende des Ziel-Links)</label>
+          <input type="text" id="suffix" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="&amp;lang=de">
+        </div>
+        <div class="form-field">
+          <label for="ruleName" data-i18n="ruleName">Name (optional)</label>
+          <input type="text" id="ruleName" maxlength="60" autocomplete="off">
+        </div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="optEncode" checked><span><span data-i18n="encode">Adresse kodieren</span><small data-i18n="encodeHint">Nötig, wenn die Adresse in einem Parameter wie ?url= steht (aus „&amp;“ wird „%26“ …).</small></span></label>
+          <label class="check"><input type="checkbox" id="optStrip"><span><span data-i18n="strip">„https://“ entfernen</span><small data-i18n="stripHint">Für Dienste, die die Adresse ohne Protokoll erwarten, z. B. test.de/www.example.com.</small></span></label>
+        </div>
+        <p class="target-label" id="rulePreviewLabel" data-i18n="preview">Vorschau mit https://www.example.com/a?b=1:</p>
+        <p class="target" id="rulePreview"></p>
+        <p class="form-error" id="ruleError" role="alert"></p>
+        <div class="row">
+          <button type="submit" class="btn primary" id="btnSave"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#device-floppy"/></svg><span id="btnSaveLabel" data-i18n="add">Hinzufügen</span></button>
+          <button type="button" class="btn" id="btnCancelEdit" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+          <button type="button" class="btn" id="btnExample"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-text"/></svg><span data-i18n="example">Beispiel einsetzen</span></button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  <section class="card" data-menu aria-labelledby="h-settings" data-icon="settings">
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <p class="target-label" id="onShareLabel" data-i18n="onShare">Wenn ein Link an die App geteilt wird:</p>
+    <div class="seg" role="group" aria-labelledby="onShareLabel" id="onShare">
+      <button type="button" aria-pressed="true" data-mode="auto"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#external-link"/></svg><span data-i18n="modeAuto">Sofort weiterleiten</span></button>
+      <button type="button" aria-pressed="false" data-mode="ask"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eye"/></svg><span data-i18n="modeAsk">Erst anzeigen</span></button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Leitet Links an einen Dienst deiner Wahl weiter – etwa an einen Archiv-, Lese- oder Übersetzungsdienst, der die Adresse als Parameter erwartet. Aus <code>www.example.com</code> wird mit dem Präfix <code>https://test.de/?url=</code> der Link <code>https://test.de/?url=www.example.com</code>.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Beim ersten Start: <strong>Präfix</strong> (Anfang des Ziel-Links) und bei Bedarf <strong>Suffix</strong> (Ende, z. B. <code>&amp;lang=de</code>) eintragen → <strong>Hinzufügen</strong>. Die Vorschau zeigt, was aus einer Beispieladresse wird.</li>
+    <li><strong>Adresse kodieren</strong> (Standard) ersetzt Zeichen wie <code>&amp;</code>, <code>?</code> und <code>/</code>, damit die Adresse als ein Parameter ankommt. Ausschalten, wenn der Dienst die Adresse direkt im Pfad erwartet. <strong>„https://“ entfernen</strong> lässt das Protokoll weg.</li>
+    <li>Android, installierte App: einen Link aus einer anderen App an <strong>Weiterleiten</strong> teilen – die App öffnet sofort den Ziel-Link der gewählten Weiterleitung. Wer lieber erst schauen will: Menü ☰ → Einstellungen → <strong>Erst anzeigen</strong>.</li>
+    <li>Ohne Teilen: Adresse einfügen, Weiterleitung wählen (bei mehreren), <strong>Weiterleiten</strong>, <strong>Link kopieren</strong> oder <strong>Teilen</strong>. Steht die Adresse in einem längeren Text, wird der erste Link darin genommen.</li>
+    <li>Weitere Weiterleitungen, Bearbeiten und Löschen: Menü ☰ → <strong>Weiterleitungen verwalten</strong>. Die zuletzt gewählte gilt auch beim Teilen.</li>
+    <li>iPhone und Kurzbefehle: Teilen an Web-Apps geht dort nicht. Stattdessen <code>https://phanlipo.github.io/link-redirect/?url=</code> plus die Adresse öffnen (z. B. per Kurzbefehl) – das wirkt wie Teilen.</li>
+  </ul>
+  <h3>Sicherheit</h3>
+  <p>Weitergeleitet wird nur, wenn der fertige Link auf der Domain deines Präfixes bleibt. Ein fremder Link der Form <code>…/link-redirect/?url=…</code> kann dich so nur zu deinen eigenen Zielen schicken, nie auf eine beliebige Seite. Ein Präfix wie <code>https://test.de</code> ohne <code>/</code> am Ende wird deshalb abgelehnt.</p>
+  <h3>Gespeichert</h3>
+  <p>Gespeichert werden nur die Weiterleitungen und Einstellungen, in diesem Browser (sichern und übertragen unter „Daten sichern“). Adressen werden nicht gespeichert. Die App selbst schickt nichts an einen Server – erst beim Weiterleiten bekommt der Zieldienst die Adresse, so wie bei jedem Link. Die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Forwards links to a service of your choice – for example an archive, reader or translation service that expects the address as a parameter. With the prefix <code>https://test.de/?url=</code>, <code>www.example.com</code> becomes <code>https://test.de/?url=www.example.com</code>.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>First start: enter the <strong>prefix</strong> (start of the target link) and, if needed, a <strong>suffix</strong> (end, e.g. <code>&amp;lang=en</code>) → <strong>Add</strong>. The preview shows what becomes of a sample address.</li>
+    <li><strong>Encode address</strong> (default) replaces characters such as <code>&amp;</code>, <code>?</code> and <code>/</code> so the address arrives as one parameter. Turn it off if the service expects the address right in the path. <strong>Remove “https://”</strong> drops the protocol.</li>
+    <li>Android, installed app: share a link from another app to <strong>Redirect</strong> – the app opens the target link of the selected redirect right away. To look first: menu ☰ → Settings → <strong>Show first</strong>.</li>
+    <li>Without sharing: paste an address, pick a redirect (if there are several), then <strong>Redirect</strong>, <strong>Copy link</strong> or <strong>Share</strong>. If the address is part of a longer text, the first link in it is used.</li>
+    <li>More redirects, editing and deleting: menu ☰ → <strong>Manage redirects</strong>. The one picked last is also used when sharing.</li>
+    <li>iPhone and Shortcuts: sharing to web apps is not possible there. Open <code>https://phanlipo.github.io/link-redirect/?url=</code> plus the address instead (e.g. from a shortcut) – it works like sharing.</li>
+  </ul>
+  <h3>Security</h3>
+  <p>The app only redirects if the finished link stays on the domain of your prefix. A foreign link like <code>…/link-redirect/?url=…</code> can therefore only send you to your own targets, never to an arbitrary site. A prefix such as <code>https://test.de</code> without a <code>/</code> at the end is rejected for that reason.</p>
+  <h3>Stored</h3>
+  <p>Only the redirects and settings are stored, in this browser (back them up or move them under “Back up data”). Addresses are not stored. The app itself sends nothing to a server – only when you redirect does the target service get the address, like with any link. The app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann die gespeicherten Weiterleitungen lesen und für eine Adresse den Ziel-Link bauen lassen; der Link erscheint hier in der App. Weiterleiten (also die Adresse an den Zieldienst schicken) kann nur der Nutzer selbst. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the saved redirects and have the target link built for an address; the link shows up here in the app. Only the user can actually redirect (that is, send the address to the target service). This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 75bfcdd68093</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{targetFor:'Ziel-Link ({name}):',noUrl:'Adresse eintragen, dann erscheint hier der Ziel-Link.',
+    errPrefix:'Das Präfix muss eine vollständige Adresse mit https:// oder http:// sein, z. B. https://test.de/?url=',
+    errHost:'Mit diesem Präfix landet der Link nicht sicher auf {host}. Endet es mit /, = oder ?',
+    saveEdit:'Speichern',editH:'Weiterleitung bearbeiten',added:'Weiterleitung gespeichert',updated:'Weiterleitung geändert',
+    deleted:'„{name}“ gelöscht',edit:'Bearbeiten',del:'Löschen',copied:'Link kopieren: erledigt',
+    encoded:'kodiert',plain:'nicht kodiert',stripped:'ohne https://','mcp.build':'Link gebaut'},
+  en:{title:'Link Redirect',sub:'Pass shared links straight on to your service.',leaveH:'Redirecting …',leaveLink:'If nothing happens: tap here',
+    setupH:'Set up your first redirect',
+    setupIntro:'The shared address goes between prefix and suffix. Example: the prefix “https://test.de/?url=” turns www.example.com into https://test.de/?url=www.example.com.',
+    mainH:'Redirect an address',urlLabel:'Address (or text with a link)',ruleGroup:'Redirect',go:'Redirect',copy:'Copy link',share:'Share',
+    manage:'Manage redirects',addMore:'Add another redirect',addH:'Add redirect',prefix:'Prefix (start of the target link)',
+    suffix:'Suffix (optional, end of the target link)',ruleName:'Name (optional)',encode:'Encode address',
+    encodeHint:'Needed if the address goes into a parameter like ?url= (“&” becomes “%26” …).',strip:'Remove “https://”',
+    stripHint:'For services that expect the address without protocol, e.g. test.de/www.example.com.',
+    preview:'Preview with https://www.example.com/a?b=1:',add:'Add',cancel:'Cancel',example:'Use example',settings:'Settings',
+    onShare:'When a link is shared to the app:',modeAuto:'Redirect at once',modeAsk:'Show first',
+    targetFor:'Target link ({name}):',noUrl:'Enter an address and the target link shows up here.',
+    errPrefix:'The prefix must be a full address with https:// or http://, e.g. https://test.de/?url=',
+    errHost:'With this prefix the link does not reliably stay on {host}. Does it end with /, = or ?',
+    saveEdit:'Save',editH:'Edit redirect',added:'Redirect saved',updated:'Redirect changed',
+    deleted:'“{name}” deleted',edit:'Edit',del:'Delete',copied:'Copy link: done',
+    encoded:'encoded',plain:'not encoded',stripped:'without https://','mcp.build':'link built'}
+});
+const t=Tools.t, $=Tools.$;
+const LS_RULES='link-redirect.rules.v1', LS_SET='link-redirect.settings.v1';
+const SAMPLE='https://www.example.com/a?b=1';
+const EXAMPLE={prefix:'https://test.de/?url=',suffix:'',encode:true,strip:false};
+let rules=Tools.load(LS_RULES,[]);
+if(!Array.isArray(rules))rules=[];
+rules=rules.filter(r=>r&&typeof r.prefix==='string');
+const settings=Object.assign({current:null,onShare:'auto'},Tools.load(LS_SET,{}));
+const saveRules=()=>Tools.save(LS_RULES,rules);
+const saveSettings=()=>Tools.save(LS_SET,settings);
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+/* ---------- Building and checking target links ---------- */
+// The first http(s) link in a text (shared texts often read "Look at this: https://…"), else the whole text
+function extractUrl(s){
+  s=String(s||'').trim();
+  const m=s.match(/https?:\/\/[^\s<>"']+/i);
+  return m?m[0]:s;
+}
+function build(rule,url){
+  let u=String(url).trim();
+  if(rule.strip)u=u.replace(/^[a-z][a-z0-9+.-]*:\/\//i,'');
+  if(rule.encode)u=encodeURIComponent(u);
+  return rule.prefix+u+(rule.suffix||'');
+}
+function prefixHost(prefix){
+  try{ const p=new URL(prefix); return /^https?:$/.test(p.protocol)&&p.hostname?p:null; }catch(_){ return null; }
+}
+// Security: the finished link must stay on the scheme and host of the user's own prefix. Otherwise a crafted
+// …/link-redirect/?url=… could send the user anywhere (open redirect), e.g. with a prefix "https://test.de".
+function check(rule,target){
+  const p=prefixHost(rule.prefix);
+  if(!p)return {error:'errPrefix'};
+  let u; try{ u=new URL(target); }catch(_){ return {error:'errHost',host:p.host}; }
+  if(u.protocol!==p.protocol||u.host!==p.host)return {error:'errHost',host:p.host};
+  return {};
+}
+const ruleName=r=>r.name||(prefixHost(r.prefix)||{hostname:r.prefix}).hostname;
+const currentRule=()=>rules.find(r=>r.id===settings.current)||rules[0]||null;
+function ruleMeta(r){
+  return [r.prefix+'…'+(r.suffix||''),r.encode?t('encoded'):t('plain')].concat(r.strip?[t('stripped')]:[]).join(' · ');
+}
+
+/* ---------- Main view ---------- */
+function targetNow(){
+  const r=currentRule(), url=extractUrl($('url').value);
+  if(!r||!url)return {rule:r,url};
+  const target=build(r,url);
+  return Object.assign({rule:r,url,target},check(r,target));
+}
+function renderMain(){
+  const chips=$('ruleChips');
+  chips.replaceChildren();
+  const cur=currentRule();
+  for(const r of rules){
+    const b=document.createElement('button');
+    b.type='button'; b.textContent=ruleName(r);
+    b.setAttribute('aria-pressed',String(r===cur));
+    b.addEventListener('click',()=>{ settings.current=r.id; saveSettings(); renderMain(); });
+    chips.append(b);
+  }
+  chips.hidden=rules.length<2;
+  const s=targetNow();
+  $('targetLabel').textContent=s.rule?t('targetFor',{name:ruleName(s.rule)}):'';
+  $('target').textContent=s.target||t('noUrl');
+  $('urlError').textContent=s.error?t(s.error,{host:s.host}):'';
+  const ok=!!(s.target&&!s.error);
+  for(const id of ['btnGo','btnCopy','btnShare'])$(id).disabled=!ok;
+  $('btnShare').hidden=!('share' in navigator);
+}
+$('url').addEventListener('input',renderMain);
+$('url').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('btnGo').click(); } });
+function leave(target,replace,via){
+  Tools.diag.log('redirect',{via});
+  $('leaveTarget').textContent=target;
+  $('leaveLink').href=target;
+  $('leaveCard').hidden=false;
+  if(replace)location.replace(target); else location.assign(target);
+}
+$('btnGo').addEventListener('click',()=>{ const s=targetNow(); if(s.target&&!s.error)leave(s.target,false,'button'); });
+$('btnCopy').addEventListener('click',async()=>{
+  const s=targetNow(); if(!s.target||s.error)return;
+  if(await Tools.copyText(s.target))Tools.toast(t('copied'));
+  Tools.diag.log('copied');
+});
+$('btnShare').addEventListener('click',async()=>{
+  const s=targetNow(); if(!s.target||s.error)return;
+  try{ await navigator.share({url:s.target}); Tools.diag.log('shared'); }
+  catch(e){ if(e.name!=='AbortError')Tools.diag.log('share failed',{name:e.name}); }
+});
+
+/* ---------- Managing redirects (same pattern as rss-reader) ----------
+   Without a redirect the page shows only the form (first start). Afterwards the page shows the address field;
+   the list, "add" (folded behind a button) and edit live in the menu (data-menu-page). */
+let editing=null, formOpen=false;
+function formRule(){
+  return {prefix:$('prefix').value.trim(),suffix:$('suffix').value.trim(),encode:$('optEncode').checked,strip:$('optStrip').checked};
+}
+function renderPreview(){
+  const r=formRule();
+  $('rulePreview').hidden=$('rulePreviewLabel').hidden=!r.prefix;
+  $('rulePreview').textContent=r.prefix?build(r,SAMPLE):'';
+}
+for(const id of ['prefix','suffix','optEncode','optStrip'])$(id).addEventListener('input',()=>{ $('ruleError').textContent=''; renderPreview(); });
+function placeForm(){
+  const none=!rules.length;
+  const slot=none?$('setupSlot'):$('menuSlot');
+  if($('ruleForm').parentNode!==slot)slot.append($('ruleForm'));
+  $('setupCard').hidden=!none;
+  $('mainCard').hidden=none;
+  $('menuSlot').hidden=none||!formOpen;
+  $('manageActions').hidden=none||formOpen;
+  $('btnNew').setAttribute('aria-expanded',String(formOpen&&!none));
+  $('btnCancelEdit').hidden=none;
+  $('btnSaveLabel').textContent=editing?t('saveEdit'):t('add');
+  $('h-add').textContent=editing?t('editH'):t('addH');
+}
+function fillForm(r){
+  $('prefix').value=r?r.prefix:'';
+  $('suffix').value=r?r.suffix||'':'';
+  $('ruleName').value=r?r.name||'':'';
+  $('optEncode').checked=r?!!r.encode:true;
+  $('optStrip').checked=r?!!r.strip:false;
+  $('ruleError').textContent='';
+  renderPreview();
+}
+function openForm(r){
+  editing=r?r.id:null; formOpen=true;
+  fillForm(r); placeForm();
+  $('prefix').focus();
+}
+function closeForm(){ editing=null; formOpen=false; fillForm(null); placeForm(); }
+$('btnNew').addEventListener('click',()=>openForm(null));
+$('btnCancelEdit').addEventListener('click',()=>{ closeForm(); $('btnNew').focus(); });
+$('btnExample').addEventListener('click',()=>{ fillForm(Object.assign({name:$('ruleName').value},EXAMPLE)); });
+$('ruleForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const r=formRule();
+  r.name=$('ruleName').value.trim().slice(0,60);
+  const c=check(r,build(r,SAMPLE));
+  if(c.error){ $('ruleError').textContent=t(c.error,{host:c.host}); $('prefix').focus(); return; }
+  const wasFirst=!rules.length;
+  if(editing){
+    const old=rules.find(x=>x.id===editing);
+    if(old)Object.assign(old,r);
+    saveRules(); closeForm(); render(); Tools.toast(t('updated'));
+    Tools.diag.log('rule edited',{rules:rules.length});
+    return;
+  }
+  r.id=newId(); rules.push(r); saveRules();
+  settings.current=r.id; saveSettings();
+  closeForm(); Tools.menu.close(); render();
+  Tools.toast(t('added'));
+  Tools.diag.log('rule added',{rules:rules.length,encode:r.encode,strip:r.strip,suffix:!!r.suffix});
+  if(!wasFirst||$('url').value)$('url').focus();
+});
+function renderList(){
+  const ul=$('ruleList');
+  ul.replaceChildren();
+  const cur=currentRule();
+  for(const r of rules){
+    const li=document.createElement('li');
+    if(r===cur)li.className='current';
+    const open=document.createElement('button');
+    open.type='button'; open.className='open';
+    const n=document.createElement('span'); n.className='name'; n.textContent=ruleName(r);
+    const m=document.createElement('span'); m.className='meta'; m.textContent=ruleMeta(r);
+    open.append(n,m);
+    open.setAttribute('aria-label',`${t('edit')}: ${ruleName(r)}`);
+    open.addEventListener('click',()=>openForm(r));
+    const del=document.createElement('button');
+    del.type='button'; del.className='btn icon';
+    del.innerHTML=Tools.icon('trash');
+    del.setAttribute('aria-label',`${t('del')}: ${ruleName(r)}`); del.title=t('del');
+    del.addEventListener('click',()=>{
+      const i=rules.indexOf(r); if(i<0)return;
+      rules.splice(i,1); saveRules();
+      if(editing===r.id)closeForm();
+      render();
+      Tools.diag.log('rule deleted',{rules:rules.length});
+      Tools.undo(t('deleted',{name:ruleName(r)}),()=>{ rules.splice(Math.min(i,rules.length),0,r); saveRules(); render(); });
+    });
+    li.append(open,del);
+    ul.append(li);
+  }
+}
+
+/* ---------- Settings ---------- */
+function renderSettings(){
+  for(const b of document.querySelectorAll('#onShare button'))b.setAttribute('aria-pressed',String(b.dataset.mode===settings.onShare));
+}
+for(const b of document.querySelectorAll('#onShare button'))b.addEventListener('click',()=>{
+  settings.onShare=b.dataset.mode; saveSettings(); renderSettings();
+});
+
+function render(){ placeForm(); renderMain(); renderList(); renderSettings(); }
+
+/* ---------- Start: shared link (Android share target, or …/?url= from a shortcut) ---------- */
+renderPreview();
+const shared=Tools.takeSharedText();
+if(shared){
+  $('url').value=extractUrl(shared.url||shared.text||shared.title);
+  Tools.diag.log('shared link received',{rules:rules.length,mode:settings.onShare});
+}
+render();
+if(shared&&settings.onShare==='auto'){
+  const s=targetNow();
+  if(s.target&&!s.error)leave(s.target,true,'share');
+  else Tools.diag.log('no redirect',{reason:s.error||(!s.rule?'no rule':'no url')});
+}
+Tools.diag.info(()=>({rules:rules.length,onShare:settings.onShare,hasUrl:!!$('url').value.trim()}));
+Tools.onLang(render);
+
+/* ---------- WebMCP ---------- */
+Tools.mcp.register({
+  name:'build_link',title:'Build target link',label:'mcp.build',
+  description:'Builds the target link for an address with one of the saved redirects (prefix + address + suffix), as if the user typed the address into the app. The address and the link are shown in the app; the agent cannot open the link itself. Returns the target link.',
+  inputSchema:{type:'object',properties:{
+    url:{type:'string',minLength:1,maxLength:4000,description:'The address (or a text containing a link) to redirect.'},
+    redirect:{type:'string',maxLength:60,description:'Name of a saved redirect (see list_rules). Default: the one selected in the app.'}
+  },required:['url'],additionalProperties:false},
+  execute:({url,redirect})=>{
+    if(!rules.length)throw new Error('No redirect is set up yet');
+    if(redirect!==undefined){
+      const r=rules.find(x=>ruleName(x).toLowerCase()===redirect.trim().toLowerCase());
+      if(!r)throw new Error(`No redirect named "${redirect}"`);
+      settings.current=r.id; saveSettings();
+    }
+    $('url').value=extractUrl(url);
+    renderMain(); renderList();
+    const s=targetNow();
+    if(s.error)throw new Error(s.error==='errHost'?`The link would leave ${s.host}`:'The saved prefix is not a valid address');
+    return {redirect:ruleName(s.rule),target:s.target};
+  }
+});
+Tools.mcp.register({
+  name:'list_rules',title:'List redirects',readOnly:true,
+  description:'Lists the saved redirects: name, prefix, suffix, whether the address is URL-encoded and whether https:// is removed, and which one is selected (also used when a link is shared to the app).',
+  execute:()=>({redirects:rules.map(r=>({name:ruleName(r),prefix:r.prefix,suffix:r.suffix||'',encode:!!r.encode,removeScheme:!!r.strip,selected:r===currentRule()}))})
+});
+})();
+</script>
+</body>
+</html>

@@ -104,6 +104,36 @@ test.describe('template tools', () => {
   });
 });
 
+test.describe('link-redirect tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('seeded')) return;
+      sessionStorage.setItem('seeded', '1');
+      localStorage.setItem('link-redirect.rules.v1', JSON.stringify([
+        { id: 'a', name: 'Archiv', prefix: 'https://test.de/?url=', suffix: '', encode: true, strip: false },
+        { id: 'b', name: '', prefix: 'https://lesen.example/', suffix: '?x=1', encode: false, strip: true },
+      ]));
+    });
+    await page.goto('/link-redirect/');
+  });
+
+  test('list_rules reads the redirects; build_link shows the link in the app but never redirects', async ({ page }) => {
+    expect(await call(page, 'link_redirect_list_rules', {})).toEqual({ ok: true, result: { redirects: [
+      { name: 'Archiv', prefix: 'https://test.de/?url=', suffix: '', encode: true, removeScheme: false, selected: true },
+      { name: 'lesen.example', prefix: 'https://lesen.example/', suffix: '?x=1', encode: false, removeScheme: true, selected: false },
+    ] } });
+    expect(await call(page, 'link_redirect_build_link', { url: 'https://www.example.com/a', redirect: 'lesen.example' }))
+      .toEqual({ ok: true, result: { redirect: 'lesen.example', target: 'https://lesen.example/www.example.com/a?x=1' } });
+    await expect(page.locator('#url')).toHaveValue('https://www.example.com/a');
+    await expect(page.locator('#target')).toHaveText('https://lesen.example/www.example.com/a?x=1');
+    await expect(page.locator('#ruleChips button').nth(1)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page).toHaveURL(/\/link-redirect\/$/);
+    expect(await call(page, 'link_redirect_build_link', { url: 'x', redirect: 'Gibt es nicht' })).toEqual({ ok: false, error: 'No redirect named "Gibt es nicht"' });
+    expect(await call(page, 'link_redirect_build_link', { url: 'x', open: true })).toEqual({ ok: false, error: 'input.open is not allowed' });
+  });
+});
+
 test.describe('dice-coin tools', () => {
   test.beforeEach(async ({ page }) => {
     await fakeModelContext(page);
