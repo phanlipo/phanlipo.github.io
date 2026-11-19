@@ -3649,3 +3649,51 @@ test.describe('quantum-putt tools', () => {
     expect((await call(page, 'quantum_putt_start_course', { course: 'golf' })).ok).toBe(false);
   });
 });
+
+test.describe('beer-tally tools', () => {
+  const pad = n => String(n).padStart(2, '0');
+  const d = new Date();
+  const TODAY = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  test.beforeEach(async ({ page }) => {
+    await open(page, '/beer-tally/');
+    await page.evaluate(() => localStorage.setItem('beer-tally.list.v1', JSON.stringify({
+      price: 150, people: [{ id: 'a', name: 'Anna' }, { id: 'b', name: 'Ben' }], days: [], payments: [],
+    })));
+    await page.reload();
+  });
+
+  test('add_beers and add_payment change the list shown in the app; get_tally reads it', async ({ page }) => {
+    expect(await call(page, 'beer_tally_add_beers', { name: 'anna', count: 3 }))
+      .toEqual({ ok: true, result: { name: 'Anna', date: TODAY, beersThatDay: 3, balanceEur: -4.5 } });
+    await expect(page.locator(`#tally .cell[data-p="a"][data-d="${TODAY}"]`)).toHaveAttribute('aria-label', /: 3$/);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Striche gemacht');
+    expect(await call(page, 'beer_tally_add_beers', { name: 'Ben', date: '2026-01-02' }))
+      .toEqual({ ok: true, result: { name: 'Ben', date: '2026-01-02', beersThatDay: 1, balanceEur: -1.5 } });
+    expect(await call(page, 'beer_tally_add_payment', { name: 'Anna', amount: 10 }))
+      .toEqual({ ok: true, result: { name: 'Anna', amountEur: 10, balanceEur: 5.5 } });
+    await expect(page.locator('#tally tbody tr').first().locator('.bal')).toHaveText('5,50 €');
+    expect(await call(page, 'beer_tally_get_tally', {})).toEqual({ ok: true, result: {
+      pricePerBeerEur: 1.5,
+      people: [
+        { name: 'Anna', beers: 3, costEur: 4.5, paidEur: 10, balanceEur: 5.5 },
+        { name: 'Ben', beers: 1, costEur: 1.5, paidEur: 0, balanceEur: -1.5 },
+      ],
+      days: [
+        { date: TODAY, pricePerBeerEur: 1.5, beers: { Anna: 3 } },
+        { date: '2026-01-02', pricePerBeerEur: 1.5, beers: { Ben: 1 } },
+      ],
+    } });
+  });
+
+  test('only people on the list, limits like the UI', async ({ page }) => {
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Carla' })).error).toBe('No person named "Carla" on the list. Known: Anna, Ben');
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Anna', count: 51 })).error).toBe('input.count must be <= 50');
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Anna', date: '02.01.2026' })).error).toBe('date must be YYYY-MM-DD');
+    expect((await call(page, 'beer_tally_add_payment', { name: 'Anna', amount: 0 })).error).toBe('amount must not be 0');
+    expect((await call(page, 'beer_tally_add_payment', { name: 'Anna', amount: 10001 })).ok).toBe(false);
+    expect((await call(page, 'beer_tally_add_beers', { name: 'Anna', remove: true })).error).toBe('input.remove is not allowed');
+    const s = await page.evaluate(() => JSON.parse(localStorage.getItem('beer-tally.list.v1')));
+    expect(s.days).toEqual([]);
+    expect(s.payments).toEqual([]);
+  });
+});

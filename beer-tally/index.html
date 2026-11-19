@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Bierstrichliste</title>
+<meta name="description" content="Striche pro Person und Tag für jedes Bier, mit Kontostand und Einzahlungen in Euro – für Verein, WG oder Feier.">
+<meta name="tool:tags" content="Freizeit, Finanzen">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="add_beers, add_payment, get_tally">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann für eingetragene Personen Striche machen, Einzahlungen buchen und die Liste mit Kontoständen lesen.">
+<meta name="tool:webmcp-help-en" content="An AI agent can add strokes and book payments for people already on the list, and read the list with balances.">
+<meta name="tool:icon" content="beer">
+<meta name="tool:color" content="#b45309">
+<meta name="tool:short-name" content="Strichliste">
+<meta name="tool:title-en" content="Beer Tally">
+<meta name="tool:description-en" content="A stroke per beer for each person and day, with balance and payments in euros – for clubs, flat shares or parties.">
+<meta name="tool:short-name-en" content="Beer Tally">
+<meta name="tool:storage" content="beer-tally.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-7ZREazdZBSpAOLgQLR+Dx1NHP4r9K8vbcGEOyM2W6Vw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Strichliste">
+<meta name="theme-color" content="#b45309">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#b45309;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f59e0b;--accent-text:#1a1204}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.card>h2{margin-block-end:10px}
+/* Tally table: names stay on the left (sticky), the newest day comes first, the table scrolls sideways in its box */
+.tally-wrap{overflow-x:auto;margin-inline:-4px;padding-inline:4px;overscroll-behavior-x:contain}
+.tally{border-collapse:separate;border-spacing:0;min-width:100%;font-variant-numeric:tabular-nums}
+.tally :is(th,td){border-block-end:1px solid var(--border);padding:0;text-align:center;vertical-align:middle}
+.tally thead th{font-size:13px;font-weight:600;color:var(--muted);padding:4px 2px}
+.tally .name{position:sticky;inset-inline-start:0;z-index:1;background:var(--surface);text-align:start;padding:4px 8px 4px 0;
+  border-inline-end:1px solid var(--border);min-width:96px;max-width:140px}
+.tally tbody .name b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tally .bal{display:block;font-size:13px;font-weight:600;white-space:nowrap}
+.bal.neg{color:var(--err)}
+.bal.pos{color:var(--ok)}
+.tally .sum{font-weight:700;min-width:40px;padding-inline:6px}
+.tally tfoot :is(th,td){border-block-end:0;font-size:13px;color:var(--muted);font-weight:600;padding-block:8px}
+.day-btn{min-height:44px;min-width:64px;width:100%;padding:2px 4px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;cursor:pointer;line-height:1.25}
+.day-btn small{display:block;font-weight:400}
+.day-btn:hover{background:var(--surface-2)}
+.day-btn.virtual{color:var(--accent)}
+.cell{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:2px 4px;width:100%;min-width:64px;min-height:52px;
+  padding:4px;border:0;background:none;color:var(--text);font:inherit;cursor:pointer;touch-action:manipulation}
+.cell:hover{background:var(--surface-2)}
+.cell:focus-visible,.day-btn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.cell svg{width:22px;height:22px;flex:none}
+.cell .n{flex-basis:100%;font-size:12px;color:var(--muted);line-height:1}
+.virtual-col{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.minus .cell{cursor:not-allowed}
+.minus .cell.has{cursor:pointer}
+.tally-actions{margin-block-start:10px}
+.accounts .open{display:flex;align-items:center;gap:8px}
+.accounts .open>span:first-child{flex:1;min-width:0}
+.accounts .bal{font-size:16px}
+.total{margin:8px 0 12px}
+.price-hint{margin:-4px 0 0}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Bierstrichliste</span></h1>
+  <p class="sub" data-i18n="sub">Ein Strich pro Bier – mit Kontostand.</p>
+</header>
+
+<main>
+  <!-- First start: only the names -->
+  <section class="card" id="setup" aria-labelledby="h-setup" hidden>
+    <h2 id="h-setup"><span class="step">1</span><span data-i18n="setupH">Wer trinkt mit?</span></h2>
+    <form class="add-person" id="setupForm" novalidate>
+      <div class="form-field"><label for="setupName" data-i18n="name">Name</label><input type="text" id="setupName" maxlength="30" autocomplete="off" enterkeyhint="done"></div>
+      <p class="form-error" role="alert" id="setupErr"></p>
+      <div class="row"><button type="submit" class="btn"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#user-plus"/></svg><span data-i18n="addPerson">Person hinzufügen</span></button></div>
+    </form>
+    <ul class="list-rows people" id="setupList"></ul>
+    <p class="notice info" id="setupHint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="setupHint">Trag zuerst mindestens einen Namen ein. Weitere Personen kannst du später im Menü ergänzen.</span></p>
+    <button type="button" class="btn primary block" id="btnStart" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#beer"/></svg><span data-i18n="start">Strichliste starten</span></button>
+  </section>
+
+  <section class="card" id="tallyCard" aria-labelledby="h-tally" hidden>
+    <h2 id="h-tally" data-i18n="tallyH">Strichliste</h2>
+    <div class="seg" role="group" aria-label="Beim Tippen" data-i18n-attr="aria-label:modeL" id="mode">
+      <button type="button" aria-pressed="true" data-mode="plus"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="modePlus">Strich dazu</span></button>
+      <button type="button" aria-pressed="false" data-mode="minus"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#minus"/></svg><span data-i18n="modeMinus">Strich weg</span></button>
+    </div>
+    <div class="tally-wrap" id="tallyWrap"><table class="tally" id="tally"></table></div>
+    <div class="row tally-actions"><button type="button" class="btn" id="btnAddDay"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calendar-plus"/></svg><span data-i18n="addDay">Tag hinzufügen</span></button></div>
+  </section>
+
+  <section class="card" id="accountCard" aria-labelledby="h-acc" hidden>
+    <h2 id="h-acc" data-i18n="accH">Kontostand</h2>
+    <ul class="list-rows accounts" id="accounts"></ul>
+    <p class="muted total" id="total"></p>
+    <button type="button" class="btn primary block" id="btnPay"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#cash"/></svg><span data-i18n="pay">Einzahlung buchen</span></button>
+  </section>
+
+  <section class="card" data-menu data-icon="settings" aria-labelledby="h-set">
+    <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <div class="form-field"><label for="price" data-i18n="priceL">Preis pro Bier</label>
+      <span class="input-unit"><input type="text" inputmode="decimal" id="price" autocomplete="off"><span class="unit">€</span></span></div>
+    <p class="form-error" role="alert" id="priceErr"></p>
+    <p class="muted price-hint" data-i18n="priceHint">Gilt für neue Tage. Den Preis eines Tages änderst du durch Tippen auf sein Datum.</p>
+  </section>
+
+  <details class="card" data-menu data-menu-page data-icon="users" id="peoplePage">
+    <summary data-i18n="peopleH">Personen</summary>
+    <form class="add-person" id="peopleForm" novalidate>
+      <div class="form-field"><label for="peopleName" data-i18n="newName">Weitere Person</label><input type="text" id="peopleName" maxlength="30" autocomplete="off" enterkeyhint="done"></div>
+      <p class="form-error" role="alert" id="peopleErr"></p>
+      <div class="row"><button type="submit" class="btn"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#user-plus"/></svg><span data-i18n="addPerson">Person hinzufügen</span></button></div>
+    </form>
+    <ul class="list-rows people" id="peopleList"></ul>
+  </details>
+
+  <details class="card" data-menu data-menu-page data-icon="history" id="payPage">
+    <summary data-i18n="paymentsH">Einzahlungen</summary>
+    <ul class="list-rows" id="payList"></ul>
+  </details>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnCsv"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="csv">Als Tabelle speichern (CSV)</span></button>
+  <button type="button" id="btnClear" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearAll">Striche und Einzahlungen löschen</span></button>
+</div>
+
+<dialog class="dialog" id="dayDlg" aria-labelledby="dayDlgH">
+  <form id="dayForm" novalidate>
+    <div class="dialog-head"><h2 id="dayDlgH"></h2><button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close;title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+    <div class="dialog-body">
+      <div class="form-field"><label for="dayDate" data-i18n="date">Datum</label><input type="date" id="dayDate" required></div>
+      <div class="form-field"><label for="dayPrice" data-i18n="dayPriceL">Preis pro Bier an diesem Tag</label>
+        <span class="input-unit"><input type="text" inputmode="decimal" id="dayPrice" autocomplete="off"><span class="unit">€</span></span></div>
+      <p class="form-error" role="alert" id="dayErr"></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn danger" id="dayDelete"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="delete">Löschen</span></button>
+      <button type="button" class="btn" data-close><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+      <button type="submit" class="btn primary"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#device-floppy"/></svg><span data-i18n="save">Speichern</span></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="payDlg" aria-labelledby="payDlgH">
+  <form id="payForm" novalidate>
+    <div class="dialog-head"><h2 id="payDlgH" data-i18n="pay">Einzahlung buchen</h2><button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close;title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+    <div class="dialog-body">
+      <div class="form-field"><label for="payPerson" data-i18n="person">Person</label><select id="payPerson"></select></div>
+      <div class="form-field"><label for="payAmount" data-i18n="amount">Betrag</label>
+        <span class="input-unit"><input type="text" inputmode="decimal" id="payAmount" autocomplete="off"><span class="unit">€</span></span></div>
+      <div class="form-field"><label for="payDate" data-i18n="date">Datum</label><input type="date" id="payDate" required></div>
+      <p class="muted" id="payBal"></p>
+      <p class="form-error" role="alert" id="payErr"></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn" data-close><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+      <button type="submit" class="btn primary"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#cash"/></svg><span data-i18n="book">Einzahlen</span></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Die Strichliste ersetzt den Zettel am Kühlschrank oder im Vereinsheim: Für jedes Bier gibt es einen Strich bei der Person und dem Tag. Aus Strichen, Preis und Einzahlungen ergibt sich der Kontostand jeder Person.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Namen:</b> Beim ersten Start trägst du alle ein, die mittrinken. Weitere Personen, Umbenennen und Entfernen findest du später im Menü unter „Personen“.</li>
+    <li><b>Strich machen:</b> In der Tabelle steht jede Spalte für ein Datum, die neueste ganz links neben den Namen. Ein Tippen in die Zelle macht einen Strich; fünf Striche werden wie auf Papier zu einem Bündel. Die Spalte für heute entsteht beim ersten Strich von selbst.</li>
+    <li><b>Vertippt?</b> Direkt danach „Rückgängig“ tippen. Für spätere Korrekturen oben auf „Strich weg“ umschalten – dann nimmt jedes Tippen einen Strich weg.</li>
+    <li><b>Tage:</b> „Tag hinzufügen“ legt eine Spalte für ein anderes Datum an (z. B. zum Nachtragen). Ein Tippen auf das Datum öffnet den Tag: Datum oder Preis ändern oder die ganze Spalte löschen.</li>
+    <li><b>Preis:</b> In den Einstellungen steht der Preis pro Bier. Jeder Tag merkt sich seinen Preis – eine spätere Preisänderung ändert alte Tage nicht.</li>
+    <li><b>Kontostand:</b> Eingezahlt minus getrunken. Rot heißt: Die Person schuldet noch Geld, grün: Sie hat Guthaben. „Einzahlung buchen“ (oder ein Tippen auf die Person) trägt eine Zahlung ein; ein negativer Betrag bucht eine Auszahlung, z. B. wenn Guthaben zurückgegeben wird. Alle Einzahlungen stehen im Menü unter „Einzahlungen“.</li>
+    <li><b>Abrechnen:</b> „Als Tabelle speichern (CSV)“ im Menü erzeugt eine Datei für Excel oder LibreOffice. „Striche und Einzahlungen löschen“ beginnt eine neue Liste mit denselben Namen.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Namen, Striche, Preise und Einzahlungen bleiben nur in diesem Browser gespeichert (sichern und auf ein anderes Handy übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline. Mehrere Handys gleichen sich nicht von selbst ab – am besten führt ein Gerät die Liste.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>The tally replaces the sheet of paper on the fridge or in the clubhouse: every beer is a stroke for the person and the day. Strokes, price and payments give each person’s balance.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Names:</b> on the first start you enter everyone who drinks along. More people, renaming and removing are in the menu under “People” later.</li>
+    <li><b>Add a stroke:</b> in the table each column is a date, the newest on the left next to the names. A tap in the cell adds a stroke; five strokes become a bundle as on paper. Today’s column appears by itself with the first stroke.</li>
+    <li><b>Mistyped?</b> Tap “Undo” right away. For later corrections switch to “Remove stroke” at the top – then every tap removes a stroke.</li>
+    <li><b>Days:</b> “Add day” creates a column for another date (e.g. to fill in later). A tap on the date opens the day: change date or price, or delete the whole column.</li>
+    <li><b>Price:</b> the price per beer is in the settings. Each day keeps its own price – changing the price later does not change past days.</li>
+    <li><b>Balance:</b> paid minus drunk. Red means the person still owes money, green means credit. “Book payment” (or a tap on the person) records a payment; a negative amount books a payout, e.g. when credit is handed back. All payments are in the menu under “Payments”.</li>
+    <li><b>Settling up:</b> “Save as table (CSV)” in the menu creates a file for Excel or LibreOffice. “Delete strokes and payments” starts a new list with the same names.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Names, strokes, prices and payments stay only in this browser (back them up or move them to another phone under “Back up data”). Nothing is sent to a server; the app also works offline. Several phones do not sync by themselves – best keep the list on one device.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann für eingetragene Personen Striche machen, Einzahlungen buchen und die Liste mit Kontoständen lesen. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can add strokes and book payments for people already on the list, and read the list with balances. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version ab40cafac23b</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{today:'Heute',sumCol:'Summe',nameCol:'Name',cellL:'{name}, {day}: {n}',dayTitle:'Tag {day}',newDay:'Tag hinzufügen',
+    added:'Strich für {name}',removed:'Strich für {name} weg',nothing:'Hier ist kein Strich zum Wegnehmen.',
+    meta:'{n} Bier · {cost} · eingezahlt {paid}',meta1:'{n} Bier · {cost} · eingezahlt {paid}',totalL1:'Zusammen {n} Bier · {cost} · eingezahlt {paid}',totalL:'Zusammen {n} Bier · {cost} · eingezahlt {paid}',
+    errName:'Bitte einen Namen eingeben.',errDup:'„{name}“ steht schon auf der Liste.',errPrice:'Bitte einen Preis von 0 bis 100 € eingeben.',
+    errDate:'Bitte ein Datum wählen.',errDayDup:'Für dieses Datum gibt es schon eine Spalte.',errAmount:'Bitte einen Betrag eingeben (nicht 0, höchstens 10.000 €).',
+    personDel:'{name} entfernt',dayDel:'Tag {day} gelöscht',payDel:'Einzahlung gelöscht',paid:'{amount} für {name} gebucht',
+    rename:'Neuer Name für {name}:',renameL:'{name} umbenennen',deleteL:'{name} löschen',payDeleteL:'Einzahlung von {name} löschen',
+    noPeople:'Noch keine Personen.',noPay:'Noch keine Einzahlungen.',payMeta:'{date} · {amount}',balNow:'Kontostand jetzt: {bal}',
+    clearQ:'Alle Striche und Einzahlungen löschen? Die Namen bleiben.',cleared:'Liste geleert',
+    csvName:'bierstrichliste',csvPerson:'Name',csvBeers:'Bier gesamt',csvCost:'Betrag €',csvPaid:'Eingezahlt €',csvBal:'Kontostand €',csvPrice:'Preis pro Bier €',
+    'mcp.beers':'Striche gemacht','mcp.pay':'Einzahlung gebucht'},
+  en:{title:'Beer Tally',sub:'One stroke per beer – with balance.',setupH:'Who drinks along?',name:'Name',addPerson:'Add person',
+    setupHint:'Enter at least one name first. You can add more people later in the menu.',start:'Start tally',tallyH:'Tally',
+    modeL:'On tap',modePlus:'Add stroke',modeMinus:'Remove stroke',addDay:'Add day',accH:'Balance',pay:'Book payment',settings:'Settings',
+    priceL:'Price per beer',priceHint:'Applies to new days. Tap a date to change the price of that day.',peopleH:'People',newName:'Another person',
+    paymentsH:'Payments',csv:'Save as table (CSV)',clearAll:'Delete strokes and payments',close:'Close',date:'Date',dayPriceL:'Price per beer on this day',
+    delete:'Delete',cancel:'Cancel',save:'Save',person:'Person',amount:'Amount',book:'Pay in',
+    today:'Today',sumCol:'Total',nameCol:'Name',cellL:'{name}, {day}: {n}',dayTitle:'Day {day}',newDay:'Add day',
+    added:'Stroke for {name}',removed:'Stroke for {name} removed',nothing:'There is no stroke to remove here.',
+    meta:'{n} beers · {cost} · paid {paid}',meta1:'{n} beer · {cost} · paid {paid}',totalL:'Together {n} beers · {cost} · paid {paid}',totalL1:'Together {n} beer · {cost} · paid {paid}',
+    errName:'Please enter a name.',errDup:'“{name}” is already on the list.',errPrice:'Please enter a price from 0 to 100 €.',
+    errDate:'Please choose a date.',errDayDup:'There already is a column for this date.',errAmount:'Please enter an amount (not 0, at most 10,000 €).',
+    personDel:'{name} removed',dayDel:'Day {day} deleted',payDel:'Payment deleted',paid:'{amount} booked for {name}',
+    rename:'New name for {name}:',renameL:'Rename {name}',deleteL:'Delete {name}',payDeleteL:'Delete payment of {name}',
+    noPeople:'No people yet.',noPay:'No payments yet.',payMeta:'{date} · {amount}',balNow:'Balance now: {bal}',
+    clearQ:'Delete all strokes and payments? The names stay.',cleared:'List cleared',
+    csvName:'beer-tally',csvPerson:'Name',csvBeers:'Beers total',csvCost:'Amount €',csvPaid:'Paid €',csvBal:'Balance €',csvPrice:'Price per beer €',
+    'mcp.beers':'strokes added','mcp.pay':'payment booked'}
+});
+const t=Tools.t, $=Tools.$;
+
+/* ---------- Data: one object, amounts in cents (no rounding drift) ----------
+   { price: cents for new days, people:[{id,name}], days:[{date:'YYYY-MM-DD', price:cents, counts:{personId:n}}],
+     payments:[{id, person, date, amount:cents (negative = payout)}] } */
+const LS='beer-tally.list.v1';
+const MAX_PRICE=10000, MAX_AMOUNT=1000000;
+const isDate=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s);
+const int=(v,lo,hi,d)=>Number.isInteger(v)?Tools.clamp(v,lo,hi):d;
+function normalize(raw){
+  const o=raw&&typeof raw==='object'?raw:{};
+  const people=(Array.isArray(o.people)?o.people:[]).filter(p=>p&&typeof p.id==='string'&&typeof p.name==='string')
+    .map(p=>({id:p.id,name:p.name.slice(0,30)}));
+  const ids=new Set(people.map(p=>p.id));
+  const seen=new Set();
+  const days=(Array.isArray(o.days)?o.days:[]).filter(d=>d&&isDate(d.date)&&!seen.has(d.date)&&seen.add(d.date)).map(d=>{
+    const counts={};
+    for(const [k,v] of Object.entries(d.counts&&typeof d.counts==='object'?d.counts:{}))if(ids.has(k)&&Number.isInteger(v)&&v>0)counts[k]=v;
+    return {date:d.date,price:int(d.price,0,MAX_PRICE,100),counts};
+  });
+  const payments=(Array.isArray(o.payments)?o.payments:[]).filter(p=>p&&ids.has(p.person)&&Number.isInteger(p.amount)&&p.amount)
+    .map(p=>({id:typeof p.id==='string'?p.id:Tools.uid('p'),person:p.person,date:isDate(p.date)?p.date:today(),amount:Tools.clamp(p.amount,-MAX_AMOUNT,MAX_AMOUNT)}));
+  return {price:int(o.price,0,MAX_PRICE,100),people,days,payments};
+}
+let data=normalize(Tools.load(LS,null));
+const save=()=>Tools.save(LS,data);
+
+function today(){
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+const dateObj=s=>{ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+const dayShort=s=>dateObj(s).toLocaleDateString(Tools.locale(),{day:'2-digit',month:'2-digit'});
+const dayWeek=s=>dateObj(s).toLocaleDateString(Tools.locale(),{weekday:'short'});
+const dayLong=s=>dateObj(s).toLocaleDateString(Tools.locale(),{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});
+const euro=c=>Tools.fmt(c/100,2)+' €';
+const parseEuro=s=>{ const v=Tools.parseNum(s); return Number.isFinite(v)?Math.round(v*100):NaN; };
+const person=id=>data.people.find(p=>p.id===id);
+const dayOf=date=>data.days.find(d=>d.date===date);
+const sortedDays=()=>data.days.slice().sort((a,b)=>a.date<b.date?1:-1);
+
+function account(id){
+  let beers=0, cost=0, paid=0;
+  for(const d of data.days){ const n=d.counts[id]||0; beers+=n; cost+=n*d.price; }
+  for(const p of data.payments)if(p.person===id)paid+=p.amount;
+  return {beers,cost,paid,balance:paid-cost};
+}
+const balClass=c=>c<0?'bal neg':c>0?'bal pos':'bal';
+
+/* ---------- Tally marks: groups of five (four strokes, one across) as small drawings ---------- */
+function marks(n){
+  let out='';
+  for(let i=0;i<n;i+=5){
+    const k=Math.min(5,n-i);
+    let lines='';
+    for(let j=0;j<Math.min(k,4);j++)lines+=`<line x1="${4+j*5}" y1="3" x2="${4+j*5}" y2="21"/>`;
+    if(k===5)lines+='<line x1="1" y1="18" x2="21" y2="6"/>';
+    out+=`<svg viewBox="0 0 22 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${lines}</svg>`;
+  }
+  return out;
+}
+
+/* ---------- Rendering ---------- */
+let setupOpen=data.people.length===0;
+let mode='plus';
+const esc=Tools.esc;
+
+function renderTable(){
+  const days=sortedDays();
+  const td=today();
+  const cols=dayOf(td)?days:[{date:td,price:data.price,counts:{},virtual:true}].concat(days);
+  let h='<thead><tr><th scope="col" class="name">'+esc(t('nameCol'))+'</th><th scope="col" class="sum">'+esc(t('sumCol'))+'</th>';
+  for(const d of cols){
+    const lab=d.date===td?t('today'):dayWeek(d.date);
+    h+=`<th scope="col"${d.virtual?' class="virtual-col"':''}><button type="button" class="day-btn${d.virtual?' virtual':''}" data-day="${d.date}"${d.virtual?' data-virtual="1"':''}>${esc(lab)}<small>${esc(dayShort(d.date))}</small></button></th>`;
+  }
+  h+='</tr></thead><tbody>';
+  for(const p of data.people){
+    const a=account(p.id);
+    h+=`<tr><th scope="row" class="name"><b>${esc(p.name)}</b><span class="${balClass(a.balance)}">${esc(euro(a.balance))}</span></th><td class="sum">${a.beers}</td>`;
+    for(const d of cols){
+      const n=d.counts[p.id]||0;
+      const lab=t('cellL',{name:p.name,day:dayShort(d.date),n});
+      h+=`<td${d.virtual?' class="virtual-col"':''}><button type="button" class="cell${n?' has':''}" data-p="${p.id}" data-d="${d.date}" aria-label="${esc(lab)}">${marks(n)}${n?`<span class="n">${n}</span>`:''}</button></td>`;
+    }
+    h+='</tr>';
+  }
+  let total=0;
+  const perDay=cols.map(d=>{ let s=0; for(const p of data.people)s+=d.counts[p.id]||0; total+=s; return s; });
+  h+=`</tbody><tfoot><tr><th scope="row" class="name">${esc(t('sumCol'))}</th><td class="sum">${total}</td>`;
+  for(let i=0;i<cols.length;i++)h+=`<td${cols[i].virtual?' class="virtual-col"':''}>${perDay[i]}</td>`;
+  h+='</tr></tfoot>';
+  $('tally').innerHTML=h;
+  $('tallyCard').classList.toggle('minus',mode==='minus');
+}
+
+function renderAccounts(){
+  let beers=0,cost=0,paid=0;
+  $('accounts').innerHTML=data.people.map(p=>{
+    const a=account(p.id); beers+=a.beers; cost+=a.cost; paid+=a.paid;
+    return `<li><button type="button" class="open" data-pay="${p.id}"><span><span class="name">${esc(p.name)}</span><span class="meta">${esc(t(a.beers===1?'meta1':'meta',{n:a.beers,cost:euro(a.cost),paid:euro(a.paid)}))}</span></span><span class="${balClass(a.balance)}">${esc(euro(a.balance))}</span></button></li>`;
+  }).join('');
+  $('total').textContent=t(beers===1?'totalL1':'totalL',{n:beers,cost:euro(cost),paid:euro(paid)});
+}
+
+function peopleRows(){
+  if(!data.people.length)return `<li class="muted">${esc(t('noPeople'))}</li>`;
+  return data.people.map(p=>`<li><span class="open"><span class="name">${esc(p.name)}</span></span>`+
+    `<button type="button" class="btn icon" data-rename="${p.id}" aria-label="${esc(t('renameL',{name:p.name}))}" title="${esc(t('renameL',{name:p.name}))}">${Tools.icon('pencil')}</button>`+
+    `<button type="button" class="btn icon" data-del="${p.id}" aria-label="${esc(t('deleteL',{name:p.name}))}" title="${esc(t('deleteL',{name:p.name}))}">${Tools.icon('trash')}</button></li>`).join('');
+}
+
+function renderPayments(){
+  const list=data.payments.slice().sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+  $('payList').innerHTML=list.length?list.map(p=>{
+    const name=(person(p.person)||{}).name||'';
+    return `<li><span class="open"><span class="name">${esc(name)}</span><span class="meta">${esc(t('payMeta',{date:dayLong(p.date),amount:euro(p.amount)}))}</span></span>`+
+      `<button type="button" class="btn icon" data-paydel="${p.id}" aria-label="${esc(t('payDeleteL',{name}))}" title="${esc(t('payDeleteL',{name}))}">${Tools.icon('trash')}</button></li>`;
+  }).join(''):`<li class="muted">${esc(t('noPay'))}</li>`;
+}
+
+function render(){
+  const setup=setupOpen||!data.people.length;
+  $('setup').hidden=!setup;
+  $('tallyCard').hidden=setup;
+  $('accountCard').hidden=setup;
+  $('setupList').innerHTML=data.people.length?peopleRows():'';
+  $('btnStart').disabled=!data.people.length;
+  $('setupHint').hidden=data.people.length>0;
+  $('peopleList').innerHTML=peopleRows();
+  for(const b of document.querySelectorAll('#mode button'))b.setAttribute('aria-pressed',String(b.dataset.mode===mode));
+  if(document.activeElement!==$('price'))$('price').value=Tools.fmt(data.price/100,2);
+  renderPayments();
+  if(!setup){ renderTable(); renderAccounts(); }
+}
+
+/* ---------- People ---------- */
+function addPerson(name){
+  name=String(name||'').trim().replace(/\s+/g,' ').slice(0,30);
+  if(!name)return t('errName');
+  if(data.people.some(p=>p.name.toLowerCase()===name.toLowerCase()))return t('errDup',{name});
+  data.people.push({id:Tools.uid('u'),name});
+  save(); render();
+  Tools.diag.log('person added',{people:data.people.length});
+  return '';
+}
+for(const [form,input,err] of [['setupForm','setupName','setupErr'],['peopleForm','peopleName','peopleErr']]){
+  $(form).addEventListener('submit',e=>{
+    e.preventDefault();
+    const msg=addPerson($(input).value);
+    $(err).textContent=msg;
+    if(!msg){ $(input).value=''; if(form==='peopleForm'){ Tools.menu.close(); } else $(input).focus(); }
+  });
+}
+$('btnStart').addEventListener('click',()=>{ setupOpen=false; render(); Tools.diag.log('setup done'); });
+
+document.addEventListener('click',async e=>{
+  const ren=e.target.closest('[data-rename]'), del=e.target.closest('[data-del]');
+  if(ren){
+    const p=person(ren.dataset.rename); if(!p)return;
+    const v=await Tools.prompt(t('rename',{name:p.name}),{value:p.name});
+    if(v==null)return;
+    const name=v.trim().replace(/\s+/g,' ').slice(0,30);
+    if(!name||data.people.some(o=>o!==p&&o.name.toLowerCase()===name.toLowerCase())){ Tools.toast(name?t('errDup',{name}):t('errName')); return; }
+    p.name=name; save(); render();
+  } else if(del){
+    const p=person(del.dataset.del); if(!p)return;
+    const before=JSON.stringify(data);
+    data.people=data.people.filter(o=>o!==p);
+    for(const d of data.days)delete d.counts[p.id];
+    data.payments=data.payments.filter(x=>x.person!==p.id);
+    save(); render();
+    Tools.undo(t('personDel',{name:p.name}),()=>{ data=normalize(JSON.parse(before)); save(); render(); });
+  }
+});
+
+/* ---------- Strokes ---------- */
+function ensureDay(date){
+  let d=dayOf(date);
+  if(!d){ d={date,price:data.price,counts:{}}; data.days.push(d); Tools.diag.log('day created',{days:data.days.length}); }
+  return d;
+}
+function addBeers(id,date,n){
+  const d=ensureDay(date);
+  d.counts[id]=(d.counts[id]||0)+n;
+  save(); render();
+}
+function removeBeer(id,date){
+  const d=dayOf(date);
+  if(!d||!d.counts[id])return false;
+  if(--d.counts[id]<=0)delete d.counts[id];
+  save(); render();
+  return true;
+}
+function focusCell(id,date){
+  const c=document.querySelector(`#tally .cell[data-p="${id}"][data-d="${date}"]`);
+  if(c)c.focus({preventScroll:true});
+}
+$('tally').addEventListener('click',e=>{
+  const c=e.target.closest('.cell');
+  if(c){
+    const {p:id,d:date}=c.dataset, p=person(id); if(!p)return;
+    if(mode==='plus'){
+      addBeers(id,date,1); focusCell(id,date);
+      if('vibrate' in navigator)navigator.vibrate(20);
+      Tools.undo(t('added',{name:p.name}),()=>removeBeer(id,date));
+    } else if(removeBeer(id,date)){
+      focusCell(id,date);
+      Tools.undo(t('removed',{name:p.name}),()=>addBeers(id,date,1));
+    } else Tools.toast(t('nothing'));
+    return;
+  }
+  const b=e.target.closest('.day-btn');
+  if(b)openDay(b.dataset.virtual?null:b.dataset.day,b.dataset.day);
+});
+for(const b of document.querySelectorAll('#mode button'))b.addEventListener('click',()=>{ mode=b.dataset.mode; render(); });
+
+/* ---------- Day dialog: add a column or change/delete one ---------- */
+const dayDlg=$('dayDlg');
+let editDay=null;
+function openDay(date,preset){
+  editDay=date?dayOf(date):null;
+  $('dayDlgH').textContent=editDay?t('dayTitle',{day:dayLong(editDay.date)}):t('newDay');
+  $('dayDate').value=editDay?editDay.date:(preset||(dayOf(today())?'':today()));
+  $('dayPrice').value=Tools.fmt((editDay?editDay.price:data.price)/100,2);
+  $('dayDelete').hidden=!editDay;
+  $('dayErr').textContent='';
+  dayDlg.showModal();
+}
+$('btnAddDay').addEventListener('click',()=>openDay(null));
+$('dayForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const date=$('dayDate').value, price=parseEuro($('dayPrice').value);
+  let err='';
+  if(!isDate(date))err=t('errDate');
+  else if(dayOf(date)&&dayOf(date)!==editDay)err=t('errDayDup');
+  else if(!(price>=0&&price<=MAX_PRICE))err=t('errPrice');
+  $('dayErr').textContent=err;
+  if(err)return;
+  if(editDay){ editDay.date=date; editDay.price=price; }
+  else data.days.push({date,price,counts:{}});
+  save(); render(); dayDlg.close();
+  Tools.diag.log(editDay?'day changed':'day added',{days:data.days.length});
+});
+$('dayDelete').addEventListener('click',()=>{
+  if(!editDay)return;
+  const gone=editDay;
+  data.days=data.days.filter(d=>d!==gone);
+  save(); render(); dayDlg.close();
+  Tools.undo(t('dayDel',{day:dayShort(gone.date)}),()=>{ if(!dayOf(gone.date)){ data.days.push(gone); save(); render(); } });
+});
+
+/* ---------- Payments ---------- */
+const payDlg=$('payDlg');
+function payBalance(){
+  const id=$('payPerson').value;
+  $('payBal').textContent=id?t('balNow',{bal:euro(account(id).balance)}):'';
+}
+function openPay(id){
+  $('payPerson').innerHTML=data.people.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  if(id)$('payPerson').value=id;
+  $('payAmount').value='';
+  $('payDate').value=today();
+  $('payErr').textContent='';
+  payBalance();
+  payDlg.showModal();
+  $('payAmount').focus();
+}
+$('payPerson').addEventListener('change',payBalance);
+$('btnPay').addEventListener('click',()=>openPay(null));
+$('accounts').addEventListener('click',e=>{ const b=e.target.closest('[data-pay]'); if(b)openPay(b.dataset.pay); });
+function bookPayment(id,amount,date){
+  data.payments.push({id:Tools.uid('p'),person:id,date,amount});
+  save(); render();
+  Tools.diag.log('payment booked',{payments:data.payments.length});
+}
+$('payForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const id=$('payPerson').value, amount=parseEuro($('payAmount').value), date=$('payDate').value;
+  let err='';
+  if(!amount||!Number.isFinite(amount)||Math.abs(amount)>MAX_AMOUNT)err=t('errAmount');
+  else if(!isDate(date))err=t('errDate');
+  $('payErr').textContent=err;
+  if(err||!person(id))return;
+  bookPayment(id,amount,date);
+  payDlg.close();
+  Tools.toast(t('paid',{amount:euro(amount),name:person(id).name}));
+});
+$('payList').addEventListener('click',e=>{
+  const b=e.target.closest('[data-paydel]'); if(!b)return;
+  const i=data.payments.findIndex(p=>p.id===b.dataset.paydel); if(i<0)return;
+  const [gone]=data.payments.splice(i,1);
+  save(); render();
+  Tools.undo(t('payDel'),()=>{ if(person(gone.person)){ data.payments.push(gone); save(); render(); } });
+});
+
+/* ---------- Settings ---------- */
+$('price').addEventListener('change',()=>{
+  const c=parseEuro($('price').value);
+  if(!(c>=0&&c<=MAX_PRICE)){ $('priceErr').textContent=t('errPrice'); return; }
+  $('priceErr').textContent='';
+  data.price=c; save(); render();
+  $('price').value=Tools.fmt(c/100,2);
+});
+
+/* ---------- Menu actions ---------- */
+$('btnCsv').addEventListener('click',()=>{
+  const de=Tools.lang()==='de', sep=de?';':',';
+  const num=c=>(c/100).toFixed(2).replace('.',de?',':'.');
+  const cell=v=>{ const s=String(v); return s.includes(sep)||/["\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const days=sortedDays().reverse();
+  const rows=[[t('csvPerson'),...days.map(d=>d.date),t('csvBeers'),t('csvCost'),t('csvPaid'),t('csvBal')]];
+  for(const p of data.people){
+    const a=account(p.id);
+    rows.push([p.name,...days.map(d=>d.counts[p.id]||0),a.beers,num(a.cost),num(a.paid),num(a.balance)]);
+  }
+  rows.push([t('csvPrice'),...days.map(d=>num(d.price))]);
+  const text='﻿'+rows.map(r=>r.map(cell).join(sep)).join('\r\n')+'\r\n';
+  Tools.download(new File([text],`${t('csvName')}-${today()}.csv`,{type:'text/csv'}));
+  Tools.diag.log('csv saved',{days:days.length,people:data.people.length});
+  Tools.menu.close();
+});
+$('btnClear').addEventListener('click',async()=>{
+  if((data.days.length||data.payments.length)&&!await Tools.confirm(t('clearQ'),{action:'delete'}))return;
+  data.days=[]; data.payments=[]; save(); render();
+  Tools.menu.close(); Tools.toast(t('cleared'));
+});
+
+render();
+Tools.onLang(render);
+// Data restored from a backup or changed in another tab
+window.addEventListener('storage',e=>{ if(e.key===LS||e.key===null){ data=normalize(Tools.load(LS,null)); render(); } });
+// A new day while the app stays open: the "today" column moves along
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden)render(); });
+Tools.diag.info(()=>({people:data.people.length,days:data.days.length,payments:data.payments.length,mode,setup:setupOpen}));
+
+/* ---------- WebMCP ---------- */
+function findPerson(name){
+  const p=data.people.find(o=>o.name.toLowerCase()===String(name).trim().toLowerCase());
+  if(!p)throw new Error(`No person named "${name}" on the list. Known: ${data.people.map(o=>o.name).join(', ')||'none'}`);
+  return p;
+}
+function checkDate(date){
+  if(date==null)return today();
+  if(!isDate(date)||Number.isNaN(dateObj(date).getTime()))throw new Error('date must be YYYY-MM-DD');
+  return date;
+}
+Tools.mcp.register({
+  name:'add_beers',title:'Add strokes',label:'mcp.beers',
+  description:'Adds strokes (one per beer) for a person already on the tally, on a date (default today), as if the user tapped the cell. A missing date column is created with the current price. Returns the person\'s strokes that day and the new balance in euros.',
+  inputSchema:{type:'object',properties:{
+    name:{type:'string',minLength:1,maxLength:30,description:'Name of a person on the list (case does not matter).'},
+    count:{type:'integer',minimum:1,maximum:50,description:'Number of beers. Default 1.'},
+    date:{type:'string',minLength:10,maxLength:10,description:'Date as YYYY-MM-DD. Default today.'}
+  },required:['name'],additionalProperties:false},
+  execute:({name,count=1,date})=>{
+    const p=findPerson(name), d=checkDate(date);
+    addBeers(p.id,d,count);
+    return {name:p.name,date:d,beersThatDay:dayOf(d).counts[p.id],balanceEur:account(p.id).balance/100};
+  }
+});
+Tools.mcp.register({
+  name:'add_payment',title:'Book payment',label:'mcp.pay',
+  description:'Books a payment in euros for a person already on the tally (negative amount = payout of credit), dated today. Returns the new balance in euros.',
+  inputSchema:{type:'object',properties:{
+    name:{type:'string',minLength:1,maxLength:30,description:'Name of a person on the list (case does not matter).'},
+    amount:{type:'number',minimum:-10000,maximum:10000,description:'Amount in euros, e.g. 20 or 7.5. Must not be 0.'}
+  },required:['name','amount'],additionalProperties:false},
+  execute:({name,amount})=>{
+    const p=findPerson(name), c=Math.round(amount*100);
+    if(!c)throw new Error('amount must not be 0');
+    bookPayment(p.id,c,today());
+    return {name:p.name,amountEur:c/100,balanceEur:account(p.id).balance/100};
+  }
+});
+Tools.mcp.register({
+  name:'get_tally',title:'Read tally',readOnly:true,
+  description:'Reads the tally: price per beer for new days, every person with beers, cost, paid and balance in euros (negative = owes money), and every day with its price and strokes per person.',
+  execute:()=>({
+    pricePerBeerEur:data.price/100,
+    people:data.people.map(p=>{ const a=account(p.id); return {name:p.name,beers:a.beers,costEur:a.cost/100,paidEur:a.paid/100,balanceEur:a.balance/100}; }),
+    days:sortedDays().map(d=>({date:d.date,pricePerBeerEur:d.price/100,beers:Object.fromEntries(data.people.filter(p=>d.counts[p.id]).map(p=>[p.name,d.counts[p.id]]))}))
+  })
+});
+})();
+</script>
+</body>
+</html>
