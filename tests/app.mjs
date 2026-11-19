@@ -1,6 +1,6 @@
 // Runs only the tests of one app: its own tests/<app>.spec.mjs and every general check that names the
 // app (site, menu, a11y, i18n, diag, webmcp, install, update …) – a quick check before pushing, instead of
-// the whole suite. CI still runs everything.
+// the whole suite. CI picks the tests of a pull request the same way (tests/select.mjs).
 //   npm run test:app -- pdf-viewer               (Chromium)
 //   npm run test:app -- pdf-viewer --repeat-each=5 --workers=4   (extra arguments go to Playwright)
 //   npm run test:app -- pdf-viewer --project=webkit             (basic check in WebKit, if installed)

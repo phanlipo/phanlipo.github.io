@@ -1,19 +1,22 @@
 # Tests
 
 Browser-Tests mit [Playwright](https://playwright.dev/) – sie laufen automatisch bei jedem Pull Request
-und jedem Push auf `main` (`.github/workflows/test.yml`): aufgeteilt auf 3 Runner gleichzeitig
-(`--shard=1/3` …), je 4 Worker. Der Check **test** (Pflicht für den Merge) ist grün, wenn alle Teile grün sind.
-Einen Teil lokal nachstellen: `npx playwright test --shard=2/3`.
+und jedem Push auf `main` (`.github/workflows/test.yml`), je Runner mit 4 Workern. Der Check **test** (Pflicht für den Merge) ist grün, wenn alle Teile grün sind.
+
+- **Push auf `main` und manueller Start:** immer alle Tests, aufgeteilt auf 3 Runner (`--shard=1/3` …). Einen Teil lokal nachstellen: `npx playwright test --shard=2/3`.
+- **Pull Request:** nur die Tests, die die Änderungen brauchen – `tests/select.mjs` wählt sie aus den geänderten Dateien aus (Regeln im Kopf der Datei, geprüft von `select.spec.mjs`): eine App → ihre Tests und alle allgemeinen Prüfungen, die sie nennen (wie `test:app`), dazu allgemeine Tests, die ihre Seite als Beispiel öffnen; gemeinsame Skripte/Bibliotheken → alle Apps, deren `sw.js` sie enthält; Test-Helfer/Fixtures → die Tests, die sie nutzen; `base.css`, `common.js`, `scripts/`, Test-Einrichtung, Unbekanntes → alles; nur Dokumentation → keine Browser-Tests. Was `build.mjs` erzeugt (`sw.js`, Fußzeile mit Cache-Version …), zählt nicht als Änderung einer App – es ändert sich z. B. bei einem neuen Icon im Sprite in allen Apps. Startseiten-Tests, `build.spec.mjs` und `select.spec.mjs` laufen immer mit. Was die Auswahl übersieht, fällt spätestens beim Push auf `main` auf – dann die Regel in `select.mjs` ergänzen.
+- Was ein PR auslöst, lokal ansehen: `node tests/select.mjs` (gegen `origin/main`) zeigt Begründung und den `--grep` zum Nachstellen.
 
 ## Lokal ausführen
 
 ```sh
 npm install                          # einmalig: Playwright, axe-core, bwip-js
 npx playwright install chromium      # einmalig: Browser
-npm test                             # alle Tests (dauert lokal lange – läuft bei jedem PR in CI)
+npm test                             # alle Tests (dauert lokal lange – läuft in CI bei jedem Push auf main)
 npx playwright test tests/dice-coin.spec.mjs   # nur eine Datei
 npx playwright test -g "offline"     # nur Tests, deren Name passt
 npm run test:app -- pdf-viewer       # nur eine App: ihre Tests + alle allgemeinen Prüfungen, die sie betreffen
+node tests/select.mjs                # welche Tests CI für die Änderungen dieses Branches auswählt
 npm run lint                         # statische Prüfung (ESLint, eslint.config.mjs) – läuft auch in CI
 ```
 
@@ -73,6 +76,7 @@ Passt der installierte Browser nicht zur Playwright-Version (z. B. in vorkonfigu
 | `qr-code.spec.mjs` | QR-Codes für Links, Umlaute/Emoji und WLAN (Sonderzeichen-Escaping) – gelesen mit einem unabhängigen Decoder (ZXing-JS); Fehlerkorrektur, Größengrenze, gespeichertes PNG, Teilen-Ziel für Links (Android), Link zum Generator mit Inhalt (auch WLAN), Verlauf |
 | `vendor-health.spec.mjs` | SBOM `sbom.cdx.json`: jede Bibliothek mit purl, Lizenz, npm-Prüfsumme und SHA-256 jeder Datei, Apps → Bibliotheken; Regeln der Pflege-Prüfung (u. a. ursprüngliches pdf-lib fällt durch), Ausnahmen mit Ablaufdatum, Schwere von Schwachstellen – ohne Netz |
 | `build.spec.mjs` | `build.mjs --check` ist sauber; `NOTICE.md` nennt jede Bibliothek mit Version und funktionierendem Lizenz-Link; die Prüfung der Vendor-Pfade erkennt zusammengesetzte Pfade und Worker, die direkt aus `assets/vendor/` starten (beides bricht offline) |
+| `select.spec.mjs` | **Testauswahl im PR** (`select.mjs`): Dokumentation braucht keine Tests; `common.js`, `base.css`, `scripts/`, Test-Einrichtung, gelöschte/unbekannte Ordner → alles; eine App → ihre Tests, Startseite, Build-Check, nicht die anderer Apps (ganze Wörter); allgemeine Tests, die eine App als Beispiel öffnen, ohne die Tests anderer Apps; gemeinsame Skripte/Bibliotheken → die Apps, deren `sw.js` sie enthält; Helfer/Fixtures → die Tests, die sie nutzen; geänderte allgemeine Testdatei ganz; was `build.mjs` in jedem App-Ordner erzeugt (`sw.js`, Manifest, Icons, markierte Bereiche wie die Fußzeile mit der Cache-Version) wählt keine App aus |
 | `helpers.mjs` | gemeinsame Helfer (u. a. `openMenu`/`closeMenu` für das App-Menü, `switchLang`/`switchTheme` zum Umschalten von Sprache und Darstellung, `openSettings`); der `page`-Fixture lässt jeden Test bei JS-Fehlern, Konsolenfehlern, **Anfragen an fremde Server** oder **localStorage-Schlüsseln außerhalb von `tool:storage`** scheitern (Ausnahme: die gemeinsame Sprach- und Darstellungswahl `tools.lang.v1`, `tools.theme.v1`); jede Seite bekommt eine **eigene Zwischenablage** (die echte teilen sich alle parallel laufenden Tests) – lesen mit `clipboardText(page)`, nie `clipboard-read`/`clipboard-write` freigeben (prüft `diag.spec.mjs`); Rückfragen der Apps (`Tools.confirm`/`Tools.prompt`) beantwortet `onDialog(page, d => d.accept())` wie früher `page.on('dialog')` (ohne Handler: abgelehnt, mit `manualDialogs(page)` klickt der Test selbst) |
 
 ## Live-Seite

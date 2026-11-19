@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "face-timelapse";
-const VERSION = 'b4af01d1245a';
+const VERSION = '7ab8991247fb';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

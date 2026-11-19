@@ -104,6 +104,36 @@ test.describe('template tools', () => {
   });
 });
 
+test.describe('link-redirect tools', () => {
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('seeded')) return;
+      sessionStorage.setItem('seeded', '1');
+      localStorage.setItem('link-redirect.rules.v1', JSON.stringify([
+        { id: 'a', name: 'Archiv', prefix: 'https://test.de/?url=', suffix: '', encode: true, strip: false },
+        { id: 'b', name: '', prefix: 'https://lesen.example/', suffix: '?x=1', encode: false, strip: true },
+      ]));
+    });
+    await page.goto('/link-redirect/');
+  });
+
+  test('list_rules reads the redirects; build_link shows the link in the app but never redirects', async ({ page }) => {
+    expect(await call(page, 'link_redirect_list_rules', {})).toEqual({ ok: true, result: { redirects: [
+      { name: 'Archiv', prefix: 'https://test.de/?url=', suffix: '', encode: true, removeScheme: false, selected: true },
+      { name: 'lesen.example', prefix: 'https://lesen.example/', suffix: '?x=1', encode: false, removeScheme: true, selected: false },
+    ] } });
+    expect(await call(page, 'link_redirect_build_link', { url: 'https://www.example.com/a', redirect: 'lesen.example' }))
+      .toEqual({ ok: true, result: { redirect: 'lesen.example', target: 'https://lesen.example/www.example.com/a?x=1' } });
+    await expect(page.locator('#url')).toHaveValue('https://www.example.com/a');
+    await expect(page.locator('#target')).toHaveText('https://lesen.example/www.example.com/a?x=1');
+    await expect(page.locator('#ruleChips button').nth(1)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page).toHaveURL(/\/link-redirect\/$/);
+    expect(await call(page, 'link_redirect_build_link', { url: 'x', redirect: 'Gibt es nicht' })).toEqual({ ok: false, error: 'No redirect named "Gibt es nicht"' });
+    expect(await call(page, 'link_redirect_build_link', { url: 'x', open: true })).toEqual({ ok: false, error: 'input.open is not allowed' });
+  });
+});
+
 test.describe('dice-coin tools', () => {
   test.beforeEach(async ({ page }) => {
     await fakeModelContext(page);
@@ -616,6 +646,30 @@ test.describe('qr-code tools', () => {
     const { result } = await call(page, 'qr_code_get_history', {});
     expect(result.entries[0]).toMatchObject({ kind: 'contact', name: 'Erika Mustermann', content: r.result.vcard });
     expect(await call(page, 'qr_code_create_contact_qr_code', { name: '' })).toEqual({ ok: false, error: 'input.name must have at least 1 characters' });
+  });
+});
+
+test.describe('mailto-generator tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/mailto-generator/'));
+
+  test('set_email fills the form and returns the link; parse_link and get_link agree', async ({ page }) => {
+    const r = await call(page, 'mailto_generator_set_email', { to: ['a@example.org', 'kaputt@'], subject: 'Hi (1)', body: 'Z1\nZ2', format: 'markdown' });
+    expect(r.ok).toBe(true);
+    // Written out by hand (RFC 6068)
+    expect(r.result.link).toBe('mailto:a@example.org,kaputt@?subject=Hi%20%281%29&body=Z1%0D%0AZ2');
+    expect(r.result.markdown).toBe(`[a@example.org](${r.result.link})`);
+    expect(r.result.invalid_addresses).toEqual(['kaputt@']);
+    await expect(page.locator('#to')).toHaveValue('a@example.org, kaputt@');
+    await expect(page.locator('#format [data-format="md"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: E-Mail eingetragen');
+    const p = await call(page, 'mailto_generator_parse_link', { link: 'mailto:x@example.org?bcc=y@example.org&subject=A+B' });
+    expect(p.result).toMatchObject({ to: ['x@example.org'], cc: [], bcc: ['y@example.org'], subject: 'A+B', body: '' });
+    await expect(page.locator('#subject')).toHaveValue('A+B');
+    expect((await call(page, 'mailto_generator_get_link', {})).result.link).toBe('mailto:x@example.org?bcc=y@example.org&subject=A%2BB');
+    expect(await call(page, 'mailto_generator_parse_link', { link: 'nothing here' }))
+      .toEqual({ ok: false, error: 'No mailto link and no email address found.' });
+    expect(await call(page, 'mailto_generator_set_email', { subject: 'x'.repeat(501) }))
+      .toEqual({ ok: false, error: 'input.subject must have at most 500 characters' });
   });
 });
 
@@ -3882,6 +3936,65 @@ test.describe('beer-tally tools', () => {
     const s = await page.evaluate(() => JSON.parse(localStorage.getItem('beer-tally.list.v1')));
     expect(s.days).toEqual([]);
     expect(s.payments).toEqual([]);
+  });
+});
+
+test.describe('split-costs tools', () => {
+  const pad = n => String(n).padStart(2, '0');
+  const d = new Date();
+  const TODAY = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  test.beforeEach(async ({ page }) => {
+    await open(page, '/split-costs/');
+    await page.evaluate(() => localStorage.setItem('split-costs.group.v1', JSON.stringify({
+      currency: '€', people: [{ id: 'a', name: 'Anna' }, { id: 'b', name: 'Ben' }, { id: 'c', name: 'Carla' }], entries: [],
+    })));
+    await page.reload();
+  });
+
+  test('add_expense and add_payment change what the app shows; get_summary reads it', async ({ page }) => {
+    // 10 € paid by Ben for everyone: 3.34 / 3.33 / 3.33 (the extra cent goes to the first person)
+    expect(await call(page, 'split_costs_add_expense', { title: 'Pizza', amount: 10, paidBy: 'ben' })).toEqual({ ok: true, result: {
+      expense: { title: 'Pizza', amount: 10, paidBy: 'Ben', date: TODAY, shares: { Anna: 3.34, Ben: 3.33, Carla: 3.33 } },
+      balances: [
+        { name: 'Anna', paid: 0, share: 3.34, balance: -3.34 },
+        { name: 'Ben', paid: 10, share: 3.33, balance: 6.67 },
+        { name: 'Carla', paid: 0, share: 3.33, balance: -3.33 },
+      ],
+    } });
+    await expect(page.locator('#entries .name')).toHaveText(['Pizza']);
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Ausgabe eingetragen');
+    // 6 € by Carla for Anna and Carla only, on another day
+    expect((await call(page, 'split_costs_add_expense', { title: 'Kino', amount: 6, paidBy: 'Carla', splitAmong: ['Anna', 'carla'], date: '2026-01-02' })).ok).toBe(true);
+    expect((await call(page, 'split_costs_add_payment', { from: 'Anna', to: 'Ben', amount: 3.34 })).result.balances[0])
+      .toEqual({ name: 'Anna', paid: 0, share: 6.34, balance: -3 });
+    await expect(page.locator('#balances .bal')).toHaveText(['-3,00 €', '3,33 €', '-0,33 €']);
+    expect(await call(page, 'split_costs_get_summary', {})).toEqual({ ok: true, result: {
+      currency: '€', totalSpent: 16,
+      balances: [
+        { name: 'Anna', paid: 0, share: 6.34, balance: -3 },
+        { name: 'Ben', paid: 10, share: 3.33, balance: 3.33 },
+        { name: 'Carla', paid: 6, share: 6.33, balance: -0.33 },
+      ],
+      settlement: [{ from: 'Anna', to: 'Ben', amount: 3 }, { from: 'Carla', to: 'Ben', amount: 0.33 }],
+      entries: [
+        { kind: 'transfer', date: TODAY, amount: 3.34, paidBy: 'Anna', shares: { Ben: 3.34 } },
+        { kind: 'expense', title: 'Pizza', date: TODAY, amount: 10, paidBy: 'Ben', shares: { Anna: 3.34, Ben: 3.33, Carla: 3.33 } },
+        { kind: 'expense', title: 'Kino', date: '2026-01-02', amount: 6, paidBy: 'Carla', shares: { Anna: 3, Carla: 3 } },
+      ],
+    } });
+  });
+
+  test('only people of the group, limits like the UI', async ({ page }) => {
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 5, paidBy: 'Dora' })).error).toBe('No person named "Dora" in the group. Known: Anna, Ben, Carla');
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 5, paidBy: 'Anna', splitAmong: ['Anna', 'Eve'] })).error).toMatch(/No person named "Eve"/);
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 5, paidBy: 'Anna', splitAmong: [] })).error).toBe('splitAmong must name at least one person');
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 0, paidBy: 'Anna' })).error).toBe('input.amount must be >= 0.01');
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 1000001, paidBy: 'Anna' })).ok).toBe(false);
+    expect((await call(page, 'split_costs_add_expense', { title: '  ', amount: 5, paidBy: 'Anna' })).error).toBe('title must not be empty');
+    expect((await call(page, 'split_costs_add_expense', { title: 'X', amount: 5, paidBy: 'Anna', date: '2026-02-30' })).error).toBe('date must be a valid YYYY-MM-DD');
+    expect((await call(page, 'split_costs_add_payment', { from: 'Anna', to: 'anna', amount: 5 })).error).toBe('from and to must be different people');
+    expect((await call(page, 'split_costs_add_payment', { from: 'Anna', to: 'Ben', amount: 5, note: 'x' })).error).toBe('input.note is not allowed');
+    expect((await page.evaluate(() => JSON.parse(localStorage.getItem('split-costs.group.v1')))).entries).toEqual([]);
   });
 });
 
