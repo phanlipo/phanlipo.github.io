@@ -2,6 +2,7 @@
 // which changed files. Titles below are written like the ones Playwright matches --grep against
 // (spec file name, describe blocks, test name).
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { select, grepFor } from './select.mjs';
 
 const matches = (sel, title) => new RegExp(grepFor(sel)).test(title);
@@ -69,4 +70,26 @@ test('test helpers and fixtures run the specs that use them', () => {
   const ui = select(['tests/ui.spec.mjs']);
   expect(ui.specs).toEqual(['ui.spec.mjs']);
   expect(matches(ui, 'ui.spec.mjs sea-battle icon buttons have a name')).toBe(true);
+});
+
+test('what build.mjs generates in every app does not select the apps', () => {
+  // a new icon in the sprite changes the cache version of every app: sw.js and the footer of index.html
+  const page = readFileSync(new URL('../sea-battle/index.html', import.meta.url), 'utf8');
+  const before = page.replace(/(<p class="footer-version">Version )\w+/, '$1000000000000');
+  expect(before).not.toBe(page);
+  const files = ['sea-battle/sw.js', 'sea-battle/manifest.webmanifest', 'sea-battle/icon-192.png', 'sea-battle/index.html', 'assets/icons.svg'];
+  const sel = select(files, { baseText: f => f === 'sea-battle/index.html' ? before : null });
+  expect(sel.all).toBeFalsy();
+  expect(sel.apps).toEqual([]);
+  // a change outside the generated parts selects the app, as does a page without a previous version
+  const edited = before.replace('</main>', '<p>neu</p></main>');
+  expect(edited).not.toBe(before);
+  expect(select(['sea-battle/index.html'], { baseText: () => edited }).apps).toEqual(['sea-battle']);
+  expect(select(['sea-battle/index.html']).apps).toEqual(['sea-battle']);
+});
+
+test('with every app selected, general specs that use an app as example run whole', () => {
+  const sel = select(['dice-coin/app.js']);
+  const every = { ...sel, apps: [...sel.apps, ...sel.others].sort(), others: [] };
+  expect(matches(every, 'menu.spec.mjs closes with Escape and the back button')).toBe(true);
 });
