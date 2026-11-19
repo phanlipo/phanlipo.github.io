@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="audio/*, audio/ogg, audio/opus, .opus, .ogg, .oga, .m4a, .mp3, .wav, .webm">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-3kz6Hblghxu/dpWZpUC2B2o8aApAFc/C2Mi0xYWQZ48='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-vQO50zs/OlPq1rVOe1JyvulSZob7d8BP2hCWJyd3wNM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -230,13 +230,16 @@ textarea#text{min-height:180px}
   <p>An AI agent can read the current transcript and the history, e.g. to summarise a voice message. You start the transcription yourself. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
   </div>
   <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
 </details>
 
 <footer>
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 29df643e043c</p>
+  <p class="footer-version">Version c9d2d9029e27</p>
   <!-- footer:end -->
 </footer>
 
@@ -363,6 +366,7 @@ async function takeFile(file) {
   try {
     const { samples, decoder } = await decodeAudio(file);
     audio = { name: file.name, samples, duration: samples.length / 16000, decoder };
+    Tools.diag.log('audio decoded', { type: file.type || '?', kb: Math.round(file.size / 1024), decoder, seconds: Math.round(audio.duration) });
     $('fileInfo').textContent = t('fileInfo', { f: file.name, d: mmss(audio.duration) }) + (decoder === 'opus' ? t('fallback') : '');
     $('fileInfo').dataset.decoder = decoder;
     $('fileInfo').dataset.duration = audio.duration.toFixed(2);
@@ -372,6 +376,7 @@ async function takeFile(file) {
     p.hidden = false;
     $('btnRun').disabled = false;
   } catch (e) {
+    Tools.diag.log('audio decode failed', { type: file.type || '?', kb: Math.round(file.size / 1024), error: String(e && e.message || e).slice(0, 120) });
     audio = null;
     $('fileInfo').textContent = '';
     $('player').hidden = true;
@@ -390,7 +395,8 @@ function getWorker() {
   if (worker) return worker;
   worker = new Worker('worker.js', { type: 'module' });
   worker.onmessage = ({ data }) => { if (data.id === runId) handle(data); };
-  worker.onerror = e => { finish(); status(t('noStart') + (e.message ? ': ' + e.message : '.'), 'err'); worker = null; };
+  Tools.diag.log('worker started');
+  worker.onerror = e => { Tools.diag.log('worker error', { error: e.message || '?' }); finish(); status(t('noStart') + (e.message ? ': ' + e.message : '.'), 'err'); worker = null; };
   return worker;
 }
 
@@ -406,13 +412,16 @@ function handle(m) {
     $('progress').removeAttribute('value'); // indeterminate
     $('progressBox').hidden = false;
     const started = Date.now(), dev = t(m.device === 'webgpu' ? 'gpu' : 'cpu');
+    Tools.diag.log('transcribing', { device: m.device });
     clearInterval(timer);
     const tick = () => status(t('transcribing', { dev, t: mmss((Date.now() - started) / 1000) }));
     tick(); timer = setInterval(tick, 1000);
   } else if (m.type === 'status' && m.status === 'loading') {
+    Tools.diag.log('model loading');
     $('progressBox').hidden = false;
     status(t('preparing'));
   } else if (m.type === 'result') {
+    Tools.diag.log('transcript done', { device: m.device, seconds: Math.round(m.seconds), chars: (m.text || '').length, chunks: (m.chunks || []).length });
     finish();
     showResult(m.text, m.chunks);
     $('resultMeta').textContent = t('resultMeta', { model: modelLabel(), dev: t(m.device === 'webgpu' ? 'gpu' : 'cpu'), s: fmt(m.seconds, 0), d: mmss(audio.duration) });
@@ -421,6 +430,7 @@ function handle(m) {
     try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (_) {}
     updateModelInfo();
   } else if (m.type === 'error') {
+    Tools.diag.log('transcribe failed', { stage: m.stage, error: String(m.message || '').slice(0, 160), online: navigator.onLine });
     finish();
     status(m.stage === 'load'
       ? t('loadFail', { m: m.message })
@@ -445,6 +455,7 @@ $('btnRun').addEventListener('click', async () => {
   status(t('starting'));
   await Tools.wakeLock.hold('work');
   runId++;
+  Tools.diag.log('transcribe start', { model: $('model').value, language: $('language').value, gpu: useGPU($('model').value), seconds: Math.round(audio.duration) });
   // Copy: the worker gets its own buffer, the page keeps the audio for another run
   const samples = audio.samples.slice();
   getWorker().postMessage({ type: 'transcribe', id: runId, audio: samples, model: $('model').value, language: $('language').value, allowGPU: useGPU($('model').value) }, [samples.buffer]);
@@ -482,7 +493,7 @@ if (navigator.share) {
   $('btnShare').hidden = false;
   $('btnShare').addEventListener('click', async () => {
     if (!$('text').value.trim()) return toast(t('noText'));
-    try { await navigator.share({ text: $('text').value.trim() }); } catch (e) { if (e.name !== 'AbortError') toast(t('shareFail')); }
+    try { await navigator.share({ text: $('text').value.trim() }); } catch (e) { if (e.name !== 'AbortError') { Tools.diag.log('share failed', { error: e.name }); toast(t('shareFail')); } }
   });
 }
 
@@ -531,6 +542,7 @@ async function labelModels(detect = true) {
     gpuOpt.hidden = gpuOpt.disabled = !hasGPU;
     if (!hasGPU && $('device').value === 'gpu') $('device').value = 'auto';
     $('device').dataset.gpu = hasGPU ? 'yes' : 'no';
+    Tools.diag.log('webgpu', { available: hasGPU });
   }
   for (const o of $('model').options) {
     const m = MODELS[o.value];
@@ -542,7 +554,14 @@ async function labelModels(detect = true) {
 labelModels();
 
 // File shared from another app (Android share sheet → installed app)
-takeSharedFile().then(f => { if (f) { toast(t('sharedTaken')); takeFile(f); } });
+takeSharedFile().then(f => { if (f) { Tools.diag.log('shared file taken'); toast(t('sharedTaken')); takeFile(f); } });
+// Page state for the diagnostics report (settings and sizes, never file names or transcripts)
+Tools.diag.info(async () => {
+  let modelFiles = 0;
+  try { if (await caches.has(MODEL_CACHE)) modelFiles = (await (await caches.open(MODEL_CACHE)).keys()).length; } catch (_) {}
+  return { settings: { model: settings.model, language: settings.language, device: settings.device }, webgpu: hasGPU, busy, worker: !!worker,
+    audio: audio ? { seconds: Math.round(audio.duration), decoder: audio.decoder } : null, modelFiles, history: hist.length };
+});
 
 /* ---------- Downloaded models ---------- */
 async function updateModelInfo() {
@@ -557,6 +576,7 @@ $('modelBox').addEventListener('toggle', () => { if ($('modelBox').open) updateM
 $('btnDeleteModels').addEventListener('click', async () => {
   if (!await Tools.confirm(t('confirmModels'), { action: 'delete' })) return;
   try { await caches.delete(MODEL_CACHE); } catch (_) {}
+  Tools.diag.log('models deleted');
   if (worker) { worker.terminate(); worker = null; }
   toast(t('modelsDeleted'));
   updateModelInfo();

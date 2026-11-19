@@ -20,7 +20,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can use all calculators (volume and fill height, gravity correction, conversion, alcohol, brewhouse efficiency, mixing, hops, brewing water, priming, CO₂ pressure). The values appear here in the input fields and the result is calculated as usual.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Id802ZM59z5oS5v0DEla2oiOrFxgpOW0+RXHq+SE/mQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-mSPP+lZuTHWnkYlczkCp843q2Pg/o1+J9lIvdvwmOb8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -487,12 +487,15 @@ select{appearance:auto}
   <p>An AI agent can use all calculators (volume and fill height, gravity correction, conversion, alcohol, brewhouse efficiency, mixing, hops, brewing water, priming, CO₂ pressure). The values appear here in the input fields and the result is calculated as usual. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
   </div>
   <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
 </details>
 <footer>
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 7a610f2b7ce4</p>
+  <p class="footer-version">Version 2a212e644619</p>
   <!-- footer:end -->
 </footer>
 
@@ -526,9 +529,10 @@ const num=k=>Tools.parseNum(S[k]);
 const fmt=Tools.fmt;
 
 /* ---------- Math rendering ---------- */
+let texFailed=false; // log a broken formula renderer once, not for every formula
 function math(el,tex,display=true){
   const div=document.createElement('div');div.className='f';
-  if(window.katex){try{katex.render(tex,div,{displayMode:display,throwOnError:false});}catch(_){div.textContent=tex;div.classList.add('fallback');}}
+  if(window.katex){try{katex.render(tex,div,{displayMode:display,throwOnError:false});}catch(e){if(!texFailed){texFailed=true;Tools.diag.log('formula failed',e);}div.textContent=tex;div.classList.add('fallback');}}
   else{div.textContent=tex;div.classList.add('fallback');}
   el.append(div);
 }
@@ -1230,7 +1234,11 @@ renderChips();
 $('zChips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;S['z.C']=fmt(+b.dataset.c,1);update();});
 update();
 /* ---------- Overview of the calculators → tab bar (assets/shared/toolbox.js); the open one is remembered ---------- */
-const box=Toolbox.init({state:{view:S.view,tab:S.tab},onChange:st=>{S.view=st.view;S.tab=st.tab;save();}});
+const box=Toolbox.init({state:{view:S.view,tab:S.tab},onChange:st=>{if(st.view!==S.view||st.tab!==S.tab)Tools.diag.log('view',{view:st.view,tab:st.tab});S.view=st.view;S.tab=st.tab;save();}});
+if(!window.katex)Tools.diag.log('katex missing – formulas shown as text');
+// Page state for the diagnostics report (open calculator and units, no entered values)
+Tools.diag.info(()=>({view:S.view,tab:S.tab,katex:!!window.katex,formulaFailed:texFailed,
+  units:Object.fromEntries(Object.entries(S).filter(([k])=>/\.(unit|ou|fu|mode)$/.test(k)))}));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ----------
    English; the values are filled into the calculator so the user sees the same calculation. */

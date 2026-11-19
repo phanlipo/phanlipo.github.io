@@ -21,7 +21,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can decode the text of a pack code and read the history (e.g. “Which batches did I scan today?”). Decoded codes appear here but are not added to the history. It cannot export.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-2QTmAeYF7J/aC4296DGh54eds868Jad80oX3Debcl/E='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-cJyshEPkn28UyAs7anP4+bLNP1uW7hw/+FExQUqE66U='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -327,7 +327,7 @@ td .chip.copied{background:var(--ok-bg);border-color:var(--ok)}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version ca36ab8bc7a1</p>
+  <p class="footer-version">Version fc215d397f62</p>
   <!-- footer:end -->
 </footer>
 
@@ -567,8 +567,8 @@ document.addEventListener('keydown',e=>{
 });
 
 /* ---------- History ---------- */
-function loadHist(){try{return JSON.parse(localStorage.getItem(LS_HIST)||'[]');}catch(_){return [];}}
-function saveHist(h){try{localStorage.setItem(LS_HIST,JSON.stringify(h.slice(0,MAX_HIST)));}catch(e){toast(tr('histSaveFail'));}}
+function loadHist(){const h=Tools.load(LS_HIST,[]);return Array.isArray(h)?h:[];}
+function saveHist(h){if(!Tools.save(LS_HIST,h.slice(0,MAX_HIST))){Tools.diag.log('history save failed',{entries:h.length});toast(tr('histSaveFail'));}}
 function keyOf(f){return (f.gtin||f.ppn||'')+'|'+(f.serial||'');}
 function addHist(r,source){
   const h=loadHist();const k=keyOf(r.fields);const dup=h.filter(x=>keyOf(x.fields)===k&&r.fields.serial).length;
@@ -604,7 +604,7 @@ $('btnExportCsv').addEventListener('click',()=>{
   download('Scan-Copy-SecurPharm_'+stamp()+'.csv','\ufeff'+lines.join('\r\n'),'text/csv;charset=utf-8');
 });
 $('btnExportJson').addEventListener('click',()=>download('Scan-Copy-SecurPharm_'+stamp()+'.json',JSON.stringify(loadHist(),null,2),'application/json'));
-$('btnClearHist').addEventListener('click',async ()=>{if(await Tools.confirm(tr('confirmClear'), { action: 'delete' })){localStorage.removeItem(LS_HIST);renderHist();toast(tr('cleared'));}});
+$('btnClearHist').addEventListener('click',async ()=>{if(await Tools.confirm(tr('confirmClear'), { action: 'delete' })){Tools.remove(LS_HIST);renderHist();toast(tr('cleared'));}});
 $('histSearch').addEventListener('input',renderHist);
 
 /* ---------- Central handler ---------- */
@@ -658,8 +658,8 @@ document.addEventListener('keydown',e=>{
 });
 
 /* ---------- Settings ---------- */
-function loadSet(){try{const s=JSON.parse(localStorage.getItem(LS_SET)||'{}');if(s.gs)$('gsCustom').value=s.gs;if(s.wedge===false)$('optWedge').checked=false;if(s.stopAfter)$('optStopAfter').checked=true;}catch(_){}}
-function saveSet(){localStorage.setItem(LS_SET,JSON.stringify({gs:$('gsCustom').value,wedge:$('optWedge').checked,stopAfter:$('optStopAfter').checked}));}
+function loadSet(){const s=Tools.load(LS_SET,{})||{};if(s.gs)$('gsCustom').value=s.gs;if(s.wedge===false)$('optWedge').checked=false;if(s.stopAfter)$('optStopAfter').checked=true;}
+function saveSet(){Tools.save(LS_SET,{gs:$('gsCustom').value,wedge:$('optWedge').checked,stopAfter:$('optStopAfter').checked});}
 ['gsCustom','optWedge','optStopAfter'].forEach(id=>$(id).addEventListener('change',saveSet));
 
 /* ---------- Decoding (BarcodeDetector → zxing-cpp/WASM → ZXing-JS) ---------- */
