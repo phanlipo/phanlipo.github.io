@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "rss-reader";
-const VERSION = '6e0956e25fb5';
+const VERSION = 'b5b16703dcbe';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
