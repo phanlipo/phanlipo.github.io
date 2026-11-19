@@ -3697,3 +3697,48 @@ test.describe('beer-tally tools', () => {
     expect(s.payments).toEqual([]);
   });
 });
+
+test.describe('minesweeper tools', () => {
+  // Easy board with known mines: bottom row plus row 8, columns 1–2 (as in minesweeper.spec.mjs)
+  const seed = page => page.addInitScript(() => {
+    const mine = Array(72).fill(0);
+    for (const i of [56, 57, 64, 65, 66, 67, 68, 69, 70, 71]) mine[i] = 1;
+    localStorage.setItem('minesweeper.game.v1', JSON.stringify({ level: 'easy', elapsed: 0,
+      game: { rows: 9, cols: 8, mines: 10, mine, open: Array(72).fill(0), flag: Array(72).fill(0), status: 'playing', hit: -1 } }));
+  });
+
+  test('get_game hides the mines; flag_cell and open_cell play on the board; the mines show once lost', async ({ page }) => {
+    await seed(page);
+    await open(page, '/minesweeper/');
+    let r = await call(page, 'minesweeper_get_game', {});
+    expect(r.result).toMatchObject({ level: 'easy', rows: 9, cols: 8, mines: 10, flags: 0, status: 'playing' });
+    expect(r.result.board).toEqual(Array(9).fill('########'));
+    r = await call(page, 'minesweeper_flag_cell', { row: 8, col: 1 });
+    expect(r.result.board[7]).toBe('F#######');
+    expect(r.result.mines_left).toBe(9);
+    await expect(page.locator('#board .cell[data-i="56"]')).toHaveAttribute('data-v', 'flag');
+    expect((await call(page, 'minesweeper_open_cell', { row: 8, col: 1 })).error).toMatch(/has a flag/);
+    r = await call(page, 'minesweeper_open_cell', { row: 8, col: 3 });
+    expect(r.result.board[7]).toBe('F#4#####');
+    await expect(page.locator('#board .cell[data-i="58"]')).toHaveText('4');
+    expect((await call(page, 'minesweeper_flag_cell', { row: 8, col: 3 })).error).toMatch(/already open/);
+    expect((await call(page, 'minesweeper_open_cell', { row: 10, col: 1 })).error).toMatch(/9 rows and 8 columns/);
+    expect((await call(page, 'minesweeper_open_cell', { row: 0, col: 1 })).ok).toBe(false);
+    r = await call(page, 'minesweeper_open_cell', { row: 9, col: 8 });
+    expect(r.result.status).toBe('lost');
+    expect(r.result.board[8]).toBe('*******X');
+    expect(r.result.board[7]).toBe('F*4#####');
+    expect((await call(page, 'minesweeper_open_cell', { row: 1, col: 1 })).error).toMatch(/game is over/);
+  });
+
+  test('new_game deals a fresh board of the chosen size', async ({ page }) => {
+    await open(page, '/minesweeper/');
+    const r = await call(page, 'minesweeper_new_game', { level: 'medium' });
+    expect(r.result).toMatchObject({ level: 'medium', rows: 13, cols: 10, mines: 22, status: 'ready' });
+    await expect(page.locator('#board .cell')).toHaveCount(130);
+    const o = await call(page, 'minesweeper_open_cell', { row: 7, col: 5 });
+    expect(o.result.status).toBe('playing');
+    expect(o.result.board[6][4]).toBe('.');
+    expect((await call(page, 'minesweeper_new_game', { level: 'huge' })).ok).toBe(false);
+  });
+});
