@@ -77,6 +77,29 @@ test.describe('Tools.confirm / Tools.prompt', () => {
   });
 });
 
+test.describe('own dialogs (dialog.dialog)', () => {
+  test('a long dialog scrolls its body and squeezes nothing, also parts that hide their overflow', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.mobile);
+    await page.goto('/template/');
+    const heights = await page.evaluate(async () => {
+      const d = document.createElement('dialog');
+      d.className = 'dialog';
+      const fields = Array.from({ length: 12 }, (_, i) => `<div class="form-field"><label for="f${i}">Feld ${i}</label><span class="input-unit"><input type="text" id="f${i}"><span class="unit">€</span></span></div>`).join('');
+      d.innerHTML = `<div class="dialog-head"><h2>Lang</h2></div><div class="dialog-body"><div class="seg" id="seg"><button type="button" aria-pressed="true">A</button><button type="button" aria-pressed="false">B</button></div>${fields}</div><div class="dialog-actions"><button type="button" class="btn">OK</button></div>`;
+      document.body.append(d);
+      d.showModal();
+      await new Promise(r => requestAnimationFrame(r));
+      const body = d.querySelector('.dialog-body');
+      return { seg: d.querySelector('#seg').getBoundingClientRect().height, unit: d.querySelector('.input-unit').getBoundingClientRect().height,
+        scrolls: body.scrollHeight > body.clientHeight, dialog: d.getBoundingClientRect().height, screen: innerHeight };
+    });
+    expect(heights.scrolls).toBe(true);
+    expect(heights.dialog).toBeLessThanOrEqual(heights.screen);
+    expect(heights.seg).toBeGreaterThanOrEqual(44);
+    expect(heights.unit).toBeGreaterThanOrEqual(44);
+  });
+});
+
 test.describe('Tools.undo', () => {
   test('the note carries an undo button that runs once', async ({ page }) => {
     await page.goto('/template/');

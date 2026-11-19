@@ -43,6 +43,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | [Käsekästchen](https://phanlipo.github.io/dots-and-boxes/) | `dots-and-boxes/` | Linien ziehen, Kästchen schließen – zu zweit an einem Handy oder gegen den Computer, mit Punktestand. |
 | [KI-Chat](https://phanlipo.github.io/ai-chat/) | `ai-chat/` | Mit Googles Sprachmodell Gemma chatten – es läuft direkt auf dem Gerät, auch offline. Kein Konto, keine Cloud: Die Unterhaltung verlässt das Gerät nicht. |
 | [Klavier](https://phanlipo.github.io/piano/) | `piano/` | Klavier zum Spielen mit den Fingern – MIDI-Dateien laden, die Noten fallen als Animation auf die Tasten. Spuren stummschalten und selbst mitspielen. |
+| [Kosten teilen](https://phanlipo.github.io/split-costs/) | `split-costs/` | Gemeinsame Ausgaben für Urlaub, WG oder Feier eintragen – die App rechnet aus, wer wem wie viel zahlt, mit möglichst wenigen Überweisungen. |
 | [Kuscheltier-Puzzle](https://phanlipo.github.io/plush-puzzle/) | `plush-puzzle/` | Kuscheltiere aus Teilen zusammenbauen: Teile auf den Schatten ziehen, bis sie einrasten – mit Konfetti am Ende. |
 | [Laserspiegel](https://phanlipo.github.io/laser-mirrors/) | `laser-mirrors/` | Logikrätsel mit Laserstrahl: Spiegel, Strahlteiler und Kontrollpunkt so setzen und drehen, dass der Laser genau die richtigen Ziele trifft – Mauern stehen im Weg. 50 Rätsel in fünf Stufen. |
 | [Lauftext](https://phanlipo.github.io/marquee/) | `marquee/` | Text eingeben, Größe, Farben und Schrift wählen und bildschirmfüllend anzeigen – stehend, laufend oder blinkend. |
