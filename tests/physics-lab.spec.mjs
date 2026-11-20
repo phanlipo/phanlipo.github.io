@@ -607,6 +607,19 @@ test.describe('particle in a magnetic field', () => {
 });
 
 test.describe('circuit', () => {
+  test('every label lies inside the drawing, also the voltage over a fully bright bulb', async ({ page }) => {
+    await open(page, 'circuit');
+    for (const kind of ['one', 'series', 'parallel', 'divider']) {
+      await page.click(`#cKind button[data-v="${kind}"]`);
+      const out = await page.evaluate(() => {
+        const svg = document.getElementById('ccSvg'), [x0, y0, w, h] = svg.getAttribute('viewBox').split(' ').map(Number);
+        return [...svg.querySelectorAll('text')].map(t => { const b = t.getBBox(); return { t: t.textContent, ok: b.x >= x0 && b.y >= y0 && b.x + b.width <= x0 + w && b.y + b.height <= y0 + h }; })
+          .filter(r => !r.ok).map(r => r.t);
+      });
+      expect(out, kind).toEqual([]);
+    }
+  });
+
   test('two equal bulbs in series get a quarter of the power, in parallel the full power', async ({ page }) => {
     await open(page, 'circuit');
     await page.locator('#ccU').fill('6'); await page.locator('#ccR1').fill('10');
