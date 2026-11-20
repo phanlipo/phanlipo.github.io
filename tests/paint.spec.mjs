@@ -1,5 +1,5 @@
 // Malen: colours, tools, eraser, reset, picture kept after reload and rotation, WebMCP-free basics.
-import { test, expect, mockAndroidShare, onDialog } from './helpers.mjs';
+import { test, expect, mockAndroidShare, onDialog, openMenu } from './helpers.mjs';
 
 /** Colour of the canvas pixel at CSS position (x, y) */
 const pixel = (page, x, y) => page.evaluate(([x, y]) => {
@@ -32,7 +32,10 @@ test('starts as a white canvas with pencil and black', async ({ page }) => {
   expect(await pixel(page, 50, 50)).toEqual(WHITE);
   await expect(page.locator('[data-tool="pencil"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-color="black"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#colors .sw')).toHaveCount(6);
+  // 7 fixed colours (white among them) and the button for own colours
+  await expect(page.locator('#colors [data-color]')).toHaveCount(7);
+  await expect(page.locator('[data-color="white"]')).toBeVisible();
+  await expect(page.locator('#btnAddColor')).toHaveAttribute('aria-label', 'Farbe hinzufügen');
   // 4 painting tools + paint bucket + eraser
   await expect(page.locator('[data-tool]')).toHaveCount(6);
 });
@@ -364,6 +367,88 @@ test.describe('paint bucket', () => {
     const right = await page.locator('#btnReset').evaluate(el => el.getBoundingClientRect().right);
     expect(right).toBeLessThanOrEqual(375);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  });
+});
+
+test('white paints white over other paint', async ({ page }) => {
+  await page.click('[data-tool="brush"]');
+  await page.click('[data-color="blue"]');
+  await stroke(page, 20, 60, 220, 60);
+  await page.click('[data-tool="pencil"]');
+  await page.click('[data-color="white"]');
+  await expect(page.locator('[data-color="white"]')).toHaveAttribute('aria-pressed', 'true');
+  await stroke(page, 120, 40, 120, 80);
+  expect(await pixel(page, 120, 60)).toEqual(WHITE);
+  expect(near(await pixel(page, 100, 60), [0x1e, 0x88, 0xe5])).toBe(true);
+});
+
+test.describe('own colours', () => {
+  test('a colour code adds a colour, paints with it and is kept after reload', async ({ page }) => {
+    await page.click('#btnAddColor');
+    await expect(page.locator('#colorDlg')).toBeVisible();
+    // Invalid code: message, nothing added
+    await page.fill('#colorCode', 'xyz');
+    await page.click('#colorForm [type="submit"]');
+    await expect(page.locator('#colorErr')).not.toBeEmpty();
+    await expect(page.locator('#colors [data-color]')).toHaveCount(7);
+    // Short form is expanded; the picker follows the code
+    await page.fill('#colorCode', '#F80');
+    await expect(page.locator('#colorPick')).toHaveValue('#ff8800');
+    await page.click('#colorForm [type="submit"]');
+    await expect(page.locator('#colorDlg')).toBeHidden();
+    const sw = page.locator('[data-color="#ff8800"]');
+    await expect(sw).toHaveAttribute('aria-pressed', 'true');
+    await expect(sw).toHaveAttribute('aria-label', 'Eigene Farbe #ff8800');
+    await stroke(page, 20, 40, 220, 40);
+    expect(near(await pixel(page, 120, 40), [0xff, 0x88, 0x00])).toBe(true);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('paint.colors.v1')))).toEqual(['#ff8800']);
+    // Adding the same colour again does not duplicate it
+    await page.click('#btnAddColor');
+    await page.fill('#colorCode', 'ff8800');
+    await page.click('#colorForm [type="submit"]');
+    await expect(page.locator('#colors [data-color]')).toHaveCount(8);
+
+    await page.reload();
+    await expect(page.locator('[data-color="#ff8800"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('the colour picker adds a colour', async ({ page }) => {
+    await page.click('#btnAddColor');
+    await page.locator('#colorPick').fill('#336699');
+    await expect(page.locator('#colorCode')).toHaveValue('#336699');
+    await page.click('#colorForm [type="submit"]');
+    await expect(page.locator('[data-color="#336699"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('removing an own colour in the menu can be undone', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('paint.colors.v1', JSON.stringify(['#123456', '#abcdef', 'junk'])));
+    await page.reload();
+    // Invalid stored values are dropped
+    await expect(page.locator('#colors [data-color]')).toHaveCount(9);
+    await page.click('[data-color="#abcdef"]');
+    await openMenu(page);
+    await page.locator('#colorsPage > summary').click();
+    await page.click('[data-del="#abcdef"]');
+    await expect(page.locator('[data-color="#abcdef"]')).toHaveCount(0);
+    await expect(page.locator('[data-color="black"]')).toHaveAttribute('aria-pressed', 'true');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('paint.colors.v1')))).toEqual(['#123456']);
+    await page.getByRole('button', { name: 'Rückgängig' }).click();
+    await expect(page.locator('[data-color="#abcdef"]')).toHaveAttribute('aria-pressed', 'true');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('paint.colors.v1')))).toEqual(['#123456', '#abcdef']);
+  });
+
+  test('many own colours scroll sideways instead of widening the page at 375 px', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    await page.evaluate(() => localStorage.setItem('paint.colors.v1',
+      JSON.stringify(Array.from({ length: 10 }, (_, i) => '#' + String(i).repeat(6)))));
+    await page.reload();
+    await expect(page.locator('#colors [data-color]')).toHaveCount(17);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    // The add button stays on screen
+    const add = await page.locator('#btnAddColor').boundingBox();
+    expect(add.x + add.width).toBeLessThanOrEqual(375);
+    await page.click('#btnAddColor');
+    await expect(page.locator('#colorDlg')).toBeVisible();
   });
 });
 
