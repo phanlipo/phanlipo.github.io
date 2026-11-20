@@ -71,7 +71,7 @@ test.describe('SBOM', () => {
     expect(Object.keys(resolved)).toHaveLength(packages.size);
     for (const pv of packages) {
       const at = pv.lastIndexOf('@');
-      expect(resolved[`pkg:npm/${pv.slice(0, at).replace('@', '%40')}@${pv.slice(at + 1)}`], pv).toBeTruthy();
+      expect(resolved[`pkg:npm/${pv.slice(0, at).replaceAll('@', '%40')}@${pv.slice(at + 1)}`], pv).toBeTruthy();
     }
     expect(resolved['pkg:npm/%40cantoo/pdf-lib@' + vendor['pdf-lib'].version]).toMatchObject({ relationship: 'direct', scope: 'runtime' });
   });
