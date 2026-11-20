@@ -512,6 +512,22 @@ test.describe('physics-lab tools', () => {
     expect(r.result).toMatchObject({ output_voltage_v: 3, current_a: 0.3, total_resistance_ohm: 30 });
   });
 
+  test('rainbow_position', async ({ page }) => {
+    const n = 1.3240 + 3046 / (680 * 680), al = Math.acos(Math.sqrt((n * n - 1) / 3)), be = Math.asin(Math.sin(al) / n);
+    const red = (4 * be - 2 * al) * 180 / Math.PI;
+    let r = await call(page, 'physics_lab_rainbow_position', { sun_height_deg: 30, from_aircraft: false, secondary_bow: true });
+    expect(r.result.radius_red_deg).toBeCloseTo(red, 2);
+    expect(r.result.top_above_horizon_deg).toBeCloseTo(red - 30, 2);
+    expect(r.result.visible_share).toBeCloseTo(Math.acos(Math.tan(30 * Math.PI / 180) / Math.tan(red * Math.PI / 180)) / Math.PI, 2);
+    expect(r.result.secondary_red_deg).toBeGreaterThan(50);
+    await expect(page.locator('#p-bow')).toBeVisible();
+    await expect(page.locator('#bwH')).toHaveValue('30');
+    r = await call(page, 'physics_lab_rainbow_position', { sun_height_deg: 50 });
+    expect(r.result).toMatchObject({ top_above_horizon_deg: null, visible_share: 0 });
+    r = await call(page, 'physics_lab_rainbow_position', { from_aircraft: true });
+    expect(r.result.visible_share).toBe(1);
+  });
+
   test('sky_colour', async ({ page }) => {
     const tau = nm => { const l = nm / 1000; return 0.008569 * l ** -4 * (1 + 0.0113 * l ** -2 + 0.00013 * l ** -4); };
     const m0 = 1 / (0.50572 * 6.07995 ** -1.6364);
