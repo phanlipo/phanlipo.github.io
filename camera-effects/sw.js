@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "camera-effects";
-const VERSION = '5d0a43ddc530';
+const VERSION = '73e9ce77c2ee';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

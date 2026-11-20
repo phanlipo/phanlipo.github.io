@@ -764,6 +764,82 @@ test.describe('voltage divider', () => {
   });
 });
 
+test.describe('wing and lift', () => {
+  // first number in the text, with its sign (“-4,6°”, “1,05-fach”)
+  const num = async loc => { const m = (await loc.textContent()).match(/([−-]?)(\d+(?:,\d+)?)/); return Number((m[1] ? '-' : '') + m[2].replace(',', '.')); };
+  const D = Math.PI / 180;
+
+  test('flat plate: C_L = 2π·sin α, and above the stall angle the flow separates', async ({ page }) => {
+    await open(page, 'wing');
+    await page.click('#wgPresets button:has-text("Flache Platte")');
+    await page.locator('#wgA').fill('5');
+    await expect(pres(page, 'wgRes', 'Auftriebsbeiwert')).toHaveText(de(2 * Math.PI * Math.sin(5 * D), 2)); // 0,55
+    expect(await num(pres(page, 'wgRes', 'Kein Auftrieb'))).toBe(0);
+    await expect(page.locator('#wgSvg .wake')).toHaveCount(0);
+    await page.locator('#wgA').fill('12');
+    await expect(page.locator('#wgSvg .wake')).toHaveCount(1);
+    await expect(page.locator('#wgWhy')).toContainText('Zu steil');
+    expect(await num(pres(page, 'wgRes', 'Auftriebsbeiwert'))).toBeLessThan(2 * Math.PI * Math.sin(12 * D));
+  });
+
+  test('thickness and camber: lift slope and angle without lift as in profile theory', async ({ page }) => {
+    await open(page, 'wing');
+    await page.click('#wgPresets button:has-text("Symmetrisch")');
+    await page.locator('#wgA').fill('0');
+    await expect(pres(page, 'wgRes', 'Auftriebsbeiwert')).toHaveText('0,00');
+    await expect(page.locator('#wgWhy')).toContainText('keinen Auftrieb');
+    await page.locator('#wgA').fill('5');
+    // Joukowski profiles: lift slope 2π·(1 + 0,77·t/c) per radian
+    expect(await num(pres(page, 'wgRes', 'Auftriebsbeiwert'))).toBeCloseTo(2 * Math.PI * (1 + 0.77 * 0.12) * Math.sin(5 * D), 1);
+    // air on top is faster than the oncoming air
+    expect(await num(pres(page, 'wgRes', 'Tempo der Luft oben'))).toBeGreaterThan(1);
+    await page.click('#wgPresets button:has-text("Gewölbt")');
+    // thin profile theory, circular-arc camber line: α₀ = −2·f/c (radians)
+    expect(await num(pres(page, 'wgRes', 'Kein Auftrieb'))).toBeCloseTo(-2 * 0.04 / D, 0);
+    await expect(page.locator('#wgWhy')).toContainText('Wölbung');
+    await page.click('#p-wing #wgFlowBox summary:has-text("Formeln")');
+    await expect(page.locator('#wgMath .katex').first()).toBeVisible();
+    await expect(page.locator('#wgMath .fallback')).toHaveCount(0);
+  });
+
+  test('Start lets the air parcels flow', async ({ page }) => {
+    await open(page, 'wing');
+    const first = page.locator('#wgSvg .parcel').first();
+    const x0 = await first.getAttribute('cx');
+    await page.click('#wgPlay');
+    await expect(page.locator('#wgPlay')).toContainText('Anhalten');
+    await expect.poll(() => first.getAttribute('cx')).not.toBe(x0);
+    await page.click('#wgPlay');
+    await expect(page.locator('#wgPlay')).toContainText('Start');
+  });
+
+  test('take-off: needed angle of attack and minimum speed of a light aircraft', async ({ page }) => {
+    await open(page, 'wing');
+    await page.click('#wgMode button[data-v="takeoff"]');
+    await page.click('#wgPlane button[data-v="small"]');
+    await page.locator('#wgV').fill('200');
+    const m = 1100, A = 16.2, rho = 1.225, g = 9.81, v = 200 / 3.6, AR = 7.4;
+    const cl = 2 * m * g / (rho * v * v * A), a = 2 * Math.PI * AR / (AR + 2), alpha = -2 + cl / a / D;
+    const vmin = Math.sqrt(2 * m * g / (rho * A * 1.6)) * 3.6;
+    await expect(pres(page, 'wgTRes', 'Nötiger Anstellwinkel')).toHaveText(`${de(alpha, 1)}°`);      // 2,1°
+    await expect(pres(page, 'wgTRes', 'Nötiger Auftriebsbeiwert')).toHaveText(`${de(cl, 2)} / 1,6`); // 0,35
+    await expect(pres(page, 'wgTRes', 'Mindest')).toHaveText(`${de(vmin, 0)} km/h`);                 // 94
+    await page.locator('#wgV').fill('80');
+    await expect(pres(page, 'wgTRes', 'Nötiger Anstellwinkel')).toHaveText('zu langsam');
+    await expect(page.locator('#wgTWhy')).toContainText('mindestens');
+  });
+
+  test('the wing settings survive a reload', async ({ page }) => {
+    await open(page, 'wing');
+    await page.locator('#wgA').fill('8.5');
+    await page.locator('#wgF').fill('2.5');
+    await page.reload();
+    await expect(page.locator('#p-wing')).toBeVisible();
+    await expect(page.locator('#wgA')).toHaveValue('8.5');
+    await expect(page.locator('#wgF')).toHaveValue('2.5');
+  });
+});
+
 test.describe('radar and stealth', () => {
   // reference: front view as in physics-lab/README.md; an echo is a ray that leaves within ±5° of the radar
   const TOL = 5 * Math.PI / 180;
@@ -868,7 +944,7 @@ test.describe('lens', () => {
 });
 
 test('open experiments with formulas have no accessibility violations', async ({ page }) => {
-  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar']) {
+  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing']) {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub:visible > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();
@@ -877,7 +953,7 @@ test('open experiments with formulas have no accessibility violations', async ({
 });
 
 test('the extra views have no accessibility violations', async ({ page }) => {
-  for (const [kind, sel] of [['refr', '#rMode button[data-v="prism"]'], ['refr', '#rMode button[data-v="drop"]'], ['lorentz', '#mgMode button[data-v="field"]'], ['circuit', '#cKind button[data-v="divider"]'], ['radar', '#raMode button[data-v="range"]']]) {
+  for (const [kind, sel] of [['refr', '#rMode button[data-v="prism"]'], ['refr', '#rMode button[data-v="drop"]'], ['lorentz', '#mgMode button[data-v="field"]'], ['circuit', '#cKind button[data-v="divider"]'], ['radar', '#raMode button[data-v="range"]'], ['wing', '#wgMode button[data-v="takeoff"]']]) {
     await open(page, kind);
     await page.click(sel);
     // open every closed section (the list shrinks with each click)

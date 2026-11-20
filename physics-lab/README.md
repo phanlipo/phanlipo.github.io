@@ -11,6 +11,7 @@ waves.js     window.Waves: Licht durch N Spalte (Intensität, Hauptmaxima, Zeige
 atomic.js    window.Atomic: radioaktiver Zerfall (Lebensdauern mit festem Zufall), Wasserstoff nach Bohr, Linien der Elemente
 electro.js   window.Electro: Lorentzkraft (Kreisbahn, Umlaufzeit), Stromkreise mit Lämpchen (eins, Reihe, parallel)
 thermo.js    window.Thermo: ideales Gas in 2D (Teilchen, Wandstöße, gemessener Druck)
+wing.js      window.Wing: Joukowski-Profil, Potenzialströmung mit Kutta-Bedingung (Stromlinien, Druck, Auftrieb), Strömungsabriss, Abheben
 radar.js     window.Radar: Radarwellen am Flugzeug-Querschnitt (Strahlen, Spiegelungen, Echo-Anteil), Radargleichung
 mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
 ```
@@ -65,6 +66,13 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 
 - **Gas in der Box:** 30/80/200 Teilchen der Masse 1 in einem 10 × 8 großen Kasten, nur Wandstöße (ideales Gas). Startgeschwindigkeiten aus der 2D-Maxwell-Verteilung, so skaliert, dass ⟨v²⟩ = 2·T/300 genau stimmt. Heizen skaliert alle Geschwindigkeiten mit √(T_neu/T_alt), die rechte Wand ist verschiebbar. Gemessener Druck = Impuls an die Wände pro Zeit und Wandlänge, gemittelt über 8 Zeiteinheiten; verglichen mit p·A = N·T (beide bezogen auf 300 K und vollen Kasten). Simulation 4-mal schneller als echte Zeit, Schritt 0,004.
 
+## Flügel & Auftrieb (wing.js)
+
+- **Profil:** Joukowski z = ζ + 1/ζ eines Kreises durch ζ = 1 (spitze Hinterkante bei z = 2), Mittelpunkt μ = (−dx, dy). Dicke und Wölbung (Anteile der Profiltiefe, gemessen im Sehnen-System, 99 Stellen) werden per Iteration auf die Reglerwerte gebracht. Anstellwinkel α = Winkel zwischen Anströmung und Sehne (Vorderkante–Hinterkante).
+- **Strömung:** exakte Potenzialströmung um den Kreis, abgebildet; Γ = 4π·V·a·sin(α_x + β) (Kutta), C_L = 8π·a·sin(α_x + β)/c. Flache Platte: 2π·sin α (Test). Zeichnung im System „Luft von links, Sehne 1 lang, Mitte bei 0“; Stromlinien mit RK4 in festen Zeitschritten (0,01 Sehnenlängen bei freier Strömung), Punkte alle 20 Schritte = gleichzeitig losgeflogene Teilchen (Animation verschiebt nur die Phase). Druckpfeile C_p = 1 − (v/V)², Länge ∝ |C_p|, ohne die Punkte direkt an der Hinterkante.
+- **Strömungsabriss:** Potenzialströmung kennt keinen Abriss. Faustregel für den Winkel ab Nullauftrieb: α_s = min(18°, 7° + 80·Dicke + 50·Wölbung) (NACA 0012 ≈ 16°, 4412 ≈ 14° geometrisch, dünne Platte ≈ 7°). Darüber fällt C_L von seinem Wert bei α_s mit exp(−Überschuss/2°) auf den Plattenwert C_L ≈ sin 2α (C_N ≈ 2 sin α). Gezeichnet wird die Kutta-Strömung mit dem verringerten Γ; ein grauer Bereich über dem hinteren Teil (wächst mit dem Überschuss) verdeckt sie und deutet die Wirbel an.
+- **Abheben:** C_L = 2mg/(ρv²A), α = α₀ + C_L/a mit a = 2π·Λ/(Λ+2) (Traglinie, elliptisch), v_min bei C_L,max. Typwerte: Papierflieger 5 g, 0,02 m², Λ 2, C_L,max 0,8, α₀ 0°; Segelflugzeug 500 kg, 18 m², Λ 16, 1,4; Sportflugzeug 1100 kg, 16,2 m², Λ 7,4, 1,6; Verkehrsflugzeug 70 t, 122,6 m², Λ 10,4, 2,6 (Klappen); α₀ −2°. Ergibt v_min ≈ 8 / 64 / 94 / 214 km/h.
+
 ## Radar & Tarnkappe (radar.js)
 
 - **Form:** Querschnitt von vorn (Meter, y nach oben), Radar weit weg in Richtung u = (cos β, sin β), β = −80 … 80° (negativ = von unten), deshalb parallele Strahlen. Herkömmlich: runder Rumpf (r = 1 m), waagrechte Flügel (y = −0,3), senkrechtes Leitwerk (x = 0, y = 1 … 4), Triebwerke (r = 0,5 m) an senkrechten Pylonen – rechte Winkel Flügel/Leitwerk und Flügel/Pylon. Tarnkappe: Sechseck-Rumpf mit Kanten bei ±3,2 m, Flügel in Verlängerung, Leitwerke um 27° nach außen geneigt; kein Paar Flächen im rechten Winkel (Leitwerk/obere Fläche 82°).
@@ -74,7 +82,7 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v }, radar: { mode, shape, b, coat, obj, r } }` – nur Reglerstellungen und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v }, radar: { mode, shape, b, coat, obj, r }, wing: { mode, a, f, t, plane, vs: { paper, glider, small, airliner } } }` – nur Reglerstellungen und offener Versuch.
 
 ## Erweitern
 
@@ -96,5 +104,6 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 8 | Thermodynamik | Gasteilchen in der Box (p, V, T) | Warum steigt der Druck, wenn das Gas warm wird? | fertig |
 | 9 | Elektrizität | Stromkreis mit festen Schaltungen (eins, Reihe, parallel) | Warum leuchten zwei Lämpchen in Reihe schwächer? | fertig |
 | 10 | Wellen | Radar & Tarnkappe (Spiegelung am Querschnitt, Radargleichung) | Warum sieht man Tarnkappenflugzeuge (auf dem Radar) nicht? | fertig |
+| 11 | Mechanik | Flügel & Auftrieb (Strömung um ein Profil, Abheben) | Warum fliegen Flugzeuge – bei welchem Winkel und welcher Flügelform gibt es Auftrieb? | fertig |
 
 Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien (zu #7), Spannungsteiler (zu #9). Ab etwa 15 Versuchen Tabs mit `data-group` (wie `unit-converter`). Eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
