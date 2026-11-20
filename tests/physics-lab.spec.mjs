@@ -1,6 +1,6 @@
 // Physik verstehen: results are checked against an independent calculation of the imaging equation
 // 1/f = 1/g + 1/b (sign convention "real is positive", see physics-lab/README.md).
-import { test, expect, switchLang, axe } from './helpers.mjs';
+import { test, expect, switchLang, axe, onDialog } from './helpers.mjs';
 
 // ---- reference (independent from optics.js) ----
 const fMirror = k => (k === 0 ? Infinity : 100 / k / 2); // k = 1/r in 1/m, r in cm, f = r/2
@@ -14,7 +14,9 @@ const de = (x, d) => x.toLocaleString('de-DE', { minimumFractionDigits: d, maxim
 const panel = kind => `#p-${kind}`;
 const result = (page, kind, label) => page.locator(`${panel(kind)} .calc-result`, { has: page.locator('.k', { hasText: label }) }).locator('.v');
 const main = (page, kind) => page.locator(`${panel(kind)} .calc-result.main .v`);
+// the tab bar only shows the experiments of the open field: for another field go back to the overview
 async function open(page, kind) {
+  if (!(await page.locator('#overview').isVisible()) && !(await page.locator(`#tab-${kind}`).isVisible())) await page.click('#tabbar [data-overview]');
   if (await page.locator('#overview').isVisible()) await page.click(`#overview [data-open="${kind}"]`);
   else await page.click(`#tab-${kind}`);
   await expect(page.locator(panel(kind))).toBeVisible();
@@ -1200,5 +1202,249 @@ test.describe('English', () => {
     await switchLang(page, 'de');
     await expect(main(page, 'mirror')).toHaveText('virtuell · aufrecht · verkleinert');
     expect((await page.locator('#p-mirror [data-part="math"] annotation').first().textContent())).toContain('-3{,}3');
+  });
+});
+
+test.describe('tab groups', () => {
+  test('inside an experiment the bar shows only the experiments of its field', async ({ page }) => {
+    await open(page, 'mirror');
+    await expect(page.locator('#tabbar [role="tab"]:visible')).toHaveCount(5); // optics
+    await expect(page.locator('#tab-doppler')).toBeHidden();
+    await open(page, 'doppler');
+    await expect(page.locator('#tabbar [role="tab"]:visible')).toHaveText(['Spalte', 'Radar', 'Doppler']);
+    await page.click('#tab-radar');
+    await expect(page.locator('#p-radar')).toBeVisible();
+    await open(page, 'seasons');
+    await expect(page.locator('#tabbar [role="tab"]:visible')).toHaveText(['Jahreszeiten']);
+  });
+});
+
+test.describe('Doppler effect', () => {
+  // reference: c = 343 m/s; heard at time tr: find the emission time te by bisection (independent of doppler.js)
+  const C = 343;
+  const heard = (f, v, d, tr) => {
+    let lo = tr - 1e4, hi = tr; // g(te) = te + r(te)/c − tr is increasing for v < c
+    for (let i = 0; i < 200; i++) { const m = (lo + hi) / 2; if (m + Math.hypot(v * m, d) / C - tr > 0) hi = m; else lo = m; }
+    const x = v * lo, cos = -x / Math.hypot(x, d);
+    return f / (1 - v * cos / C);
+  };
+
+  test('approaching higher, driving away lower, the jump in semitones', async ({ page }) => {
+    await open(page, 'doppler');
+    await page.click('#dpPre button:has-text("Krankenwagen")');
+    await page.locator('#dpF').fill('500'); await page.locator('#dpD').fill('10');
+    const v = 60 / 3.6, up = 500 * C / (C - v), down = 500 * C / (C + v);
+    await expect(pres(page, 'dpRes', 'Beim Herankommen')).toHaveText(`${de(up, 0)} Hz`);    // 526 Hz
+    await expect(pres(page, 'dpRes', 'Beim Wegfahren')).toHaveText(`${de(down, 0)} Hz`);    // 477 Hz
+    await expect(pres(page, 'dpRes', 'Sprung')).toHaveText(`${de(12 * Math.log2(up / down), 1)} Halbtöne`); // 1,7
+    await expect(pres(page, 'dpRes', 'Wellenlänge')).toHaveText(`${de((C - v) / 500 * 100, 1)} cm / ${de((C + v) / 500 * 100, 1)} cm`);
+    await expect(pres(page, 'dpRes', 'ist der Wagen schon')).toHaveText(`${de(v * 10 / C * 100, 1)} cm vorbei`);
+    // the model in the page agrees with the reference at any time
+    const got = await page.evaluate(() => [-3, -0.5, 0, 0.0292, 0.3, 4].map(t => window.Doppler.heard(500, 60 / 3.6, 10, t)));
+    [-3, -0.5, 0, 0.0292, 0.3, 4].forEach((tr, i) => expect(got[i], `t = ${tr}`).toBeCloseTo(heard(500, v, 10, tr), 6));
+    // exactly 500 Hz is heard d/c after the passing
+    expect(await page.evaluate(() => window.Doppler.heard(500, 60 / 3.6, 10, 10 / 343))).toBeCloseTo(500, 9);
+    await expect(page.locator('#dpWhy')).toContainText('ein Sprung um 1,7 Halbtöne');
+    await page.click('#dpPre button:has-text("Flugzeug")');
+    await expect(page.locator('#dpWhy')).toContainText('Überschallknall');
+  });
+
+  test('the drive runs until the car has left the picture', async ({ page }) => {
+    await page.clock.install();
+    await page.goto('/physics-lab/');
+    await open(page, 'doppler');
+    await page.click('#dpPre button:has-text("Krankenwagen")');
+    const label = () => page.locator('#dpSvg').getAttribute('aria-label');
+    const before = await label();
+    await page.click('#dpPlay');
+    await expect(page.locator('#dpPlay')).toHaveText('Anhalten');
+    await page.clock.runFor(4000);
+    expect(await label()).not.toBe(before);
+    await page.clock.runFor(20000); // 220 m at 16.7 m/s take 13.2 s
+    await expect(page.locator('#dpPlay')).toHaveText('Start');
+    expect(await label()).toContain(`Du hörst gerade ${de(500 * C / (C + 60 / 3.6), 0)} Hz`); // far behind: almost f·c/(c+v)
+  });
+
+  test('listening plays the pass with the calculated pitch', async ({ page }) => {
+    // a fake Web Audio that records the scheduled frequencies
+    await page.addInitScript(() => {
+      window.__freq = [];
+      const param = rec => ({ setValueAtTime: (v, t) => { if (rec) window.__freq.push([t, v]); } });
+      class FakeAC {
+        constructor() { this.currentTime = 0; this.state = 'running'; this.destination = {}; }
+        resume() {}
+        createOscillator() { return { type: '', frequency: param(true), connect() {}, disconnect() {}, start() {}, stop() {} }; }
+        createGain() { return { gain: param(false), connect() {}, disconnect() {} }; }
+      }
+      window.AudioContext = FakeAC;
+    });
+    await page.goto('/physics-lab/');
+    await open(page, 'doppler');
+    await page.click('#dpPre button:has-text("Krankenwagen")');
+    await page.locator('#dpF').fill('500'); await page.locator('#dpD').fill('10');
+    await page.click('#dpSound');
+    await expect(page.locator('#dpSound')).toHaveText('Ton aus');
+    const f = await page.evaluate(() => window.__freq);
+    const v = 60 / 3.6, T = 4; // min(4, 120 m / v) seconds before and after the passing
+    expect(f.length).toBe(Math.round(2 * T / 0.02) + 1);
+    expect(f[0][1]).toBeCloseTo(heard(500, v, 10, -T), 6);
+    expect(f[f.length - 1][1]).toBeCloseTo(heard(500, v, 10, T), 6);
+    expect(f[f.length - 1][0] - f[0][0]).toBeCloseTo(2 * T, 6);
+    for (let i = 1; i < f.length; i++) expect(f[i][1]).toBeLessThanOrEqual(f[i - 1][1] + 1e-9); // the pitch only falls
+    // leaving the experiment silences it
+    await page.click('#tabbar [data-overview]');
+    await open(page, 'doppler');
+    await expect(page.locator('#dpSound')).toHaveText('Anhören');
+  });
+});
+
+test.describe('seasons', () => {
+  // reference: the same simple model, written independently (degrees)
+  const R = Math.PI / 180, dec = (N, e = 23.44) => -e * Math.cos(2 * Math.PI * (N + 10) / 365);
+  const dayLen = (lat, d) => { const x = -Math.tan(lat * R) * Math.tan(d * R); return x <= -1 ? 24 : x >= 1 ? 0 : 2 * Math.acos(x) / R / 15; };
+  const hm = h => { let H = Math.floor(h), m = Math.round((h - H) * 60); if (m === 60) { H++; m = 0; } return `${H} h ${String(m).padStart(2, '0')} min`; };
+
+  test('Hamburg in June and December, and without the tilted axis', async ({ page }) => {
+    await open(page, 'seasons');
+    await page.click('#seaPlaces button:has-text("Hamburg")');
+    await page.click('#seaDays button:has-text("Sommer")');
+    await expect(page.locator('#seaNOut')).toHaveText('21. Juni');
+    const dJ = dec(172), hJ = 90 - Math.abs(54 - dJ);
+    await expect(pres(page, 'seaRes', 'Sonnenhöhe mittags')).toHaveText(`${de(hJ, 1)}°`);   // 59,4°
+    await expect(pres(page, 'seaRes', 'Tageslänge')).toHaveText(hm(dayLen(54, dJ)));        // 16 h 53 min
+    await expect(pres(page, 'seaRes', 'verteilt sich auf')).toHaveText(`${de(1 / Math.sin(hJ * R), 2)} m²`);
+    await expect(pres(page, 'seaRes', 'senkrecht über')).toHaveText(`${de(Math.round(dJ * 10) / 10, 1)}° Nord`);
+    // daily sunlight Q = S0/(π r²)·(ω0 sinφ sinδ + cosφ cosδ sinω0)·24 h
+    const w0 = Math.acos(-Math.tan(54 * R) * Math.tan(dJ * R)), r = 1 - 0.0167 * Math.cos(2 * Math.PI * (172 - 4) / 365);
+    const Q = 1361 / Math.PI / (r * r) * (w0 * Math.sin(54 * R) * Math.sin(dJ * R) + Math.cos(54 * R) * Math.cos(dJ * R) * Math.sin(w0)) * 24 / 1000;
+    await expect(pres(page, 'seaRes', 'Sonnenlicht pro Tag')).toHaveText(`${de(Q, 1)} kWh/m²`);
+    await expect(page.locator('#seaWhy')).toContainText('Die Nordhalbkugel ist der Sonne zugeneigt.');
+    await page.click('#seaDays button:has-text("Winter")');
+    const dD = dec(355);
+    await expect(pres(page, 'seaRes', 'Sonnenhöhe mittags')).toHaveText(`${de(90 - Math.abs(54 - dD), 1)}°`); // 12,6°
+    await expect(pres(page, 'seaRes', 'Tageslänge')).toHaveText(hm(dayLen(54, dD)));
+    await expect(page.locator('#seaWhy')).toContainText('Anfang Januar ist die Erde der Sonne am nächsten');
+    // upright axis: every day 12 hours, the sun at noon 90° − latitude
+    await page.click('#seaTilt button:has-text("Gerade")');
+    await expect(pres(page, 'seaRes', 'Tageslänge')).toHaveText('12 h 00 min');
+    await expect(pres(page, 'seaRes', 'Sonnenhöhe mittags')).toHaveText('36,0°');
+    await expect(page.locator('#seaWhy')).toContainText('es gäbe keine Jahreszeiten');
+  });
+
+  test('polar night at the North Cape, closest to the sun in early January', async ({ page }) => {
+    await open(page, 'seasons');
+    await page.click('#seaTilt button:has-text("Schief")');
+    await page.click('#seaPlaces button:has-text("Nordkap")');
+    await page.click('#seaDays button:has-text("Winter")');
+    await expect(pres(page, 'seaRes', 'Tageslänge')).toHaveText('0 h (Polarnacht)');
+    await expect(pres(page, 'seaRes', 'Sonnenhöhe mittags')).toHaveText('unter dem Horizont');
+    await expect(page.locator('#seaBeam')).toHaveAttribute('aria-label', 'Die Sonne geht an diesem Tag nicht auf.');
+    await page.click('#seaDays button:has-text("Sommer")');
+    await expect(pres(page, 'seaRes', 'Tageslänge')).toHaveText('24 h (Polartag)');
+    await page.locator('#seaN').fill('4');
+    await expect(page.locator('#seaNOut')).toHaveText('4. Januar');
+    await expect(pres(page, 'seaRes', 'Abstand zur Sonne')).toHaveText(`${de((1 - 0.0167) * 149.598, 1)} Mio. km`); // 147,1
+    await page.click('#p-seasons summary:has-text("Formeln")');
+    await page.click('#p-seasons summary:has-text("Warum gibt es Jahreszeiten")');
+    await expect(page.locator('#p-seasons .katex-error')).toHaveCount(0);
+    await expect(page.locator('#seaExplain')).toContainText('schiefe Erdachse');
+  });
+});
+
+test.describe('circuit kit', () => {
+  const part = (page, edge) => page.locator(`#bdHits [data-edge="${edge}"]`);
+  const row = (page, tag) => page.locator('#bdList li', { has: page.locator('.bd-tag', { hasText: new RegExp(`^${tag}$`) }) });
+
+  test('the examples: series, parallel, mixed and a short circuit', async ({ page }) => {
+    await open(page, 'build');
+    await page.click('#bdPre button:has-text("Reihe")');
+    // 6 V across 10 Ω + 20 Ω: I = 0.2 A, U1 = 2 V, U2 = 4 V
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,200 A');
+    await expect(row(page, 'L1')).toContainText('Lämpchen 10 Ω: 2,00 V · 0,200 A · 0,40 W');
+    await expect(row(page, 'L2')).toContainText('Lämpchen 20 Ω: 4,00 V · 0,200 A · 0,80 W');
+    await expect(row(page, 'V1')).toContainText('Spannungsmesser: 2,00 V');
+    await expect(row(page, 'A1')).toContainText('Strommesser: 0,200 A');
+    await expect(page.locator('#bdWhy')).toContainText('Nur ein Weg');
+    await page.click('#bdPre button:has-text("Parallel")');
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('1,20 A');      // 2 × 6 V / 10 Ω
+    await expect(page.locator('#bdWhy')).toContainText('In Knoten K1 fließen 1,20 A hinein (B1 1,20 A)');
+    // tapping the switch with the switch tool opens it: only one bulb is left
+    await page.click('#bdTools [data-tool="sw"]');
+    await part(page, 'v-1-4').click();
+    await expect(row(page, 'S1')).toContainText('Schalter offen');
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,600 A');
+    await page.click('#bdPre button:has-text("Gemischt")');
+    // 10 Ω + (20 Ω ∥ 20 Ω) = 20 Ω: 0.3 A, 3 V on L1 and 3 V on each of L2, L3
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
+    await expect(row(page, 'L3')).toContainText('3,00 V · 0,150 A');
+    await page.click('#bdPre button:has-text("Kurzschluss")');
+    await expect(page.locator('#bdWarn')).toBeVisible();
+    await expect(page.locator('#bdWarn')).toContainText('Kurzschluss!');
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('sehr groß');
+    await expect(row(page, 'L1')).toContainText('0,00 W · 0 % hell'); // the bulb goes dark
+    expect(await page.locator('#bdSvg .hot').count()).toBeGreaterThan(0); // the short-circuit path is drawn red
+  });
+
+  test('build a circuit by tapping, change a bulb, remove a wire and undo – kept after a reload', async ({ page }) => {
+    await onDialog(page, d => d.accept());
+    await open(page, 'build');
+    await page.click('#bdClear');
+    await expect(page.locator('#bdList li')).toHaveCount(0);
+    await expect(page.locator('#bdWhy')).toContainText('Noch keine Batterie');
+    await page.click('#bdTools [data-tool="bat"]'); await part(page, 'v-0-0').click();   // A1–A2
+    await page.click('#bdTools [data-tool="bulb"]'); await part(page, 'h-0-0').click();  // A1–B1
+    await page.click('#bdTools [data-tool="wire"]');
+    await part(page, 'v-0-1').click();                                                   // B1–B2
+    await expect(page.locator('#bdWhy')).toContainText('nicht geschlossen');
+    await part(page, 'h-1-0').click();                                                   // A2–B2
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,600 A');   // 6 V / 10 Ω
+    await expect(part(page, 'h-0-0')).toHaveAttribute('aria-label', 'A1–B1: Lämpchen L1');
+    // select the bulb and give it 20 Ω
+    await page.click('#bdTools [data-tool="bulb"]'); await part(page, 'h-0-0').click();
+    await expect(page.locator('#bdSelName')).toHaveText('Lämpchen L1 zwischen A1 und B1');
+    await page.locator('#bdVal').fill('20');
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
+    // turning the battery round reverses the current, the amount stays
+    await page.click('#bdTools [data-tool="bat"]'); await part(page, 'v-0-0').click();
+    await page.click('#bdFlip');
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
+    await page.click('#bdTools [data-tool="erase"]'); await part(page, 'h-1-0').click();
+    await expect(page.locator('#bdWhy')).toContainText('nicht geschlossen');
+    await page.click('.toast button:has-text("Rückgängig")');
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
+    await page.reload();
+    await expect(page.locator('#p-build')).toBeVisible();
+    await expect(row(page, 'L1')).toContainText('Lämpchen 20 Ω');
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
+  });
+
+  test('nodal analysis of a bridge circuit agrees with a hand calculation', async ({ page }) => {
+    await open(page, 'build');
+    // 12 V between the rails; branch 10 Ω + 20 Ω, branch 30 Ω + 30 Ω, 50 Ω between the middles (x, y)
+    const parts = {
+      'v-0-0': { k: 'bat', v: 12, d: -1 }, 'v-1-0': { k: 'wire' }, 'v-2-0': { k: 'wire' },
+      'h-0-0': { k: 'wire' }, 'h-0-1': { k: 'wire' }, 'h-0-2': { k: 'wire' }, 'h-0-3': { k: 'wire' },
+      'h-3-0': { k: 'wire' }, 'h-3-1': { k: 'wire' }, 'h-3-2': { k: 'wire' }, 'h-3-3': { k: 'wire' },
+      'v-0-2': { k: 'bulb', v: 10 }, 'v-1-2': { k: 'wire' }, 'v-2-2': { k: 'bulb', v: 20 },
+      'v-0-4': { k: 'bulb', v: 30 }, 'v-1-4': { k: 'wire' }, 'v-2-4': { k: 'bulb', v: 30 },
+      'h-1-2': { k: 'bulb', v: 50 }, 'h-1-3': { k: 'wire' },
+    };
+    // (x−12)/10 + x/20 + (x−y)/50 = 0 and (y−12)/30 + y/30 + (y−x)/50 = 0 → Cramer
+    const a = [[1 / 10 + 1 / 20 + 1 / 50, -1 / 50], [-1 / 50, 2 / 30 + 1 / 50]], b = [12 / 10, 12 / 30];
+    const det = a[0][0] * a[1][1] - a[0][1] * a[1][0];
+    const x = (b[0] * a[1][1] - a[0][1] * b[1]) / det, y = (a[0][0] * b[1] - b[0] * a[1][0]) / det;
+    const r = await page.evaluate(p => { const s = window.Network.solve(p); return { bridge: s.parts['h-1-2'].I, top: s.parts['v-0-2'].I, short: s.short, total: s.total.I }; }, parts);
+    expect(r.short).toBe(false);
+    expect(r.bridge).toBeCloseTo((x - y) / 50, 5);
+    expect(r.top).toBeCloseTo((12 - x) / 10, 5);
+    expect(r.total).toBeCloseTo((12 - x) / 10 + (12 - y) / 30, 5);
+    // the page shows the same through the UI after storing the circuit
+    await page.evaluate(p => localStorage.setItem('physics-lab.settings.v1', JSON.stringify({ view: 'tool', tab: 'build', bd: { parts: p } })), parts);
+    await page.reload();
+    await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText(`${de((12 - x) / 10 + (12 - y) / 30, 3)} A`);
+    await page.click('#p-build summary:has-text("Knotenanalyse")');
+    await expect(page.locator('#bdMath .katex').first()).toBeVisible();
+    await expect(page.locator('#bdMath .katex-error')).toHaveCount(0);
+    await expect(page.locator('#bdMath')).toContainText('Bezugspunkt (0 V) ist der Minuspol von B1');
   });
 });

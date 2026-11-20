@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "whoopee-cushion";
-const VERSION = '43cc49aa287e';
+const VERSION = '3357a229c990';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
