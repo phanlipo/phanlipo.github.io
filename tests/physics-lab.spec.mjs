@@ -764,6 +764,56 @@ test.describe('voltage divider', () => {
   });
 });
 
+test.describe('rainbow', () => {
+  // reference: largest angle after one reflection, cos²α = (n² − 1)/3, θ = 4β − 2α; water after Cauchy
+  const D = Math.PI / 180;
+  const n = l => 1.3240 + 3046 / (l * l);
+  const theta = (l, k = 1) => {
+    const m = n(l), a = Math.acos(Math.sqrt((m * m - 1) / (k * (k + 2)))), b = Math.asin(Math.sin(a) / m);
+    return (k === 1 ? 4 * b - 2 * a : Math.PI + 2 * a - 6 * b) / D;
+  };
+  // a circle of radius θ around a point h below the horizon: the part with cos ψ > tan h / tan θ is above it
+  const visible = (th, h) => Math.acos(Math.tan(h * D) / Math.tan(th * D)) / Math.PI;
+
+  test('the bow is a circle of 42° around the point opposite the sun; the ground hides the rest', async ({ page }) => {
+    await open(page, 'bow');
+    await page.uncheck('#bwPlane');
+    await page.locator('#bwH').fill('20');
+    const r = theta(680), v = theta(410);
+    await expect(pres(page, 'bwRes', 'Radius')).toHaveText(`rot ${de(r, 1)}°, violett ${de(v, 1)}°`); // 42,4° / 40,8°
+    await expect(pres(page, 'bwRes', 'Höchster Punkt')).toHaveText(`${de(r - 20, 1)}° über dem Horizont`);
+    await expect(pres(page, 'bwRes', 'Sichtbar')).toHaveText(`${de(Math.round(visible(r, 20) * 100), 0)} %`); // 37 %
+    await expect(page.locator('#bwWhy')).toContainText('Kegel');
+    // every point of the drawn red circle is 42,4° from the opposite point
+    const pts = await page.evaluate(() => window.Rainbow.circle(window.Rainbow.radius(680), 20, 24));
+    for (const [az, el] of pts) {
+      const P = [Math.cos(el * D) * Math.cos(az * D), Math.cos(el * D) * Math.sin(az * D), Math.sin(el * D)];
+      const A = [Math.cos(20 * D), 0, -Math.sin(20 * D)];
+      expect(Math.acos(P[0] * A[0] + P[1] * A[1] + P[2] * A[2]) / D).toBeCloseTo(r, 6);
+    }
+  });
+
+  test('sunset gives a semicircle, a high sun none, an aircraft the full circle', async ({ page }) => {
+    await open(page, 'bow');
+    await page.uncheck('#bwPlane');
+    await page.locator('#bwH').fill('0');
+    await expect(pres(page, 'bwRes', 'Sichtbar')).toHaveText('50 %');
+    await page.locator('#bwH').fill('45');
+    await expect(pres(page, 'bwRes', 'Höchster Punkt')).toHaveText('unter dem Horizont – kein Bogen');
+    await expect(pres(page, 'bwRes', 'Sichtbar')).toHaveText('0 %');
+    await expect(page.locator('#bwWhy')).toContainText('Mittagszeit');
+    await page.check('#bwPlane');
+    await expect(pres(page, 'bwRes', 'Sichtbar')).toHaveText('100 %');
+    await expect(page.locator('#bwWhy')).toContainText('vollen Kreis');
+    await page.check('#bwSecond');
+    await expect(pres(page, 'bwRes', 'Nebenbogen')).toHaveText(`rot ${de(theta(680, 2), 1)}°, violett ${de(theta(410, 2), 1)}°`); // 50,3° / 53,3°
+    await page.reload();
+    await expect(page.locator('#p-bow')).toBeVisible();
+    await expect(page.locator('#bwPlane')).toBeChecked();
+    await expect(page.locator('#bwH')).toHaveValue('45');
+  });
+});
+
 test.describe('blue sky', () => {
   // reference: Rayleigh optical depth (Hansen & Travis 1974, λ in µm) and air mass (Kasten & Young 1989)
   const tau = nm => { const l = nm / 1000; return 0.008569 * l ** -4 * (1 + 0.0113 * l ** -2 + 0.00013 * l ** -4); };
@@ -1003,7 +1053,7 @@ test.describe('lens', () => {
 });
 
 // one test per experiment: all of them in one test do not fit into the time limit on CI
-for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing', 'sky']) {
+for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing', 'sky', 'bow']) {
   test(`${kind}: open with formulas, no accessibility violations`, async ({ page }) => {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub:visible > summary`).all()) await s.click();
