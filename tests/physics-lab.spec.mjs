@@ -764,6 +764,164 @@ test.describe('voltage divider', () => {
   });
 });
 
+test.describe('wing and lift', () => {
+  // first number in the text, with its sign (“-4,6°”, “1,05-fach”)
+  const num = async loc => { const m = (await loc.textContent()).match(/([−-]?)(\d+(?:,\d+)?)/); return Number((m[1] ? '-' : '') + m[2].replace(',', '.')); };
+  const D = Math.PI / 180;
+
+  test('flat plate: C_L = 2π·sin α, and above the stall angle the flow separates', async ({ page }) => {
+    await open(page, 'wing');
+    await page.click('#wgPresets button:has-text("Flache Platte")');
+    await page.locator('#wgA').fill('5');
+    await expect(pres(page, 'wgRes', 'Auftriebsbeiwert')).toHaveText(de(2 * Math.PI * Math.sin(5 * D), 2)); // 0,55
+    expect(await num(pres(page, 'wgRes', 'Kein Auftrieb'))).toBe(0);
+    await expect(page.locator('#wgSvg .wake')).toHaveCount(0);
+    await page.locator('#wgA').fill('12');
+    await expect(page.locator('#wgSvg .wake')).toHaveCount(1);
+    await expect(page.locator('#wgWhy')).toContainText('Zu steil');
+    expect(await num(pres(page, 'wgRes', 'Auftriebsbeiwert'))).toBeLessThan(2 * Math.PI * Math.sin(12 * D));
+  });
+
+  test('thickness and camber: lift slope and angle without lift as in profile theory', async ({ page }) => {
+    await open(page, 'wing');
+    await page.click('#wgPresets button:has-text("Symmetrisch")');
+    await page.locator('#wgA').fill('0');
+    await expect(pres(page, 'wgRes', 'Auftriebsbeiwert')).toHaveText('0,00');
+    await expect(page.locator('#wgWhy')).toContainText('keinen Auftrieb');
+    await page.locator('#wgA').fill('5');
+    // Joukowski profiles: lift slope 2π·(1 + 0,77·t/c) per radian
+    expect(await num(pres(page, 'wgRes', 'Auftriebsbeiwert'))).toBeCloseTo(2 * Math.PI * (1 + 0.77 * 0.12) * Math.sin(5 * D), 1);
+    // air on top is faster than the oncoming air
+    expect(await num(pres(page, 'wgRes', 'Tempo der Luft oben'))).toBeGreaterThan(1);
+    await page.click('#wgPresets button:has-text("Gewölbt")');
+    // thin profile theory, circular-arc camber line: α₀ = −2·f/c (radians)
+    expect(await num(pres(page, 'wgRes', 'Kein Auftrieb'))).toBeCloseTo(-2 * 0.04 / D, 0);
+    await expect(page.locator('#wgWhy')).toContainText('Wölbung');
+    await page.click('#p-wing #wgFlowBox summary:has-text("Formeln")');
+    await expect(page.locator('#wgMath .katex').first()).toBeVisible();
+    await expect(page.locator('#wgMath .fallback')).toHaveCount(0);
+  });
+
+  test('Start lets the air parcels flow', async ({ page }) => {
+    await open(page, 'wing');
+    const first = page.locator('#wgSvg .parcel').first();
+    const x0 = await first.getAttribute('cx');
+    await page.click('#wgPlay');
+    await expect(page.locator('#wgPlay')).toContainText('Anhalten');
+    await expect.poll(() => first.getAttribute('cx')).not.toBe(x0);
+    await page.click('#wgPlay');
+    await expect(page.locator('#wgPlay')).toContainText('Start');
+  });
+
+  test('take-off: needed angle of attack and minimum speed of a light aircraft', async ({ page }) => {
+    await open(page, 'wing');
+    await page.click('#wgMode button[data-v="takeoff"]');
+    await page.click('#wgPlane button[data-v="small"]');
+    await page.locator('#wgV').fill('200');
+    const m = 1100, A = 16.2, rho = 1.225, g = 9.81, v = 200 / 3.6, AR = 7.4;
+    const cl = 2 * m * g / (rho * v * v * A), a = 2 * Math.PI * AR / (AR + 2), alpha = -2 + cl / a / D;
+    const vmin = Math.sqrt(2 * m * g / (rho * A * 1.6)) * 3.6;
+    await expect(pres(page, 'wgTRes', 'Nötiger Anstellwinkel')).toHaveText(`${de(alpha, 1)}°`);      // 2,1°
+    await expect(pres(page, 'wgTRes', 'Nötiger Auftriebsbeiwert')).toHaveText(`${de(cl, 2)} / 1,6`); // 0,35
+    await expect(pres(page, 'wgTRes', 'Mindest')).toHaveText(`${de(vmin, 0)} km/h`);                 // 94
+    await page.locator('#wgV').fill('80');
+    await expect(pres(page, 'wgTRes', 'Nötiger Anstellwinkel')).toHaveText('zu langsam');
+    await expect(page.locator('#wgTWhy')).toContainText('mindestens');
+  });
+
+  test('the wing settings survive a reload', async ({ page }) => {
+    await open(page, 'wing');
+    await page.locator('#wgA').fill('8.5');
+    await page.locator('#wgF').fill('2.5');
+    await page.reload();
+    await expect(page.locator('#p-wing')).toBeVisible();
+    await expect(page.locator('#wgA')).toHaveValue('8.5');
+    await expect(page.locator('#wgF')).toHaveValue('2.5');
+  });
+});
+
+test.describe('radar and stealth', () => {
+  // reference: front view as in physics-lab/README.md; an echo is a ray that leaves within ±5° of the radar
+  const TOL = 5 * Math.PI / 180;
+  const num = async loc => Number((await loc.textContent()).replace(/[^\d,]/g, '').replace(',', '.'));
+
+  test('from the side the upright fin reflects straight back, the stealth shape sends nothing back', async ({ page }) => {
+    await open(page, 'radar');
+    await page.click('#raShape button[data-v="plain"]');
+    await page.locator('#raB').fill('0');
+    await expect(page.locator('#raBOut')).toHaveText('genau von der Seite');
+    // hit: from the engines (y = −1.8) up to the top of the fin (y = 4); back: fin 3 m, pylon 0.5 m, plus the spots
+    // of fuselage (r = 1) and engine (r = 0.5) whose normal is within ±2.5° of the radar
+    const glint = r => 2 * r * Math.sin(TOL / 2);
+    const share = (3 + 0.5 + glint(1) + glint(0.5)) / (4 + 1.8) * 100; // 62,6 %
+    await expect(pres(page, 'raRes', 'Echo zurück')).toContainText('%');
+    expect(await num(pres(page, 'raRes', 'Echo zurück'))).toBeCloseTo(share, 0);
+    expect(await num(pres(page, 'raRes', 'Tarnkappe hier'))).toBe(0);
+    // the coating leaves a tenth per reflection
+    await page.check('#raCoat');
+    expect(await num(pres(page, 'raRes', 'Echo zurück'))).toBeCloseTo(share / 10, 0);
+    await expect(page.locator('#raWhy')).toContainText('90 %');
+    await page.uncheck('#raCoat');
+    await page.click('#raShape button[data-v="stealth"]');
+    await expect(pres(page, 'raRes', 'Echo zurück')).toHaveText('0,0 %');
+    await expect(page.locator('#raWhy')).toContainText('schräg');
+    await expect(page.locator('#raSvg .rback')).toHaveCount(0);
+  });
+
+  test('from above the corner between wing and fin works like a bicycle reflector', async ({ page }) => {
+    await open(page, 'radar');
+    await page.click('#raShape button[data-v="plain"]');
+    await page.locator('#raB').fill('30');
+    await expect(page.locator('#raBOut')).toHaveText('30° von oben');
+    expect(await num(pres(page, 'raRes', 'über Ecken'))).toBeGreaterThan(await num(pres(page, 'raRes', 'einmal gespiegelt')));
+    await expect(page.locator('#raWhy')).toContainText('Katzenauge');
+    await expect(page.locator('#raSvg .rback').first()).toBeVisible();
+    // a ray hitting the wing (y = −0.3) and then the fin (x = 0) runs back exactly the way it came
+    const r = await page.evaluate(() => window.Radar.ray('plain', 30, -2));
+    expect(r.bounces).toBe(2);
+    expect(r.pts[1][1]).toBeCloseTo(-0.3, 9);
+    expect(r.pts[2][0]).toBeCloseTo(0, 9);
+    expect(r.dir[0]).toBeCloseTo(Math.cos(Math.PI / 6), 9);
+    expect(r.dir[1]).toBeCloseTo(Math.sin(Math.PI / 6), 9);
+    await page.click('#raShape button[data-v="stealth"]');
+    await expect(pres(page, 'raRes', 'Echo zurück')).toHaveText('0,0 %');
+  });
+
+  test('range: a 10 000 times smaller echo is seen at a tenth of the distance', async ({ page }) => {
+    await open(page, 'radar');
+    await page.click('#raMode button[data-v="range"]');
+    await expect(page.locator('#raShapeBox')).toBeHidden();
+    const range = sigma => 150 * sigma ** 0.25;
+    await page.click('#raObj button[data-v="jet"]');
+    await page.locator('#raR').fill('100');
+    await expect(pres(page, 'raRRes', 'Reichweite des Radars')).toHaveText(`${de(range(10), 0)} km`); // 267
+    await expect(pres(page, 'raRRes', 'In 100 km')).toHaveText('erkannt');
+    await page.click('#raObj button[data-v="stealth"]');
+    await expect(pres(page, 'raRRes', 'Reichweite des Radars')).toHaveText(`${de(range(0.001), 0)} km`); // 27
+    await expect(pres(page, 'raRRes', 'In 100 km')).toHaveText('nicht erkannt');
+    await expect(pres(page, 'raRRes', 'gegenüber Kampfjet')).toHaveText('0,10-fach');
+    await expect(pres(page, 'raRRes', 'Schwelle')).toHaveText('5,1 · 10⁻³-fach'); // 0,001 · (150/100)⁴
+    await page.locator('#raR').fill('25');
+    await expect(pres(page, 'raRRes', 'In 25 km')).toHaveText('erkannt');
+    await page.click('#p-radar #raRangeBox summary:has-text("Formeln")');
+    const tex = (await page.locator('#raRMath annotation').allTextContents()).join(' ');
+    expect(tex).toContain('\\sqrt[4]{0{,}001}');
+  });
+
+  test('the radar settings survive a reload', async ({ page }) => {
+    await open(page, 'radar');
+    await page.click('#raShape button[data-v="stealth"]');
+    await page.locator('#raB').fill('-25');
+    await page.check('#raCoat');
+    await page.reload();
+    await expect(page.locator('#p-radar')).toBeVisible();
+    await expect(page.locator('#raShape button[data-v="stealth"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#raB')).toHaveValue('-25');
+    await expect(page.locator('#raBOut')).toHaveText('25° von unten');
+    await expect(page.locator('#raCoat')).toBeChecked();
+  });
+});
+
 test.describe('lens', () => {
   test('projector, magnifier and glasses', async ({ page }) => {
     await open(page, 'lens');
@@ -785,17 +943,18 @@ test.describe('lens', () => {
   });
 });
 
-test('open experiments with formulas have no accessibility violations', async ({ page }) => {
-  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas']) {
+// one test per experiment: all of them in one test do not fit into the time limit on CI
+for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing']) {
+  test(`${kind}: open with formulas, no accessibility violations`, async ({ page }) => {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub:visible > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();
     expect((await axe(page).include(panel(kind)).analyze()).violations).toEqual([]);
-  }
-});
+  });
+}
 
 test('the extra views have no accessibility violations', async ({ page }) => {
-  for (const [kind, sel] of [['refr', '#rMode button[data-v="prism"]'], ['refr', '#rMode button[data-v="drop"]'], ['lorentz', '#mgMode button[data-v="field"]'], ['circuit', '#cKind button[data-v="divider"]']]) {
+  for (const [kind, sel] of [['refr', '#rMode button[data-v="prism"]'], ['refr', '#rMode button[data-v="drop"]'], ['lorentz', '#mgMode button[data-v="field"]'], ['circuit', '#cKind button[data-v="divider"]'], ['radar', '#raMode button[data-v="range"]'], ['wing', '#wgMode button[data-v="takeoff"]']]) {
     await open(page, kind);
     await page.click(sel);
     // open every closed section (the list shrinks with each click)

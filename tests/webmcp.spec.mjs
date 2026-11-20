@@ -511,6 +511,42 @@ test.describe('physics-lab tools', () => {
     r = await call(page, 'physics_lab_circuit', { kind: 'divider', voltage_v: 9, resistance_1_ohm: 20, resistance_2_ohm: 10 });
     expect(r.result).toMatchObject({ output_voltage_v: 3, current_a: 0.3, total_resistance_ohm: 30 });
   });
+
+  test('wing_lift and takeoff_speed', async ({ page }) => {
+    let r = await call(page, 'physics_lab_wing_lift', { angle_deg: 5, camber_percent: 0, thickness_percent: 0 });
+    expect(r.result).toMatchObject({ angle_deg: 5, lift_coefficient: Math.round(2 * Math.PI * Math.sin(5 * Math.PI / 180) * 1000) / 1000, zero_lift_angle_deg: 0, stalled: false });
+    await expect(page.locator('#p-wing')).toBeVisible();
+    await expect(page.locator('#wgA')).toHaveValue('5');
+    r = await call(page, 'physics_lab_wing_lift', { angle_deg: 20 });
+    expect(r.result.stalled).toBe(true);
+    r = await call(page, 'physics_lab_takeoff_speed', { aircraft: 'small', speed_kmh: 200 });
+    const cl = 2 * 1100 * 9.81 / (1.225 * (200 / 3.6) ** 2 * 16.2);
+    expect(r.result.required_lift_coefficient).toBeCloseTo(cl, 3);
+    expect(r.result.min_speed_kmh).toBeCloseTo(Math.sqrt(2 * 1100 * 9.81 / (1.225 * 16.2 * 1.6)) * 3.6, 2);
+    expect(r.result.flies).toBe(true);
+    await expect(page.locator('#wgTakeoffBox')).toBeVisible();
+    r = await call(page, 'physics_lab_takeoff_speed', { speed_kmh: 70 });
+    expect(r.result).toMatchObject({ flies: false, required_angle_deg: null });
+    expect((await call(page, 'physics_lab_takeoff_speed', { aircraft: 'paper', speed_kmh: 100 })).ok).toBe(false);
+  });
+
+  test('radar_echo and radar_range', async ({ page }) => {
+    let r = await call(page, 'physics_lab_radar_echo', { shape: 'plain', radar_direction_deg: 30, coating: false });
+    expect(r.result).toMatchObject({ shape: 'plain', radar_direction_deg: 30, coating: false, other_shape: 'stealth', other_shape_echo_share: 0 });
+    expect(r.result.corner_reflection_share).toBeGreaterThan(r.result.single_reflection_share);
+    await expect(page.locator('#p-radar')).toBeVisible();
+    await expect(page.locator('#raB')).toHaveValue('30');
+    const plain = r.result.echo_share;
+    r = await call(page, 'physics_lab_radar_echo', { coating: true });
+    expect(r.result.echo_share).toBeLessThan(plain / 50); // corners: two reflections, a hundredth each
+    r = await call(page, 'physics_lab_radar_range', { target: 'stealth', distance_km: 100 });
+    expect(r.result).toMatchObject({ target: 'stealth', cross_section_m2: 0.001, distance_km: 100, detected: false, range_vs_fighter: 0.1 });
+    expect(r.result.detection_range_km).toBeCloseTo(150 * 0.001 ** 0.25, 2);
+    expect(r.result.echo_vs_threshold).toBeCloseTo(0.001 * 1.5 ** 4, 6);
+    await expect(page.locator('#raRangeBox')).toBeVisible();
+    r = await call(page, 'physics_lab_radar_range', { distance_km: 20 });
+    expect(r.result.detected).toBe(true);
+  });
 });
 
 test.describe('chain-transaction tools', () => {
