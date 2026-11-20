@@ -53,7 +53,8 @@ test('NOTICE.md lists every bundled library with version and a working licence l
   const vendor = JSON.parse(readFileSync('scripts/vendor.json', 'utf8'));
   const notice = readFileSync('NOTICE.md', 'utf8');
   for (const [name, v] of Object.entries(vendor)) {
-    const row = notice.split('\n').find(l => l.includes(`(\`${v.package}\`)`));
+    // one row per entry: the same package can be bundled twice in different builds (zxing-wasm, zxing-wasm-full)
+    const row = notice.split('\n').find(l => l.startsWith(`| [${name}](`) && l.includes(`(\`${v.package}\`)`));
     expect(row, name).toBeTruthy();
     expect(row).toContain(`| ${v.version} |`);
     expect(row).toContain(`[${v.license}](assets/vendor/${name}/LICENSE)`);

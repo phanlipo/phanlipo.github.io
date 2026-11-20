@@ -707,6 +707,48 @@ test.describe('rock-paper-scissors tools', () => {
   });
 });
 
+test.describe('code-scanner tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/code-scanner/'));
+
+  test('analyze_code_text breaks a GS1 text down, shows it and saves nothing', async ({ page }) => {
+    const { ok, result } = await call(page, 'code_scanner_analyze_code_text', { text: '010415012345678221ABC<GS>10CH4711<GS>17281231' });
+    expect(ok).toBe(true);
+    expect(result.type).toBe('gs1');
+    expect(result.fields).toEqual([
+      { field: 'AI 01', name: 'GTIN', value: '04150123456782', check_ok: true },
+      { field: 'AI 21', name: 'Serial number', value: 'ABC' },
+      { field: 'AI 10', name: 'Batch or lot', value: 'CH4711' },
+      { field: 'AI 17', name: 'Expiry date', value: '2028-12-31' },
+      // PZN check digit: (1·1 + 2·2 + … + 7·7) mod 11 = 140 mod 11 = 8
+      { field: 'pzn', value: '12345678', check_ok: true },
+    ]);
+    await expect(page.locator('#typeHead')).toHaveText('GS1-Daten');
+    expect(await page.evaluate(() => localStorage.getItem('code-scanner.history.v1'))).toBeNull();
+    // EAN with a wrong check digit
+    const bad = (await call(page, 'code_scanner_analyze_code_text', { text: '4006381333932', format: 'EAN13' })).result;
+    expect(bad).toMatchObject({ type: 'product', warnings: ['check'] });
+  });
+
+  test('get_current_code and get_scan_history never return Wi-Fi passwords', async ({ page }) => {
+    expect((await call(page, 'code_scanner_get_current_code', {})).result).toEqual({ code: null });
+    for (const v of ['WIFI:S:Heim;T:WPA;P:streng-geheim;;', 'https://example.com/a']) {
+      await page.locator('#srcSeg [data-src="text"]').click();
+      await page.fill('#manual', v);
+      await page.click('#btnParse');
+    }
+    const cur = (await call(page, 'code_scanner_get_current_code', {})).result.code;
+    expect(cur).toMatchObject({ type: 'url', text: 'https://example.com/a', summary: 'https://example.com/a' });
+    const all = (await call(page, 'code_scanner_get_scan_history', {})).result;
+    expect(all).toMatchObject({ total: 2, matches: 2 });
+    expect(all.entries.map(e => e.type)).toEqual(['url', 'wifi']);
+    expect(all.entries[1].summary).toBe('Heim');
+    expect('text' in all.entries[1]).toBe(false);
+    expect(JSON.stringify(all)).not.toContain('streng-geheim');
+    expect((await call(page, 'code_scanner_get_scan_history', { search: 'example' })).result.matches).toBe(1);
+    expect((await call(page, 'code_scanner_get_scan_history', { search: 'geheim' })).result.matches).toBe(0);
+  });
+});
+
 test.describe('securpharm-scanner tools', () => {
   test.beforeEach(async ({ page }) => open(page, '/securpharm-scanner/'));
 
