@@ -821,6 +821,22 @@ test.describe('floating', () => {
     await expect(pres(page, 'flRes', 'Eintauchtiefe')).toHaveText(`${de(10 / (13534 * Math.cbrt(V) ** 2) * 100, 1)} cm`); // 6,3 cm
   });
 
+  test('the load stays between the walls of the tray, also for a narrow, high tray', async ({ page }) => {
+    await open(page, 'float');
+    await page.click('#flShape button[data-v="hull"]');
+    for (const [H, load] of [['40', '87'], ['10', '79'], ['2', '13']]) {
+      await page.locator('#flH').fill(H);
+      await page.locator('#flL').fill(load);
+      const box = await page.evaluate(() => {
+        const r = el => el.getBBox();
+        const hull = r(document.querySelector('#flSvg .iron')), cargo = r(document.querySelector('#flSvg .cargo'));
+        return { hull: [hull.x, hull.x + hull.width], cargo: [cargo.x, cargo.x + cargo.width] };
+      });
+      expect(box.cargo[0], `H ${H} cm`).toBeGreaterThan(box.hull[0]);
+      expect(box.cargo[1], `H ${H} cm`).toBeLessThan(box.hull[1]);
+    }
+  });
+
   test('the same iron as a tray floats and carries a load until the water reaches the rim', async ({ page }) => {
     await open(page, 'float');
     await page.click('#flShape button[data-v="hull"]');

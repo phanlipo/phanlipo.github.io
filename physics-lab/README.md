@@ -88,7 +88,7 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 
 - 10 kg Eisen (7870 kg/m³, 1,27 L). Klumpen: Würfel 10,83 cm. Schale: Blech 1 mm → 1,27 m², offene Kiste mit quadratischem Boden a² + 4aH = 1,27 m² (Wände dünn, innen = außen). Flüssigkeiten 1000 / 1025 / 13534 kg/m³.
 - Schwimmt, wenn d = M/(ρ·a²) ≤ H (M = Eisen + Ladung); sonst läuft die Schale voll bzw. sinkt der Würfel, Auftrieb dann ρ·g·V_Eisen (Ladung ohne eigenes Volumen). Höchste Ladung ρ·a²·H − 10 kg; am größten bei a = 2H, also 12H² = Fläche → H ≈ 32,5 cm.
-- Zeichnung: Becken 1,4 m breit, Ladung als Sandkisten (1600 kg/m³); Kraftpfeile im Verhältnis zueinander. Keine Schwimmstabilität (Kentern).
+- Zeichnung: Becken 1,4 m breit, Ladung als Sand (1600 kg/m³): in der Schale eine Schicht über 90 % von Breite und Tiefe des Bodens (passt immer zwischen die Wände), auf dem Klumpen ein Würfel gleichen Volumens; Kraftpfeile im Verhältnis zueinander. Keine Schwimmstabilität (Kentern).
 
 ## Flügel & Auftrieb (wing.js)
 
