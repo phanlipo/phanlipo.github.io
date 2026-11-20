@@ -574,6 +574,15 @@ test.describe('physics-lab tools', () => {
     expect(r.result.total_current_a).toBeCloseTo(0.3, 3);
     r = await call(page, 'physics_lab_circuit_builder', { example: 'short' });
     expect(r.result).toMatchObject({ short_circuit: true, total_current_a: null });
+    // a 1 F capacitor behind 10 Ω at 6 V: after 20 s (2 τ) U_C = 6·(1 − e^(−2))
+    r = await call(page, 'physics_lab_circuit_builder', { example: 'rc', run_seconds: 20 });
+    const cap = r.result.parts.find(p => p.kind === 'capacitor');
+    expect(cap).toMatchObject({ label: 'C1', capacitance_f: 1 });
+    expect(cap.voltage_v).toBeCloseTo(6 * (1 - Math.exp(-2)), 2);
+    expect(cap.time_constant_s).toBeCloseTo(10, 2);
+    expect(cap.final_voltage_v).toBeCloseTo(6, 3);
+    expect(cap.charge_c).toBeCloseTo(cap.voltage_v, 2);
+    expect(r.result.time_s).toBeCloseTo(20, 6);
   });
 
   test('rainbow_position', async ({ page }) => {
