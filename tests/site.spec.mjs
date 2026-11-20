@@ -305,6 +305,70 @@ test.describe('start page', () => {
     await expect(row(page, c.titleEn).getByRole('button', { name: `Favourite: ${c.titleEn}` })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('favourites: long press, right click or Delete removes one right in the row – undo puts it back', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.mobile);
+    const list = tools();
+    const [a, b, c] = ['calc-pad', 'dice-coin', 'qr-code'].map(f => list.find(t => t.folder === f));
+    await page.goto('/');
+    await page.evaluate(favs => localStorage.setItem('tools.favorites.v1', JSON.stringify(favs)), [a.folder, b.folder, c.folder]);
+    await page.reload();
+    const tiles = page.locator('#shelf-fav .shelf-row a');
+    const order = () => tiles.evaluateAll(as => as.map(x => x.dataset.folder));
+    const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('tools.favorites.v1')));
+    await expect(tiles).toHaveCount(3);
+    await expect(page.locator('#fav-hint')).toHaveText('Zum Entfernen lange drücken');
+    await expect(tiles.first()).toHaveAccessibleDescription('Zum Entfernen lange drücken');
+    const press = async el => {
+      const box = await el.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+    };
+    // Long press on the middle tile: it shrinks while held, then goes; lifting the finger opens nothing
+    await press(tiles.nth(1));
+    await expect(tiles.nth(1)).toHaveClass(/pressing/);
+    await expect(tiles).toHaveCount(2);
+    // Android also fires contextmenu during the same press – it must not take the tile that moved up
+    await tiles.nth(1).dispatchEvent('contextmenu');
+    await page.mouse.up();
+    expect(await order()).toEqual([a.folder, c.folder]);
+    expect(await stored()).toEqual([a.folder, c.folder]);
+    await expect(page).toHaveURL(/\/$/);
+    // Undo puts it back at its place
+    await expect(page.locator('#toast')).toContainText(`„${b.title}“ aus den Favoriten entfernt.`);
+    await page.locator('#toast').getByRole('button', { name: 'Rückgängig' }).click();
+    await expect(tiles).toHaveCount(3);
+    expect(await order()).toEqual([a.folder, b.folder, c.folder]);
+    await expect(page.locator(`.app[data-folder="${b.folder}"] .fav`)).toHaveAttribute('aria-pressed', 'true');
+    // Moving the finger (scrolling the row) cancels the press
+    await press(tiles.first());
+    await expect(tiles.first()).toHaveClass(/pressing/);
+    await page.mouse.move(300, 600, { steps: 3 });
+    await expect(tiles.first()).not.toHaveClass(/pressing/);
+    await page.mouse.up();
+    await expect(page).toHaveURL(/\/$/);
+    // Right click removes too (desktop)
+    await tiles.last().click({ button: 'right' });
+    await expect(tiles).toHaveCount(2);
+    expect(await order()).toEqual([a.folder, b.folder]);
+    // Keyboard: Delete removes the focused tile, focus stays in the row
+    await tiles.first().focus();
+    await page.keyboard.press('Delete');
+    await expect(tiles).toHaveCount(1);
+    await expect(tiles.first()).toBeFocused();
+    expect(await stored()).toEqual([b.folder]);
+    await expect(page.locator(`.app[data-folder="${a.folder}"] .fav`)).toHaveAttribute('aria-pressed', 'false');
+    // The last one gone: the row disappears
+    await page.keyboard.press('Delete');
+    await expect(page.locator('#shelf-fav')).toBeHidden();
+    await expect(page.getByRole('searchbox', { name: 'Apps durchsuchen' })).toBeFocused();
+    // English
+    await switchLang(page, 'en');
+    await page.locator(`.app[data-folder="${a.folder}"] .fav`).click();
+    await expect(page.locator('#fav-hint')).toHaveText('Long press to remove');
+    await tiles.first().click({ button: 'right' });
+    await expect(page.locator('#toast')).toContainText(`Removed “${a.titleEn}” from favourites.`);
+  });
+
   test('home screen shortcut (Android): manifest with full-bleed icon, opens as a normal tab', async ({ page, request }) => {
     await page.goto('/');
     const href = await page.locator('link[rel="manifest"]').getAttribute('href');
