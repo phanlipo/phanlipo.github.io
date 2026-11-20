@@ -12,6 +12,7 @@ import { fakeCamera, fakeWorker } from './camera-fakes.mjs';
 import { fakeWorker as fakeFaceWorker, photo as facePhoto, withExifDate } from './face-timelapse-fakes.mjs';
 import { fakeYoutube, playerFrame, LIST, LIST_TITLE, VIDEOS } from './fake-youtube.mjs';
 import { FEED_ORIGIN, FEED_PROBLEMS, mockFeeds } from './feed-mock.mjs';
+import { fakeNfc, wscCredential } from './nfc-fake.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -4224,5 +4225,40 @@ test.describe('minesweeper tools', () => {
     expect(o.result.status).toBe('playing');
     expect(o.result.board[6][4]).toBe('.');
     expect((await call(page, 'minesweeper_new_game', { level: 'huge' })).ok).toBe(false);
+  });
+});
+
+test.describe('nfc-tags tools', () => {
+  test.beforeEach(async ({ page }) => { await fakeNfc(page); await open(page, '/nfc-tags/'); });
+
+  test('get_current_tag and get_tag_history never return Wi-Fi passwords', async ({ page }) => {
+    expect((await call(page, 'nfc_tags_get_current_tag', {})).result).toEqual({ tag: null });
+    await page.click('#btnScan');
+    await expect(page.locator('#btnScan')).toHaveText('Scannen stoppen');
+    await page.evaluate(([cred]) => {
+      window.__nfc.read('01:02', [{ recordType: 'text', data: 'Hallo' }]);
+      window.__nfc.read('03:04', [{ recordType: 'mime', mediaType: 'application/vnd.wfa.wsc', data: cred }]);
+    }, [wscCredential({ ssid: 'Heim', key: 'streng-geheim' })]);
+    const cur = (await call(page, 'nfc_tags_get_current_tag', {})).result.tag;
+    expect(cur.serial_number).toBe('03:04');
+    expect(cur.records).toEqual([{ kind: 'wifi', ssid: 'Heim', auth: 'wpa2', has_password: true }]);
+    const all = (await call(page, 'nfc_tags_get_tag_history', {})).result;
+    expect(all.total).toBe(2);
+    expect(JSON.stringify(all)).not.toContain('streng-geheim');
+    const found = (await call(page, 'nfc_tags_get_tag_history', { search: 'hallo' })).result;
+    expect(found.tags.map(x => x.serial_number)).toEqual(['01:02']);
+  });
+
+  test('prepare_tag_content fills the write form but writes nothing', async ({ page }) => {
+    const r = await call(page, 'nfc_tags_prepare_tag_content', { kind: 'url', url: 'example.com' });
+    expect(r.ok).toBe(true);
+    // same size as in nfc-tags.spec.mjs: 17-byte URL record + 3 bytes TLV
+    expect(r.result).toMatchObject({ prepared: true, kind: 'url', estimated_bytes: 20, fits_on: 'NTAG213' });
+    await expect(page.locator('#writeView')).toBeVisible();
+    await expect(page.locator('#urlIn')).toHaveValue('example.com');
+    expect(await page.evaluate(() => window.__nfc.pending + window.__nfc.written.length)).toBe(0);
+    const bad = await call(page, 'nfc_tags_prepare_tag_content', { kind: 'wifi', ssid: 'X', password: 'kurz' });
+    expect(bad.ok).toBe(false);
+    expect((await call(page, 'nfc_tags_prepare_tag_content', { kind: 'fax' })).ok).toBe(false);
   });
 });
