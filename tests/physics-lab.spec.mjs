@@ -943,14 +943,15 @@ test.describe('lens', () => {
   });
 });
 
-test('open experiments with formulas have no accessibility violations', async ({ page }) => {
-  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing']) {
+// one test per experiment: all of them in one test do not fit into the time limit on CI
+for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing']) {
+  test(`${kind}: open with formulas, no accessibility violations`, async ({ page }) => {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub:visible > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();
     expect((await axe(page).include(panel(kind)).analyze()).violations).toEqual([]);
-  }
-});
+  });
+}
 
 test('the extra views have no accessibility violations', async ({ page }) => {
   for (const [kind, sel] of [['refr', '#rMode button[data-v="prism"]'], ['refr', '#rMode button[data-v="drop"]'], ['lorentz', '#mgMode button[data-v="field"]'], ['circuit', '#cKind button[data-v="divider"]'], ['radar', '#raMode button[data-v="range"]'], ['wing', '#wgMode button[data-v="takeoff"]']]) {
