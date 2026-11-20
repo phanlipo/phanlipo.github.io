@@ -64,5 +64,36 @@
     return lines;
   }
 
-  root.Electro = { E, PARTICLES, circle, circuit, MAGNETS, poles, field, fieldLines };
+  /* The Earth's field outside the Earth: a dipole at the centre (radius 1 = Earth radius), its axis tilted by
+     EARTH.tilt against the rotation axis (y). The dipole moment points roughly to geographic south, so the field
+     lines leave the Earth in the southern hemisphere (magnetic north pole) and enter it in the northern one. */
+  const EARTH = { R: 1.6, tilt: 10 * Math.PI / 180, core: 3480 / 6371, inner: 1220 / 6371 };
+  function earthField(x, y, tilt = EARTH.tilt) {
+    const mx = -Math.sin(tilt), my = -Math.cos(tilt), r = Math.hypot(x, y) || 1e-9, ux = x / r, uy = y / r, d = mx * ux + my * uy, r3 = r * r * r;
+    return [(3 * d * ux - mx) / r3, (3 * d * uy - my) / r3];
+  }
+  function earthLines(box = [-5.5, 5.5, -3.6, 3.6], angles = [12, 20, 28, 36, 45, 55, 67]) {
+    const { R, tilt } = EARTH, lines = [], h = 0.03, a0 = Math.atan2(-Math.cos(tilt), -Math.sin(tilt));   // direction of the magnetic north pole
+    const dir = (px, py) => { const [bx, by] = earthField(px, py), l = Math.hypot(bx, by) || 1; return [bx / l, by / l]; };
+    const trace = (a, sg) => {                    // sg = 1 along the field, −1 against it
+      let x = R * Math.cos(a), y = R * Math.sin(a);
+      const pts = [[x, y]];
+      for (let i = 0; i < 2000; i++) {
+        const [ax, ay] = dir(x, y), [mx, my] = dir(x + sg * h / 2 * ax, y + sg * h / 2 * ay);
+        x += sg * h * mx; y += sg * h * my; pts.push([x, y]);
+        if (x < box[0] || x > box[1] || y < box[2] || y > box[3]) return { pts, out: true };
+        if (i > 3 && Math.hypot(x, y) < R) break;
+      }
+      return { pts, out: false };
+    };
+    for (const s of [-1, 1]) for (const deg of angles) {
+      const a = a0 + s * deg * Math.PI / 180, fw = trace(a, 1);
+      lines.push(fw.pts);
+      // a line that leaves the picture comes back from outside: draw its end near the magnetic south pole too
+      if (fw.out) lines.push(trace(a0 + Math.PI - s * deg * Math.PI / 180, -1).pts.reverse());
+    }
+    return lines;
+  }
+
+  root.Electro = { E, PARTICLES, circle, circuit, MAGNETS, poles, field, fieldLines, EARTH, earthField, earthLines };
 })(typeof window !== 'undefined' ? window : globalThis);
