@@ -1,5 +1,5 @@
 // RSS reader: feeds from stand-in servers (tests/feed-mock.mjs) – with and without CORS, through a proxy, from a file.
-import { test, expect, openMenu, closeMenu, switchLang, onDialog } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, onDialog, mockBadge, lastBadge } from './helpers.mjs';
 import { FEED_ORIGIN, NOCORS_ORIGIN, PROXY_ORIGIN, FEED_PROBLEMS, RSS, mockFeeds } from './feed-mock.mjs';
 
 const URL_ = '/rss-reader/';
@@ -20,6 +20,21 @@ async function addFeed(page, url, name = '') {
 test.use({ allowedProblems: FEED_PROBLEMS });
 
 test.describe('RSS reader', () => {
+  test('the number of unread entries is on the app icon', async ({ page }) => {
+    await mockBadge(page);
+    await mockFeeds(page);
+    await page.goto(URL_);
+    await expect.poll(() => lastBadge(page)).toBe(0); // no feed yet: a left-over number is cleared
+    await addFeed(page, `${FEED_ORIGIN}/rss.xml`);
+    await expect(page.locator('#unreadCount')).toHaveText('3 ungelesen');
+    await expect.poll(() => lastBadge(page)).toBe(3);
+    await items(page).first().locator('summary').click();
+    await expect.poll(() => lastBadge(page)).toBe(2);
+    // After a reload it is set again from the saved read marks
+    await page.reload();
+    await expect.poll(() => lastBadge(page)).toBe(2);
+  });
+
   test('add an RSS feed: entries newest first, categories, search, read marks – saved over a reload', async ({ page }) => {
     const seen = await mockFeeds(page);
     await page.goto(URL_);

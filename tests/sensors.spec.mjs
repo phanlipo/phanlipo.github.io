@@ -38,7 +38,7 @@ test('overview: tiles open a tool, back returns, the last tool reopens', async (
   await expect(page.locator('#overview')).toBeVisible();
   await expect(page.locator('#tabbar')).toBeHidden();
   await expect(page.locator('.panel:visible')).toHaveCount(0);
-  await expect(page.locator('#overview .tiles > button')).toHaveCount(14);
+  await expect(page.locator('#overview .tiles > button')).toHaveCount(16);
   await page.locator('#overview').getByRole('button', { name: 'Wasserwaage' }).click();
   await expect(page.locator('#p-level')).toBeVisible();
   await expect(page.locator('#overview')).toBeHidden();
@@ -1059,4 +1059,125 @@ test.describe('English', () => {
     await switchLang(page, 'de');
     await expect(page.locator('#vRec')).toHaveText('Aufnahme starten');
   });
+});
+
+// Battery Status API (Chromium only): a battery object the test changes, with the events the page listens to
+async function fakeBattery(page, init) {
+  await page.addInitScript(init => {
+    const b = new EventTarget();
+    Object.assign(b, init);
+    window.__setBattery = (values, type) => { Object.assign(b, values); b.dispatchEvent(new Event(type)); };
+    navigator.getBattery = async () => b;
+  }, init);
+  await page.reload();
+}
+
+test('battery: level, state, system estimates and the observed rate', async ({ page }) => {
+  await page.clock.install();
+  await fakeBattery(page, { level: 0.42, charging: false, chargingTime: Infinity, dischargingTime: 3 * 3600 + 5 * 60 });
+  await tab(page, 'Akku');
+  await running(page, 'battery');
+  await expect(page.locator('#bLevel')).toHaveText('42');
+  await expect(page.locator('#bFill')).toHaveAttribute('style', /width: 42%/);
+  await expect(page.locator('#bMeter')).toHaveClass('meter ok');
+  await expect(page.locator('#bState')).toHaveText('Entlädt');
+  await expect(page.locator('#bEmpty')).toHaveText('3 h 05 min');
+  await expect(page.locator('#bFull')).toHaveText('–');
+  await expect(page.locator('#bRate')).toHaveText('–');
+  // 5 % in 30 minutes = −10 % per hour
+  await page.clock.fastForward('30:00');
+  await page.evaluate(() => window.__setBattery({ level: 0.37, dischargingTime: 7000 }, 'levelchange'));
+  await expect(page.locator('#bLevel')).toHaveText('37');
+  await expect(page.locator('#bRate')).toHaveText(/^[−-]10,0$/);
+  await expect(page.locator('#bSince')).toHaveText('30:00');
+  await expect(page.locator('#bEmpty')).toHaveText('1 h 57 min'); // 7000 s = 116,7 min
+  // Plugged in: the system estimate until full, the observed rate starts again
+  await page.evaluate(() => window.__setBattery({ charging: true, chargingTime: 1800, dischargingTime: Infinity }, 'chargingchange'));
+  await expect(page.locator('#bState')).toHaveText('Wird geladen');
+  await expect(page.locator('#bFull')).toHaveText('30 min');
+  await expect(page.locator('#bEmpty')).toHaveText('–');
+  await expect(page.locator('#bRate')).toHaveText('–');
+  await page.clock.fastForward('15:00');
+  await page.evaluate(() => window.__setBattery({ level: 0.47 }, 'levelchange'));
+  await expect(page.locator('#bRate')).toHaveText('+40,0'); // 10 % in 15 minutes
+  // Low and not charging: red
+  await page.evaluate(() => window.__setBattery({ level: 0.12, charging: false }, 'chargingchange'));
+  await expect(page.locator('#bMeter')).toHaveClass('meter err');
+  // The screen is not kept on for the battery (it would change what is measured)
+  expect(await page.evaluate(() => Tools.wakeLock.reasons())).not.toContain('measure');
+});
+
+test('battery: browsers without the API get an explanation', async ({ page }) => {
+  await page.addInitScript(() => { delete Navigator.prototype.getBattery; });
+  await page.reload();
+  await tab(page, 'Akku');
+  await expect(page.locator('#st-battery')).toHaveText(/gibt den Akkustand nicht heraus/);
+  await expect(page.locator('#st-battery')).toHaveClass(/err/);
+});
+
+// Network Information API (Chromium only): a connection object the test changes
+async function fakeConnection(page, init) {
+  await page.addInitScript(init => {
+    const c = new EventTarget();
+    Object.assign(c, init);
+    window.__setConnection = values => { Object.assign(c, values); c.dispatchEvent(new Event('change')); };
+    Object.defineProperty(Navigator.prototype, 'connection', { configurable: true, get: () => c });
+  }, init);
+  await page.reload();
+}
+
+test('network: connection type, quality, estimates, data saver and a log of changes', async ({ page, context }) => {
+  await fakeConnection(page, { type: 'wifi', effectiveType: '4g', downlink: 10, rtt: 50, saveData: false });
+  await tab(page, 'Netzwerk');
+  await running(page, 'network');
+  await expect(page.locator('#nOnline')).toHaveText('Online');
+  await expect(page.locator('#nType')).toHaveText('WLAN');
+  await expect(page.locator('#nEff')).toHaveText('gut');
+  await expect(page.locator('#nDown')).toHaveText('≥ 10');
+  await expect(page.locator('#nRtt')).toHaveText('50');
+  await expect(page.locator('#nSave')).toHaveText('aus');
+  await expect(page.locator('#st-network')).toHaveText('');
+  await expect(page.locator('#nLog li')).toHaveCount(0);
+  await page.evaluate(() => window.__setConnection({ type: 'cellular', effectiveType: '3g', downlink: 1.5, rtt: 300, saveData: true }));
+  await expect(page.locator('#nType')).toHaveText('Mobilfunk');
+  await expect(page.locator('#nEff')).toHaveText('mittel');
+  await expect(page.locator('#nDown')).toHaveText('1,5');
+  await expect(page.locator('#nRtt')).toHaveText('300');
+  await expect(page.locator('#nSave')).toHaveText('an');
+  await expect(page.locator('#nLog li')).toHaveText([/^\d\d:\d\d:\d\d Mobilfunk · mittel$/]);
+  await context.setOffline(true);
+  await expect(page.locator('#nOnline')).toHaveText('Offline');
+  await expect(page.locator('#nLog li').first()).toHaveText(/ Offline$/);
+  await context.setOffline(false);
+  await expect(page.locator('#nOnline')).toHaveText('Online');
+  await expect(page.locator('#nLog li')).toHaveCount(3);
+});
+
+test('network: without the API only online/offline, with a note', async ({ page }) => {
+  await page.addInitScript(() => { Object.defineProperty(Navigator.prototype, 'connection', { configurable: true, get: () => undefined }); });
+  await page.reload();
+  await tab(page, 'Netzwerk');
+  await expect(page.locator('#nOnline')).toHaveText('Online');
+  await expect(page.locator('#nType')).toHaveText('Verbindungsart unbekannt');
+  await expect(page.locator('#nDown')).toHaveText('–');
+  await expect(page.locator('#st-network')).toHaveText(/verrät nur, ob eine Verbindung besteht/);
+});
+
+test('app shortcuts: a tool opens directly, the flashlight switches on', async ({ page }) => {
+  await page.goto('/sensors/?shortcut=level');
+  await expect(page.locator('#p-level')).toBeVisible();
+  await running(page, 'level');
+  expect(new URL(page.url()).search).toBe('');
+  // The back key still leads to the overview
+  await page.goBack();
+  await expect(page.locator('#overview')).toBeVisible();
+  await fakeCamera(page);
+  await page.goto('/sensors/?shortcut=torch');
+  await expect(page.locator('#p-torch')).toBeVisible();
+  await expect(page.locator('[data-start="torch"]')).toHaveText('Lampe aus');
+  expect(await page.evaluate(() => window.__torch)).toEqual([true]);
+  // An unknown action changes nothing
+  await page.goto('/sensors/?shortcut=nope');
+  await expect(page.locator('#p-torch')).toBeVisible();
+  await expect(page.locator('[data-start="torch"]')).toHaveText('Lampe an');
 });

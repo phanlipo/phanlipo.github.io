@@ -943,6 +943,26 @@ test.describe('sensors tools', () => {
     const { result } = await call(page, 'sensors_get_compass_heading', {});
     expect(result).toMatchObject({ heading_deg: 270, direction: 'W', reference: 'magnetic_north' });
   });
+
+  test('get_battery_status and get_network_info read what the browser reports', async ({ page }) => {
+    await page.addInitScript(() => {
+      const b = Object.assign(new EventTarget(), { level: 0.8, charging: true, chargingTime: 1500, dischargingTime: Infinity });
+      navigator.getBattery = async () => b;
+      const c = Object.assign(new EventTarget(), { type: 'cellular', effectiveType: '3g', downlink: 1.5, rtt: 300, saveData: false });
+      Object.defineProperty(Navigator.prototype, 'connection', { configurable: true, get: () => c });
+    });
+    await open(page, '/sensors/');
+    expect((await call(page, 'sensors_get_battery_status', {})).result)
+      .toEqual({ level_percent: 80, charging: true, minutes_to_full: 25, minutes_to_empty: null, observed_percent_per_hour: null });
+    expect((await call(page, 'sensors_get_network_info', {})).result)
+      .toEqual({ online: true, type: 'cellular', effective_type: '3g', downlink_mbps: 1.5, rtt_ms: 300, save_data: false });
+  });
+
+  test('get_battery_status without the API is an error', async ({ page }) => {
+    await page.addInitScript(() => { delete Navigator.prototype.getBattery; });
+    await open(page, '/sensors/');
+    expect((await call(page, 'sensors_get_battery_status', {})).error).toMatch(/does not provide the battery status/);
+  });
 });
 
 test.describe('pdf2word tools', () => {

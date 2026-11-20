@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "mailto-generator";
-const VERSION = '24ba57d6f007';
+const VERSION = '434d1e96954a';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

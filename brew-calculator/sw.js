@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "brew-calculator";
-const VERSION = 'ccc8f1821a9e';
+const VERSION = 'cd4cc338a262';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -13,6 +13,10 @@ const FILES = [
   "icon-maskable-512.png",
   "icon.svg",
   "manifest.webmanifest",
+  "shortcut-alkohol.png",
+  "shortcut-stammwuerze.png",
+  "shortcut-wasser.png",
+  "shortcut-zucker.png",
   "../assets/base.css",
   "../assets/common.js",
   "../assets/icons.svg",

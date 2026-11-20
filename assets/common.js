@@ -740,6 +740,45 @@ window.Tools = (function () {
     return r.title || r.text || r.url ? r : null;
   }
 
+  /* ---------- App shortcuts and badge ----------
+     Tools.shortcut()   action of the app shortcut the app was started with (long press on the installed app's icon,
+                        <meta name="tool:shortcuts"> – manifest from scripts/build.mjs), or null. The page opens as
+                        ./?shortcut=<action>; the first call removes the parameter (a reload does not repeat it), every
+                        call in the same page load returns the same action. Toolbox apps (assets/shared/toolbox.js)
+                        open the tool of that name by themselves; other apps call it once at start and do the action.
+     Tools.badge(n)     number on the app icon (Badging API), 0 = none. Installed apps on Windows/macOS/ChromeOS and on
+                        iPhone/iPad (home screen, iOS 16.4+, only with notification permission); Android shows a dot for
+                        notifications instead. Without support nothing happens – never the only place for information.
+                        Tools.badge.supported() tells whether the browser has the API. */
+  let shortcutAction;
+  function shortcut() {
+    if (shortcutAction !== undefined) return shortcutAction;
+    const q = new URLSearchParams(location.search);
+    const a = q.get('shortcut');
+    shortcutAction = a && /^[a-z0-9-]{1,32}$/.test(a) ? a : null;
+    if (q.has('shortcut')) {
+      q.delete('shortcut');
+      const rest = q.toString();
+      history.replaceState(history.state, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+      diagLog('shortcut: ' + (shortcutAction || 'invalid'));
+    }
+    return shortcutAction;
+  }
+
+  let badgeCount = null;
+  const badgeSupported = () => 'setAppBadge' in navigator && 'clearAppBadge' in navigator;
+  function badge(n) {
+    n = Math.max(0, Math.floor(Number(n) || 0));
+    if (n === badgeCount) return;
+    badgeCount = n;
+    if (!badgeSupported()) return;
+    try {
+      Promise.resolve(n ? navigator.setAppBadge(n) : navigator.clearAppBadge())
+        .then(() => diagLog('badge: ' + n), e => diagLog('badge failed', e));
+    } catch (e) { diagLog('badge failed', e); }
+  }
+  badge.supported = badgeSupported;
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupDataUi);
   else setupDataUi();
 
@@ -1236,6 +1275,7 @@ window.Tools = (function () {
     add('userAgent', navigator.userAgent);
     add('standalone', matchMedia('(display-mode: standalone)').matches || navigator.standalone === true);
     add('fullscreen', fsEl() ? 'page' : fsSystem() ? 'app' : false);
+    add('badge', badgeSupported() ? (badgeCount == null ? 'not set' : badgeCount) : 'no api');
     add('language', lang);
     add('theme', themeChoice() + (themeDark() ? ' (dark)' : ' (light)'));
     add('online', navigator.onLine);
@@ -1285,7 +1325,7 @@ window.Tools = (function () {
   else setupDiagUi();
 
   return {
-    $, load, save, remove, toast, undo, confirm: confirmAsk, prompt: promptAsk, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle,
+    $, load, save, remove, toast, undo, confirm: confirmAsk, prompt: promptAsk, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle, shortcut, badge,
     randomInt, random, uid, clamp, reducedMotion, canShareFile, download: downloadFile,
     audio: { context: audioContext, unlock: audioUnlock, ready: audioReady, tone },
     wakeLock: { hold: wakeHold, release: wakeRelease, active: () => !!wakeSentinel, supported: wakeSupported, reasons: () => [...wakeReasons] },

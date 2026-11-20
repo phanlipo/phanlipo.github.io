@@ -19,6 +19,28 @@ export function meta(html, name) {
   return v == null ? null : decode(v.trim());
 }
 
+// App shortcuts (long press on the installed app's icon): <meta name="tool:shortcuts" content="…">, entries separated
+// by ";", each "action: tabler-icon: Deutscher Name | English name". The app opens as ./?shortcut=<action>
+// (Tools.shortcut() in common.js; toolbox apps open the tool of that name by themselves). Used by build.mjs
+// (manifest "shortcuts") and build-icons.mjs (shortcut-<action>.png). Throws on a malformed entry.
+export const SHORTCUTS_MAX = 4;
+export function parseShortcuts(html, file = '') {
+  const raw = meta(html, 'tool:shortcuts');
+  if (!raw) return [];
+  const list = raw.split(';').map(s => s.trim()).filter(Boolean).map(entry => {
+    const m = entry.match(/^([a-z0-9-]{1,32})\s*:\s*([a-z0-9-]+)\s*:\s*([^|]+?)\s*\|\s*([^|]+?)$/);
+    if (!m) throw new Error(`${file}: tool:shortcuts entry "${entry}" – expected "action: icon: Deutsch | English"`);
+    const [, action, icon, name, nameEn] = m;
+    for (const n of [name, nameEn])
+      if (n.length > 24) throw new Error(`${file}: tool:shortcuts name "${n}" too long (max. 24 characters)`);
+    return { action, icon, name, nameEn };
+  });
+  if (list.length > SHORTCUTS_MAX) throw new Error(`${file}: tool:shortcuts has ${list.length} entries – at most ${SHORTCUTS_MAX} (Android shows no more)`);
+  const dup = list.find((s, i) => list.findIndex(x => x.action === s.action) !== i);
+  if (dup) throw new Error(`${file}: tool:shortcuts action "${dup.action}" twice`);
+  return list;
+}
+
 // All pages: root index.html plus <folder>/index.html (incl. template and redirects);
 // folders starting with "_" (e.g. the _site output of scripts/site.mjs) are no pages
 export function allPages() {
