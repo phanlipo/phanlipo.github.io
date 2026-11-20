@@ -217,7 +217,10 @@ ${row('f-topic', 'Thema', topics)}${row('f-feat', 'Funktion', features)}    </di
   <p class="filter-status sr-only" aria-live="polite"></p>
   <p class="filter-empty muted" data-i18n="search.none" hidden>Keine passende App gefunden.</p>
   <section class="shelf" id="shelf-fav" aria-labelledby="h-fav" hidden>
-    <h2 id="h-fav">${icon('star')}<span data-i18n="fav.h">Favoriten</span></h2>
+    <div class="shelf-head">
+      <h2 id="h-fav">${icon('star')}<span data-i18n="fav.h">Favoriten</span></h2>
+      <p class="shelf-hint" id="fav-hint" data-i18n="fav.hint">Zum Entfernen lange drücken</p>
+    </div>
     <ul class="shelf-row"></ul>
   </section>
   <section class="shelf" id="shelf-recent" aria-labelledby="h-recent" hidden>

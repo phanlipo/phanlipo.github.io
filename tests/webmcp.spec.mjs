@@ -1669,7 +1669,7 @@ test.describe('paint tools', () => {
     const empty = (await call(page, 'paint_get_canvas', {})).result;
     expect(empty).toMatchObject({ tool: 'spray', color: 'green', painted_percent: 0 });
     expect(empty.tools).toEqual(['pencil', 'brush', 'marker', 'spray', 'fill', 'eraser']);
-    expect(empty.colors).toHaveLength(6);
+    expect(empty.colors).toEqual(['black', 'white', 'red', 'yellow', 'green', 'blue', 'purple']);
     // Fill the left half with the brush: independently ≈ 50 % painted
     await call(page, 'paint_select_tool', { tool: 'brush' });
     const box = await page.locator('#paper').boundingBox();
@@ -1685,6 +1685,15 @@ test.describe('paint tools', () => {
     expect(half.painted_percent).toBeLessThan(55);
   });
 
+  test('selects an own colour the user added', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('paint.colors.v1', JSON.stringify(['#ff8800'])));
+    await page.reload();
+    expect((await call(page, 'paint_get_canvas', {})).result.colors).toContain('#ff8800');
+    const { result } = await call(page, 'paint_select_tool', { color: '#ff8800' });
+    expect(result.color).toBe('#ff8800');
+    await expect(page.locator('[data-color="#ff8800"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('a colour switches from eraser back to the last tool', async ({ page }) => {
     await call(page, 'paint_select_tool', { tool: 'marker' });
     await call(page, 'paint_select_tool', { tool: 'eraser' });
@@ -1697,6 +1706,8 @@ test.describe('paint tools', () => {
     expect((await call(page, 'paint_select_tool', { color: 'pink' })).ok).toBe(false);
     expect((await call(page, 'paint_select_tool', {})).ok).toBe(false);
     expect((await call(page, 'paint_get_canvas', { x: 1 })).ok).toBe(false);
+    // A colour code is only accepted if the user added it as an own colour
+    expect((await call(page, 'paint_select_tool', { color: '#ff8800' })).ok).toBe(false);
     await expect(page.locator('[data-tool="pencil"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('[data-color="black"]')).toHaveAttribute('aria-pressed', 'true');
   });
