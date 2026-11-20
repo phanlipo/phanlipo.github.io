@@ -764,6 +764,65 @@ test.describe('voltage divider', () => {
   });
 });
 
+test.describe('blue sky', () => {
+  // reference: Rayleigh optical depth (Hansen & Travis 1974, λ in µm) and air mass (Kasten & Young 1989)
+  const tau = nm => { const l = nm / 1000; return 0.008569 * l ** -4 * (1 + 0.0113 * l ** -2 + 0.00013 * l ** -4); };
+  const airMass = h => 1 / (Math.sin(h * Math.PI / 180) + 0.50572 * (h + 6.07995) ** -1.6364);
+  // colour of the canvas pixel at a share of width and height
+  const pixel = (page, fx, fy) => page.evaluate(([x, y]) => {
+    const c = document.getElementById('skCanvas');
+    return [...c.getContext('2d').getImageData(Math.floor(c.width * x), Math.floor(c.height * y), 1, 1).data].slice(0, 3);
+  }, [fx, fy]);
+
+  test('noon: blue sky, little blue lost on the way down', async ({ page }) => {
+    await open(page, 'sky');
+    await page.click('#skMode button[data-v="air"]');
+    await page.locator('#skH').fill('90');
+    await expect(pres(page, 'skRes', 'Blau (450 nm)')).toHaveText(`${de((700 / 450) ** 4, 1)}-mal so stark wie Rot (700 nm)`); // 5,9
+    await expect(pres(page, 'skRes', 'Weg des Sonnenlichts')).toHaveText(`${de(airMass(90), 1)}-mal so lang wie bei Sonne senkrecht`);
+    await expect(pres(page, 'skRes', 'blauen Licht')).toHaveText(`${de(Math.exp(-tau(450) * airMass(90)) * 100, 0)} %`); // 80 %
+    await expect(pres(page, 'skRes', 'roten Licht')).toHaveText(`${de(Math.exp(-tau(700) * airMass(90)) * 100, 0)} %`);  // 96 %
+    await expect(pres(page, 'skRes', 'Himmel oben')).toContainText('blau');
+    const [r, , b] = await pixel(page, 0.1, 0.05);
+    expect(b).toBeGreaterThan(r + 60);
+    await expect(page.locator('#skWhy')).toContainText('6-mal');
+  });
+
+  test('sunset: the blue is scattered out on the long way, the sun turns orange', async ({ page }) => {
+    await open(page, 'sky');
+    await page.click('#skMode button[data-v="air"]');
+    await page.locator('#skH').fill('0');
+    const m = airMass(0); // ≈ 37,9
+    await expect(pres(page, 'skRes', 'Weg des Sonnenlichts')).toHaveText(`${de(m, 1)}-mal so lang wie bei Sonne senkrecht`);
+    await expect(pres(page, 'skRes', 'blauen Licht')).toHaveText(`${de(Math.exp(-tau(450) * m) * 100, 3)} %`); // 0,023 %
+    await expect(pres(page, 'skRes', 'roten Licht')).toHaveText(`${de(Math.exp(-tau(700) * m) * 100, 0)} %`);  // 25 %
+    await expect(pres(page, 'skRes', /^Sonne$/)).toContainText(/orange|rot/);
+    await expect(page.locator('#skWhy')).toContainText('Abendrot');
+    // at the horizon next to the sun red outweighs blue
+    const [r, , b] = await pixel(page, 0.5, 0.85);
+    expect(r).toBeGreaterThan(b + 60);
+    await page.click('#p-sky summary:has-text("Formeln")');
+    const tex = (await page.locator('#skMath annotation').allTextContents()).join(' ');
+    expect(tex).toContain('\\tau_{450}=' + de(tau(450), 3).replace(',', '{,}'));
+  });
+
+  test('droplets scatter all colours alike, without air the sky is black', async ({ page }) => {
+    await open(page, 'sky');
+    await page.locator('#skH').fill('45');
+    await page.click('#skMode button[data-v="drops"]');
+    await expect(pres(page, 'skRes', 'Blau (450 nm)')).toHaveText('gleich stark wie Rot');
+    await expect(page.locator('#skWhy')).toContainText('Wolken weiß');
+    const [r, g, b] = await pixel(page, 0.1, 0.05);
+    expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(40);
+    await page.click('#skMode button[data-v="none"]');
+    await expect(pres(page, 'skRes', 'Himmel oben')).toContainText('schwarz');
+    expect(Math.max(...await pixel(page, 0.1, 0.05))).toBeLessThan(10);
+    await page.reload();
+    await expect(page.locator('#skMode button[data-v="none"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#skH')).toHaveValue('45');
+  });
+});
+
 test.describe('wing and lift', () => {
   // first number in the text, with its sign (“-4,6°”, “1,05-fach”)
   const num = async loc => { const m = (await loc.textContent()).match(/([−-]?)(\d+(?:,\d+)?)/); return Number((m[1] ? '-' : '') + m[2].replace(',', '.')); };
@@ -944,7 +1003,7 @@ test.describe('lens', () => {
 });
 
 // one test per experiment: all of them in one test do not fit into the time limit on CI
-for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing']) {
+for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing', 'sky']) {
   test(`${kind}: open with formulas, no accessibility violations`, async ({ page }) => {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub:visible > summary`).all()) await s.click();

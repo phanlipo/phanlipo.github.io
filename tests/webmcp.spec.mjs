@@ -512,6 +512,21 @@ test.describe('physics-lab tools', () => {
     expect(r.result).toMatchObject({ output_voltage_v: 3, current_a: 0.3, total_resistance_ohm: 30 });
   });
 
+  test('sky_colour', async ({ page }) => {
+    const tau = nm => { const l = nm / 1000; return 0.008569 * l ** -4 * (1 + 0.0113 * l ** -2 + 0.00013 * l ** -4); };
+    const m0 = 1 / (0.50572 * 6.07995 ** -1.6364);
+    let r = await call(page, 'physics_lab_sky_colour', { sun_height_deg: 0, scatterers: 'air' });
+    expect(r.result).toMatchObject({ sun_height_deg: 0, scatterers: 'air' });
+    expect(r.result.air_mass).toBeCloseTo(m0, 1);
+    expect(r.result.blue_450_arrives).toBeCloseTo(Math.exp(-tau(450) * m0), 5);
+    expect(r.result.red_700_arrives).toBeCloseTo(Math.exp(-tau(700) * m0), 3);
+    expect(r.result.blue_vs_red_scattering).toBeCloseTo((700 / 450) ** 4, 2);
+    await expect(page.locator('#p-sky')).toBeVisible();
+    await expect(page.locator('#skH')).toHaveValue('0');
+    r = await call(page, 'physics_lab_sky_colour', { scatterers: 'none', sun_height_deg: 60 });
+    expect(r.result).toMatchObject({ sky_overhead: '#000000', blue_vs_red_scattering: 0, blue_450_arrives: 1 });
+  });
+
   test('wing_lift and takeoff_speed', async ({ page }) => {
     let r = await call(page, 'physics_lab_wing_lift', { angle_deg: 5, camber_percent: 0, thickness_percent: 0 });
     expect(r.result).toMatchObject({ angle_deg: 5, lift_coefficient: Math.round(2 * Math.PI * Math.sin(5 * Math.PI / 180) * 1000) / 1000, zero_lift_angle_deg: 0, stalled: false });
