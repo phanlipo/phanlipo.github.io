@@ -1421,7 +1421,8 @@ test.describe('circuit kit', () => {
     await page.click('#bdTools [data-tool="bat"]'); await part(page, 'v-0-0').click();
     await page.click('#bdFlip');
     await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
-    await page.click('#bdTools [data-tool="erase"]'); await part(page, 'h-1-0').click();
+    await page.click('#bdTools [data-tool="wire"]'); await part(page, 'h-1-0').click();  // select the wire …
+    await page.click('#bdDel');                                                          // … and remove it
     await expect(page.locator('#bdWhy')).toContainText('nicht geschlossen');
     await page.click('.toast button:has-text("Rückgängig")');
     await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
@@ -1429,6 +1430,56 @@ test.describe('circuit kit', () => {
     await expect(page.locator('#p-build')).toBeVisible();
     await expect(row(page, 'L1')).toContainText('Lämpchen 20 Ω');
     await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
+  });
+
+  test('a capacitor charges through a bulb with τ = R·C, and discharges again', async ({ page }) => {
+    // reference: 6 V, R = 10 Ω, C = 1 F → U_C(t) = 6·(1 − e^(−t/10 s)), I = (6 − U_C)/10 Ω
+    const U = t => 6 * (1 - Math.exp(-t / 10));
+    await page.clock.install();
+    await page.goto('/physics-lab/');
+    await open(page, 'build');
+    await page.click('#bdPre button:has-text("Kondensator")');
+    await expect(page.locator('#bdTime')).toBeVisible();
+    await expect(row(page, 'C1')).toContainText('Kondensator 1,0 F: 0,00 V');
+    await expect(page.locator('#bdWhy')).toContainText('C1 lädt sich auf (0,00 V)');
+    await expect(page.locator('#bdWhy')).toContainText('τ = R·C = 10,0 s (R = 10,0 Ω)');
+    await expect(page.locator('#bdWhy')).toContainText('Drück Start');
+    await page.click('#bdPlay');
+    await expect(page.locator('#bdPlay')).toHaveText('Anhalten');
+    await page.clock.runFor(10000);
+    await page.click('#bdPlay');
+    await expect(page.locator('#bdPlay')).toHaveText('Start');
+    // read the state the page ended with and compare with the exact curve at that time
+    const st = await page.evaluate(() => ({ t: Number(document.getElementById('bdTimeOut').textContent.replace(/[^\d,]/g, '').replace(',', '.')) }));
+    expect(st.t).toBeGreaterThan(9.5);
+    const txt = await row(page, 'C1').textContent(), v = Number(txt.match(/F: ([\d,]+) V/)[1].replace(',', '.'));
+    expect(v).toBeCloseTo(U(st.t), 1);                                   // ≈ 3,79 V after one τ
+    await expect(row(page, 'L1')).toContainText(`${de(6 - v, 2)} V`);    // the rest of the 6 V lies on the bulb
+    await expect(page.locator('#bdChart polyline')).toHaveCount(1);
+    await page.click('#p-build summary:has-text("Knotenanalyse")');
+    await expect(page.locator('#bdMath')).toContainText('Kondensator C1: so schnell ändert sich seine Spannung');
+    await expect(page.locator('#bdMath .katex-error')).toHaveCount(0);
+    // remove the battery path: open the switch – the charge stays, no current
+    await page.click('#bdTools [data-tool="sw"]'); await part(page, 'h-2-1').click();
+    await expect(page.locator('#bdWhy')).toContainText(`Durch C1 fließt kein Strom, er hält seine Spannung von ${de(v, 2)} V`);
+    // "Discharge" empties it and starts the time at 0
+    await page.click('#bdDischarge');
+    await expect(row(page, 'C1')).toContainText('0,00 V');
+    await expect(page.locator('#bdTimeOut')).toHaveText('0,0 s');
+  });
+
+  test('the solver: a charged capacitor discharges through a bulb exponentially', async ({ page }) => {
+    await open(page, 'build');
+    // 2 F charged to 5 V, discharging through 5 Ω (τ = 10 s): after 7 s U = 5·e^(−0.7)
+    const r = await page.evaluate(() => {
+      const N = window.Network, parts = { 'v-0-0': { k: 'cap', v: 2 }, 'h-0-0': { k: 'bulb', v: 5 }, 'v-0-1': { k: 'wire' }, 'h-1-0': { k: 'wire' } }, vc = { 'v-0-0': 5 };
+      const th = N.thevenin(parts, 'v-0-0', vc);
+      N.step(parts, vc, 7);
+      return { u: vc['v-0-0'], tau: th.tau, end: th.end };
+    });
+    expect(r.tau).toBeCloseTo(10, 3);
+    expect(r.end).toBeCloseTo(0, 6);
+    expect(r.u).toBeCloseTo(5 * Math.exp(-0.7), 2);
   });
 
   test('nodal analysis of a bridge circuit agrees with a hand calculation', async ({ page }) => {
