@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "quantum-putt";
-const VERSION = 'd4a823195326';
+const VERSION = '3d8a83f3e5a8';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

@@ -512,6 +512,22 @@ test.describe('physics-lab tools', () => {
     expect(r.result).toMatchObject({ output_voltage_v: 3, current_a: 0.3, total_resistance_ohm: 30 });
   });
 
+  test('floating_iron', async ({ page }) => {
+    const V = 10 / 7870, AREA = V / 0.001, a = (-0.4 + Math.sqrt(0.16 + 4 * AREA)) / 2;
+    let r = await call(page, 'physics_lab_floating_iron', { shape: 'lump', load_kg: 0, liquid: 'fresh' });
+    expect(r.result).toMatchObject({ shape: 'lump', floats: false, draft_cm: null });
+    expect(r.result.buoyancy_n).toBeCloseTo(1000 * 9.81 * V, 2);
+    await expect(page.locator('#p-float')).toBeVisible();
+    r = await call(page, 'physics_lab_floating_iron', { shape: 'hull', wall_height_cm: 10, load_kg: 20 });
+    expect(r.result.floats).toBe(true);
+    expect(r.result.draft_cm).toBeCloseTo(30 / (1000 * a * a) * 100, 2);
+    expect(r.result.max_load_kg).toBeCloseTo(1000 * a * a * 0.1 - 10, 2);
+    expect(r.result.buoyancy_n).toBeCloseTo(r.result.weight_n, 6);
+    await expect(page.locator('#flH')).toHaveValue('10');
+    r = await call(page, 'physics_lab_floating_iron', { load_kg: 100 });
+    expect(r.result.floats).toBe(false);
+  });
+
   test('rainbow_position', async ({ page }) => {
     const n = 1.3240 + 3046 / (680 * 680), al = Math.acos(Math.sqrt((n * n - 1) / 3)), be = Math.asin(Math.sin(al) / n);
     const red = (4 * be - 2 * al) * 180 / Math.PI;

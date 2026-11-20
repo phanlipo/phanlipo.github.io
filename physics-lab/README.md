@@ -13,6 +13,7 @@ electro.js   window.Electro: Lorentzkraft (Kreisbahn, Umlaufzeit), Stromkreise m
 thermo.js    window.Thermo: ideales Gas in 2D (Teilchen, Wandstöße, gemessener Druck)
 rainbow.js   window.Rainbow: Radius von Haupt- und Nebenbogen, Kreis um den Gegenpunkt der Sonne am Himmel, sichtbarer Anteil
 sky.js       window.Sky: Rayleigh-Streuung, Luftmasse, Himmelsfarbe (Spektrum → XYZ → sRGB)
+float.js     window.Float: 10 kg Eisen als Würfel oder offene Schale, Archimedes, Eintauchtiefe, höchste Ladung
 wing.js      window.Wing: Joukowski-Profil, Potenzialströmung mit Kutta-Bedingung (Stromlinien, Druck, Auftrieb), Strömungsabriss, Abheben
 radar.js     window.Radar: Radarwellen am Flugzeug-Querschnitt (Strahlen, Spiegelungen, Echo-Anteil), Radargleichung
 mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
@@ -82,6 +83,12 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 - Bild: Panorama ±120° um die Sonne, Höhe 0–90°, 96 × 40 Zellen, weich hochskaliert. Grenzen: keine Mehrfachstreuung, kein Ozon (Chappuis-Absorption hält den Himmel in der Dämmerung blau), kein Staub.
 - Ergebnis „Blau wird gestreut“ = (700/450)⁴ ≈ 5,86 (reine 1/λ⁴-Regel); die Formeln zeigen die τ-Werte mit Korrektur.
 
+## Schwimmen (float.js)
+
+- 10 kg Eisen (7870 kg/m³, 1,27 L). Klumpen: Würfel 10,83 cm. Schale: Blech 1 mm → 1,27 m², offene Kiste mit quadratischem Boden a² + 4aH = 1,27 m² (Wände dünn, innen = außen). Flüssigkeiten 1000 / 1025 / 13534 kg/m³.
+- Schwimmt, wenn d = M/(ρ·a²) ≤ H (M = Eisen + Ladung); sonst läuft die Schale voll bzw. sinkt der Würfel, Auftrieb dann ρ·g·V_Eisen (Ladung ohne eigenes Volumen). Höchste Ladung ρ·a²·H − 10 kg; am größten bei a = 2H, also 12H² = Fläche → H ≈ 32,5 cm.
+- Zeichnung: Becken 1,4 m breit, Ladung als Sandkisten (1600 kg/m³); Kraftpfeile im Verhältnis zueinander. Keine Schwimmstabilität (Kentern).
+
 ## Flügel & Auftrieb (wing.js)
 
 - **Profil:** Joukowski z = ζ + 1/ζ eines Kreises durch ζ = 1 (spitze Hinterkante bei z = 2), Mittelpunkt μ = (−dx, dy). Dicke und Wölbung (Anteile der Profiltiefe, gemessen im Sehnen-System, 99 Stellen) werden per Iteration auf die Reglerwerte gebracht. Anstellwinkel α = Winkel zwischen Anströmung und Sehne (Vorderkante–Hinterkante).
@@ -98,7 +105,7 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v }, radar: { mode, shape, b, coat, obj, r }, wing: { mode, a, f, t, plane, vs: { paper, glider, small, airliner } }, sky: { h, mode }, bow: { h, plane, second } }` – nur Reglerstellungen und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v }, radar: { mode, shape, b, coat, obj, r }, wing: { mode, a, f, t, plane, vs: { paper, glider, small, airliner } }, sky: { h, mode }, bow: { h, plane, second }, float: { shape, H, c, liq } }` – nur Reglerstellungen und offener Versuch.
 
 ## Erweitern
 
@@ -123,5 +130,6 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 11 | Mechanik | Flügel & Auftrieb (Strömung um ein Profil, Abheben) | Warum fliegen Flugzeuge – bei welchem Winkel und welcher Flügelform gibt es Auftrieb? | fertig |
 | 12 | Optik | Blauer Himmel (Rayleigh-Streuung, Sonnenstand) | Warum ist der Himmel blau – und abends rot? | fertig |
 | 13 | Optik | Regenbogen am Himmel (Kegel um den Gegenpunkt) | Warum ist der Regenbogen rund? | fertig |
+| 14 | Mechanik | Schwimmen (Eisen als Klumpen oder Schale, Archimedes) | Warum schwimmt ein Schiff aus Eisen? | fertig |
 
 Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien (zu #7), Spannungsteiler (zu #9). Ab etwa 15 Versuchen Tabs mit `data-group` (wie `unit-converter`). Eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
