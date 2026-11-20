@@ -62,14 +62,14 @@ const VENDOR = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'
 
 // Features for the second filter row on the start page, in display order. Only what sets apps apart:
 // things every app has (offline, installable, data stays on the device) are stated once on the start page.
-const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Standort', 'Datei öffnen', 'Teilen an App', 'Vollbild', 'Benachrichtigung', 'Kopieren', 'Verlauf', 'Schütteln', 'KI-Agent', 'Download nötig'];
+const FEATURES = ['Kamera', 'Mikrofon', 'Bewegungssensor', 'Standort', 'NFC', 'Datei öffnen', 'Teilen an App', 'Vollbild', 'Benachrichtigung', 'Kopieren', 'Verlauf', 'Schütteln', 'KI-Agent', 'Download nötig'];
 // English names of all tags and features (start page filter). A new tag needs an entry here.
 const TAGS_EN = {
   Alltag: 'Everyday', Arbeit: 'Work', Freizeit: 'Leisure',
   Apotheke: 'Pharmacy', Barcode: 'Barcode', Bierbrauen: 'Homebrewing', Dokumente: 'Documents', KI: 'AI',
   Kinder: 'Kids', Lernen: 'Learning', Medizin: 'Medicine', Messen: 'Measuring', Musik: 'Music', Physik: 'Physics', Rechner: 'Calculators', Spiele: 'Games', Sport: 'Sports', Sprache: 'Speech',
   Werkzeug: 'Tools', Zufall: 'Random', Finanzen: 'Finance',
-  Kamera: 'Camera', Mikrofon: 'Microphone', Bewegungssensor: 'Motion sensor', Standort: 'Location',
+  Kamera: 'Camera', Mikrofon: 'Microphone', Bewegungssensor: 'Motion sensor', Standort: 'Location', NFC: 'NFC',
   'Datei öffnen': 'Open file', 'Teilen an App': 'Share to app', Vollbild: 'Full screen', Benachrichtigung: 'Notifications', Kopieren: 'Copy', Verlauf: 'History',
   Schütteln: 'Shake', 'KI-Agent': 'AI agent', 'Download nötig': 'Download needed',
 };
