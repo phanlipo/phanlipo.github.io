@@ -116,32 +116,40 @@ test.describe('start page', () => {
     expect(await shown()).toEqual(expected('title', 'de'));
   });
 
-  test('area switch and filter: areas, topics with at least two apps, features that set apps apart', async ({ page }) => {
+  test('group switch and filter: one button per group, topics with at least two apps, features that set apps apart', async ({ page }) => {
     await page.goto('/');
     const list = tools();
-    const all = page.locator('.seg.area').getByRole('button', { name: 'Alle', exact: true });
-    await expect(all).toHaveAttribute('aria-pressed', 'true');
-    // Areas: one button each, an area shows its apps (games included in Freizeit)
-    const areas = [...new Set(list.map(t => t.tags[0]))].sort((a, b) => a.localeCompare(b, 'de'));
-    await expect(page.locator('.seg.area button')).toHaveText(['Alle', ...areas]);
-    for (const area of areas) {
-      await page.locator('.seg.area').getByRole('button', { name: area, exact: true }).click();
-      expect(await visibleTitles(page), area).toEqual(list.filter(t => t.tags[0] === area).map(t => t.title).sort());
-      await expect(page.locator('.group:visible')).toHaveCount(new Set(list.filter(t => t.tags[0] === area).map(groupOf)).size);
+    const groups = ['Alltag', 'Arbeit', 'Freizeit', 'Spiele'].filter(g => list.some(t => groupOf(t) === g));
+    const btn = g => page.locator('.seg.area').getByRole('button', { name: g, exact: true });
+    // One button per group, in the order of the list; none pressed = all apps
+    await expect(page.locator('.seg.area button')).toHaveText(groups);
+    await expect(page.locator('.seg.area [aria-pressed="true"]')).toHaveCount(0);
+    await expect(page.locator('.app:visible')).toHaveCount(list.length);
+    for (const g of groups) {
+      await btn(g).click();
+      await expect(btn(g)).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('.seg.area [aria-pressed="true"]')).toHaveCount(1);
+      expect(await visibleTitles(page), g).toEqual(list.filter(t => groupOf(t) === g).map(t => t.title).sort());
+      await expect(page.locator('.group:visible')).toHaveCount(1);
     }
-    await all.click();
+    // Tapping the pressed group again shows everything
+    await btn(groups.at(-1)).click();
+    await expect(page.locator('.seg.area [aria-pressed="true"]')).toHaveCount(0);
     await expect(page.locator('.app:visible')).toHaveCount(list.length);
     // The filter panel opens with its button
-    const btn = page.getByRole('button', { name: 'Filter' });
+    const filterBtn = page.getByRole('button', { name: 'Filter' });
     await expect(page.locator('#filter-panel')).toBeHidden();
-    await btn.click();
-    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+    await filterBtn.click();
+    await expect(filterBtn).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#filter-panel')).toBeVisible();
+    const areas = [...new Set(list.map(t => t.tags[0]))];
     const count = x => list.filter(t => t.tags.includes(x) || t.features.includes(x)).length;
-    const topics = [...new Set(list.flatMap(t => t.tags.slice(1)))].filter(x => !areas.includes(x) && count(x) >= 2);
+    // Topics: no areas, no topic that has its own group (Spiele), at least two apps
+    const topics = [...new Set(list.flatMap(t => t.tags.slice(1)))].filter(x => !areas.includes(x) && !groups.includes(x) && count(x) >= 2);
     const features = [...new Set(list.flatMap(t => t.features))].filter(x => count(x) < list.length);
     const values = [...topics, ...features];
     await expect(page.locator('.filter-panel .chip')).toHaveCount(values.length);
+    await expect(page.locator('.chip[data-tag="Spiele"]')).toHaveCount(0);
     for (const tag of values) {
       const chip = page.locator(`.chip[data-tag="${tag}"]`);
       await chip.click();
@@ -154,15 +162,15 @@ test.describe('start page', () => {
     await page.locator(`.chip[data-tag="${values.at(-1)}"]`).click();
     await expect(page.locator('.app:visible')).toHaveCount(list.length);
     await expect(page.locator('.filter-count')).toBeHidden();
-    // Area and topic together; in an area only chips with apps there are offered
-    await page.locator('.seg.area').getByRole('button', { name: 'Freizeit', exact: true }).click();
+    // Group and topic together; in a group only chips with apps there are offered
+    await btn('Spiele').click();
     await page.locator('.chip[data-tag="Kinder"]').click();
-    expect(await visibleTitles(page)).toEqual(list.filter(t => t.tags[0] === 'Freizeit' && t.tags.includes('Kinder')).map(t => t.title).sort());
+    expect(await visibleTitles(page)).toEqual(list.filter(t => groupOf(t) === 'Spiele' && t.tags.includes('Kinder')).map(t => t.title).sort());
     const offered = await page.locator('.filter-panel .chip:visible').evaluateAll(cs => cs.map(c => c.dataset.tag));
-    expect(offered.sort()).toEqual(values.filter(x => list.some(t => t.tags[0] === 'Freizeit' && (t.tags.includes(x) || t.features.includes(x)))).sort());
+    expect(offered.sort()).toEqual(values.filter(x => list.some(t => groupOf(t) === 'Spiele' && (t.tags.includes(x) || t.features.includes(x)))).sort());
   });
 
-  test('search finds apps by title, description and tag – in German and English, combined with area and filter', async ({ page }) => {
+  test('search finds apps by title, description and tag – in German and English, combined with group and filter', async ({ page }) => {
     await page.goto('/');
     const list = tools();
     const search = page.getByRole('searchbox', { name: 'Apps durchsuchen' });
@@ -189,10 +197,11 @@ test.describe('start page', () => {
     await search.fill('pdf');
     const hay = t => norm([t.title, t.description, t.titleEn, t.descriptionEn, t.folder, ...t.tags, ...t.features].join(' '));
     expect(await visibleTitles(page)).toEqual(titles(t => hay(t).includes('pdf')));
-    // Combined with an area
+    // Combined with a group (tapping it again removes it)
     await page.locator('.seg.area').getByRole('button', { name: 'Arbeit', exact: true }).click();
-    expect(await visibleTitles(page)).toEqual(titles(t => hay(t).includes('pdf') && t.tags[0] === 'Arbeit'));
-    await page.locator('.seg.area').getByRole('button', { name: 'Alle', exact: true }).click();
+    expect(await visibleTitles(page)).toEqual(titles(t => hay(t).includes('pdf') && groupOf(t) === 'Arbeit'));
+    await page.locator('.seg.area').getByRole('button', { name: 'Arbeit', exact: true }).click();
+    expect(await visibleTitles(page)).toEqual(titles(t => hay(t).includes('pdf')));
     // No match: a visible message, no empty groups
     await search.fill('xyzqwv');
     await expect(page.locator('.app:visible')).toHaveCount(0);
@@ -227,7 +236,7 @@ test.describe('start page', () => {
     expect(await top()).toBeLessThan(30);
   });
 
-  test('phone: search, area switch and filter stay at the top while the list scrolls', async ({ page }) => {
+  test('phone: search, group switch and filter stay at the top while the list scrolls', async ({ page }) => {
     await page.setViewportSize(VIEWPORTS.mobile);
     await page.goto('/');
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
