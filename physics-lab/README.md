@@ -11,6 +11,7 @@ waves.js     window.Waves: Licht durch N Spalte (Intensität, Hauptmaxima, Zeige
 atomic.js    window.Atomic: radioaktiver Zerfall (Lebensdauern mit festem Zufall), Wasserstoff nach Bohr, Linien der Elemente
 electro.js   window.Electro: Lorentzkraft (Kreisbahn, Umlaufzeit), Stromkreise mit Lämpchen (eins, Reihe, parallel)
 thermo.js    window.Thermo: ideales Gas in 2D (Teilchen, Wandstöße, gemessener Druck)
+sky.js       window.Sky: Rayleigh-Streuung, Luftmasse, Himmelsfarbe (Spektrum → XYZ → sRGB)
 wing.js      window.Wing: Joukowski-Profil, Potenzialströmung mit Kutta-Bedingung (Stromlinien, Druck, Auftrieb), Strömungsabriss, Abheben
 radar.js     window.Radar: Radarwellen am Flugzeug-Querschnitt (Strahlen, Spiegelungen, Echo-Anteil), Radargleichung
 mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
@@ -66,6 +67,14 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 
 - **Gas in der Box:** 30/80/200 Teilchen der Masse 1 in einem 10 × 8 großen Kasten, nur Wandstöße (ideales Gas). Startgeschwindigkeiten aus der 2D-Maxwell-Verteilung, so skaliert, dass ⟨v²⟩ = 2·T/300 genau stimmt. Heizen skaliert alle Geschwindigkeiten mit √(T_neu/T_alt), die rechte Wand ist verschiebbar. Gemessener Druck = Impuls an die Wände pro Zeit und Wandlänge, gemittelt über 8 Zeiteinheiten; verglichen mit p·A = N·T (beide bezogen auf 300 K und vollen Kasten). Simulation 4-mal schneller als echte Zeit, Schritt 0,004.
 
+## Blauer Himmel (sky.js)
+
+- Sonne als schwarzer Körper 5778 K, 380–780 nm in 10-nm-Schritten. Optische Dicke der Luft (senkrecht, Meereshöhe, Hansen & Travis 1974): τ(λ) = 0,008569·λ⁻⁴·(1 + 0,0113·λ⁻² + 0,00013·λ⁻⁴), λ in µm (τ₄₅₀ ≈ 0,221, τ₇₀₀ ≈ 0,037). „Tröpfchen“: τ(550 nm) für alle Farben; „Keine Luft“: τ = 0.
+- Luftmasse nach Kasten & Young (1989), m(0°) ≈ 37,9. Direktes Licht S·e^(−τm). Himmelslicht: einfache Streuung in einer flachen, gleichmäßigen Schicht mit Rayleigh-Phasenfunktion, L = S·3/(16π)·(1+cos²θ)·m_v·(e^(−τm_s) − e^(−τm_v))/(m_v − m_s).
+- Farbe: Spektrum × CIE-1931-Normspektralwertkurven (Gauß-Näherung von Wyman, Sloan & Shirley 2013) → XYZ → sRGB; Belichtung fest (Himmel oben bei 60° Sonnenhöhe = Y 0,9), Helligkeit über Reinhard gedämpft, Farbton bleibt. Sonne immer in voller Helligkeit ihrer Farbe.
+- Bild: Panorama ±120° um die Sonne, Höhe 0–90°, 96 × 40 Zellen, weich hochskaliert. Grenzen: keine Mehrfachstreuung, kein Ozon (Chappuis-Absorption hält den Himmel in der Dämmerung blau), kein Staub.
+- Ergebnis „Blau wird gestreut“ = (700/450)⁴ ≈ 5,86 (reine 1/λ⁴-Regel); die Formeln zeigen die τ-Werte mit Korrektur.
+
 ## Flügel & Auftrieb (wing.js)
 
 - **Profil:** Joukowski z = ζ + 1/ζ eines Kreises durch ζ = 1 (spitze Hinterkante bei z = 2), Mittelpunkt μ = (−dx, dy). Dicke und Wölbung (Anteile der Profiltiefe, gemessen im Sehnen-System, 99 Stellen) werden per Iteration auf die Reglerwerte gebracht. Anstellwinkel α = Winkel zwischen Anströmung und Sehne (Vorderkante–Hinterkante).
@@ -82,7 +91,7 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v }, radar: { mode, shape, b, coat, obj, r }, wing: { mode, a, f, t, plane, vs: { paper, glider, small, airliner } } }` – nur Reglerstellungen und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v }, radar: { mode, shape, b, coat, obj, r }, wing: { mode, a, f, t, plane, vs: { paper, glider, small, airliner } }, sky: { h, mode } }` – nur Reglerstellungen und offener Versuch.
 
 ## Erweitern
 
@@ -105,5 +114,6 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 9 | Elektrizität | Stromkreis mit festen Schaltungen (eins, Reihe, parallel) | Warum leuchten zwei Lämpchen in Reihe schwächer? | fertig |
 | 10 | Wellen | Radar & Tarnkappe (Spiegelung am Querschnitt, Radargleichung) | Warum sieht man Tarnkappenflugzeuge (auf dem Radar) nicht? | fertig |
 | 11 | Mechanik | Flügel & Auftrieb (Strömung um ein Profil, Abheben) | Warum fliegen Flugzeuge – bei welchem Winkel und welcher Flügelform gibt es Auftrieb? | fertig |
+| 12 | Optik | Blauer Himmel (Rayleigh-Streuung, Sonnenstand) | Warum ist der Himmel blau – und abends rot? | fertig |
 
 Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien (zu #7), Spannungsteiler (zu #9). Ab etwa 15 Versuchen Tabs mit `data-group` (wie `unit-converter`). Eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
