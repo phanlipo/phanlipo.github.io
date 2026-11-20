@@ -1,4 +1,5 @@
 // Malen: colours, tools, eraser, reset, picture kept after reload and rotation, WebMCP-free basics.
+import { readFileSync } from 'node:fs';
 import { test, expect, mockAndroidShare, onDialog, openMenu } from './helpers.mjs';
 
 /** Colour of the canvas pixel at CSS position (x, y) */
@@ -449,6 +450,152 @@ test.describe('own colours', () => {
     expect(add.x + add.width).toBeLessThanOrEqual(375);
     await page.click('#btnAddColor');
     await expect(page.locator('#colorDlg')).toBeVisible();
+  });
+});
+
+// ---------- Inserting a picture ----------
+/** PNG built in the page: w×h, left half red, right half blue; noise=true: top half random pixels (photo-like) */
+const makePng = (page, w, h, { noise = false } = {}) => page.evaluate(async ([w, h, noise]) => {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.fillStyle = '#ff0000'; x.fillRect(0, 0, w / 2, h);
+  x.fillStyle = '#0000ff'; x.fillRect(w / 2, 0, w / 2, h);
+  if (noise) {
+    const im = x.createImageData(w, h / 2);
+    for (let i = 0; i < im.data.length; i++) im.data[i] = i % 4 === 3 ? 255 : Math.random() * 256 | 0;
+    x.putImageData(im, 0, 0);
+  }
+  const b = await new Promise(r => c.toBlob(r, 'image/png'));
+  return [...new Uint8Array(await b.arrayBuffer())];
+}, [w, h, noise]).then(a => Buffer.from(a));
+const canvasSize = page => page.locator('#paper').evaluate(c => [c.clientWidth, c.clientHeight]);
+const PURE_RED = [255, 0, 0], PURE_BLUE = [0, 0, 255];
+
+test.describe('insert a picture', () => {
+  test.use({ viewport: { width: 375, height: 700 } });
+
+  test('a picture fills the canvas whole and centred, can be painted on and is kept after reload', async ({ page }) => {
+    await expect(page.locator('#btnImage')).toHaveAttribute('aria-label', 'Bild einfügen');
+    await page.setInputFiles('#imgPick', { name: 'bild.png', mimeType: 'image/png', buffer: await makePng(page, 200, 100) });
+    const [w, h] = await canvasSize(page);
+    // 200×100 into w×h (wider than tall relative to the canvas): full width, height w/2, centred vertically
+    const ih = w / 2, top = (h - ih) / 2;
+    await expect.poll(() => pixel(page, w / 4, h / 2)).toEqual(PURE_RED);
+    expect(await pixel(page, w * 3 / 4, h / 2)).toEqual(PURE_BLUE);
+    expect(await pixel(page, w / 2, top - 8)).toEqual(WHITE);
+    expect(await pixel(page, w / 2, top + ih + 8)).toEqual(WHITE);
+    // Paint over it with black
+    await stroke(page, 20, h / 2, w - 20, h / 2);
+    expect(near(await pixel(page, w / 4, h / 2), [0x1b, 0x1b, 0x1b])).toBe(true);
+    expect(await pixel(page, w / 4, h / 2 + 20)).toEqual(PURE_RED);
+    await expect.poll(() => page.evaluate(() => (JSON.parse(localStorage.getItem('paint.drawing.v1')) || {}).strokes)).toBe(2);
+    await page.reload();
+    await expect.poll(() => pixel(page, w / 4, h / 2 + 20)).toEqual(PURE_RED);
+    expect(near(await pixel(page, w / 4, h / 2), [0x1b, 0x1b, 0x1b])).toBe(true);
+    expect(await pixel(page, w * 3 / 4, h / 2 + 20)).toEqual(PURE_BLUE);
+  });
+
+  test('a tall picture is centred horizontally', async ({ page }) => {
+    const [w, h] = await canvasSize(page);
+    // 100×400: full height, width h/4
+    await page.setInputFiles('#imgPick', { name: 'hoch.png', mimeType: 'image/png', buffer: await makePng(page, 100, 400) });
+    const iw = h / 4, left = (w - iw) / 2;
+    await expect.poll(() => pixel(page, left + iw / 4, h / 2)).toEqual(PURE_RED);
+    expect(await pixel(page, left + iw * 3 / 4, h / 2)).toEqual(PURE_BLUE);
+    expect(await pixel(page, left - 8, h / 2)).toEqual(WHITE);
+    expect(await pixel(page, left + iw + 8, h / 2)).toEqual(WHITE);
+  });
+
+  test('replacing a painted canvas asks first', async ({ page }) => {
+    await stroke(page, 20, 40, 220, 40);
+    const png = await makePng(page, 200, 100);
+    let asked = '';
+    await onDialog(page, d => { asked = d.message(); return d.dismiss(); });
+    await page.setInputFiles('#imgPick', { name: 'a.png', mimeType: 'image/png', buffer: png });
+    await expect.poll(() => asked).toContain('ersetzt die aktuelle Leinwand');
+    const [w, h] = await canvasSize(page);
+    expect(await pixel(page, w / 4, h / 2)).toEqual(WHITE);
+    expect(near(await pixel(page, 120, 40), [0x1b, 0x1b, 0x1b])).toBe(true);
+  });
+
+  test('replacing a painted canvas after confirming', async ({ page }) => {
+    await stroke(page, 20, 40, 220, 40);
+    await onDialog(page, d => d.accept());
+    await page.setInputFiles('#imgPick', { name: 'a.png', mimeType: 'image/png', buffer: await makePng(page, 200, 100) });
+    const [w, h] = await canvasSize(page);
+    await expect.poll(() => pixel(page, w / 4, h / 2)).toEqual(PURE_RED);
+    expect(await pixel(page, 120, 40)).toEqual(WHITE);
+  });
+
+  test('a picture pasted with Ctrl+V is inserted', async ({ page }) => {
+    const png = await makePng(page, 200, 100);
+    await page.evaluate(b64 => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], 'image.png', { type: 'image/png' }));
+      document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    }, png.toString('base64'));
+    const [w, h] = await canvasSize(page);
+    await expect.poll(() => pixel(page, w / 4, h / 2)).toEqual(PURE_RED);
+  });
+
+  test('a file that is no picture shows a message and leaves the canvas', async ({ page }) => {
+    await page.setInputFiles('#imgPick', { name: 'kaputt.png', mimeType: 'image/png', buffer: Buffer.from('kein Bild') });
+    await expect(page.locator('#toast')).toContainText('Das Bild ließ sich nicht öffnen.');
+    expect(await pixel(page, 50, 50)).toEqual(WHITE);
+  });
+
+  test('HEIC photo (iPhone) is read, also offline after the first time', async ({ page, context }) => {
+    // 64×48: red | green over blue | white
+    const heic = { name: 'IMG_0001.HEIC', mimeType: 'image/heic', buffer: readFileSync(new URL('./fixtures/photo.heic', import.meta.url)) };
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload();                                 // controlled by the service worker → the decoder is cached
+    const [w, h] = await canvasSize(page);
+    const ih = w * 48 / 64, top = (h - ih) / 2;
+    const check = async () => {
+      await expect.poll(async () => near(await pixel(page, w / 4, top + ih / 4), PURE_RED, 40), { timeout: 15000 }).toBe(true);
+      expect(near(await pixel(page, w * 3 / 4, top + ih * 3 / 4), WHITE, 40)).toBe(true);
+    };
+    await page.setInputFiles('#imgPick', heic);
+    await check();
+    expect(await page.evaluate(() => Heic.info())).toEqual({ native: false, worker: true });
+    await context.setOffline(true);
+    await page.evaluate(() => localStorage.removeItem('paint.drawing.v1'));
+    await page.reload();
+    expect(await pixel(page, w / 4, top + ih / 4)).toEqual(WHITE);
+    await page.setInputFiles('#imgPick', heic);
+    await check();
+    await context.setOffline(false);
+  });
+
+  test('share target: a picture shared to the installed app is inserted', async ({ page, request }) => {
+    const manifest = await (await request.get('/paint/manifest.webmanifest')).json();
+    expect(manifest.share_target.params.files[0].accept).toContain('image/*');
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload();
+    const png = await makePng(page, 200, 100);
+    expect(await page.evaluate(async b64 => {
+      const fd = new FormData();
+      fd.append('file', new File([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], 'geteilt.png', { type: 'image/png' }));
+      return (await fetch('share-target', { method: 'POST', body: fd })).ok;
+    }, png.toString('base64'))).toBe(true);
+    await page.goto('/paint/?shared=1');
+    await expect(page).toHaveURL(/\/paint\/$/);
+    const [w, h] = await canvasSize(page);
+    await expect.poll(() => pixel(page, w / 4, h / 2)).toEqual(PURE_RED);
+  });
+});
+
+test.describe('large picture on a sharp screen', () => {
+  test.use({ viewport: { width: 375, height: 700 }, deviceScaleFactor: 2 });
+  test('is stored as JPEG so it fits and comes back after reload', async ({ page }) => {
+    const [w, h] = await canvasSize(page);
+    // Photo-like: random pixels at full resolution, PNG would be several MB
+    await page.setInputFiles('#imgPick', { name: 'foto.png', mimeType: 'image/png', buffer: await makePng(page, w * 2, h * 2, { noise: true }) });
+    await expect.poll(() => page.evaluate(() => (localStorage.getItem('paint.drawing.v1') || '').includes('data:image/jpeg'))).toBe(true);
+    await page.reload();
+    // Bottom half (solid colours) survives the JPEG closely
+    await expect.poll(async () => near(await pixel(page, w / 4, h * 3 / 4), PURE_RED, 12)).toBe(true);
+    expect(near(await pixel(page, w * 3 / 4, h * 3 / 4), PURE_BLUE, 12)).toBe(true);
   });
 });
 

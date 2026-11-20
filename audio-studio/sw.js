@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "audio-studio";
-const VERSION = '8f20942d6420';
+const VERSION = 'a9ed9aeb9f86';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
