@@ -20,6 +20,7 @@ doppler.js   window.Doppler: Sirene fährt an einem Hörer vorbei (gehörte Tonh
 seasons.js   window.Seasons: Deklination, Sonnenhöhe, Tageslänge, Sonnenlicht pro Tag, Abstand Erde–Sonne
 network.js   window.Network: freier Schaltkreis auf einem 5 × 4-Raster, Knotenanalyse, Beispielschaltungen
 mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
+fall.js      window.Fall: Fallbeschleunigung g = G·M/R² für Erde, Mond, Mars, Jupiter, Fallzeit und Aufprallgeschwindigkeit
 ```
 
 ## Optik (optics.js)
@@ -160,3 +161,10 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 17 | Elektrizität | Schaltkreis-Baukasten (freie Schaltung, Knotenanalyse) | Warum geht an einer Abzweigung kein Strom verloren – und wie rechnet man damit jede Schaltung aus? | fertig |
 
 Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien mit Erde (zu #7), Spannungsteiler (zu #9). Tabs mit `data-group` je Gebiet (seit 20 Versuchen). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
+
+## Fallen auf dem Mond (fall.js)
+
+- Frage: Warum fällt man auf dem Mond langsamer als auf der Erde? Links immer die Erde, rechts Mond, Mars oder Jupiter (Wolkenoberkante), Fallhöhe 0,5 … 20 m, ohne Luftwiderstand.
+- g = G·M/R² mit Masse und Äquatorradius (NASA-Datenblätter, gerundet): Mond 1,62, Mars 3,71, Jupiter 24,78 m/s². Für die Erde der übliche Wert 9,81 m/s² (die Formel am Äquator ohne Drehung ergibt 9,80; steht in den Formeln dabei).
+- Fall aus der Ruhe: h(t) = h − ½·g·t², t = √(2h/g), v = √(2gh). Die Animation läuft in echter Zeit über die gemeinsame Schleife und endet, wenn beide Bälle unten sind; blasse Punkte alle 0,2 s (Stroboskop).
+- Erklärung: Masse und Radius im Verhältnis zur Erde (Mond 1/81 der Masse, 3,7-mal näher am Mittelpunkt → etwa 1/6), die eigene Masse kürzt sich heraus (Hammer und Feder, Apollo 15), Fallzeit nur mit √6.
