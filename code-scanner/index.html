@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Code-Scanner</title>
+<meta name="description" content="QR-Codes, Barcodes, DataMatrix, Aztec, PDF417 und weitere Codes mit Kamera oder Foto lesen – Inhalt im Original, als QR-Code und übersichtlich aufbereitet (WLAN, Kontakt, Überweisung, GS1 …).">
+<meta name="tool:tags" content="Alltag, Barcode">
+<meta name="tool:features" content="Kamera, Datei öffnen, Teilen an App, Kopieren, Verlauf, KI-Agent">
+<meta name="tool:webmcp" content="analyze_code_text, get_current_code, get_scan_history">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann den Text eines Codes aufbereiten lassen (z. B. „Was steht in diesem GS1-Code?“), den gerade angezeigten Code und den Verlauf lesen. Passwörter von WLAN-Codes und Schlüssel von Zwei-Faktor-Codes bekommt er nie. Scannen, Speichern und Öffnen von Links bleiben bei dir.">
+<meta name="tool:webmcp-help-en" content="An AI agent can have the text of a code broken down (e.g. “What is in this GS1 code?”) and read the code shown right now and the history. It never gets Wi-Fi passwords or two-factor keys. Scanning, saving and opening links stay with you.">
+<meta name="tool:icon" content="barcode">
+<meta name="tool:color" content="#0369a1">
+<meta name="tool:short-name" content="Code-Scanner">
+<meta name="tool:title-en" content="Code Scanner">
+<meta name="tool:description-en" content="Read QR codes, barcodes, DataMatrix, Aztec, PDF417 and more with the camera or a photo – content in the original, as a QR code and neatly broken down (Wi-Fi, contact, bank transfer, GS1 …).">
+<meta name="tool:short-name-en" content="Code Scanner">
+<meta name="tool:storage" content="code-scanner.">
+<meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-N7KkXcA/NMEEHV+4e5Vx2v2x5cn3uxvpYXynL4QyK/E='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Code-Scanner">
+<meta name="theme-color" content="#0369a1">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0369a1;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#7dd3fc;--accent-text:#082f49}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.seg{margin-block-end:12px}
+.videowrap{position:relative;background:#000;border-radius:var(--radius);overflow:hidden;aspect-ratio:4/3;max-height:62vh;margin-block-end:12px}
+.videowrap video{width:100%;height:100%;object-fit:cover;display:block}
+.videowrap .frame{position:absolute;inset:14%;border:3px solid rgba(255,255,255,.85);border-radius:12px;box-shadow:0 0 0 2000px rgba(0,0,0,.25);pointer-events:none}
+.videowrap.hit .frame{border-color:#4ade80}
+.videowrap .off{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#e5e7eb;font-size:15px;text-align:center;padding:16px}
+.videowrap .off .ic{width:44px;height:44px}
+.videowrap.on .off{display:none}
+.cam-extra{margin-block-start:8px}
+.cam-extra select{flex:1;min-width:0;min-height:44px}
+.preview img{display:block;max-width:100%;max-height:240px;margin:12px auto 0;border-radius:8px}
+#manual{min-height:120px}
+#status{margin-block:12px 0}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.type-head{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:18px}
+.type-head .ic{color:var(--accent)}
+.fields{margin:0;display:grid;gap:10px}
+.fields .frow{display:grid;gap:4px}
+.fields dt{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fields dt small{font-size:12px}
+.fields dd{margin:0;display:flex;gap:6px;align-items:stretch}
+.val{flex:1;min-width:0;min-height:44px;text-align:start;font:inherit;font-size:16px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding-block:8px;padding-inline:10px;cursor:pointer;overflow-wrap:anywhere;white-space:pre-wrap}
+.val.mono,.val.code{font-family:var(--mono);font-size:15px}
+.val.code{max-height:320px;overflow:auto;white-space:pre}
+.val:hover{border-color:var(--accent)}
+.val.copied{border-color:var(--ok);background:var(--ok-bg)}
+#warns .notice{margin-block:0 10px}
+#actions{margin-block-start:14px}
+#actions .btn{flex:1 1 auto}
+@media (max-width:480px){#actions .btn{flex-basis:100%}}
+@media (max-width:400px){#viewSeg .ic{display:none}}
+.raw{margin:0;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}
+.raw .ctl{color:var(--accent);font-weight:600}
+#hex{white-space:pre;overflow-wrap:normal;font-size:12px}
+.code-img{margin:12px 0;display:flex;justify-content:center}
+/* The code stays black on white in dark mode too – scanners need the contrast */
+.code-img img{display:block;max-width:100%;max-height:340px;background:#fff;border-radius:6px;padding:6px;image-rendering:pixelated}
+.panel-actions{justify-content:center}
+h3.sub-h{font-size:15px;margin:16px 0 0}
+.multi{margin-block-start:12px}
+.multi .meta{font-family:inherit}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Code-Scanner</span></h1>
+  <p class="sub" data-i18n="sub">QR-Code, Barcode, DataMatrix &amp; Co. lesen – im Original, als QR-Code und übersichtlich aufbereitet.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-scan">
+    <h2 id="h-scan"><span class="step">1</span><span data-i18n="h.scan">Code erfassen</span></h2>
+    <div class="seg" role="group" aria-label="Quelle" data-i18n-attr="aria-label:source" id="srcSeg">
+      <button type="button" aria-pressed="true" data-src="camera"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#camera"/></svg><span data-i18n="src.camera">Kamera</span></button>
+      <button type="button" aria-pressed="false" data-src="image"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#photo"/></svg><span data-i18n="src.image">Foto</span></button>
+      <button type="button" aria-pressed="false" data-src="text"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#clipboard"/></svg><span data-i18n="src.text">Text</span></button>
+    </div>
+
+    <div class="panel" data-panel="camera">
+      <div class="videowrap" id="videowrap">
+        <video id="video" playsinline muted></video>
+        <div class="frame" aria-hidden="true"></div>
+        <div class="off"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#barcode"/></svg><span data-i18n="camOff">Kamera ist aus</span></div>
+      </div>
+      <button type="button" class="btn primary block" id="btnCam"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#camera"/></svg><span id="btnCamLabel" data-i18n="camStart">Scannen starten</span></button>
+      <div class="row cam-extra" id="camExtra" hidden>
+        <select id="camSelect" aria-label="Kamera wählen" data-i18n-attr="aria-label:camSelect"></select>
+        <button type="button" class="btn" id="btnTorch" hidden aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#bulb"/></svg><span data-i18n="torch">Licht</span></button>
+      </div>
+      <div class="form-field range" id="zoomWrap" hidden><label for="zoom"><span data-i18n="zoom">Zoom</span> <output id="zoomOut" for="zoom"></output></label><input type="range" id="zoom"></div>
+    </div>
+
+    <div class="panel" data-panel="image" hidden>
+      <button type="button" class="dropzone" id="drop"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-upload"/></svg><strong data-i18n="drop">Foto wählen</strong>
+        <span class="dz-hint" data-i18n="dropHint">Oder hierher ziehen bzw. einfügen. Auch Bildschirmfotos und HEIC-Fotos.</span></button>
+      <input type="file" id="file" accept="image/*,.heic,.heif" hidden>
+      <div class="preview" id="preview"></div>
+      <div class="multi" id="multiBox" hidden>
+        <p class="muted" id="multiInfo"></p>
+        <ul class="list-rows" id="multiList"></ul>
+      </div>
+    </div>
+
+    <div class="panel" data-panel="text" hidden>
+      <label class="form-field"><span data-i18n="manual">Inhalt eines Codes</span>
+        <textarea id="manual" class="mono" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="WIFI:S:…;T:WPA;P:…;; · BEGIN:VCARD … · (01)…" data-i18n-attr="placeholder:manualPh"></textarea>
+      </label>
+      <div class="row">
+        <button type="button" class="btn primary" id="btnParse"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#list-details"/></svg><span data-i18n="parse">Aufbereiten</span></button>
+        <button type="button" class="btn" id="btnPaste" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#clipboard"/></svg><span data-i18n="paste">Einfügen</span></button>
+      </div>
+    </div>
+
+    <p class="notice" id="status" role="status" hidden></p>
+  </section>
+
+  <section class="card" aria-labelledby="h-result" id="resultCard">
+    <h2 id="h-result"><span class="step">2</span><span data-i18n="h.result">Inhalt</span></h2>
+    <div class="empty-state" id="empty">
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#qrcode"/></svg>
+      <p data-i18n="empty">Noch kein Code gelesen. Kamera starten, Foto wählen oder Text einfügen.</p>
+    </div>
+    <div id="result" hidden>
+      <p class="badges" id="badges"></p>
+      <div class="seg" role="group" aria-label="Ansicht" data-i18n-attr="aria-label:view" id="viewSeg">
+        <button type="button" aria-pressed="true" data-view="struct"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#list-details"/></svg><span data-i18n="view.struct">Struktur</span></button>
+        <button type="button" aria-pressed="false" data-view="raw"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-text"/></svg><span data-i18n="view.raw">Original</span></button>
+        <button type="button" aria-pressed="false" data-view="qr"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#qrcode"/></svg><span data-i18n="view.qr">QR-Code</span></button>
+      </div>
+
+      <div class="panel" data-view-panel="struct">
+        <h3 class="type-head" id="typeHead"></h3>
+        <div id="warns"></div>
+        <dl class="fields" id="fields"></dl>
+        <div class="row" id="actions"></div>
+        <details class="sub">
+          <summary data-i18n="meta">Angaben zum Code</summary>
+          <dl class="fields" id="meta"></dl>
+        </details>
+      </div>
+
+      <div class="panel" data-view-panel="raw" hidden>
+        <pre class="raw" id="rawText" tabindex="0" aria-label="Inhalt im Original" data-i18n-attr="aria-label:rawAria"></pre>
+        <div class="row" style="margin-block-start:10px">
+          <button type="button" class="btn" id="btnCopyRaw"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copyRaw">Inhalt kopieren</span></button>
+          <button type="button" class="btn" id="btnSaveRaw"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="saveRaw">Als Datei speichern</span></button>
+        </div>
+        <details class="sub">
+          <summary data-i18n="hex">Bytes (hexadezimal)</summary>
+          <pre class="raw" id="hex" tabindex="0" aria-label="Bytes (hexadezimal)" data-i18n-attr="aria-label:hex"></pre>
+        </details>
+        <h3 class="sub-h" id="origH"></h3>
+        <figure class="code-img" id="origFig"><img id="origImg" alt=""></figure>
+        <p class="notice info" id="origNote" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span></span></p>
+        <div class="row panel-actions" id="origActions">
+          <button type="button" class="btn" id="btnSaveOrig"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="saveImg">Bild speichern</span></button>
+          <button type="button" class="btn" id="btnShareOrig" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="shareImg">Bild teilen</span></button>
+        </div>
+      </div>
+
+      <div class="panel" data-view-panel="qr" hidden>
+        <figure class="code-img" id="qrFig"><img id="qrImg" alt=""></figure>
+        <p class="notice" id="qrNote" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span></span></p>
+        <div class="row panel-actions" id="qrActions">
+          <button type="button" class="btn primary" id="btnSaveQr"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="saveImg">Bild speichern</span></button>
+          <button type="button" class="btn" id="btnShareQr" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="shareImg">Bild teilen</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" data-menu data-icon="settings" aria-labelledby="h-set">
+    <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <div class="checks">
+      <label class="check"><input type="checkbox" id="optHistory"><span data-i18n-html="optHistory">Verlauf speichern<small>Gelesene Codes bleiben nur in diesem Browser.</small></span></label>
+      <label class="check"><input type="checkbox" id="optBeep"><span data-i18n="optBeep">Ton und Vibration bei einem Treffer</span></label>
+    </div>
+  </section>
+
+  <details class="card" data-menu data-menu-page data-icon="history" id="histPage">
+    <summary data-i18n="hist">Verlauf</summary>
+    <ul class="list-rows" id="histList"></ul>
+    <div class="row" style="margin-block-start:12px">
+      <button type="button" class="btn danger" id="btnClearHist"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearHist">Verlauf löschen</span></button>
+    </div>
+  </details>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Liest fast alle gängigen Codes und zeigt ihren Inhalt auf drei Arten: als <b>Struktur</b> (aufbereitet, z. B. Netzwerkname und Passwort eines WLAN-Codes), im <b>Original</b> (genau der gespeicherte Text, auf Wunsch als Bytes, dazu der Code neu erzeugt im selben Format) und als <b>QR-Code</b> (zum Weitergeben oder Ausdrucken). Alles läuft im Browser – nichts wird an einen Server geschickt, auch offline.</p>
+  <h3>Lesen</h3>
+  <ul>
+    <li><b>Kamera:</b> „Scannen starten“ und den Code in den Rahmen halten. Bei mehreren Kameras lässt sich die Kamera wählen; Licht und Zoom gibt es, wenn das Handy sie anbietet.</li>
+    <li><b>Foto:</b> Bild wählen, hierher ziehen oder einfügen (auch Bildschirmfotos). Stehen mehrere Codes im Bild, erscheint eine Auswahl. HEIC-Fotos öffnet Safari selbst; sonst lädt die App beim ersten HEIC-Foto einen Decoder (libheif, ca. 1,5 MB) aus ihren eigenen Dateien.</li>
+    <li><b>Text:</b> Inhalt eines Codes einfügen, etwa von einem anderen Scanner, und aufbereiten lassen.</li>
+    <li><b>Teilen:</b> Ein an die installierte App geteiltes Foto wird sofort ausgewertet.</li>
+  </ul>
+  <h3>Codearten</h3>
+  <p>2D: QR-Code, Micro-QR, rMQR, DataMatrix (auch GS1), Aztec, PDF417, MicroPDF417, MaxiCode. Strichcodes: EAN-13, EAN-8, UPC-A, UPC-E, ISBN, Code 39, Code 93, Code 128 (auch GS1-128), ITF/ITF-14, Codabar, PZN, Code 32, GS1 DataBar, Telepen, DX-Filmkante.</p>
+  <h3>Aufbereitete Inhalte</h3>
+  <ul>
+    <li><b>Link</b> mit Adresse und Parametern; Warnungen bei unverschlüsselten Links, IP-Adressen, Punycode-Domains (mögliche Fälschung) und Zugangsdaten im Link. Links öffnen sich erst nach einem Tipp.</li>
+    <li><b>WLAN</b>, <b>Kontakt</b> (vCard, MeCard – speicherbar als .vcf), <b>Termin</b> (speicherbar als .ics), <b>Ort</b>, <b>Telefon</b>, <b>SMS</b>, <b>E-Mail</b>.</li>
+    <li><b>Zahlungen:</b> GiroCode (EPC, SEPA-Überweisung) und Schweizer QR-Rechnung, mit IBAN-Prüfung.</li>
+    <li><b>Produkte:</b> EAN/UPC/GTIN mit Prüfziffer und GS1-Länderpräfix (zeigt, wo die Nummer vergeben wurde – nicht das Herkunftsland), ISBN/ISSN, PZN.</li>
+    <li><b>GS1</b> (DataMatrix, GS1-128, QR, Digital Link): alle Datenbezeichner mit Namen, Datumsangaben, Gewichten und Prüfziffern; <b>securPharm</b>-Packungscodes (GS1 und IFA/PPN).</li>
+    <li><b>Bordkarten</b> (IATA), <b>Zwei-Faktor-Schlüssel</b> (otpauth), <b>Kryptowährungs</b>-Adressen, <b>JSON</b> und andere App-Links.</li>
+  </ul>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Ein Tipp auf einen Wert kopiert ihn. Passwörter und Schlüssel bleiben verdeckt, bis du „Zeigen“ tippst.</li>
+    <li>„Original“ zeigt Steuerzeichen (z. B. das GS1-Trennzeichen) als <span class="kbd">&lt;GS&gt;</span>; „Inhalt kopieren“ kopiert den Text genau so, wie er im Code steht.</li>
+    <li>Nicht jedes Format lässt sich neu erzeugen (z. B. Micro-QR, MaxiCode, DataBar) – dann hilft der QR-Code.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Der Verlauf (bis zu 200 Codes, abschaltbar) und die Einstellungen bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“). Im Verlauf stehen auch Passwörter aus WLAN-Codes – lösche einzelne Einträge oder schalte den Verlauf ab, wenn das Gerät von anderen benutzt wird. Bibliothek: zxing-wasm (zxing-cpp) zum Lesen und Erzeugen der Codes.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Reads almost all common codes and shows their content in three ways: as a <b>structure</b> (broken down, e.g. network name and password of a Wi-Fi code), in the <b>original</b> (exactly the stored text, as bytes if you like, plus the code created again in the same format) and as a <b>QR code</b> (to pass on or print). Everything runs in the browser – nothing is sent to a server, offline too.</p>
+  <h3>Reading</h3>
+  <ul>
+    <li><b>Camera:</b> “Start scanning” and hold the code inside the frame. With several cameras you can pick one; light and zoom appear when the phone offers them.</li>
+    <li><b>Photo:</b> choose an image, drag it here or paste it (screenshots too). With several codes in the picture you get a choice. Safari opens HEIC photos itself; otherwise the app loads a decoder (libheif, about 1.5 MB) from its own files for the first HEIC photo.</li>
+    <li><b>Text:</b> paste the content of a code, e.g. from another scanner, and have it broken down.</li>
+    <li><b>Sharing:</b> a photo shared to the installed app is evaluated right away.</li>
+  </ul>
+  <h3>Code types</h3>
+  <p>2D: QR Code, Micro QR, rMQR, DataMatrix (GS1 too), Aztec, PDF417, MicroPDF417, MaxiCode. Barcodes: EAN-13, EAN-8, UPC-A, UPC-E, ISBN, Code 39, Code 93, Code 128 (GS1-128 too), ITF/ITF-14, Codabar, PZN, Code 32, GS1 DataBar, Telepen, DX film edge.</p>
+  <h3>Broken-down content</h3>
+  <ul>
+    <li><b>Link</b> with address and parameters; warnings for unencrypted links, IP addresses, punycode domains (possible fake) and credentials in the link. Links only open after a tap.</li>
+    <li><b>Wi-Fi</b>, <b>contact</b> (vCard, MeCard – can be saved as .vcf), <b>event</b> (can be saved as .ics), <b>place</b>, <b>phone</b>, <b>SMS</b>, <b>email</b>.</li>
+    <li><b>Payments:</b> EPC QR code (GiroCode, SEPA transfer) and Swiss QR bill, with IBAN check.</li>
+    <li><b>Products:</b> EAN/UPC/GTIN with check digit and GS1 country prefix (shows where the number was issued – not the country of origin), ISBN/ISSN, PZN.</li>
+    <li><b>GS1</b> (DataMatrix, GS1-128, QR, Digital Link): all application identifiers with names, dates, weights and check digits; <b>securPharm</b> pack codes (GS1 and IFA/PPN).</li>
+    <li><b>Boarding passes</b> (IATA), <b>two-factor keys</b> (otpauth), <b>cryptocurrency</b> addresses, <b>JSON</b> and other app links.</li>
+  </ul>
+  <h3>How to use</h3>
+  <ul>
+    <li>Tapping a value copies it. Passwords and keys stay hidden until you tap “Show”.</li>
+    <li>“Original” shows control characters (e.g. the GS1 separator) as <span class="kbd">&lt;GS&gt;</span>; “Copy content” copies the text exactly as it is in the code.</li>
+    <li>Not every format can be created again (e.g. Micro QR, MaxiCode, DataBar) – the QR code helps then.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The history (up to 200 codes, can be switched off) and the settings stay only in this browser (back them up or move them under “Back up data”). The history also holds passwords from Wi-Fi codes – delete single entries or switch the history off if others use the device. Library: zxing-wasm (zxing-cpp) for reading and creating the codes.</p>
+  </div>
+  <!-- files:start -->
+  <div data-lang="de">
+  <h3>Dateien an die App geben</h3>
+  <ul>
+    <li><b>Android:</b> App installieren (☰ → <i>Als App installieren</i>). Dann die Datei in Galerie, Dateien-, Mail- oder Messenger-App <i>teilen</i> und „Code-Scanner“ wählen – das klappt auch offline.</li>
+    <li><b>Windows/Computer:</b> Als installierte App (Chrome oder Edge) steht sie unter <i>Öffnen mit</i> (Rechtsklick auf die Datei); als Standard-App öffnet sie Dateien per Doppelklick. Mit Edge erscheint sie auch im Teilen-Menü von Windows.</li>
+    <li><b>iPhone/iPad:</b> Teilen an Web-Apps und <i>Öffnen mit</i> gibt es dort nicht – die Datei hier in der App auswählen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>Giving files to the app</h3>
+  <ul>
+    <li><b>Android:</b> install the app (☰ → <i>Install as an app</i>). Then <i>share</i> the file from the gallery, files, mail or messenger app and pick “Code Scanner” – this works offline too.</li>
+    <li><b>Windows/computer:</b> as an installed app (Chrome or Edge) it is listed under <i>Open with</i> (right-click the file); set as default app, it opens files with a double-click. With Edge it also appears in the Windows share menu.</li>
+    <li><b>iPhone/iPad:</b> sharing to web apps and <i>Open with</i> do not exist there – choose the file here in the app.</li>
+  </ul>
+  </div>
+  <!-- files:end -->
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann den Text eines Codes aufbereiten lassen (z. B. „Was steht in diesem GS1-Code?“), den gerade angezeigten Code und den Verlauf lesen. Passwörter von WLAN-Codes und Schlüssel von Zwei-Faktor-Codes bekommt er nie. Scannen, Speichern und Öffnen von Links bleiben bei dir. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can have the text of a code broken down (e.g. “What is in this GS1 code?”) and read the code shown right now and the history. It never gets Wi-Fi passwords or two-factor keys. Scanning, saving and opening links stay with you. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version c4e5c5715b4a</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/shared/heic.js"></script>
+<script src="../assets/shared/vcard.js"></script>
+<script src="../assets/vendor/zxing-wasm-full/iife/full/index.js"></script>
+<script src="parse.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  'type.url':'Link','type.gs1link':'GS1 Digital Link','type.wifi':'WLAN','type.vcard':'Kontakt (vCard)','type.mecard':'Kontakt (MeCard)',
+  'type.event':'Termin','type.geo':'Ort','type.tel':'Telefonnummer','type.sms':'SMS','type.email':'E-Mail','type.epc':'Überweisung (GiroCode)',
+  'type.swissqr':'QR-Rechnung (Schweiz)','type.gs1':'GS1-Daten','type.ifa':'Packungscode (IFA)','type.product':'Produktnummer','type.pzn':'Pharmazentralnummer',
+  'type.otp':'Zwei-Faktor-Schlüssel','type.crypto':'Kryptowährung','type.boarding':'Bordkarte','type.json':'JSON','type.uri':'App-Link','type.text':'Text','type.binary':'Binärdaten',
+  'f.host':'Domain','f.port':'Port','f.path':'Pfad','f.hash':'Anker','f.ssid':'Netzwerkname (SSID)','f.security':'Verschlüsselung','f.password':'Passwort',
+  'f.hiddenNet':'Verstecktes Netzwerk','f.eap':'EAP-Methode','f.identity':'Identität','f.anonId':'Anonyme Identität','f.phase2':'Phase 2',
+  'f.name':'Name','f.org':'Firma','f.jobTitle':'Position','f.role':'Rolle','f.nickname':'Spitzname','f.tel':'Telefon','f.email':'E-Mail','f.web':'Webseite',
+  'f.address':'Adresse','f.birthday':'Geburtstag','f.note':'Notiz','f.coords':'Koordinaten','f.social':'Profil','f.reading':'Aussprache',
+  'f.summary':'Titel','f.location':'Ort','f.description':'Beschreibung','f.organizer':'Veranstalter','f.start':'Beginn','f.end':'Ende',
+  'f.lat':'Breitengrad','f.lon':'Längengrad','f.alt':'Höhe','f.query':'Suche','f.message':'Nachricht','f.to':'An','f.cc':'Kopie (CC)','f.bcc':'Blindkopie (BCC)','f.subject':'Betreff',
+  'f.payee':'Empfänger','f.iban':'IBAN','f.bic':'BIC','f.amount':'Betrag','f.purpose':'Zweck-Code','f.reference':'Referenz','f.remittance':'Verwendungszweck','f.info':'Hinweis',
+  'f.instant':'Echtzeitüberweisung','f.ultimatePayee':'Endgültiger Empfänger','f.currency':'Währung','f.payer':'Zahlungspflichtiger','f.billInfo':'Rechnungsinformationen',
+  'f.issuer':'Anbieter','f.account':'Konto','f.otpType':'Verfahren','f.secret':'Geheimer Schlüssel','f.algorithm':'Algorithmus','f.digits':'Stellen','f.period':'Gültigkeit','f.counter':'Zähler',
+  'f.currencyName':'Währung','f.label':'Bezeichnung','f.passenger':'Fluggast','f.pnr':'Buchungscode','f.depart':'Von','f.arrive':'Nach','f.flight':'Flug','f.flightDate':'Flugdatum',
+  'f.cabin':'Buchungsklasse','f.seat':'Sitz','f.sequence':'Check-in-Nummer','f.legs':'Flugabschnitte','f.json':'Inhalt','f.scheme':'Schema','f.target':'Ziel',
+  'f.chars':'Zeichen','f.words':'Wörter','f.lines':'Zeilen','f.controlChars':'Steuerzeichen','f.bytes':'Bytes','f.pzn':'PZN','f.gtin':'GTIN / EAN','f.upce':'UPC-E',
+  'f.packLevel':'Verpackungsebene','f.isbn':'ISBN-13','f.isbn10':'ISBN-10','f.issn':'ISSN','f.prefixUse':'Nummernkreis','f.gs1Country':'GS1-Vergabestelle',
+  'v.security.nopass':'Keine (offenes Netz)','v.security.WPA':'WPA/WPA2','v.security.SAE':'WPA3','v.hiddenNet.yes':'Ja','v.hiddenNet.no':'Nein','v.instant.yes':'Ja',
+  'v.prefixUse.instore':'Interne Nummer (Geschäft, Gewichtsartikel)','v.prefixUse.coupon':'Gutschein / Coupon','v.prefixUse.refund':'Pfandbon / Rückgabebeleg',
+  'n.cell':'mobil','n.work':'geschäftlich','n.home':'privat','n.fax':'Fax',
+  'w.http':'Unverschlüsselter Link (http) – Eingaben können mitgelesen werden.','w.punycode':'Die Domain enthält Sonderzeichen (Punycode) – sie kann einer bekannten Adresse täuschend ähnlich sehen.',
+  'w.ip':'Der Link führt zu einer IP-Adresse statt zu einem Namen.','w.userinfo':'Der Link enthält Benutzername oder Passwort.','w.expired':'Verfalldatum überschritten.',
+  'w.check':'Eine Prüfziffer oder Prüfsumme stimmt nicht – Code oder Eingabe prüfen.','w.secretCode':'Enthält einen geheimen Schlüssel für die Anmeldung – nicht weitergeben.',
+  'w.scheme':'Dieser Link kann Code ausführen oder Dateien öffnen und wird nicht angeboten.',
+  'b.ok':'Prüfziffer ok','b.bad':'Prüfziffer falsch',
+  'l.open':'Link öffnen','l.call':'Anrufen','l.sms':'SMS schreiben','l.mail':'E-Mail schreiben','l.map':'In Karten-App öffnen','l.osm':'OpenStreetMap',
+  'a.vcard':'Kontakt speichern','a.ics':'In Kalender übernehmen','a.copyPass':'Passwort kopieren','a.copyAll':'Alles kopieren','a.share':'Teilen …',
+  show:'Zeigen',hide:'Verbergen',copied:'Kopiert: {v}',copiedHidden:'{l} kopiert',copyFail:'Kopieren nicht möglich',tapCopy:'Tippen zum Kopieren',
+  'm.format':'Format','m.content':'Inhaltsart','m.ec':'Fehlerkorrektur','m.version':'Version / Größe','m.symId':'Symbologie-Kennung','m.eci':'Zeichensatz-Angabe (ECI)',
+  'm.mirrored':'Gespiegelt','m.inverted':'Hell auf dunkel','m.sequence':'Teil','m.chars':'Zeichen','m.bytes':'Bytes','m.source':'Quelle','m.time':'Gelesen',
+  'ct.Text':'Text','ct.Binary':'Binärdaten','ct.Mixed':'Gemischt','ct.GS1':'GS1','ct.ISO15434':'ISO 15434','ct.UnknownECI':'Unbekannter Zeichensatz',
+  yes:'Ja','seq':'{i} von {n}','src.camera':'Kamera','src.image':'Foto','src.text':'Text','src.share':'Geteilt','src.agent':'KI-Agent',
+  origH:'Neu erzeugt als {f}',origNA:'{f} lässt sich hier nicht neu erzeugen – nimm den QR-Code.',origBinary:'Binärdaten lassen sich nur als QR-Code neu erzeugen.',
+  origFail:'Neu erzeugen nicht möglich: {e}',qrFail:'Für einen QR-Code ist der Inhalt zu lang oder ungeeignet.',qrGs1:'Als GS1-QR-Code erzeugt (die Datenbezeichner bleiben erhalten).',
+  imgAlt:'{f} mit dem gelesenen Inhalt',camStart:'Scannen starten',camStop:'Scannen beenden',camAgain:'Nochmal scannen',camHold:'Code in den Rahmen halten …',
+  cam:'Kamera {n}',noCamApi:'Kamerazugriff wird hier nicht unterstützt (HTTPS nötig).',camFail:'Kamera ließ sich nicht starten: {e}',denied:'Zugriff verweigert',
+  noDecoder:'Der Decoder ließ sich nicht laden. Seite neu laden oder Internet prüfen.',loading:'Decoder wird vorbereitet …',
+  analysing:'Bild wird untersucht …',noCode:'Kein Code im Bild gefunden. Tipp: näher heran, scharf und ohne Spiegelung fotografieren.',
+  noImage:'Bitte ein Bild verwenden.',imgFail:'Das Bild ließ sich nicht öffnen.',heicLoading:'HEIC-Foto: Decoder wird geladen …',heicFail:'Das HEIC-Foto ließ sich nicht lesen.',
+  found:'{f} gelesen',foundN:'{n} Codes im Bild – tippe einen an.',emptyText:'Bitte zuerst den Inhalt eines Codes eingeben.',
+  histEmpty:'Noch keine Codes gelesen.',histOff:'Der Verlauf ist abgeschaltet.',delEntry:'Eintrag löschen',deleted:'Eintrag gelöscht',clearQ:'Den ganzen Verlauf ({n} Codes) löschen?',cleared:'Verlauf gelöscht',
+  histFail:'Verlauf konnte nicht gespeichert werden.',fileSaved:'{n} gespeichert',
+  'mcp.analyze':'Text aufbereitet','mcp.current':'Code gelesen','mcp.history':'Verlauf gelesen'
+},
+en:{
+  title:'Code Scanner',sub:'Read QR codes, barcodes, DataMatrix & co. – in the original, as a QR code and neatly broken down.','h.scan':'Capture code',source:'Source',
+  'src.camera':'Camera','src.image':'Photo','src.text':'Text',camOff:'Camera is off',camStart:'Start scanning',camSelect:'Choose camera',torch:'Light',zoom:'Zoom',
+  drop:'Choose a photo',dropHint:'Or drag it here or paste it. Screenshots and HEIC photos too.',manual:'Content of a code',manualPh:'WIFI:S:…;T:WPA;P:…;; · BEGIN:VCARD … · (01)…',
+  parse:'Break down',paste:'Paste','h.result':'Content',empty:'No code read yet. Start the camera, choose a photo or paste text.',view:'View',
+  'view.struct':'Structure','view.raw':'Original','view.qr':'QR code',meta:'About the code',rawAria:'Content in the original',copyRaw:'Copy content',saveRaw:'Save as file',
+  hex:'Bytes (hexadecimal)',saveImg:'Save image',shareImg:'Share image',settings:'Settings',
+  optHistory:'Keep a history<small>Codes read stay only in this browser.</small>',optBeep:'Sound and vibration on a hit',hist:'History',clearHist:'Clear history',
+  'type.url':'Link','type.gs1link':'GS1 Digital Link','type.wifi':'Wi-Fi','type.vcard':'Contact (vCard)','type.mecard':'Contact (MeCard)',
+  'type.event':'Event','type.geo':'Place','type.tel':'Phone number','type.sms':'SMS','type.email':'Email','type.epc':'Bank transfer (EPC QR)',
+  'type.swissqr':'Swiss QR bill','type.gs1':'GS1 data','type.ifa':'Pack code (IFA)','type.product':'Product number','type.pzn':'German pharmacy number (PZN)',
+  'type.otp':'Two-factor key','type.crypto':'Cryptocurrency','type.boarding':'Boarding pass','type.json':'JSON','type.uri':'App link','type.text':'Text','type.binary':'Binary data',
+  'f.host':'Domain','f.port':'Port','f.path':'Path','f.hash':'Anchor','f.ssid':'Network name (SSID)','f.security':'Encryption','f.password':'Password',
+  'f.hiddenNet':'Hidden network','f.eap':'EAP method','f.identity':'Identity','f.anonId':'Anonymous identity','f.phase2':'Phase 2',
+  'f.name':'Name','f.org':'Company','f.jobTitle':'Job title','f.role':'Role','f.nickname':'Nickname','f.tel':'Phone','f.email':'Email','f.web':'Website',
+  'f.address':'Address','f.birthday':'Birthday','f.note':'Note','f.coords':'Coordinates','f.social':'Profile','f.reading':'Pronunciation',
+  'f.summary':'Title','f.location':'Location','f.description':'Description','f.organizer':'Organiser','f.start':'Start','f.end':'End',
+  'f.lat':'Latitude','f.lon':'Longitude','f.alt':'Altitude','f.query':'Search','f.message':'Message','f.to':'To','f.cc':'Copy (CC)','f.bcc':'Blind copy (BCC)','f.subject':'Subject',
+  'f.payee':'Payee','f.iban':'IBAN','f.bic':'BIC','f.amount':'Amount','f.purpose':'Purpose code','f.reference':'Reference','f.remittance':'Payment reference text','f.info':'Note',
+  'f.instant':'Instant transfer','f.ultimatePayee':'Ultimate payee','f.currency':'Currency','f.payer':'Payer','f.billInfo':'Billing information',
+  'f.issuer':'Issuer','f.account':'Account','f.otpType':'Method','f.secret':'Secret key','f.algorithm':'Algorithm','f.digits':'Digits','f.period':'Valid for','f.counter':'Counter',
+  'f.currencyName':'Currency','f.label':'Label','f.passenger':'Passenger','f.pnr':'Booking code','f.depart':'From','f.arrive':'To','f.flight':'Flight','f.flightDate':'Flight date',
+  'f.cabin':'Booking class','f.seat':'Seat','f.sequence':'Check-in number','f.legs':'Flight legs','f.json':'Content','f.scheme':'Scheme','f.target':'Target',
+  'f.chars':'Characters','f.words':'Words','f.lines':'Lines','f.controlChars':'Control characters','f.bytes':'Bytes','f.pzn':'PZN','f.gtin':'GTIN / EAN','f.upce':'UPC-E',
+  'f.packLevel':'Packaging level','f.isbn':'ISBN-13','f.isbn10':'ISBN-10','f.issn':'ISSN','f.prefixUse':'Number range','f.gs1Country':'GS1 issuing office',
+  'v.security.nopass':'None (open network)','v.security.WPA':'WPA/WPA2','v.security.SAE':'WPA3','v.hiddenNet.yes':'Yes','v.hiddenNet.no':'No','v.instant.yes':'Yes',
+  'v.prefixUse.instore':'Internal number (shop, variable weight)','v.prefixUse.coupon':'Voucher / coupon','v.prefixUse.refund':'Deposit or refund receipt',
+  'n.cell':'mobile','n.work':'work','n.home':'home','n.fax':'fax',
+  'w.http':'Unencrypted link (http) – what you enter can be read along the way.','w.punycode':'The domain contains special characters (punycode) – it can look deceptively like a well-known address.',
+  'w.ip':'The link leads to an IP address instead of a name.','w.userinfo':'The link contains a user name or password.','w.expired':'Expiry date has passed.',
+  'w.check':'A check digit or checksum is wrong – check the code or the input.','w.secretCode':'Contains a secret sign-in key – do not pass it on.',
+  'w.scheme':'This link can run code or open files and is not offered.',
+  'b.ok':'check digit ok','b.bad':'check digit wrong',
+  'l.open':'Open link','l.call':'Call','l.sms':'Write SMS','l.mail':'Write email','l.map':'Open in maps app','l.osm':'OpenStreetMap',
+  'a.vcard':'Save contact','a.ics':'Add to calendar','a.copyPass':'Copy password','a.copyAll':'Copy all','a.share':'Share …',
+  show:'Show',hide:'Hide',copied:'Copied: {v}',copiedHidden:'{l} copied',copyFail:'Copying is not possible',tapCopy:'Tap to copy',
+  'm.format':'Format','m.content':'Content type','m.ec':'Error correction','m.version':'Version / size','m.symId':'Symbology identifier','m.eci':'Character set given (ECI)',
+  'm.mirrored':'Mirrored','m.inverted':'Light on dark','m.sequence':'Part','m.chars':'Characters','m.bytes':'Bytes','m.source':'Source','m.time':'Read',
+  'ct.Text':'Text','ct.Binary':'Binary data','ct.Mixed':'Mixed','ct.GS1':'GS1','ct.ISO15434':'ISO 15434','ct.UnknownECI':'Unknown character set',
+  yes:'Yes','seq':'{i} of {n}','src.share':'Shared','src.agent':'AI agent',
+  origH:'Created again as {f}',origNA:'{f} cannot be created again here – use the QR code.',origBinary:'Binary data can only be created again as a QR code.',
+  origFail:'Could not create it again: {e}',qrFail:'The content is too long or unsuitable for a QR code.',qrGs1:'Created as a GS1 QR code (the application identifiers are kept).',
+  imgAlt:'{f} with the content read',camStop:'Stop scanning',camAgain:'Scan again',camHold:'Hold the code inside the frame …',
+  cam:'Camera {n}',noCamApi:'Camera access is not supported here (HTTPS needed).',camFail:'The camera could not be started: {e}',denied:'access denied',
+  noDecoder:'The decoder could not be loaded. Reload the page or check the internet.',loading:'Preparing the decoder …',
+  analysing:'Examining the image …',noCode:'No code found in the image. Tip: get closer, take the photo sharp and without reflections.',
+  noImage:'Please use an image.',imgFail:'The image could not be opened.',heicLoading:'HEIC photo: loading the decoder …',heicFail:'The HEIC photo could not be read.',
+  found:'{f} read',foundN:'{n} codes in the image – tap one.',emptyText:'Please enter the content of a code first.',
+  histEmpty:'No codes read yet.',histOff:'The history is switched off.',delEntry:'Delete entry',deleted:'Entry deleted',clearQ:'Delete the whole history ({n} codes)?',cleared:'History cleared',
+  histFail:'The history could not be saved.',fileSaved:'{n} saved',
+  'mcp.analyze':'text broken down','mcp.current':'code read','mcp.history':'history read'
+}});
+const t=Tools.t, $=Tools.$;
+const LS_SET='code-scanner.settings.v1', LS_HIST='code-scanner.history.v1', MAX_HIST=200;
+const settings=Object.assign({history:true,beep:true,src:'camera',view:'struct',cam:''},Tools.load(LS_SET,{}));
+const saveSet=()=>Tools.save(LS_SET,settings);
+
+/* ---------- Formats: display names and what the writer can create ---------- */
+const FORMAT_NAMES={QRCode:'QR-Code',QRCodeModel1:'QR-Code (Model 1)',QRCodeModel2:'QR-Code',MicroQRCode:'Micro-QR-Code',RMQRCode:'rMQR-Code',
+  DataMatrix:'DataMatrix',Aztec:'Aztec',AztecCode:'Aztec',AztecRune:'Aztec Rune',PDF417:'PDF417',CompactPDF417:'Compact PDF417',MicroPDF417:'MicroPDF417',
+  MaxiCode:'MaxiCode',EAN13:'EAN-13',EAN8:'EAN-8',UPCA:'UPC-A',UPCE:'UPC-E',ISBN:'ISBN (EAN-13)',EANUPC:'EAN/UPC',Code39:'Code 39',Code39Std:'Code 39',
+  Code39Ext:'Code 39 (Full ASCII)',Code32:'Code 32',PZN:'PZN (Code 39)',Code93:'Code 93',Code128:'Code 128',ITF:'ITF',ITF14:'ITF-14',Codabar:'Codabar',
+  DataBar:'GS1 DataBar',DataBarOmni:'GS1 DataBar',DataBarStk:'GS1 DataBar Stacked',DataBarStkOmni:'GS1 DataBar Stacked',DataBarLtd:'GS1 DataBar Limited',
+  DataBarExp:'GS1 DataBar Expanded',DataBarExpStk:'GS1 DataBar Expanded Stacked',DXFilmEdge:'DX-Filmkante',Telepen:'Telepen',TelepenAlpha:'Telepen',TelepenNumeric:'Telepen'};
+const fmtName=f=>f?(FORMAT_NAMES[f]||f):t('src.text');
+// Read format → format the writer can create (zxing-wasm marks these writable); anything else has no own image
+const WRITE={QRCode:'QRCode',QRCodeModel2:'QRCode',DataMatrix:'DataMatrix',Aztec:'AztecCode',AztecCode:'AztecCode',PDF417:'PDF417',
+  EAN13:'EAN13',ISBN:'EAN13',EAN8:'EAN8',UPCA:'UPCA',UPCE:'UPCE',Code39:'Code39',Code39Std:'Code39',Code39Ext:'Code39',PZN:'Code39',
+  Code93:'Code93',Code128:'Code128',ITF:'ITF',ITF14:'ITF',Codabar:'Codabar'};
+const LINEAR=/^(EAN|UPC|Code|ITF|Codabar|ISBN|PZN)/;
+const TYPE_ICON={url:{icon:'link'},gs1link:{icon:'link'},wifi:{icon:'wifi'},vcard:{icon:'address-book'},mecard:{icon:'address-book'},event:{icon:'calendar-event'},
+  geo:{icon:'map-pin'},tel:{icon:'phone'},sms:{icon:'message'},email:{icon:'mail'},epc:{icon:'building-bank'},swissqr:{icon:'building-bank'},gs1:{icon:'package'},
+  ifa:{icon:'pill'},product:{icon:'barcode'},pzn:{icon:'pill'},otp:{icon:'key'},crypto:{icon:'currency-bitcoin'},boarding:{icon:'plane'},json:{icon:'braces'},
+  uri:{icon:'link'},text:{icon:'file-text'},binary:{icon:'binary'}};
+const LINK_ICON={open:{icon:'external-link'},call:{icon:'phone'},sms:{icon:'message'},mail:{icon:'mail'},map:{icon:'map-pin'},osm:{icon:'map'}};
+const has=k=>Tools.t(k)!==k;
+
+/* ---------- Decoder (zxing-wasm, full build: reads and writes) ---------- */
+let zxState='loading';
+const ZX=window.ZXingWASM;
+const zxReady=(async()=>{
+  if(!ZX){zxState='missing';Tools.diag.log('zxing: script missing');return false;}
+  try{
+    await ZX.prepareZXingModule({fireImmediately:true,overrides:{locateFile:(path,prefix)=>path.endsWith('.wasm')?new URL('../assets/vendor/zxing-wasm-full/full/zxing_full.wasm',location.href).href:prefix+path}});
+    zxState='ready';Tools.diag.log('zxing: ready');return true;
+  }catch(e){zxState='failed';Tools.diag.log('zxing: failed',e);return false;}
+})();
+const READ_OPTS={formats:[],tryHarder:true,tryRotate:true,tryInvert:true,tryDownscale:true,textMode:'Plain'};
+async function readImageData(id,max){
+  if(!await zxReady)return [];
+  const res=await ZX.readBarcodes(id,Object.assign({},READ_OPTS,{maxNumberOfSymbols:max||1}));
+  return res.filter(r=>r.isValid!==false&&(r.text||r.bytes&&r.bytes.length));
+}
+
+/* ---------- Status line ---------- */
+const ST_ICON={info:{icon:'info-circle'},ok:{icon:'circle-check'},warn:{icon:'alert-triangle'},err:{icon:'alert-circle'}};
+function setStatus(msg,kind){
+  const s=$('status');
+  if(!msg){s.hidden=true;return;}
+  s.className='notice '+(kind||'info');s.hidden=false;
+  s.innerHTML=Tools.icon(ST_ICON[kind||'info'].icon)+'<span></span>';s.lastChild.textContent=msg;
+}
+
+/* ---------- Current result ---------- */
+let current=null; // {text, bytes, format, contentType, meta…, src, ts, parsed}
+const view={v:settings.view};
+function toResult(r,src){
+  return {text:r.text||'',bytes:r.bytes&&r.bytes.length?Array.from(r.bytes):null,format:r.format||'',contentType:r.contentType||'Text',
+    ecLevel:r.ecLevel||'',version:r.version||'',symId:r.symbologyIdentifier||'',hasECI:!!r.hasECI,isMirrored:!!r.isMirrored,isInverted:!!r.isInverted,
+    seqIndex:r.sequenceIndex,seqSize:r.sequenceSize,src,ts:new Date().toISOString()};
+}
+function analyse(res){
+  res.parsed=CodeParse.analyze(res.text,{format:res.format,contentType:res.contentType,byteLength:res.bytes?res.bytes.length:0});
+  return res;
+}
+function show(res,{save=true}={}){
+  current=analyse(res);
+  if(save)addHist(current);
+  $('empty').hidden=true;$('result').hidden=false;
+  render();
+  Tools.diag.log('result',{format:res.format||'text',type:current.parsed.type,chars:res.text.length,src:res.src});
+}
+
+const fmtDate=(v,time)=>{
+  const d=new Date(time?v:v+'T00:00:00');
+  if(isNaN(d))return v;
+  return time?d.toLocaleString(Tools.locale(),{dateStyle:'medium',timeStyle:'short'}):d.toLocaleDateString(Tools.locale(),{year:'numeric',month:'2-digit',day:'2-digit'});
+};
+function fieldLabel(f){
+  if(f.name){const n=typeof f.name==='string'?f.name:(f.name[Tools.lang()]||f.name.de);return f.k==='ai'?n+' ('+f.id+')':f.k==='di'&&f.id!=='?'?n+' ('+f.id+')':n;}
+  return t('f.'+f.k);
+}
+function fieldText(f){
+  let v=f.v;
+  switch(f.kind){
+    case 'date':v=fmtDate(v,false);break;
+    case 'datetime':v=fmtDate(v,true);break;
+    case 'money':try{v=new Intl.NumberFormat(Tools.locale(),{style:'currency',currency:f.cur}).format(v);}catch(_){v=Tools.fmt(v,2)+' '+f.cur;}break;
+    case 'number':v=Tools.fmt(v,f.digits||0)+(f.unit?' '+f.unit:'');break;
+    case 'region':try{v=new Intl.DisplayNames([Tools.locale()],{type:'region'}).of(v)||v;}catch(_){}break;
+    case 'enum':if(has('v.'+f.k+'.'+v))v=t('v.'+f.k+'.'+v);break;
+    default:if(f.unit)v=v+' '+f.unit;
+  }
+  return String(v);
+}
+function noteText(n){return n.split(', ').map(x=>has('n.'+x)?t('n.'+x):x).join(', ');}
+
+async function copy(text,label,el,hidden){
+  if(await Tools.copyText(text)){
+    if(el){el.classList.add('copied');setTimeout(()=>el.classList.remove('copied'),700);}
+    Tools.toast(hidden?t('copiedHidden',{l:label}):t('copied',{v:text.length>60?text.slice(0,59)+'…':text}));
+  }else Tools.toast(t('copyFail'));
+}
+const MASK='••••••••';
+function fieldRow(f,box){
+  const row=document.createElement('div');row.className='frow';
+  const dt=document.createElement('dt');dt.textContent=fieldLabel(f);
+  if(f.note){const s=document.createElement('small');s.textContent=noteText(f.note);dt.append(s);}
+  if(typeof f.check==='boolean'){const b=document.createElement('span');b.className='badge '+(f.check?'ok':'err');b.textContent=t(f.check?'b.ok':'b.bad');dt.append(b);}
+  const dd=document.createElement('dd'),val=document.createElement('button');
+  val.type='button';val.className='val'+(f.kind==='mono'?' mono':'')+(f.kind==='code'?' code':'');val.title=t('tapCopy');
+  const text=fieldText(f);
+  val.textContent=f.secret?MASK:text;
+  val.addEventListener('click',()=>copy(text,fieldLabel(f),val,f.secret&&val.textContent===MASK));
+  dd.append(val);
+  if(f.secret){
+    const b=document.createElement('button');b.type='button';b.className='btn';b.setAttribute('aria-pressed','false');
+    const set=on=>{b.innerHTML=Tools.icon(on?'eye-off':'eye')+'<span></span>';b.lastChild.textContent=t(on?'hide':'show');b.setAttribute('aria-pressed',String(on));val.textContent=on?text:MASK;};
+    set(false);b.addEventListener('click',()=>set(b.getAttribute('aria-pressed')!=='true'));dd.append(b);
+  }
+  row.append(dt,dd);box.append(row);
+}
+function plainText(p){return p.fields.filter(f=>f.k!=='json').map(f=>fieldLabel(f)+': '+fieldText(f)).join('\n');}
+function btn(icon,label,cls){const b=document.createElement('button');b.type='button';b.className='btn'+(cls?' '+cls:'');b.innerHTML=Tools.icon(icon)+'<span></span>';b.lastChild.textContent=label;return b;}
+
+function render(){
+  if(!current)return;
+  const p=current.parsed,res=current;
+  // badges: format, content type
+  const bd=$('badges');bd.innerHTML='';bd.hidden=!res.format;
+  for(const s of [res.format?fmtName(res.format):null,res.format&&res.contentType!=='Text'?t('ct.'+res.contentType):null].filter(Boolean)){const b=document.createElement('span');b.className='badge';b.textContent=s;bd.append(b);}
+  // structured
+  $('typeHead').innerHTML=Tools.icon(TYPE_ICON[p.type].icon)+'<span></span>';$('typeHead').lastChild.textContent=t('type.'+p.type);
+  const w=$('warns');w.innerHTML='';
+  for(const c of p.warn){const n=document.createElement('p');n.className='notice warn';n.innerHTML=Tools.icon('alert-triangle')+'<span></span>';n.lastChild.textContent=t('w.'+c);w.append(n);}
+  const fb=$('fields');fb.innerHTML='';
+  for(const f of p.fields)fieldRow(f,fb);
+  // actions: links (only http/tel/sms/mailto/geo, see parse.js), files, copy, share
+  const ac=$('actions');ac.innerHTML='';let primary=false;
+  for(const l of p.links){
+    const a=document.createElement('a');a.className='btn'+(primary?'':' primary');primary=true;a.href=l.href;a.target='_blank';a.rel='noopener noreferrer';
+    a.innerHTML=Tools.icon(LINK_ICON[l.k].icon)+'<span></span>';a.lastChild.textContent=t('l.'+l.k);
+    a.addEventListener('click',()=>Tools.diag.log('link opened: '+l.k));ac.append(a);
+  }
+  const file=p.file||(p.vcard&&window.VCard&&!VCard.empty(p.vcard)?{k:'vcard',name:(p.vcard.n||'kontakt').replace(/[^\p{L}\p{N} _-]+/gu,'').trim().slice(0,40)+'.vcf',type:'text/vcard',text:VCard.build(p.vcard)}:null);
+  if(file){
+    const b=btn(file.k==='vcard'?'address-book':'calendar-plus',t(file.k==='vcard'?'a.vcard':'a.ics'),primary?'':'primary');primary=true;
+    b.addEventListener('click',()=>saveFile(new File([file.text],file.name||'code.txt',{type:file.type})));ac.append(b);
+  }
+  const pass=p.fields.find(f=>f.k==='password');
+  if(pass){const b=btn('copy',t('a.copyPass'),primary?'':'primary');primary=true;b.addEventListener('click',()=>copy(pass.v,t('f.password'),null,true));ac.append(b);}
+  if(p.fields.length&&p.type!=='text'&&p.type!=='binary'){const b=btn('copy',t('a.copyAll'));b.addEventListener('click',()=>copy(plainText(p),'',null,false));ac.append(b);}
+  if(navigator.share&&p.type!=='wifi'&&p.type!=='otp'&&p.type!=='binary'){
+    const b=btn('share',t('a.share'));
+    b.addEventListener('click',()=>navigator.share({text:res.text}).catch(e=>Tools.diag.log('share text: '+e.name)));ac.append(b);
+  }
+  ac.hidden=!ac.children.length;
+  // details about the code
+  const m=$('meta');m.innerHTML='';
+  const meta=[['m.format',fmtName(res.format)],['m.content',t('ct.'+res.contentType)],['m.ec',res.ecLevel],['m.version',res.version],['m.symId',res.symId],
+    ['m.eci',res.hasECI?t('yes'):''],['m.mirrored',res.isMirrored?t('yes'):''],['m.inverted',res.isInverted?t('yes'):''],
+    ['m.sequence',res.seqSize>1?t('seq',{i:res.seqIndex+1,n:res.seqSize}):''],['m.chars',String([...res.text].length)],['m.bytes',res.bytes?String(res.bytes.length):''],
+    ['m.source',t('src.'+res.src)],['m.time',fmtDate(res.ts,true)]];
+  for(const [k,v] of meta)if(v)fieldRow({k:'meta',name:t(k),v},m);
+  renderRaw();renderViews();
+}
+
+/* ---------- Original: text with visible control characters, bytes, code in its own format ---------- */
+const CTL={0:'NUL',4:'EOT',9:'TAB',13:'CR',28:'FS',29:'GS',30:'RS',31:'US',127:'DEL'};
+function rawHtml(s){
+  let out='';
+  for(const ch of s){
+    const c=ch.codePointAt(0);
+    if(c===10){out+='\n';continue;}
+    if(c<32||c===127){out+='<span class="ctl">&lt;'+(CTL[c]||'0x'+c.toString(16).padStart(2,'0'))+'&gt;</span>';continue;}
+    out+=Tools.esc(ch);
+  }
+  return out;
+}
+function bytesOf(res){return res.bytes?new Uint8Array(res.bytes):new TextEncoder().encode(res.text);}
+function hexDump(b){
+  const lines=[],n=Math.min(b.length,4096);
+  for(let i=0;i<n;i+=16){
+    const row=Array.from(b.slice(i,Math.min(i+16,n)));
+    lines.push(i.toString(16).padStart(6,'0')+'  '+row.map(x=>x.toString(16).padStart(2,'0')).join(' ').padEnd(48)+'  '+row.map(x=>x>=32&&x<127?String.fromCharCode(x):'.').join(''));
+  }
+  if(b.length>n)lines.push('…');
+  return lines.join('\n');
+}
+function renderRaw(){
+  const res=current;
+  $('rawText').innerHTML=rawHtml(res.contentType==='Binary'?Array.from(bytesOf(res),x=>String.fromCharCode(x)).join(''):res.text)||'&nbsp;';
+  $('hex').textContent=hexDump(bytesOf(res));
+}
+$('btnCopyRaw').addEventListener('click',e=>{if(current)copy(current.text,'',e.currentTarget,false);});
+$('btnSaveRaw').addEventListener('click',()=>{
+  if(!current)return;
+  const bin=current.contentType==='Binary';
+  saveFile(new File([bin?bytesOf(current):current.text],bin?'code.bin':'code.txt',{type:bin?'application/octet-stream':'text/plain'}));
+});
+
+// Images of the code: original format and QR code (zxing-wasm writer → PNG)
+let origFile=null,qrFile=null,imgToken=0;
+const urls=[];
+function setImg(img,blob,alt){while(urls.length>4)URL.revokeObjectURL(urls.shift());const u=URL.createObjectURL(blob);urls.push(u);img.src=u;img.alt=alt;}
+function note(id,msg,kind){const n=$(id);n.hidden=!msg;if(msg){n.className='notice '+(kind||'info');n.lastChild.textContent=msg;}}
+function writeInput(res,gs1){
+  if(res.contentType==='Binary'&&res.bytes)return new Uint8Array(res.bytes);
+  if(gs1){const h=CodeParse.gs1Hri(res.text);if(h)return h;}
+  return res.text;
+}
+async function writeCode(input,format,opts){
+  if(!await zxReady)throw new Error('decoder');
+  const r=await ZX.writeBarcode(input,Object.assign({format,scale:LINEAR.test(format)?-640:-480,addHRT:LINEAR.test(format)},opts));
+  if(r.error||!r.image)throw new Error(r.error||'no image');
+  return r.image;
+}
+const fileBase=()=>'code-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+async function renderViews(){
+  const res=current,token=++imgToken;
+  const gs1=res.contentType==='GS1'||res.parsed.type==='gs1';
+  // original format
+  const wf=WRITE[res.format];
+  $('origH').textContent=t('origH',{f:fmtName(wf?res.format:'')});
+  origFile=null;$('origFig').hidden=true;$('origActions').hidden=true;$('origH').hidden=!res.format;
+  if(!res.format)note('origNote','');
+  else if(!wf)note('origNote',t('origNA',{f:fmtName(res.format)}));
+  else if(res.contentType==='Binary'&&wf!=='QRCode'&&wf!=='DataMatrix'&&wf!=='AztecCode'&&wf!=='PDF417')note('origNote',t('origBinary'));
+  else{
+    note('origNote','');
+    try{
+      const input=res.format==='PZN'?'-'+res.text:writeInput(res,gs1);
+      const blob=await writeCode(input,wf,gs1&&res.contentType==='GS1'?{options:'gs1'}:{});
+      if(token!==imgToken)return;
+      origFile=new File([blob],fileBase()+'-'+wf.toLowerCase()+'.png',{type:'image/png'});
+      setImg($('origImg'),blob,t('imgAlt',{f:fmtName(res.format)}));$('origFig').hidden=false;$('origActions').hidden=false;
+    }catch(e){if(token===imgToken){Tools.diag.log('write original failed',{format:wf,e:String(e&&e.message||e)});note('origNote',t('origFail',{e:String(e&&e.message||e)}),'warn');}}
+  }
+  // QR code
+  qrFile=null;$('qrFig').hidden=true;$('qrActions').hidden=true;
+  try{
+    const useGs1=gs1&&!!CodeParse.gs1Hri(res.text);
+    const blob=await writeCode(writeInput(res,useGs1),'QRCode',{options:(useGs1?'gs1,':'')+'ecLevel=M'});
+    if(token!==imgToken)return;
+    qrFile=new File([blob],fileBase()+'-qr.png',{type:'image/png'});
+    setImg($('qrImg'),blob,t('imgAlt',{f:'QR-Code'}));$('qrFig').hidden=false;$('qrActions').hidden=false;
+    note('qrNote',useGs1?t('qrGs1'):'');
+  }catch(e){if(token===imgToken){Tools.diag.log('write qr failed',String(e&&e.message||e));note('qrNote',t('qrFail'),'warn');}}
+  const canShare=Tools.canShareFile('code.png','image/png');
+  $('btnShareOrig').hidden=!canShare;$('btnShareQr').hidden=!canShare;
+}
+function saveFile(f){Tools.download(f);Tools.toast(t('fileSaved',{n:f.name}));Tools.diag.log('file saved',{type:f.type});}
+function shareFile(f){if(!f)return;navigator.share({files:[f]}).catch(e=>Tools.diag.log('share file: '+e.name));}
+$('btnSaveOrig').addEventListener('click',()=>{if(origFile)saveFile(origFile);});
+$('btnSaveQr').addEventListener('click',()=>{if(qrFile)saveFile(qrFile);});
+$('btnShareOrig').addEventListener('click',()=>shareFile(origFile));
+$('btnShareQr').addEventListener('click',()=>shareFile(qrFile));
+
+/* ---------- View and source switches ---------- */
+function setView(v){
+  view.v=v;settings.view=v;saveSet();
+  for(const b of document.querySelectorAll('#viewSeg button'))b.setAttribute('aria-pressed',String(b.dataset.view===v));
+  for(const p of document.querySelectorAll('[data-view-panel]'))p.hidden=p.dataset.viewPanel!==v;
+}
+for(const b of document.querySelectorAll('#viewSeg button'))b.addEventListener('click',()=>setView(b.dataset.view));
+function setSrc(s){
+  settings.src=s;saveSet();
+  for(const b of document.querySelectorAll('#srcSeg button'))b.setAttribute('aria-pressed',String(b.dataset.src===s));
+  for(const p of document.querySelectorAll('[data-panel]'))p.hidden=p.dataset.panel!==s;
+  if(s!=='camera')stopCam();
+  setStatus('');
+}
+for(const b of document.querySelectorAll('#srcSeg button'))b.addEventListener('click',()=>setSrc(b.dataset.src));
+
+function hitFeedback(){
+  if(!settings.beep)return;
+  Tools.audio.tone({freq:1250,ms:90,vol:.08});
+  if(navigator.vibrate&&(!navigator.userActivation||navigator.userActivation.hasBeenActive))navigator.vibrate(60);
+}
+function found(res){
+  show(res);
+  setStatus(res.format?t('found',{f:fmtName(res.format)}):'',res.format?'ok':'');
+  hitFeedback();
+  if(matchMedia('(max-width:860px)').matches)$('resultCard').scrollIntoView({behavior:Tools.reducedMotion()?'auto':'smooth',block:'start'});
+}
+
+/* ---------- Camera ---------- */
+const video=$('video');let stream=null,camTimer=null,busy=false,frames=0;const camCanvas=document.createElement('canvas');
+function camLabel(k){$('btnCamLabel').textContent=t(k);$('btnCamLabel').dataset.k=k;}
+async function listCams(){
+  try{
+    const devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput'),sel=$('camSelect');
+    sel.innerHTML='';
+    devs.forEach((d,i)=>{const o=document.createElement('option');o.value=d.deviceId;o.textContent=d.label||t('cam',{n:i+1});sel.append(o);});
+    const cur=stream&&stream.getVideoTracks()[0]&&stream.getVideoTracks()[0].getSettings().deviceId;
+    if(cur)sel.value=cur;
+    sel.hidden=devs.length<2;
+    $('camExtra').hidden=sel.hidden&&$('btnTorch').hidden;
+  }catch(_){}
+}
+async function startCam(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus(t('noCamApi'),'err');return;}
+  stopCam();
+  try{
+    const id=settings.cam;
+    const base={width:{ideal:1920},height:{ideal:1080}};
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:Object.assign(id?{deviceId:{exact:id}}:{facingMode:'environment'},base)})
+      .catch(e=>{if(id&&e.name==='OverconstrainedError'){settings.cam='';return navigator.mediaDevices.getUserMedia({audio:false,video:Object.assign({facingMode:'environment'},base)});}throw e;});
+    video.srcObject=stream;await video.play();
+    $('videowrap').classList.add('on');camLabel('camStop');setStatus(t('camHold'),'info');
+    Tools.diag.log('camera on',{w:video.videoWidth,h:video.videoHeight});
+    setupTrack();await listCams();
+    Tools.wakeLock.hold('camera');
+    if(zxState==='loading')setStatus(t('loading'),'info');
+    if(!await zxReady){setStatus(t('noDecoder'),'err');stopCam();return;}
+    setStatus(t('camHold'),'info');
+    frames=0;camTimer=setTimeout(scanFrame,200);
+  }catch(e){Tools.diag.log('camera failed',e);setStatus(t('camFail',{e:e.name==='NotAllowedError'?t('denied'):e.message}),'err');stopCam();}
+}
+function stopCam(keepLabel){
+  if(camTimer){clearTimeout(camTimer);camTimer=null;}
+  if(stream){stream.getTracks().forEach(tr=>tr.stop());stream=null;Tools.diag.log('camera off',{frames});}
+  video.srcObject=null;$('videowrap').classList.remove('on');$('btnTorch').hidden=true;$('zoomWrap').hidden=true;
+  if(!keepLabel)camLabel(current?'camAgain':'camStart');
+  Tools.wakeLock.release('camera');
+}
+async function scanFrame(){
+  if(!stream)return;
+  if(busy||!video.videoWidth){camTimer=setTimeout(scanFrame,120);return;}
+  busy=true;
+  try{
+    const W=video.videoWidth,H=video.videoHeight;
+    frames++;
+    // alternate: centre crop in full resolution (small codes far away) and the whole frame scaled down
+    const full=frames%2===0,f=full?1:.6,sw=Math.round(W*f),sh=Math.round(H*f),sc=Math.min(1,1280/Math.max(sw,sh));
+    camCanvas.width=Math.round(sw*sc);camCanvas.height=Math.round(sh*sc);
+    const ctx=camCanvas.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(video,Math.round((W-sw)/2),Math.round((H-sh)/2),sw,sh,0,0,camCanvas.width,camCanvas.height);
+    const hits=await readImageData(ctx.getImageData(0,0,camCanvas.width,camCanvas.height),1);
+    if(hits.length&&stream){
+      const w=$('videowrap');w.classList.add('hit');setTimeout(()=>w.classList.remove('hit'),500);
+      stopCam(true);camLabel('camAgain');
+      found(toResult(hits[0],'camera'));
+      return;
+    }
+  }catch(e){Tools.diag.log('scan error',e);}
+  finally{busy=false;}
+  if(stream)camTimer=setTimeout(scanFrame,60);
+}
+let torchOn=false;
+function setupTrack(){
+  const track=stream&&stream.getVideoTracks()[0];
+  if(!track||!track.getCapabilities)return;
+  const cap=track.getCapabilities();
+  if(cap.focusMode&&cap.focusMode.includes('continuous'))track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
+  const z=$('zoom');
+  if(cap.zoom&&cap.zoom.max>cap.zoom.min){
+    z.min=cap.zoom.min;z.max=cap.zoom.max;z.step=cap.zoom.step||0.1;z.value=track.getSettings().zoom||cap.zoom.min;
+    $('zoomOut').textContent=Tools.fmt(Number(z.value),1)+'×';$('zoomWrap').hidden=false;
+  }
+  torchOn=false;$('btnTorch').hidden=!cap.torch;$('btnTorch').setAttribute('aria-pressed','false');
+  $('camExtra').hidden=$('camSelect').hidden&&$('btnTorch').hidden;
+}
+$('zoom').addEventListener('input',()=>{
+  const track=stream&&stream.getVideoTracks()[0],z=$('zoom');
+  $('zoomOut').textContent=Tools.fmt(Number(z.value),1)+'×';
+  if(track)track.applyConstraints({advanced:[{zoom:Number(z.value)}]}).catch(()=>{});
+});
+$('btnTorch').addEventListener('click',()=>{
+  const track=stream&&stream.getVideoTracks()[0];if(!track)return;
+  torchOn=!torchOn;$('btnTorch').setAttribute('aria-pressed',String(torchOn));
+  track.applyConstraints({advanced:[{torch:torchOn}]}).catch(e=>Tools.diag.log('torch failed',e));
+});
+$('btnCam').addEventListener('click',()=>{Tools.audio.unlock();if(stream)stopCam();else startCam();});
+$('camSelect').addEventListener('change',()=>{settings.cam=$('camSelect').value;saveSet();if(stream)startCam();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&stream)stopCam();});
+
+/* ---------- Photo: file, drag & drop, paste, shared ---------- */
+const fileIn=$('file');
+$('drop').addEventListener('click',()=>fileIn.click());
+fileIn.addEventListener('change',()=>{if(fileIn.files[0])handleFile(fileIn.files[0],'image');fileIn.value='';});
+const drop=$('drop');
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,()=>drop.classList.remove('over')));
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f){setSrc('image');handleFile(f,'image');}});
+document.addEventListener('paste',e=>{
+  const items=e.clipboardData&&e.clipboardData.items;if(!items)return;
+  for(const it of items)if(it.type.startsWith('image/')){e.preventDefault();setSrc('image');handleFile(it.getAsFile(),'image');return;}
+});
+async function toBitmapSource(file){
+  if(await Heic.isHeicFile(file)){
+    if(Heic.info().native!==true&&!Heic.info().worker)setStatus(t('heicLoading'),'info');
+    try{return await Heic.decode(file);}catch(e){Tools.diag.log('HEIC failed',e);throw new Error('heic');}
+  }
+  if(!file.type.startsWith('image/')&&file.type)throw new Error('type');
+  return await new Promise((ok,fail)=>{const img=new Image();const u=URL.createObjectURL(file);img.onload=()=>{URL.revokeObjectURL(u);ok(img);};img.onerror=()=>{URL.revokeObjectURL(u);fail(new Error('img'));};img.src=u;});
+}
+async function handleFile(file,src){
+  if(!file)return;
+  Tools.diag.log('image: '+(file.type||'?')+', '+Math.round(file.size/1024)+' kB');
+  $('multiBox').hidden=true;
+  let img;
+  try{img=await toBitmapSource(file);}
+  catch(e){setStatus(t(e.message==='heic'?'heicFail':e.message==='type'?'noImage':'imgFail'),'err');return;}
+  const W=img.naturalWidth||img.width,H=img.naturalHeight||img.height;
+  // preview
+  const pv=$('preview');pv.innerHTML='';const c0=document.createElement('canvas');const ps=Math.min(1,640/Math.max(W,H));
+  c0.width=Math.round(W*ps);c0.height=Math.round(H*ps);c0.getContext('2d').drawImage(img,0,0,c0.width,c0.height);
+  const pimg=new Image();pimg.alt='';c0.toBlob(b=>{if(b){const u=URL.createObjectURL(b);pimg.src=u;}},'image/jpeg',.8);pv.append(pimg);
+  setStatus(t('analysing'),'info');
+  if(!await zxReady){setStatus(t('noDecoder'),'err');return;}
+  // whole picture at two sizes, then centre crops (small code on a large photo)
+  const tries=[{f:1,max:2000},{f:1,max:1000},{f:.6,max:1200},{f:.35,max:1000}];
+  const c=document.createElement('canvas'),ctx=c.getContext('2d',{willReadFrequently:true});
+  let hits=[];
+  for(const tr of tries){
+    const sw=W*tr.f,sh=H*tr.f,sc=Math.min(tr.max/Math.max(sw,sh),2);
+    c.width=Math.max(1,Math.round(sw*sc));c.height=Math.max(1,Math.round(sh*sc));
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,(W-sw)/2,(H-sh)/2,sw,sh,0,0,c.width,c.height);
+    try{hits=await readImageData(ctx.getImageData(0,0,c.width,c.height),12);}catch(e){Tools.diag.log('read failed',e);}
+    if(hits.length)break;
+  }
+  if(img.close)img.close();
+  Tools.diag.log('image: '+hits.length+' code(s)');
+  if(!hits.length){setStatus(t('noCode'),'err');return;}
+  const uniq=[];for(const h of hits)if(!uniq.some(u=>u.text===h.text&&u.format===h.format))uniq.push(h);
+  const results=uniq.map(h=>toResult(h,src));
+  found(results[0]);
+  if(results.length>1){
+    setStatus(t('foundN',{n:results.length}),'ok');
+    $('multiInfo').textContent=t('foundN',{n:results.length});
+    const ul=$('multiList');ul.innerHTML='';
+    results.forEach((r,i)=>{
+      const li=document.createElement('li');if(i===0)li.className='current';
+      const b=document.createElement('button');b.type='button';b.className='open';
+      const p=analyse(r).parsed;
+      b.innerHTML='<span class="name"></span><span class="meta"></span>';b.firstChild.textContent=t('type.'+p.type)+': '+p.summary;b.lastChild.textContent=fmtName(r.format);
+      b.addEventListener('click',()=>{for(const x of ul.children)x.classList.toggle('current',x===li);show(r,{save:false});addHist(r);});
+      li.append(b);ul.append(li);
+    });
+    $('multiBox').hidden=false;
+  }
+}
+
+/* ---------- Text ---------- */
+$('btnParse').addEventListener('click',()=>{
+  const v=$('manual').value;
+  if(!v.trim()){setStatus(t('emptyText'),'warn');return;}
+  setStatus('');found(Object.assign(toResult({text:v},'text'),{format:'',contentType:'Text'}));
+});
+if(navigator.clipboard&&navigator.clipboard.readText){
+  $('btnPaste').hidden=false;
+  $('btnPaste').addEventListener('click',async()=>{try{$('manual').value=await navigator.clipboard.readText();$('btnParse').click();}catch(e){Tools.diag.log('paste failed',e);}});
+}
+
+/* ---------- History ---------- */
+function loadHist(){const h=Tools.load(LS_HIST,[]);return Array.isArray(h)?h.filter(x=>x&&typeof x.text==='string'):[];}
+function saveHist(h){if(!Tools.save(LS_HIST,h.slice(0,MAX_HIST))){Tools.diag.log('history save failed');Tools.toast(t('histFail'));}}
+const HIST_FIELDS=['format','contentType','ecLevel','version','symId','hasECI','isMirrored','isInverted','seqIndex','seqSize','src','ts'];
+function addHist(res){
+  if(!settings.history)return;
+  const h=loadHist().filter(x=>!(x.text===res.text&&(x.format||'')===(res.format||'')));
+  const e={id:Tools.uid('h'),text:res.text};
+  for(const k of HIST_FIELDS)if(res[k]!=null&&res[k]!==''&&res[k]!==false)e[k]=res[k];
+  if(res.contentType==='Binary'&&res.bytes&&res.bytes.length<=4096)e.bytes=btoa(String.fromCharCode(...res.bytes));
+  h.unshift(e);saveHist(h);renderHist();
+}
+function fromHist(e){
+  const r=Object.assign({ecLevel:'',version:'',symId:'',hasECI:false,isMirrored:false,isInverted:false,contentType:'Text',format:'',src:'text'},e);
+  r.bytes=e.bytes?Array.from(atob(e.bytes),c=>c.charCodeAt(0)):null;
+  return r;
+}
+function renderHist(){
+  const h=loadHist(),ul=$('histList');ul.innerHTML='';
+  if(!h.length){const li=document.createElement('li');li.className='muted';li.textContent=t(settings.history?'histEmpty':'histOff');ul.append(li);}
+  for(const e of h){
+    const p=CodeParse.analyze(e.text,{format:e.format,contentType:e.contentType});
+    const li=document.createElement('li'),b=document.createElement('button');b.type='button';b.className='open';
+    b.innerHTML='<span class="name"></span><span class="meta"></span>';
+    b.firstChild.textContent=t('type.'+p.type)+(p.summary?': '+p.summary:'');
+    b.lastChild.textContent=fmtDate(e.ts,true)+' · '+fmtName(e.format);
+    b.addEventListener('click',()=>{show(fromHist(e),{save:false});Tools.menu.close();});
+    const d=document.createElement('button');d.type='button';d.className='btn icon';d.innerHTML=Tools.icon('trash');
+    d.setAttribute('aria-label',t('delEntry'));d.title=t('delEntry');
+    d.addEventListener('click',()=>{
+      const all=loadHist(),i=all.findIndex(x=>x.id===e.id);if(i<0)return;
+      const [gone]=all.splice(i,1);saveHist(all);renderHist();
+      Tools.undo(t('deleted'),()=>{const now=loadHist();now.splice(Math.min(i,now.length),0,gone);saveHist(now);renderHist();});
+    });
+    li.append(b,d);ul.append(li);
+  }
+  $('btnClearHist').hidden=!h.length;
+}
+$('btnClearHist').addEventListener('click',async()=>{
+  const n=loadHist().length;if(!n)return;
+  if(!await Tools.confirm(t('clearQ',{n:Tools.fmt(n,0)}),{action:'delete'}))return;
+  Tools.remove(LS_HIST);renderHist();Tools.toast(t('cleared'));
+});
+
+/* ---------- Settings ---------- */
+$('optHistory').checked=settings.history;$('optBeep').checked=settings.beep;
+$('optHistory').addEventListener('change',e=>{settings.history=e.target.checked;saveSet();renderHist();});
+$('optBeep').addEventListener('change',e=>{settings.beep=e.target.checked;saveSet();if(settings.beep)Tools.audio.unlock();});
+
+/* ---------- Start ---------- */
+setSrc(['camera','image','text'].includes(settings.src)?settings.src:'camera');
+setView(['struct','raw','qr'].includes(settings.view)?settings.view:'struct');
+camLabel('camStart');renderHist();
+Tools.diag.info(()=>({decoder:zxState,camera:!!stream,frames,heic:Heic.info(),view:view.v,source:settings.src,result:current?{format:current.format||'text',type:current.parsed.type}:null,history:loadHist().length}));
+// Photo shared to the installed app (Android) or opened with it ("Open with")
+Tools.takeSharedFile().then(f=>{if(f){Tools.diag.log('shared file received');setSrc('image');handleFile(f,'share');}});
+Tools.onLang(()=>{if(current)render();renderHist();camLabel($('btnCamLabel').dataset.k||'camStart');
+  if(!$('multiBox').hidden)$('multiInfo').textContent=t('foundN',{n:$('multiList').children.length});});
+
+/* ---------- WebMCP: tools for AI agents (see AGENTS.md "WebMCP") ----------
+   Only text and what the user already scanned; never camera, files, deleting or opening links.
+   Wi-Fi passwords and two-factor secrets are never returned. */
+const SECRET_TYPES=['wifi','otp'];
+function agentCode(res){
+  const p=res.parsed||CodeParse.analyze(res.text,{format:res.format,contentType:res.contentType});
+  const o={format:res.format||null,content_type:res.contentType||'Text',type:p.type,summary:p.type==='wifi'?(p.fields.find(f=>f.k==='ssid')||{}).v||'':p.summary,fields:p.agent,warnings:p.warn};
+  if(!SECRET_TYPES.includes(p.type))o.text=res.text;
+  else o.note='The raw text is withheld because it contains a password or secret key.';
+  return o;
+}
+Tools.mcp.register({
+  name:'analyze_code_text',title:'Break down the text of a code',label:'mcp.analyze',readOnly:true,
+  description:'Breaks down the text content of a barcode or QR code into structured fields and shows it in the app: links (with warnings), Wi-Fi, vCard/MeCard contacts, calendar events, geo, phone, SMS, email, EPC/GiroCode and Swiss QR bill payments (IBAN check), GS1 element strings and Digital Links (application identifiers, dates, check digits), IFA/securPharm pack codes, EAN/UPC/ISBN product numbers, IATA boarding passes, otpauth, crypto payment links, JSON. GS1 group separators may be written as <GS>. Nothing is saved to the history.',
+  inputSchema:{type:'object',properties:{
+    text:{type:'string',minLength:1,maxLength:8000,description:'Text content of the code.'},
+    format:{type:'string',enum:['QRCode','DataMatrix','Aztec','PDF417','EAN13','EAN8','UPCA','UPCE','Code128','Code39','PZN','ITF'],description:'Barcode format the text came from, if known (helps with product numbers).'}
+  },required:['text'],additionalProperties:false},
+  execute:({text,format})=>{
+    const v=text.replace(/<GS>/gi,CodeParse.GS).replace(/<RS>/gi,CodeParse.RS).replace(/<EOT>/gi,CodeParse.EOT);
+    const res=Object.assign(toResult({text:v},'agent'),{format:format||'',contentType:/^\(\d{2,4}\)/.test(v)?'GS1':'Text'});
+    show(res,{save:false});setStatus('');
+    const o=agentCode(current);delete o.text;return o;
+  }
+});
+Tools.mcp.register({
+  name:'get_current_code',title:'Read the code shown',label:'mcp.current',readOnly:true,untrusted:true,
+  description:'Returns the code currently shown in the app (scanned by the user): format, content type, detected kind, the broken-down fields and the raw text (withheld for Wi-Fi and two-factor codes). Returns {code: null} if nothing has been read yet.',
+  execute:()=>({code:current?agentCode(current):null})
+});
+Tools.mcp.register({
+  name:'get_scan_history',title:'Read the scan history',label:'mcp.history',readOnly:true,untrusted:true,
+  description:'Reads the history of codes read in the app, newest first: time, format, detected kind, a short summary and the raw text (withheld for Wi-Fi and two-factor codes). Can be filtered by a search text.',
+  inputSchema:{type:'object',properties:{
+    limit:{type:'integer',minimum:1,maximum:200,description:'Maximum number of entries. Default 20.'},
+    search:{type:'string',maxLength:100,description:'Only entries whose text or summary contains this (case-insensitive).'}
+  },additionalProperties:false},
+  execute:({limit=20,search=''})=>{
+    const q=search.toLowerCase().trim(),h=loadHist();
+    const items=h.map(e=>{const o=agentCode(fromHist(e));o.time=e.ts||null;return o;})
+      .filter(o=>!q||(o.summary||'').toLowerCase().includes(q)||(o.text||'').toLowerCase().includes(q));
+    return {total:h.length,matches:items.length,entries:items.slice(0,limit).map(o=>({time:o.time,format:o.format,type:o.type,summary:o.summary,text:o.text,note:o.note}))};
+  }
+});
+})();
+</script>
+</body>
+</html>
