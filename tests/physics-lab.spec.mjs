@@ -764,6 +764,88 @@ test.describe('voltage divider', () => {
   });
 });
 
+test.describe('radar and stealth', () => {
+  // reference: front view as in physics-lab/README.md; an echo is a ray that leaves within ±5° of the radar
+  const TOL = 5 * Math.PI / 180;
+  const num = async loc => Number((await loc.textContent()).replace(/[^\d,]/g, '').replace(',', '.'));
+
+  test('from the side the upright fin reflects straight back, the stealth shape sends nothing back', async ({ page }) => {
+    await open(page, 'radar');
+    await page.click('#raShape button[data-v="plain"]');
+    await page.locator('#raB').fill('0');
+    await expect(page.locator('#raBOut')).toHaveText('genau von der Seite');
+    // hit: from the engines (y = −1.8) up to the top of the fin (y = 4); back: fin 3 m, pylon 0.5 m, plus the spots
+    // of fuselage (r = 1) and engine (r = 0.5) whose normal is within ±2.5° of the radar
+    const glint = r => 2 * r * Math.sin(TOL / 2);
+    const share = (3 + 0.5 + glint(1) + glint(0.5)) / (4 + 1.8) * 100; // 62,6 %
+    await expect(pres(page, 'raRes', 'Echo zurück')).toContainText('%');
+    expect(await num(pres(page, 'raRes', 'Echo zurück'))).toBeCloseTo(share, 0);
+    expect(await num(pres(page, 'raRes', 'Tarnkappe hier'))).toBe(0);
+    // the coating leaves a tenth per reflection
+    await page.check('#raCoat');
+    expect(await num(pres(page, 'raRes', 'Echo zurück'))).toBeCloseTo(share / 10, 0);
+    await expect(page.locator('#raWhy')).toContainText('90 %');
+    await page.uncheck('#raCoat');
+    await page.click('#raShape button[data-v="stealth"]');
+    await expect(pres(page, 'raRes', 'Echo zurück')).toHaveText('0,0 %');
+    await expect(page.locator('#raWhy')).toContainText('schräg');
+    await expect(page.locator('#raSvg .rback')).toHaveCount(0);
+  });
+
+  test('from above the corner between wing and fin works like a bicycle reflector', async ({ page }) => {
+    await open(page, 'radar');
+    await page.click('#raShape button[data-v="plain"]');
+    await page.locator('#raB').fill('30');
+    await expect(page.locator('#raBOut')).toHaveText('30° von oben');
+    expect(await num(pres(page, 'raRes', 'über Ecken'))).toBeGreaterThan(await num(pres(page, 'raRes', 'einmal gespiegelt')));
+    await expect(page.locator('#raWhy')).toContainText('Katzenauge');
+    await expect(page.locator('#raSvg .rback').first()).toBeVisible();
+    // a ray hitting the wing (y = −0.3) and then the fin (x = 0) runs back exactly the way it came
+    const r = await page.evaluate(() => window.Radar.ray('plain', 30, -2));
+    expect(r.bounces).toBe(2);
+    expect(r.pts[1][1]).toBeCloseTo(-0.3, 9);
+    expect(r.pts[2][0]).toBeCloseTo(0, 9);
+    expect(r.dir[0]).toBeCloseTo(Math.cos(Math.PI / 6), 9);
+    expect(r.dir[1]).toBeCloseTo(Math.sin(Math.PI / 6), 9);
+    await page.click('#raShape button[data-v="stealth"]');
+    await expect(pres(page, 'raRes', 'Echo zurück')).toHaveText('0,0 %');
+  });
+
+  test('range: a 10 000 times smaller echo is seen at a tenth of the distance', async ({ page }) => {
+    await open(page, 'radar');
+    await page.click('#raMode button[data-v="range"]');
+    await expect(page.locator('#raShapeBox')).toBeHidden();
+    const range = sigma => 150 * sigma ** 0.25;
+    await page.click('#raObj button[data-v="jet"]');
+    await page.locator('#raR').fill('100');
+    await expect(pres(page, 'raRRes', 'Reichweite des Radars')).toHaveText(`${de(range(10), 0)} km`); // 267
+    await expect(pres(page, 'raRRes', 'In 100 km')).toHaveText('erkannt');
+    await page.click('#raObj button[data-v="stealth"]');
+    await expect(pres(page, 'raRRes', 'Reichweite des Radars')).toHaveText(`${de(range(0.001), 0)} km`); // 27
+    await expect(pres(page, 'raRRes', 'In 100 km')).toHaveText('nicht erkannt');
+    await expect(pres(page, 'raRRes', 'gegenüber Kampfjet')).toHaveText('0,10-fach');
+    await expect(pres(page, 'raRRes', 'Schwelle')).toHaveText('5,1 · 10⁻³-fach'); // 0,001 · (150/100)⁴
+    await page.locator('#raR').fill('25');
+    await expect(pres(page, 'raRRes', 'In 25 km')).toHaveText('erkannt');
+    await page.click('#p-radar #raRangeBox summary:has-text("Formeln")');
+    const tex = (await page.locator('#raRMath annotation').allTextContents()).join(' ');
+    expect(tex).toContain('\\sqrt[4]{0{,}001}');
+  });
+
+  test('the radar settings survive a reload', async ({ page }) => {
+    await open(page, 'radar');
+    await page.click('#raShape button[data-v="stealth"]');
+    await page.locator('#raB').fill('-25');
+    await page.check('#raCoat');
+    await page.reload();
+    await expect(page.locator('#p-radar')).toBeVisible();
+    await expect(page.locator('#raShape button[data-v="stealth"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#raB')).toHaveValue('-25');
+    await expect(page.locator('#raBOut')).toHaveText('25° von unten');
+    await expect(page.locator('#raCoat')).toBeChecked();
+  });
+});
+
 test.describe('lens', () => {
   test('projector, magnifier and glasses', async ({ page }) => {
     await open(page, 'lens');
@@ -786,7 +868,7 @@ test.describe('lens', () => {
 });
 
 test('open experiments with formulas have no accessibility violations', async ({ page }) => {
-  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas']) {
+  for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar']) {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub:visible > summary`).all()) await s.click();
     await expect(page.locator(`${panel(kind)} .katex`).first()).toBeVisible();
@@ -795,7 +877,7 @@ test('open experiments with formulas have no accessibility violations', async ({
 });
 
 test('the extra views have no accessibility violations', async ({ page }) => {
-  for (const [kind, sel] of [['refr', '#rMode button[data-v="prism"]'], ['refr', '#rMode button[data-v="drop"]'], ['lorentz', '#mgMode button[data-v="field"]'], ['circuit', '#cKind button[data-v="divider"]']]) {
+  for (const [kind, sel] of [['refr', '#rMode button[data-v="prism"]'], ['refr', '#rMode button[data-v="drop"]'], ['lorentz', '#mgMode button[data-v="field"]'], ['circuit', '#cKind button[data-v="divider"]'], ['radar', '#raMode button[data-v="range"]']]) {
     await open(page, kind);
     await page.click(sel);
     // open every closed section (the list shrinks with each click)
