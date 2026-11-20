@@ -34,6 +34,10 @@
 //                                                        the section "Dateien an die App geben" (scripts/partials/help-files.html,
 //                                                        <!-- files:start/end -->, uses tool:short-name / -short-name-en)
 //   tool:share-text ("true")                             receive shared links/text (Android) as ?title=&text=&url=
+//   tool:shortcuts                                       app shortcuts on the icon (long press), up to 4:
+//                                                        "action: icon: Deutsch | English; …" – manifest "shortcuts" with
+//                                                        url ./?shortcut=<action> and icon shortcut-<action>.png
+//                                                        (build-icons.mjs); the page reads it with Tools.shortcut()
 //   tool:webmcp ("a, b")                                 WebMCP tools the page registers (names without app prefix);
 //                                                        needs the feature "KI-Agent", checked by tests/webmcp.spec.mjs
 //   tool:webmcp-help, tool:webmcp-help-en                what an AI agent can do in this app (plain text, one or two sentences);
@@ -48,7 +52,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
-import { ROOT, decode, meta, allPages, vendorProblems, isPublished, usedIcons, spriteIcons, ICON_SPRITE } from './lib.mjs';
+import { ROOT, decode, meta, allPages, parseShortcuts, vendorProblems, isPublished, usedIcons, spriteIcons, ICON_SPRITE } from './lib.mjs';
 import { renderSbom, SBOM_FILE } from './sbom.mjs';
 
 const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules', 'tests']);
@@ -104,6 +108,7 @@ function pageInfo({ folder, file }) {
     connect: (meta(html, 'tool:connect') || '').split(/\s+/).filter(Boolean),
     cast: meta(html, 'tool:cast') === 'true',
     youtube: meta(html, 'tool:youtube') === 'true',
+    shortcuts: parseShortcuts(html, file),
     icon: existsSync(join(ROOT, folder, 'icon.svg')),
   };
 }
@@ -138,6 +143,9 @@ for (const t of tools) {
 const apps = [...tools, ...pages.filter(p => p.folder === 'template')];
 const isApp = p => apps.includes(p);
 for (const p of apps) {
+  for (const s of p.shortcuts)
+    if (!existsSync(join(ROOT, p.folder, `shortcut-${s.action}.png`)))
+      throw new Error(`${p.file}: shortcut-${s.action}.png missing – run: node scripts/build-icons.mjs ${p.folder}`);
   if (p.shareAccept.length && !read(p.file).includes('<!-- files:start -->'))
     throw new Error(`${p.file}: tool:share-target needs <!-- files:start --><!-- files:end --> in the help (before "Fehlersuche")`);
   if (!p.webmcp.length) continue;
@@ -382,6 +390,18 @@ function manifest(p) {
         method: 'GET',
         params: { title: 'title', text: 'text', url: 'url' },
       },
+    } : {}),
+    ...(p.shortcuts.length ? {
+      // Long press on the icon (Android, Windows/macOS/ChromeOS; not iPhone). Tools.shortcut() reads ?shortcut=,
+      // the service worker serves the cached page for it (ignoreSearch), so this works offline too.
+      shortcuts: p.shortcuts.map(s => ({
+        name: s.name,
+        short_name: s.name,
+        name_localized: { en: s.nameEn },
+        short_name_localized: { en: s.nameEn },
+        url: `./?shortcut=${s.action}`,
+        icons: [{ src: `shortcut-${s.action}.png`, sizes: '192x192', type: 'image/png' }],
+      })),
     } : {}),
     icons: [
       ...(existsSync(join(ROOT, p.folder, 'icon.svg')) ? [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml' }] : []),

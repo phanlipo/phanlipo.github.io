@@ -8,6 +8,8 @@
 //   icon-180.png            apple-touch-icon (iPhone home screen)
 //   icon-192.png, icon-512.png   PWA manifest icons (start page: for its home screen shortcut on Android)
 //   icon-maskable-512.png   PWA icon Android may crop to a circle/squircle (icon kept in the safe zone)
+//   shortcut-<action>.png   192 px icon per app shortcut (<meta name="tool:shortcuts">, see lib.mjs), same tile
+//                           in the app colour; files of removed shortcuts are deleted
 //
 // Run manually after adding a page or changing its icon – not part of the git hook.
 //   node scripts/build-icons.mjs              all pages
@@ -19,10 +21,10 @@
 // The Tabler version comes from scripts/vendor.json (entry "tabler-icons"); the package is
 // downloaded from the npm registry. PNGs need Playwright (Chromium); without it only icon.svg is written.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { ROOT, allPages, meta, npmFiles, usedIcons, ICON_SPRITE } from './lib.mjs';
+import { ROOT, allPages, meta, npmFiles, usedIcons, ICON_SPRITE, parseShortcuts } from './lib.mjs';
 
 const tabler = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'))['tabler-icons'];
 let tablerFiles = null;
@@ -66,12 +68,13 @@ async function renderPngs(jobs) {
     await page.setContent(`<html><body style="margin:0">${svg.replace('<svg ', `<svg width="${px}" height="${px}" `)}</body></html>`);
     await page.screenshot({ path: file, omitBackground: true });
   };
-  for (const { dir, svg, mask, pwa } of jobs) {
+  for (const { dir, svg, mask, pwa, shortcuts } of jobs) {
     await shot(svg, 180, join(dir, 'icon-180.png'));
     if (!pwa) continue; // start page is not an installable app
     await shot(svg, 192, join(dir, 'icon-192.png'));
     await shot(svg, 512, join(dir, 'icon-512.png'));
     await shot(mask, 512, join(dir, 'icon-maskable-512.png'));
+    for (const s of shortcuts) await shot(s.svg, 192, join(dir, `shortcut-${s.action}.png`));
   }
   await browser.close();
 }
@@ -110,8 +113,12 @@ for (const { folder, file } of allPages()) {
   const svg = compose(raw, color, false), mask = compose(raw, color, true);
   const dir = join(ROOT, folder);
   writeFileSync(join(dir, 'icon.svg'), svg);
-  jobs.push({ dir, svg, mask, pwa: true });
-  console.log(`${folder || '(start page)'}: ${icon} ${color}`);
+  const shortcuts = [];
+  for (const s of parseShortcuts(html, file)) shortcuts.push({ action: s.action, svg: compose(await tablerSvg(s.icon), color, false) });
+  for (const f of readdirSync(dir))
+    if (/^shortcut-.+\.png$/.test(f) && !shortcuts.some(s => f === `shortcut-${s.action}.png`)) unlinkSync(join(dir, f));
+  jobs.push({ dir, svg, mask, pwa: true, shortcuts });
+  console.log(`${folder || '(start page)'}: ${icon} ${color}` + (shortcuts.length ? ` · shortcuts ${shortcuts.map(s => s.action).join(', ')}` : ''));
 }
 await renderPngs(jobs);
 if (!jobs.length) console.warn('! No page with <meta name="tool:icon"> found' + (only ? ` in "${only}"` : ''));
