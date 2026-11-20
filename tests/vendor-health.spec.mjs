@@ -66,7 +66,13 @@ test.describe('SBOM', () => {
   test('dependency-graph snapshot contains every library as runtime dependency', () => {
     const s = snapshot(bom, { GITHUB_SHA: 'a'.repeat(40), GITHUB_REF: 'refs/heads/main', GITHUB_RUN_ID: '1' });
     const resolved = s.manifests['scripts/vendor.json'].resolved;
-    expect(Object.keys(resolved)).toHaveLength(Object.keys(vendor).length);
+    // one entry per package and version: the same package bundled twice (zxing-wasm, zxing-wasm-full) is one dependency
+    const packages = new Set(Object.values(vendor).map(v => `${v.package}@${v.version}`));
+    expect(Object.keys(resolved)).toHaveLength(packages.size);
+    for (const pv of packages) {
+      const at = pv.lastIndexOf('@');
+      expect(resolved[`pkg:npm/${pv.slice(0, at).replace('@', '%40')}@${pv.slice(at + 1)}`], pv).toBeTruthy();
+    }
     expect(resolved['pkg:npm/%40cantoo/pdf-lib@' + vendor['pdf-lib'].version]).toMatchObject({ relationship: 'direct', scope: 'runtime' });
   });
 });
