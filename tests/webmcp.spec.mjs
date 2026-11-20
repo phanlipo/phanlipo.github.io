@@ -528,6 +528,54 @@ test.describe('physics-lab tools', () => {
     expect(r.result.floats).toBe(false);
   });
 
+  test('doppler_shift', async ({ page }) => {
+    const c = 343, v = 90 / 3.6;
+    let r = await call(page, 'physics_lab_doppler_shift', { speed_kmh: 90, siren_hz: 440, distance_m: 5 });
+    expect(r.result).toMatchObject({ speed_kmh: 90, siren_hz: 440, distance_m: 5, speed_of_sound_m_s: c });
+    expect(r.result.approaching_hz).toBeCloseTo(440 * c / (c - v), 2);
+    expect(r.result.receding_hz).toBeCloseTo(440 * c / (c + v), 2);
+    expect(r.result.jump_semitones).toBeCloseTo(12 * Math.log2((c + v) / (c - v)), 2);
+    expect(r.result.passed_when_unchanged_m).toBeCloseTo(v * 5 / c, 2);
+    await expect(page.locator('#p-doppler')).toBeVisible();
+    await expect(page.locator('#dpV')).toHaveValue('90');
+    r = await call(page, 'physics_lab_doppler_shift', { speed_kmh: 900 });
+    expect(r.result.siren_hz).toBe(440);
+    expect(r.result.approaching_hz).toBeCloseTo(440 * c / (c - 250), 2);
+  });
+
+  test('seasons', async ({ page }) => {
+    const R = Math.PI / 180, dec = -23.44 * Math.cos(2 * Math.PI * (172 + 10) / 365);
+    let r = await call(page, 'physics_lab_seasons', { day_of_year: 172, latitude_deg: 48, axis_tilted: true });
+    expect(r.result.declination_deg).toBeCloseTo(dec, 2);
+    expect(r.result.noon_altitude_deg).toBeCloseTo(90 - Math.abs(48 - dec), 2);
+    expect(r.result.day_length_h).toBeCloseTo(2 * Math.acos(-Math.tan(48 * R) * Math.tan(dec * R)) / R / 15, 2);
+    expect(r.result.beam_area_m2).toBeCloseTo(1 / Math.sin((90 - Math.abs(48 - dec)) * R), 2);
+    await expect(page.locator('#p-seasons')).toBeVisible();
+    r = await call(page, 'physics_lab_seasons', { axis_tilted: false });
+    expect(r.result).toMatchObject({ day_of_year: 172, latitude_deg: 48, axis_tilt_deg: 0, declination_deg: 0, noon_altitude_deg: 42, day_length_h: 12 });
+    r = await call(page, 'physics_lab_seasons', { day_of_year: 355, latitude_deg: 80, axis_tilted: true });
+    expect(r.result).toMatchObject({ sun_rises: false, day_length_h: 0, daily_sunlight_kwh_m2: 0, beam_area_m2: null });
+  });
+
+  test('circuit_builder', async ({ page }) => {
+    let r = await call(page, 'physics_lab_circuit_builder', { example: 'mixed' });
+    // 6 V, 10 Ω in series with 20 Ω ∥ 20 Ω: 0.3 A, 1.8 W
+    expect(r.result).toMatchObject({ example: 'mixed', short_circuit: false, batteries: 1 });
+    expect(r.result.total_current_a).toBeCloseTo(0.3, 3);
+    expect(r.result.total_power_w).toBeCloseTo(1.8, 3);
+    const bulbs = r.result.parts.filter(p => p.kind === 'bulb');
+    expect(bulbs.map(b => [b.label, b.resistance_ohm])).toEqual([['L1', 10], ['L2', 20], ['L3', 20]]);
+    expect(bulbs[0].current_a).toBeCloseTo(0.3, 3);
+    expect(bulbs[1].voltage_v).toBeCloseTo(3, 3);
+    expect(r.result.nodes.map(n => n.potential_v).sort((a, b) => a - b)).toEqual([0, 3, 6]);
+    await expect(page.locator('#p-build')).toBeVisible();
+    r = await call(page, 'physics_lab_circuit_builder', {});
+    expect(r.result.example).toBe(null);
+    expect(r.result.total_current_a).toBeCloseTo(0.3, 3);
+    r = await call(page, 'physics_lab_circuit_builder', { example: 'short' });
+    expect(r.result).toMatchObject({ short_circuit: true, total_current_a: null });
+  });
+
   test('rainbow_position', async ({ page }) => {
     const n = 1.3240 + 3046 / (680 * 680), al = Math.acos(Math.sqrt((n * n - 1) / 3)), be = Math.asin(Math.sin(al) / n);
     const red = (4 * be - 2 * al) * 180 / Math.PI;

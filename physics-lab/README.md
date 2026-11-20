@@ -1,6 +1,6 @@
 # Physik verstehen – Aufbau
 
-Physik zum Ausprobieren: je Versuch eine Zeichnung, die sofort auf Regler reagiert, das Ergebnis, eine Erklärung in Worten und die Formeln mit den eigenen Zahlen (KaTeX). Werkzeugkasten nach `UI-KONZEPT.md` 4b – jeder Versuch ist ein Werkzeug; Gruppen auf der Übersicht nach Gebiet (Optik, Wellen, …). (`.md` wird nicht veröffentlicht.)
+Physik zum Ausprobieren: je Versuch eine Zeichnung, die sofort auf Regler reagiert, das Ergebnis, eine Erklärung in Worten und die Formeln mit den eigenen Zahlen (KaTeX). Werkzeugkasten nach `UI-KONZEPT.md` 4b – jeder Versuch ist ein Werkzeug; Gruppen auf der Übersicht nach Gebiet (Optik, Wellen, …). Die Tabs tragen `data-group` (gleich dem Gebiet): Im Versuch zeigt die Leiste nur die Versuche desselben Gebiets. (`.md` wird nicht veröffentlicht.)
 
 **Leitsatz: Jeder Versuch beantwortet eine Warum-Frage** (als aufklappbarer Abschnitt mit durchgerechnetem Beispiel). Die Frage bestimmt, welche Regler und Anzeigen der Versuch braucht – nicht mehr.
 
@@ -16,6 +16,9 @@ sky.js       window.Sky: Rayleigh-Streuung, Luftmasse, Himmelsfarbe (Spektrum �
 float.js     window.Float: 10 kg Eisen als Würfel oder offene Schale, Archimedes, Eintauchtiefe, höchste Ladung
 wing.js      window.Wing: Joukowski-Profil, Potenzialströmung mit Kutta-Bedingung (Stromlinien, Druck, Auftrieb), Strömungsabriss, Abheben
 radar.js     window.Radar: Radarwellen am Flugzeug-Querschnitt (Strahlen, Spiegelungen, Echo-Anteil), Radargleichung
+doppler.js   window.Doppler: Sirene fährt an einem Hörer vorbei (gehörte Tonhöhe über der Zeit, Wellenlängen, Halbtöne)
+seasons.js   window.Seasons: Deklination, Sonnenhöhe, Tageslänge, Sonnenlicht pro Tag, Abstand Erde–Sonne
+network.js   window.Network: freier Schaltkreis auf einem 5 × 4-Raster, Knotenanalyse, Beispielschaltungen
 mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
 ```
 
@@ -66,6 +69,26 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 - **Feldlinien:** Jeder Stabmagnet als zwei Pole (±1, Feld ∝ 1/r²) an seinen Enden; Linien starten auf einem kleinen Kreis um jeden Nordpol (14 je Pol) und werden mit dem Mittelpunktverfahren verfolgt, bis sie einen Südpol erreichen oder das Bild verlassen. Anordnungen: ein Magnet, N gegenüber S, N gegenüber N.
 - **Stromkreis:** Batterie ohne Innenwiderstand, ohmsche Lämpchen (2 … 50 Ω), Schaltungen eins/Reihe/parallel und Spannungsteiler (zwei Widerstände, Messgerät an R₂ ohne Stromverbrauch). Helligkeit = Leistung im Verhältnis zum selben Lämpchen allein an derselben Batterie. Die Punkte auf den Drähten sind eine CSS-Animation (Tempo ∝ Strom), bei „weniger Bewegung“ stehen sie still.
 
+## Doppler-Effekt (doppler.js)
+
+- Straße y = 0, Sirene fährt mit v in +x-Richtung und ist bei t = 0 auf Höhe des Hörers, der im Abstand d steht. Ruhende Luft, c = 343 m/s, v < c (Regler 10 … 1100 km/h).
+- Der zur Zeit t gehörte Schall wurde zur Zeit tₑ losgeschickt: c·(t − tₑ) = √((v·tₑ)² + d²), kleinere Lösung der quadratischen Gleichung. Gehörte Frequenz f' = f / (1 − v·cos θ / c), θ zwischen Fahrtrichtung und Linie zum Hörer beim Losschicken. Grenzwerte f·c/(c ∓ v); den Ton f hört man, wenn der Wagen schon v·d/c weiter ist (Test).
+- Bild: Straße ±100 m; ein Kreis je 16,7 m Wellenabstand in ruhender Luft (steht für viele Wellenberge). Zeitlupe, damit eine Durchfahrt mindestens 6 s dauert. Kurve: gehörte Frequenz über die Zeit beim Hörer.
+- **Anhören** (Web Audio, Dreieckston): 2·T Sekunden in echter Zeit (T = 2,5 … 4 s), Frequenz und Lautstärke (∝ d/r) alle 20 ms gesetzt; die Animation läuft dann synchron mit der Uhr des AudioContext. Ohne Web Audio fehlt der Knopf. Stoppt mit jedem `setRun(…, false)` (Hook `stopHooks`).
+
+## Jahreszeiten (seasons.js)
+
+- Einfache Formeln (auf etwa 1° genau): Deklination δ = −ε·cos(2π(N + 10)/365), ε = 23,44° oder 0 („Gerade“); Abstand r = 1 − 0,0167·cos(2π(N − 4)/365) AE. Mittagshöhe 90° − |φ − δ|, Tageslänge aus cos ω₀ = −tan φ·tan δ (Sonne als Punkt, ohne Brechung), Tagessumme oben auf der Lufthülle Q = S₀/(π r²)·(ω₀ sin φ sin δ + cos φ cos δ sin ω₀)·24 h, S₀ = 1361 W/m².
+- Bild links: Erdbahn schräg von oben, Juni links von der Sonne, die Achse lehnt immer nach rechts (fest im Raum). Rechts: Schnitt durch Sonnenrichtung und Achse, die Achse ist um δ zur Sonne geneigt; Breitengrad als Linie, „du“ mittags am sonnenseitigen Ende.
+- Lichtbündel: 1 m² Querschnitt verteilt sich auf 1/sin h. Kurve: Tagessumme übers Jahr mit und ohne Neigung.
+
+## Schaltkreis-Baukasten (network.js)
+
+- Raster 5 × 4 Punkte (A1 … E4), Bauteile auf den 31 Kanten (`h-r-c`, `v-r-c`): Draht, Batterie (1,5 … 12 V, Pluspol per `d`), Lämpchen (2 … 50 Ω), Schalter, Strom- und Spannungsmesser.
+- Knotenanalyse mit Leitwertmatrix (Gauß mit Pivotsuche): Draht, geschlossener Schalter und Strommesser 10⁻⁷ Ω, Batterie als ideale Quelle mit 10⁻⁴ Ω Innenwiderstand (Norton) – größer als ein Draht wie bei einer echten Batterie, damit ein Kurzschluss die Klemmenspannung fast auf 0 zieht. Spannungsmesser ohne Strom. Jeder zusammenhängende Teil bekommt einen Bezugspunkt (Minuspol seiner ersten Batterie). Kurzschluss = Strom > 5000 A (normal höchstens ~200 A, Kurzschluss ≥ 14 000 A).
+- „Knoten“ für die Anzeige: Punkte, die durch Draht, Schalter oder Strommesser verbunden sind (Union-Find). Batterien legen Knoten fest (von der Masse aus); für die übrigen Knoten zeigt „Knotenanalyse mit deinen Werten“ die Knotenregel mit Ohm.
+- Bedienung: über jeder Kante ein 44-px-Knopf (`#bdHits`) über der Zeichnung. Antippen setzt das gewählte Bauteil ein bzw. wählt ein gleiches aus (Schalter schaltet um); Entfernen mit `Tools.undo`, „Alles entfernen“ mit Rückfrage. Lämpchen voll hell bei 4 W.
+
 ## Wärme (thermo.js)
 
 - **Gas in der Box:** 30/80/200 Teilchen der Masse 1 in einem 10 × 8 großen Kasten, nur Wandstöße (ideales Gas). Startgeschwindigkeiten aus der 2D-Maxwell-Verteilung, so skaliert, dass ⟨v²⟩ = 2·T/300 genau stimmt. Heizen skaliert alle Geschwindigkeiten mit √(T_neu/T_alt), die rechte Wand ist verschiebbar. Gemessener Druck = Impuls an die Wände pro Zeit und Wandlänge, gemittelt über 8 Zeiteinheiten; verglichen mit p·A = N·T (beide bezogen auf 300 K und vollen Kasten). Simulation 4-mal schneller als echte Zeit, Schritt 0,004.
@@ -106,7 +129,7 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v }, radar: { mode, shape, b, coat, obj, r }, wing: { mode, a, f, t, plane, vs: { paper, glider, small, airliner } }, sky: { h, mode }, bow: { h, plane, second }, float: { shape, H, c, liq } }` – nur Reglerstellungen und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v }, radar: { mode, shape, b, coat, obj, r }, wing: { mode, a, f, t, plane, vs: { paper, glider, small, airliner } }, sky: { h, mode }, bow: { h, plane, second }, float: { shape, H, c, liq }, dop: { v, f, d }, sea: { N, lat, tilt }, bd: { parts: { kante: { k, v, d, on } }, tool, sel } }` – Reglerstellungen, gebaute Schaltung und offener Versuch.
 
 ## Erweitern
 
@@ -132,5 +155,8 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 12 | Optik | Blauer Himmel (Rayleigh-Streuung, Sonnenstand) | Warum ist der Himmel blau – und abends rot? | fertig |
 | 13 | Optik | Regenbogen am Himmel (Kegel um den Gegenpunkt) | Warum ist der Regenbogen rund? | fertig |
 | 14 | Mechanik | Schwimmen (Eisen als Klumpen oder Schale, Archimedes) | Warum schwimmt ein Schiff aus Eisen? | fertig |
+| 15 | Wellen | Doppler-Effekt (Sirene fährt vorbei, Anhören) | Warum klingt eine Sirene anders, wenn sie vorbeifährt? | fertig |
+| 16 | Erde & Weltall | Jahreszeiten (Erdbahn, Sonnenhöhe, Tageslänge, mit/ohne Neigung) | Warum gibt es Jahreszeiten? | fertig |
+| 17 | Elektrizität | Schaltkreis-Baukasten (freie Schaltung, Knotenanalyse) | Warum geht an einer Abzweigung kein Strom verloren – und wie rechnet man damit jede Schaltung aus? | fertig |
 
-Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien mit Erde (zu #7), Spannungsteiler (zu #9). Ab etwa 15 Versuchen Tabs mit `data-group` (wie `unit-converter`). Eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
+Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien mit Erde (zu #7), Spannungsteiler (zu #9). Tabs mit `data-group` je Gebiet (seit 20 Versuchen). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
