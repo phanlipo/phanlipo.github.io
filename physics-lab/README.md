@@ -62,6 +62,7 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 ## Elektrizität & Magnetismus (electro.js)
 
 - **Teilchen im Magnetfeld:** Elektron, Proton, Alphateilchen; v = 1 … 10 · 10⁶ m/s, B = 1 … 10 mT, Feld in den oder aus dem Bildschirm. r = m·v/(|q|·B), T = 2π·m/(|q|·B). Maßstab je Teilchen fest (größter Kreis passt ins Bild), damit v und B die Kreisgröße sichtbar ändern. Die Animation ist verlangsamt: 3 s je Umlauf bei 5 mT, proportional zum echten T (hängt nur von B ab, nicht von v). Drehsinn aus F = q·v×B.
+- **Erde (Feldlinien):** Dipol im Erdmittelpunkt, B = (3(m·r̂)r̂ − m)/r³, m zeigt etwa nach geografisch Süd, um 10° gegen die Drehachse geneigt. Erdradius 1,6 Einheiten, äußerer Kern 3480/6371, innerer Kern 1220/6371 des Radius. 14 Linien starten auf der Südhalbkugel bei 12 … 67° neben dem magnetischen Nordpol und enden auf der Oberfläche oder am Bildrand. Nur das Feld außerhalb; die Erklärung (Geodynamo) unter „Warum hat die Erde ein Magnetfeld?“.
 - **Feldlinien:** Jeder Stabmagnet als zwei Pole (±1, Feld ∝ 1/r²) an seinen Enden; Linien starten auf einem kleinen Kreis um jeden Nordpol (14 je Pol) und werden mit dem Mittelpunktverfahren verfolgt, bis sie einen Südpol erreichen oder das Bild verlassen. Anordnungen: ein Magnet, N gegenüber S, N gegenüber N.
 - **Stromkreis:** Batterie ohne Innenwiderstand, ohmsche Lämpchen (2 … 50 Ω), Schaltungen eins/Reihe/parallel und Spannungsteiler (zwei Widerstände, Messgerät an R₂ ohne Stromverbrauch). Helligkeit = Leistung im Verhältnis zum selben Lämpchen allein an derselben Batterie. Die Punkte auf den Drähten sind eine CSS-Animation (Tempo ∝ Strom), bei „weniger Bewegung“ stehen sie still.
 
@@ -123,7 +124,7 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 4 | Mechanik | Schiefer Wurf mit/ohne Luftwiderstand | Warum fliegt der Ball mit Luftwiderstand unter weniger als 45° am weitesten? | fertig |
 | 5 | Optik | Brechung, Totalreflexion (Prisma/Regenbogen später) | Warum sieht ein Stab im Wasser geknickt aus? | fertig |
 | 6 | Atomphysik | Radioaktiver Zerfall; Spektrallinien (Bohr) | Warum gibt es eine Halbwertszeit, obwohl jeder Zerfall Zufall ist? Warum leuchtet jedes Element in eigenen Farben? | fertig |
-| 7 | Magnetismus | Lorentzkraft (Feldlinien später) | Warum fliegen geladene Teilchen im Magnetfeld im Kreis (Polarlicht)? | fertig |
+| 7 | Magnetismus | Lorentzkraft (Feldlinien später) | Warum fliegen geladene Teilchen im Magnetfeld im Kreis (Polarlicht)? Warum hat die Erde ein Magnetfeld? | fertig |
 | 8 | Thermodynamik | Gasteilchen in der Box (p, V, T) | Warum steigt der Druck, wenn das Gas warm wird? | fertig |
 | 9 | Elektrizität | Stromkreis mit festen Schaltungen (eins, Reihe, parallel) | Warum leuchten zwei Lämpchen in Reihe schwächer? | fertig |
 | 10 | Wellen | Radar & Tarnkappe (Spiegelung am Querschnitt, Radargleichung) | Warum sieht man Tarnkappenflugzeuge (auf dem Radar) nicht? | fertig |
@@ -132,4 +133,4 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 13 | Optik | Regenbogen am Himmel (Kegel um den Gegenpunkt) | Warum ist der Regenbogen rund? | fertig |
 | 14 | Mechanik | Schwimmen (Eisen als Klumpen oder Schale, Archimedes) | Warum schwimmt ein Schiff aus Eisen? | fertig |
 
-Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien (zu #7), Spannungsteiler (zu #9). Ab etwa 15 Versuchen Tabs mit `data-group` (wie `unit-converter`). Eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
+Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien mit Erde (zu #7), Spannungsteiler (zu #9). Ab etwa 15 Versuchen Tabs mit `data-group` (wie `unit-converter`). Eigenes Vorhaben: freier Schaltkreis-Baukasten (Bauteile verbinden, Knotenanalyse). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.

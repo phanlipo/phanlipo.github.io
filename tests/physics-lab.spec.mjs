@@ -727,6 +727,44 @@ test.describe('magnetic field lines', () => {
     await page.click('#mgMode button[data-v="particle"]');
     await expect(page.locator('#mgPart')).toBeVisible();
   });
+
+  test('the Earth: tilted dipole, field lines from south to north, geodynamo explained', async ({ page }) => {
+    await open(page, 'lorentz');
+    await page.click('#mgMode button[data-v="field"]');
+    await page.click('#mgCfg button[data-v="earth"]');
+    // 14 lines from the southern hemisphere; the 6 that leave the picture also come back in near the North Pole
+    await expect(page.locator('#mgField .fline')).toHaveCount(20);
+    await expect(page.locator('#mgField .core')).toHaveCount(1);
+    await expect(page.locator('#mgFWhy')).toContainText('Südpol (lila) nahe dem geografischen Nordpol');
+    const r = await page.evaluate(() => {
+      const E = window.Electro, R = E.EARTH.R, tilt = E.EARTH.tilt;
+      // along the magnetic equator (perpendicular to the tilted axis) the field points towards the north;
+      // at the magnetic poles it is twice as strong and points out of (south) or into (north) the Earth
+      const eq = E.earthField(R * Math.cos(tilt), -R * Math.sin(tilt));
+      const north = E.earthField(R * Math.sin(tilt), R * Math.cos(tilt)), south = E.earthField(-R * Math.sin(tilt), -R * Math.cos(tilt));
+      const lines = E.earthLines();
+      const R2 = R * R, onSurface = p => Math.abs(p[0] * p[0] + p[1] * p[1] - R2) < 1e-9;
+      return { eq, north, south, tilt, starts: lines.filter(l => onSurface(l[0])).map(l => l[0][1]),
+        backEnds: lines.filter(l => !onSurface(l[0])).map(l => l[l.length - 1][1]), ends: lines.map(l => Math.hypot(...l[l.length - 1])) };
+    });
+    expect(r.tilt * 180 / Math.PI).toBeCloseTo(10, 6);
+    // equator: B = −m/r³ with m = −(sin τ, cos τ), so B ∥ (sin τ, cos τ), |B| = 1/R³
+    expect(r.eq[1]).toBeGreaterThan(0);
+    expect(Math.atan2(r.eq[0], r.eq[1])).toBeCloseTo(r.tilt, 6);
+    expect(Math.hypot(...r.north) / Math.hypot(...r.eq)).toBeCloseTo(2, 6);
+    expect(r.north[1]).toBeLessThan(0);           // enters the Earth near the geographic North Pole
+    expect(r.south[1]).toBeLessThan(0);           // leaves it near the South Pole (pointing away, downwards)
+    expect(r.starts.length).toBe(14);
+    expect(r.starts.every(y => y < 0)).toBe(true); // lines start in the southern hemisphere …
+    expect(r.backEnds.length).toBe(6);
+    expect(r.backEnds.every(y => y > 0)).toBe(true); // … or come in from outside and end in the northern one
+    // lines that stay inside the picture end again on the Earth's surface (northern hemisphere)
+    expect(r.ends.filter(d => d < 1.7).length).toBeGreaterThanOrEqual(6);
+    await page.click('#mgEBox summary');
+    await expect(page.locator('#mgEExplain p')).toHaveCount(5);
+    await expect(page.locator('#mgEExplain')).toContainText('Curie-Temperatur');
+    await expect(page.locator('#mgEExplain')).toContainText('Geodynamo');
+  });
 });
 
 test.describe('gas meter labels on a phone', () => {
