@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "laser-mirrors";
-const VERSION = '49b947cc1c85';
+const VERSION = 'a828b3ee9eee';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

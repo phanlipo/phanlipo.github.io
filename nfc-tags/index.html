@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>NFC-Tags</title>
+<meta name="description" content="NFC-Tags mit dem Handy lesen und beschreiben (Chrome auf Android): Text, Link, Telefon, E-Mail, Kontakt oder WLAN – mit Verlauf, Tag kopieren, leeren und schreibschützen.">
+<meta name="tool:tags" content="Alltag, Werkzeug">
+<meta name="tool:features" content="NFC, Kopieren, Verlauf, KI-Agent">
+<meta name="tool:webmcp" content="get_current_tag, get_tag_history, prepare_tag_content">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann den zuletzt gelesenen Tag und den Verlauf lesen (ohne WLAN-Passwörter) und Inhalt zum Schreiben vorbereiten, z. B. „Bereite einen Tag mit meiner Website vor“. Scannen und Schreiben selbst startest immer du.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the last tag read and the history (without Wi-Fi passwords) and prepare content for writing, e.g. “Prepare a tag with my website”. Scanning and writing itself is always started by you.">
+<meta name="tool:icon" content="nfc">
+<meta name="tool:color" content="#0f766e">
+<meta name="tool:short-name" content="NFC-Tags">
+<meta name="tool:title-en" content="NFC Tags">
+<meta name="tool:description-en" content="Read and write NFC tags with your phone (Chrome on Android): text, link, phone, email, contact or Wi-Fi – with history, copying, erasing and locking tags.">
+<meta name="tool:short-name-en" content="NFC Tags">
+<meta name="tool:storage" content="nfc-tags.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Glue/+6e/YMHUjdIcH4i46YPTDS5mKS1JFmS2NarsMo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="NFC-Tags">
+<meta name="theme-color" content="#0f766e">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0f766e;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#5eead4;--accent-text:#042f2e}}
+main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.card>h2{margin-block-end:12px}
+#status{margin-block:12px 0}
+.wait{display:flex;flex-direction:column;gap:10px}
+.pulse{width:64px;height:64px;margin:4px auto;color:var(--accent);animation:pulse 1.6s ease-in-out infinite}
+.pulse .ic{width:64px;height:64px}
+@keyframes pulse{50%{opacity:.35;transform:scale(.9)}}
+@media (prefers-reduced-motion: reduce){.pulse{animation:none}}
+.tag-meta{margin:0 0 8px;color:var(--muted);font-size:14px;overflow-wrap:anywhere}
+.records{display:grid;gap:10px}
+.rec{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2);padding:10px 12px;min-width:0}
+.rec h3{margin:0 0 4px;font-size:15px;display:flex;align-items:center;gap:6px}
+.rec .val{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:16px}
+.rec .val.mono{font-size:13px}
+.rec .sub{margin:4px 0 0;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.rec dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;margin:0}
+.rec dt{color:var(--muted);font-size:14px}
+.rec dd{margin:0;overflow-wrap:anywhere}
+.rec .row{margin-block-start:8px}
+.rec .records{margin-block-start:6px}
+.kind-fields{display:grid;gap:12px;margin-block:12px}
+#size{margin:0 0 12px;color:var(--muted);font-size:14px}
+#textIn{min-height:110px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">NFC-Tags</span></h1>
+  <p class="sub" data-i18n="sub">Tags lesen und beschreiben</p>
+</header>
+
+<main>
+  <p class="notice warn" id="unsupported" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#alert-triangle"/></svg><span data-i18n="unsupported">Dieser Browser kann kein NFC. Web NFC gibt es nur in Chrome (und Samsung Internet, Opera) auf Android-Handys mit NFC – nicht auf dem iPhone und nicht am Computer. Vorbereiten und den Verlauf ansehen geht trotzdem.</span></p>
+
+  <div class="seg" role="group" aria-label="Modus" data-i18n-attr="aria-label:mode" id="mode">
+    <button type="button" aria-pressed="true" data-mode="read"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#nfc"/></svg><span data-i18n="modeRead">Lesen</span></button>
+    <button type="button" aria-pressed="false" data-mode="write"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#pencil"/></svg><span data-i18n="modeWrite">Schreiben</span></button>
+  </div>
+
+  <!-- Waiting for a tag (write, erase, lock): one panel for all, with cancel -->
+  <section class="card wait" id="waitBox" hidden aria-labelledby="waitText">
+    <div class="pulse" aria-hidden="true"><svg class="ic"><use href="../assets/icons.svg#nfc"/></svg></div>
+    <p id="waitText" role="status"></p>
+    <button type="button" class="btn block" id="btnCancel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+  </section>
+
+  <section class="card" id="readView" aria-labelledby="h-read">
+    <h2 id="h-read" data-i18n="readH">Tag lesen</h2>
+    <button type="button" class="btn primary block" id="btnScan"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#nfc"/></svg><span id="btnScanText" data-i18n="scanStart">Scannen starten</span></button>
+    <p class="muted" id="status" role="status"></p>
+  </section>
+
+  <section class="card" id="resultCard" hidden aria-labelledby="h-result">
+    <h2 id="h-result" data-i18n="resultH">Gelesener Tag</h2>
+    <p class="tag-meta" id="tagMeta"></p>
+    <div class="records" id="records"></div>
+  </section>
+
+  <section class="card" id="writeView" hidden aria-labelledby="h-write">
+    <h2 id="h-write" data-i18n="writeH">Tag beschreiben</h2>
+    <div class="chips wrap" role="group" aria-label="Inhalt" data-i18n-attr="aria-label:kind" id="kind">
+      <button type="button" aria-pressed="true" data-kind="text"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-text"/></svg><span data-i18n="k.text">Text</span></button>
+      <button type="button" aria-pressed="false" data-kind="url"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#link"/></svg><span data-i18n="k.url">Link</span></button>
+      <button type="button" aria-pressed="false" data-kind="tel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#phone"/></svg><span data-i18n="k.tel">Telefon</span></button>
+      <button type="button" aria-pressed="false" data-kind="mail"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#mail"/></svg><span data-i18n="k.mail">E-Mail</span></button>
+      <button type="button" aria-pressed="false" data-kind="contact"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#address-book"/></svg><span data-i18n="k.contact">Kontakt</span></button>
+      <button type="button" aria-pressed="false" data-kind="wifi"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#wifi"/></svg><span data-i18n="k.wifi">WLAN</span></button>
+    </div>
+
+    <div class="kind-fields" data-for="text">
+      <div class="form-field"><label for="textIn" data-i18n="f.text">Text</label><textarea id="textIn" data-f="text" maxlength="800"></textarea></div>
+    </div>
+    <div class="kind-fields" data-for="url" hidden>
+      <div class="form-field"><label for="urlIn" data-i18n="f.url">Adresse (Link)</label><input type="url" id="urlIn" data-f="url" inputmode="url" autocomplete="url" placeholder="https://example.com" maxlength="800"></div>
+    </div>
+    <div class="kind-fields" data-for="tel" hidden>
+      <div class="form-field"><label for="telIn" data-i18n="f.tel">Telefonnummer</label><input type="tel" id="telIn" data-f="tel" autocomplete="tel" placeholder="+49 30 1234567" maxlength="30"></div>
+    </div>
+    <div class="kind-fields" data-for="mail" hidden>
+      <div class="form-field"><label for="mailIn" data-i18n="f.email">E-Mail-Adresse</label><input type="email" id="mailIn" data-f="email" autocomplete="email" maxlength="200"></div>
+      <div class="form-field"><label for="subjIn" data-i18n="f.subject">Betreff (optional)</label><input type="text" id="subjIn" data-f="subject" maxlength="200"></div>
+    </div>
+    <div class="kind-fields" data-for="contact" hidden>
+      <div class="form-field"><label for="nameIn" data-i18n="f.name">Name</label><input type="text" id="nameIn" data-f="name" autocomplete="name" maxlength="100"></div>
+      <div class="form-field"><label for="ctelIn" data-i18n="f.ctel">Telefon (optional)</label><input type="tel" id="ctelIn" data-f="ctel" autocomplete="tel" maxlength="30"></div>
+      <div class="form-field"><label for="cmailIn" data-i18n="f.cemail">E-Mail (optional)</label><input type="email" id="cmailIn" data-f="cemail" autocomplete="email" maxlength="200"></div>
+    </div>
+    <div class="kind-fields" data-for="wifi" hidden>
+      <div class="form-field"><label for="ssidIn" data-i18n="f.ssid">Netzwerkname (SSID)</label><input type="text" id="ssidIn" data-f="ssid" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="32"></div>
+      <div class="seg" role="group" aria-label="Sicherheit" data-i18n-attr="aria-label:f.wauth" id="wauth">
+        <button type="button" aria-pressed="true" data-wauth="wpa2"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#lock"/></svg><span data-i18n="wpa">WPA2/WPA3</span></button>
+        <button type="button" aria-pressed="false" data-wauth="open"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#lock-open"/></svg><span data-i18n="wopen">Offen</span></button>
+      </div>
+      <div class="form-field" id="wkeyField"><label for="wkeyIn" data-i18n="f.wkey">Passwort</label><input type="text" id="wkeyIn" data-f="wkey" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="63"></div>
+      <p class="notice info"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="wifiHint">Android-Handys bieten nach dem Antippen an, sich mit dem WLAN zu verbinden; iPhones können WLAN-Tags nicht lesen. Das Passwort steht lesbar auf dem Tag und wird hier nicht gespeichert.</span></p>
+    </div>
+
+    <p id="size" aria-live="polite"></p>
+    <p class="form-error" id="writeErr" role="alert" hidden></p>
+    <button type="button" class="btn primary block" id="btnWrite"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#nfc"/></svg><span data-i18n="write">Auf Tag schreiben</span></button>
+  </section>
+
+  <section class="card" data-menu data-icon="settings" aria-labelledby="h-set">
+    <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <div class="checks">
+      <label class="check"><input type="checkbox" id="optHistory"><span data-i18n-html="optHistory">Verlauf speichern<small>Gelesene Tags bleiben nur in diesem Browser.</small></span></label>
+      <label class="check"><input type="checkbox" id="optVibrate"><span data-i18n="optVibrate">Vibrieren, wenn ein Tag gelesen wurde</span></label>
+    </div>
+  </section>
+
+  <details class="card" data-menu data-menu-page data-icon="history" id="histPage">
+    <summary data-i18n="hist">Verlauf</summary>
+    <ul class="list-rows" id="histList"></ul>
+    <div class="row" style="margin-block-start:12px">
+      <button type="button" class="btn danger" id="btnClearHist"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearHist">Verlauf löschen</span></button>
+    </div>
+  </details>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnErase"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eraser"/></svg><span data-i18n="erase">Tag leeren</span></button>
+  <button type="button" id="btnLock" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#lock"/></svg><span data-i18n="lock">Tag schreibschützen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>NFC-Tags sind kleine Aufkleber, Karten oder Anhänger mit einem Chip, den ein Handy aus wenigen Zentimetern liest. Diese App liest, was auf einem Tag steht, und schreibt eigenen Inhalt darauf – z. B. einen Link zur eigenen Website, die Telefonnummer am Schlüsselanhänger oder das Gäste-WLAN an der Haustür.</p>
+  <h3>Was du brauchst</h3>
+  <ul>
+    <li>Ein Android-Handy mit NFC und Chrome (oder Samsung Internet, Opera). Auf dem iPhone und am Computer gibt es Web NFC nicht.</li>
+    <li>NFC muss in den Android-Einstellungen eingeschaltet sein. Beim ersten Scannen fragt Chrome, ob die Seite NFC benutzen darf.</li>
+    <li>Leere Tags gibt es günstig zu kaufen (NTAG213, NTAG215, NTAG216). Die App zeigt beim Schreiben, ob der Inhalt etwa auf einen NTAG213 (144 Bytes) passt.</li>
+  </ul>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><strong>Lesen:</strong> „Scannen starten“ tippen und den Tag an die Rückseite des Handys halten (meist in der Mitte oder oben). Solange die App offen ist, liest sie jeden Tag, den du anhältst. Links öffnen sich erst, wenn du „Öffnen“ tippst – prüfe die Adresse vorher, Tags kann jeder bekleben.</li>
+    <li><strong>Schreiben:</strong> Unter „Schreiben“ die Art wählen (Text, Link, Telefon, E-Mail, Kontakt, WLAN), ausfüllen, „Auf Tag schreiben“ tippen und den Tag anhalten, bis die Meldung kommt. Der alte Inhalt des Tags wird ersetzt.</li>
+    <li><strong>Tag kopieren:</strong> Einen Tag lesen und beim Eintrag „Zum Schreiben übernehmen“ tippen, dann einen anderen Tag beschreiben.</li>
+    <li><strong>Im Menü:</strong> „Tag leeren“ löscht den Inhalt eines Tags. „Tag schreibschützen“ sperrt ihn <em>für immer</em> – danach kann niemand mehr etwas darauf schreiben, auch du nicht.</li>
+    <li>Beim Lesen zeigt die App die Seriennummer des Tags, sofern Chrome sie liefert. Tags von Bankkarten, Ausweisen und Fahrkarten enthalten meist keine lesbaren NDEF-Daten.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Der Verlauf (bis zu 100 gelesene Tags, abschaltbar), der Entwurf zum Schreiben und die Einstellungen bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“). WLAN-Passwörter aus dem Schreib-Formular werden nicht gespeichert; liest du einen WLAN-Tag, steht sein Passwort aber im Verlauf – lösche den Eintrag oder schalte den Verlauf ab, wenn andere das Gerät benutzen. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>NFC tags are small stickers, cards or key fobs with a chip that a phone reads from a few centimetres away. This app reads what is on a tag and writes your own content to it – e.g. a link to your website, your phone number on a key fob or the guest Wi-Fi at the front door.</p>
+  <h3>What you need</h3>
+  <ul>
+    <li>An Android phone with NFC and Chrome (or Samsung Internet, Opera). Web NFC is not available on the iPhone or on computers.</li>
+    <li>NFC has to be switched on in the Android settings. The first time you scan, Chrome asks whether the page may use NFC.</li>
+    <li>Blank tags are cheap to buy (NTAG213, NTAG215, NTAG216). When writing, the app shows whether the content roughly fits on an NTAG213 (144 bytes).</li>
+  </ul>
+  <h3>How to use</h3>
+  <ul>
+    <li><strong>Read:</strong> tap “Start scanning” and hold the tag to the back of the phone (usually the middle or top). While the app is open it reads every tag you hold to it. Links only open when you tap “Open” – check the address first, anyone can put stickers on things.</li>
+    <li><strong>Write:</strong> under “Write” choose the kind (text, link, phone, email, contact, Wi-Fi), fill it in, tap “Write to tag” and hold the tag to the phone until the message appears. The old content of the tag is replaced.</li>
+    <li><strong>Copy a tag:</strong> read a tag, tap “Use for writing” on the entry, then write another tag.</li>
+    <li><strong>In the menu:</strong> “Erase tag” deletes the content of a tag. “Lock tag” makes it read-only <em>for good</em> – after that nobody can write to it, not even you.</li>
+    <li>When reading, the app shows the serial number of the tag if Chrome provides it. Bank cards, ID cards and tickets usually hold no readable NDEF data.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The history (up to 100 tags read, can be switched off), the draft for writing and the settings stay only in this browser (back them up or move them under “Back up data”). Wi-Fi passwords from the write form are not stored; if you read a Wi-Fi tag, its password is in the history though – delete the entry or switch the history off if others use the device. Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann den zuletzt gelesenen Tag und den Verlauf lesen (ohne WLAN-Passwörter) und Inhalt zum Schreiben vorbereiten, z. B. „Bereite einen Tag mit meiner Website vor“. Scannen und Schreiben selbst startest immer du. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the last tag read and the history (without Wi-Fi passwords) and prepare content for writing, e.g. “Prepare a tag with my website”. Scanning and writing itself is always started by you. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 2b1fe7754f73</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="ndef.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{scanStop:'Scannen stoppen',idle:'Tippe auf „Scannen starten“ und halte dann einen Tag an die Rückseite des Handys.',
+    scanning:'Bereit – halte einen Tag an die Rückseite des Handys.',starting:'NFC wird gestartet …',
+    noNfc:'Hier nicht möglich: Dieser Browser kann kein NFC.',
+    'err.NotAllowedError':'NFC wurde nicht erlaubt. Erlaube es in Chrome über das Schloss neben der Adresse (Website-Einstellungen → NFC).',
+    'err.NotSupportedError':'NFC ist ausgeschaltet oder fehlt. Schalte NFC in den Android-Einstellungen ein und versuche es noch einmal.',
+    'err.NotReadableError':'NFC ist gerade nicht nutzbar (z. B. von einer anderen App belegt). Versuche es gleich noch einmal.',
+    'err.NetworkError':'Der Tag wurde zu früh weggenommen oder lässt sich nicht beschreiben. Halte ihn ruhig an das Handy und versuche es noch einmal.',
+    'err.InvalidStateError':'Gerade läuft schon ein NFC-Vorgang.','err.SyntaxError':'Dieser Inhalt lässt sich nicht als NFC-Daten schreiben.',
+    'err.other':'NFC-Fehler: {name}',readErr:'Dieser Tag ließ sich nicht lesen. Er ist leer, nicht NDEF-formatiert oder wurde zu früh weggenommen.',
+    tagRead:'Tag gelesen',serial:'Seriennummer {s}',recs:'{n} Einträge',rec1:'1 Eintrag',noRecs:'Der Tag ist leer.',
+    'r.text':'Text','r.url':'Link','r.tel':'Telefonnummer','r.mail':'E-Mail','r.sms':'SMS','r.geo':'Ort','r.uri':'Adresse',
+    'r.contact':'Kontakt','r.wifi':'WLAN','r.mime':'Daten ({t})','r.binary':'Binärdaten ({t})','r.poster':'Smart Poster','r.empty':'Leerer Eintrag','r.other':'Eintrag ({t})',
+    lang:'Sprache: {l}',bytes:'{n} Bytes',cut:'gekürzt',name:'Name',tel:'Telefon',email:'E-Mail',org:'Firma',web:'Website',
+    ssid:'Netzwerk',auth:'Sicherheit',key:'Passwort','auth.wpa2':'WPA2/WPA3','auth.wpa':'WPA','auth.open':'offen','auth.other':'andere',
+    showKey:'Passwort zeigen',copy:'Kopieren',copied:'Kopiert',copyFail:'Kopieren nicht möglich',open:'Öffnen',call:'Anrufen',mailTo:'E-Mail schreiben',
+    useWrite:'Zum Schreiben übernehmen',taken:'Ins Schreib-Formular übernommen',
+    holdWrite:'Halte jetzt den Tag an die Rückseite des Handys, um ihn zu beschreiben.',holdErase:'Halte jetzt den Tag an das Handy, um ihn zu leeren.',
+    holdLock:'Halte jetzt den Tag an das Handy, um ihn zu sperren.',written:'Tag beschrieben',erased:'Tag geleert',locked:'Tag schreibgeschützt',
+    canceled:'Abgebrochen',noLock:'Dieser Browser kann Tags nicht schreibschützen.',
+    lockQ:'Den nächsten Tag, den du anhältst, für immer schreibschützen? Danach lässt er sich nie wieder ändern.',eraseQ:'Den Inhalt des nächsten Tags, den du anhältst, löschen?',
+    size:'Etwa {n} Bytes – passt auf einen {tag} ({cap} Bytes).',tooBig:'Etwa {n} Bytes – das ist mehr, als gängige Tags fassen (NTAG216: 888 Bytes).',
+    'e.emptyText':'Gib einen Text ein.','e.emptyUrl':'Gib eine Adresse ein.','e.badUrl':'Das ist keine gültige Web-Adresse (z. B. https://example.com).',
+    'e.badTel':'Das ist keine gültige Telefonnummer.','e.badEmail':'Das ist keine gültige E-Mail-Adresse.','e.emptyName':'Gib einen Namen ein.',
+    'e.emptySsid':'Gib den Netzwerknamen ein.','e.longSsid':'Der Netzwerkname ist zu lang (höchstens 32 Bytes).','e.badKey':'Das Passwort braucht 8 bis 63 Zeichen.','e.kind':'Unbekannte Art.',
+    writeMissing:'Erst ausfüllen: {msg}',
+    histEmpty:'Noch keine Tags gelesen.',histOff:'Der Verlauf ist abgeschaltet.',delEntry:'Eintrag löschen',deleted:'Eintrag gelöscht',
+    clearQ:'Den ganzen Verlauf ({n} Tags) löschen?',cleared:'Verlauf gelöscht',histFail:'Verlauf konnte nicht gespeichert werden.',
+    'mcp.current':'Tag gelesen','mcp.history':'Verlauf gelesen','mcp.prepare':'Inhalt vorbereitet'},
+  en:{title:'NFC Tags',sub:'Read and write tags',mode:'Mode',modeRead:'Read',modeWrite:'Write',cancel:'Cancel',
+    unsupported:'This browser cannot do NFC. Web NFC is only available in Chrome (and Samsung Internet, Opera) on Android phones with NFC – not on the iPhone and not on computers. Preparing content and viewing the history still work.',
+    readH:'Read a tag',scanStart:'Start scanning',scanStop:'Stop scanning',resultH:'Tag read',writeH:'Write a tag',kind:'Content',
+    'k.text':'Text','k.url':'Link','k.tel':'Phone','k.mail':'Email','k.contact':'Contact','k.wifi':'Wi-Fi',
+    'f.text':'Text','f.url':'Address (link)','f.tel':'Phone number','f.email':'Email address','f.subject':'Subject (optional)','f.name':'Name',
+    'f.ctel':'Phone (optional)','f.cemail':'Email (optional)','f.ssid':'Network name (SSID)','f.wauth':'Security','f.wkey':'Password',wpa:'WPA2/WPA3',wopen:'Open',
+    wifiHint:'Android phones offer to join the Wi-Fi after tapping; iPhones cannot read Wi-Fi tags. The password is readable on the tag and is not stored here.',
+    write:'Write to tag',settings:'Settings',optHistory:'Keep a history<small>Tags read stay only in this browser.</small>',optVibrate:'Vibrate when a tag was read',
+    hist:'History',clearHist:'Clear history',erase:'Erase tag',lock:'Lock tag',
+    idle:'Tap “Start scanning”, then hold a tag to the back of the phone.',scanning:'Ready – hold a tag to the back of the phone.',starting:'Starting NFC …',
+    noNfc:'Not possible here: this browser cannot do NFC.',
+    'err.NotAllowedError':'NFC was not allowed. Allow it in Chrome via the lock next to the address (site settings → NFC).',
+    'err.NotSupportedError':'NFC is switched off or missing. Switch NFC on in the Android settings and try again.',
+    'err.NotReadableError':'NFC cannot be used right now (e.g. another app has it). Try again in a moment.',
+    'err.NetworkError':'The tag was taken away too early or cannot be written. Hold it still against the phone and try again.',
+    'err.InvalidStateError':'Another NFC operation is running.','err.SyntaxError':'This content cannot be written as NFC data.',
+    'err.other':'NFC error: {name}',readErr:'This tag could not be read. It is blank, not NDEF formatted or was taken away too early.',
+    tagRead:'Tag read',serial:'Serial number {s}',recs:'{n} records',rec1:'1 record',noRecs:'The tag is empty.',
+    'r.text':'Text','r.url':'Link','r.tel':'Phone number','r.mail':'Email','r.sms':'SMS','r.geo':'Place','r.uri':'Address',
+    'r.contact':'Contact','r.wifi':'Wi-Fi','r.mime':'Data ({t})','r.binary':'Binary data ({t})','r.poster':'Smart poster','r.empty':'Empty record','r.other':'Record ({t})',
+    lang:'Language: {l}',bytes:'{n} bytes',cut:'shortened',name:'Name',tel:'Phone',email:'Email',org:'Company',web:'Website',
+    ssid:'Network',auth:'Security',key:'Password','auth.wpa2':'WPA2/WPA3','auth.wpa':'WPA','auth.open':'open','auth.other':'other',
+    showKey:'Show password',copy:'Copy',copied:'Copied',copyFail:'Copying not possible',open:'Open',call:'Call',mailTo:'Write email',
+    useWrite:'Use for writing',taken:'Put into the write form',
+    holdWrite:'Now hold the tag to the back of the phone to write it.',holdErase:'Now hold the tag to the phone to erase it.',
+    holdLock:'Now hold the tag to the phone to lock it.',written:'Tag written',erased:'Tag erased',locked:'Tag locked',
+    canceled:'Cancelled',noLock:'This browser cannot lock tags.',
+    lockQ:'Lock the next tag you hold to the phone for good? It can never be changed again.',eraseQ:'Delete the content of the next tag you hold to the phone?',
+    size:'About {n} bytes – fits on an {tag} ({cap} bytes).',tooBig:'About {n} bytes – more than common tags hold (NTAG216: 888 bytes).',
+    'e.emptyText':'Enter a text.','e.emptyUrl':'Enter an address.','e.badUrl':'This is not a valid web address (e.g. https://example.com).',
+    'e.badTel':'This is not a valid phone number.','e.badEmail':'This is not a valid email address.','e.emptyName':'Enter a name.',
+    'e.emptySsid':'Enter the network name.','e.longSsid':'The network name is too long (at most 32 bytes).','e.badKey':'The password needs 8 to 63 characters.','e.kind':'Unknown kind.',
+    writeMissing:'Fill in first: {msg}',
+    histEmpty:'No tags read yet.',histOff:'The history is switched off.',delEntry:'Delete entry',deleted:'Entry deleted',
+    clearQ:'Delete the whole history ({n} tags)?',cleared:'History cleared',histFail:'The history could not be saved.',
+    'mcp.current':'tag read','mcp.history':'history read','mcp.prepare':'content prepared'}
+});
+const t=Tools.t, $=Tools.$, N=window.NfcNdef;
+const LS_SET='nfc-tags.settings.v1', LS_HIST='nfc-tags.history.v1', LS_DRAFT='nfc-tags.draft.v1', MAX_HIST=100;
+const KINDS=['text','url','tel','mail','contact','wifi'];
+const DRAFT_FIELDS=['text','url','tel','email','subject','name','ctel','cemail','ssid']; // never the Wi-Fi password
+const settings=Object.assign({history:true,vibrate:true,mode:'read'},Tools.load(LS_SET,{}));
+const draft=Object.assign({kind:'text',wauth:'wpa2',wkey:''},Tools.load(LS_DRAFT,{}),{wkey:''});
+if(!KINDS.includes(draft.kind))draft.kind='text';
+const saveSet=()=>Tools.save(LS_SET,settings);
+const saveDraft=()=>{const d={kind:draft.kind,wauth:draft.wauth};for(const k of DRAFT_FIELDS)if(draft[k])d[k]=String(draft[k]);Tools.save(LS_DRAFT,d);};
+const supported='NDEFReader' in window;
+let scanCtl=null, scanState='idle', scanErr='', opCtl=null, op=null, current=null, lastOpError='';
+
+const fmtDate=ts=>new Date(ts).toLocaleString(Tools.locale(),{dateStyle:'medium',timeStyle:'short'});
+const errText=e=>{const k='err.'+(e&&e.name);const s=t(k);return s!==k?s:t('err.other',{name:(e&&e.name)||'?'});};
+const icon=n=>Tools.icon(n);
+
+/* ---------- Mode: read / write ---------- */
+function setMode(m){
+  settings.mode=m==='write'?'write':'read'; saveSet();
+  for(const b of document.querySelectorAll('#mode button'))b.setAttribute('aria-pressed',String(b.dataset.mode===settings.mode));
+  $('readView').hidden=settings.mode!=='read';
+  $('resultCard').hidden=settings.mode!=='read'||!current;
+  $('writeView').hidden=settings.mode!=='write';
+  if(settings.mode==='write')stopScan();
+}
+for(const b of document.querySelectorAll('#mode button'))b.addEventListener('click',()=>setMode(b.dataset.mode));
+
+/* ---------- Reading ---------- */
+function renderScan(){
+  const on=scanState==='scanning'||scanState==='starting';
+  $('btnScanText').textContent=t(on?'scanStop':'scanStart');
+  $('btnScan').querySelector('use').setAttribute('href','../assets/icons.svg#'+(on?'player-stop':'nfc'));
+  $('btnScan').classList.toggle('primary',!on);
+  $('btnScan').disabled=!supported;
+  const st=$('status');
+  st.className=scanState==='error'?'form-error':'muted';
+  st.textContent=!supported?t('noNfc'):scanState==='scanning'?t('scanning'):scanState==='starting'?t('starting'):scanState==='error'?scanErr:t('idle');
+}
+async function startScan(){
+  if(!supported||scanCtl)return;
+  abortOp();
+  const ctl=new AbortController(); scanCtl=ctl; scanState='starting'; renderScan();
+  try{
+    const reader=new window.NDEFReader();
+    reader.addEventListener('reading',e=>{ if(scanCtl===ctl)onTag(e); });
+    reader.addEventListener('readingerror',()=>{ if(scanCtl!==ctl)return; Tools.diag.log('reading error'); Tools.toast(t('readErr')); });
+    await reader.scan({signal:ctl.signal});
+    if(scanCtl!==ctl)return;
+    scanState='scanning'; Tools.diag.log('scan started');
+  }catch(e){
+    if(scanCtl!==ctl)return;
+    scanCtl=null;
+    if(e&&e.name==='AbortError'){scanState='idle';}
+    else{scanState='error';scanErr=errText(e);Tools.diag.log('scan failed',{name:e&&e.name});}
+  }
+  renderScan();
+}
+function stopScan(){
+  if(!scanCtl)return;
+  const c=scanCtl; scanCtl=null; c.abort(); scanState='idle'; Tools.diag.log('scan stopped'); renderScan();
+}
+$('btnScan').addEventListener('click',()=>{ if(scanCtl)stopScan(); else startScan(); });
+
+function onTag(e){
+  let records=[];
+  try{ records=Array.from((e.message&&e.message.records)||[],r=>N.decode(r)); }
+  catch(err){ Tools.diag.log('decode failed',{name:err&&err.name}); }
+  const tag={id:Tools.uid('t'),ts:Date.now(),records};
+  if(e.serialNumber)tag.serial=String(e.serialNumber);
+  Tools.diag.log('tag read',{records:records.length,kinds:records.map(r=>r.kind).join(','),serial:!!tag.serial});
+  show(tag);
+  addHist(tag);
+  if(settings.vibrate&&'vibrate' in navigator)navigator.vibrate(60);
+}
+function show(tag){
+  current=tag;
+  const meta=[fmtDate(tag.ts)];
+  if(tag.serial)meta.push(t('serial',{s:tag.serial}));
+  meta.push(tag.records.length===1?t('rec1'):t('recs',{n:Tools.fmt(tag.records.length,0)}));
+  $('tagMeta').textContent=meta.join(' · ');
+  const box=$('records'); box.textContent='';
+  if(!tag.records.length){const p=document.createElement('p');p.className='muted';p.textContent=t('noRecs');box.append(p);}
+  for(const r of tag.records)box.append(recordEl(r));
+  if(settings.mode==='read')$('resultCard').hidden=false;
+}
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
+function btn(label,ic,fn){const b=el('button','btn');b.type='button';b.innerHTML=icon(ic);b.append(el('span','',label));b.addEventListener('click',fn);return b;}
+function copyBtn(text){return btn(t('copy'),'copy',async()=>{Tools.toast(t(await Tools.copyText(text)?'copied':'copyFail'));});}
+function linkBtn(href,label,ic){const a=el('a','btn');a.href=href;a.target='_blank';a.rel='noopener noreferrer';a.innerHTML=icon(ic);a.append(el('span','',label));return a;}
+const RICON={text:'file-text',url:'link',tel:'phone',mail:'mail',sms:'message',geo:'map-pin',contact:'address-book',wifi:'wifi',mime:'file',binary:'file',poster:'link',empty:'file',other:'file'};
+function recordTitle(r){
+  if(r.kind==='url')return t({web:'r.url',tel:'r.tel',mail:'r.mail',sms:'r.sms',geo:'r.geo'}[r.urlKind]||'r.uri');
+  if(r.kind==='mime'||r.kind==='binary')return t('r.'+r.kind,{t:r.mediaType||'?'});
+  if(r.kind==='other')return t('r.other',{t:r.recordType});
+  return t('r.'+r.kind);
+}
+function recordEl(r){
+  const box=el('div','rec'), h=el('h3');
+  h.innerHTML=icon(r.kind==='url'?(RICON[r.urlKind]||'link'):RICON[r.kind]||'file');
+  h.append(el('span','',recordTitle(r)));
+  box.append(h);
+  const actions=el('div','row');
+  if(r.kind==='text'){box.append(el('p','val',r.text));if(r.lang)box.append(el('p','sub',t('lang',{l:r.lang})));actions.append(copyBtn(r.text));}
+  else if(r.kind==='url'){
+    let shown=r.url; try{ if(r.urlKind==='tel'||r.urlKind==='mail')shown=decodeURIComponent(r.url.replace(/^(tel|mailto):/i,'')); }catch(_){}
+    box.append(el('p','val',shown));
+    if(r.urlKind==='web')actions.append(linkBtn(r.url,t('open'),'external-link'));
+    else if(r.urlKind==='tel')actions.append(linkBtn(r.url,t('call'),'phone'));
+    else if(r.urlKind==='mail')actions.append(linkBtn(r.url,t('mailTo'),'mail'));
+    actions.append(copyBtn(shown));
+  }
+  else if(r.kind==='contact'){
+    const dl=el('dl');
+    for(const k of ['name','org','tel','email','url'])if(r.fields[k]){dl.append(el('dt','',t(k==='url'?'web':k)),el('dd','',r.fields[k]));}
+    box.append(dl);actions.append(copyBtn(r.text));
+  }
+  else if(r.kind==='wifi'){
+    const dl=el('dl');dl.append(el('dt','',t('ssid')),el('dd','',r.ssid),el('dt','',t('auth')),el('dd','',t('auth.'+r.auth)));
+    box.append(dl);
+    if(r.key){
+      const kb=btn(t('showKey'),'eye',()=>{kb.replaceWith(el('p','val mono',r.key));});
+      actions.append(kb,copyBtn(r.key));
+    }
+  }
+  else if(r.kind==='mime'){box.append(el('p','val mono',r.text));actions.append(copyBtn(r.text));}
+  else if(r.kind==='poster'){const inner=el('div','records');for(const x of r.records)inner.append(recordEl(x));box.append(inner);}
+  else if(r.kind==='binary'||r.kind==='other'){
+    if(r.text!=null){box.append(el('p','val',r.text));actions.append(copyBtn(r.text));}
+    else if(r.hex){box.append(el('p','val mono',r.hex));}
+    box.append(el('p','sub',t('bytes',{n:Tools.fmt(r.size,0)})+(r.truncated?' · '+t('cut'):'')));
+  }
+  if(r.id)box.append(el('p','sub','ID: '+r.id));
+  const f=N.fromDecoded(r);
+  if(f&&r.kind!=='poster')actions.append(btn(t('useWrite'),'pencil',()=>{takeIntoForm(f);Tools.toast(t('taken'));}));
+  if(actions.childNodes.length)box.append(actions);
+  return box;
+}
+
+/* ---------- Writing ---------- */
+function takeIntoForm(f){
+  for(const k of DRAFT_FIELDS)draft[k]='';
+  draft.wkey='';
+  Object.assign(draft,f);
+  saveDraft(); renderForm(); setMode('write');
+}
+function renderForm(){
+  for(const b of document.querySelectorAll('#kind button'))b.setAttribute('aria-pressed',String(b.dataset.kind===draft.kind));
+  for(const s of document.querySelectorAll('.kind-fields'))s.hidden=s.dataset.for!==draft.kind;
+  for(const i of document.querySelectorAll('[data-f]'))if(i.value!==String(draft[i.dataset.f]||''))i.value=draft[i.dataset.f]||'';
+  for(const b of document.querySelectorAll('#wauth button'))b.setAttribute('aria-pressed',String(b.dataset.wauth===draft.wauth));
+  $('wkeyField').hidden=draft.wauth==='open';
+  renderSize();
+}
+function renderSize(){
+  const res=N.build(draft);
+  $('writeErr').hidden=true;
+  if(res.error){$('size').textContent='';}
+  else{
+    const n=N.estimate(res.records), fit=N.fits(n);
+    $('size').textContent=fit?t('size',{n:Tools.fmt(n,0),tag:fit.tag,cap:Tools.fmt(fit.capacity,0)}):t('tooBig',{n:Tools.fmt(n,0)});
+  }
+  $('btnWrite').disabled=!supported;
+}
+for(const b of document.querySelectorAll('#kind button'))b.addEventListener('click',()=>{draft.kind=b.dataset.kind;saveDraft();renderForm();});
+for(const b of document.querySelectorAll('#wauth button'))b.addEventListener('click',()=>{draft.wauth=b.dataset.wauth;saveDraft();renderForm();});
+for(const i of document.querySelectorAll('[data-f]'))i.addEventListener('input',()=>{draft[i.dataset.f]=i.value;saveDraft();renderSize();});
+
+// One pending operation (write, erase, lock) at a time; scanning stops meanwhile
+function abortOp(){ if(opCtl){const c=opCtl;opCtl=null;op=null;c.abort();} $('waitBox').hidden=true; }
+async function runOp(kind,fn){
+  if(!supported){Tools.toast(t('noNfc'));return false;}
+  stopScan(); abortOp();
+  const ctl=new AbortController(); opCtl=ctl; op=kind;
+  $('waitText').textContent=t({write:'holdWrite',erase:'holdErase',lock:'holdLock'}[kind]);
+  $('waitBox').hidden=false;
+  Tools.diag.log(kind+' waiting');
+  try{
+    await fn(new window.NDEFReader(),ctl.signal);
+    if(opCtl!==ctl)return false;
+    Tools.diag.log(kind+' done'); lastOpError='';
+    Tools.toast(t({write:'written',erase:'erased',lock:'locked'}[kind]));
+    if('vibrate' in navigator&&settings.vibrate)navigator.vibrate([40,60,40]);
+    return true;
+  }catch(e){
+    if(opCtl!==ctl)return false;
+    if(e&&e.name==='AbortError'){Tools.toast(t('canceled'));return false;}
+    lastOpError=e&&e.name||'?';
+    Tools.diag.log(kind+' failed',{name:lastOpError});
+    const msg=errText(e);
+    if(kind==='write'){$('writeErr').textContent=msg;$('writeErr').hidden=false;}
+    else Tools.toast(msg,6000);
+    return false;
+  }finally{
+    if(opCtl===ctl){opCtl=null;op=null;$('waitBox').hidden=true;}
+  }
+}
+$('btnCancel').addEventListener('click',()=>{ const had=!!opCtl; abortOp(); if(had){Tools.diag.log('operation cancelled');Tools.toast(t('canceled'));} });
+$('btnWrite').addEventListener('click',()=>{
+  const res=N.build(draft);
+  if(res.error){$('writeErr').textContent=t('e.'+res.error);$('writeErr').hidden=false;return;}
+  $('writeErr').hidden=true;
+  runOp('write',(r,signal)=>r.write({records:res.records},{signal,overwrite:true}));
+});
+$('btnErase').addEventListener('click',async()=>{
+  Tools.menu.close();
+  if(!supported){Tools.toast(t('noNfc'));return;}
+  if(!await Tools.confirm(t('eraseQ'),{action:'delete'}))return;
+  runOp('erase',(r,signal)=>r.write({records:[{recordType:'empty'}]},{signal,overwrite:true}));
+});
+$('btnLock').addEventListener('click',async()=>{
+  Tools.menu.close();
+  if(!supported){Tools.toast(t('noNfc'));return;}
+  if(typeof window.NDEFReader.prototype.makeReadOnly!=='function'){Tools.toast(t('noLock'));return;}
+  if(!await Tools.confirm(t('lockQ'),{ok:t('lock')}))return;
+  runOp('lock',(r,signal)=>r.makeReadOnly({signal}));
+});
+
+/* ---------- History ---------- */
+function loadHist(){const h=Tools.load(LS_HIST,[]);return Array.isArray(h)?h.filter(x=>x&&Array.isArray(x.records)&&typeof x.ts==='number'):[];}
+function saveHist(h){if(!Tools.save(LS_HIST,h.slice(0,MAX_HIST))){Tools.diag.log('history save failed');Tools.toast(t('histFail'));}}
+function addHist(tag){ if(!settings.history)return; const h=loadHist(); h.unshift(tag); saveHist(h); renderHist(); }
+function summary(tag){
+  const r=tag.records[0];
+  if(!r)return t('noRecs');
+  const s=r.kind==='text'?r.text:r.kind==='url'?r.url.replace(/^(tel|mailto):/i,''):r.kind==='contact'?(r.fields.name||''):r.kind==='wifi'?r.ssid:r.kind==='mime'?r.text:'';
+  const title=recordTitle(r);
+  return s?title+': '+s.replace(/\s+/g,' ').slice(0,80):title;
+}
+function renderHist(){
+  const h=loadHist(),ul=$('histList');ul.textContent='';
+  if(!h.length){ul.append(el('li','muted',t(settings.history?'histEmpty':'histOff')));}
+  for(const e of h){
+    const li=el('li'),b=el('button','open');b.type='button';
+    b.append(el('span','name',summary(e)),el('span','meta',fmtDate(e.ts)+(e.serial?' · '+e.serial:'')));
+    b.addEventListener('click',()=>{setMode('read');show(e);Tools.menu.close();});
+    const d=el('button','btn icon');d.type='button';d.innerHTML=icon('trash');
+    d.setAttribute('aria-label',t('delEntry'));d.title=t('delEntry');
+    d.addEventListener('click',()=>{
+      const all=loadHist(),i=all.findIndex(x=>x.id===e.id);if(i<0)return;
+      const [gone]=all.splice(i,1);saveHist(all);renderHist();
+      Tools.undo(t('deleted'),()=>{const now=loadHist();now.splice(Math.min(i,now.length),0,gone);saveHist(now);renderHist();});
+    });
+    li.append(b,d);ul.append(li);
+  }
+  $('btnClearHist').hidden=!h.length;
+}
+$('btnClearHist').addEventListener('click',async()=>{
+  const n=loadHist().length;if(!n)return;
+  if(!await Tools.confirm(t('clearQ',{n:Tools.fmt(n,0)}),{action:'delete'}))return;
+  Tools.remove(LS_HIST);renderHist();Tools.toast(t('cleared'));
+});
+
+/* ---------- Settings ---------- */
+$('optHistory').checked=settings.history;$('optVibrate').checked=settings.vibrate;
+$('optHistory').addEventListener('change',e=>{settings.history=e.target.checked;saveSet();renderHist();});
+$('optVibrate').addEventListener('change',e=>{settings.vibrate=e.target.checked;saveSet();});
+
+/* ---------- Start ---------- */
+$('unsupported').hidden=supported;
+function renderAll(){ renderScan(); renderForm(); renderHist(); if(current)show(current); }
+setMode(settings.mode);
+renderAll();
+Tools.onLang(renderAll);
+Tools.diag.log('start',{webNfc:supported,makeReadOnly:supported&&typeof window.NDEFReader.prototype.makeReadOnly==='function',secure:window.isSecureContext});
+if(supported&&navigator.permissions&&navigator.permissions.query)
+  navigator.permissions.query({name:'nfc'}).then(p=>Tools.diag.log('nfc permission',{state:p.state}),()=>{});
+Tools.diag.info(()=>({webNfc:supported,mode:settings.mode,scan:scanState,op,lastOpError,kind:draft.kind,
+  current:current?{records:current.records.length,kinds:current.records.map(r=>r.kind).join(',')}:null,history:loadHist().length}));
+// Chrome pauses NFC while the page is hidden; note it so a "nothing happens" report is explainable
+document.addEventListener('visibilitychange',()=>{ if(scanCtl||opCtl)Tools.diag.log('visibility',{state:document.visibilityState}); });
+
+/* ---------- WebMCP ---------- */
+// Agents never get Wi-Fi passwords; links and texts on tags come from strangers (untrusted)
+function forAgent(r){
+  if(r.kind==='wifi'){const o=Object.assign({},r);delete o.key;o.has_password=!!r.key;return o;}
+  if(r.kind==='poster')return Object.assign({},r,{records:r.records.map(forAgent)});
+  return r;
+}
+const tagForAgent=tag=>({time:new Date(tag.ts).toISOString(),serial_number:tag.serial||null,records:tag.records.map(forAgent)});
+Tools.mcp.register({
+  name:'get_current_tag',title:'Read the tag shown',label:'mcp.current',readOnly:true,untrusted:true,
+  description:'Returns the NFC tag the app shows right now (the last one read or opened from the history): time, serial number and its NDEF records decoded (text, url with kind web/tel/mail/sms/geo, contact with fields, wifi without the password, mime text, binary as hex, smart poster with nested records). Returns {tag:null} when no tag has been read yet. Reading a new tag needs the user to scan.',
+  execute:()=>({tag:current?tagForAgent(current):null})
+});
+Tools.mcp.register({
+  name:'get_tag_history',title:'Read the tag history',label:'mcp.history',readOnly:true,untrusted:true,
+  description:'Reads the history of NFC tags read in the app, newest first: time, serial number and decoded records (Wi-Fi passwords withheld). Optional search text filters by record content.',
+  inputSchema:{type:'object',properties:{
+    search:{type:'string',maxLength:100,description:'Only tags whose records contain this text (case-insensitive).'},
+    limit:{type:'integer',minimum:1,maximum:100,description:'Maximum number of tags. Default 20.'}
+  },additionalProperties:false},
+  execute:({search='',limit=20})=>{
+    const q=search.trim().toLowerCase();
+    let h=loadHist().map(tagForAgent);
+    if(q)h=h.filter(x=>JSON.stringify(x.records).toLowerCase().includes(q));
+    return {enabled:settings.history,total:h.length,tags:h.slice(0,limit)};
+  }
+});
+Tools.mcp.register({
+  name:'prepare_tag_content',title:'Prepare content to write',label:'mcp.prepare',
+  description:'Fills the write form of the app with content for an NFC tag and switches to the write view, so the user only has to tap "Write to tag" and hold a tag to the phone. It does not write anything itself. Kinds: text (text), url (url, https is added if missing), tel (tel), mail (email, optional subject), contact (name, optional tel and email as a vCard), wifi (ssid, security wpa2 or open, password for wpa2 with 8–63 characters). Returns the estimated size in bytes and the smallest common tag it fits on, or an error code when a field is invalid.',
+  inputSchema:{type:'object',properties:{
+    kind:{type:'string',enum:KINDS,description:'What the tag should hold.'},
+    text:{type:'string',maxLength:800},url:{type:'string',maxLength:800},
+    tel:{type:'string',maxLength:30,description:'Phone number for kind tel or contact.'},
+    email:{type:'string',maxLength:200,description:'Email address for kind mail or contact.'},
+    subject:{type:'string',maxLength:200},name:{type:'string',maxLength:100},
+    ssid:{type:'string',maxLength:32},security:{type:'string',enum:['wpa2','open']},
+    password:{type:'string',maxLength:63}
+  },required:['kind'],additionalProperties:false},
+  execute:a=>{
+    const d={kind:a.kind,wauth:a.security||'wpa2',text:a.text||'',url:a.url||'',subject:a.subject||'',name:a.name||'',ssid:a.ssid||'',wkey:a.password||'',
+      tel:a.kind==='tel'?a.tel||'':'',email:a.kind==='mail'?a.email||'':'',ctel:a.kind==='contact'?a.tel||'':'',cemail:a.kind==='contact'?a.email||'':''};
+    const res=N.build(d);
+    if(res.error)throw new Error('Invalid content: '+res.error);
+    for(const k of DRAFT_FIELDS)draft[k]='';
+    Object.assign(draft,d); saveDraft(); renderForm(); setMode('write');
+    const n=N.estimate(res.records), fit=N.fits(n);
+    return {prepared:true,kind:d.kind,estimated_bytes:n,fits_on:fit?fit.tag:null,next_step:'The user taps "Write to tag" and holds a tag to the phone.'};
+  }
+});
+})();
+</script>
+</body>
+</html>
