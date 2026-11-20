@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "quantum-magnetism";
-const VERSION = 'c7d7fb6dc1d1';
+const VERSION = '3b465d588e52';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

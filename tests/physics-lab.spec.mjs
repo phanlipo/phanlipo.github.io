@@ -1170,7 +1170,7 @@ test.describe('lens', () => {
 });
 
 // one test per experiment: all of them in one test do not fit into the time limit on CI
-for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing', 'sky', 'bow', 'float']) {
+for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing', 'sky', 'bow', 'float', 'fall']) {
   test(`${kind}: open with formulas, no accessibility violations`, async ({ page }) => {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub:visible > summary`).all()) await s.click();
@@ -1228,7 +1228,7 @@ test.describe('tab groups', () => {
     await page.click('#tab-radar');
     await expect(page.locator('#p-radar')).toBeVisible();
     await open(page, 'seasons');
-    await expect(page.locator('#tabbar [role="tab"]:visible')).toHaveText(['Jahreszeiten']);
+    await expect(page.locator('#tabbar [role="tab"]:visible')).toHaveText(['Jahreszeiten', 'Fallen']);
   });
 });
 
@@ -1421,7 +1421,8 @@ test.describe('circuit kit', () => {
     await page.click('#bdTools [data-tool="bat"]'); await part(page, 'v-0-0').click();
     await page.click('#bdFlip');
     await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
-    await page.click('#bdTools [data-tool="erase"]'); await part(page, 'h-1-0').click();
+    await page.click('#bdTools [data-tool="wire"]'); await part(page, 'h-1-0').click();  // select the wire …
+    await page.click('#bdDel');                                                          // … and remove it
     await expect(page.locator('#bdWhy')).toContainText('nicht geschlossen');
     await page.click('.toast button:has-text("Rückgängig")');
     await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
@@ -1429,6 +1430,56 @@ test.describe('circuit kit', () => {
     await expect(page.locator('#p-build')).toBeVisible();
     await expect(row(page, 'L1')).toContainText('Lämpchen 20 Ω');
     await expect(pres(page, 'bdRes', 'Strom aus der Batterie')).toHaveText('0,300 A');
+  });
+
+  test('a capacitor charges through a bulb with τ = R·C, and discharges again', async ({ page }) => {
+    // reference: 6 V, R = 10 Ω, C = 1 F → U_C(t) = 6·(1 − e^(−t/10 s)), I = (6 − U_C)/10 Ω
+    const U = t => 6 * (1 - Math.exp(-t / 10));
+    await page.clock.install();
+    await page.goto('/physics-lab/');
+    await open(page, 'build');
+    await page.click('#bdPre button:has-text("Kondensator")');
+    await expect(page.locator('#bdTime')).toBeVisible();
+    await expect(row(page, 'C1')).toContainText('Kondensator 1,0 F: 0,00 V');
+    await expect(page.locator('#bdWhy')).toContainText('C1 lädt sich auf (0,00 V)');
+    await expect(page.locator('#bdWhy')).toContainText('τ = R·C = 10,0 s (R = 10,0 Ω)');
+    await expect(page.locator('#bdWhy')).toContainText('Drück Start');
+    await page.click('#bdPlay');
+    await expect(page.locator('#bdPlay')).toHaveText('Anhalten');
+    await page.clock.runFor(10000);
+    await page.click('#bdPlay');
+    await expect(page.locator('#bdPlay')).toHaveText('Start');
+    // read the state the page ended with and compare with the exact curve at that time
+    const st = await page.evaluate(() => ({ t: Number(document.getElementById('bdTimeOut').textContent.replace(/[^\d,]/g, '').replace(',', '.')) }));
+    expect(st.t).toBeGreaterThan(9.5);
+    const txt = await row(page, 'C1').textContent(), v = Number(txt.match(/F: ([\d,]+) V/)[1].replace(',', '.'));
+    expect(v).toBeCloseTo(U(st.t), 1);                                   // ≈ 3,79 V after one τ
+    await expect(row(page, 'L1')).toContainText(`${de(6 - v, 2)} V`);    // the rest of the 6 V lies on the bulb
+    await expect(page.locator('#bdChart polyline')).toHaveCount(1);
+    await page.click('#p-build summary:has-text("Knotenanalyse")');
+    await expect(page.locator('#bdMath')).toContainText('Kondensator C1: so schnell ändert sich seine Spannung');
+    await expect(page.locator('#bdMath .katex-error')).toHaveCount(0);
+    // remove the battery path: open the switch – the charge stays, no current
+    await page.click('#bdTools [data-tool="sw"]'); await part(page, 'h-2-1').click();
+    await expect(page.locator('#bdWhy')).toContainText(`Durch C1 fließt kein Strom, er hält seine Spannung von ${de(v, 2)} V`);
+    // "Discharge" empties it and starts the time at 0
+    await page.click('#bdDischarge');
+    await expect(row(page, 'C1')).toContainText('0,00 V');
+    await expect(page.locator('#bdTimeOut')).toHaveText('0,0 s');
+  });
+
+  test('the solver: a charged capacitor discharges through a bulb exponentially', async ({ page }) => {
+    await open(page, 'build');
+    // 2 F charged to 5 V, discharging through 5 Ω (τ = 10 s): after 7 s U = 5·e^(−0.7)
+    const r = await page.evaluate(() => {
+      const N = window.Network, parts = { 'v-0-0': { k: 'cap', v: 2 }, 'h-0-0': { k: 'bulb', v: 5 }, 'v-0-1': { k: 'wire' }, 'h-1-0': { k: 'wire' } }, vc = { 'v-0-0': 5 };
+      const th = N.thevenin(parts, 'v-0-0', vc);
+      N.step(parts, vc, 7);
+      return { u: vc['v-0-0'], tau: th.tau, end: th.end };
+    });
+    expect(r.tau).toBeCloseTo(10, 3);
+    expect(r.end).toBeCloseTo(0, 6);
+    expect(r.u).toBeCloseTo(5 * Math.exp(-0.7), 2);
   });
 
   test('nodal analysis of a bridge circuit agrees with a hand calculation', async ({ page }) => {
@@ -1459,5 +1510,94 @@ test.describe('circuit kit', () => {
     await expect(page.locator('#bdMath .katex').first()).toBeVisible();
     await expect(page.locator('#bdMath .katex-error')).toHaveCount(0);
     await expect(page.locator('#bdMath')).toContainText('Bezugspunkt (0 V) ist der Minuspol von B1');
+  });
+});
+
+test.describe('falling on the Moon', () => {
+  // reference: g = G·M/R² (mass, equatorial radius), Earth 9.81 m/s²; from rest t = √(2h/g), v = √(2gh)
+  const G = 6.674e-11, gOf = (M, R) => G * M / (R * R);
+  const g = { earth: 9.81, moon: gOf(7.346e22, 1.7381e6), mars: gOf(6.417e23, 3.3962e6), jupiter: gOf(1.898e27, 7.1492e7) };
+  const fallT = (h, gg) => Math.sqrt(2 * h / gg), impact = (h, gg) => Math.sqrt(2 * gg * h);
+  const s = x => `${de(x, 2)} s`;
+
+  test('from 5 m the ball needs about 2.5 times as long on the Moon and lands more slowly', async ({ page }) => {
+    expect(g.moon).toBeCloseTo(1.62, 2);
+    await open(page, 'fall');
+    await page.click('#faBody button[data-v="moon"]');
+    await page.locator('#faH').fill('5');
+    await expect(page.locator('#faHOut')).toHaveText('5,0 m');
+    await expect(pres(page, 'faRes', 'Fallzeit Erde')).toHaveText(s(fallT(5, g.earth)));   // 1,01 s
+    await expect(pres(page, 'faRes', 'Fallzeit Mond')).toHaveText(s(fallT(5, g.moon)));    // 2,48 s
+    const v = impact(5, g.moon);
+    await expect(pres(page, 'faRes', 'Aufprall Mond')).toHaveText(`${de(v, 1)} m/s (${de(v * 3.6, 0)} km/h)`); // 4,0 m/s
+    await expect(pres(page, 'faRes', 'Fallbeschleunigung Mond')).toHaveText(`${de(g.moon, 2)} m/s² (${de(g.moon / 9.81 * 100, 1)} % der Erde)`);
+    await expect(pres(page, 'faRes', 'Auf dem Mond dauert der Fall')).toHaveText(`${de(Math.sqrt(9.81 / g.moon), 2)}-mal so lang`); // √6
+    await expect(page.locator('#faWhy')).toContainText('Auf dem Mond zieht die Schwerkraft nur mit 1,62 m/s²');
+    // the formulas: Newton with mass and radius, and the fall time with the chosen height
+    await page.click('#p-fall summary:has-text("Formeln")');
+    const tex = (await page.locator('#faMath annotation').allTextContents()).join(' ');
+    expect(tex).toContain('7{,}346\\cdot 10^{22}');
+    expect(tex).toContain('\\approx 1{,}62');
+    expect(tex).toContain('\\sqrt{\\frac{2\\cdot 5{,}0\\,\\text{m}}{1{,}62');
+    // the explanation: a 81st of the mass, 3.7 times closer to the centre
+    await page.click('#p-fall summary:has-text("Warum fällt man")');
+    await expect(page.locator('#faExplain')).toContainText('etwa 1/81');
+    await expect(page.locator('#faExplain')).toContainText('3,7-mal näher');
+    await expect(page.locator('#faExplain')).toContainText('Apollo 15');
+  });
+
+  test('Mars and Jupiter: weaker and stronger than the Earth', async ({ page }) => {
+    await open(page, 'fall');
+    await page.locator('#faH').fill('20');
+    await page.click('#faBody button[data-v="mars"]');
+    await expect(pres(page, 'faRes', 'Fallzeit Mars')).toHaveText(s(fallT(20, g.mars)));
+    await page.click('#faBody button[data-v="jupiter"]');
+    await expect(pres(page, 'faRes', 'Fallzeit Jupiter')).toHaveText(s(fallT(20, g.jupiter)));     // 1,27 s
+    await expect(pres(page, 'faRes', 'Fallbeschleunigung Jupiter')).toContainText(`${de(g.jupiter, 2)} m/s²`);
+    await expect(pres(page, 'faRes', 'Auf dem Jupiter dauert der Fall')).toHaveText(`${de(Math.sqrt(9.81 / g.jupiter), 2)}-mal so lang`);
+    await expect(page.locator('#faWhy')).toContainText('so stark wie auf der Erde');
+    await expect(page.locator('#faWhy')).toContainText('Wolken');
+    await page.reload();
+    await expect(page.locator('#p-fall')).toBeVisible();
+    await expect(page.locator('#faH')).toHaveValue('20');
+    await expect(page.locator('#faBody button[data-v="jupiter"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('both balls fall in real time; the one on Earth is down first', async ({ page }) => {
+    await page.clock.install();
+    await page.goto('/physics-lab/');
+    await open(page, 'fall');
+    await page.click('#faBody button[data-v="moon"]');
+    await page.locator('#faH').fill('5');
+    const tE = fallT(5, g.earth), tM = fallT(5, g.moon);
+    await page.click('#faPlay');
+    await expect(page.locator('#faPlay')).toHaveText('Anhalten');
+    await page.clock.runFor(Math.ceil((tE + 0.2) * 1000));
+    const labels = page.locator('#faSvg text', { hasText: /^(unten nach|t =)/ });
+    await expect(labels.first()).toHaveText(`unten nach ${s(tE)}`);
+    await expect(labels.nth(1)).toHaveText(/^t = /);
+    await expect(page.locator('#faPlay')).toHaveText('Anhalten');
+    await page.clock.runFor(Math.ceil((tM - tE) * 1000));
+    await expect(labels.nth(1)).toHaveText(`unten nach ${s(tM)}`);
+    await expect(page.locator('#faPlay')).toHaveText('Fallen lassen');
+    // a dot every 0.2 s: on the Moon more dots than on Earth
+    expect(await page.locator('#faSvg .ghost1').count()).toBe(Math.ceil(tE / 0.2));
+    expect(await page.locator('#faSvg .ghost2').count()).toBe(Math.ceil(tM / 0.2));
+    await page.click('#faReset');
+    await expect(labels.first()).toHaveText(`t = ${s(0)}`);
+    await expect(page.locator('#faSvg .ghost2')).toHaveCount(0);
+  });
+});
+
+test.describe('falling on the Moon (English)', () => {
+  test.use({ locale: 'en-US' });
+  test('labels, results and formulas follow the language', async ({ page }) => {
+    await open(page, 'fall');
+    await page.click('#faBody button[data-v="moon"]');
+    await page.locator('#faH').fill('10');
+    await expect(pres(page, 'faRes', 'Fall time Moon')).toHaveText(`${(Math.sqrt(20 / (6.674e-11 * 7.346e22 / 1.7381e6 ** 2))).toFixed(2)} s`);
+    await expect(page.locator('#faWhy')).toContainText('On the Moon gravity pulls with only 1.62 m/s²');
+    await page.click('#p-fall summary:has-text("Formulas")');
+    expect((await page.locator('#faMath annotation').allTextContents()).join(' ')).toContain('6.674\\cdot 10^{-11}');
   });
 });

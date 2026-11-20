@@ -1,16 +1,20 @@
 /* Free circuit kit without DOM: parts on the edges of a grid of 5 × 4 points, solved by nodal analysis.
    Edge keys: 'h-r-c' joins point (r, c) with (r, c+1), 'v-r-c' joins (r, c) with (r+1, c); point index = r·COLS + c.
-   Parts: { k: 'wire' | 'bat' | 'bulb' | 'sw' | 'am' | 'vm', v: volts (bat) or ohms (bulb), d: ±1, on: bool (sw) }
+   Parts: { k: 'wire' | 'bat' | 'bulb' | 'sw' | 'am' | 'vm' | 'cap', v: volts (bat), ohms (bulb) or farads (cap), d: ±1, on: bool (sw) }
      d = +1: the plus pole (bat) or the red terminal (vm) is at the second point of the edge (right / below), −1 at the first.
    Model: wires, closed switches and ammeters are tiny resistances (R0), a battery is an ideal source with a small inner
    resistance RB = 1000·R0 (Norton form; like a real battery it has much more than a wire, so a short pulls its
    terminal voltage down to almost 0), a voltmeter draws no current. Each connected part of the circuit gets its own reference
    point (0 V): the minus pole of its first battery. Ideal parts make a short circuit show up as a huge current (> SHORT).
+   Capacitors: solve(parts, { vc, dt }) takes the voltage of each capacitor at the start of a time step (vc[key] = potential
+   of the first point minus the second, 0 if missing) and the step dt. Backward Euler: during the step a capacitor acts like
+   a conductance C/dt with a source C/dt·vc (always stable, also for a capacitor joined directly to a battery); the result
+   gives its voltage at the end of the step (parts[key].U), the caller keeps it for the next step.
    Used by index.html (window.Network) and the tests. */
 (function (root) {
   'use strict';
-  const COLS = 5, ROWS = 4, R0 = 1e-7, RB = 1e-4, SHORT = 5000, P_FULL = 4; // Ω, A, W (a bulb glows fully at 4 W)
-  const KINDS = ['wire', 'bat', 'bulb', 'sw', 'am', 'vm'];
+  const COLS = 5, ROWS = 4, R0 = 1e-7, RB = 1e-4, SHORT = 5000, P_FULL = 4, DT = 1 / 120; // Ω, A, W (a bulb glows fully at 4 W), s
+  const KINDS = ['wire', 'bat', 'bulb', 'sw', 'am', 'vm', 'cap'];
 
   function edges() {
     const out = [];
@@ -28,6 +32,7 @@
     const o = { k: p.k };
     if (p.k === 'bat') { o.v = Number.isFinite(p.v) ? Math.min(12, Math.max(1.5, Math.round(p.v * 2) / 2)) : 6; o.d = p.d === -1 ? -1 : 1; }
     if (p.k === 'bulb') o.v = Number.isFinite(p.v) ? Math.min(50, Math.max(2, Math.round(p.v))) : 10;
+    if (p.k === 'cap') o.v = Number.isFinite(p.v) ? Math.min(5, Math.max(0.1, Math.round(p.v * 10) / 10)) : 1;
     if (p.k === 'vm') o.d = p.d === -1 ? -1 : 1;
     if (p.k === 'sw') o.on = p.on !== false;
     return o;
@@ -70,7 +75,8 @@
     return x;
   }
 
-  function solve(parts) {
+  function solve(parts, opts = {}) {
+    const vc = opts.vc || {}, dt = opts.dt || DT;
     const N = COLS * ROWS, list = [];
     for (const e of EDGES) { const p = parts[e.key]; if (p) list.push({ e, p }); }
     // elements that carry current: [a, b, conductance, source current a→b]
@@ -79,6 +85,7 @@
       if (p.k === 'vm' || (p.k === 'sw' && !p.on)) continue;
       if (p.k === 'bulb') el.push({ key: e.key, a: e.a, b: e.b, g: 1 / p.v, s: 0 });
       else if (p.k === 'bat') el.push({ key: e.key, a: e.a, b: e.b, g: 1 / RB, s: p.d * p.v / RB });
+      else if (p.k === 'cap') { const g = p.v / dt; el.push({ key: e.key, a: e.a, b: e.b, g, s: -g * (vc[e.key] || 0) }); }
       else el.push({ key: e.key, a: e.a, b: e.b, g: 1 / R0, s: 0 });
     }
     // connected parts and their reference points
@@ -110,9 +117,10 @@
       if (p.k === 'bulb') { r.I = U / p.v; r.P = U * U / p.v; r.bright = Math.min(1, r.P / P_FULL); }
       else if (p.k === 'bat') { r.I = U / RB + p.d * p.v / RB; r.out = p.d * r.I; r.terminal = -p.d * U; r.P = r.terminal * r.out; }
       else if (p.k === 'vm') r.reading = -p.d * U;           // red terminal minus black terminal
+      else if (p.k === 'cap') { r.I = p.v / dt * (U - (vc[e.key] || 0)); r.Q = p.v * U; r.E = p.v * U * U / 2; r.P = U * r.I; }
       else if (p.k !== 'sw' || p.on) r.I = U / R0;
       r.short = Math.abs(r.I) > SHORT;
-      if (r.short) short = true;
+      if (r.short && p.k === 'bat') short = true;
       out[e.key] = r;
     }
 
@@ -130,23 +138,23 @@
     const netOf = i => (used[i] ? netIdx[i] : -1);
     for (const N1 of nets) { N1.phi = N1.nodes.reduce((s, i) => s + V(i), 0) / N1.nodes.length; N1.ground = N1.nodes.some(i => grounds.has(i)); }
     // nets fixed by batteries: start at each reference point that is a minus pole and follow the batteries
-    const bats = list.filter(x => x.p.k === 'bat');
+    const bats = list.filter(x => x.p.k === 'bat'), caps = list.filter(x => x.p.k === 'cap');
     const queue = [];
     for (const { e, p } of bats) { const m = netOf(p.d === 1 ? e.a : e.b); if (nets[m].ground && !nets[m].fixed) { nets[m].fixed = true; queue.push(m); } }
     while (queue.length) {
       const m = queue.shift();
-      for (const { e } of bats) {
+      for (const { e } of bats.concat(caps)) {
         const x = netOf(e.a), y = netOf(e.b);
         for (const [u, w] of [[x, y], [y, x]]) if (u === m && !nets[w].fixed) { nets[w].fixed = true; queue.push(w); }
       }
     }
-    for (const { e } of bats) { nets[netOf(e.a)].source = true; nets[netOf(e.b)].source = true; }
+    for (const { e } of bats.concat(caps)) { nets[netOf(e.a)].source = true; nets[netOf(e.b)].source = true; }
     // live: the net belongs to a connected part with a battery (elsewhere no current can flow)
-    const live = new Set(bats.map(({ e }) => comp.find(e.a)));
+    const live = new Set(bats.concat(caps.filter(({ e }) => Math.abs(vc[e.key] || 0) > 1e-9)).map(({ e }) => comp.find(e.a)));
     for (const n1 of nets) n1.live = live.has(comp.find(n1.nodes[0]));
     let I = 0, P = 0;
     for (const { e } of bats) { I += out[e.key].out; P += out[e.key].P; }
-    return { phi, parts: out, nets, netOf, short, total: { I, P }, batteries: bats.length };
+    return { phi, parts: out, nets, netOf, short, total: { I, P }, batteries: bats.length, capacitors: caps.length };
   }
 
   /* Examples. Battery on the left edge with the plus pole at the top (d = −1), a rectangle of wire around rows 1–3. */
@@ -161,11 +169,33 @@
     // one bulb in series with two in parallel
     mixed: { ...frame, 'v-1-0': { k: 'bat', v: 6, d: -1 }, 'h-0-1': { k: 'bulb', v: 10 }, 'h-0-2': W, 'h-0-3': W,
       'v-0-3': { k: 'bulb', v: 20 }, 'v-1-3': W, 'v-0-4': { k: 'bulb', v: 20 }, 'v-1-4': W },
+    // a bulb in series with a capacitor: bright at first, darker while the capacitor fills (τ = R·C = 10 s)
+    rc: { ...frame, 'v-1-0': { k: 'bat', v: 6, d: -1 }, 'h-0-1': { k: 'bulb', v: 10 }, 'h-0-2': W, 'h-0-3': W, 'v-0-4': { k: 'cap', v: 1 }, 'v-1-4': W, 'h-2-1': { k: 'sw', on: true } },
     // a bulb, and a closed switch that joins the poles of the battery by wire
     short: { ...frame, 'v-1-0': { k: 'bat', v: 6, d: -1 }, 'h-0-1': { k: 'bulb', v: 10 }, 'h-0-2': W, 'h-0-3': W, 'v-0-4': W, 'v-1-4': W,
       'h-1-0': { k: 'sw', on: true }, 'v-1-1': W },
   };
   const example = name => Object.fromEntries(Object.entries(EXAMPLES[name]).map(([k, p]) => [k, { ...p }]));
 
-  root.Network = { COLS, ROWS, R0, RB, SHORT, P_FULL, KINDS, EDGES, BY_KEY, EXAMPLES, example, clean, labels, solve };
+  // let time run: n steps of dt, the capacitor voltages vc are changed in place; returns the last solution
+  function step(parts, vc, seconds, dt = DT) {
+    let sol = null;
+    const n = Math.max(1, Math.round(seconds / dt));
+    for (let i = 0; i < n; i++) {
+      sol = solve(parts, { vc, dt });
+      for (const k in parts) if (parts[k].k === 'cap') vc[k] = sol.parts[k].U;
+    }
+    return sol;
+  }
+  /* What the rest of the circuit looks like from one capacitor: a source U_end behind a resistance R (Thévenin), found
+     by holding the capacitor at two voltages for an instant. Then U_C(t) = U_end + (U_0 − U_end)·e^(−t/τ), τ = R·C. */
+  function thevenin(parts, key, vc = {}) {
+    const tiny = 1e-9, C = parts[key].v, at = v => solve(parts, { vc: { ...vc, [key]: v }, dt: tiny }).parts[key].I;
+    const i0 = at(0), i1 = at(1), G = i0 - i1;                      // current into the capacitor falls by G per volt
+    if (!(Math.abs(G) > 1e-12)) return { R: Infinity, end: vc[key] || 0, tau: Infinity };
+    const R = 1 / G - tiny / C, end = i0 / G;                      // remove the conductance C/tiny of the step itself
+    return { R: Math.max(0, R), end, tau: Math.max(0, R) * C };
+  }
+
+  root.Network = { COLS, ROWS, R0, RB, SHORT, P_FULL, KINDS, EDGES, BY_KEY, EXAMPLES, example, clean, labels, solve, step, thevenin, DT };
 })(typeof window !== 'undefined' ? window : globalThis);

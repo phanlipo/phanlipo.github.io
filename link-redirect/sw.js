@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "link-redirect";
-const VERSION = 'e210e86d469c';
+const VERSION = 'df3e3c9089a9';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

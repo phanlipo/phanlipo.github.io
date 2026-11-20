@@ -558,6 +558,23 @@ test.describe('physics-lab tools', () => {
     expect(r.result).toMatchObject({ sun_rises: false, day_length_h: 0, daily_sunlight_kwh_m2: 0, beam_area_m2: null });
   });
 
+  test('free_fall', async ({ page }) => {
+    const gMoon = 6.674e-11 * 7.346e22 / 1.7381e6 ** 2;
+    let r = await call(page, 'physics_lab_free_fall', { place: 'moon', height_m: 5 });
+    expect(r.result).toMatchObject({ place: 'moon', height_m: 5, gravity_earth_m_s2: 9.81 });
+    expect(r.result.gravity_m_s2).toBeCloseTo(gMoon, 2);
+    expect(r.result.fall_time_s).toBeCloseTo(Math.sqrt(10 / gMoon), 2);
+    expect(r.result.fall_time_earth_s).toBeCloseTo(Math.sqrt(10 / 9.81), 2);
+    expect(r.result.impact_speed_m_s).toBeCloseTo(Math.sqrt(10 * gMoon), 2);
+    expect(r.result.fall_time_ratio).toBeCloseTo(Math.sqrt(9.81 / gMoon), 2);
+    await expect(page.locator('#p-fall')).toBeVisible();
+    await expect(page.locator('#faH')).toHaveValue('5');
+    r = await call(page, 'physics_lab_free_fall', { place: 'jupiter' });
+    expect(r.result.height_m).toBe(5);
+    expect(r.result.fall_time_ratio).toBeLessThan(1);
+    expect((await call(page, 'physics_lab_free_fall', { height_m: 30 })).ok).toBe(false);
+  });
+
   test('circuit_builder', async ({ page }) => {
     let r = await call(page, 'physics_lab_circuit_builder', { example: 'mixed' });
     // 6 V, 10 Ω in series with 20 Ω ∥ 20 Ω: 0.3 A, 1.8 W
@@ -575,6 +592,15 @@ test.describe('physics-lab tools', () => {
     expect(r.result.total_current_a).toBeCloseTo(0.3, 3);
     r = await call(page, 'physics_lab_circuit_builder', { example: 'short' });
     expect(r.result).toMatchObject({ short_circuit: true, total_current_a: null });
+    // a 1 F capacitor behind 10 Ω at 6 V: after 20 s (2 τ) U_C = 6·(1 − e^(−2))
+    r = await call(page, 'physics_lab_circuit_builder', { example: 'rc', run_seconds: 20 });
+    const cap = r.result.parts.find(p => p.kind === 'capacitor');
+    expect(cap).toMatchObject({ label: 'C1', capacitance_f: 1 });
+    expect(cap.voltage_v).toBeCloseTo(6 * (1 - Math.exp(-2)), 2);
+    expect(cap.time_constant_s).toBeCloseTo(10, 2);
+    expect(cap.final_voltage_v).toBeCloseTo(6, 3);
+    expect(cap.charge_c).toBeCloseTo(cap.voltage_v, 2);
+    expect(r.result.time_s).toBeCloseTo(20, 6);
   });
 
   test('rainbow_position', async ({ page }) => {

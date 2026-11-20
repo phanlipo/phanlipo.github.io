@@ -20,6 +20,7 @@ doppler.js   window.Doppler: Sirene fährt an einem Hörer vorbei (gehörte Tonh
 seasons.js   window.Seasons: Deklination, Sonnenhöhe, Tageslänge, Sonnenlicht pro Tag, Abstand Erde–Sonne
 network.js   window.Network: freier Schaltkreis auf einem 5 × 4-Raster, Knotenanalyse, Beispielschaltungen
 mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
+fall.js      window.Fall: Fallbeschleunigung g = G·M/R² für Erde, Mond, Mars, Jupiter, Fallzeit und Aufprallgeschwindigkeit
 ```
 
 ## Optik (optics.js)
@@ -87,7 +88,8 @@ mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stop
 - Raster 5 × 4 Punkte (A1 … E4), Bauteile auf den 31 Kanten (`h-r-c`, `v-r-c`): Draht, Batterie (1,5 … 12 V, Pluspol per `d`), Lämpchen (2 … 50 Ω), Schalter, Strom- und Spannungsmesser.
 - Knotenanalyse mit Leitwertmatrix (Gauß mit Pivotsuche): Draht, geschlossener Schalter und Strommesser 10⁻⁷ Ω, Batterie als ideale Quelle mit 10⁻⁴ Ω Innenwiderstand (Norton) – größer als ein Draht wie bei einer echten Batterie, damit ein Kurzschluss die Klemmenspannung fast auf 0 zieht. Spannungsmesser ohne Strom. Jeder zusammenhängende Teil bekommt einen Bezugspunkt (Minuspol seiner ersten Batterie). Kurzschluss = Strom > 5000 A (normal höchstens ~200 A, Kurzschluss ≥ 14 000 A).
 - „Knoten“ für die Anzeige: Punkte, die durch Draht, Schalter oder Strommesser verbunden sind (Union-Find). Batterien legen Knoten fest (von der Masse aus); für die übrigen Knoten zeigt „Knotenanalyse mit deinen Werten“ die Knotenregel mit Ohm.
-- Bedienung: über jeder Kante ein 44-px-Knopf (`#bdHits`) über der Zeichnung. Antippen setzt das gewählte Bauteil ein bzw. wählt ein gleiches aus (Schalter schaltet um); Entfernen mit `Tools.undo`, „Alles entfernen“ mit Rückfrage. Lämpchen voll hell bei 4 W.
+- Bedienung: über jeder Kante ein 44-px-Knopf (`#bdHits`) über der Zeichnung. Antippen setzt das gewählte Bauteil ein bzw. wählt ein gleiches aus (Schalter schaltet um); Entfernen über das ausgewählte Bauteil mit `Tools.undo` (kein Radiergummi: 8 Werkzeuge passen bei 375 px nicht in die Leiste), „Alles entfernen“ mit Rückfrage. Lämpchen voll hell bei 4 W.
+- **Kondensator** (0,1 … 5 F, riesig, damit Laden Sekunden dauert): implizites Euler-Verfahren in Schritten von 1/120 s – im Schritt Leitwert C/Δt mit Quelle C/Δt·U_alt, immer stabil, auch direkt an der Batterie. `Network.step` lässt Zeit laufen, `Network.thevenin` bestimmt aus zwei Lösungen bei festgehaltener Kondensatorspannung, was der Kondensator vom Rest sieht (Ersatzquelle U_end hinter R) → τ = R·C für Erklärung und Formeln. Prüfwert (Test): Beispiel „Kondensator“ (6 V, 10 Ω, 1 F) nach 10 s bei 6·(1 − e⁻¹) = 3,79 V. Zeit per **Start** (Animationsschleife, 10 Bilder pro Sekunde), Spannungen nur im Speicher, nicht in `physics-lab.settings.v1`.
 
 ## Wärme (thermo.js)
 
@@ -160,3 +162,10 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 17 | Elektrizität | Schaltkreis-Baukasten (freie Schaltung, Knotenanalyse) | Warum geht an einer Abzweigung kein Strom verloren – und wie rechnet man damit jede Schaltung aus? | fertig |
 
 Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien mit Erde (zu #7), Spannungsteiler (zu #9). Tabs mit `data-group` je Gebiet (seit 20 Versuchen). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
+
+## Fallen auf dem Mond (fall.js)
+
+- Frage: Warum fällt man auf dem Mond langsamer als auf der Erde? Links immer die Erde, rechts Mond, Mars oder Jupiter (Wolkenoberkante), Fallhöhe 0,5 … 20 m, ohne Luftwiderstand.
+- g = G·M/R² mit Masse und Äquatorradius (NASA-Datenblätter, gerundet): Mond 1,62, Mars 3,71, Jupiter 24,78 m/s². Für die Erde der übliche Wert 9,81 m/s² (die Formel am Äquator ohne Drehung ergibt 9,80; steht in den Formeln dabei).
+- Fall aus der Ruhe: h(t) = h − ½·g·t², t = √(2h/g), v = √(2gh). Die Animation läuft in echter Zeit über die gemeinsame Schleife und endet, wenn beide Bälle unten sind; blasse Punkte alle 0,2 s (Stroboskop).
+- Erklärung: Masse und Radius im Verhältnis zur Erde (Mond 1/81 der Masse, 3,7-mal näher am Mittelpunkt → etwa 1/6), die eigene Masse kürzt sich heraus (Hammer und Feder, Apollo 15), Fallzeit nur mit √6.
