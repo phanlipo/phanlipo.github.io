@@ -164,7 +164,7 @@ function setBlock(file, name, content, required) {
 }
 
 // Start page groups: the area (first tag) of an app, with big areas split by one topic
-// (Freizeit → Spiele and the rest). The area switch (.seg) shows an area with its sub-groups.
+// (Freizeit → Spiele and the rest). The switch above the list (.seg) has one button per group.
 const SUBGROUPS = { Freizeit: 'Spiele' };
 // Topics with fewer apps get no filter chip (the search still finds them by the tag)
 const MIN_TOPIC = 2;
@@ -180,8 +180,9 @@ function renderCards() {
   const count = x => tools.filter(t => t.tags.includes(x) || t.features.includes(x)).length;
   // Areas: the first tag of every app (Alltag, Arbeit, Freizeit) – the .seg switch
   const areas = [...new Set(tools.map(t => t.tags[0]).filter(Boolean))].sort(byName);
-  // Filter panel: topics (other tags) and features. Values every app has (e.g. KI-Agent) set nothing apart.
-  const topics = [...new Set(tools.flatMap(t => t.tags.slice(1)))].filter(x => !areas.includes(x) && count(x) >= MIN_TOPIC).sort(byName);
+  // Filter panel: topics (other tags, not those with their own group) and features. Values every app has
+  // (e.g. KI-Agent) set nothing apart.
+  const topics = [...new Set(tools.flatMap(t => t.tags.slice(1)))].filter(x => !areas.includes(x) && !Object.values(SUBGROUPS).includes(x) && count(x) >= MIN_TOPIC).sort(byName);
   const features = FEATURES.filter(f => count(f) && count(f) < tools.length);
   const chip = x => `<button type="button" class="chip" data-tag="${escHtml(x)}" data-i18n="tag.${escHtml(x)}" aria-pressed="false">${escHtml(x)}</button>`;
   const row = (id, label, values) => values.length ? `      <div class="filter-row" role="group" aria-labelledby="${id}">
@@ -191,8 +192,12 @@ function renderCards() {
         </div>
       </div>
 ` : '';
+  // Groups in area order; a sub-group follows its area
+  const order = areas.flatMap(a => SUBGROUPS[a] ? [a, SUBGROUPS[a]] : [a]);
+  const groups = order.map(g => [g, tools.filter(t => groupOf(t) === g)]).filter(([, list]) => list.length);
   const icon = name => `<svg class="ic" aria-hidden="true"><use href="assets/icons.svg#${name}"/></svg>`;
-  // Search, area switch and filter: hidden until the page script runs (no JS = the plain grouped list).
+  // Search, group switch and filter: hidden until the page script runs (no JS = the plain grouped list).
+  // The switch has one button per group; none pressed = all groups, tapping the pressed one again = all.
   // The bar sticks to the top while scrolling.
   const filter = `  <div class="filter-anchor"></div>
   <div class="filter" hidden>
@@ -204,8 +209,7 @@ function renderCards() {
       <button type="button" class="btn filter-btn" aria-expanded="false" aria-controls="filter-panel">${icon('filter')}<span data-i18n="filter">Filter</span><span class="filter-count" hidden></span></button>
     </div>
     <div class="seg area" role="group" aria-label="Bereich" data-i18n-attr="aria-label:f-area">
-      <button type="button" data-area="" data-i18n="filter.all" aria-pressed="true">Alle</button>
-      ${areas.map(x => `<button type="button" data-area="${escHtml(x)}" data-i18n="tag.${escHtml(x)}" aria-pressed="false">${escHtml(x)}</button>`).join('\n      ')}
+      ${groups.map(([g]) => `<button type="button" data-group="${escHtml(g)}" data-i18n="tag.${escHtml(g)}" aria-pressed="false">${escHtml(g)}</button>`).join('\n      ')}
     </div>
     <div class="filter-panel" id="filter-panel" hidden>
 ${row('f-topic', 'Thema', topics)}${row('f-feat', 'Funktion', features)}    </div>
@@ -221,17 +225,13 @@ ${row('f-topic', 'Thema', topics)}${row('f-feat', 'Funktion', features)}    </di
     <ul class="shelf-row"></ul>
   </section>
 `;
-  // Groups in area order; a sub-group follows its area
-  const order = areas.flatMap(a => SUBGROUPS[a] ? [a, SUBGROUPS[a]] : [a]);
-  const groups = order.map(g => [g, tools.filter(t => groupOf(t) === g)]).filter(([, list]) => list.length);
   const item = t => `      <li class="app" data-folder="${t.folder}" data-tags="${escHtml(JSON.stringify([...t.tags, ...t.features]))}">
         ${t.icon ? `<img src="${t.folder}/icon.svg" alt="" width="40" height="40">` : '<span class="noicon"></span>'}
         <div class="app-text"><a class="open" href="${t.folder}/"><span data-i18n="card.${t.folder}.title">${escHtml(t.title)}</span></a>
         <p data-i18n="card.${t.folder}.desc">${escHtml(t.description)}</p></div>
       </li>`;
   const list = groups.map(([g, ts]) => {
-    const area = ts[0].tags[0];
-    return `  <section class="group" data-group="${escHtml(g)}" data-area="${escHtml(area)}" aria-labelledby="g-${escHtml(g)}">
+    return `  <section class="group" data-group="${escHtml(g)}" aria-labelledby="g-${escHtml(g)}">
     <h2 id="g-${escHtml(g)}"><span data-i18n="tag.${escHtml(g)}">${escHtml(g)}</span> <span class="count">${ts.length}</span></h2>
     <ul class="apps">
 ${ts.map(item).join('\n')}
@@ -239,7 +239,7 @@ ${ts.map(item).join('\n')}
   </section>`;
   }).join('\n');
   // English texts of the list and filters for the start page script (Tools.i18n)
-  const en = { 'filter.all': 'All', 'f-area': 'Area', 'f-topic': 'Topic', 'f-feat': 'Feature', filter: 'Filter',
+  const en = { 'f-area': 'Area', 'f-topic': 'Topic', 'f-feat': 'Feature', filter: 'Filter',
     search: 'Search apps', 'search.none': 'No matching app found.' };
   for (const x of new Set([...tools.flatMap(t => [...t.tags, ...t.features]), ...order])) en['tag.' + x] = TAGS_EN[x];
   for (const t of tools) {

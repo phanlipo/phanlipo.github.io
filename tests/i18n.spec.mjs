@@ -31,13 +31,18 @@ test.describe('browser language English', () => {
       await expect(item.getByRole('link', { name: t.titleEn, exact: true })).toHaveAttribute('href', `${t.folder}/`);
     }
     // Area switch and filter in English; the German values behind them stay the same
-    await expect(page.locator('.seg.area').getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.seg.area button')).toHaveText(['Everyday', 'Work', 'Leisure', 'Games']);
     await expect(page.locator('.group[data-group="Alltag"] h2')).toContainText('Everyday');
-    await page.getByRole('button', { name: 'Filter' }).click();
-    await page.getByRole('button', { name: 'Games', exact: true }).click();
+    // Group "Games" = the Leisure apps with the topic Spiele
+    const games = t => t.tags[0] === 'Freizeit' && t.tags.includes('Spiele');
+    await page.locator('.seg.area').getByRole('button', { name: 'Games', exact: true }).click();
     for (const t of list)
-      await expect(page.locator(`.app[data-folder="${t.folder}"]`)).toBeVisible({ visible: t.tags.includes('Spiele') });
-    await expect(page.locator('.filter-status')).toHaveText(`${list.filter(t => t.tags.includes('Spiele')).length} of ${list.length} apps`);
+      await expect(page.locator(`.app[data-folder="${t.folder}"]`)).toBeVisible({ visible: games(t) });
+    await expect(page.locator('.filter-status')).toHaveText(`${list.filter(games).length} of ${list.length} apps`);
+    // A topic chip in English on top
+    await page.getByRole('button', { name: 'Filter' }).click();
+    await page.getByRole('button', { name: 'Kids', exact: true }).click();
+    await expect(page.locator('.filter-status')).toHaveText(`${list.filter(t => games(t) && t.tags.includes('Kinder')).length} of ${list.length} apps`);
     await expectNoHorizontalScroll(page);
   });
 
