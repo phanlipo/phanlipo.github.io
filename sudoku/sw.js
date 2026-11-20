@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "sudoku";
-const VERSION = 'f0fa82e034e4';
+const VERSION = 'c92b64c66d21';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

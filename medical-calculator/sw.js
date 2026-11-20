@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "medical-calculator";
-const VERSION = 'a4e95cd37245';
+const VERSION = '058834651308';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

@@ -764,6 +764,54 @@ test.describe('voltage divider', () => {
   });
 });
 
+test.describe('floating', () => {
+  // reference: 10 kg iron (7870 kg/m³), sheet 1 mm → area V/s; open tray a² + 4aH = area; floats if M/(ρ a²) ≤ H
+  const V = 10 / 7870, AREA = V / 0.001, g = 9.81;
+  const side = H => (-4 * H + Math.sqrt(16 * H * H + 4 * AREA)) / 2;
+
+  test('a lump of iron sinks in water but floats on mercury', async ({ page }) => {
+    await open(page, 'float');
+    await page.click('#flShape button[data-v="lump"]');
+    await page.click('#flLiq button[data-v="fresh"]');
+    await page.locator('#flL').fill('0');
+    await expect(pres(page, 'flRes', 'Ergebnis')).toHaveText('sinkt');
+    await expect(pres(page, 'flRes', 'Gewicht / Auftrieb')).toHaveText(`${de(10 * g, 0)} N / ${de(1000 * g * V, 0)} N`); // 98 N / 12 N
+    await expect(pres(page, 'flRes', 'Größe')).toHaveText(`Würfel ${de(Math.cbrt(V) * 100, 1)} cm`);
+    await expect(page.locator('#flHField')).toBeHidden();
+    await page.click('#flLiq button[data-v="mercury"]');
+    await expect(pres(page, 'flRes', 'Ergebnis')).toHaveText('schwimmt');
+    await expect(pres(page, 'flRes', 'Eintauchtiefe')).toHaveText(`${de(10 / (13534 * Math.cbrt(V) ** 2) * 100, 1)} cm`); // 6,3 cm
+  });
+
+  test('the same iron as a tray floats and carries a load until the water reaches the rim', async ({ page }) => {
+    await open(page, 'float');
+    await page.click('#flShape button[data-v="hull"]');
+    await page.click('#flLiq button[data-v="fresh"]');
+    await page.locator('#flH').fill('10');
+    await page.locator('#flL').fill('20');
+    const a = side(0.1), d = 30 / (1000 * a * a), max = 1000 * a * a * 0.1 - 10;
+    await expect(pres(page, 'flRes', 'Ergebnis')).toHaveText('schwimmt');
+    await expect(pres(page, 'flRes', 'Eintauchtiefe')).toHaveText(`${de(d * 100, 1)} cm`);               // 3,4 cm
+    await expect(pres(page, 'flRes', 'Verdrängte')).toHaveText(`${de(30, 2)} L = ${de(30, 2)} kg`);
+    await expect(pres(page, 'flRes', 'Höchste Ladung')).toHaveText(`${de(max, 1)} kg`);                // 79,3 kg
+    await expect(pres(page, 'flRes', 'Größe')).toHaveText(`${de(a * 100, 1)} × ${de(a * 100, 1)} cm, 10 cm hoch`);
+    await expect(page.locator('#flWhy')).toContainText('Luft');
+    await page.locator('#flL').fill(String(Math.ceil(max)));
+    await expect(pres(page, 'flRes', 'Ergebnis')).toHaveText('sinkt');
+    await expect(pres(page, 'flRes', 'Eintauchtiefe')).toHaveText('läuft voll');
+    await page.locator('#flL').fill(String(Math.floor(max)));
+    await expect(pres(page, 'flRes', 'Ergebnis')).toHaveText('schwimmt');
+    // a flat plate without rim sinks
+    await page.locator('#flH').fill('0');
+    await expect(pres(page, 'flRes', 'Ergebnis')).toHaveText('sinkt');
+    await expect(page.locator('#flWhy')).toContainText('ohne Rand');
+    await page.reload();
+    await expect(page.locator('#p-float')).toBeVisible();
+    await expect(page.locator('#flH')).toHaveValue('0');
+    await expect(page.locator('#flL')).toHaveValue(String(Math.floor(max)));
+  });
+});
+
 test.describe('rainbow', () => {
   // reference: largest angle after one reflection, cos²α = (n² − 1)/3, θ = 4β − 2α; water after Cauchy
   const D = Math.PI / 180;
@@ -1053,7 +1101,7 @@ test.describe('lens', () => {
 });
 
 // one test per experiment: all of them in one test do not fit into the time limit on CI
-for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing', 'sky', 'bow']) {
+for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing', 'sky', 'bow', 'float']) {
   test(`${kind}: open with formulas, no accessibility violations`, async ({ page }) => {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub:visible > summary`).all()) await s.click();
