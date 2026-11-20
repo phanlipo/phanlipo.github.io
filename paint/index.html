@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Malen</title>
-<meta name="description" content="Weiße Leinwand zum Malen mit dem Finger: 6 Farben, Stift, Pinsel, Marker, Spray, Farbtopf und Radierer – als Bild speichern oder teilen.">
+<meta name="description" content="Weiße Leinwand oder eigenes Foto zum Malen mit dem Finger: 7 Farben und eigene Farben, Stift, Pinsel, Marker, Spray, Farbtopf und Radierer – als Bild speichern oder teilen.">
 <meta name="tool:tags" content="Freizeit, Kinder">
 <meta name="tool:features" content="KI-Agent">
 <meta name="tool:webmcp" content="select_tool, get_canvas">
@@ -16,12 +16,13 @@
 <meta name="tool:color" content="#a16207">
 <meta name="tool:short-name" content="Malen">
 <meta name="tool:title-en" content="Paint">
-<meta name="tool:description-en" content="A white canvas to paint on with your finger: 6 colours, pencil, brush, marker, spray, paint bucket and eraser – save or share as an image.">
+<meta name="tool:description-en" content="A white canvas or your own photo to paint on with your finger: 7 colours plus your own, pencil, brush, marker, spray, paint bucket and eraser – save or share as an image.">
 <meta name="tool:short-name-en" content="Paint">
 <meta name="tool:storage" content="paint.">
+<meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .gif, .heic, .heif">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gpxEbJJcp5Z4uc6404pN9uB423phO4YdN1f7JHvniM0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-l1wMx+CbsUAa5ATU3pZe+IizENn3WAkt4TlM6UyrCAo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -37,6 +38,13 @@
 main{display:flex;flex-direction:column}
 .bar{flex:none;display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;padding:8px;border-radius:0;border-inline:0;border-block-end:0;box-shadow:none}
 .group{display:flex;gap:6px;flex-wrap:nowrap}
+/* Colours scroll sideways when the own colours no longer fit (padding keeps the selection ring visible) */
+.colors-row{display:flex;gap:6px;align-items:center;max-width:100%;min-width:0}
+#colors{min-width:0;overflow-x:auto;padding:5px;margin:-5px;scrollbar-width:thin}
+.sw.add{background:var(--surface);color:var(--text)}
+.sw-dot{display:inline-block;width:28px;height:28px;flex:none;border-radius:50%;border:2px solid var(--border);background:var(--c)}
+.pick{display:flex;gap:12px;align-items:flex-end}
+.pick .form-field:last-child{flex:1;min-width:0}
 .sw{width:44px;height:44px;border-radius:50%;cursor:pointer;padding:0;display:grid;place-items:center;flex:none}
 .sw{border:2px solid var(--border);background:var(--c)}
 .sw[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:2px;border-color:var(--surface)}
@@ -56,6 +64,7 @@ main{display:flex;flex-direction:column}
   <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Malen</span></h1>
   <div class="stage-actions">
     <button type="button" class="head-btn" id="btnShare" aria-label="Bild teilen" title="Bild teilen" data-i18n-attr="aria-label:share; title:share" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg></button>
+    <button type="button" class="head-btn" id="btnImage" aria-label="Bild einfügen" title="Bild einfügen" data-i18n-attr="aria-label:img.insert; title:img.insert"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#photo-plus"/></svg></button>
     <button type="button" class="head-btn" id="btnSave" aria-label="Als Bild speichern" title="Als Bild speichern" data-i18n-attr="aria-label:save; title:save"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg></button>
   </div>
 </header>
@@ -65,8 +74,12 @@ main{display:flex;flex-direction:column}
     <canvas id="paper" role="img" aria-label="Leinwand" data-i18n-attr="aria-label:canvas"></canvas>
     <canvas id="layer" aria-hidden="true"></canvas>
   </div>
+  <input type="file" id="imgPick" accept="image/*,.heic,.heif" hidden>
   <section class="card bar" aria-label="Farben und Werkzeuge" data-i18n-attr="aria-label:bar">
-    <div class="group" id="colors" role="group" aria-label="Farbe" data-i18n-attr="aria-label:color"></div>
+    <div class="colors-row">
+      <div class="group" id="colors" role="group" aria-label="Farbe" data-i18n-attr="aria-label:color"></div>
+      <button type="button" class="sw add" id="btnAddColor" aria-label="Farbe hinzufügen" title="Farbe hinzufügen" data-i18n-attr="aria-label:own.add; title:own.add"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg></button>
+    </div>
     <div class="toolbar" id="tools" role="group" aria-label="Werkzeug" data-i18n-attr="aria-label:tool">
       <button type="button" data-tool="pencil" aria-label="Stift" title="Stift" data-i18n-attr="aria-label:t.pencil; title:t.pencil"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#pencil"/></svg><span class="tb-label" data-i18n="t.pencil">Stift</span></button>
       <button type="button" data-tool="brush" aria-label="Pinsel" title="Pinsel" data-i18n-attr="aria-label:t.brush; title:t.brush"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#brush"/></svg><span class="tb-label" data-i18n="t.brush">Pinsel</span></button>
@@ -78,6 +91,30 @@ main{display:flex;flex-direction:column}
     </div>
   </section>
 </main>
+
+<details class="card" data-menu data-menu-page data-icon="palette" id="colorsPage">
+  <summary data-i18n="own.h">Eigene Farben</summary>
+  <p class="muted" data-i18n="own.intro">Eigene Farben stehen hinter den festen Farben und bleiben in diesem Browser gespeichert.</p>
+  <div class="row"><button type="button" class="btn" id="btnAddColor2"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="own.add">Farbe hinzufügen</span></button></div>
+  <ul class="list-rows" id="ownList"></ul>
+</details>
+
+<dialog class="dialog" id="colorDlg" aria-labelledby="colorDlgH">
+  <form id="colorForm" novalidate>
+    <div class="dialog-head"><h2 id="colorDlgH" data-i18n="own.add">Farbe hinzufügen</h2><button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close;title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+    <div class="dialog-body">
+      <div class="pick">
+        <div class="form-field"><label for="colorPick" data-i18n="own.pick">Wählen</label><input type="color" id="colorPick" value="#ff8800"></div>
+        <div class="form-field"><label for="colorCode" data-i18n="own.code">Farbcode</label><input type="text" id="colorCode" class="mono" value="#ff8800" maxlength="7" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="#ff8800"></div>
+      </div>
+      <p class="form-error" role="alert" id="colorErr"></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn" data-close><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+      <button type="submit" class="btn primary"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="own.addShort">Hinzufügen</span></button>
+    </div>
+  </form>
+</dialog>
 
 <!-- data:start -->
 <details class="data card">
@@ -98,28 +135,52 @@ main{display:flex;flex-direction:column}
   <p>Eine weiße Leinwand zum Malen mit Finger, Stift oder Maus.</p>
   <h3>Bedienung</h3>
   <ul>
-    <li><b>Farbe</b> antippen – es gibt 6 Farben.</li>
+    <li><b>Farbe</b> antippen – es gibt 7 feste Farben (auch Weiß, z. B. zum Malen auf bunten Flächen).</li>
+    <li><b>Eigene Farbe</b>: Das Plus hinter den Farben öffnet einen Farbwähler; dort lässt sich auch ein Farbcode eingeben (z. B. <code>#ff8800</code> oder kurz <code>#f80</code>). Eigene Farben bleiben in diesem Browser gespeichert und kommen mit in die Sicherung. Entfernen lassen sie sich im Menü unter <b>Eigene Farben</b>.</li>
     <li><b>Werkzeug</b> wählen: <b>Stift</b> (dünn), <b>Pinsel</b> (dick), <b>Marker</b> (breit und durchscheinend) oder <b>Spray</b> (sprüht, solange der Finger liegt – je länger, desto dichter).</li>
     <li><b>Farbtopf</b>: Antippen füllt die ganze Fläche in der gewählten Farbe – bis zu den gemalten Linien oder bis zum Rand der Leinwand. Ist eine Form nicht ganz geschlossen, läuft die Farbe durch die Lücke hinaus.</li>
     <li><b>Radierer</b> malt weiß und entfernt so, was darunter ist. Wer danach eine Farbe antippt, malt wieder mit dem letzten Werkzeug.</li>
+    <li><b>Bild einfügen</b> (Bild-Knopf oben rechts): Ein Foto oder Bild wird auf die Leinwand gelegt – so groß, dass es ganz zu sehen ist, der Rest bleibt weiß. Danach lässt es sich mit allen Werkzeugen bemalen; der Farbtopf füllt dabei ähnlich gefärbte Flächen des Fotos. Am Computer geht das auch mit Strg+V (kopiertes Bild) oder durch Hineinziehen. Das Bild ersetzt die bisherige Leinwand (nach Rückfrage). JPG, PNG, WebP, GIF und HEIC (iPhone) werden gelesen. Das Bild bleibt auf dem Gerät, nichts wird hochgeladen.</li>
+    <li>Der <b>Radierer</b> malt auch auf einem Foto weiß – er stellt das Foto nicht wieder her.</li>
     <li><b>Papierkorb</b> leert die ganze Leinwand (nach Rückfrage).</li>
     <li><b>Als Bild speichern</b> (Pfeil nach unten, oben rechts) lädt das Bild als PNG-Datei herunter – so groß, wie es auf dem Bildschirm entsteht. <b>Teilen</b> (nur auf Geräten, die Dateien teilen können, z. B. Handy) schickt es an eine andere App oder legt es in der Galerie bzw. in „Fotos“ ab.</li>
-    <li>Das Bild bleibt nach dem Schließen erhalten und wird nur in diesem Browser gespeichert. Beim Drehen des Handys geht nichts verloren: Passt das Bild nicht ganz auf den Bildschirm, wird es verkleinert ganz gezeigt – zurückgedreht ist es wieder groß.</li>
+    <li>Das Bild bleibt nach dem Schließen erhalten und wird nur in diesem Browser gespeichert (große Bilder wie Fotos als JPG, damit sie in den Speicher passen). Beim Drehen des Handys geht nichts verloren: Passt das Bild nicht ganz auf den Bildschirm, wird es verkleinert ganz gezeigt – zurückgedreht ist es wieder groß.</li>
   </ul>
   </div>
   <div data-lang="en" lang="en" hidden>
   <p>A white canvas to paint on with your finger, a stylus or the mouse.</p>
   <h3>How to use</h3>
   <ul>
-    <li>Tap a <b>colour</b> – there are 6.</li>
+    <li>Tap a <b>colour</b> – there are 7 fixed ones (white too, e.g. for painting on coloured areas).</li>
+    <li><b>Own colour</b>: the plus after the colours opens a colour picker; you can also type a colour code there (e.g. <code>#ff8800</code> or short <code>#f80</code>). Own colours are kept in this browser and included in the backup. Remove them in the menu under <b>Own colours</b>.</li>
     <li>Pick a <b>tool</b>: <b>pencil</b> (thin), <b>brush</b> (thick), <b>marker</b> (wide and see-through) or <b>spray</b> (sprays while your finger rests – the longer, the denser).</li>
     <li><b>Paint bucket</b>: a tap fills the whole area in the chosen colour – up to the painted lines or the edge of the canvas. If a shape is not quite closed, the paint runs out through the gap.</li>
     <li>The <b>eraser</b> paints white and so removes what is underneath. Tapping a colour afterwards switches back to the last tool.</li>
+    <li><b>Insert picture</b> (picture button, top right): a photo or image is laid onto the canvas – as large as fits whole, the rest stays white. Then paint on it with every tool; the paint bucket fills similarly coloured areas of the photo. On a computer you can also press Ctrl+V (copied image) or drag it in. The picture replaces the current canvas (after asking). JPG, PNG, WebP, GIF and HEIC (iPhone) can be read. The picture stays on the device, nothing is uploaded.</li>
+    <li>On a photo, too, the <b>eraser</b> paints white – it does not bring back the photo.</li>
     <li>The <b>bin</b> clears the whole canvas (after asking).</li>
     <li><b>Save as image</b> (down arrow, top right) downloads the picture as a PNG file – at the size it is painted on screen. <b>Share</b> (only on devices that can share files, e.g. phones) sends it to another app or saves it to the gallery or Photos.</li>
-    <li>The picture is kept after closing and stored only in this browser. Rotating the phone loses nothing: if the picture does not fit the screen, it is shown whole and smaller – turn back and it is full size again.</li>
+    <li>The picture is kept after closing and stored only in this browser (large pictures such as photos as JPG so they fit into the storage). Rotating the phone loses nothing: if the picture does not fit the screen, it is shown whole and smaller – turn back and it is full size again.</li>
   </ul>
   </div>
+  <!-- files:start -->
+  <div data-lang="de">
+  <h3>Dateien an die App geben</h3>
+  <ul>
+    <li><b>Android:</b> App installieren (☰ → <i>Als App installieren</i>). Dann die Datei in Galerie, Dateien-, Mail- oder Messenger-App <i>teilen</i> und „Malen“ wählen – das klappt auch offline.</li>
+    <li><b>Windows/Computer:</b> Als installierte App (Chrome oder Edge) steht sie unter <i>Öffnen mit</i> (Rechtsklick auf die Datei); als Standard-App öffnet sie Dateien per Doppelklick. Mit Edge erscheint sie auch im Teilen-Menü von Windows.</li>
+    <li><b>iPhone/iPad:</b> Teilen an Web-Apps und <i>Öffnen mit</i> gibt es dort nicht – die Datei hier in der App auswählen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>Giving files to the app</h3>
+  <ul>
+    <li><b>Android:</b> install the app (☰ → <i>Install as an app</i>). Then <i>share</i> the file from the gallery, files, mail or messenger app and pick “Paint” – this works offline too.</li>
+    <li><b>Windows/computer:</b> as an installed app (Chrome or Edge) it is listed under <i>Open with</i> (right-click the file); set as default app, it opens files with a double-click. With Edge it also appears in the Windows share menu.</li>
+    <li><b>iPhone/iPad:</b> sharing to web apps and <i>Open with</i> do not exist there – choose the file here in the app.</li>
+  </ul>
+  </div>
+  <!-- files:end -->
   <!-- agent:start -->
   <div data-lang="de">
   <h3>KI-Agenten (WebMCP)</h3>
@@ -140,34 +201,61 @@ main{display:flex;flex-direction:column}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 6c7cbf6ead25</p>
+  <p class="footer-version">Version 14a4fb9d05ca</p>
   <!-- footer:end -->
 </footer>
 
 <script src="../assets/common.js"></script>
+<script src="../assets/shared/heic.js"></script>
 <script>
 (function(){
 'use strict';
 Tools.i18n({
-  de:{'c.black':'Schwarz','c.red':'Rot','c.yellow':'Gelb','c.green':'Grün','c.blue':'Blau','c.purple':'Lila',
+  de:{'img.insert':'Bild einfügen','img.replace':'Bild einfügen? Es ersetzt die aktuelle Leinwand.','img.fail':'Das Bild ließ sich nicht öffnen.',
+    'img.heicFail':'Das HEIC-Foto ließ sich nicht öffnen. Tipp: auf dem iPhone unter Einstellungen › Kamera › Formate „Maximale Kompatibilität“ wählen.','img.heic':'Lade HEIC-Decoder …',
+    'c.white':'Weiß','own.add':'Farbe hinzufügen','c.custom':'Eigene Farbe {hex}',close:'Schließen',delete:'Löschen',
+    'own.removed':'Farbe {hex} entfernt','own.none':'Noch keine eigenen Farben.','own.bad':'Bitte einen Farbcode wie #ff8800 eingeben.',
+    'c.black':'Schwarz','c.red':'Rot','c.yellow':'Gelb','c.green':'Grün','c.blue':'Blau','c.purple':'Lila',
     confirmReset:'Ganze Leinwand leeren?',cleared:'Leinwand geleert',saveFail:'Bild zu groß zum Speichern – es bleibt nur bis zum Schließen.',
     'mcp.select':'Werkzeug gewählt',saved:'Bild gespeichert',fileName:'malen',fileFail:'Bild konnte nicht erstellt werden.',shareFail:'Teilen hat nicht geklappt.'},
   en:{title:'Paint',bar:'Colours and tools',color:'Colour',tool:'Tool',canvas:'Canvas',reset:'Clear canvas',
     't.pencil':'Pencil','t.brush':'Brush','t.marker':'Marker','t.spray':'Spray','t.fill':'Paint bucket','t.eraser':'Eraser',
-    'c.black':'Black','c.red':'Red','c.yellow':'Yellow','c.green':'Green','c.blue':'Blue','c.purple':'Purple',
+    'img.insert':'Insert picture','img.replace':'Insert the picture? It replaces the current canvas.','img.fail':'The picture could not be opened.',
+    'img.heicFail':'The HEIC photo could not be opened. Tip: on the iPhone choose Settings › Camera › Formats “Most Compatible”.','img.heic':'Loading HEIC decoder …',
+    'c.black':'Black','c.white':'White','c.custom':'Own colour {hex}',close:'Close',delete:'Delete',cancel:'Cancel',
+    'own.h':'Own colours','own.intro':'Own colours come after the fixed colours and are kept in this browser.','own.add':'Add colour',
+    'own.pick':'Pick','own.code':'Colour code','own.addShort':'Add',
+    'own.removed':'Colour {hex} removed','own.none':'No own colours yet.','own.bad':'Please enter a colour code like #ff8800.','c.red':'Red','c.yellow':'Yellow','c.green':'Green','c.blue':'Blue','c.purple':'Purple',
     confirmReset:'Clear the whole canvas?',cleared:'Canvas cleared',saveFail:'Picture too large to save – it is kept only until you close the app.',
     'mcp.select':'tool selected',save:'Save as image',share:'Share image',saved:'Picture saved',fileName:'paint',fileFail:'Could not create the picture.',shareFail:'Sharing did not work.'}
 });
 const t=Tools.t;
-const COLORS={black:'#1b1b1b',red:'#e53935',yellow:'#fdd835',green:'#43a047',blue:'#1e88e5',purple:'#8e24aa'};
+const COLORS={black:'#1b1b1b',white:'#ffffff',red:'#e53935',yellow:'#fdd835',green:'#43a047',blue:'#1e88e5',purple:'#8e24aa'};
 // Sizes in CSS pixels
 const TOOLS={pencil:{w:3},brush:{w:14},marker:{w:26},spray:{r:18},fill:{},eraser:{w:30}};
 const DRAW_TOOLS=['pencil','brush','marker','spray','fill'];
-const LS_SET='paint.settings.v1',LS_IMG='paint.drawing.v1';
+const LS_SET='paint.settings.v1',LS_IMG='paint.drawing.v1',LS_COL='paint.colors.v1';
+const MAX_OWN=24;
 const WHITE='#ffffff';
 
+// Own colours: '#rrggbb' strings in the order they were added
+const HEX=/^#[0-9a-f]{6}$/;
+/** '#F80', 'f80', '#ff8800' … → '#ff8800', anything else → null */
+function normHex(v){
+  let h=String(v||'').trim().toLowerCase();
+  if(!h.startsWith('#'))h='#'+h;
+  if(/^#[0-9a-f]{3}$/.test(h))h='#'+[...h.slice(1)].map(c=>c+c).join('');
+  return HEX.test(h)?h:null;
+}
+const loadedOwn=Tools.load(LS_COL,[]);
+let own=Array.isArray(loadedOwn)?[...new Set(loadedOwn.map(normHex).filter(Boolean))].slice(0,MAX_OWN):[];
+const saveOwn=()=>Tools.save(LS_COL,own);
+const isFixed=c=>Object.hasOwn(COLORS,c);
+const isColor=c=>isFixed(c)||own.includes(c);
+const colorValue=c=>isFixed(c)?COLORS[c]:c;
+
 const st=Tools.load(LS_SET,{});
-const S={color:COLORS[st.color]?st.color:'black',tool:TOOLS[st.tool]?st.tool:'pencil',last:DRAW_TOOLS.includes(st.last)?st.last:'pencil'};
+const S={color:isColor(st.color)?st.color:'black',tool:TOOLS[st.tool]?st.tool:'pencil',last:DRAW_TOOLS.includes(st.last)?st.last:'pencil'};
 if(DRAW_TOOLS.includes(S.tool))S.last=S.tool;
 const saveSettings=()=>Tools.save(LS_SET,{color:S.color,tool:S.tool,last:S.last});
 
@@ -179,17 +267,67 @@ let strokes=0,saveFailed=false;
 
 // ---------- UI ----------
 const colorBox=Tools.$('colors');
-colorBox.innerHTML=Object.entries(COLORS).map(([k,c])=>`<button type="button" class="sw" data-color="${k}" style="--c:${c}"></button>`).join('');
+const colorName=c=>isFixed(c)?t('c.'+c):t('c.custom',{hex:c});
+function renderColors(){
+  colorBox.innerHTML=[...Object.entries(COLORS),...own.map(h=>[h,h])].map(([k,c])=>`<button type="button" class="sw" data-color="${k}" style="--c:${c}"></button>`).join('');
+  renderLabels();renderSel();renderOwnList();
+}
 function renderLabels(){
-  colorBox.querySelectorAll('.sw').forEach(b=>{const n=t('c.'+b.dataset.color);b.setAttribute('aria-label',n);b.title=n;});
+  colorBox.querySelectorAll('[data-color]').forEach(b=>{const n=colorName(b.dataset.color);b.setAttribute('aria-label',n);b.title=n;});
+}
+function renderOwnList(){
+  const list=Tools.$('ownList');
+  list.innerHTML=own.length?own.map(h=>`<li><button type="button" class="open" data-pick="${h}"><span class="name"><span class="sw-dot" style="--c:${h}"></span> <span class="mono">${h}</span></span></button>`
+    +`<button type="button" class="btn icon" data-del="${h}" aria-label="${t('delete')} ${h}" title="${t('delete')} ${h}">${Tools.icon('trash')}</button></li>`).join('')
+    :`<li class="muted">${t('own.none')}</li>`;
 }
 function renderSel(){
-  colorBox.querySelectorAll('.sw').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.color===S.color&&S.tool!=='eraser')));
+  colorBox.querySelectorAll('[data-color]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.color===S.color&&S.tool!=='eraser')));
   document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===S.tool)));
 }
 function setColor(c){S.color=c;if(S.tool==='eraser')S.tool=S.last;saveSettings();renderSel();}
 function setTool(k){S.tool=k;if(DRAW_TOOLS.includes(k))S.last=k;saveSettings();renderSel();}
-colorBox.addEventListener('click',e=>{const b=e.target.closest('[data-color]');if(b)setColor(b.dataset.color);});
+Tools.$('btnAddColor').addEventListener('click',openColorDlg);
+colorBox.addEventListener('click',e=>{
+  const b=e.target.closest('[data-color]');if(b)setColor(b.dataset.color);
+});
+const showSel=()=>{const b=colorBox.querySelector('[aria-pressed="true"]');if(b)b.scrollIntoView({block:'nearest',inline:'nearest'});};
+// Own colour: picker and code field stay in step
+const colorDlg=Tools.$('colorDlg'),pick=Tools.$('colorPick'),code=Tools.$('colorCode'),colorErr=Tools.$('colorErr');
+function openColorDlg(){
+  const start=own.includes(S.color)?S.color:pick.value;
+  pick.value=start;code.value=start;colorErr.textContent='';
+  Tools.menu.close();
+  colorDlg.showModal();
+}
+pick.addEventListener('input',()=>{code.value=pick.value;colorErr.textContent='';});
+code.addEventListener('input',()=>{const h=normHex(code.value);if(h)pick.value=h;colorErr.textContent='';});
+Tools.$('colorForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const h=normHex(code.value);
+  if(!h){colorErr.textContent=t('own.bad');code.focus();return;}
+  addOwn(h);colorDlg.close();
+});
+function addOwn(h){
+  if(!own.includes(h)){own.push(h);if(own.length>MAX_OWN)own.shift();saveOwn();Tools.diag.log('own colour added',{count:own.length});}
+  if(!isColor(S.color))S.color='black';
+  renderColors();setColor(h);showSel();
+}
+Tools.$('btnAddColor2').addEventListener('click',openColorDlg);
+Tools.$('ownList').addEventListener('click',e=>{
+  const p=e.target.closest('[data-pick]');
+  if(p){setColor(p.dataset.pick);Tools.menu.close();showSel();return;}
+  const d=e.target.closest('[data-del]');if(!d)return;
+  const h=d.dataset.del,i=own.indexOf(h),wasSel=S.color===h;
+  own.splice(i,1);saveOwn();
+  if(wasSel){S.color='black';saveSettings();}
+  renderColors();
+  Tools.undo(t('own.removed',{hex:h}),()=>{
+    if(!own.includes(h)){own.splice(Math.min(i,own.length),0,h);saveOwn();}
+    if(wasSel){S.color=h;saveSettings();}
+    renderColors();
+  });
+});
 document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
 Tools.$('btnReset').addEventListener('click',async ()=>{
   if(!await Tools.confirm(t('confirmReset'), { action: 'reset' }))return;
@@ -199,8 +337,8 @@ Tools.$('btnReset').addEventListener('click',async ()=>{
   Tools.diag.log('canvas cleared');
   Tools.toast(t('cleared'));
 });
-renderLabels();renderSel();
-Tools.onLang(renderLabels);
+renderColors();
+Tools.onLang(renderColors);
 
 // ---------- Export as PNG ----------
 // The picture as it is on the paper (white background, full resolution); a marker stroke still
@@ -260,8 +398,10 @@ fit();
 if('ResizeObserver' in window)new ResizeObserver(fit).observe(wrap);else window.addEventListener('resize',fit);
 
 // Restore the saved picture (at the size it was saved with)
+// (saved.png holds a data URL – PNG, or JPEG for large pictures such as photos; the name stays for old saves)
 const saved=Tools.load(LS_IMG,null);
-if(saved&&typeof saved.png==='string'&&saved.png.startsWith('data:image/png')){
+const restored=new Promise(done=>{
+if(saved&&typeof saved.png==='string'&&/^data:image\/(png|jpeg)[;,]/.test(saved.png)){
   const img=new Image();
   img.onload=()=>{
     const w=+saved.w||img.width/dpr,h=+saved.h||img.height/dpr;
@@ -270,22 +410,93 @@ if(saved&&typeof saved.png==='string'&&saved.png.startsWith('data:image/png')){
     strokes=+saved.strokes||1;
     fit();
     Tools.diag.log('picture restored',{w,h});
+    done();
   };
-  img.onerror=()=>Tools.diag.log('restore failed');
+  img.onerror=()=>{Tools.diag.log('restore failed');done();};
   img.src=saved.png;
-}
+}else done();
+});
 
 let saveTimer=0;
 function scheduleSave(){
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>{
-    const ok=Tools.save(LS_IMG,{w:W,h:H,strokes,png:paper.toDataURL('image/png')});
-    if(!ok&&!saveFailed){saveFailed=true;Tools.toast(t('saveFail'),4000);Tools.diag.log('save failed',{w:W,h:H});}
-    if(ok)saveFailed=false;
-  },400);
+  saveTimer=setTimeout(()=>{saveTimer=0;savePicture();},400);
+}
+// PNG keeps drawings exact. Photos make a PNG large (localStorage holds only a few MB): above PNG_MAX
+// characters, or when the PNG does not fit, the picture is stored as JPEG instead.
+const PNG_MAX=1500000;
+let savedAs='';
+function savePicture(){
+  const put=url=>Tools.save(LS_IMG,{w:W,h:H,strokes,png:url});
+  const png=paper.toDataURL('image/png');
+  let ok=png.length<=PNG_MAX&&put(png),as='png';
+  if(!ok){ok=put(paper.toDataURL('image/jpeg',0.92));as='jpeg';}
+  if(ok&&as!==savedAs){savedAs=as;Tools.diag.log('picture saved as',as);}
+  if(!ok&&!saveFailed){saveFailed=true;Tools.toast(t('saveFail'),4000);Tools.diag.log('save failed',{w:W,h:H});}
+  if(ok)saveFailed=false;
 }
 // Save right away when the app goes to the background
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&saveTimer){clearTimeout(saveTimer);Tools.save(LS_IMG,{w:W,h:H,strokes,png:paper.toDataURL('image/png')});saveTimer=0;}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&saveTimer){clearTimeout(saveTimer);saveTimer=0;savePicture();}});
+
+// ---------- Insert a picture ----------
+// The picture is laid onto a fresh canvas of the visible size, whole (contain) and centred, on white.
+async function decodeImage(f){
+  if(await Heic.isHeicFile(f))return {src:await Heic.decode(f),heic:true};
+  if('createImageBitmap' in window){
+    try{return {src:await createImageBitmap(f,{imageOrientation:'from-image'}),heic:false};}catch(e){Tools.diag.log('createImageBitmap failed',e&&e.name);}
+  }
+  const url=URL.createObjectURL(f),img=new Image();
+  try{img.src=url;await img.decode();return {src:img,heic:false,url};}
+  catch(e){URL.revokeObjectURL(url);throw e;}
+}
+let inserting=false;
+async function insertImage(f,{ask=true}={}){
+  if(!f||inserting)return;
+  if(ask&&strokes&&!await Tools.confirm(t('img.replace'),{action:'replace'}))return;
+  inserting=true;
+  let heic=false,im=null;
+  try{
+    heic=await Heic.isHeicFile(f);
+    if(heic&&Heic.info().native!==true&&!Heic.info().worker)Tools.toast(t('img.heic'));
+    im=await decodeImage(f);
+    const iw=im.src.width||im.src.naturalWidth,ih=im.src.height||im.src.naturalHeight;
+    if(!iw||!ih)throw new Error('empty image');
+    strokes=0;W=H=0;fit();// fresh canvas of the visible size
+    const k=Math.min(paper.width/iw,paper.height/ih),dw=iw*k,dh=ih*k;
+    ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=WHITE;ctx.fillRect(0,0,paper.width,paper.height);
+    ctx.imageSmoothingQuality='high';
+    ctx.drawImage(im.src,(paper.width-dw)/2,(paper.height-dh)/2,dw,dh);
+    strokes=1;
+    savePicture();
+    Tools.diag.log('picture inserted',{w:iw,h:ih,type:f.type||'?',heic,bytes:f.size});
+  }catch(e){
+    Tools.diag.log('insert failed',{type:f.type||'?',heic,bytes:f.size},e);
+    Tools.toast(t(heic?'img.heicFail':'img.fail'),heic?7000:4000);
+  }finally{
+    if(im){if(im.src.close)im.src.close();if(im.url)URL.revokeObjectURL(im.url);}
+    inserting=false;
+  }
+}
+const imgPick=Tools.$('imgPick');
+Tools.$('btnImage').addEventListener('click',()=>{imgPick.value='';imgPick.click();});
+imgPick.addEventListener('change',()=>insertImage(imgPick.files[0]));
+const imageOf=list=>[...(list||[])].find(f=>/^image\//.test(f.type)||/\.(heic|heif)$/i.test(f.name));
+document.addEventListener('paste',e=>{
+  if(e.target.closest&&e.target.closest('input,textarea,[contenteditable]'))return;
+  const f=imageOf(e.clipboardData&&e.clipboardData.files);
+  if(f){e.preventDefault();insertImage(f);}
+});
+document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault();});
+document.addEventListener('drop',e=>{
+  if(!e.dataTransfer||!e.dataTransfer.files.length)return;
+  e.preventDefault();
+  insertImage(imageOf(e.dataTransfer.files));
+});
+// A picture shared to (or opened with) the installed app: after the saved picture, which it then replaces
+Tools.takeSharedFile().then(async f=>{
+  await restored;
+  if(f){Tools.diag.log('shared file');insertImage(f);}
+});
 
 // ---------- Drawing ----------
 let cur=null;// {id, tool, color, x, y, raf}
@@ -364,12 +575,12 @@ paper.addEventListener('pointerdown',e=>{
   try{paper.setPointerCapture(e.pointerId);}catch(_){}
   const p=pos(e);
   if(S.tool==='fill'){
-    const t0=performance.now(),n=floodFill(p.x,p.y,COLORS[S.color]);
+    const t0=performance.now(),n=floodFill(p.x,p.y,colorValue(S.color));
     Tools.diag.log('fill',{px:n,ms:Math.round(performance.now()-t0)});
     if(n){strokes++;scheduleSave();}
     return;
   }
-  cur={id:e.pointerId,tool:S.tool,color:COLORS[S.color],x:p.x,y:p.y,raf:0};
+  cur={id:e.pointerId,tool:S.tool,color:colorValue(S.color),x:p.x,y:p.y,raf:0};
   if(cur.tool==='spray'){spray();cur.raf=requestAnimationFrame(sprayLoop);}
   else dot(p);
 });
@@ -407,20 +618,21 @@ function painted(){
   }
   return all?Math.round(n/all*1000)/10:0;
 }
-Tools.diag.info(()=>({tool:S.tool,color:S.color,surface:`${W}x${H}`,dpr,strokes,saveFailed,share:canShareFiles}));
+Tools.diag.info(()=>({tool:S.tool,color:S.color,surface:`${W}x${H}`,dpr,strokes,saveFailed,savedAs,share:canShareFiles,heic:Heic.info()}));
 
-const toolEnum=Object.keys(TOOLS),colorEnum=Object.keys(COLORS);
+const toolEnum=Object.keys(TOOLS),colorList=()=>[...Object.keys(COLORS),...own];
 const state=()=>({tool:S.tool,color:S.color,width:W,height:H});
 Tools.mcp.register({
   name:'select_tool',title:'Select colour and tool',label:'mcp.select',
   description:'Selects the colour and/or the painting tool in the app, as if the user tapped them. The eraser paints white; choosing a colour while the eraser is active switches back to the last painting tool. Returns the selected tool and colour.',
   inputSchema:{type:'object',properties:{
     tool:{type:'string',enum:toolEnum,description:'pencil (thin), brush (thick), marker (wide, see-through), spray, fill (paint bucket: a tap fills the touched area up to painted lines or the canvas edge) or eraser.'},
-    color:{type:'string',enum:colorEnum,description:'One of the six colours.'}
+    color:{type:'string',pattern:'^([a-z]+|#[0-9a-f]{6})$',description:'A fixed colour (black, white, red, yellow, green, blue, purple) or one of the user\'s own colours as #rrggbb – get_canvas lists all of them. New colours can only be added by the user.'}
   },additionalProperties:false},
   execute:({tool,color})=>{
     if(!tool&&!color)throw new Error('Give tool and/or color.');
-    if(color)setColor(color);
+    if(color&&!isColor(color))throw new Error(`Unknown colour "${color}". Available: ${colorList().join(', ')}.`);
+    if(color){setColor(color);showSel();}
     if(tool)setTool(tool);
     return {tool:S.tool,color:S.color};
   }
@@ -429,7 +641,7 @@ Tools.mcp.register({
   name:'get_canvas',title:'Read the canvas state',readOnly:true,
   description:'Reads the selected tool and colour, the available tools and colours, the canvas size in CSS pixels and how much of the canvas is painted (percent of non-white area). Does not return the picture.',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
-  execute:()=>({...state(),painted_percent:painted(),tools:toolEnum,colors:colorEnum})
+  execute:()=>({...state(),painted_percent:painted(),tools:toolEnum,colors:colorList()})
 });
 })();
 </script>
