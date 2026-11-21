@@ -91,7 +91,7 @@
   }
 
   /* ---------- Game ---------- */
-  const newBallObj = (x, y, vx = 0, vy = 0) => ({ x, y, vx, vy, px: x, py: y, layer: 0, hold: 0, saucer: null, cool: 0, zone: {}, stuck: 0, nx: 0, ny: 0 });
+  const newBallObj = (x, y, vx = 0, vy = 0) => ({ x, y, vx, vy, px: x, py: y, layer: 0, ramp: null, hold: 0, saucer: null, cool: 0, zone: {}, stuck: 0, nx: 0, ny: 0 });
   function createGame(table, opts = {}) {
     const g = {
       table, balls: clamp(Math.round(opts.balls || 3), 1, 9),
@@ -106,6 +106,7 @@
       spin: Object.fromEntries(table.spinners.map(s => [s.id, { a: 0, w: 0 }])),   // spinner angle (drawing)
       raise: {},                                // bank id → time its targets stand up again
       lamps: { kickback: false, lock: false }, multiball: false, ramps: 0, jackpots: 0,
+      mission: { i: 0, n: 0, done: 0 },        // mission chain: current mission, progress, completed chains
       mult: 1, bonus: 0, saveUntil: 0, saved: 0, launched: false,
       flash: {},                                // element id → time it last lit up (drawing)
       bumperHits: 0, lastBonus: 0, lastMult: 1,
@@ -146,10 +147,32 @@
     g.live = [newBallObj(LANE_X, LANE_REST)];
     g.phase = 'launch'; g.launched = false; g.saveUntil = 0; g.queue = 0; g.multiball = false;
   }
+  // Effects of completed lanes, banks and missions: one name or a list
   function effect(g, what, ev) {
+    if (Array.isArray(what)) { for (const w of what) effect(g, w, ev); return; }
     if (what === 'mult') g.mult = Math.min(MAX_MULT, g.mult + 1);
     else if (what === 'save') g.saveUntil = Math.max(g.saveUntil, g.time + 4);
     else if (what === 'kickback') { if (!g.lamps.kickback) ev.push('kickbackLit'); g.lamps.kickback = true; }
+    else if (what === 'multiball' && g.table.multiball && !g.multiball) startMultiball(g, ev);
+  }
+  /* Mission chain: each mission counts one kind of hit ('ramp', 'spinner' turns, 'bumper', 'bankAll', 'saucer',
+     'lane'); when it is reached, its score, then the next mission. After the last one the chain's own score and
+     effect, and it starts again. */
+  function progress(g, kind, n, ev) {
+    const list = g.table.missions;
+    if (!list || !list.length) return;
+    const m = list[g.mission.i];
+    if (m.kind !== kind) return;
+    g.mission.n = Math.min(m.count, g.mission.n + n);
+    ev.push('missionStep');
+    if (g.mission.n < m.count) return;
+    award(g, m.score); ev.push('mission');
+    g.mission.i++; g.mission.n = 0;
+    if (g.mission.i < list.length) return;
+    const all = g.table.missionsDone;
+    g.mission.i = 0; g.mission.done++;
+    award(g, all.score); ev.push('missionsAll');
+    effect(g, all.effect, ev);
   }
   function startMultiball(g, ev) {
     const mb = g.table.multiball;
@@ -185,13 +208,15 @@
     }
     // Ramps: crossing the mouth upwards lifts the ball onto the ramp, back down drops it; the end drops it too
     for (const r of T.ramps) {
-      if (b.layer === 0 && crossed(r.enter, b) === 1) { b.layer = 1; ev.push('rampIn'); }
-      else if (b.layer === 1 && crossed(r.enter, b) === -1) { b.layer = 0; ev.push('rampBack'); }
-      else if (b.layer === 1 && crossed(r.exit, b) === 1) {
-        b.layer = 0; g.ramps++; g.flash[r.id] = g.time;
+      if (b.layer === 0 && crossed(r.enter, b) === 1) { b.layer = 1; b.ramp = r.id; ev.push('rampIn'); }
+      else if (b.ramp !== r.id) continue;
+      else if (crossed(r.enter, b) === -1) { b.layer = 0; b.ramp = null; ev.push('rampBack'); }
+      else if (crossed(r.exit, b) === 1) {
+        b.layer = 0; b.ramp = null; g.ramps++; g.flash[r.id] = g.time;
         award(g, r.score); g.bonus += BONUS_STEP; ev.push('ramp');
         if (g.multiball && T.multiball) { award(g, T.multiball.jackpot); g.jackpots++; ev.push('jackpot'); }
         else if (r.lockEvery && T.multiball && g.ramps % r.lockEvery === 0 && !g.lamps.lock) { g.lamps.lock = true; ev.push('lockLit'); }
+        progress(g, 'ramp', 1, ev);   // after the jackpot: a multiball started by this ramp's mission scores from the next ramp on
       }
     }
     // Walls, rails, slingshots, the gate – on the ball's level
@@ -218,7 +243,7 @@
             down[i] = true; g.flash[bank.id + i] = g.time;
             award(g, bank.score); g.bonus += BONUS_STEP; ev.push('target');
             if (down.every(Boolean)) {
-              award(g, bank.allScore * g.mult); ev.push('bankAll');
+              award(g, bank.allScore * g.mult); ev.push('bankAll'); progress(g, 'bankAll', 1, ev);
               g.raise[bank.id] = g.time + 0.4;   // they stand up again shortly (not under a ball, see step)
               effect(g, bank.effect, ev);
             }
@@ -230,7 +255,7 @@
         if (hitCapsule(b, p.x, p.y, p.x, p.y, p.r, WALL_E) < 0) continue;
         const vn = b.vx * b.nx + b.vy * b.ny;
         if (vn < BUMPER_KICK) { b.vx += (BUMPER_KICK - vn) * b.nx; b.vy += (BUMPER_KICK - vn) * b.ny; }
-        award(g, p.score); g.bumperHits++; g.flash[p.id] = g.time; ev.push('bumper');
+        award(g, p.score); g.bumperHits++; g.flash[p.id] = g.time; ev.push('bumper'); progress(g, 'bumper', 1, ev);
       }
       // Flippers
       for (const f of g.flippers) {
@@ -242,13 +267,13 @@
       for (const sp of T.spinners) {
         if (!crossed(sp, b)) continue;
         const turns = Math.max(1, Math.round(Math.hypot(b.vx, b.vy) / 25));
-        award(g, turns * sp.score); g.spin[sp.id].w = turns * 6; ev.push('spinner');
+        award(g, turns * sp.score); g.spin[sp.id].w = turns * 6; ev.push('spinner'); progress(g, 'spinner', turns, ev);
       }
       // Saucers
       for (const s of T.saucers) {
         if (b.cool > 0 || Math.hypot(b.x - s.x, b.y - s.y) > SAUCER_R) continue;
         Object.assign(b, { x: s.x, y: s.y, vx: 0, vy: 0, hold: SAUCER_HOLD, saucer: s });
-        award(g, s.score); g.bonus += BONUS_STEP; g.flash[s.id] = g.time; ev.push('saucer');
+        award(g, s.score); g.bonus += BONUS_STEP; g.flash[s.id] = g.time; ev.push('saucer'); progress(g, 'saucer', 1, ev);
         if (g.lamps.lock && T.multiball && !g.multiball) { startMultiball(g, ev); b.hold += 1; }
         return true;
       }
@@ -265,7 +290,7 @@
         if (lane >= 0 && lane !== b.zone[r.id]) {
           const lit = g.lit[r.id];
           g.flash[r.id + lane] = g.time;
-          if (!lit[lane]) { lit[lane] = true; award(g, r.score); g.bonus += BONUS_STEP; ev.push('lane'); }
+          if (!lit[lane]) { lit[lane] = true; award(g, r.score); g.bonus += BONUS_STEP; ev.push('lane'); progress(g, 'lane', 1, ev); }
           else award(g, r.score / 5);
           if (lit.every(Boolean)) { lit.fill(false); award(g, r.allScore); effect(g, r.effect, ev); ev.push('lanesAll'); }
         }
@@ -277,7 +302,11 @@
     b.x = clamp(b.x, BALL_R, W - BALL_R);
     if (b.y < BALL_R) { b.y = BALL_R; if (b.vy < 0) b.vy = -b.vy * WALL_E; }
     // A ball that hardly moves for a few seconds (not on a held flipper, not in the shooter lane) gets a nudge
-    const slow = Math.hypot(b.vx, b.vy) < 3, cradled = g.held.some(Boolean) && b.y > 140;
+    const slow = Math.hypot(b.vx, b.vy) < 3, cradled = g.flippers.some(f => {
+      if (!f.held) return false;
+      const tip = flipperTip(f), q = closest(b.x, b.y, f.px, f.py, tip.x, tip.y);
+      return Math.hypot(b.x - q.x, b.y - q.y) < FLIP_R + BALL_R + 1;
+    });
     b.stuck = slow && !cradled && !inShooterLane(b) ? b.stuck + dt : 0;
     if (b.stuck > 3) { b.vy = -80; b.vx = b.x < CX ? 30 : -30; b.stuck = 0; ev.push('nudge'); }
     return !(b.y > H + BALL_R && !inShooterLane(b));
@@ -298,7 +327,8 @@
 
   /* One step of DT. Returns events for sounds and display: 'launch', 'wall', 'flip0', 'flip1', 'bumper', 'sling',
      'lane', 'lanesAll', 'target', 'bankAll', 'spinner', 'saucer', 'saucerKick', 'rampIn', 'rampBack', 'ramp',
-     'lockLit', 'multiball', 'jackpot', 'multiballEnd', 'kickbackLit', 'kickback', 'nudge', 'saved', 'drain',
+     'lockLit', 'multiball', 'jackpot', 'multiballEnd', 'kickbackLit', 'kickback', 'missionStep', 'mission', 'missionsAll',
+     'nudge', 'saved', 'drain',
      'ball' (next ball ready), 'over'. */
   function step(g, dt = DT) {
     const ev = [];

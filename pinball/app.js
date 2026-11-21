@@ -9,6 +9,10 @@
       intro: 'Linke Bildschirmhälfte: linker Flipper, rechte Hälfte: rechter Flipper. Zum Abschießen rechts gedrückt halten und loslassen.',
       desc_komet: 'Zum Einstieg: drei Bumper, Bahnen oben, Ziele rechts.',
       desc_tiefsee: 'Mittel: Rampe, Spinner, Kugelfang mit Multiball, Kickback.',
+      desc_uhrwerk: 'Schwer: zwei Rampen, dritter Flipper, fünf Missionen bis zum Multiball mit drei Kugeln.',
+      mis_ramp: '{n} Rampen', mis_spinner: 'Spinner {n}×', mis_bumper: '{n} Bumper', mis_bankAll: 'Alle Ziele', mis_saucer: 'In die Uhr', mis_lane: '{n} Bahnen',
+      missionDone: 'Mission geschafft', missionsAll: 'Uhrwerk aufgezogen!',
+      sayMission: 'Mission geschafft. Nächste: {m}.', sayMissionsAll: 'Alle Missionen geschafft – Multiball!',
       best: 'Bestwert ({table}, {n} Kugeln): {s}', bestNone: 'Noch kein Bestwert auf „{table}“ mit {n} Kugeln.',
       ballOf: 'Kugel {b}/{n}', ballLabel: 'Kugel', multLabel: 'Multiplikator', scoreLabel: 'Punkte',
       save: 'Ballsicherung', bonus: 'Bonus {b} × {m}', launchHint: 'Rechts halten, loslassen',
@@ -30,6 +34,10 @@
       intro: 'Left half of the screen: left flipper, right half: right flipper. To launch, hold the right side and let go.',
       desc_komet: 'To start with: three bumpers, top lanes, targets on the right.',
       desc_tiefsee: 'Medium: ramp, spinner, saucer with multiball, kickback.',
+      desc_uhrwerk: 'Hard: two ramps, a third flipper, five missions up to a three-ball multiball.',
+      mis_ramp: '{n} ramps', mis_spinner: 'Spinner {n}×', mis_bumper: '{n} bumpers', mis_bankAll: 'All targets', mis_saucer: 'Into the clock', mis_lane: '{n} lanes',
+      missionDone: 'Mission done', missionsAll: 'Clockwork wound up!',
+      sayMission: 'Mission done. Next: {m}.', sayMissionsAll: 'All missions done – multiball!',
       best: 'Best ({table}, {n} balls): {s}', bestNone: 'No best score on “{table}” with {n} balls yet.',
       ballOf: 'Ball {b}/{n}', ballLabel: 'Ball', multLabel: 'Multiplier', scoreLabel: 'Score',
       save: 'Ball save', bonus: 'Bonus {b} × {m}', launchHint: 'Hold right, let go',
@@ -289,6 +297,10 @@
         show(t('bonus', { b: pts(game.lastBonus / Math.max(1, game.lastMult)), m: Tools.fmt(game.lastMult, 0) }), 1.6);
         say(t('sayDrain', { s: pts(game.lastBonus), p: pts(game.score) }));
         Tools.diag.log('drain', { ball: game.ball }); break;
+      case 'mission': beep(780, 0.1, 0.1); beep(1040, 0.14, 0.1, 0.1); show(t('missionDone')); say(t('sayMission', { m: missionText() })); break;
+      case 'missionsAll':
+        for (let i = 0; i < 5; i++) beep(440 + i * 110, 0.1, 0.1, i * 0.09);
+        show(t('missionsAll'), 2); say(t('sayMissionsAll')); Tools.diag.log('missions done'); break;
       case 'ball': say(t('sayBall', { b: game.ball, n: game.balls })); break;
       case 'over': gameOver(); break;
     }
@@ -327,6 +339,13 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = color;
     ctx.fillText(txt, x, y);
   }
+  // The current mission as text: "2 Rampen 1/2"
+  function missionText() {
+    const list = game.table.missions;
+    if (!list || !list.length) return '';
+    const m = list[game.mission.i];
+    return t('mis_' + m.kind, { n: Tools.fmt(m.count, 0) }) + ' ' + Tools.fmt(game.mission.n, 0) + '/' + Tools.fmt(m.count, 0);
+  }
   const blink = () => Math.floor(game.time * 4) % 2 === 0;
   function lampOn(l) {
     const g = game;
@@ -336,6 +355,7 @@
       case 'kickback': return g.lamps.kickback;
       case 'lock': return g.lamps.lock && blink();
       case 'jackpot': return g.multiball && blink();
+      case 'mission': return l.n < g.mission.i || (l.n === g.mission.i && g.mission.n > 0 && blink());
     }
     return false;
   }
@@ -422,6 +442,9 @@
       for (const side of r.rails) for (let i = 0; i + 1 < side.length; i++) capsule(side[i].x, side[i].y, side[i + 1].x, side[i + 1].y, 0.5, P.wall);
     }
     if (inPlay) for (const b of g.live) if (b.layer === 1) drawBall(b);
+    // Current mission above its lamps
+    const mt = missionText();
+    if (mt && phase !== 'idle') text(mt, CX, 101.5, 2.6, P.text, 700);
     // Messages on the table
     if (message && g.time < message.until && phase !== 'idle') text(message.text, CX, 92, 7, P.lit);
     if (phase === 'play' && waiting() && !g.pulling && g.time > 0.6) {
@@ -434,7 +457,7 @@
   showTable(); renderSettings(); renderPanel(); renderHud(); resize();
 
   Tools.diag.info(() => ({ phase, table: game.table.id, game: game.phase, balls: game.balls, ball: game.ball, mult: game.mult, saved: game.saved,
-    live: game.live.length, multiball: game.multiball, fullscreen: settings.fullscreen, maxTouchPoints: navigator.maxTouchPoints || 0,
+    live: game.live.length, multiball: game.multiball, mission: game.mission.i + '/' + game.mission.n, fullscreen: settings.fullscreen, maxTouchPoints: navigator.maxTouchPoints || 0,
     held: ['L', 'R', 'P'].filter(c => held[c].size).join('') || '-', flippers: game.held.slice(),
     pull: Math.round(game.pull * 100) / 100, pos: game.live[0] ? [Math.round(game.live[0].x), Math.round(game.live[0].y)] : null }));
 
@@ -443,19 +466,21 @@
     phase, table: phase === 'idle' ? settings.table : game.table.id, balls_per_game: phase === 'idle' ? settings.balls : game.balls,
     ball: phase === 'idle' ? null : Math.min(game.ball, game.balls),
     score: phase === 'idle' ? null : game.score, multiplier: game.mult, multiball: game.multiball,
+    mission: game.table.missions && phase !== 'idle' ? { number: game.mission.i + 1, of: game.table.missions.length, kind: game.table.missions[game.mission.i].kind,
+      progress: game.mission.n, needed: game.table.missions[game.mission.i].count, chains_done: game.mission.done } : null,
     next_game: { table: settings.table, balls_per_game: settings.balls },
     tables: TABLES.list.map(tb => ({ id: tb.id, name: tb.name.en, best_scores: Object.fromEntries(BALLS.map(n => [String(n), best(tb.id, n) || null])) })),
   });
   Tools.mcp.register({
     name: 'get_state', title: 'Read game state', readOnly: true,
-    description: 'Reads the pinball game: phase (idle, play, paused, over), the table, balls per game, the current ball, score, bonus multiplier, whether a multiball is running, the settings for the next game and, per table, the best score per number of balls.',
+    description: 'Reads the pinball game: phase (idle, play, paused, over), the table, balls per game, the current ball, score, bonus multiplier, whether a multiball is running, the current mission (only on tables with missions), the settings for the next game and, per table, the best score per number of balls.',
     execute: state
   });
   Tools.mcp.register({
     name: 'set_game', title: 'Set up the next game', label: 'mcp.set',
     description: 'Chooses the table and/or the number of balls per game for the next game, as on the start card and in the settings. A running game is not changed. Returns the game state.',
     inputSchema: { type: 'object', properties: {
-      table: { type: 'string', enum: IDS, description: 'Table: komet (easy, bumpers and targets) or tiefsee (medium, ramp, spinner, multiball).' },
+      table: { type: 'string', enum: IDS, description: 'Table: komet (easy, bumpers and targets), tiefsee (medium, ramp, spinner, multiball) or uhrwerk (hard, two ramps, third flipper, mission chain).' },
       balls_per_game: { type: 'integer', enum: BALLS, description: 'Balls per game.' }
     }, additionalProperties: false },
     execute: ({ table: id, balls_per_game: n } = {}) => { if (id) setTable(id); if (n) setBalls(n); draw(); return state(); }

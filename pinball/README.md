@@ -14,6 +14,7 @@ app.js       Spielablauf (idle → play ⇄ paused → over), Tischwahl, Finger/
 - Ein Tisch ist ein Objekt mit Listen von Bauteilen; das Format steht oben in `tables.js`. Gemeinsam sind Gehäuse mit runder Oberseite, Abschussbahn rechts (x 91…100) und meist der untere Teil (`lower`: Innen-/Außenbahnen, Schleudern, Flipper).
 - **Komet** (Einstieg): drei Bumper, Bahnen oben, Fallziele rechts (geben Ballsicherung).
 - **Tiefsee** (mittel): Rampe links (zweite Ebene) in die linke Innenbahn, Orbit mit Spinner rechts, Kugelfang in der Mitte, Fallziele schalten den Kickback links an; jede zweite Rampe schaltet den Multiball frei, im Kugelfang startet er (2 Kugeln), Rampen geben dann den Jackpot.
+- **Uhrwerk** (schwer): zwei gespiegelte U-Rampen (`uRamp`) in beide Innenbahnen, Spinner an der rechten Mündung, dazwischen ein unten offener Turm mit Fallzielen links, drittem Flipper rechts (rechte Taste) und Kugelfang „Uhr“ oben; Missionskette (`missions`, `missionsDone`) startet einen Multiball mit 3 Kugeln; die Bahnen oben schalten auch den Kickback an.
 - Neuer Tisch: Funktion in `tables.js` anlegen, in `list` eintragen, Farben in `index.html` (`.table[data-table=…]`, hell und dunkel), Texte `desc_<id>` in `app.js`, Hilfe. Den Zufalls-Test in `tests/pinball.spec.mjs` laufen lassen: er findet Mulden (Kugel bleibt liegen) und zu enge Durchlässe.
 
 ## Physik (engine.js)
@@ -31,7 +32,7 @@ app.js       Spielablauf (idle → play ⇄ paused → over), Tischwahl, Finger/
 
 ## Regeln (engine.js, Werte in tables.js)
 
-Für alle Tische: Bahnen oben (Spurwechsel per Flipper, alle → Punkte und eine Wirkung, z. B. Multiplikator bis ×5), Fallziel-Reihen (alle → Punkte × Multiplikator und eine Wirkung: Ballsicherung oder Kickback), Bonus (+100 je neue Bahn, Ziel, Rampe, Kugelfang) × Multiplikator beim Verlust der Kugel, Ballsicherung 8 s nach dem ersten Abschuss jeder Kugel, 3 oder 5 Kugeln. Rampen zählen; jede `lockEvery`-te schaltet den Multiball frei, ein Kugelfang startet ihn, Rampen geben dann den Jackpot.
+Für alle Tische: Bahnen oben (Spurwechsel per Flipper, alle → Punkte und eine Wirkung, z. B. Multiplikator bis ×5), Fallziel-Reihen (alle → Punkte × Multiplikator und eine Wirkung: Ballsicherung oder Kickback), Bonus (+100 je neue Bahn, Ziel, Rampe, Kugelfang) × Multiplikator beim Verlust der Kugel, Ballsicherung 8 s nach dem ersten Abschuss jeder Kugel, 3 oder 5 Kugeln. Rampen zählen; jede `lockEvery`-te schaltet den Multiball frei, ein Kugelfang startet ihn, Rampen geben dann den Jackpot. Missionen (`progress`): eine Kette von Aufgaben, die über alle Kugeln eines Spiels weiterläuft; nach der letzten Punkte und eine Wirkung (z. B. Multiball), dann von vorn.
 
 ## Oberfläche (app.js)
 

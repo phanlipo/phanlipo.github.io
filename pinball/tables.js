@@ -13,8 +13,11 @@
    - ramps: { id, path, width, rails (walls on layer 1, generated), enter, exit, score, lockEvery } – a second
      level: crossing enter (upwards) lifts the ball onto it, crossing exit drops it back; a weak ball rolls back out
    - kickbacks: { id, x0, y0, x1, y1, speed } – a lit kickback shoots a ball in the outlane back up
-   - lamps: { kind: 'mult' (n) | 'save' | 'kickback' | 'lock' | 'jackpot', x, y, r } – drawn by the page
-   - multiball: { balls, jackpot, save } – a lit lock in a saucer starts it
+   - lamps: { kind: 'mult' (n) | 'save' | 'kickback' | 'lock' | 'jackpot' | 'mission' (n), x, y, r } – drawn by the page
+   - multiball: { balls, jackpot, save } – a lit lock in a saucer (or the effect 'multiball') starts it
+   - missions: [{ kind: 'ramp' | 'spinner' (turns) | 'bumper' | 'bankAll' | 'saucer' | 'lane', count, score }] – a
+     chain, one after the other; missionsDone: { score, effect } after the last one (then it starts again)
+   Effects (banks, rollovers, missionsDone): one name or a list – 'mult', 'save', 'kickback', 'multiball'.
    Sensor lines (enter, exit, kickbacks) count a crossing "forward" when the ball moves from the side where
    (x1−x0)(y−y0) − (y1−y0)(x−x0) > 0 to the other side. */
 (function (root) {
@@ -81,6 +84,17 @@
     return pts;
   }
 
+  // A U-shaped ramp: up from a mouth at y = 98 (x 26.5…35.5), a U-turn at the top, down the side; it drops the ball
+  // inside the inlane (below the tops of the inlane guide and the slingshot). m mirrors it to the right side; the
+  // sensor lines then run the other way round, so "forward" stays up the mouth and down the exit.
+  function uRamp(b, id, m, extra) {
+    const flip = m(0) !== 0, line = (x0, y0, x1, y1) => flip ? { x0: m(x1), y0: y1, x1: m(x0), y1: y0 } : { x0, y0, x1, y1 };
+    const path = [{ x: 31, y: 99 }, { x: 31, y: 42 }, ...arc(21.25, 42, 9.75, 0, -Math.PI, 10).slice(1), { x: 11.5, y: 128 }].map(p => ({ x: m(p.x), y: p.y }));
+    const ramp = { id, path, width: 9, enter: line(26.5, 98, 35.5, 98), exit: line(16, 126, 7, 126), ...extra };
+    ramp.rails = rails(b, path, 9, 1);
+    return ramp;
+  }
+
   /* ---------- Komet: the first table – three bumpers, top lanes, drop targets on the right ---------- */
   function komet() {
     const b = builder();
@@ -108,13 +122,9 @@
   function tiefsee() {
     const b = builder();
     cabinet(b); lower(b);
-    const lanes = topLanes(b, [33, 47, 61, 75]);
-    // Ramp: up from the mouth at y = 98, a U-turn at the top left, down the left side; it drops the ball inside the
-    // left inlane (below the tops of the inlane guide and the slingshot)
-    const path = [{ x: 31, y: 99 }, { x: 31, y: 42 }, ...arc(21.25, 42, 9.75, 0, -Math.PI, 10).slice(1), { x: 11.5, y: 128 }];
-    const ramp = { id: 'current', path, width: 9, score: 1000, lockEvery: 2,
-      enter: { x0: 26.5, y0: 98, x1: 35.5, y1: 98 }, exit: { x0: 16, y0: 126, x1: 7, y1: 126 } };
-    ramp.rails = rails(b, path, 9, 1);
+    const lanes = topLanes(b, [30, 44, 58, 72]);
+    // Ramp on the left, into the left inlane
+    const ramp = uRamp(b, 'current', x => x, { score: 1000, lockEvery: 2 });
     // Under the ramp: balls falling down the left side are guided towards the left inlane
     b.wall(0, 62, 9, 72, 0.8);
     // Orbit on the right: inner wall, a deflector at the bottom that sends the ball back towards the middle
@@ -137,6 +147,40 @@
     };
   }
 
-  const list = [komet(), tiefsee()];
+  /* ---------- Uhrwerk: two ramps (left into the left inlane, right into the right inlane, with a spinner at its
+     mouth), between them a tower open at the bottom with the clock saucer at the top, a third flipper on its right wall
+     and drop targets on its left wall;
+     a chain of five missions starts a three-ball multiball; the top lanes also light the kickback ---------- */
+  function uhrwerk() {
+    const b = builder();
+    cabinet(b); lower(b);
+    const lanes = topLanes(b, [30, 44, 58, 72]);
+    const left = uRamp(b, 'pendulum', x => x, { score: 1000 }), right = uRamp(b, 'spring', mirror, { score: 1000 });
+    // Under the ramps: balls falling down either side are guided towards the inlanes
+    b.wall(0, 62, 9, 72, 0.8); b.wall(SEP_X - 0.6, 62, 82, 72, 0.8);
+    const TX = 37.7;
+    return {
+      id: 'uhrwerk', name: { de: 'Uhrwerk', en: 'Clockwork' },
+      walls: b.walls,
+      // The third flipper hangs in the tower on its right wall (right button) and shoots up to the saucer
+      flippers: [...flippers(), { side: 1, x: 53.5, y: 74, len: 8, rest: 0.5, up: -0.42 }],
+      bumpers: [{ x: 38.5, y: 36 }, { x: 52.5, y: 36 }].map((p, i) => ({ id: 'b' + i, r: 4, score: 100, ...p })),
+      banks: [{ id: 'gears', targets: [[82, 87], [88, 93], [94, 99]].map(([y0, y1]) => ({ x0: TX, y0, x1: TX, y1 })), score: 250, allScore: 2000, effect: 'save' }],
+      rollovers: [{ id: 'top', lanes, score: 500, allScore: 2000, laneChange: true, effect: ['mult', 'kickback'] }],
+      spinners: [{ id: 'balance', x0: mirror(35.5), y0: 102, x1: mirror(26.5), y1: 102, score: 30 }],
+      saucers: [{ id: 'clock', x: CX, y: 50, score: 1000, out: { vx: 4, vy: 40 } }],
+      ramps: [left, right],
+      kickbacks: [{ id: 'left', x0: 6.7, y0: 138, x1: 0, y1: 138, speed: 250 }],
+      lamps: [...multLamps(112), { kind: 'save', x: CX, y: 140, r: 2.4 }, { kind: 'kickback', x: 3.6, y: 131, r: 1.8 },
+        { kind: 'jackpot', x: 21, y: 102, r: 2.2 }, { kind: 'jackpot', x: mirror(21), y: 102, r: 2.2 },
+        ...[0, 1, 2, 3, 4].map(n => ({ kind: 'mission', n, x: CX + (n - 2) * 4, y: 106, r: 1.4 }))],
+      multiball: { balls: 3, jackpot: 5000, save: 8 },
+      missions: [{ kind: 'ramp', count: 2, score: 3000 }, { kind: 'spinner', count: 12, score: 3000 }, { kind: 'bumper', count: 15, score: 3000 },
+        { kind: 'bankAll', count: 1, score: 4000 }, { kind: 'saucer', count: 1, score: 5000 }],
+      missionsDone: { score: 20000, effect: 'multiball' },
+    };
+  }
+
+  const list = [komet(), tiefsee(), uhrwerk()];
   root.PinballTables = { list, byId: Object.fromEntries(list.map(t => [t.id, t])) };
 })(typeof self !== 'undefined' ? self : globalThis);

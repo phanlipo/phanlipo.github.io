@@ -4468,9 +4468,10 @@ test.describe('pinball tools', () => {
     await page.addInitScript(() => localStorage.setItem('pinball.settings.v2', JSON.stringify({ table: 'komet', balls: 3, sound: false, vibrate: false, best: { komet: { 3: 12340 } } })));
     await open(page, '/pinball/');
     let r = await call(page, 'pinball_get_state', {});
-    expect(r).toEqual({ ok: true, result: { phase: 'idle', table: 'komet', balls_per_game: 3, ball: null, score: null, multiplier: 1, multiball: false,
+    expect(r).toEqual({ ok: true, result: { phase: 'idle', table: 'komet', balls_per_game: 3, ball: null, score: null, multiplier: 1, multiball: false, mission: null,
       next_game: { table: 'komet', balls_per_game: 3 },
-      tables: [{ id: 'komet', name: 'Comet', best_scores: { 3: 12340, 5: null } }, { id: 'tiefsee', name: 'Deep Sea', best_scores: { 3: null, 5: null } }] } });
+      tables: [{ id: 'komet', name: 'Comet', best_scores: { 3: 12340, 5: null } }, { id: 'tiefsee', name: 'Deep Sea', best_scores: { 3: null, 5: null } },
+        { id: 'uhrwerk', name: 'Clockwork', best_scores: { 3: null, 5: null } }] } });
     r = await call(page, 'pinball_set_game', { table: 'tiefsee', balls_per_game: 5 });
     expect(r.result).toMatchObject({ phase: 'idle', table: 'tiefsee', balls_per_game: 5 });
     await expect(page.locator('#optBalls [data-v="5"]')).toHaveAttribute('aria-pressed', 'true');
@@ -4489,6 +4490,10 @@ test.describe('pinball tools', () => {
     await expect(page.locator('#hudBall')).toHaveText('Kugel 1/5');
     await expect(page.locator('#table')).toHaveAttribute('data-table', 'tiefsee');
     expect(JSON.parse(await page.evaluate(() => localStorage.getItem('pinball.settings.v2')))).toMatchObject({ table: 'komet', balls: 3 });
+    // On the table with missions the state names the current one
+    await call(page, 'pinball_set_game', { table: 'uhrwerk' });
+    r = await call(page, 'pinball_new_game', {});
+    expect(r.result).toMatchObject({ table: 'uhrwerk', mission: { number: 1, of: 5, kind: 'ramp', progress: 0, needed: 2, chains_done: 0 } });
   });
 });
 

@@ -14,7 +14,7 @@ const { E, T } = (() => {
   vm.runInNewContext(readFileSync('pinball/tables.js', 'utf8') + readFileSync('pinball/engine.js', 'utf8'), { self: c, Math });
   return { E: c.PinballEngine, T: c.PinballTables };
 })();
-const KOMET = T.byId.komet, DEEP = T.byId.tiefsee;
+const KOMET = T.byId.komet, DEEP = T.byId.tiefsee, CLOCK = T.byId.uhrwerk;
 const { DT, BALL_R, FLIP_R, LANE_REST, LANE_X, SEP_X, CX } = E;
 const lcg = seed => () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
 const steps = (g, n) => { const ev = []; for (let k = 0; k < n; k++) ev.push(...E.step(g)); return ev; };
@@ -328,6 +328,56 @@ test.describe('engine', () => {
     expect(until(g, () => g.phase !== 'play', 2)).toContain('drain');
   });
 
+  test('Uhrwerk: both ramps drop into their inlanes; the right button also moves the third flipper', () => {
+    for (const [ramp, x0, x1] of [[CLOCK.ramps[0], 7.5, 15.5], [CLOCK.ramps[1], 75.5, 83.5]]) {
+      const mouth = (ramp.enter.x0 + ramp.enter.x1) / 2;
+      const g = inPlay(CLOCK, { x: mouth, y: 104, vx: 0, vy: -280 });
+      const ev = until(g, () => ball(g).y > 132 && ball(g).layer === 0 && g.ramps === 1);
+      expect(ev.filter(e => /^ramp/.test(e)), ramp.id).toEqual(['rampIn', 'ramp']);
+      expect(ball(g).x, ramp.id).toBeGreaterThan(x0);
+      expect(ball(g).x, ramp.id).toBeLessThan(x1);
+    }
+    const g = E.createGame(CLOCK);
+    expect(g.flippers.map(f => f.side)).toEqual([0, 1, 1]);
+    E.setFlipper(g, 1, true);
+    expect(g.flippers.map(f => f.held)).toEqual([false, true, true]);
+    steps(g, 30);
+    expect(g.flippers[2].a).toBeCloseTo(-0.42, 9);
+  });
+
+  test('Uhrwerk missions: one after the other; the last one starts a three-ball multiball and the chain again', () => {
+    const ramp = CLOCK.ramps[0], mouth = (ramp.enter.x0 + ramp.enter.x1) / 2, clock = CLOCK.saucers[0];
+    const g = inPlay(CLOCK, {});
+    const shoot = () => { put(ball(g), { x: mouth, y: 104, vx: 0, vy: -280, layer: 0 }); const n = g.ramps; return until(g, () => g.ramps > n); };
+    // Mission 1: two ramps
+    expect(shoot()).toContain('missionStep');
+    expect(g.mission).toEqual({ i: 0, n: 1, done: 0 });
+    let ev = shoot();
+    expect(ev).toContain('mission');
+    expect(g.mission).toEqual({ i: 1, n: 0, done: 0 });
+    expect(g.score).toBe(2 * 1000 + 3000);
+    // A ramp now does not count for the spinner mission
+    shoot();
+    expect(g.mission.n).toBe(0);
+    // Jump to the last mission: the clock
+    g.mission.i = 4; g.score = 0;
+    put(ball(g), { x: clock.x, y: clock.y - 4, vx: 0, vy: 30 });
+    ev = until(g, () => g.live.length === 3 && g.queue === 0, 4);
+    expect(ev).toEqual(expect.arrayContaining(['saucer', 'mission', 'missionsAll', 'multiball']));
+    expect(g.score).toBe(1000 + 5000 + 20000);
+    expect(g.mission).toEqual({ i: 0, n: 0, done: 1 });
+    expect(g.multiball).toBe(true);
+  });
+
+  test('Uhrwerk top lanes: all three raise the multiplier and switch on the kickback', () => {
+    const g = inPlay(CLOCK, {});
+    const lanes = CLOCK.rollovers[0].lanes;
+    let ev = [];
+    for (const l of lanes) { put(ball(g), { x: l.x, y: l.y0 - 2, vx: 0, vy: 40 }); ev = ev.concat(steps(g, 30)); }
+    expect(ev).toEqual(expect.arrayContaining(['lanesAll', 'kickbackLit']));
+    expect([g.mult, g.lamps.kickback]).toEqual([2, true]);
+  });
+
   test('long seeded games on every table: the ball stays in the cabinet, never slips into the shooter lane and never gets stuck', () => {
     for (const table of T.list) {
       const rnd = lcg(11), count = {};
@@ -357,8 +407,8 @@ test.describe('engine', () => {
       expect(problem, table.id).toBeNull();
       expect(games, table.id).toBe(12);
       expect(count.nudge || 0, table.id).toBe(0);
-      const want = ['bumper', 'sling', 'lane', 'target', 'flip0', 'flip1', 'drain', 'saved'];
-      if (table.ramps.length) want.push('ramp', 'spinner', 'saucer', 'kickback');
+      const want = ['bumper', 'sling', 'lane', 'target', 'flip0', 'flip1', 'drain', 'saved',
+        ...{ komet: [], tiefsee: ['ramp', 'spinner', 'saucer', 'kickback'], uhrwerk: ['ramp', 'spinner', 'mission', 'lanesAll', 'kickback'] }[table.id]];   // the clock saucer: own test above
       for (const e of want) expect(count[e], `${table.id}: ${e}`).toBeGreaterThan(0);
     }
   });
@@ -502,7 +552,7 @@ test.describe('page', () => {
 
   test('choosing a table: its layout and colours, description and best score; kept after a reload', async ({ page }) => {
     await page.goto('/pinball/');
-    await expect(page.locator('#tables button')).toHaveText(['Komet', 'Tiefsee']);
+    await expect(page.locator('#tables button')).toHaveText(['Komet', 'Tiefsee', 'Uhrwerk']);
     await expect(page.locator('#tables [data-table="komet"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#table')).toHaveAttribute('data-table', 'komet');
     const field = () => page.locator('#table').evaluate(el => getComputedStyle(el).getPropertyValue('--field').trim());
@@ -555,7 +605,7 @@ test.describe('page', () => {
       await page.goto('/pinball/');
       await expect(page.locator('h1')).toHaveText('Pinball');
       await expect(page.locator('#best')).toHaveText('No best score on “Comet” with 3 balls yet.');
-      await expect(page.locator('#tables button')).toHaveText(['Comet', 'Deep Sea']);
+      await expect(page.locator('#tables button')).toHaveText(['Comet', 'Deep Sea', 'Clockwork']);
       await expect(page.locator('#hudBall')).toHaveText('Ball 1/3');
       await expect(page.locator('#panelText')).toHaveText(/^Left half of the screen/);
       await switchLang(page, 'de');

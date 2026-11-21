@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files (of the icon sprite only the icons
 // this app uses): every change creates a new version, the browser installs it in the background and removes the old one.
 const APP = "pinball";
-const VERSION = '3a0ae70a9051';
+const VERSION = '294aeec0e38e';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
