@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Übersetzer</title>
+<meta name="description" content="Texte direkt auf dem Gerät übersetzen, auch offline – mit der eingebauten Übersetzung des Browsers (Chrome) oder einem Opus-MT-Modell. Der Text verlässt das Gerät nicht.">
+<meta name="tool:tags" content="Alltag, KI">
+<meta name="tool:features" content="Teilen an App, Kopieren, Download nötig, KI-Agent">
+<meta name="tool:webmcp" content="translate_text, get_translation">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann einen Text in eine andere Sprache übersetzen lassen und die aktuelle Übersetzung lesen – aber nur mit Sprachpaketen bzw. Modellen, die schon heruntergeladen sind. Den ersten Download startest du selbst.">
+<meta name="tool:webmcp-help-en" content="An AI agent can have a text translated into another language and read the current translation – but only with language packs or models that are already downloaded. You start the first download yourself.">
+<meta name="tool:icon" content="language">
+<meta name="tool:color" content="#4338ca">
+<meta name="tool:short-name" content="Übersetzer">
+<meta name="tool:title-en" content="Translator">
+<meta name="tool:description-en" content="Translate texts right on the device, even offline – with the browser’s built-in translation (Chrome) or an Opus-MT model. The text never leaves the device.">
+<meta name="tool:short-name-en" content="Translator">
+<meta name="tool:storage" content="translator.">
+<meta name="tool:share-text" content="true">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-6Vt5kmEteA1HUBlxq6yn+TxLP2U6LpSAf40y4Inzlrw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Übersetzer">
+<meta name="theme-color" content="#4338ca">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#4338ca;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#a5b4fc;--accent-text:#1e1b4b}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:end}
+.pair .form-field{margin:0}
+.pair .btn.icon{margin-block-end:0}
+.engine{font-size:14px;color:var(--muted);margin-block:8px 0;min-height:1.4em}
+.texts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-block-start:12px}
+@media (max-width:760px){.texts{grid-template-columns:minmax(0,1fr)}}
+.texts .form-field{margin:0}
+.texts textarea{min-height:160px}
+.count{font-size:12px;color:var(--muted);text-align:end;margin:2px 0 0}
+.detected{font-size:13px;color:var(--muted);margin:2px 0 0;min-height:1.3em}
+.progress{margin-block-start:10px}
+.status{font-size:14px;margin-block:8px 0;min-height:1.4em}
+.status.err{color:var(--err)}
+.status.ok{color:var(--ok)}
+.out-actions{margin-block-start:8px}
+#btnRun{margin-block-start:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Übersetzer</span></h1>
+  <p class="sub" data-i18n="sub">Übersetzen direkt auf dem Gerät – der Text verlässt es nicht.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-main">
+    <h2 id="h-main" class="sr-only" data-i18n="h.main">Übersetzen</h2>
+    <div class="pair">
+      <div class="form-field"><label for="src" data-i18n="from">Von</label><select id="src"></select></div>
+      <button type="button" class="btn icon" id="btnSwap" aria-label="Sprachen tauschen" title="Sprachen tauschen" data-i18n-attr="aria-label:swap; title:swap"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-left-right"/></svg></button>
+      <div class="form-field"><label for="tgt" data-i18n="to">Nach</label><select id="tgt"></select></div>
+    </div>
+    <p class="engine" id="engineInfo" aria-live="polite"></p>
+    <div class="texts">
+      <div>
+        <div class="form-field"><label for="input" data-i18n="inputLabel">Text</label>
+          <textarea id="input" maxlength="5000" placeholder="Text eingeben oder einfügen" data-i18n-attr="placeholder:inputPh"></textarea></div>
+        <p class="detected" id="detected" aria-live="polite"></p>
+        <p class="count" id="count"></p>
+      </div>
+      <div>
+        <div class="form-field"><label for="output" data-i18n="outputLabel">Übersetzung</label>
+          <textarea id="output" placeholder="Hier erscheint die Übersetzung – sie lässt sich danach bearbeiten." data-i18n-attr="placeholder:outputPh"></textarea></div>
+        <div class="row out-actions">
+          <button type="button" class="btn" id="btnCopy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span data-i18n="copy">Kopieren</span></button>
+          <button type="button" class="btn" id="btnSpeak" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#volume"/></svg><span>Vorlesen</span></button>
+          <button type="button" class="btn" id="btnShare" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="share">Teilen …</span></button>
+          <button type="button" class="btn" id="btnClear"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eraser"/></svg><span data-i18n="clear">Leeren</span></button>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="btn primary block" id="btnRun"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#language"/></svg><span id="btnRunLabel" data-i18n="run">Übersetzen</span></button>
+    <div class="progress" id="progressBox" hidden><progress id="progress" max="100"></progress></div>
+    <p class="status" id="status" role="status"></p>
+  </section>
+</main>
+
+<details class="card" id="settingsBox" data-menu data-icon="settings">
+  <summary data-i18n="settings">Einstellungen</summary>
+  <div class="form-field"><label for="engine" data-i18n="engine">Übersetzen mit</label>
+    <select id="engine">
+      <option value="auto" data-i18n="eng.auto">Automatisch (empfohlen)</option>
+      <option value="browser" data-i18n="eng.browser">Nur Übersetzung des Browsers</option>
+      <option value="opus" data-i18n="eng.opus">Nur Opus-MT-Modell</option>
+    </select>
+  </div>
+  <p class="muted" id="apiInfo"></p>
+</details>
+<section class="card" aria-labelledby="h-models" data-menu data-icon="database">
+  <h2 id="h-models" data-i18n="models">Heruntergeladene Modelle</h2>
+  <p class="muted" id="modelInfo"></p>
+  <div class="row"><button type="button" class="btn small danger" id="btnDeleteModels"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="deleteModels">Modelle löschen</span></button></div>
+</section>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Übersetzt Texte <strong>direkt auf dem Gerät</strong> – ohne Übersetzungsdienst im Internet. Der Text wird nirgendwohin geschickt; nach dem ersten Download klappt es auch offline.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>Sprachen oben wählen (mit dem Pfeil tauschen), Text eingeben oder einfügen und „Übersetzen“ tippen (am Computer auch Strg+Eingabe).</li>
+    <li>„Automatisch erkennen“ gibt es, wenn der Browser die Sprache selbst erkennen kann (Chrome am Computer).</li>
+    <li>Die Übersetzung lässt sich korrigieren und dann kopieren, vorlesen oder teilen. Text und Übersetzung bleiben bis zum Leeren erhalten.</li>
+    <li>Installiert auf Android: Text oder Link in einer anderen App <i>teilen</i> und „Übersetzer“ wählen – der Text landet im Eingabefeld.</li>
+  </ul>
+  <h3>Zwei Wege zu übersetzen</h3>
+  <ul>
+    <li><strong>Übersetzung des Browsers</strong> (Translator API): Chrome am Computer (ab Version 138) übersetzt mit eigenen Sprachmodellen auf dem Gerät. Beim ersten Mal lädt Chrome das Sprachpaket von Google herunter – dabei wird kein Text übertragen. Die Pakete verwaltet Chrome selbst.</li>
+    <li><strong>Opus-MT-Modell</strong>: Wo der Browser das nicht kann (Handy, Safari, Firefox oder ein Sprachpaar, das Chrome nicht kennt), lädt die App nach Rückfrage einmalig ein Übersetzungsmodell von <strong>Hugging Face</strong> (ca. 110 MB je Richtung; ohne Text). Für Paare ohne eigenes Modell geht es über Englisch (zwei Modelle). Die Modelle bleiben im Browser und lassen sich unter Einstellungen löschen.</li>
+    <li>„Automatisch“ nimmt den Browser, wenn er das Sprachpaar kann, sonst das Modell. Unter Einstellungen lässt sich ein Weg fest wählen.</li>
+    <li>Opus-MT übersetzt Satz für Satz und ist auf dem Handy langsamer; manche Sprachen gibt es dort nur in eine Richtung (z. B. Japanisch, Koreanisch, Polnisch, Türkisch nur nach Englisch, Portugiesisch gar nicht).</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Sprachwahl, Einstellung und der zuletzt übersetzte Text bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“).</p>
+  <p class="note">Maschinelle Übersetzung macht Fehler – besonders bei Namen, Fachbegriffen und Redewendungen. Wichtige Texte bitte prüfen lassen.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Translates texts <strong>right on the device</strong> – without an online translation service. The text is not sent anywhere; after the first download it also works offline.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Choose the languages at the top (swap them with the arrows), type or paste a text and tap “Translate” (on a computer also Ctrl+Enter).</li>
+    <li>“Detect automatically” is offered when the browser can detect the language itself (Chrome on a computer).</li>
+    <li>The translation can be corrected and then copied, read aloud or shared. Text and translation are kept until you clear them.</li>
+    <li>Installed on Android: <i>share</i> a text or link from another app and pick “Translator” – the text lands in the input field.</li>
+  </ul>
+  <h3>Two ways to translate</h3>
+  <ul>
+    <li><strong>The browser’s translation</strong> (Translator API): Chrome on a computer (version 138 or later) translates with its own language models on the device. The first time, Chrome downloads the language pack from Google – no text is sent. Chrome manages these packs itself.</li>
+    <li><strong>Opus-MT model</strong>: where the browser cannot do it (phone, Safari, Firefox or a pair Chrome does not know), the app asks and then downloads a translation model once from <strong>Hugging Face</strong> (about 110 MB per direction; without any text). Pairs without their own model go through English (two models). The models stay in the browser and can be deleted under Settings.</li>
+    <li>“Automatic” uses the browser if it can do the pair, otherwise the model. Under Settings you can choose one way for good.</li>
+    <li>Opus-MT translates sentence by sentence and is slower on a phone; some languages only go one way there (e.g. Japanese, Korean, Polish, Turkish only into English, Portuguese not at all).</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The choice of languages, the setting and the last translated text stay only in this browser (back them up or move them under “Back up data”).</p>
+  <p class="note">Machine translation makes mistakes – especially with names, technical terms and idioms. Please have important texts checked.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann einen Text in eine andere Sprache übersetzen lassen und die aktuelle Übersetzung lesen – aber nur mit Sprachpaketen bzw. Modellen, die schon heruntergeladen sind. Den ersten Download startest du selbst. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can have a text translated into another language and read the current translation – but only with language packs or models that are already downloaded. You start the first download yourself. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 7d2f1185332d</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="logic.js"></script>
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+const { $, load, save, toast, fmt } = Tools;
+const L = window.TranslatorLogic;
+Tools.i18n({
+  de: {
+    run: 'Übersetzen', running: 'Übersetze …', auto: 'Automatisch erkennen', speak: 'Vorlesen', stop: 'Stopp',
+    'info.browser': 'Übersetzt mit dem Browser auf dem Gerät.', 'info.browserDl': 'Übersetzt mit dem Browser – beim ersten Mal lädt er das Sprachpaket.',
+    'info.detect': 'Die Sprache erkennt der Browser.', 'info.opus': 'Übersetzt mit Opus-MT – Modell ist geladen.', 'info.opusDl': 'Übersetzt mit Opus-MT – einmaliger Download ca. {mb} MB.',
+    'info.via': ' (über Englisch)', 'info.none': 'Dieses Sprachpaar kann dieser Browser nicht übersetzen.', 'info.same': 'Bitte zwei verschiedene Sprachen wählen.',
+    'api.yes': 'Dieser Browser hat eine eingebaute Übersetzung (Translator API).', 'api.no': 'Dieser Browser hat keine eingebaute Übersetzung – es wird das Opus-MT-Modell genutzt.',
+    noText: 'Bitte erst einen Text eingeben.', same: 'Ausgangs- und Zielsprache sind gleich.', notDetected: 'Die Sprache wurde nicht erkannt – bitte oben wählen.',
+    detected: 'Erkannt: {l}', alreadyTarget: 'Der Text ist schon auf {l}.', unsupported: 'Dieses Sprachpaar kann hier nicht übersetzt werden.',
+    confirmBrowserDl: 'Für {pair} lädt der Browser einmalig ein Sprachpaket herunter (der Text wird nicht übertragen). Herunterladen?',
+    confirmDetectDl: 'Zum Erkennen der Sprache lädt der Browser einmalig ein kleines Modell herunter. Herunterladen?',
+    confirmOpusDl: 'Für {pair} lädt die App einmalig ca. {mb} MB von Hugging Face (der Text wird nicht übertragen). Danach geht es auch offline. Herunterladen?',
+    loading: 'Sprachpaket wird geladen …', loadingModel: 'Modell wird geladen{step} …', ofTotal: ' {a} von {b}', stepOf: ' ({s} von {n})',
+    translating: 'Übersetze … {p} %', done: 'Fertig.', meta: 'Fertig · {engine} · {s} s', 'eng.browserName': 'Browser', 'eng.opusName': 'Opus-MT',
+    loadFail: 'Das Modell konnte nicht geladen werden. Für den ersten Download ist eine Internetverbindung nötig. ({m})', fail: 'Fehler beim Übersetzen: {m}',
+    browserFail: 'Die Übersetzung des Browsers ist fehlgeschlagen: {m}',
+    copied: 'Übersetzung kopiert', noOutput: 'Noch keine Übersetzung', copyFail: 'Kopieren nicht möglich', shareFail: 'Teilen nicht möglich',
+    cleared: 'Text geleert', sharedTaken: 'Geteilter Text übernommen', chars: '{n} / {max} Zeichen',
+    noModels: 'Noch kein Modell heruntergeladen.', modelList: '{list} · zusammen ca. {mb} MB', confirmDelModels: 'Heruntergeladene Opus-MT-Modelle löschen? Beim nächsten Übersetzen werden sie neu geladen.',
+    modelsDeleted: 'Modelle gelöscht', 'mcp.translate': 'Text übersetzt', 'mcp.get': 'Übersetzung gelesen',
+  },
+  en: {
+    title: 'Translator', sub: 'Translate right on the device – the text never leaves it.', 'h.main': 'Translate', from: 'From', to: 'To', swap: 'Swap languages',
+    inputLabel: 'Text', inputPh: 'Type or paste a text', outputLabel: 'Translation', outputPh: 'The translation appears here – you can edit it afterwards.',
+    copy: 'Copy', share: 'Share …', clear: 'Clear', settings: 'Settings', engine: 'Translate with', 'eng.auto': 'Automatic (recommended)',
+    'eng.browser': 'Only the browser’s translation', 'eng.opus': 'Only the Opus-MT model', models: 'Downloaded models', deleteModels: 'Delete models',
+    run: 'Translate', running: 'Translating …', auto: 'Detect automatically', speak: 'Read aloud', stop: 'Stop',
+    'info.browser': 'Translated by the browser on the device.', 'info.browserDl': 'Translated by the browser – the first time it downloads the language pack.',
+    'info.detect': 'The browser detects the language.', 'info.opus': 'Translated with Opus-MT – the model is downloaded.', 'info.opusDl': 'Translated with Opus-MT – one-time download of about {mb} MB.',
+    'info.via': ' (through English)', 'info.none': 'This browser cannot translate this pair of languages.', 'info.same': 'Please choose two different languages.',
+    'api.yes': 'This browser has a built-in translation (Translator API).', 'api.no': 'This browser has no built-in translation – the Opus-MT model is used.',
+    noText: 'Please enter a text first.', same: 'Source and target language are the same.', notDetected: 'The language was not detected – please choose it above.',
+    detected: 'Detected: {l}', alreadyTarget: 'The text is already in {l}.', unsupported: 'This pair of languages cannot be translated here.',
+    confirmBrowserDl: 'For {pair} the browser downloads a language pack once (the text is not sent). Download?',
+    confirmDetectDl: 'To detect the language the browser downloads a small model once. Download?',
+    confirmOpusDl: 'For {pair} the app downloads about {mb} MB from Hugging Face once (the text is not sent). After that it also works offline. Download?',
+    loading: 'Loading language pack …', loadingModel: 'Loading model{step} …', ofTotal: ' {a} of {b}', stepOf: ' ({s} of {n})',
+    translating: 'Translating … {p} %', done: 'Done.', meta: 'Done · {engine} · {s} s', 'eng.browserName': 'browser', 'eng.opusName': 'Opus-MT',
+    loadFail: 'The model could not be loaded. The first download needs an internet connection. ({m})', fail: 'Translation error: {m}',
+    browserFail: 'The browser’s translation failed: {m}',
+    copied: 'Translation copied', noOutput: 'No translation yet', copyFail: 'Copying is not possible', shareFail: 'Sharing is not possible',
+    cleared: 'Text cleared', sharedTaken: 'Shared text taken over', chars: '{n} / {max} characters',
+    noModels: 'No model downloaded yet.', modelList: '{list} · about {mb} MB together', confirmDelModels: 'Delete the downloaded Opus-MT models? They will be downloaded again the next time you translate.',
+    modelsDeleted: 'Models deleted', 'mcp.translate': 'text translated', 'mcp.get': 'translation read',
+  },
+});
+const t = Tools.t;
+
+const MAX_CHARS = 5000;
+const LS_SET = 'translator.settings.v1', LS_DRAFT = 'translator.draft.v1';
+const MODEL_CACHE = 'transformers-cache';
+const OPUS_FILES = ['onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_merged_quantized.onnx'];
+const hasApi = 'Translator' in self;
+const hasDetector = 'LanguageDetector' in self;
+const hasSpeech = 'speechSynthesis' in self && 'SpeechSynthesisUtterance' in self;
+
+/* ---------- Settings and draft ---------- */
+const uiDe = Tools.lang() !== 'en';
+const settings = Object.assign({ src: hasDetector ? 'auto' : (uiDe ? 'en' : 'de'), tgt: uiDe ? 'de' : 'en', engine: 'auto' }, load(LS_SET, {}));
+if (settings.src !== 'auto' && !L.LANGS.includes(settings.src)) settings.src = 'en';
+if (settings.src === 'auto' && !hasDetector) settings.src = settings.tgt === 'en' ? 'de' : 'en';
+if (!L.LANGS.includes(settings.tgt)) settings.tgt = 'de';
+if (!['auto', 'browser', 'opus'].includes(settings.engine)) settings.engine = 'auto';
+const saveSettings = () => save(LS_SET, settings);
+// The last text and its translation: { text, result, from, to }
+let draft = Object.assign({ text: '', result: '', from: '', to: '' }, load(LS_DRAFT, {}));
+const saveDraft = () => save(LS_DRAFT, draft);
+
+const langName = code => {
+  try { return new Intl.DisplayNames([Tools.locale()], { type: 'language' }).of(code) || code; } catch (_) { return code; }
+};
+const pairName = (a, b) => `${langName(a)} → ${langName(b)}`;
+
+/* ---------- Language selects ---------- */
+function renderSelects() {
+  const sorted = L.LANGS.slice().sort((a, b) => langName(a).localeCompare(langName(b), Tools.locale()));
+  const opts = list => list.map(c => `<option value="${c}">${Tools.esc(langName(c))}</option>`).join('');
+  $('src').innerHTML = (hasDetector ? `<option value="auto">${Tools.esc(t('auto'))}</option>` : '') + opts(sorted);
+  $('tgt').innerHTML = opts(sorted);
+  $('src').value = settings.src;
+  $('tgt').value = settings.tgt;
+}
+$('src').addEventListener('change', () => { settings.src = $('src').value; saveSettings(); $('detected').textContent = ''; updateInfo(); });
+$('tgt').addEventListener('change', () => { settings.tgt = $('tgt').value; saveSettings(); updateInfo(); });
+$('btnSwap').addEventListener('click', () => {
+  const from = settings.src === 'auto' ? (draft.from || null) : settings.src;
+  if (!from) return;
+  settings.src = settings.tgt; settings.tgt = from;
+  if (draft.result.trim()) {
+    draft = { text: $('output').value, result: $('input').value, from: settings.src, to: settings.tgt };
+    $('input').value = draft.text; $('output').value = draft.result; saveDraft();
+  }
+  saveSettings(); renderSelects(); $('detected').textContent = ''; updateCount(); updateInfo();
+});
+$('engine').value = settings.engine;
+$('engine').addEventListener('change', () => { settings.engine = $('engine').value; saveSettings(); updateInfo(); });
+
+/* ---------- Which engine translates a pair ---------- */
+async function browserAvailability(src, tgt) {
+  if (!hasApi) return 'unavailable';
+  try { return await Translator.availability({ sourceLanguage: src, targetLanguage: tgt }); } catch (e) {
+    Tools.diag.log('availability failed', { error: e.name });
+    return 'unavailable';
+  }
+}
+/** { engine: 'browser', availability } | { engine: 'opus', route } | null */
+async function choose(src, tgt) {
+  if (settings.engine !== 'opus') {
+    const a = await browserAvailability(src, tgt);
+    if (a !== 'unavailable') return { engine: 'browser', availability: a };
+  }
+  if (settings.engine !== 'browser') {
+    const route = L.opusRoute(src, tgt);
+    if (route) return { engine: 'opus', route };
+  }
+  return null;
+}
+
+/* ---------- Opus-MT models in the cache of transformers.js (shared with other apps: only ours) ---------- */
+const modelOf = url => (String(url).match(/\/(Xenova\/opus-mt-[A-Za-z]+-[A-Za-z]+)\/resolve\//) || [])[1] || null;
+async function cachedModels() {
+  const have = new Map();
+  try {
+    if (!('caches' in self) || !await caches.has(MODEL_CACHE)) return have;
+    const c = await caches.open(MODEL_CACHE);
+    for (const req of await c.keys()) {
+      const m = modelOf(req.url);
+      if (!m) continue;
+      const files = have.get(m) || new Set();
+      files.add(req.url.slice(req.url.indexOf('/resolve/') + 1).replace(/^resolve\/[^/]+\//, ''));
+      have.set(m, files);
+    }
+  } catch (_) {}
+  return have;
+}
+const isComplete = files => !!files && OPUS_FILES.every(f => files.has(f));
+async function routeDownloaded(route) {
+  const have = await cachedModels();
+  return route.every(m => isComplete(have.get(m)));
+}
+async function renderModels() {
+  const all = await cachedModels();   // also half-downloaded models can be deleted
+  const have = [...all.entries()].filter(([, f]) => isComplete(f)).map(([m]) => m);
+  const names = have.map(m => { const [a, b] = m.replace('Xenova/opus-mt-', '').split('-'); return pairName(a, b); });
+  $('modelInfo').textContent = names.length ? t('modelList', { list: names.join(', '), mb: fmt(names.length * L.OPUS_MB, 0) }) : t('noModels');
+  $('btnDeleteModels').disabled = !all.size;
+}
+$('btnDeleteModels').addEventListener('click', async () => {
+  if (!await Tools.confirm(t('confirmDelModels'), { action: 'delete' })) return;
+  try {
+    const c = await caches.open(MODEL_CACHE);
+    for (const req of await c.keys()) if (modelOf(req.url)) await c.delete(req);
+  } catch (e) { Tools.diag.log('delete models failed', { error: e.name }); }
+  if (worker) { worker.terminate(); worker = null; }
+  Tools.diag.log('models deleted');
+  toast(t('modelsDeleted'));
+  renderModels(); updateInfo();
+});
+
+/* ---------- Info line under the languages ---------- */
+let infoSeq = 0;
+async function updateInfo() {
+  const seq = ++infoSeq;
+  const src = settings.src, tgt = settings.tgt;
+  let text;
+  if (src === tgt) text = t('info.same');
+  else if (src === 'auto') {
+    // The pair is only known after detection; the browser does both where it can
+    text = settings.engine === 'opus' || !hasApi ? t('info.none') : t('info.detect');
+  } else {
+    const c = await choose(src, tgt);
+    if (!c) text = t('info.none');
+    else if (c.engine === 'browser') text = c.availability === 'available' ? t('info.browser') : t('info.browserDl');
+    else {
+      const ready = await routeDownloaded(c.route);
+      text = (ready ? t('info.opus') : t('info.opusDl', { mb: fmt(c.route.length * L.OPUS_MB, 0) })) + (c.route.length > 1 ? t('info.via') : '');
+    }
+  }
+  if (seq === infoSeq) $('engineInfo').textContent = text;
+}
+
+/* ---------- Status, progress ---------- */
+const status = (text, kind) => { const s = $('status'); s.textContent = text; s.className = 'status' + (kind ? ' ' + kind : ''); };
+const mb = b => fmt(b / 1048576, b < 10485760 ? 1 : 0) + ' MB';
+function progress(fraction) {
+  $('progressBox').hidden = fraction == null;
+  if (fraction == null) return;
+  if (fraction < 0) $('progress').removeAttribute('value');
+  else $('progress').value = Math.round(Math.min(1, fraction) * 100);
+}
+let busy = false;
+function setBusy(on) {
+  busy = on;
+  $('btnRun').disabled = on;
+  $('btnRunLabel').textContent = on ? t('running') : t('run');
+  if (!on) progress(null);
+}
+
+/* ---------- Browser: Translator API and LanguageDetector ---------- */
+const translators = new Map();   // 'de|en' → Promise<Translator>
+function getTranslator(src, tgt) {
+  const key = src + '|' + tgt;
+  if (!translators.has(key)) {
+    const p = Translator.create({
+      sourceLanguage: src, targetLanguage: tgt,
+      monitor(m) { m.addEventListener('downloadprogress', e => { progress(e.loaded); status(t('loading') + ' ' + fmt(e.loaded * 100, 0) + ' %'); }); },
+    });
+    p.catch(() => translators.delete(key));
+    translators.set(key, p);
+  }
+  return translators.get(key);
+}
+let detector = null;
+async function detect(text, interactive) {
+  if (!detector) {
+    const a = await LanguageDetector.availability();
+    if (a === 'unavailable') return null;
+    if (a !== 'available') {
+      if (!interactive) throw new Error('The language detection model is not downloaded yet. Ask the user to translate once in the app with "Detect automatically".');
+      if (!await Tools.confirm(t('confirmDetectDl'), { action: 'download' })) return undefined;
+    }
+    detector = LanguageDetector.create({ monitor(m) { m.addEventListener('downloadprogress', e => progress(e.loaded)); } });
+    detector.catch(() => { detector = null; });
+  }
+  const results = await (await detector).detect(text);
+  for (const r of results || []) {
+    const code = L.baseLang(r.detectedLanguage);
+    if (code && r.confidence >= 0.5) return code;
+    if (r.confidence < 0.5) break;
+  }
+  return null;
+}
+async function translateBrowser(text, src, tgt) {
+  const tr = await getTranslator(src, tgt);
+  const parts = L.split(text, src, true);
+  const out = [];
+  for (let i = 0; i < parts.pieces.length; i++) {
+    progress(i / parts.pieces.length);
+    status(t('translating', { p: fmt(i / parts.pieces.length * 100, 0) }));
+    out.push(await tr.translate(parts.pieces[i]));
+  }
+  return L.join(parts, out, tgt);
+}
+
+/* ---------- Opus-MT in worker.js ---------- */
+let worker = null, runId = 0;
+const pending = new Map();
+function getWorker() {
+  if (worker) return worker;
+  worker = new Worker('worker.js', { type: 'module' });
+  worker.onmessage = ({ data }) => {
+    const job = pending.get(data.id);
+    if (!job) return;
+    if (data.type === 'progress') {
+      progress(data.total ? data.loaded / data.total : -1);
+      status(t('loadingModel', { step: '' }) + (data.total ? t('ofTotal', { a: mb(data.loaded), b: mb(data.total) }) : ''));
+    } else if (data.type === 'status') {
+      if (data.status === 'loading') { status(t('loadingModel', { step: data.steps > 1 ? t('stepOf', { s: data.step, n: data.steps }) : '' })); Tools.diag.log('model loading', { step: data.step, steps: data.steps }); }
+      else { progress(data.total ? data.done / data.total : -1); status(t('translating', { p: fmt(data.total ? data.done / data.total * 100 : 0, 0) })); }
+    } else if (data.type === 'result') { pending.delete(data.id); job.resolve(data); }
+    else if (data.type === 'error') {
+      pending.delete(data.id);
+      Tools.diag.log('worker error', { stage: data.stage, message: String(data.message).slice(0, 200) });
+      const e = new Error(data.message); e.stage = data.stage; job.reject(e);
+    }
+  };
+  worker.onerror = e => {
+    Tools.diag.log('worker failed to start', { message: e.message || '' });
+    for (const [id, job] of pending) { const err = new Error(e.message || 'worker failed'); err.stage = 'load'; job.reject(err); pending.delete(id); }
+    worker = null;
+  };
+  return worker;
+}
+function translateOpus(text, src, tgt, route) {
+  const parts = L.split(text, src, false);
+  const id = ++runId;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    getWorker().postMessage({ type: 'translate', id, models: route, pieces: parts.pieces });
+  }).then(r => L.join(parts, r.pieces, tgt));
+}
+
+/* ---------- Translate ---------- */
+/**
+ * Translates text from src ('auto' = detect) to tgt. interactive: called from a tap – may ask before downloads.
+ * Returns { translation, from, to, engine } or throws; null when the user declined a download.
+ */
+async function translate(text, src, tgt, interactive) {
+  if (src === 'auto') {
+    const d = hasDetector ? await detect(text, interactive) : null;
+    if (d === undefined) return null;
+    if (!d) throw Object.assign(new Error('The language of the text was not detected.'), { ui: t('notDetected') });
+    src = d;
+    $('detected').textContent = t('detected', { l: langName(d) });
+  }
+  if (src === tgt) throw Object.assign(new Error('The text is already in the target language.'), { ui: settings.src === 'auto' ? t('alreadyTarget', { l: langName(tgt) }) : t('same') });
+  const c = await choose(src, tgt);
+  Tools.diag.log('translate', { from: src, to: tgt, engine: c ? c.engine : null, availability: c && c.availability, models: c && c.route ? c.route.length : 0, chars: text.length });
+  if (!c) throw Object.assign(new Error(`Translating from ${src} to ${tgt} is not possible in this browser.`), { ui: t('unsupported') });
+  const started = performance.now();
+  let translation;
+  if (c.engine === 'browser') {
+    if (c.availability !== 'available') {
+      if (!interactive) throw new Error(`The language pack for ${src} → ${tgt} is not downloaded yet. Ask the user to translate this pair once in the app.`);
+      if (!await Tools.confirm(t('confirmBrowserDl', { pair: pairName(src, tgt) }), { action: 'download' })) return null;
+      status(t('loading')); progress(-1);
+    }
+    try { translation = await translateBrowser(text, src, tgt); } catch (e) {
+      Tools.diag.log('browser translation failed', { error: e.name });
+      throw Object.assign(e, { ui: t('browserFail', { m: e.message || e.name }) });
+    }
+  } else {
+    if (!await routeDownloaded(c.route)) {
+      if (!interactive) throw new Error(`The Opus-MT model for ${src} → ${tgt} is not downloaded yet. Ask the user to translate this pair once in the app.`);
+      if (!await Tools.confirm(t('confirmOpusDl', { pair: pairName(src, tgt), mb: fmt(c.route.length * L.OPUS_MB, 0) }), { action: 'download' })) return null;
+    }
+    status(t('loadingModel', { step: '' })); progress(-1);
+    try { translation = await translateOpus(text, src, tgt, c.route); } catch (e) {
+      throw Object.assign(e, { ui: e.stage === 'load' ? t('loadFail', { m: e.message }) : t('fail', { m: e.message }) });
+    }
+  }
+  return { translation, from: src, to: tgt, engine: c.engine, seconds: (performance.now() - started) / 1000 };
+}
+
+async function run(interactive) {
+  const text = $('input').value.trim();
+  if (!text) { status(t('noText'), 'err'); $('input').focus(); return null; }
+  if (busy) return null;
+  stopSpeaking();
+  setBusy(true);
+  status('');
+  if (settings.src === 'auto') $('detected').textContent = '';
+  await Tools.wakeLock.hold('work');
+  try {
+    const r = await translate(text, settings.src, settings.tgt, interactive);
+    if (!r) { status(''); return null; }
+    draft = { text: $('input').value, result: r.translation, from: r.from, to: r.to };
+    saveDraft();
+    $('output').value = r.translation;
+    $('output').lang = r.to;
+    status(t('meta', { engine: t(r.engine === 'browser' ? 'eng.browserName' : 'eng.opusName'), s: fmt(r.seconds, 1) }), 'ok');
+    Tools.diag.log('translated', { engine: r.engine, seconds: Math.round(r.seconds * 10) / 10, chars: r.translation.length });
+    return r;
+  } catch (e) {
+    status(e.ui || t('fail', { m: e.message || e.name }), 'err');
+    if (!interactive) throw e;
+    return null;
+  } finally {
+    Tools.wakeLock.release('work');
+    setBusy(false);
+    updateInfo(); renderModels();
+  }
+}
+$('btnRun').addEventListener('click', () => run(true));
+$('input').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(true); } });
+
+/* ---------- Text fields and actions ---------- */
+const updateCount = () => { $('count').textContent = t('chars', { n: fmt($('input').value.length, 0), max: fmt(MAX_CHARS, 0) }); };
+$('input').addEventListener('input', () => { draft.text = $('input').value; saveDraft(); updateCount(); });
+$('output').addEventListener('input', () => { draft.result = $('output').value; saveDraft(); });
+$('btnCopy').addEventListener('click', async () => {
+  const v = $('output').value.trim();
+  if (!v) { toast(t('noOutput')); return; }
+  toast(await Tools.copyText(v) ? t('copied') : t('copyFail'));
+});
+if (navigator.share) {
+  $('btnShare').hidden = false;
+  $('btnShare').addEventListener('click', async () => {
+    const v = $('output').value.trim();
+    if (!v) { toast(t('noOutput')); return; }
+    try { await navigator.share({ text: v }); } catch (e) { if (e.name !== 'AbortError') { Tools.diag.log('share failed', { error: e.name }); toast(t('shareFail')); } }
+  });
+}
+let speaking = false;
+function stopSpeaking() {
+  if (!speaking) return;
+  speaking = false;
+  try { speechSynthesis.cancel(); } catch (_) {}
+  renderSpeak();
+}
+const renderSpeak = () => {
+  $('btnSpeak').innerHTML = (speaking ? Tools.icon('player-stop') : Tools.icon('volume')) + `<span>${Tools.esc(speaking ? t('stop') : t('speak'))}</span>`;
+};
+if (hasSpeech) {
+  $('btnSpeak').hidden = false;
+  $('btnSpeak').addEventListener('click', () => {
+    if (speaking) { stopSpeaking(); return; }
+    const v = $('output').value.trim();
+    if (!v) { toast(t('noOutput')); return; }
+    const u = new SpeechSynthesisUtterance(v);
+    u.lang = draft.to || settings.tgt;
+    u.onend = u.onerror = () => { speaking = false; renderSpeak(); };
+    speaking = true; renderSpeak();
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  });
+}
+$('btnClear').addEventListener('click', () => {
+  const before = draft;
+  if (!before.text && !before.result) return;
+  stopSpeaking();
+  draft = { text: '', result: '', from: '', to: '' }; saveDraft();
+  $('input').value = ''; $('output').value = ''; $('detected').textContent = ''; status(''); updateCount();
+  Tools.undo(t('cleared'), () => { draft = before; saveDraft(); $('input').value = before.text; $('output').value = before.result; updateCount(); });
+});
+
+/* ---------- Start ---------- */
+function render() {
+  renderSelects();
+  $('apiInfo').textContent = hasApi ? t('api.yes') : t('api.no');
+  if (!busy) $('btnRunLabel').textContent = t('run');
+  if (hasSpeech) renderSpeak();
+  updateCount(); updateInfo(); renderModels();
+}
+$('input').value = draft.text;
+$('output').value = draft.result;
+if (draft.to) $('output').lang = draft.to;
+const shared = Tools.takeSharedText();
+if (shared) {
+  // Apps often repeat the title or the link inside the text – keep each once
+  const parts = [shared.text];
+  if (shared.title && !shared.text.includes(shared.title)) parts.unshift(shared.title);
+  if (shared.url && !shared.text.includes(shared.url)) parts.push(shared.url);
+  const text = parts.filter(Boolean).join('\n').slice(0, MAX_CHARS);
+  draft = { text, result: '', from: '', to: '' }; saveDraft();
+  $('input').value = text; $('output').value = '';
+  toast(t('sharedTaken'));
+  Tools.diag.log('shared text taken', { chars: text.length });
+}
+render();
+Tools.onLang(render);
+Tools.diag.info(() => ({
+  translatorApi: hasApi, languageDetector: hasDetector, from: settings.src, to: settings.tgt, engine: settings.engine,
+  busy, inputChars: $('input').value.length, outputChars: $('output').value.length, worker: !!worker,
+}));
+
+/* ---------- WebMCP ---------- */
+Tools.mcp.register({
+  name: 'translate_text', title: 'Translate a text', label: 'mcp.translate', untrusted: true,
+  description: 'Translates a text on the device, as if the user typed it into the app and pressed Translate. The text and the translation are shown and saved in the app; the chosen languages become the languages of the app. Only works with language packs or models that are already downloaded – otherwise it fails and the user has to translate that pair once in the app. Returns the translation, the source language (detected for "auto") and which engine translated.',
+  inputSchema: { type: 'object', properties: {
+    text: { type: 'string', minLength: 1, maxLength: MAX_CHARS, description: 'The text to translate.' },
+    target_language: { type: 'string', enum: L.LANGS, description: 'Language to translate into (ISO 639-1 code).' },
+    source_language: { type: 'string', enum: ['auto', ...L.LANGS], description: 'Language of the text (ISO 639-1 code). "auto" detects it where the browser can. Default: the language chosen in the app.' },
+  }, required: ['text', 'target_language'], additionalProperties: false },
+  execute: async ({ text, target_language, source_language }) => {
+    if (busy) throw new Error('A translation is already running.');
+    const src = source_language || settings.src;
+    if (src === 'auto' && !hasDetector) throw new Error('This browser cannot detect languages. Give source_language.');
+    if (!text.trim()) throw new Error('The text is empty.');
+    settings.src = src; settings.tgt = target_language; saveSettings(); renderSelects(); updateInfo();
+    $('input').value = text; draft = { text, result: '', from: '', to: '' }; saveDraft(); $('output').value = ''; updateCount();
+    const r = await run(false);
+    if (!r) throw new Error('The translation did not finish.');
+    return { translation: r.translation, source_language: r.from, target_language: r.to, engine: r.engine === 'browser' ? 'browser' : 'opus-mt' };
+  },
+});
+Tools.mcp.register({
+  name: 'get_translation', title: 'Read the translation', label: 'mcp.get', readOnly: true, untrusted: true,
+  description: 'Reads the text and its translation currently shown in the app (the user may have corrected the translation), with the languages.',
+  execute: () => {
+    if (!$('input').value.trim() && !$('output').value.trim()) throw new Error('No text yet.');
+    return { text: $('input').value, translation: $('output').value, source_language: draft.from || settings.src, target_language: draft.to || settings.tgt };
+  },
+});
+})();
+</script>
+</body>
+</html>

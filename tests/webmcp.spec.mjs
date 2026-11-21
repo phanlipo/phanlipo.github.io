@@ -13,6 +13,7 @@ import { fakeWorker as fakeFaceWorker, photo as facePhoto, withExifDate } from '
 import { fakeYoutube, playerFrame, LIST, LIST_TITLE, VIDEOS } from './fake-youtube.mjs';
 import { FEED_ORIGIN, FEED_PROBLEMS, mockFeeds } from './feed-mock.mjs';
 import { fakeNfc, wscCredential } from './nfc-fake.mjs';
+import { fakeTranslatorApi } from './translator-fakes.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -1158,6 +1159,36 @@ test.describe('voice-transcriber tools', () => {
     await page.locator('#hist .open').click();
     await page.fill('#text', 'Hallo Welt, korrigiert');
     expect((await call(page, 'voice_transcriber_get_transcript', {})).result.text).toBe('Hallo Welt, korrigiert');
+  });
+});
+
+test.describe('translator tools', () => {
+  test('translate_text with downloaded language packs, never starts a download; get_translation', async ({ page }) => {
+    await fakeTranslatorApi(page, { avail: { 'de-en': 'available', 'fr-de': 'available', 'de-it': 'downloadable' } });
+    await open(page, '/translator/');
+    const P = 'translator_';
+    expect((await call(page, P + 'get_translation', {})).error).toMatch(/No text yet/);
+    const r = await call(page, P + 'translate_text', { text: 'Hallo Welt', source_language: 'de', target_language: 'en' });
+    expect(r.result).toEqual({ translation: '[en] Hallo Welt', source_language: 'de', target_language: 'en', engine: 'browser' });
+    // Shown in the app, languages taken over
+    await expect(page.locator('#input')).toHaveValue('Hallo Welt');
+    await expect(page.locator('#output')).toHaveValue('[en] Hallo Welt');
+    await expect(page.locator('#tgt')).toHaveValue('en');
+    // Detected source language
+    const d = await call(page, P + 'translate_text', { text: 'Bonjour', source_language: 'auto', target_language: 'de' });
+    expect(d.result).toMatchObject({ translation: '[de] Bonjour', source_language: 'fr' });
+    // A language pack that still has to be downloaded: error, no question, nothing created
+    const dl = await call(page, P + 'translate_text', { text: 'Hallo', source_language: 'de', target_language: 'it' });
+    expect(dl.error).toMatch(/not downloaded yet/);
+    expect(await page.evaluate(() => window.__tr.created)).not.toContain('de-it');
+    await expect(page.locator('.dialog[open]')).toHaveCount(0);
+    // Wrong input
+    expect((await call(page, P + 'translate_text', { text: 'x', target_language: 'xx' })).ok).toBe(false);
+    expect((await call(page, P + 'translate_text', { text: '', target_language: 'de' })).ok).toBe(false);
+    expect((await call(page, P + 'translate_text', { text: 'x'.repeat(5001), target_language: 'de' })).ok).toBe(false);
+    // The user corrects the translation – the agent reads what is shown
+    await page.fill('#output', 'Hello world');
+    expect((await call(page, P + 'get_translation', {})).result).toEqual({ text: 'Hallo', translation: 'Hello world', source_language: 'de', target_language: 'it' });
   });
 });
 
