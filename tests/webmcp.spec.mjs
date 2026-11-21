@@ -2963,13 +2963,13 @@ test.describe('reflex-party tools', () => {
   test('get_state reads settings, last match and solo best; set_game sets up the next match', async ({ page }) => {
     const last = { players: 1, target: 5, diff: 'hard', scores: [5], wrong: [2], winner: 0, rounds: 9, seconds: 41.5, avg: 388, missed: 1, at: '2026-05-01T09:00:00.000Z' };
     await page.addInitScript(v => localStorage.setItem('reflex-party.state.v1', v), JSON.stringify({
-      players: 3, target: 10, diff: 'normal', games: ['dice', 'clock'], sound: true, vibrate: false, matches: 4, last,
+      players: 3, target: 10, diff: 'normal', games: ['dice', 'clock'], sound: true, vibrate: false, speak: false, matches: 4, last,
       best: { 'hard-5': { avg: 388, seconds: 41.5, at: last.at } } }));
     await open(page, '/reflex-party/');
     let r = await call(page, 'reflex_party_get_state', {});
     expect(r.ok).toBe(true);
     expect(r.result).toEqual({
-      settings: { players: 3, target_points: 10, difficulty: 'normal', games: ['dice', 'clock'], sounds: true, vibration: false },
+      settings: { players: 3, target_points: 10, difficulty: 'normal', games: ['dice', 'clock'], sounds: true, vibration: false, read_aloud: false },
       available_games: ['color', 'sum', 'bars', 'count', 'pair', 'dice', 'clock', 'order', 'green', 'countdown'],
       phase: 'idle', match: null, matches_played: 4,
       last_match: { players: 1, target_points: 5, difficulty: 'hard', scores: [5], winner: 1, rounds: 9, mistakes: [2], seconds: 41.5, average_reaction_ms: 388, missed: 1 },
@@ -2980,7 +2980,10 @@ test.describe('reflex-party tools', () => {
     r = await call(page, 'reflex_party_set_game', { players: 4, difficulty: 'easy', games: ['countdown', 'color'] });
     expect(r).toEqual({ ok: true, result: { players: 4, target_points: 10, difficulty: 'easy', games: ['color', 'countdown'] } });
     await expect(page.locator('#players [data-n="4"]')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#summary')).toHaveText('Bis 10 Punkte · Leicht · 2 Minispiele');
+    await expect(page.locator('#diffs [data-diff="easy"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#games [aria-pressed="true"]')).toHaveText(['Farbwort', 'Blind-Countdown']);
+    r = await call(page, 'reflex_party_set_game', { difficulty: 'kids' });
+    expect(r.result.difficulty).toBe('kids');
     expect((await call(page, 'reflex_party_set_game', { players: 5 })).ok).toBe(false);
     expect((await call(page, 'reflex_party_set_game', { target_points: 7 })).ok).toBe(false);
     expect((await call(page, 'reflex_party_set_game', { games: [] })).ok).toBe(false);

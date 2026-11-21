@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "reflex-party";
-const VERSION = 'f7f37b3220ba';
+const VERSION = 'd4252a5bdec2';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

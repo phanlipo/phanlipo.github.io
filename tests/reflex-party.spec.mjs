@@ -24,7 +24,7 @@ const RULES = {
 
 async function open(page, settings = {}) {
   await page.addInitScript(([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); },
-    [LS, JSON.stringify({ players: 2, target: 5, diff: 'normal', sound: false, vibrate: false, ...settings })]);
+    [LS, JSON.stringify({ players: 2, target: 5, diff: 'normal', sound: false, vibrate: false, speak: false, ...settings })]);
   await page.clock.install({ time: new Date('2026-05-01T09:00:00') });
   await page.goto('/reflex-party/');
   await page.clock.pauseAt(new Date('2026-05-01T09:00:05'));
@@ -50,7 +50,7 @@ test('every mini-game makes hit and non-hit pictures exactly as asked, on every 
         if (id === 'count' && (s.n < 1 || s.dots.some((a, j) => s.dots.some((b, k) => k > j && Math.hypot(a.x - b.x, a.y - b.y) < 16)))) out.push({ id, s });
         if (id === 'bars' && (s.a < 20 || s.a > 98 || s.b < 20 || s.b > 98)) out.push({ id, s });
         if (id === 'clock' && (s.dh < 1 || s.dh > 12 || s.dm < 0 || s.dm > 55 || s.dm % 5)) out.push({ id, s });
-        if (id === 'pair' && s.items.length !== { easy: 4, normal: 5, hard: 7 }[diff]) out.push({ id, s });
+        if (id === 'pair' && s.items.length !== { kids: 3, easy: 4, normal: 5, hard: 7 }[diff]) out.push({ id, s });
       }
     }
     return out.slice(0, 5);
@@ -60,7 +60,7 @@ test('every mini-game makes hit and non-hit pictures exactly as asked, on every 
 
 test('two players: wrong tap costs a point and locks, first right tap scores, match to 5 with ranking', async ({ page }) => {
   await open(page, { games: ['dice'] });
-  await expect(page.locator('#summary')).toHaveText('Bis 5 Punkte · Mittel · 1 Minispiel');
+  await expect(page.locator('#gamesInfo')).toHaveText('1 von 10 Minispielen an. Tippen schaltet ein oder aus.');
   await page.click('#btnStart');
   await expect(page.locator('#setup')).toBeHidden();
   await expect(page.locator('#btnStop')).toBeVisible();
@@ -243,15 +243,17 @@ test('three and four players: pads in the corners, keyboard keys 1–4', async (
   await expect(page.locator('#toast')).toHaveText('Partie abgebrochen.');
 });
 
-test('settings persist, at least one mini-game stays on, locked while playing', async ({ page }) => {
+test('choosing before the start: mini-games on/off, at least one stays on, settings persist', async ({ page }) => {
   await open(page);
-  await expect(page.locator('#summary')).toHaveText('Bis 5 Punkte · Mittel · 10 Minispiele');
+  // Everything is chosen on the start screen, before the match
+  const setup = page.locator('#setup');
+  await expect(setup.locator('#games button')).toHaveCount(10);
+  await expect(page.locator('#gamesInfo')).toHaveText('10 von 10 Minispielen an. Tippen schaltet ein oder aus.');
+  await expect(page.locator('#diffInfo')).toHaveText('1,2 Sekunden pro Bild.');
   await page.click('#players [data-n="3"]');
-  await openMenu(page);
   await page.click('#targets [data-target="15"]');
   await page.click('#diffs [data-diff="hard"]');
-  const chips = page.locator('#games button');
-  await expect(chips).toHaveCount(10);
+  await expect(page.locator('#diffInfo')).toHaveText('0,85 Sekunden pro Bild und kleinere Unterschiede.');
   for (const id of ['color', 'sum', 'bars', 'count', 'pair', 'dice', 'clock', 'order', 'green'])
     await page.click(`#games [data-game="${id}"]`);
   await expect(page.locator('#games [aria-pressed="true"]')).toHaveText(['Blind-Countdown']);
@@ -259,27 +261,145 @@ test('settings persist, at least one mini-game stays on, locked while playing', 
   await expect(page.locator('#games [data-game="countdown"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#toast')).toHaveText('Mindestens ein Minispiel bleibt an.');
   await page.click('#games [data-game="dice"]');
+  await expect(page.locator('#gamesInfo')).toHaveText('2 von 10 Minispielen an. Tippen schaltet ein oder aus.');
+  await page.uncheck('#optSpeak');
+  await openMenu(page);
   await page.uncheck('#optVibrate');
   await closeMenu(page);
-  await expect(page.locator('#summary')).toHaveText('Bis 15 Punkte · Schwer · 2 Minispiele');
   await page.reload();
   await expect(page.locator('#players [data-n="3"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#summary')).toHaveText('Bis 15 Punkte · Schwer · 2 Minispiele');
-  expect(await saved(page)).toMatchObject({ players: 3, target: 15, diff: 'hard', games: ['dice', 'countdown'], vibrate: false });
+  await expect(page.locator('#targets [data-target="15"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#games [aria-pressed="true"]')).toHaveText(['Pasch', 'Blind-Countdown']);
+  await expect(page.locator('#optSpeak')).not.toBeChecked();
+  expect(await saved(page)).toMatchObject({ players: 3, target: 15, diff: 'hard', games: ['dice', 'countdown'], vibrate: false, speak: false });
+  // "Alle" and "Ohne Lesen"
+  await page.click('#btnAllGames');
+  await expect(page.locator('#games [aria-pressed="true"]')).toHaveCount(10);
+  await page.click('#btnKidGames');
+  await expect(page.locator('#games [aria-pressed="true"]')).toHaveText(['Balken', 'Punkte zählen', 'Paar', 'Pasch', 'Grünes Licht', 'Blind-Countdown']);
+  await page.click('#btnAllGames');
+  await page.click('#games [data-game="color"]');
+  await page.click('#games [data-game="sum"]');
 
+  // A round is one of the chosen games, and never the same twice in a row; the start screen is gone while playing
   await page.click('#btnStart');
-  await openMenu(page);
-  await expect(page.locator('#targets [data-target="5"]')).toBeDisabled();
-  await expect(page.locator('#games [data-game="dice"]')).toBeDisabled();
-  await closeMenu(page);
-  // A round is one of the chosen games, and never the same twice in a row
+  await expect(setup).toBeHidden();
   const seen = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     seen.push(await page.locator('#stim').getAttribute('data-game'));
-    await page.click('#btnStop');
-    await page.click('#btnStart');
+    await page.clock.runFor(INTRO + 1);
+    // Finish the round fast: everyone taps (wrong or right), the next round follows
+    for (const n of [1, 2, 3]) await pad(page, n).click();
+    await page.clock.runFor(BANNER);
   }
-  expect(seen.every(g => ['dice', 'countdown'].includes(g))).toBe(true);
+  expect(seen.every(g => !['color', 'sum'].includes(g))).toBe(true);
+  for (let i = 1; i < seen.length; i++) expect(seen[i]).not.toBe(seen[i - 1]);
+});
+
+test('kids: more time, easy pictures, no minus for pressing too early, countdown shows the 0', async ({ page }) => {
+  await open(page, { diff: 'normal' });
+  await page.click('#diffs [data-diff="kids"]');
+  await expect(page.locator('#diffInfo')).toHaveText('Viel Zeit pro Bild, ganz einfache Aufgaben, Zahlen beim Countdown sichtbar. Zu früh drücken kostet keinen Punkt.');
+  // Choosing kids switches to the games without reading; adding one with reading shows a hint
+  await expect(page.locator('#games [aria-pressed="true"]')).toHaveText(['Balken', 'Punkte zählen', 'Paar', 'Pasch', 'Grünes Licht', 'Blind-Countdown']);
+  await page.click('#games [data-game="clock"]');
+  await expect(page.locator('#gamesInfo')).toContainText('Farbwort, Rechnung, Uhrzeit und Reihenfolge brauchen Lesen oder Rechnen.');
+  await page.click('#btnKidGames');
+  await expect(page.locator('#gamesInfo')).not.toContainText('Lesen');
+  // Choosing kids again doesn't overwrite a changed choice
+  await page.click('#games [data-game="dice"]');
+  await page.click('#diffs [data-diff="kids"]');
+  await expect(page.locator('#games [data-game="dice"]')).toHaveAttribute('aria-pressed', 'false');
+
+  // Easy pictures (independently checked)
+  const pics = await page.evaluate(() => {
+    const RG = window.ReflexGames, out = {};
+    for (const id of RG.IDS) if (id !== 'countdown') out[id] = Array.from({ length: 200 }, (_, i) => RG.make(id, Tools.randomInt, i % 2 === 0, 'kids', null));
+    return out;
+  });
+  for (const s of pics.sum) { expect(s.op).toBe('+'); expect(Math.max(s.a, s.b)).toBeLessThanOrEqual(5); }
+  for (const s of pics.count) { expect(s.dots.length).toBeGreaterThanOrEqual(2); expect(s.dots.length).toBeLessThanOrEqual(5); }
+  for (const s of pics.pair) expect(s.items).toHaveLength(3);
+  for (const s of pics.clock) { expect(s.m).toBe(0); expect(s.dm).toBe(0); }
+  for (const s of pics.order) { expect(s.nums).toHaveLength(3); expect(Math.max(...s.nums)).toBeLessThanOrEqual(10); }
+  for (const s of pics.bars) if (s.a !== s.b) expect(Math.abs(s.a - s.b)).toBeGreaterThanOrEqual(22);
+  for (const [id, list] of Object.entries(pics)) list.forEach((s, i) => expect(RULES[id](s), id).toBe(i % 2 === 0));
+
+  // A match with only the countdown: 1000 ms per number, all visible, then 0; intro 2200 ms
+  await page.click('#btnKidGames');
+  for (const id of ['bars', 'count', 'pair', 'dice', 'green']) await page.click(`#games [data-game="${id}"]`);
+  await page.click('#btnStart');
+  await expect(page.locator('#task')).toHaveText('Tippen, sobald die 0 kommt');
+  await page.clock.runFor(1400);
+  expect(await picture(page)).toBeNull();        // still the intro
+  await page.clock.runFor(800);
+  expect(await picture(page)).toEqual({ g: 'countdown', shown: 3 });
+  await page.clock.runFor(1000);
+  expect(await picture(page)).toEqual({ g: 'countdown', shown: 2 });
+  await page.clock.runFor(1000);
+  expect(await picture(page)).toEqual({ g: 'countdown', shown: 1 });
+  await pad(page, 1).click();                     // too early: locked, but no point lost
+  await expect(pad(page, 1)).toHaveClass(/locked/);
+  await page.clock.runFor(1000);
+  expect(await picture(page)).toEqual({ g: 'countdown', shown: 0 });
+  await expect(page.locator('.cd')).toHaveText('0');
+  await page.clock.runFor(1400);                  // the window is 1500 ms
+  await pad(page, 2).click();
+  await expect(score(page, 2)).toHaveText('1');
+  await page.clock.runFor(BANNER + 2200 + 3000 + 100);
+  await pad(page, 2).click();
+  await page.clock.runFor(BANNER + 2200 + 2500);
+  await pad(page, 2).click();                     // too early with 2 points: still 2
+  await expect(score(page, 2)).toHaveText('2');
+  await expect(pad(page, 2)).toHaveClass(/locked/);
+  expect((await saved(page)).diff).toBe('kids');
+});
+
+test('reads the task aloud at the start of each round, pictures start after it, and the winner at the end', async ({ page }) => {
+  // Fake speech: records what is said; "reading" takes 3 s on the controlled clock
+  await page.addInitScript(() => {
+    window.__said = [];
+    window.SpeechSynthesisUtterance = function (text) { this.text = text; };
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
+      speak(u) { window.__said.push({ text: u.text, lang: u.lang }); setTimeout(() => u.onend && u.onend(), 3000); },
+      cancel() { window.__said.push('cancel'); }, getVoices: () => [],
+    } });
+  });
+  await open(page, { games: ['countdown'], speak: true });
+  await expect(page.locator('#optSpeak')).toBeChecked();
+  await expect(page.locator('#speakInfo')).toBeHidden();
+  await page.click('#btnStart');
+  const said = () => page.evaluate(() => window.__said.filter(x => x !== 'cancel'));
+  expect(await said()).toEqual([{ text: 'Tippen, wenn der Countdown bei 0 wäre', lang: 'de-DE' }]);
+  // Intro is 1400 ms, but the pictures wait for the end of the speech (3000 ms)
+  await page.clock.runFor(2900);
+  expect(await picture(page)).toBeNull();
+  await page.clock.runFor(100);
+  expect(await picture(page)).toEqual({ g: 'countdown', shown: 3 });
+  for (let i = 0; i < 5; i++) {
+    await page.clock.runFor((i ? BANNER + 3000 : 0) + 2400 + 100);
+    await pad(page, 1).click();
+    await expect(score(page, 1)).toHaveText(String(i + 1));
+  }
+  await page.clock.runFor(BANNER);
+  await expect(page.locator('.result h2')).toHaveText('Spieler 1 gewinnt!');
+  const all = await said();
+  expect(all).toHaveLength(6);
+  expect(all.at(-1)).toEqual({ text: 'Spieler 1 gewinnt!', lang: 'de-DE' });
+  // Stopping silences the voice at once
+  await page.click('#btnAgain');
+  await page.click('#btnStop');
+  expect((await page.evaluate(() => window.__said)).at(-1)).toBe('cancel');
+});
+
+test('without speech in the browser the option is off and explained; the match runs anyway', async ({ page }) => {
+  await page.addInitScript(() => { delete window.speechSynthesis; delete window.SpeechSynthesisUtterance; });
+  await open(page, { games: ['dice'], speak: true });
+  await expect(page.locator('#optSpeak')).toBeDisabled();
+  await expect(page.locator('#speakInfo')).toHaveText('Dieser Browser kann nicht vorlesen.');
+  await page.click('#btnStart');
+  await page.clock.runFor(INTRO);
+  expect((await picture(page)).g).toBe('dice');
 });
 
 for (const scheme of ['light', 'dark']) {
@@ -309,7 +429,8 @@ test.describe('English', () => {
   test.use({ locale: 'en-US' });
   test('texts, pads and result in English; switching language re-renders', async ({ page }) => {
     await open(page, { players: 2, games: ['countdown'], diff: 'easy' });
-    await expect(page.locator('#summary')).toHaveText('To 5 points · Easy · 1 mini-game');
+    await expect(page.locator('#gamesInfo')).toHaveText('1 of 10 mini-games on. Tap to switch on or off.');
+    await expect(page.locator('#diffInfo')).toHaveText('1.6 seconds per picture.');
     await page.click('#btnStart');
     await expect(page.locator('#task')).toHaveText('Tap when the countdown would hit 0');
     await expect(pad(page, 1)).toHaveText('Player 10');

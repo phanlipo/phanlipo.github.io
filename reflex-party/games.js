@@ -3,9 +3,11 @@
    Architecture and timing: reflex-party/README.md */
 (function () {
   'use strict';
-  const DIFFS = ['easy', 'normal', 'hard'];
+  const DIFFS = ['kids', 'easy', 'normal', 'hard'];
   // Milliseconds one picture stays on screen
-  const STEP = { easy: 1600, normal: 1200, hard: 850 };
+  const STEP = { kids: 2200, easy: 1600, normal: 1200, hard: 850 };
+  // Games that need no reading or arithmetic (the "Ohne Lesen" choice, default for kids)
+  const NO_READING = ['bars', 'count', 'pair', 'dice', 'green', 'countdown'];
 
   // Colours of the game content (names are ids; the page maps them to tokens and words)
   const INKS = ['red', 'blue', 'green', 'purple'];
@@ -37,12 +39,12 @@
     sum: {
       make(rnd, want, diff) {
         const op = diff === 'hard' && rnd(2) ? '*' : '+';
-        const max = diff === 'easy' ? 9 : diff === 'normal' ? 20 : 12;
+        const max = diff === 'kids' ? 5 : diff === 'easy' ? 9 : diff === 'normal' ? 20 : 12;
         const a = range(rnd, op === '*' ? 2 : 1, max), b = range(rnd, op === '*' ? 2 : 1, max);
         const right = op === '*' ? a * b : a + b;
         let c = right;
         if (!want) {
-          const off = op === '*' && rnd(2) ? (rnd(2) ? a : b) : range(rnd, 1, diff === 'easy' ? 3 : 2);
+          const off = op === '*' && rnd(2) ? (rnd(2) ? a : b) : range(rnd, 1, diff === 'easy' || diff === 'kids' ? 3 : 2);
           c = right + sign(rnd) * off;
           if (c < 0) c = right + off;
         }
@@ -53,7 +55,7 @@
     /* Bars: two bars (length in % of the track); hard: both centred, so the ends don't line up */
     bars: {
       make(rnd, want, diff) {
-        const gap = diff === 'easy' ? [14, 25] : diff === 'normal' ? [7, 13] : [4, 7];
+        const gap = diff === 'kids' ? [22, 35] : diff === 'easy' ? [14, 25] : diff === 'normal' ? [7, 13] : [4, 7];
         const a = range(rnd, 35, 95);
         let b = a;
         if (!want) {
@@ -67,7 +69,7 @@
     /* Counting: dots in the field and a number; positions in % (centres), at least 16 apart */
     count: {
       make(rnd, want, diff) {
-        const [lo, hi] = diff === 'easy' ? [3, 6] : diff === 'normal' ? [4, 9] : [6, 12];
+        const [lo, hi] = diff === 'kids' ? [2, 5] : diff === 'easy' ? [3, 6] : diff === 'normal' ? [4, 9] : [6, 12];
         const n = range(rnd, lo, hi);
         const dots = [];
         for (let tries = 0; dots.length < n && tries < 2000; tries++) {
@@ -75,7 +77,7 @@
           if (dots.every(o => Math.hypot(o.x - p.x, o.y - p.y) >= 16)) dots.push(p);
         }
         let shown = dots.length;
-        if (!want) shown = dots.length + (dots.length <= 1 ? 1 : sign(rnd)) * range(rnd, 1, diff === 'easy' ? 2 : 1);
+        if (!want) shown = dots.length + (dots.length <= 2 ? 1 : sign(rnd)) * range(rnd, 1, diff === 'easy' || diff === 'kids' ? 2 : 1);
         return { g: 'count', dots, n: shown };
       },
       ok: s => s.dots.length === s.n,
@@ -83,7 +85,7 @@
     /* Pair: a row of shapes; a hit when two are exactly alike (shape and colour) */
     pair: {
       make(rnd, want, diff) {
-        const n = diff === 'easy' ? 4 : diff === 'normal' ? 5 : 7;
+        const n = diff === 'kids' ? 3 : diff === 'easy' ? 4 : diff === 'normal' ? 5 : 7;
         const all = [];
         for (const shape of SHAPES) for (const ink of INKS) all.push({ shape, ink });
         let items;
@@ -114,11 +116,11 @@
     /* Clock: an analog clock and a digital time (h 1–12, minutes in steps of 5) */
     clock: {
       make(rnd, want, diff) {
-        const step = diff === 'easy' ? 15 : 5;
+        const step = diff === 'kids' ? 60 : diff === 'easy' ? 15 : 5;   // kids: full hours only
         const h = range(rnd, 1, 12), m = rnd(60 / step) * step;
         let dh = h, dm = m;
         if (!want) {
-          if (diff === 'easy' || rnd(2)) dh = ((h - 1 + sign(rnd) * range(rnd, 1, diff === 'hard' ? 1 : 3) + 12) % 12) + 1;
+          if (diff === 'easy' || diff === 'kids' || rnd(2)) dh = ((h - 1 + sign(rnd) * range(rnd, 1, diff === 'hard' ? 1 : 3) + 12) % 12) + 1;
           else dm = (m + sign(rnd) * step * range(rnd, 1, 2) + 60) % 60;
         }
         return { g: 'clock', h, m, dh, dm };
@@ -128,12 +130,12 @@
     /* Order: numbers in a row; a hit when they go up from left to right */
     order: {
       make(rnd, want, diff) {
-        const n = diff === 'hard' ? 5 : 4, max = diff === 'easy' ? 20 : 99;
+        const n = diff === 'hard' ? 5 : diff === 'kids' ? 3 : 4, max = diff === 'kids' ? 10 : diff === 'easy' ? 20 : 99;
         const set = new Set();
         while (set.size < n) set.add(range(rnd, 1, max));
         const nums = [...set].sort((a, b) => a - b);
         if (!want) {
-          if (diff === 'easy') { do shuffle(rnd, nums); while (sortedAsc(nums)); }
+          if (diff === 'easy' || diff === 'kids') { do shuffle(rnd, nums); while (sortedAsc(nums)); }
           else { const i = rnd(n - 1); [nums[i], nums[i + 1]] = [nums[i + 1], nums[i]]; }   // only one neighbour pair swapped
         }
         return { g: 'order', nums };
@@ -156,12 +158,13 @@
   };
   const IDS = Object.keys(GAMES);
 
-  /** Blind countdown: counts down from 3 (one number per `tick` ms) and hides after `visible` numbers.
-      A tap scores from `zero` ms on (3 ticks after the start) for `window` ms; before that it is wrong. */
+  /** Blind countdown: counts down from 3 (one number per `tick` ms) and hides after `visible` numbers
+      (kids: all visible, then 0 is shown). A tap scores from `zero` ms on (3 ticks after the start)
+      for `window` ms; before that it is wrong. */
   function countdownPlan(diff) {
-    const tick = { easy: 900, normal: 800, hard: 700 }[diff];
-    const visible = { easy: 2, normal: 1, hard: 1 }[diff];
-    return { tick, visible, zero: 3 * tick, window: { easy: 1200, normal: 800, hard: 500 }[diff] };
+    const tick = { kids: 1000, easy: 900, normal: 800, hard: 700 }[diff];
+    const visible = { kids: 3, easy: 2, normal: 1, hard: 1 }[diff];
+    return { tick, visible, zero: 3 * tick, window: { kids: 1500, easy: 1200, normal: 800, hard: 500 }[diff] };
   }
 
   /** Plan for the "hit now!" steps of one round: index of the first hit step (never step 0),
@@ -185,5 +188,5 @@
   }
   const ok = s => !!(s && GAMES[s.g] && GAMES[s.g].ok(s));
 
-  window.ReflexGames = { IDS, DIFFS, STEP, INKS, SHAPES, GAMES, make, ok, wantAt, countdownPlan };
+  window.ReflexGames = { IDS, DIFFS, STEP, NO_READING, INKS, SHAPES, GAMES, make, ok, wantAt, countdownPlan };
 })();
