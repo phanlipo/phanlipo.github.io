@@ -7,10 +7,11 @@
  * (default 'unavailable'). A 'downloadable' pair needs user activation in create(), reports download
  * progress and is 'available' afterwards – like Chrome.
  * detect: answer of LanguageDetector.detect() ([{ detectedLanguage, confidence }]); false = no LanguageDetector.
+ * translator: false = only the LanguageDetector, no Translator API (Chrome on Android).
  * Recorded in window.__tr: created pairs, translated pieces, number of detections.
  */
-export async function fakeTranslatorApi(page, { avail = {}, detect = [{ detectedLanguage: 'fr', confidence: 0.92 }] } = {}) {
-  await page.addInitScript(({ avail, detect }) => {
+export async function fakeTranslatorApi(page, { avail = {}, detect = [{ detectedLanguage: 'fr', confidence: 0.92 }], translator = true } = {}) {
+  await page.addInitScript(({ avail, detect, translator }) => {
     const st = window.__tr = { avail: { ...avail }, created: [], pieces: [], detections: 0, detect, progress: [] };
     const get = (s, t) => st.avail[`${s}-${t}`] ?? st.avail['*'] ?? 'unavailable';
     class FakeTranslator {
@@ -36,13 +37,13 @@ export async function fakeTranslatorApi(page, { avail = {}, detect = [{ detected
       async translate(x) { st.pieces.push(x); return `[${this.targetLanguage}] ${x}`; }
       destroy() {}
     }
-    window.Translator = FakeTranslator;
+    if (translator) window.Translator = FakeTranslator; else delete window.Translator;
     if (detect === false) delete window.LanguageDetector;
     else window.LanguageDetector = {
       availability: async () => 'available',
       create: async () => ({ detect: async () => { st.detections++; return st.detect; } }),
     };
-  }, { avail, detect });
+  }, { avail, detect, translator });
 }
 
 /** A browser without built-in translation (Safari, Firefox, Chrome on Android) */
