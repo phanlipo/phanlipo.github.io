@@ -26,6 +26,23 @@ const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const JAKOB = 'C4 D4 E4 C4 | C4 D4 E4 C4 | E4 F4 G4:2 | E4 F4 G4:2 | ' +
   'G4:.5 A4:.5 G4:.5 F4:.5 E4 C4 | G4:.5 A4:.5 G4:.5 F4:.5 E4 C4 | C4 G3 C4:2 | C4 G3 C4:2';
 
+// Flohwalzer (G♭ major, 2/4): bass note (left hand), then a chord (right hand) twice, then the upbeat E♭–D♭.
+// Three voices: right hand top (melody), right hand lower chord note, left hand. Section on G♭, then on D♭ (A♭+C♭).
+const FLOH = (() => {
+  const v = { top: ['Eb5:.25 Db5:.25 |'], low: ['r:.5 |'], bass: ['r:.5 |'] };
+  const bar = (top, low, bass) => { v.top.push(top + ' |'); v.low.push(low + ' |'); v.bass.push(bass + ' |'); };
+  const T = { top: 'Db5', low: 'Bb4', bass: 'Gb3' }, D = { top: 'Cb5', low: 'Ab4', bass: 'Db3' };
+  const plain = c => bar(`r:.5 ${c.top}:.5 ${c.top}:.5 Eb5:.25 Db5:.25`, `r:.5 ${c.low}:.5 ${c.low}:.5 r:.5`, `${c.bass}:.5 r:1.5`);
+  const turn = (a, b) => bar(`r:.5 ${a.top}:.5 r:.5 ${b.top}:.5`, `r:.5 ${a.low}:.5 r:.5 ${b.low}:.5`, `${a.bass}:.5 r:.5 ${b.bass}:.5 r:.5`);
+  for (let r = 0; r < 2; r++) {
+    plain(T); plain(T); turn(T, D); plain(T);
+    plain(D); plain(D); turn(D, T); plain(D);
+  }
+  bar('Db5:2', 'Bb4:2', 'Gb3:2');
+  const join = a => a.join(' ').replace(/ \|$/, '');
+  return { top: join(v.top), low: join(v.low), bass: join(v.bass) };
+})();
+
 const LIST = [
   {
     id: 'entchen', group: 'kids',
@@ -111,6 +128,16 @@ const LIST = [
     piano: { parts: { de: ['Rechte Hand', 'Linke Hand'], en: ['Right hand', 'Left hand'] },
       voices: ['r:.5 | r:1.5 | A2:.25 E3:.25 A3:.25 r:.75 | E2:.25 E3:.25 G#3:.25 r:.75 | A2:.25 E3:.25 A3:.25 r:.75 | ' +
         'r:1.5 | A2:.25 E3:.25 A3:.25 r:.75 | E2:.25 E3:.25 G#3:.25 r:.75 | A2:.25 E3:.25 A3:.25 r:.25'] }
+  },
+  {
+    id: 'flohwalzer', group: 'piano',
+    title: { de: 'Flohwalzer', en: 'Flea Waltz' },
+    meter: '2/4', bpm: 132, upbeat: 0.5,
+    melody: FLOH.top,
+    lyrics: [],
+    credits: { melody: 'trad' },
+    piano: { parts: { de: ['Rechte Hand', 'Rechte Hand (Akkord)', 'Linke Hand'], en: ['Right hand', 'Right hand (chord)', 'Left hand'] },
+      voices: [FLOH.low, FLOH.bass] }
   }
 ];
 
