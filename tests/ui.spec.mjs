@@ -44,6 +44,22 @@ const findEmoji = page => page.evaluate(src => {
 }, EMOJI.source);
 
 // Icon-only buttons: header, toolbars, square .btn.icon – visible ones with their name and sprite icon
+// Actions on a result (UI-KONZEPT.md 4, AGENTS.md "Aktionen zu einem Ergebnis"): from 3 secondary buttons with
+// these icons in one container, they belong in a .toolbar – a .row of .btn wraps into several lines on a phone.
+// Hidden buttons count too (many appear only with the result). Lists the offending containers.
+const RESULT_ICONS = ['copy', 'share', 'download', 'printer', 'volume', 'external-link', 'file-export', 'eraser', 'trash'];
+const resultActionRows = page => page.evaluate(icons => {
+  const isAction = el => el.matches('.btn:not(.primary)') && [...el.querySelectorAll('use')]
+    .some(u => icons.includes((u.getAttribute('href') || '').split('#')[1]));
+  const out = [];
+  for (const c of document.querySelectorAll('body *')) {
+    if (c.matches('.toolbar')) continue;
+    const kids = [...c.children].filter(isAction);
+    if (kids.length >= 3) out.push(`${c.tagName.toLowerCase()}${c.id ? '#' + c.id : ''}.${[...c.classList].join('.')}: ${kids.map(k => k.id || k.textContent.trim()).join(', ')}`);
+  }
+  return out;
+}, RESULT_ICONS);
+
 const iconButtons = page => page.evaluate(() => {
   const name = el => (el.getAttribute('aria-label') || el.textContent || '').replace(/\s+/g, ' ').trim();
   return [...document.querySelectorAll('.head-btn, .toolbar > :is(button,label,a), .btn.icon')]
@@ -150,6 +166,11 @@ for (const app of apps()) {
       expect(bad, 'use <label class="check"><input …><span>…</span></label> (base.css)').toEqual([]);
     });
 
+    test('actions on a result: from 3 secondary buttons in a .toolbar, not a row of buttons', async ({ page }) => {
+      await page.goto(url);
+      expect(await resultActionRows(page), 'use <div class="toolbar"> with icon + short word (UI-KONZEPT.md 4)').toEqual([]);
+    });
+
     test('icon-only buttons: name, sprite icon of the lexicon, 44 px', async ({ page }) => {
       await page.setViewportSize(VIEWPORTS.mobile);
       await page.goto(url);
@@ -168,6 +189,18 @@ for (const app of apps()) {
 }
 
 test.describe('toolbar', () => {
+  test('the result-action check finds a row of buttons and accepts a toolbar', async ({ page }) => {
+    await page.goto('/template/');
+    const btn = (icon, cls = 'btn') => `<button type="button" class="${cls}"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#${icon}"/></svg><span>x</span></button>`;
+    await page.evaluate(html => document.querySelector('main').insertAdjacentHTML('beforeend', html), [
+      `<div class="row" id="bad">${btn('copy')}${btn('share')}${btn('download')}</div>`,
+      `<div class="row" id="two">${btn('copy')}${btn('share')}</div>`,
+      `<div class="row" id="withPrimary">${btn('download', 'btn primary')}${btn('copy')}${btn('share')}</div>`,
+      `<div class="toolbar" id="good">${btn('copy', '')}${btn('share', '')}${btn('download', '')}${btn('eraser', '')}</div>`,
+    ].join(''));
+    expect((await resultActionRows(page)).map(r => r.split('.')[0])).toEqual(['div#bad']);
+  });
+
   // A toolbar shows its words while every item gets ≥ 64 px, otherwise only the icons (the word stays its name)
   const bar = n => `<div class="toolbar" id="tb" style="width:340px">${Array.from({ length: n }, (_, i) =>
     `<button type="button"${i ? '' : ' aria-pressed="true"'}><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#pencil"/></svg><span class="tb-label">Wort ${i + 1}</span></button>`).join('')}</div>`;
