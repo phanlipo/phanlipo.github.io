@@ -270,6 +270,18 @@ export async function mockLaunchQueue(page, files) {
   }, list);
 }
 
+/** Stand-in Badging API (Tools.badge, common.js): navigator.setAppBadge/clearAppBadge record their calls in
+ *  window.__badge (number set, 0 for clear). Call before page.goto(); badgeCalls(page) reads them. */
+export async function mockBadge(page) {
+  await page.addInitScript(() => {
+    window.__badge = [];
+    navigator.setAppBadge = n => { window.__badge.push(n); return Promise.resolve(); };
+    navigator.clearAppBadge = () => { window.__badge.push(0); return Promise.resolve(); };
+  });
+}
+export const badgeCalls = page => page.evaluate(() => window.__badge);
+export const lastBadge = page => page.evaluate(() => window.__badge.at(-1) ?? null);
+
 /**
  * Accessibility check with axe-core (WCAG 2.1 A/AA): `await axe(page).analyze()`, can be narrowed
  * with `.exclude(…)`. Legacy mode runs axe directly in the page instead of opening an extra page

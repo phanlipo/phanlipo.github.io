@@ -1,7 +1,7 @@
 // Erinnerungen: create, fire on time (notification via the service worker), late after the app was closed,
 // edit and schedule again from the history, validation, permission states, English.
 // Time is controlled with Playwright's clock; notifications are recorded by a stand-in Notification API.
-import { test, expect, clipboardText, switchLang, openMenu, onDialog } from './helpers.mjs';
+import { test, expect, clipboardText, switchLang, openMenu, onDialog, mockBadge, lastBadge } from './helpers.mjs';
 
 const KEY = 'reminders.list.v1';
 const START = new Date('2026-10-29T12:00:00+01:00'); // = 12:00 in Europe/Berlin (winter time)
@@ -472,4 +472,20 @@ test.describe('English', () => {
     await expect(page.locator('#h-form')).toHaveText('Erinnerung bearbeiten');
     await expect(page.locator('#btnSave')).toHaveText('Änderungen speichern');
   });
+});
+
+test('due reminders are counted on the app icon until confirmed', async ({ page }) => {
+  await mockBadge(page);
+  await open(page);
+  await add(page, 'Eins', '2026-10-29T12:05');
+  await add(page, 'Zwei', '2026-10-29T12:06');
+  await expect.poll(() => lastBadge(page)).toBe(0);
+  await page.clock.runFor(5 * 60e3 + 30e3);
+  await expect(page.locator('#dueList li')).toHaveCount(1);
+  await expect.poll(() => lastBadge(page)).toBe(1);
+  await page.clock.runFor(60e3);
+  await expect(page.locator('#dueList li')).toHaveCount(2);
+  await expect.poll(() => lastBadge(page)).toBe(2);
+  await page.click('#btnDueOk');
+  await expect.poll(() => lastBadge(page)).toBe(0);
 });

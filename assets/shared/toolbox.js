@@ -7,6 +7,8 @@
                           of the open tool's group (like the groups on the overview)
    The phone's back key returns from a tool to the overview (one history entry for "in a tool"). The app keeps the
    state ({ view: 'overview' | 'tool', tab }) in its own storage, so the last tool opens again after a reload.
+   App shortcuts (<meta name="tool:shortcuts">, see scripts/lib.mjs) whose action is a tab name open that tool at start
+   (Tools.shortcut()) – the shortcut action is the data-tab value, nothing else to do in the app.
 
      const box = Toolbox.init({
        state: { view, tab },                  // saved state (missing or unknown values are fine)
@@ -30,6 +32,8 @@
     const state = { view: 'overview', tab: names[0] };
     if (opt.state && names.includes(opt.state.tab)) state.tab = opt.state.tab;
     if (opt.state && opt.state.view === 'tool') state.view = 'tool';
+    const sc = root.Tools && root.Tools.shortcut ? root.Tools.shortcut() : null;
+    if (sc && names.includes(sc)) { state.view = 'tool'; state.tab = sc; }
     const changed = () => { if (opt.onChange) opt.onChange({ view: state.view, tab: state.tab }); };
     const KEY = 'toolbox';
     const inTool = () => !!(history.state && history.state[KEY]);

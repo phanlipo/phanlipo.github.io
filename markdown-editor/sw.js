@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "markdown-editor";
-const VERSION = 'aeb2d5bb5ae3';
+const VERSION = 'f4a3f49b9b7a';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

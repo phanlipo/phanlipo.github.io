@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "atomic-clock";
-const VERSION = 'fb92070b9b9c';
+const VERSION = '79754e7c3f51';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

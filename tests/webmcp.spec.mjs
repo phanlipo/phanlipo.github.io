@@ -12,6 +12,7 @@ import { fakeCamera, fakeWorker } from './camera-fakes.mjs';
 import { fakeWorker as fakeFaceWorker, photo as facePhoto, withExifDate } from './face-timelapse-fakes.mjs';
 import { fakeYoutube, playerFrame, LIST, LIST_TITLE, VIDEOS } from './fake-youtube.mjs';
 import { FEED_ORIGIN, FEED_PROBLEMS, mockFeeds } from './feed-mock.mjs';
+import { fakeNfc, wscCredential } from './nfc-fake.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -959,6 +960,26 @@ test.describe('sensors tools', () => {
     await expect(page.locator('#cDeg')).toHaveText('270°');
     const { result } = await call(page, 'sensors_get_compass_heading', {});
     expect(result).toMatchObject({ heading_deg: 270, direction: 'W', reference: 'magnetic_north' });
+  });
+
+  test('get_battery_status and get_network_info read what the browser reports', async ({ page }) => {
+    await page.addInitScript(() => {
+      const b = Object.assign(new EventTarget(), { level: 0.8, charging: true, chargingTime: 1500, dischargingTime: Infinity });
+      navigator.getBattery = async () => b;
+      const c = Object.assign(new EventTarget(), { type: 'cellular', effectiveType: '3g', downlink: 1.5, rtt: 300, saveData: false });
+      Object.defineProperty(Navigator.prototype, 'connection', { configurable: true, get: () => c });
+    });
+    await open(page, '/sensors/');
+    expect((await call(page, 'sensors_get_battery_status', {})).result)
+      .toEqual({ level_percent: 80, charging: true, minutes_to_full: 25, minutes_to_empty: null, observed_percent_per_hour: null });
+    expect((await call(page, 'sensors_get_network_info', {})).result)
+      .toEqual({ online: true, type: 'cellular', effective_type: '3g', downlink_mbps: 1.5, rtt_ms: 300, save_data: false });
+  });
+
+  test('get_battery_status without the API is an error', async ({ page }) => {
+    await page.addInitScript(() => { delete Navigator.prototype.getBattery; });
+    await open(page, '/sensors/');
+    expect((await call(page, 'sensors_get_battery_status', {})).error).toMatch(/does not provide the battery status/);
   });
 });
 
@@ -4302,5 +4323,40 @@ test.describe('atomic-clock tools', () => {
     r = (await call(page, 'atomic_clock_get_time', { time_zone: 'local' })).result;
     expect(r.time_zone).toBe('Europe/Berlin');
     expect(r.world_clocks).toEqual(['Australia/Adelaide']);
+  });
+});
+
+test.describe('nfc-tags tools', () => {
+  test.beforeEach(async ({ page }) => { await fakeNfc(page); await open(page, '/nfc-tags/'); });
+
+  test('get_current_tag and get_tag_history never return Wi-Fi passwords', async ({ page }) => {
+    expect((await call(page, 'nfc_tags_get_current_tag', {})).result).toEqual({ tag: null });
+    await page.click('#btnScan');
+    await expect(page.locator('#btnScan')).toHaveText('Scannen stoppen');
+    await page.evaluate(([cred]) => {
+      window.__nfc.read('01:02', [{ recordType: 'text', data: 'Hallo' }]);
+      window.__nfc.read('03:04', [{ recordType: 'mime', mediaType: 'application/vnd.wfa.wsc', data: cred }]);
+    }, [wscCredential({ ssid: 'Heim', key: 'streng-geheim' })]);
+    const cur = (await call(page, 'nfc_tags_get_current_tag', {})).result.tag;
+    expect(cur.serial_number).toBe('03:04');
+    expect(cur.records).toEqual([{ kind: 'wifi', ssid: 'Heim', auth: 'wpa2', has_password: true }]);
+    const all = (await call(page, 'nfc_tags_get_tag_history', {})).result;
+    expect(all.total).toBe(2);
+    expect(JSON.stringify(all)).not.toContain('streng-geheim');
+    const found = (await call(page, 'nfc_tags_get_tag_history', { search: 'hallo' })).result;
+    expect(found.tags.map(x => x.serial_number)).toEqual(['01:02']);
+  });
+
+  test('prepare_tag_content fills the write form but writes nothing', async ({ page }) => {
+    const r = await call(page, 'nfc_tags_prepare_tag_content', { kind: 'url', url: 'example.com' });
+    expect(r.ok).toBe(true);
+    // same size as in nfc-tags.spec.mjs: 17-byte URL record + 3 bytes TLV
+    expect(r.result).toMatchObject({ prepared: true, kind: 'url', estimated_bytes: 20, fits_on: 'NTAG213' });
+    await expect(page.locator('#writeView')).toBeVisible();
+    await expect(page.locator('#urlIn')).toHaveValue('example.com');
+    expect(await page.evaluate(() => window.__nfc.pending + window.__nfc.written.length)).toBe(0);
+    const bad = await call(page, 'nfc_tags_prepare_tag_content', { kind: 'wifi', ssid: 'X', password: 'kurz' });
+    expect(bad.ok).toBe(false);
+    expect((await call(page, 'nfc_tags_prepare_tag_content', { kind: 'fax' })).ok).toBe(false);
   });
 });

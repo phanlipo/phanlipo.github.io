@@ -16,12 +16,13 @@
 <meta name="tool:description-en" content="Your own reminders with time and text – a notification arrives on time, and they can be changed in the history.">
 <meta name="tool:short-name-en" content="Reminders">
 <meta name="tool:storage" content="reminders.">
+<meta name="tool:shortcuts" content="new: bell-plus: Neue Erinnerung | New reminder">
 <meta name="tool:webmcp" content="create_reminder, update_reminder, list_reminders">
 <meta name="tool:webmcp-help" content="Ein KI-Agent kann Erinnerungen anlegen (auch wiederholende), ändern und auflisten.">
 <meta name="tool:webmcp-help-en" content="An AI agent can create (also repeating), change and list reminders.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-j1TDMv/1MeRabv4HZRWB88k/ptn+cAlS4d2FzN99/2Y='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-21VBBi/QcEq6QXcUrtJS3Wr+0lXFDd9Gz4tOcHaygI8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -154,7 +155,8 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
     <li>Text und Zeitpunkt eingeben (oder <em>+10 Min.</em>, <em>+1 Std.</em>, <em>Morgen 9:00</em>) und speichern.</li>
     <li><strong>Wiederholen</strong> <em>täglich</em> oder <em>wöchentlich</em>: Die Erinnerung bleibt unter <em>Geplant</em> und rückt nach jeder Benachrichtigung zum nächsten Termin (gleiche Uhrzeit, auch bei Zeitumstellung). Jede fällige Erinnerung landet im Verlauf. Beenden: <em>Bearbeiten → Wiederholen: Nie</em> oder löschen. War die App mehrere Termine lang zu, kommt nur eine Benachrichtigung.</li>
     <li><strong>Geplant</strong> zeigt die kommenden Erinnerungen, <strong>Verlauf</strong> die fälligen. Mit <strong>Bearbeiten</strong> bzw. <strong>Erneut planen</strong> lassen sich Text und Zeitpunkt ändern – die Erinnerung wird dann wieder geplant.</li>
-    <li>Ist eine Erinnerung fällig, erscheint sie zusätzlich oben in der App.</li>
+    <li>Ist eine Erinnerung fällig, erscheint sie zusätzlich oben in der App. Die installierte App zeigt am Symbol außerdem die Zahl der fälligen Erinnerungen, bis sie mit <em>OK</em> bestätigt sind (Computer und iPhone; Android zeigt stattdessen den Punkt der Benachrichtigung).</li>
+    <li>Installierte App: Symbol lange drücken → <em>Neue Erinnerung</em> öffnet direkt das Formular (Android, Computer).</li>
   </ul>
   <h3>Wichtig: App muss laufen</h3>
   <ul>
@@ -178,7 +180,8 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
     <li>Enter a text and a time (or <em>+10 min</em>, <em>+1 hr</em>, <em>Tomorrow 9:00</em>) and save.</li>
     <li><strong>Repeat</strong> <em>daily</em> or <em>weekly</em>: the reminder stays under <em>Scheduled</em> and moves on to the next date after each notification (same time of day, also across daylight saving changes). Every reminder that was due goes to the history. To stop: <em>Edit → Repeat: Never</em> or delete it. If the app was closed for several dates, only one notification arrives.</li>
     <li><strong>Scheduled</strong> lists the upcoming reminders, <strong>History</strong> the ones that were due. <strong>Edit</strong> or <strong>Schedule again</strong> changes text and time – the reminder is then scheduled again.</li>
-    <li>When a reminder is due, it also appears at the top of the app.</li>
+    <li>When a reminder is due, it also appears at the top of the app. The installed app also shows the number of due reminders on its icon until you confirm them with <em>OK</em> (computer and iPhone; Android shows the notification dot instead).</li>
+    <li>Installed app: long-press the icon → <em>New reminder</em> opens the form directly (Android, computer).</li>
   </ul>
   <h3>Important: the app must be running</h3>
   <ul>
@@ -214,7 +217,7 @@ input[type=datetime-local],#repeat{width:100%;font:inherit;font-size:16px;min-he
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 62e9e375438b</p>
+  <p class="footer-version">Version 92adcd4fc087</p>
   <!-- footer:end -->
 </footer>
 
@@ -525,6 +528,7 @@ function render(){
   // Due box
   const shown=dueNow.map(byId).filter(Boolean);
   $('due').hidden=!shown.length;
+  Tools.badge(shown.length); // due reminders not confirmed yet, on the app icon (where supported)
   // Only touch the live region when its content changes (no repeated announcements)
   const dueTexts=shown.map(r=>`${r.text} – ${fmtWhen(r.at)}`);
   if(dueTexts.join('\n')!==[...$('dueList').children].map(li=>li.textContent).join('\n'))
@@ -621,6 +625,8 @@ if(navigator.permissions&&navigator.permissions.query)
 Tools.onLang(render);
 log('start',{permission:permission(),android:isAndroid,standalone:matchMedia('(display-mode: standalone)').matches});
 check();
+// App shortcut "Neue Erinnerung": straight to the form
+if(Tools.shortcut()==='new'){$('h-form').scrollIntoView({block:'start'});$('text').focus({preventScroll:true});}
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
 const AT_RE=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
