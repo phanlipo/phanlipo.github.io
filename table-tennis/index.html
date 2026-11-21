@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Tischtennis</title>
+<meta name="description" content="Tischtennis von oben auf dem Handy oder Tablet: allein gegen den Computer in drei Stärken oder zu zweit an einem Gerät – je schneller du den Schläger ziehst, desto härter der Schlag.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="Vollbild, KI-Agent">
+<meta name="tool:webmcp" content="get_state, set_game, new_game">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Spielstand und Bilanz lesen, Spielart, Stärke des Computers und Punkte bis zum Sieg einstellen und ein neues Spiel beginnen. Spielen musst du selbst.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the score and the record, set the mode, the computer's strength and the points needed to win, and start a new game. Playing is up to you.">
+<meta name="tool:icon" content="ping-pong">
+<meta name="tool:color" content="#1b7a4c">
+<meta name="tool:short-name" content="Tischtennis">
+<meta name="tool:title-en" content="Table Tennis">
+<meta name="tool:description-en" content="Table tennis seen from above on your phone or tablet: alone against the computer at three strengths or two of you on one device – the faster you swing the paddle, the harder the shot.">
+<meta name="tool:short-name-en" content="Ping Pong">
+<meta name="tool:storage" content="table-tennis.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Tischtennis">
+<meta name="theme-color" content="#1b7a4c">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#1b7a4c;--accent-text:#ffffff;
+  --floor:#e9e4d8;--floor-line:#d6cfbf;--table:#1f6e8c;--table-edge:#17546b;--tline:#ffffff;--net:#eef2f5;--post:#2b3138;
+  --ball:#ff8a1a;--shadow:rgba(0,0,0,.28);--handle:#a8743d;
+  --p0:#1d5fd1;--p1:#c8261f}
+@media (prefers-color-scheme: dark){:root{--accent:#6fd3a0;--accent-text:#08251a;
+  --floor:#171b1f;--floor-line:#262c32;--table:#1a5770;--table-edge:#0f3a4b;--tline:#dfe8ee;--net:#c9d3da;--post:#8a96a3;
+  --ball:#ff9d3d;--shadow:rgba(0,0,0,.55);--handle:#8a6236;
+  --p0:#5b9bf5;--p1:#f26b62}}
+main{display:flex;flex-direction:column}
+/* The room fills the stage; table and players' areas are drawn into the canvas as large as fits (sideways in landscape) */
+.court{position:relative;flex:1;min-height:240px}
+.court canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none;
+  -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.court canvas:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* Start, pause and result on top of the table */
+.panel{position:absolute;inset:0;margin:auto;width:min(340px,calc(100% - 32px));height:fit-content;max-height:calc(100% - 24px);overflow:auto;
+  display:grid;gap:12px;padding:16px;border-radius:14px;background:color-mix(in srgb,var(--surface) 96%,transparent);
+  border:1px solid var(--border);box-shadow:0 6px 24px rgba(0,0,0,.18);text-align:center}
+.panel[hidden]{display:none}
+.panel h2{margin:0;font-size:22px}
+.panel .big{margin:0;font-size:44px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--accent)}
+.panel p{margin:0}
+.panel .record{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
+.panel .seg{width:100%}
+.panel .seg button{flex:1}
+.panel .btn.primary{min-height:52px;font-size:17px;font-weight:600}
+/* While playing the header is hidden (nothing to hit by mistake); pause sits in the top left corner of the room */
+body.stage.playing>header{display:none}
+.pause-in{position:absolute;inset-block-start:max(4px,env(safe-area-inset-top));inset-inline-start:max(4px,env(safe-area-inset-left));z-index:2;
+  border-radius:50%;opacity:.75;background:var(--surface);border:1px solid var(--border)}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Tischtennis</span></h1>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnNew" aria-label="Neues Spiel" title="Neues Spiel" data-i18n-attr="aria-label:newGame; title:newGame"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg></button>
+  </div>
+</header>
+<main>
+  <section class="court" id="court" aria-label="Spielfeld" data-i18n-attr="aria-label:courtL" data-phase="idle">
+    <canvas id="cv" tabindex="0" role="img" aria-label="Tischtennisplatte von oben" data-i18n-attr="aria-label:cvLabel"></canvas>
+    <p class="sr-only" id="status" role="status"></p>
+    <button type="button" class="btn icon pause-in" id="btnPause" aria-label="Pause" title="Pause" data-i18n-attr="aria-label:pause; title:pause" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-pause"/></svg></button>
+    <div class="panel" id="panel">
+      <h2 id="panelTitle" data-i18n="title">Tischtennis</h2>
+      <p class="big" id="panelScore" hidden></p>
+      <p id="panelText"></p>
+      <div class="seg" role="group" aria-label="Spielart" data-i18n-attr="aria-label:modeL" id="modes">
+        <button type="button" data-mode="cpu" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#device-desktop"/></svg><span data-i18n="cpu">Gegen Computer</span></button>
+        <button type="button" data-mode="two" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span data-i18n="two">Zu zweit</span></button>
+      </div>
+      <div class="seg" role="group" aria-label="Stärke des Computers" data-i18n-attr="aria-label:levelL" id="levels">
+        <button type="button" data-level="easy" aria-pressed="false"><span data-i18n="easy">Leicht</span></button>
+        <button type="button" data-level="medium" aria-pressed="true"><span data-i18n="medium">Mittel</span></button>
+        <button type="button" data-level="hard" aria-pressed="false"><span data-i18n="hard">Schwer</span></button>
+      </div>
+      <p class="record" id="record"></p>
+      <button type="button" class="btn primary block" id="btnStart"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span id="startLabel" data-i18n="play">Spielen</span></button>
+    </div>
+  </section>
+</main>
+
+<section class="card" data-menu data-icon="settings" aria-labelledby="h-settings">
+  <h2 id="h-settings" data-i18n="settingsH">Einstellungen</h2>
+  <fieldset class="seg-group"><legend data-i18n="pointsL">Punkte bis zum Sieg</legend>
+    <div class="seg" id="optPoints">
+      <button type="button" aria-pressed="false" data-v="5">5</button>
+      <button type="button" aria-pressed="true" data-v="11">11</button>
+      <button type="button" aria-pressed="false" data-v="21">21</button>
+    </div>
+  </fieldset>
+  <label class="check"><input type="checkbox" id="optSound"><span data-i18n="sound">Töne</span></label>
+  <label class="check" id="fsRow"><input type="checkbox" id="optFullscreen"><span data-i18n="fsOpt">Beim Spielen Vollbild (ohne Status- und Navigationsleiste)</span></label>
+  <label class="check"><input type="checkbox" id="optVibrate"><span data-i18n="vibrate">Vibrieren bei Schlägen und Punkten</span></label>
+</section>
+<div class="menu-list" data-menu>
+  <button type="button" id="btnClearRecord" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearRecord">Bilanz löschen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Tischtennis von oben gesehen, für eine Person gegen den Computer oder für zwei Personen an einem Handy oder Tablet. Gespielt wird bis 11 Punkte (einstellbar 5, 11 oder 21) mit 2 Punkten Vorsprung.</p>
+  <h3>Spielen</h3>
+  <ul>
+    <li><b>Schläger bewegen:</b> Finger aufs Spielfeld legen und ziehen – der Schläger folgt dem Finger, so schnell er kann. Er darf überall auf deiner Seite des Netzes sein, auch neben und hinter der Platte.</li>
+    <li><b>Schlagen:</b> Der Ball muss erst auf deiner Seite der Platte aufspringen, dann triffst du ihn mit dem Schläger. Bewegst du den Schläger dabei schnell nach vorn, fliegt der Ball schneller und weiter bis kurz vor das Ende der Platte. Hältst du den Schläger nur hin, kommt der Ball langsam und kurz zurück.</li>
+    <li><b>Richtung:</b> Triffst du den Ball mit der Mitte des Schlägers, fliegt er geradeaus weiter; mit dem Rand schräg zur Seite. Eine Seitwärtsbewegung des Schlägers lenkt ihn zusätzlich.</li>
+    <li><b>Höhe:</b> Der Schatten zeigt, wo der Ball ist; je weiter der Ball von seinem Schatten weg und je größer er ist, desto höher fliegt er. Über das Netz fliegt er von selbst, außer du schlägst ihn sehr flach und schnell direkt hinter dem Netz.</li>
+    <li><b>Aufschlag:</b> Der Ball schwebt an deinem Ende der Platte – zieh den Schläger hindurch. Der Aufschlag wechselt alle 2 Punkte, ab 10 : 10 (bzw. 4 : 4, 20 : 20) nach jedem Punkt.</li>
+    <li><b>Punkte:</b> Du bekommst den Punkt, wenn dein Ball auf der anderen Seite aufspringt und nicht zurückkommt (oder dort ein zweites Mal aufspringt). Du verlierst ihn, wenn dein Ball neben oder hinter der Platte landet („Aus“) oder im Netz hängen bleibt („Netz“).</li>
+    <li><b>Gegen den Computer:</b> Du spielst unten (blau). Leicht, Mittel und Schwer unterscheiden sich darin, wie schnell der Computer reagiert und läuft, wie hart und wie genau er spielt. Siege und Niederlagen je Stärke stehen als Bilanz auf der Startkarte.</li>
+    <li><b>Zu zweit (Multitouch):</b> Das Gerät flach zwischen euch legen. Blau spielt unten, Rot oben; jeder setzt einen Finger auf seiner Seite des Netzes auf. Beide Finger werden gleichzeitig erkannt – der Finger gehört der Seite, auf der er aufgesetzt wurde, auch wenn er später darüber hinausrutscht.</li>
+    <li><b>Quer halten:</b> Auf einem breiten Bildschirm liegt die Platte quer – Blau spielt dann von rechts, Rot von links.</li>
+    <li><b>Nichts aus Versehen drücken:</b> Während des Spiels ist die Kopfleiste ausgeblendet. Auf Android und am Computer schaltet „Spielen“ zusätzlich das Vollbild ein (abschaltbar in den Einstellungen). Die Zurück-Geste beendet das Vollbild und hält das Spiel an.</li>
+    <li><b>Pause:</b> der runde Knopf oben links (oder Leertaste); dann sind Menü und „Neues Spiel“ wieder da. Verlässt du die App, hält das Spiel von selbst an.</li>
+    <li><b>iPhone:</b> Safari erlaubt Webseiten kein Vollbild. Zum Home-Bildschirm hinzugefügt zeigt die App aber keine Safari-Leisten.</li>
+    <li>Mit der Tastatur: Pfeiltasten bewegen den blauen Schläger.</li>
+  </ul>
+  <h3>Tipps</h3>
+  <ul>
+    <li>Warte hinter der Platte auf den Ball – nach dem Aufspringen hast du am meisten Zeit.</li>
+    <li>Kommt der Ball weit außen, spiel ihn mit dem Rand des Schlägers zurück zur Mitte, sonst fliegt er neben die Platte.</li>
+    <li>Klappt Multitouch nicht? Manche Geräte oder Bildschirmlupen fangen Gesten mit mehreren Fingern ab – dann diese Funktion in den Bedienungshilfen ausschalten.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Einstellungen (Spielart, Stärke, Punkte bis zum Sieg, Töne, Vollbild, Vibrieren) und die Bilanz gegen den Computer bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“), nicht das laufende Spiel. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Table tennis seen from above, for one person against the computer or for two people on one phone or tablet. A game goes to 11 points (5, 11 or 21 in the settings) with a lead of 2 points.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li><b>Moving the paddle:</b> put a finger on the court and drag – the paddle follows your finger as fast as it can. It may be anywhere on your side of the net, also beside and behind the table.</li>
+    <li><b>Hitting:</b> the ball has to bounce on your side of the table first, then you hit it with the paddle. Move the paddle forward fast and the ball flies faster and longer, up to just before the end of the table. Just hold the paddle in the way and the ball comes back slow and short.</li>
+    <li><b>Direction:</b> hit the ball with the middle of the paddle and it flies straight on; with the edge, it goes off to the side. Moving the paddle sideways steers it as well.</li>
+    <li><b>Height:</b> the shadow shows where the ball is; the further the ball is from its shadow and the bigger it is, the higher it flies. It clears the net by itself, unless you hit it very flat and fast right behind the net.</li>
+    <li><b>Serve:</b> the ball floats at your end of the table – swipe the paddle through it. The serve changes every 2 points, from 10 : 10 (or 4 : 4, 20 : 20) after every point.</li>
+    <li><b>Points:</b> you win the point when your ball bounces on the other side and doesn't come back (or bounces there a second time). You lose it when your ball lands beside or behind the table (“Out”) or stays in the net (“Net”).</li>
+    <li><b>Against the computer:</b> you play at the bottom (blue). Easy, medium and hard differ in how fast the computer reacts and moves and how hard and how exactly it plays. Wins and losses per strength are shown as your record on the start card.</li>
+    <li><b>Two of you (multi-touch):</b> lay the device flat between you. Blue plays at the bottom, red at the top; each puts a finger down on their side of the net. Both fingers are recognised at the same time – a finger belongs to the side where it touched down, even if it slides beyond it later.</li>
+    <li><b>Holding it sideways:</b> on a wide screen the table lies sideways – blue then plays from the right, red from the left.</li>
+    <li><b>Nothing pressed by mistake:</b> while you play, the header is hidden. On Android and on a computer, “Play” also switches to full screen (can be turned off in the settings). The back gesture ends full screen and pauses the game.</li>
+    <li><b>Pause:</b> the round button in the top left (or the space bar); then the menu and “New game” are back. If you leave the app, the game pauses by itself.</li>
+    <li><b>iPhone:</b> Safari doesn't allow full screen for web pages. Added to the home screen, the app shows no Safari bars, though.</li>
+    <li>With the keyboard: the arrow keys move the blue paddle.</li>
+  </ul>
+  <h3>Tips</h3>
+  <ul>
+    <li>Wait behind the table for the ball – after the bounce you have the most time.</li>
+    <li>If the ball comes far out to the side, play it back to the middle with the edge of the paddle, or it flies past the table.</li>
+    <li>Multi-touch doesn't work? Some devices or screen magnifiers catch gestures with several fingers – then turn that feature off in the accessibility settings.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Settings (mode, strength, points to win, sounds, full screen, vibration) and your record against the computer stay only in this browser (back them up or move them under “Back up data”), not the running game. Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann Spielstand und Bilanz lesen, Spielart, Stärke des Computers und Punkte bis zum Sieg einstellen und ein neues Spiel beginnen. Spielen musst du selbst. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the score and the record, set the mode, the computer's strength and the points needed to win, and start a new game. Playing is up to you. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version f7f54d16470a</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

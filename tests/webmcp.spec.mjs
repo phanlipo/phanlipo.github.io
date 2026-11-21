@@ -4487,3 +4487,29 @@ test.describe('pinball tools', () => {
     expect(JSON.parse(await page.evaluate(() => localStorage.getItem('pinball.settings.v1')))).toMatchObject({ balls: 3 });
   });
 });
+
+test.describe('table-tennis tools', () => {
+  test('get_state, set_game and new_game; a running game keeps its settings', async ({ page }) => {
+    await page.clock.install({ time: 0 });
+    await page.addInitScript(() => localStorage.setItem('table-tennis.settings.v1', JSON.stringify({ mode: 'cpu', level: 'easy', points: 5, sound: false, vibrate: false, record: { easy: { w: 2, l: 1 } } })));
+    await open(page, '/table-tennis/');
+    const record = { easy: { wins: 2, losses: 1 }, medium: { wins: 0, losses: 0 }, hard: { wins: 0, losses: 0 } };
+    let r = await call(page, 'table_tennis_get_state', {});
+    expect(r).toEqual({ ok: true, result: { phase: 'idle', mode: 'computer', level: 'easy', points_to_win: 5, score: null, server: null, winner: null,
+      next_game: { mode: 'computer', level: 'easy', points_to_win: 5 }, record_against_computer: record } });
+    r = await call(page, 'table_tennis_set_game', { mode: 'two_players', points_to_win: 21 });
+    expect(r.result).toMatchObject({ phase: 'idle', mode: 'two_players', points_to_win: 21 });
+    await expect(page.locator('#modes [data-mode="two"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#optPoints [data-v="21"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Spiel eingestellt');
+    expect(await call(page, 'table_tennis_set_game', { points_to_win: 7 })).toMatchObject({ ok: false });
+    expect(await call(page, 'table_tennis_set_game', { goals_to_win: 5 })).toMatchObject({ ok: false });
+    r = await call(page, 'table_tennis_new_game', {});
+    expect(r.result).toMatchObject({ phase: 'play', mode: 'two_players', points_to_win: 21, score: { blue: 0, red: 0 }, server: 'blue' });
+    await expect(page.locator('#panel')).toBeHidden();
+    // During the game: the next game changes, the running one doesn't
+    r = await call(page, 'table_tennis_set_game', { mode: 'computer', level: 'hard', points_to_win: 11 });
+    expect(r.result).toMatchObject({ phase: 'play', mode: 'two_players', points_to_win: 21, next_game: { mode: 'computer', level: 'hard', points_to_win: 11 } });
+    expect(JSON.parse(await page.evaluate(() => localStorage.getItem('table-tennis.settings.v1')))).toMatchObject({ mode: 'cpu', level: 'hard', points: 11 });
+  });
+});

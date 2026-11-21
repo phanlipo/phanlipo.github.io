@@ -7,7 +7,7 @@
 <title>Reflex-Party</title>
 <meta name="description" content="Partyspiel für 1–4 Personen an einem Handy, auch für Kinder: Jede hat ihre Taste am Rand – wer bei Pasch, richtiger Rechnung oder passender Farbe zuerst drückt, punktet.">
 <meta name="tool:tags" content="Freizeit, Spiele, Kinder">
-<meta name="tool:features" content="KI-Agent">
+<meta name="tool:features" content="Vollbild, KI-Agent">
 <meta name="tool:webmcp" content="get_state, set_game">
 <meta name="tool:webmcp-help" content="Ein KI-Agent kann Spielstand, Einstellungen und Bestwerte lesen und für die nächste Partie Mitspieler, Punkteziel, Schwierigkeit und Minispiele einstellen. Drücken müsst ihr selbst.">
 <meta name="tool:webmcp-help-en" content="An AI agent can read the score, settings and best results and set players, target score, difficulty and mini-games for the next match. Pressing is up to you.">
@@ -20,7 +20,7 @@
 <meta name="tool:storage" content="reflex-party.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-XjthG0Aa7iRy6dpibMM30SDlTZGPM3bmxgBj0Tn5/lI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-jVakAl3BpirRlPB4HBebQv3RLD8UId651bsTObcg5bc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -68,7 +68,7 @@ main{display:flex;flex-direction:column;padding:8px;gap:8px;max-width:900px;marg
 .pad.win{animation:pulse .5s}
 @keyframes shake{25%{translate:-6px 0}75%{translate:6px 0}}
 @keyframes pulse{50%{transform:scale(1.06)}}
-.center{min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+.center{position:relative;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
   background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:8px;overflow:hidden}
 .task{margin:0;text-align:center;font-weight:700;font-size:17px;max-width:32ch}
 .task.flip{rotate:180deg}
@@ -112,6 +112,12 @@ main{display:flex;flex-direction:column;padding:8px;gap:8px;max-width:900px;marg
 .result .row{justify-content:center}
 .record{color:var(--good);font-weight:700;margin:0}
 @media (prefers-reduced-motion: reduce){.pad,.stim.fresh>.pic{animation:none;transition:none}.pad.bad,.pad.win{animation:none}}
+
+/* While playing the header is hidden (nothing to hit by mistake); pause sits in a corner of the picture */
+body.stage.playing>header{display:none}
+.pause-in{position:absolute;inset-block-start:6px;inset-inline-start:6px;z-index:2;border-radius:50%;opacity:.75;
+  background:var(--surface);border:1px solid var(--border)}
+.pause-in[hidden]{display:none}
 
 /* Settings */
 .card h3{font-size:16px;margin:14px 0 8px}
@@ -170,6 +176,7 @@ main{display:flex;flex-direction:column;padding:8px;gap:8px;max-width:900px;marg
   <section class="arena" id="arena" aria-label="Spielfeld" data-i18n-attr="aria-label:arenaL" hidden>
     <div class="pads top" id="padsTop"></div>
     <div class="center" id="center">
+      <button type="button" class="btn icon pause-in" id="btnPause" aria-label="Pause" title="Pause" data-i18n-attr="aria-label:pause; title:pause" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-pause"/></svg></button>
       <p class="task flip" id="taskTop" aria-hidden="true"></p>
       <div class="stim" id="stim" aria-hidden="true"></div>
       <p class="task" id="task"></p>
@@ -182,6 +189,7 @@ main{display:flex;flex-direction:column;padding:8px;gap:8px;max-width:900px;marg
     <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
     <label class="check"><input type="checkbox" id="optSound"> <span data-i18n="sound">Töne</span></label>
     <label class="check"><input type="checkbox" id="optVibrate"> <span data-i18n="vibrate">Vibration (Android)</span></label>
+    <label class="check" id="fsRow"><input type="checkbox" id="optFullscreen"> <span data-i18n="fsOpt">Beim Spielen Vollbild (ohne Status- und Navigationsleiste)</span></label>
   </section>
 
   <section class="card" data-menu data-icon="trophy" aria-labelledby="h-best">
@@ -216,6 +224,9 @@ main{display:flex;flex-direction:column;padding:8px;gap:8px;max-width:900px;marg
     <li><b>Vorlesen:</b> Mit „Aufgabe vorlesen“ sagt das Handy zu Beginn jeder Runde, worauf es ankommt, und am Ende, wer gewonnen hat. Die Bilder starten erst, wenn die Aufgabe vorgelesen ist. Es spricht die Stimme des Geräts (Lautstärke aufdrehen; auf dem iPhone den Stummschalter ausschalten).</li>
     <li><b>Minispiele wählen:</b> Vor dem Start auf die Namen tippen, um sie ein- oder auszuschalten. „Ohne Lesen“ wählt die Spiele, für die man weder lesen noch rechnen muss.</li>
     <li><b>Allein:</b> Mit einer Person ist es ein Training gegen die Uhr. Am Ende siehst du die mittlere Reaktionszeit, Fehlgriffe und Verpasstes; die beste Reaktionszeit je Schwierigkeit wird gemerkt.</li>
+    <li><b>Nichts aus Versehen drücken:</b> Während der Partie ist die Kopfleiste ausgeblendet, das Spielfeld füllt den Bildschirm. Auf Android und am Computer schaltet „Spiel starten“ zusätzlich das Vollbild ein (Status-, Navigations- und Adressleiste verschwinden; abschaltbar in den Einstellungen). Die Zurück-Geste beendet das Vollbild und hält die Partie an.</li>
+    <li><b>Pause:</b> der runde Knopf oben links im Bild (oder die Leertaste). Dann sind Menü und „Laufende Runde stoppen“ wieder da; „Weiterspielen“ startet eine neue Runde, die Punkte bleiben. Verlässt du die App, hält die Partie von selbst an.</li>
+    <li><b>iPhone:</b> Safari erlaubt Webseiten kein Vollbild. Zum Home-Bildschirm hinzugefügt zeigt die App aber keine Safari-Leisten.</li>
     <li><b>Mit Tastatur:</b> die Tasten <kbd>1</kbd> bis <kbd>4</kbd> drücken für Spieler 1 bis 4.</li>
   </ul>
   <h3>Minispiele</h3>
@@ -241,7 +252,7 @@ main{display:flex;flex-direction:column;padding:8px;gap:8px;max-width:900px;marg
     <li>Tipp: „Aufgabe vorlesen“ anlassen, dann müssen Kinder die Aufgabe nicht selbst lesen.</li>
   </ul>
   <h3>Gespeichert</h3>
-  <p>Nur Einstellungen und die Bestwerte allein – in diesem Browser (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline. Wechselst du während einer Partie in eine andere App, wird sie abgebrochen.</p>
+  <p>Nur Einstellungen (auch Töne, Vibration, Vollbild) und die Bestwerte allein – in diesem Browser (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
   <p>A fast party game for 1 to 4 people on <b>one</b> device. Ideally the phone or tablet lies flat on the table with everyone around it.</p>
@@ -254,6 +265,9 @@ main{display:flex;flex-direction:column;padding:8px;gap:8px;max-width:900px;marg
     <li><b>Read aloud:</b> with “Read the task aloud” the device says what matters at the start of every round, and who won at the end. The pictures only start once the task has been read. It uses the device’s voice (turn up the volume; on iPhone switch off the silent switch).</li>
     <li><b>Choosing mini-games:</b> before the start, tap the names to switch them on or off. “No reading” picks the games that need neither reading nor arithmetic.</li>
     <li><b>Alone:</b> with one person it is practice against the clock. At the end you see the average reaction time, mistakes and misses; the best reaction time per difficulty is kept.</li>
+    <li><b>Nothing pressed by mistake:</b> during a match the header is hidden and the playing field fills the screen. On Android and on a computer, “Start game” also switches to full screen (status, navigation and address bar disappear; can be turned off in the settings). The back gesture ends full screen and pauses the match.</li>
+    <li><b>Pause:</b> the round button in the top left corner of the picture (or the space bar). Then the menu and “Stop the running round” are back; “Resume” starts a new round, the points stay. If you leave the app, the match pauses by itself.</li>
+    <li><b>iPhone:</b> Safari doesn’t allow web pages to go full screen. Added to the home screen, the app shows no Safari bars though.</li>
     <li><b>With a keyboard:</b> press the keys <kbd>1</kbd> to <kbd>4</kbd> for players 1 to 4.</li>
   </ul>
   <h3>Mini-games</h3>
@@ -279,7 +293,7 @@ main{display:flex;flex-direction:column;padding:8px;gap:8px;max-width:900px;marg
     <li>Tip: keep “Read the task aloud” on, so children don’t have to read the task themselves.</li>
   </ul>
   <h3>Stored</h3>
-  <p>Only settings and the best results alone – in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline. Switching to another app during a match ends it.</p>
+  <p>Only settings (sounds, vibration and full screen too) and the best results alone – in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline.</p>
   </div>
   <!-- agent:start -->
   <div data-lang="de">
@@ -300,7 +314,7 @@ main{display:flex;flex-direction:column;padding:8px;gap:8px;max-width:900px;marg
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version d194855d1a72</p>
+  <p class="footer-version">Version 6215d1298c63</p>
   <!-- footer:end -->
 </footer>
 
@@ -320,6 +334,7 @@ de:{
   'w.red':'ROT','w.blue':'BLAU','w.green':'GRÜN','w.purple':'LILA',
   player:'Spieler {n}',ready:'Achtung …',point:'+1',minus:'−1 für {p}',nobody:'Keiner – weiter geht’s',missed:'Verpasst',tooEarly:'Zu früh!',
   wins:'{p} gewinnt!',done:'Geschafft!',again:'Nochmal',back:'Zur Auswahl',aborted:'Partie abgebrochen.',
+  paused:'Pause',resume:'Weiterspielen',pausedInfo:'Weiter geht’s mit einer neuen Runde, die Punkte bleiben.',
   'q.countdownKids':'Tippen, sobald die 0 kommt',
   'd.kids':'Viel Zeit pro Bild, ganz einfache Aufgaben, Zahlen beim Countdown sichtbar. Zu früh drücken kostet keinen Punkt.',
   'd.easy':'1,6 Sekunden pro Bild.','d.normal':'1,2 Sekunden pro Bild.','d.hard':'0,85 Sekunden pro Bild und kleinere Unterschiede.',
@@ -335,7 +350,8 @@ en:{
   kids:'Kids',kidGames:'No reading',speak:'Read the task aloud',speakInfo:'This browser can’t read aloud.',
   start:'Start game',arenaL:'Playing field',settings:'Settings',targetH:'Points to win',
   diffH:'Difficulty',easy:'Easy',normal:'Normal',hard:'Hard',gamesH:'Mini-games',allGames:'All',
-  sound:'Sounds',vibrate:'Vibration (Android)',bestH:'Best results alone',
+  sound:'Sounds',vibrate:'Vibration (Android)',bestH:'Best results alone',pause:'Pause',
+  fsOpt:'Full screen while playing (no status and navigation bar)',
   'g.color':'Colour word','g.sum':'Sum','g.bars':'Bars','g.count':'Counting','g.pair':'Pair','g.dice':'Double',
   'g.clock':'Clock','g.order':'Order','g.green':'Green light','g.countdown':'Blind countdown',
   'q.color':'Tap when word and colour match','q.sum':'Tap when the sum is right','q.bars':'Tap when both bars are the same length',
@@ -345,6 +361,7 @@ en:{
   'w.red':'RED','w.blue':'BLUE','w.green':'GREEN','w.purple':'PURPLE',
   player:'Player {n}',ready:'Get ready …',point:'+1',minus:'−1 for {p}',nobody:'Nobody – on we go',missed:'Missed',tooEarly:'Too early!',
   wins:'{p} wins!',done:'Done!',again:'Play again',back:'Back to setup',aborted:'Match stopped.',
+  paused:'Paused',resume:'Resume',pausedInfo:'It goes on with a new round, the points stay.',
   'q.countdownKids':'Tap as soon as the 0 comes',
   'd.kids':'Lots of time per picture, very simple tasks, countdown numbers stay visible. Pressing too early costs no point.',
   'd.easy':'1.6 seconds per picture.','d.normal':'1.2 seconds per picture.','d.hard':'0.85 seconds per picture and smaller differences.',
@@ -361,14 +378,14 @@ const TARGETS=[5,10,15],BANNER=1300,SPEECH_MAX=5000;
 const introMs=d=>d==='kids'?2200:1400;
 const taskKey=(id,d)=>'q.'+(id==='countdown'&&d==='kids'?'countdownKids':id);
 
-const state=Tools.load(LS,{players:2,target:10,diff:'normal',games:RG.IDS.slice(),sound:true,vibrate:true,speak:true,best:{},matches:0,last:null});
+const state=Tools.load(LS,{players:2,target:10,diff:'normal',games:RG.IDS.slice(),sound:true,vibrate:true,speak:true,fullscreen:true,best:{},matches:0,last:null});
 if(![1,2,3,4].includes(state.players))state.players=2;
 if(!TARGETS.includes(state.target))state.target=10;
 if(!RG.DIFFS.includes(state.diff))state.diff='normal';
 if(!Array.isArray(state.games))state.games=RG.IDS.slice();
 state.games=RG.IDS.filter(id=>state.games.includes(id));
 if(!state.games.length)state.games=RG.IDS.slice();
-for(const k of ['sound','vibrate','speak'])if(typeof state[k]!=='boolean')state[k]=true;
+for(const k of ['sound','vibrate','speak','fullscreen'])if(typeof state[k]!=='boolean')state[k]=true;
 if(!state.best||typeof state.best!=='object'||Array.isArray(state.best))state.best={};
 if(!(Number.isInteger(state.matches)&&state.matches>=0))state.matches=0;
 if(!state.last||typeof state.last!=='object')state.last=null;
@@ -491,22 +508,61 @@ for(const id of ['padsTop','padsBottom']){
 document.addEventListener('keydown',e=>{
   if(!match||e.repeat||e.ctrlKey||e.metaKey||e.altKey)return;
   if(document.querySelector('.menu-open, dialog[open]'))return;
+  if(e.key===' '&&phase==='play'){e.preventDefault();pause('key');return;}
   const i='1234'.indexOf(e.key);
   if(i>=0&&i<match.n){e.preventDefault();press(i);}
 });
 
 /* ---------- Match ----------
-   phase: idle (setup) → play (rounds) → over (result) → play (again) or idle.
+   phase: idle (setup) → play (rounds) ⇄ paused → over (result) → play (again) or idle.
+   Pause drops the running round; resuming starts a new one (scores stay).
    Round: intro (task only, taps ignored) → run (a new picture every STEP ms; a tap on a "hit now!" picture scores,
    any other tap is −1 and locks that player for the round) → result (banner) → next round or over.
    No tap on two "hit now!" pictures in a row → the round ends without a point. Blind countdown: see games.js. */
 let match=null,phase='idle';
 function setPhase(p){
   phase=p;arena.dataset.phase=p;
-  setup.hidden=p!=='idle';arena.hidden=p==='idle';$('btnStop').hidden=p==='idle';
+  setup.hidden=p!=='idle';arena.hidden=p==='idle';$('btnStop').hidden=p==='idle';$('btnPause').hidden=p!=='play';
+  document.body.classList.toggle('playing',p==='play');   // header hidden: nothing to hit by mistake
+  if(p==='play')Tools.wakeLock.hold('game');else Tools.wakeLock.release('game');
   for(const b of document.querySelectorAll('#players button,#targets button,#diffs button,#games button,#btnAllGames'))b.disabled=p==='play';
 }
+/* Full screen: only right after a tap (browser rule), so on start, again and resume */
+function enterFullscreen(){
+  const fs=Tools.fullscreen;
+  if(state.fullscreen&&fs.supported()&&!fs.active())fs.enter(document.documentElement);
+}
+// Leaving full screen (back gesture, Escape) during a match was probably not meant for the game: pause it
+Tools.fullscreen.onChange(active=>{if(!active&&phase==='play')pause('fullscreen');});
+function pause(reason){
+  if(phase!=='play')return;
+  // The winning point was already made (banner showing): end the match instead of pausing
+  const w=match.scores.findIndex(v=>v>=match.target);
+  if(w>=0){finish(w);return;}
+  clearTimers();hush();match.round=null;
+  setPhase('paused');renderPads();renderPaused();
+  Tools.diag.log('paused',{reason});
+}
+function renderPaused(){
+  $('task').textContent='';$('taskTop').textContent='';
+  stim.innerHTML=`<div class="result" role="group" aria-labelledby="resHead"><h2 id="resHead">${Tools.esc(t('paused'))}</h2>`+
+    `<p class="info">${Tools.esc(t('pausedInfo'))}</p>`+
+    `<div class="row"><button type="button" class="btn primary" id="btnResume">${Tools.icon('player-play')}<span>${Tools.esc(t('resume'))}</span></button></div></div>`;
+  stim.removeAttribute('aria-hidden');
+  delete stim.dataset.state;delete stim.dataset.game;delete stim.dataset.result;
+  $('btnResume').addEventListener('click',resume);
+  $('announce').textContent=t('paused');
+}
+function resume(){
+  if(phase!=='paused')return;
+  enterFullscreen();if(state.sound)Tools.audio.unlock();
+  stim.setAttribute('aria-hidden','true');
+  setPhase('play');
+  Tools.diag.log('resumed');
+  startRound();
+}
 function startMatch(){
+  enterFullscreen();
   clearTimers();if(state.sound)Tools.audio.unlock();
   const n=state.players;
   match={n,target:state.target,diff:state.diff,games:state.games.slice(),scores:Array(n).fill(0),wrong:Array(n).fill(0),
@@ -665,13 +721,15 @@ function quit(){
 }
 function stop(reason){
   if(phase==='idle')return;
-  const wasPlaying=phase==='play';
+  const wasPlaying=phase==='play'||phase==='paused';
   quit();
   if(wasPlaying){Tools.toast(t('aborted'));Tools.diag.log('stopped',{reason});}
 }
 $('btnStart').addEventListener('click',startMatch);
 $('btnStop').addEventListener('click',()=>stop('button'));
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&phase==='play')stop('hidden');});
+$('btnPause').addEventListener('click',()=>pause('button'));
+// Leaving the app (or locking the screen) pauses the match
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pause('hidden');});
 
 /* ---------- Setup and settings ---------- */
 function renderSetup(){
@@ -697,7 +755,7 @@ function renderBest(){
 }
 // Changes outside a running match (an agent too); false while playing
 function change(patch){
-  if(phase==='play')return false;
+  if(phase==='play'||phase==='paused')return false;
   Object.assign(state,patch);save();
   if(phase==='over')quit();else renderSetup();
   Tools.diag.log('settings',{players:state.players,target:state.target,diff:state.diff,games:state.games.length});
@@ -717,26 +775,29 @@ $('games').addEventListener('click',e=>{
 $('btnAllGames').addEventListener('click',()=>change({games:RG.IDS.slice()}));
 $('btnKidGames').addEventListener('click',()=>change({games:RG.NO_READING.slice()}));
 $('optSpeak').addEventListener('change',e=>{state.speak=e.target.checked;save();if(!state.speak)hush();});
-for(const [id,k] of [['optSound','sound'],['optVibrate','vibrate']]){
+for(const [id,k] of [['optSound','sound'],['optVibrate','vibrate'],['optFullscreen','fullscreen']]){
   $(id).checked=state[k];
   $(id).addEventListener('change',e=>{state[k]=e.target.checked;save();if(k==='sound'&&state[k])Tools.audio.unlock();});
 }
 
+// Only where a page may switch to full screen (not on iPhone, not in the installed full-screen app)
+$('fsRow').hidden=!Tools.fullscreen.supported()||Tools.fullscreen.system();
 setPhase('idle');renderSetup();renderBest();
 Tools.onLang(()=>{
   renderSetup();renderBest();
   if(phase==='play'){renderPads();if(match.round)$('task').textContent=$('taskTop').textContent=t(taskKey(match.round.id,match.diff));if(match.round&&match.round.state&&match.round.phase!=='result')show(match.round.state);}
   else if(phase==='over'){renderPads();renderResult();}
+  else if(phase==='paused'){renderPads();renderPaused();}
 });
 Tools.diag.info(()=>({phase,players:state.players,target:state.target,diff:state.diff,games:state.games.length,
-  round:match&&match.round?{game:match.round.id,phase:match.round.phase}:null,scores:match?match.scores:null,sound:state.sound,vibrate:state.vibrate,speak:state.speak,canSpeak,matches:state.matches}));
+  round:match&&match.round?{game:match.round.id,phase:match.round.phase}:null,scores:match?match.scores:null,sound:state.sound,vibrate:state.vibrate,fullscreen:state.fullscreen,fsActive:Tools.fullscreen.active(),speak:state.speak,canSpeak,matches:state.matches}));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
 const pubLast=r=>r&&{players:r.players,target_points:r.target,difficulty:r.diff,scores:r.scores,winner:r.winner+1,rounds:r.rounds,
   mistakes:r.wrong,...(r.players===1?{seconds:r.seconds,average_reaction_ms:r.avg,missed:r.missed}:{})};
 Tools.mcp.register({
   name:'get_state',title:'Read game state',label:'mcp.state',readOnly:true,
-  description:'Reads Reflex Party, a party reaction game for 1–4 people on one device: the settings (players, target score, difficulty, enabled mini-games), the phase (idle = setup, play, over), the running match (scores per player, current mini-game), the last finished match and the best solo results (average reaction in milliseconds per difficulty and target).',
+  description:'Reads Reflex Party, a party reaction game for 1–4 people on one device: the settings (players, target score, difficulty, enabled mini-games), the phase (idle = setup, play, paused, over), the running match (scores per player, current mini-game), the last finished match and the best solo results (average reaction in milliseconds per difficulty and target).',
   inputSchema:{type:'object',properties:{},additionalProperties:false},
   execute:()=>({
     settings:{players:state.players,target_points:state.target,difficulty:state.diff,games:state.games.slice(),sounds:state.sound,vibration:state.vibrate,read_aloud:state.speak},
@@ -749,7 +810,7 @@ Tools.mcp.register({
 });
 Tools.mcp.register({
   name:'set_game',title:'Set up the match',label:'mcp.set',
-  description:'Sets players, target score, difficulty and/or the mini-games for the next match (the players start it themselves). Not possible while a match is running. Mini-games: color (word matches its colour), sum, bars (same length), count (number matches dots), pair (two identical shapes), dice (double), clock (analog = digital), order (ascending), green (lamp turns green), countdown (blind countdown to 0). Returns the new settings.',
+  description:'Sets players, target score, difficulty and/or the mini-games for the next match (the players start it themselves). Not possible while a match is running or paused. Mini-games: color (word matches its colour), sum, bars (same length), count (number matches dots), pair (two identical shapes), dice (double), clock (analog = digital), order (ascending), green (lamp turns green), countdown (blind countdown to 0). Returns the new settings.',
   inputSchema:{type:'object',properties:{
     players:{type:'integer',minimum:1,maximum:4,description:'Number of people at the device (1 = solo practice).'},
     target_points:{type:'integer',enum:TARGETS,description:'Points needed to win.'},
