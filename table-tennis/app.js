@@ -245,7 +245,7 @@
   function beep(freq, dur, vol, delay = 0) {
     if (settings.sound) Tools.audio.tone({ freq, ms: dur * 1000, type: 'triangle', vol, at: delay });
   }
-  function buzz(p) { if (settings.vibrate && 'vibrate' in navigator) try { navigator.vibrate(p); } catch { /* optional */ } }
+  function buzz(p) { if (settings.vibrate) Tools.vibrate(p); }  // at least 30 ms each, see common.js
 
   /* ---------- Drawing ---------- */
   let P = null;
