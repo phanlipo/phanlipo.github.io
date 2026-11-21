@@ -1,58 +1,76 @@
-/* Flipper – page script: game flow, touch and keyboard input, drawing, sounds, best scores, WebMCP.
-   Table, physics and rules without DOM: engine.js (window.PinballEngine). See README.md. */
+/* Flipper – page script: table choice, game flow, touch and keyboard input, drawing, sounds, best scores, WebMCP.
+   Tables as data: tables.js (window.PinballTables); physics and rules without DOM: engine.js (window.PinballEngine).
+   See README.md. */
 (function () {
   'use strict';
   Tools.i18n({
     de: {
       paused: 'Pause', resume: 'Weiterspielen', again: 'Nochmal', over: 'Spiel vorbei', newBest: 'Neuer Bestwert!',
       intro: 'Linke Bildschirmhälfte: linker Flipper, rechte Hälfte: rechter Flipper. Zum Abschießen rechts gedrückt halten und loslassen.',
-      best: 'Bestwert ({n} Kugeln): {s}', bestNone: 'Noch kein Bestwert mit {n} Kugeln.',
+      desc_komet: 'Zum Einstieg: drei Bumper, Bahnen oben, Ziele rechts.',
+      desc_tiefsee: 'Mittel: Rampe, Spinner, Kugelfang mit Multiball, Kickback.',
+      best: 'Bestwert ({table}, {n} Kugeln): {s}', bestNone: 'Noch kein Bestwert auf „{table}“ mit {n} Kugeln.',
       ballOf: 'Kugel {b}/{n}', ballLabel: 'Kugel', multLabel: 'Multiplikator', scoreLabel: 'Punkte',
       save: 'Ballsicherung', bonus: 'Bonus {b} × {m}', launchHint: 'Rechts halten, loslassen',
+      multiball: 'Multiball!', jackpot: 'Jackpot', lockLit: 'Multiball bereit', kickbackLit: 'Kickback an', kickback: 'Kickback!',
+      lamp_lock: 'Multiball', lamp_jackpot: 'Jackpot',
       sayBall: 'Kugel {b} von {n}. Rechts gedrückt halten und loslassen zum Abschießen.',
       sayDrain: 'Kugel verloren. Bonus {s}. Punkte: {p}.', saySaved: 'Ballsicherung: Die Kugel kommt zurück.',
       sayMult: 'Multiplikator {m}.', sayBank: 'Alle Ziele getroffen.', sayOver: 'Spiel vorbei. {p} Punkte.',
-      clearQ: 'Bestwerte löschen?', cleared: 'Bestwerte gelöscht', newQ: 'Laufendes Spiel abbrechen und neu beginnen?',
+      sayLock: 'Multiball bereit: in den Kugelfang schießen.', sayMultiball: 'Multiball! Rampe gibt Jackpot.', sayJackpot: 'Jackpot! Punkte: {p}.',
+      sayKickLit: 'Kickback links ist an.', sayKick: 'Kickback.',
+      clearQ: 'Alle Bestwerte löschen?', cleared: 'Bestwerte gelöscht', newQ: 'Laufendes Spiel abbrechen und neu beginnen?',
       'mcp.set': 'Spiel eingestellt', 'mcp.new': 'Neues Spiel'
     },
     en: {
-      title: 'Pinball', pause: 'Pause', newGame: 'New game', tableL: 'Pinball table', cvLabel: 'Pinball table',
+      title: 'Pinball', pause: 'Pause', newGame: 'New game', tableL: 'Pinball table', cvLabel: 'Pinball table', tablesL: 'Table',
       play: 'Play', settingsH: 'Settings', ballsL: 'Balls per game', sound: 'Sounds', fsOpt: 'Full screen while playing (no status and navigation bar)',
       vibrate: 'Vibrate on flippers and bumpers', clearBest: 'Delete best scores', flipL: 'Left flipper', flipR: 'Right flipper',
       paused: 'Paused', resume: 'Resume', again: 'Play again', over: 'Game over', newBest: 'New best score!',
       intro: 'Left half of the screen: left flipper, right half: right flipper. To launch, hold the right side and let go.',
-      best: 'Best ({n} balls): {s}', bestNone: 'No best score with {n} balls yet.',
+      desc_komet: 'To start with: three bumpers, top lanes, targets on the right.',
+      desc_tiefsee: 'Medium: ramp, spinner, saucer with multiball, kickback.',
+      best: 'Best ({table}, {n} balls): {s}', bestNone: 'No best score on “{table}” with {n} balls yet.',
       ballOf: 'Ball {b}/{n}', ballLabel: 'Ball', multLabel: 'Multiplier', scoreLabel: 'Score',
       save: 'Ball save', bonus: 'Bonus {b} × {m}', launchHint: 'Hold right, let go',
+      multiball: 'Multiball!', jackpot: 'Jackpot', lockLit: 'Multiball ready', kickbackLit: 'Kickback on', kickback: 'Kickback!',
+      lamp_lock: 'Multiball', lamp_jackpot: 'Jackpot',
       sayBall: 'Ball {b} of {n}. Hold the right side and let go to launch.',
       sayDrain: 'Ball lost. Bonus {s}. Score: {p}.', saySaved: 'Ball save: the ball comes back.',
       sayMult: 'Multiplier {m}.', sayBank: 'All targets hit.', sayOver: 'Game over. {p} points.',
-      clearQ: 'Delete the best scores?', cleared: 'Best scores deleted', newQ: 'Abandon the running game and start again?',
+      sayLock: 'Multiball ready: shoot into the saucer.', sayMultiball: 'Multiball! The ramp scores the jackpot.', sayJackpot: 'Jackpot! Score: {p}.',
+      sayKickLit: 'The left kickback is on.', sayKick: 'Kickback.',
+      clearQ: 'Delete all best scores?', cleared: 'Best scores deleted', newQ: 'Abandon the running game and start again?',
       'mcp.set': 'game set up', 'mcp.new': 'new game'
     }
   });
-  const t = Tools.t, $ = Tools.$, E = window.PinballEngine;
+  const t = Tools.t, $ = Tools.$, E = window.PinballEngine, TABLES = window.PinballTables;
   const { W, H, BALL_R, DT, FLIP_R, LANE_REST, SEP_X, CX } = E;
+  const tableName = id => TABLES.byId[id].name[Tools.lang() === 'en' ? 'en' : 'de'];
 
-  /* ---------- Stored settings and best scores ---------- */
-  const LS = 'pinball.settings.v1';
-  const BALLS = [3, 5];
-  const settings = Object.assign({ balls: 3, sound: true, fullscreen: true, vibrate: true, best: {} }, Tools.load(LS, {}));
+  /* ---------- Stored settings and best scores ----------
+     v2: best scores per table ({ komet: { 3: n, 5: n }, … }). v1 (only the first table) is taken over once. */
+  const LS = 'pinball.settings.v2', LS1 = 'pinball.settings.v1';
+  const BALLS = [3, 5], IDS = TABLES.list.map(tb => tb.id);
+  const stored = Tools.load(LS, null) || (old => old ? { ...old, table: 'komet', best: { komet: old.best || {} } } : {})(Tools.load(LS1, null));
+  const settings = Object.assign({ table: 'komet', balls: 3, sound: true, fullscreen: true, vibrate: true, best: {} }, stored);
+  if (!IDS.includes(settings.table)) settings.table = 'komet';
   if (!BALLS.includes(settings.balls)) settings.balls = 3;
   if (!settings.best || typeof settings.best !== 'object') settings.best = {};
   const save = () => Tools.save(LS, settings);
-  const best = n => Math.max(0, Math.floor(settings.best[n]) || 0);
+  const best = (id, n) => Math.max(0, Math.floor((settings.best[id] || {})[n]) || 0);
 
   /* ---------- Game state ---------- */
   // phase: 'idle' (start card), 'play', 'paused', 'over'
-  let game = E.createGame({ balls: settings.balls }), phase = 'idle', newRecord = false, message = null;
+  let game = E.createGame(TABLES.byId[settings.table], { balls: settings.balls }), phase = 'idle', newRecord = false, message = null;
   const cv = $('cv'), ctx = cv.getContext('2d'), table = $('table');
 
+  function freshGame() { game = E.createGame(TABLES.byId[settings.table], { balls: settings.balls }); message = null; showTable(); }
   function newGame() {
-    game = E.createGame({ balls: settings.balls });
-    newRecord = false; message = null; releaseAll();
+    freshGame();
+    newRecord = false; releaseAll();
     setPhase('play');
-    Tools.diag.log('new game', { balls: settings.balls });
+    Tools.diag.log('new game', { table: settings.table, balls: settings.balls });
     say(t('sayBall', { b: 1, n: game.balls }));
   }
   function setPhase(p) {
@@ -68,28 +86,46 @@
   const pts = n => Tools.fmt(n, 0);
 
   function gameOver() {
-    newRecord = game.score > best(game.balls);
-    if (newRecord) { settings.best[game.balls] = game.score; save(); }
-    Tools.diag.log('game over', { balls: game.balls, newRecord });
+    const id = game.table.id;
+    newRecord = game.score > best(id, game.balls);
+    if (newRecord) { settings.best[id] = { ...settings.best[id], [game.balls]: game.score }; save(); }
+    Tools.diag.log('game over', { table: id, balls: game.balls, newRecord });
     say(t('sayOver', { p: pts(game.score) }));
     setPhase('over');
     buzz([60, 60, 120]);
   }
 
-  /* ---------- Panel and score bar ---------- */
+  /* ---------- Panel, table choice and score bar ---------- */
+  function renderTables() {
+    const box = $('tables');
+    if (box.children.length !== IDS.length) {
+      box.textContent = '';
+      for (const id of IDS) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.dataset.table = id;
+        b.addEventListener('click', () => setTable(id));
+        box.append(b);
+      }
+    }
+    for (const b of box.children) { b.textContent = tableName(b.dataset.table); b.setAttribute('aria-pressed', String(b.dataset.table === settings.table)); }
+  }
   function renderPanel() {
     const panel = $('panel'), show = phase !== 'play';
     panel.hidden = !show;
     $('btnPause').hidden = phase !== 'play';
     if (!show) return;
-    const over = phase === 'over', paused = phase === 'paused';
+    const over = phase === 'over', paused = phase === 'paused', choose = phase === 'idle' || over;
     $('panelTitle').textContent = over ? (newRecord ? t('newBest') : t('over')) : paused ? t('paused') : t('title');
     $('panelScore').hidden = phase === 'idle';
     $('panelScore').textContent = pts(game.score);
-    $('panelText').hidden = paused;
+    $('tables').hidden = !choose;
+    renderTables();
+    $('tableDesc').hidden = !choose;
+    $('tableDesc').textContent = t('desc_' + settings.table);
+    $('panelText').hidden = phase !== 'idle';
     $('panelText').textContent = t('intro');
-    const n = phase === 'idle' || over ? settings.balls : game.balls, b = best(n);
-    $('best').textContent = b ? t('best', { n, s: pts(b) }) : t('bestNone', { n });
+    const id = choose ? settings.table : game.table.id, n = choose ? settings.balls : game.balls, b = best(id, n);
+    $('best').textContent = b ? t('best', { table: tableName(id), n, s: pts(b) }) : t('bestNone', { table: tableName(id), n });
     $('startLabel').textContent = paused ? t('resume') : over ? t('again') : t('play');
   }
   function renderHud() {
@@ -105,9 +141,16 @@
     // Only where a page may switch to full screen (not on iPhone, not in the installed full-screen app)
     $('fsRow').hidden = !Tools.fullscreen.supported() || Tools.fullscreen.system();
   }
+  // The table on screen: its colours (CSS per data-table) and, before a game, the chosen layout
+  function showTable() { table.dataset.table = game.table.id; P = null; draw(); }
+  function setTable(id) {
+    settings.table = id; save();
+    if (phase === 'idle' || phase === 'over') { freshGame(); renderHud(); }
+    renderPanel();
+  }
   function setBalls(n) {
     settings.balls = n; save(); renderSettings();
-    if (phase === 'idle') { game = E.createGame({ balls: n }); renderHud(); }
+    if (phase === 'idle') { freshGame(); renderHud(); }
     renderPanel();
   }
   for (const b of document.querySelectorAll('#optBalls button')) b.addEventListener('click', () => setBalls(Number(b.dataset.v)));
@@ -134,7 +177,7 @@
       pause();
       if (!await Tools.confirm(t('newQ'), { action: 'reset' })) return;
     }
-    game = E.createGame({ balls: settings.balls }); message = null;
+    freshGame();
     setPhase('idle');
   });
   $('btnClearBest').addEventListener('click', async () => {
@@ -146,14 +189,13 @@
   /* ---------- Input: each finger holds the flipper of the half where it touched down ----------
      While the ball waits in the shooter lane, the right half pulls the plunger instead; letting go launches. */
   const held = { L: new Set(), R: new Set(), P: new Set() };   // pointerIds / key names per control
-  const waiting = () => game.phase === 'launch' && game.b.vy === 0;
+  const waiting = () => game.phase === 'launch';
   function press(ctrl, id) {
     if (phase !== 'play') return;
     if (ctrl === 'R' && waiting()) ctrl = 'P';
     held[ctrl].add(id);
     if (ctrl === 'P') E.setPlunger(game, true);
-    else { E.setFlipper(game, ctrl === 'L' ? 0 : 1, true); buzz(8); beep(ctrl === 'L' ? 180 : 200, 0.04, 0.05); }
-    return ctrl;
+    else { E.setFlipper(game, ctrl === 'L' ? 0 : 1, true); buzz(30); beep(ctrl === 'L' ? 180 : 200, 0.04, 0.05); }
   }
   function releaseId(id) {
     for (const c of ['L', 'R', 'P']) {
@@ -211,28 +253,40 @@
     draw();
     if (phase === 'play') raf = requestAnimationFrame(frame);
   }
+  const show = (text, s = 1.4) => { message = { text, until: game.time + s }; };
   function onEvent(ev) {
     switch (ev) {
-      case 'bumper': beep(620 + 80 * (game.bumperHits % 3), 0.06, 0.1); buzz(15); break;
-      case 'sling': beep(420, 0.05, 0.09); buzz(10); break;
+      case 'bumper': beep(620 + 80 * (game.bumperHits % 3), 0.06, 0.1); buzz(30); break;
+      case 'sling': beep(420, 0.05, 0.09); buzz(30); break;
       case 'wall': beep(150, 0.03, 0.04); break;
       case 'flip0': case 'flip1': beep(260, 0.03, 0.06); break;
       case 'launch': beep(240, 0.12, 0.08); break;
       case 'lane': beep(880, 0.08, 0.08); break;
       case 'target': beep(500, 0.07, 0.1); break;
+      case 'spinner': beep(1200, 0.03, 0.05); beep(1300, 0.03, 0.05, 0.05); break;
+      case 'saucer': beep(330, 0.1, 0.1); beep(440, 0.1, 0.1, 0.1); break;
+      case 'rampIn': beep(300, 0.25, 0.05); break;
+      case 'ramp': beep(660, 0.08, 0.1); beep(880, 0.12, 0.1, 0.08); show('+' + pts(game.table.ramps[0].score), 1); break;
       case 'lanesAll':
         beep(660, 0.1, 0.1); beep(990, 0.16, 0.1, 0.1);
-        message = { text: '×' + Tools.fmt(game.mult, 0), until: game.time + 1.4 };
-        say(t('sayMult', { m: Tools.fmt(game.mult, 0) })); break;
+        show('×' + Tools.fmt(game.mult, 0)); say(t('sayMult', { m: Tools.fmt(game.mult, 0) })); break;
       case 'bankAll':
-        beep(520, 0.1, 0.1); beep(780, 0.18, 0.1, 0.1);
-        message = { text: '+' + pts(E.SCORE.bankAll * game.mult), until: game.time + 1.4 }; say(t('sayBank')); break;
+        beep(520, 0.1, 0.1); beep(780, 0.18, 0.1, 0.1); say(t('sayBank')); break;
+      case 'kickbackLit': show(t('kickbackLit')); say(t('sayKickLit')); break;
+      case 'kickback': beep(200, 0.15, 0.12); buzz(60); show(t('kickback')); say(t('sayKick')); break;
+      case 'lockLit': beep(700, 0.1, 0.1); beep(900, 0.1, 0.1, 0.12); show(t('lockLit')); say(t('sayLock')); break;
+      case 'multiball':
+        for (let i = 0; i < 4; i++) beep(520 + i * 130, 0.1, 0.1, i * 0.1);
+        buzz([60, 40, 60]); show(t('multiball'), 2); say(t('sayMultiball')); Tools.diag.log('multiball'); break;
+      case 'jackpot':
+        for (let i = 0; i < 3; i++) beep(880 + i * 220, 0.12, 0.12, i * 0.12);
+        buzz(80); show(t('jackpot') + ' +' + pts(game.table.multiball.jackpot), 1.8); say(t('sayJackpot', { p: pts(game.score) })); break;
       case 'saved':
         beep(700, 0.1, 0.08); beep(700, 0.1, 0.08, 0.15);
-        message = { text: t('save'), until: game.time + 1.6 }; say(t('saySaved')); Tools.diag.log('ball saved'); break;
+        show(t('save'), 1.6); say(t('saySaved')); Tools.diag.log('ball saved'); break;
       case 'drain':
         beep(300, 0.2, 0.1, 0); beep(200, 0.3, 0.1, 0.18); buzz(80);
-        message = { text: t('bonus', { b: pts(game.lastBonus / Math.max(1, game.lastMult || 1)), m: Tools.fmt(game.lastMult || 1, 0) }), until: game.time + 1.6 };
+        show(t('bonus', { b: pts(game.lastBonus / Math.max(1, game.lastMult)), m: Tools.fmt(game.lastMult, 0) }), 1.6);
         say(t('sayDrain', { s: pts(game.lastBonus), p: pts(game.score) }));
         Tools.diag.log('drain', { ball: game.ball }); break;
       case 'ball': say(t('sayBall', { b: game.ball, n: game.balls })); break;
@@ -250,9 +304,10 @@
   /* ---------- Drawing ---------- */
   let P = null;
   function palette() {
-    const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
+    // Colours from the tokens; each table has its own (CSS .table[data-table=…])
+    const cs = getComputedStyle(table), v = n => cs.getPropertyValue(n).trim();
     P = { cab: v('--cabinet'), field: v('--field'), wall: v('--wall'), bumper: v('--bumper'), lit: v('--lit'), sling: v('--sling'),
-      flipper: v('--flipper'), ball: v('--ball'), lamp: v('--lamp'), target: v('--target'), text: v('--text'), font: v('--font') };
+      flipper: v('--flipper'), ball: v('--ball'), lamp: v('--lamp'), target: v('--target'), ramp: v('--ramp'), text: v('--text'), font: v('--font') };
   }
   function resize() {
     const r = table.getBoundingClientRect(), dpr = Math.min(3, window.devicePixelRatio || 1);
@@ -272,9 +327,27 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = color;
     ctx.fillText(txt, x, y);
   }
+  const blink = () => Math.floor(game.time * 4) % 2 === 0;
+  function lampOn(l) {
+    const g = game;
+    switch (l.kind) {
+      case 'mult': return g.mult >= l.n;
+      case 'save': return g.time < g.saveUntil && phase !== 'idle' && (g.saveUntil - g.time > 2 || blink());
+      case 'kickback': return g.lamps.kickback;
+      case 'lock': return g.lamps.lock && blink();
+      case 'jackpot': return g.multiball && blink();
+    }
+    return false;
+  }
+  function drawBall(b) {
+    const big = b.layer === 1 ? 1.12 : 1;   // on the ramp: a little closer to the eye
+    if (b.layer === 1) { ctx.globalAlpha = 0.25; disc(b.x + 1, b.y + 1.4, BALL_R, P.cab); ctx.globalAlpha = 1; }
+    disc(b.x, b.y, BALL_R * big, P.ball);
+    disc(b.x - 0.8, b.y - 0.8, BALL_R * 0.35 * big, P.field);
+  }
   function draw() {
     if (!P) palette();
-    const { s, ox, oy, dpr } = geo, g = game;
+    const { s, ox, oy, dpr } = geo, g = game, T = g.table;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
@@ -282,36 +355,47 @@
     ctx.fillStyle = P.cab; ctx.fillRect(0, 0, W, H);
     ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, 50); ctx.arc(50, 50, 50, Math.PI, 2 * Math.PI); ctx.lineTo(W, H); ctx.closePath();
     ctx.fillStyle = P.field; ctx.fill();
-    // Lamps: multiplier row in the middle, ball save above the flippers
-    for (let m = 2; m <= E.MAX_MULT; m++) {
-      const x = CX + (m - 3.5) * 9, on = g.mult >= m;
-      disc(x, 112, 3.2, on ? P.lit : P.lamp);
-      text('×' + m, x, 112.2, 2.8, on ? P.field : P.text, 700);
+    // Lamps
+    for (const l of T.lamps) {
+      const on = lampOn(l);
+      disc(l.x, l.y, l.r, on ? P.lit : P.lamp);
+      if (l.kind === 'mult') text('×' + l.n, l.x, l.y + 0.2, 2.8, on ? P.field : P.text, 700);
+      else if (l.kind === 'lock' || l.kind === 'jackpot') text(t('lamp_' + l.kind), l.x, l.y + l.r + 2.4, 2.4, on ? P.lit : P.text, 700);
     }
-    const saving = g.time < g.saveUntil && phase !== 'idle';
-    disc(CX, 140, 2.4, saving && (g.saveUntil - g.time > 2 || Math.floor(g.time * 6) % 2) ? P.lit : P.lamp);
-    // Top lanes: lamp above each lane
-    E.LANES.forEach((x, i) => { disc(x, 20, 2.2, g.lanes[i] || lit('l' + i, 0.3) ? P.lit : P.lamp); });
-    // Walls and slingshots
-    for (const w of E.walls) {
-      if (w.y0 > H && w.y1 > H) continue;
+    // Rollover lanes: a lamp in each lane
+    for (const r of T.rollovers) r.lanes.forEach((l, i) => disc(l.x, (l.y0 + l.y1) / 2, 2.2, g.lit[r.id][i] || lit(r.id + i, 0.3) ? P.lit : P.lamp));
+    // Saucers: a hole
+    for (const sc of T.saucers) {
+      disc(sc.x, sc.y, E.SAUCER_R + 1.4, lit(sc.id, 0.4) ? P.lit : P.wall);
+      disc(sc.x, sc.y, E.SAUCER_R + 0.4, P.cab);
+    }
+    // Kickbacks: the kicker plate in the outlane
+    for (const k of T.kickbacks) capsule(k.x0 - 0.8, k.y0 + 1.2, k.x1 + 0.8, k.y1 + 1.2, 0.6, g.lamps.kickback || lit(k.id, 0.3) ? P.lit : P.lamp);
+    // Walls on the playfield and slingshots
+    for (const w of T.walls) {
+      if ((w.y0 > H && w.y1 > H) || w.layer === 1) continue;
       const c = w.kind === 'sling' ? (lit(w.id) ? P.lit : P.sling) : P.wall;
       capsule(w.x0, w.y0, w.x1, w.y1, Math.max(w.r, 0.5), c);
     }
+    // Spinners: a flat plate that turns (seen from above it gets thinner and wider)
+    for (const sp of T.spinners) {
+      const a = g.spin[sp.id].a, th = 0.4 + 1.6 * Math.abs(Math.cos(a));
+      capsule(sp.x0, sp.y0, sp.x1, sp.y1, th / 2, Math.abs(g.spin[sp.id].w) > 2 ? P.lit : P.target);
+    }
     // Drop targets (a dropped one leaves only a thin mark)
-    E.TARGETS.forEach((tg, i) => {
-      if (g.targets[i]) capsule(E.TARGET_X + 1.2, tg.y0 + 1, E.TARGET_X + 1.2, tg.y1 - 1, 0.3, P.lamp);
-      else capsule(E.TARGET_X, tg.y0, E.TARGET_X, tg.y1, 1, lit('t' + i) ? P.lit : P.target);
+    for (const bank of T.banks) bank.targets.forEach((tg, i) => {
+      if (g.down[bank.id][i]) capsule(tg.x0 + 1.2, tg.y0 + 1, tg.x1 + 1.2, tg.y1 - 1, 0.3, P.lamp);
+      else capsule(tg.x0, tg.y0, tg.x1, tg.y1, 1, lit(bank.id + i) ? P.lit : P.target);
     });
     // Pop bumpers
-    E.BUMPERS.forEach((b, i) => {
-      const on = lit('b' + i);
-      disc(b.x, b.y, E.BUMPER_R + (on ? 0.8 : 0), on ? P.lit : P.bumper);
-      disc(b.x, b.y, E.BUMPER_R * 0.55, P.field);
-      disc(b.x, b.y, E.BUMPER_R * 0.3, on ? P.lit : P.bumper);
-    });
+    for (const b of T.bumpers) {
+      const on = lit(b.id);
+      disc(b.x, b.y, b.r + (on ? 0.8 : 0), on ? P.lit : P.bumper);
+      disc(b.x, b.y, b.r * 0.55, P.field);
+      disc(b.x, b.y, b.r * 0.3, on ? P.lit : P.bumper);
+    }
     // Plunger
-    const py = LANE_REST + BALL_R + 0.5 + (g.phase === 'launch' && g.b.vy === 0 ? g.pull * 6 : 0);
+    const py = LANE_REST + BALL_R + 0.5 + (waiting() ? g.pull * 6 : 0);
     ctx.fillStyle = P.flipper; ctx.fillRect(SEP_X + 1.5, py, W - SEP_X - 3, 2);
     ctx.fillStyle = P.lamp; ctx.fillRect(W - (W - SEP_X) / 2 - 0.8, py + 2, 1.6, H - py);
     // Flippers: thick at the pivot, thinner at the tip
@@ -325,13 +409,21 @@
       ctx.closePath(); ctx.fillStyle = P.flipper; ctx.fill();
       disc(f.px, f.py, 0.7, P.field);
     }
-    // Ball (not while the next one is coming)
-    if (g.phase !== 'drain' && g.phase !== 'over') {
-      disc(g.b.x, g.b.y, BALL_R, P.ball);
-      disc(g.b.x - 0.8, g.b.y - 0.8, BALL_R * 0.35, P.field);
+    const inPlay = g.phase !== 'drain' && g.phase !== 'over';
+    if (inPlay) for (const b of g.live) if (b.layer === 0) drawBall(b);
+    // Ramps above the playfield: a translucent band with its rails, then the balls on it
+    for (const r of T.ramps) {
+      const [a, b] = r.rails;
+      ctx.beginPath();
+      a.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      for (let i = b.length - 1; i >= 0; i--) ctx.lineTo(b[i].x, b[i].y);
+      ctx.closePath();
+      ctx.globalAlpha = 0.55; ctx.fillStyle = lit(r.id, 0.5) ? P.lit : P.ramp; ctx.fill(); ctx.globalAlpha = 1;
+      for (const side of r.rails) for (let i = 0; i + 1 < side.length; i++) capsule(side[i].x, side[i].y, side[i + 1].x, side[i + 1].y, 0.5, P.wall);
     }
+    if (inPlay) for (const b of g.live) if (b.layer === 1) drawBall(b);
     // Messages on the table
-    if (message && g.time < message.until && phase !== 'idle') text(message.text, CX, 92, 8, P.lit);
+    if (message && g.time < message.until && phase !== 'idle') text(message.text, CX, 92, 7, P.lit);
     if (phase === 'play' && waiting() && !g.pulling && g.time > 0.6) {
       ctx.globalAlpha = 0.85; text(t('launchHint'), CX, 128, 3.6, P.text, 700); ctx.globalAlpha = 1;
     }
@@ -339,38 +431,38 @@
   if ('ResizeObserver' in window) new ResizeObserver(resize).observe(table); else window.addEventListener('resize', resize);
   Tools.theme.onChange(() => { palette(); draw(); });
   Tools.onLang(() => { renderPanel(); renderHud(); draw(); });
-  renderSettings(); renderPanel(); renderHud(); resize();
+  showTable(); renderSettings(); renderPanel(); renderHud(); resize();
 
-  Tools.diag.info(() => ({ phase, game: game.phase, balls: game.balls, ball: game.ball, mult: game.mult, saved: game.saved,
-    fullscreen: settings.fullscreen, maxTouchPoints: navigator.maxTouchPoints || 0,
-    held: ['L', 'R', 'P'].filter(c => held[c].size).join('') || '-', flippers: game.flippers.map(f => f.up),
-    pull: Math.round(game.pull * 100) / 100, pos: [Math.round(game.b.x), Math.round(game.b.y)] }));
+  Tools.diag.info(() => ({ phase, table: game.table.id, game: game.phase, balls: game.balls, ball: game.ball, mult: game.mult, saved: game.saved,
+    live: game.live.length, multiball: game.multiball, fullscreen: settings.fullscreen, maxTouchPoints: navigator.maxTouchPoints || 0,
+    held: ['L', 'R', 'P'].filter(c => held[c].size).join('') || '-', flippers: game.held.slice(),
+    pull: Math.round(game.pull * 100) / 100, pos: game.live[0] ? [Math.round(game.live[0].x), Math.round(game.live[0].y)] : null }));
 
   /* ---------- WebMCP ---------- */
   const state = () => ({
-    phase, balls_per_game: phase === 'idle' ? settings.balls : game.balls,
+    phase, table: phase === 'idle' ? settings.table : game.table.id, balls_per_game: phase === 'idle' ? settings.balls : game.balls,
     ball: phase === 'idle' ? null : Math.min(game.ball, game.balls),
-    score: phase === 'idle' ? null : game.score, multiplier: game.mult,
-    lit_lanes: game.lanes.filter(Boolean).length, dropped_targets: game.targets.filter(Boolean).length,
-    next_game: { balls_per_game: settings.balls },
-    best_scores: Object.fromEntries(BALLS.map(n => [String(n), best(n) || null])),
+    score: phase === 'idle' ? null : game.score, multiplier: game.mult, multiball: game.multiball,
+    next_game: { table: settings.table, balls_per_game: settings.balls },
+    tables: TABLES.list.map(tb => ({ id: tb.id, name: tb.name.en, best_scores: Object.fromEntries(BALLS.map(n => [String(n), best(tb.id, n) || null])) })),
   });
   Tools.mcp.register({
     name: 'get_state', title: 'Read game state', readOnly: true,
-    description: 'Reads the pinball game: phase (idle, play, paused, over), balls per game, the current ball, score, bonus multiplier, lit top lanes and dropped targets, the setting for the next game and the best score per number of balls.',
+    description: 'Reads the pinball game: phase (idle, play, paused, over), the table, balls per game, the current ball, score, bonus multiplier, whether a multiball is running, the settings for the next game and, per table, the best score per number of balls.',
     execute: state
   });
   Tools.mcp.register({
     name: 'set_game', title: 'Set up the next game', label: 'mcp.set',
-    description: 'Sets the number of balls per game for the next game, as in the settings. A running game is not changed. Returns the game state.',
+    description: 'Chooses the table and/or the number of balls per game for the next game, as on the start card and in the settings. A running game is not changed. Returns the game state.',
     inputSchema: { type: 'object', properties: {
+      table: { type: 'string', enum: IDS, description: 'Table: komet (easy, bumpers and targets) or tiefsee (medium, ramp, spinner, multiball).' },
       balls_per_game: { type: 'integer', enum: BALLS, description: 'Balls per game.' }
     }, additionalProperties: false },
-    execute: ({ balls_per_game: n } = {}) => { if (n) setBalls(n); draw(); return state(); }
+    execute: ({ table: id, balls_per_game: n } = {}) => { if (id) setTable(id); if (n) setBalls(n); draw(); return state(); }
   });
   Tools.mcp.register({
     name: 'new_game', title: 'Start a new game', label: 'mcp.new',
-    description: 'Starts a new game with the current settings, as if the user pressed Play. A running game is abandoned. The user then plays with the flippers; the agent cannot flip or launch. Returns the game state.',
+    description: 'Starts a new game on the chosen table with the current settings, as if the user pressed Play. A running game is abandoned. The user then plays with the flippers; the agent cannot flip or launch. Returns the game state.',
     execute: () => { newGame(); return state(); }
   });
 })();
