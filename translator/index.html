@@ -22,7 +22,7 @@
 <meta name="tool:share-text" content="true">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-6Vt5kmEteA1HUBlxq6yn+TxLP2U6LpSAf40y4Inzlrw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-obYEPeAa20u8tWVaJ/t+v+zfxu8wf7aB4nbvpUhCRSo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -49,7 +49,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .status.err{color:var(--err)}
 .status.ok{color:var(--ok)}
 .out-actions{margin-block-start:8px}
-#btnRun{margin-block-start:12px}
+#btnRun{margin-block-start:8px}
 </style>
 </head>
 <body>
@@ -73,6 +73,10 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
           <textarea id="input" maxlength="5000" placeholder="Text eingeben oder einfügen" data-i18n-attr="placeholder:inputPh"></textarea></div>
         <p class="detected" id="detected" aria-live="polite"></p>
         <p class="count" id="count"></p>
+        <!-- The main action right under the text: on a phone before the translation, not below it -->
+        <button type="button" class="btn primary block" id="btnRun"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#language"/></svg><span id="btnRunLabel" data-i18n="run">Übersetzen</span></button>
+        <div class="progress" id="progressBox" hidden><progress id="progress" max="100"></progress></div>
+        <p class="status" id="status" role="status"></p>
       </div>
       <div>
         <div class="form-field"><label for="output" data-i18n="outputLabel">Übersetzung</label>
@@ -85,9 +89,6 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
         </div>
       </div>
     </div>
-    <button type="button" class="btn primary block" id="btnRun"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#language"/></svg><span id="btnRunLabel" data-i18n="run">Übersetzen</span></button>
-    <div class="progress" id="progressBox" hidden><progress id="progress" max="100"></progress></div>
-    <p class="status" id="status" role="status"></p>
   </section>
 </main>
 
@@ -128,7 +129,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <h3>Bedienung</h3>
   <ul>
     <li>Sprachen oben wählen (mit dem Pfeil tauschen), Text eingeben oder einfügen und „Übersetzen“ tippen (am Computer auch Strg+Eingabe).</li>
-    <li>„Automatisch erkennen“ gibt es, wenn der Browser die Sprache selbst erkennen kann (Chrome am Computer).</li>
+    <li>„Erkennen“ (bei „Von“) gibt es, wenn der Browser die Sprache selbst erkennen kann (Chrome). Bei sehr kurzen Texten ist das unsicher – dann steht „unsicher“ dabei; im Zweifel die Sprache selbst wählen.</li>
     <li>Die Übersetzung lässt sich korrigieren und dann kopieren, vorlesen oder teilen. Text und Übersetzung bleiben bis zum Leeren erhalten.</li>
     <li>Installiert auf Android: Text oder Link in einer anderen App <i>teilen</i> und „Übersetzer“ wählen – der Text landet im Eingabefeld.</li>
   </ul>
@@ -148,7 +149,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <h3>How to use</h3>
   <ul>
     <li>Choose the languages at the top (swap them with the arrows), type or paste a text and tap “Translate” (on a computer also Ctrl+Enter).</li>
-    <li>“Detect automatically” is offered when the browser can detect the language itself (Chrome on a computer).</li>
+    <li>“Detect” (under “From”) is offered when the browser can detect the language itself (Chrome). With very short texts this is uncertain – then it says “uncertain”; if in doubt, choose the language yourself.</li>
     <li>The translation can be corrected and then copied, read aloud or shared. Text and translation are kept until you clear them.</li>
     <li>Installed on Android: <i>share</i> a text or link from another app and pick “Translator” – the text lands in the input field.</li>
   </ul>
@@ -182,7 +183,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 7d2f1185332d</p>
+  <p class="footer-version">Version f12337c42002</p>
   <!-- footer:end -->
 </footer>
 
@@ -195,13 +196,14 @@ const { $, load, save, toast, fmt } = Tools;
 const L = window.TranslatorLogic;
 Tools.i18n({
   de: {
-    run: 'Übersetzen', running: 'Übersetze …', auto: 'Automatisch erkennen', speak: 'Vorlesen', stop: 'Stopp',
+    run: 'Übersetzen', running: 'Übersetze …', auto: 'Erkennen', speak: 'Vorlesen', stop: 'Stopp',
     'info.browser': 'Übersetzt mit dem Browser auf dem Gerät.', 'info.browserDl': 'Übersetzt mit dem Browser – beim ersten Mal lädt er das Sprachpaket.',
     'info.detect': 'Die Sprache erkennt der Browser.', 'info.opus': 'Übersetzt mit Opus-MT – Modell ist geladen.', 'info.opusDl': 'Übersetzt mit Opus-MT – einmaliger Download ca. {mb} MB.',
     'info.via': ' (über Englisch)', 'info.none': 'Dieses Sprachpaar kann dieser Browser nicht übersetzen.', 'info.same': 'Bitte zwei verschiedene Sprachen wählen.',
     'api.yes': 'Dieser Browser hat eine eingebaute Übersetzung (Translator API).', 'api.no': 'Dieser Browser hat keine eingebaute Übersetzung – es wird das Opus-MT-Modell genutzt.',
     noText: 'Bitte erst einen Text eingeben.', same: 'Ausgangs- und Zielsprache sind gleich.', notDetected: 'Die Sprache wurde nicht erkannt – bitte oben wählen.',
-    detected: 'Erkannt: {l}', alreadyTarget: 'Der Text ist schon auf {l}.', unsupported: 'Dieses Sprachpaar kann hier nicht übersetzt werden.',
+    detected: 'Erkannt: {l}', detectedUnsure: 'Erkannt: {l} (unsicher – sonst oben wählen)',
+    detectFail: 'Die Spracherkennung des Browsers ist fehlgeschlagen – bitte oben die Sprache wählen. ({m})', alreadyTarget: 'Der Text ist schon auf {l}.', unsupported: 'Dieses Sprachpaar kann hier nicht übersetzt werden.',
     confirmBrowserDl: 'Für {pair} lädt der Browser einmalig ein Sprachpaket herunter (der Text wird nicht übertragen). Herunterladen?',
     confirmDetectDl: 'Zum Erkennen der Sprache lädt der Browser einmalig ein kleines Modell herunter. Herunterladen?',
     confirmOpusDl: 'Für {pair} lädt die App einmalig ca. {mb} MB von Hugging Face (der Text wird nicht übertragen). Danach geht es auch offline. Herunterladen?',
@@ -219,13 +221,14 @@ Tools.i18n({
     inputLabel: 'Text', inputPh: 'Type or paste a text', outputLabel: 'Translation', outputPh: 'The translation appears here – you can edit it afterwards.',
     copy: 'Copy', share: 'Share …', clear: 'Clear', settings: 'Settings', engine: 'Translate with', 'eng.auto': 'Automatic (recommended)',
     'eng.browser': 'Only the browser’s translation', 'eng.opus': 'Only the Opus-MT model', models: 'Downloaded models', deleteModels: 'Delete models',
-    run: 'Translate', running: 'Translating …', auto: 'Detect automatically', speak: 'Read aloud', stop: 'Stop',
+    run: 'Translate', running: 'Translating …', auto: 'Detect', speak: 'Read aloud', stop: 'Stop',
     'info.browser': 'Translated by the browser on the device.', 'info.browserDl': 'Translated by the browser – the first time it downloads the language pack.',
     'info.detect': 'The browser detects the language.', 'info.opus': 'Translated with Opus-MT – the model is downloaded.', 'info.opusDl': 'Translated with Opus-MT – one-time download of about {mb} MB.',
     'info.via': ' (through English)', 'info.none': 'This browser cannot translate this pair of languages.', 'info.same': 'Please choose two different languages.',
     'api.yes': 'This browser has a built-in translation (Translator API).', 'api.no': 'This browser has no built-in translation – the Opus-MT model is used.',
     noText: 'Please enter a text first.', same: 'Source and target language are the same.', notDetected: 'The language was not detected – please choose it above.',
-    detected: 'Detected: {l}', alreadyTarget: 'The text is already in {l}.', unsupported: 'This pair of languages cannot be translated here.',
+    detected: 'Detected: {l}', detectedUnsure: 'Detected: {l} (uncertain – otherwise choose above)',
+    detectFail: 'The browser’s language detection failed – please choose the language above. ({m})', alreadyTarget: 'The text is already in {l}.', unsupported: 'This pair of languages cannot be translated here.',
     confirmBrowserDl: 'For {pair} the browser downloads a language pack once (the text is not sent). Download?',
     confirmDetectDl: 'To detect the language the browser downloads a small model once. Download?',
     confirmOpusDl: 'For {pair} the app downloads about {mb} MB from Hugging Face once (the text is not sent). After that it also works offline. Download?',
@@ -360,8 +363,8 @@ async function updateInfo() {
   let text;
   if (src === tgt) text = t('info.same');
   else if (src === 'auto') {
-    // The pair is only known after detection; the browser does both where it can
-    text = settings.engine === 'opus' || !hasApi ? t('info.none') : t('info.detect');
+    // The pair is only known after detection; then the browser's translation or Opus-MT translates
+    text = hasDetector && !(settings.engine === 'browser' && !hasApi) ? t('info.detect') : t('info.none');
   } else {
     const c = await choose(src, tgt);
     if (!c) text = t('info.none');
@@ -406,24 +409,31 @@ function getTranslator(src, tgt) {
   return translators.get(key);
 }
 let detector = null;
+// Short texts ("Hallo") rarely reach a high confidence – the best candidate in our languages counts from
+// MIN_CONFIDENCE on, below SURE_CONFIDENCE it is shown as uncertain. Returns { lang, confidence } or null;
+// undefined when the user declined the download.
+const MIN_CONFIDENCE = 0.15, SURE_CONFIDENCE = 0.5;
 async function detect(text, interactive) {
   if (!detector) {
     const a = await LanguageDetector.availability();
+    Tools.diag.log('detector availability', { availability: a });
     if (a === 'unavailable') return null;
     if (a !== 'available') {
-      if (!interactive) throw new Error('The language detection model is not downloaded yet. Ask the user to translate once in the app with "Detect automatically".');
+      if (!interactive) throw new Error('The language detection model is not downloaded yet. Ask the user to translate once in the app with "Detect".');
       if (!await Tools.confirm(t('confirmDetectDl'), { action: 'download' })) return undefined;
     }
     detector = LanguageDetector.create({ monitor(m) { m.addEventListener('downloadprogress', e => progress(e.loaded)); } });
     detector.catch(() => { detector = null; });
   }
-  const results = await (await detector).detect(text);
-  for (const r of results || []) {
-    const code = L.baseLang(r.detectedLanguage);
-    if (code && r.confidence >= 0.5) return code;
-    if (r.confidence < 0.5) break;
+  let results;
+  try { results = await (await detector).detect(text); } catch (e) {
+    Tools.diag.log('detection failed', { error: e.name, message: String(e.message || '').slice(0, 120) });
+    throw Object.assign(e, { ui: t('detectFail', { m: e.message || e.name }) });
   }
-  return null;
+  // Only language codes and confidences – never the text
+  Tools.diag.log('detected', { top: (results || []).slice(0, 3).map(r => `${r.detectedLanguage} ${Math.round(r.confidence * 100)}%`) });
+  const best = (results || []).find(r => L.baseLang(r.detectedLanguage));
+  return best && best.confidence >= MIN_CONFIDENCE ? { lang: L.baseLang(best.detectedLanguage), confidence: best.confidence } : null;
 }
 async function translateBrowser(text, src, tgt) {
   const tr = await getTranslator(src, tgt);
@@ -485,8 +495,8 @@ async function translate(text, src, tgt, interactive) {
     const d = hasDetector ? await detect(text, interactive) : null;
     if (d === undefined) return null;
     if (!d) throw Object.assign(new Error('The language of the text was not detected.'), { ui: t('notDetected') });
-    src = d;
-    $('detected').textContent = t('detected', { l: langName(d) });
+    src = d.lang;
+    $('detected').textContent = t(d.confidence >= SURE_CONFIDENCE ? 'detected' : 'detectedUnsure', { l: langName(d.lang) });
   }
   if (src === tgt) throw Object.assign(new Error('The text is already in the target language.'), { ui: settings.src === 'auto' ? t('alreadyTarget', { l: langName(tgt) }) : t('same') });
   const c = await choose(src, tgt);
@@ -537,6 +547,7 @@ async function run(interactive) {
     Tools.diag.log('translated', { engine: r.engine, seconds: Math.round(r.seconds * 10) / 10, chars: r.translation.length });
     return r;
   } catch (e) {
+    Tools.diag.log('translate failed', { error: e.name, message: String(e.message || '').slice(0, 160) });
     status(e.ui || t('fail', { m: e.message || e.name }), 'err');
     if (!interactive) throw e;
     return null;

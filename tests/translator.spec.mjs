@@ -80,7 +80,7 @@ test.describe('browser translation (Translator API)', () => {
     await fakeTranslatorApi(page, { avail: { 'fr-de': 'available', 'de-fr': 'available' } });
     await page.goto(URL_);
     await expect(page.locator('#src')).toHaveValue('auto');           // default when the browser can detect
-    await expect(page.locator('#src option').first()).toHaveText('Automatisch erkennen');
+    await expect(page.locator('#src option').first()).toHaveText('Erkennen');
     await page.selectOption('#tgt', 'de');
     await expect(page.locator('#engineInfo')).toHaveText('Die Sprache erkennt der Browser.');
     await page.fill('#input', 'Bonjour tout le monde');
@@ -122,6 +122,54 @@ test.describe('browser translation (Translator API)', () => {
     await page.click('#btnRun');
     await expect(page.locator('#status')).toHaveText('Ausgangs- und Zielsprache sind gleich.');
   });
+});
+
+test.describe('language detection without the Translator API (Chrome on Android)', () => {
+  test('short text: uncertain detection still translates with Opus-MT and says so', async ({ page }) => {
+    await fakeTranslatorApi(page, { translator: false, detect: [{ detectedLanguage: 'de', confidence: 0.31 }, { detectedLanguage: 'nl', confidence: 0.22 }] });
+    await fakeOpusWorker(page);
+    await onDialog(page, d => d.accept());
+    await page.goto(URL_);
+    await expect(page.locator('#src')).toHaveValue('auto');
+    await page.selectOption('#tgt', 'en');
+    await expect(page.locator('#engineInfo')).toHaveText('Die Sprache erkennt der Browser.');
+    await page.fill('#input', 'Hallo');
+    await page.click('#btnRun');
+    await expect(page.locator('#output')).toHaveValue('en(Hallo)');
+    await expect(page.locator('#detected')).toHaveText('Erkannt: Deutsch (unsicher – sonst oben wählen)');
+    // The diagnostics name the detected languages, never the text
+    const diag = await page.evaluate(() => Tools.diag.text());
+    expect(diag).toContain('de 31%');
+    expect(diag).not.toContain('Hallo');
+    // Sure detection: no hint
+    await page.evaluate(() => { window.__tr.detect = [{ detectedLanguage: 'fr', confidence: 0.97 }]; });
+    await page.fill('#input', 'Bonjour à tous');
+    await page.click('#btnRun');
+    await expect(page.locator('#output')).toHaveValue('en(Bonjour à tous)');
+    await expect(page.locator('#detected')).toHaveText('Erkannt: Französisch');
+  });
+
+  test('only very unsure or unknown languages count as not detected', async ({ page }) => {
+    await fakeTranslatorApi(page, { translator: false, detect: [{ detectedLanguage: 'la', confidence: 0.6 }, { detectedLanguage: 'it', confidence: 0.1 }] });
+    await fakeOpusWorker(page);
+    await page.goto(URL_);
+    await page.selectOption('#tgt', 'en');
+    await page.fill('#input', 'Lorem ipsum');
+    await page.click('#btnRun');
+    await expect(page.locator('#status')).toHaveText('Die Sprache wurde nicht erkannt – bitte oben wählen.');
+    expect(await page.evaluate(() => Tools.diag.text())).toContain('translate failed');
+  });
+});
+
+test('the main button sits right under the text, before the translation (phone)', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await page.goto(URL_);
+  const input = await page.locator('#input').boundingBox();
+  const run = await page.locator('#btnRun').boundingBox();
+  const output = await page.locator('#output').boundingBox();
+  expect(run.y).toBeGreaterThan(input.y + input.height);
+  expect(run.y + run.height).toBeLessThan(output.y);
+  expect(run.y + run.height).toBeLessThan(740);                       // visible without scrolling
 });
 
 test.describe('Opus-MT fallback', () => {
