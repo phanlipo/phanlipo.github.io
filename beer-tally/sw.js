@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files (of the icon sprite only the icons
 // this app uses): every change creates a new version, the browser installs it in the background and removes the old one.
 const APP = "beer-tally";
-const VERSION = 'bfe8e800c044';
+const VERSION = '9e9f06fb2961';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

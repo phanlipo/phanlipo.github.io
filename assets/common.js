@@ -769,14 +769,16 @@ window.Tools = (function () {
      Tools.vibrate(pattern)  like navigator.vibrate: milliseconds, or [vibrate, pause, vibrate, …]; 0 stops.
                              Every vibration lasts at least VIBRATE_MIN ms: shorter ones (5–25 ms) are not felt on many
                              Android phones – the motor does not spin up. Returns false without support (iPhone/Safari,
-                             Firefox on the computer) or when the browser refuses (no tap on the page yet). */
+                             Firefox on the computer) or when the browser refuses (no tap on the page yet).
+                             Tools.vibrate(p, { min: 0 }) plays it as given – only for testing what can be felt (sensors). */
   const VIBRATE_MIN = 30;
   let vibrateRefused = false;
-  function vibrate(p) {
+  function vibrate(p, opt = {}) {
     if (!('vibrate' in navigator)) return false;
+    const min = typeof opt.min === 'number' ? opt.min : VIBRATE_MIN;
     const list = (Array.isArray(p) ? p : [p]).map((v, i) => {
       v = Math.max(0, Math.round(Number(v) || 0));
-      return i % 2 === 0 && v > 0 ? Math.max(v, VIBRATE_MIN) : v;
+      return i % 2 === 0 && v > 0 ? Math.max(v, min) : v;
     });
     let ok = false;
     try { ok = navigator.vibrate(Array.isArray(p) ? list : list[0]); } catch (e) { diagLog('vibrate failed', e); return false; }
