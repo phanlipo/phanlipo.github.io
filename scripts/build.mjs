@@ -9,6 +9,9 @@
 //   4. Data backup section in every app (scripts/partials/data.html)   <!-- data:start/end -->
 //      and help sections on AI agents (scripts/partials/help-agent.html) <!-- agent:start/end -->
 //      and on sharing/opening files (scripts/partials/help-files.html)   <!-- files:start/end -->
+//      and on vibration (scripts/partials/help-vibrate.html)             <!-- vibrate:start/end -->,
+//      for every app whose own scripts vibrate (Tools.vibrate / navigator.vibrate); the markers are
+//      added by this script before the agent section or "Fehlersuche"
 //   5. Per app (every listed tool + template): manifest.webmanifest and sw.js (offline cache).
 //      The cache version is a hash of all cached files, so every change ships automatically
 //      (of assets/icons.svg only the icons the app uses – a new icon does not update every app);
@@ -598,6 +601,18 @@ const dataBlock = readFileSync(join(ROOT, 'scripts/partials/data.html'), 'utf8')
 const agentBlock = readFileSync(join(ROOT, 'scripts/partials/help-agent.html'), 'utf8').trim();
 const filesBlock = readFileSync(join(ROOT, 'scripts/partials/help-files.html'), 'utf8').trim();
 const renderFiles = p => `\n  ${filesBlock.replace('{name}', () => escHtml(p.shortName)).replace('{nameEn}', () => escHtml(p.shortNameEn)).replaceAll('\n', '\n  ')}\n  `;
+const vibrateBlock = readFileSync(join(ROOT, 'scripts/partials/help-vibrate.html'), 'utf8').trim();
+const renderVibrate = () => `\n  ${vibrateBlock.replaceAll('\n', '\n  ')}\n  `;
+// Apps that vibrate get the help section on vibration (Android drops short vibrations when "Haptic feedback"
+// is off – see AGENTS.md). Their own scripts count, not shared ones.
+const vibrates = p => ownScripts(p).some(f => /\b(Tools|navigator)\.vibrate\(/.test(read(f)));
+function vibrateMarkers(p) {
+  const html = read(p.file);
+  if (html.includes('<!-- vibrate:start -->')) return;
+  const at = html.includes('  <!-- agent:start -->') ? html.indexOf('  <!-- agent:start -->') : html.indexOf('  <h3 data-i18n="diag.h">');
+  if (at < 0) throw new Error(`${p.file}: vibrates – needs <!-- vibrate:start --><!-- vibrate:end --> in the help (before "Fehlersuche")`);
+  put(p.file, html.slice(0, at) + '  <!-- vibrate:start --><!-- vibrate:end -->\n' + html.slice(at));
+}
 const renderAgent = p => `\n  ${agentBlock.replace('{de}', () => escHtml(p.agentHelp)).replace('{en}', () => escHtml(p.agentHelpEn)).replaceAll('\n', '\n  ')}\n  `;
 setBlock('index.html', 'tools', renderCards(), true);
 setBlock('README.md', 'tools', renderTable(), true);
@@ -607,6 +622,9 @@ for (const p of pages) {
   setBlock(p.file, 'data', isApp(p) && p.storage ? `\n${dataBlock}\n` : '\n', false);
   setBlock(p.file, 'files', isApp(p) && p.shareAccept.length ? renderFiles(p) : '', false);
   setBlock(p.file, 'agent', isApp(p) && p.webmcp.length ? renderAgent(p) : '', false);
+  const vib = isApp(p) && vibrates(p);
+  if (vib) vibrateMarkers(p);
+  setBlock(p.file, 'vibrate', vib ? renderVibrate() : '', false);
 }
 for (const p of apps) {
   if (!p.storage) console.warn(`! ${p.file}: <meta name="tool:storage"> missing – no data backup section`);
