@@ -19,7 +19,7 @@
     en: {
       title: 'Air Hockey', pause: 'Pause', newGame: 'New game', rinkL: 'Rink', cvLabel: 'Air hockey table',
       modeL: 'Mode', cpu: 'Against computer', two: 'Two of us', levelL: 'Computer strength', easy: 'Easy', medium: 'Medium', hard: 'Hard',
-      play: 'Play', settingsH: 'Settings', goalsL: 'Goals to win', sound: 'Sounds', vibrate: 'Vibrate on hits and goals', clearRecord: 'Delete record',
+      play: 'Play', settingsH: 'Settings', goalsL: 'Goals to win', sound: 'Sounds', fsOpt: 'Full screen while playing (no status and navigation bar)', vibrate: 'Vibrate on hits and goals', clearRecord: 'Delete record',
       you: 'You', computer: 'Computer', blue: 'Blue', red: 'Red',
       goal: 'Goal!', against: 'Conceded', won: 'You won!', lost: 'You lost',
       winsTwo: '{who} wins', paused: 'Paused', resume: 'Resume', again: 'Play again',
@@ -39,7 +39,7 @@
   /* ---------- Stored settings and record ---------- */
   const LS = 'air-hockey.settings.v1';
   const GOALS = [3, 5, 7, 10], LEVELS = ['easy', 'medium', 'hard'];
-  const settings = Object.assign({ mode: 'cpu', level: 'medium', goals: 7, sound: true, vibrate: true, record: {} }, Tools.load(LS, {}));
+  const settings = Object.assign({ mode: 'cpu', level: 'medium', goals: 7, sound: true, fullscreen: true, vibrate: true, record: {} }, Tools.load(LS, {}));
   if (!['cpu', 'two'].includes(settings.mode)) settings.mode = 'cpu';
   if (!LEVELS.includes(settings.level)) settings.level = 'medium';
   if (!GOALS.includes(settings.goals)) settings.goals = 7;
@@ -65,6 +65,7 @@
     phase = p;
     rink.dataset.phase = p;
     if (p === 'play') { last = 0; startLoop(); Tools.wakeLock.hold('game'); } else { stopLoop(); Tools.wakeLock.release('game'); }
+    document.body.classList.toggle('playing', p === 'play');   // header hidden: nothing to hit by mistake
     renderPanel(); draw();
   }
   function pause() { if (phase === 'play') { setPhase('paused'); Tools.diag.log('paused'); } }
@@ -87,7 +88,7 @@
   function renderPanel() {
     const panel = $('panel'), show = phase !== 'play';
     panel.hidden = !show;
-    $('btnPause').disabled = phase !== 'play';
+    $('btnPause').hidden = phase !== 'play';
     if (!show) return;
     const over = phase === 'over', paused = phase === 'paused';
     const choose = phase === 'idle' || over;
@@ -114,6 +115,9 @@
     for (const b of document.querySelectorAll('#optGoals button')) b.setAttribute('aria-pressed', String(Number(b.dataset.v) === settings.goals));
     $('optSound').checked = settings.sound;
     $('optVibrate').checked = settings.vibrate;
+    $('optFullscreen').checked = settings.fullscreen;
+    // Only where a page may switch to full screen (not on iPhone, not in the installed full-screen app)
+    $('fsRow').hidden = !Tools.fullscreen.supported() || Tools.fullscreen.system();
   }
   for (const b of document.querySelectorAll('#modes button')) b.addEventListener('click', () => { settings.mode = b.dataset.mode; save(); renderPanel(); draw(); });
   for (const b of document.querySelectorAll('#levels button')) b.addEventListener('click', () => { settings.level = b.dataset.level; save(); renderPanel(); });
@@ -123,8 +127,18 @@
   });
   $('optSound').addEventListener('change', e => { settings.sound = e.target.checked; save(); unlockAudio(); });
   $('optVibrate').addEventListener('change', e => { settings.vibrate = e.target.checked; save(); });
+  $('optFullscreen').addEventListener('change', e => { settings.fullscreen = e.target.checked; save(); });
+
+  /* ---------- Full screen: only right after a tap (browser rule), so on Play/Resume ---------- */
+  function enterFullscreen() {
+    const fs = Tools.fullscreen;
+    if (settings.fullscreen && fs.supported() && !fs.active()) fs.enter(document.documentElement);
+  }
+  // Leaving full screen (back gesture, Escape) during a game was probably not meant for the game: pause it
+  Tools.fullscreen.onChange(active => { if (!active && phase === 'play') pause(); });
   $('btnStart').addEventListener('click', () => {
     unlockAudio();
+    enterFullscreen();
     if (phase === 'paused') { setPhase('play'); Tools.diag.log('resumed'); } else newGame();
     cv.focus({ preventScroll: true });
   });
@@ -325,7 +339,7 @@
   Tools.onLang(() => { renderPanel(); draw(); });
   renderSettings(); renderPanel(); resize();
 
-  Tools.diag.info(() => ({ phase, mode, level, goals: settings.goals, score: game.score.slice(), rotated: geo.rot,
+  Tools.diag.info(() => ({ phase, mode, level, goals: settings.goals, score: game.score.slice(), rotated: geo.rot, fullscreen: settings.fullscreen,
     fingers: owners.filter(o => o !== null).length, maxTouchPoints: navigator.maxTouchPoints || 0,
     mallets: game.mallets.map(m => [Math.round(m.x), Math.round(m.y)]), puck: [Math.round(game.puck.x), Math.round(game.puck.y)] }));
 

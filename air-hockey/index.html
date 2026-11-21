@@ -8,7 +8,7 @@
 <title>Airhockey</title>
 <meta name="description" content="Airhockey auf dem Handy oder Tablet: allein gegen den Computer in drei Stärken oder zu zweit an einem Gerät – jeder mit einem Finger auf seiner Hälfte.">
 <meta name="tool:tags" content="Freizeit, Spiele, Kinder">
-<meta name="tool:features" content="KI-Agent">
+<meta name="tool:features" content="Vollbild, KI-Agent">
 <meta name="tool:webmcp" content="get_state, set_game, new_game">
 <meta name="tool:webmcp-help" content="Ein KI-Agent kann Spielstand und Bilanz lesen, Spielart, Stärke des Computers und Tore bis zum Sieg einstellen und ein neues Spiel beginnen. Spielen musst du selbst.">
 <meta name="tool:webmcp-help-en" content="An AI agent can read the score and the record, set the mode, the computer's strength and the goals needed to win, and start a new game. Playing is up to you.">
@@ -54,6 +54,10 @@ main{display:flex;flex-direction:column}
 .panel .seg{width:100%}
 .panel .seg button{flex:1}
 .panel .btn.primary{min-height:52px;font-size:17px;font-weight:600}
+/* While playing the header is hidden (nothing to hit by mistake); pause sits in a corner outside the rounded table corner */
+body.stage.playing>header{display:none}
+.pause-in{position:absolute;inset-block-start:max(4px,env(safe-area-inset-top));inset-inline-start:max(4px,env(safe-area-inset-left));z-index:2;
+  border-radius:50%;opacity:.75;background:var(--surface);border:1px solid var(--border)}
 .dot{display:inline-block;width:.8em;height:.8em;border-radius:50%;vertical-align:-.05em;margin-inline-end:.3em}
 .dot.p0{background:var(--p0)}.dot.p1{background:var(--p1)}
 </style>
@@ -62,7 +66,6 @@ main{display:flex;flex-direction:column}
 <header>
   <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Airhockey</span></h1>
   <div class="stage-actions">
-    <button type="button" class="head-btn" id="btnPause" aria-label="Pause" title="Pause" data-i18n-attr="aria-label:pause; title:pause" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-pause"/></svg></button>
     <button type="button" class="head-btn" id="btnNew" aria-label="Neues Spiel" title="Neues Spiel" data-i18n-attr="aria-label:newGame; title:newGame"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg></button>
   </div>
 </header>
@@ -70,6 +73,7 @@ main{display:flex;flex-direction:column}
   <section class="rink" id="rink" aria-label="Spielfeld" data-i18n-attr="aria-label:rinkL" data-phase="idle">
     <canvas id="cv" tabindex="0" role="img" aria-label="Airhockey-Tisch" data-i18n-attr="aria-label:cvLabel"></canvas>
     <p class="sr-only" id="status" role="status"></p>
+    <button type="button" class="btn icon pause-in" id="btnPause" aria-label="Pause" title="Pause" data-i18n-attr="aria-label:pause; title:pause" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-pause"/></svg></button>
     <div class="panel" id="panel">
       <h2 id="panelTitle" data-i18n="title">Airhockey</h2>
       <p class="big" id="panelScore" hidden></p>
@@ -100,6 +104,7 @@ main{display:flex;flex-direction:column}
     </div>
   </fieldset>
   <label class="check"><input type="checkbox" id="optSound"><span data-i18n="sound">Töne</span></label>
+  <label class="check" id="fsRow"><input type="checkbox" id="optFullscreen"><span data-i18n="fsOpt">Beim Spielen Vollbild (ohne Status- und Navigationsleiste)</span></label>
   <label class="check"><input type="checkbox" id="optVibrate"><span data-i18n="vibrate">Vibrieren bei Treffern und Toren</span></label>
 </section>
 <div class="menu-list" data-menu>
@@ -129,7 +134,10 @@ main{display:flex;flex-direction:column}
     <li><b>Gegen den Computer:</b> Du spielst unten (blau). Leicht, Mittel und Schwer unterscheiden sich darin, wie schnell und genau der Computer verteidigt und angreift. Siege und Niederlagen je Stärke stehen als Bilanz auf der Startkarte.</li>
     <li><b>Zu zweit (Multitouch):</b> Das Gerät flach zwischen euch legen. Blau spielt unten, Rot oben; jeder setzt einen Finger in seiner Hälfte auf. Beide Finger werden gleichzeitig erkannt – der Finger gehört der Hälfte, in der er aufgesetzt wurde, auch wenn er später darüber hinausrutscht. Spielstand und Meldungen stehen für jeden richtig herum.</li>
     <li><b>Quer halten:</b> Auf einem breiten Bildschirm liegt der Tisch quer – Blau spielt dann von rechts, Rot von links.</li>
-    <li>Nach einem Tor bekommt, wer es kassiert hat, den Puck auf seine Seite. <b>Pause</b> oben in der Leiste (oder Leertaste); verlässt du die App, hält das Spiel von selbst an.</li>
+    <li>Nach einem Tor bekommt, wer es kassiert hat, den Puck auf seine Seite.</li>
+    <li><b>Nichts aus Versehen drücken:</b> Während des Spiels ist die Kopfleiste ausgeblendet, der Tisch füllt den Bildschirm. Auf Android und am Computer schaltet „Spielen“ zusätzlich das Vollbild ein (Status-, Navigations- und Adressleiste verschwinden; abschaltbar in den Einstellungen). Die Zurück-Geste beendet das Vollbild und hält das Spiel an.</li>
+    <li><b>Pause:</b> der runde Knopf oben links in der Ecke (oder Leertaste); dann sind Menü und „Neues Spiel“ wieder da. Verlässt du die App, hält das Spiel von selbst an.</li>
+    <li><b>iPhone:</b> Safari erlaubt Webseiten kein Vollbild. Zum Home-Bildschirm hinzugefügt zeigt die App aber keine Safari-Leisten. Die Wischgeste vom linken Rand (zurück) lässt sich nicht abschalten.</li>
     <li>Mit der Tastatur: Pfeiltasten bewegen den blauen Schläger.</li>
   </ul>
   <h3>Tipps</h3>
@@ -139,7 +147,7 @@ main{display:flex;flex-direction:column}
     <li>Klappt Multitouch nicht? Manche Geräte oder Bildschirmlupen fangen Gesten mit mehreren Fingern ab – dann diese Funktion in den Bedienungshilfen ausschalten.</li>
   </ul>
   <h3>Gespeichert</h3>
-  <p>Einstellungen (Spielart, Stärke, Tore bis zum Sieg, Töne, Vibrieren) und die Bilanz gegen den Computer bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“), nicht das laufende Spiel. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  <p>Einstellungen (Spielart, Stärke, Tore bis zum Sieg, Töne, Vollbild, Vibrieren) und die Bilanz gegen den Computer bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“), nicht das laufende Spiel. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
   <p>Air hockey for one person against the computer or for two people on one phone or tablet. Whoever first scores the set number of goals (7 by default) wins.</p>
@@ -149,7 +157,10 @@ main{display:flex;flex-direction:column}
     <li><b>Against the computer:</b> you play at the bottom (blue). Easy, medium and hard differ in how fast and how exactly the computer defends and attacks. Wins and losses per strength are shown as your record on the start card.</li>
     <li><b>Two of you (multi-touch):</b> lay the device flat between you. Blue plays at the bottom, red at the top; each puts a finger down in their own half. Both fingers are recognised at the same time – a finger belongs to the half where it touched down, even if it slides beyond it later. Score and messages are the right way up for each of you.</li>
     <li><b>Holding it sideways:</b> on a wide screen the table lies sideways – blue then plays from the right, red from the left.</li>
-    <li>After a goal, whoever conceded it gets the puck on their side. <b>Pause</b> is at the top of the bar (or the space bar); if you leave the app, the game pauses by itself.</li>
+    <li>After a goal, whoever conceded it gets the puck on their side.</li>
+    <li><b>Nothing pressed by mistake:</b> while you play, the header is hidden and the table fills the screen. On Android and on a computer, “Play” also switches to full screen (status, navigation and address bar disappear; can be turned off in the settings). The back gesture ends full screen and pauses the game.</li>
+    <li><b>Pause:</b> the round button in the top left corner (or the space bar); then the menu and “New game” are back. If you leave the app, the game pauses by itself.</li>
+    <li><b>iPhone:</b> Safari doesn't allow full screen for web pages. Added to the home screen, the app shows no Safari bars, though. The swipe from the left edge (back) can't be turned off.</li>
     <li>With the keyboard: the arrow keys move the blue mallet.</li>
   </ul>
   <h3>Tips</h3>
@@ -159,7 +170,7 @@ main{display:flex;flex-direction:column}
     <li>Multi-touch doesn't work? Some devices or screen magnifiers catch gestures with several fingers – then turn that feature off in the accessibility settings.</li>
   </ul>
   <h3>Stored</h3>
-  <p>Settings (mode, strength, goals to win, sounds, vibration) and your record against the computer stay only in this browser (back them up or move them under “Back up data”), not the running game. Nothing is sent to a server; the app also works offline.</p>
+  <p>Settings (mode, strength, goals to win, sounds, full screen, vibration) and your record against the computer stay only in this browser (back them up or move them under “Back up data”), not the running game. Nothing is sent to a server; the app also works offline.</p>
   </div>
   <!-- agent:start -->
   <div data-lang="de">
@@ -180,7 +191,7 @@ main{display:flex;flex-direction:column}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 21653781eb1c</p>
+  <p class="footer-version">Version 16672c886f78</p>
   <!-- footer:end -->
 </footer>
 
