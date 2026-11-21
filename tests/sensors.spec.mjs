@@ -38,7 +38,7 @@ test('overview: tiles open a tool, back returns, the last tool reopens', async (
   await expect(page.locator('#overview')).toBeVisible();
   await expect(page.locator('#tabbar')).toBeHidden();
   await expect(page.locator('.panel:visible')).toHaveCount(0);
-  await expect(page.locator('#overview .tiles > button')).toHaveCount(16);
+  await expect(page.locator('#overview .tiles > button')).toHaveCount(17);
   await page.locator('#overview').getByRole('button', { name: 'Wasserwaage' }).click();
   await expect(page.locator('#p-level')).toBeVisible();
   await expect(page.locator('#overview')).toBeHidden();
@@ -1183,4 +1183,46 @@ test('app shortcuts: a tool opens directly, the flashlight switches on', async (
   await page.goto('/sensors/?shortcut=nope');
   await expect(page.locator('#p-torch')).toBeVisible();
   await expect(page.locator('[data-start="torch"]')).toHaveText('Lampe an');
+});
+
+test('vibration test: exact durations and patterns, 1 s later like in a game, what the browser answered', async ({ page }) => {
+  await page.clock.install();
+  await page.addInitScript(() => {
+    window.__vib = [];
+    Object.defineProperty(Navigator.prototype, 'vibrate', { configurable: true, value: p => { window.__vib.push(p); return window.__ok !== false; } });
+  });
+  await page.reload();
+  await tab(page, 'Vibration testen');
+  await expect(page.locator('#p-vibe')).toBeVisible();
+  // Short pulses as tapped – not raised to the 30 ms of Tools.vibrate
+  await page.getByRole('button', { name: '5 ms', exact: true }).click();
+  await page.getByRole('button', { name: '20 ms', exact: true }).click();
+  await page.getByRole('button', { name: 'Doppelt' }).click();
+  expect(await page.evaluate(() => window.__vib)).toEqual([5, 20, [50, 100, 50]]);
+  await expect(page.locator('#st-vibe')).toHaveText(/^Doppelt: vom Browser angenommen/);
+  // 1 second after the tap
+  await page.getByLabel('Erst 1 Sekunde nach dem Tippen').click();
+  await page.getByRole('button', { name: '50 ms', exact: true }).click();
+  await expect(page.locator('#st-vibe')).toHaveText('50 ms: vibriert in 1 Sekunde …');
+  expect(await page.evaluate(() => window.__vib.length)).toBe(3);
+  await page.clock.runFor(1000);
+  await expect(page.locator('#st-vibe')).toHaveText(/^50 ms: vom Browser angenommen/);
+  expect(await page.evaluate(() => window.__vib.at(-1))).toBe(50);
+  // Refused by the browser
+  await page.evaluate(() => { window.__ok = false; });
+  await page.getByLabel('Erst 1 Sekunde nach dem Tippen').click();
+  await page.getByRole('button', { name: '100 ms', exact: true }).click();
+  await expect(page.locator('#st-vibe')).toHaveText(/^100 ms: vom Browser abgelehnt/);
+  // Stop
+  await page.getByRole('button', { name: 'Stopp' }).click();
+  expect(await page.evaluate(() => window.__vib.at(-1))).toBe(0);
+  await expect(page.locator('#st-vibe')).toHaveText('Gestoppt.');
+});
+
+test('vibration test: browsers without vibration say so', async ({ page }) => {
+  await page.addInitScript(() => { delete Navigator.prototype.vibrate; });
+  await page.reload();
+  await tab(page, 'Vibration testen');
+  await page.getByRole('button', { name: '30 ms', exact: true }).click();
+  await expect(page.locator('#st-vibe')).toHaveText(/kann nicht vibrieren/);
 });
