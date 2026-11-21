@@ -41,6 +41,27 @@ test('starts as a white canvas with pencil and black', async ({ page }) => {
   await expect(page.locator('[data-tool]')).toHaveCount(6);
 });
 
+test('the chosen tool stays highlighted while the finger/mouse is still on it', async ({ page }) => {
+  // On a phone the tapped button keeps :hover until the next tap elsewhere – the hover grey
+  // must not replace the accent background, or the dark icon sits on a dark background.
+  for (const scheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const spray = page.locator('[data-tool="spray"]');
+    await spray.click();
+    await spray.hover();
+    await expect(spray).toHaveAttribute('aria-pressed', 'true');
+    const [bg, accent] = await spray.evaluate(b => {
+      const probe = document.createElement('div');
+      probe.style.background = 'var(--accent)';
+      document.body.append(probe);
+      const a = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return [getComputedStyle(b).backgroundColor, a];
+    });
+    expect(bg).toBe(accent);
+  }
+});
+
 test('paints in the chosen colour, the pencil is thin and the brush thick', async ({ page }) => {
   await page.click('[data-color="red"]');
   await stroke(page, 20, 40, 220, 40);
