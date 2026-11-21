@@ -336,6 +336,33 @@ test('copy, clear with undo', async ({ page }) => {
   expect(await draft(page)).toMatchObject({ text: 'Hallo', result: 'Hello' });
 });
 
+test('actions under the translation fit in one row on a phone; read aloud toggles to stop', async ({ page }) => {
+  await page.addInitScript(() => {
+    navigator.share = async () => {};
+    window.__spoken = [];
+    const synth = { speak: u => { window.__spoken.push({ text: u.text, lang: u.lang }); window.__utter = u; }, cancel: () => {} };
+    Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+    window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; this.lang = ''; } };
+  });
+  await page.setViewportSize({ width: 375, height: 740 });
+  await page.goto(URL_);
+  const buttons = page.locator('.out-actions > button');
+  await expect(buttons).toHaveCount(4);
+  const boxes = await buttons.evaluateAll(bs => bs.map(b => { const r = b.getBoundingClientRect(); return { y: r.y, h: r.height }; }));
+  expect(new Set(boxes.map(b => Math.round(b.y))).size).toBe(1);   // one row
+  await expect(page.locator('.out-actions .tb-label').first()).toBeVisible();   // with the word
+  await page.fill('#output', 'Привет.');
+  await page.evaluate(() => { localStorage.setItem('translator.draft.v1', JSON.stringify({ text: '', result: '', from: 'de', to: 'ru' })); });
+  const speak = page.locator('#btnSpeak');
+  await expect(speak).toHaveAccessibleName('Vorlesen');
+  await speak.click();
+  await expect(speak).toHaveAccessibleName('Stopp');
+  await expect(speak).toHaveText('Stopp');
+  expect(await page.evaluate(() => window.__spoken[0].text)).toBe('Привет.');
+  await page.evaluate(() => window.__utter.onend());
+  await expect(speak).toHaveAccessibleName('Vorlesen');
+});
+
 test('diagnostics contain no text', async ({ page }) => {
   await fakeTranslatorApi(page, { avail: { '*': 'available' } });
   await page.goto(URL_);
