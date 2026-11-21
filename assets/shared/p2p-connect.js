@@ -64,6 +64,7 @@
       qrOffer: 'QR-Code zum Beitreten',
       copyCode: 'Code kopieren',
       share: 'Teilen …',
+      'tb.copy': 'Kopieren', 'tb.share': 'Teilen',   // short words under the icons (.toolbar)
       hostH2: '2. Dann den Antwort-Code scannen',
       scanAnswer: 'Antwort-Code scannen',
       pasteAnswer: 'Antwort-Code von Hand eingeben',
@@ -108,6 +109,7 @@
       qrOffer: 'QR code to join',
       copyCode: 'Copy code',
       share: 'Share …',
+      'tb.copy': 'Copy', 'tb.share': 'Share',
       hostH2: '2. Then scan the reply code',
       scanAnswer: 'Scan reply code',
       pasteAnswer: 'Enter reply code manually',

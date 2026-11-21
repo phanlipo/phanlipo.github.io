@@ -44,18 +44,19 @@ const findEmoji = page => page.evaluate(src => {
 }, EMOJI.source);
 
 // Icon-only buttons: header, toolbars, square .btn.icon – visible ones with their name and sprite icon
-// Actions on a result (UI-KONZEPT.md 4, AGENTS.md "Aktionen zu einem Ergebnis"): from 3 secondary buttons with
+// Actions on a result (UI-KONZEPT.md 4, AGENTS.md "Aktionen zu einem Ergebnis"): from 2 secondary buttons with
 // these icons in one container, they belong in a .toolbar – a .row of .btn wraps into several lines on a phone.
-// Hidden buttons count too (many appear only with the result). Lists the offending containers.
+// Hidden buttons count too (many appear only with the result); icon-only buttons of list rows (.btn.icon) do not.
+// Lists the offending containers.
 const RESULT_ICONS = ['copy', 'share', 'download', 'printer', 'volume', 'external-link', 'file-export', 'eraser', 'trash'];
 const resultActionRows = page => page.evaluate(icons => {
-  const isAction = el => el.matches('.btn:not(.primary)') && [...el.querySelectorAll('use')]
+  const isAction = el => el.matches('.btn:not(.primary):not(.icon)') && [...el.querySelectorAll('use')]
     .some(u => icons.includes((u.getAttribute('href') || '').split('#')[1]));
   const out = [];
   for (const c of document.querySelectorAll('body *')) {
     if (c.matches('.toolbar')) continue;
     const kids = [...c.children].filter(isAction);
-    if (kids.length >= 3) out.push(`${c.tagName.toLowerCase()}${c.id ? '#' + c.id : ''}.${[...c.classList].join('.')}: ${kids.map(k => k.id || k.textContent.trim()).join(', ')}`);
+    if (kids.length >= 2) out.push(`${c.tagName.toLowerCase()}${c.id ? '#' + c.id : ''}.${[...c.classList].join('.')}: ${kids.map(k => k.id || k.textContent.trim()).join(', ')}`);
   }
   return out;
 }, RESULT_ICONS);
@@ -166,7 +167,7 @@ for (const app of apps()) {
       expect(bad, 'use <label class="check"><input …><span>…</span></label> (base.css)').toEqual([]);
     });
 
-    test('actions on a result: from 3 secondary buttons in a .toolbar, not a row of buttons', async ({ page }) => {
+    test('actions on a result: from 2 secondary buttons in a .toolbar, not a row of buttons', async ({ page }) => {
       await page.goto(url);
       expect(await resultActionRows(page), 'use <div class="toolbar"> with icon + short word (UI-KONZEPT.md 4)').toEqual([]);
     });
@@ -195,10 +196,12 @@ test.describe('toolbar', () => {
     await page.evaluate(html => document.querySelector('main').insertAdjacentHTML('beforeend', html), [
       `<div class="row" id="bad">${btn('copy')}${btn('share')}${btn('download')}</div>`,
       `<div class="row" id="two">${btn('copy')}${btn('share')}</div>`,
-      `<div class="row" id="withPrimary">${btn('download', 'btn primary')}${btn('copy')}${btn('share')}</div>`,
+      `<div class="row" id="one">${btn('copy')}${btn('pencil')}</div>`,
+      `<ul class="list-rows"><li id="item">${btn('share', 'btn icon')}${btn('download', 'btn icon')}${btn('trash', 'btn icon')}</li></ul>`,
+      `<div class="row" id="withPrimary">${btn('download', 'btn primary')}${btn('copy')}${btn('pencil')}</div>`,
       `<div class="toolbar" id="good">${btn('copy', '')}${btn('share', '')}${btn('download', '')}${btn('eraser', '')}</div>`,
     ].join(''));
-    expect((await resultActionRows(page)).map(r => r.split('.')[0])).toEqual(['div#bad']);
+    expect((await resultActionRows(page)).map(r => r.split('.')[0])).toEqual(['div#bad', 'div#two']);
   });
 
   // A toolbar shows its words while every item gets ≥ 64 px, otherwise only the icons (the word stays its name)
