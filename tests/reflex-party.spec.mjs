@@ -2,7 +2,7 @@
 // independent rules here), rounds (intro, a picture per step, a "hit now!" picture at the latest every 6th),
 // first right tap scores and ends the round, wrong taps cost a point (not below 0) and lock that player,
 // two missed chances end the round, match to the target with ranking; blind countdown with exact reaction
-// times and solo best; pads for 1–4 players (top row turned), keyboard 1–4, stop and leaving the app abort,
+// times and solo best; pads for 1–4 players (top row turned), keyboard 1–4, pause (button, leaving the app, leaving full screen) and stop,
 // settings persist, at least one mini-game stays on, English.
 import { test, expect, openMenu, closeMenu, switchLang, axe } from './helpers.mjs';
 
@@ -24,7 +24,7 @@ const RULES = {
 
 async function open(page, settings = {}) {
   await page.addInitScript(([k, v]) => { if (!localStorage.getItem(k)) localStorage.setItem(k, v); },
-    [LS, JSON.stringify({ players: 2, target: 5, diff: 'normal', sound: false, vibrate: false, speak: false, ...settings })]);
+    [LS, JSON.stringify({ players: 2, target: 5, diff: 'normal', sound: false, vibrate: false, speak: false, fullscreen: false, ...settings })]);
   await page.clock.install({ time: new Date('2026-05-01T09:00:00') });
   await page.goto('/reflex-party/');
   await page.clock.pauseAt(new Date('2026-05-01T09:00:05'));
@@ -63,7 +63,9 @@ test('two players: wrong tap costs a point and locks, first right tap scores, ma
   await expect(page.locator('#gamesInfo')).toHaveText('1 von 10 Minispielen an. Tippen schaltet ein oder aus.');
   await page.click('#btnStart');
   await expect(page.locator('#setup')).toBeHidden();
-  await expect(page.locator('#btnStop')).toBeVisible();
+  // While playing the header (menu, stop) is hidden; pause sits in the picture
+  await expect(page.locator('body > header')).toBeHidden();
+  await expect(page.locator('#btnPause')).toBeVisible();
   // Player 1 at the bottom, player 2 at the top (turned towards the person opposite)
   await expect(page.locator('#padsBottom .pad')).toHaveCount(1);
   await expect(page.locator('#padsTop .pad')).toHaveText('Spieler 20');
@@ -227,6 +229,8 @@ test('three and four players: pads in the corners, keyboard keys 1–4', async (
   expect(box.width).toBeLessThanOrEqual(375);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
+  await page.click('#btnPause');
+  await expect(page.locator('#arena')).toHaveAttribute('data-phase', 'paused');
   await page.click('#btnStop');
   await expect(page.locator('#setup')).toBeVisible();
   await page.click('#players [data-n="3"]');
@@ -234,11 +238,14 @@ test('three and four players: pads in the corners, keyboard keys 1–4', async (
   await expect(page.locator('#padsTop .pad')).toHaveText(['Spieler 30']);
   await expect(page.locator('#padsBottom .pad')).toHaveCount(2);
   await page.keyboard.press('4');                 // no fourth player: ignored, no error
-  // Leaving the app ends the match
+  // Leaving the app pauses the match; stopping then ends it
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
     document.dispatchEvent(new Event('visibilitychange'));
   });
+  await expect(page.locator('#arena')).toHaveAttribute('data-phase', 'paused');
+  await expect(page.locator('body > header')).toBeVisible();
+  await page.click('#btnStop');
   await expect(page.locator('#setup')).toBeVisible();
   await expect(page.locator('#toast')).toHaveText('Partie abgebrochen.');
 });
@@ -388,6 +395,7 @@ test('reads the task aloud at the start of each round, pictures start after it, 
   expect(all.at(-1)).toEqual({ text: 'Spieler 1 gewinnt!', lang: 'de-DE' });
   // Stopping silences the voice at once
   await page.click('#btnAgain');
+  await page.click('#btnPause');
   await page.click('#btnStop');
   expect((await page.evaluate(() => window.__said)).at(-1)).toBe('cancel');
 });
@@ -425,6 +433,65 @@ for (const scheme of ['light', 'dark']) {
   });
 }
 
+test('full screen on start; pause (button, space, leaving full screen) keeps the points; the setting turns it off', async ({ page }) => {
+  // Fake full screen API: records the calls, the back gesture is simulated by exitFullscreen()
+  await page.addInitScript(() => {
+    let el = null;
+    const set = v => { el = v; document.dispatchEvent(new Event('fullscreenchange')); };
+    Object.defineProperty(document, 'fullscreenElement', { get: () => el, configurable: true });
+    Object.defineProperty(document, 'fullscreenEnabled', { get: () => true, configurable: true });
+    window.__fsCalls = 0;
+    Element.prototype.requestFullscreen = function () { window.__fsCalls++; set(this); return Promise.resolve(); };
+    document.exitFullscreen = () => { set(null); return Promise.resolve(); };
+  });
+  await open(page, { games: ['green'], fullscreen: true });
+  await page.click('#btnStart');
+  await expect.poll(() => page.evaluate(() => window.__fsCalls)).toBe(1);
+  await expect(page.locator('body > header')).toBeHidden();
+  // Player 2 scores a point
+  await page.clock.runFor(INTRO);
+  for (let i = 0; i < 8 && (await picture(page)).lamp !== 'green'; i++) await page.clock.runFor(STEP.normal);
+  expect((await picture(page)).lamp).toBe('green');
+  await pad(page, 2).click();
+  await expect(score(page, 2)).toHaveText('1');
+  await page.clock.runFor(BANNER + INTRO);
+  // Player 1 taps wrong (locked), then the back gesture leaves full screen: paused, header back
+  expect((await picture(page)).lamp).not.toBe('green');
+  await pad(page, 1).click();
+  await expect(pad(page, 1)).toHaveClass(/locked/);
+  await page.evaluate(() => document.exitFullscreen());
+  await expect(page.locator('#arena')).toHaveAttribute('data-phase', 'paused');
+  await expect(page.locator('body > header')).toBeVisible();
+  await expect(page.locator('#btnPause')).toBeHidden();
+  await expect(page.locator('#stim h2')).toHaveText('Pause');
+  // Nothing runs while paused, taps don't count
+  await page.clock.runFor(10000);
+  await page.keyboard.press('1');
+  await expect(score(page, 1)).toHaveText('0');
+  await expect(score(page, 2)).toHaveText('1');
+  // Resume: full screen again, a new round with the points kept and nobody locked
+  await page.click('#btnResume');
+  await expect.poll(() => page.evaluate(() => window.__fsCalls)).toBe(2);
+  await expect(page.locator('#arena')).toHaveAttribute('data-phase', 'play');
+  await expect(page.locator('body > header')).toBeHidden();
+  await expect(page.locator('#task')).toHaveText('Tippen, sobald die Lampe grün ist');
+  await expect(pad(page, 1)).not.toHaveClass(/locked/);
+  await expect(score(page, 2)).toHaveText('1');
+  // Space pauses too
+  await page.keyboard.press(' ');
+  await expect(page.locator('#arena')).toHaveAttribute('data-phase', 'paused');
+  // The setting in the menu turns full screen off
+  await openMenu(page);
+  await expect(page.locator('#optFullscreen')).toBeChecked();
+  await page.locator('#optFullscreen').uncheck();
+  await closeMenu(page);
+  await page.evaluate(() => document.exitFullscreen());
+  await page.click('#btnResume');
+  await expect(page.locator('#arena')).toHaveAttribute('data-phase', 'play');
+  expect(await page.evaluate(() => window.__fsCalls)).toBe(2);
+  expect((await saved(page)).fullscreen).toBe(false);
+});
+
 test.describe('English', () => {
   test.use({ locale: 'en-US' });
   test('texts, pads and result in English; switching language re-renders', async ({ page }) => {
@@ -443,12 +510,17 @@ test.describe('English', () => {
     await page.clock.runFor(1000);
     await pad(page, 2).click();
     await expect(score(page, 2)).toHaveText('1');
+    // The menu is hidden while playing: pause, switch the language, resume (a new round starts)
+    await page.click('#btnPause');
+    await expect(page.locator('#stim h2')).toHaveText('Paused');
     await switchLang(page, 'de');
     await expect(pad(page, 2)).toHaveText('Spieler 21');
+    await expect(page.locator('#btnResume')).toHaveText('Weiterspielen');
     await switchLang(page, 'en');
     await expect(pad(page, 2)).toHaveText('Player 21');
+    await page.click('#btnResume');
     for (let i = 2; i <= 5; i++) {
-      await page.clock.runFor(BANNER + INTRO + 2800);
+      await page.clock.runFor((i > 2 ? BANNER : 0) + INTRO + 2800);
       await pad(page, 2).click();
       await expect(score(page, 2)).toHaveText(String(i));
     }
