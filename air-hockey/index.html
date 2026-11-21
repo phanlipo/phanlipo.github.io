@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Airhockey</title>
+<meta name="description" content="Airhockey auf dem Handy oder Tablet: allein gegen den Computer in drei Stärken oder zu zweit an einem Gerät – jeder mit einem Finger auf seiner Hälfte.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="get_state, set_game, new_game">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Spielstand und Bilanz lesen, Spielart, Stärke des Computers und Tore bis zum Sieg einstellen und ein neues Spiel beginnen. Spielen musst du selbst.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the score and the record, set the mode, the computer's strength and the goals needed to win, and start a new game. Playing is up to you.">
+<meta name="tool:icon" content="circle-dot">
+<meta name="tool:color" content="#1e5fae">
+<meta name="tool:short-name" content="Airhockey">
+<meta name="tool:title-en" content="Air Hockey">
+<meta name="tool:description-en" content="Air hockey on your phone or tablet: alone against the computer at three strengths or two of you on one device – each with a finger on their own half.">
+<meta name="tool:short-name-en" content="Air Hockey">
+<meta name="tool:storage" content="air-hockey.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Airhockey">
+<meta name="theme-color" content="#1e5fae">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#1e5fae;--accent-text:#ffffff;
+  --table:#e6f0fb;--line:#8fb0d6;--rim:#b9cde4;--goal:#0d1626;--puck:#1b2430;--puck-ring:#5d6b7c;
+  --p0:#1d5fd1;--p1:#c8261f;--knob:rgba(255,255,255,.45)}
+@media (prefers-color-scheme: dark){:root{--accent:#8ab8f0;--accent-text:#0b1a2e;
+  --table:#132539;--line:#3f6290;--rim:#2a405e;--goal:#02060c;--puck:#eef2f7;--puck-ring:#9aa8b8;
+  --p0:#5b9bf5;--p1:#f26b62;--knob:rgba(255,255,255,.35)}}
+main{display:flex;flex-direction:column}
+/* The rink fills the stage; the table is drawn into the canvas as large as fits (turned sideways in landscape) */
+.rink{position:relative;flex:1;min-height:240px}
+.rink canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none;
+  -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.rink canvas:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* Start, pause and result on top of the table */
+.panel{position:absolute;inset:0;margin:auto;width:min(340px,calc(100% - 32px));height:fit-content;max-height:calc(100% - 24px);overflow:auto;
+  display:grid;gap:12px;padding:16px;border-radius:14px;background:color-mix(in srgb,var(--surface) 96%,transparent);
+  border:1px solid var(--border);box-shadow:0 6px 24px rgba(0,0,0,.18);text-align:center}
+.panel[hidden]{display:none}
+.panel h2{margin:0;font-size:22px}
+.panel .big{margin:0;font-size:44px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--accent)}
+.panel p{margin:0}
+.panel .record{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
+.panel .seg{width:100%}
+.panel .seg button{flex:1}
+.panel .btn.primary{min-height:52px;font-size:17px;font-weight:600}
+.dot{display:inline-block;width:.8em;height:.8em;border-radius:50%;vertical-align:-.05em;margin-inline-end:.3em}
+.dot.p0{background:var(--p0)}.dot.p1{background:var(--p1)}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Airhockey</span></h1>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnPause" aria-label="Pause" title="Pause" data-i18n-attr="aria-label:pause; title:pause" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-pause"/></svg></button>
+    <button type="button" class="head-btn" id="btnNew" aria-label="Neues Spiel" title="Neues Spiel" data-i18n-attr="aria-label:newGame; title:newGame"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg></button>
+  </div>
+</header>
+<main>
+  <section class="rink" id="rink" aria-label="Spielfeld" data-i18n-attr="aria-label:rinkL" data-phase="idle">
+    <canvas id="cv" tabindex="0" role="img" aria-label="Airhockey-Tisch" data-i18n-attr="aria-label:cvLabel"></canvas>
+    <p class="sr-only" id="status" role="status"></p>
+    <div class="panel" id="panel">
+      <h2 id="panelTitle" data-i18n="title">Airhockey</h2>
+      <p class="big" id="panelScore" hidden></p>
+      <p id="panelText"></p>
+      <div class="seg" role="group" aria-label="Spielart" data-i18n-attr="aria-label:modeL" id="modes">
+        <button type="button" data-mode="cpu" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#device-desktop"/></svg><span data-i18n="cpu">Gegen Computer</span></button>
+        <button type="button" data-mode="two" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#users"/></svg><span data-i18n="two">Zu zweit</span></button>
+      </div>
+      <div class="seg" role="group" aria-label="Stärke des Computers" data-i18n-attr="aria-label:levelL" id="levels">
+        <button type="button" data-level="easy" aria-pressed="false"><span data-i18n="easy">Leicht</span></button>
+        <button type="button" data-level="medium" aria-pressed="true"><span data-i18n="medium">Mittel</span></button>
+        <button type="button" data-level="hard" aria-pressed="false"><span data-i18n="hard">Schwer</span></button>
+      </div>
+      <p class="record" id="record"></p>
+      <button type="button" class="btn primary block" id="btnStart"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span id="startLabel" data-i18n="play">Spielen</span></button>
+    </div>
+  </section>
+</main>
+
+<section class="card" data-menu data-icon="settings" aria-labelledby="h-settings">
+  <h2 id="h-settings" data-i18n="settingsH">Einstellungen</h2>
+  <fieldset class="seg-group"><legend data-i18n="goalsL">Tore bis zum Sieg</legend>
+    <div class="seg" id="optGoals">
+      <button type="button" aria-pressed="false" data-v="3">3</button>
+      <button type="button" aria-pressed="false" data-v="5">5</button>
+      <button type="button" aria-pressed="true" data-v="7">7</button>
+      <button type="button" aria-pressed="false" data-v="10">10</button>
+    </div>
+  </fieldset>
+  <label class="check"><input type="checkbox" id="optSound"><span data-i18n="sound">Töne</span></label>
+  <label class="check"><input type="checkbox" id="optVibrate"><span data-i18n="vibrate">Vibrieren bei Treffern und Toren</span></label>
+</section>
+<div class="menu-list" data-menu>
+  <button type="button" id="btnClearRecord" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clearRecord">Bilanz löschen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Airhockey für eine Person gegen den Computer oder für zwei Personen an einem Handy oder Tablet. Wer zuerst die eingestellte Zahl an Toren (Standard 7) schießt, gewinnt.</p>
+  <h3>Spielen</h3>
+  <ul>
+    <li><b>Schläger bewegen:</b> Finger auf den Tisch legen und ziehen – der Schläger folgt dem Finger, so schnell er kann. Wie fest der Puck fliegt, hängt davon ab, wie schnell du den Schläger bewegst. Jeder Schläger bleibt in seiner Hälfte.</li>
+    <li><b>Gegen den Computer:</b> Du spielst unten (blau). Leicht, Mittel und Schwer unterscheiden sich darin, wie schnell und genau der Computer verteidigt und angreift. Siege und Niederlagen je Stärke stehen als Bilanz auf der Startkarte.</li>
+    <li><b>Zu zweit (Multitouch):</b> Das Gerät flach zwischen euch legen. Blau spielt unten, Rot oben; jeder setzt einen Finger in seiner Hälfte auf. Beide Finger werden gleichzeitig erkannt – der Finger gehört der Hälfte, in der er aufgesetzt wurde, auch wenn er später darüber hinausrutscht. Spielstand und Meldungen stehen für jeden richtig herum.</li>
+    <li><b>Quer halten:</b> Auf einem breiten Bildschirm liegt der Tisch quer – Blau spielt dann von rechts, Rot von links.</li>
+    <li>Nach einem Tor bekommt, wer es kassiert hat, den Puck auf seine Seite. <b>Pause</b> oben in der Leiste (oder Leertaste); verlässt du die App, hält das Spiel von selbst an.</li>
+    <li>Mit der Tastatur: Pfeiltasten bewegen den blauen Schläger.</li>
+  </ul>
+  <h3>Tipps</h3>
+  <ul>
+    <li>Über die Bande spielen: Der Puck prallt von den Seiten ab und verliert dabei nur wenig Tempo.</li>
+    <li>Bleib nicht direkt vor dem eigenen Tor kleben – wer dem Puck entgegengeht, verkürzt den Winkel.</li>
+    <li>Klappt Multitouch nicht? Manche Geräte oder Bildschirmlupen fangen Gesten mit mehreren Fingern ab – dann diese Funktion in den Bedienungshilfen ausschalten.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Einstellungen (Spielart, Stärke, Tore bis zum Sieg, Töne, Vibrieren) und die Bilanz gegen den Computer bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“), nicht das laufende Spiel. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Air hockey for one person against the computer or for two people on one phone or tablet. Whoever first scores the set number of goals (7 by default) wins.</p>
+  <h3>How to play</h3>
+  <ul>
+    <li><b>Moving the mallet:</b> put a finger on the table and drag – the mallet follows your finger as fast as it can. How hard the puck flies depends on how fast you move the mallet. Each mallet stays in its own half.</li>
+    <li><b>Against the computer:</b> you play at the bottom (blue). Easy, medium and hard differ in how fast and how exactly the computer defends and attacks. Wins and losses per strength are shown as your record on the start card.</li>
+    <li><b>Two of you (multi-touch):</b> lay the device flat between you. Blue plays at the bottom, red at the top; each puts a finger down in their own half. Both fingers are recognised at the same time – a finger belongs to the half where it touched down, even if it slides beyond it later. Score and messages are the right way up for each of you.</li>
+    <li><b>Holding it sideways:</b> on a wide screen the table lies sideways – blue then plays from the right, red from the left.</li>
+    <li>After a goal, whoever conceded it gets the puck on their side. <b>Pause</b> is at the top of the bar (or the space bar); if you leave the app, the game pauses by itself.</li>
+    <li>With the keyboard: the arrow keys move the blue mallet.</li>
+  </ul>
+  <h3>Tips</h3>
+  <ul>
+    <li>Play off the cushions: the puck bounces off the sides and loses little speed.</li>
+    <li>Don't stick right in front of your own goal – moving towards the puck narrows the angle.</li>
+    <li>Multi-touch doesn't work? Some devices or screen magnifiers catch gestures with several fingers – then turn that feature off in the accessibility settings.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Settings (mode, strength, goals to win, sounds, vibration) and your record against the computer stay only in this browser (back them up or move them under “Back up data”), not the running game. Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann Spielstand und Bilanz lesen, Spielart, Stärke des Computers und Tore bis zum Sieg einstellen und ein neues Spiel beginnen. Spielen musst du selbst. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the score and the record, set the mode, the computer's strength and the goals needed to win, and start a new game. Playing is up to you. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 21653781eb1c</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

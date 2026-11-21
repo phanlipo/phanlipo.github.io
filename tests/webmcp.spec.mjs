@@ -4391,3 +4391,28 @@ test.describe('nfc-tags tools', () => {
     expect((await call(page, 'nfc_tags_prepare_tag_content', { kind: 'fax' })).ok).toBe(false);
   });
 });
+
+test.describe('air-hockey tools', () => {
+  test('get_state, set_game and new_game; a running game keeps its settings', async ({ page }) => {
+    await page.clock.install({ time: 0 });
+    await page.addInitScript(() => localStorage.setItem('air-hockey.settings.v1', JSON.stringify({ mode: 'cpu', level: 'easy', goals: 5, sound: false, vibrate: false, record: { easy: { w: 2, l: 1 } } })));
+    await open(page, '/air-hockey/');
+    const record = { easy: { wins: 2, losses: 1 }, medium: { wins: 0, losses: 0 }, hard: { wins: 0, losses: 0 } };
+    let r = await call(page, 'air_hockey_get_state', {});
+    expect(r).toEqual({ ok: true, result: { phase: 'idle', mode: 'computer', level: 'easy', goals_to_win: 5, score: null, winner: null,
+      next_game: { mode: 'computer', level: 'easy', goals_to_win: 5 }, record_against_computer: record } });
+    r = await call(page, 'air_hockey_set_game', { mode: 'two_players', goals_to_win: 3 });
+    expect(r.result).toMatchObject({ phase: 'idle', mode: 'two_players', goals_to_win: 3 });
+    await expect(page.locator('#modes [data-mode="two"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#optGoals [data-v="3"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Spiel eingestellt');
+    expect(await call(page, 'air_hockey_set_game', { goals_to_win: 4 })).toMatchObject({ ok: false });
+    r = await call(page, 'air_hockey_new_game', {});
+    expect(r.result).toMatchObject({ phase: 'play', mode: 'two_players', goals_to_win: 3, score: { blue: 0, red: 0 } });
+    await expect(page.locator('#panel')).toBeHidden();
+    // During the game: the next game changes, the running one doesn't
+    r = await call(page, 'air_hockey_set_game', { mode: 'computer', level: 'hard', goals_to_win: 10 });
+    expect(r.result).toMatchObject({ phase: 'play', mode: 'two_players', goals_to_win: 3, next_game: { mode: 'computer', level: 'hard', goals_to_win: 10 } });
+    expect(JSON.parse(await page.evaluate(() => localStorage.getItem('air-hockey.settings.v1')))).toMatchObject({ mode: 'cpu', level: 'hard', goals: 10 });
+  });
+});
