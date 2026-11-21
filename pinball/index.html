@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
 <title>Flipper</title>
-<meta name="description" content="Flipper auf dem Handy: Kugel abschießen, mit zwei Flippern im Spiel halten, Bumper, Ziele und Bahnen treffen – mit Multiplikator, Ballsicherung und Bestwert.">
+<meta name="description" content="Flipper auf dem Handy mit mehreren Tischen: Kugel abschießen, mit zwei Flippern im Spiel halten, Bumper, Rampe, Spinner und Ziele treffen – mit Multiball, Multiplikator und Bestwert.">
 <meta name="tool:tags" content="Freizeit, Spiele">
 <meta name="tool:features" content="Vollbild, KI-Agent">
 <meta name="tool:webmcp" content="get_state, set_game, new_game">
@@ -16,7 +16,7 @@
 <meta name="tool:color" content="#6b3fa0">
 <meta name="tool:short-name" content="Flipper">
 <meta name="tool:title-en" content="Pinball">
-<meta name="tool:description-en" content="Pinball on your phone: launch the ball, keep it in play with two flippers, hit bumpers, targets and lanes – with multiplier, ball save and best score.">
+<meta name="tool:description-en" content="Pinball on your phone with several tables: launch the ball, keep it in play with two flippers, hit bumpers, ramp, spinner and targets – with multiball, multiplier and best score.">
 <meta name="tool:short-name-en" content="Pinball">
 <meta name="tool:storage" content="pinball.">
 <!-- head:start -->
@@ -32,10 +32,15 @@
 <style>
 :root{--accent:#6b3fa0;--accent-text:#ffffff;
   --cabinet:#2b2140;--field:#f4effb;--wall:#7d6a99;--bumper:#6b3fa0;--lit:#e0730b;--sling:#2f7fb8;
-  --flipper:#c8261f;--ball:#3a4250;--lamp:#d8cde8;--target:#1f8a5b}
+  --flipper:#c8261f;--ball:#3a4250;--lamp:#d8cde8;--target:#1f8a5b;--ramp:#c9b6e4}
 @media (prefers-color-scheme: dark){:root{--accent:#c4a3ef;--accent-text:#1d1030;
   --cabinet:#0b0712;--field:#1c1529;--wall:#8a77a8;--bumper:#a77de0;--lit:#ffb347;--sling:#5fb0ea;
-  --flipper:#f26b62;--ball:#e8ebf0;--lamp:#3a2e4f;--target:#4cc792}}
+  --flipper:#f26b62;--ball:#e8ebf0;--lamp:#3a2e4f;--target:#4cc792;--ramp:#4a3a66}}
+/* Each table has its own colours (data-table on .table; the canvas reads them from there) */
+.table[data-table="tiefsee"]{--cabinet:#0f2f45;--field:#e6f3f7;--wall:#4d7c95;--bumper:#0e7c86;--sling:#2f6fb8;--target:#a86f00;--lamp:#c8dfe8;--ramp:#8fc1d4}
+@media (prefers-color-scheme: dark){.table[data-table="tiefsee"]{--cabinet:#03111b;--field:#0d2230;--wall:#5c8ea8;--bumper:#3cc0c8;--sling:#5fa8ea;--target:#e0b84c;--lamp:#1f3d4f;--ramp:#2d5b73}}
+.table[data-table="uhrwerk"]{--cabinet:#3b2a1a;--field:#f7f0e3;--wall:#8a6a45;--bumper:#9a5a1e;--lit:#d4570b;--sling:#7d5a2e;--target:#2f6f4f;--lamp:#e6dac4;--ramp:#d8c3a0;--flipper:#a32a1f}
+@media (prefers-color-scheme: dark){.table[data-table="uhrwerk"]{--cabinet:#0a0704;--field:#1d160e;--wall:#a08055;--bumper:#d08a3c;--lit:#ffc04d;--sling:#c98a4b;--target:#5fb88a;--lamp:#3a2d1c;--ramp:#4a3a24;--flipper:#f26b62}}
 main{display:flex;flex-direction:column}
 /* Score bar above the table; the table is drawn into the canvas as large as fits */
 .hud{display:flex;align-items:center;gap:8px;padding:4px max(8px,env(safe-area-inset-right)) 4px max(8px,env(safe-area-inset-left));
@@ -56,6 +61,9 @@ main{display:flex;flex-direction:column}
 .panel h2{margin:0;font-size:22px}
 .panel .big{margin:0;font-size:40px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--accent)}
 .panel p{margin:0}
+.panel .seg{width:100%}
+.panel .seg button{flex:1}
+.panel .desc{color:var(--muted);font-size:14px}
 .panel .best{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
 .panel .btn.primary{min-height:52px;font-size:17px;font-weight:600}
 /* While playing the header is hidden (nothing to hit by mistake) */
@@ -83,6 +91,8 @@ body.stage.playing .hud{padding-top:max(4px,env(safe-area-inset-top))}
     <div class="panel" id="panel">
       <h2 id="panelTitle" data-i18n="title">Flipper</h2>
       <p class="big" id="panelScore" hidden></p>
+      <div class="seg" role="group" id="tables" aria-label="Tisch" data-i18n-attr="aria-label:tablesL"></div>
+      <p class="desc" id="tableDesc"></p>
       <p id="panelText"></p>
       <p class="best" id="best"></p>
       <button type="button" class="btn primary block" id="btnStart"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span id="startLabel" data-i18n="play">Spielen</span></button>
@@ -122,50 +132,88 @@ body.stage.playing .hud{padding-top:max(4px,env(safe-area-inset-top))}
 <details class="help card">
   <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
   <div data-lang="de">
-  <p>Ein Flipper für eine Person: Kugel abschießen, mit den beiden Flippern im Spiel halten und möglichst viele Punkte sammeln. Ein Spiel hat 3 Kugeln (in den Einstellungen auch 5).</p>
+  <p>Ein Flipper für eine Person: Kugel abschießen, mit den beiden Flippern im Spiel halten und möglichst viele Punkte sammeln. Ein Spiel hat 3 Kugeln (in den Einstellungen auch 5). Den Tisch wählst du auf der Startkarte; jeder hat eigene Bestwerte.</p>
   <h3>Spielen</h3>
   <ul>
     <li><b>Flippern:</b> Finger auf die linke Bildschirmhälfte – der linke Flipper schlägt hoch, solange der Finger liegt; rechts genauso. Beide gehen gleichzeitig.</li>
     <li><b>Abschießen:</b> Liegt die Kugel rechts unten in der Abschussbahn, die rechte Hälfte gedrückt halten (die Feder spannt sich) und loslassen. Je länger, desto kräftiger. Ist der Schuss zu schwach, rollt die Kugel zurück und du kannst es noch einmal versuchen.</li>
-    <li><b>Ballsicherung:</b> In den ersten 8 Sekunden nach dem Abschuss kommt eine verlorene Kugel zurück (die Lampe über den Flippern leuchtet). Alle drei grünen Ziele umwerfen gibt ein paar Sekunden Ballsicherung dazu.</li>
+    <li><b>Ballsicherung:</b> In den ersten 8 Sekunden nach dem Abschuss kommt eine verlorene Kugel zurück (die Lampe über den Flippern leuchtet). Auf „Komet“ geben die drei grünen Ziele rechts ein paar Sekunden Ballsicherung dazu.</li>
     <li><b>Kugel halten:</b> Flipper oben lassen, die Kugel rollt in die Kuhle davor und bleibt liegen – dann in Ruhe zielen.</li>
     <li><b>Pause:</b> der runde Knopf oben links (oder P bzw. Escape); dann sind Menü und „Neues Spiel“ wieder da. Verlässt du die App, hält das Spiel von selbst an.</li>
     <li><b>Nichts aus Versehen drücken:</b> Während des Spiels ist die Kopfleiste ausgeblendet. Auf Android und am Computer schaltet „Spielen“ zusätzlich das Vollbild ein (abschaltbar in den Einstellungen). Die Zurück-Geste beendet das Vollbild und hält das Spiel an. Auf dem iPhone erlaubt Safari kein Vollbild; zum Home-Bildschirm hinzugefügt zeigt die App aber keine Safari-Leisten.</li>
     <li><b>Tastatur:</b> Pfeil links/rechts, Shift links/rechts oder Z und M für die Flipper; Leertaste, Enter oder Pfeil runter für die Feder.</li>
   </ul>
-  <h3>Punkte</h3>
+  <h3>Auf allen Tischen</h3>
   <ul>
-    <li>Bumper 100, Schleudern 10, eine Bahn oben 500, ein Ziel rechts 250.</li>
+    <li>Bumper 100, Schleudern 10, eine Bahn oben 500, ein Fallziel 250.</li>
     <li><b>Bahnen oben:</b> Rollt die Kugel durch eine der drei Bahnen, leuchtet sie. Leuchten alle drei, gibt es 2.000 Punkte und der Multiplikator steigt (bis ×5). Jeder Druck auf einen Flipper schiebt die leuchtenden Bahnen eine weiter – so bringst du die dunkle Bahn dorthin, wo die Kugel hinfällt.</li>
-    <li><b>Ziele rechts:</b> Sind alle drei umgeworfen, gibt es 3.000 Punkte mal Multiplikator, und sie stehen wieder auf.</li>
-    <li><b>Bonus:</b> Jede neue Bahn und jedes Ziel erhöht den Bonus um 100. Geht die Kugel verloren, wird der Bonus mal Multiplikator gutgeschrieben; danach beginnen beide wieder von vorn.</li>
+    <li><b>Fallziele:</b> Sind alle einer Reihe umgeworfen, gibt es Punkte mal Multiplikator, und sie stehen wieder auf.</li>
+    <li><b>Bonus:</b> Jede neue Bahn, jedes Ziel, jede Rampe und jeder Kugelfang erhöht den Bonus um 100. Geht die Kugel verloren, wird der Bonus mal Multiplikator gutgeschrieben; danach beginnen beide wieder von vorn.</li>
     <li>Rollt die Kugel durch eine Außenbahn ganz links oder rechts, ist sie meist verloren – die Innenbahnen daneben führen zum Flipper.</li>
   </ul>
+  <h3>Komet (zum Einstieg)</h3>
+  <ul>
+    <li>Drei Bumper, drei Bahnen oben, drei grüne Fallziele rechts: alle drei geben 3.000 Punkte mal Multiplikator und ein paar Sekunden Ballsicherung.</li>
+  </ul>
+  <h3>Tiefsee (mittel)</h3>
+  <ul>
+    <li><b>Rampe links:</b> Ein kräftiger Schuss in die Mündung in der Mitte links bringt die Kugel über die Rampe zurück in die linke Innenbahn (1.000 Punkte). Ist der Schuss zu schwach, rollt sie wieder heraus.</li>
+    <li><b>Multiball:</b> Jede zweite Rampe lässt die Lampe „Multiball“ unter dem Kugelfang blinken. Triffst du dann den Kugelfang in der Mitte, kommt eine zweite Kugel ins Spiel. Solange beide rollen, gibt jede Rampe den Jackpot (5.000 Punkte). Die ersten Sekunden des Multiballs sind gesichert.</li>
+    <li><b>Kugelfang:</b> hält die Kugel kurz fest (750 Punkte) und spuckt sie Richtung Flipper wieder aus.</li>
+    <li><b>Orbit rechts mit Spinner:</b> Je schneller die Kugel durchrollt, desto öfter dreht sich der Spinner – jede Drehung 30 Punkte.</li>
+    <li><b>Kickback:</b> Die drei goldenen Fallziele rechts schalten den Kickback in der linken Außenbahn an (Lampe dort). Rollt die Kugel dann hinein, wird sie zurück ins Spiel geschossen – einmal, danach muss er wieder angeschaltet werden.</li>
+  </ul>
+  <h3>Uhrwerk (schwer)</h3>
+  <ul>
+    <li><b>Zwei Rampen:</b> links in die linke, rechts in die rechte Innenbahn (je 1.000 Punkte). An der rechten Mündung dreht sich ein Spinner.</li>
+    <li><b>Turm in der Mitte:</b> unten offen, an der linken Wand drei Fallziele, an der rechten ein dritter Flipper (rechte Seite drücken), oben der Kugelfang „Uhr“ zwischen zwei Bumpern.</li>
+    <li><b>Missionen:</b> Fünf Aufgaben nacheinander – Rampen, Spinner-Drehungen, Bumper, alle Ziele, die Uhr. Die aktuelle steht mitten auf dem Tisch, darunter fünf Lampen für den Fortschritt. Jede gibt Punkte; sind alle geschafft, gibt es 20.000 Punkte und einen Multiball mit drei Kugeln (Rampen geben dann den Jackpot), danach beginnt die Kette von vorn. Die Missionen laufen über alle Kugeln eines Spiels weiter.</li>
+    <li><b>Bahnen oben:</b> Alle drei erhöhen den Multiplikator und schalten zusätzlich den Kickback links an.</li>
+  </ul>
   <h3>Gespeichert</h3>
-  <p>Einstellungen (Kugeln je Spiel, Töne, Vollbild, Vibrieren) und der Bestwert je Zahl der Kugeln bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“), nicht das laufende Spiel. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  <p>Einstellungen (Tisch, Kugeln je Spiel, Töne, Vollbild, Vibrieren) und die Bestwerte je Tisch und Zahl der Kugeln bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“), nicht das laufende Spiel. Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
-  <p>Pinball for one person: launch the ball, keep it in play with the two flippers and collect as many points as you can. A game has 3 balls (5 in the settings).</p>
+  <p>Pinball for one person: launch the ball, keep it in play with the two flippers and collect as many points as you can. A game has 3 balls (5 in the settings). Choose the table on the start card; each has its own best scores.</p>
   <h3>How to play</h3>
   <ul>
     <li><b>Flipping:</b> put a finger on the left half of the screen – the left flipper goes up as long as the finger stays; the right side works the same. Both work at the same time.</li>
     <li><b>Launching:</b> when the ball waits in the shooter lane at the bottom right, hold the right half (the spring is pulled) and let go. The longer you hold, the harder the shot. If it is too weak, the ball rolls back and you can try again.</li>
-    <li><b>Ball save:</b> for the first 8 seconds after a launch a lost ball comes back (the lamp above the flippers is lit). Knocking down all three green targets adds a few seconds of ball save.</li>
+    <li><b>Ball save:</b> for the first 8 seconds after a launch a lost ball comes back (the lamp above the flippers is lit). On “Comet” the three green targets on the right add a few seconds of ball save.</li>
     <li><b>Holding the ball:</b> keep a flipper up, the ball rolls into the dip in front of it and stays there – then take aim calmly.</li>
     <li><b>Pause:</b> the round button at the top left (or P or Escape); then the menu and “New game” are back. If you leave the app, the game pauses by itself.</li>
     <li><b>Nothing pressed by mistake:</b> while you play the header is hidden. On Android and on a computer “Play” also switches to full screen (can be turned off in the settings). The back gesture ends full screen and pauses the game. On iPhone Safari does not allow full screen; added to the home screen the app shows no Safari bars, though.</li>
     <li><b>Keyboard:</b> arrow left/right, left/right Shift or Z and M for the flippers; space, Enter or arrow down for the spring.</li>
   </ul>
-  <h3>Points</h3>
+  <h3>On every table</h3>
   <ul>
-    <li>Bumper 100, slingshot 10, a top lane 500, a target on the right 250.</li>
+    <li>Bumper 100, slingshot 10, a top lane 500, a drop target 250.</li>
     <li><b>Top lanes:</b> when the ball rolls through one of the three lanes, it lights up. With all three lit you get 2,000 points and the multiplier goes up (up to ×5). Every flipper press moves the lit lanes one step – so you can bring the dark lane to where the ball will fall.</li>
-    <li><b>Targets on the right:</b> once all three are down you get 3,000 points times the multiplier, and they stand up again.</li>
-    <li><b>Bonus:</b> every new lane and every target adds 100 to the bonus. When the ball is lost, the bonus times the multiplier is added to your score; then both start again.</li>
+    <li><b>Drop targets:</b> once all of a row are down you get points times the multiplier, and they stand up again.</li>
+    <li><b>Bonus:</b> every new lane, every target, every ramp and every saucer adds 100 to the bonus. When the ball is lost, the bonus times the multiplier is added to your score; then both start again.</li>
     <li>A ball rolling down an outlane on the far left or right is usually lost – the inlanes beside them lead to the flippers.</li>
   </ul>
+  <h3>Comet (to start with)</h3>
+  <ul>
+    <li>Three bumpers, three top lanes, three green drop targets on the right: all three give 3,000 points times the multiplier and a few seconds of ball save.</li>
+  </ul>
+  <h3>Deep Sea (medium)</h3>
+  <ul>
+    <li><b>Ramp on the left:</b> a strong shot into the mouth in the middle left takes the ball over the ramp back into the left inlane (1,000 points). If the shot is too weak, it rolls back out.</li>
+    <li><b>Multiball:</b> every second ramp makes the “Multiball” lamp below the saucer blink. If you then hit the saucer in the middle, a second ball comes into play. While both roll, every ramp scores the jackpot (5,000 points). The first seconds of the multiball are saved.</li>
+    <li><b>Saucer:</b> holds the ball briefly (750 points) and spits it out towards the flippers.</li>
+    <li><b>Orbit on the right with spinner:</b> the faster the ball rolls through, the more often the spinner turns – 30 points per turn.</li>
+    <li><b>Kickback:</b> the three golden drop targets on the right switch on the kickback in the left outlane (lamp there). If the ball then rolls in, it is shot back into play – once, then it has to be switched on again.</li>
+  </ul>
+  <h3>Clockwork (hard)</h3>
+  <ul>
+    <li><b>Two ramps:</b> the left one into the left inlane, the right one into the right inlane (1,000 points each). A spinner turns at the right mouth.</li>
+    <li><b>Tower in the middle:</b> open at the bottom, three drop targets on its left wall, a third flipper on its right wall (press the right side), at the top the “clock” saucer between two bumpers.</li>
+    <li><b>Missions:</b> five tasks one after the other – ramps, spinner turns, bumpers, all targets, the clock. The current one is written in the middle of the table, with five lamps for the progress below. Each gives points; once all are done you get 20,000 points and a three-ball multiball (ramps then score the jackpot), then the chain starts again. Missions carry on over all balls of a game.</li>
+    <li><b>Top lanes:</b> all three raise the multiplier and also switch on the kickback on the left.</li>
+  </ul>
   <h3>Stored</h3>
-  <p>Settings (balls per game, sounds, full screen, vibration) and the best score per number of balls stay only in this browser (back them up or move them under “Back up data”), not the running game. Nothing is sent to a server; the app also works offline.</p>
+  <p>Settings (table, balls per game, sounds, full screen, vibration) and the best scores per table and number of balls stay only in this browser (back them up or move them under “Back up data”), not the running game. Nothing is sent to a server; the app also works offline.</p>
   </div>
   <!-- vibrate:start -->
   <div data-lang="de">
@@ -202,11 +250,12 @@ body.stage.playing .hud{padding-top:max(4px,env(safe-area-inset-top))}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version b7cb3e4948b2</p>
+  <p class="footer-version">Version 294aeec0e38e</p>
   <!-- footer:end -->
 </footer>
 
 <script src="../assets/common.js"></script>
+<script src="tables.js"></script>
 <script src="engine.js"></script>
 <script src="app.js"></script>
 </body>
