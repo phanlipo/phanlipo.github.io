@@ -174,15 +174,20 @@ export function publishedFiles(dir = '') {
 export const ICON_SPRITE = 'assets/icons.svg';
 const ICON_PATTERNS = [/\bicons\.svg#([a-z0-9-]+)/g, /\bicon\(\s*['"]([a-z0-9-]+)['"]/g,
   /\bdata-icon=["']([a-z0-9-]+)["']/g, /\bicon:\s*['"]([a-z0-9-]+)['"]/g, /"icon":\s*"([a-z0-9-]+)"/g];
+// Icon names a text uses (same patterns as above)
+export function iconsIn(text) {
+  const names = new Set();
+  for (const re of ICON_PATTERNS) for (const m of text.matchAll(re)) names.add(m[1]);
+  return names;
+}
 export function usedIcons() {
   const files = [...publishedFiles(), ...publishedTemplate()]
     .filter(f => /\.(html|m?js|json)$/.test(f) && !f.startsWith('assets/vendor/') && !f.endsWith('/sw.js'));
   const used = new Map();
   for (const f of files) {
-    const text = readFileSync(join(ROOT, f), 'utf8');
-    for (const re of ICON_PATTERNS) for (const m of text.matchAll(re)) {
-      if (!used.has(m[1])) used.set(m[1], new Set());
-      used.get(m[1]).add(f);
+    for (const name of iconsIn(readFileSync(join(ROOT, f), 'utf8'))) {
+      if (!used.has(name)) used.set(name, new Set());
+      used.get(name).add(f);
     }
   }
   return new Map([...used].sort(([a], [b]) => a.localeCompare(b)));
@@ -192,6 +197,13 @@ function publishedTemplate() {
 }
 // Symbol ids in the sprite file
 export const spriteIcons = text => new Set([...text.matchAll(/<symbol id="([a-z0-9-]+)"/g)].map(m => m[1]));
+// The part of the sprite an app depends on: the <symbol> elements of the given icons, sorted by name.
+// The offline cache version hashes this instead of the whole sprite (build.mjs serviceWorker), so a new
+// icon only updates the apps that use it – an app's cached older sprite still holds all of its own icons.
+export function spriteSubset(text, names) {
+  const symbols = new Map([...text.matchAll(/<symbol id="([a-z0-9-]+)"[\s\S]*?<\/symbol>/g)].map(m => [m[1], m[0]]));
+  return [...names].sort().map(n => symbols.get(n) ?? `missing:${n}`).join('\n');
+}
 
 /* ---------- Health of the vendor libraries (vendor.mjs --check) ----------
    Pure rules, so tests can check them without network. Facts per library:
