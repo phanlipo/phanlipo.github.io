@@ -2,7 +2,7 @@
 // cannot see. The examples are the two mistakes that once broke "PDF zu Word" offline.
 import { test, expect } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { vendorProblems } from '../scripts/lib.mjs';
+import { vendorProblems, spriteSubset, iconsIn } from '../scripts/lib.mjs';
 
 const NAMES = ['pdfjs', 'docx', 'tesseract'];
 const check = (text, file = 'app/convert.mjs') => vendorProblems([{ file, text }], 'app', NAMES);
@@ -61,4 +61,17 @@ test('NOTICE.md lists every bundled library with version and a working licence l
   }
   // every linked file exists
   for (const [, href] of notice.matchAll(/\]\((assets\/vendor\/[^)]+)\)/g)) expect(existsSync(href), href).toBe(true);
+});
+
+test('the offline cache version depends only on the icons an app uses', () => {
+  const sprite = icons => `<svg>\n${icons.map(([n, d]) => `<symbol id="${n}" viewBox="0 0 24 24"><path d="${d}"/></symbol>`).join('\n')}\n</svg>`;
+  const before = sprite([['copy', 'M1'], ['download', 'M2']]);
+  const used = iconsIn('<use href="../assets/icons.svg#download"/> Tools.icon(\'copy\')');
+  expect([...used].sort()).toEqual(['copy', 'download']);
+  // a new icon for another app leaves the part this app depends on unchanged
+  expect(spriteSubset(sprite([['copy', 'M1'], ['download', 'M2'], ['trash', 'M3']]), used)).toBe(spriteSubset(before, used));
+  // a changed drawing of one of its own icons changes it
+  expect(spriteSubset(sprite([['copy', 'M1'], ['download', 'M9']]), used)).not.toBe(spriteSubset(before, used));
+  // a missing icon changes it, too (build.mjs --check fails in that case anyway)
+  expect(spriteSubset(sprite([['copy', 'M1']]), used)).not.toBe(spriteSubset(before, used));
 });
