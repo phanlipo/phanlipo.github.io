@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "minesweeper";
-const VERSION = 'f5cfbd9ecaa7';
+const VERSION = '5a5ec0b4e5f0';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

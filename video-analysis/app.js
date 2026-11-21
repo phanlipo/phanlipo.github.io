@@ -38,7 +38,7 @@ Tools.i18n({
     rotateL: 'x axis along the scale (for a tilted camera)', closeVideo: 'Close video', resH: 'Measurements', qtyL: 'Graph',
     'q.y': 'y over t', 'q.x': 'x over t', 'q.vy': 'vy over t', 'q.vx': 'vx over t', 'q.v': 'speed v over t', 'q.path': 'Path: y over x',
     modelL: 'Fit', 'm.none': 'none', 'm.lin': 'linear', 'm.quad': 'quadratic (projectile, fall)', 'm.sine': 'sine (oscillation)',
-    graphLabel: 'Graph of the measurements with fitted curve', tableCap: 'Measured points', csv: 'Save CSV', copy: 'Copy table', clearPts: 'Delete all points',
+    graphLabel: 'Graph of the measurements with fitted curve', tableCap: 'Measured points', csv: 'Save CSV', 'tb.csv': 'CSV', copy: 'Copy table', 'tb.copy': 'Copy', clearPts: 'Delete all points', 'tb.clear': 'Delete',
     frame: 'Frame {k} of {n}', time: 't = {t} s', noVideo: 'This video cannot be played in the browser.',
     loading: 'Loading video …', notVideo: 'This is not a video.',
     'hint.scale0': 'Tap the first end of the object of known length.', 'hint.scale1': 'Now tap the second end.',
