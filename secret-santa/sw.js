@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files (of the icon sprite only the icons
 // this app uses): every change creates a new version, the browser installs it in the background and removes the old one.
 const APP = "secret-santa";
-const VERSION = '51dfa56ecdfb';
+const VERSION = '9cd957bf05bf';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

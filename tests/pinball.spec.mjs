@@ -284,6 +284,33 @@ test.describe('page', () => {
     expect((await diag(page)).flippers).toEqual([false, false]);
   });
 
+  test('vibration on a flipper is long enough to be felt (30 ms); off in the settings', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__vib = [];
+      Object.defineProperty(Navigator.prototype, 'vibrate', { configurable: true, value: p => { window.__vib.push(p); return true; } });
+    });
+    await page.goto('/pinball/');
+    await page.click('#btnStart');
+    await finger(page, 'pointerdown', 1, 0.75, 0.6);
+    await finger(page, 'pointerup', 1, 0.75, 0.6);
+    await page.clock.runFor(1500);
+    await finger(page, 'pointerdown', 2, 0.2, 0.9);
+    await finger(page, 'pointerup', 2, 0.2, 0.9);
+    const vib = await page.evaluate(() => window.__vib);
+    expect(vib.length).toBeGreaterThan(0);
+    // Every vibration at least 30 ms – 8 ms were not felt on many Android phones
+    for (const p of vib) for (const [i, v] of [p].flat().entries()) if (i % 2 === 0) expect(v).toBeGreaterThanOrEqual(30);
+    // Switched off: no vibration at all
+    await page.evaluate(() => { Tools.save('pinball.settings.v1', Object.assign(Tools.load('pinball.settings.v1', {}), { vibrate: false })); });
+    await page.reload();
+    await page.click('#btnStart');
+    await finger(page, 'pointerdown', 1, 0.75, 0.6);
+    await finger(page, 'pointerup', 1, 0.75, 0.6);
+    await page.clock.runFor(1500);
+    await finger(page, 'pointerdown', 2, 0.2, 0.9);
+    expect(await page.evaluate(() => window.__vib)).toEqual([]);
+  });
+
   test('keyboard: arrows flip, space launches; P pauses, the header comes back; resume', async ({ page }) => {
     await page.goto('/pinball/');
     await expect(page.locator('#btnPause')).toBeHidden();

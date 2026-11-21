@@ -147,3 +147,17 @@ test.describe('audio', () => {
     expect(await page.evaluate(() => Tools.diag.text())).toMatch(/^audio: \{"state":"running","rate":48000\}$/m);
   });
 });
+
+test('Tools.vibrate: every vibration at least 30 ms, pauses and 0 unchanged; without support false', async ({ page }) => {
+  await page.evaluate(() => {
+    window.__vib = [];
+    Object.defineProperty(Navigator.prototype, 'vibrate', { configurable: true, value: p => { window.__vib.push(p); return window.__ok !== false; } });
+  });
+  expect(await page.evaluate(() => [Tools.vibrate(8), Tools.vibrate(200), Tools.vibrate([10, 20, 15]), Tools.vibrate(0), Tools.vibrate(-5)])).toEqual([true, true, true, true, true]);
+  expect(await page.evaluate(() => window.__vib)).toEqual([30, 200, [30, 20, 30], 0, 0]);
+  // Refused (no tap on the page yet): false, noted once in the diagnostics
+  expect(await page.evaluate(() => { window.__ok = false; return [Tools.vibrate(50), Tools.vibrate(50)]; })).toEqual([false, false]);
+  expect((await page.evaluate(() => Tools.diag.text())).match(/vibrate: refused/g)).toHaveLength(1);
+  // No API (iPhone/Safari)
+  expect(await page.evaluate(() => { delete Navigator.prototype.vibrate; return Tools.vibrate(50); })).toBe(false);
+});

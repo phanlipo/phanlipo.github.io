@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files (of the icon sprite only the icons
 // this app uses): every change creates a new version, the browser installs it in the background and removes the old one.
 const APP = "image-swipe";
-const VERSION = '1c694fc9c0bf';
+const VERSION = 'fff8b106c10e';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",

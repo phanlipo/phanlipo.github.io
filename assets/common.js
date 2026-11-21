@@ -765,6 +765,25 @@ window.Tools = (function () {
     return shortcutAction;
   }
 
+  /* ---------- Vibration ----------
+     Tools.vibrate(pattern)  like navigator.vibrate: milliseconds, or [vibrate, pause, vibrate, …]; 0 stops.
+                             Every vibration lasts at least VIBRATE_MIN ms: shorter ones (5–25 ms) are not felt on many
+                             Android phones – the motor does not spin up. Returns false without support (iPhone/Safari,
+                             Firefox on the computer) or when the browser refuses (no tap on the page yet). */
+  const VIBRATE_MIN = 30;
+  let vibrateRefused = false;
+  function vibrate(p) {
+    if (!('vibrate' in navigator)) return false;
+    const list = (Array.isArray(p) ? p : [p]).map((v, i) => {
+      v = Math.max(0, Math.round(Number(v) || 0));
+      return i % 2 === 0 && v > 0 ? Math.max(v, VIBRATE_MIN) : v;
+    });
+    let ok = false;
+    try { ok = navigator.vibrate(Array.isArray(p) ? list : list[0]); } catch (e) { diagLog('vibrate failed', e); return false; }
+    if (!ok && !vibrateRefused) { vibrateRefused = true; diagLog('vibrate: refused by the browser'); }
+    return ok;
+  }
+
   let badgeCount = null;
   const badgeSupported = () => 'setAppBadge' in navigator && 'clearAppBadge' in navigator;
   function badge(n) {
@@ -1325,7 +1344,7 @@ window.Tools = (function () {
   else setupDiagUi();
 
   return {
-    $, load, save, remove, toast, undo, confirm: confirmAsk, prompt: promptAsk, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle, shortcut, badge,
+    $, load, save, remove, toast, undo, confirm: confirmAsk, prompt: promptAsk, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle, shortcut, badge, vibrate,
     randomInt, random, uid, clamp, reducedMotion, canShareFile, download: downloadFile,
     audio: { context: audioContext, unlock: audioUnlock, ready: audioReady, tone },
     wakeLock: { hold: wakeHold, release: wakeRelease, active: () => !!wakeSentinel, supported: wakeSupported, reasons: () => [...wakeReasons] },
