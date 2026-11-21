@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Reflex-Party</title>
+<meta name="description" content="Partyspiel für 1–4 Personen an einem Handy, auch für Kinder: Jede hat ihre Taste am Rand – wer bei Pasch, richtiger Rechnung oder passender Farbe zuerst drückt, punktet.">
+<meta name="tool:tags" content="Freizeit, Spiele, Kinder">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="get_state, set_game">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Spielstand, Einstellungen und Bestwerte lesen und für die nächste Partie Mitspieler, Punkteziel, Schwierigkeit und Minispiele einstellen. Drücken müsst ihr selbst.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the score, settings and best results and set players, target score, difficulty and mini-games for the next match. Pressing is up to you.">
+<meta name="tool:icon" content="bolt">
+<meta name="tool:color" content="#8e3bb5">
+<meta name="tool:short-name" content="Reflex-Party">
+<meta name="tool:title-en" content="Reflex Party">
+<meta name="tool:description-en" content="Party game for 1–4 people on one phone, kids too: everyone has a button at the edge – whoever presses first on a double, a correct sum or a matching colour scores.">
+<meta name="tool:short-name-en" content="Reflex Party">
+<meta name="tool:storage" content="reflex-party.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-XjthG0Aa7iRy6dpibMM30SDlTZGPM3bmxgBj0Tn5/lI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Reflex-Party">
+<meta name="theme-color" content="#8e3bb5">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#8e3bb5;--accent-text:#ffffff;
+  --p1:#1d4ed8;--p2:#b91c1c;--p3:#15803d;--p4:#b45309;--pad-text:#ffffff;
+  --ink-red:#c62828;--ink-blue:#1d4ed8;--ink-green:#15803d;--ink-purple:#7e22ce;
+  --lamp-red:#e53935;--lamp-amber:#f59e0b;--lamp-blue:#2563eb;--lamp-green:#16a34a;--lamp-off:#3a3a3a;
+  --pip:#1d1d1d;--die:#ffffff;--good:#1f8a4c;--bad:#c62828}
+@media (prefers-color-scheme: dark){:root{--accent:#d3a6ec;--accent-text:#2a0f38;
+  --ink-red:#ff7b7b;--ink-blue:#8db0ff;--ink-green:#5ee08f;--ink-purple:#d6a4ff;
+  --lamp-off:#111111;--pip:#111111;--die:#f2f2f2;--good:#4cc27e;--bad:#ff6b6b}}
+
+main{display:flex;flex-direction:column;padding:8px;gap:8px;max-width:900px;margin-inline:auto}
+.setup{display:grid;gap:12px;align-content:start}
+.setup h2{margin:0}
+.setup h3{font-size:16px;margin:4px 0 -4px}
+.setup .info{margin:-4px 0 0}
+.setup .seg button{font-size:18px;font-weight:700}
+.summary{margin:0;color:var(--muted)}
+.setup .start{min-height:56px;font-size:18px}
+
+/* ---------- Arena: pads at the top (turned towards the people opposite) and bottom, the picture in between ---------- */
+.arena{flex:1;min-height:0;display:grid;grid-template-rows:auto 1fr auto;gap:8px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.arena[hidden]{display:none}
+.pads{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px}
+.arena[data-n="1"]{grid-template-rows:1fr auto}
+.arena[data-n="1"] .pad{min-height:max(120px,22vh)}
+.pads:empty{display:none}
+.pad{position:relative;min-height:max(88px,14vh);border:0;border-radius:18px;background:var(--pc);color:var(--pad-text);font:inherit;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:6px;cursor:pointer;
+  touch-action:none;-webkit-tap-highlight-color:transparent;transition:opacity .15s,transform .08s}
+.pad:focus-visible{outline:4px solid var(--text);outline-offset:2px}
+.pad:active{transform:scale(.97)}
+.pads.top .pad>span{rotate:180deg}
+.pad-inner{display:flex;flex-direction:column;align-items:center}
+.pad-name{font-size:15px;font-weight:700}
+.pad-score{font-size:40px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
+.pad.locked{opacity:.35}
+.pad.bad{animation:shake .3s}
+.pad.win{animation:pulse .5s}
+@keyframes shake{25%{translate:-6px 0}75%{translate:6px 0}}
+@keyframes pulse{50%{transform:scale(1.06)}}
+.center{min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:8px;overflow:hidden}
+.task{margin:0;text-align:center;font-weight:700;font-size:17px;max-width:32ch}
+.task.flip{rotate:180deg}
+.stim{position:relative;flex:1;min-height:120px;width:100%;container-type:size;display:flex;align-items:center;justify-content:center}
+.stim.fresh>.pic{animation:pop .18s ease-out}
+@keyframes pop{from{scale:.85;opacity:.4}}
+.pic{display:flex;align-items:center;justify-content:center;gap:4cqmin;width:100%;height:100%}
+.word{font-size:min(22cqw,40cqh);font-weight:900;letter-spacing:.02em}
+.eq,.big{font-size:min(16cqw,36cqh);font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cd{font-size:min(40cqw,70cqh);font-weight:900;color:var(--accent);font-variant-numeric:tabular-nums}
+.pic svg{display:block;height:auto;max-height:90cqh}
+.bars svg{width:min(90cqw,150cqh)}
+.dots svg{width:min(55cqw,85cqh)}
+.dots .big{min-width:1.4em;text-align:center}
+.pairs{flex-wrap:wrap;align-content:center;gap:3cqmin}
+.pairs svg{width:min(20cqw,36cqh)}
+.dice svg{width:min(34cqw,70cqh)}
+.clock svg{width:min(48cqw,85cqh)}
+.nums{gap:2cqw}
+.nums b{font-size:min(11cqw,30cqh);font-weight:800;min-width:1.6em;text-align:center;padding:.15em .1em;border-radius:12px;background:var(--surface-2);font-variant-numeric:tabular-nums}
+.lamp svg{width:min(60cqw,85cqh)}
+.ink-red{color:var(--ink-red);fill:var(--ink-red)}.ink-blue{color:var(--ink-blue);fill:var(--ink-blue)}
+.ink-green{color:var(--ink-green);fill:var(--ink-green)}.ink-purple{color:var(--ink-purple);fill:var(--ink-purple)}
+.die{fill:var(--die);stroke:var(--border);stroke-width:2}.pip{fill:var(--pip)}
+.face{fill:var(--surface-2);stroke:var(--text);stroke-width:3}.tickm{stroke:var(--text);stroke-width:2.5;stroke-linecap:round}
+.hand{stroke:var(--text);stroke-linecap:round}
+.track{fill:var(--surface-2)}.bar{fill:var(--accent)}
+/* Result of a round on top of the picture */
+.banner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;
+  background:color-mix(in srgb,var(--surface) 82%,transparent);font-size:min(9cqw,30px);font-weight:800}
+.banner[hidden]{display:none}
+.banner .who{color:var(--bc,var(--text))}
+.banner small{font-size:16px;font-weight:600;color:var(--muted)}
+/* Match result */
+.result{display:grid;gap:10px;justify-items:center;text-align:center;width:100%;max-width:420px;overflow:auto;padding:4px}
+.result h2{margin:0;font-size:24px}
+.rank{list-style:none;margin:0;padding:0;display:grid;gap:4px;width:100%}
+.rank li{display:flex;justify-content:space-between;gap:8px;padding:6px 12px;border-radius:10px;background:var(--surface-2);font-variant-numeric:tabular-nums}
+.rank li b{color:var(--text)}
+.rank .dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--pc);margin-inline-end:8px;vertical-align:middle}
+.result .row{justify-content:center}
+.record{color:var(--good);font-weight:700;margin:0}
+@media (prefers-reduced-motion: reduce){.pad,.stim.fresh>.pic{animation:none;transition:none}.pad.bad,.pad.win{animation:none}}
+
+/* Settings */
+.card h3{font-size:16px;margin:14px 0 8px}
+.games-actions{margin:0}
+.info{color:var(--muted);margin:6px 0 0}
+.best{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.best th,.best td{text-align:start;padding:6px 4px;border-bottom:1px solid var(--border)}
+.best .num{text-align:end}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Reflex-Party</span></h1>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnStop" aria-label="Laufende Runde stoppen" title="Laufende Runde stoppen" data-i18n-attr="aria-label:stopL; title:stopL" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-stop"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <section class="card setup" id="setup" aria-labelledby="h-setup">
+    <h2 id="h-setup" data-i18n="setupH">Neue Partie</h2>
+    <p class="summary" data-i18n="intro">Handy flach hinlegen – jede Person bekommt eine farbige Taste. Wer im richtigen Moment zuerst drückt, punktet.</p>
+    <h3 id="h-players" data-i18n="playersH">Wie viele spielen mit?</h3>
+    <div class="seg" role="group" aria-labelledby="h-players" id="players">
+      <button type="button" data-n="1" aria-pressed="false">1</button>
+      <button type="button" data-n="2" aria-pressed="true">2</button>
+      <button type="button" data-n="3" aria-pressed="false">3</button>
+      <button type="button" data-n="4" aria-pressed="false">4</button>
+    </div>
+    <h3 id="h-diff" data-i18n="diffH">Schwierigkeit</h3>
+    <div class="seg" role="group" aria-labelledby="h-diff" id="diffs">
+      <button type="button" data-diff="kids" aria-pressed="false"><span data-i18n="kids">Kinder</span></button>
+      <button type="button" data-diff="easy" aria-pressed="false"><span data-i18n="easy">Leicht</span></button>
+      <button type="button" data-diff="normal" aria-pressed="true"><span data-i18n="normal">Mittel</span></button>
+      <button type="button" data-diff="hard" aria-pressed="false"><span data-i18n="hard">Schwer</span></button>
+    </div>
+    <p class="info" id="diffInfo"></p>
+    <h3 id="h-games" data-i18n="gamesH">Minispiele</h3>
+    <div class="chips wrap" role="group" aria-labelledby="h-games" id="games"></div>
+    <div class="row games-actions">
+      <button type="button" class="btn" id="btnAllGames"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#checks"/></svg><span data-i18n="allGames">Alle</span></button>
+      <button type="button" class="btn" id="btnKidGames"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#mood-kid"/></svg><span data-i18n="kidGames">Ohne Lesen</span></button>
+    </div>
+    <p class="info" id="gamesInfo"></p>
+    <h3 id="h-target" data-i18n="targetH">Punkte zum Sieg</h3>
+    <div class="seg" role="group" aria-labelledby="h-target" id="targets">
+      <button type="button" data-target="5" aria-pressed="false">5</button>
+      <button type="button" data-target="10" aria-pressed="true">10</button>
+      <button type="button" data-target="15" aria-pressed="false">15</button>
+    </div>
+    <label class="check"><input type="checkbox" id="optSpeak"> <span data-i18n="speak">Aufgabe vorlesen</span></label>
+    <p class="info" id="speakInfo" data-i18n="speakInfo" hidden>Dieser Browser kann nicht vorlesen.</p>
+    <button type="button" class="btn primary block start" id="btnStart"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span data-i18n="start">Spiel starten</span></button>
+  </section>
+
+  <section class="arena" id="arena" aria-label="Spielfeld" data-i18n-attr="aria-label:arenaL" hidden>
+    <div class="pads top" id="padsTop"></div>
+    <div class="center" id="center">
+      <p class="task flip" id="taskTop" aria-hidden="true"></p>
+      <div class="stim" id="stim" aria-hidden="true"></div>
+      <p class="task" id="task"></p>
+    </div>
+    <div class="pads bottom" id="padsBottom"></div>
+  </section>
+  <p class="sr-only" id="announce" role="status"></p>
+
+  <section class="card" data-menu data-icon="settings" aria-labelledby="h-set">
+    <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <label class="check"><input type="checkbox" id="optSound"> <span data-i18n="sound">Töne</span></label>
+    <label class="check"><input type="checkbox" id="optVibrate"> <span data-i18n="vibrate">Vibration (Android)</span></label>
+  </section>
+
+  <section class="card" data-menu data-icon="trophy" aria-labelledby="h-best">
+    <h2 id="h-best" data-i18n="bestH">Bestwerte allein</h2>
+    <div id="bestList"></div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein schnelles Partyspiel für 1 bis 4 Personen an <b>einem</b> Gerät. Am besten liegt das Handy oder Tablet flach auf dem Tisch, alle sitzen drumherum.</p>
+  <h3>So geht’s</h3>
+  <ul>
+    <li><b>Tasten:</b> Jede Person hat eine farbige Taste. Bei 2 Personen liegen sie oben und unten (die obere ist umgedreht), bei 3 oder 4 Personen in den Ecken. Mehrere dürfen gleichzeitig drücken – es zählt, wer zuerst war.</li>
+    <li><b>Runde:</b> Jede Runde ist ein zufälliges Minispiel. Erst erscheint die Aufgabe, dann wechselt das Bild in der Mitte immer wieder. Sobald die Aufgabe erfüllt ist, schnell drücken!</li>
+    <li><b>Punkte:</b> Richtig und als Erste(r): <b>+1</b>, die Runde ist vorbei. Zu früh oder falsch: <b>−1</b> (nicht unter 0) und deine Taste ist bis zur nächsten Runde gesperrt. Drückt keiner, geht es nach zwei verpassten Gelegenheiten weiter.</li>
+    <li><b>Sieg:</b> Wer zuerst das Punkteziel (5, 10 oder 15) erreicht, gewinnt.</li>
+    <li><b>Vorlesen:</b> Mit „Aufgabe vorlesen“ sagt das Handy zu Beginn jeder Runde, worauf es ankommt, und am Ende, wer gewonnen hat. Die Bilder starten erst, wenn die Aufgabe vorgelesen ist. Es spricht die Stimme des Geräts (Lautstärke aufdrehen; auf dem iPhone den Stummschalter ausschalten).</li>
+    <li><b>Minispiele wählen:</b> Vor dem Start auf die Namen tippen, um sie ein- oder auszuschalten. „Ohne Lesen“ wählt die Spiele, für die man weder lesen noch rechnen muss.</li>
+    <li><b>Allein:</b> Mit einer Person ist es ein Training gegen die Uhr. Am Ende siehst du die mittlere Reaktionszeit, Fehlgriffe und Verpasstes; die beste Reaktionszeit je Schwierigkeit wird gemerkt.</li>
+    <li><b>Mit Tastatur:</b> die Tasten <kbd>1</kbd> bis <kbd>4</kbd> drücken für Spieler 1 bis 4.</li>
+  </ul>
+  <h3>Minispiele</h3>
+  <ul>
+    <li><b>Farbwort:</b> Passt das Wort zur Farbe, in der es geschrieben ist?</li>
+    <li><b>Rechnung:</b> Stimmt das Ergebnis? (Schwer auch mit Malnehmen.)</li>
+    <li><b>Balken:</b> Sind beide Balken gleich lang? (Schwer: mittig, damit die Enden nicht helfen.)</li>
+    <li><b>Punkte zählen:</b> Stimmt die Zahl mit den Punkten überein?</li>
+    <li><b>Paar:</b> Gibt es zwei genau gleiche Formen (Form und Farbe)?</li>
+    <li><b>Pasch:</b> Zeigen beide Würfel dieselbe Zahl?</li>
+    <li><b>Uhrzeit:</b> Zeigen Zeigeruhr und Digitaluhr dieselbe Zeit?</li>
+    <li><b>Reihenfolge:</b> Sind die Zahlen von links nach rechts aufsteigend?</li>
+    <li><b>Grünes Licht:</b> Drücken, sobald die Lampe grün ist.</li>
+    <li><b>Blind-Countdown:</b> Es wird von 3 heruntergezählt, dann verschwinden die Zahlen. Drücke, wenn du glaubst, dass 0 erreicht ist – zu früh zählt als Fehler. (Bei „Kinder“ bleiben die Zahlen sichtbar.)</li>
+  </ul>
+  <h3>Schwierigkeit</h3>
+  <p>Leicht zeigt jedes Bild 1,6 Sekunden, Mittel 1,2 und Schwer 0,85 Sekunden. Auf Schwer sind die Unterschiede außerdem kleiner (Balken, Uhrzeit, Reihenfolge, Paar).</p>
+  <h3>Mit Kindern</h3>
+  <ul>
+    <li><b>Kinder</b> als Schwierigkeit: 2,2 Sekunden pro Bild, längere Pause vor jeder Runde, nur drei Formen, kleine Zahlen, deutliche Unterschiede, volle Stunden bei der Uhr. Beim Countdown bleiben die Zahlen sichtbar und die 0 erscheint.</li>
+    <li>Zu früh drücken kostet bei „Kinder“ keinen Punkt – die Taste macht nur bis zur nächsten Runde Pause.</li>
+    <li>Wer „Kinder“ wählt, bekommt automatisch die Minispiele ohne Lesen (Balken, Punkte zählen, Paar, Pasch, Grünes Licht, Countdown). Die anderen lassen sich wieder dazunehmen.</li>
+    <li>Tipp: „Aufgabe vorlesen“ anlassen, dann müssen Kinder die Aufgabe nicht selbst lesen.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Nur Einstellungen und die Bestwerte allein – in diesem Browser (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline. Wechselst du während einer Partie in eine andere App, wird sie abgebrochen.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A fast party game for 1 to 4 people on <b>one</b> device. Ideally the phone or tablet lies flat on the table with everyone around it.</p>
+  <h3>How it works</h3>
+  <ul>
+    <li><b>Buttons:</b> everyone has a coloured button. With 2 people they are at the top and bottom (the top one upside down), with 3 or 4 people in the corners. Several may press at the same time – whoever was first counts.</li>
+    <li><b>Round:</b> every round is a random mini-game. First the task appears, then the picture in the middle keeps changing. As soon as the task is met, press quickly!</li>
+    <li><b>Points:</b> right and first: <b>+1</b>, the round is over. Too early or wrong: <b>−1</b> (not below 0) and your button is locked until the next round. If nobody presses, the game moves on after two missed chances.</li>
+    <li><b>Winning:</b> whoever reaches the target score first (5, 10 or 15) wins.</li>
+    <li><b>Read aloud:</b> with “Read the task aloud” the device says what matters at the start of every round, and who won at the end. The pictures only start once the task has been read. It uses the device’s voice (turn up the volume; on iPhone switch off the silent switch).</li>
+    <li><b>Choosing mini-games:</b> before the start, tap the names to switch them on or off. “No reading” picks the games that need neither reading nor arithmetic.</li>
+    <li><b>Alone:</b> with one person it is practice against the clock. At the end you see the average reaction time, mistakes and misses; the best reaction time per difficulty is kept.</li>
+    <li><b>With a keyboard:</b> press the keys <kbd>1</kbd> to <kbd>4</kbd> for players 1 to 4.</li>
+  </ul>
+  <h3>Mini-games</h3>
+  <ul>
+    <li><b>Colour word:</b> does the word match the colour it is written in?</li>
+    <li><b>Sum:</b> is the result right? (Hard also with multiplication.)</li>
+    <li><b>Bars:</b> are both bars the same length? (Hard: centred, so the ends don't help.)</li>
+    <li><b>Counting:</b> does the number match the dots?</li>
+    <li><b>Pair:</b> are there two shapes exactly alike (shape and colour)?</li>
+    <li><b>Double:</b> do both dice show the same number?</li>
+    <li><b>Clock:</b> do the clock face and the digital clock show the same time?</li>
+    <li><b>Order:</b> do the numbers go up from left to right?</li>
+    <li><b>Green light:</b> press as soon as the lamp is green.</li>
+    <li><b>Blind countdown:</b> it counts down from 3, then the numbers disappear. Press when you think 0 has been reached – too early counts as a mistake. (On “Kids” the numbers stay visible.)</li>
+  </ul>
+  <h3>Difficulty</h3>
+  <p>Easy shows each picture for 1.6 seconds, normal for 1.2 and hard for 0.85 seconds. On hard the differences are also smaller (bars, clock, order, pair).</p>
+  <h3>With children</h3>
+  <ul>
+    <li><b>Kids</b> as difficulty: 2.2 seconds per picture, a longer pause before each round, only three shapes, small numbers, clear differences, full hours on the clock. In the countdown the numbers stay visible and the 0 appears.</li>
+    <li>On “Kids” pressing too early costs no point – the button just pauses until the next round.</li>
+    <li>Choosing “Kids” switches to the mini-games without reading (bars, counting, pair, double, green light, countdown). The others can be added again.</li>
+    <li>Tip: keep “Read the task aloud” on, so children don’t have to read the task themselves.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Only settings and the best results alone – in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline. Switching to another app during a match ends it.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann Spielstand, Einstellungen und Bestwerte lesen und für die nächste Partie Mitspieler, Punkteziel, Schwierigkeit und Minispiele einstellen. Drücken müsst ihr selbst. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the score, settings and best results and set players, target score, difficulty and mini-games for the next match. Pressing is up to you. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version d194855d1a72</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="games.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  'g.color':'Farbwort','g.sum':'Rechnung','g.bars':'Balken','g.count':'Punkte zählen','g.pair':'Paar','g.dice':'Pasch',
+  'g.clock':'Uhrzeit','g.order':'Reihenfolge','g.green':'Grünes Licht','g.countdown':'Blind-Countdown',
+  'q.color':'Tippen, wenn Wort und Farbe passen','q.sum':'Tippen, wenn die Rechnung stimmt','q.bars':'Tippen, wenn beide Balken gleich lang sind',
+  'q.count':'Tippen, wenn die Zahl der Punkte stimmt','q.pair':'Tippen bei zwei gleichen Formen','q.dice':'Tippen bei einem Pasch',
+  'q.clock':'Tippen, wenn beide Uhren dieselbe Zeit zeigen','q.order':'Tippen, wenn die Zahlen aufsteigend sind',
+  'q.green':'Tippen, sobald die Lampe grün ist','q.countdown':'Tippen, wenn der Countdown bei 0 wäre',
+  'w.red':'ROT','w.blue':'BLAU','w.green':'GRÜN','w.purple':'LILA',
+  player:'Spieler {n}',ready:'Achtung …',point:'+1',minus:'−1 für {p}',nobody:'Keiner – weiter geht’s',missed:'Verpasst',tooEarly:'Zu früh!',
+  wins:'{p} gewinnt!',done:'Geschafft!',again:'Nochmal',back:'Zur Auswahl',aborted:'Partie abgebrochen.',
+  'q.countdownKids':'Tippen, sobald die 0 kommt',
+  'd.kids':'Viel Zeit pro Bild, ganz einfache Aufgaben, Zahlen beim Countdown sichtbar. Zu früh drücken kostet keinen Punkt.',
+  'd.easy':'1,6 Sekunden pro Bild.','d.normal':'1,2 Sekunden pro Bild.','d.hard':'0,85 Sekunden pro Bild und kleinere Unterschiede.',
+  'gi.count':'{n} von {all} Minispielen an. Tippen schaltet ein oder aus.','gi.read':'Farbwort, Rechnung, Uhrzeit und Reihenfolge brauchen Lesen oder Rechnen.',
+  'gi.last':'Mindestens ein Minispiel bleibt an.',
+  'r.time':'Zeit: {n} s','r.avg':'Ø Reaktion: {n} ms','r.wrong':'Zu früh/falsch: {n}','r.missed':'Verpasst: {n}','r.record':'Neue Bestzeit!',
+  'b.diff':'Schwierigkeit','b.avg':'Ø Reaktion','b.none':'Noch keine Bestwerte – spiel allein eine Partie!','b.matches':'Gespielte Partien: {n}',
+  'mcp.state':'Spielstand gelesen','mcp.set':'Partie eingestellt'
+},
+en:{
+  title:'Reflex Party',stopL:'Stop the running round',playersH:'How many are playing?',
+  setupH:'New match',intro:'Put the phone down flat – everyone gets a coloured button. Whoever presses first at the right moment scores.',
+  kids:'Kids',kidGames:'No reading',speak:'Read the task aloud',speakInfo:'This browser can’t read aloud.',
+  start:'Start game',arenaL:'Playing field',settings:'Settings',targetH:'Points to win',
+  diffH:'Difficulty',easy:'Easy',normal:'Normal',hard:'Hard',gamesH:'Mini-games',allGames:'All',
+  sound:'Sounds',vibrate:'Vibration (Android)',bestH:'Best results alone',
+  'g.color':'Colour word','g.sum':'Sum','g.bars':'Bars','g.count':'Counting','g.pair':'Pair','g.dice':'Double',
+  'g.clock':'Clock','g.order':'Order','g.green':'Green light','g.countdown':'Blind countdown',
+  'q.color':'Tap when word and colour match','q.sum':'Tap when the sum is right','q.bars':'Tap when both bars are the same length',
+  'q.count':'Tap when the number matches the dots','q.pair':'Tap when two shapes are alike','q.dice':'Tap on a double',
+  'q.clock':'Tap when both clocks show the same time','q.order':'Tap when the numbers go up',
+  'q.green':'Tap as soon as the lamp is green','q.countdown':'Tap when the countdown would hit 0',
+  'w.red':'RED','w.blue':'BLUE','w.green':'GREEN','w.purple':'PURPLE',
+  player:'Player {n}',ready:'Get ready …',point:'+1',minus:'−1 for {p}',nobody:'Nobody – on we go',missed:'Missed',tooEarly:'Too early!',
+  wins:'{p} wins!',done:'Done!',again:'Play again',back:'Back to setup',aborted:'Match stopped.',
+  'q.countdownKids':'Tap as soon as the 0 comes',
+  'd.kids':'Lots of time per picture, very simple tasks, countdown numbers stay visible. Pressing too early costs no point.',
+  'd.easy':'1.6 seconds per picture.','d.normal':'1.2 seconds per picture.','d.hard':'0.85 seconds per picture and smaller differences.',
+  'gi.count':'{n} of {all} mini-games on. Tap to switch on or off.','gi.read':'Colour word, sum, clock and order need reading or arithmetic.',
+  'gi.last':'At least one mini-game stays on.',
+  'r.time':'Time: {n} s','r.avg':'Avg. reaction: {n} ms','r.wrong':'Too early/wrong: {n}','r.missed':'Missed: {n}','r.record':'New best time!',
+  'b.diff':'Difficulty','b.avg':'Avg. reaction','b.none':'No best results yet – play a match alone!','b.matches':'Matches played: {n}',
+  'mcp.state':'game state read','mcp.set':'match set up'
+}});
+const {$,t}=Tools;
+const RG=window.ReflexGames;
+const LS='reflex-party.state.v1';
+const TARGETS=[5,10,15],BANNER=1300,SPEECH_MAX=5000;
+const introMs=d=>d==='kids'?2200:1400;
+const taskKey=(id,d)=>'q.'+(id==='countdown'&&d==='kids'?'countdownKids':id);
+
+const state=Tools.load(LS,{players:2,target:10,diff:'normal',games:RG.IDS.slice(),sound:true,vibrate:true,speak:true,best:{},matches:0,last:null});
+if(![1,2,3,4].includes(state.players))state.players=2;
+if(!TARGETS.includes(state.target))state.target=10;
+if(!RG.DIFFS.includes(state.diff))state.diff='normal';
+if(!Array.isArray(state.games))state.games=RG.IDS.slice();
+state.games=RG.IDS.filter(id=>state.games.includes(id));
+if(!state.games.length)state.games=RG.IDS.slice();
+for(const k of ['sound','vibrate','speak'])if(typeof state[k]!=='boolean')state[k]=true;
+if(!state.best||typeof state.best!=='object'||Array.isArray(state.best))state.best={};
+if(!(Number.isInteger(state.matches)&&state.matches>=0))state.matches=0;
+if(!state.last||typeof state.last!=='object')state.last=null;
+const save=()=>Tools.save(LS,state);
+
+const rnd=Tools.randomInt;
+const now=()=>performance.now();
+const pname=i=>t('player',{n:i+1});
+const arena=$('arena'),stim=$('stim'),setup=$('setup');
+
+/* ---------- Timers (all through later(), so stopping clears everything) ---------- */
+const timers=new Set();
+const later=(fn,ms)=>{const id=setTimeout(()=>{timers.delete(id);fn();},ms);timers.add(id);return id;};
+function clearTimers(){for(const id of timers)clearTimeout(id);timers.clear();}
+
+/* ---------- Sound & vibration ---------- */
+const tone=(f1,f2,ms,type='sine',vol=.25,at=0)=>{if(state.sound)Tools.audio.tone({freq:f1,to:f2,ms,type,vol,at});};
+const sfx={
+  step:()=>tone(520,520,40,'sine',.06),
+  point:()=>{tone(660,990,120,'triangle');tone(990,1320,160,'triangle',.25,.12);},
+  wrong:()=>tone(170,110,180,'square',.12),
+  win:()=>{[523,659,784,1047].forEach((f,i)=>tone(f,f,180,'triangle',.25,i*.15));}
+};
+const buzz=ms=>{if(state.vibrate&&navigator.vibrate)try{navigator.vibrate(ms);}catch(_){}};
+
+/* ---------- Reading aloud (Web Speech API of the browser; voices from the device, works offline with most) ---------- */
+const canSpeak='speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;
+const speakOn=()=>state.speak&&canSpeak;
+function hush(){if(canSpeak)try{speechSynthesis.cancel();}catch(_){}}
+// Calls done() when the text has been read (or failed); never more than once
+function speak(text,done){
+  let called=false;const fin=()=>{if(!called){called=true;if(done)done();}};
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang=Tools.lang()==='en'?'en-GB':'de-DE';u.rate=Tools.lang()==='en'?1:.95;
+    u.onend=fin;u.onerror=e=>{Tools.diag.log('speech error',{error:e&&e.error});fin();};
+    speechSynthesis.speak(u);
+  }catch(e){Tools.diag.log('speech error',{name:e&&e.name});fin();}
+}
+
+/* ---------- Drawing the mini-games (SVG and text; every picture is plain data in data-state for tests) ---------- */
+const SHAPE_PATH={
+  circle:'<circle cx="50" cy="50" r="40"/>',
+  square:'<rect x="12" y="12" width="76" height="76" rx="6"/>',
+  triangle:'<path d="M50 8L92 88H8Z"/>',
+  star:'<path d="M50 6l12.9 27.3 29.9 3.6-22 20.6 5.7 29.6L50 72.6 23.5 87.1l5.7-29.6-22-20.6 29.9-3.6Z"/>',
+  hexagon:'<path d="M50 6l38 22v44L50 94 12 72V28Z"/>',
+  diamond:'<path d="M50 4l40 46-40 46-40-46Z"/>'
+};
+const PIPS={1:[[50,50]],2:[[28,28],[72,72]],3:[[28,28],[50,50],[72,72]],4:[[28,28],[72,28],[28,72],[72,72]],
+  5:[[28,28],[72,28],[50,50],[28,72],[72,72]],6:[[28,26],[72,26],[28,50],[72,50],[28,74],[72,74]]};
+const svg=(vb,inner)=>`<svg viewBox="${vb}" focusable="false">${inner}</svg>`;
+const die=v=>svg('0 0 100 100',`<rect class="die" x="4" y="4" width="92" height="92" rx="16"/>`+PIPS[v].map(([x,y])=>`<circle class="pip" cx="${x}" cy="${y}" r="9"/>`).join(''));
+function clockFace(h,m){
+  let ticks='';
+  for(let i=0;i<12;i++){const a=i*Math.PI/6,r1=i%3?40:36;ticks+=`<line class="tickm" x1="${(50+r1*Math.sin(a)).toFixed(1)}" y1="${(50-r1*Math.cos(a)).toFixed(1)}" x2="${(50+44*Math.sin(a)).toFixed(1)}" y2="${(50-44*Math.cos(a)).toFixed(1)}"/>`;}
+  const ha=((h%12)+m/60)*30,ma=m*6;
+  const hand=(deg,len,w)=>{const a=deg*Math.PI/180;return `<line class="hand" stroke-width="${w}" x1="50" y1="50" x2="${(50+len*Math.sin(a)).toFixed(1)}" y2="${(50-len*Math.cos(a)).toFixed(1)}"/>`;};
+  return svg('0 0 100 100',`<circle class="face" cx="50" cy="50" r="46"/>${ticks}${hand(ha,24,6)}${hand(ma,36,3.5)}<circle cx="50" cy="50" r="3.5" fill="currentColor"/>`);
+}
+const n0=v=>Tools.fmt(v,0);
+function draw(s){
+  switch(s.g){
+    case 'color':return `<div class="pic"><span class="word ink-${s.ink}">${Tools.esc(t('w.'+s.word))}</span></div>`;
+    case 'sum':return `<div class="pic"><span class="eq">${n0(s.a)} ${s.op==='*'?'×':'+'} ${n0(s.b)} = ${n0(s.c)}</span></div>`;
+    case 'bars':{
+      const x=v=>s.centred?(100-v)/2:0;
+      return `<div class="pic bars">${svg('0 0 100 50',`<rect class="track" x="0" y="4" width="100" height="16" rx="4"/><rect class="track" x="0" y="30" width="100" height="16" rx="4"/>`+
+        `<rect class="bar" x="${x(s.a)}" y="4" width="${s.a}" height="16" rx="4"/><rect class="bar" x="${x(s.b)}" y="30" width="${s.b}" height="16" rx="4"/>`)}</div>`;
+    }
+    case 'count':return `<div class="pic dots">${svg('0 0 100 100',`<rect class="track" x="0" y="0" width="100" height="100" rx="10"/>`+
+      s.dots.map(d=>`<circle class="ink-blue" cx="${d.x}" cy="${d.y}" r="6"/>`).join(''))}<b class="big">${n0(s.n)}</b></div>`;
+    case 'pair':return `<div class="pic pairs">${s.items.map(i=>svg('0 0 100 100',SHAPE_PATH[i.shape].replace('/>',` class="ink-${i.ink}"/>`))).join('')}</div>`;
+    case 'dice':return `<div class="pic dice">${die(s.d[0])}${die(s.d[1])}</div>`;
+    case 'clock':return `<div class="pic clock">${clockFace(s.h,s.m)}<b class="big">${s.dh}:${String(s.dm).padStart(2,'0')}</b></div>`;
+    case 'order':return `<div class="pic nums">${s.nums.map(v=>`<b>${n0(v)}</b>`).join('')}</div>`;
+    case 'green':return `<div class="pic lamp">${svg('0 0 100 100',`<rect x="22" y="4" width="56" height="92" rx="14" fill="var(--lamp-off)"/><circle cx="50" cy="50" r="22" fill="var(--lamp-${s.lamp})"/>`)}</div>`;
+    case 'countdown':return `<div class="pic"><span class="cd">${s.shown==null?'?':n0(s.shown)}</span></div>`;
+  }
+  return '';
+}
+
+/* ---------- Pads ---------- */
+// Bottom row: players 1 (and 2); top row (turned 180°): 2 with two players, 3 (and 4) with three or four
+const layout=n=>n===1?{bottom:[0],top:[]}:n===2?{bottom:[0],top:[1]}:n===3?{bottom:[0,1],top:[2]}:{bottom:[0,1],top:[3,2]};
+let pads=[];
+function buildPads(n){
+  const l=layout(n);pads=[];
+  for(const [id,list] of [['padsTop',l.top],['padsBottom',l.bottom]]){
+    const box=$(id);box.textContent='';
+    for(const i of list){
+      const b=document.createElement('button');
+      b.type='button';b.className='pad';b.dataset.p=i;
+      b.style.setProperty('--pc',`var(--p${i+1})`);
+      b.innerHTML='<span class="pad-inner"><span class="pad-name"></span><b class="pad-score">0</b></span>';
+      box.appendChild(b);pads[i]=b;
+    }
+  }
+  $('taskTop').hidden=n<2;arena.dataset.n=n;
+}
+function renderPads(){
+  if(!match)return;
+  pads.forEach((b,i)=>{
+    b.querySelector('.pad-name').textContent=pname(i);
+    b.querySelector('.pad-score').textContent=n0(match.scores[i]);
+    b.classList.toggle('locked',!!(match.round&&match.round.locked.has(i)));
+  });
+}
+const flash=(b,cls)=>{b.classList.remove(cls);void b.offsetWidth;b.classList.add(cls);later(()=>b.classList.remove(cls),520);};
+// Touch and mouse react on pointerdown (several fingers at once are fine); keyboard: click with detail 0
+for(const id of ['padsTop','padsBottom']){
+  $(id).addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    const b=e.target.closest('.pad');if(b){e.preventDefault();press(Number(b.dataset.p));}
+  });
+  $(id).addEventListener('click',e=>{const b=e.target.closest('.pad');if(b&&e.detail===0)press(Number(b.dataset.p));});
+  $(id).addEventListener('contextmenu',e=>e.preventDefault());
+}
+document.addEventListener('keydown',e=>{
+  if(!match||e.repeat||e.ctrlKey||e.metaKey||e.altKey)return;
+  if(document.querySelector('.menu-open, dialog[open]'))return;
+  const i='1234'.indexOf(e.key);
+  if(i>=0&&i<match.n){e.preventDefault();press(i);}
+});
+
+/* ---------- Match ----------
+   phase: idle (setup) → play (rounds) → over (result) → play (again) or idle.
+   Round: intro (task only, taps ignored) → run (a new picture every STEP ms; a tap on a "hit now!" picture scores,
+   any other tap is −1 and locks that player for the round) → result (banner) → next round or over.
+   No tap on two "hit now!" pictures in a row → the round ends without a point. Blind countdown: see games.js. */
+let match=null,phase='idle';
+function setPhase(p){
+  phase=p;arena.dataset.phase=p;
+  setup.hidden=p!=='idle';arena.hidden=p==='idle';$('btnStop').hidden=p==='idle';
+  for(const b of document.querySelectorAll('#players button,#targets button,#diffs button,#games button,#btnAllGames'))b.disabled=p==='play';
+}
+function startMatch(){
+  clearTimers();if(state.sound)Tools.audio.unlock();
+  const n=state.players;
+  match={n,target:state.target,diff:state.diff,games:state.games.slice(),scores:Array(n).fill(0),wrong:Array(n).fill(0),
+    hits:Array(n).fill(0),missed:0,times:[],t0:now(),round:null,lastGame:null,rounds:0};
+  buildPads(n);setPhase('play');renderPads();
+  Tools.diag.log('match start',{players:n,target:match.target,diff:match.diff,games:match.games.length});
+  startRound();
+}
+function startRound(){
+  const opts=match.games.length>1?match.games.filter(g=>g!==match.lastGame):match.games;
+  const id=opts[rnd(opts.length)];
+  match.lastGame=id;match.rounds++;
+  match.round={id,phase:'intro',i:0,sinceLast:0,okMissed:0,locked:new Set(),state:null,okAt:0};
+  $('task').textContent=$('taskTop').textContent=t(taskKey(id,match.diff));
+  stim.innerHTML=`<div class="pic"><span class="eq">${Tools.esc(t('ready'))}</span></div><div class="banner" hidden></div>`;
+  stim.dataset.game=id;delete stim.dataset.state;delete stim.dataset.result;
+  renderPads();
+  Tools.diag.log('round',{n:match.rounds,game:id});
+  // The pictures start when the intro time is over and the task has been read aloud (at most SPEECH_MAX)
+  const r=match.round,go=id==='countdown'?runCountdown:step;
+  let wait=1;
+  const one=()=>{if(--wait===0&&match&&match.round===r&&phase==='play')go();};
+  if(speakOn()){
+    wait=2;let read=false;
+    const end=()=>{if(!read){read=true;one();}};
+    speak(t(taskKey(id,match.diff)),end);later(end,SPEECH_MAX);
+  }
+  later(one,introMs(match.diff));
+}
+function show(s){
+  const r=match.round;
+  r.state=s;
+  stim.innerHTML=draw(s)+'<div class="banner" hidden></div>';
+  stim.dataset.state=JSON.stringify(s);
+  stim.classList.remove('fresh');void stim.offsetWidth;stim.classList.add('fresh');
+}
+function step(){
+  const r=match.round;
+  if(phase!=='play'||r.phase==='result')return;
+  if(r.phase==='run'&&RG.ok(r.state)){
+    // A "hit now!" picture went by without anyone pressing
+    r.okMissed++;if(match.n===1)match.missed++;
+    if(r.okMissed>=2){endRound(null,'nobody');return;}
+  }
+  r.phase='run';
+  const want=RG.wantAt(rnd,r.i,r.sinceLast);
+  show(RG.make(r.id,rnd,want,match.diff,r.state));
+  r.sinceLast=want?0:r.sinceLast+1;r.i++;
+  if(want)r.okAt=now();
+  sfx.step();
+  later(step,RG.STEP[match.diff]);
+}
+function runCountdown(){
+  const r=match.round,plan=RG.countdownPlan(match.diff);
+  r.phase='run';r.plan=plan;r.t0=now();
+  r.cd=true;
+  const shownAt=k=>{ // k = 0, 1, 2 → shows 3, 2, 1 (or hidden)
+    if(phase!=='play'||match.round!==r||r.phase!=='run')return;
+    show({g:'countdown',shown:k<plan.visible?3-k:null});
+    if(k<2)later(()=>shownAt(k+1),plan.tick);
+  };
+  shownAt(0);
+  later(()=>{if(match.round===r&&r.phase==='run'){r.okAt=now();if(plan.visible>=3)show({g:'countdown',shown:0});}},plan.zero);
+  later(()=>{
+    if(match.round!==r||r.phase!=='run')return;
+    if(match.n===1)match.missed++;
+    endRound(null,'nobody');
+  },plan.zero+plan.window);
+}
+// Is a tap right now a hit? Blind countdown: from zero on (okAt set), else the picture decides.
+const hitNow=r=>r.cd?r.okAt>0:RG.ok(r.state);
+function press(p){
+  if(phase!=='play'||!match||p>=match.n)return;
+  const r=match.round;
+  if(!r||r.phase!=='run'||r.locked.has(p))return;
+  if(hitNow(r)){
+    const rt=now()-r.okAt;
+    match.scores[p]++;match.hits[p]++;match.times.push(rt);
+    Tools.diag.log('hit',{player:p+1,game:r.id,ms:Math.round(rt)});
+    flash(pads[p],'win');sfx.point();buzz(30);
+    endRound(p,'point');
+  }else{
+    if(match.diff!=='kids')match.scores[p]=Math.max(0,match.scores[p]-1);   // kids: only the break, no minus
+    match.wrong[p]++;
+    r.locked.add(p);
+    Tools.diag.log('wrong',{player:p+1,game:r.id});
+    flash(pads[p],'bad');sfx.wrong();buzz([20,40,20]);
+    renderPads();
+    if(r.locked.size>=match.n)endRound(null,match.n===1?'early':'nobody',p);
+    else $('announce').textContent=match.diff==='kids'?t('tooEarly'):t('minus',{p:pname(p)});
+  }
+}
+function endRound(winner,why,who){
+  const r=match.round;
+  r.phase='result';clearTimers();
+  renderPads();
+  const banner=stim.querySelector('.banner');
+  if(winner!=null){
+    banner.style.setProperty('--bc',`var(--p${winner+1})`);
+    banner.innerHTML=`<span class="who">${Tools.esc(pname(winner))}</span><span>${Tools.esc(t('point'))}</span>`;
+  }else{
+    banner.style.removeProperty('--bc');
+    banner.innerHTML=`<span>${Tools.esc(t(why==='early'?'tooEarly':match.n===1?'missed':'nobody'))}</span>`;
+  }
+  banner.hidden=false;
+  stim.dataset.result=winner!=null?'p'+(winner+1):why;
+  $('announce').textContent=winner!=null?`${pname(winner)} ${t('point')}`:banner.textContent;
+  if(who==null&&winner==null)Tools.diag.log('round over',{why});
+  if(winner!=null&&match.scores[winner]>=match.target)later(()=>finish(winner),BANNER);
+  else later(startRound,BANNER);
+}
+function finish(winner){
+  clearTimers();
+  const n=match.n,ms=match.times;
+  const res={players:n,target:match.target,diff:match.diff,scores:match.scores.slice(),wrong:match.wrong.slice(),winner,
+    rounds:match.rounds,at:new Date().toISOString()};
+  if(n===1){
+    res.seconds=Math.round((now()-match.t0)/100)/10;
+    res.avg=ms.length?Math.round(ms.reduce((a,b)=>a+b,0)/ms.length):null;
+    res.missed=match.missed;
+    const k=match.diff+'-'+match.target,prev=state.best[k];
+    res.record=res.avg!=null&&(!prev||res.avg<prev.avg);
+    if(res.record)state.best[k]={avg:res.avg,seconds:res.seconds,at:res.at};
+  }
+  state.matches++;state.last=res;save();
+  match.round=null;
+  setPhase('over');sfx.win();buzz([60,80,60]);
+  Tools.diag.log('match over',{players:n,winner:winner+1,rounds:res.rounds});
+  renderResult();renderBest();
+  if(speakOn())speak(stim.querySelector('h2').textContent);
+}
+function renderResult(){
+  const r=state.last;if(!r)return;
+  $('task').textContent='';$('taskTop').textContent='';
+  let body;
+  if(r.players===1){
+    const li=s=>`<li><span>${Tools.esc(s)}</span></li>`;
+    body=`<h2>${Tools.esc(t('done'))}</h2>`+(r.record?`<p class="record" id="resRecord">${Tools.icon('trophy')} ${Tools.esc(t('r.record'))}</p>`:'')+
+      `<ul class="rank" id="resList">${li(t('r.time',{n:Tools.fmt(r.seconds,1)}))}${r.avg!=null?li(t('r.avg',{n:n0(r.avg)})):''}${li(t('r.wrong',{n:n0(r.wrong[0])}))}${li(t('r.missed',{n:n0(r.missed)}))}</ul>`;
+  }else{
+    const order=r.scores.map((s,i)=>i).sort((a,b)=>r.scores[b]-r.scores[a]||a-b);
+    body=`<h2 id="resWinner" style="color:var(--p${r.winner+1})">${Tools.esc(t('wins',{p:pname(r.winner)}))}</h2>`+
+      `<ol class="rank" id="resList">${order.map(i=>`<li style="--pc:var(--p${i+1})"><span><span class="dot"></span>${Tools.esc(pname(i))}</span><b>${n0(r.scores[i])}</b></li>`).join('')}</ol>`;
+  }
+  stim.innerHTML=`<div class="result" role="group" aria-labelledby="resHead">${body.replace('<h2','<h2 id="resHead"').replace(' id="resWinner"','')}`+
+    `<div class="row"><button type="button" class="btn primary" id="btnAgain">${Tools.icon('refresh')}<span>${Tools.esc(t('again'))}</span></button>`+
+    `<button type="button" class="btn" id="btnBack">${Tools.icon('users')}<span>${Tools.esc(t('back'))}</span></button></div></div>`;
+  stim.removeAttribute('aria-hidden');
+  delete stim.dataset.state;delete stim.dataset.game;delete stim.dataset.result;
+  $('btnAgain').addEventListener('click',()=>{stim.setAttribute('aria-hidden','true');startMatch();});
+  $('btnBack').addEventListener('click',()=>{stim.setAttribute('aria-hidden','true');quit();});
+  $('announce').textContent=stim.querySelector('h2').textContent;
+}
+function quit(){
+  clearTimers();hush();match=null;stim.textContent='';stim.setAttribute('aria-hidden','true');setPhase('idle');renderSetup();
+}
+function stop(reason){
+  if(phase==='idle')return;
+  const wasPlaying=phase==='play';
+  quit();
+  if(wasPlaying){Tools.toast(t('aborted'));Tools.diag.log('stopped',{reason});}
+}
+$('btnStart').addEventListener('click',startMatch);
+$('btnStop').addEventListener('click',()=>stop('button'));
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&phase==='play')stop('hidden');});
+
+/* ---------- Setup and settings ---------- */
+function renderSetup(){
+  for(const b of document.querySelectorAll('#players button'))b.setAttribute('aria-pressed',String(Number(b.dataset.n)===state.players));
+  for(const b of document.querySelectorAll('#targets button'))b.setAttribute('aria-pressed',String(Number(b.dataset.target)===state.target));
+  for(const b of document.querySelectorAll('#diffs button'))b.setAttribute('aria-pressed',String(b.dataset.diff===state.diff));
+  const box=$('games');
+  box.innerHTML=RG.IDS.map(id=>`<button type="button" data-game="${id}" aria-pressed="${state.games.includes(id)}">${Tools.esc(t('g.'+id))}</button>`).join('');
+  if(phase==='play')for(const b of box.querySelectorAll('button'))b.disabled=true;
+  $('diffInfo').textContent=t('d.'+state.diff);
+  const read=state.games.some(g=>!RG.NO_READING.includes(g));
+  $('gamesInfo').textContent=t('gi.count',{n:n0(state.games.length),all:n0(RG.IDS.length)})+(read&&state.diff==='kids'?' '+t('gi.read'):'');
+  $('optSpeak').checked=state.speak;$('optSpeak').disabled=!canSpeak;$('speakInfo').hidden=canSpeak;
+}
+function renderBest(){
+  const rows=[];
+  for(const d of RG.DIFFS)for(const tg of TARGETS){
+    const b=state.best[d+'-'+tg];
+    if(b&&Number.isFinite(b.avg))rows.push(`<tr><td>${Tools.esc(t(d))} · ${n0(tg)}</td><td class="num">${n0(b.avg)} ms</td></tr>`);
+  }
+  $('bestList').innerHTML=(rows.length?`<table class="best"><thead><tr><th scope="col">${Tools.esc(t('b.diff'))}</th><th scope="col" class="num">${Tools.esc(t('b.avg'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
+    :`<p class="info">${Tools.esc(t('b.none'))}</p>`)+(state.matches?`<p class="info">${Tools.esc(t('b.matches',{n:n0(state.matches)}))}</p>`:'');
+}
+// Changes outside a running match (an agent too); false while playing
+function change(patch){
+  if(phase==='play')return false;
+  Object.assign(state,patch);save();
+  if(phase==='over')quit();else renderSetup();
+  Tools.diag.log('settings',{players:state.players,target:state.target,diff:state.diff,games:state.games.length});
+  return true;
+}
+$('players').addEventListener('click',e=>{const b=e.target.closest('button');if(b)change({players:Number(b.dataset.n)});});
+$('targets').addEventListener('click',e=>{const b=e.target.closest('button');if(b)change({target:Number(b.dataset.target)});});
+// Choosing "Kinder" also switches to the games without reading (they can be changed again below)
+$('diffs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  change(b.dataset.diff==='kids'&&state.diff!=='kids'?{diff:'kids',games:RG.NO_READING.slice()}:{diff:b.dataset.diff});});
+$('games').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  const id=b.dataset.game,on=state.games.includes(id);
+  if(on&&state.games.length===1){Tools.toast(t('gi.last'));return;}
+  change({games:RG.IDS.filter(g=>g===id?!on:state.games.includes(g))});
+});
+$('btnAllGames').addEventListener('click',()=>change({games:RG.IDS.slice()}));
+$('btnKidGames').addEventListener('click',()=>change({games:RG.NO_READING.slice()}));
+$('optSpeak').addEventListener('change',e=>{state.speak=e.target.checked;save();if(!state.speak)hush();});
+for(const [id,k] of [['optSound','sound'],['optVibrate','vibrate']]){
+  $(id).checked=state[k];
+  $(id).addEventListener('change',e=>{state[k]=e.target.checked;save();if(k==='sound'&&state[k])Tools.audio.unlock();});
+}
+
+setPhase('idle');renderSetup();renderBest();
+Tools.onLang(()=>{
+  renderSetup();renderBest();
+  if(phase==='play'){renderPads();if(match.round)$('task').textContent=$('taskTop').textContent=t(taskKey(match.round.id,match.diff));if(match.round&&match.round.state&&match.round.phase!=='result')show(match.round.state);}
+  else if(phase==='over'){renderPads();renderResult();}
+});
+Tools.diag.info(()=>({phase,players:state.players,target:state.target,diff:state.diff,games:state.games.length,
+  round:match&&match.round?{game:match.round.id,phase:match.round.phase}:null,scores:match?match.scores:null,sound:state.sound,vibrate:state.vibrate,speak:state.speak,canSpeak,matches:state.matches}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const pubLast=r=>r&&{players:r.players,target_points:r.target,difficulty:r.diff,scores:r.scores,winner:r.winner+1,rounds:r.rounds,
+  mistakes:r.wrong,...(r.players===1?{seconds:r.seconds,average_reaction_ms:r.avg,missed:r.missed}:{})};
+Tools.mcp.register({
+  name:'get_state',title:'Read game state',label:'mcp.state',readOnly:true,
+  description:'Reads Reflex Party, a party reaction game for 1–4 people on one device: the settings (players, target score, difficulty, enabled mini-games), the phase (idle = setup, play, over), the running match (scores per player, current mini-game), the last finished match and the best solo results (average reaction in milliseconds per difficulty and target).',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>({
+    settings:{players:state.players,target_points:state.target,difficulty:state.diff,games:state.games.slice(),sounds:state.sound,vibration:state.vibrate,read_aloud:state.speak},
+    available_games:RG.IDS.slice(),phase,
+    match:match?{scores:match.scores.slice(),current_game:match.round?match.round.id:null,rounds:match.rounds}:null,
+    last_match:pubLast(state.last),
+    solo_best:Object.entries(state.best).map(([k,b])=>({difficulty:k.split('-')[0],target_points:Number(k.split('-')[1]),average_reaction_ms:b.avg,seconds:b.seconds})),
+    matches_played:state.matches
+  })
+});
+Tools.mcp.register({
+  name:'set_game',title:'Set up the match',label:'mcp.set',
+  description:'Sets players, target score, difficulty and/or the mini-games for the next match (the players start it themselves). Not possible while a match is running. Mini-games: color (word matches its colour), sum, bars (same length), count (number matches dots), pair (two identical shapes), dice (double), clock (analog = digital), order (ascending), green (lamp turns green), countdown (blind countdown to 0). Returns the new settings.',
+  inputSchema:{type:'object',properties:{
+    players:{type:'integer',minimum:1,maximum:4,description:'Number of people at the device (1 = solo practice).'},
+    target_points:{type:'integer',enum:TARGETS,description:'Points needed to win.'},
+    difficulty:{type:'string',enum:RG.DIFFS,description:'kids: 2.2 s per picture, very simple tasks, no point lost for pressing too early; easy: 1.6 s per picture, normal: 1.2 s, hard: 0.85 s and smaller differences.'},
+    games:{type:'array',items:{type:'string',enum:RG.IDS},minItems:1,uniqueItems:true,description:'Mini-games to play (at least one).'}
+  },additionalProperties:false},
+  execute:({players,target_points,difficulty,games})=>{
+    const patch={};
+    if(players!==undefined)patch.players=players;
+    if(target_points!==undefined)patch.target=target_points;
+    if(difficulty!==undefined)patch.diff=difficulty;
+    if(games!==undefined){
+      if(!Array.isArray(games)||!games.length||games.some(g=>!RG.IDS.includes(g)))throw new Error('Choose at least one of the listed mini-games.');
+      patch.games=RG.IDS.filter(g=>games.includes(g));
+    }
+    if(!change(patch))throw new Error('A match is running – wait until it is over.');
+    return {players:state.players,target_points:state.target,difficulty:state.diff,games:state.games.slice()};
+  }
+});
+})();
+</script>
+</body>
+</html>
