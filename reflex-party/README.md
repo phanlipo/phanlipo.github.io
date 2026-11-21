@@ -9,7 +9,8 @@ Partyspiel für 1–4 Personen an einem Gerät: Jede Person hat eine farbige Tas
 
 ## Ablauf
 
-- **Partie:** `idle` (Auswahl) → `play` → `over` (Ergebnis) → `play` (Nochmal) oder `idle`.
+- **Partie:** `idle` (Auswahl) → `play` ⇄ `paused` → `over` (Ergebnis) → `play` (Nochmal) oder `idle`.
+- **Vollbild & Pause (wie `air-hockey`):** Während `play` ist die Kopfleiste ausgeblendet (`body.playing`), ein runder Pause-Knopf sitzt oben links im Bild. „Spiel starten“, „Nochmal“ und „Weiterspielen“ schalten das Vollbild ein (Einstellung `fullscreen`, abschaltbar). Pause durch Knopf, Leertaste, Verlassen des Vollbilds oder der App: Die laufende Runde verfällt, „Weiterspielen“ startet eine neue, die Punkte bleiben. War der Siegpunkt schon gefallen, endet die Partie statt zu pausieren. Stoppen nur in der Pause (Kopfleiste). Bildschirm bleibt während `play` an (`Tools.wakeLock`).
 - **Auswahl vor dem Start:** Mitspieler, Schwierigkeit, Minispiele (Chips; „Alle“, „Ohne Lesen“ = `NO_READING`), Punkteziel, Vorlesen. Im Menü nur Töne, Vibration, Bestwerte.
 - **Runde:** zufälliges Minispiel aus den gewählten, nie zweimal hintereinander. `intro` (1,4 s, bei Kindern 2,2 s, nur die Aufgabe, Drücken zählt nicht; mit Vorlesen zusätzlich bis die Stimme fertig ist, höchstens 5 s) → `run` (alle `STEP[diff]` ms ein neues Bild) → `result` (1,3 s Banner) → nächste Runde.
 - **Treffer-Bilder:** nie das erste Bild einer Runde, danach mit 28 % Wahrscheinlichkeit, spätestens jedes 6. Bild. Laufen zwei Treffer-Bilder ohne Drücken vorbei, endet die Runde ohne Punkt.
