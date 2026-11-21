@@ -11,6 +11,7 @@ Alles läuft im Browser, ohne Server und ohne Build-Schritt. Daten bleiben im `l
 | Seite | Ordner | Beschreibung |
 |---|---|---|
 | [4 gewinnt](https://phanlipo.github.io/four-in-a-row/) | `four-in-a-row/` | Steine einwerfen, vier in eine Reihe bringen – zu zweit an einem Handy oder gegen den Computer, mit Punktestand. |
+| [Airhockey](https://phanlipo.github.io/air-hockey/) | `air-hockey/` | Airhockey auf dem Handy oder Tablet: allein gegen den Computer in drei Stärken oder zu zweit an einem Gerät – jeder mit einem Finger auf seiner Hälfte. |
 | [Anzeigetafel](https://phanlipo.github.io/scoreboard/) | `scoreboard/` | Spielstand groß anzeigen für Fußball (mit Spieluhr), Tischtennis, Tennis, Padel und Darts – mit Aufschlag-Anzeige, Sätzen, Finish-Vorschlag und eigenen Namen. |
 | [API-Check](https://phanlipo.github.io/api-check/) | `api-check/` | REST-APIs ausprobieren: API-Adresse und OpenAPI/Swagger-Spezifikation (JSON oder YAML) angeben – daraus entsteht ein Formular für jede Anfrage. Konfigurationen bleiben gespeichert. |
 | [Atomuhr](https://phanlipo.github.io/atomic-clock/) | `atomic-clock/` | Sekundengenaue Uhrzeit, abgeglichen mit der Serveruhr: zeigt, wie weit die eigene Uhr danebenliegt, mit Zeitzonen, Weltuhren und nächster Zeitumstellung. |

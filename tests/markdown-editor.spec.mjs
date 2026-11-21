@@ -5,7 +5,12 @@ import { test, expect, openMenu, closeMenu, mockAndroidShare } from './helpers.m
 
 const raw = page => page.locator('#raw');
 const view = page => page.locator('#view');
-const tool = (page, k) => page.locator(`#toolbar [data-tool="${k}"]`);
+const tool = (page, k) => page.locator(`[data-tool="${k}"]`);
+// Taps a formatting tool like a user: the less used ones are behind "Mehr" (#moreTools), which closes again after use
+async function useTool(page, k) {
+  if (await page.locator(`#toolbar [data-tool="${k}"]`).count() === 0 && await page.locator('#moreTools').isHidden()) await page.click('#btnMore');
+  await tool(page, k).click();
+}
 const stored = page => page.evaluate(() => JSON.parse(localStorage.getItem('markdown-editor.files.v1') || '[]'));
 const select = (page, from, to) => raw(page).evaluate((el, [a, b]) => { el.focus(); el.setSelectionRange(a, b); }, [from, to]);
 // The view is converted back to Markdown shortly after typing; the text display then shows it
@@ -16,53 +21,83 @@ async function rawText(page) {
 
 test.beforeEach(async ({ page }) => { await page.goto('/markdown-editor/'); });
 
+test('toolbar: four tools with words and "Mehr" for the rest; the keyboard focus stays in the editor', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await page.reload();
+  const main = page.locator('#toolbar > button');
+  await expect(main).toHaveCount(5);
+  expect(await main.evaluateAll(bs => bs.map(b => b.dataset.tool || b.id))).toEqual(['undo', 'bold', 'heading', 'ul', 'btnMore']);
+  // One row, every word visible
+  const ys = await main.evaluateAll(bs => bs.map(b => Math.round(b.getBoundingClientRect().y)));
+  expect(new Set(ys).size).toBe(1);
+  for (const l of await page.locator('#toolbar .tb-label').all()) await expect(l).toBeVisible();
+  await expect(page.locator('#btnMore')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#moreTools')).toBeHidden();
+  await raw(page).fill('Hallo');
+  await select(page, 0, 5);
+  await page.click('#btnMore');
+  await expect(page.locator('#btnMore')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#moreTools [data-tool]')).toHaveCount(10);
+  await expect(raw(page)).toBeFocused();                       // tapping "Mehr" keeps the keyboard open
+  await page.locator('#moreTools [data-tool="italic"]').click();
+  await expect(raw(page)).toHaveValue('*Hallo*');
+  await expect(page.locator('#moreTools')).toBeHidden();       // closes after use
+  await expect(page.locator('#btnMore')).toHaveAttribute('aria-expanded', 'false');
+  await page.click('#btnMore');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#moreTools')).toBeHidden();
+  await page.click('#btnMore');
+  await page.click('#btnMore');                                // second tap closes
+  await expect(page.locator('#moreTools')).toBeHidden();
+});
+
 test('formatting buttons write Markdown in the text display', async ({ page }) => {
   await raw(page).fill('Hallo Welt');
   await select(page, 6, 10);
-  await tool(page, 'bold').click();
+  await useTool(page, 'bold');
   await expect(raw(page)).toHaveValue('Hallo **Welt**');
   // The selection stays on the word: a second tap removes the marks again
-  await tool(page, 'bold').click();
+  await useTool(page, 'bold');
   await expect(raw(page)).toHaveValue('Hallo Welt');
-  await tool(page, 'italic').click();
+  await useTool(page, 'italic');
   await expect(raw(page)).toHaveValue('Hallo *Welt*');
   // Heading cycles through levels 1–3 and off
-  await tool(page, 'heading').click();
+  await useTool(page, 'heading');
   await expect(raw(page)).toHaveValue('# Hallo *Welt*');
-  await tool(page, 'heading').click();
+  await useTool(page, 'heading');
   await expect(raw(page)).toHaveValue('## Hallo *Welt*');
-  await tool(page, 'heading').click();
-  await tool(page, 'heading').click();
+  await useTool(page, 'heading');
+  await useTool(page, 'heading');
   await expect(raw(page)).toHaveValue('Hallo *Welt*');
   // Lists over several lines, toggled off again
   await raw(page).fill('Eins\nZwei');
   await select(page, 0, 9);
-  await tool(page, 'ol').click();
+  await useTool(page, 'ol');
   await expect(raw(page)).toHaveValue('1. Eins\n2. Zwei');
-  await tool(page, 'ul').click();
+  await useTool(page, 'ul');
   await expect(raw(page)).toHaveValue('- Eins\n- Zwei');
-  await tool(page, 'ul').click();
+  await useTool(page, 'ul');
   await expect(raw(page)).toHaveValue('Eins\nZwei');
   await select(page, 0, 0);
-  await tool(page, 'task').click();
+  await useTool(page, 'task');
   await expect(raw(page)).toHaveValue('- [ ] Eins\nZwei');
   // Link around the selected word, the address is selected for typing
   await raw(page).fill('siehe Doku');
   await select(page, 6, 10);
-  await tool(page, 'link').click();
+  await useTool(page, 'link');
   await page.keyboard.type('https://example.org');
   await expect(raw(page)).toHaveValue('siehe [Doku](https://example.org)');
   // Divider and table on their own lines
   await raw(page).fill('Text');
   await select(page, 4, 4);
-  await tool(page, 'hr').click();
+  await useTool(page, 'hr');
   await expect(raw(page)).toHaveValue('Text\n\n---\n');
   await raw(page).fill('a');
   await select(page, 1, 1);
-  await tool(page, 'code').click();
+  await useTool(page, 'code');
   await expect(raw(page)).toHaveValue('a`Code`');
   // Undo goes back step by step
-  await tool(page, 'undo').click();
+  await useTool(page, 'undo');
   await expect(raw(page)).toHaveValue('a');
 });
 
@@ -112,17 +147,17 @@ test('formatting buttons work in the view', async ({ page }) => {
   await page.locator('#views [data-v="render"]').click();
   await view(page).click();
   await page.keyboard.type('Titel');
-  await tool(page, 'heading').click();
-  await tool(page, 'heading').click();
+  await useTool(page, 'heading');
+  await useTool(page, 'heading');
   await page.keyboard.press('End');
   await page.keyboard.press('Enter');
-  await tool(page, 'bold').click();
+  await useTool(page, 'bold');
   await page.keyboard.type('stark');
-  await tool(page, 'bold').click();
+  await useTool(page, 'bold');
   await page.keyboard.press('Enter');
-  await tool(page, 'ul').click();
+  await useTool(page, 'ul');
   await page.keyboard.type('Punkt');
-  await tool(page, 'task').click();
+  await useTool(page, 'task');
   await expect(view(page).locator('h2')).toHaveText('Titel');
   expect(await rawText(page)).toBe('## Titel\n\n**stark**\n\n- [ ] Punkt');
 });
