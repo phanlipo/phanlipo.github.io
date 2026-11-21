@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files: every change
 // creates a new version, the browser installs it in the background and removes the old one.
 const APP = "text-to-speech";
-const VERSION = '853607641946';
+const VERSION = 'bcb623198da4';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
