@@ -4462,6 +4462,32 @@ test.describe('air-hockey tools', () => {
   });
 });
 
+test.describe('pinball tools', () => {
+  test('get_state, set_game and new_game; a running game keeps its number of balls', async ({ page }) => {
+    await page.clock.install({ time: 0 });
+    await page.addInitScript(() => localStorage.setItem('pinball.settings.v1', JSON.stringify({ balls: 3, sound: false, vibrate: false, best: { 3: 12340 } })));
+    await open(page, '/pinball/');
+    let r = await call(page, 'pinball_get_state', {});
+    expect(r).toEqual({ ok: true, result: { phase: 'idle', balls_per_game: 3, ball: null, score: null, multiplier: 1, lit_lanes: 0, dropped_targets: 0,
+      next_game: { balls_per_game: 3 }, best_scores: { 3: 12340, 5: null } } });
+    r = await call(page, 'pinball_set_game', { balls_per_game: 5 });
+    expect(r.result).toMatchObject({ phase: 'idle', balls_per_game: 5 });
+    await expect(page.locator('#optBalls [data-v="5"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#best')).toHaveText('Noch kein Bestwert mit 5 Kugeln.');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Spiel eingestellt');
+    expect(await call(page, 'pinball_set_game', { balls_per_game: 4 })).toMatchObject({ ok: false });
+    r = await call(page, 'pinball_new_game', {});
+    expect(r.result).toMatchObject({ phase: 'play', balls_per_game: 5, ball: 1, score: 0 });
+    await expect(page.locator('#panel')).toBeHidden();
+    await expect(page.locator('#hudBall')).toHaveText('Kugel 1/5');
+    // During the game: the next game changes, the running one doesn't
+    r = await call(page, 'pinball_set_game', { balls_per_game: 3 });
+    expect(r.result).toMatchObject({ phase: 'play', balls_per_game: 5, next_game: { balls_per_game: 3 } });
+    await expect(page.locator('#hudBall')).toHaveText('Kugel 1/5');
+    expect(JSON.parse(await page.evaluate(() => localStorage.getItem('pinball.settings.v1')))).toMatchObject({ balls: 3 });
+  });
+});
+
 test.describe('table-tennis tools', () => {
   test('get_state, set_game and new_game; a running game keeps its settings', async ({ page }) => {
     await page.clock.install({ time: 0 });
