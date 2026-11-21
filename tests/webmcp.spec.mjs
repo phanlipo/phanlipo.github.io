@@ -4274,6 +4274,58 @@ test.describe('minesweeper tools', () => {
   });
 });
 
+test.describe('atomic-clock tools', () => {
+  test.use({ timezoneId: 'Europe/Berlin', allowedProblems: /Failed to load resource|ERR_FAILED/ });
+
+  test('get_time reads the synchronised time and the device offset', async ({ page }) => {
+    await fakeModelContext(page);
+    // The server clock is 3 s ahead of this machine (Date header in whole seconds)
+    await page.route('**/atomic-clock/manifest.webmanifest?sync=*', route => route.fulfill({
+      status: 200, headers: { Date: new Date(Date.now() + 3000).toUTCString() }, body: '' }));
+    await page.goto('/atomic-clock/');
+    await expect(page.locator('#btnSync')).toBeDisabled(); // sync starts shortly after loading
+    await expect(page.locator('#btnSync')).toBeEnabled({ timeout: 15000 });
+    const r = (await call(page, 'atomic_clock_get_time', { time_zone: 'UTC' })).result;
+    expect(r.synchronised).toBe(true);
+    expect(r.accuracy_ms).toBeLessThanOrEqual(100);
+    expect(Math.abs(r.device_clock_offset_ms + 3000)).toBeLessThanOrEqual(150);
+    expect(Math.abs(Date.parse(r.utc) - (Date.now() + 3000))).toBeLessThan(1500);
+    expect(r.utc_offset).toBe('UTC');
+    expect(r.big_clock_zone).toBe('Europe/Berlin');
+  });
+
+  test('set_time_zone and add_world_clock change the app; unknown zones are refused', async ({ page }) => {
+    await fakeModelContext(page);
+    await page.route('**/atomic-clock/manifest.webmanifest?sync=*', r => r.abort());
+    const t = new Date('2027-07-01T12:00:00Z').getTime();
+    await page.clock.install({ time: t - 1000 });
+    await page.clock.pauseAt(t);
+    await page.goto('/atomic-clock/');
+    let r = await call(page, 'atomic_clock_set_time_zone', { time_zone: 'America/New_York' });
+    expect(r.result).toEqual({ time_zone: 'America/New_York', local_time: '2027-07-01T08:00:00', utc_offset: 'UTC-4', utc: '2027-07-01T12:00:00.000Z' });
+    await expect(page.locator('#zoneName')).toHaveText('New York');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Zeitzone gewechselt');
+    r = (await call(page, 'atomic_clock_get_time', {})).result;
+    expect(r.synchronised).toBe(false);
+    expect(r.device_clock_offset_ms).toBeNull();
+    // US: first Sunday of November 2027 is the 7th, 2:00 EDT = 06:00 UTC
+    expect(r.next_offset_change).toEqual({ utc: '2027-11-07T06:00:00.000Z', utc_offset_before: 'UTC-4', utc_offset_after: 'UTC-5' });
+
+    r = await call(page, 'atomic_clock_add_world_clock', { time_zone: 'Australia/Adelaide' });
+    expect(r.result.local_time).toBe('2027-07-01T21:30:00');
+    expect(r.result.utc_offset).toBe('UTC+9:30');
+    await expect(page.locator('#worldList li .name')).toHaveText(['Adelaide']);
+    expect((await call(page, 'atomic_clock_add_world_clock', { time_zone: 'Australia/Adelaide' })).result.error).toMatch(/already/);
+    expect((await call(page, 'atomic_clock_add_world_clock', { time_zone: 'Mars/Olympus' })).result.error).toMatch(/Unknown time zone/);
+    expect((await call(page, 'atomic_clock_set_time_zone', { time_zone: 'Nowhere' })).result.error).toMatch(/Unknown time zone/);
+    expect((await call(page, 'atomic_clock_get_time', { time_zone: 'x'.repeat(65) })).ok).toBe(false);
+    await expect(page.locator('#zoneName')).toHaveText('New York');
+    r = (await call(page, 'atomic_clock_get_time', { time_zone: 'local' })).result;
+    expect(r.time_zone).toBe('Europe/Berlin');
+    expect(r.world_clocks).toEqual(['Australia/Adelaide']);
+  });
+});
+
 test.describe('nfc-tags tools', () => {
   test.beforeEach(async ({ page }) => { await fakeNfc(page); await open(page, '/nfc-tags/'); });
 

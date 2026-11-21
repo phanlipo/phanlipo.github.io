@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Atomuhr</title>
+<meta name="description" content="Sekundengenaue Uhrzeit, abgeglichen mit der Serveruhr: zeigt, wie weit die eigene Uhr danebenliegt, mit Zeitzonen, Weltuhren und nächster Zeitumstellung.">
+<meta name="tool:tags" content="Alltag, Werkzeug">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="get_time, set_time_zone, add_world_clock">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann die abgeglichene Uhrzeit in jeder Zeitzone lesen, die Zeitzone der Hauptuhr wechseln und Weltuhren hinzufügen.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the synchronised time in any time zone, switch the time zone of the main clock and add world clocks.">
+<meta name="tool:icon" content="clock-check">
+<meta name="tool:color" content="#0b6b75">
+<meta name="tool:short-name" content="Atomuhr">
+<meta name="tool:title-en" content="Atomic Clock">
+<meta name="tool:description-en" content="Time accurate to the second, synchronised with the server clock: shows how far off your own clock is, with time zones, world clocks and the next clock change.">
+<meta name="tool:short-name-en" content="Atomic Clock">
+<meta name="tool:storage" content="atomic-clock.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-unhsyZjE/tTPy8y/yVVXR4h1NE5Y0yeHXualLA2BDPM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Atomuhr">
+<meta name="theme-color" content="#0b6b75">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0b6b75;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#6ccfda;--accent-text:#0b1a1d}}
+main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.clock{text-align:center}
+.clock h2{justify-content:center}
+.time{margin:4px 0 0;font-size:clamp(44px,16vw,120px);font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap}
+.time .period{font-size:.35em;font-weight:600;margin-inline-start:.2em;letter-spacing:0}
+.date{margin:2px 0 0;font-size:18px}
+.zone-info{margin:2px 0 0;color:var(--muted);font-size:14px}
+.sync{display:flex;align-items:center;justify-content:center;gap:6px;margin:10px 0 0;font-size:14px;color:var(--muted);flex-wrap:wrap}
+.sync .ic{flex:none}
+.sync.ok .ic{color:var(--ok)}
+.sync.warn .ic{color:var(--warn)}
+.sync.busy .ic{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(1turn)}}
+@media (prefers-reduced-motion: reduce){.sync.busy .ic{animation:none}}
+.deviation{margin:4px 0 0;font-weight:600}
+.clock .row{justify-content:center}
+.clock .form-field{text-align:start;margin-top:12px}
+.list-rows .clock-time{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;padding-inline:4px}
+.add-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:10px}
+.add-row .form-field{flex:1 1 200px;margin:0}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Atomuhr</span></h1>
+  <p class="sub" data-i18n="sub">Genaue Zeit – in jeder Zeitzone.</p>
+</header>
+
+<main>
+  <section class="card clock" aria-labelledby="zoneName">
+    <h2 id="zoneName"></h2>
+    <p class="time" id="time" role="timer"></p>
+    <p class="date" id="date"></p>
+    <p class="zone-info" id="zoneInfo"></p>
+    <p class="sync" id="sync" role="status"><svg class="ic" aria-hidden="true"><use id="syncIcon" href="../assets/icons.svg#refresh"/></svg><span id="syncText"></span></p>
+    <p class="deviation" id="deviation"></p>
+    <div class="row"><button type="button" class="btn" id="btnSync"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#refresh"/></svg><span data-i18n="resync">Neu abgleichen</span></button></div>
+    <div class="form-field"><label for="zoneSel" data-i18n="zoneL">Zeitzone</label><select id="zoneSel"></select></div>
+    <p class="notice info" id="dst"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#clock"/></svg><span id="dstText"></span></p>
+  </section>
+
+  <section class="card" aria-labelledby="h-world">
+    <h2 id="h-world"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#world"/></svg><span data-i18n="world">Weltuhren</span></h2>
+    <div class="empty-state" id="worldEmpty">
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#world"/></svg>
+      <p data-i18n="worldEmpty">Noch keine Weltuhren. Wähle unten eine Zeitzone.</p>
+    </div>
+    <ul class="list-rows" id="worldList"></ul>
+    <div class="add-row">
+      <div class="form-field"><label for="addSel" data-i18n="addL">Weitere Zeitzone</label><select id="addSel"></select></div>
+      <button type="button" class="btn" id="btnAdd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="add">Hinzufügen</span></button>
+    </div>
+  </section>
+
+  <section class="card" data-menu data-icon="settings" aria-labelledby="h-set">
+    <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <label class="check"><input type="checkbox" id="optAwake"><span data-i18n="awake">Bildschirm anlassen</span></label>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Die Atomuhr zeigt die genaue Uhrzeit – unabhängig davon, ob die Uhr deines Geräts richtig geht – und verrät, wie weit die Geräteuhr danebenliegt.</p>
+  <h3>Woher kommt die Zeit?</h3>
+  <p>Beim Start fragt die App einige Male kurz beim Server dieser Seite (GitHub Pages) nach und liest die Uhrzeit aus seiner Antwort. Dessen Uhr wird laufend über das Internet mit Atomuhren abgeglichen (NTP). Weil der Server die Zeit nur auf die Sekunde genau angibt, schickt die App die Anfragen gezielt um den Sekundenwechsel herum und engt die Zeit so auf Bruchteile einer Sekunde ein. Die erreichte Genauigkeit steht unter der Uhr („± 0,05 s“); bei langsamem Netz ist sie gröber. Die Sekunde springt genau dann um, wenn sie es auch auf der Atomuhr tut.</p>
+  <p>Ohne Internet zeigt die App die Zeit deines Geräts und sagt das dazu. Sie gleicht erneut ab, wenn du „Neu abgleichen“ tippst, wieder online bist oder nach einer Weile zur App zurückkehrst, sonst alle 30 Minuten.</p>
+  <h3>Zeitzonen</h3>
+  <ul>
+    <li><strong>Zeitzone</strong> wählt, welche Zeit die große Uhr zeigt – „Gerät“ folgt der Zeitzone deines Handys.</li>
+    <li>Darunter steht die <strong>nächste Zeitumstellung</strong> dieser Zone (Sommer-/Winterzeit), sofern es eine gibt.</li>
+    <li><strong>Weltuhren</strong> zeigen weitere Zonen mit dem Unterschied zur großen Uhr. Antippen macht sie zur großen Uhr; der Papierkorb entfernt sie (mit „Rückgängig“).</li>
+  </ul>
+  <p>Die Regeln für Zeitzonen und Sommerzeit kommen aus deinem Browser; sie sind so aktuell wie dessen letzte Aktualisierung.</p>
+  <h3>Gespeichert</h3>
+  <p>Gewählte Zeitzone, Weltuhren und Einstellungen bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“). An den Server geht nur die leere Zeitanfrage – ohne Daten von dir.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>The atomic clock shows the exact time – whether or not your device’s clock is right – and tells you how far off the device clock is.</p>
+  <h3>Where does the time come from?</h3>
+  <p>On start the app briefly asks the server of this site (GitHub Pages) a few times and reads the time from its answer. That server’s clock is kept in step with atomic clocks over the internet (NTP). Because the server states the time only to the second, the app sends its requests right around the change of the second and so narrows the time down to a fraction of a second. The accuracy reached is shown below the clock (“± 0.05 s”); on a slow network it is coarser. The second ticks over exactly when it does on the atomic clock.</p>
+  <p>Without internet the app shows your device’s time and says so. It synchronises again when you tap “Sync again”, come back online or return to the app after a while, otherwise every 30 minutes.</p>
+  <h3>Time zones</h3>
+  <ul>
+    <li><strong>Time zone</strong> picks which time the big clock shows – “Device” follows the time zone of your phone.</li>
+    <li>Below it is the <strong>next clock change</strong> of that zone (daylight saving time), if there is one.</li>
+    <li><strong>World clocks</strong> show more zones with the difference to the big clock. Tap one to make it the big clock; the bin removes it (with “Undo”).</li>
+  </ul>
+  <p>Time zone and daylight saving rules come from your browser; they are as current as its last update.</p>
+  <h3>Stored</h3>
+  <p>The chosen time zone, world clocks and settings stay only in this browser (back them up or move them under “Back up data”). Only the empty time request goes to the server – without any of your data.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann die abgeglichene Uhrzeit in jeder Zeitzone lesen, die Zeitzone der Hauptuhr wechseln und Weltuhren hinzufügen. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the synchronised time in any time zone, switch the time zone of the main clock and add world clocks. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 79754e7c3f51</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{device:'Gerät',deviceZone:'Gerät ({z})',syncing:'Abgleich läuft …',synced:'Abgeglichen · ± {acc} s',
+    offline:'Kein Abgleich möglich – zeigt die Gerätezeit',unsynced:'Noch nicht abgeglichen',
+    behind:'Deine Geräteuhr geht {d} nach.',ahead:'Deine Geräteuhr geht {d} vor.',exact:'Deine Geräteuhr geht genau.',
+    sec:'{n} s',min:'{m} min {s} s',hours:'{h} Std.',hoursMin:'{h} Std. {m} Min.',mins:'{m} Min.',sameTime:'gleiche Zeit',
+    dstNext:'Nächste Zeitumstellung: {date}, {from} → {to} Uhr ({dir})',dstFwd:'Uhr wird {d} vorgestellt',dstBack:'Uhr wird {d} zurückgestellt',
+    dstNone:'Keine Zeitumstellung in den nächsten zwölf Monaten.',remove:'{z} entfernen',removed:'{z} entfernt',showBig:'{z} als große Uhr zeigen',
+    already:'{z} ist schon in der Liste.',added:'{z} hinzugefügt','mcp.zone':'Zeitzone gewechselt','mcp.add':'Weltuhr hinzugefügt',
+    'r.Africa':'Afrika','r.America':'Amerika','r.Antarctica':'Antarktis','r.Arctic':'Arktis','r.Asia':'Asien','r.Atlantic':'Atlantik',
+    'r.Australia':'Australien','r.Europe':'Europa','r.Indian':'Indischer Ozean','r.Pacific':'Pazifik','r.Other':'Weitere'},
+  en:{title:'Atomic Clock',sub:'Exact time – in any time zone.',resync:'Sync again',zoneL:'Time zone',world:'World clocks',
+    worldEmpty:'No world clocks yet. Pick a time zone below.',addL:'Another time zone',add:'Add',settings:'Settings',awake:'Keep screen on',
+    device:'Device',deviceZone:'Device ({z})',syncing:'Synchronising …',synced:'Synchronised · ± {acc} s',
+    offline:'Cannot synchronise – showing the device time',unsynced:'Not synchronised yet',
+    behind:'Your device clock is {d} slow.',ahead:'Your device clock is {d} fast.',exact:'Your device clock is exact.',
+    sec:'{n} s',min:'{m} min {s} s',hours:'{h} h',hoursMin:'{h} h {m} min',mins:'{m} min',sameTime:'same time',
+    dstNext:'Next clock change: {date}, {from} → {to} ({dir})',dstFwd:'clocks go forward {d}',dstBack:'clocks go back {d}',
+    dstNone:'No clock change in the next twelve months.',remove:'Remove {z}',removed:'{z} removed',showBig:'Show {z} as the big clock',
+    already:'{z} is already in the list.',added:'{z} added','mcp.zone':'time zone switched','mcp.add':'world clock added',
+    'r.Africa':'Africa','r.America':'America','r.Antarctica':'Antarctica','r.Arctic':'Arctic','r.Asia':'Asia','r.Atlantic':'Atlantic',
+    'r.Australia':'Australia','r.Europe':'Europe','r.Indian':'Indian Ocean','r.Pacific':'Pacific','r.Other':'Other'}
+});
+const t=Tools.t, $=Tools.$;
+const LS='atomic-clock.settings.v1';
+const settings=Object.assign({zone:'local',clocks:[],awake:false},Tools.load(LS,{}));
+if(!Array.isArray(settings.clocks))settings.clocks=[];
+const save=()=>Tools.save(LS,settings);
+
+/* ---------- Time zones (rules from the browser's Intl data) ---------- */
+const FALLBACK_ZONES=['Europe/London','Europe/Lisbon','Europe/Berlin','Europe/Paris','Europe/Madrid','Europe/Rome','Europe/Vienna','Europe/Zurich',
+  'Europe/Amsterdam','Europe/Warsaw','Europe/Athens','Europe/Helsinki','Europe/Istanbul','Europe/Moscow','Africa/Cairo','Africa/Johannesburg',
+  'Africa/Lagos','Africa/Nairobi','Asia/Dubai','Asia/Karachi','Asia/Kolkata','Asia/Kathmandu','Asia/Bangkok','Asia/Shanghai','Asia/Hong_Kong',
+  'Asia/Singapore','Asia/Tokyo','Asia/Seoul','Australia/Perth','Australia/Adelaide','Australia/Sydney','Pacific/Auckland','Pacific/Honolulu',
+  'America/Anchorage','America/Los_Angeles','America/Denver','America/Chicago','America/New_York','America/Halifax','America/Sao_Paulo',
+  'America/Argentina/Buenos_Aires','America/Mexico_City','Atlantic/Reykjavik'];
+const ZONES=(()=>{
+  let list=[];
+  try{ if(Intl.supportedValuesOf)list=Intl.supportedValuesOf('timeZone'); }catch(_){ list=[]; }
+  if(!list.length)list=FALLBACK_ZONES;
+  return [...new Set(['UTC',...list])];
+})();
+const deviceZone=()=>{ try{ return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'; }catch(_){ return 'UTC'; } };
+// Valid IANA name (or 'local') → canonical name; null if the browser does not know it
+function canonical(z){
+  if(z==='local')return 'local';
+  if(typeof z!=='string'||!z.trim())return null;
+  try{ return new Intl.DateTimeFormat('en-US',{timeZone:z.trim()}).resolvedOptions().timeZone; }catch(_){ return null; }
+}
+const resolve=z=>z==='local'?deviceZone():z;
+// Some browsers still list old IANA names (e.g. Chrome: Asia/Calcutta) – show today's city names
+const RENAMED={Calcutta:'Kolkata',Saigon:'Ho Chi Minh',Kiev:'Kyiv',Katmandu:'Kathmandu',Rangoon:'Yangon',Godthab:'Nuuk',
+  Ulan_Bator:'Ulaanbaatar',Dacca:'Dhaka',Thimbu:'Thimphu',Uzhgorod:'Uzhhorod',Zaporozhye:'Zaporizhzhia',
+  Enderbury:'Kanton',Ponape:'Pohnpei',Truk:'Chuuk',Faeroe:'Faroe',Asmera:'Asmara'};
+const cityName=z=>{ if(z==='UTC')return 'UTC'; const c=z.split('/').pop(); return (RENAMED[c]||c).replace(/_/g,' '); };
+const zoneLabel=z=>z==='local'?t('device'):cityName(z);
+
+const fmtCache=new Map();
+function formatter(zone,kind){
+  const loc=Tools.locale(), key=loc+'|'+zone+'|'+kind;
+  let f=fmtCache.get(key);
+  if(!f){
+    const o={timeZone:zone};
+    if(kind==='parts')Object.assign(o,{hourCycle:'h23',year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'numeric',second:'numeric'});
+    else if(kind==='time')Object.assign(o,{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    else if(kind==='short')Object.assign(o,{hour:'2-digit',minute:'2-digit'});
+    else if(kind==='date')Object.assign(o,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    else if(kind==='dshort')Object.assign(o,{weekday:'short',day:'numeric',month:'short'});
+    else if(kind==='long')Object.assign(o,{timeZoneName:'long',hour:'numeric'});
+    f=new Intl.DateTimeFormat(kind==='parts'?'en-US':loc,o);
+    fmtCache.set(key,f);
+  }
+  return f;
+}
+// Offset of a zone from UTC in minutes at instant ts
+function zoneOffset(ts,zone){
+  const p={};
+  for(const x of formatter(zone,'parts').formatToParts(ts))p[x.type]=x.value;
+  const wall=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute,+p.second);
+  return Math.round((wall-Math.floor(ts/1000)*1000)/60000);
+}
+const MINUS='−';
+function offsetText(min){
+  const s=min<0?MINUS:'+', a=Math.abs(min), h=Math.floor(a/60), m=a%60;
+  return 'UTC'+(min===0?'':s+h+(m?':'+String(m).padStart(2,'0'):''));
+}
+function durText(min){
+  const a=Math.abs(min), h=Math.floor(a/60), m=a%60;
+  return h&&m?t('hoursMin',{h,m}):h?t('hours',{h}):t('mins',{m});
+}
+function diffText(min){
+  if(!min)return t('sameTime');
+  return (min<0?MINUS:'+')+durText(min);
+}
+function longName(ts,zone){
+  try{ const p=formatter(zone,'long').formatToParts(ts).find(x=>x.type==='timeZoneName'); return p?p.value:''; }catch(_){ return ''; }
+}
+// Next change of the UTC offset (daylight saving) within about a year
+const dstCache=new Map();
+function nextChange(zone,from){
+  const c=dstCache.get(zone);
+  if(c&&c.from<=from&&from-c.from<3600e3&&(!c.at||c.at>from))return c;
+  const DAY=864e5, o=zoneOffset(from,zone);
+  let res={from,at:null};
+  for(let d=1;d<=370;d++){
+    const ts=from+d*DAY;
+    if(zoneOffset(ts,zone)!==o){
+      let lo=ts-DAY, hi=ts;
+      while(hi-lo>1000){ const mid=Math.floor((lo+hi)/2); if(zoneOffset(mid,zone)===o)lo=mid; else hi=mid; }
+      const at=Math.ceil((lo+1)/60000)*60000;
+      res={from,at,before:o,after:zoneOffset(at,zone)};
+      break;
+    }
+  }
+  dstCache.set(zone,res);
+  return res;
+}
+const wallTime=(ts,offMin)=>{ const d=new Date(ts+offMin*60000); return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'); };
+
+/* ---------- Synchronisation with the server clock ----------
+   The server of this site (GitHub Pages, NTP-synchronised) states its time in the Date header of every answer,
+   to the second. A request sent at local t0 and answered at t1 with Date D means: offset (server − device)
+   lies in [D − t1, D + 1000 − t0]. Each further request is timed so that the server should see the change of
+   the second if the current middle estimate were right; its answer then cuts the remaining range about in half.
+   HEAD requests bypass the service worker (it only answers GET). */
+const sync={offset:0,acc:null,state:'none',at:0,samples:0,rtt:null,running:false};
+const now=()=>Date.now()+sync.offset;
+const wait=ms=>new Promise(r=>setTimeout(r,Math.max(0,ms)));
+async function sample(){
+  const t0=Date.now();
+  const res=await fetch('manifest.webmanifest?sync='+t0+'-'+Tools.randomInt(1e6),{method:'HEAD',cache:'no-store',credentials:'omit'});
+  const t1=Date.now();
+  const d=Date.parse(res.headers.get('Date')||'');
+  if(!Number.isFinite(d))throw new Error('no Date header');
+  return {lo:d-t1,hi:d+1000-t0,rtt:t1-t0};
+}
+async function runSync(reason){
+  if(sync.running)return;
+  // Known to be offline: do not even try (the 'online' event syncs once the network is back)
+  if(navigator.onLine===false){
+    Tools.diag.log('sync skipped',{reason,offline:true});
+    if(sync.acc==null){ sync.state='offline'; sync.offset=0; }
+    render(); return;
+  }
+  sync.running=true; sync.state=sync.acc==null?'busy':sync.state; renderSync();
+  Tools.diag.log('sync start',{reason});
+  let lo=-Infinity, hi=Infinity, rtt=Infinity, n=0, resets=0;
+  try{
+    for(;n<8;){
+      if(n>0){
+        // Aim the server's arrival at the change of the second the current estimate predicts
+        const mid=(lo+hi)/2, half=rtt/2, nowL=Date.now();
+        const target=Math.ceil((nowL+40+half+mid)/1000)*1000-half-mid;
+        await wait(target-nowL);
+        if(navigator.onLine===false)break; // went offline meanwhile: keep what we have
+      }
+      const s=await sample(); n++;
+      rtt=Math.min(rtt,s.rtt);
+      if(Math.max(lo,s.lo)>Math.min(hi,s.hi)){ lo=s.lo; hi=s.hi; resets++; }
+      else{ lo=Math.max(lo,s.lo); hi=Math.min(hi,s.hi); }
+      Object.assign(sync,{offset:Math.round((lo+hi)/2),acc:(hi-lo)/2,state:'ok',at:Date.now(),samples:n,rtt});
+      render();
+      if(hi-lo<=Math.max(80,rtt*1.2))break;
+    }
+    Tools.diag.log('sync done',{samples:n,offsetMs:sync.offset,accuracyMs:Math.round(sync.acc),rttMs:rtt,resets});
+  }catch(e){
+    Tools.diag.log('sync failed',{error:String(e&&e.message||e),samples:n});
+    if(!n&&sync.acc==null){ sync.state='offline'; sync.offset=0; }
+  }finally{
+    if(sync.acc==null&&sync.state==='busy')sync.state='offline';
+    sync.running=false; render();
+  }
+}
+
+/* ---------- Rendering ---------- */
+function deviationText(){
+  const o=sync.offset, a=Math.abs(o);
+  if(a<=Math.max(sync.acc,50))return t('exact');
+  const d=a<60000?t('sec',{n:Tools.fmt(a/1000,1)}):(sec=>t('min',{m:Math.floor(sec/60),s:sec%60}))(Math.round(a/1000));
+  return t(o>0?'behind':'ahead',{d});
+}
+function renderSync(){
+  const el=$('sync');
+  const busy=sync.acc==null&&(sync.running||sync.state==='busy');
+  el.className='sync '+(busy?'busy':sync.state);
+  const icon=busy?'refresh':sync.state==='ok'?'circle-check':sync.state==='offline'?'alert-triangle':'refresh';
+  $('syncIcon').setAttribute('href','../assets/icons.svg#'+icon);
+  $('syncText').textContent=busy?t('syncing')
+    :sync.state==='ok'?t('synced',{acc:Tools.fmt(Math.max(sync.acc,1)/1000,sync.acc<95?2:1)})
+    :sync.state==='offline'?t('offline'):t('unsynced');
+  $('deviation').hidden=sync.state!=='ok';
+  if(sync.state==='ok')$('deviation').textContent=deviationText();
+  $('btnSync').disabled=sync.running;
+}
+function timeHtml(ts,zone){
+  const parts=formatter(zone,'time').formatToParts(ts);
+  const period=(parts.find(p=>p.type==='dayPeriod')||{}).value||'';
+  return {main:parts.filter(p=>p.type!=='dayPeriod').map(p=>p.value).join('').trim(),period};
+}
+function renderClock(ts){
+  const zone=resolve(settings.zone);
+  const {main,period}=timeHtml(ts,zone);
+  const el=$('time');
+  el.textContent=main;
+  if(period){ const s=document.createElement('span'); s.className='period'; s.textContent=period; el.append(s); }
+  $('date').textContent=formatter(zone,'date').format(ts);
+  const off=zoneOffset(ts,zone), ln=longName(ts,zone);
+  $('zoneInfo').textContent=(settings.zone==='local'?zone+' · ':'')+(ln&&!/^GMT/.test(ln)?ln+' · ':'')+offsetText(off);
+  $('zoneName').textContent=zoneLabel(settings.zone);
+  const ch=nextChange(zone,ts);
+  if(ch.at){
+    const shift=ch.after-ch.before;
+    $('dstText').textContent=t('dstNext',{date:formatter(zone,'dshort').format(ch.at),from:wallTime(ch.at,ch.before),to:wallTime(ch.at,ch.after),
+      dir:t(shift>0?'dstFwd':'dstBack',{d:durText(shift)})});
+  }else $('dstText').textContent=t('dstNone');
+}
+function renderWorld(ts){
+  const list=$('worldList'), main=resolve(settings.zone), mainOff=zoneOffset(ts,main);
+  $('worldEmpty').hidden=settings.clocks.length>0;
+  const rows=[...list.children];
+  if(rows.length!==settings.clocks.length||rows.some((r,i)=>r.dataset.zone!==settings.clocks[i]))buildWorld();
+  for(const li of list.children){
+    const z=li.dataset.zone, off=zoneOffset(ts,z);
+    const {main:tm,period}=timeHtml(ts,z);
+    li.querySelector('.clock-time').textContent=tm+(period?' '+period:'');
+    li.querySelector('.meta').textContent=formatter(z,'dshort').format(ts)+' · '+offsetText(off)+' · '+diffText(off-mainOff);
+  }
+}
+function buildWorld(){
+  const list=$('worldList');
+  list.replaceChildren(...settings.clocks.map(z=>{
+    const li=document.createElement('li'); li.dataset.zone=z;
+    const open=document.createElement('button'); open.type='button'; open.className='open';
+    open.setAttribute('aria-label',t('showBig',{z:cityName(z)}));
+    const name=document.createElement('span'); name.className='name'; name.textContent=cityName(z);
+    const meta=document.createElement('span'); meta.className='meta';
+    open.append(name,meta);
+    open.addEventListener('click',()=>{ setZone(z); window.scrollTo({top:0,behavior:Tools.reducedMotion()?'auto':'smooth'}); });
+    const time=document.createElement('span'); time.className='clock-time'; time.setAttribute('aria-hidden','true');
+    const del=document.createElement('button'); del.type='button'; del.className='btn icon';
+    del.setAttribute('aria-label',t('remove',{z:cityName(z)})); del.title=t('remove',{z:cityName(z)});
+    del.innerHTML=Tools.icon('trash');
+    del.addEventListener('click',()=>removeClock(z));
+    li.append(open,time,del);
+    return li;
+  }));
+}
+function fillSelects(){
+  const ts=now(), groups=new Map();
+  for(const z of ZONES){
+    const r=z.includes('/')?z.split('/')[0]:'Other';
+    const key=['Africa','America','Antarctica','Arctic','Asia','Atlantic','Australia','Europe','Indian','Pacific'].includes(r)?r:'Other';
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(z);
+  }
+  const labels=new Map();
+  const label=z=>{
+    if(!labels.has(z)){ const c=z.split('/'); labels.set(z,(c.length>2?c.slice(1).join(' / ').replace(/_/g,' '):cityName(z))+' ('+offsetText(zoneOffset(ts,z))+')'); }
+    return labels.get(z);
+  };
+  const build=(sel,withDevice)=>{
+    const keep=sel.value;
+    const opts=[];
+    if(withDevice){ const o=new Option(t('deviceZone',{z:deviceZone()}),'local'); opts.push(o); }
+    opts.push(new Option('UTC','UTC'));
+    for(const [r,zs] of [...groups].sort((a,b)=>t('r.'+a[0]).localeCompare(t('r.'+b[0]),Tools.locale()))){
+      const g=document.createElement('optgroup'); g.label=t('r.'+r);
+      for(const z of zs.filter(z=>z!=='UTC').sort((a,b)=>label(a).localeCompare(label(b),Tools.locale())))g.append(new Option(label(z),z));
+      if(g.children.length)opts.push(g);
+    }
+    sel.replaceChildren(...opts);
+    if(keep)sel.value=keep;
+  };
+  build($('zoneSel'),true);
+  build($('addSel'),false);
+  // A saved zone the list does not contain (other browser) still needs an entry
+  if(settings.zone!=='local'&&![...$('zoneSel').options].some(o=>o.value===settings.zone))$('zoneSel').append(new Option(cityName(settings.zone),settings.zone));
+  $('zoneSel').value=settings.zone;
+  if(!$('addSel').value)$('addSel').value=settings.zone!=='local'&&settings.zone!=='UTC'?'UTC':'America/New_York';
+}
+function render(){
+  const ts=now();
+  renderSync(); renderClock(ts); renderWorld(ts);
+}
+// Tick exactly on the change of the synchronised second
+let timer=0;
+function tick(){
+  clearTimeout(timer);
+  render();
+  timer=setTimeout(tick,1000-(now()%1000)+5);
+}
+
+/* ---------- Actions ---------- */
+function setZone(z){
+  const c=canonical(z);
+  if(!c)return null;
+  settings.zone=c; save();
+  if(c!=='local'&&![...$('zoneSel').options].some(o=>o.value===c))$('zoneSel').append(new Option(cityName(c),c));
+  $('zoneSel').value=c;
+  Tools.diag.log('zone set',{local:c==='local'});
+  render();
+  return c;
+}
+function addClock(z){
+  const c=canonical(z);
+  if(!c||c==='local')return {error:'unknown'};
+  if(settings.clocks.includes(c))return {error:'exists',zone:c};
+  settings.clocks.push(c); save(); render();
+  return {zone:c};
+}
+function removeClock(z){
+  const i=settings.clocks.indexOf(z);
+  if(i<0)return;
+  settings.clocks.splice(i,1); save(); render();
+  Tools.undo(t('removed',{z:cityName(z)}),()=>{ if(!settings.clocks.includes(z)){ settings.clocks.splice(Math.min(i,settings.clocks.length),0,z); save(); render(); } });
+}
+$('zoneSel').addEventListener('change',e=>setZone(e.target.value));
+$('btnAdd').addEventListener('click',()=>{
+  const r=addClock($('addSel').value);
+  if(r.error==='exists')Tools.toast(t('already',{z:cityName(r.zone)}));
+  else if(r.zone)Tools.toast(t('added',{z:cityName(r.zone)}));
+});
+$('btnSync').addEventListener('click',()=>runSync('button'));
+const applyAwake=()=>{ if(settings.awake)Tools.wakeLock.hold('clock'); else Tools.wakeLock.release('clock'); };
+$('optAwake').checked=settings.awake;
+$('optAwake').addEventListener('change',e=>{ settings.awake=e.target.checked; save(); applyAwake(); });
+applyAwake();
+
+// Sync again: every 30 minutes while visible, after returning from a longer break, when back online
+let hiddenAt=0;
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){ hiddenAt=Date.now(); return; }
+  if(hiddenAt&&Date.now()-hiddenAt>5*60e3)runSync('visible');
+  tick();
+});
+window.addEventListener('online',()=>runSync('online'));
+setInterval(()=>{ if(!document.hidden&&Date.now()-sync.at>30*60e3)runSync('interval'); },60e3);
+
+sync.state='busy';
+fillSelects();
+tick();
+// First sync shortly after the page has loaded: the clock shows the device time right away, and a request
+// is not left half-way when the network drops during loading
+const startSync=()=>setTimeout(()=>runSync('start'),600);
+if(document.readyState==='complete')startSync(); else window.addEventListener('load',startSync,{once:true});
+Tools.onLang(()=>{ fmtCache.clear(); fillSelects(); buildWorld(); render(); });
+Tools.diag.info(()=>({sync:sync.state,offsetMs:sync.offset,accuracyMs:sync.acc==null?null:Math.round(sync.acc),samples:sync.samples,rttMs:sync.rtt,
+  zones:ZONES.length,local:settings.zone==='local',worldClocks:settings.clocks.length}));
+
+/* ---------- WebMCP ---------- */
+function timeInfo(zone){
+  const ts=now(), off=zoneOffset(ts,zone), w=new Date(ts+off*60000);
+  const p=n=>String(n).padStart(2,'0');
+  return {time_zone:zone,local_time:`${w.getUTCFullYear()}-${p(w.getUTCMonth()+1)}-${p(w.getUTCDate())}T${p(w.getUTCHours())}:${p(w.getUTCMinutes())}:${p(w.getUTCSeconds())}`,
+    utc_offset:offsetText(off).replace(MINUS,'-'),utc:new Date(ts).toISOString()};
+}
+Tools.mcp.register({
+  name:'get_time',title:'Read the exact time',readOnly:true,
+  description:'Reads the synchronised time of the app (server clock, not the device clock). Without time_zone it uses the zone of the big clock. Also returns how far the device clock is off and the accuracy, the zones of the world clocks and the next daylight saving change.',
+  inputSchema:{type:'object',properties:{
+    time_zone:{type:'string',maxLength:64,description:'IANA time zone, e.g. "Europe/Berlin", "UTC" or "local" for the device zone. Default: the big clock.'}
+  },additionalProperties:false},
+  execute:({time_zone})=>{
+    const c=time_zone==null?settings.zone:canonical(time_zone);
+    if(!c)return {error:`Unknown time zone "${String(time_zone).slice(0,64)}". Use an IANA name like "Europe/Berlin".`};
+    const zone=resolve(c), ch=nextChange(zone,now());
+    return Object.assign(timeInfo(zone),{
+      synchronised:sync.state==='ok',accuracy_ms:sync.acc==null?null:Math.round(sync.acc),
+      device_clock_offset_ms:sync.state==='ok'?-sync.offset:null,
+      next_offset_change:ch.at?{utc:new Date(ch.at).toISOString(),utc_offset_before:offsetText(ch.before).replace(MINUS,'-'),utc_offset_after:offsetText(ch.after).replace(MINUS,'-')}:null,
+      big_clock_zone:resolve(settings.zone),world_clocks:settings.clocks.slice()
+    });
+  }
+});
+Tools.mcp.register({
+  name:'set_time_zone',title:'Switch time zone',label:'mcp.zone',
+  description:'Switches the big clock of the app to a time zone, as if the user picked it. The choice is saved. Returns the zone and its current time.',
+  inputSchema:{type:'object',properties:{
+    time_zone:{type:'string',maxLength:64,description:'IANA time zone, e.g. "America/New_York", "UTC", or "local" for the device zone.'}
+  },required:['time_zone'],additionalProperties:false},
+  execute:({time_zone})=>{
+    const c=setZone(time_zone);
+    if(!c)return {error:`Unknown time zone "${String(time_zone).slice(0,64)}". Use an IANA name like "Europe/Berlin".`};
+    return timeInfo(resolve(c));
+  }
+});
+Tools.mcp.register({
+  name:'add_world_clock',title:'Add world clock',label:'mcp.add',
+  description:'Adds a time zone to the world clocks shown below the big clock. The list is saved. Returns the zone and its current time, or an error if it is unknown or already listed.',
+  inputSchema:{type:'object',properties:{
+    time_zone:{type:'string',maxLength:64,description:'IANA time zone, e.g. "Asia/Tokyo" or "UTC".'}
+  },required:['time_zone'],additionalProperties:false},
+  execute:({time_zone})=>{
+    const r=addClock(time_zone);
+    if(r.error==='unknown')return {error:`Unknown time zone "${String(time_zone).slice(0,64)}". Use an IANA name like "Asia/Tokyo".`};
+    if(r.error==='exists')return {error:`${r.zone} is already a world clock.`};
+    return timeInfo(r.zone);
+  }
+});
+})();
+</script>
+</body>
+</html>
