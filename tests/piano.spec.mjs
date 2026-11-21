@@ -147,6 +147,27 @@ test('example song: Ode to Joy starts with E4 over C3', async ({ page }) => {
   await expect.poll(() => lit(page)).toBe('48 64');
 });
 
+test('playing: the pause icon is set once and not again every second (it would blink)', async ({ page }) => {
+  await page.clock.install();
+  await page.goto(URL_);
+  await openMenu(page);
+  await page.click('#songList [data-demo="flohwalzer"]');
+  await expect(page.locator('#songName')).toHaveText('Flohwalzer');
+  await closeMenu(page);
+  await page.click('#btnPlay');
+  await expect(page.locator('#playIcon use')).toHaveAttribute('href', /#player-pause$/);
+  await page.evaluate(() => {
+    window.__iconChanges = 0;
+    new MutationObserver(list => { window.__iconChanges += list.length; })
+      .observe(document.getElementById('btnPlay'), { subtree: true, attributes: true, attributeFilter: ['href', 'aria-label', 'title'] });
+  });
+  await page.clock.runFor(3500);
+  await expect(page.locator('#time')).toHaveText(/^0:03 /);
+  expect(await page.evaluate(() => window.__iconChanges)).toBe(0);
+  await page.click('#btnPlay');
+  await expect(page.locator('#playIcon use')).toHaveAttribute('href', /#player-play$/);
+});
+
 test('short landscape phone: the whole keyboard with its note names fits without scrolling', async ({ page }) => {
   // Phone in landscape minus the browser bars – before, main scrolled and cut off the bottom of the keys
   for (const viewport of [{ width: 780, height: 270 }, { width: 800, height: 300 }, { width: 844, height: 390 }]) {
