@@ -211,7 +211,7 @@ test.describe('page', () => {
     await page.goto('/air-hockey/');
     await expect(page.locator('#modes [data-mode="cpu"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#record')).toHaveText('Noch keine Spiele gegen „Mittel“.');
-    await expect(page.locator('#btnPause')).toBeDisabled();
+    await expect(page.locator('#btnPause')).toBeHidden();
     await page.click('#btnStart');
     await finger(page, 'pointerdown', 5, 0.8, 0.15);   // top half – still blue
     await page.clock.runFor(1000);
@@ -265,10 +265,60 @@ test.describe('page', () => {
     await expect(page.locator('#startLabel')).toHaveText('Nochmal');
     await expect(page.locator('#status')).toContainText(/Tor für (Du|Computer)\./);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('air-hockey.settings.v1')));
-    expect(saved).toEqual({ mode: 'cpu', level: 'hard', goals: 3, sound: false, vibrate: false, record: { hard: won ? { w: 1, l: 0 } : { w: 0, l: 1 } } });
+    expect(saved).toEqual({ mode: 'cpu', level: 'hard', goals: 3, sound: false, fullscreen: true, vibrate: false, record: { hard: won ? { w: 1, l: 0 } : { w: 0, l: 1 } } });
     await page.reload();
     await expect(page.locator('#levels [data-level="hard"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#record')).toContainText('Bilanz (Schwer): ');
+  });
+
+  test('while playing the header is hidden; the pause button in the corner brings it back', async ({ page }) => {
+    await page.goto('/air-hockey/');
+    await expect(page.locator('body > header')).toBeVisible();
+    await expect(page.locator('#btnPause')).toBeHidden();
+    const before = (await page.locator('#cv').boundingBox()).height;
+    await page.click('#btnStart');
+    await expect(page.locator('body > header')).toBeHidden();
+    await expect(page.locator('#btnPause')).toBeVisible();
+    expect((await page.locator('#cv').boundingBox()).height).toBeGreaterThan(before);   // the table gets the room
+    await page.click('#btnPause');
+    await expect(page.locator('#rink')).toHaveAttribute('data-phase', 'paused');
+    await expect(page.locator('body > header')).toBeVisible();
+    await expect(page.locator('#btnPause')).toBeHidden();
+    // Space pauses too
+    await page.click('#btnStart');
+    await page.locator('#cv').press(' ');
+    await expect(page.locator('#rink')).toHaveAttribute('data-phase', 'paused');
+  });
+
+  test('Play switches to full screen; leaving it during the game pauses; the setting turns it off', async ({ page }) => {
+    // Fake full screen API: records the calls, the back gesture is simulated by exitFullscreen()
+    await page.addInitScript(() => {
+      let el = null;
+      const set = v => { el = v; document.dispatchEvent(new Event('fullscreenchange')); };
+      Object.defineProperty(document, 'fullscreenElement', { get: () => el, configurable: true });
+      Object.defineProperty(document, 'fullscreenEnabled', { get: () => true, configurable: true });
+      window.__fsCalls = 0;
+      Element.prototype.requestFullscreen = function () { window.__fsCalls++; set(this); return Promise.resolve(); };
+      document.exitFullscreen = () => { set(null); return Promise.resolve(); };
+    });
+    await page.goto('/air-hockey/');
+    await page.click('#btnStart');
+    await expect.poll(() => page.evaluate(() => window.__fsCalls)).toBe(1);
+    await expect(page.locator('#rink')).toHaveAttribute('data-phase', 'play');
+    await page.evaluate(() => document.exitFullscreen());
+    await expect(page.locator('#rink')).toHaveAttribute('data-phase', 'paused');
+    await page.click('#btnStart');   // resume: full screen again
+    await expect.poll(() => page.evaluate(() => window.__fsCalls)).toBe(2);
+    await page.click('#btnPause');
+    await openMenu(page);
+    await expect(page.locator('#optFullscreen')).toBeChecked();
+    await page.locator('#optFullscreen').uncheck();
+    await closeMenu(page);
+    await page.evaluate(() => document.exitFullscreen());
+    await page.click('#btnStart');
+    await expect(page.locator('#rink')).toHaveAttribute('data-phase', 'play');
+    expect(await page.evaluate(() => window.__fsCalls)).toBe(2);
+    expect(JSON.parse(await page.evaluate(() => localStorage.getItem('air-hockey.settings.v1'))).fullscreen).toBe(false);
   });
 
   test('the table lies sideways on a wide screen: blue plays from the right', async ({ page }) => {
