@@ -547,6 +547,9 @@ test.describe('spectrogram', () => {
     await running(page, 'spectro');
     await expect.poll(async () => Math.abs(num(await text(page, 'spPeak')) - 2000), { timeout: 8000 }).toBeLessThan(3);
     await page.waitForFunction(() => document.querySelectorAll('#spPeaks tr').length > 0);
+    // Enough columns that the tapped one (3 px from the right edge) is not one of the first: those start with
+    // the analyser buffer still partly silent and are quieter than the sine
+    await expect.poll(async () => Number((await page.evaluate(() => Tools.diag.text())).match(/"cols":(\d+)/)?.[1] || 0)).toBeGreaterThanOrEqual(12);
     await page.locator('[data-start="spectro"]').click();
     await expect(page.locator('[data-start="spectro"]')).toHaveText('Starten');
     await expect(page.locator('#spPng')).toBeEnabled();
