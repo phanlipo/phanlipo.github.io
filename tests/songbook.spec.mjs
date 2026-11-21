@@ -137,6 +137,22 @@ test('playback highlights the note being played, shows the bar and follows the t
   await expect(score(page)).toHaveAttribute('data-song', 'entchen');
 });
 
+test('playing: the pause icon is set once and not again with every bar (it would blink)', async ({ page }) => {
+  await page.clock.install();
+  await page.goto(URL_);
+  await pick(page, 'entchen');
+  await page.click('#btnPlay');
+  await expect(page.locator('#playIcon use')).toHaveAttribute('href', /#player-pause$/);
+  await page.evaluate(() => {
+    window.__iconChanges = 0;
+    new MutationObserver(list => { window.__iconChanges += list.length; })
+      .observe(document.getElementById('btnPlay'), { subtree: true, attributes: true, attributeFilter: ['href', 'aria-label', 'title'] });
+  });
+  await page.clock.runFor(4500);                         // 120 bpm: bar 3
+  await expect(page.locator('#where')).toHaveText('Takt 3 / 10');
+  expect(await page.evaluate(() => window.__iconChanges)).toBe(0);
+});
+
 test('tap a note: playback jumps there', async ({ page }) => {
   await page.goto(URL_);
   await pick(page, 'haenschen');
