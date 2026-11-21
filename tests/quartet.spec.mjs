@@ -227,7 +227,11 @@ test.describe('against the computer', () => {
 
   test('a whole game through the UI, result counted', async ({ page }) => {
     test.setTimeout(90000);
+    // Clock held while the dealt cards are read: on "fast" a computer that starts picks after 150 ms
+    // and the counts would already have moved
+    await page.clock.install();
     await page.goto(URL_);
+    await page.clock.pauseAt(Date.now() + 60000);
     await page.selectOption('#deckSel', 'autos');
     await expect(page.locator('#deckInfo')).toHaveText('32 Karten · Baujahr, Leistung, Tempo, Länge, Gewicht');
     await page.selectOption('#cpuN', '2');
@@ -239,6 +243,7 @@ test.describe('against the computer', () => {
     const counts = await page.locator('#seats .scount').evaluateAll(els => els.map(e => parseInt(e.textContent, 10)));
     expect(counts.sort()).toEqual([10, 11, 11]);
     await expect(page.locator('#turn')).toContainText('Runde 1 von 25');
+    await page.clock.resume();
     await playToEnd([page]);
     await expect(page.locator('#over')).toBeVisible();
     await expect(page.locator('#overText')).toHaveText(/gewonnen|Unentschieden/);
