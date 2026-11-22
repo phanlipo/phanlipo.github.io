@@ -482,6 +482,10 @@ for (const app of apps()) {
       const cdp = await context.newCDPSession(page);
       const { installabilityErrors } = await cdp.send('Page.getInstallabilityErrors');
       expect(installabilityErrors.map(e => e.errorId)).toEqual([]);
+      // Own app id per app – otherwise Chrome/Edge (Windows) merges all installed apps into one
+      // ("./" would resolve against the origin, not the manifest URL)
+      const { manifest: parsed } = await cdp.send('Page.getAppManifest');
+      expect(parsed.id).toBe(new URL(url, page.url()).href);
 
       await page.reload();
       expect(await page.evaluate(() => !!navigator.serviceWorker.controller), 'controlled by its service worker').toBe(true);
