@@ -355,7 +355,11 @@ function manifest(p) {
   if (p.shareAccept.length && p.shareText) throw new Error(`${p.file}: tool:share-target and tool:share-text together are not supported yet`);
   const icon = (src, sizes, extra) => existsSync(join(ROOT, p.folder, src)) ? [{ src, sizes, type: 'image/png', ...extra }] : [];
   return JSON.stringify({
-    id: './',
+    // The id is resolved against the ORIGIN, not against the manifest URL: "./" would give every app the id
+    // https://phanlipo.github.io/ and Chrome/Edge on Windows would treat them all as one installed app (the
+    // last manifest loaded overwrites name, icon and start page of the others). Same value as the default
+    // (= start_url), so installs from before the id was set stay the same app.
+    id: p.folder ? `/${p.folder}/` : '/',
     name: p.title,
     short_name: p.shortName,
     description: p.description || '',
