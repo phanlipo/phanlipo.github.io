@@ -21,7 +21,7 @@
 <meta name="tool:storage" content="atomic-clock.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-unhsyZjE/tTPy8y/yVVXR4h1NE5Y0yeHXualLA2BDPM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-UNNRdPzkvj2Qw8I0omkPE0OVVs0s4pIhoMtT18wXQZI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -36,6 +36,8 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .clock{text-align:center}
 .clock h2{justify-content:center}
 .time{margin:4px 0 0;font-size:clamp(44px,16vw,120px);font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap}
+.time.with-ms{font-size:clamp(36px,12.5vw,104px)}
+.time .ms{font-size:.5em;font-weight:600;letter-spacing:0}
 .time .period{font-size:.35em;font-weight:600;margin-inline-start:.2em;letter-spacing:0}
 .date{margin:2px 0 0;font-size:18px}
 .zone-info{margin:2px 0 0;color:var(--muted);font-size:14px}
@@ -52,6 +54,17 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .list-rows .clock-time{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;padding-inline:4px}
 .add-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:10px}
 .add-row .form-field{flex:1 1 200px;margin:0}
+.analog{display:block;width:min(72vw,300px);height:auto;margin:8px auto 4px}
+.analog .face{fill:var(--surface-2);stroke:var(--border);stroke-width:2}
+.analog .tick{stroke:var(--muted);stroke-width:1.5;stroke-linecap:round}
+.analog .tick.h{stroke:var(--text);stroke-width:3}
+.analog .num{fill:var(--text);font-size:15px;font-weight:600;text-anchor:middle;dominant-baseline:central}
+.analog .hand{stroke:var(--text);stroke-linecap:round}
+.analog .hour{stroke-width:6}
+.analog .minute{stroke-width:4}
+.analog .second{stroke:var(--accent);stroke-width:2}
+.analog .hub{fill:var(--accent)}
+#h-set~.seg-group{margin:0 0 12px}
 </style>
 </head>
 <body>
@@ -63,6 +76,13 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 <main>
   <section class="card clock" aria-labelledby="zoneName">
     <h2 id="zoneName"></h2>
+    <svg class="analog" id="analog" viewBox="-100 -100 200 200" aria-hidden="true" hidden>
+      <circle class="face" r="96"/><g id="dial"></g>
+      <line class="hand hour" id="handH" y1="10" y2="-48"/>
+      <line class="hand minute" id="handM" y1="12" y2="-72"/>
+      <line class="hand second" id="handS" y1="16" y2="-84"/>
+      <circle class="hub" r="4"/>
+    </svg>
     <p class="time" id="time" role="timer"></p>
     <p class="date" id="date"></p>
     <p class="zone-info" id="zoneInfo"></p>
@@ -88,6 +108,14 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 
   <section class="card" data-menu data-icon="settings" aria-labelledby="h-set">
     <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+    <fieldset class="seg-group"><legend data-i18n="faceL">Anzeige</legend>
+      <div class="seg" id="faceSeg">
+        <label><input type="radio" name="face" value="digital"><span data-i18n="face.digital">Digital</span></label>
+        <label><input type="radio" name="face" value="analog"><span data-i18n="face.analog">Analog</span></label>
+        <label><input type="radio" name="face" value="both"><span data-i18n="face.both">Beides</span></label>
+      </div>
+    </fieldset>
+    <label class="check"><input type="checkbox" id="optMs"><span data-i18n="ms">Millisekunden anzeigen</span></label>
     <label class="check"><input type="checkbox" id="optAwake"><span data-i18n="awake">Bildschirm anlassen</span></label>
   </section>
 </main>
@@ -118,6 +146,8 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li>Darunter steht die <strong>nächste Zeitumstellung</strong> dieser Zone (Sommer-/Winterzeit), sofern es eine gibt.</li>
     <li><strong>Weltuhren</strong> zeigen weitere Zonen mit dem Unterschied zur großen Uhr. Antippen macht sie zur großen Uhr; der Papierkorb entfernt sie (mit „Rückgängig“).</li>
   </ul>
+  <h3>Anzeige</h3>
+  <p>Unter „Einstellungen“ im Menü wählst du, ob die große Uhr <strong>digital</strong>, <strong>analog</strong> (Zifferblatt mit Zeigern) oder <strong>beides</strong> zeigt. „Millisekunden anzeigen“ hängt an die digitale Zeit die Tausendstelsekunden an und lässt den Sekundenzeiger der analogen Uhr gleichmäßig laufen. Die Millisekunden sind nur so genau wie der Abgleich („± …“ unter der Uhr) – bei ± 0,05 s also auf etwa fünf Hundertstel.</p>
   <p>Die Regeln für Zeitzonen und Sommerzeit kommen aus deinem Browser; sie sind so aktuell wie dessen letzte Aktualisierung.</p>
   <h3>Gespeichert</h3>
   <p>Gewählte Zeitzone, Weltuhren und Einstellungen bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“). An den Server geht nur die leere Zeitanfrage – ohne Daten von dir.</p>
@@ -133,6 +163,8 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
     <li>Below it is the <strong>next clock change</strong> of that zone (daylight saving time), if there is one.</li>
     <li><strong>World clocks</strong> show more zones with the difference to the big clock. Tap one to make it the big clock; the bin removes it (with “Undo”).</li>
   </ul>
+  <h3>Display</h3>
+  <p>Under “Settings” in the menu you choose whether the big clock is <strong>digital</strong>, <strong>analogue</strong> (a dial with hands) or <strong>both</strong>. “Show milliseconds” adds the thousandths of a second to the digital time and lets the second hand of the analogue clock sweep smoothly. The milliseconds are only as accurate as the synchronisation (“± …” below the clock) – at ± 0.05 s about five hundredths.</p>
   <p>Time zone and daylight saving rules come from your browser; they are as current as its last update.</p>
   <h3>Stored</h3>
   <p>The chosen time zone, world clocks and settings stay only in this browser (back them up or move them under “Back up data”). Only the empty time request goes to the server – without any of your data.</p>
@@ -156,7 +188,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 79815f52f255</p>
+  <p class="footer-version">Version 15e2ce5a95e4</p>
   <!-- footer:end -->
 </footer>
 
@@ -171,11 +203,13 @@ Tools.i18n({
     sec:'{n} s',min:'{m} min {s} s',hours:'{h} Std.',hoursMin:'{h} Std. {m} Min.',mins:'{m} Min.',sameTime:'gleiche Zeit',
     dstNext:'Nächste Zeitumstellung: {date}, {from} → {to} Uhr ({dir})',dstFwd:'Uhr wird {d} vorgestellt',dstBack:'Uhr wird {d} zurückgestellt',
     dstNone:'Keine Zeitumstellung in den nächsten zwölf Monaten.',remove:'{z} entfernen',removed:'{z} entfernt',showBig:'{z} als große Uhr zeigen',
+    analogL:'Analoge Uhr: {t}',
     already:'{z} ist schon in der Liste.',added:'{z} hinzugefügt','mcp.zone':'Zeitzone gewechselt','mcp.add':'Weltuhr hinzugefügt',
     'r.Africa':'Afrika','r.America':'Amerika','r.Antarctica':'Antarktis','r.Arctic':'Arktis','r.Asia':'Asien','r.Atlantic':'Atlantik',
     'r.Australia':'Australien','r.Europe':'Europa','r.Indian':'Indischer Ozean','r.Pacific':'Pazifik','r.Other':'Weitere'},
   en:{title:'Atomic Clock',sub:'Exact time – in any time zone.',resync:'Sync again',zoneL:'Time zone',world:'World clocks',
     worldEmpty:'No world clocks yet. Pick a time zone below.',addL:'Another time zone',add:'Add',settings:'Settings',awake:'Keep screen on',
+    faceL:'Display','face.digital':'Digital','face.analog':'Analogue','face.both':'Both',ms:'Show milliseconds',analogL:'Analogue clock: {t}',
     device:'Device',deviceZone:'Device ({z})',syncing:'Synchronising …',synced:'Synchronised · ± {acc} s',
     offline:'Cannot synchronise – showing the device time',unsynced:'Not synchronised yet',
     behind:'Your device clock is {d} slow.',ahead:'Your device clock is {d} fast.',exact:'Your device clock is exact.',
@@ -188,8 +222,11 @@ Tools.i18n({
 });
 const t=Tools.t, $=Tools.$;
 const LS='atomic-clock.settings.v1';
-const settings=Object.assign({zone:'local',clocks:[],awake:false},Tools.load(LS,{}));
+const settings=Object.assign({zone:'local',clocks:[],awake:false,face:'digital',ms:false},Tools.load(LS,{}));
 if(!Array.isArray(settings.clocks))settings.clocks=[];
+const FACES=['digital','analog','both'];
+if(!FACES.includes(settings.face))settings.face='digital';
+settings.ms=settings.ms===true;
 const save=()=>Tools.save(LS,settings);
 
 /* ---------- Time zones (rules from the browser's Intl data) ---------- */
@@ -362,14 +399,61 @@ function timeHtml(ts,zone){
   const period=(parts.find(p=>p.type==='dayPeriod')||{}).value||'';
   return {main:parts.filter(p=>p.type!=='dayPeriod').map(p=>p.value).join('').trim(),period};
 }
+// What the frame loop needs between full renders: the shown second, the zone offset, the ms element
+const cur={sec:null,off:0,msEl:null,sep:'.'};
+const decimalSep=()=>{ try{ return (new Intl.NumberFormat(Tools.locale()).formatToParts(1.5).find(p=>p.type==='decimal')||{}).value||'.'; }catch(_){ return '.'; } };
+const msText=ts=>cur.sep+String(Math.floor(ts)%1000).padStart(3,'0');
+const showDigital=()=>settings.face!=='analog', showAnalog=()=>settings.face!=='digital';
+function buildDial(){
+  const NS='http://www.w3.org/2000/svg', g=$('dial'), items=[];
+  for(let i=0;i<60;i++){
+    const h=i%5===0, a=i*Math.PI/30, l=document.createElementNS(NS,'line');
+    l.setAttribute('class',h?'tick h':'tick');
+    const r1=h?82:88, r2=93;
+    l.setAttribute('x1',(Math.sin(a)*r1).toFixed(2)); l.setAttribute('y1',(-Math.cos(a)*r1).toFixed(2));
+    l.setAttribute('x2',(Math.sin(a)*r2).toFixed(2)); l.setAttribute('y2',(-Math.cos(a)*r2).toFixed(2));
+    items.push(l);
+    if(h){
+      const n=document.createElementNS(NS,'text'); n.setAttribute('class','num');
+      n.setAttribute('x',(Math.sin(a)*69).toFixed(2)); n.setAttribute('y',(-Math.cos(a)*69).toFixed(2));
+      n.textContent=String(i/5||12); items.push(n);
+    }
+  }
+  g.replaceChildren(...items);
+}
+// wall = time in the zone as UTC milliseconds; smooth = second hand sweeps instead of jumping
+function setHands(wall,smooth){
+  const d=new Date(wall), ms=smooth?d.getUTCMilliseconds():0;
+  const s=d.getUTCSeconds()+ms/1000, m=d.getUTCMinutes()+s/60, h=d.getUTCHours()%12+m/60;
+  $('handH').setAttribute('transform',`rotate(${(h*30).toFixed(2)})`);
+  $('handM').setAttribute('transform',`rotate(${(m*6).toFixed(2)})`);
+  $('handS').setAttribute('transform',`rotate(${(s*6).toFixed(2)})`);
+}
+function applyFace(){
+  $('time').hidden=!showDigital();
+  $('time').classList.toggle('with-ms',settings.ms);
+  $('analog').toggleAttribute('hidden',!showAnalog()); // SVG elements have no .hidden property
+  const alone=settings.face==='analog';
+  if(alone){ $('analog').setAttribute('role','img'); $('analog').removeAttribute('aria-hidden'); }
+  else{ $('analog').removeAttribute('role'); $('analog').removeAttribute('aria-label'); $('analog').setAttribute('aria-hidden','true'); }
+  for(const r of document.querySelectorAll('input[name="face"]'))r.checked=r.value===settings.face;
+  $('optMs').checked=settings.ms;
+}
 function renderClock(ts){
   const zone=resolve(settings.zone);
   const {main,period}=timeHtml(ts,zone);
   const el=$('time');
   el.textContent=main;
+  cur.msEl=null; cur.sep=decimalSep(); cur.sec=Math.floor(ts/1000);
+  if(settings.ms){ const s=document.createElement('span'); s.className='ms'; s.textContent=msText(ts); el.append(s); cur.msEl=s; }
   if(period){ const s=document.createElement('span'); s.className='period'; s.textContent=period; el.append(s); }
   $('date').textContent=formatter(zone,'date').format(ts);
   const off=zoneOffset(ts,zone), ln=longName(ts,zone);
+  cur.off=off;
+  if(showAnalog()){
+    setHands(ts+off*60000,settings.ms);
+    if(settings.face==='analog')$('analog').setAttribute('aria-label',t('analogL',{t:main+(period?' '+period:'')}));
+  }
   $('zoneInfo').textContent=(settings.zone==='local'?zone+' · ':'')+(ln&&!/^GMT/.test(ln)?ln+' · ':'')+offsetText(off);
   $('zoneName').textContent=zoneLabel(settings.zone);
   const ch=nextChange(zone,ts);
@@ -453,7 +537,22 @@ function tick(){
   clearTimeout(timer);
   render();
   timer=setTimeout(tick,1000-(now()%1000)+5);
+  startFrames();
 }
+// With milliseconds: update them (and the sweeping second hand) every frame; a new second renders everything
+let raf=0;
+function frame(){
+  raf=0;
+  if(!settings.ms||document.hidden)return;
+  const ts=now();
+  if(Math.floor(ts/1000)!==cur.sec)render();
+  else{
+    if(cur.msEl)cur.msEl.textContent=msText(ts);
+    if(showAnalog())setHands(ts+cur.off*60000,true);
+  }
+  raf=requestAnimationFrame(frame);
+}
+function startFrames(){ if(!raf&&settings.ms&&!document.hidden&&'requestAnimationFrame' in window)raf=requestAnimationFrame(frame); }
 
 /* ---------- Actions ---------- */
 function setZone(z){
@@ -490,6 +589,12 @@ const applyAwake=()=>{ if(settings.awake)Tools.wakeLock.hold('clock'); else Tool
 $('optAwake').checked=settings.awake;
 $('optAwake').addEventListener('change',e=>{ settings.awake=e.target.checked; save(); applyAwake(); });
 applyAwake();
+for(const r of document.querySelectorAll('input[name="face"]'))r.addEventListener('change',e=>{
+  if(!e.target.checked||!FACES.includes(e.target.value))return;
+  settings.face=e.target.value; save(); applyFace(); render();
+  Tools.diag.log('face set',{face:settings.face});
+});
+$('optMs').addEventListener('change',e=>{ settings.ms=e.target.checked; save(); applyFace(); render(); startFrames(); });
 
 // Sync again: every 30 minutes while visible, after returning from a longer break, when back online
 let hiddenAt=0;
@@ -502,6 +607,8 @@ window.addEventListener('online',()=>runSync('online'));
 setInterval(()=>{ if(!document.hidden&&Date.now()-sync.at>30*60e3)runSync('interval'); },60e3);
 
 sync.state='busy';
+buildDial();
+applyFace();
 fillSelects();
 tick();
 // First sync shortly after the page has loaded: the clock shows the device time right away, and a request
@@ -510,7 +617,7 @@ const startSync=()=>setTimeout(()=>runSync('start'),600);
 if(document.readyState==='complete')startSync(); else window.addEventListener('load',startSync,{once:true});
 Tools.onLang(()=>{ fmtCache.clear(); fillSelects(); buildWorld(); render(); });
 Tools.diag.info(()=>({sync:sync.state,offsetMs:sync.offset,accuracyMs:sync.acc==null?null:Math.round(sync.acc),samples:sync.samples,rttMs:sync.rtt,
-  zones:ZONES.length,local:settings.zone==='local',worldClocks:settings.clocks.length}));
+  zones:ZONES.length,local:settings.zone==='local',worldClocks:settings.clocks.length,face:settings.face,ms:settings.ms}));
 
 /* ---------- WebMCP ---------- */
 function timeInfo(zone){
