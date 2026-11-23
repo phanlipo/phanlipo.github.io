@@ -264,6 +264,44 @@ test('download saves the file as .md with its text', async ({ page }) => {
   expect((await dl2).suggestedFilename()).toBe('notizen.txt');
 });
 
+test('print / PDF: only the formatted document, named like the file; Ctrl+P fills it too', async ({ page }) => {
+  await page.evaluate(() => { window.__printed = []; window.print = () => { window.__printed.push(document.title); }; });
+  const title = await page.title();
+  await raw(page).fill('# Bericht: Q3/2026\n\nText mit **fett**\n\n- [x] erledigt\n- [ ] offen\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n<img src=x onerror="window.__bad=1">');
+  await openMenu(page);
+  await page.click('#btnPrint');
+  // The menu is closed, the browser's print dialog was asked for with the document's name as title (PDF file name)
+  expect(await page.evaluate(() => window.__printed)).toEqual(['Bericht- Q3-2026']);
+  await expect(page.locator('#printDoc h1')).toHaveText('Bericht: Q3/2026');
+  await expect(page.locator('#printDoc strong')).toHaveText('fett');
+  await expect(page.locator('#printDoc input[type=checkbox]')).toHaveCount(2);
+  await expect(page.locator('#printDoc input[type=checkbox]').first()).toBeChecked();
+  await expect(page.locator('#printDoc td')).toHaveText(['1', '2']);
+  await expect(page.locator('#printDoc img')).not.toHaveAttribute('src', /.+/);
+  expect(await page.evaluate(() => window.__bad)).toBeUndefined();
+  // Hidden on screen, alone when printing
+  await expect(page.locator('#printDoc')).toBeHidden();
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('#printDoc')).toBeVisible();
+  for (const sel of ['header', 'main', '#toolbar', 'details.help', 'footer']) await expect(page.locator(sel).first()).toBeHidden();
+  // Black text also in dark mode
+  await page.emulateMedia({ media: 'print', colorScheme: 'dark' });
+  expect(await page.locator('#printDoc h1').evaluate(el => getComputedStyle(el).color)).toBe('rgb(0, 0, 0)');
+  const pdf = await page.pdf({ format: 'A4' });
+  expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+  // After printing: title back, nothing left over
+  await page.evaluate(() => dispatchEvent(new Event('afterprint')));
+  expect(await page.title()).toBe(title);
+  await expect(page.locator('#printDoc')).toBeEmpty();
+  // Ctrl+P / browser menu: beforeprint fills it with the current text (also from the view)
+  await page.emulateMedia({ media: 'screen', colorScheme: 'light' });
+  await page.locator('#views [data-v="render"]').click();
+  await view(page).locator('h1').evaluate(el => { el.textContent = 'Neu'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.evaluate(() => dispatchEvent(new Event('beforeprint')));
+  await expect(page.locator('#printDoc h1')).toHaveText('Neu');
+  expect(await page.title()).toBe('Neu');
+});
+
 test.describe('share', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 800 } });
   test('shares the file as text/plain .md (Chrome on Android)', async ({ page }) => {
