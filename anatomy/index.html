@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Anatomie 3D</title>
+<meta name="description" content="Den menschlichen Körper in 3D erkunden: Skelett mit allen Knochen, Muskeln, Organe, Gefäße und Nerven – drehen, antippen, Namen lernen.">
+<meta name="tool:tags" content="Freizeit, Medizin, Lernen">
+<meta name="tool:features" content="KI-Agent">
+<meta name="tool:webmcp" content="find_parts, show_part, set_layers, get_state">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Körperteile suchen, einen Teil zeigen und heranholen, Ebenen ein- und ausschalten und lesen, was gerade zu sehen ist.">
+<meta name="tool:webmcp-help-en" content="An AI agent can search for body parts, show and zoom to a part, switch layers on and off and read what is shown right now.">
+<meta name="tool:icon" content="bone">
+<meta name="tool:color" content="#a63d36">
+<meta name="tool:short-name" content="Anatomie">
+<meta name="tool:title-en" content="Anatomy 3D">
+<meta name="tool:description-en" content="Explore the human body in 3D: skeleton with every bone, muscles, organs, vessels and nerves – turn it, tap it, learn the names.">
+<meta name="tool:short-name-en" content="Anatomy">
+<meta name="tool:storage" content="anatomy.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/kEWNPXNYRxnwDbHt/1ShocfoeeMd89aKW9gsHYAxG0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Anatomie">
+<meta name="theme-color" content="#a63d36">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+/* Accent = tool:color (light); a lighter shade of it for dark mode */
+:root{--accent:#a63d36;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f0948a;--accent-text:#2b0b08}}
+/* Stage: layer chips on top, the 3D view fills the rest, the selected part and the tools at the bottom (thumb) */
+main{display:flex;flex-direction:column}
+.layers{flex:none;padding:6px 8px 4px}
+.view{position:relative;flex:1;min-height:200px;overflow:hidden;background:var(--bg)}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;outline:none}
+#cv:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+.view-status{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;text-align:center;pointer-events:none}
+.view-status[hidden]{display:none}
+.view-status progress{width:min(260px,70%)}
+.view-status p{margin:0}
+.zoom{position:absolute;inset-inline-end:8px;inset-block-end:8px;display:flex;flex-direction:column;gap:6px}
+.zoom .btn.icon{background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+/* Name labels: dot on the part, name beside it */
+.labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.labels[hidden]{display:none}
+.lbl{position:absolute;display:flex;align-items:center;gap:4px;transform:translateY(-50%);max-width:46%;font-size:13px;line-height:1.2}
+.lbl.left{flex-direction:row-reverse;transform:translate(-100%,-50%)}
+.lbl i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--surface)}
+.lbl span{padding:2px 6px;border-radius:6px;background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.25);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lbl.sel span{background:var(--accent);color:var(--accent-text);font-weight:600}
+/* Selected part and quiz: one card above the tool bar */
+.panel{flex:none;margin:0;border-radius:0;border-inline:0;border-block-end:0;box-shadow:none;padding:10px 12px;display:grid;gap:6px}
+.panel[hidden]{display:none}
+.panel h2{margin:0;font-size:18px;line-height:1.25}
+.panel .sub{margin:0;color:var(--muted);font-size:14px}
+.panel .sub i{font-style:italic}
+.quiz-q{margin:0;font-size:17px}
+.quiz-q b{color:var(--accent)}
+.quiz-score{margin:0;color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
+.bar{flex:none;justify-content:center;padding:4px 8px;border-block-start:1px solid var(--border);background:var(--surface)}
+.results .meta i{font-style:italic}
+#searchList{max-height:55vh;overflow-y:auto}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Anatomie 3D</span></h1>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnSearch" aria-label="Suchen" title="Suchen" data-i18n-attr="aria-label:search; title:search"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#search"/></svg></button>
+    <button type="button" class="head-btn" id="btnHome" aria-label="Ansicht zurücksetzen" title="Ansicht zurücksetzen" data-i18n-attr="aria-label:home; title:home"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#focus-centered"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <div class="chips layers" id="layers" role="group" aria-label="Ebenen" data-i18n-attr="aria-label:layers"></div>
+  <div class="view" id="view">
+    <canvas id="cv" tabindex="0" role="img" aria-label="3D-Körper: ziehen zum Drehen, zwei Finger zum Zoomen, antippen für den Namen" data-i18n-attr="aria-label:canvas"></canvas>
+    <div class="labels" id="labels" aria-hidden="true" hidden></div>
+    <div class="view-status" id="status" role="status"></div>
+    <div class="zoom">
+      <button type="button" class="btn icon" id="btnZoomIn" aria-label="Vergrößern" title="Vergrößern" data-i18n-attr="aria-label:zoomIn; title:zoomIn"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#zoom-in"/></svg></button>
+      <button type="button" class="btn icon" id="btnZoomOut" aria-label="Verkleinern" title="Verkleinern" data-i18n-attr="aria-label:zoomOut; title:zoomOut"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#zoom-out"/></svg></button>
+    </div>
+  </div>
+
+  <section class="card panel" id="info" aria-live="polite" hidden>
+    <h2 id="infoName"></h2>
+    <p class="sub" id="infoSub"></p>
+    <div class="toolbar" id="infoBar">
+      <button type="button" id="btnHide"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eye-off"/></svg><span class="tb-label" data-i18n="hide">Ausblenden</span></button>
+      <button type="button" id="btnFocus"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#zoom-in"/></svg><span class="tb-label" data-i18n="focus">Heranholen</span></button>
+      <button type="button" id="btnClose"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span class="tb-label" data-i18n="close">Schließen</span></button>
+    </div>
+  </section>
+
+  <section class="card panel" id="quiz" hidden>
+    <p class="quiz-q" id="quizQ" aria-live="polite"></p>
+    <p class="quiz-score" id="quizScore"></p>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnQuizNext" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"/></svg><span data-i18n="next">Weiter</span></button>
+      <button type="button" class="btn" id="btnQuizSkip"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-skip-forward"/></svg><span data-i18n="skip">Überspringen</span></button>
+      <button type="button" class="btn" id="btnQuizEnd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-stop"/></svg><span data-i18n="quizEnd">Quiz beenden</span></button>
+    </div>
+  </section>
+
+  <div class="toolbar bar" id="bar">
+    <button type="button" id="btnRotate" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#rotate-360"/></svg><span class="tb-label" data-i18n="rotate">Drehen</span></button>
+    <button type="button" id="btnLabels" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#tags"/></svg><span class="tb-label" data-i18n="labels">Namen</span></button>
+    <button type="button" id="btnQuiz"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#school"/></svg><span class="tb-label" data-i18n="quiz">Quiz</span></button>
+    <button type="button" id="btnShowAll" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eye"/></svg><span class="tb-label" data-i18n="showAll">Alle zeigen</span></button>
+  </div>
+
+  <section class="card" aria-labelledby="h-settings" data-menu data-icon="settings">
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <div class="form-field range">
+      <label for="optSkin"><span data-i18n="skinOpacity">Deckkraft der Haut</span> <output id="optSkinOut" for="optSkin"></output></label>
+      <input type="range" id="optSkin" min="10" max="100" step="5">
+    </div>
+    <label class="check"><input type="checkbox" id="optLatin"><span data-i18n="latinFirst">Lateinische Fachbegriffe als Hauptname</span></label>
+  </section>
+</main>
+
+<dialog class="dialog" id="searchDlg" aria-labelledby="searchH">
+  <div class="dialog-head"><h2 id="searchH" data-i18n="searchH">Körperteil suchen</h2><button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close; title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+  <div class="dialog-body">
+    <div class="form-field">
+      <label for="searchInput" data-i18n="searchLabel">Name (Deutsch, Latein oder Englisch)</label>
+      <input type="search" id="searchInput" autocomplete="off" enterkeyhint="search" maxlength="80">
+    </div>
+    <p class="muted" id="searchInfo" role="status"></p>
+    <ul class="list-rows results" id="searchList"></ul>
+  </div>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Atlas des menschlichen Körpers in 3D zum Lernen der Anatomie: alle Knochen des Skeletts, Muskeln, Organe, Herz und Gefäße, Nerven und Sinnesorgane, Lymphsystem und Haut.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><strong>Drehen:</strong> mit einem Finger (oder der Maus) ziehen – rundherum um 360° und nach oben und unten. „Drehen“ unten lässt den Körper langsam von selbst kreisen.</li>
+    <li><strong>Zoomen und verschieben:</strong> mit zwei Fingern auseinander- bzw. zusammenziehen und schieben, am Computer mit dem Mausrad und mit gedrückter Umschalttaste oder rechter Maustaste. Die Lupen rechts unten zoomen ebenfalls; <em>Ansicht zurücksetzen</em> oben zeigt wieder den ganzen Körper.</li>
+    <li><strong>Ebenen:</strong> Oben schaltest du Haut, Muskeln, Skelett, Organe, Herz &amp; Gefäße, Nerven &amp; Sinne und Lymphsystem einzeln ein und aus – auch mehrere zugleich. Die Haut ist durchscheinend; wie stark, stellst du im Menü unter <em>Einstellungen</em> ein.</li>
+    <li><strong>Namen:</strong> Antippen zeigt den Namen des Teils – auf Deutsch (wo es einen gebräuchlichen deutschen Namen gibt), auf Latein und Englisch, dazu die Körperseite. <em>Namen</em> unten beschriftet die größten sichtbaren Teile; beim Drehen verschwinden die Schilder kurz und kommen dann zurück.</li>
+    <li><strong>Darunter schauen:</strong> <em>Ausblenden</em> entfernt den gewählten Teil, z. B. einen Muskel, um die Schicht darunter zu sehen. <em>Alle zeigen</em> holt alles zurück.</li>
+    <li><strong>Suchen:</strong> die Lupe oben findet Teile nach deutschem, lateinischem oder englischem Namen, schaltet die Ebene ein und holt den Teil heran.</li>
+    <li><strong>Quiz:</strong> fragt nach Teilen, die gerade zu sehen sind („Wo ist …?“). Tippe den richtigen an; zehn Fragen je Runde, der Bestwert bleibt gespeichert. Über die Ebenen und das Drehen bestimmst du, was abgefragt wird.</li>
+  </ul>
+  <h3>Woher die Daten kommen</h3>
+  <p>Die 3D-Modelle stammen aus <a href="https://www.z-anatomy.com/">Z-Anatomy</a> („Z-Anatomy – The libre 3D atlas of anatomy“, Lizenz <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.de">CC BY-SA 4.0</a>), das auf <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html">BodyParts3D</a> beruht („BodyParts3D – The Database Center for Life Science“, CC BY-SA 2.1 Japan). Für das Handy wurden die Modelle vereinfacht (weniger Dreiecke); die vereinfachten Modelle stehen unter derselben Lizenz. Lateinische Namen nach der Terminologia Anatomica aus Z-Anatomy; die deutschen Namen sind ergänzt – wo es keinen gebräuchlichen gibt, steht der lateinische. Das Modell zeigt einen männlichen Körper.</p>
+  <p>Die App dient dem Lernen und ersetzt keinen ärztlichen Rat. Angaben ohne Gewähr.</p>
+  <h3>Gespeichert</h3>
+  <p>Gewählte Ebenen, Einstellungen und der Quiz-Bestwert bleiben nur in diesem Browser (sichern und übertragen unter „Daten sichern“). Die Modelle (etwa 6 MB) werden beim ersten Öffnen mit der App geladen; danach läuft alles offline. Nichts wird an einen Server geschickt.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>A 3D atlas of the human body for learning anatomy: every bone of the skeleton, muscles, organs, heart and vessels, nerves and sense organs, lymphatic system and skin.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><strong>Turn:</strong> drag with one finger (or the mouse) – all the way round (360°) and up and down. “Turn” at the bottom spins the body slowly by itself.</li>
+    <li><strong>Zoom and move:</strong> pinch and drag with two fingers; on a computer use the mouse wheel and drag with Shift or the right mouse button. The magnifiers at the bottom right zoom too; <em>Reset view</em> at the top shows the whole body again.</li>
+    <li><strong>Layers:</strong> at the top you switch skin, muscles, skeleton, organs, heart &amp; vessels, nerves &amp; senses and lymphatic system on and off – several at once as well. The skin is see-through; set how much in the menu under <em>Settings</em>.</li>
+    <li><strong>Names:</strong> tap a part to see its name in English and Latin plus the side of the body. <em>Names</em> at the bottom labels the largest visible parts; while you turn the body the labels disappear for a moment and come back.</li>
+    <li><strong>Look underneath:</strong> <em>Hide</em> removes the chosen part, for example a muscle, to see the layer below. <em>Show all</em> brings everything back.</li>
+    <li><strong>Search:</strong> the magnifier at the top finds parts by their English, Latin or German name, switches the layer on and zooms to the part.</li>
+    <li><strong>Quiz:</strong> asks for parts that are visible right now (“Where is …?”). Tap the right one; ten questions per round, the best score is kept. The layers and the way you turn the body decide what is asked.</li>
+  </ul>
+  <h3>Where the data comes from</h3>
+  <p>The 3D models come from <a href="https://www.z-anatomy.com/">Z-Anatomy</a> (“Z-Anatomy – The libre 3D atlas of anatomy”, licence <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>), which is based on <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html">BodyParts3D</a> (“BodyParts3D – The Database Center for Life Science”, CC BY-SA 2.1 Japan). For phones the models were simplified (fewer triangles); the simplified models are under the same licence. Latin names follow the Terminologia Anatomica as included in Z-Anatomy. The model shows a male body.</p>
+  <p>The app is for learning and does not replace medical advice. No guarantee of accuracy.</p>
+  <h3>Stored</h3>
+  <p>Chosen layers, settings and the best quiz score stay only in this browser (back them up or move them under “Back up data”). The models (about 6 MB) are loaded with the app the first time you open it; after that everything works offline. Nothing is sent to a server.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann Körperteile suchen, einen Teil zeigen und heranholen, Ebenen ein- und ausschalten und lesen, was gerade zu sehen ist. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can search for body parts, show and zoom to a part, switch layers on and off and read what is shown right now. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 3eb0d8338b38</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script type="module">
+import { Viewer, supported } from './viewer.mjs';
+
+Tools.i18n({
+  de: {
+    'layer.skin': 'Haut', 'layer.muscles': 'Muskeln', 'layer.skeleton': 'Skelett', 'layer.organs': 'Organe',
+    'layer.vessels': 'Herz & Gefäße', 'layer.nerves': 'Nerven & Sinne', 'layer.lymph': 'Lymphsystem',
+    left: 'links', right: 'rechts', loading: 'Lade {layer} …', loadFail: '{layer} ließ sich nicht laden.', noLayer: 'Oben eine Ebene einschalten.',
+    noGl: 'Dieser Browser kann keine 3D-Grafik (WebGL) anzeigen.', glLost: 'Die 3D-Grafik wurde vom Browser beendet. Bitte die Seite neu laden.',
+    hidden: '{name} ausgeblendet', results: '{n} Treffer', resultsMax: 'Die ersten {n} Treffer',
+    noResults: 'Nichts gefunden.', typeMore: 'Mindestens 2 Buchstaben eingeben.',
+    quizWhere: 'Wo ist: <b>{name}</b>?', quizRight: 'Richtig: <b>{name}</b>', quizWrong: 'Das war {got}. Gesucht: <b>{name}</b> (grün)',
+    quizMissed: 'Daneben – gesucht war <b>{name}</b> (grün).', quizScore: 'Frage {q} von {n} · {ok} richtig', quizBest: 'Bestwert: {best} von {n}',
+    quizDone: 'Fertig: {ok} von {n} richtig.', quizNewBest: 'Neuer Bestwert!', quizNone: 'Für das Quiz erst eine Ebene einschalten und den Körper so drehen, dass Teile zu sehen sind.',
+    again: 'Nochmal', 'mcp.show': 'Teil gezeigt', 'mcp.layers': 'Ebenen umgeschaltet',
+  },
+  en: {
+    title: 'Anatomy 3D', search: 'Search', home: 'Reset view', layers: 'Layers',
+    canvas: '3D body: drag to turn, two fingers to zoom, tap for the name', zoomIn: 'Zoom in', zoomOut: 'Zoom out',
+    hide: 'Hide', focus: 'Zoom to', close: 'Close', next: 'Next', skip: 'Skip', quizEnd: 'End quiz', rotate: 'Turn', labels: 'Names',
+    quiz: 'Quiz', showAll: 'Show all', settings: 'Settings', skinOpacity: 'Skin opacity', latinFirst: 'Latin terms as the main name',
+    searchH: 'Find a body part', searchLabel: 'Name (English, Latin or German)',
+    'layer.skin': 'Skin', 'layer.muscles': 'Muscles', 'layer.skeleton': 'Skeleton', 'layer.organs': 'Organs',
+    'layer.vessels': 'Heart & vessels', 'layer.nerves': 'Nerves & senses', 'layer.lymph': 'Lymphatic system',
+    left: 'left', right: 'right', loading: 'Loading {layer} …', loadFail: '{layer} could not be loaded.', noLayer: 'Switch on a layer at the top.',
+    noGl: 'This browser cannot show 3D graphics (WebGL).', glLost: 'The browser stopped the 3D graphics. Please reload the page.',
+    hidden: '{name} hidden', results: '{n} results', resultsMax: 'The first {n} results',
+    noResults: 'Nothing found.', typeMore: 'Type at least 2 letters.',
+    quizWhere: 'Where is: <b>{name}</b>?', quizRight: 'Right: <b>{name}</b>', quizWrong: 'That was {got}. Looking for: <b>{name}</b> (green)',
+    quizMissed: 'Missed – looking for <b>{name}</b> (green).', quizScore: 'Question {q} of {n} · {ok} right', quizBest: 'Best: {best} of {n}',
+    quizDone: 'Done: {ok} of {n} right.', quizNewBest: 'New best score!', quizNone: 'For the quiz, switch on a layer first and turn the body so that parts are visible.',
+    again: 'Again', 'mcp.show': 'part shown', 'mcp.layers': 'layers switched',
+  },
+});
+const t = Tools.t, $ = Tools.$;
+const LAYERS = ['skin', 'muscles', 'skeleton', 'organs', 'vessels', 'nerves', 'lymph'];
+const LS = 'anatomy.settings.v1', LS_QUIZ = 'anatomy.quiz.v1';
+const saved = Tools.load(LS, {});
+const settings = {
+  layers: Array.isArray(saved.layers) ? saved.layers.filter(l => LAYERS.includes(l)) : ['skeleton'],
+  skin: Number.isFinite(saved.skin) ? Tools.clamp(saved.skin, 10, 100) : 35,
+  latin: !!saved.latin, labels: !!saved.labels, rotate: !!saved.rotate,
+};
+const save = () => Tools.save(LS, settings);
+const quizStore = Object.assign({ best: 0, played: 0 }, Tools.load(LS_QUIZ, {}));
+const QUIZ_N = 10;
+
+let index = null, viewer = null, selected = -1, quiz = null;
+const loading = new Map();   // layer id -> Promise
+const failed = new Set();
+
+/* ---------- Names ---------- */
+// part = [layer, English, side, Latin, German, colour, v0, vn, i0, in] (scripts/anatomy/pack.mjs)
+const P = i => index.parts[i];
+function mainName(i) {
+  const [, en, , la, de] = P(i);
+  if (settings.latin) return la || en;
+  return Tools.lang() === 'de' ? (de || la || en) : en;
+}
+function sideName(i) { const s = P(i)[2]; return s === 'l' ? t('left') : s === 'r' ? t('right') : ''; }
+function fullName(i) { const s = sideName(i); return s ? `${mainName(i)} (${s})` : mainName(i); }
+/** Other names below the main one: Latin and English (German UI) or Latin (English UI) */
+function otherNames(i) {
+  const [, en, , la, de] = P(i), main = mainName(i), out = [];
+  const add = (text, latin) => { if (text && text !== main && !out.some(o => o.text === text)) out.push({ text, latin }); };
+  add(la, true);
+  if (Tools.lang() === 'de' || settings.latin) add(en);
+  if (Tools.lang() === 'de' && settings.latin) add(de);
+  return out;
+}
+const layerName = li => t('layer.' + LAYERS[li]);
+
+/* ---------- Layer chips ---------- */
+function renderChips() {
+  const box = $('layers');
+  box.textContent = '';
+  for (const id of LAYERS) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.layer = id;
+    b.textContent = t('layer.' + id);
+    b.setAttribute('aria-pressed', String(settings.layers.includes(id)));
+    b.addEventListener('click', () => toggleLayer(id));
+    box.append(b);
+  }
+}
+function toggleLayer(id, on = !settings.layers.includes(id)) {
+  settings.layers = LAYERS.filter(l => l === id ? on : settings.layers.includes(l));
+  save();
+  for (const b of $('layers').children) b.setAttribute('aria-pressed', String(settings.layers.includes(b.dataset.layer)));
+  return applyLayers();
+}
+async function applyLayers() {
+  if (!viewer) return;
+  for (const id of LAYERS) viewer.setLayerVisible(id, settings.layers.includes(id));
+  if (selected >= 0 && !viewer.drawn(selected)) select(-1);
+  updateStatus();
+  await Promise.all(settings.layers.map(loadLayer));
+  updateStatus();
+  scheduleLabels();
+}
+function loadLayer(id) {
+  if (viewer.hasLayer(id) || failed.has(id)) return Promise.resolve();
+  if (loading.has(id)) return loading.get(id);
+  const li = LAYERS.indexOf(id), meta = index.layers[li];
+  const p = (async () => {
+    Tools.diag.log('load layer', id, meta.bytes);
+    const res = await fetch('models/' + meta.file);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    let buf;
+    if (res.body && res.body.getReader) {
+      const reader = res.body.getReader(), data = new Uint8Array(meta.bytes);
+      let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (got + value.length > data.length) throw new Error('size');
+        data.set(value, got); got += value.length;
+        progress.set(id, got / meta.bytes); updateStatus();
+      }
+      if (got !== meta.bytes) throw new Error('size');
+      buf = data.buffer;
+    } else buf = await res.arrayBuffer();
+    if (buf.byteLength !== meta.bytes) throw new Error('size');
+    viewer.addLayer(id, li, buf, { transparent: id === 'skin' });
+    if (id === 'skin') viewer.setOpacity('skin', settings.skin / 100);
+    viewer.setLayerVisible(id, settings.layers.includes(id));
+    Tools.diag.log('layer ready', id);
+  })().catch(e => { failed.add(id); Tools.diag.log('layer failed', id, String(e)); Tools.toast(t('loadFail', { layer: t('layer.' + id) })); })
+    .finally(() => { loading.delete(id); progress.delete(id); updateStatus(); });
+  loading.set(id, p);
+  return p;
+}
+const progress = new Map();
+function updateStatus() {
+  const st = $('status');
+  st.textContent = '';
+  if (!viewer) return;
+  const waiting = settings.layers.filter(l => loading.has(l));
+  if (waiting.length) {
+    const p = document.createElement('p'); p.textContent = t('loading', { layer: waiting.map(l => t('layer.' + l)).join(', ') });
+    const bar = document.createElement('progress'); bar.max = 1;
+    const vals = waiting.map(l => progress.get(l) || 0); bar.value = vals.reduce((a, b) => a + b, 0) / vals.length;
+    st.append(p, bar);
+  } else if (!settings.layers.length) {
+    const p = document.createElement('p'); p.className = 'muted'; p.textContent = t('noLayer'); st.append(p);
+  }
+  st.hidden = !st.childNodes.length;
+}
+
+/* ---------- Selection ---------- */
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function select(i, { focus = false } = {}) {
+  if (selected >= 0 && !quiz) viewer.mark(selected, null);
+  selected = i;
+  if (i >= 0) { viewer.mark(i, css('--accent')); if (focus) viewer.focus(i); }
+  renderInfo();
+  scheduleLabels();
+}
+function renderInfo() {
+  const box = $('info');
+  box.hidden = selected < 0 || !!quiz;
+  if (box.hidden) return;
+  $('infoName').textContent = mainName(selected);
+  const sub = $('infoSub');
+  sub.textContent = '';
+  const bits = otherNames(selected);
+  bits.forEach((b, k) => {
+    if (k) sub.append(' · ');
+    if (b.latin) { const it = document.createElement('i'); it.lang = 'la'; it.textContent = b.text; sub.append(it); } else sub.append(b.text);
+  });
+  if (bits.length) sub.append(' · ');
+  sub.append([layerName(P(selected)[0]), sideName(selected)].filter(Boolean).join(', '));
+}
+$('btnClose').addEventListener('click', () => select(-1));
+$('btnFocus').addEventListener('click', () => { if (selected >= 0) viewer.focus(selected); });
+$('btnHide').addEventListener('click', () => {
+  const i = selected; if (i < 0) return;
+  select(-1);
+  viewer.setHidden(i, true);
+  $('btnShowAll').disabled = false;
+  Tools.undo(t('hidden', { name: fullName(i) }), () => { viewer.setHidden(i, false); $('btnShowAll').disabled = !viewer.hidden.size; scheduleLabels(); });
+  scheduleLabels();
+});
+$('btnShowAll').addEventListener('click', () => { viewer.showAll(); $('btnShowAll').disabled = true; scheduleLabels(); });
+
+/* ---------- Labels: the largest visible parts get a name ---------- */
+let labelTimer = 0;
+function scheduleLabels() { clearTimeout(labelTimer); labelTimer = setTimeout(drawLabels, 60); }
+function hideLabels() { $('labels').hidden = true; }
+function drawLabels() {
+  const box = $('labels');
+  box.textContent = '';
+  if (!viewer || (!settings.labels && selected < 0) || quiz) { box.hidden = true; return; }
+  const vis = viewer.visibleParts();
+  const W = $('view').clientWidth, taken = [];   // the label layer itself may still be hidden (0 wide)
+  const items = [];
+  const sel = selected >= 0 ? vis.find(v => v.i === selected) : null;
+  if (sel) items.push({ ...sel, sel: true });
+  if (settings.labels) for (const v of vis) {
+    if (items.length >= 14) break;
+    if (v.px < 350 || v.i === selected) continue;
+    items.push(v);
+  }
+  for (const v of items) {
+    const name = fullName(v.i), w = Math.min(W * 0.46, name.length * 7.5 + 24), h = 24;
+    const left = v.x > W / 2;
+    const r = { x0: left ? v.x - w : v.x, x1: left ? v.x : v.x + w, y0: v.y - h / 2, y1: v.y + h / 2 };
+    if (!v.sel && taken.some(o => r.x0 < o.x1 && r.x1 > o.x0 && r.y0 < o.y1 && r.y1 > o.y0)) continue;
+    taken.push(r);
+    const el = document.createElement('div');
+    el.className = 'lbl' + (left ? ' left' : '') + (v.sel ? ' sel' : '');
+    el.style.left = v.x + 'px'; el.style.top = v.y + 'px';
+    const dot = document.createElement('i'), tx = document.createElement('span');
+    tx.textContent = name;
+    el.append(dot, tx);
+    box.append(el);
+  }
+  box.hidden = !box.childNodes.length;
+}
+$('btnLabels').addEventListener('click', () => {
+  settings.labels = !settings.labels; save();
+  $('btnLabels').setAttribute('aria-pressed', String(settings.labels));
+  drawLabels();
+});
+$('btnRotate').addEventListener('click', () => {
+  settings.rotate = !settings.rotate; save();
+  $('btnRotate').setAttribute('aria-pressed', String(settings.rotate));
+  viewer?.setAutoRotate(settings.rotate);
+  if (settings.rotate) hideLabels();
+});
+
+/* ---------- Search ---------- */
+const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss');
+function search(query, { layer = null, limit = 50 } = {}) {
+  const q = norm(query.trim());
+  if (q.length < 2) return [];
+  const words = q.split(/\s+/);
+  const hits = [];
+  index.parts.forEach((p, i) => {
+    if (layer && LAYERS[p[0]] !== layer) return;
+    const hay = norm([p[1], p[3], p[4]].join(' | '));
+    if (!words.every(w => hay.includes(w))) return;
+    const name = norm(mainName(i));
+    const score = (name === q ? 0 : name.startsWith(q) ? 1 : hay.includes(q) ? 2 : 3) * 10 + Math.min(9, name.length / 10);
+    hits.push({ i, score });
+  });
+  // Left and right of the same structure: one hit (the other side stays one tap away in the model)
+  const seen = new Set(), out = [];
+  for (const h of hits.sort((a, b) => a.score - b.score || a.i - b.i)) {
+    const key = P(h.i)[0] + '|' + P(h.i)[1];
+    if (seen.has(key)) continue;
+    seen.add(key); out.push(h.i);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+function renderSearch() {
+  const q = $('searchInput').value, list = $('searchList');
+  list.textContent = '';
+  if (q.trim().length < 2) { $('searchInfo').textContent = t('typeMore'); return; }
+  const res = search(q, { limit: 51 });
+  $('searchInfo').textContent = !res.length ? t('noResults') : res.length > 50 ? t('resultsMax', { n: 50 }) : t('results', { n: res.length });
+  for (const i of res.slice(0, 50)) {
+    const li = document.createElement('li'), b = document.createElement('button');
+    b.type = 'button'; b.className = 'open';
+    const n = document.createElement('span'); n.className = 'name'; n.textContent = mainName(i);
+    const m = document.createElement('span'); m.className = 'meta';
+    const others = otherNames(i);
+    if (others[0]) { const it = document.createElement(others[0].latin ? 'i' : 'span'); it.textContent = others[0].text; m.append(it, ' · '); }
+    m.append(layerName(P(i)[0]));
+    b.append(n, m);
+    b.addEventListener('click', () => { $('searchDlg').close(); showPart(i); });
+    li.append(b); list.append(li);
+  }
+}
+$('btnSearch').addEventListener('click', () => {
+  if (!index) return;
+  $('searchDlg').showModal();
+  $('searchInput').select();
+  renderSearch();
+});
+$('searchInput').addEventListener('input', renderSearch);
+async function showPart(i) {
+  if (quiz) endQuiz();
+  const id = LAYERS[P(i)[0]];
+  if (!settings.layers.includes(id)) await toggleLayer(id, true);
+  else await loadLayer(id);
+  if (!viewer.hasLayer(id)) return false;
+  if (viewer.hidden.has(i)) { viewer.setHidden(i, false); $('btnShowAll').disabled = !viewer.hidden.size; }
+  select(i, { focus: true });
+  return true;
+}
+
+/* ---------- Quiz: "Where is …?" for parts visible right now ---------- */
+function quizPool() {
+  const asked = new Set(quiz.asked);
+  return viewer.visibleParts().filter(v => v.px >= 100 && !asked.has(P(v.i)[1]));   // about 10 × 10 px: still easy to tap
+}
+function startQuiz() {
+  if (!viewer) return;
+  select(-1);
+  quiz = { q: 0, ok: 0, asked: [], target: -1, answered: false };
+  if (!quizPool().length) { quiz = null; Tools.toast(t('quizNone')); return; }
+  settings.rotate && $('btnRotate').click();
+  nextQuestion();
+}
+function nextQuestion() {
+  viewer.clearMarks();
+  if (quiz.q >= QUIZ_N) return finishQuiz();
+  const pool = quizPool();
+  if (!pool.length) return finishQuiz();
+  const pick = pool[Tools.randomInt(pool.length)];
+  quiz.target = pick.i; quiz.q++; quiz.answered = false; quiz.asked.push(P(pick.i)[1]);
+  renderQuiz();
+}
+function answer(i) {
+  if (!quiz || quiz.answered || quiz.target < 0) return;
+  quiz.answered = true;
+  const ok = i >= 0 && P(i)[1] === P(quiz.target)[1] && P(i)[0] === P(quiz.target)[0];
+  if (ok) { quiz.ok++; viewer.mark(i, css('--ok')); quiz.msg = t('quizRight', { name: Tools.esc(fullName(i)) }); } else {
+    if (i >= 0) viewer.mark(i, css('--err'));
+    viewer.mark(quiz.target, css('--ok'));
+    quiz.msg = i >= 0 ? t('quizWrong', { got: Tools.esc(fullName(i)), name: Tools.esc(mainName(quiz.target)) }) : t('quizMissed', { name: Tools.esc(mainName(quiz.target)) });
+  }
+  renderQuiz();
+}
+function finishQuiz() {
+  const n = quiz.q, ok = quiz.ok;
+  const best = ok > quizStore.best;
+  quizStore.played++; if (best) quizStore.best = ok;
+  Tools.save(LS_QUIZ, quizStore);
+  quiz.done = true; quiz.answered = true;
+  quiz.msg = t('quizDone', { ok, n }) + (best && ok ? ' ' + t('quizNewBest') : '');
+  quiz.total = n;
+  renderQuiz();
+}
+function endQuiz() { quiz = null; viewer.clearMarks(); renderQuiz(); renderInfo(); scheduleLabels(); }
+function renderQuiz() {
+  const box = $('quiz');
+  box.hidden = !quiz;
+  $('btnQuiz').setAttribute('aria-pressed', String(!!quiz));
+  if (!quiz) return;
+  $('quizQ').innerHTML = quiz.answered ? quiz.msg : t('quizWhere', { name: Tools.esc(mainName(quiz.target)) });
+  $('quizScore').textContent = (quiz.done ? '' : t('quizScore', { q: quiz.q, n: QUIZ_N, ok: quiz.ok }) + ' · ') + t('quizBest', { best: quizStore.best, n: QUIZ_N });
+  $('btnQuizNext').hidden = !quiz.answered;
+  $('btnQuizNext').querySelector('span').textContent = quiz.done ? t('again') : t('next');
+  $('btnQuizSkip').hidden = quiz.answered;
+  hideLabels();
+}
+$('btnQuiz').addEventListener('click', () => quiz ? endQuiz() : startQuiz());
+$('btnQuizEnd').addEventListener('click', endQuiz);
+$('btnQuizSkip').addEventListener('click', () => answer(-1));
+$('btnQuizNext').addEventListener('click', () => { if (quiz.done) startQuiz(); else nextQuestion(); });
+
+/* ---------- Settings ---------- */
+const skinOut = () => { $('optSkinOut').textContent = Tools.fmt(settings.skin, 0) + ' %'; };
+$('optSkin').value = settings.skin; skinOut();
+$('optSkin').addEventListener('input', e => { settings.skin = +e.target.value; skinOut(); viewer?.setOpacity('skin', settings.skin / 100); save(); });
+$('optLatin').checked = settings.latin;
+$('optLatin').addEventListener('change', e => { settings.latin = e.target.checked; save(); renderAll(); });
+$('btnRotate').setAttribute('aria-pressed', String(settings.rotate));
+$('btnLabels').setAttribute('aria-pressed', String(settings.labels));
+$('btnHome').addEventListener('click', () => viewer?.reset());
+$('btnZoomIn').addEventListener('click', () => viewer?.zoom(0.75));
+$('btnZoomOut').addEventListener('click', () => viewer?.zoom(1 / 0.75));
+
+function renderAll() { renderChips(); renderInfo(); renderQuiz(); updateStatus(); scheduleLabels(); if ($('searchDlg').open) renderSearch(); }
+Tools.onLang(renderAll);
+Tools.theme.onChange(() => { if (selected >= 0 && !quiz) viewer.mark(selected, css('--accent')); });
+renderChips();
+
+/* ---------- Start ---------- */
+async function start() {
+  const st = $('status');
+  if (!supported()) { st.innerHTML = `<p class="notice warn">${Tools.icon('alert-triangle')}<span>${Tools.esc(t('noGl'))}</span></p>`; Tools.diag.log('no WebGL'); return; }
+  try {
+    const res = await fetch('models/index.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    index = await res.json();
+  } catch (e) {
+    Tools.diag.log('index failed', String(e));
+    st.innerHTML = `<p class="notice err" role="alert">${Tools.icon('alert-circle')}<span>${Tools.esc(t('loadFail', { layer: 'Index' }))}</span></p>`;
+    return;
+  }
+  viewer = new Viewer($('cv'), {
+    bounds: index.bounds, parts: index.parts,
+    onTap: i => {
+      if (quiz) { if (!quiz.answered) answer(i); return; }
+      select(i === selected ? -1 : i);
+    },
+    onMove: hideLabels,
+    onRest: scheduleLabels,
+    onLost: () => { st.hidden = false; st.innerHTML = `<p class="notice err" role="alert">${Tools.icon('alert-circle')}<span>${Tools.esc(t('glLost'))}</span></p>`; Tools.diag.log('webgl context lost'); },
+  });
+  window.__anatomy = { viewer, index, search, showPart, quiz: () => quiz && { ...quiz } };   // for the tests
+  viewer.setAutoRotate(settings.rotate);
+  await applyLayers();
+}
+Tools.diag.info(() => ({
+  webgl: supported(), layers: settings.layers.join(','), loaded: viewer ? [...viewer.layers.keys()].join(',') : '',
+  failed: [...failed].join(','), hidden: viewer ? viewer.hidden.size : 0, quiz: !!quiz, labels: settings.labels,
+  camera: viewer ? viewer.state() : null,
+}));
+
+/* ---------- WebMCP: tools for AI agents (see AGENTS.md "WebMCP") ---------- */
+const partInfo = i => ({
+  id: i, name: P(i)[1], latin: P(i)[3] || null, german: P(i)[4] || null, layer: LAYERS[P(i)[0]],
+  side: P(i)[2] === 'l' ? 'left' : P(i)[2] === 'r' ? 'right' : null,
+});
+const ready = () => { if (!index || !viewer) throw new Error('The 3D model is not ready (no WebGL or still loading).'); };
+Tools.mcp.register({
+  name: 'find_parts', title: 'Find body parts', readOnly: true,
+  description: 'Searches the anatomy model for body parts (bones, muscles, organs, vessels, nerves, lymphatic organs, skin regions) by English, Latin or German name. Left and right of the same structure count as one result. Returns ids for show_part.',
+  inputSchema: { type: 'object', properties: {
+    query: { type: 'string', minLength: 2, maxLength: 80, description: 'Name or part of it, e.g. "femur", "Musculus biceps", "Leber".' },
+    layer: { type: 'string', enum: LAYERS, description: 'Only search this layer.' },
+    limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Most results to return. Default 20.' },
+  }, required: ['query'], additionalProperties: false },
+  execute: ({ query, layer, limit = 20 }) => { ready(); return { results: search(query, { layer, limit }).map(partInfo) }; },
+});
+Tools.mcp.register({
+  name: 'show_part', title: 'Show a body part', label: 'mcp.show',
+  description: 'Shows one body part in the app: switches its layer on, selects it (name card) and zooms the camera to it, as if the user had tapped it in the search. Ends a running quiz. Use an id from find_parts.',
+  inputSchema: { type: 'object', properties: {
+    id: { type: 'integer', minimum: 0, maximum: 99999, description: 'Part id from find_parts.' },
+  }, required: ['id'], additionalProperties: false },
+  execute: async ({ id }) => {
+    ready();
+    if (id >= index.parts.length) throw new Error(`No part with id ${id}.`);
+    if (!await showPart(id)) throw new Error('The layer of this part could not be loaded.');
+    return { shown: partInfo(id), layers: settings.layers };
+  },
+});
+Tools.mcp.register({
+  name: 'set_layers', title: 'Switch layers', label: 'mcp.layers',
+  description: 'Chooses which layers of the body are shown, like the layer buttons at the top of the app. The skin is see-through; skin_opacity sets how much (10–100 %).',
+  inputSchema: { type: 'object', properties: {
+    layers: { type: 'array', items: { type: 'string', enum: LAYERS }, uniqueItems: true, maxItems: LAYERS.length, description: 'Layers to show; all others are switched off.' },
+    skin_opacity: { type: 'integer', minimum: 10, maximum: 100, description: 'Opacity of the skin in percent.' },
+  }, required: ['layers'], additionalProperties: false },
+  execute: async ({ layers, skin_opacity }) => {
+    ready();
+    if (skin_opacity != null) { settings.skin = skin_opacity; $('optSkin').value = skin_opacity; skinOut(); viewer.setOpacity('skin', skin_opacity / 100); }
+    settings.layers = LAYERS.filter(l => layers.includes(l));
+    save(); renderChips();
+    await applyLayers();
+    return { layers: settings.layers, loaded: [...viewer.layers.keys()], skin_opacity: settings.skin };
+  },
+});
+Tools.mcp.register({
+  name: 'get_state', title: 'Read what is shown', readOnly: true,
+  description: 'Reads the state of the app: layers shown, the selected part, how many parts are hidden, the camera (turn angle, tilt, zoom), the running quiz question and the best quiz score.',
+  execute: () => {
+    ready();
+    return {
+      layers: settings.layers, selected: selected >= 0 ? partInfo(selected) : null, hidden_parts: viewer.hidden.size,
+      camera: viewer.state(), labels: settings.labels, auto_rotate: settings.rotate,
+      quiz: quiz ? { question: quiz.q, of: QUIZ_N, correct: quiz.ok, looking_for: quiz.done ? null : partInfo(quiz.target).name, finished: !!quiz.done } : null,
+      best_quiz_score: quizStore.best,
+    };
+  },
+});
+
+start();
+</script>
+</body>
+</html>
