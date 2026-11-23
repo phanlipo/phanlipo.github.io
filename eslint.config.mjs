@@ -26,7 +26,7 @@ const ownGlobals = (() => {
 })();
 // Globals of the libraries in assets/vendor that pages load as classic scripts
 const vendorGlobals = Object.fromEntries(['qrcode', 'ZXingWASM', 'ABCJS', 'marked', 'DOMPurify', 'katex',
-  'TurndownService', 'libheif', 'pdfjsLib', 'Tesseract', 'JSZip'].map(n => [n, 'readonly']));
+  'TurndownService', 'libheif', 'pdfjsLib', 'Tesseract', 'JSZip', 'hljs'].map(n => [n, 'readonly']));
 
 export default [
   {

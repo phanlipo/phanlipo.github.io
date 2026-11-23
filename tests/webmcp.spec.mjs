@@ -2383,6 +2383,37 @@ test.describe('markdown-editor tools', () => {
   });
 });
 
+test.describe('code-editor tools', () => {
+  test.beforeEach(async ({ page }) => { await open(page, '/code-editor/'); });
+
+  test('create_file opens a new highlighted file, list and read return it, other files stay', async ({ page }) => {
+    await page.click('#btnBlank');
+    await page.fill('#code', 'eigener Text');
+    await page.fill('#name', 'notiz.txt');
+    const c = await call(page, 'code_editor_create_file', { name: 'tool.py', text: 'def f():\r\n    return 1\n' });
+    expect(c).toEqual({ ok: true, result: { id: expect.any(String), name: 'tool.py', language: 'python', lines: 2, characters: 22, modified: expect.any(String), open: true } });
+    await expect(page.locator('#code')).toHaveValue('def f():\n    return 1\n');
+    await expect(page.locator('#name')).toHaveValue('tool.py');
+    await expect(page.locator('#hlCode .hljs-keyword').first()).toHaveText('def');
+    await expect(page.locator('#modes [data-m="view"]')).toHaveAttribute('aria-pressed', 'true');
+    const l = (await call(page, 'code_editor_list_files', {})).result.files;
+    expect(l.map(f => [f.name, f.language, f.characters, f.open])).toEqual([['tool.py', 'python', 22, true], ['notiz.txt', 'plaintext', 12, false]]);
+    expect((await call(page, 'code_editor_read_file', { id: l[1].id })).result).toMatchObject({ name: 'notiz.txt', text: 'eigener Text', open: false });
+    expect((await call(page, 'code_editor_read_file', {})).result).toMatchObject({ id: c.result.id, text: 'def f():\n    return 1\n' });
+  });
+
+  test('bad input is rejected and changes nothing', async ({ page }) => {
+    expect((await call(page, 'code_editor_read_file', {})).error).toContain('No file is open');
+    expect((await call(page, 'code_editor_read_file', { id: 'nope' })).error).toContain('list_files');
+    expect((await call(page, 'code_editor_create_file', { text: 'x' })).ok).toBe(false);
+    expect((await call(page, 'code_editor_create_file', { name: 'a.txt', text: 1 })).ok).toBe(false);
+    expect((await call(page, 'code_editor_create_file', { name: 'a.txt', text: 'x', other: 1 })).ok).toBe(false);
+    expect((await call(page, 'code_editor_create_file', { name: '   ', text: 'x' })).ok).toBe(false);
+    expect((await call(page, 'code_editor_list_files', {})).result.files).toEqual([]);
+    await expect(page.locator('#start')).toBeVisible();
+  });
+});
+
 test.describe('scoreboard tools', () => {
   test.beforeEach(async ({ page }) => { await open(page, '/scoreboard/'); });
 
