@@ -4640,3 +4640,32 @@ test.describe('anatomy tools', () => {
     await expect(page.locator('#layers [aria-pressed="true"]')).toHaveText(['Skelett']);
   });
 });
+
+test.describe('planets tools', () => {
+  test.use({ timezoneId: 'Europe/Berlin' });
+  test('set_time, get_sky and explain_planet answer in English and show the result', async ({ page }) => {
+    await open(page, '/planets/');
+    let r = await call(page, 'planets_set_time', { time: '2026-11-24T05:00' });
+    expect(r.ok).toBe(true);
+    expect(r.result.time).toBe('2026-11-24T05:00');
+    const venus = r.result.planets.find(p => p.planet === 'venus');
+    expect(venus).toMatchObject({ visible: 'morning', summary: 'Mornings, from 05:00', magnitude: -4.9, side: 'west of the Sun (morning)' });
+    await expect(page.locator('#when')).toHaveValue('2026-11-24T05:00');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Zeit eingestellt');
+    r = await call(page, 'planets_get_sky', {});
+    expect(r.result.planets.map(p => p.planet)).toEqual(['mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']);
+    expect(r.result).not.toHaveProperty('location');
+    expect(JSON.stringify(r.result)).not.toMatch(/"(lat|lon|latitude|longitude)"/);
+    r = await call(page, 'planets_explain_planet', { planet: 'jupiter' });
+    expect(r.result).toMatchObject({ planet: 'jupiter', side: 'west' });
+    expect(r.result.explanation.join(' ')).toContain('west of the Sun');
+    expect(r.result.nextEvents[0]).toMatchObject({ event: 'Opposition – opposite the Sun, visible all night' });
+    await expect(page.locator('#pName')).toHaveText('Jupiter');
+    r = await call(page, 'planets_set_time', { time: '2026-08-15' });
+    expect(r.result.time).toBe('2026-08-15T21:00');
+    expect(await call(page, 'planets_set_time', { time: '2051-01-01T00:00' })).toMatchObject({ ok: false, error: 'Only dates from 1800 to 2050 are possible.' });
+    expect(await call(page, 'planets_set_time', { time: 'tomorrow' })).toMatchObject({ ok: false });
+    expect(await call(page, 'planets_explain_planet', { planet: 'pluto' })).toMatchObject({ ok: false });
+    expect(await call(page, 'planets_explain_planet', { planet: 'mars', extra: 1 })).toMatchObject({ ok: false });
+  });
+});

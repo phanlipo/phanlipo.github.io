@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Planeten</title>
+<meta name="description" content="Das Sonnensystem für jedes Datum von 1800 bis 2050 als Animation – mit Antwort, welche Planeten heute Nacht wann und wo am Himmel stehen und warum.">
+<meta name="tool:tags" content="Freizeit, Physik, Lernen">
+<meta name="tool:features" content="Standort, KI-Agent">
+<meta name="tool:webmcp" content="set_time, get_sky, explain_planet">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Datum und Uhrzeit einstellen, lesen, welche Planeten in der Nacht zu sehen sind, und sich einen Planeten erklären lassen. Deinen Standort bekommt er nicht.">
+<meta name="tool:webmcp-help-en" content="An AI agent can set the date and time, read which planets can be seen at night and have a planet explained. It does not get your location.">
+<meta name="tool:icon" content="planet">
+<meta name="tool:color" content="#4338ca">
+<meta name="tool:short-name" content="Planeten">
+<meta name="tool:title-en" content="Planets">
+<meta name="tool:description-en" content="The solar system for any date from 1800 to 2050 as an animation – telling you which planets are in the sky tonight, when, where and why.">
+<meta name="tool:short-name-en" content="Planets">
+<meta name="tool:storage" content="planets.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-rP2A9xJstKzkp8GIwoTrj6OtXBdXOedhgVoDoseT/a4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Planeten">
+<meta name="theme-color" content="#4338ca">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#4338ca;--accent-text:#ffffff;
+  --sun:#f59e0b;--orbit:rgba(0,0,0,.13);--orbit-sel:rgba(67,56,202,.55);--sight:#4338ca;--sunline:rgba(0,0,0,.45);
+  --mercury:#857f78;--venus:#c08a12;--earth:#2563eb;--mars:#c2410c;--jupiter:#9a5b2b;--saturn:#a8893d;--uranus:#0e8f9a;--neptune:#3b4fd8}
+@media (prefers-color-scheme: dark){:root{--accent:#a5b4fc;--accent-text:#11143a;
+  --sun:#fbbf24;--orbit:rgba(255,255,255,.14);--orbit-sel:rgba(165,180,252,.6);--sight:#a5b4fc;--sunline:rgba(255,255,255,.5);
+  --mercury:#b5afa8;--venus:#f2c94c;--earth:#60a5fa;--mars:#fb7a4a;--jupiter:#d9a06b;--saturn:#e3c77a;--uranus:#5fd4dd;--neptune:#8b9bff}}
+main{display:flex;flex-direction:column}
+.view{position:relative;flex:1 1 52%;min-height:200px;background:var(--surface);border-block-end:1px solid var(--border)}
+.view canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:manipulation;cursor:pointer}
+.view canvas:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.badge{position:absolute;inset-block-start:8px;inset-inline-start:8px;max-width:calc(100% - 16px);margin:0;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:8px;padding:4px 10px;font-size:14px;font-variant-numeric:tabular-nums;box-shadow:var(--shadow);pointer-events:none}
+.toolbar{flex:none;padding:4px 6px;border-block-end:1px solid var(--border);background:var(--surface)}
+.panel{flex:1 1 48%;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:10px 12px 16px;display:flex;flex-direction:column;gap:14px}
+.panel>*{flex:none}
+.panel h2{font-size:17px;margin:0;display:flex;align-items:center;gap:8px}
+.panel h3{font-size:14px;margin:4px 0 0;color:var(--muted)}
+.dot{display:inline-block;flex:none;width:14px;height:14px;border-radius:50%;background:var(--c)}
+.planet{display:grid;gap:8px}
+.planet p{margin:0}
+.vis{font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.stats .stat-box{padding:6px 4px}
+.stats .stat-box>b{font-size:18px}
+.stats .stat-box>span{font-size:12px;line-height:1.2}
+.why{margin:0;padding-inline-start:20px;display:grid;gap:6px}
+.events,.sky{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.events button,.sky button{width:100%;min-height:44px;display:flex;align-items:center;gap:10px;text-align:start;padding:6px 10px;border:1px solid var(--border);
+  border-radius:10px;background:var(--surface);color:var(--text);font:inherit;font-size:15px;cursor:pointer}
+.events button:hover,.sky button:hover{background:var(--surface-2)}
+.events b{flex:none;min-width:7.5em;font-variant-numeric:tabular-nums}
+.sky button[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.sky .name{font-weight:600;min-width:5.2em}
+.sky .when{flex:1;min-width:0;color:var(--muted)}
+.sky .mag{flex:none;font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}
+.sky li.off .name{color:var(--muted)}
+.small{font-size:14px;color:var(--muted)}
+.field-row{display:flex;gap:8px;align-items:flex-end}
+.field-row .form-field{flex:1;min-width:0}
+@media (max-width:420px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:900px){
+  main{display:grid;grid-template-columns:420px 1fr;grid-template-rows:1fr auto}
+  .panel{grid-column:1;grid-row:1 / 3;border-inline-end:1px solid var(--border)}
+  .view{grid-column:2;grid-row:1;border-block-end:0}
+  .toolbar{grid-column:2;grid-row:2;border-block-start:1px solid var(--border);border-block-end:0}
+}
+@media (orientation:landscape) and (max-height:500px){
+  main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:1fr auto}
+  .panel{grid-column:1;grid-row:1 / 3;border-inline-end:1px solid var(--border)}
+  .view{grid-column:2;grid-row:1;border-block-end:0}
+  .toolbar{grid-column:2;grid-row:2;border-block-start:1px solid var(--border);border-block-end:0}
+}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Planeten</span></h1>
+  <p class="sub" data-i18n="sub">Sonnensystem für jedes Datum – und was du am Himmel siehst</p>
+</header>
+
+<main>
+  <div class="view" id="view">
+    <canvas id="cv" tabindex="0" role="img" aria-label="Sonnensystem von oben: die Sonne in der Mitte, die Planeten auf ihren Bahnen. Antippen wählt einen Planeten." data-i18n-attr="aria-label:cvLabel"></canvas>
+    <p class="badge" id="badge"></p>
+  </div>
+  <div class="toolbar" id="tb">
+    <button type="button" id="btnBack"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg><span class="tb-label" id="backL">Zurück</span></button>
+    <button type="button" id="btnPlay" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span class="tb-label" id="playL" data-i18n="play">Abspielen</span></button>
+    <button type="button" id="btnFwd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"/></svg><span class="tb-label" id="fwdL">Vor</span></button>
+    <button type="button" id="btnNow"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#clock"/></svg><span class="tb-label" data-i18n="now">Jetzt</span></button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="form-field"><label for="when" data-i18n="whenL">Datum und Uhrzeit</label>
+      <input type="datetime-local" id="when" min="1800-01-01T00:00" max="2050-12-31T23:59" step="60"></div>
+    <fieldset class="seg-group"><legend data-i18n="speedL">Abspielen und Schritte: je Sekunde bzw. Tippen</legend>
+      <div class="seg" id="speed">
+        <button type="button" aria-pressed="false" data-v="day"><span data-i18n="sp.day">Tag</span></button>
+        <button type="button" aria-pressed="true" data-v="week"><span data-i18n="sp.week">Woche</span></button>
+        <button type="button" aria-pressed="false" data-v="month"><span data-i18n="sp.month">Monat</span></button>
+        <button type="button" aria-pressed="false" data-v="year"><span data-i18n="sp.year">Jahr</span></button>
+      </div>
+    </fieldset>
+    <fieldset class="seg-group"><legend data-i18n="viewL">Ansicht</legend>
+      <div class="seg" id="viewSel">
+        <button type="button" aria-pressed="true" data-v="inner"><span data-i18n="v.inner">Bis zum Mars</span></button>
+        <button type="button" aria-pressed="false" data-v="all"><span data-i18n="v.all">Alle Planeten</span></button>
+      </div>
+    </fieldset>
+
+    <section class="planet" id="planet" aria-labelledby="pName">
+      <h2 id="pName"></h2>
+      <p class="vis" id="pVis" role="status"></p>
+      <p class="small" id="pNow"></p>
+      <div class="stats">
+        <div class="stat-box"><b id="sMag">–</b><span data-i18n="sMag">Helligkeit (mag)</span></div>
+        <div class="stat-box"><b id="sIll">–</b><span data-i18n="sIll">beleuchtet</span></div>
+        <div class="stat-box"><b id="sDist">–</b><span data-i18n="sDist">Entfernung (AE)</span></div>
+        <div class="stat-box"><b id="sElong">–</b><span data-i18n="sElong">Abstand zur Sonne</span></div>
+      </div>
+      <h3 data-i18n="whyH">Warum?</h3>
+      <ul class="why" id="pWhy"></ul>
+      <p class="small" id="pRise"></p>
+      <h3 data-i18n="eventsH">Nächste Ereignisse – antippen springt hin</h3>
+      <ul class="events" id="pEvents"></ul>
+    </section>
+
+    <section aria-labelledby="skyH">
+      <h2 id="skyH"></h2>
+      <p class="small" id="sunLine"></p>
+      <ul class="sky" id="sky"></ul>
+      <p class="notice info" id="placeNote"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span id="placeText"></span></p>
+    </section>
+  </div>
+</main>
+
+<details class="card" data-menu data-menu-page data-icon="settings">
+  <summary data-i18n="settingsH">Einstellungen</summary>
+  <h3 data-i18n="placeH">Beobachtungsort</h3>
+  <p class="small" data-i18n="placeIntro">Für Aufgang, Untergang und die Sichtbarkeit am Himmel. Voreingestellt ist die Mitte Deutschlands.</p>
+  <div class="field-row">
+    <div class="form-field"><label for="lat" data-i18n="latL">Breite (° Nord)</label><input type="text" id="lat" inputmode="decimal" autocomplete="off"></div>
+    <div class="form-field"><label for="lon" data-i18n="lonL">Länge (° Ost)</label><input type="text" id="lon" inputmode="decimal" autocomplete="off"></div>
+  </div>
+  <p class="form-error" id="placeErr" role="alert" hidden></p>
+  <div class="row">
+    <button type="button" class="btn" id="btnGeo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#current-location"/></svg><span data-i18n="geo">Standort verwenden</span></button>
+  </div>
+  <p class="small" data-i18n="geoNote">Der Standort wird nur einmal abgefragt, auf eine Nachkommastelle gerundet (etwa 10 km) und nur in diesem Browser gespeichert.</p>
+</details>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Die App zeigt das Sonnensystem von oben (vom Nordpol der Erdbahn aus) für ein beliebiges Datum zwischen 1800 und 2050 und beantwortet, welche Planeten in der Nacht zu sehen sind – wann, wo und warum.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><strong>Datum und Uhrzeit</strong> oben einstellen, mit <em>Zurück</em>/<em>Vor</em> schrittweise, mit <em>Abspielen</em> als Animation. Das Tempo (Tag, Woche, Monat oder Jahr je Sekunde) gilt auch für die Schritte. <em>Jetzt</em> springt zurück zum aktuellen Zeitpunkt.</li>
+    <li>Einen Planeten im Bild oder in der Liste antippen: Die Karte zeigt, wann und wo er zu sehen ist, wie hell er ist und <strong>warum</strong>. Die Linie von der Erde zum Planeten und die gestrichelte Linie zur Sonne zeigen den Winkel zwischen beiden am Himmel.</li>
+    <li>Die Ereignisse (Konjunktion, Opposition, größter Abstand zur Sonne, größte Helligkeit) antippen, um direkt dorthin zu springen.</li>
+    <li>In der Ansicht <em>Alle Planeten</em> sind die Abstände gestaucht (Wurzel der Entfernung), sonst passten Uranus und Neptun nicht ins Bild. <em>Bis zum Mars</em> ist maßstabsgetreu.</li>
+    <li>Den Beobachtungsort stellst du im Menü unter <em>Einstellungen</em> ein. Uhrzeiten gelten in der Zeitzone dieses Geräts.</li>
+  </ul>
+  <h3>Begriffe</h3>
+  <ul>
+    <li><strong>Abstand zur Sonne</strong> (Elongation): der Winkel zwischen Planet und Sonne, von der Erde aus gesehen. Östlich der Sonne heißt Abendhimmel, westlich Morgenhimmel. Merkur und Venus kreisen innerhalb der Erdbahn und kommen nie weiter als etwa 28° bzw. 47° von der Sonne weg.</li>
+    <li><strong>Konjunktion:</strong> der Planet steht von der Erde aus in Richtung der Sonne und ist nicht zu sehen. <strong>Opposition:</strong> er steht der Sonne gegenüber, ist die ganze Nacht zu sehen und der Erde am nächsten.</li>
+    <li><strong>Helligkeit</strong> in Größenklassen (mag): kleinere Zahlen sind heller, negative sehr hell. Sirius, der hellste Stern, hat −1,5 mag; mit bloßem Auge sieht man bis etwa 6 mag.</li>
+    <li><strong>Sichtbar</strong> zählt ein Planet, wenn er mindestens 5° über dem Horizont steht, während die Sonne mehr als 6° darunter ist (ab dem Ende der Dämmerung).</li>
+  </ul>
+  <h3>So wird gerechnet</h3>
+  <p>Die Bahnen kommen aus den Bahnelementen der NASA (JPL, E. M. Standish: <em>Keplerian Elements for Approximate Positions of the Major Planets</em>, gültig 1800–2050). Daraus berechnet die App mit der Kepler-Gleichung die Positionen – direkt im Browser, ohne Internet. Die Richtung am Himmel stimmt auf wenige Bogenminuten (bei Jupiter und Saturn bis etwa ein Drittel Monddurchmesser), Auf- und Untergänge auf etwa eine Minute. Die Helligkeit folgt den Formeln des <em>Astronomical Almanac</em>, beim Saturn mit der Neigung der Ringe. Mond, Zwergplaneten und Sterne zeigt die App nicht.</p>
+  <h3>Gespeichert</h3>
+  <p>Beobachtungsort, Ansicht, Tempo und der gewählte Planet bleiben nur in diesem Browser gespeichert (sichern und übertragen unter „Daten sichern“). Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>The app shows the solar system from above (from the north pole of the Earth’s orbit) for any date between 1800 and 2050 and tells you which planets can be seen at night – when, where and why.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Set the <strong>date and time</strong> at the top, step with <em>Back</em>/<em>Forward</em> or animate with <em>Play</em>. The speed (a day, week, month or year per second) also sets the step. <em>Now</em> jumps back to the current moment.</li>
+    <li>Tap a planet in the picture or in the list: the card shows when and where it can be seen, how bright it is and <strong>why</strong>. The line from the Earth to the planet and the dashed line to the Sun show the angle between them in the sky.</li>
+    <li>Tap an event (conjunction, opposition, greatest distance from the Sun, greatest brilliancy) to jump to it.</li>
+    <li>In the view <em>All planets</em> distances are compressed (square root of the distance), otherwise Uranus and Neptune would not fit. <em>Up to Mars</em> is to scale.</li>
+    <li>Set your place of observation in the menu under <em>Settings</em>. Times are in this device’s time zone.</li>
+  </ul>
+  <h3>Terms</h3>
+  <ul>
+    <li><strong>Distance from the Sun</strong> (elongation): the angle between planet and Sun as seen from the Earth. East of the Sun means the evening sky, west the morning sky. Mercury and Venus orbit inside the Earth’s orbit and never get farther than about 28° and 47° from the Sun.</li>
+    <li><strong>Conjunction:</strong> seen from the Earth, the planet is in the direction of the Sun and cannot be seen. <strong>Opposition:</strong> it is opposite the Sun, visible all night and closest to the Earth.</li>
+    <li><strong>Brightness</strong> in magnitudes (mag): smaller numbers are brighter, negative ones very bright. Sirius, the brightest star, is −1.5 mag; the naked eye reaches about 6 mag.</li>
+    <li>A planet counts as <strong>visible</strong> when it is at least 5° above the horizon while the Sun is more than 6° below it (from the end of twilight).</li>
+  </ul>
+  <h3>How it is calculated</h3>
+  <p>The orbits come from NASA’s orbital elements (JPL, E. M. Standish: <em>Keplerian Elements for Approximate Positions of the Major Planets</em>, valid 1800–2050). From them the app solves Kepler’s equation for the positions – in the browser, without the internet. Directions in the sky are right to a few arcminutes (Jupiter and Saturn up to about a third of the Moon’s width), rising and setting to about a minute. Brightness follows the formulas of the <em>Astronomical Almanac</em>, for Saturn including the tilt of its rings. The Moon, dwarf planets and stars are not shown.</p>
+  <h3>Stored</h3>
+  <p>Place of observation, view, speed and the chosen planet stay only in this browser (back them up or move them under “Back up data”). Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann Datum und Uhrzeit einstellen, lesen, welche Planeten in der Nacht zu sehen sind, und sich einen Planeten erklären lassen. Deinen Standort bekommt er nicht. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can set the date and time, read which planets can be seen at night and have a planet explained. It does not get your location. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version cfac39a9e3ff</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="ephemeris.js"></script>
+<script>
+(function(){
+'use strict';
+const E=PlanetEphemeris;
+const NAMES={de:{mercury:'Merkur',venus:'Venus',earth:'Erde',mars:'Mars',jupiter:'Jupiter',saturn:'Saturn',uranus:'Uranus',neptune:'Neptun'},
+  en:{mercury:'Mercury',venus:'Venus',earth:'Earth',mars:'Mars',jupiter:'Jupiter',saturn:'Saturn',uranus:'Uranus',neptune:'Neptune'}};
+// Texts the script writes, in both languages; the English dictionary is also used for the WebMCP results
+const DE={
+  back:'Zurück',fwd:'Vor',pause:'Pause',
+  'u.day':'1 Tag','u.week':'1 Woche','u.month':'1 Monat','u.year':'1 Jahr',
+  backA:'{u} zurück',fwdA:'{u} vor',
+  nightOf:'Am Himmel in der Nacht vom {a} auf den {b}',skyAt:'Am Himmel am {a}',
+  sunLine:'Sonne: Aufgang {rise} · Untergang {set}',sunUp:'Sonne: den ganzen Tag über dem Horizont',sunDown:'Sonne: geht an diesem Tag nicht auf',
+  place:'Beobachtungsort: {lat}° {ns}, {lon}° {ew} – ändern im Menü unter Einstellungen.',
+  placeDefault:'Beobachtungsort: Mitte Deutschlands – ändern im Menü unter Einstellungen.',
+  N:'N',S:'S',O:'O',W:'W',
+  'vis.evening':'Abends, bis {to} Uhr','vis.morning':'Morgens, ab {from} Uhr',
+  'vis.eveningLong':'Vom Abend bis {to} Uhr','vis.morningLong':'Ab {from} Uhr bis zum Morgen','vis.allNight':'Die ganze Nacht',
+  'vis.night':'Nachts, {from}–{to} Uhr','vis.eveningMorning':'Abends und morgens',
+  'vis.nearSun':'Nicht zu sehen – zu nah an der Sonne','vis.belowHorizon':'Nicht zu sehen – nachts unter dem Horizont',
+  'vis.noNight':'Nicht zu sehen – es wird nicht dunkel genug','vis.faint':' (nur mit Fernglas)',
+  best:'Am höchsten um {time} Uhr: {alt}° über dem Horizont im {dir}.',
+  nowUp:'Zum eingestellten Zeitpunkt: {alt}° über dem Horizont im {dir}.',nowDown:'Zum eingestellten Zeitpunkt unter dem Horizont.',
+  rise:'Aufgang {rise} · Untergang {set} (an diesem Tag)',alwaysUp:'Den ganzen Tag über dem Horizont.',alwaysDown:'Geht an diesem Tag nicht auf.',
+  dirs:'Norden,Nordosten,Osten,Südosten,Süden,Südwesten,Westen,Nordwesten',
+  'why.infConj':'{name} steht von der Erde aus gesehen nur {e}° neben der Sonne und zieht gerade zwischen Erde und Sonne hindurch (untere Konjunktion). Im hellen Himmel um die Sonne ist {name} nicht zu sehen.',
+  'why.supConj':'{name} steht von der Erde aus gesehen nur {e}° neben der Sonne, auf der anderen Seite hinter ihr (obere Konjunktion). Im hellen Himmel um die Sonne ist {name} nicht zu sehen.',
+  'why.conj':'{name} steht von der Erde aus gesehen nur {e}° neben der Sonne, hinter ihr (Konjunktion), und ist im hellen Himmel um die Sonne nicht zu sehen.',
+  'why.innerWest':'{name} steht von der Erde aus gesehen {e}° westlich der Sonne. Weil sich der Himmel von Osten nach Westen dreht, geht {name} deshalb vor der Sonne auf und ist am Morgenhimmel im Osten zu sehen.',
+  'why.innerEast':'{name} steht von der Erde aus gesehen {e}° östlich der Sonne. Deshalb geht {name} nach der Sonne unter und ist am Abendhimmel im Westen zu sehen.',
+  'why.innerMax':'Weiter als etwa {max}° entfernt sich {name} nie von der Sonne, weil die Bahn innerhalb der Erdbahn liegt – darum ist {name} nie um Mitternacht zu sehen.',
+  'why.outerWest':'{name} steht {e}° westlich der Sonne und geht vor ihr auf – zu sehen in der zweiten Nachthälfte und am Morgen.',
+  'why.outerEast':'{name} steht {e}° östlich der Sonne und geht nach ihr unter – zu sehen am Abend und in der ersten Nachthälfte.',
+  'why.opp':'{name} steht der Sonne fast gegenüber ({e}°): Aufgang etwa bei Sonnenuntergang, Untergang bei Sonnenaufgang – zu sehen die ganze Nacht. Die Erde überholt {name} gerade auf der Innenbahn, deshalb ist der Abstand besonders klein.',
+  'why.morningStar':'Darum heißt die Venus jetzt „Morgenstern“ – obwohl sie ein Planet ist.',
+  'why.eveningStar':'Darum heißt die Venus jetzt „Abendstern“ – obwohl sie ein Planet ist.',
+  'why.dist':'Entfernung zur Erde: {au} AE ({km} Mio. km), von der Erde aus beleuchtet: {pct} %.',
+  'why.crescent':'Nah an der Erde zeigt die Venus vor allem ihre Nachtseite – im Fernglas eine Sichel. Weil sie so nah ist, wirkt die Sichel groß: Am hellsten ist die Venus, wenn etwa ein Viertel beleuchtet ist, rund fünf Wochen vor und nach der unteren Konjunktion.',
+  'why.clouds':'Planeten leuchten nicht selbst. Die dichten, weißen Wolken der Venus werfen aber rund drei Viertel des Sonnenlichts zurück – mehr als jeder andere Planet.',
+  'why.magSirius':'Mit {m} mag ist {name} heller als Sirius, der hellste Stern (−1,5 mag). Kleinere Zahlen bedeuten heller.',
+  'why.magBright':'Mit {m} mag gehört {name} zu den hellsten Lichtpunkten am Nachthimmel (kleinere Zahlen bedeuten heller).',
+  'why.magEye':'Mit {m} mag ist {name} mit bloßem Auge gut zu sehen.',
+  'why.magDark':'Mit {m} mag ist {name} nur unter sehr dunklem Himmel mit bloßem Auge zu erahnen – mit Fernglas leicht.',
+  'why.magScope':'Mit {m} mag ist {name} zu schwach für das bloße Auge – nur mit Fernglas oder Teleskop zu sehen.',
+  'why.peakNext':'Am hellsten wird {name} am {date} ({m} mag).','why.peakPast':'Am hellsten war {name} am {date} ({m} mag).',
+  'why.oppNext':'Am nächsten und hellsten ist {name} zur Opposition am {date} ({m} mag).',
+  'why.oppPast':'Am nächsten und hellsten war {name} zur Opposition am {date} ({m} mag).',
+  'ev.inferiorConjunction':'Untere Konjunktion – zwischen Erde und Sonne','ev.superiorConjunction':'Obere Konjunktion – hinter der Sonne',
+  'ev.conjunction':'Konjunktion – hinter der Sonne','ev.opposition':'Opposition – gegenüber der Sonne, die ganze Nacht zu sehen',
+  'ev.east':'Größter Abstand östlich der Sonne ({e}°) – Abendhimmel','ev.west':'Größter Abstand westlich der Sonne ({e}°) – Morgenhimmel',
+  'ev.greatestBrilliancy':'Größte Helligkeit ({m} mag)',
+  range:'Nur 1800 bis 2050 möglich.',end:'Ende des Zeitraums 1800–2050 erreicht.',
+  placeBad:'Breite −89 bis 89, Länge −180 bis 180 eingeben.',geoOk:'Standort übernommen.',geoFail:'Standort nicht verfügbar.',geoNo:'Dieser Browser kann den Standort nicht abfragen.',
+  'mcp.time':'Zeit eingestellt','mcp.explain':'Planet erklärt',
+};
+const EN={
+  title:'Planets',sub:'The solar system for any date – and what you see in the sky',
+  cvLabel:'The solar system from above: the Sun in the centre, the planets on their orbits. Tap to choose a planet.',
+  play:'Play',now:'Now',whenL:'Date and time',speedL:'Play and steps: per second or tap',
+  'sp.day':'Day','sp.week':'Week','sp.month':'Month','sp.year':'Year',viewL:'View','v.inner':'Up to Mars','v.all':'All planets',
+  sMag:'Brightness (mag)',sIll:'illuminated',sDist:'Distance (AU)',sElong:'From the Sun',whyH:'Why?',eventsH:'Next events – tap to jump there',
+  settingsH:'Settings',placeH:'Place of observation',placeIntro:'For rising, setting and visibility in the sky. The default is the centre of Germany.',
+  latL:'Latitude (° north)',lonL:'Longitude (° east)',geo:'Use my location',
+  geoNote:'Your location is asked for once only, rounded to one decimal (about 10 km) and stored only in this browser.',
+  back:'Back',fwd:'Forward',pause:'Pause',
+  'u.day':'1 day','u.week':'1 week','u.month':'1 month','u.year':'1 year',backA:'{u} back',fwdA:'{u} forward',
+  nightOf:'In the sky in the night of {a} to {b}',skyAt:'In the sky on {a}',
+  sunLine:'Sun: rises {rise} · sets {set}',sunUp:'Sun: above the horizon all day',sunDown:'Sun: does not rise on this day',
+  place:'Place of observation: {lat}° {ns}, {lon}° {ew} – change it in the menu under Settings.',
+  placeDefault:'Place of observation: centre of Germany – change it in the menu under Settings.',
+  N:'N',S:'S',O:'E',W:'W',
+  'vis.evening':'Evenings, until {to}','vis.morning':'Mornings, from {from}',
+  'vis.eveningLong':'From the evening until {to}','vis.morningLong':'From {from} until morning','vis.allNight':'All night',
+  'vis.night':'At night, {from}–{to}','vis.eveningMorning':'Evenings and mornings',
+  'vis.nearSun':'Not visible – too close to the Sun','vis.belowHorizon':'Not visible – below the horizon at night',
+  'vis.noNight':'Not visible – it does not get dark enough','vis.faint':' (binoculars only)',
+  best:'Highest at {time}: {alt}° above the horizon in the {dir}.',
+  nowUp:'At the time set: {alt}° above the horizon in the {dir}.',nowDown:'At the time set: below the horizon.',
+  rise:'Rises {rise} · sets {set} (on this day)',alwaysUp:'Above the horizon all day.',alwaysDown:'Does not rise on this day.',
+  dirs:'north,northeast,east,southeast,south,southwest,west,northwest',
+  'why.infConj':'Seen from the Earth, {name} is only {e}° from the Sun and is just passing between the Earth and the Sun (inferior conjunction). In the bright sky around the Sun {name} cannot be seen.',
+  'why.supConj':'Seen from the Earth, {name} is only {e}° from the Sun, on the far side behind it (superior conjunction). In the bright sky around the Sun {name} cannot be seen.',
+  'why.conj':'Seen from the Earth, {name} is only {e}° from the Sun, behind it (conjunction), and cannot be seen in the bright sky around the Sun.',
+  'why.innerWest':'Seen from the Earth, {name} is {e}° west of the Sun. As the sky turns from east to west, {name} therefore rises before the Sun and can be seen in the morning sky in the east.',
+  'why.innerEast':'Seen from the Earth, {name} is {e}° east of the Sun. So {name} sets after the Sun and can be seen in the evening sky in the west.',
+  'why.innerMax':'{name} never gets farther than about {max}° from the Sun, because its orbit lies inside the Earth’s – so {name} is never seen at midnight.',
+  'why.outerWest':'{name} is {e}° west of the Sun and rises before it – visible in the second half of the night and in the morning.',
+  'why.outerEast':'{name} is {e}° east of the Sun and sets after it – visible in the evening and the first half of the night.',
+  'why.opp':'{name} is almost opposite the Sun ({e}°): it rises around sunset and sets around sunrise – visible all night. The Earth is overtaking {name} on the inside track, so the distance is especially small.',
+  'why.morningStar':'That is why Venus is now called the “morning star” – although it is a planet.',
+  'why.eveningStar':'That is why Venus is now called the “evening star” – although it is a planet.',
+  'why.dist':'Distance from the Earth: {au} AU ({km} million km), illuminated as seen from the Earth: {pct} %.',
+  'why.crescent':'Close to the Earth, Venus shows mostly its night side – a crescent in binoculars. Being so close, the crescent looks large: Venus is brightest with about a quarter lit, some five weeks before and after inferior conjunction.',
+  'why.clouds':'Planets do not shine by themselves. But the thick white clouds of Venus reflect about three quarters of the sunlight – more than any other planet.',
+  'why.magSirius':'At {m} mag {name} is brighter than Sirius, the brightest star (−1.5 mag). Smaller numbers mean brighter.',
+  'why.magBright':'At {m} mag {name} is one of the brightest points of light in the night sky (smaller numbers mean brighter).',
+  'why.magEye':'At {m} mag {name} is easy to see with the naked eye.',
+  'why.magDark':'At {m} mag {name} can just be glimpsed with the naked eye under a very dark sky – easy with binoculars.',
+  'why.magScope':'At {m} mag {name} is too faint for the naked eye – binoculars or a telescope only.',
+  'why.peakNext':'{name} will be brightest on {date} ({m} mag).','why.peakPast':'{name} was brightest on {date} ({m} mag).',
+  'why.oppNext':'{name} is closest and brightest at opposition on {date} ({m} mag).',
+  'why.oppPast':'{name} was closest and brightest at opposition on {date} ({m} mag).',
+  'ev.inferiorConjunction':'Inferior conjunction – between Earth and Sun','ev.superiorConjunction':'Superior conjunction – behind the Sun',
+  'ev.conjunction':'Conjunction – behind the Sun','ev.opposition':'Opposition – opposite the Sun, visible all night',
+  'ev.east':'Greatest distance east of the Sun ({e}°) – evening sky','ev.west':'Greatest distance west of the Sun ({e}°) – morning sky',
+  'ev.greatestBrilliancy':'Greatest brilliancy ({m} mag)',
+  range:'Only 1800 to 2050 is possible.',end:'End of the period 1800–2050 reached.',
+  placeBad:'Enter a latitude from −89 to 89 and a longitude from −180 to 180.',geoOk:'Location set.',geoFail:'Location not available.',geoNo:'This browser cannot get the location.',
+  'mcp.time':'time set','mcp.explain':'planet explained',
+};
+Tools.i18n({de:DE,en:EN});
+const t=Tools.t;
+// Text in a given language (WebMCP results are always English, whatever the page shows)
+const tl=(lang,key,vars)=>{ const s=(lang==='en'?EN:DE)[key]??key; return vars?s.replace(/\{(\w+)\}/g,(m,k)=>(k in vars?String(vars[k]):m)):s; };
+
+const DAY=86400000;
+const SPEEDS={day:1,week:7,month:30.436875,year:365.25};
+const MAX_ELONG={mercury:28,venus:47};
+const DEFAULT_PLACE={lat:51,lon:10};
+const LS='planets.settings.v1';
+const saved=Tools.load(LS,{})||{};
+const settings={lat:DEFAULT_PLACE.lat,lon:DEFAULT_PLACE.lon,view:'inner',speed:'week',planet:'venus'};
+if(Number.isFinite(saved.lat)&&Math.abs(saved.lat)<=89&&Number.isFinite(saved.lon)&&Math.abs(saved.lon)<=180){settings.lat=saved.lat;settings.lon=saved.lon;}
+if(['inner','all'].includes(saved.view))settings.view=saved.view;
+if(saved.speed in SPEEDS)settings.speed=saved.speed;
+if(E.PLANETS.includes(saved.planet))settings.planet=saved.planet;
+const save=()=>Tools.save(LS,settings);
+
+// 1800–2050 in the device's time zone (the date field and the toasts speak of local dates)
+const MIN_TIME=new Date(E.MIN_YEAR,0,1).getTime(),MAX_TIME=new Date(E.MAX_YEAR,11,31,23,59).getTime();
+const clampTime=ms=>Math.min(MAX_TIME,Math.max(MIN_TIME,ms));
+let time=clampTime(Date.now());
+let playing=false;
+
+/* ---------- Formatting ---------- */
+const loc=()=>Tools.locale();
+const fmtTime=ms=>new Date(ms).toLocaleTimeString(loc(),{hour:'2-digit',minute:'2-digit'});
+const fmtDate=ms=>new Date(ms).toLocaleDateString(loc(),{day:'numeric',month:'long',year:'numeric'});
+const fmtDayMonth=ms=>new Date(ms).toLocaleDateString(loc(),{day:'numeric',month:'numeric'});
+const fmtShortDate=ms=>new Date(ms).toLocaleDateString(loc(),{day:'2-digit',month:'2-digit',year:'numeric'});
+const fmtBadge=ms=>new Date(ms).toLocaleString(loc(),{weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+const pad=n=>String(n).padStart(2,'0');
+const localValue=ms=>{ const d=new Date(ms); return `${String(d.getFullYear()).padStart(4,'0')}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const parseLocal=v=>{ const m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(v||''); if(!m)return NaN;
+  const d=new Date(2000,0,1); d.setFullYear(+m[1],+m[2]-1,+m[3]); d.setHours(+m[4],+m[5],0,0); return d.getTime(); };
+const dirOf=(az,lang)=>tl(lang,'dirs').split(',')[Math.round(az/45)%8];
+const name=(b,lang=Tools.lang())=>(NAMES[lang]||NAMES.de)[b];
+
+/* ---------- What the panel shows, in either language (page: current language; WebMCP: English) ---------- */
+function ctx(lang){
+  const page=lang===Tools.lang();
+  return {lang,
+    t:(k,v)=>page?t(k,v):tl(lang,k,v),
+    num:(x,d)=>page?Tools.fmt(x,d):x.toFixed(d),
+    time:ms=>page?fmtTime(ms):localValue(ms).slice(11),
+    date:ms=>page?fmtDate(ms):localValue(ms).slice(0,10)};
+}
+function visText(v,X){
+  let s;
+  // "Evenings" / "mornings" only when it is near dusk or dawn; otherwise from the evening until … / from … until morning
+  const H3=3*3600000;
+  if(v.kind==='evening')s=X.t(v.to-v.night.start<=H3?'vis.evening':'vis.eveningLong',{to:X.time(v.to)});
+  else if(v.kind==='morning')s=X.t(v.night.end-v.from<=H3?'vis.morning':'vis.morningLong',{from:X.time(v.from)});
+  else if(v.kind==='night')s=X.t('vis.night',{from:X.time(v.from),to:X.time(v.to)});
+  else s=X.t('vis.'+v.kind);
+  if(v.best&&!v.nakedEye)s+=X.t('vis.faint');
+  return s;
+}
+function explain(body,g,evs,X){
+  const nm=name(body,X.lang),out=[],e=X.num(g.elongation,0),inner=E.INNER.has(body);
+  if(g.elongation<12)out.push(X.t(inner?(g.delta<g.sunDistance?'why.infConj':'why.supConj'):'why.conj',{name:nm,e}));
+  else if(inner){
+    out.push(X.t(g.side==='west'?'why.innerWest':'why.innerEast',{name:nm,e}));
+    if(body==='venus')out.push(X.t(g.side==='west'?'why.morningStar':'why.eveningStar'));
+    out.push(X.t('why.innerMax',{name:nm,max:MAX_ELONG[body]}));
+  } else if(g.elongation>150)out.push(X.t('why.opp',{name:nm,e}));
+  else out.push(X.t(g.side==='west'?'why.outerWest':'why.outerEast',{name:nm,e}));
+  out.push(X.t('why.dist',{au:X.num(g.delta,2),km:X.num(g.delta*149.598,0),pct:X.num(g.illuminated*100,0)}));
+  if(body==='venus'&&g.elongation>=12&&g.illuminated<0.5)out.push(X.t('why.crescent'));
+  if(body==='venus')out.push(X.t('why.clouds'));
+  const m=X.num(g.mag,1);
+  const key=g.mag<-1.46?'why.magSirius':g.mag<1.5?'why.magBright':g.mag<5?'why.magEye':g.mag<6.5?'why.magDark':'why.magScope';
+  out.push(X.t(key,{name:nm,m}));
+  // The closest brightest moment within 75 days (Venus: greatest brilliancy, outer planets: opposition)
+  let peak=null;
+  for(const ev of evs)if((ev.type==='greatestBrilliancy'||ev.type==='opposition')&&Math.abs(ev.time-time)<75*DAY
+    &&(!peak||Math.abs(ev.time-time)<Math.abs(peak.time-time)))peak=ev;
+  if(peak){
+    const k=(peak.type==='opposition'?'why.opp':'why.peak')+(peak.time>=time?'Next':'Past');
+    out.push(X.t(k,{name:nm,date:X.date(peak.time),m:X.num(E.geo(body,peak.time).mag,1)}));
+  }
+  return out;
+}
+const eventText=(ev,X)=>ev.type==='greatestElongation'?X.t('ev.'+ev.side,{e:X.num(ev.elongation,0)})
+  :ev.type==='greatestBrilliancy'?X.t('ev.greatestBrilliancy',{m:X.num(ev.mag,1)}):X.t('ev.'+ev.type);
+
+/* ---------- State of the sky for the time set (cached per time and place) ---------- */
+let cache=null;
+function sky(){
+  const key=`${time}|${settings.lat}|${settings.lon}`;
+  if(cache&&cache.key===key)return cache;
+  const night=E.nightAround(time,settings.lat,settings.lon);
+  const vis={};
+  for(const b of E.PLANETS)vis[b]=E.visibility(b,time,settings.lat,settings.lon,night);
+  cache={key,night,vis,geo:{},events:{}};
+  return cache;
+}
+const geoOf=b=>{ const s=sky(); return s.geo[b]||(s.geo[b]=E.geo(b,time)); };
+const eventsOf=b=>{ const s=sky(); return s.events[b]||(s.events[b]=E.events(b,time-80*DAY,time+800*DAY)); };
+function dayRange(ms){ const d=new Date(ms); d.setHours(0,0,0,0); const a=d.getTime(); d.setDate(d.getDate()+1); return [a,d.getTime()]; }
+
+/* ---------- Drawing ---------- */
+const cv=Tools.$('cv'),cx=cv.getContext('2d');
+let colors={};
+function readColors(){
+  const cs=getComputedStyle(document.documentElement);
+  for(const k of ['sun','orbit','orbit-sel','sight','sunline','text','muted','surface',...E.BODIES])colors[k]=cs.getPropertyValue('--'+k).trim();
+}
+const SIZE={mercury:3.5,venus:5,earth:5,mars:4,jupiter:8,saturn:7,uranus:5.5,neptune:5.5};
+let layout={w:0,h:0,dpr:1};
+function resize(){
+  const r=cv.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,3);
+  layout={w:r.width,h:r.height,dpr};
+  cv.width=Math.max(1,Math.round(r.width*dpr)); cv.height=Math.max(1,Math.round(r.height*dpr));
+  draw();
+}
+// Heliocentric x/y (AU) → canvas; "all" compresses distances (square root) so Neptune fits
+function project(p){
+  const R=Math.min(layout.w,layout.h)/2-18;
+  const r=Math.hypot(p.x,p.y);
+  const s=settings.view==='all'?(r?Math.sqrt(r/31)*R/r:0):R/1.75;
+  return {x:layout.w/2+p.x*s,y:layout.h/2-p.y*s};
+}
+let shown={};
+function draw(){
+  const {w,h,dpr}=layout;
+  if(!w||!h)return;
+  cx.setTransform(dpr,0,0,dpr,0,0);
+  cx.clearRect(0,0,w,h);
+  const bodies=settings.view==='all'?E.BODIES:['mercury','venus','earth','mars'];
+  const sel=settings.planet;
+  for(const b of bodies){
+    cx.beginPath();
+    E.orbit(b,time,120).forEach((p,i)=>{ const q=project(p); if(i)cx.lineTo(q.x,q.y); else cx.moveTo(q.x,q.y); });
+    cx.strokeStyle=b===sel?colors['orbit-sel']:colors.orbit; cx.lineWidth=b===sel?1.6:1; cx.stroke();
+  }
+  shown={};
+  for(const b of E.BODIES)shown[b]=project(E.helio(b,time));
+  const sun={x:w/2,y:h/2},earth=shown.earth;
+  // Lines of sight from the Earth: to the Sun (dashed) and to the chosen planet, with the angle between them
+  const g=geoOf(sel);
+  cx.save();
+  cx.setLineDash([5,5]); cx.strokeStyle=colors.sunline; cx.lineWidth=1.2;
+  cx.beginPath(); cx.moveTo(earth.x,earth.y); cx.lineTo(sun.x,sun.y); cx.stroke();
+  cx.restore();
+  const target=shown[sel];
+  const dx=target.x-earth.x,dy=target.y-earth.y,len=Math.hypot(dx,dy)||1;
+  const far=Math.max(w,h)*2;
+  cx.strokeStyle=colors.sight; cx.lineWidth=1.6;
+  cx.beginPath(); cx.moveTo(earth.x,earth.y); cx.lineTo(earth.x+dx/len*far,earth.y+dy/len*far); cx.stroke();
+  const a1=Math.atan2(sun.y-earth.y,sun.x-earth.x),a2=Math.atan2(dy,dx);
+  let d=a2-a1; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI;
+  cx.beginPath(); cx.arc(earth.x,earth.y,26,a1,a1+d,d<0); cx.stroke();
+  cx.font=`600 12px ${getComputedStyle(document.body).fontFamily}`;
+  cx.fillStyle=colors.text; cx.textAlign='center'; cx.textBaseline='middle';
+  const angle={x:earth.x+Math.cos(a1+d/2)*42,y:earth.y+Math.sin(a1+d/2)*42};
+  cx.fillText(`${Tools.fmt(g.elongation,0)}°`,angle.x,angle.y);
+  // Sun and planets
+  cx.fillStyle=colors.sun; cx.beginPath(); cx.arc(sun.x,sun.y,9,0,2*Math.PI); cx.fill();
+  cx.textAlign='start'; cx.textBaseline='alphabetic';
+  for(const b of bodies){
+    const p=shown[b];
+    if(b==='saturn'){ cx.strokeStyle=colors.saturn; cx.lineWidth=1.5; cx.beginPath(); cx.ellipse(p.x,p.y,SIZE.saturn+5,(SIZE.saturn+5)*0.4,-0.4,0,2*Math.PI); cx.stroke(); }
+    cx.fillStyle=colors[b]; cx.beginPath(); cx.arc(p.x,p.y,SIZE[b],0,2*Math.PI); cx.fill();
+    if(b===sel){ cx.strokeStyle=colors.sight; cx.lineWidth=2; cx.beginPath(); cx.arc(p.x,p.y,SIZE[b]+4,0,2*Math.PI); cx.stroke(); }
+  }
+  // Names: the first of four places around the dot that overlaps no other name, dot or the angle
+  const font=getComputedStyle(document.body).fontFamily,taken=[{x:angle.x-14,y:angle.y-9,w:28,h:18}];
+  for(const b of bodies){ const p=shown[b]; taken.push({x:p.x-SIZE[b],y:p.y-SIZE[b],w:2*SIZE[b],h:2*SIZE[b]}); }
+  const hit=r=>taken.some(o=>r.x<o.x+o.w&&o.x<r.x+r.w&&r.y<o.y+o.h&&o.y<r.y+r.h);
+  for(const b of [sel,'earth',...bodies.filter(b=>b!==sel&&b!=='earth')]){
+    if(!bodies.includes(b))continue;
+    const p=shown[b],strong=b===sel||b==='earth';
+    cx.font=`${strong?'700':'400'} 12px ${font}`;
+    const tw=cx.measureText(name(b)).width,o=SIZE[b]+4;
+    const spots=[[o,-o-12],[o,o],[-o-tw,-o-12],[-o-tw,o]].map(([dx2,dy2])=>({x:p.x+dx2,y:p.y+dy2,w:tw,h:13}));
+    const inside=r2=>r2.x>=2&&r2.x+r2.w<=w-2&&r2.y>=2&&r2.y+r2.h<=h-2;
+    const r=spots.find(r2=>inside(r2)&&!hit(r2))||spots.find(inside)||spots[0];
+    taken.push(r);
+    cx.fillStyle=strong?colors.text:colors.muted; cx.textBaseline='top';
+    cx.fillText(name(b),r.x,r.y);
+  }
+  cx.textBaseline='alphabetic';
+  // Chosen planet outside the picture (view "up to Mars"): name at the edge, on its line of sight
+  if(!bodies.includes(sel)){
+    const m=16; let k=far;
+    if(dx>0)k=Math.min(k,(w-m-earth.x)/(dx/len)); if(dx<0)k=Math.min(k,(m-earth.x)/(dx/len));
+    if(dy>0)k=Math.min(k,(h-m-earth.y)/(dy/len)); if(dy<0)k=Math.min(k,(m-earth.y)/(dy/len));
+    const ex=earth.x+dx/len*k,ey=earth.y+dy/len*k;
+    cx.fillStyle=colors[sel]; cx.beginPath(); cx.arc(ex,ey,5,0,2*Math.PI); cx.fill();
+    cx.font=`700 12px ${getComputedStyle(document.body).fontFamily}`; cx.fillStyle=colors.text;
+    cx.textAlign=ex>w/2?'end':'start'; cx.fillText(name(sel)+' →',ex+(ex>w/2?-9:9),ey+(ey<h/2?16:-8));
+  }
+  Tools.$('badge').textContent=fmtBadge(time);
+}
+
+/* ---------- Panel ---------- */
+const $=Tools.$;
+function li(html){ const l=document.createElement('li'); l.innerHTML=html; return l; }
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function renderPanel(){
+  const X=ctx(Tools.lang()),s=sky(),sel=settings.planet,g=geoOf(sel),v=s.vis[sel];
+  // Chosen planet
+  $('pName').innerHTML=`<i class="dot" style="--c:var(--${sel})"></i>${esc(name(sel))}`;
+  $('pVis').textContent=visText(v,X);
+  const h=E.altitude(sel,time,settings.lat,settings.lon);
+  let nowText=h.alt>0?t('nowUp',{alt:Tools.fmt(h.alt,0),dir:dirOf(h.az,Tools.lang())}):t('nowDown');
+  if(v.best)nowText=t('best',{time:fmtTime(v.best.t),alt:Tools.fmt(v.best.alt,0),dir:dirOf(v.best.az,Tools.lang())})+' '+nowText;
+  $('pNow').textContent=nowText;
+  $('sMag').textContent=Tools.fmt(g.mag,1);
+  $('sIll').textContent=Tools.fmt(g.illuminated*100,0)+' %';
+  $('sDist').textContent=Tools.fmt(g.delta,2);
+  $('sElong').textContent=Tools.fmt(g.elongation,0)+'°';
+  const evs=eventsOf(sel);
+  const why=$('pWhy'); why.textContent='';
+  for(const s2 of explain(sel,g,evs,X))why.append(li(esc(s2)));
+  const [d0,d1]=dayRange(time),rs=E.riseSet(sel,d0,d1,settings.lat,settings.lon);
+  $('pRise').textContent=rs.alwaysUp?t('alwaysUp'):rs.alwaysDown?t('alwaysDown'):t('rise',{rise:rs.rise?fmtTime(rs.rise):'–',set:rs.set?fmtTime(rs.set):'–'});
+  const evl=$('pEvents'); evl.textContent='';
+  for(const ev of evs.filter(ev=>ev.time>time).slice(0,4)){
+    const l=li(`<button type="button" data-time="${ev.time}"><b>${esc(fmtShortDate(ev.time))}</b><span>${esc(eventText(ev,X))}</span></button>`);
+    evl.append(l);
+  }
+  // All planets in the night
+  $('skyH').textContent=s.night&&!s.night.polar?t('nightOf',{a:fmtDayMonth(s.night.start),b:fmtDayMonth(s.night.end)}):t('skyAt',{a:fmtDate(time)});
+  const srs=E.riseSet('sun',d0,d1,settings.lat,settings.lon);
+  $('sunLine').textContent=srs.alwaysUp?t('sunUp'):srs.alwaysDown?t('sunDown'):t('sunLine',{rise:srs.rise?fmtTime(srs.rise):'–',set:srs.set?fmtTime(srs.set):'–'});
+  const list=$('sky'); list.textContent='';
+  for(const b of E.PLANETS){
+    const vb=s.vis[b];
+    const l=li(`<button type="button" data-planet="${b}" aria-pressed="${b===sel}"><i class="dot" style="--c:var(--${b})"></i><span class="name">${esc(name(b))}</span><span class="when">${esc(visText(vb,X))}</span><span class="mag">${esc(Tools.fmt(vb.mag,1))}</span></button>`);
+    if(!vb.best)l.className='off';
+    list.append(l);
+  }
+  const isDefault=settings.lat===DEFAULT_PLACE.lat&&settings.lon===DEFAULT_PLACE.lon;
+  $('placeText').textContent=isDefault?t('placeDefault'):t('place',{lat:Tools.fmt(Math.abs(settings.lat),1),ns:t(settings.lat>=0?'N':'S'),lon:Tools.fmt(Math.abs(settings.lon),1),ew:t(settings.lon>=0?'O':'W')});
+}
+function renderControls(){
+  for(const b of document.querySelectorAll('#speed button'))b.setAttribute('aria-pressed',String(b.dataset.v===settings.speed));
+  for(const b of document.querySelectorAll('#viewSel button'))b.setAttribute('aria-pressed',String(b.dataset.v===settings.view));
+  const u=t('u.'+settings.speed);
+  $('backL').textContent=t('back'); $('fwdL').textContent=t('fwd');
+  $('btnBack').setAttribute('aria-label',t('backA',{u})); $('btnBack').title=t('backA',{u});
+  $('btnFwd').setAttribute('aria-label',t('fwdA',{u})); $('btnFwd').title=t('fwdA',{u});
+  $('btnPlay').setAttribute('aria-pressed',String(playing));
+  $('btnPlay').querySelector('use').setAttribute('href','../assets/icons.svg#'+(playing?'player-pause':'player-play'));
+  $('playL').textContent=t(playing?'pause':'play');
+  if(document.activeElement!==$('when'))$('when').value=localValue(time);
+  $('lat').value=Tools.fmt(settings.lat,1); $('lon').value=Tools.fmt(settings.lon,1);
+}
+function render(){ renderControls(); renderPanel(); draw(); }
+
+/* ---------- Time ---------- */
+function setTime(ms,{quiet}={}){
+  time=clampTime(ms);
+  if(!quiet)render();
+}
+function step(dir){
+  const n=time+dir*SPEEDS[settings.speed]*DAY;
+  if(n<MIN_TIME||n>MAX_TIME)Tools.toast(t('range'));
+  setTime(n);
+}
+let last=0,lastPanel=0,raf=0;
+function frame(now){
+  if(!playing)return;
+  if(last){
+    const n=time+(now-last)/1000*SPEEDS[settings.speed]*DAY;
+    if(n>=MAX_TIME){ time=MAX_TIME; stop(); Tools.toast(t('end')); return; }
+    time=n;
+    draw();
+    if(now-lastPanel>300){ lastPanel=now; renderPanel(); $('when').value=localValue(time); }
+  }
+  last=now;
+  raf=requestAnimationFrame(frame);
+}
+function start(){ if(playing)return; playing=true; last=0; Tools.diag.log('play',{speed:settings.speed}); renderControls(); raf=requestAnimationFrame(frame); }
+function stop(){ if(!playing)return; playing=false; cancelAnimationFrame(raf); time=Math.round(time/60000)*60000; Tools.diag.log('pause'); render(); }
+
+$('btnPlay').addEventListener('click',()=>playing?stop():start());
+$('btnBack').addEventListener('click',()=>{ stop(); step(-1); });
+$('btnFwd').addEventListener('click',()=>{ stop(); step(1); });
+$('btnNow').addEventListener('click',()=>{ stop(); setTime(Date.now()); });
+$('when').addEventListener('change',e=>{
+  const ms=parseLocal(e.target.value);
+  if(!Number.isFinite(ms))return;
+  stop();
+  if(ms<MIN_TIME||ms>MAX_TIME)Tools.toast(t('range'));
+  setTime(ms);
+});
+for(const b of document.querySelectorAll('#speed button'))b.addEventListener('click',()=>{ settings.speed=b.dataset.v; save(); renderControls(); });
+for(const b of document.querySelectorAll('#viewSel button'))b.addEventListener('click',()=>{ settings.view=b.dataset.v; save(); renderControls(); draw(); });
+function choose(b){ settings.planet=b; save(); renderPanel(); draw(); }
+$('sky').addEventListener('click',e=>{ const b=e.target.closest('[data-planet]'); if(b)choose(b.dataset.planet); });
+$('pEvents').addEventListener('click',e=>{ const b=e.target.closest('[data-time]'); if(b){ stop(); setTime(Number(b.dataset.time)); } });
+cv.addEventListener('click',e=>{
+  const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  const bodies=settings.view==='all'?E.PLANETS:['mercury','venus','mars'];
+  let best=null,bd=32;
+  for(const b of bodies){ const p=shown[b]; if(!p)continue; const d=Math.hypot(p.x-x,p.y-y); if(d<bd){ bd=d; best=b; } }
+  if(best)choose(best);
+});
+
+/* ---------- Place of observation ---------- */
+function setPlace(lat,lon){
+  settings.lat=Math.round(lat*10)/10; settings.lon=Math.round(lon*10)/10;
+  save(); cache=null; render();
+}
+function readPlace(){
+  const lat=Tools.parseNum($('lat').value),lon=Tools.parseNum($('lon').value);
+  const ok=Number.isFinite(lat)&&Math.abs(lat)<=89&&Number.isFinite(lon)&&Math.abs(lon)<=180;
+  $('placeErr').hidden=ok; $('placeErr').textContent=ok?'':t('placeBad');
+  for(const id of ['lat','lon'])$(id).setAttribute('aria-invalid',String(!ok));
+  if(ok)setPlace(lat,lon);
+}
+$('lat').addEventListener('change',readPlace);
+$('lon').addEventListener('change',readPlace);
+$('btnGeo').addEventListener('click',()=>{
+  if(!('geolocation' in navigator)){ Tools.toast(t('geoNo')); return; }
+  navigator.geolocation.getCurrentPosition(p=>{
+    Tools.diag.log('geolocation: ok');
+    $('placeErr').hidden=true;
+    setPlace(p.coords.latitude,p.coords.longitude);
+    Tools.toast(t('geoOk'));
+  },err=>{ Tools.diag.log('geolocation: failed',{code:err.code}); Tools.toast(t('geoFail')); },{maximumAge:600000,timeout:15000});
+});
+
+readColors();
+new ResizeObserver(resize).observe(cv);
+render();
+Tools.theme.onChange(()=>{ readColors(); draw(); });
+Tools.onLang(render);
+Tools.diag.info(()=>({planet:settings.planet,view:settings.view,speed:settings.speed,playing,placeIsDefault:settings.lat===DEFAULT_PLACE.lat&&settings.lon===DEFAULT_PLACE.lon}));
+
+/* ---------- WebMCP ---------- */
+function skyResult(){
+  const s=sky(),X=ctx('en');
+  return {
+    time:localValue(time),
+    night:s.night&&!s.night.polar?{from:localValue(s.night.start),to:localValue(s.night.end)}:null,
+    planets:E.PLANETS.map(b=>{ const v=s.vis[b];
+      return {planet:b,visible:v.kind,summary:visText(v,X),from:v.from?localValue(v.from):null,to:v.to?localValue(v.to):null,
+        magnitude:+v.mag.toFixed(1),elongation:+v.elongation.toFixed(1),side:v.side==='east'?'east of the Sun (evening)':'west of the Sun (morning)'}; }),
+  };
+}
+Tools.mcp.register({
+  name:'set_time',title:'Set date and time',label:'mcp.time',
+  description:'Sets the date and time shown by the planets app (between 1800-01-01 and 2050-12-31, local time of the device) and stops the animation. Returns which planets can be seen in the night around that time.',
+  inputSchema:{type:'object',properties:{
+    time:{type:'string',pattern:'^(now|\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2})?)$',description:'Local date and time as YYYY-MM-DDTHH:MM (or just YYYY-MM-DD for 21:00 that day), or "now".'}
+  },required:['time'],additionalProperties:false},
+  execute:({time:v})=>{
+    const ms=v==='now'?Date.now():parseLocal(v.length===10?v+'T21:00':v);
+    if(!Number.isFinite(ms))throw new Error('Invalid date.');
+    if(ms<MIN_TIME||ms>MAX_TIME)throw new Error('Only dates from 1800 to 2050 are possible.');
+    stop(); setTime(ms);
+    return skyResult();
+  }
+});
+Tools.mcp.register({
+  name:'get_sky',title:'Read the night sky',readOnly:true,
+  description:'Reads for the date and time set in the app which planets can be seen in the night around it, from when to when, their magnitude (smaller is brighter) and angle from the Sun.',
+  execute:()=>skyResult()
+});
+Tools.mcp.register({
+  name:'explain_planet',title:'Explain a planet',label:'mcp.explain',
+  description:'Chooses a planet in the app and explains for the date and time set why it can or cannot be seen: position relative to the Sun, distance, phase, brightness and the next events (conjunction, opposition, greatest elongation, greatest brilliancy).',
+  inputSchema:{type:'object',properties:{
+    planet:{type:'string',enum:E.PLANETS,description:'The planet.'}
+  },required:['planet'],additionalProperties:false},
+  execute:({planet})=>{
+    choose(planet);
+    const X=ctx('en'),g=geoOf(planet),v=sky().vis[planet],evs=eventsOf(planet);
+    return {planet,time:localValue(time),visibility:visText(v,X),magnitude:+g.mag.toFixed(2),illuminatedPercent:Math.round(g.illuminated*100),
+      distanceAu:+g.delta.toFixed(3),elongation:+g.elongation.toFixed(1),side:g.side,explanation:explain(planet,g,evs,X),
+      nextEvents:evs.filter(ev=>ev.time>time).slice(0,4).map(ev=>({date:localValue(ev.time).slice(0,10),event:eventText(ev,X)}))};
+  }
+});
+})();
+</script>
+</body>
+</html>
