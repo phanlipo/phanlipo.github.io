@@ -2,7 +2,7 @@
 // the explanation for a known evening, events, playing, place of observation, settings and language.
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { test, expect, openSettings, closeMenu, switchLang } from './helpers.mjs';
+import { test, expect, openMenu, openSettings, closeMenu, switchLang } from './helpers.mjs';
 
 const E = (() => { const c = {}; vm.runInNewContext(readFileSync('planets/ephemeris.js', 'utf8'), { self: c, Math }); return c.PlanetEphemeris; })();
 const DAY = 86400000;
@@ -254,6 +254,81 @@ test.describe('app', () => {
     expect(shown + hidden).toBe(4);
     await expect(page.locator('#jMoonsCap')).toContainText('I = Io, E = Europa, G = Ganymed, K = Kallisto');
     await expect(page.locator('#jMoonsSvg')).toHaveAttribute('aria-label', /^Jupitermonde: /);
+  });
+
+  // Chrome asks for the motion sensors (granted by default on phones); here granted explicitly
+  const grantSensors = context => context.grantPermissions(['accelerometer', 'gyroscope', 'magnetometer']);
+
+  test('compass view: the sky around you, tap chooses, aligning with the phone', async ({ page, context }) => {
+    await grantSensors(context);
+    await setWhen(page, '2026-11-24T05:00');
+    await page.click('#sky [data-planet="moon"]');
+    await page.click('#viewSel [data-v="sky"]');
+    await expect(page.locator('#cv')).toHaveAttribute('aria-label', /^Kompass mit dem Himmel/);
+    await expect(page.locator('#btnOrient')).toBeVisible();
+    // Where Venus must be: azimuth from north clockwise, distance from the centre 90° − altitude (same layout as the page)
+    const at = heading => page.evaluate(hd => {
+      const E = window.PlanetEphemeris, r = document.getElementById('cv').getBoundingClientRect();
+      const h = E.altitude('venus', new Date(2026, 10, 24, 5).getTime(), 51, 10);
+      const R = Math.max(40, Math.min(r.width, r.height - 48) / 2 - 28), a = (h.az - hd) * Math.PI / 180, rho = R * (90 - h.alt) / 90;
+      return { x: r.width / 2 + rho * Math.sin(a), y: r.height / 2 + 16 - rho * Math.cos(a), az: h.az };
+    }, heading);
+    const p0 = await at(0);
+    expect(p0.az).toBeGreaterThan(100);   // south-east, before sunrise
+    expect(p0.az).toBeLessThan(140);
+    await page.locator('#cv').click({ position: { x: p0.x, y: p0.y } });
+    await expect(page.locator('#pName')).toHaveText('Venus');
+    // Phone pointing east (alpha 270 → heading 90): Venus moves round, a tap at the old place chooses nothing new
+    await page.click('#sky [data-planet="moon"]');
+    await page.click('#btnOrient');
+    await expect(page.locator('#btnOrient')).toHaveAttribute('aria-pressed', 'true');
+    await page.evaluate(() => window.dispatchEvent(new DeviceOrientationEvent('deviceorientationabsolute', { alpha: 270, beta: 0, gamma: 0, absolute: true })));
+    await expect(page.locator('#badge')).toContainText('nach Handy ausgerichtet');
+    const p1 = await at(90);
+    await page.locator('#cv').click({ position: { x: p1.x, y: p1.y } });
+    await expect(page.locator('#pName')).toHaveText('Venus');
+    // Leaving the compass view stops it
+    await page.click('#viewSel [data-v="inner"]');
+    await expect(page.locator('#btnOrient')).toBeHidden();
+    await page.click('#viewSel [data-v="sky"]');
+    await expect(page.locator('#btnOrient')).toHaveAttribute('aria-pressed', 'false');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('planets.settings.v1')).view)).toBe('sky');
+  });
+
+  test('aligning without compass data gives up with a note; refused access is said too', async ({ page, context }) => {
+    await page.click('#viewSel [data-v="sky"]');
+    await page.click('#btnOrient');
+    await expect(page.locator('#toast')).toHaveText('Zugriff auf den Kompass nicht erlaubt.');
+    await expect(page.locator('#btnOrient')).toHaveAttribute('aria-pressed', 'false');
+    await grantSensors(context);
+    await page.click('#btnOrient');
+    await expect(page.locator('#toast')).toHaveText('Der Kompass des Geräts liefert keine Richtung.', { timeout: 6000 });
+    await expect(page.locator('#btnOrient')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('moon calendar: a month with shapes and main phases, tap a day', async ({ page }) => {
+    await setWhen(page, '2026-11-24T05:00');
+    await openMenu(page);
+    await page.click('#menuCal');
+    const dlg = page.locator('#calDlg');
+    await expect(dlg).toBeVisible();
+    await expect(page.locator('#calMonth')).toHaveText('November 2026');
+    await expect(page.locator('#calGrid [data-day]')).toHaveCount(30);
+    await expect(page.locator('#calGrid [data-day="24"]')).toHaveAttribute('aria-current', 'date');
+    await expect(page.locator('#calGrid button.main')).toHaveCount(4);
+    // USNO: full moon 24 Nov 2026 14:53 UTC = 15:53 in Berlin
+    await expect(page.locator('#calGrid [data-day="24"]')).toHaveAttribute('aria-label', /^24\. November: Vollmond, 100 % beleuchtet · 15:5\d$/);
+    await expect(page.locator('#calPhases li')).toHaveText([/^Letztes Viertel: So\., 1\. Nov\./, /^Neumond: Mo\., 9\. Nov\./, /^Erstes Viertel: Di\., 17\. Nov\./, /^Vollmond: Di\., 24\. Nov\./]);
+    await page.click('#calNext');
+    await expect(page.locator('#calMonth')).toHaveText('Dezember 2026');
+    await expect(page.locator('#calGrid [data-day]')).toHaveCount(31);
+    await page.click('#calGrid [data-day="9"]');
+    await expect(dlg).toBeHidden();
+    await expect(page.locator('#when')).toHaveValue('2026-12-09T21:00');
+    await expect(page.locator('#pName')).toHaveText('Mond');
+    await expect(page.locator('#btnCal')).toBeVisible();
+    await page.click('#btnCal');
+    await expect(page.locator('#calMonth')).toHaveText('Dezember 2026');
   });
 
   test('switching the language re-renders all texts written by the script', async ({ page }) => {

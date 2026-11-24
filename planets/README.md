@@ -21,10 +21,13 @@ ephemeris.js   window.PlanetEphemeris: Rechnung ohne DOM – Bahnen, Positionen,
 
 - **Ansichten:** „Bis zum Mars“ maßstabsgetreu (1,75 AE bis zum Rand), „Alle Planeten“ mit gestauchtem Abstand (√r). Linie Erde → gewählter Planet, gestrichelt Erde → Sonne, dazwischen der Winkel (Elongation). Namen werden an die erste freie von vier Stellen um den Punkt gesetzt.
 - **Texte „Warum?“** entstehen in `explain()` aus Elongation, Seite (Ost = Abend, West = Morgen), Entfernung, Phase, Helligkeit und dem nächsten Höhepunkt (größte Helligkeit/Opposition innerhalb ±75 Tagen). `ctx(lang)` liefert die Formatierung: auf der Seite in der eingestellten Sprache, für WebMCP immer englisch.
-- **Gespeichert** (`planets.settings.v1`): `{ lat, lon, view: 'inner'|'all', speed: 'day'|'week'|'month'|'year', planet }`. Der Zeitpunkt wird nicht gespeichert (Start = jetzt). Der Standort wird nur auf Knopfdruck abgefragt, auf 0,1° gerundet und nie protokolliert oder an Agenten gegeben.
+- **Gespeichert** (`planets.settings.v1`): `{ lat, lon, view: 'inner'|'all'|'sky', speed: 'hour'|'day'|'week'|'month'|'year', planet }`. Der Zeitpunkt wird nicht gespeichert (Start = jetzt). Der Standort wird nur auf Knopfdruck abgefragt, auf 0,1° gerundet und nie protokolliert oder an Agenten gegeben.
 - **Mond in der Oberfläche:** wählbar wie ein Planet (`SKY = ['moon', ...PLANETS]`, gespeichert als `planet: 'moon'`), eigene Erklärung in `explainMoon()` (beleuchtete Seite rechts beim zunehmenden Mond auf der Nordhalbkugel, auf der Südhalbkugel umgekehrt). Im Bild in seiner echten Richtung, aber 16 px neben der Erde.
 - **Jupitermonde in der Oberfläche:** SVG auf der Jupiter-Karte (`renderJupiterMoons`), Norden oben, Osten links, verdeckte Monde nur in der Bildunterschrift.
-- **WebMCP:** `set_time`, `get_sky` (nur lesen, mit Mondphase), `explain_planet` (auch `moon`; bei Jupiter mit Lage der Monde).
+- **Kompass** (`view: 'sky'`, `drawSky`): Beobachter in der Mitte, Azimut = Richtung (Norden oben), Abstand zur Mitte = 90° − Höhe; Hintergrund nach Sonnenhöhe (Tag/Dämmerung/Nacht). Der Gewählte unter dem Horizont: gestrichelter Ring am Rand. *Ausrichten* dreht mit dem Gerätekompass: iPhone `webkitCompassHeading` nach `DeviceOrientationEvent.requestPermission()`, Chrome `deviceorientationabsolute` (Richtung = 360° − alpha), plus Bildschirmdrehung. Lehnt Chrome `requestPermission` ab (Fehler statt Antwort), wird trotzdem gelauscht; ohne Daten nach 3 s Hinweis und aus. Verlassen der Ansicht beendet es.
+- **Mondkalender** (`calDlg`, `moonMonth`, `renderCal`): Monat mit der Mondgestalt um 21 Uhr je Tag (SVG aus beleuchtetem Anteil und Seite, wie `drawMoonShape` auf dem Canvas), Hauptphasen mit Uhrzeit; Antippen setzt den Tag 21 Uhr und wählt den Mond.
+- **Tempo:** `hour` (1 h/s) dazu, deshalb `.chips` statt `.seg`.
+- **WebMCP:** `set_time`, `get_sky` (nur lesen, mit Mondphase), `explain_planet` (auch `moon`; bei Jupiter mit Lage der Monde), `get_moon_calendar` (nur lesen). `get_sky` gibt zusätzlich Höhe und Himmelsrichtung zum eingestellten Zeitpunkt.
 
 ## Tests
 

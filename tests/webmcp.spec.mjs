@@ -4655,6 +4655,9 @@ test.describe('planets tools', () => {
     r = await call(page, 'planets_get_sky', {});
     expect(r.result.planets.map(p => p.planet)).toEqual(['moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']);
     expect(r.result.planets[0]).toMatchObject({ phase: 'Full moon', visible: 'allNight', illuminatedPercent: 100 });
+    expect(r.result.planets.find(p => p.planet === 'venus')).toMatchObject({ directionNow: 'east' });
+    expect(r.result.planets.find(p => p.planet === 'venus').altitudeNow).toBeCloseTo(5, 0);
+
     expect(r.result).not.toHaveProperty('location');
     expect(JSON.stringify(r.result)).not.toMatch(/"(lat|lon|latitude|longitude)"/);
     r = await call(page, 'planets_explain_planet', { planet: 'jupiter' });
@@ -4675,5 +4678,13 @@ test.describe('planets tools', () => {
     expect(await call(page, 'planets_set_time', { time: 'tomorrow' })).toMatchObject({ ok: false });
     expect(await call(page, 'planets_explain_planet', { planet: 'pluto' })).toMatchObject({ ok: false });
     expect(await call(page, 'planets_explain_planet', { planet: 'mars', extra: 1 })).toMatchObject({ ok: false });
+    r = await call(page, 'planets_get_moon_calendar', { year: 2026, month: 11 });
+    expect(r.result.month).toBe('2026-11');
+    expect(r.result.days).toHaveLength(30);
+    expect(r.result.days[23]).toMatchObject({ date: '2026-11-24', phase: 'Full moon', illuminatedPercent: 100 });
+    expect(r.result.mainPhases.map(p => p.phase)).toEqual(['Last quarter', 'New moon', 'First quarter', 'Full moon']);
+    expect(r.result.mainPhases[3].time).toMatch(/^2026-11-24T15:5\d$/);
+    expect(await call(page, 'planets_get_moon_calendar', { year: 2051, month: 1 })).toMatchObject({ ok: false });
+    expect(await call(page, 'planets_get_moon_calendar', { year: 2026, month: 13 })).toMatchObject({ ok: false });
   });
 });
