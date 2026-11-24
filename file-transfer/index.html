@@ -22,7 +22,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can read whether a device is connected and which files and texts were sent or received. It cannot send, connect or save files.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rW3ci0ysTW1MdNObjZipwy3EkAKkxc8e6wUKxN8M8I0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-IVXu/ONkBKQULIEZXl929Z1LGd3/fUhw/NWz5e7Ieoo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -265,7 +265,7 @@ textarea.code{min-height:84px;word-break:break-all}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 5e3045b1c87f</p>
+  <p class="footer-version">Version 4c29b7ac00ed</p>
   <!-- footer:end -->
 </footer>
 
@@ -350,15 +350,20 @@ const settings=Object.assign({stun:false},Tools.load(LS_SET,{}));
 const CHUNK=64*1024, READ=1024*1024, HIGH=4*1024*1024, MAX_TEXT=10000;   // HIGH: at most this much waits in the channel
 
 /* ---------- Rows ----------
-   {id, dir:'out'|'in', kind:'file'|'text', name, size, type, text, state, done, at, rid, file}
+   {id, dir:'out'|'in', kind:'file'|'text', name, size, type, text, state, done, at, rid}
+   The files themselves are kept apart: outFiles (chosen here, to send) and inFiles (received, to save or share).
    state: queued (out, not started) · sending · confirm (out, all bytes sent) · receiving · done · canceled · failed
    why (failed): 'lost' | 'missing' */
 let items=[];
 const byId=id=>items.find(i=>i.id===id);
+const outFiles=new Map(), inFiles=new Map();
+const fileOf=it=>it.dir==='out'?outFiles.get(it.id):inFiles.get(it.id);
+const hasFile=it=>!!it&&(it.dir==='out'?outFiles.has(it.id):inFiles.has(it.id));
 const urls=new Map();   // id → object URL of a picture preview
 function preview(it){
-  if(!it.file||!/^image\//.test(it.type)||it.type==='image/heic'||it.type==='image/heif')return '';
-  if(!urls.has(it.id))urls.set(it.id,URL.createObjectURL(it.file));
+  const file=fileOf(it);
+  if(!file||!/^image\//.test(it.type)||it.type==='image/heic'||it.type==='image/heif')return '';
+  if(!urls.has(it.id))urls.set(it.id,URL.createObjectURL(file));
   return urls.get(it.id);
 }
 function dropUrl(id){const u=urls.get(id);if(u){URL.revokeObjectURL(u);urls.delete(id);}}
@@ -440,7 +445,7 @@ async function pump(){
   finally{pumping=false;}
 }
 async function sendFile(it){
-  const p=conn.peer(),file=it.file;
+  const p=conn.peer(),file=outFiles.get(it.id);
   if(!file){it.state='failed';it.why='missing';persist();renderList();return;}
   it.state='sending';it.done=0;it.t0=performance.now();sending=it;renderList();
   Tools.diag.log('file send',{size:file.size});
@@ -486,7 +491,7 @@ function onMessage(m){
     case 'end':finish(m.id);break;
     case 'got':{
       const it=items.find(i=>i.dir==='out'&&i.id===m.id);
-      if(it&&it.state==='confirm'){it.state='done';it.file=null;dropUrl(it.id);persist();renderList();Tools.diag.log('file confirmed',{size:it.size});}
+      if(it&&it.state==='confirm'){it.state='done';outFiles.delete(it.id);dropUrl(it.id);persist();renderList();Tools.diag.log('file confirmed',{size:it.size});}
       break;
     }
     case 'cancel':{
@@ -518,7 +523,7 @@ function finish(rid){
   if(!incoming||incoming.it.rid!==rid)return;
   const {it,chunks,got}=incoming;incoming=null;
   if(got!==it.size){it.state='failed';send({t:'cancel',id:rid});Tools.diag.log('size mismatch',{got,size:it.size});persist();renderList();return;}
-  it.file=new File(chunks,it.name,{type:it.type||'application/octet-stream'});
+  inFiles.set(it.id,new File(chunks,it.name,{type:it.type||'application/octet-stream'}));
   it.state='done';it.done=it.size;
   send({t:'got',id:rid});
   Tools.diag.log('file received',{size:it.size,ms:Math.round(performance.now()-it.t0)});
@@ -534,7 +539,11 @@ function cancelIn(it){
 function addFiles(files){
   const list=[...files].filter(f=>f&&typeof f.size==='number');
   if(!list.length)return;
-  for(const f of list)items.unshift({id:Tools.uid('o'),dir:'out',kind:'file',name:safeName(f.name),size:f.size,type:safeType(f.type),state:'queued',done:0,at:Date.now(),file:f});
+  for(const f of list){
+    const id=Tools.uid('o');
+    outFiles.set(id,f);
+    items.unshift({id,dir:'out',kind:'file',name:safeName(f.name),size:f.size,type:safeType(f.type),state:'queued',done:0,at:Date.now()});
+  }
   Tools.diag.log('files added',{n:list.length,bytes:list.reduce((s,f)=>s+f.size,0)});
   if(!conn.connected())Tools.toast(t('pickedN',{n:list.length}));
   persist();renderList();pump();
@@ -581,7 +590,7 @@ function row(it){
   const active=it.state==='sending'||it.state==='receiving'||it.state==='confirm';
   const label=it.kind==='file'?it.name:t('textItem');
   const li=el('li');li.dataset.id=it.id;
-  const img=it.kind==='file'&&it.file?preview(it):'';
+  const img=it.kind==='file'&&hasFile(it)?preview(it):'';
   if(img){const i=el('img','thumb');i.src=img;i.alt='';li.append(i);}
   else li.insertAdjacentHTML('beforeend',Tools.icon(it.dir==='out'?'arrow-up':'arrow-down','dir '+(it.dir==='out'?'out':'in')));
   const box=el('div','item');
@@ -590,8 +599,9 @@ function row(it){
   box.append(el('span','meta'+(it.state==='failed'||it.state==='canceled'?' err':it.state==='done'?' ok':''),metaLine(it)));
   if(active&&it.kind==='file'){const bar=el('progress');bar.max=it.size||1;bar.value=it.done;bar.setAttribute('aria-label',label);box.append(bar);}
   li.append(box);
-  if(it.dir==='in'&&it.kind==='file'&&it.state==='done'&&it.file){
-    if(Tools.canShareFile(it.name,it.file.type))li.append(btn('share','share',t('shareFile',{n:it.name})));
+  const got=it.dir==='in'&&it.kind==='file'&&it.state==='done'?inFiles.get(it.id):null;
+  if(got){
+    if(Tools.canShareFile(it.name,got.type))li.append(btn('share','share',t('shareFile',{n:it.name})));
     li.append(btn('download','download',t('download',{n:it.name})));
   }
   if(it.kind==='text')li.append(btn('copy','copy',t('copyText')));
@@ -602,7 +612,7 @@ function renderList(){
   $('empty').hidden=items.length>0;
   $('list').hidden=!items.length;
   $('list').replaceChildren(...items.map(row));
-  for(const id of [...urls.keys()])if(!byId(id)||!byId(id).file)dropUrl(id);
+  for(const id of [...urls.keys()])if(!hasFile(byId(id)))dropUrl(id);
 }
 // Progress: only the bar and the line of that row, at most every 150 ms (the last value always follows)
 let lastProgress=0,progressTimer=0;
@@ -620,9 +630,9 @@ $('list').addEventListener('click',async e=>{
   const b=e.target.closest('button[data-act]');if(!b)return;
   const it=byId(b.closest('li').dataset.id);if(!it)return;
   const act=b.dataset.act;
-  if(act==='download')Tools.download(it.file,it.name);
+  if(act==='download')Tools.download(inFiles.get(it.id),it.name);
   else if(act==='share'){
-    try{await navigator.share({files:[it.file]});Tools.diag.log('shared file');}
+    try{await navigator.share({files:[inFiles.get(it.id)]});Tools.diag.log('shared file');}
     catch(err){if(err&&err.name!=='AbortError'){Tools.diag.log('share failed',err);Tools.toast(t('shareFail'));}}
   }
   else if(act==='copy')Tools.toast(t((await Tools.copyText(it.text))?'copiedText':'copyFail'));
@@ -639,7 +649,7 @@ $('btnClear').addEventListener('click',async()=>{
   if(incoming){send({t:'cancel',id:incoming.it.rid});incoming=null;}
   if(sending){send({t:'cancel',id:sending.id});sending=null;}
   for(const id of [...urls.keys()])dropUrl(id);
-  items=[];persist();renderList();Tools.menu.close();Tools.toast(t('cleared'));
+  items=[];outFiles.clear();inFiles.clear();persist();renderList();Tools.menu.close();Tools.toast(t('cleared'));
 });
 
 /* ---------- Kept on the device (Tools.keep): list, received files and files not sent yet ----------
@@ -650,10 +660,10 @@ function persist(){if(restoring)return;clearTimeout(keepTimer);keepTimer=setTime
 async function doPersist(){
   if(!Tools.keep.supported())return;
   const stored=items.filter(i=>i.state!=='receiving');
-  for(const it of stored)if(it.file&&!it.kept&&await Tools.keep.put(keyOf(it),it.file))it.kept=true;
+  for(const it of stored){const f=fileOf(it);if(f&&!it.kept&&await Tools.keep.put(keyOf(it),f))it.kept=true;}
   await Tools.keep.putJson('list',{v:1,items:stored.map(i=>({id:i.id,rid:i.rid,dir:i.dir,kind:i.kind,name:i.name,size:i.size,type:i.type,text:i.text,
-    state:i.state==='sending'||i.state==='confirm'?'queued':i.state,why:i.why,at:i.at,file:!!i.file}))});
-  const want=new Set(stored.filter(i=>i.file).map(keyOf));
+    state:i.state==='sending'||i.state==='confirm'?'queued':i.state,why:i.why,at:i.at,file:hasFile(i)}))});
+  const want=new Set(stored.filter(hasFile).map(keyOf));
   for(const n of await Tools.keep.names())if(n.startsWith('f-')&&!want.has(n))await Tools.keep.remove(n);
 }
 async function restore(){
@@ -662,10 +672,11 @@ async function restore(){
   const out=[];
   for(const s of st.items){
     if(!s||typeof s.id!=='string'||!['in','out'].includes(s.dir))continue;
-    const it={...s,done:0,file:null};
+    const it={...s,done:0};
+    delete it.file;
     if(s.file){
       const f=await Tools.keep.get(keyOf(s));
-      if(f){it.file=f;it.kept=true;}
+      if(f){(it.dir==='out'?outFiles:inFiles).set(it.id,f);it.kept=true;}
       else if(s.state==='queued'||s.state==='done'&&s.dir==='in'){it.state='failed';it.why='missing';}
     }
     out.push(it);
