@@ -22,7 +22,7 @@
 <meta name="tool:storage" content="code-editor.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-lHeBwjti0FCASy++RkGiPxLpxhlWoA63nxo6CAvLq7c='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-GuPH6dSAvMM0TrdSDp4v+8gsvMRP6S3jPRgdC/MVYBk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -62,13 +62,22 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
 #scroller{flex:1;min-width:0;overflow:auto;overscroll-behavior:contain;border-radius:var(--radius)}
 .inner{display:flex;min-height:100%;width:max-content;min-width:100%}
 body.wrap .inner{width:100%}
-#gutter,#hl,#code{margin:0;border:0;padding-block:10px 40px;font:var(--code-size)/1.5 var(--mono);letter-spacing:0;tab-size:var(--tab,4);-moz-tab-size:var(--tab,4)}
-#gutter{flex:none;padding-inline:10px 8px;text-align:end;color:var(--muted);background:var(--surface-2);border-inline-end:1px solid var(--border);user-select:none;white-space:pre;min-width:2ch}
-body.wrap #gutter,body.no-lines #gutter{display:none}
+/* Line numbers: every line of the coloured copy is its own block (.ln) and shows its number in front of it
+   (CSS counter), so the number stays on the first row of a wrapped line. The number column is part of the
+   left padding of both the copy and the textarea (--gw, set from the number of digits). */
+.layer,#hl,#code{font:var(--code-size)/1.5 var(--mono);letter-spacing:0;tab-size:var(--tab,4);-moz-tab-size:var(--tab,4)}
+#hl,#code{margin:0;border:0;padding-block:10px 40px;padding-inline:calc(var(--gw,0px) + 12px) 12px}
+#layer{--gw:var(--gwn,0px)}
+body.no-lines #layer{--gw:0px}
 .layer{position:relative;flex:1 0 auto}
 body.wrap .layer{flex:1 1 0;min-width:0}
-#hl{padding-inline:12px;white-space:pre;color:var(--text);background:transparent;min-height:100%;box-sizing:border-box;pointer-events:none}
-#code{position:absolute;inset:0;width:100%;height:100%;min-height:0;box-sizing:border-box;padding-inline:12px;resize:none;overflow:hidden;
+.layer::before{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:var(--gw,0px);background:var(--surface-2);border-inline-end:1px solid var(--border);box-sizing:border-box}
+body.no-lines .layer::before{display:none}
+#hl{position:relative;white-space:pre;color:var(--text);background:transparent;min-height:100%;box-sizing:border-box;pointer-events:none;counter-reset:line}
+#hl .ln{position:relative;min-height:1.5em}
+#hl .ln::before{counter-increment:line;content:counter(line);position:absolute;inset-inline-end:calc(100% + 20px);color:var(--muted);font-style:normal;font-weight:400;white-space:nowrap}
+body.no-lines #hl .ln::before{content:none}
+#code{position:absolute;inset:0;width:100%;height:100%;min-height:0;box-sizing:border-box;resize:none;overflow:hidden;
   white-space:pre;overflow-wrap:normal;word-break:normal;background:transparent;color:transparent;-webkit-text-fill-color:transparent;caret-color:var(--text);outline:0;border-radius:0}
 #code::placeholder{color:var(--muted);-webkit-text-fill-color:var(--muted)}
 #code::selection{background:color-mix(in srgb,var(--accent) 35%,transparent)}
@@ -77,7 +86,7 @@ body.wrap #hl,body.wrap #code{white-space:pre-wrap;overflow-wrap:anywhere}
 .hits{position:absolute;inset:0;pointer-events:none}
 .hits>i{position:absolute;background:var(--hit);border-radius:2px}
 .hits>i.cur{background:var(--hit-cur)}
-#hl code{font:inherit;background:none;border:0;padding:0}
+#hl code{display:block;font:inherit;background:none;border:0;padding:0}
 
 /* highlight.js classes */
 .hljs-keyword,.hljs-selector-tag,.hljs-literal,.hljs-doctag,.hljs-meta .hljs-keyword{color:var(--hl-keyword)}
@@ -142,7 +151,6 @@ body.wrap #hl,body.wrap #code{white-space:pre-wrap;overflow-wrap:anywhere}
     <div class="editor-area code-box">
       <div id="scroller">
         <div class="inner">
-          <pre id="gutter" aria-hidden="true"></pre>
           <div class="layer" id="layer">
             <div class="hits" id="hits" aria-hidden="true"></div>
             <pre id="hl" aria-hidden="true"><code id="hlCode"></code></pre>
@@ -236,7 +244,7 @@ body.wrap #hl,body.wrap #code{white-space:pre-wrap;overflow-wrap:anywhere}
     <li><b>Ansehen</b> zeigt die Datei nur an – auf dem Handy öffnet sich keine Tastatur, Markieren und Kopieren gehen trotzdem. <b>Bearbeiten</b> schaltet das Schreiben ein. Geöffnete Dateien starten im Ansehen, neue im Bearbeiten.</li>
     <li>Die <b>Sprache</b> (für die Farben) erkennt die App an der Dateiendung, an Namen wie <code>Makefile</code> oder <code>Dockerfile</code>, an der ersten Zeile (<code>#!/bin/bash</code>) oder am Inhalt. Unten unter <b>Sprache</b> lässt sie sich selbst wählen; dort stehen auch Zeichenkodierung und Zeilenenden.</li>
     <li><b>Suchen</b> findet Text (ohne Unterschied zwischen Groß- und Kleinschreibung); beim Bearbeiten lässt er sich ersetzen – einzeln oder alle auf einmal. <i>Enter</i> springt zum nächsten Treffer, <i>Strg+F</i> öffnet die Suche.</li>
-    <li><b>Zeile</b> springt zu einer Zeilennummer, <b>Umbruch</b> bricht lange Zeilen um (dann ohne Zeilennummern), <b>Kopieren</b> kopiert die ganze Datei.</li>
+    <li><b>Zeile</b> springt zu einer Zeilennummer, <b>Umbruch</b> bricht lange Zeilen um (die Zeilennummer steht dann vor der ersten Bildschirmzeile), <b>Kopieren</b> kopiert die ganze Datei.</li>
     <li>Beim Bearbeiten: <b>Einrücken</b>/<b>Ausrücken</b> (auch <i>Tab</i>/<i>Umschalt+Tab</i>; erst <i>Esc</i>, dann <i>Tab</i> verlässt das Textfeld), <i>Enter</i> behält die Einrückung der Zeile. Die App rückt so ein wie die Datei (Tabulator, 2 oder 4 Leerzeichen). Bei JSON macht <b>Formatieren</b> (unter <i>Mehr</i>) die Datei übersichtlich.</li>
     <li><b>Herunterladen</b> speichert die Datei mit ihrem Namen, ihrer Zeichenkodierung und ihren Zeilenenden. <b>Teilen</b> (oben, wenn das Gerät es kann) schickt sie an andere Apps.</li>
     <li><b>Direkt in der Datei speichern</b> (Chrome und Edge am Computer): Öffnest du eine Datei über <i>Öffnen</i> oder <i>Öffnen mit</i>, bleibt sie mit der App verknüpft. Der Knopf oben (Diskette) bzw. <i>Strg+S</i> schreibt die Änderungen in genau diese Datei zurück; ein Punkt am Knopf zeigt ungespeicherte Änderungen. <i>Speichern unter …</i> im Menü legt eine neue Datei an. Auf dem iPhone, in Firefox und Safari lädt der Knopf die Datei stattdessen herunter.</li>
@@ -258,7 +266,7 @@ body.wrap #hl,body.wrap #code{white-space:pre-wrap;overflow-wrap:anywhere}
     <li><b>View</b> only shows the file – on a phone no keyboard pops up, selecting and copying still work. <b>Edit</b> turns on writing. Opened files start in view, new ones in edit.</li>
     <li>The app recognises the <b>language</b> (for the colours) by the file extension, by names like <code>Makefile</code> or <code>Dockerfile</code>, by the first line (<code>#!/bin/bash</code>) or by the content. Under <b>Language</b> at the bottom you can choose it yourself; character encoding and line endings are there too.</li>
     <li><b>Find</b> searches the text (ignoring upper and lower case); while editing you can replace it – one by one or all at once. <i>Enter</i> jumps to the next match, <i>Ctrl+F</i> opens the search.</li>
-    <li><b>Line</b> jumps to a line number, <b>Wrap</b> wraps long lines (then without line numbers), <b>Copy</b> copies the whole file.</li>
+    <li><b>Line</b> jumps to a line number, <b>Wrap</b> wraps long lines (the line number then stands in front of the first row), <b>Copy</b> copies the whole file.</li>
     <li>While editing: <b>Indent</b>/<b>Outdent</b> (also <i>Tab</i>/<i>Shift+Tab</i>; first <i>Esc</i>, then <i>Tab</i> leaves the text field), <i>Enter</i> keeps the indentation of the line. The app indents like the file does (tab, 2 or 4 spaces). For JSON, <b>Format</b> (under <i>More</i>) lays the file out neatly.</li>
     <li><b>Download</b> saves the file with its name, character encoding and line endings. <b>Share</b> (at the top, if the device can) sends it to other apps.</li>
     <li><b>Save straight into the file</b> (Chrome and Edge on a computer): when you open a file with <i>Open</i> or <i>Open with</i>, it stays linked to the app. The button at the top (floppy disk) or <i>Ctrl+S</i> writes the changes back into exactly that file; a dot on the button shows unsaved changes. <i>Save as …</i> in the menu creates a new file. On iPhone, in Firefox and Safari the button downloads the file instead.</li>
@@ -310,7 +318,7 @@ body.wrap #hl,body.wrap #code{white-space:pre-wrap;overflow-wrap:anywhere}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 0f9d3ec8d190</p>
+  <p class="footer-version">Version f8320209dfe5</p>
   <!-- footer:end -->
 </footer>
 
@@ -473,9 +481,22 @@ function ensureLang(id){
 }
 
 /* ---------- Editor ---------- */
-const code=$('code'),hlCode=$('hlCode'),gutter=$('gutter'),scroller=$('scroller'),layer=$('layer'),nameEl=$('name');
+const code=$('code'),hlCode=$('hlCode'),scroller=$('scroller'),layer=$('layer'),nameEl=$('name');
 const tb=$('toolbar'),more=$('moreTools');
-let shownLines=0,plainShown=false;
+let shownDigits=0,plainShown=false;
+// highlight.js HTML (or escaped text) → one <div class="ln"> per line; spans running over a line break are closed
+// at its end and opened again on the next line
+function toLines(html){
+  const out=[],open=[];let line='';
+  for(const m of html.matchAll(/(<span[^>]*>)|(<\/span>)|(\n)|([^<\n]+)/g)){
+    if(m[1]){open.push(m[1]);line+=m[1];}
+    else if(m[2]){open.pop();line+=m[2];}
+    else if(m[3]){out.push(line+'</span>'.repeat(open.length));line=open.join('');}
+    else line+=m[4];
+  }
+  out.push(line);
+  return '<div class="ln">'+out.join('</div><div class="ln">')+'</div>';
+}
 function renderHighlight(){
   const text=cur.text,lang=langOf(cur);
   const limit=state.mode==='edit'?HL_EDIT:HL_VIEW;
@@ -490,16 +511,11 @@ function renderHighlight(){
     });
   }
   // A trailing newline gets its own (empty) line, as in the textarea
-  const tail=text.endsWith('\n')?'\n':'';
-  if(html!=null){hlCode.innerHTML=html+tail;plainShown=false;}
-  else{hlCode.textContent=text+tail;plainShown=true;}
+  plainShown=html==null;
+  hlCode.innerHTML=toLines(html!=null?html:esc(text));
   hlCode.className=html!=null?'hljs language-'+lang:'';
-  const n=lineCount(text);
-  if(n!==shownLines){
-    shownLines=n;
-    let s='';for(let i=1;i<=n;i++)s+=i+'\n';
-    gutter.textContent=s;
-  }
+  const digits=String(lineCount(text)).length;
+  if(digits!==shownDigits){shownDigits=digits;layer.style.setProperty('--gwn',`calc(${Math.max(2,digits)}ch + 28px)`);}
   $('bigNote').hidden=!note;
   if(note)$('bigText').textContent=t(note);
   textIndex=null;
@@ -515,7 +531,6 @@ function renderSoon(){
 function showDoc(){
   code.value=cur.text;nameEl.value=cur.name;
   nameEl.placeholder=t('untitled');
-  shownLines=0;
   renderHighlight();updateSaveBtn();
   scroller.scrollTop=0;scroller.scrollLeft=0;
 }
@@ -605,18 +620,23 @@ code.addEventListener('keydown',e=>{
 code.addEventListener('blur',()=>{escaped=false;});
 
 /* ---------- Position of a text offset on the screen (for find and go to line) ---------- */
-let textIndex=null;   // text nodes of the coloured copy with their start offsets
+let textIndex=null;   // text nodes of the coloured copy with their start offsets (each line block adds its line break)
 function nodeAt(offset){
   if(!textIndex){
     textIndex=[];let pos=0;
-    const w=document.createTreeWalker(hlCode,NodeFilter.SHOW_TEXT);
-    for(let n=w.nextNode();n;n=w.nextNode()){textIndex.push([pos,n]);pos+=n.data.length;}
+    for(const ln of hlCode.children){
+      const w=document.createTreeWalker(ln,NodeFilter.SHOW_TEXT);
+      let any=false;
+      for(let n=w.nextNode();n;n=w.nextNode()){textIndex.push([pos,n,n.data.length]);pos+=n.data.length;any=true;}
+      if(!any)textIndex.push([pos,ln,0]);   // empty line: the block itself
+      pos++;
+    }
   }
   let lo=0,hi=textIndex.length-1;
   if(hi<0)return null;
   while(lo<hi){const mid=(lo+hi+1)>>1;if(textIndex[mid][0]<=offset)lo=mid;else hi=mid-1;}
-  const [start,node]=textIndex[lo];
-  return [node,Math.min(offset-start,node.data.length)];
+  const [start,node,len]=textIndex[lo];
+  return [node,Math.min(offset-start,len)];
 }
 function rangeRects(from,to){
   const a=nodeAt(from),b=nodeAt(to);
@@ -629,8 +649,8 @@ function rangeRects(from,to){
 function scrollToOffset(offset){
   const rs=rangeRects(offset,Math.min(offset+1,cur.text.length));
   if(!rs.length)return;
-  const r=rs[0],gw=gutter.offsetParent?gutter.offsetWidth:0;
-  const top=r.top,left=r.left+gw;
+  const r=rs[0],gw=parseFloat(getComputedStyle(code).paddingInlineStart)||0;
+  const top=r.top,left=r.left;
   const vh=scroller.clientHeight,vw=scroller.clientWidth;
   if(top<scroller.scrollTop+20||top+r.height>scroller.scrollTop+vh-20)scroller.scrollTop=Math.max(0,top-vh/3);
   if(left<scroller.scrollLeft+gw||left>scroller.scrollLeft+vw-30)scroller.scrollLeft=Math.max(0,left-vw/2);
