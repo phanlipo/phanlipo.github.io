@@ -19,7 +19,7 @@
         codes.useCode(text, expect) → { ok } | { ok: false, msg }   (scanned, pasted or from a link)
         codes.startScan(expect), stopScan(), cancelScan(), scanning(), scanExpect(), scanEngine()
 
-   2. P2PConnect.session(o): one host and one guest (rock-paper-scissors, sea-battle) – codes() plus the peer.
+   2. P2PConnect.session(o): one host and one guest (rock-paper-scissors, sea-battle, file-transfer) – codes() plus the peer.
       Also uses #btnHost, #qrOffer, #qrAnswer and the status lines #hostStatus, #guestStatus.
         const conn = P2PConnect.session({
           label: 'sea-battle',              // for the diagnostics
@@ -27,6 +27,7 @@
           show(step),                       // 'lobby' | 'host' | 'guest' | 'scan': the page shows that screen
           status(id, text, cls),
           onOpen(), onMessage(msg), onLost(reason)   // reason 'disconnected'; not called after conn.close()
+          onBinary(arrayBuffer),            // optional: binary data (peer.sendBinary, file-transfer)
         });
         conn.connected(), conn.role() ('host' | 'guest' | null), conn.peer(), conn.send(msg), conn.close()
         and everything of codes(): conn.useCode(…), conn.startScan(…) …
@@ -215,6 +216,7 @@
       peer = p; role = r;
       p.on('open', () => { if (p === peer) { clearTimeout(connectTimer); log('channel open', { role }); o.onOpen(); } });
       p.on('message', m => { if (p === peer) o.onMessage(m); });
+      p.on('binary', b => { if (p === peer && o.onBinary) o.onBinary(b); });
       p.on('close', () => { if (p === peer) o.onLost('disconnected'); });
       return p;
     }

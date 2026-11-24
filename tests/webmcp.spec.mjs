@@ -867,6 +867,25 @@ test.describe('rock-paper-scissors tools', () => {
   });
 });
 
+test.describe('file-transfer tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/file-transfer/'));
+
+  test('get_transfers lists waiting files and texts, newest first, and changes nothing', async ({ page }) => {
+    expect((await call(page, 'file_transfer_get_transfers', {})).result).toEqual({ connected: false, transfers: [] });
+    await page.setInputFiles('#fileIn', { name: 'bericht.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 x') });
+    await page.fill('#textIn', 'Hallo');
+    await page.click('#btnSendText');
+    const { ok, result } = await call(page, 'file_transfer_get_transfers', {});
+    expect(ok).toBe(true);
+    expect(result).toEqual({ connected: false, transfers: [
+      { direction: 'sent', kind: 'text', text: 'Hallo', state: 'waiting' },
+      { direction: 'sent', kind: 'file', name: 'bericht.pdf', bytes: 10, progress: 0, state: 'waiting' },
+    ] });
+    expect((await call(page, 'file_transfer_get_transfers', { limit: 1 })).result.transfers).toHaveLength(1);
+    await expect(page.locator('#list li')).toHaveCount(2);
+  });
+});
+
 test.describe('code-scanner tools', () => {
   test.beforeEach(async ({ page }) => open(page, '/code-scanner/'));
 
