@@ -312,6 +312,11 @@ test.describe('Image Swipe', () => {
     await expect(page.locator('#resList b')).toHaveText(['Maus', 'Hund']);       // newest first
     await page.click('#btnCopy');
     expect(await clipboardText(page)).toBe('Maus (1F42D)\nHund (1F436)');
+    // Emoji entries open large too
+    await page.locator('#resList li[data-id="1F42D"] button[data-act="view"]').click();
+    await expect(page.locator('#viewDlg .emoji')).toHaveAccessibleName('Maus');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#viewDlg')).toBeHidden();
     // Flip Hund to “pass”, remove the rating of Maus
     await page.locator('#resList li[data-id="1F436"] button[data-act="flip"]').click();
     await page.locator('#resList li[data-id="1F42D"] button[data-act="unrate"]').click();
@@ -325,6 +330,45 @@ test.describe('Image Swipe', () => {
     await page.click('#btnResults');
     await expect(page.locator('#card')).toHaveAttribute('data-id', '1F436');
     expect(await ls(page, K.swipes)).toEqual({ p1: {} });
+  });
+
+  test('results: a tap on the thumbnail shows the whole picture large', async ({ page }) => {
+    await mockApi(page);
+    await page.goto(URL_);
+    await addJson(page, API_SOURCE);
+    await page.locator('#emptyBtns button', { hasText: 'Daten laden' }).click();
+    await expect(page.locator('#cardImg')).toBeVisible();
+    await page.click('#btnLike');
+    await page.click('#btnResults');
+    const thumb = page.locator('#resList li[data-id="s1-001"] button[data-act="view"]');
+    await expect(thumb).toHaveAccessibleName('Erste groß anzeigen');
+    await expect(thumb.locator('img')).toBeVisible();
+    await thumb.click();
+    const dlg = page.locator('#viewDlg');
+    await expect(dlg).toBeVisible();
+    await expect(page.locator('#viewH')).toHaveText('Erste');
+    const img = dlg.locator('img');
+    await expect(img).toHaveAttribute('alt', 'Erste');
+    // The 1 px picture is scaled up to fill the screen
+    const box = await img.boundingBox(), vp = page.viewportSize();
+    expect(Math.max(box.width, box.height)).toBeGreaterThan(Math.min(vp.width, vp.height) * 0.8);
+    await dlg.getByRole('button', { name: 'Schließen' }).click();
+    await expect(dlg).toBeHidden();
+  });
+
+  test.describe('tablet', () => {
+    test.use({ viewport: { width: 820, height: 1180 } });
+    test('the card uses the whole screen and scales the picture up', async ({ page }) => {
+      await mockApi(page);
+      await page.goto(URL_);
+      await addJson(page, API_SOURCE);
+      await page.locator('#emptyBtns button', { hasText: 'Daten laden' }).click();
+      await expect(page.locator('#cardImg')).toBeVisible();
+      const card = await page.locator('#card').boundingBox();
+      expect(card.width).toBeGreaterThan(820 - 40);
+      const img = await page.locator('#cardImg').boundingBox();
+      expect(img.width).toBeGreaterThan(700);
+    });
   });
 
   test('a JSON file can be opened', async ({ page }) => {
