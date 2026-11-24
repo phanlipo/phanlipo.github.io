@@ -1,5 +1,5 @@
 /* Direct connections between devices (WebRTC data channels) without a server – window.P2P.
-   Used by card-games, quartet, sea-battle and rock-paper-scissors (all through p2p-connect.js: codes, scanner, texts); mail-account-qr uses only drawQr, scanner and readImage. Do not change the format of the codes
+   Used by card-games, quartet, sea-battle, rock-paper-scissors and file-transfer (all through p2p-connect.js: codes, scanner, texts); mail-account-qr uses only drawQr, scanner and readImage. Do not change the format of the codes
    without still accepting the old one: devices with an older and a newer app version must still connect.
 
    Two codes are exchanged (QR code, link or copied text):
@@ -20,8 +20,12 @@
        await peer.offer()             → offer code         (host)
        await peer.answer(offerCode)   → answer code        (guest)
        await peer.accept(answerCode)                       (host)
-       peer.on('open' | 'message' | 'close', fn)  message: parsed JSON; close: once, not after peer.close()
+       peer.on('open' | 'message' | 'binary' | 'close', fn)  message: parsed JSON; binary: ArrayBuffer;
+                                                           close: once, not after peer.close()
        peer.send(obj), peer.isOpen(), peer.close(), peer.state()
+       peer.sendBinary(arrayBuffer)   → true when queued (JSON and binary keep their order: one ordered channel)
+       await peer.drain(bytes)        waits until at most bytes are still queued (back pressure for big data;
+                                      resolves at once when the channel is closed)
        errors: Error('noRtc'), Error('noCandidates'), Error('badCode')
      P2P.check(text, expect)          → { ok, code, kind } | { ok:false, why:'badCode'|'isAnswer'|'isOffer' }
      P2P.link(code)                   → link to this page that joins with the code
@@ -104,15 +108,20 @@
     const stun = !!opts.stun;
     const pc = new RTCPeerConnection({ iceServers: stun ? [{ urls: STUN }] : [] });
     const dc = pc.createDataChannel(opts.label || 'p2p', { negotiated: true, id: 0, ordered: true });
-    const handlers = { open: [], message: [], close: [] };
+    dc.binaryType = 'arraybuffer';
+    const handlers = { open: [], message: [], binary: [], close: [] };
+    let drainWaiters = [];
+    const wake = () => { const w = drainWaiters; drainWaiters = []; for (const fn of w) fn(); };
     let closed = false, lost = false;
     const emit = (type, arg) => { for (const fn of handlers[type]) { try { fn(arg); } catch (e) { log('p2p handler', e); } } };
     const fail = why => { if (closed || lost) return; lost = true; log('p2p lost', why); emit('close', why); };
     pc.addEventListener('connectionstatechange', () => { log('pc state', pc.connectionState); if (pc.connectionState === 'failed') fail('failed'); });
     pc.addEventListener('iceconnectionstatechange', () => log('ice state', pc.iceConnectionState));
     dc.addEventListener('open', () => { log('channel open'); emit('open'); });
-    dc.addEventListener('close', () => fail('closed'));
+    dc.addEventListener('close', () => { wake(); fail('closed'); });
+    dc.addEventListener('bufferedamountlow', wake);
     dc.addEventListener('message', e => {
+      if (typeof e.data !== 'string') { if (e.data instanceof ArrayBuffer) emit('binary', e.data); return; }
       let m; try { m = JSON.parse(e.data); } catch (_) { log('bad message'); return; }
       if (m && typeof m === 'object' && !Array.isArray(m)) emit('message', m);
     });
@@ -148,6 +157,13 @@
         log('answer set');
       },
       send(obj) { if (dc.readyState === 'open') { dc.send(JSON.stringify(obj)); return true; } return false; },
+      sendBinary(buf) { if (dc.readyState === 'open') { dc.send(buf); return true; } return false; },
+      drain(bytes) {
+        return new Promise(res => {
+          const check = () => { if (dc.readyState !== 'open' || dc.bufferedAmount <= bytes) res(); else { dc.bufferedAmountLowThreshold = bytes; drainWaiters.push(check); } };
+          check();
+        });
+      },
       isOpen: () => dc.readyState === 'open',
       close() { closed = true; try { dc.close(); } catch (_) { /* already closed */ } try { pc.close(); } catch (_) { /* already closed */ } },
       state: () => ({ pc: pc.connectionState, ice: pc.iceConnectionState, channel: dc.readyState }),

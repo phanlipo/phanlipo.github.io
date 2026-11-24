@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Dateiübertragung</title>
+<meta name="description" content="Dateien und Texte direkt von Gerät zu Gerät schicken – per QR-Code verbunden, ohne Server, ohne Konto.">
+<meta name="tool:tags" content="Alltag, Werkzeug, Dokumente">
+<meta name="tool:features" content="Kamera, Datei öffnen, Teilen an App, Kopieren, KI-Agent">
+<meta name="tool:icon" content="arrows-transfer-up-down">
+<meta name="tool:color" content="#0369a1">
+<meta name="tool:short-name" content="Übertragen">
+<meta name="tool:title-en" content="File Transfer">
+<meta name="tool:description-en" content="Send files and texts directly from device to device – connected by QR code, no server, no account.">
+<meta name="tool:short-name-en" content="Transfer">
+<meta name="tool:storage" content="file-transfer.">
+<meta name="tool:share-target" content="*/*, .pdf, .zip, .jpg, .jpeg, .png, .webp, .heic, .gif, .mp4, .mov, .mp3, .m4a, .txt, .csv">
+<meta name="tool:webmcp" content="get_transfers">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann lesen, ob ein Gerät verbunden ist und welche Dateien und Texte gesendet oder empfangen wurden. Senden, verbinden und Dateien speichern kann er nicht.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read whether a device is connected and which files and texts were sent or received. It cannot send, connect or save files.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-FyJgz6khmtSty1mkx6+BYNZOT8YcDRHErvXGKlrZ0b4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Übertragen">
+<meta name="theme-color" content="#0369a1">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0369a1;--accent-text:#ffffff;--page-width:640px}
+@media (prefers-color-scheme: dark){:root{--accent:#38bdf8;--accent-text:#04131d}}
+main{max-width:var(--page-width);margin-inline:auto;padding:12px;display:grid;gap:12px}
+
+/* ---------- Connection (same screens as the two-device games) ---------- */
+.panel{display:grid;gap:10px}
+.big-btns{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+.big-btns .btn{min-height:64px;font-size:17px;justify-content:center}
+.big-btns small{display:block;font-size:13px;font-weight:400}
+.steps{margin:0;padding-inline-start:22px;display:grid;gap:4px}
+.net-status{margin:0;text-align:center;font-weight:600;min-height:1.5em}
+.net-status.err{color:var(--err)}
+.qr-box{display:grid;justify-items:center;gap:8px}
+.qr-box canvas{width:min(78vw,280px);height:auto;aspect-ratio:1;image-rendering:pixelated;border-radius:8px;background:#fff}
+.step-h{font-size:17px;margin:0}
+textarea.code{min-height:84px;word-break:break-all}
+.video-wrap{position:relative;width:100%;aspect-ratio:1;max-height:60vh;border-radius:12px;overflow:hidden;background:#000}
+.video-wrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.video-wrap::after{content:"";position:absolute;inset:15%;border:3px solid rgba(255,255,255,.8);border-radius:12px;pointer-events:none}
+.conn-on{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.conn-on p{margin:0;font-weight:600;color:var(--ok);display:flex;align-items:center;gap:6px}
+
+/* ---------- Transfers ---------- */
+#textIn{min-height:72px}
+.list-rows .item{flex:1;min-width:0;display:grid;gap:2px}
+.list-rows .dir{flex:none;width:28px;height:28px;color:var(--muted)}
+.list-rows .dir.in{color:var(--accent)}
+.list-rows .thumb{flex:none;width:44px;height:44px;object-fit:cover;border-radius:6px;background:var(--surface)}
+.list-rows .text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:9.5em;overflow:auto}
+.list-rows progress{width:100%;height:8px}
+.list-rows .meta.err{color:var(--err)}
+.list-rows .meta.ok{color:var(--ok)}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Dateiübertragung</span></h1>
+  <p class="sub" data-i18n="sub">Direkt von Gerät zu Gerät</p>
+</header>
+
+<main>
+  <section class="card" id="connCard" aria-labelledby="h-conn">
+    <h2 id="h-conn" data-i18n="connH">Verbindung</h2>
+    <!-- Not connected: start or join -->
+    <div class="panel" id="connLobby">
+      <p data-i18n="lead">Zwei Geräte verbinden sich über zwei QR-Codes. Danach laufen Dateien und Texte direkt und verschlüsselt von Gerät zu Gerät – in beide Richtungen.</p>
+      <div class="big-btns">
+        <button type="button" class="btn primary" id="btnHost"><span><span data-i18n="host">Verbindung starten</span><small data-i18n="hostSub">zeigt QR-Code</small></span></button>
+        <button type="button" class="btn" id="btnJoin"><span><span data-i18n="join">Beitreten</span><small data-i18n="joinSub">QR-Code scannen</small></span></button>
+      </div>
+      <p class="net-status" id="lobbyStatus" role="status"></p>
+      <details>
+        <summary data-i18n="pasteOffer">Verbindungs-Code von Hand eingeben</summary>
+        <label for="offerIn" data-i18n="pasteOfferLbl">Verbindungs-Code oder Link des anderen Geräts (z. B. per Nachricht geschickt):</label>
+        <textarea id="offerIn" class="code mono" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+        <div class="row"><button type="button" class="btn" id="btnOfferIn" data-i18n="connect">Verbinden</button></div>
+      </details>
+      <ol class="steps">
+        <li data-i18n="step1">Gerät A tippt auf „Verbindung starten“.</li>
+        <li data-i18n="step2">Gerät B tippt auf „Beitreten“ und scannt den Code von A (oder öffnet ihn mit der Kamera-App).</li>
+        <li data-i18n="step3">Gerät A scannt den Antwort-Code von B – fertig.</li>
+      </ol>
+      <p class="muted" data-i18n="sameWifi">Beide Geräte im selben WLAN oder ein Handy als Hotspot für das andere.</p>
+    </div>
+
+    <!-- Host: show the offer, then scan the answer -->
+    <div class="panel" id="connHost" hidden>
+      <h3 class="step-h" data-i18n="hostH1">1. Das andere Gerät scannt diesen Code</h3>
+      <div class="qr-box">
+        <canvas id="qrOffer" width="280" height="280" role="img" aria-label="QR-Code zum Beitreten" data-i18n-attr="aria-label:qrOffer"></canvas>
+        <div class="toolbar">
+          <button type="button" id="btnCopyOffer" aria-label="Code kopieren" title="Code kopieren" data-i18n-attr="aria-label:copyCode; title:copyCode"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span class="tb-label" data-i18n="tb.copy">Kopieren</span></button>
+          <button type="button" id="btnShareOffer" hidden aria-label="Teilen …" title="Teilen …" data-i18n-attr="aria-label:share; title:share"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span class="tb-label" data-i18n="tb.share">Teilen</span></button>
+        </div>
+      </div>
+      <h3 class="step-h" data-i18n="hostH2">2. Dann den Antwort-Code scannen</h3>
+      <button type="button" class="btn primary" id="btnScanAnswer"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#scan"/></svg><span data-i18n="scanAnswer">Antwort-Code scannen</span></button>
+      <details>
+        <summary data-i18n="pasteAnswer">Antwort-Code von Hand eingeben</summary>
+        <label for="answerIn" data-i18n="pasteAnswerLbl">Antwort-Code des anderen Geräts:</label>
+        <textarea id="answerIn" class="code mono" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+        <div class="row"><button type="button" class="btn" id="btnAnswerIn" data-i18n="connect">Verbinden</button></div>
+      </details>
+      <p class="net-status" id="hostStatus" role="status"></p>
+      <button type="button" class="btn" id="btnHostCancel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+    </div>
+
+    <!-- Guest: show the answer -->
+    <div class="panel" id="connGuest" hidden>
+      <h3 class="step-h" data-i18n="guestH">Jetzt scannt das andere Gerät diesen Antwort-Code</h3>
+      <div class="qr-box">
+        <canvas id="qrAnswer" width="280" height="280" role="img" aria-label="QR-Code mit der Antwort" data-i18n-attr="aria-label:qrAnswer"></canvas>
+        <div class="toolbar">
+          <button type="button" id="btnCopyAnswer" aria-label="Code kopieren" title="Code kopieren" data-i18n-attr="aria-label:copyCode; title:copyCode"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span class="tb-label" data-i18n="tb.copy">Kopieren</span></button>
+          <button type="button" id="btnShareAnswer" hidden aria-label="Teilen …" title="Teilen …" data-i18n-attr="aria-label:share; title:share"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span class="tb-label" data-i18n="tb.share">Teilen</span></button>
+        </div>
+      </div>
+      <p class="net-status" id="guestStatus" role="status"></p>
+      <button type="button" class="btn" id="btnGuestCancel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+    </div>
+
+    <!-- Camera -->
+    <div class="panel" id="connScan" hidden>
+      <h3 id="h-scan" class="step-h"></h3>
+      <div class="video-wrap"><video id="video" playsinline muted></video></div>
+      <p class="net-status" id="scanStatus" role="status"></p>
+      <button type="button" class="btn" id="btnScanCancel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+    </div>
+
+    <!-- Connected -->
+    <div class="panel conn-on" id="connOn" hidden>
+      <p><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#devices"/></svg><span data-i18n="connectedLine">Verbunden mit dem anderen Gerät</span></p>
+      <button type="button" class="btn" id="btnLeave"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#logout"/></svg><span data-i18n="leave">Trennen</span></button>
+    </div>
+  </section>
+
+  <section class="card" id="sendCard" aria-labelledby="h-send">
+    <h2 id="h-send" data-i18n="sendH">Senden</h2>
+    <label class="dropzone" id="drop">
+      <input type="file" id="fileIn" class="sr-only" multiple>
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-upload"/></svg>
+      <strong data-i18n="pick">Dateien wählen</strong>
+      <span class="dz-hint" data-i18n="pickHint">oder hierher ziehen – auch mehrere</span>
+    </label>
+    <div class="form-field">
+      <label for="textIn" data-i18n="textLbl">Text oder Link</label>
+      <textarea id="textIn" maxlength="10000" autocomplete="off"></textarea>
+    </div>
+    <div class="row"><button type="button" class="btn" id="btnSendText"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#send"/></svg><span data-i18n="sendText">Text senden</span></button></div>
+    <p class="muted" id="sendHint" data-i18n="waitHint">Gewählte Dateien und Texte warten, bis ein Gerät verbunden ist, und gehen dann sofort los.</p>
+  </section>
+
+  <section class="card" id="listCard" aria-labelledby="h-list">
+    <h2 id="h-list" data-i18n="listH">Übertragungen</h2>
+    <div class="empty-state" id="empty">
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#files"/></svg>
+      <p data-i18n="empty">Noch nichts gesendet oder empfangen.</p>
+    </div>
+    <ul class="list-rows boxed" id="list" aria-labelledby="h-list"></ul>
+  </section>
+</main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnClear" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="clear">Liste leeren</span></button>
+</div>
+
+<section class="card" data-menu data-icon="settings" aria-labelledby="h-set">
+  <h2 id="h-set" data-i18n="settings">Einstellungen</h2>
+  <label class="check"><input type="checkbox" id="optStun"><span data-i18n="optStun">Auch über das Internet verbinden (STUN-Server von Google)</span></label>
+  <p class="muted" data-i18n="optStunHelp">Nur nötig, wenn die Geräte nicht im selben WLAN sind. Der Server erfährt dabei die öffentliche IP-Adresse – die Dateien laufen trotzdem direkt. Klappt nicht in jedem Mobilfunknetz. Beide Geräte müssen es einschalten.</p>
+</section>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Schickt Fotos, Videos, Dokumente und Texte von einem Gerät zum anderen – Handy, Tablet oder Computer, auch zwischen Android und iPhone. Es gibt keinen Server dazwischen und kein Konto: Die Daten gehen direkt (WebRTC, verschlüsselt) von Gerät zu Gerät.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Verbinden:</b> Gerät A tippt auf <i>Verbindung starten</i>, Gerät B auf <i>Beitreten</i> und scannt den QR-Code (die normale Kamera-App geht auch: der Code ist ein Link). Dann scannt A den Antwort-Code von B. Ohne Kamera lassen sich beide Codes kopieren und per Nachricht schicken.</li>
+    <li><b>Senden:</b> Dateien wählen oder hineinziehen, oder einen Text bzw. Link eingeben und <i>Text senden</i>. Beide Seiten können senden. Was vor dem Verbinden gewählt wird, wartet und geht los, sobald die Verbindung steht.</li>
+    <li><b>Empfangen:</b> Dateien kommen von selbst an. Mit <i>Herunterladen</i> landen sie im Download-Ordner, mit <i>Teilen</i> (Handy) z. B. in der Galerie oder einer anderen App.</li>
+    <li>Während der Übertragung beide Geräte eingeschaltet lassen und die App im Vordergrund – im Hintergrund trennen Handys die Verbindung. Der Bildschirm bleibt dafür an, solange verbunden ist.</li>
+    <li><b>Geht nicht?</b> Beide im selben WLAN? Gast-WLANs und manche Firmennetze trennen Geräte voneinander – dann ein Handy als Hotspot für das andere nutzen oder in den Einstellungen den STUN-Server einschalten (beide Geräte).</li>
+  </ul>
+  <h3>Größe</h3>
+  <p>Eine empfangene Datei wird erst im Arbeitsspeicher zusammengesetzt. Bis einige hundert MB klappt das auf aktuellen Handys gut, bei sehr großen Videos kann der Browser abbrechen. Die Geschwindigkeit hängt vom WLAN ab.</p>
+  <h3>Gespeichert</h3>
+  <p>Die Liste der Übertragungen, empfangene Dateien und noch nicht gesendete Dateien bleiben auf diesem Gerät im Speicher des Browsers, bis du sie aus der Liste entfernst (☰ → <i>Liste leeren</i> oder <i>Alle Daten löschen</i>) – so überstehen sie auch ein Neuladen. Sie sind nicht Teil der Sicherungsdatei. In den Einstellungen gespeichert wird nur, ob der STUN-Server benutzt wird. QR-Codes: <a href="https://github.com/kazuhikoarase/qrcode-generator">qrcode-generator</a> (MIT), Scanner ohne BarcodeDetector: <a href="https://github.com/Sec-ant/zxing-wasm">zxing-wasm</a> (MIT).</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Sends photos, videos, documents and texts from one device to another – phone, tablet or computer, also between Android and iPhone. There is no server in between and no account: the data goes directly (WebRTC, encrypted) from device to device.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Connect:</b> device A taps <i>Start connection</i>, device B taps <i>Join</i> and scans the QR code (the normal camera app works too: the code is a link). Then A scans B’s reply code. Without a camera both codes can be copied and sent by message.</li>
+    <li><b>Send:</b> choose or drop files, or type a text or link and tap <i>Send text</i>. Both sides can send. Anything chosen before connecting waits and starts as soon as the connection is up.</li>
+    <li><b>Receive:</b> files arrive by themselves. <i>Download</i> puts them into the downloads folder, <i>Share</i> (phone) e.g. into the gallery or another app.</li>
+    <li>Keep both devices on and the app in the foreground while transferring – phones drop the connection in the background. The screen stays on for that while connected.</li>
+    <li><b>Not working?</b> Both in the same Wi-Fi? Guest Wi-Fis and some company networks keep devices apart – then use one phone as a hotspot for the other or switch on the STUN server in the settings (both devices).</li>
+  </ul>
+  <h3>Size</h3>
+  <p>A received file is first put together in memory. Up to a few hundred MB this works well on current phones; with very large videos the browser may give up. The speed depends on the Wi-Fi.</p>
+  <h3>Stored</h3>
+  <p>The list of transfers, received files and files not sent yet stay on this device in the browser’s storage until you remove them from the list (☰ → <i>Clear list</i> or <i>Delete all data</i>) – so they survive a reload too. They are not part of the backup file. The settings only store whether the STUN server is used. QR codes: <a href="https://github.com/kazuhikoarase/qrcode-generator">qrcode-generator</a> (MIT), scanner without BarcodeDetector: <a href="https://github.com/Sec-ant/zxing-wasm">zxing-wasm</a> (MIT).</p>
+  </div>
+  <!-- files:start -->
+  <div data-lang="de">
+  <h3>Dateien an die App geben</h3>
+  <ul>
+    <li><b>Android:</b> App installieren (☰ → <i>Als App installieren</i>). Dann die Datei in Galerie, Dateien-, Mail- oder Messenger-App <i>teilen</i> und „Übertragen“ wählen – das klappt auch offline.</li>
+    <li><b>Windows/Computer:</b> Als installierte App (Chrome oder Edge) steht sie unter <i>Öffnen mit</i> (Rechtsklick auf die Datei); als Standard-App öffnet sie Dateien per Doppelklick. Mit Edge erscheint sie auch im Teilen-Menü von Windows.</li>
+    <li><b>iPhone/iPad:</b> Teilen an Web-Apps und <i>Öffnen mit</i> gibt es dort nicht – die Datei hier in der App auswählen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>Giving files to the app</h3>
+  <ul>
+    <li><b>Android:</b> install the app (☰ → <i>Install as an app</i>). Then <i>share</i> the file from the gallery, files, mail or messenger app and pick “Transfer” – this works offline too.</li>
+    <li><b>Windows/computer:</b> as an installed app (Chrome or Edge) it is listed under <i>Open with</i> (right-click the file); set as default app, it opens files with a double-click. With Edge it also appears in the Windows share menu.</li>
+    <li><b>iPhone/iPad:</b> sharing to web apps and <i>Open with</i> do not exist there – choose the file here in the app.</li>
+  </ul>
+  </div>
+  <!-- files:end -->
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann lesen, ob ein Gerät verbunden ist und welche Dateien und Texte gesendet oder empfangen wurden. Senden, verbinden und Dateien speichern kann er nicht. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read whether a device is connected and which files and texts were sent or received. It cannot send, connect or save files. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version af7f05730a99</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/vendor/qrcode-generator/qrcode.js"></script>
+<script src="../assets/vendor/zxing-wasm/iife/reader/index.js"></script>
+<script src="../assets/shared/p2p.js"></script>
+<script src="../assets/shared/p2p-connect.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{...P2PConnect.texts.de,
+    lead:'Zwei Geräte verbinden sich über zwei QR-Codes. Danach laufen Dateien und Texte direkt und verschlüsselt von Gerät zu Gerät – in beide Richtungen.',
+    host:'Verbindung starten',pasteOffer:'Verbindungs-Code von Hand eingeben',
+    pasteOfferLbl:'Verbindungs-Code oder Link des anderen Geräts (z. B. per Nachricht geschickt):',
+    step1:'Gerät A tippt auf „Verbindung starten“.',step2:'Gerät B tippt auf „Beitreten“ und scannt den Code von A (oder öffnet ihn mit der Kamera-App).',
+    step3:'Gerät A scannt den Antwort-Code von B – fertig.',hostH1:'1. Das andere Gerät scannt diesen Code',
+    pasteAnswerLbl:'Antwort-Code des anderen Geräts:',guestH:'Jetzt scannt das andere Gerät diesen Antwort-Code',
+    scanOfferH:'Verbindungs-Code des anderen Geräts scannen',scanAnswerH:'Antwort-Code des anderen Geräts scannen',
+    waitHost:'Warte, bis das andere Gerät den Code scannt …',
+    isAnswer:'Das ist ein Antwort-Code – den scannt das Gerät, das die Verbindung gestartet hat.',
+    isOffer:'Das ist ein Verbindungs-Code – hier wird der Antwort-Code gebraucht.',
+    shareTitle:'Dateiübertragung',
+    confirmLeave:'Verbindung zum anderen Gerät trennen? Laufende Übertragungen brechen ab.',
+    'st.queued':'wartet auf Verbindung','st.next':'wartet','st.sending':'wird gesendet …','st.confirm':'wartet auf Bestätigung …',
+    'st.receiving':'wird empfangen …','st.sent':'gesendet','st.received':'empfangen','st.canceled':'abgebrochen',
+    'st.failed':'fehlgeschlagen','st.lost':'Verbindung getrennt','st.missing':'Datei nicht mehr da',
+    progress:'{a} von {b}',speed:'{s}/s',
+    textItem:'Text',download:'Herunterladen: {n}',shareFile:'Teilen: {n}',copyText:'Text kopieren',
+    cancelItem:'Abbrechen: {n}',removeItem:'Aus der Liste entfernen: {n}',removed:'Aus der Liste entfernt',
+    gotFile:'Datei empfangen: {n}',gotText:'Text empfangen',copiedText:'Text kopiert',
+    emptyText:'Erst einen Text eingeben.',clearQ:'Alle {n} Einträge aus der Liste entfernen? Empfangene Dateien sind dann auch hier weg.',
+    cleared:'Liste geleert','keep.restored':'{n} Einträge vom letzten Mal wieder da.',
+    queuedN:'{n} warten auf eine Verbindung.',pickedN:'{n} Datei(en) hinzugefügt',shareFail:'Teilen nicht möglich',
+    'mcp.read':'Übertragungen gelesen'},
+  en:{...P2PConnect.texts.en,
+    title:'File Transfer',sub:'Directly from device to device',connH:'Connection',
+    lead:'Two devices connect with two QR codes. Then files and texts go directly and encrypted from device to device – in both directions.',
+    host:'Start connection',hostSub:'shows QR code',joinSub:'scan a QR code',pasteOffer:'Enter connection code manually',
+    pasteOfferLbl:'Connection code or link of the other device (e.g. sent by message):',
+    step1:'Device A taps “Start connection”.',step2:'Device B taps “Join” and scans A’s code (or opens it with the camera app).',
+    step3:'Device A scans B’s reply code – done.',hostH1:'1. The other device scans this code',
+    pasteAnswerLbl:'Reply code of the other device:',guestH:'Now the other device scans this reply code',
+    scanOfferH:'Scan the other device’s connection code',scanAnswerH:'Scan the other device’s reply code',
+    waitHost:'Waiting for the other device to scan the code …',
+    isAnswer:'This is a reply code – it is scanned by the device that started the connection.',
+    isOffer:'This is a connection code – the reply code is needed here.',
+    sameWifi:'Both devices in the same Wi-Fi, or one phone as a hotspot for the other.',
+    connectedLine:'Connected to the other device',leave:'Disconnect',shareTitle:'File Transfer',
+    confirmLeave:'Disconnect from the other device? Running transfers stop.',
+    sendH:'Send',pick:'Choose files',pickHint:'or drop them here – several at once',textLbl:'Text or link',sendText:'Send text',
+    waitHint:'Chosen files and texts wait until a device is connected and then start right away.',
+    listH:'Transfers',empty:'Nothing sent or received yet.',clear:'Clear list',settings:'Settings',
+    optStun:'Also connect over the internet (Google STUN server)',
+    optStunHelp:'Only needed when the devices are not in the same Wi-Fi. The server learns the public IP address – the files still go directly. Does not work in every mobile network. Both devices have to switch it on.',
+    'st.queued':'waiting for a connection','st.next':'waiting','st.sending':'sending …','st.confirm':'waiting for confirmation …',
+    'st.receiving':'receiving …','st.sent':'sent','st.received':'received','st.canceled':'cancelled',
+    'st.failed':'failed','st.lost':'connection lost','st.missing':'file no longer there',
+    progress:'{a} of {b}',speed:'{s}/s',
+    textItem:'Text',download:'Download: {n}',shareFile:'Share: {n}',copyText:'Copy text',
+    cancelItem:'Cancel: {n}',removeItem:'Remove from the list: {n}',removed:'Removed from the list',
+    gotFile:'File received: {n}',gotText:'Text received',copiedText:'Text copied',
+    emptyText:'Type a text first.',clearQ:'Remove all {n} entries from the list? Received files are gone from here too.',
+    cleared:'List cleared','keep.restored':'{n} entries from last time are back.',
+    queuedN:'{n} waiting for a connection.',pickedN:'{n} file(s) added',shareFail:'Sharing not possible',
+    'mcp.read':'transfers read'}
+});
+const t=Tools.t,$=Tools.$;
+const LS_SET='file-transfer.settings.v1';
+const settings=Object.assign({stun:false},Tools.load(LS_SET,{}));
+
+/* ================= Protocol (one ordered WebRTC data channel, assets/shared/p2p.js) =================
+   JSON messages and binary chunks share the channel and keep their order, so a file is
+     {t:'file',id,name,size,type}  then its bytes as binary messages  then {t:'end',id}
+   One file at a time per direction; both devices can send at once (the channel carries both ways).
+     {t:'got',id}     receiver: file complete and size checked – the sender marks it sent
+     {t:'cancel',id}  either side: stop that file (receiver ignores binary data until the next header)
+     {t:'text',id,text}  a text or link (at most 10 000 characters)
+     {t:'hello',v:1}, {t:'bye'}
+   id is the sender's id; the receiver keeps its own id per row and remembers the sender's as rid. */
+const CHUNK=64*1024, READ=1024*1024, HIGH=4*1024*1024, MAX_TEXT=10000;   // HIGH: at most this much waits in the channel
+
+/* ---------- Rows ----------
+   {id, dir:'out'|'in', kind:'file'|'text', name, size, type, text, state, done, at, rid, file}
+   state: queued (out, not started) · sending · confirm (out, all bytes sent) · receiving · done · canceled · failed
+   why (failed): 'lost' | 'missing' */
+let items=[];
+const byId=id=>items.find(i=>i.id===id);
+const urls=new Map();   // id → object URL of a picture preview
+function preview(it){
+  if(!it.file||!/^image\//.test(it.type)||it.type==='image/heic'||it.type==='image/heif')return '';
+  if(!urls.has(it.id))urls.set(it.id,URL.createObjectURL(it.file));
+  return urls.get(it.id);
+}
+function dropUrl(id){const u=urls.get(id);if(u){URL.revokeObjectURL(u);urls.delete(id);}}
+const fmtSize=n=>n<1024?Tools.fmt(n,0)+' B':n<1048576?Tools.fmt(n/1024,n<10240?1:0)+' KB':n<1073741824?Tools.fmt(n/1048576,n<10485760?1:0)+' MB':Tools.fmt(n/1073741824,1)+' GB';
+const safeName=s=>String(s||'').replace(/[\u0000-\u001f\u007f/\\]/g,'_').trim().slice(0,200)||'datei';
+const safeType=s=>/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(s||'')&&String(s).length<=100?String(s).toLowerCase():'';
+
+/* ---------- Connection (P2PConnect.session: same screens and texts as the two-device games) ---------- */
+const PANELS={lobby:'connLobby',host:'connHost',guest:'connGuest',scan:'connScan'};
+let panel='connLobby';
+function showPanel(id){panel=id;renderConn();}
+function renderConn(){
+  const vis=conn.connected()?'connOn':panel==='connOn'?'connLobby':panel;
+  for(const p of ['connLobby','connHost','connGuest','connScan','connOn'])$(p).hidden=p!==vis;
+  $('sendHint').hidden=conn.connected();
+}
+const setStatus=(id,msg,cls)=>{const el=$(id);el.textContent=msg||'';el.className='net-status'+(cls?' '+cls:'');};
+const conn=P2PConnect.session({label:'file-transfer',stun:()=>settings.stun,show:step=>showPanel(PANELS[step]),status:setStatus,
+  onOpen,onMessage,onBinary,onLost:lost});
+const send=m=>conn.send(m);
+
+function onOpen(){
+  send({t:'hello',v:1});
+  Tools.wakeLock.hold('transfer');
+  Tools.toast(t('connected'));
+  setStatus('lobbyStatus','');
+  showPanel('connOn');
+  Tools.diag.log('connected',{role:conn.role(),queued:items.filter(i=>i.state==='queued').length});
+  renderList();pump();
+}
+// Connection gone (lost or left): running sends start again from the beginning next time, partly received files fail
+function dropRunning(){
+  for(const it of items){
+    if(it.dir==='out'&&(it.state==='sending'||it.state==='confirm')){it.state='queued';it.done=0;}
+    if(it.dir==='in'&&it.state==='receiving'){it.state='failed';it.why='lost';}
+  }
+  incoming=null;sending=null;
+  Tools.wakeLock.release('transfer');
+  persist();renderList();
+}
+function lost(reason){
+  Tools.diag.log('connection lost',reason);
+  const was=conn.connected()||panel==='connHost'||panel==='connGuest'||panel==='connOn';
+  conn.close();conn.stopScan();dropRunning();
+  showPanel('connLobby');
+  if(was){setStatus('lobbyStatus',t(reason),'err');Tools.toast(t(reason),3000);}
+}
+function leave(){
+  Tools.diag.log('leave');
+  send({t:'bye'});
+  conn.stopScan();conn.close();dropRunning();
+  setStatus('lobbyStatus','');showPanel('connLobby');
+}
+$('btnLeave').addEventListener('click',async()=>{
+  if(items.some(i=>i.state==='sending'||i.state==='receiving'||i.state==='confirm')&&!await Tools.confirm(t('confirmLeave'),{action:'leave'}))return;
+  leave();
+});
+for(const id of ['btnHostCancel','btnGuestCancel'])$(id).addEventListener('click',()=>{conn.close();showPanel('connLobby');});
+
+/* ---------- Sending ---------- */
+let pumping=false,sending=null;
+async function pump(){
+  if(pumping)return;
+  pumping=true;
+  try{
+    for(;;){
+      if(!conn.connected())break;
+      const it=items.find(i=>i.dir==='out'&&i.state==='queued');
+      if(!it)break;
+      if(it.kind==='text'){
+        send({t:'text',id:it.id,text:it.text});
+        it.state='done';persist();renderList();
+        Tools.diag.log('text sent',{chars:it.text.length});
+        continue;
+      }
+      await sendFile(it);
+    }
+  }catch(e){Tools.diag.log('send failed',e);}
+  finally{pumping=false;}
+}
+async function sendFile(it){
+  const p=conn.peer(),file=it.file;
+  if(!file){it.state='failed';it.why='missing';persist();renderList();return;}
+  it.state='sending';it.done=0;it.t0=performance.now();sending=it;renderList();
+  Tools.diag.log('file send',{size:file.size});
+  p.send({t:'file',id:it.id,name:it.name,size:file.size,type:it.type});
+  const alive=()=>it.state==='sending'&&conn.peer()===p&&p.isOpen();
+  let off=0;
+  while(off<file.size){
+    if(!alive())return;
+    const block=await file.slice(off,Math.min(file.size,off+READ)).arrayBuffer();
+    for(let o=0;o<block.byteLength;o+=CHUNK){
+      await p.drain(HIGH);
+      if(!alive())return;
+      if(!p.sendBinary(block.slice(o,o+CHUNK)))return;
+    }
+    off+=block.byteLength;it.done=off;progress(it);
+  }
+  if(!alive())return;
+  p.send({t:'end',id:it.id});
+  it.state='confirm';sending=null;renderList();
+}
+function cancelOut(it){
+  const running=it.state==='sending'||it.state==='confirm';
+  if(running)send({t:'cancel',id:it.id});
+  it.state='canceled';
+  if(sending===it)sending=null;
+  Tools.diag.log('send canceled',{running});
+  persist();renderList();pump();
+}
+
+/* ---------- Receiving ---------- */
+let incoming=null;   // {it, rid, chunks, got}
+function onMessage(m){
+  switch(m.t){
+    case 'file':{
+      if(typeof m.id!=='string'||!Number.isSafeInteger(m.size)||m.size<0)return;
+      if(incoming){incoming.it.state='failed';incoming.it.why='lost';}
+      const it={id:Tools.uid('i'),rid:m.id.slice(0,40),dir:'in',kind:'file',name:safeName(m.name),size:m.size,type:safeType(m.type),state:'receiving',done:0,at:Date.now(),t0:performance.now()};
+      items.unshift(it);incoming={it,chunks:[],got:0};
+      Tools.diag.log('file incoming',{size:m.size});
+      if(!m.size)finish(m.id);else renderList();
+      break;
+    }
+    case 'end':finish(m.id);break;
+    case 'got':{
+      const it=items.find(i=>i.dir==='out'&&i.id===m.id);
+      if(it&&it.state==='confirm'){it.state='done';it.file=null;dropUrl(it.id);persist();renderList();Tools.diag.log('file confirmed',{size:it.size});}
+      break;
+    }
+    case 'cancel':{
+      if(incoming&&incoming.it.rid===m.id){incoming.it.state='canceled';incoming=null;persist();renderList();}
+      const it=items.find(i=>i.dir==='out'&&i.id===m.id&&(i.state==='sending'||i.state==='confirm'));
+      if(it){it.state='canceled';if(sending===it)sending=null;persist();renderList();pump();}
+      Tools.diag.log('canceled by peer');
+      break;
+    }
+    case 'text':{
+      if(typeof m.text!=='string'||!m.text)return;
+      const text=m.text.slice(0,MAX_TEXT);
+      items.unshift({id:Tools.uid('i'),dir:'in',kind:'text',text,name:'',size:text.length,type:'',state:'done',at:Date.now()});
+      persist();renderList();Tools.toast(t('gotText'));
+      Tools.diag.log('text received',{chars:text.length});
+      break;
+    }
+    case 'bye':lost('disconnected');break;
+  }
+}
+function onBinary(buf){
+  if(!incoming)return;   // after a cancel: rest of that file
+  incoming.chunks.push(buf);incoming.got+=buf.byteLength;
+  const it=incoming.it;it.done=incoming.got;
+  if(incoming.got>it.size){send({t:'cancel',id:it.rid});it.state='failed';incoming=null;persist();renderList();return;}
+  progress(it);
+}
+function finish(rid){
+  if(!incoming||incoming.it.rid!==rid)return;
+  const {it,chunks,got}=incoming;incoming=null;
+  if(got!==it.size){it.state='failed';send({t:'cancel',id:rid});Tools.diag.log('size mismatch',{got,size:it.size});persist();renderList();return;}
+  it.file=new File(chunks,it.name,{type:it.type||'application/octet-stream'});
+  it.state='done';it.done=it.size;
+  send({t:'got',id:rid});
+  Tools.diag.log('file received',{size:it.size,ms:Math.round(performance.now()-it.t0)});
+  Tools.toast(t('gotFile',{n:it.name}));
+  persist();renderList();
+}
+function cancelIn(it){
+  if(incoming&&incoming.it===it){send({t:'cancel',id:it.rid});incoming=null;}
+  it.state='canceled';persist();renderList();
+}
+
+/* ---------- Adding ---------- */
+function addFiles(files){
+  const list=[...files].filter(f=>f&&typeof f.size==='number');
+  if(!list.length)return;
+  for(const f of list)items.unshift({id:Tools.uid('o'),dir:'out',kind:'file',name:safeName(f.name),size:f.size,type:safeType(f.type),state:'queued',done:0,at:Date.now(),file:f});
+  Tools.diag.log('files added',{n:list.length,bytes:list.reduce((s,f)=>s+f.size,0)});
+  if(!conn.connected())Tools.toast(t('pickedN',{n:list.length}));
+  persist();renderList();pump();
+}
+$('fileIn').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+const drop=$('drop');
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over');});
+drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransfer)addFiles(e.dataTransfer.files);});
+$('btnSendText').addEventListener('click',()=>{
+  const text=$('textIn').value.slice(0,MAX_TEXT);
+  if(!text.trim()){Tools.toast(t('emptyText'));$('textIn').focus();return;}
+  items.unshift({id:Tools.uid('o'),dir:'out',kind:'text',text,name:'',size:text.length,type:'',state:'queued',done:0,at:Date.now()});
+  $('textIn').value='';
+  persist();renderList();pump();
+});
+
+/* ---------- List ---------- */
+const esc=Tools.esc;
+function statusText(it){
+  const s=it.state;
+  if(s==='queued')return conn.connected()?t('st.next'):t('st.queued');
+  if(s==='sending'||s==='receiving'){
+    const sec=(performance.now()-(it.t0||0))/1000,rate=sec>0.5?it.done/sec:0;
+    return t(s==='sending'?'st.sending':'st.receiving')+' '+t('progress',{a:fmtSize(it.done),b:fmtSize(it.size)})+(rate?' · '+t('speed',{s:fmtSize(rate)}):'');
+  }
+  if(s==='confirm')return t('st.confirm');
+  if(s==='done')return t(it.dir==='out'?'st.sent':'st.received');
+  if(s==='canceled')return t('st.canceled');
+  return it.why?t('st.'+it.why):t('st.failed');
+}
+function metaLine(it){
+  const when=new Date(it.at).toLocaleTimeString(Tools.locale(),{hour:'2-digit',minute:'2-digit'});
+  return (it.kind==='file'?fmtSize(it.size)+' · ':'')+statusText(it)+' · '+when;
+}
+const btn=(act,icon,label)=>`<button type="button" class="btn icon" data-act="${act}" aria-label="${esc(label)}" title="${esc(label)}">${Tools.icon(icon)}</button>`;
+const isLink=s=>/^https?:\/\/\S+$/i.test(s.trim());
+function row(it){
+  const active=it.state==='sending'||it.state==='receiving'||it.state==='confirm';
+  const label=it.kind==='file'?it.name:t('textItem');
+  const img=it.kind==='file'&&it.file?preview(it):'';
+  const lead=img?`<img class="thumb" src="${esc(img)}" alt="">`:`<svg class="ic dir ${it.dir}" aria-hidden="true"><use href="../assets/icons.svg#${it.dir==='out'?'arrow-up':'arrow-down'}"/></svg>`;
+  let body;
+  if(it.kind==='text'){
+    const txt=it.text.trim();
+    body=isLink(txt)?`<a class="text" href="${esc(txt)}" target="_blank" rel="noopener noreferrer">${esc(txt)}</a>`:`<span class="text">${esc(it.text)}</span>`;
+  }else body=`<span class="name">${esc(it.name)}</span>`;
+  const cls=it.state==='failed'||it.state==='canceled'?' err':it.state==='done'?' ok':'';
+  const bar=active&&it.kind==='file'?`<progress max="${it.size||1}" value="${it.done}" aria-label="${esc(label)}"></progress>`:'';
+  let acts='';
+  if(it.dir==='in'&&it.kind==='file'&&it.state==='done'&&it.file){
+    if(Tools.canShareFile(it.name,it.file.type))acts+=btn('share','share',t('shareFile',{n:it.name}));
+    acts+=btn('download','download',t('download',{n:it.name}));
+  }
+  if(it.kind==='text')acts+=btn('copy','copy',t('copyText'));
+  acts+=active||it.state==='queued'?btn('cancel','x',t('cancelItem',{n:label})):btn('remove','trash',t('removeItem',{n:label}));
+  return `<li data-id="${it.id}">${lead}<div class="item">${body}<span class="meta${cls}">${esc(metaLine(it))}</span>${bar}</div>${acts}</li>`;
+}
+function renderList(){
+  $('empty').hidden=items.length>0;
+  $('list').hidden=!items.length;
+  $('list').innerHTML=items.map(row).join('');
+  for(const id of [...urls.keys()])if(!byId(id)||!byId(id).file)dropUrl(id);
+}
+// Progress: only the bar and the line of that row, at most every 150 ms (the last value always follows)
+let lastProgress=0,progressTimer=0;
+function progress(it){
+  const now=performance.now();
+  clearTimeout(progressTimer);
+  if(now-lastProgress<150&&it.done<it.size){progressTimer=setTimeout(()=>progress(it),150);return;}
+  lastProgress=now;
+  const li=$('list').querySelector(`li[data-id="${it.id}"]`);
+  if(!li)return;
+  const bar=li.querySelector('progress');if(bar)bar.value=it.done;
+  li.querySelector('.meta').textContent=metaLine(it);
+}
+$('list').addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-act]');if(!b)return;
+  const it=byId(b.closest('li').dataset.id);if(!it)return;
+  const act=b.dataset.act;
+  if(act==='download')Tools.download(it.file,it.name);
+  else if(act==='share'){
+    try{await navigator.share({files:[it.file]});Tools.diag.log('shared file');}
+    catch(err){if(err&&err.name!=='AbortError'){Tools.diag.log('share failed',err);Tools.toast(t('shareFail'));}}
+  }
+  else if(act==='copy')Tools.toast(t((await Tools.copyText(it.text))?'copiedText':'copyFail'));
+  else if(act==='cancel'){if(it.dir==='out')cancelOut(it);else cancelIn(it);}
+  else if(act==='remove'){
+    const at=items.indexOf(it);
+    items.splice(at,1);dropUrl(it.id);persist();renderList();
+    Tools.undo(t('removed'),()=>{items.splice(Math.min(at,items.length),0,it);it.kept=false;persist();renderList();});
+  }
+});
+$('btnClear').addEventListener('click',async()=>{
+  if(!items.length){Tools.menu.close();return;}
+  if(!await Tools.confirm(t('clearQ',{n:items.length}),{action:'delete'}))return;
+  if(incoming){send({t:'cancel',id:incoming.it.rid});incoming=null;}
+  if(sending){send({t:'cancel',id:sending.id});sending=null;}
+  for(const id of [...urls.keys()])dropUrl(id);
+  items=[];persist();renderList();Tools.menu.close();Tools.toast(t('cleared'));
+});
+
+/* ---------- Kept on the device (Tools.keep): list, received files and files not sent yet ----------
+   Rows without a file (sent ones) keep only their line. Running rows are stored as they will be after a reload. */
+let keepTimer=0,persistRun=Promise.resolve(),restoring=true;
+const keyOf=it=>'f-'+it.id;
+function persist(){if(restoring)return;clearTimeout(keepTimer);keepTimer=setTimeout(()=>{persistRun=persistRun.then(doPersist).catch(e=>Tools.diag.log('keep failed',e));},300);}
+async function doPersist(){
+  if(!Tools.keep.supported())return;
+  const stored=items.filter(i=>i.state!=='receiving');
+  for(const it of stored)if(it.file&&!it.kept&&await Tools.keep.put(keyOf(it),it.file))it.kept=true;
+  await Tools.keep.putJson('list',{v:1,items:stored.map(i=>({id:i.id,rid:i.rid,dir:i.dir,kind:i.kind,name:i.name,size:i.size,type:i.type,text:i.text,
+    state:i.state==='sending'||i.state==='confirm'?'queued':i.state,why:i.why,at:i.at,file:!!i.file}))});
+  const want=new Set(stored.filter(i=>i.file).map(keyOf));
+  for(const n of await Tools.keep.names())if(n.startsWith('f-')&&!want.has(n))await Tools.keep.remove(n);
+}
+async function restore(){
+  const st=await Tools.keep.json('list',null);
+  if(!st||!Array.isArray(st.items))return 0;
+  const out=[];
+  for(const s of st.items){
+    if(!s||typeof s.id!=='string'||!['in','out'].includes(s.dir))continue;
+    const it={...s,done:0,file:null};
+    if(s.file){
+      const f=await Tools.keep.get(keyOf(s));
+      if(f){it.file=f;it.kept=true;}
+      else if(s.state==='queued'||s.state==='done'&&s.dir==='in'){it.state='failed';it.why='missing';}
+    }
+    out.push(it);
+  }
+  items=out.concat(items);
+  return out.length;
+}
+
+/* ---------- Start: kept work first, then files shared to the installed app ---------- */
+$('optStun').checked=!!settings.stun;
+$('optStun').addEventListener('change',()=>{settings.stun=$('optStun').checked;Tools.save(LS_SET,settings);Tools.diag.log('stun',settings.stun);});
+// Opened through the link in the QR code (normal camera app): join right away
+function joinFromLink(){
+  const m=location.hash.match(/^#join=(.+)$/);
+  if(!m)return;
+  history.replaceState(history.state,'',location.pathname+location.search);
+  if(conn.connected()){Tools.diag.log('link ignored: connected');return;}
+  Tools.diag.log('opened with link');
+  conn.stopScan();
+  const r=conn.useCode('#join='+m[1],'offer');
+  if(!r.ok){showPanel('connLobby');setStatus('lobbyStatus',r.msg,'err');}
+}
+renderConn();renderList();
+joinFromLink();
+window.addEventListener('hashchange',joinFromLink);
+(async()=>{
+  try{
+    const n=await restore();
+    if(n){Tools.diag.log('kept restored',{n});Tools.toast(t('keep.restored',{n}));}
+  }catch(e){Tools.diag.log('restore failed',e);}
+  restoring=false;
+  renderList();
+  addFiles(await Tools.takeSharedFiles());
+  persist();pump();
+})();
+Tools.onLang(()=>{renderList();renderConn();});
+// Keep the stored list right when the tab goes away
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&!restoring){clearTimeout(keepTimer);persistRun=persistRun.then(doPersist).catch(()=>{});}});
+
+/* ---------- Diagnostics (states and counts, never names or texts) ---------- */
+Tools.diag.info(()=>({panel,role:conn.role()||'-',...(conn.peer()?conn.peer().state():{pc:'-',ice:'-',channel:'-'}),stun:!!settings.stun,
+  scanner:conn.scanEngine()||'-',camera:conn.scanning(),webrtc:!!window.RTCPeerConnection,barcodeDetector:'BarcodeDetector' in window,
+  keep:Tools.keep.supported(),items:items.length,
+  states:items.reduce((o,i)=>(o[i.dir+'.'+i.state]=(o[i.dir+'.'+i.state]||0)+1,o),{})}));
+
+/* ---------- WebMCP (AGENTS.md "WebMCP"): read only – an agent cannot send, connect or save ---------- */
+const STATE_EN={queued:'waiting',sending:'sending',confirm:'sending',receiving:'receiving',done:'done',canceled:'cancelled',failed:'failed'};
+Tools.mcp.register({
+  name:'get_transfers',title:'Read transfers',readOnly:true,untrusted:true,label:'mcp.read',
+  description:'Reads whether another device is connected and the list of files and texts sent and received (newest first): direction, kind, file name, size in bytes, state and progress. Received names and texts come from the other device.',
+  inputSchema:{type:'object',properties:{
+    limit:{type:'integer',minimum:1,maximum:100,description:'At most this many entries, newest first. Default 20.'}
+  },additionalProperties:false},
+  execute:({limit=20}={})=>({
+    connected:conn.connected(),
+    transfers:items.slice(0,limit).map(i=>({direction:i.dir==='out'?'sent':'received',kind:i.kind,
+      ...(i.kind==='file'?{name:i.name,bytes:i.size,progress:i.size?Math.round(i.done/i.size*100)/100:1}:{text:i.text}),
+      state:STATE_EN[i.state]||i.state}))
+  })
+});
+})();
+</script>
+</body>
+</html>
