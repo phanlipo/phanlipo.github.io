@@ -22,7 +22,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can read whether a device is connected and which files and texts were sent or received. It cannot send, connect or save files.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-IVXu/ONkBKQULIEZXl929Z1LGd3/fUhw/NWz5e7Ieoo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-zRMLhfTYmgEFLdqT/+JoEynUPL+EmLC0f0pA//OiCZs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -265,7 +265,7 @@ textarea.code{min-height:84px;word-break:break-all}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 4c29b7ac00ed</p>
+  <p class="footer-version">Version d92afa5f9e46</p>
   <!-- footer:end -->
 </footer>
 
@@ -359,14 +359,29 @@ const byId=id=>items.find(i=>i.id===id);
 const outFiles=new Map(), inFiles=new Map();
 const fileOf=it=>it.dir==='out'?outFiles.get(it.id):inFiles.get(it.id);
 const hasFile=it=>!!it&&(it.dir==='out'?outFiles.has(it.id):inFiles.has(it.id));
-const urls=new Map();   // id → object URL of a picture preview
+// Picture previews: drawn once into a small canvas (no object URL of the file in the page), copied per render
+const THUMB=88, thumbs=new Map();   // id → canvas | 'pending' | 'none'
 function preview(it){
+  const v=thumbs.get(it.id);
+  if(v&&v!=='pending'&&v!=='none'){
+    const c=el('canvas','thumb');c.width=c.height=THUMB;c.setAttribute('aria-hidden','true');
+    c.getContext('2d').drawImage(v,0,0);
+    return c;
+  }
+  if(v)return null;
   const file=fileOf(it);
-  if(!file||!/^image\//.test(it.type)||it.type==='image/heic'||it.type==='image/heif')return '';
-  if(!urls.has(it.id))urls.set(it.id,URL.createObjectURL(file));
-  return urls.get(it.id);
+  if(!file||!/^image\//.test(it.type)||it.type==='image/heic'||it.type==='image/heif'||!('createImageBitmap' in window)){thumbs.set(it.id,'none');return null;}
+  thumbs.set(it.id,'pending');
+  createImageBitmap(file).then(bmp=>{
+    const c=document.createElement('canvas');c.width=c.height=THUMB;
+    const k=Math.max(THUMB/bmp.width,THUMB/bmp.height),w=bmp.width*k,h=bmp.height*k;
+    c.getContext('2d').drawImage(bmp,(THUMB-w)/2,(THUMB-h)/2,w,h);bmp.close();
+    if(thumbs.get(it.id)!=='pending')return;
+    thumbs.set(it.id,c);renderList();
+  }).catch(()=>{if(thumbs.get(it.id)==='pending')thumbs.set(it.id,'none');});
+  return null;
 }
-function dropUrl(id){const u=urls.get(id);if(u){URL.revokeObjectURL(u);urls.delete(id);}}
+const dropThumb=id=>thumbs.delete(id);
 const fmtSize=n=>n<1024?Tools.fmt(n,0)+' B':n<1048576?Tools.fmt(n/1024,n<10240?1:0)+' KB':n<1073741824?Tools.fmt(n/1048576,n<10485760?1:0)+' MB':Tools.fmt(n/1073741824,1)+' GB';
 const safeName=s=>String(s||'').replace(/[\u0000-\u001f\u007f/\\]/g,'_').trim().slice(0,200)||'datei';
 const safeType=s=>/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(s||'')&&String(s).length<=100?String(s).toLowerCase():'';
@@ -491,7 +506,7 @@ function onMessage(m){
     case 'end':finish(m.id);break;
     case 'got':{
       const it=items.find(i=>i.dir==='out'&&i.id===m.id);
-      if(it&&it.state==='confirm'){it.state='done';outFiles.delete(it.id);dropUrl(it.id);persist();renderList();Tools.diag.log('file confirmed',{size:it.size});}
+      if(it&&it.state==='confirm'){it.state='done';outFiles.delete(it.id);dropThumb(it.id);persist();renderList();Tools.diag.log('file confirmed',{size:it.size});}
       break;
     }
     case 'cancel':{
@@ -590,8 +605,8 @@ function row(it){
   const active=it.state==='sending'||it.state==='receiving'||it.state==='confirm';
   const label=it.kind==='file'?it.name:t('textItem');
   const li=el('li');li.dataset.id=it.id;
-  const img=it.kind==='file'&&hasFile(it)?preview(it):'';
-  if(img){const i=el('img','thumb');i.src=img;i.alt='';li.append(i);}
+  const img=it.kind==='file'&&hasFile(it)?preview(it):null;
+  if(img)li.append(img);
   else li.insertAdjacentHTML('beforeend',Tools.icon(it.dir==='out'?'arrow-up':'arrow-down','dir '+(it.dir==='out'?'out':'in')));
   const box=el('div','item');
   if(it.kind==='text')box.append(el('span','text',it.text));
@@ -612,7 +627,7 @@ function renderList(){
   $('empty').hidden=items.length>0;
   $('list').hidden=!items.length;
   $('list').replaceChildren(...items.map(row));
-  for(const id of [...urls.keys()])if(!hasFile(byId(id)))dropUrl(id);
+  for(const id of [...thumbs.keys()])if(!hasFile(byId(id)))dropThumb(id);
 }
 // Progress: only the bar and the line of that row, at most every 150 ms (the last value always follows)
 let lastProgress=0,progressTimer=0;
@@ -639,7 +654,7 @@ $('list').addEventListener('click',async e=>{
   else if(act==='cancel'){if(it.dir==='out')cancelOut(it);else cancelIn(it);}
   else if(act==='remove'){
     const at=items.indexOf(it);
-    items.splice(at,1);dropUrl(it.id);persist();renderList();
+    items.splice(at,1);persist();renderList();
     Tools.undo(t('removed'),()=>{items.splice(Math.min(at,items.length),0,it);it.kept=false;persist();renderList();});
   }
 });
@@ -648,7 +663,7 @@ $('btnClear').addEventListener('click',async()=>{
   if(!await Tools.confirm(t('clearQ',{n:items.length}),{action:'delete'}))return;
   if(incoming){send({t:'cancel',id:incoming.it.rid});incoming=null;}
   if(sending){send({t:'cancel',id:sending.id});sending=null;}
-  for(const id of [...urls.keys()])dropUrl(id);
+  thumbs.clear();
   items=[];outFiles.clear();inFiles.clear();persist();renderList();Tools.menu.close();Tools.toast(t('cleared'));
 });
 

@@ -153,12 +153,12 @@ test('waiting files and texts are kept over a reload; remove with undo; clear li
   // Names and texts are shown as text, never as HTML
   await page.setInputFiles('#fileIn', { name: '<img src=x onerror=alert(1)>.txt', mimeType: 'text/plain', buffer: Buffer.from('x') });
   await expect(row(page, '<img src=x onerror=alert(1)>.txt')).toHaveCount(1);
-  await expect(page.locator('#list img:not(.thumb)')).toHaveCount(0);
+  await expect(page.locator('#list img')).toHaveCount(0);
   await row(page, '<img src=x onerror=alert(1)>.txt').getByRole('button', { name: 'Abbrechen: <img src=x onerror=alert(1)>.txt' }).click();
   await row(page, '<img src=x onerror=alert(1)>.txt').getByRole('button', { name: 'Aus der Liste entfernen: <img src=x onerror=alert(1)>.txt' }).click();
   await expect(page.locator('#list li')).toHaveCount(2);
   // Pictures get a preview
-  await expect(row(page, 'foto.png').locator('img.thumb')).toHaveAttribute('src', /^blob:/);
+  await expect(row(page, 'foto.png').locator('canvas.thumb')).toBeVisible();
   await expect.poll(() => keptRows(page)).toBe(2);
   await page.reload();
   await expect(page.locator('#toast')).toHaveText('2 Einträge vom letzten Mal wieder da.');
