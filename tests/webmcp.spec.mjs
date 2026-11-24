@@ -4528,6 +4528,30 @@ test.describe('pinball tools', () => {
   });
 });
 
+test.describe('marble-maze tools', () => {
+  test('get_state, choose_level only among unlocked levels and not while playing, start_level', async ({ page }) => {
+    await page.clock.install({ time: 0 });
+    await page.addInitScript(() => localStorage.setItem('marble-maze.settings.v1', JSON.stringify({ control: 'touch', sound: false, fullscreen: false, done: 2, level: 1, best: { 1: 12.3 } })));
+    await open(page, '/marble-maze/');
+    let r = await call(page, 'marble_maze_get_state', {});
+    expect(r).toEqual({ ok: true, result: { phase: 'idle', level: 1, levels: 30, unlocked: 3, time_seconds: null, falls: null, control: 'finger',
+      best_times_seconds: { 1: 12.3, 2: null, 3: null } } });
+    r = await call(page, 'marble_maze_choose_level', { level: 3 });
+    expect(r.result).toMatchObject({ phase: 'idle', level: 3 });
+    await expect(page.locator('#lvLabel')).toHaveText('Level 3 von 30');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Level gewählt');
+    expect(await call(page, 'marble_maze_choose_level', { level: 4 })).toMatchObject({ ok: false, error: 'Level 4 is locked; levels 1-3 are unlocked.' });
+    expect(await call(page, 'marble_maze_choose_level', { level: 31 })).toMatchObject({ ok: false });
+    expect(await call(page, 'marble_maze_choose_level', {})).toMatchObject({ ok: false });
+    r = await call(page, 'marble_maze_start_level', {});
+    expect(r.result).toMatchObject({ phase: 'play', level: 3, time_seconds: 0, falls: 0 });
+    await expect(page.locator('#panel')).toBeHidden();
+    await expect(page.locator('#hudLevel')).toHaveText('Level 3');
+    expect(await call(page, 'marble_maze_choose_level', { level: 1 })).toMatchObject({ ok: false });
+    expect(JSON.parse(await page.evaluate(() => localStorage.getItem('marble-maze.settings.v1')))).toMatchObject({ level: 3, done: 2 });
+  });
+});
+
 test.describe('table-tennis tools', () => {
   test('get_state, set_game and new_game; a running game keeps its settings', async ({ page }) => {
     await page.clock.install({ time: 0 });
