@@ -109,6 +109,82 @@
     return NaN;
   }
 
+  /* ---------- The Moon: Meeus, Astronomical Algorithms, ch. 47, the larger periodic terms (about 0.1° accurate).
+     Each term: multiples of D, M, M', F and the coefficient (longitude/latitude 1e-6 °, distance 1e-3 km). */
+  const MOON_LR = [ // D, M, M', F, Σl, Σr
+    [0, 0, 1, 0, 6288774, -20905355], [2, 0, -1, 0, 1274027, -3699111], [2, 0, 0, 0, 658314, -2955968],
+    [0, 0, 2, 0, 213618, -569925], [0, 1, 0, 0, -185116, 48888], [0, 0, 0, 2, -114332, -3149],
+    [2, 0, -2, 0, 58793, 246158], [2, -1, -1, 0, 57066, -152138], [2, 0, 1, 0, 53322, -170733],
+    [2, -1, 0, 0, 45758, -204586], [0, 1, -1, 0, -40923, -129620], [1, 0, 0, 0, -34720, 108743],
+    [0, 1, 1, 0, -30383, 104755], [2, 0, 0, -2, 15327, 10321], [0, 0, 1, 2, -12528, 0],
+    [0, 0, 1, -2, 10980, 79661], [4, 0, -1, 0, 10675, -34782], [0, 0, 3, 0, 10034, -23210],
+    [4, 0, -2, 0, 8548, -21636], [2, 1, -1, 0, -7888, 24208], [2, 1, 0, 0, -6766, 30824],
+    [1, 0, -1, 0, -5163, -8379], [1, 1, 0, 0, 4987, -16675], [2, -1, 1, 0, 4036, -12831],
+  ];
+  const MOON_B = [ // D, M, M', F, Σb
+    [0, 0, 0, 1, 5128122], [0, 0, 1, 1, 280602], [0, 0, 1, -1, 277693], [2, 0, 0, -1, 173237],
+    [2, 0, -1, 1, 55413], [2, 0, -1, -1, 46271], [2, 0, 0, 1, 32573], [0, 0, 2, 1, 17198],
+    [2, 0, 1, -1, 9266], [0, 0, 2, -1, 8822], [2, -1, 0, -1, 8216], [2, 0, -2, -1, 4324], [2, 0, 1, 1, 4200],
+  ];
+  const AU_KM = 149597870.7, EARTH_RADIUS_KM = 6378.14;
+  /** Geocentric ecliptic longitude/latitude (J2000, like the planets) and distance (km) of the Moon */
+  function moonPosition(time) {
+    const T = centuries(time);
+    const L = 218.3164477 + 481267.88123421 * T, D = (297.8501921 + 445267.1114034 * T) * DEG;
+    const M = (357.5291092 + 35999.0502909 * T) * DEG, Mp = (134.9633964 + 477198.8675055 * T) * DEG;
+    const F = (93.2720950 + 483202.0175233 * T) * DEG, Ecc = 1 - 0.002516 * T;
+    let l = 0, r = 0, b = 0;
+    for (const [d, m, mp, f, cl, cr] of MOON_LR) {
+      const a = d * D + m * M + mp * Mp + f * F, e = m ? Ecc ** Math.abs(m) : 1;
+      l += cl * e * Math.sin(a); r += cr * e * Math.cos(a);
+    }
+    for (const [d, m, mp, f, cb] of MOON_B) b += cb * (m ? Ecc : 1) * Math.sin(d * D + m * M + mp * Mp + f * F);
+    // Meeus gives the equinox of date; back to J2000 so the rest of the pipeline treats it like the planets
+    return { lon: wrap360(L + l / 1e6 - 1.396971 * T), lat: b / 1e6, km: 385000.56 + r / 1000 };
+  }
+  const MOON_PHASES = ['newMoon', 'firstQuarter', 'fullMoon', 'lastQuarter'];
+  /** Phase of the Moon from its angle east of the Sun (0–360°): name and growing/waning */
+  function moonPhaseName(age) {
+    const a = wrap360(age);
+    if (a < 6.5 || a >= 353.5) return 'newMoon';
+    if (a < 83.5) return 'waxingCrescent';
+    if (a < 96.5) return 'firstQuarter';
+    if (a < 173.5) return 'waxingGibbous';
+    if (a < 186.5) return 'fullMoon';
+    if (a < 263.5) return 'waningGibbous';
+    if (a < 276.5) return 'lastQuarter';
+    return 'waningCrescent';
+  }
+
+  /* ---------- Jupiter's four large moons: Meeus ch. 44, low-accuracy method (good to a few hundredths of
+     Jupiter's radius). x, y in Jupiter radii as seen from the Earth: x positive towards the west, y towards
+     the north. behind: the moon is on the far side of Jupiter. */
+  const GALILEAN = ['io', 'europa', 'ganymede', 'callisto'];
+  function jupiterMoons(time) {
+    const d = time / 86400000 + 2440587.5 - 2451545.0;
+    const V = (172.74 + 0.00111588 * d) * DEG, M = (357.529 + 0.9856003 * d) * DEG;
+    const N = (20.020 + 0.0830853 * d + 0.329 * Math.sin(V)) * DEG;
+    const J = 66.115 + 0.9025179 * d - 0.329 * Math.sin(V);
+    const A = 1.915 * Math.sin(M) + 0.020 * Math.sin(2 * M), B = 5.555 * Math.sin(N) + 0.168 * Math.sin(2 * N);
+    const K = (J + A - B) * DEG;
+    const R = 1.00014 - 0.01671 * Math.cos(M) - 0.00014 * Math.cos(2 * M);
+    const r = 5.20872 - 0.25208 * Math.cos(N) - 0.00611 * Math.cos(2 * N);
+    const delta = Math.sqrt(r * r + R * R - 2 * r * R * Math.cos(K));
+    const psi = Math.asin(R / delta * Math.sin(K)) / DEG;
+    const t = d - delta / 173, base = psi - B;
+    const u = [163.8069 + 203.4058646 * t, 358.4140 + 101.2916335 * t, 5.7176 + 50.2345180 * t, 224.8092 + 21.4879800 * t].map(x => x + base);
+    const G = (331.18 + 50.310482 * t) * DEG, H = (87.45 + 21.569231 * t) * DEG;
+    const c1 = 0.473 * Math.sin(2 * (u[0] - u[1]) * DEG), c2 = 1.065 * Math.sin(2 * (u[1] - u[2]) * DEG);
+    const c3 = 0.165 * Math.sin(G), c4 = 0.843 * Math.sin(H);
+    const rr = [5.9057 - 0.0244 * Math.cos(2 * (u[0] - u[1]) * DEG), 9.3966 - 0.0882 * Math.cos(2 * (u[1] - u[2]) * DEG),
+      14.9883 - 0.0216 * Math.cos(G), 26.3627 - 0.1939 * Math.cos(H)];
+    const uu = [u[0] + c1, u[1] + c2, u[2] + c3, u[3] + c4].map(x => x * DEG);
+    const De = 3.12 * Math.sin((J + 42.8) * DEG) * DEG;
+    return GALILEAN.map((name, k) => ({
+      name, x: rr[k] * Math.sin(uu[k]), y: -rr[k] * Math.cos(uu[k]) * Math.sin(De), behind: Math.cos(uu[k]) < 0,
+    }));
+  }
+
   /** Everything about a planet (or the Sun) seen from the Earth's centre at a time:
       lon/lat (geocentric ecliptic J2000), ra/dec (of date), r (from Sun), delta (from Earth),
       elongation (angle to the Sun), side ('east' = evening sky, 'west' = morning sky), phase angle,
@@ -116,6 +192,20 @@
   function geo(body, time) {
     const T = centuries(time);
     const earth = helio('earth', time);
+    if (body === 'moon') {
+      const m = moonPosition(time), delta = m.km / AU_KM, b = m.lat * DEG, l = m.lon * DEG;
+      const sun = geo('sun', time), age = wrap360(m.lon - sun.lon);
+      const cosE = Math.cos(b) * Math.cos(l - sun.lon * DEG);
+      const elongation = Math.acos(Math.max(-1, Math.min(1, cosE))) / DEG;
+      const phaseAngle = Math.atan2(sun.delta * Math.sin(elongation * DEG), delta - sun.delta * Math.cos(elongation * DEG)) / DEG;
+      const ia = Math.abs(phaseAngle);
+      return {
+        body, lon: m.lon, lat: m.lat, r: sun.delta, delta, km: m.km, ...toEquatorial(m.lon, m.lat, T),
+        sunDistance: sun.delta, elongation, side: age < 180 ? 'east' : 'west', age, phase: moonPhaseName(age),
+        phaseAngle: ia, illuminated: (1 + Math.cos(ia * DEG)) / 2, parallax: Math.asin(EARTH_RADIUS_KM / m.km) / DEG,
+        mag: -12.73 + 0.026 * ia + 4e-9 * ia ** 4,
+      };
+    }
     if (body === 'sun') {
       const x = -earth.x, y = -earth.y, z = -earth.z, delta = earth.r;
       const lon = wrap360(Math.atan2(y, x) / DEG), lat = Math.asin(z / delta) / DEG;
@@ -168,7 +258,8 @@
 
   /** Rising and setting within [from, to] (ms): { rise, set } as times or null; also always up/down */
   function riseSet(body, from, to, lat, lon) {
-    const h0 = H0[body] ?? -0.567;
+    // The Moon: its radius and its parallax (it is seen from the surface, not the Earth's centre)
+    const h0 = body === 'moon' ? 0.7275 * geo('moon', from).parallax - 0.567 : H0[body] ?? -0.567;
     const f = t => altitude(body, t, lat, lon).alt - h0;
     let rise = null, set = null, t0 = from, v0 = f(from), anyUp = v0 > 0;
     for (let t1 = from + STEP; t0 < to; t1 = Math.min(to, t1 + STEP)) {
@@ -269,6 +360,7 @@
       'greatestElongation' (with side and elongation), 'greatestBrilliancy' (Venus, with mag) */
   function events(body, from, to) {
     from = clampTime(from); to = clampTime(to);
+    if (body === 'moon') return moonPhases(from, to);
     const out = [];
     const inner = INNER.has(body);
     const conj = t => diffLon(body, t), opp = t => wrap180(diffLon(body, t) - 180);
@@ -304,7 +396,23 @@
     return out.sort((a, b) => a.time - b.time);
   }
 
+  /** Main phases of the Moon between two times: { type: 'newMoon'|'firstQuarter'|'fullMoon'|'lastQuarter', time } */
+  function moonPhases(from, to) {
+    const out = [], age = t => geo('moon', t).age, step = DAY / 4;
+    let a0 = age(from);
+    for (let t = from + step; t <= to; t += step) {
+      const a1 = age(t);
+      for (let k = 0; k < 4; k++) {
+        const target = k * 90, d0 = wrap180(a0 - target), d1 = wrap180(a1 - target);
+        if (d0 < 0 && d1 >= 0 && d1 - d0 < 90) out.push({ type: MOON_PHASES[k], time: refineCrossing(x => wrap180(age(x) - target), t - step, t) });
+      }
+      a0 = a1;
+    }
+    return out.sort((a, b) => a.time - b.time);
+  }
+
   root.PlanetEphemeris = {
+    GALILEAN, moonPosition, moonPhaseName, jupiterMoons,
     PLANETS, BODIES, INNER, MIN_YEAR, MAX_YEAR, MIN_TIME, MAX_TIME, DARK, MIN_ALT, NAKED_EYE,
     centuries, clampTime, elements, helio, orbit, geo, horizon, altitude, riseSet, nightAround, visibility, events,
   };

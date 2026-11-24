@@ -73,6 +73,50 @@ test.describe('ephemeris (Kepler orbits)', () => {
   });
 });
 
+test.describe('ephemeris (Moon and Jupiter’s moons)', () => {
+  test('phases of the Moon on the published times', () => {
+    // USNO: full moon 3 Jan 2026 10:03, new moon 18 Jan 2026 19:52, full moon (total eclipse) 3 Mar 2026 11:38 UTC
+    const phases = E.events('moon', utc(2026, 0, 1), utc(2026, 2, 10));
+    for (const [type, when] of [['fullMoon', utc(2026, 0, 3, 10, 3)], ['newMoon', utc(2026, 0, 18, 19, 52)], ['fullMoon', utc(2026, 2, 3, 11, 38)]]) {
+      const p = phases.find(e => e.type === type && Math.abs(e.time - when) < DAY);
+      expect(p, `${type} ${new Date(when).toISOString()}`).toBeTruthy();
+      expect(Math.abs(p.time - when) / 60000).toBeLessThan(10);
+    }
+    // Phases follow each other in order, a synodic month (29.53 days) from new moon to new moon
+    expect(phases.map(p => p.type).slice(0, 4)).toEqual(['fullMoon', 'lastQuarter', 'newMoon', 'firstQuarter']);
+    const news = phases.filter(p => p.type === 'newMoon');
+    expect((news[1].time - news[0].time) / DAY).toBeCloseTo(29.5, 0);
+    const full = E.geo('moon', utc(2026, 2, 3, 11, 38));
+    expect(full.phase).toBe('fullMoon');
+    expect(full.illuminated).toBeGreaterThan(0.99);
+  });
+
+  test('distance of the Moon between perigee and apogee', () => {
+    let min = Infinity, max = 0;
+    for (let t = utc(2026, 0, 1); t < utc(2027, 0, 1); t += DAY / 4) { const km = E.geo('moon', t).km; min = Math.min(min, km); max = Math.max(max, km); }
+    expect(min).toBeGreaterThan(356000);
+    expect(min).toBeLessThan(358500);
+    expect(max).toBeGreaterThan(405000);
+    expect(max).toBeLessThan(407000);
+  });
+
+  test('Jupiter’s moons stay within their orbits and repeat with their synodic periods', () => {
+    const orbit = [5.9, 9.4, 15.0, 26.4], period = [1.769861, 3.554095, 7.166389, 16.753553];
+    const t0 = utc(2026, 0, 10);
+    const a = E.jupiterMoons(t0);
+    expect(a.map(m => m.name)).toEqual(['io', 'europa', 'ganymede', 'callisto']);
+    a.forEach((m, k) => {
+      let widest = 0;
+      for (let i = 0; i < 100; i++) widest = Math.max(widest, Math.abs(E.jupiterMoons(t0 + i * period[k] / 100 * DAY)[k].x));
+      expect(widest).toBeGreaterThan(orbit[k] - 0.3);
+      expect(widest).toBeLessThan(orbit[k] + 0.3);
+      const again = E.jupiterMoons(t0 + period[k] * DAY)[k];
+      // Seen from the moving Earth the period shifts a little (most near opposition, as on this date)
+      expect(Math.abs(again.x - m.x)).toBeLessThan(0.07 * orbit[k]);
+    });
+  });
+});
+
 test.describe('app', () => {
   test.use({ timezoneId: 'Europe/Berlin' });
   const setWhen = async (page, v) => { await page.fill('#when', v); await page.dispatchEvent('#when', 'change'); };
@@ -184,6 +228,32 @@ test.describe('app', () => {
     const diag = await page.evaluate(() => window.Tools.diag.text());
     expect(diag).not.toContain('48.1');
     expect(diag).not.toContain('11.6');
+  });
+
+  test('the Moon: phase, why, next phases; Jupiter’s moons as in binoculars', async ({ page }) => {
+    await setWhen(page, '2026-11-24T20:00');
+    await expect(page.locator('#sky li').first()).toContainText('Mond');
+    await page.click('#sky [data-planet="moon"]');
+    await expect(page.locator('#pName')).toHaveText('Mond');
+    await expect(page.locator('#pVis')).toHaveText('Die ganze Nacht');
+    await expect(page.locator('#sIll')).toHaveText('100 %');
+    await expect(page.locator('#sDistL')).toHaveText('Entfernung (Tsd. km)');
+    await expect(page.locator('#pWhy li').first()).toContainText('Vollmond: Der Mond steht der Sonne gegenüber');
+    await expect(page.locator('#pEvents button').first()).toContainText('Letztes Viertel');
+    await expect(page.locator('#jMoons')).toBeHidden();
+    // A week later: waning, in the morning sky, lit on the left
+    await page.click('#btnFwd');
+    await expect(page.locator('#pWhy li').first()).toContainText('westlich der Sonne');
+    await expect(page.locator('#pWhy li').first()).toContainText('linken Seite');
+    await page.click('#sky [data-planet="jupiter"]');
+    await expect(page.locator('#sDistL')).toHaveText('Entfernung (AE)');
+    await expect(page.locator('#jMoons')).toBeVisible();
+    const shown = await page.locator('#jMoonsSvg circle.m').count();
+    const hidden = await page.evaluate(() => window.PlanetEphemeris.jupiterMoons(new Date(2026, 11, 1, 20).getTime())
+      .filter(m => m.behind && Math.hypot(m.x, m.y) < 1).length);
+    expect(shown + hidden).toBe(4);
+    await expect(page.locator('#jMoonsCap')).toContainText('I = Io, E = Europa, G = Ganymed, K = Kallisto');
+    await expect(page.locator('#jMoonsSvg')).toHaveAttribute('aria-label', /^Jupitermonde: /);
   });
 
   test('switching the language re-renders all texts written by the script', async ({ page }) => {
