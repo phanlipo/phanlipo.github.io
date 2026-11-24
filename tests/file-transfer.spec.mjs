@@ -75,12 +75,11 @@ test('two devices: waiting files start after connecting, arrive unchanged; text 
   // Sent rows have no download, received ones do
   await expect(row(host, 'video.bin').getByRole('button', { name: /Herunterladen/ })).toHaveCount(0);
 
-  // The other way round: a link as text, shown as a link and copyable
+  // The other way round: a link as text (shown as text, never as HTML or link) and copyable
   await guest.fill('#textIn', 'https://example.org/seite?a=1');
   await guest.click('#btnSendText');
-  const link = host.locator('#list a.text');
-  await expect(link).toHaveText('https://example.org/seite?a=1');
-  await expect(link).toHaveAttribute('rel', /noopener/);
+  await expect(host.locator('#list .text')).toHaveText('https://example.org/seite?a=1');
+  await expect(host.locator('#list a')).toHaveCount(0);
   await row(host, 'https://example.org').getByRole('button', { name: 'Text kopieren' }).click();
   expect(await clipboardText(host)).toBe('https://example.org/seite?a=1');
   await expect(guest.locator('#textIn')).toHaveValue('');
