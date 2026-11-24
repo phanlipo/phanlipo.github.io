@@ -52,11 +52,15 @@ test('opens a Python file: view mode, highlighting, line numbers, language from 
   await expect(hl(page).locator('.hljs-keyword').first()).toHaveText('import');
   await expect(hl(page).locator('.hljs-comment')).toHaveText('# Gruß');
   await expect(hl(page).locator('.hljs-string')).toHaveText('"Hallo "');
-  // 5 lines and the empty one after the last line break, like the textarea shows it
-  await expect(page.locator('#gutter')).toHaveText('1\n2\n3\n4\n5\n6\n');
+  // 5 lines and the empty one after the last line break, like the textarea shows it – one block each, numbered
+  await expect(hl(page).locator('.ln')).toHaveCount(6);
+  expect(await hl(page).locator('.ln').first().evaluate(el => getComputedStyle(el, '::before').content)).toBe('counter(line)');
   await expect(tool(page, 'lang')).toHaveAttribute('aria-label', 'Sprache & Format: Python');
   // The coloured copy has exactly the same text as the textarea
-  expect(await hl(page).textContent()).toBe(await code(page).inputValue() + '\n');
+  expect((await hl(page).locator('.ln').allTextContents()).join('\n')).toBe(await code(page).inputValue());
+  // A string spanning a line break keeps its colour on both lines
+  await openFile(page, 'b.py', 'x = """eins\nzwei"""\n');
+  await expect(hl(page).locator('.ln').nth(1).locator('.hljs-string')).toHaveText('zwei"""');
   await page.click('#modes [data-m="edit"]');
   await expect(code(page)).toHaveJSProperty('readOnly', false);
   await expect(code(page)).toBeFocused();
@@ -83,9 +87,23 @@ test('the coloured text lies exactly under the textarea (no own scrolling, same 
     expect(m.ownScrollX, `wrap ${wrap}: textarea scrolls itself`).toBeLessThanOrEqual(1);
     expect(m.page).toBeLessThanOrEqual(1280);
   }
-  // Wrapping hides the line numbers (they would not match the wrapped lines)
-  await expect(page.locator('#gutter')).toBeHidden();
   await expect(tool(page, 'wrap')).toHaveAttribute('aria-pressed', 'true');
+  // Line numbers stay with wrapping: the long line 2 takes several rows, its number stands at its first row and
+  // line 3 starts right below it – in the copy and (same size, same text) in the textarea
+  const lines = await page.evaluate(() => {
+    const ls = [...document.querySelectorAll('#hlCode .ln')].slice(0, 3).map(l => l.getBoundingClientRect());
+    const lh = parseFloat(getComputedStyle(document.getElementById('hl')).lineHeight);
+    const ln = document.querySelector('#hlCode .ln');
+    return { rows: ls.map(r => Math.round(r.height / lh)), gap: Math.abs(ls[2].top - ls[1].bottom),
+      number: getComputedStyle(ln, '::before').content, numberShown: getComputedStyle(ln, '::before').display,
+      pad: parseFloat(getComputedStyle(document.getElementById('code')).paddingLeft) };
+  });
+  expect(lines.rows[0]).toBe(1);
+  expect(lines.rows[1]).toBeGreaterThan(2);
+  expect(lines.rows[2]).toBe(1);
+  expect(lines.gap).toBeLessThan(0.5);
+  expect(lines.number).toBe('counter(line)');
+  expect(lines.pad).toBeGreaterThan(30);     // room for the numbers in front of the text
 });
 
 test('typing in edit mode: colours follow every key, Tab/Shift+Tab, Enter keeps the indentation, undo', async ({ page }) => {
@@ -297,12 +315,11 @@ test('go to line scrolls the line into view; copy copies the whole file', async 
   const pos = await code(page).evaluate(el => el.selectionStart);
   expect(text.slice(pos, pos + 9)).toBe('Zeile 250');
   // The line is inside the visible part of the scroll box
-  const vis = await page.evaluate(p => {
-    const s = document.getElementById('scroller'), r = document.createRange(), t = document.getElementById('hlCode').firstChild;
-    r.setStart(t, p); r.setEnd(t, p + 1);
-    const a = r.getBoundingClientRect(), b = s.getBoundingClientRect();
-    return a.top >= b.top && a.bottom <= b.bottom;
-  }, pos);
+  const vis = await page.evaluate(() => {
+    const s = document.getElementById('scroller'), l = document.querySelectorAll('#hlCode .ln')[249];
+    const a = l.getBoundingClientRect(), b = s.getBoundingClientRect();
+    return l.textContent === 'Zeile 250' && a.top >= b.top && a.bottom <= b.bottom;
+  });
   expect(vis).toBe(true);
   await tool(page, 'copy').click();
   await expect(page.locator('#toast')).toHaveText('Kopiert');
@@ -353,7 +370,7 @@ test('files in the menu: open, delete with undo, new file; settings stay', async
   await page.reload();
   await expect(page.locator('body')).toHaveClass(/no-lines/);
   await expect(page.locator('body')).toHaveClass(/font-xl/);
-  expect(await code(page).evaluate(el => [getComputedStyle(el).fontSize, getComputedStyle(el).tabSize])).toEqual(['21px', '2']);
+  expect(await code(page).evaluate(el => [getComputedStyle(el).fontSize, getComputedStyle(el).tabSize, getComputedStyle(el).paddingLeft])).toEqual(['21px', '2', '12px']);
   // Deleting every file brings back the start screen
   await openMenu(page);
   for (let i = 0; i < 3 && await page.locator('#files [data-act="delete"]').count(); i++) await page.locator('#files [data-act="delete"]').first().click();
