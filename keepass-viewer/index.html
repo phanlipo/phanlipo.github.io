@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>KeePass-Betrachter</title>
+<meta name="description" content="KeePass-Datenbank (.kdbx) im Browser öffnen, Einträge suchen und Passwörter kopieren – nur lesen, alles bleibt auf dem Gerät.">
+<meta name="tool:tags" content="Alltag, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, Kopieren, KI-Agent">
+<meta name="tool:webmcp" content="find_entries, show_entry, lock">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann im entsperrten Tresor nach Einträgen suchen (er bekommt nur Titel, Gruppe und Adresse), einen Eintrag anzeigen und den Tresor sperren. Passwörter, Benutzernamen, Notizen und Einmalcodes bekommt er nie, und entsperren kann er nicht.">
+<meta name="tool:webmcp-help-en" content="An AI agent can search the unlocked vault for entries (it only gets title, group and address), show an entry and lock the vault. It never gets passwords, user names, notes or one-time codes, and it cannot unlock.">
+<meta name="tool:icon" content="shield-lock">
+<meta name="tool:color" content="#2e6b4b">
+<meta name="tool:short-name" content="KeePass">
+<meta name="tool:title-en" content="KeePass Viewer">
+<meta name="tool:description-en" content="Open a KeePass database (.kdbx) in the browser, search entries and copy passwords – read only, everything stays on the device.">
+<meta name="tool:short-name-en" content="KeePass">
+<meta name="tool:storage" content="keepass-viewer.">
+<meta name="tool:share-target" content=".kdbx">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-+tEhItkhZmdEpJQ8sRrXNXLK4j5BGoJyvTALTx2W8mk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="KeePass">
+<meta name="theme-color" content="#2e6b4b">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#2e6b4b;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#7fc7a0;--accent-text:#0d1f16}}
+main{max-width:720px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.file-line{display:flex;align-items:center;gap:8px;margin:0 0 12px;min-width:0}
+.file-line .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.pw-wrap{display:flex;gap:6px;align-items:stretch}
+.pw-wrap input{flex:1;min-width:0}
+.key-line{display:flex;align-items:center;gap:6px;min-width:0}
+.key-line .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status{margin:8px 0 0;color:var(--muted);font-size:14px;min-height:1.4em}
+.crumbs{display:flex;align-items:center;gap:6px;min-width:0;margin-block:8px 4px}
+.crumbs h2{margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list-rows .open{display:flex;align-items:center;gap:10px}
+.list-rows .open>.ic{flex:none;color:var(--muted)}
+.list-rows .open>span{flex:1;min-width:0}
+.fields>li{align-items:flex-start}
+.fields .fv{flex:1;min-width:0;padding-block:4px}
+.fields .val{display:block;overflow-wrap:anywhere;white-space:pre-wrap}
+.fields .val.secret{letter-spacing:2px}
+.fields .val a{color:var(--accent)}
+.otp{font-size:22px;font-weight:700;letter-spacing:3px;font-variant-numeric:tabular-nums}
+.otp-left{display:block;font-size:13px;color:var(--muted)}
+.entry-title{margin:0;overflow-wrap:anywhere}
+.entry-path{margin:2px 0 8px;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">KeePass-Betrachter</span></h1>
+  <p class="sub" data-i18n="sub">Passwörter ansehen und kopieren – nur lesen.</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnLock" hidden aria-label="Sperren" title="Sperren" data-i18n-attr="aria-label:lock; title:lock"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#lock"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <!-- Locked: choose a file, then password and optional key file -->
+  <section class="card" id="lockCard" aria-labelledby="h-lock">
+    <h2 id="h-lock" data-i18n="openH">Tresor öffnen</h2>
+    <div id="pickArea">
+      <label class="dropzone" id="dropzone"><input type="file" id="fileIn" class="sr-only">
+        <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-upload"/></svg>
+        <strong data-i18n="pick">KeePass-Datei wählen</strong>
+        <span class="dz-hint" data-i18n="pickHint">Datei mit der Endung .kdbx – oder hierher ziehen</span>
+      </label>
+    </div>
+    <form id="unlockForm" hidden autocomplete="off">
+      <p class="file-line"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#database"/></svg><span class="name" id="fileName"></span>
+        <button type="button" class="btn" id="btnOther"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#folder-open"/></svg><span data-i18n="other">Andere Datei</span></button></p>
+      <div class="form-field">
+        <label for="pw" data-i18n="pw">Master-Passwort</label>
+        <div class="pw-wrap">
+          <input type="password" id="pw" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="1000">
+          <button type="button" class="btn icon" id="btnShowPw" aria-pressed="false" aria-label="Passwort zeigen" title="Passwort zeigen" data-i18n-attr="aria-label:showPw; title:showPw"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eye"/></svg></button>
+        </div>
+      </div>
+      <div class="form-field">
+        <span class="label" id="keyLabel" data-i18n="keyFile">Schlüsseldatei (nur falls benutzt)</span>
+        <div class="key-line">
+          <button type="button" class="btn" id="btnKey" aria-describedby="keyLabel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#key"/></svg><span data-i18n="keyPick">Schlüsseldatei wählen</span></button>
+          <span class="name" id="keyName"></span>
+          <button type="button" class="btn icon" id="btnKeyX" hidden aria-label="Schlüsseldatei entfernen" title="Schlüsseldatei entfernen" data-i18n-attr="aria-label:keyRemove; title:keyRemove"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button>
+        </div>
+        <input type="file" id="keyIn" class="sr-only" tabindex="-1" aria-hidden="true">
+      </div>
+      <p class="form-error" id="err" role="alert"></p>
+      <button type="submit" class="btn primary block" id="btnUnlock"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#lock-open"/></svg><span data-i18n="unlock">Entsperren</span></button>
+      <p class="status" id="status" role="status"></p>
+    </form>
+  </section>
+
+  <!-- Unlocked: search, groups and entries -->
+  <section class="card" id="vaultCard" hidden aria-labelledby="h-group">
+    <div class="form-field">
+      <label for="q" data-i18n="search">Suchen</label>
+      <input type="search" id="q" autocomplete="off" spellcheck="false" maxlength="100">
+    </div>
+    <div class="crumbs">
+      <button type="button" class="btn icon" id="btnUp" hidden aria-label="Übergeordnete Gruppe" title="Übergeordnete Gruppe" data-i18n-attr="aria-label:up; title:up"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg></button>
+      <h2 id="h-group"></h2>
+    </div>
+    <ul class="list-rows" id="list"></ul>
+  </section>
+
+  <!-- One entry -->
+  <section class="card" id="entryCard" hidden aria-labelledby="h-entry">
+    <button type="button" class="btn" id="btnBack"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg><span data-i18n="back">Zurück</span></button>
+    <h2 class="entry-title" id="h-entry"></h2>
+    <p class="entry-path" id="entryPath"></p>
+    <ul class="list-rows fields" id="fields"></ul>
+  </section>
+</main>
+
+<details class="card" data-menu data-menu-page data-icon="settings">
+  <summary data-i18n="settings">Einstellungen</summary>
+  <div class="form-field">
+    <span class="label" id="lockAfterL" data-i18n="lockAfter">Automatisch sperren nach</span>
+    <div class="seg" role="group" aria-labelledby="lockAfterL" id="lockAfter">
+      <button type="button" data-min="1" aria-pressed="false"><span data-i18n="min1">1 Min.</span></button>
+      <button type="button" data-min="5" aria-pressed="true"><span data-i18n="min5">5 Min.</span></button>
+      <button type="button" data-min="15" aria-pressed="false"><span data-i18n="min15">15 Min.</span></button>
+    </div>
+  </div>
+  <label class="check"><input type="checkbox" id="optHidden"><span data-i18n="optHidden">Sperren, sobald die App in den Hintergrund geht</span></label>
+  <label class="check"><input type="checkbox" id="optClip"><span data-i18n="optClip">Zwischenablage nach 30 Sekunden leeren</span></label>
+  <label class="check"><input type="checkbox" id="optKeep"><span data-i18n="optKeep">Datenbank-Datei auf diesem Gerät merken (verschlüsselt, ohne Passwort und Schlüsseldatei)</span></label>
+</details>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="btnForget" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="forget">Gemerkte Datei vergessen</span></button>
+</div>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Öffnet eine KeePass-Datenbank (KeePass 2, KeePassXC, KeePassDX, Strongbox, KeePassium …) zum Nachschlagen: Einträge suchen, Passwort, Benutzername und Einmalcode kopieren. Ändern lässt sich hier nichts – die Datei bleibt, wie sie ist.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li>KeePass-Datei (<code>.kdbx</code>) wählen, das Master-Passwort eingeben und, falls die Datenbank eine hat, die Schlüsseldatei wählen. Dann „Entsperren“.</li>
+    <li>Das Kopier-Symbol in der Liste kopiert direkt das Passwort. Ein Tipp auf den Eintrag zeigt alle Felder; jedes lässt sich einzeln kopieren, verborgene mit dem Auge anzeigen.</li>
+    <li>Einmalcodes (TOTP) aus KeePassXC und KeePass 2.47+ werden mit Restzeit angezeigt.</li>
+    <li>Das Schloss oben sperrt sofort. Ohne Bedienung sperrt die App nach der eingestellten Zeit von selbst (Einstellungen im Menü).</li>
+    <li>Der Papierkorb der Datenbank wird nicht angezeigt, Anhänge und ältere Versionen eines Eintrags auch nicht.</li>
+  </ul>
+  <h3>Sicherheit – bitte lesen</h3>
+  <ul>
+    <li>Entschlüsselt wird nur auf diesem Gerät. Datei, Passwort und Inhalte gehen an keinen Server; die App läuft auch offline.</li>
+    <li>Für den Alltag sind eigene KeePass-Apps besser: KeePassDX (Android), KeePassium oder Strongbox (iPhone), KeePassXC (Computer). Sie können Passwörter direkt in Formulare eintragen und laufen nicht im Browser.</li>
+    <li>Diese App teilt sich die Adresse <em>phanlipo.github.io</em> mit vielen anderen Tools. Ein Fehler in einem davon könnte im Prinzip auch diese Seite erreichen. Deshalb hier nur lesen, die Datei nie hier speichern lassen, wenn du das Gerät mit anderen teilst, und nach dem Nachschlagen sperren.</li>
+    <li>Kopierte Passwörter liegen in der Zwischenablage, wo andere Apps sie lesen können. Die App leert sie nach 30 Sekunden – aber nur, wenn sie dann noch im Vordergrund ist; Browser erlauben es sonst nicht. Manche Tastaturen merken sich Kopiertes zusätzlich.</li>
+    <li>Beim Sperren wirft die App die entschlüsselten Daten weg. Ganz aus dem Arbeitsspeicher löschen kann ein Browser sie aber nicht sofort.</li>
+  </ul>
+  <h3>Unterstützt</h3>
+  <ul>
+    <li>KDBX 3.1 und 4 mit AES-256 oder ChaCha20, Schlüsselableitung AES-KDF, Argon2d oder Argon2id; Passwort, Schlüsseldatei (XML, Binär, Hex) oder beides.</li>
+    <li>Nicht: KeePass 1 (<code>.kdb</code>), Twofish-Verschlüsselung, YubiKey/Challenge-Response.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Nur die Einstellungen (sichern und übertragen unter „Daten sichern“). Ist „Datei merken“ an, liegt die verschlüsselte <code>.kdbx</code> im Speicher dieses Browsers, damit beim nächsten Mal nur das Passwort nötig ist. Passwort und Schlüsseldatei werden nie gespeichert. „Gemerkte Datei vergessen“ im Menü entfernt sie.</p>
+  <h3>Wenn es nicht klappt</h3>
+  <ul>
+    <li><strong>Falsches Passwort?</strong> Groß-/Kleinschreibung und Tastaturbelegung prüfen. Wurde die Datenbank mit einer Schlüsseldatei angelegt, muss sie mitgewählt werden.</li>
+    <li><strong>Sehr langsam oder Abbruch auf dem Handy:</strong> Argon2 mit viel Speicher (z. B. 1 GB) kann für den Browser zu viel sein. In KeePass(XC) unter Datenbank-Einstellungen → Verschlüsselung den Speicher verringern.</li>
+    <li>Die Datei muss die aktuelle Version sein: Bei Cloud-Ordnern vor dem Öffnen synchronisieren lassen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Opens a KeePass database (KeePass 2, KeePassXC, KeePassDX, Strongbox, KeePassium …) to look things up: search entries, copy password, user name and one-time code. Nothing can be changed here – the file stays as it is.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li>Choose the KeePass file (<code>.kdbx</code>), enter the master password and, if the database uses one, choose the key file. Then “Unlock”.</li>
+    <li>The copy icon in the list copies the password right away. Tapping the entry shows all fields; each can be copied on its own, hidden ones shown with the eye.</li>
+    <li>One-time codes (TOTP) from KeePassXC and KeePass 2.47+ are shown with the time left.</li>
+    <li>The lock at the top locks at once. Without use, the app locks itself after the time set (settings in the menu).</li>
+    <li>The database’s recycle bin is not shown, nor are attachments and older versions of an entry.</li>
+  </ul>
+  <h3>Security – please read</h3>
+  <ul>
+    <li>Decryption happens only on this device. File, password and contents go to no server; the app also works offline.</li>
+    <li>For everyday use, dedicated KeePass apps are better: KeePassDX (Android), KeePassium or Strongbox (iPhone), KeePassXC (computer). They can fill in passwords directly and do not run in the browser.</li>
+    <li>This app shares the address <em>phanlipo.github.io</em> with many other tools. A bug in one of them could in principle reach this page too. So only read here, do not let the file be kept here if you share the device, and lock after looking something up.</li>
+    <li>Copied passwords sit in the clipboard, where other apps can read them. The app clears it after 30 seconds – but only if it is still in the foreground then; browsers do not allow it otherwise. Some keyboards keep their own copy history.</li>
+    <li>On locking, the app drops the decrypted data. A browser cannot wipe it from memory right away, though.</li>
+  </ul>
+  <h3>Supported</h3>
+  <ul>
+    <li>KDBX 3.1 and 4 with AES-256 or ChaCha20, key derivation AES-KDF, Argon2d or Argon2id; password, key file (XML, binary, hex) or both.</li>
+    <li>Not: KeePass 1 (<code>.kdb</code>), Twofish encryption, YubiKey/challenge-response.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Only the settings (back them up or move them under “Back up data”). With “Keep the file” on, the encrypted <code>.kdbx</code> stays in this browser’s storage, so next time only the password is needed. Password and key file are never stored. “Forget the kept file” in the menu removes it.</p>
+  <h3>If it does not work</h3>
+  <ul>
+    <li><strong>Wrong password?</strong> Check upper/lower case and the keyboard layout. If the database was created with a key file, it has to be chosen too.</li>
+    <li><strong>Very slow or aborted on the phone:</strong> Argon2 with a lot of memory (e.g. 1 GB) can be too much for the browser. Lower the memory in KeePass(XC) under database settings → encryption.</li>
+    <li>The file has to be the current version: let cloud folders sync before opening it.</li>
+  </ul>
+  </div>
+  <!-- files:start -->
+  <div data-lang="de">
+  <h3>Dateien an die App geben</h3>
+  <ul>
+    <li><b>Android:</b> App installieren (☰ → <i>Als App installieren</i>). Dann die Datei in Galerie, Dateien-, Mail- oder Messenger-App <i>teilen</i> und „KeePass“ wählen – das klappt auch offline.</li>
+    <li><b>Windows/Computer:</b> Als installierte App (Chrome oder Edge) steht sie unter <i>Öffnen mit</i> (Rechtsklick auf die Datei); als Standard-App öffnet sie Dateien per Doppelklick. Mit Edge erscheint sie auch im Teilen-Menü von Windows.</li>
+    <li><b>iPhone/iPad:</b> Teilen an Web-Apps und <i>Öffnen mit</i> gibt es dort nicht – die Datei hier in der App auswählen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>Giving files to the app</h3>
+  <ul>
+    <li><b>Android:</b> install the app (☰ → <i>Install as an app</i>). Then <i>share</i> the file from the gallery, files, mail or messenger app and pick “KeePass” – this works offline too.</li>
+    <li><b>Windows/computer:</b> as an installed app (Chrome or Edge) it is listed under <i>Open with</i> (right-click the file); set as default app, it opens files with a double-click. With Edge it also appears in the Windows share menu.</li>
+    <li><b>iPhone/iPad:</b> sharing to web apps and <i>Open with</i> do not exist there – choose the file here in the app.</li>
+  </ul>
+  </div>
+  <!-- files:end -->
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann im entsperrten Tresor nach Einträgen suchen (er bekommt nur Titel, Gruppe und Adresse), einen Eintrag anzeigen und den Tresor sperren. Passwörter, Benutzernamen, Notizen und Einmalcodes bekommt er nie, und entsperren kann er nicht. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can search the unlocked vault for entries (it only gets title, group and address), show an entry and lock the vault. It never gets passwords, user names, notes or one-time codes, and it cannot unlock. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version eb8cc35167a0</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="kdbx.js"></script>
+<script src="totp.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    results:'Treffer: {n}', noResults:'Keine Treffer.', emptyGroup:'Diese Gruppe ist leer.',
+    groupMeta:'{n} Einträge', groupMeta1:'1 Eintrag', copyPw:'Passwort kopieren: {t}', copyField:'{f} kopieren', show:'{f} zeigen', hide:'{f} verbergen',
+    copied:'{f} kopiert', copiedClear:'{f} kopiert – wird in 30 s geleert', copyFail:'Kopieren nicht möglich',
+    f_user:'Benutzername', f_pw:'Passwort', f_url:'Adresse', f_notes:'Notizen', f_otp:'Einmalcode', f_tags:'Tags', f_expires:'Läuft ab',
+    otpLeft:'noch {s} s', expired:'abgelaufen', untitled:'(ohne Titel)', working:'Entschlüssele …', slow:'Entschlüssele … (starke Schlüsselableitung, das dauert etwas)',
+    locked:'Gesperrt', lockedAuto:'Automatisch gesperrt', 'mcp.find':'Einträge gesucht', 'mcp.show':'Eintrag angezeigt', 'mcp.lock':'gesperrt',
+    'err.not-kdbx':'Das ist keine KeePass-Datei (.kdbx).', 'err.kdbx1':'KeePass-1-Dateien (.kdb) werden nicht unterstützt – in KeePass 2 oder KeePassXC importieren und als .kdbx speichern.',
+    'err.version':'Diese KDBX-Version wird nicht unterstützt.', 'err.cipher':'Diese Verschlüsselung (z. B. Twofish) wird nicht unterstützt.',
+    'err.kdf':'Diese Schlüsselableitung wird nicht unterstützt.', 'err.compression':'Die Datei ist komprimiert, aber dieser Browser kann das nicht entpacken.',
+    'err.corrupt':'Die Datei ist beschädigt oder unvollständig.', 'err.wrong-key':'Passwort oder Schlüsseldatei falsch.', 'err.keyfile':'Die Schlüsseldatei ist ungültig.',
+    'err.xml':'Der Inhalt der Datenbank ist nicht lesbar.', 'err.memory':'Zu wenig Speicher für die Schlüsselableitung (Argon2). Siehe Hilfe.',
+    'err.argon2':'Die Schlüsselableitung (Argon2) ist fehlgeschlagen.', 'err.crypto':'Dieser Browser kann nicht entschlüsseln (nur über https möglich).',
+    'err.empty':'Bitte Passwort eingeben oder Schlüsseldatei wählen.', 'err.read':'Die Datei ließ sich nicht lesen.', 'err.other':'Öffnen fehlgeschlagen.',
+    forgotten:'Gemerkte Datei vergessen',
+  },
+  en:{
+    title:'KeePass Viewer', sub:'View and copy passwords – read only.', lock:'Lock', openH:'Open vault', pick:'Choose KeePass file',
+    pickHint:'File ending in .kdbx – or drop it here', other:'Other file', pw:'Master password', showPw:'Show password', hidePw:'Hide password',
+    keyFile:'Key file (only if used)', keyPick:'Choose key file', keyRemove:'Remove key file', unlock:'Unlock', search:'Search',
+    up:'Parent group', back:'Back', settings:'Settings', lockAfter:'Lock automatically after', min1:'1 min', min5:'5 min', min15:'15 min',
+    optHidden:'Lock as soon as the app goes to the background', optClip:'Clear the clipboard after 30 seconds',
+    optKeep:'Keep the database file on this device (encrypted, without password and key file)', forget:'Forget the kept file',
+    results:'Results: {n}', noResults:'No results.', emptyGroup:'This group is empty.',
+    groupMeta:'{n} entries', groupMeta1:'1 entry', copyPw:'Copy password: {t}', copyField:'Copy {f}', show:'Show {f}', hide:'Hide {f}',
+    copied:'{f} copied', copiedClear:'{f} copied – cleared in 30 s', copyFail:'Copying not possible',
+    f_user:'User name', f_pw:'Password', f_url:'Address', f_notes:'Notes', f_otp:'One-time code', f_tags:'Tags', f_expires:'Expires',
+    otpLeft:'{s} s left', expired:'expired', untitled:'(no title)', working:'Decrypting …', slow:'Decrypting … (strong key derivation, this takes a while)',
+    locked:'Locked', lockedAuto:'Locked automatically', 'mcp.find':'searched entries', 'mcp.show':'showed an entry', 'mcp.lock':'locked',
+    'err.not-kdbx':'This is not a KeePass file (.kdbx).', 'err.kdbx1':'KeePass 1 files (.kdb) are not supported – import into KeePass 2 or KeePassXC and save as .kdbx.',
+    'err.version':'This KDBX version is not supported.', 'err.cipher':'This encryption (e.g. Twofish) is not supported.',
+    'err.kdf':'This key derivation is not supported.', 'err.compression':'The file is compressed, but this browser cannot unpack it.',
+    'err.corrupt':'The file is damaged or incomplete.', 'err.wrong-key':'Wrong password or key file.', 'err.keyfile':'The key file is not valid.',
+    'err.xml':'The database contents cannot be read.', 'err.memory':'Not enough memory for the key derivation (Argon2). See help.',
+    'err.argon2':'The key derivation (Argon2) failed.', 'err.crypto':'This browser cannot decrypt (only possible over https).',
+    'err.empty':'Please enter the password or choose a key file.', 'err.read':'The file could not be read.', 'err.other':'Opening failed.',
+    forgotten:'Kept file forgotten',
+  }
+});
+const t=Tools.t, $=Tools.$;
+const LS='keepass-viewer.settings.v1';
+const settings=Object.assign({lockMin:5,lockHidden:false,clearClip:true,keep:true},Tools.load(LS,{}));
+if(![1,5,15].includes(settings.lockMin)) settings.lockMin=5;
+const save=()=>Tools.save(LS,settings);
+const KEEP_KEY='db';
+
+/* ---------- State: the file (encrypted) and, while unlocked, the decrypted database ---------- */
+let file=null;        // { name, bytes } – the .kdbx as chosen, still encrypted
+let keyFile=null;     // { name, bytes } – only in memory, never stored
+let db=null;          // result of KDBX.open while unlocked
+let groupPath=[];     // ids from the root to the group shown
+let entryId=null;     // entry shown, or null
+let busy=false;
+
+/* ---------- Argon2 in a worker (argon2-worker.js); started on first use ---------- */
+let worker=null, jobs=new Map(), jobId=0;
+function argon2(o){
+  if(!worker){
+    worker=new Worker('argon2-worker.js');
+    worker.onmessage=e=>{ const j=jobs.get(e.data.id); if(!j) return; jobs.delete(e.data.id); e.data.error?j.reject(Object.assign(new Error(e.data.error),{code:e.data.error})):j.resolve(e.data.hash); };
+    worker.onerror=e=>{ Tools.diag.log('argon2 worker error',e.message||''); for(const j of jobs.values()) j.reject(Object.assign(new Error('argon2'),{code:'argon2'})); jobs.clear(); worker=null; };
+  }
+  Tools.diag.log('argon2',{type:o.type,memoryKiB:o.memoryKiB,iterations:o.iterations,parallelism:o.parallelism});
+  return new Promise((resolve,reject)=>{ const id=++jobId; jobs.set(id,{resolve,reject}); worker.postMessage({id,...o}); });
+}
+
+/* ---------- Choosing files ---------- */
+async function setFile(f,restored){
+  if(!f) return;
+  let bytes;
+  try{ bytes=new Uint8Array(await f.arrayBuffer()); }catch(e){ Tools.diag.log('read failed',e); showErr('err.read'); return; }
+  let head;
+  try{ head=KDBX.info(bytes); }catch(e){
+    Tools.diag.log('not opened',{code:e.code||'other',size:bytes.length});
+    if(restored){ await Tools.keep.remove(KEEP_KEY); return; }
+    file=null; renderLock(); showErr('err.'+(e.code||'other')); return;
+  }
+  Tools.diag.log('file',{size:bytes.length,restored:!!restored,...head});
+  file={name:f.name||'database.kdbx',bytes};
+  lock(null);
+  renderLock();
+  setTimeout(()=>$('pw').focus(),0);
+}
+$('fileIn').addEventListener('change',e=>{ setFile(e.target.files[0]); e.target.value=''; });
+const dz=$('dropzone');
+dz.addEventListener('dragover',e=>{ e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{ e.preventDefault(); dz.classList.remove('over'); setFile(e.dataTransfer.files[0]); });
+$('btnOther').addEventListener('click',()=>$('fileIn').click());
+$('btnKey').addEventListener('click',()=>$('keyIn').click());
+$('keyIn').addEventListener('change',async e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(!f) return;
+  try{ keyFile={name:f.name,bytes:new Uint8Array(await f.arrayBuffer())}; Tools.diag.log('key file',{size:f.size}); }catch(_){ showErr('err.read'); }
+  renderLock();
+});
+$('btnKeyX').addEventListener('click',()=>{ keyFile=null; renderLock(); $('btnKey').focus(); });
+$('btnShowPw').addEventListener('click',()=>{
+  const b=$('btnShowPw'), on=b.getAttribute('aria-pressed')!=='true';
+  $('pw').type=on?'text':'password'; b.setAttribute('aria-pressed',String(on));
+  b.innerHTML=Tools.icon(on?'eye-off':'eye'); b.setAttribute('aria-label',t(on?'hidePw':'showPw')); b.title=t(on?'hidePw':'showPw');
+});
+
+function showErr(code){ $('err').textContent=code?t(code):''; }
+function renderLock(){
+  const unlocked=!!db;
+  $('lockCard').hidden=unlocked;
+  $('pickArea').hidden=!!file;
+  $('unlockForm').hidden=!file;
+  $('fileName').textContent=file?file.name:'';
+  $('keyName').textContent=keyFile?keyFile.name:'';
+  $('btnKeyX').hidden=!keyFile;
+  $('btnUnlock').disabled=busy;
+  $('btnLock').hidden=!unlocked;
+}
+
+/* ---------- Unlock ---------- */
+$('unlockForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(busy||!file) return;
+  const password=$('pw').value;
+  if(!password&&!keyFile){ showErr('err.empty'); $('pw').focus(); return; }
+  showErr(''); busy=true; renderLock();
+  let head={}; try{ head=KDBX.info(file.bytes); }catch(_){}
+  $('status').textContent=t((head.memoryKiB||0)>=256*1024?'slow':'working');
+  const t0=performance.now();
+  try{
+    const opened=await KDBX.open(file.bytes,{password:password||null,keyFile:keyFile&&keyFile.bytes,argon2});
+    db=opened; groupPath=[db.root.id]; entryId=null; $('q').value='';
+    $('pw').value='';
+    if($('pw').type==='text') $('btnShowPw').click();
+    Tools.diag.log('unlocked',{ms:Math.round(performance.now()-t0),entries:allEntries().length,version:db.version,cipher:db.cipher,kdf:db.kdf});
+    touch();
+    if(settings.keep&&Tools.keep.supported()) await Tools.keep.put(KEEP_KEY,new File([file.bytes],file.name,{type:'application/octet-stream'}));
+    renderAll();
+    $('q').focus();
+  }catch(err){
+    const code=err&&err.code?err.code:'other';
+    Tools.diag.log('unlock failed',{code,ms:Math.round(performance.now()-t0)});
+    if(!err||!err.code) console.error(err);
+    showErr(t('err.'+code)?'err.'+code:'err.other');
+    $('pw').select();
+  }finally{
+    busy=false; $('status').textContent=''; renderLock();
+  }
+});
+
+/* ---------- Lock: drop everything decrypted ---------- */
+function lock(reason){
+  const was=!!db;
+  db=null; groupPath=[]; entryId=null; stopOtp();
+  $('list').replaceChildren(); $('fields').replaceChildren(); $('q').value='';
+  $('vaultCard').hidden=true; $('entryCard').hidden=true;
+  renderLock();
+  if(was){ Tools.diag.log('locked',{reason:reason||'manual'}); Tools.toast(t(reason==='auto'?'lockedAuto':'locked')); }
+}
+$('btnLock').addEventListener('click',()=>{ lock('manual'); $('pw').focus(); });
+
+// Auto-lock: after the chosen time without a tap or key – also counted while the app is in the background
+let lastUse=Date.now();
+const touch=()=>{ lastUse=Date.now(); };
+['pointerdown','keydown','scroll'].forEach(ev=>document.addEventListener(ev,touch,{passive:true,capture:true}));
+const checkIdle=()=>{ if(db&&Date.now()-lastUse>settings.lockMin*60000) lock('auto'); };
+setInterval(checkIdle,5000);
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'&&db&&settings.lockHidden) lock('hidden');
+  else if(document.visibilityState==='visible') checkIdle();
+});
+
+/* ---------- Groups, search, entries ---------- */
+function visibleGroups(g){ return g.groups.filter(x=>!(db.recycleBinId&&x.id===db.recycleBinId)); }
+function allEntries(){
+  if(!db) return [];
+  const out=[]; const walk=g=>{ out.push(...g.entries); visibleGroups(g).forEach(walk); }; walk(db.root); return out;
+}
+function countEntries(g){ return g.entries.length+visibleGroups(g).reduce((n,x)=>n+countEntries(x),0); }
+function groupById(id){
+  let found=null; const walk=g=>{ if(g.id===id) found=g; else visibleGroups(g).forEach(walk); }; walk(db.root); return found;
+}
+const byName=(a,b)=>a.localeCompare(b,Tools.locale(),{sensitivity:'base'});
+const entryTitle=e=>e.title||t('untitled');
+const isExpired=e=>!!e.expires&&new Date(e.expires)<new Date();
+function search(q){
+  const words=q.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  return allEntries().filter(e=>{
+    const hay=[e.title,e.username,e.url,e.path.join(' '),...e.tags].join(' ').toLocaleLowerCase();
+    return words.every(w=>hay.includes(w));
+  }).sort((a,b)=>byName(entryTitle(a),entryTitle(b)));
+}
+
+function entryRow(e,withPath){
+  const li=document.createElement('li');
+  const open=document.createElement('button'); open.type='button'; open.className='open';
+  open.innerHTML=Tools.icon('key')+'<span><span class="name"></span><span class="meta"></span></span>';
+  open.querySelector('.name').textContent=entryTitle(e);
+  const meta=[e.username,withPath&&e.path.join(' › '),isExpired(e)&&t('expired')].filter(Boolean).join(' · ');
+  open.querySelector('.meta').textContent=meta;
+  open.querySelector('.meta').hidden=!meta;
+  open.dataset.id=e.id;
+  open.addEventListener('click',()=>showEntry(e.id));
+  li.append(open);
+  if(e.password){
+    const c=document.createElement('button'); c.type='button'; c.className='btn icon'; c.innerHTML=Tools.icon('copy');
+    const name=t('copyPw',{t:entryTitle(e)}); c.setAttribute('aria-label',name); c.title=name;
+    c.addEventListener('click',()=>copy(e.password,t('f_pw')));
+    li.append(c);
+  }
+  return li;
+}
+function renderList(){
+  if(!db) return;
+  const list=$('list'); list.replaceChildren();
+  const q=$('q').value.trim();
+  const g=groupById(groupPath[groupPath.length-1])||db.root;
+  $('btnUp').hidden=!!q||groupPath.length<=1;
+  if(q){
+    const hits=search(q);
+    $('h-group').textContent=t('results',{n:Tools.fmt(hits.length,0)});
+    hits.slice(0,200).forEach(e=>list.append(entryRow(e,true)));
+    if(!hits.length){ const li=document.createElement('li'); li.className='muted'; li.textContent=t('noResults'); list.append(li); }
+    return;
+  }
+  $('h-group').textContent=g===db.root?(db.name||g.name||file.name):g.name;
+  for(const sub of visibleGroups(g).slice().sort((a,b)=>byName(a.name,b.name))){
+    const li=document.createElement('li');
+    const b=document.createElement('button'); b.type='button'; b.className='open';
+    b.innerHTML=Tools.icon('folder')+'<span><span class="name"></span><span class="meta"></span></span>';
+    b.querySelector('.name').textContent=sub.name;
+    const n=countEntries(sub); b.querySelector('.meta').textContent=n===1?t('groupMeta1'):t('groupMeta',{n:Tools.fmt(n,0)});
+    b.addEventListener('click',()=>{ groupPath.push(sub.id); renderList(); list.querySelector('button')?.focus(); });
+    li.append(b); list.append(li);
+  }
+  g.entries.slice().sort((a,b)=>byName(entryTitle(a),entryTitle(b))).forEach(e=>list.append(entryRow(e,false)));
+  if(!list.children.length){ const li=document.createElement('li'); li.className='muted'; li.textContent=t('emptyGroup'); list.append(li); }
+}
+$('q').addEventListener('input',renderList);
+$('btnUp').addEventListener('click',()=>{ if(groupPath.length>1) groupPath.pop(); renderList(); });
+
+/* ---------- One entry: every field with copy, hidden ones with the eye ---------- */
+let otpTimer=null;
+const stopOtp=()=>{ if(otpTimer){ clearInterval(otpTimer); otpTimer=null; } };
+function fieldRow(label,value,{secret=false,link=false,multiline=false}={}){
+  const li=document.createElement('li');
+  const fv=document.createElement('div'); fv.className='fv';
+  const lab=document.createElement('span'); lab.className='meta'; lab.textContent=label;
+  const val=document.createElement('span'); val.className='val'+(multiline?'':' mono');
+  fv.append(lab,val); li.append(fv);
+  let shown=!secret;
+  const paint=()=>{
+    val.classList.toggle('secret',!shown);
+    if(!shown){ val.textContent='••••••••'; return; }
+    if(link&&/^https?:\/\//i.test(value)){
+      const a=document.createElement('a'); a.href=value; a.target='_blank'; a.rel='noopener noreferrer'; a.textContent=value; val.replaceChildren(a);
+    }else val.textContent=value;
+  };
+  paint();
+  if(secret){
+    const b=document.createElement('button'); b.type='button'; b.className='btn icon'; b.setAttribute('aria-pressed','false');
+    const upd=()=>{ b.innerHTML=Tools.icon(shown?'eye-off':'eye'); const n=t(shown?'hide':'show',{f:label}); b.setAttribute('aria-label',n); b.title=n; b.setAttribute('aria-pressed',String(shown)); };
+    b.addEventListener('click',()=>{ shown=!shown; paint(); upd(); }); upd(); li.append(b);
+  }
+  const c=document.createElement('button'); c.type='button'; c.className='btn icon'; c.innerHTML=Tools.icon('copy');
+  const n=t('copyField',{f:label}); c.setAttribute('aria-label',n); c.title=n;
+  c.addEventListener('click',()=>copy(value,label,secret));
+  li.append(c);
+  return li;
+}
+function otpRow(spec){
+  const li=document.createElement('li');
+  const fv=document.createElement('div'); fv.className='fv';
+  fv.innerHTML='<span class="meta"></span><span class="val otp"></span><span class="otp-left"></span>';
+  fv.querySelector('.meta').textContent=t('f_otp');
+  li.append(fv);
+  let code='';
+  const tick=async()=>{
+    const now=Date.now();
+    try{ code=await TOTP.code(spec,now); }catch(_){ code=''; }
+    fv.querySelector('.otp').textContent=code?code.replace(/^(\d{3})(\d{3,})$/,'$1 $2'):'–';
+    fv.querySelector('.otp-left').textContent=t('otpLeft',{s:TOTP.secondsLeft(spec,now)});
+  };
+  tick(); otpTimer=setInterval(tick,1000);
+  const c=document.createElement('button'); c.type='button'; c.className='btn icon'; c.innerHTML=Tools.icon('copy');
+  const n=t('copyField',{f:t('f_otp')}); c.setAttribute('aria-label',n); c.title=n;
+  c.addEventListener('click',()=>{ if(code) copy(code,t('f_otp'),true); });
+  li.append(c);
+  return li;
+}
+function showEntry(id){
+  const e=allEntries().find(x=>x.id===id);
+  if(!e) return;
+  entryId=id; renderEntry();
+  $('btnBack').focus();
+}
+function renderEntry(){
+  stopOtp();
+  const e=db&&entryId?allEntries().find(x=>x.id===entryId):null;
+  $('entryCard').hidden=!e; $('vaultCard').hidden=!db||!!e;
+  if(!e) return;
+  $('h-entry').textContent=entryTitle(e);
+  $('entryPath').textContent=[db.name||db.root.name,...e.path].join(' › ');
+  const ul=$('fields'); ul.replaceChildren();
+  if(e.username) ul.append(fieldRow(t('f_user'),e.username));
+  if(e.password) ul.append(fieldRow(t('f_pw'),e.password,{secret:true}));
+  const spec=TOTP.fromEntry(e);
+  if(spec) ul.append(otpRow(spec));
+  if(e.url) ul.append(fieldRow(t('f_url'),e.url,{link:true}));
+  for(const f of e.fields){
+    if(TOTP.FIELDS.includes(f.key)||f.key.startsWith('TimeOtp-')||f.key.startsWith('KPEX_')) continue;
+    ul.append(fieldRow(f.key,f.value,{secret:f.protected}));
+  }
+  if(e.notes) ul.append(fieldRow(t('f_notes'),e.notes,{multiline:true}));
+  if(e.tags.length) ul.append(fieldRow(t('f_tags'),e.tags.join(', ')));
+  if(e.expires) ul.append(fieldRow(t('f_expires'),new Date(e.expires).toLocaleString(Tools.locale())+(isExpired(e)?' – '+t('expired'):'')));
+}
+$('btnBack').addEventListener('click',()=>{ const id=entryId; entryId=null; renderEntry(); renderList();
+  [...$('list').querySelectorAll('.open')].find(b=>b.dataset.id===id)?.focus(); });
+function renderAll(){ renderLock(); $('vaultCard').hidden=!db; renderList(); renderEntry(); }
+
+/* ---------- Copy, optionally clearing the clipboard again ---------- */
+let clipTimer=null;
+async function copy(value,label,secret=true){
+  const ok=await Tools.copyText(value);
+  if(!ok){ Tools.toast(t('copyFail')); return; }
+  Tools.diag.log('copied',{secret});
+  clearTimeout(clipTimer);
+  if(settings.clearClip&&secret){
+    Tools.toast(t('copiedClear',{f:label}));
+    clipTimer=setTimeout(async()=>{
+      // Browsers only allow writing while the page has the focus; otherwise there is nothing we can do
+      if(document.visibilityState!=='visible'||!document.hasFocus()){ Tools.diag.log('clipboard not cleared (background)'); return; }
+      try{ await navigator.clipboard.writeText(''); Tools.diag.log('clipboard cleared'); }catch(_){ Tools.diag.log('clipboard clear failed'); }
+    },30000);
+  }else Tools.toast(t('copied',{f:label}));
+}
+
+/* ---------- Settings ---------- */
+function renderSettings(){
+  for(const b of document.querySelectorAll('#lockAfter button')) b.setAttribute('aria-pressed',String(Number(b.dataset.min)===settings.lockMin));
+  $('optHidden').checked=settings.lockHidden; $('optClip').checked=settings.clearClip; $('optKeep').checked=settings.keep;
+}
+for(const b of document.querySelectorAll('#lockAfter button')) b.addEventListener('click',()=>{ settings.lockMin=Number(b.dataset.min); save(); renderSettings(); });
+$('optHidden').addEventListener('change',e=>{ settings.lockHidden=e.target.checked; save(); });
+$('optClip').addEventListener('change',e=>{ settings.clearClip=e.target.checked; save(); });
+$('optKeep').addEventListener('change',async e=>{
+  settings.keep=e.target.checked; save();
+  if(!settings.keep) await Tools.keep.remove(KEEP_KEY);
+  else if(db&&file) await Tools.keep.put(KEEP_KEY,new File([file.bytes],file.name,{type:'application/octet-stream'}));
+});
+$('btnForget').addEventListener('click',async()=>{
+  await Tools.keep.remove(KEEP_KEY);
+  lock('forget'); file=null; keyFile=null; renderLock();
+  Tools.menu.close(); Tools.toast(t('forgotten'));
+});
+renderSettings(); renderLock();
+Tools.onLang(()=>{ renderSettings(); if(db){ renderList(); renderEntry(); } if($('err').textContent) showErr(''); });
+
+// Shared to the app / "Open with" first, then the file kept from last time
+Tools.takeSharedFile().then(async f=>{
+  if(f){ Tools.diag.log('shared file'); setFile(f); return; }
+  if(!settings.keep||file) return;
+  const k=await Tools.keep.get(KEEP_KEY);
+  if(k&&!file) setFile(k,true);
+});
+
+Tools.diag.info(async()=>{
+  let head=null; try{ head=file&&KDBX.info(file.bytes); }catch(_){}
+  return { file:!!file, size:file?file.bytes.length:0, header:head, keyFile:!!keyFile, unlocked:!!db,
+    entries:db?allEntries().length:0, view:entryId?'entry':db?'list':'lock', settings,
+    kept:(await Tools.keep.names()).includes(KEEP_KEY), clipboard:!!(navigator.clipboard&&navigator.clipboard.writeText),
+    decompression:typeof DecompressionStream!=='undefined' };
+});
+
+/* ---------- WebMCP: never passwords, user names, notes or codes; never unlock ---------- */
+const needOpen=()=>{ if(!db) throw new Error('The vault is locked. Ask the user to unlock it in the app.'); };
+const summary=e=>({ title:e.title, group:e.path.join(' / '), url:e.url });
+Tools.mcp.register({
+  name:'find_entries', title:'Find vault entries', label:'mcp.find', untrusted:true,
+  description:'Searches the unlocked KeePass vault for entries whose title, address, group or tags contain all given words, and shows the results in the app. Returns at most 20 entries with title, group and URL only – never passwords, user names, notes or one-time codes.',
+  inputSchema:{type:'object',properties:{query:{type:'string',minLength:1,maxLength:100,description:'Words to search for, e.g. "bank" or "mail work".'}},required:['query'],additionalProperties:false},
+  execute:({query})=>{ needOpen(); entryId=null; $('q').value=query; renderEntry(); renderList();
+    const hits=search(query.trim()); return { total:hits.length, entries:hits.slice(0,20).map(summary) }; }
+});
+Tools.mcp.register({
+  name:'show_entry', title:'Show a vault entry', label:'mcp.show', untrusted:true,
+  description:'Opens one entry of the unlocked KeePass vault in the app, so the user can copy from it. The title must match exactly (case-insensitive); use find_entries first. Secret fields stay hidden. Returns title, group, URL and the names of its fields – never their values.',
+  inputSchema:{type:'object',properties:{title:{type:'string',minLength:1,maxLength:200,description:'Exact title of the entry.'}},required:['title'],additionalProperties:false},
+  execute:({title})=>{ needOpen();
+    const want=title.trim().toLocaleLowerCase(), hits=allEntries().filter(e=>e.title.toLocaleLowerCase()===want);
+    if(!hits.length) throw new Error('No entry with this title.');
+    if(hits.length>1) throw new Error(`${hits.length} entries have this title; ask the user which one.`);
+    const e=hits[0]; showEntry(e.id);
+    return { ...summary(e), fields:[e.username&&'user name',e.password&&'password',TOTP.fromEntry(e)&&'one-time code',...e.fields.filter(f=>!TOTP.FIELDS.includes(f.key)&&!f.key.startsWith('TimeOtp-')&&!f.key.startsWith('KPEX_')).map(f=>f.key),e.notes&&'notes'].filter(Boolean) };
+  }
+});
+Tools.mcp.register({
+  name:'lock', title:'Lock the vault', label:'mcp.lock',
+  description:'Locks the KeePass vault in the app right away: the decrypted data is dropped and the master password is needed again. Returns whether it was unlocked before.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{ const was=!!db; lock('agent'); return { wasUnlocked:was }; }
+});
+})();
+</script>
+</body>
+</html>

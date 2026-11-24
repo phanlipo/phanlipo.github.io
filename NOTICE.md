@@ -40,6 +40,7 @@ neben jeder Bibliothek in `assets/vendor/<name>/LICENSE` und wird mit ihr ausgel
 | [pyodide](https://pyodide.org) (`pyodide`) | 314.0.7 | [MPL-2.0](assets/vendor/pyodide/LICENSE) | siehe Lizenztext | Python-Interpreter (CPython als WebAssembly) in Code ausführen |
 | [highlight](https://highlightjs.org) (`@highlightjs/cdn-assets`) | 11.12.0 | [BSD-3-Clause](assets/vendor/highlight/LICENSE) | Copyright (c) 2006, Ivan Sagalaev. | Syntax-Hervorhebung im Code-Editor |
 | [three](https://threejs.org) (`three`) | 0.187.0 | [MIT](assets/vendor/three/LICENSE) | Copyright © 2010-2026 three.js authors | 3D-Darstellung (WebGL) des Körpers in der Anatomie-App |
+| [hash-wasm](https://github.com/Daninet/hash-wasm) (`hash-wasm`) | 4.13.0 | [MIT](assets/vendor/hash-wasm/LICENSE) | Copyright (c) 2020 Dani Biró | Argon2 (WebAssembly) zum Entschlüsseln von KeePass-Datenbanken (KDBX 4) im KeePass-Betrachter |
 
 ## Weitere Lizenzdateien
 

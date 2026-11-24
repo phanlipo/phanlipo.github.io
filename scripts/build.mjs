@@ -338,6 +338,7 @@ const FILE_TYPES = {
   '.ico': 'image/x-icon', '.svg': 'image/svg+xml',
   '.ics': 'text/calendar',
   '.zip': 'application/zip',
+  '.kdbx': 'application/x-keepass2',
   // Text and source files (code-editor)
   '.json': 'application/json', '.xml': 'application/xml', '.yaml': 'application/yaml', '.yml': 'application/yaml',
   '.toml': 'application/toml', '.ini': 'text/plain', '.cfg': 'text/plain', '.conf': 'text/plain', '.properties': 'text/plain',

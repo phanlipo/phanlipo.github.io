@@ -103,6 +103,8 @@ Verbindliche Zuordnung von Bedeutung zu Tabler-Name. Alle Namen sind gegen `@tab
 | Vergrößern / Verkleinern | `zoom-in` / `zoom-out` | – („+“/„−“ als Text in `function-plotter`) |
 | Neu laden (Update) | `refresh` | `common.js` |
 | Favorit / Favourite (gefüllt = gesetzt) | `star` | Startseite |
+| Sperren / Entsperren / Lock, Unlock | `lock` / `lock-open` | `keepass-viewer`, `pdf-viewer` |
+| Geheimes zeigen / verbergen / Show, hide | `eye` / `eye-off` | `keepass-viewer`, `mail-account-qr` |
 
 ### Spiel & Mitspieler
 
