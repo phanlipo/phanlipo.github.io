@@ -73,7 +73,7 @@ export default [
   },
   // Pages with <script type="module"> and module workers written as .js
   {
-    files: ['audio-studio/index.html', 'video-to-audio/index.html', 'ai-chat/worker.js', 'text-to-speech/kokoro-worker.js',
+    files: ['anatomy/index.html', 'audio-studio/index.html', 'video-to-audio/index.html', 'ai-chat/worker.js', 'text-to-speech/kokoro-worker.js',
       'voice-transcriber/worker.js', 'translator/worker.js'],
     languageOptions: { sourceType: 'module' },
   },
