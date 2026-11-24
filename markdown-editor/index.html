@@ -22,7 +22,7 @@
 <meta name="tool:storage" content="markdown-editor.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-lUpmIOfogat+Yb0PDcUHCwwltbzpCjkpCkuHS4FC4kI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-6bNXnicFtCTJ8hpuwtX095UQeaYnPVFVjsr6XakXwj8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -61,6 +61,10 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
 .md th,.md td{border:1px solid var(--border);padding:6px 10px;text-align:start}
 .md th{background:var(--surface-2)}
 .md img{max-width:100%}
+.md .mermaid-block{margin:10px 0;overflow-x:auto;text-align:center}
+.md .mermaid-block>pre{text-align:start}
+.md .mermaid-block svg{max-width:100%;height:auto}
+.md .mermaid-error{margin:4px 0 0;color:var(--err);font-size:14px;text-align:start}
 .md img[data-md-src]{display:inline-block;min-width:2em;min-height:1.5em;padding:2px 8px;border:1px dashed var(--border);border-radius:4px;color:var(--muted);font-size:14px}
 
 #btnDownload{position:relative}
@@ -68,6 +72,23 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
 
 /* ---------- Files (in the menu) ---------- */
 .files .btn.icon .ic{width:20px;height:20px}
+
+/* ---------- Print / PDF: only the rendered document, light on white ---------- */
+@page{margin:16mm 15mm}
+@media print{
+  body>*:not(#printDoc){display:none!important}
+  html,body,body.stage,body.stage.has-menu{display:block;height:auto;min-height:0;overflow:visible;background:#fff}
+  #printDoc{display:block!important;--text:#000;--muted:#444;--border:#bbb;--surface-2:#f3f4f6;--accent:#475569;color:var(--text);
+    padding:0;line-height:1.5;font-size:11pt;overflow-wrap:break-word}
+  #printDoc *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #printDoc>:first-child{margin-top:0}
+  #printDoc h1,#printDoc h2,#printDoc h3,#printDoc h4{break-after:avoid}
+  #printDoc pre,#printDoc blockquote,#printDoc tr,#printDoc img,#printDoc .mermaid-block{break-inside:avoid}
+  #printDoc pre{white-space:pre-wrap}
+  #printDoc table{display:table;overflow:visible}
+  #printDoc a{color:var(--text)}
+  #printDoc input[type=checkbox]{accent-color:#475569}
+}
 </style>
 </head>
 <body class="stage">
@@ -98,6 +119,9 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
   <div class="toolbar-more" id="moreTools" role="group" aria-label="Weitere Werkzeuge" data-i18n-attr="aria-label:moreLabel" hidden></div>
   <div class="toolbar" id="toolbar" role="toolbar" aria-label="Formatierung" data-i18n-attr="aria-label:tbLabel"></div>
 
+  <div class="menu-list" data-menu>
+    <button type="button" id="btnPrint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#printer"/></svg><span data-i18n="print">Drucken / PDF</span></button>
+  </div>
   <section class="card" data-menu data-icon="files" aria-labelledby="h-files">
     <h2 id="h-files" data-i18n="files">Dateien</h2>
     <p class="muted" data-i18n="filesIntro">Alles wird automatisch gespeichert – nur in diesem Browser.</p>
@@ -109,6 +133,9 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
     <input type="file" id="fileInput" accept=".md,.markdown,.mdown,.txt,text/markdown,text/x-markdown,text/plain" hidden>
   </section>
 </main>
+
+<!-- The open document, formatted, only for printing / "Save as PDF" (filled right before printing) -->
+<article id="printDoc" class="md" hidden></article>
 
 <!-- data:start -->
 <details class="data card">
@@ -135,6 +162,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
     <li>In der Ansicht hakst du Aufgaben direkt per Tippen ab.</li>
     <li>Oben links gibst du der Datei einen <b>Namen</b>. Ohne Namen gilt die erste Zeile.</li>
     <li><b>Herunterladen</b> speichert die Datei als <code>.md</code>, <b>Teilen</b> (oben, wenn das Gerät es kann) schickt sie an andere Apps – als Datei, oder als Text, wenn das Gerät keine Markdown-Dateien teilen kann.</li>
+    <li><b>Drucken / PDF</b> im Menü ☰ druckt die geöffnete Datei formatiert – ohne Knöpfe und Leisten. Als <b>PDF</b> speicherst du sie im Druckdialog mit <i>Als PDF speichern</i> (Android: oben als Drucker <i>Als PDF speichern</i> wählen; iPhone: im Druckdialog oben auf Teilen tippen, dann <i>In Dateien sichern</i>). Der Dateiname ist der Name der Datei. <i>Strg+P</i> geht auch.</li>
     <li><b>Neue Datei</b> (oben) beginnt eine leere Datei; die bisherige bleibt erhalten.</li>
     <li>Im Menü ☰ liegen die <b>Dateien</b>: antippen zum Öffnen, daneben Teilen, Herunterladen und Löschen. Dort kannst du auch eine Datei vom Gerät <b>öffnen</b> (<code>.md</code> oder <code>.txt</code>).</li>
     <li><b>Direkt in der Datei speichern</b> (Chrome und Edge am Computer): Öffnest du eine Datei über <i>Datei öffnen …</i> oder <i>Öffnen mit</i>, bleibt sie mit der App verknüpft. Der Knopf oben (Diskette) bzw. <i>Strg+S</i> schreibt deine Änderungen dann in genau diese Datei zurück – statt eine Kopie herunterzuladen. Ein Punkt am Knopf zeigt ungespeicherte Änderungen. <i>Speichern unter …</i> im Menü legt eine neue Datei an einem Ort deiner Wahl an. Beim ersten Speichern fragt der Browser um Erlaubnis. Die Verknüpfung gilt, bis du die App schließt; der Text selbst bleibt wie immer im Browser gespeichert. Auf dem iPhone, in Firefox und Safari gibt es das nicht – dort lädt der Knopf die Datei herunter.</li>
@@ -143,9 +171,10 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
   <ul>
     <li>Bearbeitest du in der <b>Ansicht</b>, schreibt die App das Markdown neu und vereinheitlicht dabei die Schreibweise (z.&nbsp;B. Listen mit <code>-</code>, Fett mit <code>**</code>). Inhalte bleiben erhalten; selten genutzte HTML-Teile können verloren gehen. Wer die Schreibweise genau behalten will, bearbeitet in der Textdarstellung.</li>
     <li>Unterstützt wird Markdown mit den GitHub-Erweiterungen: Tabellen, Aufgabenlisten, Durchgestrichen.</li>
+    <li><b>Diagramme:</b> Ein Code-Block mit <code>```mermaid</code> erscheint in der Ansicht und beim Drucken als Diagramm (Ablauf-, Sequenz-, Gantt-, Klassen-, Kreisdiagramm und mehr, siehe mermaid.js.org). Ändern lässt sich ein Diagramm nur in der Textdarstellung. Enthält es einen Fehler, zeigt die Ansicht den Text mit einem Hinweis. Die Diagramm-Bibliothek ist groß (etwa 5&nbsp;MB) und wird erst geladen, wenn eine Datei ein Diagramm enthält – danach klappt es auch offline.</li>
     <li><b>Bilder</b> aus dem Internet lädt die App nicht (Datenschutz, offline) – sie zeigt stattdessen den Bildtext. Eingebettete Bilder (<code>data:</code>) werden angezeigt.</li>
     <li>Alles wird automatisch in diesem Browser gespeichert und funktioniert offline; nichts wird hochgeladen. Der Platz im Browser ist begrenzt (einige MB für alle Dateien zusammen) – große Dateien besser herunterladen.</li>
-    <li>Bibliotheken: marked (MIT) wandelt Markdown in die Ansicht um, DOMPurify (Apache-2.0) entfernt dabei Skripte, turndown (MIT) macht aus der bearbeiteten Ansicht wieder Markdown.</li>
+    <li>Bibliotheken: marked (MIT) wandelt Markdown in die Ansicht um, DOMPurify (Apache-2.0) entfernt dabei Skripte, turndown (MIT) macht aus der bearbeiteten Ansicht wieder Markdown, Mermaid (MIT) zeichnet die Diagramme.</li>
   </ul>
   </div>
   <div data-lang="en" lang="en" hidden>
@@ -158,6 +187,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
     <li>In the view you tick off tasks with a tap.</li>
     <li>At the top left you give the file a <b>name</b>. Without a name the first line is used.</li>
     <li><b>Download</b> saves the file as <code>.md</code>, <b>Share</b> (at the top, if the device can) sends it to other apps – as a file, or as text if the device cannot share Markdown files.</li>
+    <li><b>Print / PDF</b> in the menu ☰ prints the open file formatted – without buttons and bars. To get a <b>PDF</b>, choose <i>Save as PDF</i> in the print dialog (Android: choose <i>Save as PDF</i> as the printer at the top; iPhone: tap Share at the top of the print dialog, then <i>Save to Files</i>). The PDF takes the file’s name. <i>Ctrl+P</i> works too.</li>
     <li><b>New file</b> (at the top) starts an empty file; the previous one is kept.</li>
     <li>The menu ☰ holds the <b>files</b>: tap one to open it, next to it share, download and delete. There you can also <b>open</b> a file from the device (<code>.md</code> or <code>.txt</code>).</li>
     <li><b>Save straight into the file</b> (Chrome and Edge on a computer): when you open a file with <i>Open file …</i> or <i>Open with</i>, it stays linked to the app. The button at the top (floppy disk) or <i>Ctrl+S</i> then writes your changes back into exactly that file – instead of downloading a copy. A dot on the button shows unsaved changes. <i>Save as …</i> in the menu creates a new file wherever you like. The browser asks for permission the first time you save. The link lasts until you close the app; the text itself stays saved in the browser as always. iPhone, Firefox and Safari do not offer this – there the button downloads the file.</li>
@@ -166,9 +196,10 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
   <ul>
     <li>When you edit in the <b>view</b>, the app rewrites the Markdown and makes the notation uniform (e.g. lists with <code>-</code>, bold with <code>**</code>). The content is kept; rarely used HTML parts may get lost. To keep the notation exactly, edit in the text display.</li>
     <li>Markdown with the GitHub extensions is supported: tables, task lists, strikethrough.</li>
+    <li><b>Diagrams:</b> a code block with <code>```mermaid</code> appears as a diagram in the view and when printing (flowchart, sequence, Gantt, class, pie chart and more, see mermaid.js.org). A diagram can only be changed in the text display. If it contains an error, the view shows the text with a note. The diagram library is large (about 5&nbsp;MB) and is only loaded when a file contains a diagram – after that it works offline too.</li>
     <li><b>Images</b> from the internet are not loaded (privacy, offline) – the app shows the image text instead. Embedded images (<code>data:</code>) are shown.</li>
     <li>Everything is saved automatically in this browser and works offline; nothing is uploaded. Browser storage is limited (a few MB for all files together) – better download large files.</li>
-    <li>Libraries: marked (MIT) turns Markdown into the view, DOMPurify (Apache-2.0) removes scripts from it, turndown (MIT) turns the edited view back into Markdown.</li>
+    <li>Libraries: marked (MIT) turns Markdown into the view, DOMPurify (Apache-2.0) removes scripts from it, turndown (MIT) turns the edited view back into Markdown, Mermaid (MIT) draws the diagrams.</li>
   </ul>
   </div>
   <!-- files:start -->
@@ -209,7 +240,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 3ce791c1359b</p>
+  <p class="footer-version">Version 3274f09c6d4a</p>
   <!-- footer:end -->
 </footer>
 
@@ -233,6 +264,9 @@ de:{
   task:'Erledigt',img:'Bild',delete:'Löschen',shareN:'Teilen: {name}',downloadN:'Herunterladen: {name}',deleteN:'Löschen: {name}',
   download:'Herunterladen',saveTo:'Speichern in {name}',saveToUnsaved:'Speichern in {name} (ungespeicherte Änderungen)',
   saved:'Gespeichert: {name}',writeFail:'Speichern in die Datei hat nicht geklappt.',noPermission:'Der Browser hat das Speichern in die Datei nicht erlaubt.',
+  print:'Drucken / PDF',
+  diagram:'Diagramm',diagramFail:'Das Diagramm enthält einen Fehler – hier sein Text.',
+  diagramLoadFail:'Diagramme lassen sich gerade nicht anzeigen – beim ersten Mal ist Internet nötig.',
   'mcp.list':'Dateien gelesen','mcp.read':'Datei gelesen','mcp.create':'Datei angelegt'
 },
 en:{
@@ -251,6 +285,9 @@ en:{
   task:'Done',img:'Image',delete:'Delete',shareN:'Share: {name}',downloadN:'Download: {name}',deleteN:'Delete: {name}',
   saveTo:'Save to {name}',saveToUnsaved:'Save to {name} (unsaved changes)',
   saved:'Saved: {name}',writeFail:'Saving to the file did not work.',noPermission:'The browser did not allow saving to the file.',
+  print:'Print / PDF',
+  diagram:'Diagram',diagramFail:'The diagram contains an error – here is its text.',
+  diagramLoadFail:'Diagrams cannot be shown right now – the first time needs internet.',
   'mcp.list':'files read','mcp.read':'file read','mcp.create':'file created'
 }});
 const {$,t,esc}=Tools;
@@ -303,7 +340,12 @@ DOMPurify.addHook('afterSanitizeAttributes',node=>{
 // fires an image's error event while parsing, even in inert documents (DOMParser, <template>).
 // Only applied to raw HTML (from the Markdown or pasted), never to text or code.
 const defang=h=>h.replace(/([\s\/"'`])(on[a-z]+)(\s*=)/gi,'$1data-x-$2$3');
-marked.use({renderer:{html:tok=>defang(tok.text)}});
+// ```mermaid blocks: the source stays in data-mermaid (for the way back to Markdown), the code shows until the diagram is drawn.
+// URI-encoded: DOMPurify drops attributes containing "-->" (every flowchart arrow)
+const isMermaid=lang=>(lang||'').trim().split(/\s/)[0].toLowerCase()==='mermaid';
+const mermaidSrc=n=>{try{return decodeURIComponent(n.getAttribute('data-mermaid')||'');}catch(_){return '';}};
+marked.use({renderer:{html:tok=>defang(tok.text),
+  code:tok=>isMermaid(tok.lang)?`<div class="mermaid-block" data-mermaid="${esc(encodeURIComponent(tok.text))}"><pre><code>${esc(tok.text)}</code></pre></div>\n`:false}});
 // Then in a <template> (inert): drop those attributes and image addresses; DOMPurify does the full cleaning
 function defuse(html){
   const tpl=document.createElement('template');
@@ -321,7 +363,14 @@ function defuse(html){
 const sanitize=html=>DOMPurify.sanitize(defuse(html),purifyCfg);
 const toHtml=md=>sanitize(marked.parse(md,{gfm:true,breaks:false,async:false}));
 
-const td=new TurndownService({headingStyle:'atx',hr:'---',bulletListMarker:'-',codeBlockStyle:'fenced',emDelimiter:'*',strongDelimiter:'**',linkStyle:'inlined'});
+function mermaidMd(node){
+  const src=mermaidSrc(node).replace(/\n+$/,'');
+  let fence='```';while(src.includes(fence))fence+='`';
+  return '\n\n'+fence+'mermaid\n'+src+'\n'+fence+'\n\n';
+}
+const isMermaidNode=n=>n.nodeName==='DIV'&&n.hasAttribute('data-mermaid');
+const td=new TurndownService({blankReplacement:(c,n)=>isMermaidNode(n)?mermaidMd(n):n.isBlock?'\n\n':'',headingStyle:'atx',hr:'---',bulletListMarker:'-',codeBlockStyle:'fenced',emDelimiter:'*',strongDelimiter:'**',linkStyle:'inlined'});
+td.addRule('mermaid',{filter:isMermaidNode,replacement:(c,n)=>mermaidMd(n)});
 td.addRule('strike',{filter:['del','s','strike'],replacement:c=>c.trim()?'~~'+c+'~~':c});
 td.addRule('checkbox',{filter:n=>n.nodeName==='INPUT'&&n.type==='checkbox',replacement:(c,n)=>(n.checked?'[x]':'[ ]')+' '});
 td.addRule('listItem',{filter:'li',replacement(content,node,options){
@@ -396,6 +445,75 @@ function persist(){
 let saveTimer=0;
 const scheduleSave=()=>{clearTimeout(saveTimer);saveTimer=setTimeout(persist,400);};
 
+/* ---------- Diagrams (Mermaid) ----------
+   The library (about 5 MB) is loaded only when a document has a ```mermaid block; the service worker keeps it
+   for offline use after that (precache: false in vendor.json). securityLevel 'strict': Mermaid cleans labels
+   and allows no scripts or click handlers in diagrams. Renders run one after another (Mermaid is not reentrant). */
+const mm={loaded:false,loadFailed:false,rendered:0,errors:0},svgCache=new Map();
+let mermaidLoad=null,mermaidQueue=Promise.resolve(),mermaidN=0;
+function loadMermaid(){
+  if(window.mermaid)return Promise.resolve(window.mermaid);
+  if(!mermaidLoad){
+    Tools.diag.log('mermaid loading');
+    mermaidLoad=new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='../assets/vendor/mermaid/mermaid.min.js';
+      s.onload=()=>window.mermaid?res(window.mermaid):rej(new Error('mermaid missing'));
+      s.onerror=()=>{s.remove();rej(new Error('mermaid load failed'));};
+      document.head.appendChild(s);
+    }).then(m=>{mm.loaded=true;mm.loadFailed=false;Tools.diag.log('mermaid loaded');return m;},
+      e=>{mermaidLoad=null;mm.loadFailed=true;Tools.diag.log('mermaid load failed',e);throw e;});
+  }
+  return mermaidLoad;
+}
+const diagramTheme=()=>Tools.theme.dark()?'dark':'default';
+function mermaidSvg(src,theme){
+  const key=theme+'\n'+src;
+  if(svgCache.has(key))return Promise.resolve(svgCache.get(key));
+  const job=mermaidQueue.then(async()=>{
+    const m=await loadMermaid();
+    m.initialize({startOnLoad:false,securityLevel:'strict',theme});
+    const id='mmd-'+(++mermaidN);
+    try{
+      const {svg}=await m.render(id,src);
+      if(svgCache.size>40)svgCache.delete(svgCache.keys().next().value);
+      svgCache.set(key,svg);
+      return svg;
+    }finally{for(const x of [id,'d'+id])document.getElementById(x)?.remove();}
+  });
+  mermaidQueue=job.catch(()=>{});
+  return job;
+}
+function showSvg(b,svg,theme){
+  b.innerHTML=svg;b.dataset.theme=theme;
+  const el=b.querySelector('svg');if(el){el.setAttribute('role','img');el.setAttribute('aria-label',t('diagram'));}
+}
+// Draws the diagrams in root (view or print) that are not drawn in this theme yet
+async function renderDiagrams(root,theme){
+  for(const b of root.querySelectorAll('.mermaid-block[data-mermaid]')){
+    if(b.dataset.theme===theme)continue;
+    const src=mermaidSrc(b),attr=b.dataset.mermaid;
+    try{
+      const svg=await mermaidSvg(src,theme);
+      if(b.isConnected&&b.dataset.mermaid===attr){showSvg(b,svg,theme);mm.rendered++;}
+    }catch(e){
+      if(!b.isConnected)continue;
+      const load=!window.mermaid;
+      // Only the kind of error: Mermaid's message quotes the diagram text
+      if(!load){mm.errors++;Tools.diag.log('diagram failed',e&&e.name||'Error');}
+      b.innerHTML=`<pre><code>${esc(src)}</code></pre><p class="mermaid-error">${esc(t(load?'diagramLoadFail':'diagramFail'))}</p>`;
+      if(!load)b.dataset.theme=theme;
+    }
+  }
+}
+// Synchronous (Ctrl+P): diagrams already drawn in this theme
+function cachedDiagrams(root,theme){
+  for(const b of root.querySelectorAll('.mermaid-block[data-mermaid]')){
+    const svg=svgCache.get(theme+'\n'+mermaidSrc(b));
+    if(svg)showSvg(b,svg,theme);
+  }
+}
+
 /* ---------- Editor ---------- */
 const raw=$('raw'),view=$('view'),nameEl=$('name');
 let viewDirty=false,syncTimer=0;
@@ -409,6 +527,9 @@ function syncFromView(){
 function flush(){syncFromView();if(saveTimer){clearTimeout(saveTimer);saveTimer=0;persist();}}
 function prepView(){
   for(const cb of view.querySelectorAll('input[type=checkbox]')){cb.setAttribute('contenteditable','false');cb.setAttribute('aria-label',t('task'));}
+  // Diagrams are changed in the text display; in the view they are one block
+  for(const b of view.querySelectorAll('.mermaid-block')){b.setAttribute('contenteditable','false');b.querySelector('svg')?.setAttribute('aria-label',t('diagram'));}
+  if(view.querySelector('.mermaid-block[data-mermaid]'))renderDiagrams(view,diagramTheme());
 }
 function renderView(){view.innerHTML=cur.text.trim()?toHtml(cur.text):'';prepView();}
 function showDoc(){
@@ -845,15 +966,48 @@ document.addEventListener('keydown',e=>{
   }
 });
 
+/* ---------- Print / PDF ----------
+   The browser's print dialog makes the PDF ("Save as PDF"): real text, links and page breaks, no library.
+   #printDoc gets the open document right before printing, also for Ctrl+P (beforeprint); the page title
+   is the document's name while printing, browsers suggest it as the PDF's file name. */
+const printDoc=$('printDoc');
+let pageTitle=null,printReady=false;
+function preparePrint(){
+  flush();
+  printDoc.innerHTML=cur.text.trim()?toHtml(cur.text):'';
+  cachedDiagrams(printDoc,'default');
+  for(const cb of printDoc.querySelectorAll('input[type=checkbox]'))cb.setAttribute('aria-label',t('task'));
+  printDoc.lang=Tools.lang();
+  if(pageTitle==null)pageTitle=document.title;
+  document.title=fileName(cur).replace(/\.(md|markdown|txt)$/i,'');
+}
+function afterPrint(){
+  printReady=false;
+  if(pageTitle!=null){document.title=pageTitle;pageTitle=null;}
+  printDoc.innerHTML='';
+}
+// Ctrl+P / browser menu: diagrams only if already drawn (they take time; the menu entry waits for them)
+addEventListener('beforeprint',()=>{if(!printReady)preparePrint();});
+addEventListener('afterprint',afterPrint);
+$('btnPrint').addEventListener('click',async()=>{
+  Tools.menu.close();
+  preparePrint();
+  printReady=true;
+  if(printDoc.querySelector('.mermaid-block'))await renderDiagrams(printDoc,'default');
+  Tools.diag.log('print',{chars:cur.text.length});
+  try{window.print();}catch(e){Tools.diag.log('print failed',e);}
+});
+
 window.addEventListener('pagehide',flush);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush();});
 
 /* ---------- Start ---------- */
 renderToolbar();applyView();showDoc();renderFiles();persist();
 Tools.onLang(()=>{renderToolbar();renderFiles();updateNamePh();updateSaveBtn();if(state.view==='render')prepView();});
+Tools.theme.onChange(()=>{if(state.view==='render'&&view.querySelector('.mermaid-block'))renderDiagrams(view,diagramTheme());});
 Tools.diag.info(()=>({view:state.view,files:files.length,currentChars:cur.text.length,
   fileAccess:FSA,linkedFiles:links.size,currentLinked:links.has(cur.id),currentUnsaved:isDirty(cur),
-  storedChars:files.reduce((n,f)=>n+f.text.length,0),share:!!navigator.share,
+  storedChars:files.reduce((n,f)=>n+f.text.length,0),diagrams:mm,share:!!navigator.share,
   canShareFiles:Tools.canShareFile('x.md','text/markdown')}));
 
 /* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */

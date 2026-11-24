@@ -264,6 +264,44 @@ test('download saves the file as .md with its text', async ({ page }) => {
   expect((await dl2).suggestedFilename()).toBe('notizen.txt');
 });
 
+test('print / PDF: only the formatted document, named like the file; Ctrl+P fills it too', async ({ page }) => {
+  await page.evaluate(() => { window.__printed = []; window.print = () => { window.__printed.push(document.title); }; });
+  const title = await page.title();
+  await raw(page).fill('# Bericht: Q3/2026\n\nText mit **fett**\n\n- [x] erledigt\n- [ ] offen\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n<img src=x onerror="window.__bad=1">');
+  await openMenu(page);
+  await page.click('#btnPrint');
+  // The menu is closed, the browser's print dialog was asked for with the document's name as title (PDF file name)
+  expect(await page.evaluate(() => window.__printed)).toEqual(['Bericht- Q3-2026']);
+  await expect(page.locator('#printDoc h1')).toHaveText('Bericht: Q3/2026');
+  await expect(page.locator('#printDoc strong')).toHaveText('fett');
+  await expect(page.locator('#printDoc input[type=checkbox]')).toHaveCount(2);
+  await expect(page.locator('#printDoc input[type=checkbox]').first()).toBeChecked();
+  await expect(page.locator('#printDoc td')).toHaveText(['1', '2']);
+  await expect(page.locator('#printDoc img')).not.toHaveAttribute('src', /.+/);
+  expect(await page.evaluate(() => window.__bad)).toBeUndefined();
+  // Hidden on screen, alone when printing
+  await expect(page.locator('#printDoc')).toBeHidden();
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('#printDoc')).toBeVisible();
+  for (const sel of ['header', 'main', '#toolbar', 'details.help', 'footer']) await expect(page.locator(sel).first()).toBeHidden();
+  // Black text also in dark mode
+  await page.emulateMedia({ media: 'print', colorScheme: 'dark' });
+  expect(await page.locator('#printDoc h1').evaluate(el => getComputedStyle(el).color)).toBe('rgb(0, 0, 0)');
+  const pdf = await page.pdf({ format: 'A4' });
+  expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+  // After printing: title back, nothing left over
+  await page.evaluate(() => dispatchEvent(new Event('afterprint')));
+  expect(await page.title()).toBe(title);
+  await expect(page.locator('#printDoc')).toBeEmpty();
+  // Ctrl+P / browser menu: beforeprint fills it with the current text (also from the view)
+  await page.emulateMedia({ media: 'screen', colorScheme: 'light' });
+  await page.locator('#views [data-v="render"]').click();
+  await view(page).locator('h1').evaluate(el => { el.textContent = 'Neu'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.evaluate(() => dispatchEvent(new Event('beforeprint')));
+  await expect(page.locator('#printDoc h1')).toHaveText('Neu');
+  expect(await page.title()).toBe('Neu');
+});
+
 test.describe('share', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 800 } });
   test('shares the file as text/plain .md (Chrome on Android)', async ({ page }) => {
@@ -479,6 +517,99 @@ test.describe('save into the file (File System Access)', () => {
       await page.click('#btnSaveAs');
       await expect(page.locator('.toast').last()).toContainText('Saved: notes.md');
       await expect(saveBtn(page)).toHaveAttribute('aria-label', 'Save to notes.md');
+    });
+  });
+});
+
+test.describe('Mermaid diagrams', () => {
+  const FLOW = 'flowchart LR\n  A[Start] --> B{Prüfen}\n  B -->|ja| C[Fertig]\n  B -->|nein| A';
+  const SEQ = 'sequenceDiagram\n  Alice->>Bob: Hallo';
+  const DOC = `# Ablauf\n\n\`\`\`mermaid\n${FLOW}\n\`\`\`\n\nText danach\n\n\`\`\`mermaid\n${SEQ}\n\`\`\`\n\n\`\`\`mermaid\nflowchart LR\n  A -->\n\`\`\`\n`;
+  const lib = '/assets/vendor/mermaid/mermaid.min.js';
+
+  test('drawn in the view, errors shown with the text; the library loads only for diagrams', async ({ page }) => {
+    const loads = [];
+    page.on('request', r => { if (r.url().endsWith(lib)) loads.push(r.url()); });
+    await raw(page).fill('# Ohne Diagramm\n\n```js\nconst a = 1;\n```');
+    await page.locator('#views [data-v="render"]').click();
+    await expect(view(page).locator('pre code')).toHaveText('const a = 1;');
+    expect(loads).toEqual([]);
+    await page.locator('#views [data-v="raw"]').click();
+    await raw(page).fill(DOC);
+    await page.locator('#views [data-v="render"]').click();
+    const blocks = view(page).locator('.mermaid-block');
+    await expect(blocks.nth(0).locator('svg[role="img"]')).toHaveAttribute('aria-label', 'Diagramm');
+    await expect(blocks.nth(0).locator('svg')).toContainText('Prüfen');
+    await expect(blocks.nth(1).locator('svg')).toContainText('Hallo');
+    await expect(blocks.nth(2).locator('.mermaid-error')).toHaveText('Das Diagramm enthält einen Fehler – hier sein Text.');
+    await expect(blocks.nth(2).locator('pre code')).toHaveText('flowchart LR\n  A -->');
+    for (let i = 0; i < 3; i++) await expect(blocks.nth(i)).toHaveAttribute('contenteditable', 'false');
+    expect(loads).toHaveLength(1);
+    // Mermaid leaves nothing behind outside the view
+    expect(await page.evaluate(() => [...document.body.children].filter(e => /mmd/.test(e.id) || e.querySelector?.('[id^="mmd-"]') && !e.closest('main')).length)).toBe(0);
+    // Diagram text from the file is no part of the diagnosis
+    expect(await page.evaluate(() => Tools.diag.text())).not.toContain('Prüfen');
+  });
+
+  test('editing the view around a diagram keeps its Markdown exactly', async ({ page }) => {
+    await raw(page).fill(DOC);
+    await page.locator('#views [data-v="render"]').click();
+    await expect(view(page).locator('.mermaid-block svg')).toHaveCount(2);
+    await view(page).locator('h1').evaluate(el => { el.textContent = 'Neuer Ablauf'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    const md = await rawText(page);
+    expect(md).toContain('# Neuer Ablauf');
+    expect(md).toContain('```mermaid\n' + FLOW + '\n```');
+    expect(md).toContain('```mermaid\n' + SEQ + '\n```');
+    expect(md).toContain('```mermaid\nflowchart LR\n  A -->\n```');
+  });
+
+  test('dark theme draws dark diagrams; print / PDF draws them light', async ({ page }) => {
+    await page.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await raw(page).fill(DOC);
+    await page.locator('#views [data-v="render"]').click();
+    await expect(view(page).locator('.mermaid-block[data-theme="dark"] svg')).toHaveCount(2);
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect(view(page).locator('.mermaid-block[data-theme="default"] svg')).toHaveCount(2);
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await openMenu(page);
+    await page.click('#btnPrint');
+    await expect.poll(() => page.evaluate(() => window.__printed)).toBe(1);
+    await expect(page.locator('#printDoc .mermaid-block[data-theme="default"] svg')).toHaveCount(2);
+    await expect(page.locator('#printDoc .mermaid-error')).toHaveCount(1);
+    await page.emulateMedia({ media: 'print', colorScheme: 'dark' });
+    await expect(page.locator('#printDoc .mermaid-block svg').first()).toBeVisible();
+    const pdf = await page.pdf({ format: 'A4' });
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  test('works offline after it was used once', async ({ page, context }) => {
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload();
+    await raw(page).fill(DOC);
+    await page.locator('#views [data-v="render"]').click();
+    await expect(view(page).locator('.mermaid-block svg')).toHaveCount(2);
+    await context.setOffline(true);
+    await page.reload();
+    await expect(view(page).locator('.mermaid-block svg')).toHaveCount(2);
+    await expect(view(page).locator('.mermaid-block svg').first()).toContainText('Prüfen');
+    await context.setOffline(false);
+  });
+
+  test.describe('offline before the first use', () => {
+    // The browser reports the failed download of the library
+    test.use({ allowedProblems: /^console: Failed to load resource: net::ERR_FAILED$/ });
+    test('the text with a note; drawn once the network is back', async ({ page, context }) => {
+      await page.evaluate(() => navigator.serviceWorker.ready);
+      await context.setOffline(true);
+      await raw(page).fill('```mermaid\n' + SEQ + '\n```');
+      await page.locator('#views [data-v="render"]').click();
+      await expect(view(page).locator('.mermaid-error')).toHaveText('Diagramme lassen sich gerade nicht anzeigen – beim ersten Mal ist Internet nötig.');
+      await expect(view(page).locator('pre code')).toHaveText(SEQ);
+      expect(await rawText(page)).toBe('```mermaid\n' + SEQ + '\n```');
+      await context.setOffline(false);
+      await page.locator('#views [data-v="render"]').click();
+      await expect(view(page).locator('.mermaid-block svg')).toContainText('Hallo');
     });
   });
 });
