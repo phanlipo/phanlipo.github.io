@@ -337,6 +337,7 @@ const FILE_TYPES = {
   '.heic': 'image/heic', '.heif': 'image/heif', '.avif': 'image/avif', '.gif': 'image/gif', '.bmp': 'image/bmp',
   '.ico': 'image/x-icon', '.svg': 'image/svg+xml',
   '.ics': 'text/calendar',
+  '.zip': 'application/zip',
   // Text and source files (code-editor)
   '.json': 'application/json', '.xml': 'application/xml', '.yaml': 'application/yaml', '.yml': 'application/yaml',
   '.toml': 'application/toml', '.ini': 'text/plain', '.cfg': 'text/plain', '.conf': 'text/plain', '.properties': 'text/plain',
