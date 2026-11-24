@@ -22,7 +22,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can play notes, play, pause or seek the loaded song, change its tempo and read details about it.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-SUakeJVuXeoWkWtGnzhDW0I0BUvtZlKv5rYcdl231eI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Q/30Wv4p8Y5Yn60je9WGmBLMbgJ0S8x3jdLhaBXR5zI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -35,6 +35,7 @@
 :root{--accent:#4338ca;--accent-text:#ffffff;--roll-bg:#eef0fb;--key-white:#ffffff;--key-black:#1b2430;--key-edge:#b9c1cf}
 @media (prefers-color-scheme: dark){:root{--accent:#a5b4fc;--accent-text:#11143a;--roll-bg:#141829;--key-white:#e9ecf2;--key-black:#0b0e14;--key-edge:#5a6577}}
 /* Stage: falling notes fill the screen, transport and keyboard at the bottom (thumb) */
+.song-group{margin:12px 0 6px;font-size:.9rem}
 main{display:flex;flex-direction:column}
 .roll{position:relative;flex:1;min-height:90px;background:var(--roll-bg);overflow:hidden}
 .roll canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -128,7 +129,7 @@ main{display:flex;flex-direction:column}
     <div class="slider"><input type="range" id="speed" min="25" max="200" step="5" value="100"><output id="speedOut" for="speed">100 %</output></div>
   </div>
   <h3 data-i18n="songs">Lieder aus dem Liederbuch</h3>
-  <div class="row" id="songList"></div>
+  <div id="songList"></div>
   <p><a class="btn" id="toSongbook" href="../songbook/"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#music"/></svg><span data-i18n="toSongbook">Noten im Liederbuch ansehen</span></a></p>
 </section>
 
@@ -257,7 +258,7 @@ main{display:flex;flex-direction:column}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 5b926f3291ca</p>
+  <p class="footer-version">Version fe8e62454257</p>
   <!-- footer:end -->
 </footer>
 
@@ -743,7 +744,11 @@ $('parts').addEventListener('change',e=>{
   updateLit();
 });
 function renderSongList(){
-  $('songList').innerHTML=Songs.list.map(s=>`<button type="button" class="btn" data-demo="${Tools.esc(s.id)}"${song&&song.demo===s.id?' aria-pressed="true"':''}>${Tools.esc(s.title[Tools.lang()]||s.title.de)}</button>`).join('');
+  const L=Tools.lang();
+  $('songList').innerHTML=Songs.groups.map(g=>{
+    const list=Songs.list.filter(s=>s.group===g.id);
+    return list.length?`<h4 class="song-group">${Tools.esc(g.title[L]||g.title.de)}</h4><div class="row">`+list.map(s=>`<button type="button" class="btn" data-demo="${Tools.esc(s.id)}"${song&&song.demo===s.id?' aria-pressed="true"':''}>${Tools.esc(s.title[L]||s.title.de)}</button>`).join('')+'</div>':'';
+  }).join('');
   $('toSongbook').href='../songbook/'+(song&&song.demo?'?song='+encodeURIComponent(song.demo):'');
 }
 function renderAll(){
