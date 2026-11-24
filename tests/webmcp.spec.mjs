@@ -4741,3 +4741,41 @@ test.describe('planets tools', () => {
     expect(await call(page, 'planets_get_moon_calendar', { year: 2026, month: 13 })).toMatchObject({ ok: false });
   });
 });
+
+test.describe('keepass-viewer tools', () => {
+  const kdbx = readFileSync(new URL('./fixtures/keepass/kdbx4-aeskdf-aes.kdbx', import.meta.url));
+  test.beforeEach(async ({ page }) => {
+    await fakeModelContext(page);
+    await page.goto('/keepass-viewer/');
+  });
+
+  test('only while unlocked; never passwords, user names or notes; lock drops the data', async ({ page }) => {
+    expect(await call(page, 'keepass_viewer_find_entries', { query: 'mail' }))
+      .toEqual({ ok: false, error: 'The vault is locked. Ask the user to unlock it in the app.' });
+    await page.setInputFiles('#fileIn', { name: 'tresor.kdbx', mimeType: 'application/octet-stream', buffer: kdbx });
+    await page.fill('#pw', 'test-passwort');
+    await page.click('#btnUnlock');
+    await expect(page.locator('#vaultCard')).toBeVisible();
+    const found = await call(page, 'keepass_viewer_find_entries', { query: 'example' });
+    expect(found).toEqual({ ok: true, result: { total: 2, entries: [
+      { title: 'Girokonto', group: 'Bank', url: 'https://bank.example.com/login' },
+      { title: 'Mail', group: '', url: 'https://mail.example.org' },
+    ] } });
+    // shown in the app
+    await expect(page.locator('#q')).toHaveValue('example');
+    await expect(page.locator('#h-group')).toHaveText('Treffer: 2');
+    const shown = await call(page, 'keepass_viewer_show_entry', { title: 'mail' });
+    expect(shown).toEqual({ ok: true, result: { title: 'Mail', group: '', url: 'https://mail.example.org',
+      fields: ['user name', 'password', 'one-time code', 'PIN', 'notes'] } });
+    await expect(page.locator('#h-entry')).toHaveText('Mail');
+    await expect(page.locator('#fields .val.secret').first()).toHaveText('••••••••');
+    const all = JSON.stringify([found, shown]);
+    for (const secret of ['S3cr3t', 'anna@', '4711', 'Zeile', 'JBSWY3DP', 'Bank-P']) expect(all).not.toContain(secret);
+    expect(await call(page, 'keepass_viewer_show_entry', { title: 'Nix' })).toEqual({ ok: false, error: 'No entry with this title.' });
+    expect(await call(page, 'keepass_viewer_find_entries', { query: '' })).toEqual({ ok: false, error: 'input.query must have at least 1 characters' });
+    expect(await call(page, 'keepass_viewer_lock', {})).toEqual({ ok: true, result: { wasUnlocked: true } });
+    await expect(page.locator('#vaultCard')).toBeHidden();
+    await expect(page.locator('#entryCard')).toBeHidden();
+    expect((await call(page, 'keepass_viewer_show_entry', { title: 'Mail' })).ok).toBe(false);
+  });
+});
