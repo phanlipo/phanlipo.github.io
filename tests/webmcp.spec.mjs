@@ -2383,6 +2383,37 @@ test.describe('markdown-editor tools', () => {
   });
 });
 
+test.describe('code-editor tools', () => {
+  test.beforeEach(async ({ page }) => { await open(page, '/code-editor/'); });
+
+  test('create_file opens a new highlighted file, list and read return it, other files stay', async ({ page }) => {
+    await page.click('#btnBlank');
+    await page.fill('#code', 'eigener Text');
+    await page.fill('#name', 'notiz.txt');
+    const c = await call(page, 'code_editor_create_file', { name: 'tool.py', text: 'def f():\r\n    return 1\n' });
+    expect(c).toEqual({ ok: true, result: { id: expect.any(String), name: 'tool.py', language: 'python', lines: 2, characters: 22, modified: expect.any(String), open: true } });
+    await expect(page.locator('#code')).toHaveValue('def f():\n    return 1\n');
+    await expect(page.locator('#name')).toHaveValue('tool.py');
+    await expect(page.locator('#hlCode .hljs-keyword').first()).toHaveText('def');
+    await expect(page.locator('#modes [data-m="view"]')).toHaveAttribute('aria-pressed', 'true');
+    const l = (await call(page, 'code_editor_list_files', {})).result.files;
+    expect(l.map(f => [f.name, f.language, f.characters, f.open])).toEqual([['tool.py', 'python', 22, true], ['notiz.txt', 'plaintext', 12, false]]);
+    expect((await call(page, 'code_editor_read_file', { id: l[1].id })).result).toMatchObject({ name: 'notiz.txt', text: 'eigener Text', open: false });
+    expect((await call(page, 'code_editor_read_file', {})).result).toMatchObject({ id: c.result.id, text: 'def f():\n    return 1\n' });
+  });
+
+  test('bad input is rejected and changes nothing', async ({ page }) => {
+    expect((await call(page, 'code_editor_read_file', {})).error).toContain('No file is open');
+    expect((await call(page, 'code_editor_read_file', { id: 'nope' })).error).toContain('list_files');
+    expect((await call(page, 'code_editor_create_file', { text: 'x' })).ok).toBe(false);
+    expect((await call(page, 'code_editor_create_file', { name: 'a.txt', text: 1 })).ok).toBe(false);
+    expect((await call(page, 'code_editor_create_file', { name: 'a.txt', text: 'x', other: 1 })).ok).toBe(false);
+    expect((await call(page, 'code_editor_create_file', { name: '   ', text: 'x' })).ok).toBe(false);
+    expect((await call(page, 'code_editor_list_files', {})).result.files).toEqual([]);
+    await expect(page.locator('#start')).toBeVisible();
+  });
+});
+
 test.describe('scoreboard tools', () => {
   test.beforeEach(async ({ page }) => { await open(page, '/scoreboard/'); });
 
@@ -4497,6 +4528,30 @@ test.describe('pinball tools', () => {
   });
 });
 
+test.describe('marble-maze tools', () => {
+  test('get_state, choose_level only among unlocked levels and not while playing, start_level', async ({ page }) => {
+    await page.clock.install({ time: 0 });
+    await page.addInitScript(() => localStorage.setItem('marble-maze.settings.v1', JSON.stringify({ control: 'touch', sound: false, fullscreen: false, done: 2, level: 1, best: { 1: 12.3 } })));
+    await open(page, '/marble-maze/');
+    let r = await call(page, 'marble_maze_get_state', {});
+    expect(r).toEqual({ ok: true, result: { phase: 'idle', level: 1, levels: 30, unlocked: 3, time_seconds: null, falls: null, control: 'finger',
+      best_times_seconds: { 1: 12.3, 2: null, 3: null } } });
+    r = await call(page, 'marble_maze_choose_level', { level: 3 });
+    expect(r.result).toMatchObject({ phase: 'idle', level: 3 });
+    await expect(page.locator('#lvLabel')).toHaveText('Level 3 von 30');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Level gewählt');
+    expect(await call(page, 'marble_maze_choose_level', { level: 4 })).toMatchObject({ ok: false, error: 'Level 4 is locked; levels 1-3 are unlocked.' });
+    expect(await call(page, 'marble_maze_choose_level', { level: 31 })).toMatchObject({ ok: false });
+    expect(await call(page, 'marble_maze_choose_level', {})).toMatchObject({ ok: false });
+    r = await call(page, 'marble_maze_start_level', {});
+    expect(r.result).toMatchObject({ phase: 'play', level: 3, time_seconds: 0, falls: 0 });
+    await expect(page.locator('#panel')).toBeHidden();
+    await expect(page.locator('#hudLevel')).toHaveText('Level 3');
+    expect(await call(page, 'marble_maze_choose_level', { level: 1 })).toMatchObject({ ok: false });
+    expect(JSON.parse(await page.evaluate(() => localStorage.getItem('marble-maze.settings.v1')))).toMatchObject({ level: 3, done: 2 });
+  });
+});
+
 test.describe('table-tennis tools', () => {
   test('get_state, set_game and new_game; a running game keeps its settings', async ({ page }) => {
     await page.clock.install({ time: 0 });
@@ -4520,5 +4575,68 @@ test.describe('table-tennis tools', () => {
     r = await call(page, 'table_tennis_set_game', { mode: 'computer', level: 'hard', points_to_win: 11 });
     expect(r.result).toMatchObject({ phase: 'play', mode: 'two_players', points_to_win: 21, next_game: { mode: 'computer', level: 'hard', points_to_win: 11 } });
     expect(JSON.parse(await page.evaluate(() => localStorage.getItem('table-tennis.settings.v1')))).toMatchObject({ mode: 'cpu', level: 'hard', points: 11 });
+  });
+});
+
+test.describe('anatomy tools', () => {
+  const index = JSON.parse(readFileSync(new URL('../anatomy/models/index.json', import.meta.url), 'utf8'));
+  const id = (en, side) => index.parts.findIndex(p => p[1] === en && p[2] === side);
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await fakeModelContext(page);
+    await page.goto('/anatomy/');
+    await page.waitForFunction(() => window.__anatomy && window.__anatomy.viewer.layers.has('skeleton'));
+  });
+
+  test('find_parts searches all languages; get_state reads without changing anything', async ({ page }) => {
+    let r = await call(page, 'anatomy_find_parts', { query: 'femur' });
+    // Left and right are one hit (the id of one side)
+    const femur = r.result.results[0];
+    expect(femur).toEqual({ id: id('Femur', femur.side[0]), name: 'Femur', latin: 'Os femoris', german: 'Oberschenkelknochen', layer: 'skeleton', side: femur.side });
+    expect(r.result.results.filter(p => p.name === 'Femur')).toHaveLength(1);
+    r = await call(page, 'anatomy_find_parts', { query: 'Leber' });
+    expect(r.result.results[0]).toMatchObject({ name: 'Liver', latin: 'Hepar', layer: 'organs', side: null });
+    r = await call(page, 'anatomy_find_parts', { query: 'nerve', layer: 'nerves', limit: 5 });
+    expect(r.result.results).toHaveLength(5);
+    expect(r.result.results.every(p => p.layer === 'nerves')).toBe(true);
+    expect((await call(page, 'anatomy_find_parts', { query: 'zzzz' })).result).toEqual({ results: [] });
+    r = await call(page, 'anatomy_get_state', {});
+    expect(r.result).toEqual({ layers: ['skeleton'], selected: null, hidden_parts: 0, camera: { azimuthDeg: 0, elevationDeg: 5, zoom: 1 },
+      labels: false, auto_rotate: false, quiz: null, best_quiz_score: 0 });
+    // Nothing was loaded or switched for the search
+    expect(await page.evaluate(() => [...window.__anatomy.viewer.layers.keys()])).toEqual(['skeleton']);
+  });
+
+  test('show_part switches the layer on, selects and zooms in; set_layers like the chips', async ({ page }) => {
+    const liver = index.parts.findIndex(p => p[1] === 'Liver');
+    let r = await call(page, 'anatomy_show_part', { id: liver });
+    expect(r.result).toEqual({ shown: { id: liver, name: 'Liver', latin: 'Hepar', german: 'Leber', layer: 'organs', side: null }, layers: ['skeleton', 'organs'] });
+    await expect(page.locator('#infoName')).toHaveText('Leber');
+    await expect(page.locator('#layers [data-layer="organs"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Teil gezeigt');
+    expect((await call(page, 'anatomy_get_state', {})).result.camera.zoom).toBeGreaterThan(2);
+    r = await call(page, 'anatomy_set_layers', { layers: ['muscles', 'skin'], skin_opacity: 50 });
+    expect(r.result).toEqual({ layers: ['skin', 'muscles'], loaded: ['skeleton', 'organs', 'skin', 'muscles'], skin_opacity: 50 });
+    await expect(page.locator('#layers [aria-pressed="true"]')).toHaveText(['Haut', 'Muskeln']);
+    await expect(page.locator('#info')).toBeHidden();   // the liver is no longer drawn
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('anatomy.settings.v1')))).toMatchObject({ layers: ['skin', 'muscles'], skin: 50 });
+    r = await call(page, 'anatomy_get_state', {});
+    expect(r.result).toMatchObject({ layers: ['skin', 'muscles'], selected: null });
+    // A part that the user had hidden comes back when an agent shows it
+    const femur = id('Femur', 'r');
+    await page.evaluate(i => window.__anatomy.viewer.setHidden(i, true), femur);
+    r = await call(page, 'anatomy_show_part', { id: femur });
+    expect(r.result.layers).toEqual(['skin', 'muscles', 'skeleton']);
+    expect(await page.evaluate(() => window.__anatomy.viewer.hidden.size)).toBe(0);
+    expect((await call(page, 'anatomy_get_state', {})).result.selected).toMatchObject({ name: 'Femur', side: 'right' });
+  });
+
+  test('invalid input is rejected', async ({ page }) => {
+    expect(await call(page, 'anatomy_show_part', { id: 99999 })).toEqual({ ok: false, error: 'No part with id 99999.' });
+    expect((await call(page, 'anatomy_show_part', {})).ok).toBe(false);
+    expect((await call(page, 'anatomy_find_parts', { query: 'a' })).ok).toBe(false);
+    expect((await call(page, 'anatomy_set_layers', { layers: ['bones'] })).ok).toBe(false);
+    expect((await call(page, 'anatomy_set_layers', { layers: ['skin'], skin_opacity: 5 })).ok).toBe(false);
+    await expect(page.locator('#layers [aria-pressed="true"]')).toHaveText(['Skelett']);
   });
 });

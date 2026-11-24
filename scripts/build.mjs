@@ -337,6 +337,19 @@ const FILE_TYPES = {
   '.heic': 'image/heic', '.heif': 'image/heif', '.avif': 'image/avif', '.gif': 'image/gif', '.bmp': 'image/bmp',
   '.ico': 'image/x-icon', '.svg': 'image/svg+xml',
   '.ics': 'text/calendar',
+  // Text and source files (code-editor)
+  '.json': 'application/json', '.xml': 'application/xml', '.yaml': 'application/yaml', '.yml': 'application/yaml',
+  '.toml': 'application/toml', '.ini': 'text/plain', '.cfg': 'text/plain', '.conf': 'text/plain', '.properties': 'text/plain',
+  '.log': 'text/plain', '.csv': 'text/csv', '.tsv': 'text/tab-separated-values',
+  '.html': 'text/html', '.htm': 'text/html', '.css': 'text/css', '.scss': 'text/x-scss',
+  '.js': 'text/javascript', '.mjs': 'text/javascript', '.cjs': 'text/javascript', '.jsx': 'text/javascript',
+  '.ts': 'text/x-typescript', '.tsx': 'text/x-typescript',
+  '.py': 'text/x-python', '.c': 'text/x-c', '.h': 'text/x-c', '.cpp': 'text/x-c++', '.cc': 'text/x-c++', '.hpp': 'text/x-c++',
+  '.cs': 'text/x-csharp', '.java': 'text/x-java', '.kt': 'text/x-kotlin', '.go': 'text/x-go', '.rs': 'text/x-rust',
+  '.rb': 'text/x-ruby', '.php': 'application/x-httpd-php', '.pl': 'text/x-perl', '.lua': 'text/x-lua', '.r': 'text/x-r',
+  '.swift': 'text/x-swift', '.dart': 'text/x-dart', '.sql': 'application/sql',
+  '.sh': 'application/x-sh', '.bash': 'application/x-sh', '.zsh': 'application/x-sh', '.ps1': 'text/plain', '.bat': 'text/plain', '.cmd': 'text/plain',
+  '.tex': 'application/x-tex', '.diff': 'text/x-diff', '.patch': 'text/x-diff', '.ino': 'text/x-c++', '.gcode': 'text/plain',
 };
 function fileHandlers(p) {
   const exts = p.shareAccept.filter(a => a.startsWith('.')).map(a => a.toLowerCase());

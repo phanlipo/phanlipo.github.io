@@ -1,6 +1,6 @@
 // Atomuhr: time synchronised from the Date header of the own server (HEAD requests, faked here with a
 // known offset), time zones, next clock change (checked against the known EU/US rules), world clocks.
-import { test, expect, openMenu, switchLang } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang } from './helpers.mjs';
 
 const SYNC = '**/atomic-clock/manifest.webmanifest?sync=*';
 const LS = 'atomic-clock.settings.v1';
@@ -145,6 +145,49 @@ test.describe('without server', () => {
     await page.reload();
     await expect(rows).toHaveCount(2);
     expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)).clocks, LS)).toEqual(['Asia/Tokyo', 'America/Los_Angeles']);
+  });
+
+  test('milliseconds and analogue clock: digital, analogue or both, saved', async ({ page }) => {
+    await stopClock(page, '2027-08-01T10:00:00Z');
+    await page.goto('/atomic-clock/');
+    await expect(page.locator('#analog')).toBeHidden();
+    await openMenu(page);
+    await page.getByLabel('Millisekunden anzeigen').click();
+    await page.locator('#faceSeg label', { hasText: /^Beides$/ }).click();
+    await closeMenu(page);
+    await expect(page.locator('#time')).toHaveText('12:00:00,000');
+    await page.clock.runFor(1250);
+    await expect(page.locator('#time')).toHaveText(/^12:00:01,2\d\d$/);
+    // Hands at 12:00:01.25 Berlin: hour ≈ 0°, minute 0.125°, second hand sweeps (7.5°)
+    await expect(page.locator('#analog')).toBeVisible();
+    await expect(page.locator('#analog')).toHaveAttribute('aria-hidden', 'true');
+    const angle = async id => Number((await page.locator(id).getAttribute('transform')).match(/rotate\(([\d.]+)\)/)[1]);
+    expect(await angle('#handS')).toBeGreaterThanOrEqual(7.2);
+    expect(await angle('#handS')).toBeLessThanOrEqual(8.4);
+    expect(await angle('#handM')).toBeLessThan(0.2);
+    expect(await angle('#handH')).toBeLessThan(0.1);
+    // Analogue only: the digital time is hidden, the dial carries the time as its name
+    await openMenu(page);
+    await page.locator('#faceSeg label', { hasText: /^Analog$/ }).click();
+    await closeMenu(page);
+    await expect(page.locator('#time')).toBeHidden();
+    await expect(page.locator('#analog')).toHaveAttribute('role', 'img');
+    await expect(page.locator('#analog')).toHaveAttribute('aria-label', /^Analoge Uhr: 12:00:0\d$/);
+    expect(await page.evaluate(k => { const s = JSON.parse(localStorage.getItem(k)); return [s.face, s.ms]; }, LS)).toEqual(['analog', true]);
+    await page.reload();
+    await expect(page.locator('#time')).toBeHidden();
+    await expect(page.locator('#analog')).toBeVisible();
+  });
+
+  test('analogue hands without milliseconds jump with the seconds', async ({ page }) => {
+    await page.addInitScript(k => localStorage.setItem(k, JSON.stringify({ face: 'both' })), LS);
+    await stopClock(page, '2027-08-01T13:20:30Z');
+    await page.goto('/atomic-clock/');
+    await expect(page.locator('#time')).toHaveText('15:20:30');
+    // 15:20:30 → hour (3 + 20.5/60) · 30 = 100.25°, minute 20.5 · 6 = 123°, second 180°
+    await expect(page.locator('#handH')).toHaveAttribute('transform', 'rotate(100.25)');
+    await expect(page.locator('#handM')).toHaveAttribute('transform', 'rotate(123.00)');
+    await expect(page.locator('#handS')).toHaveAttribute('transform', 'rotate(180.00)');
   });
 
   test('keep screen on is a setting in the menu', async ({ page }) => {

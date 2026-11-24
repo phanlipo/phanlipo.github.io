@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Code-Editor</title>
+<meta name="description" content="Textdateien ansehen und bearbeiten – JSON, Python, Markdown, C++, Shell, XML und viele mehr, mit farbiger Syntax, Zeilennummern und Suchen &amp; Ersetzen.">
+<meta name="tool:tags" content="Arbeit, Dokumente, Werkzeug">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, Verlauf, KI-Agent">
+<meta name="tool:webmcp" content="list_files, read_file, create_file">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann die Liste der Dateien und deren Inhalt lesen und eine neue Datei anlegen. Bestehende Dateien ändern kann er nicht.">
+<meta name="tool:webmcp-help-en" content="An AI agent can read the list of files and their content and create a new file. It cannot change existing files.">
+<meta name="tool:share-target" content="text/*, application/json, application/xml, application/javascript, application/x-sh, application/x-yaml, application/yaml, application/toml, application/sql, .txt, .md, .json, .xml, .yaml, .yml, .toml, .ini, .cfg, .conf, .properties, .log, .csv, .tsv, .html, .htm, .css, .scss, .js, .mjs, .cjs, .jsx, .ts, .tsx, .py, .c, .h, .cpp, .cc, .hpp, .cs, .java, .kt, .go, .rs, .rb, .php, .pl, .lua, .r, .swift, .dart, .sql, .sh, .bash, .zsh, .ps1, .bat, .cmd, .tex, .diff, .patch, .ino, .gcode">
+<meta name="tool:icon" content="file-code">
+<meta name="tool:color" content="#6d28d9">
+<meta name="tool:short-name" content="Code-Editor">
+<meta name="tool:title-en" content="Code Editor">
+<meta name="tool:description-en" content="View and edit text files – JSON, Python, Markdown, C++, shell, XML and many more, with coloured syntax, line numbers and find &amp; replace.">
+<meta name="tool:short-name-en" content="Code Editor">
+<meta name="tool:storage" content="code-editor.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-lHeBwjti0FCASy++RkGiPxLpxhlWoA63nxo6CAvLq7c='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Code-Editor">
+<meta name="theme-color" content="#6d28d9">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#6d28d9;--accent-text:#ffffff;--code-size:16px;
+  /* Syntax colours (AA contrast on --surface) */
+  --hl-keyword:#cf222e;--hl-string:#0a3069;--hl-comment:#57606a;--hl-number:#0550ae;--hl-title:#8250df;
+  --hl-type:#953800;--hl-tag:#116329;--hl-add-bg:#dafbe1;--hl-del-bg:#ffebe9;--hl-del:#82071e;--hit:rgba(255,200,0,.35);--hit-cur:rgba(255,150,0,.6)}
+@media (prefers-color-scheme: dark){:root{--accent:#c4b5fd;--accent-text:#1e1035;
+  --hl-keyword:#ff7b72;--hl-string:#a5d6ff;--hl-comment:#9aa5b1;--hl-number:#79c0ff;--hl-title:#d2a8ff;
+  --hl-type:#ffa657;--hl-tag:#7ee787;--hl-add-bg:#12351f;--hl-del-bg:#45161a;--hl-del:#ffa198;--hit:rgba(255,210,0,.25);--hit-cur:rgba(255,170,0,.5)}}
+body.font-l{--code-size:18px}
+body.font-xl{--code-size:21px}
+main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right))}
+#work{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.topbar{flex:none;display:flex;gap:8px;align-items:center}
+.topbar input{flex:1;min-width:0;min-height:44px;padding-inline:10px;font-size:16px}
+#modes{flex:none}
+#modes>button{flex:none;padding-inline:10px;font-size:15px}
+.topbar .btn.icon{flex:none;position:relative}
+#btnDownload.unsaved::after{content:"";position:absolute;inset-block-start:6px;inset-inline-end:6px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+
+/* ---------- Start (no file yet) ---------- */
+#start{flex:1;display:flex;flex-direction:column;gap:12px;justify-content:center;max-width:560px;width:100%;margin-inline:auto}
+#start .dropzone{min-height:180px;text-align:center}
+#start .dz-hint{max-width:40ch}
+
+/* ---------- Editor: a highlighted <pre> under a transparent <textarea>, both in one scroll box ----------
+   Both use exactly the same font, padding and wrapping, so the caret and the selection sit on the coloured text.
+   The textarea is an overlay of the size of the text (it never scrolls itself) – that is why it does not take
+   the standard textarea look of base.css. */
+.code-box{position:relative;overflow:hidden}
+#scroller{flex:1;min-width:0;overflow:auto;overscroll-behavior:contain;border-radius:var(--radius)}
+.inner{display:flex;min-height:100%;width:max-content;min-width:100%}
+body.wrap .inner{width:100%}
+#gutter,#hl,#code{margin:0;border:0;padding-block:10px 40px;font:var(--code-size)/1.5 var(--mono);letter-spacing:0;tab-size:var(--tab,4);-moz-tab-size:var(--tab,4)}
+#gutter{flex:none;padding-inline:10px 8px;text-align:end;color:var(--muted);background:var(--surface-2);border-inline-end:1px solid var(--border);user-select:none;white-space:pre;min-width:2ch}
+body.wrap #gutter,body.no-lines #gutter{display:none}
+.layer{position:relative;flex:1 0 auto}
+body.wrap .layer{flex:1 1 0;min-width:0}
+#hl{padding-inline:12px;white-space:pre;color:var(--text);background:transparent;min-height:100%;box-sizing:border-box;pointer-events:none}
+#code{position:absolute;inset:0;width:100%;height:100%;min-height:0;box-sizing:border-box;padding-inline:12px;resize:none;overflow:hidden;
+  white-space:pre;overflow-wrap:normal;word-break:normal;background:transparent;color:transparent;-webkit-text-fill-color:transparent;caret-color:var(--text);outline:0;border-radius:0}
+#code::placeholder{color:var(--muted);-webkit-text-fill-color:var(--muted)}
+#code::selection{background:color-mix(in srgb,var(--accent) 35%,transparent)}
+body.wrap #hl,body.wrap #code{white-space:pre-wrap;overflow-wrap:anywhere}
+#code:focus-visible{outline:0}
+.hits{position:absolute;inset:0;pointer-events:none}
+.hits>i{position:absolute;background:var(--hit);border-radius:2px}
+.hits>i.cur{background:var(--hit-cur)}
+#hl code{font:inherit;background:none;border:0;padding:0}
+
+/* highlight.js classes */
+.hljs-keyword,.hljs-selector-tag,.hljs-literal,.hljs-doctag,.hljs-meta .hljs-keyword{color:var(--hl-keyword)}
+.hljs-string,.hljs-regexp,.hljs-meta .hljs-string,.hljs-char.escape_{color:var(--hl-string)}
+.hljs-comment,.hljs-quote,.hljs-formula{color:var(--hl-comment);font-style:italic}
+.hljs-number,.hljs-attr,.hljs-attribute,.hljs-variable.constant_,.hljs-property,.hljs-symbol,.hljs-bullet,.hljs-link,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id,.hljs-operator{color:var(--hl-number)}
+.hljs-title,.hljs-title.function_,.hljs-title.class_,.hljs-section,.hljs-meta,.hljs-selector-pseudo{color:var(--hl-title)}
+.hljs-built_in,.hljs-type,.hljs-params,.hljs-variable,.hljs-template-variable,.hljs-title.class_.inherited__{color:var(--hl-type)}
+.hljs-name,.hljs-tag,.hljs-template-tag,.hljs-subst{color:var(--hl-tag)}
+.hljs-section,.hljs-strong{font-weight:700}
+.hljs-emphasis{font-style:italic}
+.hljs-addition{color:var(--hl-tag);background:var(--hl-add-bg)}
+.hljs-deletion{color:var(--hl-del);background:var(--hl-del-bg)}
+
+/* ---------- Find & replace ---------- */
+#find{flex:none;display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.find-row{display:flex;gap:6px;align-items:center}
+.find-row input{flex:1;min-width:0;min-height:44px;padding-inline:10px;font-size:16px}
+#findCount{flex:none;font-size:14px;color:var(--muted);min-width:4ch;text-align:center}
+.find-row .btn{flex:none;min-height:44px}
+#toolbar,#moreTools{flex:none}
+.notice-line{flex:none;margin:0;font-size:14px}
+
+/* ---------- Files (in the menu) and the format dialog ---------- */
+.files .btn.icon .ic{width:20px;height:20px}
+#fmtInfo{color:var(--muted);font-size:14px}
+</style>
+</head>
+<body class="stage">
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Code-Editor</span></h1>
+  <p class="sub" data-i18n="sub">Textdateien ansehen und bearbeiten – mit farbiger Syntax.</p>
+  <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnOpen" aria-label="Datei öffnen" title="Datei öffnen" data-i18n-attr="aria-label:open; title:open"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#folder-open"/></svg></button>
+    <button type="button" class="head-btn" id="btnNew" aria-label="Neue Datei" title="Neue Datei" data-i18n-attr="aria-label:new; title:new"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-plus"/></svg></button>
+    <button type="button" class="head-btn" id="btnShare" aria-label="Teilen" title="Teilen" data-i18n-attr="aria-label:share; title:share" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg></button>
+  </div>
+</header>
+
+<main id="main">
+  <h2 class="sr-only" data-i18n="h.editor">Editor</h2>
+  <!-- First start: only choosing a file (or starting an empty one) -->
+  <div id="start" hidden>
+    <label class="dropzone" id="drop">
+      <input type="file" id="fileInput" class="sr-only" multiple>
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-upload"/></svg>
+      <strong data-i18n="pick">Datei öffnen</strong>
+      <span class="dz-hint" data-i18n="pickHint">oder hierher ziehen – JSON, Python, Markdown, C++, Shell, XML und jede andere Textdatei</span>
+    </label>
+    <button type="button" class="btn block" id="btnBlank"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-plus"/></svg><span data-i18n="blank">Leere Datei beginnen</span></button>
+  </div>
+
+  <div id="work" hidden>
+    <div class="topbar">
+      <input type="text" id="name" maxlength="120" autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="Dateiname" data-i18n-attr="aria-label:nameLabel" placeholder="unbenannt.txt">
+      <div class="seg" id="modes" role="group" aria-label="Modus" data-i18n-attr="aria-label:modeLabel">
+        <button type="button" data-m="view" aria-pressed="true" data-i18n="m.view">Ansehen</button>
+        <button type="button" data-m="edit" aria-pressed="false" data-i18n="m.edit">Bearbeiten</button>
+      </div>
+      <button type="button" class="btn icon" id="btnDownload" aria-label="Herunterladen" title="Herunterladen"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg></button>
+    </div>
+    <div class="editor-area code-box">
+      <div id="scroller">
+        <div class="inner">
+          <pre id="gutter" aria-hidden="true"></pre>
+          <div class="layer" id="layer">
+            <div class="hits" id="hits" aria-hidden="true"></div>
+            <pre id="hl" aria-hidden="true"><code id="hlCode"></code></pre>
+            <textarea id="code" wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Dateiinhalt" data-i18n-attr="aria-label:codeLabel; placeholder:codePh" placeholder="Hier schreiben oder einfügen …"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="notice info notice-line" id="bigNote" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span id="bigText"></span></p>
+    <div id="find" role="search" hidden>
+      <div class="find-row">
+        <input type="search" id="findText" autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="Suchen" placeholder="Suchen" data-i18n-attr="aria-label:findLabel; placeholder:findLabel">
+        <span id="findCount" role="status" aria-live="polite"></span>
+        <button type="button" class="btn icon" id="findPrev" aria-label="Vorheriger Treffer" title="Vorheriger Treffer" data-i18n-attr="aria-label:prev; title:prev"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-up"/></svg></button>
+        <button type="button" class="btn icon" id="findNext" aria-label="Nächster Treffer" title="Nächster Treffer" data-i18n-attr="aria-label:next; title:next"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-down"/></svg></button>
+        <button type="button" class="btn icon" id="findClose" aria-label="Suche schließen" title="Suche schließen" data-i18n-attr="aria-label:findClose; title:findClose"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button>
+      </div>
+      <div class="find-row" id="replaceRow">
+        <input type="text" id="replText" autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="Ersetzen durch" placeholder="Ersetzen durch" data-i18n-attr="aria-label:replLabel; placeholder:replLabel">
+        <button type="button" class="btn" id="btnRepl" data-i18n="repl">Ersetzen</button>
+        <button type="button" class="btn" id="btnReplAll" data-i18n="replAll">Alle</button>
+      </div>
+    </div>
+    <div class="toolbar-more" id="moreTools" role="group" aria-label="Weitere Werkzeuge" data-i18n-attr="aria-label:moreLabel" hidden></div>
+    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Werkzeuge" data-i18n-attr="aria-label:tbLabel"></div>
+  </div>
+
+  <section class="card" data-menu data-icon="files" aria-labelledby="h-files">
+    <h2 id="h-files" data-i18n="files">Dateien</h2>
+    <p class="muted" data-i18n="filesIntro">Alles wird automatisch gespeichert – nur in diesem Browser.</p>
+    <ul class="files list-rows" id="files"></ul>
+    <div class="row" style="margin-top:10px">
+      <button type="button" class="btn" id="btnOpen2"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#folder-open"/></svg><span data-i18n="openFile">Datei öffnen …</span></button>
+      <button type="button" class="btn" id="btnSaveAs" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#device-floppy"/></svg><span data-i18n="saveAs">Speichern unter …</span></button>
+    </div>
+  </section>
+
+  <details class="card" data-menu data-icon="settings">
+    <summary data-i18n="settings">Einstellungen</summary>
+    <label class="check"><input type="checkbox" id="optLines"><span data-i18n="optLines">Zeilennummern</span></label>
+    <label class="check"><input type="checkbox" id="optWrap"><span data-i18n="optWrap">Lange Zeilen umbrechen</span></label>
+    <h3 data-i18n="fontSize">Schriftgröße</h3>
+    <div class="seg" id="optFont" role="group" aria-label="Schriftgröße" data-i18n-attr="aria-label:fontSize">
+      <button type="button" data-v="m" aria-pressed="true" data-i18n="font.m">Normal</button>
+      <button type="button" data-v="l" aria-pressed="false" data-i18n="font.l">Groß</button>
+      <button type="button" data-v="xl" aria-pressed="false" data-i18n="font.xl">Sehr groß</button>
+    </div>
+    <h3 data-i18n="tabSize">Breite eines Tabulators</h3>
+    <div class="seg" id="optTab" role="group" aria-label="Breite eines Tabulators" data-i18n-attr="aria-label:tabSize">
+      <button type="button" data-v="2" aria-pressed="false">2</button>
+      <button type="button" data-v="4" aria-pressed="true">4</button>
+      <button type="button" data-v="8" aria-pressed="false">8</button>
+    </div>
+  </details>
+</main>
+
+<dialog class="dialog" id="fmtDlg" aria-labelledby="fmtDlgH">
+  <form method="dialog">
+    <div class="dialog-head"><h2 id="fmtDlgH" data-i18n="fmtTitle">Sprache &amp; Format</h2><button type="submit" class="head-btn" aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close; title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+    <div class="dialog-body">
+      <div class="form-field"><label for="fmtLang" data-i18n="fmtLang">Sprache (Farben)</label><select id="fmtLang"></select></div>
+      <div class="form-field"><label for="fmtEnc" data-i18n="fmtEnc">Zeichenkodierung beim Speichern</label><select id="fmtEnc"></select></div>
+      <div class="form-field"><label for="fmtEol" data-i18n="fmtEol">Zeilenenden</label>
+        <select id="fmtEol"><option value="lf">LF (Linux, macOS)</option><option value="crlf">CRLF (Windows)</option><option value="cr">CR (Mac OS 9)</option></select></div>
+      <p id="fmtInfo" role="status"></p>
+    </div>
+    <div class="dialog-actions"><button type="submit" class="btn primary" data-i18n="done">Fertig</button></div>
+  </form>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Ein Editor für <b>Textdateien aller Art</b>: Programmcode (Python, JavaScript, C, C++, Java, Shell …), Daten und Einstellungen (JSON, XML, YAML, INI, CSV), Markdown, Protokolle und einfache Texte. Die Syntax wird farbig hervorgehoben.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><b>Öffnen</b> (Ordner oben): eine oder mehrere Dateien vom Gerät wählen – oder auf die Fläche ziehen. Jede Datei, die Text enthält, lässt sich öffnen, egal welche Endung sie hat. Bilder, PDFs, Archive und Programme lehnt die App ab.</li>
+    <li><b>Ansehen</b> zeigt die Datei nur an – auf dem Handy öffnet sich keine Tastatur, Markieren und Kopieren gehen trotzdem. <b>Bearbeiten</b> schaltet das Schreiben ein. Geöffnete Dateien starten im Ansehen, neue im Bearbeiten.</li>
+    <li>Die <b>Sprache</b> (für die Farben) erkennt die App an der Dateiendung, an Namen wie <code>Makefile</code> oder <code>Dockerfile</code>, an der ersten Zeile (<code>#!/bin/bash</code>) oder am Inhalt. Unten unter <b>Sprache</b> lässt sie sich selbst wählen; dort stehen auch Zeichenkodierung und Zeilenenden.</li>
+    <li><b>Suchen</b> findet Text (ohne Unterschied zwischen Groß- und Kleinschreibung); beim Bearbeiten lässt er sich ersetzen – einzeln oder alle auf einmal. <i>Enter</i> springt zum nächsten Treffer, <i>Strg+F</i> öffnet die Suche.</li>
+    <li><b>Zeile</b> springt zu einer Zeilennummer, <b>Umbruch</b> bricht lange Zeilen um (dann ohne Zeilennummern), <b>Kopieren</b> kopiert die ganze Datei.</li>
+    <li>Beim Bearbeiten: <b>Einrücken</b>/<b>Ausrücken</b> (auch <i>Tab</i>/<i>Umschalt+Tab</i>; erst <i>Esc</i>, dann <i>Tab</i> verlässt das Textfeld), <i>Enter</i> behält die Einrückung der Zeile. Die App rückt so ein wie die Datei (Tabulator, 2 oder 4 Leerzeichen). Bei JSON macht <b>Formatieren</b> (unter <i>Mehr</i>) die Datei übersichtlich.</li>
+    <li><b>Herunterladen</b> speichert die Datei mit ihrem Namen, ihrer Zeichenkodierung und ihren Zeilenenden. <b>Teilen</b> (oben, wenn das Gerät es kann) schickt sie an andere Apps.</li>
+    <li><b>Direkt in der Datei speichern</b> (Chrome und Edge am Computer): Öffnest du eine Datei über <i>Öffnen</i> oder <i>Öffnen mit</i>, bleibt sie mit der App verknüpft. Der Knopf oben (Diskette) bzw. <i>Strg+S</i> schreibt die Änderungen in genau diese Datei zurück; ein Punkt am Knopf zeigt ungespeicherte Änderungen. <i>Speichern unter …</i> im Menü legt eine neue Datei an. Auf dem iPhone, in Firefox und Safari lädt der Knopf die Datei stattdessen herunter.</li>
+    <li>Im Menü ☰ liegen die <b>Dateien</b> (antippen zum Öffnen, daneben Teilen, Herunterladen, Löschen) und die <b>Einstellungen</b> (Zeilennummern, Umbruch, Schriftgröße, Tabulatorbreite).</li>
+  </ul>
+  <h3>Hinweise</h3>
+  <ul>
+    <li>Gelesen werden UTF-8 (mit und ohne BOM), UTF-16 (mit BOM) und ältere Windows-Dateien (Windows-1252/Latin-1). Gespeichert wird in derselben Kodierung; Zeichen, die Windows-1252 nicht kennt, werden dabei zu „?“ – dann unter <i>Sprache</i> auf UTF-8 umstellen.</li>
+    <li>Dateien bis 2 MB. Bei sehr großen Dateien bleiben die Farben beim Bearbeiten aus, damit das Tippen flüssig bleibt; beim Ansehen sind sie da.</li>
+    <li>Alles wird automatisch in diesem Browser gespeichert und funktioniert offline; nichts wird hochgeladen. Der Platz im Browser ist begrenzt (einige MB für alle Dateien zusammen) – große Dateien herunterladen und hier löschen.</li>
+    <li>Bibliothek: highlight.js (BSD-3-Clause) für die Farben – rund 70 Sprachen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>An editor for <b>text files of any kind</b>: program code (Python, JavaScript, C, C++, Java, shell …), data and settings (JSON, XML, YAML, INI, CSV), Markdown, logs and plain text. The syntax is highlighted in colour.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><b>Open</b> (folder at the top): pick one or more files from the device – or drop them on the area. Any file that contains text can be opened, whatever its extension. Images, PDFs, archives and programs are refused.</li>
+    <li><b>View</b> only shows the file – on a phone no keyboard pops up, selecting and copying still work. <b>Edit</b> turns on writing. Opened files start in view, new ones in edit.</li>
+    <li>The app recognises the <b>language</b> (for the colours) by the file extension, by names like <code>Makefile</code> or <code>Dockerfile</code>, by the first line (<code>#!/bin/bash</code>) or by the content. Under <b>Language</b> at the bottom you can choose it yourself; character encoding and line endings are there too.</li>
+    <li><b>Find</b> searches the text (ignoring upper and lower case); while editing you can replace it – one by one or all at once. <i>Enter</i> jumps to the next match, <i>Ctrl+F</i> opens the search.</li>
+    <li><b>Line</b> jumps to a line number, <b>Wrap</b> wraps long lines (then without line numbers), <b>Copy</b> copies the whole file.</li>
+    <li>While editing: <b>Indent</b>/<b>Outdent</b> (also <i>Tab</i>/<i>Shift+Tab</i>; first <i>Esc</i>, then <i>Tab</i> leaves the text field), <i>Enter</i> keeps the indentation of the line. The app indents like the file does (tab, 2 or 4 spaces). For JSON, <b>Format</b> (under <i>More</i>) lays the file out neatly.</li>
+    <li><b>Download</b> saves the file with its name, character encoding and line endings. <b>Share</b> (at the top, if the device can) sends it to other apps.</li>
+    <li><b>Save straight into the file</b> (Chrome and Edge on a computer): when you open a file with <i>Open</i> or <i>Open with</i>, it stays linked to the app. The button at the top (floppy disk) or <i>Ctrl+S</i> writes the changes back into exactly that file; a dot on the button shows unsaved changes. <i>Save as …</i> in the menu creates a new file. On iPhone, in Firefox and Safari the button downloads the file instead.</li>
+    <li>The menu ☰ holds the <b>files</b> (tap to open, next to it share, download, delete) and the <b>settings</b> (line numbers, wrapping, font size, tab width).</li>
+  </ul>
+  <h3>Notes</h3>
+  <ul>
+    <li>Read are UTF-8 (with and without BOM), UTF-16 (with BOM) and older Windows files (Windows-1252/Latin-1). Saving uses the same encoding; characters Windows-1252 does not know become “?” – then switch to UTF-8 under <i>Language</i>.</li>
+    <li>Files up to 2 MB. For very large files the colours stay off while editing so typing stays smooth; when viewing they are there.</li>
+    <li>Everything is saved automatically in this browser and works offline; nothing is uploaded. Browser storage is limited (a few MB for all files together) – download large files and delete them here.</li>
+    <li>Library: highlight.js (BSD-3-Clause) for the colours – about 70 languages.</li>
+  </ul>
+  </div>
+  <!-- files:start -->
+  <div data-lang="de">
+  <h3>Dateien an die App geben</h3>
+  <ul>
+    <li><b>Android:</b> App installieren (☰ → <i>Als App installieren</i>). Dann die Datei in Galerie, Dateien-, Mail- oder Messenger-App <i>teilen</i> und „Code-Editor“ wählen – das klappt auch offline.</li>
+    <li><b>Windows/Computer:</b> Als installierte App (Chrome oder Edge) steht sie unter <i>Öffnen mit</i> (Rechtsklick auf die Datei); als Standard-App öffnet sie Dateien per Doppelklick. Mit Edge erscheint sie auch im Teilen-Menü von Windows.</li>
+    <li><b>iPhone/iPad:</b> Teilen an Web-Apps und <i>Öffnen mit</i> gibt es dort nicht – die Datei hier in der App auswählen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>Giving files to the app</h3>
+  <ul>
+    <li><b>Android:</b> install the app (☰ → <i>Install as an app</i>). Then <i>share</i> the file from the gallery, files, mail or messenger app and pick “Code Editor” – this works offline too.</li>
+    <li><b>Windows/computer:</b> as an installed app (Chrome or Edge) it is listed under <i>Open with</i> (right-click the file); set as default app, it opens files with a double-click. With Edge it also appears in the Windows share menu.</li>
+    <li><b>iPhone/iPad:</b> sharing to web apps and <i>Open with</i> do not exist there – choose the file here in the app.</li>
+  </ul>
+  </div>
+  <!-- files:end -->
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann die Liste der Dateien und deren Inhalt lesen und eine neue Datei anlegen. Bestehende Dateien ändern kann er nicht. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can read the list of files and their content and create a new file. It cannot change existing files. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 0f9d3ec8d190</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/vendor/highlight/highlight.min.js"></script>
+<script src="text-files.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+de:{
+  untitled:'unbenannt.txt',lines:'{n} Zeilen',line1:'1 Zeile',current:'geöffnet',empty:'leer',noFiles:'Noch keine Dateien.',
+  deleted:'Gelöscht',downloaded:'Heruntergeladen',copied:'Kopiert',copyFail:'Kopieren hat nicht geklappt',
+  shareFail:'Teilen hat nicht geklappt',saveFail:'Speichern fehlgeschlagen – der Speicher im Browser ist voll. Datei herunterladen und andere löschen.',
+  opened:'Geöffnet: {name}',openedN:'{n} Dateien geöffnet',tooBig:'{name}: zu groß (höchstens 2 MB).',readFail:'{name}: ließ sich nicht lesen.',
+  binary:'{name}: keine Textdatei (z. B. Bild, PDF oder Archiv).',
+  'b.undo':'Rückgängig','b.redo':'Wiederholen','b.find':'Suchen','b.indent':'Einrücken','b.outdent':'Ausrücken','b.lang':'Sprache',
+  'b.wrap':'Umbruch','b.goto':'Zeile','b.copy':'Kopieren','b.format':'Formatieren','b.more':'Mehr',
+  'bl.wrap':'Umbruch langer Zeilen','bl.goto':'Zur Zeile springen','bl.copy':'Ganze Datei kopieren','bl.lang':'Sprache & Format: {lang}','bl.format':'JSON formatieren',
+  delete:'Löschen',shareN:'Teilen: {name}',downloadN:'Herunterladen: {name}',deleteN:'Löschen: {name}',
+  download:'Herunterladen',saveTo:'Speichern in {name}',saveToUnsaved:'Speichern in {name} (ungespeicherte Änderungen)',
+  saved:'Gespeichert: {name}',writeFail:'Speichern in die Datei hat nicht geklappt.',noPermission:'Der Browser hat das Speichern in die Datei nicht erlaubt.',
+  gotoQ:'Zu welcher Zeile? (1–{n})',noMatch:'Kein Treffer',matches:'{i}/{n}',replaced:'{n}× ersetzt',
+  jsonBad:'Kein gültiges JSON: {msg}',formatted:'Formatiert',auto:'Automatisch ({lang})',
+  info:'{lines} · {chars} Zeichen · Einrückung: {indent}',tab:'Tabulator',spaces:'{n} Leerzeichen',
+  lossy:'{n} Zeichen passen nicht in Windows-1252 und werden beim Speichern zu „?“.',
+  bigEdit:'Große Datei: beim Bearbeiten ohne Farben, damit das Tippen flüssig bleibt.',bigView:'Sehr große Datei: ohne Farben.',
+  langFail:'Die Farben für {lang} ließen sich nicht laden.',
+  'lang.plaintext':'Text','lang.apache':'Apache-Konfiguration','lang.nginx':'Nginx-Konfiguration','lang.properties':'Java-Properties','lang.dos':'Batch (Windows)',
+  'mcp.list':'Dateien gelesen','mcp.read':'Datei gelesen','mcp.create':'Datei angelegt'
+},
+en:{
+  title:'Code Editor',sub:'View and edit text files – with coloured syntax.',open:'Open file',new:'New file',share:'Share','h.editor':'Editor',
+  pick:'Open file',pickHint:'or drop it here – JSON, Python, Markdown, C++, shell, XML and any other text file',blank:'Start an empty file',
+  nameLabel:'File name',modeLabel:'Mode','m.view':'View','m.edit':'Edit',codeLabel:'File content',codePh:'Write or paste here …',
+  findLabel:'Find',prev:'Previous match',next:'Next match',findClose:'Close search',replLabel:'Replace with',repl:'Replace',replAll:'All',
+  moreLabel:'More tools',tbLabel:'Tools',files:'Files',filesIntro:'Everything is saved automatically – only in this browser.',
+  openFile:'Open file …',saveAs:'Save as …',settings:'Settings',optLines:'Line numbers',optWrap:'Wrap long lines',fontSize:'Font size',
+  'font.m':'Normal','font.l':'Large','font.xl':'Very large',tabSize:'Width of a tab',
+  fmtTitle:'Language & format',fmtLang:'Language (colours)',fmtEnc:'Character encoding when saving',fmtEol:'Line endings',done:'Done',close:'Close',
+  untitled:'untitled.txt',lines:'{n} lines',line1:'1 line',current:'open',empty:'empty',noFiles:'No files yet.',
+  deleted:'Deleted',downloaded:'Downloaded',copied:'Copied',copyFail:'Copying did not work',
+  shareFail:'Sharing did not work',saveFail:'Saving failed – the browser storage is full. Download the file and delete others.',
+  opened:'Opened: {name}',openedN:'{n} files opened',tooBig:'{name}: too big (2 MB at most).',readFail:'{name}: could not be read.',
+  binary:'{name}: not a text file (e.g. image, PDF or archive).',
+  'b.undo':'Undo','b.redo':'Redo','b.find':'Find','b.indent':'Indent','b.outdent':'Outdent','b.lang':'Language',
+  'b.wrap':'Wrap','b.goto':'Line','b.copy':'Copy','b.format':'Format','b.more':'More',
+  'bl.wrap':'Wrap long lines','bl.goto':'Go to line','bl.copy':'Copy the whole file','bl.lang':'Language & format: {lang}','bl.format':'Format JSON',
+  delete:'Delete',shareN:'Share: {name}',downloadN:'Download: {name}',deleteN:'Delete: {name}',
+  download:'Download',saveTo:'Save to {name}',saveToUnsaved:'Save to {name} (unsaved changes)',
+  saved:'Saved: {name}',writeFail:'Saving to the file did not work.',noPermission:'The browser did not allow saving to the file.',
+  gotoQ:'Which line? (1–{n})',noMatch:'No match',matches:'{i}/{n}',replaced:'Replaced {n}×',
+  jsonBad:'Not valid JSON: {msg}',formatted:'Formatted',auto:'Automatic ({lang})',
+  info:'{lines} · {chars} characters · indentation: {indent}',tab:'tab',spaces:'{n} spaces',
+  lossy:'{n} characters do not fit into Windows-1252 and become “?” when saving.',
+  bigEdit:'Large file: no colours while editing, so typing stays smooth.',bigView:'Very large file: no colours.',
+  langFail:'The colours for {lang} could not be loaded.',
+  'lang.plaintext':'Text','lang.apache':'Apache config','lang.nginx':'Nginx config','lang.properties':'Java properties','lang.dos':'Batch (Windows)',
+  'mcp.list':'files read','mcp.read':'file read','mcp.create':'file created'
+}});
+const {$,t,esc}=Tools;
+const TF=window.TextFiles;
+const LF='code-editor.files.v1',LS='code-editor.state.v1',LSET='code-editor.settings.v1';
+const MAX_FILE=2*1024*1024;      // bytes of a file to open
+const HL_EDIT=100000;            // characters: colours while typing up to here
+const HL_VIEW=1000000;           // characters: colours when viewing up to here
+
+/* ---------- Settings ---------- */
+const settings=Object.assign({lines:true,wrap:false,font:'m',tab:4},Tools.load(LSET,{}));
+if(!['m','l','xl'].includes(settings.font))settings.font='m';
+if(![2,4,8].includes(Number(settings.tab)))settings.tab=4;
+settings.tab=Number(settings.tab);
+const saveSettings=()=>Tools.save(LSET,settings);
+function applySettings(){
+  document.body.classList.toggle('wrap',!!settings.wrap);
+  document.body.classList.toggle('no-lines',!settings.lines);
+  document.body.classList.remove('font-l','font-xl');
+  if(settings.font!=='m')document.body.classList.add('font-'+settings.font);
+  document.documentElement.style.setProperty('--tab',String(settings.tab));
+  code.wrap=settings.wrap?'soft':'off';
+  $('optLines').checked=!!settings.lines;$('optWrap').checked=!!settings.wrap;
+  for(const b of $('optFont').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.v===settings.font));
+  for(const b of $('optTab').querySelectorAll('button'))b.setAttribute('aria-pressed',String(Number(b.dataset.v)===settings.tab));
+  const w=tb.querySelector('[data-tool="wrap"]')||more.querySelector('[data-tool="wrap"]');
+  if(w)w.setAttribute('aria-pressed',String(!!settings.wrap));
+  requestAnimationFrame(drawHits);
+}
+
+/* ---------- Files ---------- */
+const newFile=(name,text,extra)=>{const now=Date.now();
+  return Object.assign({id:Tools.uid(),name:name||'',text:text||'',lang:'auto',encoding:'utf-8',eol:'lf',indent:null,created:now,modified:now},extra||{});};
+let files=Tools.load(LF,[]);
+if(!Array.isArray(files))files=[];
+files=files.filter(f=>f&&typeof f.id==='string'&&typeof f.text==='string').map(f=>({
+  id:f.id,name:typeof f.name==='string'?f.name:'',text:f.text,
+  lang:typeof f.lang==='string'&&(f.lang==='auto'||TF.langById(f.lang))?f.lang:'auto',
+  encoding:TF.ENCODINGS.includes(f.encoding)?f.encoding:'utf-8',eol:['lf','crlf','cr'].includes(f.eol)?f.eol:'lf',
+  indent:['\t','  ','    '].includes(f.indent)?f.indent:null,guess:typeof f.guess==='string'?f.guess:undefined,
+  created:Number(f.created)||Date.now(),modified:Number(f.modified)||Date.now()}));
+const state=Object.assign({current:null,mode:'view'},Tools.load(LS,{}));
+if(!['view','edit'].includes(state.mode))state.mode='view';
+let cur=files.find(f=>f.id===state.current)||files.slice().sort((a,b)=>b.modified-a.modified)[0];
+if(!cur){cur=newFile();files.push(cur);}
+const isEmpty=f=>!f.text&&!f.name.trim();
+let started=!isEmpty(cur);   // false: the start screen (choose a file) is shown
+
+const displayName=f=>f.name.trim()||t('untitled');
+function fileName(f){
+  return displayName(f).replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'-').replace(/^[\s.]+(?=[^.])|[\s.]+$/g,'').slice(0,120)||t('untitled');
+}
+const lineCount=text=>{let n=1;for(let i=text.indexOf('\n');i>=0;i=text.indexOf('\n',i+1))n++;return n;};
+// Lines as people count them: a line break at the very end does not start another line
+const textLines=text=>text?lineCount(text)-(text.endsWith('\n')?1:0):0;
+
+let saveWarned=false;
+function persist(){
+  const ok=Tools.save(LF,files)&&Tools.save(LS,{current:cur.id,mode:state.mode});
+  if(!ok){Tools.diag.log('save failed',{files:files.length,chars:files.reduce((n,f)=>n+f.text.length,0)});
+    if(!saveWarned){saveWarned=true;Tools.toast(t('saveFail'),5000);}}
+  else saveWarned=false;
+  return ok;
+}
+let saveTimer=0;
+const scheduleSave=()=>{clearTimeout(saveTimer);saveTimer=setTimeout(()=>{saveTimer=0;persist();},500);};
+function flush(){if(saveTimer){clearTimeout(saveTimer);saveTimer=0;persist();}}
+
+/* ---------- Languages ---------- */
+const langName=id=>{const k='lang.'+id,s=t(k);if(s!==k)return s;const l=TF.langById(id);return l?l.name:id;};
+// Built-in languages that the content guess may pick (not the special ones)
+const GUESS=TF.LANGS.filter(l=>!l.src&&l.id!=='plaintext').map(l=>l.id).filter(id=>hljs.getLanguage(id));
+function guessLang(text){
+  const sample=text.slice(0,6000);
+  if(!sample.trim())return 'plaintext';
+  const s=sample.trim();
+  if(/^[[{]/.test(s)){try{JSON.parse(text.length<200000?text:'x');return 'json';}catch(_){}}
+  try{const r=hljs.highlightAuto(sample,GUESS);return r.language&&r.relevance>=6?r.language:'plaintext';}
+  catch(_){return 'plaintext';}
+}
+// The language a file is shown in: chosen, else by name/first line, else guessed from the content (kept)
+function langOf(f){
+  if(f.lang!=='auto')return f.lang;
+  const d=TF.detect(f.name,f.text);
+  if(d)return d;
+  if(!f.guess)f.guess=guessLang(f.text);
+  return f.guess;
+}
+const loading=new Map();
+function ensureLang(id){
+  if(hljs.getLanguage(id))return Promise.resolve(true);
+  const l=TF.langById(id);
+  if(!l||!l.src)return Promise.resolve(false);
+  if(!loading.has(id))loading.set(id,new Promise(resolve=>{
+    const s=document.createElement('script');
+    s.src=l.src;
+    s.onload=()=>{Tools.diag.log('language loaded',id);resolve(!!hljs.getLanguage(id));};
+    s.onerror=()=>{Tools.diag.log('language load failed',id);loading.delete(id);s.remove();resolve(false);};
+    document.head.appendChild(s);
+  }));
+  return loading.get(id);
+}
+
+/* ---------- Editor ---------- */
+const code=$('code'),hlCode=$('hlCode'),gutter=$('gutter'),scroller=$('scroller'),layer=$('layer'),nameEl=$('name');
+const tb=$('toolbar'),more=$('moreTools');
+let shownLines=0,plainShown=false;
+function renderHighlight(){
+  const text=cur.text,lang=langOf(cur);
+  const limit=state.mode==='edit'?HL_EDIT:HL_VIEW;
+  let html=null,note='';
+  if(text.length>limit)note=state.mode==='edit'&&text.length<=HL_VIEW?'bigEdit':'bigView';
+  else if(lang!=='plaintext'){
+    if(hljs.getLanguage(lang)){
+      try{html=hljs.highlight(text,{language:lang,ignoreIllegals:true}).value;}catch(e){Tools.diag.log('highlight failed',lang,e);}
+    }else ensureLang(lang).then(ok=>{
+      if(ok&&langOf(cur)===lang)renderHighlight();
+      else if(!ok&&langOf(cur)===lang)Tools.toast(t('langFail',{lang:langName(lang)}),4000);
+    });
+  }
+  // A trailing newline gets its own (empty) line, as in the textarea
+  const tail=text.endsWith('\n')?'\n':'';
+  if(html!=null){hlCode.innerHTML=html+tail;plainShown=false;}
+  else{hlCode.textContent=text+tail;plainShown=true;}
+  hlCode.className=html!=null?'hljs language-'+lang:'';
+  const n=lineCount(text);
+  if(n!==shownLines){
+    shownLines=n;
+    let s='';for(let i=1;i<=n;i++)s+=i+'\n';
+    gutter.textContent=s;
+  }
+  $('bigNote').hidden=!note;
+  if(note)$('bigText').textContent=t(note);
+  textIndex=null;
+  if(!$('find').hidden)findUpdate(false);
+}
+let hlTimer=0;
+function renderSoon(){
+  // Up to the edit limit at once (the coloured text must follow every key), above it only the plain text
+  clearTimeout(hlTimer);
+  if(cur.text.length<=HL_EDIT)renderHighlight();
+  else hlTimer=setTimeout(renderHighlight,120);
+}
+function showDoc(){
+  code.value=cur.text;nameEl.value=cur.name;
+  nameEl.placeholder=t('untitled');
+  shownLines=0;
+  renderHighlight();updateSaveBtn();
+  scroller.scrollTop=0;scroller.scrollLeft=0;
+}
+function showScreen(){
+  $('start').hidden=started;$('work').hidden=!started;
+}
+function setMode(m,focus){
+  if(m!==state.mode){
+    state.mode=m;persist();Tools.diag.log('mode',m);
+    renderHighlight();
+  }
+  code.readOnly=state.mode!=='edit';
+  for(const b of $('modes').querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.m===state.mode));
+  $('replaceRow').hidden=state.mode!=='edit';
+  renderToolbar();
+  if(focus&&state.mode==='edit')code.focus();
+}
+$('modes').addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(b)setMode(b.dataset.m,true);});
+
+code.addEventListener('input',()=>{
+  if(code.readOnly)return;
+  cur.text=code.value;cur.modified=Date.now();
+  if(cur.lang==='auto'&&!TF.detect(cur.name,cur.text)&&cur.text.length<400)cur.guess=undefined; // still short: guess again
+  scheduleSave();renderSoon();renderFilesSoon();updateSaveBtn();
+});
+nameEl.addEventListener('input',()=>{
+  const before=langOf(cur);
+  cur.name=nameEl.value;cur.modified=Date.now();scheduleSave();renderFilesSoon();
+  if(langOf(cur)!==before){renderHighlight();renderToolbar();}
+});
+let filesTimer=0;
+const renderFilesSoon=()=>{clearTimeout(filesTimer);filesTimer=setTimeout(renderFiles,500);};
+
+// Typing helpers. insertText keeps the browser's undo history; setRangeText is the fallback (Firefox).
+function insert(text,selStart,selEnd){
+  code.focus();
+  const start=code.selectionStart;
+  let ok=false;
+  try{ok=document.execCommand('insertText',false,text);}catch(_){ok=false;}
+  if(!ok){code.setRangeText(text,code.selectionStart,code.selectionEnd,'end');code.dispatchEvent(new Event('input',{bubbles:true}));}
+  if(selStart!=null)code.setSelectionRange(start+selStart,start+(selEnd==null?selStart:selEnd));
+}
+const unit=()=>cur.indent||(cur.indent=TF.indentUnit(cur.text));
+function lineRange(){
+  const v=code.value,a=v.lastIndexOf('\n',code.selectionStart-1)+1;
+  let b=code.selectionEnd;
+  if(b>code.selectionStart&&v[b-1]==='\n')b--;
+  const e=v.indexOf('\n',b);
+  return [a,e<0?v.length:e];
+}
+function indentLines(outdent){
+  if(code.readOnly)return;
+  const u=unit(),s=code.selectionStart,e=code.selectionEnd;
+  if(!outdent&&s===e){insert(u);return;}
+  const [a,b]=lineRange(),lines=code.value.slice(a,b).split('\n');
+  let first=0,total=0;
+  const w=u==='\t'?settings.tab:u.length;
+  const changed=lines.map((l,i)=>{
+    let d;
+    if(outdent){const m=l.match(new RegExp('^(\\t| {1,'+w+'})'));d=m?-m[0].length:0;l=l.slice(-d);}
+    else{d=l?u.length:0;if(l)l=u+l;}
+    if(i===0)first=d;total+=d;return l;
+  }).join('\n');
+  if(changed===code.value.slice(a,b))return;
+  code.setSelectionRange(a,b);
+  insert(changed);
+  if(s===e){const p=Math.max(a,s+first);code.setSelectionRange(p,p);}
+  else code.setSelectionRange(Math.max(a,s+first),Math.max(a,e+total));
+}
+let escaped=false;
+code.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){escaped=true;return;}
+  if(code.readOnly)return;
+  if(e.key==='Tab'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
+    // After Esc, Tab moves the focus as usual (keyboard users must be able to leave the editor)
+    if(escaped){escaped=false;return;}
+    e.preventDefault();indentLines(e.shiftKey);return;
+  }
+  if(e.key==='Enter'&&!e.shiftKey&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.isComposing&&code.selectionStart===code.selectionEnd){
+    // Keep the indentation of the current line
+    const v=code.value,p=code.selectionStart,a=v.lastIndexOf('\n',p-1)+1;
+    const ind=v.slice(a,p).match(/^[ \t]*/)[0];
+    if(ind){e.preventDefault();insert('\n'+ind);}
+  }
+  if(e.key!=='Shift')escaped=false;
+});
+code.addEventListener('blur',()=>{escaped=false;});
+
+/* ---------- Position of a text offset on the screen (for find and go to line) ---------- */
+let textIndex=null;   // text nodes of the coloured copy with their start offsets
+function nodeAt(offset){
+  if(!textIndex){
+    textIndex=[];let pos=0;
+    const w=document.createTreeWalker(hlCode,NodeFilter.SHOW_TEXT);
+    for(let n=w.nextNode();n;n=w.nextNode()){textIndex.push([pos,n]);pos+=n.data.length;}
+  }
+  let lo=0,hi=textIndex.length-1;
+  if(hi<0)return null;
+  while(lo<hi){const mid=(lo+hi+1)>>1;if(textIndex[mid][0]<=offset)lo=mid;else hi=mid-1;}
+  const [start,node]=textIndex[lo];
+  return [node,Math.min(offset-start,node.data.length)];
+}
+function rangeRects(from,to){
+  const a=nodeAt(from),b=nodeAt(to);
+  if(!a||!b)return [];
+  const r=document.createRange();
+  try{r.setStart(a[0],a[1]);r.setEnd(b[0],b[1]);}catch(_){return [];}
+  const base=layer.getBoundingClientRect();
+  return [...r.getClientRects()].filter(x=>x.width>0||from===to).map(x=>({left:x.left-base.left,top:x.top-base.top,width:Math.max(x.width,2),height:x.height}));
+}
+function scrollToOffset(offset){
+  const rs=rangeRects(offset,Math.min(offset+1,cur.text.length));
+  if(!rs.length)return;
+  const r=rs[0],gw=gutter.offsetParent?gutter.offsetWidth:0;
+  const top=r.top,left=r.left+gw;
+  const vh=scroller.clientHeight,vw=scroller.clientWidth;
+  if(top<scroller.scrollTop+20||top+r.height>scroller.scrollTop+vh-20)scroller.scrollTop=Math.max(0,top-vh/3);
+  if(left<scroller.scrollLeft+gw||left>scroller.scrollLeft+vw-30)scroller.scrollLeft=Math.max(0,left-vw/2);
+}
+
+/* ---------- Find & replace ---------- */
+const find=$('find'),findText=$('findText');
+let hits=[],hitIdx=-1;
+function computeHits(){
+  hits=[];
+  const q=findText.value;
+  if(!q)return;
+  const hay=cur.text.toLowerCase(),needle=q.toLowerCase();
+  if(hay.length!==cur.text.length){
+    // Lower-casing changed the length (rare letters): search case-sensitively instead
+    for(let i=cur.text.indexOf(q);i>=0&&hits.length<10000;i=cur.text.indexOf(q,i+Math.max(1,q.length)))hits.push(i);
+    return;
+  }
+  for(let i=hay.indexOf(needle);i>=0&&hits.length<10000;i=hay.indexOf(needle,i+Math.max(1,needle.length)))hits.push(i);
+}
+function drawHits(){
+  const box=$('hits');box.textContent='';
+  if(find.hidden||!hits.length)return;
+  const len=findText.value.length;
+  // Only the matches near the visible part (drawing thousands would be slow)
+  const from=Math.max(0,hitIdx-200),to=Math.min(hits.length,Math.max(hitIdx,0)+200);
+  const frag=document.createDocumentFragment();
+  for(let k=from;k<to;k++)for(const r of rangeRects(hits[k],hits[k]+len)){
+    const i=document.createElement('i');
+    if(k===hitIdx)i.className='cur';
+    i.style.left=r.left+'px';i.style.top=r.top+'px';i.style.width=r.width+'px';i.style.height=r.height+'px';
+    frag.appendChild(i);
+  }
+  box.appendChild(frag);
+}
+function showCount(){
+  const q=findText.value;
+  $('findCount').textContent=!q?'':hits.length?t('matches',{i:hitIdx+1,n:hits.length>=10000?'10000+':hits.length}):t('noMatch');
+}
+function selectHit(scroll){
+  if(hitIdx<0||!hits.length){showCount();drawHits();return;}
+  const p=hits[hitIdx];
+  try{code.setSelectionRange(p,p+findText.value.length);}catch(_){}
+  showCount();drawHits();
+  if(scroll)scrollToOffset(p);
+}
+// After a change of the text or the search word: keep the match at or after the caret
+function findUpdate(scroll){
+  computeHits();
+  const at=Math.min(code.selectionStart,code.selectionEnd);
+  hitIdx=hits.length?Math.max(0,hits.findIndex(p=>p>=at)):-1;
+  if(hits.length&&hitIdx<0)hitIdx=0;
+  if(scroll)selectHit(true);else{showCount();drawHits();}
+}
+function step(d){
+  if(!hits.length){showCount();return;}
+  hitIdx=(hitIdx+d+hits.length)%hits.length;
+  selectHit(true);
+}
+function openFind(){
+  find.hidden=false;
+  const sel=code.value.slice(code.selectionStart,code.selectionEnd);
+  if(sel&&!sel.includes('\n')&&sel.length<200)findText.value=sel;
+  findText.focus();findText.select();
+  findUpdate(true);
+  Tools.diag.log('find open');
+}
+function closeFind(){
+  find.hidden=true;$('hits').textContent='';
+  if(state.mode==='edit')code.focus();
+}
+let findTimer=0;
+findText.addEventListener('input',()=>{clearTimeout(findTimer);findTimer=setTimeout(()=>{hitIdx=-1;findUpdate(false);if(hits.length){hitIdx=Math.max(0,hits.findIndex(p=>p>=code.selectionStart));if(hitIdx<0)hitIdx=0;selectHit(true);}},cur.text.length>200000?250:60);});
+findText.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();clearTimeout(findTimer);if(!hits.length)findUpdate(true);else step(e.shiftKey?-1:1);}
+  else if(e.key==='Escape'){e.preventDefault();closeFind();}
+});
+$('findNext').addEventListener('click',()=>step(1));
+$('findPrev').addEventListener('click',()=>step(-1));
+$('findClose').addEventListener('click',closeFind);
+$('replText').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();replaceOne();}else if(e.key==='Escape'){e.preventDefault();closeFind();}});
+function replaceOne(){
+  if(code.readOnly||!hits.length)return;
+  const q=findText.value,p=hits[hitIdx],r=$('replText').value;
+  code.setSelectionRange(p,p+q.length);
+  insert(r);
+  computeHits();
+  hitIdx=hits.findIndex(x=>x>=p+r.length);
+  if(hitIdx<0)hitIdx=hits.length?0:-1;
+  selectHit(true);
+  findText.focus();
+}
+function replaceAll(){
+  if(code.readOnly||!hits.length)return;
+  const q=findText.value,r=$('replText').value,n=hits.length;
+  let out='',last=0;
+  for(const p of hits){out+=cur.text.slice(last,p)+r;last=p+q.length;}
+  out+=cur.text.slice(last);
+  code.setSelectionRange(0,code.value.length);
+  insert(out);
+  code.setSelectionRange(0,0);
+  findUpdate(false);
+  Tools.toast(t('replaced',{n:Tools.fmt(n,0)}));
+  Tools.diag.log('replace all',{n});
+}
+$('btnRepl').addEventListener('click',replaceOne);
+$('btnReplAll').addEventListener('click',replaceAll);
+document.addEventListener('keydown',e=>{
+  if(!started)return;
+  if((e.ctrlKey||e.metaKey)&&!e.altKey&&(e.key==='f'||e.key==='F')){e.preventDefault();openFind();}
+});
+
+/* ---------- Tools ---------- */
+async function gotoLine(){
+  const n=lineCount(cur.text);
+  const v=await Tools.prompt(t('gotoQ',{n:Tools.fmt(n,0)}),{value:''});
+  if(v==null)return;
+  const k=Math.round(Tools.parseNum(v));
+  if(!Number.isFinite(k))return;
+  const line=Math.min(Math.max(1,k),n);
+  let p=0;for(let i=1;i<line;i++)p=cur.text.indexOf('\n',p)+1;
+  if(state.mode==='edit')code.focus();
+  code.setSelectionRange(p,p);
+  scrollToOffset(p);
+  Tools.diag.log('goto',{line});
+}
+async function copyAll(){
+  const ok=await Tools.copyText(cur.text);
+  Tools.toast(t(ok?'copied':'copyFail'));
+}
+function formatJson(){
+  if(code.readOnly)return;
+  let v;
+  try{v=JSON.parse(cur.text);}catch(e){Tools.toast(t('jsonBad',{msg:e.message}),5000);return;}
+  const u=unit();
+  const out=JSON.stringify(v,null,u==='\t'?'\t':u.length)+(cur.text.endsWith('\n')?'\n':'');
+  if(out===cur.text)return;
+  code.setSelectionRange(0,code.value.length);
+  insert(out);
+  code.setSelectionRange(0,0);
+  Tools.toast(t('formatted'));
+}
+const ACTIONS={
+  undo:()=>{code.focus();document.execCommand('undo');},
+  redo:()=>{code.focus();document.execCommand('redo');},
+  find:()=>find.hidden?openFind():closeFind(),
+  indent:()=>indentLines(false),outdent:()=>indentLines(true),
+  lang:()=>openFormat(),
+  wrap:()=>{settings.wrap=!settings.wrap;saveSettings();applySettings();Tools.diag.log('wrap',settings.wrap);},
+  goto:gotoLine,copy:copyAll,format:formatJson
+};
+// Tabler icons from the shared sprite (names written out, so the sprite build finds them)
+const ICON={undo:Tools.icon('arrow-back-up'),redo:Tools.icon('arrow-forward-up'),find:Tools.icon('search'),
+  indent:Tools.icon('indent-increase'),outdent:Tools.icon('indent-decrease'),lang:Tools.icon('code'),wrap:Tools.icon('text-wrap'),
+  goto:Tools.icon('list-numbers'),copy:Tools.icon('copy'),format:Tools.icon('braces'),more:Tools.icon('dots'),
+  save:Tools.icon('device-floppy'),download:Tools.icon('download'),share:Tools.icon('share'),trash:Tools.icon('trash')};
+function toolSets(){
+  if(state.mode!=='edit')return [['find','goto','wrap','lang','copy'],[]];
+  const extra=langOf(cur)==='json'?['format']:[];
+  return [['undo','find','indent','lang'],['redo','outdent','goto','wrap','copy',...extra]];
+}
+function toolBtn(k){
+  const word=t('b.'+k),label=k==='lang'?t('bl.lang',{lang:langName(langOf(cur))}):t('bl.'+k)!=='bl.'+k?t('bl.'+k):word;
+  const pressed=k==='wrap'?` aria-pressed="${!!settings.wrap}"`:k==='find'?` aria-pressed="${!find.hidden}"`:'';
+  return `<button type="button" data-tool="${k}"${pressed} aria-label="${esc(label)}" title="${esc(label)}">${ICON[k]}<span class="tb-label">${esc(word)}</span></button>`;
+}
+function renderToolbar(){
+  const [main,rest]=toolSets();
+  if(!rest.length)more.hidden=true;
+  tb.innerHTML=main.map(toolBtn).join('')+(rest.length?
+    `<button type="button" id="btnMore" aria-expanded="${!more.hidden}" aria-controls="moreTools" aria-label="${esc(t('b.more'))}" title="${esc(t('b.more'))}">${ICON.more}<span class="tb-label">${esc(t('b.more'))}</span></button>`:'');
+  more.innerHTML=rest.map(toolBtn).join('');
+}
+function showMore(on){more.hidden=!on;const b=$('btnMore');if(b)b.setAttribute('aria-expanded',String(on));}
+// Keep the focus (and the keyboard on phones) in the editor
+for(const el of [tb,more])el.addEventListener('mousedown',e=>{if(e.target.closest('button'))e.preventDefault();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!more.hidden)showMore(false);});
+for(const el of [tb,more])el.addEventListener('click',e=>{
+  if(e.target.closest('#btnMore')){showMore(more.hidden);return;}
+  const b=e.target.closest('button[data-tool]');if(!b)return;
+  if(el===more)showMore(false);
+  const k=b.dataset.tool;
+  try{ACTIONS[k]();}catch(err){Tools.diag.log('tool failed',k,err);}
+  if(k==='find')renderToolbar();
+  Tools.diag.log('tool',k,state.mode);
+});
+
+/* ---------- Language & format dialog ---------- */
+const fmtDlg=$('fmtDlg');
+function fillFormat(){
+  const sorted=TF.LANGS.slice().sort((a,b)=>langName(a.id).localeCompare(langName(b.id),Tools.locale()));
+  const auto=cur.lang==='auto'?langOf(cur):(TF.detect(cur.name,cur.text)||guessLang(cur.text));
+  $('fmtLang').innerHTML=`<option value="auto">${esc(t('auto',{lang:langName(auto)}))}</option>`+
+    sorted.map(l=>`<option value="${l.id}">${esc(langName(l.id))}</option>`).join('');
+  $('fmtLang').value=cur.lang;
+  $('fmtEnc').innerHTML=TF.ENCODINGS.map(e=>`<option value="${e}">${esc(TF.ENC_NAMES[e])}</option>`).join('');
+  $('fmtEnc').value=cur.encoding;
+  $('fmtEol').value=cur.eol;
+  showFormatInfo();
+}
+function showFormatInfo(){
+  const n=textLines(cur.text),u=unit();
+  let s=t('info',{lines:n===1?t('line1'):t('lines',{n:Tools.fmt(n,0)}),chars:Tools.fmt(cur.text.length,0),indent:u==='\t'?t('tab'):t('spaces',{n:u.length})});
+  const lost=TF.lossy(cur.text,cur.encoding);
+  if(lost)s+=' '+t('lossy',{n:Tools.fmt(lost,0)});
+  $('fmtInfo').textContent=s;
+}
+function openFormat(){fillFormat();fmtDlg.showModal();}
+$('fmtLang').addEventListener('change',()=>{
+  cur.lang=$('fmtLang').value;cur.modified=Date.now();persist();
+  renderHighlight();renderToolbar();renderFiles();Tools.diag.log('language',cur.lang,langOf(cur));
+});
+$('fmtEnc').addEventListener('change',()=>{cur.encoding=$('fmtEnc').value;persist();showFormatInfo();updateSaveBtn();Tools.diag.log('encoding',cur.encoding);});
+$('fmtEol').addEventListener('change',()=>{cur.eol=$('fmtEol').value;persist();updateSaveBtn();Tools.diag.log('eol',cur.eol);});
+fmtDlg.addEventListener('close',()=>{if(state.mode==='edit')code.focus();});
+
+/* ---------- Settings (menu) ---------- */
+$('optLines').addEventListener('change',e=>{settings.lines=e.target.checked;saveSettings();applySettings();});
+$('optWrap').addEventListener('change',e=>{settings.wrap=e.target.checked;saveSettings();applySettings();});
+$('optFont').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;settings.font=b.dataset.v;saveSettings();applySettings();});
+$('optTab').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;settings.tab=Number(b.dataset.v);saveSettings();applySettings();});
+window.addEventListener('resize',()=>{textIndex=null;requestAnimationFrame(drawHits);});
+
+/* ---------- Files: list, open, new, delete, share, download ---------- */
+const sorted=()=>files.filter(f=>f===cur||!isEmpty(f)).sort((a,b)=>b.modified-a.modified);
+const byId=id=>files.find(f=>f.id===id);
+function renderFiles(){
+  clearTimeout(filesTimer);
+  const list=sorted().filter(f=>started||f!==cur||!isEmpty(f)),canShare=!!navigator.share;
+  $('files').innerHTML=list.map(f=>{
+    const n=esc(displayName(f)),when=new Date(f.modified).toLocaleString(Tools.locale(),{dateStyle:'short',timeStyle:'short'});
+    const lc=textLines(f.text);
+    const size=!f.text?t('empty'):lc===1?t('line1'):t('lines',{n:Tools.fmt(lc,0)});
+    return `<li data-id="${esc(f.id)}"${f===cur?' class="current"':''}>
+      <button type="button" class="open"${f===cur?' aria-current="true"':''}><span class="name">${n}</span><span class="meta">${esc(when)} · ${esc(size)} · ${esc(langName(langOf(f)))}${f===cur&&started?' · '+esc(t('current')):''}</span></button>
+      ${canShare?`<button type="button" class="btn icon" data-act="share" aria-label="${esc(t('shareN',{name:displayName(f)}))}" title="${esc(t('share'))}">${ICON.share}</button>`:''}
+      <button type="button" class="btn icon" data-act="download" aria-label="${esc(t('downloadN',{name:displayName(f)}))}" title="${esc(t('download'))}">${ICON.download}</button>
+      <button type="button" class="btn icon" data-act="delete" aria-label="${esc(t('deleteN',{name:displayName(f)}))}" title="${esc(t('delete'))}">${ICON.trash}</button>
+    </li>`;}).join('')||`<li class="muted">${esc(t('noFiles'))}</li>`;
+}
+function dropEmpty(except){files=files.filter(f=>f===except||!isEmpty(f));}
+function openDoc(f,mode){
+  flush();
+  cur=f;dropEmpty(cur);started=true;
+  if(!find.hidden)closeFind();
+  showScreen();showDoc();setMode(mode||state.mode);persist();renderFiles();
+}
+function newDoc(name,text,extra,mode){
+  flush();
+  let f=cur;
+  if(isEmpty(cur)&&!links.has(cur.id)){Object.assign(cur,newFile(name,text,extra),{id:cur.id});}
+  else{f=newFile(name,text,extra);files.push(f);}
+  openDoc(f,mode);
+  return f;
+}
+// Deletes at once and offers to take it back (UI-KONZEPT.md: one entry → undo instead of asking)
+function deleteDoc(f){
+  flush();
+  const before=files.slice(),link=links.get(f.id),wasCur=f===cur,added=[];
+  files=files.filter(x=>x!==f);links.delete(f.id);
+  if(wasCur){
+    cur=sorted()[0]||null;
+    if(!cur){cur=newFile();files.push(cur);added.push(cur);started=false;showScreen();}
+    showDoc();renderToolbar();
+  }
+  persist();renderFiles();
+  Tools.undo(t('deleted'),()=>{
+    flush();files=before.concat(files.filter(x=>!before.includes(x)&&!added.includes(x)));if(link)links.set(f.id,link);
+    if(wasCur){cur=f;started=true;showScreen();showDoc();renderToolbar();}persist();renderFiles();Tools.diag.log('restored');
+  });
+  Tools.diag.log('deleted',{files:files.length});
+}
+const fileOf=f=>new File([TF.encode(f.text,f.encoding,f.eol)],fileName(f),{type:'text/plain'});
+function downloadDoc(f){
+  flush();
+  Tools.download(fileOf(f));
+  Tools.toast(t('downloaded'));
+  Tools.diag.log('download',{chars:f.text.length,encoding:f.encoding,eol:f.eol});
+}
+async function shareDoc(f){
+  flush();
+  // Chrome on Android only shares files with MIME types from its own list: the file goes out as text/plain
+  // under its own name; without file sharing the text itself is shared
+  const file=fileOf(f);
+  let canFiles=false;
+  try{canFiles=!!(navigator.canShare&&navigator.canShare({files:[file]}));}catch(_){}
+  try{
+    if(canFiles){Tools.diag.log('share file');await navigator.share({files:[file],title:displayName(f)});}
+    else{Tools.diag.log('share text');await navigator.share({title:displayName(f),text:f.text});}
+  }catch(e){
+    if(e.name==='AbortError')return;
+    Tools.diag.log('share failed',e);Tools.toast(t('shareFail'));
+  }
+}
+$('files').addEventListener('click',e=>{
+  const li=e.target.closest('li[data-id]');if(!li)return;
+  const f=byId(li.dataset.id);if(!f)return;
+  const act=e.target.closest('[data-act]');
+  if(!act){if(e.target.closest('.open')){openDoc(f);Tools.menu.close();}return;}
+  if(act.dataset.act==='share')shareDoc(f);
+  else if(act.dataset.act==='download')downloadDoc(f);
+  else if(act.dataset.act==='delete')deleteDoc(f);
+});
+function startBlank(){newDoc('','',null,'edit');code.focus();Tools.diag.log('new',{files:files.length});}
+$('btnNew').addEventListener('click',startBlank);
+$('btnBlank').addEventListener('click',startBlank);
+$('btnShare').hidden=!navigator.share;
+$('btnShare').addEventListener('click',()=>{if(started)shareDoc(cur);});
+$('btnDownload').addEventListener('click',()=>links.has(cur.id)?saveDoc(false):downloadDoc(cur));
+
+// Reads a file into a new document; returns it, or null (with a message) if it is too big or not text
+async function openFile(file,quiet){
+  const name=file.name||'';
+  try{
+    if(file.size>MAX_FILE)throw new Error(t('tooBig',{name}));
+    let bytes;
+    try{bytes=new Uint8Array(await file.arrayBuffer());}catch(_){throw new Error(t('readFail',{name}));}
+    let r;
+    try{r=TF.decode(bytes);}catch(e){throw new Error(e.message==='binary'?t('binary',{name}):t('readFail',{name}));}
+    const f=newDoc(name,r.text,{encoding:r.encoding,eol:r.eol,indent:TF.indentUnit(r.text)},'view');
+    if(!quiet)Tools.toast(t('opened',{name:displayName(f)}));
+    Tools.diag.log('file opened',{bytes:file.size,type:file.type||'?',encoding:r.encoding,eol:r.eol,lang:langOf(f),lines:lineCount(r.text)});
+    return f;
+  }catch(e){Tools.diag.log('open failed',{bytes:file.size,type:file.type||'?'},e.message===t('binary',{name})?'binary':'');Tools.toast(e.message,4000);return null;}
+}
+async function openFiles(list){
+  let n=0;
+  for(const f of list)if(await openFile(f,list.length>1))n++;
+  if(list.length>1&&n)Tools.toast(t('openedN',{n}));
+}
+function pick(){
+  if(FSA.open){Tools.menu.close();pickOpen();return;}
+  const i=$('fileInput');i.value='';i.click();
+}
+$('btnOpen').addEventListener('click',pick);
+$('btnOpen2').addEventListener('click',pick);
+$('fileInput').addEventListener('change',()=>{const l=[...$('fileInput').files];if(l.length){Tools.menu.close();openFiles(l);}});
+// The start screen's dropzone is a label around the file input: with the File System Access API it opens the
+// picker that keeps the file linked instead
+$('drop').addEventListener('click',e=>{if(FSA.open&&e.target!==$('fileInput')){e.preventDefault();pickOpen();}});
+// Dropping files anywhere on the page
+const main=$('main');
+main.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')){e.preventDefault();$('drop').classList.add('over');}});
+main.addEventListener('dragleave',e=>{if(!main.contains(e.relatedTarget))$('drop').classList.remove('over');});
+main.addEventListener('drop',e=>{
+  if(!e.dataTransfer||!e.dataTransfer.files.length)return;
+  e.preventDefault();$('drop').classList.remove('over');
+  openFiles([...e.dataTransfer.files]);
+});
+Tools.takeSharedFiles().then(async list=>{
+  if(!list.length)return;
+  Tools.diag.log('shared files received',list.length);
+  for(const f of list){
+    const h=Tools.fileHandle(f);
+    if(h)await openLinked(h,f);else await openFile(f,list.length>1);
+  }
+});
+
+/* ---------- Saving straight into the file (File System Access API: Chrome/Edge on computers) ----------
+   Like the Markdown editor: a file opened with the picker or "Open with" keeps its handle in memory until the
+   app closes; the save button then writes back into it (same encoding and line endings). */
+const FSA={open:'showOpenFilePicker' in window,save:'showSaveFilePicker' in window};
+const PICK={id:'code-editor'};
+const links=new Map();
+const isDirty=f=>{const l=links.get(f.id);return !!l&&l.saved!==f.text+'|'+f.encoding+'|'+f.eol;};
+const savedKey=f=>f.text+'|'+f.encoding+'|'+f.eol;
+function updateSaveBtn(){
+  const b=$('btnDownload'),l=links.get(cur.id),dirty=isDirty(cur);
+  const label=l?t(dirty?'saveToUnsaved':'saveTo',{name:l.handle.name}):t('download');
+  const kind=l?'save':'download';
+  if(b.dataset.kind!==kind){b.innerHTML=ICON[kind];b.dataset.kind=kind;}
+  b.setAttribute('aria-label',label);b.title=label;
+  b.classList.toggle('unsaved',dirty);
+}
+async function openLinked(h,file){
+  // The same file again: switch to its document (and take the file's text if nothing is unsaved)
+  for(const [id,l] of links){
+    let same=false;
+    try{same=!!(h.isSameEntry&&await h.isSameEntry(l.handle));}catch(_){}
+    const f=same&&byId(id);
+    if(!f)continue;
+    if(!isDirty(f)){
+      try{const r=TF.decode(new Uint8Array(await file.arrayBuffer()));
+        if(r.text!==f.text){f.text=r.text;f.modified=Date.now();}f.encoding=r.encoding;f.eol=r.eol;l.saved=savedKey(f);}catch(_){}
+    }
+    openDoc(f,'view');
+    Tools.toast(t('opened',{name:displayName(f)}));
+    Tools.diag.log('linked file opened again');
+    return true;
+  }
+  const f=await openFile(file);
+  if(!f)return true;
+  links.set(f.id,{handle:h,saved:savedKey(f)});
+  updateSaveBtn();
+  Tools.diag.log('file linked');
+  return true;
+}
+async function pickOpen(){
+  let hs;
+  try{hs=await window.showOpenFilePicker(Object.assign({multiple:true},PICK));}
+  catch(e){if(e.name!=='AbortError'){Tools.diag.log('open picker failed',e);Tools.toast(t('readFail',{name:''}),4000);}return;}
+  for(const h of hs){
+    let file;
+    try{file=await h.getFile();}
+    catch(e){Tools.diag.log('open picker read failed',e);Tools.toast(t('readFail',{name:h.name}),4000);continue;}
+    await openLinked(h,file);
+  }
+}
+async function writable(h){
+  // Handles from the open picker are read-only at first: the browser asks once
+  if(!h.queryPermission)return true;
+  const opt={mode:'readwrite'};
+  if(await h.queryPermission(opt)==='granted')return true;
+  return !!h.requestPermission&&await h.requestPermission(opt)==='granted';
+}
+let saving=false;
+async function saveDoc(as){
+  flush();
+  if(saving)return;
+  const f=cur,l=!as&&links.get(f.id);
+  if(!l&&!FSA.save){downloadDoc(f);return;}
+  saving=true;
+  try{
+    let h=l&&l.handle;
+    if(!h){
+      try{h=await window.showSaveFilePicker(Object.assign({suggestedName:fileName(f)},PICK));}
+      catch(e){if(e.name!=='AbortError'){Tools.diag.log('save picker failed',e);Tools.toast(t('writeFail'),4000);}return;}
+    }
+    if(!await writable(h)){Tools.diag.log('save: no permission');Tools.toast(t('noPermission'),4000);return;}
+    const key=savedKey(f),bytes=TF.encode(f.text,f.encoding,f.eol),w=await h.createWritable();
+    try{await w.write(bytes);await w.close();}
+    catch(e){try{await w.abort();}catch(_){}throw e;}
+    links.set(f.id,{handle:h,saved:key});
+    // "Save as" with another name: the document takes the file's name
+    if(!l&&h.name&&h.name!==f.name){
+      f.name=h.name;
+      if(f===cur){nameEl.value=f.name;renderHighlight();renderToolbar();}
+      persist();renderFiles();
+    }
+    if(f===cur)updateSaveBtn();
+    Tools.toast(t('saved',{name:h.name}));
+    Tools.diag.log(as?'saved as':'saved',{chars:f.text.length,encoding:f.encoding});
+  }catch(e){
+    Tools.diag.log('save failed',e);
+    Tools.toast(t(e&&e.name==='NotAllowedError'?'noPermission':'writeFail'),4000);
+  }finally{saving=false;}
+}
+$('btnSaveAs').hidden=!FSA.save;
+$('btnSaveAs').addEventListener('click',()=>{Tools.menu.close();saveDoc(true);});
+// Ctrl+S / Cmd+S: into the linked file, otherwise "Save as" (or download without the API)
+document.addEventListener('keydown',e=>{
+  if(started&&(e.ctrlKey||e.metaKey)&&!e.altKey&&(e.key==='s'||e.key==='S')){
+    e.preventDefault();
+    if(!links.has(cur.id)&&!FSA.save)downloadDoc(cur);else saveDoc(e.shiftKey);
+  }
+});
+
+window.addEventListener('pagehide',flush);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush();});
+
+/* ---------- Start ---------- */
+applySettings();showScreen();showDoc();setMode(state.mode);renderFiles();persist();
+Tools.onLang(()=>{renderToolbar();renderFiles();nameEl.placeholder=t('untitled');renderHighlight();if(fmtDlg.open)fillFormat();showCount();});
+Tools.diag.info(()=>({mode:state.mode,started,files:files.length,currentChars:cur.text.length,currentLines:lineCount(cur.text),
+  language:langOf(cur),languageChosen:cur.lang!=='auto',encoding:cur.encoding,eol:cur.eol,plain:plainShown,
+  settings:Object.assign({},settings),fileAccess:FSA,linkedFiles:links.size,currentLinked:links.has(cur.id),currentUnsaved:isDirty(cur),
+  storedChars:files.reduce((n,f)=>n+f.text.length,0),share:!!navigator.share,
+  loadedLanguages:hljs.listLanguages().length}));
+
+/* ---------- WebMCP: tools for AI agents in the browser (see AGENTS.md "WebMCP") ---------- */
+const info=f=>({id:f.id,name:displayName(f),language:langOf(f),lines:textLines(f.text),characters:f.text.length,
+  modified:new Date(f.modified).toISOString(),open:f===cur&&started});
+Tools.mcp.register({
+  name:'list_files',title:'List the text files',label:'mcp.list',readOnly:true,
+  description:'Lists the text files stored in the app, newest first: id, file name, language (as used for highlighting), number of lines and characters, last change (ISO date) and whether it is open in the editor.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:()=>{flush();return {files:sorted().filter(f=>!isEmpty(f)).map(info)};}
+});
+Tools.mcp.register({
+  name:'read_file',title:'Read a text file',label:'mcp.read',readOnly:true,untrusted:true,
+  description:'Returns the content of a text file stored in the app, with its id, name and language. Without an id it reads the file open in the editor. The text was written or opened by the user and may contain anything.',
+  inputSchema:{type:'object',properties:{id:{type:'string',maxLength:40,description:'Id from list_files; omit for the open file.'}},additionalProperties:false},
+  execute:a=>{
+    flush();
+    const f=a.id!=null?byId(a.id):cur;
+    if(!f||(a.id==null&&!started))throw new Error(a.id!=null?'No file with this id – call list_files first':'No file is open');
+    return Object.assign(info(f),{text:f.text});
+  }
+});
+Tools.mcp.register({
+  name:'create_file',title:'Create a text file',label:'mcp.create',
+  description:'Creates a new text file in the app and opens it in the editor; existing files stay unchanged. The file name (with extension, e.g. "script.py" or "data.json") decides the highlighting. Returns the new file\'s id, name and language.',
+  inputSchema:{type:'object',properties:{
+    name:{type:'string',minLength:1,maxLength:120,description:'File name with extension, e.g. "notes.md".'},
+    text:{type:'string',maxLength:200000,description:'The content of the file.'}
+  },required:['name','text'],additionalProperties:false},
+  execute:a=>{
+    const name=String(a.name).trim().slice(0,120);
+    if(!name)throw new Error('name must not be empty');
+    const text=String(a.text).replace(/\r\n?/g,'\n');
+    const f=newDoc(name,text,{indent:TF.indentUnit(text)},'view');
+    return info(f);
+  }
+});
+})();
+</script>
+</body>
+</html>
