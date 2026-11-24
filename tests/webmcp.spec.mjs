@@ -14,6 +14,7 @@ import { fakeYoutube, playerFrame, LIST, LIST_TITLE, VIDEOS } from './fake-youtu
 import { FEED_ORIGIN, FEED_PROBLEMS, mockFeeds } from './feed-mock.mjs';
 import { fakeNfc, wscCredential } from './nfc-fake.mjs';
 import { fakeTranslatorApi } from './translator-fakes.mjs';
+import { icdZip, alphaZip } from './medical-codes-data.mjs';
 
 /** Installs a stand-in modelContext before the page loads (on document, or on navigator for older drafts) */
 async function fakeModelContext(page, where = 'document') {
@@ -2594,6 +2595,58 @@ test.describe('pdf-viewer tools', () => {
     expect((await call(page, 'pdf_viewer_go_to_page', {})).ok).toBe(false);
     expect((await call(page, 'pdf_viewer_get_page_text', { page: 9 })).error).toBe('page must be between 1 and 2');
     await expect(page.locator('#pageLabel')).toHaveText('1 / 2');
+  });
+});
+
+test.describe('medical-codes tools', () => {
+  test.beforeEach(async ({ page }) => open(page, '/medical-codes/'));
+
+  test('without a file the tools say what is missing', async ({ page }) => {
+    expect((await call(page, 'medical_codes_list_datasets', {})).result).toEqual({ active: null, datasets: [] });
+    expect((await call(page, 'medical_codes_search_codes', { query: 'A00' })).error).toMatch(/^No file is loaded/);
+    expect((await call(page, 'medical_codes_show_code', { code: 'A00' })).error).toMatch(/^No file is loaded/);
+  });
+
+  test('search and open codes; shown in the app; untrusted file content', async ({ page }) => {
+    await page.setInputFiles('#fileInput', [{ name: 'alpha.zip', mimeType: 'application/zip', buffer: alphaZip() }, { name: 'icd.zip', mimeType: 'application/zip', buffer: icdZip() }]);
+    await expect(page.locator('#dsChips button')).toHaveCount(2);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'medical_codes_search_codes').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+    expect(tools.find(t => t.name === 'medical_codes_show_code').annotations).toEqual({ readOnlyHint: false, untrustedContentHint: true });
+    expect((await call(page, 'medical_codes_list_datasets', {})).result).toEqual({ active: 'ICD-10-GM 2026', datasets: [
+      { title: 'Alpha-ID-SE 2026', kind: 'list', entries: 4 }, { title: 'ICD-10-GM 2026', kind: 'classification', entries: 22 }] });
+    let r = await call(page, 'medical_codes_search_codes', { query: 'cholera', limit: 2 });
+    expect(r.result).toEqual({ dataset: 'ICD-10-GM 2026', total: 3, results: [
+      { code: 'A00', title: 'Cholera', kind: 'category' }, { code: 'A00.0', title: 'Cholera durch Vibrio cholerae O:1, Biovar cholerae', kind: 'category' }] });
+    await expect(page.locator('#q')).toHaveValue('cholera');
+    await expect(page.locator('#results > li')).toHaveCount(3);
+    await expect(page.locator('.toast')).toContainText('KI-Agent: Kodes gesucht');
+    r = await call(page, 'medical_codes_search_codes', { query: 'typhus', dataset: 'alpha-id' });
+    expect(r.result).toEqual({ dataset: 'Alpha-ID-SE 2026', total: 1, results: [{ text: 'Typhusmeningitis', id: 'I11111', codes: ['A01.0†', 'G01*'], valid: false }] });
+    await expect(page.locator('#dsChips button[aria-pressed="true"]')).toHaveText('Alpha-ID-SE 2026');
+    // show_code finds the code in the classification even while the list is chosen
+    r = await call(page, 'medical_codes_show_code', { code: 'A00.9' });
+    expect(r.result).toEqual({ dataset: 'ICD-10-GM 2026', code: 'A00.9', title: 'Cholera, nicht näher bezeichnet', kind: 'category',
+      parents: [{ code: 'I', title: 'Bestimmte infektiöse und parasitäre Krankheiten' }, { code: 'A00-A09', title: 'Infektiöse Darmkrankheiten' }, { code: 'A00', title: 'Cholera' }],
+      notes: [{ kind: 'exclusion', text: 'Paratyphus A (A01.1)' }, { kind: 'note', text: 'Erster Absatz & mehr. Punkt eins Punkt zwei' }], children: [] });
+    await expect(page.locator('#dTitle')).toHaveText('A00.9Cholera, nicht näher bezeichnet');
+    await expect(page.locator('.toast')).toContainText('KI-Agent: Kode geöffnet');
+    // A search goes back to the list
+    await call(page, 'medical_codes_search_codes', { query: 'A01' });
+    await expect(page.locator('#browse')).toBeVisible();
+    await expect(page.locator('#results .code')).toHaveText(['A01', 'A01.0†', 'A01.1']);
+  });
+
+  test('invalid input and unknown codes change nothing', async ({ page }) => {
+    await page.setInputFiles('#fileInput', { name: 'icd.zip', mimeType: 'application/zip', buffer: icdZip() });
+    await expect(page.locator('#count')).toHaveText('22 Einträge');
+    expect((await call(page, 'medical_codes_show_code', { code: 'Z99.9' })).error).toBe('Code "Z99.9" not found in the loaded coding systems.');
+    expect((await call(page, 'medical_codes_search_codes', { query: 'A00', dataset: 'OPS' })).error).toBe('No loaded coding system matches "OPS". Loaded: ICD-10-GM 2026');
+    expect((await call(page, 'medical_codes_search_codes', { query: '' })).ok).toBe(false);
+    expect((await call(page, 'medical_codes_search_codes', { query: 'A00', limit: 51 })).ok).toBe(false);
+    expect((await call(page, 'medical_codes_search_codes', { query: 'A00', extra: 1 })).ok).toBe(false);
+    await expect(page.locator('#q')).toHaveValue('');
+    await expect(page.locator('#browse')).toBeVisible();
   });
 });
 

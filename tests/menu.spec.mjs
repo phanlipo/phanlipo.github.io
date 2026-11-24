@@ -364,12 +364,12 @@ test.describe('appearance: light, dark, system', () => {
     expect(theme.y + theme.height, 'appearance switch fully visible').toBeLessThanOrEqual(sheet.y + sheet.height);
     await expect(page.locator('#appMenu > .menu-body > footer')).toBeAttached();
     await expect(page.locator('#menuInstall')).toBeAttached();
-    await page.getByRole('button', { name: 'Dunkel' }).click();
+    await page.getByRole('button', { name: 'Dunkel', exact: true }).click();
     expect(await bg(page)).toBe(DARK);
-    await expect(page.getByRole('button', { name: 'Dunkel' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Dunkel', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.getByRole('button', { name: 'English' }).click();
     await expect(page.locator('#menuSettings > summary')).toContainText('Settings');
-    await page.getByRole('button', { name: 'System' }).click();
+    await page.getByRole('button', { name: 'System', exact: true }).click();
     expect(await bg(page)).toBe(LIGHT);
     await closeMenu(page);
     await expectNoHorizontalScroll(page);
