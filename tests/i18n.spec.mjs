@@ -122,7 +122,7 @@ test.describe('language switch', () => {
     await page.goto('/');
     await openSettings(page);
     for (const name of ['Deutsch', 'English', 'Hell', 'Dunkel', 'System']) {
-      const box = await page.getByRole('button', { name }).boundingBox();
+      const box = await page.getByRole('button', { name, exact: true }).boundingBox();
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
   });
