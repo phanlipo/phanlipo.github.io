@@ -8,10 +8,10 @@
 <title>Planeten</title>
 <meta name="description" content="Das Sonnensystem für jedes Datum von 1800 bis 2050 als Animation – mit Antwort, welche Planeten und welcher Mond heute Nacht wann und wo am Himmel stehen und warum.">
 <meta name="tool:tags" content="Freizeit, Physik, Lernen">
-<meta name="tool:features" content="Standort, KI-Agent">
-<meta name="tool:webmcp" content="set_time, get_sky, explain_planet">
-<meta name="tool:webmcp-help" content="Ein KI-Agent kann Datum und Uhrzeit einstellen, lesen, welche Planeten und ob der Mond in der Nacht zu sehen sind, und sich einen Planeten oder den Mond erklären lassen. Deinen Standort bekommt er nicht.">
-<meta name="tool:webmcp-help-en" content="An AI agent can set the date and time, read which planets and whether the Moon can be seen at night and have a planet or the Moon explained. It does not get your location.">
+<meta name="tool:features" content="Standort, Bewegungssensor, KI-Agent">
+<meta name="tool:webmcp" content="set_time, get_sky, explain_planet, get_moon_calendar">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Datum und Uhrzeit einstellen, lesen, welche Planeten und ob der Mond in der Nacht zu sehen sind und in welcher Himmelsrichtung, den Mondkalender lesen und sich einen Planeten oder den Mond erklären lassen. Deinen Standort bekommt er nicht.">
+<meta name="tool:webmcp-help-en" content="An AI agent can set the date and time, read which planets and whether the Moon can be seen at night and in which direction, read the Moon calendar and have a planet or the Moon explained. It does not get your location.">
 <meta name="tool:icon" content="planet">
 <meta name="tool:color" content="#4338ca">
 <meta name="tool:short-name" content="Planeten">
@@ -21,7 +21,7 @@
 <meta name="tool:storage" content="planets.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ZZW9wV1yK2nYKqoavyAjTicRK6JtvMLdVS4PdFo8Dtw='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dzuRQly85kH50ht8HeJBYRaNEZalzbdAsASEyp5jI1Y='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -32,10 +32,10 @@
 <style>
 :root{--accent:#4338ca;--accent-text:#ffffff;
   --sun:#f59e0b;--orbit:rgba(0,0,0,.13);--orbit-sel:rgba(67,56,202,.55);--sight:#4338ca;--sunline:rgba(0,0,0,.45);
-  --moon:#8d93a0;--mercury:#857f78;--venus:#c08a12;--earth:#2563eb;--mars:#c2410c;--jupiter:#9a5b2b;--saturn:#a8893d;--uranus:#0e8f9a;--neptune:#3b4fd8}
+  --moon:#8d93a0;--moon-lit:#f2e3a0;--moon-dark:#3c4250;--sky-day:rgba(37,99,235,.10);--sky-twilight:rgba(79,70,229,.16);--sky-night:rgba(30,41,90,.12);--mercury:#857f78;--venus:#c08a12;--earth:#2563eb;--mars:#c2410c;--jupiter:#9a5b2b;--saturn:#a8893d;--uranus:#0e8f9a;--neptune:#3b4fd8}
 @media (prefers-color-scheme: dark){:root{--accent:#a5b4fc;--accent-text:#11143a;
   --sun:#fbbf24;--orbit:rgba(255,255,255,.14);--orbit-sel:rgba(165,180,252,.6);--sight:#a5b4fc;--sunline:rgba(255,255,255,.5);
-  --moon:#c6cad3;--mercury:#b5afa8;--venus:#f2c94c;--earth:#60a5fa;--mars:#fb7a4a;--jupiter:#d9a06b;--saturn:#e3c77a;--uranus:#5fd4dd;--neptune:#8b9bff}}
+  --moon:#c6cad3;--moon-lit:#f2e3a0;--moon-dark:#323846;--sky-day:rgba(96,165,250,.16);--sky-twilight:rgba(129,140,248,.14);--sky-night:rgba(0,0,0,.35);--mercury:#b5afa8;--venus:#f2c94c;--earth:#60a5fa;--mars:#fb7a4a;--jupiter:#d9a06b;--saturn:#e3c77a;--uranus:#5fd4dd;--neptune:#8b9bff}}
 main{display:flex;flex-direction:column}
 .view{position:relative;flex:1 1 52%;min-height:200px;background:var(--surface);border-block-end:1px solid var(--border)}
 .view canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:manipulation;cursor:pointer}
@@ -68,6 +68,22 @@ main{display:flex;flex-direction:column}
 .sky li.off .name{color:var(--muted)}
 .small{font-size:14px;color:var(--muted)}
 .jmoons{margin:0;display:grid;gap:4px}
+.cal-nav{display:flex;align-items:center;gap:8px}
+.cal-nav h3{flex:1;margin:0;text-align:center;font-size:17px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .wd{font-size:12px;font-weight:600;color:var(--muted);text-align:center}
+.cal button{min-height:58px;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:3px 0;border:1px solid var(--border);
+  border-radius:8px;background:var(--surface);color:var(--text);font:inherit;font-size:13px;font-variant-numeric:tabular-nums;cursor:pointer}
+.cal button:hover{background:var(--surface-2)}
+.cal button.main{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cal button[aria-current="date"]{font-weight:700;background:var(--surface-2)}
+.cal svg{width:24px;height:24px;flex:none}
+.cal small{font-size:11px;line-height:1;color:var(--muted)}
+.cal-phases{list-style:none;padding:0;display:grid;gap:4px;font-size:15px}
+.cal-phases li{display:flex;align-items:center;gap:8px}
+.cal-phases svg{width:20px;height:20px;flex:none}
+.moon-lit{fill:var(--moon-lit)}
+.moon-dark{fill:var(--moon-dark);stroke:var(--border);stroke-width:.06}
 .jmoons svg{width:100%;height:72px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border)}
 .jmoons text{font:2.4px var(--font);fill:var(--text)}
 .jmoons .dir{fill:var(--muted);font-weight:600}
@@ -97,13 +113,14 @@ main{display:flex;flex-direction:column}
 
 <main>
   <div class="view" id="view">
-    <canvas id="cv" tabindex="0" role="img" aria-label="Sonnensystem von oben: die Sonne in der Mitte, die Planeten auf ihren Bahnen. Antippen wählt einen Planeten." data-i18n-attr="aria-label:cvLabel"></canvas>
+    <canvas id="cv" tabindex="0" role="img" aria-label="Sonnensystem von oben: die Sonne in der Mitte, die Planeten auf ihren Bahnen. Antippen wählt einen Planeten."></canvas>
     <p class="badge" id="badge"></p>
   </div>
   <div class="toolbar" id="tb">
     <button type="button" id="btnBack"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg><span class="tb-label" id="backL">Zurück</span></button>
     <button type="button" id="btnPlay" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span class="tb-label" id="playL" data-i18n="play">Abspielen</span></button>
     <button type="button" id="btnFwd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"/></svg><span class="tb-label" id="fwdL">Vor</span></button>
+    <button type="button" id="btnOrient" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#compass"/></svg><span class="tb-label" data-i18n="orient">Ausrichten</span></button>
     <button type="button" id="btnNow"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#clock"/></svg><span class="tb-label" data-i18n="now">Jetzt</span></button>
   </div>
 
@@ -111,7 +128,8 @@ main{display:flex;flex-direction:column}
     <div class="form-field"><label for="when" data-i18n="whenL">Datum und Uhrzeit</label>
       <input type="datetime-local" id="when" min="1800-01-01T00:00" max="2050-12-31T23:59" step="60"></div>
     <fieldset class="seg-group"><legend data-i18n="speedL">Abspielen und Schritte: je Sekunde bzw. Tippen</legend>
-      <div class="seg" id="speed">
+      <div class="chips wrap" id="speed">
+        <button type="button" aria-pressed="false" data-v="hour"><span data-i18n="sp.hour">Stunde</span></button>
         <button type="button" aria-pressed="false" data-v="day"><span data-i18n="sp.day">Tag</span></button>
         <button type="button" aria-pressed="true" data-v="week"><span data-i18n="sp.week">Woche</span></button>
         <button type="button" aria-pressed="false" data-v="month"><span data-i18n="sp.month">Monat</span></button>
@@ -122,6 +140,7 @@ main{display:flex;flex-direction:column}
       <div class="seg" id="viewSel">
         <button type="button" aria-pressed="true" data-v="inner"><span data-i18n="v.inner">Bis zum Mars</span></button>
         <button type="button" aria-pressed="false" data-v="all"><span data-i18n="v.all">Alle Planeten</span></button>
+        <button type="button" aria-pressed="false" data-v="sky"><span data-i18n="v.sky">Kompass</span></button>
       </div>
     </fieldset>
 
@@ -144,6 +163,7 @@ main{display:flex;flex-direction:column}
       <p class="small" id="pRise"></p>
       <h3 data-i18n="eventsH">Nächste Ereignisse – antippen springt hin</h3>
       <ul class="events" id="pEvents"></ul>
+      <button type="button" class="btn" id="btnCal" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calendar"/></svg><span data-i18n="cal">Mondkalender</span></button>
     </section>
 
     <section aria-labelledby="skyH">
@@ -154,6 +174,24 @@ main{display:flex;flex-direction:column}
     </section>
   </div>
 </main>
+
+<div class="menu-list" data-menu>
+  <button type="button" id="menuCal"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#calendar"/></svg><span data-i18n="cal">Mondkalender</span></button>
+</div>
+
+<dialog class="dialog" id="calDlg" aria-labelledby="calH">
+  <div class="dialog-head"><h2 id="calH" data-i18n="cal">Mondkalender</h2><button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close;title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+  <div class="dialog-body">
+    <div class="cal-nav">
+      <button type="button" class="btn icon" id="calPrev" aria-label="Voriger Monat" title="Voriger Monat" data-i18n-attr="aria-label:calPrev;title:calPrev"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg></button>
+      <h3 id="calMonth" aria-live="polite"></h3>
+      <button type="button" class="btn icon" id="calNext" aria-label="Nächster Monat" title="Nächster Monat" data-i18n-attr="aria-label:calNext;title:calNext"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"/></svg></button>
+    </div>
+    <div class="cal" id="calGrid"></div>
+    <ul class="cal-phases" id="calPhases"></ul>
+    <p class="small" data-i18n="calHint">Gestalt des Mondes jeweils um 21 Uhr. Einen Tag antippen, um ihn in der App einzustellen.</p>
+  </div>
+</dialog>
 
 <details class="card" data-menu data-menu-page data-icon="settings">
   <summary data-i18n="settingsH">Einstellungen</summary>
@@ -193,6 +231,8 @@ main{display:flex;flex-direction:column}
     <li>Einen Planeten im Bild oder in der Liste antippen: Die Karte zeigt, wann und wo er zu sehen ist, wie hell er ist und <strong>warum</strong>. Die Linie von der Erde zum Planeten und die gestrichelte Linie zur Sonne zeigen den Winkel zwischen beiden am Himmel.</li>
     <li>Die Ereignisse (Konjunktion, Opposition, größter Abstand zur Sonne, größte Helligkeit) antippen, um direkt dorthin zu springen.</li>
     <li>In der Ansicht <em>Alle Planeten</em> sind die Abstände gestaucht (Wurzel der Entfernung), sonst passten Uranus und Neptun nicht ins Bild. <em>Bis zum Mars</em> ist maßstabsgetreu.</li>
+    <li><strong>Kompass:</strong> Die Ansicht <em>Kompass</em> stellt die Erde – genauer dich – in die Mitte: Der Kreis ist der Horizont, die Mitte der Punkt senkrecht über dir, Norden ist oben. Sonne, Mond und Planeten stehen in der Himmelsrichtung, in der du sie siehst; je näher am Rand, desto tiefer. Mit <em>Ausrichten</em> dreht sich der Kompass mit dem Handy: Was oben steht, liegt in der Richtung, in die das Handy zeigt (Handy flach halten; Metall und Magnete in der Nähe stören, auf dem iPhone fragt der Browser nach der Erlaubnis). Das Tempo <em>Stunde</em> zeigt, wie die Gestirne über den Himmel ziehen.</li>
+    <li><strong>Mondkalender:</strong> über die Mond-Karte oder das Menü. Er zeigt für jeden Tag eines Monats die Gestalt des Mondes um 21 Uhr und die genauen Zeiten von Neumond, Halbmond und Vollmond; ein Tag lässt sich antippen.</li>
     <li><strong>Mond:</strong> In der Liste ganz oben, mit Phase, Entfernung und den nächsten Mondphasen. Im Bild steht er in seiner wahren Richtung neben der Erde, aber viel zu weit weg gezeichnet – maßstabsgetreu läge er im Punkt der Erde.</li>
     <li><strong>Jupitermonde:</strong> Mit Jupiter gewählt zeigt die Karte Io, Europa, Ganymed und Kallisto so, wie sie im Fernglas neben dem Planeten stehen (Norden oben, Osten links; im Teleskop oft gespiegelt).</li>
     <li>Den Beobachtungsort stellst du im Menü unter <em>Einstellungen</em> ein. Uhrzeiten gelten in der Zeitzone dieses Geräts.</li>
@@ -217,6 +257,8 @@ main{display:flex;flex-direction:column}
     <li>Tap a planet in the picture or in the list: the card shows when and where it can be seen, how bright it is and <strong>why</strong>. The line from the Earth to the planet and the dashed line to the Sun show the angle between them in the sky.</li>
     <li>Tap an event (conjunction, opposition, greatest distance from the Sun, greatest brilliancy) to jump to it.</li>
     <li>In the view <em>All planets</em> distances are compressed (square root of the distance), otherwise Uranus and Neptune would not fit. <em>Up to Mars</em> is to scale.</li>
+    <li><strong>Compass:</strong> the view <em>Compass</em> puts the Earth – you, really – in the centre: the circle is the horizon, the centre the point straight above you, north is at the top. Sun, Moon and planets are in the direction where you see them; the closer to the edge, the lower. With <em>Align</em> the compass turns with your phone: whatever is at the top lies in the direction the phone points (hold it flat; metal and magnets nearby disturb it; on iPhone the browser asks for permission). The speed <em>Hour</em> shows how they move across the sky.</li>
+    <li><strong>Moon calendar:</strong> from the Moon card or the menu. It shows the Moon’s shape at 9 pm for every day of a month and the exact times of new, half and full moon; tap a day to set it.</li>
     <li><strong>Moon:</strong> at the top of the list, with phase, distance and the next phases. In the picture it is in its true direction from the Earth but drawn far too far away – to scale it would sit inside the Earth’s dot.</li>
     <li><strong>Jupiter’s moons:</strong> with Jupiter chosen, the card shows Io, Europa, Ganymede and Callisto as they appear next to the planet in binoculars (north up, east left; telescopes often mirror the view).</li>
     <li>Set your place of observation in the menu under <em>Settings</em>. Times are in this device’s time zone.</li>
@@ -236,11 +278,11 @@ main{display:flex;flex-direction:column}
   <!-- agent:start -->
   <div data-lang="de">
   <h3>KI-Agenten (WebMCP)</h3>
-  <p>Ein KI-Agent kann Datum und Uhrzeit einstellen, lesen, welche Planeten und ob der Mond in der Nacht zu sehen sind, und sich einen Planeten oder den Mond erklären lassen. Deinen Standort bekommt er nicht. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  <p>Ein KI-Agent kann Datum und Uhrzeit einstellen, lesen, welche Planeten und ob der Mond in der Nacht zu sehen sind und in welcher Himmelsrichtung, den Mondkalender lesen und sich einen Planeten oder den Mond erklären lassen. Deinen Standort bekommt er nicht. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
   <h3>AI agents (WebMCP)</h3>
-  <p>An AI agent can set the date and time, read which planets and whether the Moon can be seen at night and have a planet or the Moon explained. It does not get your location. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  <p>An AI agent can set the date and time, read which planets and whether the Moon can be seen at night and in which direction, read the Moon calendar and have a planet or the Moon explained. It does not get your location. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
   </div>
   <!-- agent:end -->
   <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
@@ -253,7 +295,7 @@ main{display:flex;flex-direction:column}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 0414d7425d5d</p>
+  <p class="footer-version">Version 5c488e55856b</p>
   <!-- footer:end -->
 </footer>
 
@@ -274,7 +316,7 @@ const DE={
   sunLine:'Sonne: Aufgang {rise} · Untergang {set}',sunUp:'Sonne: den ganzen Tag über dem Horizont',sunDown:'Sonne: geht an diesem Tag nicht auf',
   place:'Beobachtungsort: {lat}° {ns}, {lon}° {ew} – ändern im Menü unter Einstellungen.',
   placeDefault:'Beobachtungsort: Mitte Deutschlands – ändern im Menü unter Einstellungen.',
-  N:'N',S:'S',O:'O',W:'W',
+  N:'N',S:'S',O:'O',W:'W',close:'Schließen',
   'vis.evening':'Abends, bis {to} Uhr','vis.morning':'Morgens, ab {from} Uhr',
   'vis.eveningLong':'Vom Abend bis {to} Uhr','vis.morningLong':'Ab {from} Uhr bis zum Morgen','vis.allNight':'Die ganze Nacht',
   'vis.night':'Nachts, {from}–{to} Uhr','vis.eveningMorning':'Abends und morgens',
@@ -314,6 +356,11 @@ const DE={
   placeBad:'Breite −89 bis 89, Länge −180 bis 180 eingeben.',geoOk:'Standort übernommen.',geoFail:'Standort nicht verfügbar.',geoNo:'Dieser Browser kann den Standort nicht abfragen.',
   'mcp.time':'Zeit eingestellt','mcp.explain':'Planet erklärt',
   sDist:'Entfernung (AE)',sDistMoon:'Entfernung (Tsd. km)',
+  cvLabel:'Sonnensystem von oben: die Sonne in der Mitte, die Planeten auf ihren Bahnen. Antippen wählt einen Planeten.',
+  'u.hour':'1 Stunde',sun:'Sonne',zenith:'Zenit',below:'{name} (unter dem Horizont)',oriented:'nach Handy ausgerichtet',
+  cvSky:'Kompass mit dem Himmel: Mitte senkrecht über dir, Rand der Horizont, Norden oben. Antippen wählt einen Planeten oder den Mond.',
+  orientNone:'Der Kompass des Geräts liefert keine Richtung.',orientDenied:'Zugriff auf den Kompass nicht erlaubt.',
+  calPhaseLine:'{phase}: {when}',calDay:'{date}: {phase}, {pct} % beleuchtet',
   'phase.newMoon':'Neumond','phase.waxingCrescent':'Zunehmende Sichel','phase.firstQuarter':'Erstes Viertel (Halbmond)',
   'phase.waxingGibbous':'Zunehmender Mond','phase.fullMoon':'Vollmond','phase.waningGibbous':'Abnehmender Mond',
   'phase.lastQuarter':'Letztes Viertel (Halbmond)','phase.waningCrescent':'Abnehmende Sichel',
@@ -385,6 +432,12 @@ const EN={
   placeBad:'Enter a latitude from −89 to 89 and a longitude from −180 to 180.',geoOk:'Location set.',geoFail:'Location not available.',geoNo:'This browser cannot get the location.',
   'mcp.time':'time set','mcp.explain':'planet explained',
   sDistMoon:'Distance (1000 km)',
+  'sp.hour':'Hour','v.sky':'Compass',orient:'Align',cal:'Moon calendar',calPrev:'Previous month',calNext:'Next month',close:'Close',
+  calHint:'Shape of the Moon at 9 pm each day. Tap a day to set it in the app.',
+  'u.hour':'1 hour',sun:'Sun',zenith:'Zenith',below:'{name} (below the horizon)',oriented:'aligned with the phone',
+  cvSky:'Compass with the sky: overhead in the centre, the horizon at the edge, north at the top. Tap to choose a planet or the Moon.',
+  orientNone:'The device compass gives no direction.',orientDenied:'Access to the compass was not allowed.',
+  calPhaseLine:'{phase}: {when}',calDay:'{date}: {phase}, {pct} % lit',
   'phase.newMoon':'New moon','phase.waxingCrescent':'Waxing crescent','phase.firstQuarter':'First quarter (half moon)',
   'phase.waxingGibbous':'Waxing gibbous','phase.fullMoon':'Full moon','phase.waningGibbous':'Waning gibbous',
   'phase.lastQuarter':'Last quarter (half moon)','phase.waningCrescent':'Waning crescent',
@@ -408,14 +461,14 @@ const tl=(lang,key,vars)=>{ const s=(lang==='en'?EN:DE)[key]??key; return vars?s
 
 const DAY=86400000;
 const SKY=['moon',...E.PLANETS];   // what can be chosen: the Moon and the planets
-const SPEEDS={day:1,week:7,month:30.436875,year:365.25};
+const SPEEDS={hour:1/24,day:1,week:7,month:30.436875,year:365.25};
 const MAX_ELONG={mercury:28,venus:47};
 const DEFAULT_PLACE={lat:51,lon:10};
 const LS='planets.settings.v1';
 const saved=Tools.load(LS,{})||{};
 const settings={lat:DEFAULT_PLACE.lat,lon:DEFAULT_PLACE.lon,view:'inner',speed:'week',planet:'venus'};
 if(Number.isFinite(saved.lat)&&Math.abs(saved.lat)<=89&&Number.isFinite(saved.lon)&&Math.abs(saved.lon)<=180){settings.lat=saved.lat;settings.lon=saved.lon;}
-if(['inner','all'].includes(saved.view))settings.view=saved.view;
+if(['inner','all','sky'].includes(saved.view))settings.view=saved.view;
 if(saved.speed in SPEEDS)settings.speed=saved.speed;
 if(SKY.includes(saved.planet))settings.planet=saved.planet;
 const save=()=>Tools.save(LS,settings);
@@ -521,7 +574,7 @@ const cv=Tools.$('cv'),cx=cv.getContext('2d');
 let colors={};
 function readColors(){
   const cs=getComputedStyle(document.documentElement);
-  for(const k of ['sun','orbit','orbit-sel','sight','sunline','text','muted','surface','moon',...E.BODIES])colors[k]=cs.getPropertyValue('--'+k).trim();
+  for(const k of ['sun','orbit','orbit-sel','sight','sunline','text','muted','surface','moon','moon-lit','moon-dark','sky-day','sky-twilight','sky-night',...E.BODIES])colors[k]=cs.getPropertyValue('--'+k).trim();
 }
 const SIZE={moon:2.5,mercury:3.5,venus:5,earth:5,mars:4,jupiter:8,saturn:7,uranus:5.5,neptune:5.5};
 let layout={w:0,h:0,dpr:1};
@@ -539,11 +592,91 @@ function project(p){
   return {x:layout.w/2+p.x*s,y:layout.h/2-p.y*s};
 }
 let shown={};
+/* Moon shape: lit part of a disc of radius r. Lit on the right while waxing (seen from the northern hemisphere). */
+function moonLit(g){ return (g.side==='east')===(settings.lat>=0); }
+function drawMoonShape(x,y,r,g){
+  const k=g.illuminated,rx=r*Math.abs(1-2*k);
+  cx.save(); cx.translate(x,y); if(!moonLit(g))cx.scale(-1,1);
+  cx.fillStyle=colors['moon-dark']; cx.beginPath(); cx.arc(0,0,r,0,2*Math.PI); cx.fill();
+  cx.fillStyle=colors['moon-lit']; cx.beginPath(); cx.arc(0,0,r,-Math.PI/2,Math.PI/2,false);
+  if(k<0.5)cx.ellipse(0,0,rx,r,0,Math.PI/2,-Math.PI/2,true); else cx.ellipse(0,0,rx,r,0,Math.PI/2,3*Math.PI/2,false);
+  cx.fill(); cx.restore();
+}
+function moonSvg(g){
+  const k=g.illuminated,rx=Math.abs(1-2*k).toFixed(3);
+  return `<svg viewBox="-1.1 -1.1 2.2 2.2" aria-hidden="true"><circle class="moon-dark" r="1"/><path class="moon-lit"${moonLit(g)?'':' transform="scale(-1 1)"'} d="M0 -1A1 1 0 0 1 0 1A${rx} 1 0 0 ${k<0.5?0:1} 0 -1Z"/></svg>`;
+}
+// Placing names: the first of four spots around a dot that overlaps nothing placed before and stays inside
+function placeLabels(items,taken,font){
+  const {w,h}=layout;
+  const hit=r=>taken.some(o=>r.x<o.x+o.w&&o.x<r.x+r.w&&r.y<o.y+o.h&&o.y<r.y+r.h);
+  const inside=r=>r.x>=2&&r.x+r.w<=w-2&&r.y>=2&&r.y+r.h<=h-2;
+  for(const it of items){
+    cx.font=`${it.strong?'700':'400'} 12px ${font}`;
+    const tw=cx.measureText(it.text).width,o=it.size+4;
+    const spots=[[o,-o-12],[o,o],[-o-tw,-o-12],[-o-tw,o]].map(([dx,dy])=>({x:it.x+dx,y:it.y+dy,w:tw,h:13}));
+    const r=spots.find(r2=>inside(r2)&&!hit(r2))||spots.find(inside)||spots[0];
+    taken.push(r);
+    cx.fillStyle=it.strong?colors.text:colors.muted; cx.textBaseline='top'; cx.textAlign='start';
+    cx.fillText(it.text,r.x,r.y);
+  }
+  cx.textBaseline='alphabetic';
+}
+let skyShown={};
+// Compass view: the observer in the centre. Azimuth = direction, distance from the centre = 90° − altitude.
+function drawSky(){
+  const {w,h}=layout,font=getComputedStyle(document.body).fontFamily;
+  const ox=w/2,oy=h/2+16,R=Math.max(40,Math.min(w,h-48)/2-28),D=Math.PI/180;   // room for the date at the top
+  const heading=orient.on&&orient.heading!=null?orient.heading:0;
+  const at=(az,alt)=>{ const a=(az-heading)*D,rho=R*(90-Math.max(alt,0))/90; return {x:ox+rho*Math.sin(a),y:oy-rho*Math.cos(a)}; };
+  const sunH=E.altitude('sun',time,settings.lat,settings.lon);
+  cx.fillStyle=colors[sunH.alt>0?'sky-day':sunH.alt>-6?'sky-twilight':'sky-night'];
+  cx.beginPath(); cx.arc(ox,oy,R,0,2*Math.PI); cx.fill();
+  cx.strokeStyle=colors.orbit; cx.lineWidth=1; cx.setLineDash([4,4]);
+  for(const alt of [30,60]){ cx.beginPath(); cx.arc(ox,oy,R*(90-alt)/90,0,2*Math.PI); cx.stroke(); }
+  cx.setLineDash([]);
+  cx.strokeStyle=colors.muted; cx.lineWidth=1.5; cx.beginPath(); cx.arc(ox,oy,R,0,2*Math.PI); cx.stroke();
+  // Ticks every 15°, letters for the four directions (north in the accent colour)
+  for(let az=0;az<360;az+=15){
+    const a=(az-heading)*D,l=az%90===0?10:az%45===0?7:4;
+    cx.beginPath(); cx.moveTo(ox+R*Math.sin(a),oy-R*Math.cos(a)); cx.lineTo(ox+(R+l)*Math.sin(a),oy-(R+l)*Math.cos(a)); cx.stroke();
+  }
+  cx.textAlign='center'; cx.textBaseline='middle';
+  ['N','O','S','W'].forEach((k,i)=>{ const a=(i*90-heading)*D;
+    cx.font=`700 ${i?14:16}px ${font}`; cx.fillStyle=i?colors.text:colors.sight;
+    cx.fillText(t(k),ox+(R+20)*Math.sin(a),oy-(R+20)*Math.cos(a)); });
+  cx.font=`400 11px ${font}`; cx.fillStyle=colors.muted; cx.fillText('+',ox,oy);
+  const sel=settings.planet,items=[],taken=[];
+  skyShown={};
+  const bodies=['sun',...SKY];
+  for(const b of bodies){
+    const hz=E.altitude(b,time,settings.lat,settings.lon);
+    if(hz.alt<=0){
+      // The chosen one below the horizon: hollow mark on the rim in its direction
+      if(b===sel){ const p=at(hz.az,0); cx.strokeStyle=colors.sight; cx.lineWidth=2; cx.setLineDash([3,3]); cx.beginPath(); cx.arc(p.x,p.y,7,0,2*Math.PI); cx.stroke(); cx.setLineDash([]);
+        skyShown[b]=p; items.unshift({x:p.x,y:p.y,size:7,text:t('below',{name:name(b)}),strong:true}); }
+      continue;
+    }
+    const p=at(hz.az,hz.alt),size=b==='sun'?9:b==='moon'?7:Math.min(SIZE[b],5);
+    skyShown[b]=p;
+    if(b===sel){ cx.strokeStyle=colors.sight; cx.lineWidth=1.6; cx.beginPath(); cx.moveTo(ox,oy); cx.lineTo(p.x,p.y); cx.stroke(); }
+    if(b==='sun'){ cx.fillStyle=colors.sun; cx.beginPath(); cx.arc(p.x,p.y,size,0,2*Math.PI); cx.fill(); }
+    else if(b==='moon')drawMoonShape(p.x,p.y,size,geoOf('moon'));
+    else { cx.fillStyle=colors[b]; cx.beginPath(); cx.arc(p.x,p.y,size,0,2*Math.PI); cx.fill(); }
+    if(b===sel){ cx.strokeStyle=colors.sight; cx.lineWidth=2; cx.beginPath(); cx.arc(p.x,p.y,size+4,0,2*Math.PI); cx.stroke(); }
+    taken.push({x:p.x-size,y:p.y-size,w:2*size,h:2*size});
+    const it={x:p.x,y:p.y,size,text:b==='sun'?t('sun'):name(b),strong:b===sel};
+    if(b===sel)items.unshift(it); else items.push(it);
+  }
+  placeLabels(items,taken,font);
+  Tools.$('badge').textContent=fmtBadge(time)+(orient.on&&orient.heading!=null?' · '+t('oriented'):'');
+}
 function draw(){
   const {w,h,dpr}=layout;
   if(!w||!h)return;
   cx.setTransform(dpr,0,0,dpr,0,0);
   cx.clearRect(0,0,w,h);
+  if(settings.view==='sky'){ drawSky(); return; }
   const bodies=settings.view==='all'?E.BODIES:['mercury','venus','earth','mars'];
   const sel=settings.planet;
   for(const b of bodies){
@@ -586,24 +719,12 @@ function draw(){
   }
   { const p=shown.moon; cx.fillStyle=colors.moon; cx.beginPath(); cx.arc(p.x,p.y,SIZE.moon,0,2*Math.PI); cx.fill();
     if(sel==='moon'){ cx.strokeStyle=colors.sight; cx.lineWidth=2; cx.beginPath(); cx.arc(p.x,p.y,SIZE.moon+4,0,2*Math.PI); cx.stroke(); } }
-  // Names: the first of four places around the dot that overlaps no other name, dot or the angle
+  // Names: the chosen body and the Earth first, then the rest
   const font=getComputedStyle(document.body).fontFamily,taken=[{x:angle.x-14,y:angle.y-9,w:28,h:18}];
   for(const b of bodies){ const p=shown[b]; taken.push({x:p.x-SIZE[b],y:p.y-SIZE[b],w:2*SIZE[b],h:2*SIZE[b]}); }
-  const hit=r=>taken.some(o=>r.x<o.x+o.w&&o.x<r.x+r.w&&r.y<o.y+o.h&&o.y<r.y+r.h);
   const named=[...bodies,...(sel==='moon'?['moon']:[])];
-  for(const b of [sel,'earth',...bodies.filter(b=>b!==sel&&b!=='earth')]){
-    if(!named.includes(b))continue;
-    const p=shown[b],strong=b===sel||b==='earth';
-    cx.font=`${strong?'700':'400'} 12px ${font}`;
-    const tw=cx.measureText(name(b)).width,o=SIZE[b]+4;
-    const spots=[[o,-o-12],[o,o],[-o-tw,-o-12],[-o-tw,o]].map(([dx2,dy2])=>({x:p.x+dx2,y:p.y+dy2,w:tw,h:13}));
-    const inside=r2=>r2.x>=2&&r2.x+r2.w<=w-2&&r2.y>=2&&r2.y+r2.h<=h-2;
-    const r=spots.find(r2=>inside(r2)&&!hit(r2))||spots.find(inside)||spots[0];
-    taken.push(r);
-    cx.fillStyle=strong?colors.text:colors.muted; cx.textBaseline='top';
-    cx.fillText(name(b),r.x,r.y);
-  }
-  cx.textBaseline='alphabetic';
+  placeLabels([sel,'earth',...bodies.filter(b=>b!==sel&&b!=='earth')].filter(b=>named.includes(b))
+    .map(b=>({x:shown[b].x,y:shown[b].y,size:SIZE[b],text:name(b),strong:b===sel||b==='earth'})),taken,font);
   // Chosen planet outside the picture (view "up to Mars"): name at the edge, on its line of sight
   if(!bodies.includes(sel)&&sel!=='moon'){
     const m=16; let k=far;
@@ -659,6 +780,7 @@ function renderPanel(){
   $('sDist').textContent=sel==='moon'?Tools.fmt(g.km/1000,0):Tools.fmt(g.delta,2);
   $('sDistL').textContent=t(sel==='moon'?'sDistMoon':'sDist');
   renderJupiterMoons(sel);
+  $('btnCal').hidden=sel!=='moon';
   $('sElong').textContent=Tools.fmt(g.elongation,0)+'°';
   const evs=eventsOf(sel);
   const why=$('pWhy'); why.textContent='';
@@ -697,6 +819,9 @@ function renderControls(){
   $('playL').textContent=t(playing?'pause':'play');
   if(document.activeElement!==$('when'))$('when').value=localValue(time);
   $('lat').value=Tools.fmt(settings.lat,1); $('lon').value=Tools.fmt(settings.lon,1);
+  $('btnOrient').hidden=settings.view!=='sky';
+  $('btnOrient').setAttribute('aria-pressed',String(orient.on));
+  cv.setAttribute('aria-label',t(settings.view==='sky'?'cvSky':'cvLabel'));
 }
 function render(){ renderControls(); renderPanel(); draw(); }
 
@@ -738,16 +863,112 @@ $('when').addEventListener('change',e=>{
   setTime(ms);
 });
 for(const b of document.querySelectorAll('#speed button'))b.addEventListener('click',()=>{ settings.speed=b.dataset.v; save(); renderControls(); });
-for(const b of document.querySelectorAll('#viewSel button'))b.addEventListener('click',()=>{ settings.view=b.dataset.v; save(); renderControls(); draw(); });
+for(const b of document.querySelectorAll('#viewSel button'))b.addEventListener('click',()=>{
+  settings.view=b.dataset.v; save();
+  if(settings.view!=='sky'&&orient.on)orientStop();
+  renderControls(); draw();
+});
 function choose(b){ settings.planet=b; save(); renderPanel(); draw(); }
 $('sky').addEventListener('click',e=>{ const b=e.target.closest('[data-planet]'); if(b)choose(b.dataset.planet); });
 $('pEvents').addEventListener('click',e=>{ const b=e.target.closest('[data-time]'); if(b){ stop(); setTime(Number(b.dataset.time)); } });
 cv.addEventListener('click',e=>{
   const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
-  const bodies=[...(settings.view==='all'?E.PLANETS:['mercury','venus','mars']),'moon'];
+  const bodies=settings.view==='sky'?SKY:[...(settings.view==='all'?E.PLANETS:['mercury','venus','mars']),'moon'];
+  const where=settings.view==='sky'?skyShown:shown;
   let best=null,bd=32;
-  for(const b of bodies){ const p=shown[b]; if(!p)continue; const d=Math.hypot(p.x-x,p.y-y); if(d<bd){ bd=d; best=b; } }
+  for(const b of bodies){ const p=where[b]; if(!p)continue; const d=Math.hypot(p.x-x,p.y-y); if(d<bd){ bd=d; best=b; } }
   if(best)choose(best);
+});
+
+/* ---------- Compass of the device: turns the compass view so that "up" is where the phone points ----------
+   iPhone: webkitCompassHeading after DeviceOrientationEvent.requestPermission(); Android/Chrome:
+   deviceorientationabsolute (alpha counts anticlockwise from north). No data within 3 s: give up with a note. */
+const orient={on:false,heading:null,handler:null,ev:'',got:false,timer:0,frame:0};
+function orientStart(){
+  if(!('DeviceOrientationEvent' in window)){ Tools.toast(t('orientNone')); Tools.diag.log('orientation: not supported'); return; }
+  const go=()=>{
+    orient.ev='ondeviceorientationabsolute' in window?'deviceorientationabsolute':'deviceorientation';
+    orient.handler=e=>{
+      let hd=null;
+      if(typeof e.webkitCompassHeading==='number'&&!Number.isNaN(e.webkitCompassHeading))hd=e.webkitCompassHeading;
+      else if(e.absolute&&e.alpha!=null)hd=360-e.alpha;
+      if(hd==null)return;
+      const so=(screen.orientation&&screen.orientation.angle)||0;
+      orient.heading=((hd+so)%360+360)%360;
+      if(!orient.got){ orient.got=true; Tools.diag.log('orientation: data'); }
+      if(!orient.frame)orient.frame=requestAnimationFrame(()=>{ orient.frame=0; draw(); });
+    };
+    window.addEventListener(orient.ev,orient.handler);
+    orient.on=true; orient.got=false;
+    Tools.diag.log('orientation: start',{event:orient.ev});
+    orient.timer=setTimeout(()=>{ if(orient.on&&!orient.got){ orientStop(); Tools.toast(t('orientNone')); Tools.diag.log('orientation: no data'); } },3000);
+    renderControls();
+  };
+  if(typeof DeviceOrientationEvent.requestPermission==='function'){
+    DeviceOrientationEvent.requestPermission().then(r=>{ if(r==='granted')go(); else { Tools.toast(t('orientDenied')); Tools.diag.log('orientation: denied'); } })
+      // Chrome has requestPermission too but may reject it without asking; then just listen (no data → note after 3 s)
+      .catch(e=>{ Tools.diag.log('orientation: permission request failed',{error:e&&e.name}); go(); });
+  } else go();
+}
+function orientStop(){
+  if(orient.handler)window.removeEventListener(orient.ev,orient.handler);
+  clearTimeout(orient.timer);
+  Object.assign(orient,{on:false,heading:null,handler:null,got:false});
+  renderControls(); draw();
+}
+$('btnOrient').addEventListener('click',()=>orient.on?orientStop():orientStart());
+
+/* ---------- Moon calendar: one month, the Moon's shape at 21:00 each day, main phases with their time ---------- */
+let calY=0,calM=0;
+function moonMonth(y,m){
+  const days=[],n=new Date(y,m+1,0).getDate();
+  for(let d=1;d<=n;d++){ const t21=new Date(y,m,d,21).getTime(); days.push({d,time:t21,g:E.geo('moon',t21)}); }
+  const a=new Date(y,m,1).getTime(),b=new Date(y,m+1,1).getTime();
+  const main=E.events('moon',a-DAY,b+DAY).filter(ev=>ev.time>=a&&ev.time<b);
+  return {days,main};
+}
+function renderCal(){
+  const {days,main}=moonMonth(calY,calM),first=new Date(calY,calM,1);
+  $('calMonth').textContent=first.toLocaleDateString(loc(),{month:'long',year:'numeric'});
+  $('calPrev').disabled=new Date(calY,calM,0).getTime()<MIN_TIME;
+  $('calNext').disabled=new Date(calY,calM+1,1).getTime()>MAX_TIME;
+  const grid=$('calGrid'); grid.textContent='';
+  for(let i=0;i<7;i++){ const wd=document.createElement('div'); wd.className='wd'; wd.setAttribute('aria-hidden','true');
+    wd.textContent=new Date(2024,0,1+i).toLocaleDateString(loc(),{weekday:'short'}); grid.append(wd); }
+  const off=(first.getDay()+6)%7;
+  for(let i=0;i<off;i++)grid.append(document.createElement('span'));
+  const cur=new Date(time);
+  for(const day of days){
+    const mp=main.find(ev=>new Date(ev.time).getDate()===day.d);
+    const b=document.createElement('button'); b.type='button'; b.dataset.day=day.d;
+    if(mp)b.className='main';
+    if(cur.getFullYear()===calY&&cur.getMonth()===calM&&cur.getDate()===day.d)b.setAttribute('aria-current','date');
+    const phase=t('phase.'+(mp?mp.type:day.g.phase));
+    b.setAttribute('aria-label',t('calDay',{date:new Date(day.time).toLocaleDateString(loc(),{day:'numeric',month:'long'}),phase,pct:Tools.fmt(day.g.illuminated*100,0)})
+      +(mp?' · '+fmtTime(mp.time):''));
+    b.innerHTML=`<span>${day.d}</span>${moonSvg(day.g)}${mp?`<small>${esc(fmtTime(mp.time))}</small>`:''}`;
+    grid.append(b);
+  }
+  const list=$('calPhases'); list.textContent='';
+  for(const ev of main){
+    const when=new Date(ev.time).toLocaleString(loc(),{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    list.append(li(`${moonSvg(E.geo('moon',ev.time))}<span>${esc(t('calPhaseLine',{phase:t('ev.'+ev.type),when}))}</span>`));
+  }
+}
+function openCal(){
+  const d=new Date(time); calY=d.getFullYear(); calM=d.getMonth();
+  renderCal(); Tools.menu.close(); $('calDlg').showModal();
+  Tools.diag.log('moon calendar opened');
+}
+$('btnCal').addEventListener('click',openCal);
+$('menuCal').addEventListener('click',openCal);
+$('calPrev').addEventListener('click',()=>{ calM--; if(calM<0){ calM=11; calY--; } renderCal(); });
+$('calNext').addEventListener('click',()=>{ calM++; if(calM>11){ calM=0; calY++; } renderCal(); });
+$('calGrid').addEventListener('click',e=>{
+  const b=e.target.closest('[data-day]'); if(!b)return;
+  stop(); settings.planet='moon'; save();
+  setTime(new Date(calY,calM,Number(b.dataset.day),21).getTime());
+  $('calDlg').close();
 });
 
 /* ---------- Place of observation ---------- */
@@ -778,8 +999,8 @@ readColors();
 new ResizeObserver(resize).observe(cv);
 render();
 Tools.theme.onChange(()=>{ readColors(); draw(); });
-Tools.onLang(render);
-Tools.diag.info(()=>({planet:settings.planet,view:settings.view,speed:settings.speed,playing,placeIsDefault:settings.lat===DEFAULT_PLACE.lat&&settings.lon===DEFAULT_PLACE.lon}));
+Tools.onLang(()=>{ render(); if($('calDlg').open)renderCal(); });
+Tools.diag.info(()=>({planet:settings.planet,view:settings.view,speed:settings.speed,playing,orientation:orient.on?(orient.got?'on':'waiting'):'off',placeIsDefault:settings.lat===DEFAULT_PLACE.lat&&settings.lon===DEFAULT_PLACE.lon}));
 
 /* ---------- WebMCP ---------- */
 function skyResult(){
@@ -789,7 +1010,8 @@ function skyResult(){
     night:s.night&&!s.night.polar?{from:localValue(s.night.start),to:localValue(s.night.end)}:null,
     planets:SKY.map(b=>{ const v=s.vis[b];
       return {planet:b,...(b==='moon'?{phase:X.t('phase.'+geoOf('moon').phase),illuminatedPercent:Math.round(geoOf('moon').illuminated*100)}:{}),visible:v.kind,summary:visText(v,X),from:v.from?localValue(v.from):null,to:v.to?localValue(v.to):null,
-        magnitude:+v.mag.toFixed(1),elongation:+v.elongation.toFixed(1),side:v.side==='east'?'east of the Sun (evening)':'west of the Sun (morning)'}; }),
+        magnitude:+v.mag.toFixed(1),elongation:+v.elongation.toFixed(1),side:v.side==='east'?'east of the Sun (evening)':'west of the Sun (morning)',
+        ...(()=>{ const hz=E.altitude(b,time,settings.lat,settings.lon); return {altitudeNow:+hz.alt.toFixed(1),directionNow:dirOf(hz.az,'en')}; })()}; }),
   };
 }
 Tools.mcp.register({
@@ -808,8 +1030,22 @@ Tools.mcp.register({
 });
 Tools.mcp.register({
   name:'get_sky',title:'Read the night sky',readOnly:true,
-  description:'Reads for the date and time set in the app which planets and whether the Moon can be seen in the night around it, from when to when, their magnitude (smaller is brighter), angle from the Sun and the phase of the Moon.',
+  description:'Reads for the date and time set in the app which planets and whether the Moon can be seen in the night around it, from when to when, their magnitude (smaller is brighter), angle from the Sun, the phase of the Moon, and where each one is at the time set (altitude above the horizon in degrees, compass direction).',
   execute:()=>skyResult()
+});
+Tools.mcp.register({
+  name:'get_moon_calendar',title:'Read the Moon calendar',readOnly:true,
+  description:'Reads the phases of the Moon for a month (1800-2050): for each day the phase and the illuminated percentage at 9 pm local time, and the exact local times of new moon, first quarter, full moon and last quarter.',
+  inputSchema:{type:'object',properties:{
+    year:{type:'integer',minimum:1800,maximum:2050,description:'Year.'},
+    month:{type:'integer',minimum:1,maximum:12,description:'Month, 1 = January.'}
+  },required:['year','month'],additionalProperties:false},
+  execute:({year,month})=>{
+    const {days,main}=moonMonth(year,month-1),X=ctx('en');
+    return {month:`${year}-${pad(month)}`,
+      days:days.map(d=>({date:localValue(d.time).slice(0,10),phase:X.t('phase.'+d.g.phase),illuminatedPercent:Math.round(d.g.illuminated*100)})),
+      mainPhases:main.map(ev=>({phase:X.t('ev.'+ev.type),time:localValue(ev.time)}))};
+  }
 });
 Tools.mcp.register({
   name:'explain_planet',title:'Explain a planet',label:'mcp.explain',
