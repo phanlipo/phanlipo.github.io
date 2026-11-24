@@ -80,8 +80,11 @@
     return a;
   };
   // Elements inside a Label that start a new line or a list item
-  const BLOCK = new Set(['Para', 'ListItem', 'Row', 'Fragment', 'Caption', 'Display']);
+  // Fragment (type="list") joins parts of one term on a line: "Diabetes mellitus:" + "juveniler Typ"
+  const BLOCK = new Set(['Para', 'ListItem', 'Row', 'Caption', 'Display']);
   const BR = { br: true };
+  // XML whitespace only – a no-break space ("Stadium\u00a0I") stays
+  const WS = /[ \t\r\n]+/g;
   const USAGE = { dagger: '†', aster: '*', optional: '!' };
 
   // Calls onTag(name, attrs, closing, selfClosing) and onText(text) – a small streaming scanner, much lighter
@@ -122,8 +125,8 @@
     const classes = new Map();            // code → item
     const modifiers = new Map();          // modifier code → [modifier class codes in order]
     const modClasses = new Map();         // modifier + '\u0000' + code → { code, label, rubrics, meta }
+    const modDefs = new Map();            // modifier code → its own Rubrics (title of the list)
     let cur = null, rubric = null, label = null, inTitle = false, titleText = '', refDepth = 0, refText = '';
-    let modifier = null;
 
     const flushText = (s, cdata) => {
       if (!cdata) s = unent(s);
@@ -138,12 +141,17 @@
           refDepth = 0;
           const t = refText.replace(/\s+/g, ' ').trim();
           const ra = (label && label._ref) || {};
-          if (t && label) label.parts.push(ra.code && ra.code !== t ? { ref: t, code: ra.code } : { ref: t });
+          if (t && label) {
+            const r = { ref: t };
+            if (ra.code && ra.code !== t) r.code = ra.code;
+            if (ra.class === 'in brackets') r.paren = true;
+            label.parts.push(r);
+          }
           refText = '';
         } else if (tag === 'Label' && label) { finishLabel(); }
         else if (tag === 'Rubric') rubric = null;
         else if (tag === 'Class' || tag === 'ModifierClass') cur = null;
-        else if (tag === 'Modifier') modifier = null;
+        else if (tag === 'Modifier') cur = null;
         else if (tag === 'Title') inTitle = false;
         else if (BLOCK.has(tag) && label) label.parts.push(BR);
         return;
@@ -158,8 +166,9 @@
           if (self) cur = null;
           break;
         case 'Modifier':
-          modifier = a.code; if (!modifiers.has(a.code)) modifiers.set(a.code, []);
-          if (self) modifier = null;
+          if (!modifiers.has(a.code)) modifiers.set(a.code, []);
+          cur = { code: a.code, modDef: true, rubrics: [], meta: [], sub: [] }; modDefs.set(a.code, cur);
+          if (self) cur = null;
           break;
         case 'ModifierClass':
           cur = { code: a.code, modifier: a.modifier, rubrics: [], meta: [], sub: [], usage: USAGE[a.usage] || '' };
@@ -169,11 +178,11 @@
           if (self) cur = null;
           break;
         case 'SuperClass':
-          if (cur && !cur.sup && !cur.modifier) cur.sup = a.code;
+          if (cur && !cur.sup && !cur.modifier && !cur.modDef) cur.sup = a.code;
           break;
         case 'SubClass':
-          if (cur) cur.sub.push(a.code);
-          else if (modifier) { const l = modifiers.get(modifier); if (!l.includes(a.code)) l.push(a.code); }
+          if (cur && cur.modDef) { const l = modifiers.get(cur.code); if (!l.includes(a.code)) l.push(a.code); }
+          else if (cur) cur.sub.push(a.code);
           break;
         case 'ModifiedBy':
           if (cur && cur.mods) cur.mods.push({ code: a.code, all: a.all !== 'false', valid: [] });
@@ -198,6 +207,7 @@
           break;
         default:
           if (BLOCK.has(tag) && label && !self) label.parts.push(BR);
+          else if (tag === 'Fragment' && label && !self) label.parts.push(' ');
           else if (tag === 'Cell' && label && !self) label.parts.push(' ');
       }
     }, flushText);
@@ -207,11 +217,11 @@
       const out = [];
       const add = str => { if (typeof out[out.length - 1] === 'string') out[out.length - 1] += str; else out.push(str); };
       for (const p of label.parts) {
-        if (typeof p === 'string') add(p.replace(/\s+/g, ' '));
+        if (typeof p === 'string') add(p.replace(WS, ' '));
         else if (p === BR) add('\n');
         else out.push(p);
       }
-      for (let i = 0; i < out.length; i++) if (typeof out[i] === 'string') out[i] = out[i].replace(/ *\n[ \n]*/g, '\n');
+      for (let i = 0; i < out.length; i++) if (typeof out[i] === 'string') out[i] = out[i].replace(/ {2,}/g, ' ').replace(/ *\n[ \n]*/g, '\n');
       if (typeof out[0] === 'string') out[0] = out[0].replace(/^\s+/, '');
       const li = out.length - 1;
       if (typeof out[li] === 'string') out[li] = out[li].replace(/\s+$/, '');
@@ -223,14 +233,16 @@
     /* Simplify: one text per rubric (first label, German preferred), title = preferred rubric */
     const simplify = c => {
       const rub = [];
-      let title = '';
+      let title = '', long = '';
       for (const r of c.rubrics) {
         const l = r.labels.find(x => /^de/i.test(x.lang)) || r.labels[0];
         if (!l) continue;
         if (r.kind === 'preferred' && !title) { title = textOf(l.parts); continue; }
+        // The full title of codes whose preferred title only makes sense below their parent ("Olekranon")
+        if (r.kind === 'preferredLong' && !long) { long = textOf(l.parts); continue; }
         rub.push({ kind: r.kind, parts: l.parts });
       }
-      return { title, rub };
+      return long && long !== title ? { title: long, short: title, rub } : { title, rub };
     };
 
     const out = [];
@@ -238,6 +250,7 @@
     for (const c of ds.items) {
       const s = simplify(c);
       const it = { code: c.code, kind: c.kind, usage: c.usage, title: s.title, rub: s.rub, meta: c.meta, parent: c.sup || '', children: [] };
+      if (s.short) it.short = s.short;
       index.set(c.code, it); out.push(it);
     }
     // Children in the order of SubClass, then any items that name this parent but were not listed
@@ -256,7 +269,21 @@
     const LIMIT = 300000;
     let generated = 0;
     const modClass = (m, code) => modClasses.get(m + '\u0000' + code);
-    const expand = (code, mods) => {
+    // ICF: the lists are qualifiers ("xxx.1" = leichtes Problem), not further codes – shown with the code instead
+    const isQualifier = m => /^Q_/.test(m) || (modifiers.get(m) || []).some(c => /xxx/i.test(c));
+    ds.qualifiers = {};
+    for (const [m, codes] of modifiers) {
+      if (!isQualifier(m)) continue;
+      const def = modDefs.get(m);
+      ds.qualifiers[m] = { title: def ? simplify(def).title : m,
+        classes: codes.map(c => ({ code: c, title: modClass(m, c) ? simplify(modClass(m, c)).title : '' })) };
+    }
+    // excludeOnPrecedingModifier "S04E10_4 .0": this 5th digit does not exist after that 4th digit
+    const excludedAfter = (md, prev) => md.meta.some(([n, v]) => n === 'excludeOnPrecedingModifier' && prev.some(p => v === p));
+    // Codes built from a modifier get only the Meta of the modifier class (OPS has them there); the Meta of the
+    // class above (e.g. "E10: not for coding") does not apply to them
+    const ownMeta = meta => meta.filter(([n]) => n !== 'excludeOnPrecedingModifier');
+    const expand = (code, mods, prev) => {
       const it = index.get(code);
       if (!mods.length || generated > LIMIT) return;
       const [m, ...rest] = mods;
@@ -264,13 +291,14 @@
       for (const mc of codes) {
         if (mc.includes('.') && code.includes('.')) continue;
         const md = modClass(m.code, mc);
-        if (!md) continue;
+        if (!md || excludedAfter(md, prev)) continue;
         const nc = code + mc;
         if (index.has(nc)) continue;
         const ms = simplify(md);
-        const n = { code: nc, kind: 'category', usage: it.usage, title: it.title + ': ' + ms.title, rub: ms.rub, meta: md.meta, parent: code, children: [], gen: true };
+        const n = { code: nc, kind: 'category', usage: it.usage, title: it.title + ': ' + ms.title, rub: ms.rub,
+          meta: ownMeta(md.meta), parent: code, children: [], gen: true };
         index.set(nc, n); out.push(n); it.children.push(nc); generated++;
-        expand(nc, rest);
+        expand(nc, rest, prev.concat(m.code + ' ' + mc));
       }
     };
     const raw = new Map(ds.items.map(c => [c.code, c]));
@@ -278,12 +306,18 @@
       const c = raw.get(code), it = index.get(code);
       let mods = inherited.filter(m => !(c && c.excl.includes(m.code)));
       if (c) for (const m of c.mods) if (!mods.some(x => x.code === m.code)) mods = mods.concat(m);
+      const quals = mods.filter(m => ds.qualifiers[m.code]);
+      if (quals.length && it.kind !== 'chapter' && it.kind !== 'component' && it.kind !== 'block') it.quals = quals.map(m => m.code);
       if (it.children.length) { for (const ch of it.children.slice()) walk(ch, mods); return; }
-      expand(code, mods);
+      expand(code, mods.filter(m => !ds.qualifiers[m.code]), []);
     };
     for (const it of out.slice()) if (!it.parent || !index.has(it.parent)) walk(it.code, []);
+    for (const it of out) if (it.meta.length) it.meta = ownMeta(it.meta);
 
     ds.items = sortByTree(out, index);
+    // ICD-10-GM and ICD-10-WHO both call themselves "ICD-10" – the file name tells them apart
+    const guess = guessTitle(fileName).replace(/ 20\d\d$/, '');
+    if (ds.title === 'ICD-10' && /^ICD-10-(GM|WHO)$/.test(guess)) ds.title = guess;
     ds.title = ds.title ? (ds.version && !ds.title.includes(ds.version) ? ds.title + ' ' + ds.version : ds.title) : guessTitle(fileName);
     titleText = titleText.replace(/\s+/g, ' ').trim();
     ds.longTitle = titleText;
@@ -301,15 +335,15 @@
     for (const it of items) visit(it);
     return res;
   }
-  const textOf = parts => parts.map(p => typeof p === 'string' ? p : p.ref).join('').replace(/\s+/g, ' ').trim();
+  const textOf = parts => parts.map(p => typeof p === 'string' ? p : p.paren ? ' (' + p.ref + ')' : p.ref).join('').replace(WS, ' ').replace(/ \)/g, ')').trim();
 
   /* ---------- EDV-TXT lists: Alpha-ID-SE, alphabets of ICD-10-GM / OPS / ICD-10-WHO ----------
      One entry per line, fields separated by "|", the text is the last field. Alpha-ID-SE:
      validity|Alpha-ID|ICD primary|star|additional|primary 2|ORPHAcode|text. Other lists: codes are recognised
      by their form. */
   const CODE_RE = [
-    /^[A-Z]\d{2}(\.[0-9-]{1,2})?[†*!+]?$/,           // ICD-10
-    /^\d-\d{2}[0-9a-z]?(\.[0-9a-z-]{1,2})?$/,          // OPS
+    /^[A-Z]\d{2}(\.[0-9-]{1,2})?[†*!+]?↔?$/,          // ICD-10
+    /^\d-\d{2}[0-9a-z]?(\.[0-9a-z-]{1,2})?↔?$/,         // OPS; ↔ = needs a side (R, L, B)
     /^[0-9]{4}\/[0-9]$/,                              // ICD-O morphology
   ];
   const isCode = s => CODE_RE.some(r => r.test(s));
@@ -320,13 +354,19 @@
     const pipes = sample.filter(l => l.includes('|')).length, semis = sample.filter(l => l.includes(';')).length;
     if (pipes < sample.length * 0.8) { if (semis >= sample.length * 0.8) throw fail('semicolon'); return null; }
     const alpha = /alpha-?id/i.test(fileName) || sample.every(l => { const f = l.split('|'); return f.length === 8 && /^[01]$/.test(f[0]) && /^I\d+$/.test(f[1]); });
+    // ICD-10-GM alphabet: kind|number|print flag|primary|star|additional|primary 2|text
+    const icdAlpha = !alpha && sample.every(l => { const f = l.split('|'); return f.length === 8 && /^\d$/.test(f[0]) && /^\d+$/.test(f[1]) && /^[01]$/.test(f[2]); });
     const items = [];
     for (const l of lines) {
       const f = l.split('|').map(s => s.trim());
       const text = f[f.length - 1];
       if (!text) continue;
       const it = { text, codes: [] };
-      if (alpha && f.length >= 8) {
+      if (icdAlpha && f.length >= 8) {
+        it.id = f[1];
+        const roles = ['primary', 'star', 'add', 'primary2'];
+        for (let i = 0; i < 4; i++) if (f[3 + i]) it.codes.push({ code: f[3 + i], role: roles[i] });
+      } else if (alpha && f.length >= 8) {
         it.valid = f[0] !== '0';
         it.id = f[1];
         const roles = ['primary', 'star', 'add', 'primary2'];
@@ -367,7 +407,7 @@
       for (const e of entries) {
         const n = e.name.toLowerCase();
         if (n.endsWith('/') || /(^|\/)(__macosx|\._)/.test(n)) continue;
-        if (!/\.(xml|txt|zip)$/.test(n)) continue;
+        if (!/\.(xml|txt|zip)$/.test(n) || /liesmich|readme/.test(n)) continue;
         onProgress && onProgress({ step: 'unzip', file: e.name.replace(/^.*\//, '') });
         await readBlob(await zipData(blob, e), e.name, out, depth + 1, onProgress);
       }

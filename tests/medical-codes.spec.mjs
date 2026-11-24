@@ -1,7 +1,7 @@
 // Kodiersysteme: BfArM downloads (ClaML ZIP, EDV-TXT) read in the browser – with hand-written test files in the
 // layout of the real ones (tests/medical-codes-data.mjs), no BfArM content.
 import { test, expect, openMenu, switchLang, clipboardText, mockLaunchQueue, axe } from './helpers.mjs';
-import { icdZip, opsZip, alphaZip, metaZip, nestedZip, zip, ICD_XML } from './medical-codes-data.mjs';
+import { icdZip, opsZip, alphaZip, metaZip, nestedZip, icdAlphaZip, opsAlphaZip, icfZip, zip, ICD_XML } from './medical-codes-data.mjs';
 
 const ZIP = 'application/zip';
 const load = (page, files) => page.setInputFiles('#fileInput', files.map(([name, buffer]) => ({ name, mimeType: ZIP, buffer })));
@@ -21,9 +21,9 @@ test('ICD-10-GM ClaML ZIP: chapters, browse, detail with notes, references and p
   await load(page, [['icd10gm2026syst-claml.zip', icdZip()]]);
   await expect(page.locator('#browse')).toBeVisible();
   await expect(page.locator('#setup')).toBeHidden();
-  await expect(page.locator('#count')).toHaveText('14 Einträge');
+  await expect(page.locator('#count')).toHaveText('22 Einträge');
   // Without a search: the chapters, in book order
-  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page).locator('.code')).toHaveText(['I', 'IV', 'XIII']);
   await expect(rows(page).nth(0)).toContainText('I' + 'Bestimmte infektiöse und parasitäre Krankheiten');
   await expect(rows(page).nth(0)).toContainText('Kapitel');
   await rows(page).nth(0).locator('.open').click();
@@ -40,7 +40,7 @@ test('ICD-10-GM ClaML ZIP: chapters, browse, detail with notes, references and p
   const note = page.locator('.rub', { has: page.locator('h3', { hasText: 'Hinweis' }) });
   expect(await note.locator('p').innerText()).toBe('Erster Absatz & mehr.\nPunkt eins\nPunkt zwei');
   await excl.locator('button.ref').click();
-  await expect(page.locator('#dTitle')).toHaveText('A01.1Paratyphus A');
+  await expect(page.locator('#dTitle')).toHaveText('A01.1Typhus abdominalis und Paratyphus: Paratyphus A');
   // Back (button and browser back) walks the opened codes back to the list
   await page.goBack();
   await expect(page.locator('#dTitle')).toHaveText('A00.9Cholera, nicht näher bezeichnet');
@@ -68,7 +68,7 @@ test('dagger codes, meta data and codes built from a modifier', async ({ page })
   await rows(page).first().locator('.open').click();
   await expect(page.locator('#dTitle')).toHaveText('A00Cholera');
   await page.locator('#dBody details summary').click();
-  await expect(page.locator('#dBody .meta-table tr').nth(1)).toHaveText('Para295P');
+  await expect(page.locator('#dBody .meta-table tr').nth(1)).toHaveText('Verwendung nach § 295 SGB Vzur Primärverschlüsselung zugelassen');
   await page.click('#btnBack');
   // M00 has a 5th-digit modifier: M00.0 gets M00.00 and M00.01
   await find(page, 'M00.0');
@@ -77,6 +77,93 @@ test('dagger codes, meta data and codes built from a modifier', async ({ page })
   await expect(page.locator('#dTitle')).toHaveText('M00.01Arthritis und Polyarthritis durch Staphylokokken: Schulterregion');
   await expect(page.locator('#dKind')).toContainText('aus Zusatzliste zusammengesetzt');
   await expect(page.locator('.rub', { hasText: 'Inklusive' }).locator('p')).toHaveText('Klavikula, Skapula');
+});
+
+test('as in the real files: two-level modifiers with excluded combinations, long titles, fragments, references in brackets', async ({ page }) => {
+  await load(page, [['icd10gm2026syst-claml.zip', icdZip()]]);
+  // The read-me next to the ClaML (fields with "|") does not become a list
+  await expect(page.locator('#dsChips')).toBeHidden();
+  // E10 + 4th digit (.0, .9) + 5th digit (0, 1) – but no E10.00: the file excludes "0" after ".0"
+  await find(page, 'E10');
+  await expect(rows(page).locator('.code')).toHaveText(['E10', 'E10-E14', 'E10.0', 'E10.01', 'E10.9', 'E10.90', 'E10.91']);
+  await expect(rows(page).nth(3)).toContainText('Diabetes mellitus, Typ 1: Mit Koma: Als entgleist bezeichnet');
+  await rows(page).first().locator('.open').click();
+  // The no-break space of the file stays
+  expect(await page.locator('#dTitle').textContent()).toBe('E10Diabetes mellitus, Typ\u00a01');
+  await expect(page.locator('.rub', { hasText: 'Inklusive' }).locator('p')).toHaveText('Diabetes mellitus: juveniler Typ');
+  const excl = page.locator('.rub', { hasText: 'Exklusive' });
+  expect(await excl.locator('p').textContent()).toBe('Cholera o.n.A. (A00.9)');
+  await excl.locator('button.ref').click();
+  await expect(page.locator('#dTitle')).toHaveText('A00.9Cholera, nicht näher bezeichnet');
+  await page.click('#btnBack');
+  // Extra details with their meaning
+  await page.locator('#dBody details summary').click();
+  await expect(page.locator('#dBody .meta-table tr').nth(1)).toHaveText('Verwendung nach § 295 SGB Vnicht zur Verschlüsselung zugelassen');
+  await expect(page.locator('#dBody .meta-table tr').nth(2)).toHaveText('Geschlechtsbezugkein Geschlechtsbezug');
+  await expect(page.locator('#dBody .meta-table tr').nth(3)).toHaveText('Untere Altersgrenzeab 10 vollendeten Lebensjahren');
+  await expect(page.locator('#dBody .meta-table tr').nth(4)).toHaveText('Gültigkeit nach § 17b/§ 17d KHGgültig nach § 17b und § 17d KHG');
+  await page.click('#btnBack');
+  // A code built from modifiers does not take the details of E10 ("not for coding")
+  await find(page, 'E10.91');
+  await rows(page).first().locator('.open').click();
+  await expect(page.locator('#dTitle')).toHaveText('E10.91Diabetes mellitus, Typ 1: Ohne Komplikationen: Als entgleist bezeichnet');
+  await expect(page.locator('#dBody details')).toHaveCount(0);
+  await page.click('#btnBack');
+  // preferredLong is the title; search also looks at the titles above
+  await find(page, 'A01.1');
+  await expect(rows(page)).toHaveText(['A01.1Typhus abdominalis und Paratyphus: Paratyphus A']);
+  await find(page, 'typ 1 koma');
+  await expect(rows(page).locator('.code')).toHaveText(['E10.0', 'E10.01']);
+});
+
+test('ICF: qualifiers are shown with the code, not turned into codes', async ({ page }) => {
+  await load(page, [['icf2005syst-claml.zip', icfZip()]]);
+  await expect(page.locator('#count')).toHaveText('4 Einträge');
+  await find(page, 'b1100');
+  await expect(rows(page)).toHaveText(['b1100Bewusstseinszustand']);
+  await rows(page).first().locator('.open').click();
+  await expect(page.locator('#dKind')).toHaveText('ICF 2005 · Kode');
+  const q = page.locator('.rub', { has: page.locator('h3', { hasText: 'Beurteilungsmerkmal: Ausmaß oder Größe der Schädigung' }) });
+  await expect(q.locator('tr')).toHaveText(['xxx.0Schädigung nicht vorhanden', 'xxx.1Schädigung leicht ausgeprägt']);
+});
+
+test('alphabets of ICD-10-GM (Windows-1252, dagger as "+") and OPS ("↔"); hits in other files are offered', async ({ page }) => {
+  await load(page, [['icd10gm2026alpha-txt.zip', icdAlphaZip()], ['ops2027alpha_txt.zip', opsAlphaZip()], ['icd.zip', icdZip()], ['ops.zip', opsZip()]]);
+  await expect(page.locator('#dsChips button')).toHaveText(['ICD-10-GM Alphabet 2026', 'OPS Alphabet 2027', 'ICD-10-GM 2026', 'OPS 2027']);
+  await page.locator('#dsChips button', { hasText: 'ICD-10-GM Alphabet' }).click();
+  await find(page, 'typhöse');
+  await expect(rows(page)).toHaveText(['Typhöse Meningitis86001 · A01.0† · G01*']);
+  await rows(page).first().locator('.open').click();
+  await expect(page.locator('#dBody tr').nth(1)).toHaveText('PrimärkodeA01.0† Typhus abdominalis');
+  await expect(page.locator('#dBody tr').nth(2)).toHaveText('Stern-KodeG01*');
+  await page.click('#btnBack');
+  // Reference entries without a code are listed too
+  await find(page, 'abnorm');
+  await expect(rows(page)).toHaveText(['Abnorm - s. Art der Krankheit86498']);
+  await page.locator('#dsChips button', { hasText: 'OPS Alphabet' }).click();
+  await find(page, 'klavikula');
+  await expect(rows(page)).toHaveText(['Exploration von Knochengewebe an der Klavikula948 · 5-780.00↔']);
+  await rows(page).first().locator('.open').click();
+  await page.locator('#dBody button.ref', { hasText: '5-780.00↔' }).click();
+  await expect(page.locator('#dTitle')).toHaveText('5-780.00Exploration von Knochengewebe: Klavikula');
+  // The OPS code: its own details from the modifier list, not EinmalK of 5-780.0
+  await page.locator('#dBody details summary').click();
+  await expect(page.locator('#dBody .meta-table tr').nth(1)).toHaveText('Zusatzkodenein');
+  await expect(page.locator('#dBody .meta-table tr')).toHaveCount(2);
+  await expect(page.locator('.rub', { hasText: 'Einträge im Alphabet – OPS Alphabet 2027' }).locator('.name')).toHaveText(['Exploration von Knochengewebe an der Klavikula']);
+  await page.click('#btnBack');
+  await expect(page.locator('#dTitle')).toHaveText('Exploration von Knochengewebe an der Klavikula');
+  await page.click('#btnBack');
+  await expect(page.locator('#browse')).toBeVisible();
+  // A synonym only in the alphabet: the classification offers the hits there
+  await page.locator('#dsChips button', { hasText: 'ICD-10-GM 2026' }).click();
+  await find(page, 'klassische');
+  await expect(page.locator('#elsewhere button')).toHaveText(['1 Treffer in ICD-10-GM Alphabet 2026']);
+  await find(page, 'typhöse');
+  await expect(page.locator('#count')).toHaveText('Keine Treffer.');
+  await page.locator('#elsewhere button').click();
+  await expect(page.locator('#dsChips button[aria-pressed="true"]')).toHaveText('ICD-10-GM Alphabet 2026');
+  await expect(rows(page)).toHaveCount(1);
 });
 
 test('search: code prefixes, words in any order, umlauts and inclusions', async ({ page }) => {
@@ -119,10 +206,10 @@ test('Alpha-ID-SE next to ICD-10-GM: links both ways, invalid entries last', asy
   await find(page, 'a0');
   await expect(rows(page).locator('.name')).toHaveText(['Cholera durch Vibrio cholerae O:1, Biovar cholerae', 'Asiatische Cholera', 'Typhusmeningitis']);
   await expect(rows(page).nth(2)).toHaveClass(/inactive/);
-  await expect(rows(page).nth(2).locator('.meta')).toHaveText('I11111 · A01.0 · G01* · nicht mehr gültig');
+  await expect(rows(page).nth(2).locator('.meta')).toHaveText('I11111 · A01.0† · G01* · nicht mehr gültig');
   await rows(page).nth(2).locator('.open').click();
   await expect(page.locator('#dKind')).toHaveText('Alpha-ID-SE 2026 · nicht mehr gültig');
-  await expect(page.locator('#dBody tr').nth(1)).toHaveText('PrimärkodeA01.0 Typhus abdominalis');
+  await expect(page.locator('#dBody tr').nth(1)).toHaveText('PrimärkodeA01.0† Typhus abdominalis');
   // Star code not in the loaded file: plain text
   await expect(page.locator('#dBody tr').nth(2)).toHaveText('Stern-KodeG01*');
   await page.locator('#dBody button.ref', { hasText: 'A01.0' }).click();
@@ -143,7 +230,7 @@ test('Alpha-ID-SE next to ICD-10-GM: links both ways, invalid entries last', asy
 
 test('nested ZIP of older years; wrong files get a clear message', async ({ page }) => {
   await load(page, [['icd10gm2024.zip', nestedZip()]]);
-  await expect(page.locator('#count')).toHaveText('14 Einträge');
+  await expect(page.locator('#count')).toHaveText('22 Einträge');
   await openMenu(page);
   await page.locator('#filesPage summary').click();
   await page.click('#btnAdd');
@@ -154,7 +241,7 @@ test('nested ZIP of older years; wrong files get a clear message', async ({ page
   await page.setInputFiles('#fileInput', { name: 'kaputt.zip', mimeType: ZIP, buffer: Buffer.from('PK\u0003\u0004 abgeschnitten') });
   await expect(page.locator('#err')).toContainText('beschädigt');
   // The loaded file is still there
-  await expect(page.locator('#count')).toHaveText('14 Einträge');
+  await expect(page.locator('#count')).toHaveText('22 Einträge');
   // A plain XML file works too, and the same file twice is recognised
   await page.setInputFiles('#fileInput', { name: 'icd.xml', mimeType: 'application/xml', buffer: Buffer.from(ICD_XML) });
   await expect(page.locator('#err')).toBeHidden();
@@ -187,7 +274,7 @@ test('files survive a reload; removing one offers undo', async ({ page }) => {
   await page.click('#btnBack');
   await expect(page.locator('#browse')).toBeVisible();
   await expect(page.locator('#dsChips')).toBeHidden();
-  await expect(page.locator('#count')).toHaveText('14 Einträge');
+  await expect(page.locator('#count')).toHaveText('22 Einträge');
   // All files removed: the setup again
   await openMenu(page);
   await page.locator('#filesPage summary').click();
@@ -214,7 +301,7 @@ test('copy takes code and title; offline after the first visit', async ({ page, 
 test('opened with the installed app (launch queue)', async ({ page }) => {
   await mockLaunchQueue(page, [{ name: 'icd.zip', mimeType: ZIP, buffer: icdZip() }]);
   await page.goto('/medical-codes/?opened=1');
-  await expect(page.locator('#count')).toHaveText('14 Einträge');
+  await expect(page.locator('#count')).toHaveText('22 Einträge');
 });
 
 test('diagnostics hold no file names or search terms', async ({ page }) => {
@@ -240,7 +327,7 @@ test.describe('English', () => {
   test('texts written by the script are English; switching back re-renders', async ({ page }) => {
     await load(page, [['icd.zip', icdZip()]]);
     await expect(page.locator('header .sub')).toHaveText('Search ICD-10-GM, OPS and Alpha-ID-SE from the BfArM');
-    await expect(page.locator('#count')).toHaveText('14 entries');
+    await expect(page.locator('#count')).toHaveText('22 entries');
     await find(page, 'A00.9');
     await rows(page).first().locator('.open').click();
     await expect(page.locator('.rub h3')).toHaveText(['Excludes', 'Note']);

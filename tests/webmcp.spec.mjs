@@ -2614,7 +2614,7 @@ test.describe('medical-codes tools', () => {
     expect(tools.find(t => t.name === 'medical_codes_search_codes').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
     expect(tools.find(t => t.name === 'medical_codes_show_code').annotations).toEqual({ readOnlyHint: false, untrustedContentHint: true });
     expect((await call(page, 'medical_codes_list_datasets', {})).result).toEqual({ active: 'ICD-10-GM 2026', datasets: [
-      { title: 'Alpha-ID-SE 2026', kind: 'list', entries: 4 }, { title: 'ICD-10-GM 2026', kind: 'classification', entries: 14 }] });
+      { title: 'Alpha-ID-SE 2026', kind: 'list', entries: 4 }, { title: 'ICD-10-GM 2026', kind: 'classification', entries: 22 }] });
     let r = await call(page, 'medical_codes_search_codes', { query: 'cholera', limit: 2 });
     expect(r.result).toEqual({ dataset: 'ICD-10-GM 2026', total: 3, results: [
       { code: 'A00', title: 'Cholera', kind: 'category' }, { code: 'A00.0', title: 'Cholera durch Vibrio cholerae O:1, Biovar cholerae', kind: 'category' }] });
@@ -2622,7 +2622,7 @@ test.describe('medical-codes tools', () => {
     await expect(page.locator('#results > li')).toHaveCount(3);
     await expect(page.locator('.toast')).toContainText('KI-Agent: Kodes gesucht');
     r = await call(page, 'medical_codes_search_codes', { query: 'typhus', dataset: 'alpha-id' });
-    expect(r.result).toEqual({ dataset: 'Alpha-ID-SE 2026', total: 1, results: [{ text: 'Typhusmeningitis', id: 'I11111', codes: ['A01.0', 'G01*'], valid: false }] });
+    expect(r.result).toEqual({ dataset: 'Alpha-ID-SE 2026', total: 1, results: [{ text: 'Typhusmeningitis', id: 'I11111', codes: ['A01.0†', 'G01*'], valid: false }] });
     await expect(page.locator('#dsChips button[aria-pressed="true"]')).toHaveText('Alpha-ID-SE 2026');
     // show_code finds the code in the classification even while the list is chosen
     r = await call(page, 'medical_codes_show_code', { code: 'A00.9' });
@@ -2639,7 +2639,7 @@ test.describe('medical-codes tools', () => {
 
   test('invalid input and unknown codes change nothing', async ({ page }) => {
     await page.setInputFiles('#fileInput', { name: 'icd.zip', mimeType: 'application/zip', buffer: icdZip() });
-    await expect(page.locator('#count')).toHaveText('14 Einträge');
+    await expect(page.locator('#count')).toHaveText('22 Einträge');
     expect((await call(page, 'medical_codes_show_code', { code: 'Z99.9' })).error).toBe('Code "Z99.9" not found in the loaded coding systems.');
     expect((await call(page, 'medical_codes_search_codes', { query: 'A00', dataset: 'OPS' })).error).toBe('No loaded coding system matches "OPS". Loaded: ICD-10-GM 2026');
     expect((await call(page, 'medical_codes_search_codes', { query: '' })).ok).toBe(false);
