@@ -29,13 +29,17 @@ test('repository files are not published, only what the pages need', async ({ re
   }
 });
 
-test('apps show no subtitle in the header, the start page does', async ({ page }) => {
-  await page.setViewportSize(VIEWPORTS.mobile);
-  for (const app of apps()) {
+// One test per app: a single test over all apps outgrew the test time limit as apps were added
+for (const app of apps()) {
+  test(`${app.folder}: no subtitle in the header`, async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.mobile);
     await page.goto(`/${app.folder}/`);
     const sub = page.locator('header .sub');
     if (await sub.count()) await expect(sub, app.folder).toBeHidden();
-  }
+  });
+}
+test('the start page shows its subtitle in the header', async ({ page }) => {
+  await page.setViewportSize(VIEWPORTS.mobile);
   await page.goto('/');
   await expect(page.locator('header .sub')).toBeVisible();
 });
