@@ -4522,3 +4522,66 @@ test.describe('table-tennis tools', () => {
     expect(JSON.parse(await page.evaluate(() => localStorage.getItem('table-tennis.settings.v1')))).toMatchObject({ mode: 'cpu', level: 'hard', points: 11 });
   });
 });
+
+test.describe('anatomy tools', () => {
+  const index = JSON.parse(readFileSync(new URL('../anatomy/models/index.json', import.meta.url), 'utf8'));
+  const id = (en, side) => index.parts.findIndex(p => p[1] === en && p[2] === side);
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await fakeModelContext(page);
+    await page.goto('/anatomy/');
+    await page.waitForFunction(() => window.__anatomy && window.__anatomy.viewer.layers.has('skeleton'));
+  });
+
+  test('find_parts searches all languages; get_state reads without changing anything', async ({ page }) => {
+    let r = await call(page, 'anatomy_find_parts', { query: 'femur' });
+    // Left and right are one hit (the id of one side)
+    const femur = r.result.results[0];
+    expect(femur).toEqual({ id: id('Femur', femur.side[0]), name: 'Femur', latin: 'Os femoris', german: 'Oberschenkelknochen', layer: 'skeleton', side: femur.side });
+    expect(r.result.results.filter(p => p.name === 'Femur')).toHaveLength(1);
+    r = await call(page, 'anatomy_find_parts', { query: 'Leber' });
+    expect(r.result.results[0]).toMatchObject({ name: 'Liver', latin: 'Hepar', layer: 'organs', side: null });
+    r = await call(page, 'anatomy_find_parts', { query: 'nerve', layer: 'nerves', limit: 5 });
+    expect(r.result.results).toHaveLength(5);
+    expect(r.result.results.every(p => p.layer === 'nerves')).toBe(true);
+    expect((await call(page, 'anatomy_find_parts', { query: 'zzzz' })).result).toEqual({ results: [] });
+    r = await call(page, 'anatomy_get_state', {});
+    expect(r.result).toEqual({ layers: ['skeleton'], selected: null, hidden_parts: 0, camera: { azimuthDeg: 0, elevationDeg: 5, zoom: 1 },
+      labels: false, auto_rotate: false, quiz: null, best_quiz_score: 0 });
+    // Nothing was loaded or switched for the search
+    expect(await page.evaluate(() => [...window.__anatomy.viewer.layers.keys()])).toEqual(['skeleton']);
+  });
+
+  test('show_part switches the layer on, selects and zooms in; set_layers like the chips', async ({ page }) => {
+    const liver = index.parts.findIndex(p => p[1] === 'Liver');
+    let r = await call(page, 'anatomy_show_part', { id: liver });
+    expect(r.result).toEqual({ shown: { id: liver, name: 'Liver', latin: 'Hepar', german: 'Leber', layer: 'organs', side: null }, layers: ['skeleton', 'organs'] });
+    await expect(page.locator('#infoName')).toHaveText('Leber');
+    await expect(page.locator('#layers [data-layer="organs"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#toast')).toHaveText('KI-Agent: Teil gezeigt');
+    expect((await call(page, 'anatomy_get_state', {})).result.camera.zoom).toBeGreaterThan(2);
+    r = await call(page, 'anatomy_set_layers', { layers: ['muscles', 'skin'], skin_opacity: 50 });
+    expect(r.result).toEqual({ layers: ['skin', 'muscles'], loaded: ['skeleton', 'organs', 'skin', 'muscles'], skin_opacity: 50 });
+    await expect(page.locator('#layers [aria-pressed="true"]')).toHaveText(['Haut', 'Muskeln']);
+    await expect(page.locator('#info')).toBeHidden();   // the liver is no longer drawn
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('anatomy.settings.v1')))).toMatchObject({ layers: ['skin', 'muscles'], skin: 50 });
+    r = await call(page, 'anatomy_get_state', {});
+    expect(r.result).toMatchObject({ layers: ['skin', 'muscles'], selected: null });
+    // A part that the user had hidden comes back when an agent shows it
+    const femur = id('Femur', 'r');
+    await page.evaluate(i => window.__anatomy.viewer.setHidden(i, true), femur);
+    r = await call(page, 'anatomy_show_part', { id: femur });
+    expect(r.result.layers).toEqual(['skin', 'muscles', 'skeleton']);
+    expect(await page.evaluate(() => window.__anatomy.viewer.hidden.size)).toBe(0);
+    expect((await call(page, 'anatomy_get_state', {})).result.selected).toMatchObject({ name: 'Femur', side: 'right' });
+  });
+
+  test('invalid input is rejected', async ({ page }) => {
+    expect(await call(page, 'anatomy_show_part', { id: 99999 })).toEqual({ ok: false, error: 'No part with id 99999.' });
+    expect((await call(page, 'anatomy_show_part', {})).ok).toBe(false);
+    expect((await call(page, 'anatomy_find_parts', { query: 'a' })).ok).toBe(false);
+    expect((await call(page, 'anatomy_set_layers', { layers: ['bones'] })).ok).toBe(false);
+    expect((await call(page, 'anatomy_set_layers', { layers: ['skin'], skin_opacity: 5 })).ok).toBe(false);
+    await expect(page.locator('#layers [aria-pressed="true"]')).toHaveText(['Skelett']);
+  });
+});
