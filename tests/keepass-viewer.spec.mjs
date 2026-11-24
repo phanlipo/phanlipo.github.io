@@ -69,7 +69,7 @@ test.describe('crypto building blocks', () => {
     expect(r).toEqual(['94287082', '07081804', '46119246', '69279037', '89005924', '65353130', null, null]);
   });
 
-  test('key files: XML version 2 with hash check, 64 hex characters, other files hashed', async ({ page }) => {
+  test('key files: XML version 1 and 2 with hash check, 64 hex characters, other files hashed', async ({ page }) => {
     const r = await page.evaluate(async () => {
       const hex = b => Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
       const enc = s => new TextEncoder().encode(s);
@@ -77,10 +77,12 @@ test.describe('crypto building blocks', () => {
       const xml = h => enc(`<?xml version="1.0"?><KeyFile><Meta><Version>2.0</Version></Meta><Key><Data Hash="${h}">00010203 04050607</Data></Key></KeyFile>`);
       let bad = null;
       try { await keyFileHash(xml('00000000')); } catch (e) { bad = e.code; }
-      return { xml: hex(await keyFileHash(xml('8A851FF8'))), bad, hexKey: hex(await keyFileHash(enc('ab'.repeat(32)))),
+      const v1 = enc('<?xml version="1.0"?>\n<KeyFile>\n<Meta><Version>1.00</Version></Meta>\n<Key><Data>AAECAwQFBgc=</Data></Key>\n</KeyFile>');
+      return { xml: hex(await keyFileHash(xml('8A851FF8'))), v1: hex(await keyFileHash(v1)), bad, hexKey: hex(await keyFileHash(enc('ab'.repeat(32)))),
         other: hex(await keyFileHash(enc('abc'))) };
     });
     expect(r.xml).toBe('0001020304050607');
+    expect(r.v1).toBe('0001020304050607');
     expect(r.bad).toBe('keyfile');
     expect(r.hexKey).toBe('ab'.repeat(32));
     expect(r.other).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'); // SHA-256("abc")

@@ -124,21 +124,21 @@
   /* ---------- Key ---------- */
   async function keyFileHash(kf) {
     const text = (() => { try { return new TextDecoder('utf-8', { fatal: true }).decode(kf); } catch (_) { return null; } })();
-    if (text && /<KeyFile/i.test(text) && typeof DOMParser !== 'undefined') {
-      const doc = new DOMParser().parseFromString(text.replace(/^﻿/, ''), 'application/xml');
-      const version = (doc.querySelector('KeyFile > Meta > Version')?.textContent || '').trim();
-      const dataEl = doc.querySelector('KeyFile > Key > Data');
-      if (dataEl && !doc.querySelector('parsererror')) {
-        const raw = dataEl.textContent.replace(/\s+/g, '');
-        if (version.startsWith('2')) {
-          if (!/^[0-9a-f]+$/i.test(raw) || raw.length % 2) fail('keyfile');
-          const key = new Uint8Array(raw.match(/../g).map(x => parseInt(x, 16)));
-          const expect = (dataEl.getAttribute('Hash') || '').toLowerCase();
-          if (expect && hex((await sha256(key)).subarray(0, 4)) !== expect) fail('keyfile');
-          return key;
-        }
-        try { return Uint8Array.from(atob(raw), c => c.charCodeAt(0)); } catch (_) { fail('keyfile'); }
+    // KeePass XML key file (version 1: base64, version 2: hex with hash). Read as plain text on purpose:
+    // the format is tiny and fixed, and an untrusted file never goes through a DOM parser.
+    const xml = text && /<KeyFile[\s>]/i.test(text) ? text.replace(/<!--[\s\S]*?-->/g, '') : null;
+    const data = xml && xml.match(/<Key>\s*<Data(\s[^>]*)?>([^<]*)<\/Data>/i);
+    if (data) {
+      const version = (xml.match(/<Meta>[\s\S]*?<Version>([^<]*)<\/Version>/i) || [])[1] || '';
+      const raw = data[2].replace(/\s+/g, '');
+      if (version.trim().startsWith('2')) {
+        if (!/^[0-9a-f]+$/i.test(raw) || raw.length % 2) fail('keyfile');
+        const key = new Uint8Array(raw.match(/../g).map(x => parseInt(x, 16)));
+        const expect = ((data[1] || '').match(/\bHash\s*=\s*["']([0-9a-f]*)["']/i) || [])[1];
+        if (expect && hex((await sha256(key)).subarray(0, 4)) !== expect.toLowerCase()) fail('keyfile');
+        return key;
       }
+      try { return Uint8Array.from(atob(raw), c => c.charCodeAt(0)); } catch (_) { fail('keyfile'); }
     }
     if (kf.length === 32) return kf.slice();
     if (kf.length === 64 && text && /^[0-9a-f]{64}$/i.test(text)) return new Uint8Array(text.match(/../g).map(x => parseInt(x, 16)));
