@@ -126,7 +126,7 @@
     const text = (() => { try { return new TextDecoder('utf-8', { fatal: true }).decode(kf); } catch (_) { return null; } })();
     // KeePass XML key file (version 1: base64, version 2: hex with hash). Read as plain text on purpose:
     // the format is tiny and fixed, and an untrusted file never goes through a DOM parser.
-    const xml = text && /<KeyFile[\s>]/i.test(text) ? text.replace(/<!--[\s\S]*?-->/g, '') : null;
+    const xml = text && /<KeyFile[\s>]/i.test(text) ? text : null;
     const data = xml && xml.match(/<Key>\s*<Data(\s[^>]*)?>([^<]*)<\/Data>/i);
     if (data) {
       const version = (xml.match(/<Meta>[\s\S]*?<Version>([^<]*)<\/Version>/i) || [])[1] || '';
