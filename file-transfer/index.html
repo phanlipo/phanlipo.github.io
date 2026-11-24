@@ -22,7 +22,7 @@
 <meta name="tool:webmcp-help-en" content="An AI agent can read whether a device is connected and which files and texts were sent or received. It cannot send, connect or save files.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-FyJgz6khmtSty1mkx6+BYNZOT8YcDRHErvXGKlrZ0b4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-b8TFTuM+BBuYJrF8I251lSwv/HGHpPXsoSslK/Ekhp0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -265,7 +265,7 @@ textarea.code{min-height:84px;word-break:break-all}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version af7f05730a99</p>
+  <p class="footer-version">Version 9a7d5a8ebb67</p>
   <!-- footer:end -->
 </footer>
 
@@ -553,7 +553,6 @@ $('btnSendText').addEventListener('click',()=>{
 });
 
 /* ---------- List ---------- */
-const esc=Tools.esc;
 function statusText(it){
   const s=it.state;
   if(s==='queued')return conn.connected()?t('st.next'):t('st.queued');
@@ -570,33 +569,45 @@ function metaLine(it){
   const when=new Date(it.at).toLocaleTimeString(Tools.locale(),{hour:'2-digit',minute:'2-digit'});
   return (it.kind==='file'?fmtSize(it.size)+' · ':'')+statusText(it)+' · '+when;
 }
-const btn=(act,icon,label)=>`<button type="button" class="btn icon" data-act="${act}" aria-label="${esc(label)}" title="${esc(label)}">${Tools.icon(icon)}</button>`;
+// Rows are built with DOM methods only: names and texts come from the other device and never go through innerHTML
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
+function btn(act,icon,label){
+  const b=el('button','btn icon');b.type='button';b.dataset.act=act;
+  b.setAttribute('aria-label',label);b.title=label;
+  b.insertAdjacentHTML('beforeend',Tools.icon(icon));   // fixed sprite icon, no outside data
+  return b;
+}
 const isLink=s=>/^https?:\/\/\S+$/i.test(s.trim());
 function row(it){
   const active=it.state==='sending'||it.state==='receiving'||it.state==='confirm';
   const label=it.kind==='file'?it.name:t('textItem');
+  const li=el('li');li.dataset.id=it.id;
   const img=it.kind==='file'&&it.file?preview(it):'';
-  const lead=img?`<img class="thumb" src="${esc(img)}" alt="">`:`<svg class="ic dir ${it.dir}" aria-hidden="true"><use href="../assets/icons.svg#${it.dir==='out'?'arrow-up':'arrow-down'}"/></svg>`;
-  let body;
+  if(img){const i=el('img','thumb');i.src=img;i.alt='';li.append(i);}
+  else li.insertAdjacentHTML('beforeend',Tools.icon(it.dir==='out'?'arrow-up':'arrow-down','dir '+(it.dir==='out'?'out':'in')));
+  const box=el('div','item');
   if(it.kind==='text'){
     const txt=it.text.trim();
-    body=isLink(txt)?`<a class="text" href="${esc(txt)}" target="_blank" rel="noopener noreferrer">${esc(txt)}</a>`:`<span class="text">${esc(it.text)}</span>`;
-  }else body=`<span class="name">${esc(it.name)}</span>`;
-  const cls=it.state==='failed'||it.state==='canceled'?' err':it.state==='done'?' ok':'';
-  const bar=active&&it.kind==='file'?`<progress max="${it.size||1}" value="${it.done}" aria-label="${esc(label)}"></progress>`:'';
-  let acts='';
+    let url=null;
+    if(isLink(txt))try{const u=new URL(txt);if(u.protocol==='https:'||u.protocol==='http:')url=u.href;}catch(_){/* not a link */}
+    if(url){const a=el('a','text',txt);a.href=url;a.target='_blank';a.rel='noopener noreferrer';box.append(a);}
+    else box.append(el('span','text',it.text));
+  }else box.append(el('span','name',it.name));
+  box.append(el('span','meta'+(it.state==='failed'||it.state==='canceled'?' err':it.state==='done'?' ok':''),metaLine(it)));
+  if(active&&it.kind==='file'){const bar=el('progress');bar.max=it.size||1;bar.value=it.done;bar.setAttribute('aria-label',label);box.append(bar);}
+  li.append(box);
   if(it.dir==='in'&&it.kind==='file'&&it.state==='done'&&it.file){
-    if(Tools.canShareFile(it.name,it.file.type))acts+=btn('share','share',t('shareFile',{n:it.name}));
-    acts+=btn('download','download',t('download',{n:it.name}));
+    if(Tools.canShareFile(it.name,it.file.type))li.append(btn('share','share',t('shareFile',{n:it.name})));
+    li.append(btn('download','download',t('download',{n:it.name})));
   }
-  if(it.kind==='text')acts+=btn('copy','copy',t('copyText'));
-  acts+=active||it.state==='queued'?btn('cancel','x',t('cancelItem',{n:label})):btn('remove','trash',t('removeItem',{n:label}));
-  return `<li data-id="${it.id}">${lead}<div class="item">${body}<span class="meta${cls}">${esc(metaLine(it))}</span>${bar}</div>${acts}</li>`;
+  if(it.kind==='text')li.append(btn('copy','copy',t('copyText')));
+  li.append(active||it.state==='queued'?btn('cancel','x',t('cancelItem',{n:label})):btn('remove','trash',t('removeItem',{n:label})));
+  return li;
 }
 function renderList(){
   $('empty').hidden=items.length>0;
   $('list').hidden=!items.length;
-  $('list').innerHTML=items.map(row).join('');
+  $('list').replaceChildren(...items.map(row));
   for(const id of [...urls.keys()])if(!byId(id)||!byId(id).file)dropUrl(id);
 }
 // Progress: only the bar and the line of that row, at most every 150 ms (the last value always follows)
