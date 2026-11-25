@@ -3,7 +3,7 @@
 // the tests then call the tools like an agent would.
 import { readFileSync } from 'node:fs';
 import { test, expect, apps, openMenu, closeMenu, onDialog } from './helpers.mjs';
-import { makePdf } from './pdf-tools.mjs';
+import { makePdf, scanPdf, SCAN_TITLE } from './pdf-tools.mjs';
 import { fakeLlm, markDownloaded } from './fake-llm.mjs';
 import { CLIPS, clip, wavInfo, mp3Info, toneHz, id3Tags, oggTags } from './audio-files.mjs';
 import { ORIGIN, API_PROBLEMS, mockApi, addYamlConfig } from './api-mock.mjs';
@@ -2627,6 +2627,19 @@ test.describe('pdf-viewer tools', () => {
     r = await call(page, 'pdf_viewer_get_page_text', { page: 1 });
     expect(r.result.text).toContain('EINS');
     expect(r.result.text).not.toContain('ZWEI');
+  });
+
+  test('page text of a scanned page: empty, after text recognition the recognised text', async ({ page }) => {
+    test.setTimeout(180000);
+    await page.setInputFiles('#inPick', { name: 's.pdf', mimeType: 'application/pdf', buffer: await scanPdf(page) });
+    await expect(page.locator('#pages .page')).toHaveCount(1);
+    expect((await call(page, 'pdf_viewer_get_page_text', {})).result).toEqual({ page: 1, pages: 1, truncated: false, text: '' });
+    await openMenu(page);
+    await page.click('#btnOcr');
+    await expect(page.locator('.toast')).toContainText('Text auf 1 Seite(n) erkannt', { timeout: 150000 });
+    const r = (await call(page, 'pdf_viewer_get_page_text', {})).result;
+    expect(r).toMatchObject({ page: 1, recognised: true });
+    expect(r.text.split('\n')[0]).toBe(SCAN_TITLE);
   });
 
   test('invalid input is rejected and changes nothing', async ({ page }) => {

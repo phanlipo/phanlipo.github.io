@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-OOCjtmVw9RRFqP9SDDYTHl+qEZ3r1WYBugl4e6dnbVo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-YSXUjpqEUpTTpnkhXOyzIt3/tFG/JZUBR9j4Qrb5ZkY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -103,6 +103,10 @@ select{min-height:44px;padding-inline:10px;width:100%;font-size:16px}
     <div class="preview" id="preview" tabindex="0" aria-label="Vorschau des erkannten Textes und der Bilder" data-i18n-attr="aria-label:previewAria"></div>
   </section>
 </main>
+<div class="menu-list" id="handActions" data-menu>
+  <button type="button" id="btnToView" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-type-pdf"/></svg><span data-i18n="hand.view">PDF in „PDF ansehen“ öffnen</span></button>
+  <button type="button" id="btnToEdit" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-pencil"/></svg><span data-i18n="hand.edit">PDF in „PDF bearbeiten“ öffnen</span></button>
+</div>
 
 <!-- data:start -->
 <details class="data card">
@@ -126,6 +130,7 @@ select{min-height:44px;padding-inline:10px;width:100%;font-size:16px}
     <li>PDF wählen (oder auf den Kasten ziehen), dann „In Word umwandeln“.</li>
     <li>Die Vorschau zeigt den erkannten Text und die Bilder. „Word-Datei speichern“ lädt die .docx herunter; „Teilen …“ schickt sie z. B. per Mail oder in eine andere App.</li>
     <li>Passwortgeschützte PDFs fragen nach dem Passwort.</li>
+    <li>Im Menü (☰) lässt sich die gewählte PDF an „PDF ansehen“ oder „PDF bearbeiten“ weitergeben – die Datei bleibt auf dem Gerät.</li>
   </ul>
   <h3>Was übernommen wird</h3>
   <ul>
@@ -159,6 +164,7 @@ select{min-height:44px;padding-inline:10px;width:100%;font-size:16px}
     <li>Choose a PDF (or drag it onto the box), then “Convert to Word”.</li>
     <li>The preview shows the recognised text and the images. “Save Word file” downloads the .docx; “Share …” sends it e.g. by mail or to another app.</li>
     <li>Password-protected PDFs ask for the password.</li>
+    <li>In the menu (☰), the chosen PDF can be handed to “PDF Viewer” or “Edit PDF” – the file stays on the device.</li>
   </ul>
   <h3>What is taken over</h3>
   <ul>
@@ -222,7 +228,7 @@ select{min-height:44px;padding-inline:10px;width:100%;font-size:16px}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 317fa75978c2</p>
+  <p class="footer-version">Version 8b33f2a33bb7</p>
   <!-- footer:end -->
 </footer>
 
@@ -244,6 +250,7 @@ Tools.i18n({
     'e.invalid': 'Das ist keine lesbare PDF-Datei.', 'e.notext': 'In dieser PDF wurde weder Text noch ein Bild gefunden.', failed: 'Umwandlung fehlgeschlagen: {m}',
     pageBreak: 'Seitenumbruch', imgAlt: 'Bild aus der PDF', page1: 'Seite', pages: 'Seiten', paras: 'Absätze', img1: 'Bild', imgs: 'Bilder', shareFail: 'Teilen nicht möglich',
     'mcp.convert': 'umgewandelt', 'mcp.text': 'Text gelesen',
+    'hand.fail': 'Übergeben hat nicht geklappt.',
   },
   en: {
     runHint: 'Choose a PDF file above first.', title: 'PDF to Word', sub: 'Convert a PDF into an editable Word file – the file never leaves the device.',
@@ -262,6 +269,7 @@ Tools.i18n({
     'e.invalid': 'This is not a readable PDF file.', 'e.notext': 'Neither text nor an image was found in this PDF.', failed: 'Conversion failed: {m}',
     pageBreak: 'Page break', imgAlt: 'Image from the PDF', page1: 'page', pages: 'pages', paras: 'paragraphs', img1: 'image', imgs: 'images', shareFail: 'Sharing is not possible',
     'mcp.convert': 'converted', 'mcp.text': 'text read',
+    'hand.view': 'Open the PDF in “PDF Viewer”', 'hand.edit': 'Open the PDF in “Edit PDF”', 'hand.fail': 'Handing over did not work.',
   },
 });
 const t = Tools.t;
@@ -302,6 +310,7 @@ function takeFile(f) {
   $('fileInfo').textContent = t('fileInfo', { f: f.name, kb: fmt(f.size / 1024, 0) });
   status('');
   $('btnRun').disabled = false;
+  $('btnToView').disabled = $('btnToEdit').disabled = false;
 }
 
 const drop = $('drop');
@@ -426,6 +435,15 @@ $('btnShare').addEventListener('click', async () => {
 });
 
 takeSharedFile().then(f => { if (f) { Tools.diag.log('shared file taken'); takeFile(f); } });
+
+// The chosen PDF to another PDF app of this site (Tools.handOff; on the device only)
+async function handTo(app) {
+  if (!file) return;
+  Tools.menu.close();
+  if (!(await Tools.handOff(app, file))) toast(t('hand.fail'));
+}
+$('btnToView').addEventListener('click', () => handTo('pdf-viewer'));
+$('btnToEdit').addEventListener('click', () => handTo('pdf-edit'));
 // Page state for the diagnostics report (sizes and settings, never file names or text)
 Tools.diag.info(() => ({ settings: { pageBreaks: settings.pageBreaks, ocr: settings.ocr, lang: settings.lang }, busy,
   file: file ? { type: file.type || '?', kb: Math.round(file.size / 1024) } : null, libLoaded: !!lib, lastError,

@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files (of the icon sprite only the icons
 // this app uses): every change creates a new version, the browser installs it in the background and removes the old one.
 const APP = "planets";
-const VERSION = '5c488e55856b';
+const VERSION = 'ad9cb2806b57';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
