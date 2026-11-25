@@ -503,10 +503,23 @@
     vintage: [['tone', 0, 100, 5, 70, '%']],
   };
   const FILTERS = Object.keys(SLIDERS);
-  const RUN = { coloring, comic, sketch, watercolor, oil, popart, halftone, pixel, bw, vintage };
+  // A fixed switch, no lookup by name: the filter name comes from a message (worker) and must only pick
+  // one of these functions; anything else gives the photo unchanged
   function apply(rgba, w, h, filter, opts = {}) {
     const flat = flatten(rgba);
-    return RUN[filter] ? RUN[filter](flat, w, h, opts) : flat;
+    switch (filter) {
+      case 'coloring': return coloring(flat, w, h, opts);
+      case 'comic': return comic(flat, w, h, opts);
+      case 'sketch': return sketch(flat, w, h, opts);
+      case 'watercolor': return watercolor(flat, w, h, opts);
+      case 'oil': return oil(flat, w, h, opts);
+      case 'popart': return popart(flat, w, h, opts);
+      case 'halftone': return halftone(flat, w, h, opts);
+      case 'pixel': return pixel(flat, w, h, opts);
+      case 'bw': return bw(flat, w, h, opts);
+      case 'vintage': return vintage(flat, w, h, opts);
+      default: return flat;
+    }
   }
 
   root.PhotoFilters = { FILTERS, SLIDERS, apply, blur, canny, removeSpecks, dilate };

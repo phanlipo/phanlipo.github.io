@@ -327,6 +327,14 @@ test('pixel, pop art, halftone, oil, watercolour', async ({ page }) => {
   }
 });
 
+test('an unknown filter name only gives the photo back, never another function', async ({ page }) => {
+  const out = await page.evaluate(() => {
+    const px = new Uint8ClampedArray([10, 20, 30, 255, 40, 50, 60, 255]);
+    return ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'nope'].map(f => [...PhotoFilters.apply(px, 2, 1, f, {})].join());
+  });
+  for (const o of out) expect(o).toBe('10,20,30,255,40,50,60,255');
+});
+
 test.describe('English', () => {
   test.use({ locale: 'en-US' });
   test('texts and file name follow the language', async ({ page }) => {
