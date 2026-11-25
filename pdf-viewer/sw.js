@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files (of the icon sprite only the icons
 // this app uses): every change creates a new version, the browser installs it in the background and removes the old one.
 const APP = "pdf-viewer";
-const VERSION = '89bb6a00c5da';
+const VERSION = 'a21842d89f9d';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -13,10 +13,12 @@ const FILES = [
   "icon-maskable-512.png",
   "icon.svg",
   "manifest.webmanifest",
+  "ocr-worker.js",
   "pdf-worker.mjs",
   "../assets/base.css",
   "../assets/common.js",
   "../assets/icons.svg",
+  "../assets/shared/ocr.mjs",
   "../assets/vendor/pdfjs/iccs/CGATS001Compat-v2-micro.icc",
   "../assets/vendor/pdfjs/pdf.min.mjs",
   "../assets/vendor/pdfjs/pdf.worker.min.mjs",
@@ -51,7 +53,12 @@ const FILES = [
   "../assets/vendor/pdfjs/wasm/qcms_bg.wasm"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
-const RUNTIME = {};
+const RUNTIME = {
+  "../assets/vendor/tesseract/": "vendor:tesseract@7.0.0",
+  "../assets/vendor/tesseract-core/": "vendor:tesseract-core@7.0.0",
+  "../assets/vendor/tesseract-deu/": "vendor:tesseract-deu@1.0.0",
+  "../assets/vendor/tesseract-eng/": "vendor:tesseract-eng@1.0.0"
+};
 const RUNTIME_URLS = Object.entries(RUNTIME).map(([dir, cache]) => [new URL(dir, self.location).href, cache]);
 
 self.addEventListener('install', event => {

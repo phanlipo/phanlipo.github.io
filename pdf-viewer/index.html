@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-38n1PaqxQRPyceoNgeQFLQV7kjGJ1eiRqurpaKVFegk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-E6t+6+DZUYHHQ6JrWWgnlGjnpHa+ywPLajuuyLSS4kg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -45,8 +45,10 @@ body.stage.empty>main{display:flex;flex-direction:column;justify-content:center}
 body.night .page{filter:invert(1) hue-rotate(180deg)}
 /* Text layer (pdf.js TextLayer, CSS after pdf.js' pdf_viewer.css): invisible text over the canvas for selecting
    and copying. --total-scale-factor (CSS px per PDF point) is set on .page by layout(), so zooming needs no redraw.
-   Width/height: pdf.js writes them with CSS round(), which older browsers drop – the page box is the same size. */
-.textLayer{position:absolute;inset:0;width:100%!important;height:100%!important;overflow:clip;text-align:initial;line-height:1;
+   Width/height: pdf.js writes them with CSS round(), which older browsers drop – here from the unrotated page size
+   (--raw-w/--raw-h, set by addLayers); a rotated page turns the layer into place (data-main-rotation, as pdf.js). */
+.textLayer{position:absolute;inset:0;overflow:clip;
+  width:calc(var(--total-scale-factor) * var(--raw-w) * 1px)!important;height:calc(var(--total-scale-factor) * var(--raw-h) * 1px)!important;text-align:initial;line-height:1;
   text-size-adjust:none;-webkit-text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0;caret-color:CanvasText;z-index:1;
   --min-font-size:1;--text-scale-factor:calc(var(--total-scale-factor) * var(--min-font-size));--min-font-size-inv:calc(1 / var(--min-font-size))}
 .textLayer :is(span,br){color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0% 0%}
@@ -54,6 +56,9 @@ body.night .page{filter:invert(1) hue-rotate(180deg)}
   font-size:calc(var(--text-scale-factor) * var(--font-height));--scale-x:1;--rotate:0deg;
   transform:rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv))}
 .textLayer .markedContent{display:contents}
+.textLayer[data-main-rotation="90"]{transform:rotate(90deg) translateY(-100%)}
+.textLayer[data-main-rotation="180"]{transform:rotate(180deg) translate(-100%,-100%)}
+.textLayer[data-main-rotation="270"]{transform:rotate(270deg) translateX(-100%)}
 .textLayer ::selection{background:rgba(0,90,255,.3)}
 .textLayer br::selection{background:transparent}
 .textLayer .endOfContent{display:block;position:absolute;inset:100% 0 0;z-index:0;cursor:default;user-select:none;-webkit-user-select:none}
@@ -97,7 +102,19 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
 .hlLayer{position:absolute;inset:0;z-index:0;pointer-events:none}
 .hlLayer div{position:absolute;background:rgba(255,196,0,.45);border-radius:2px}
 .hlLayer div.cur{background:rgba(255,110,0,.55);box-shadow:0 0 0 2px #d14900}
+/* Text recognition: progress above the bottom bar, stays while the bars hide */
+#ocrStatus{position:fixed;inset-inline:max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right));inset-block-end:calc(84px + env(safe-area-inset-bottom));
+  z-index:6;margin-inline:auto;max-width:480px;display:flex;align-items:center;gap:8px;padding:4px 4px 4px 14px;
+  background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+#ocrStatus[hidden]{display:none}
+#ocrStatus progress{flex:1;min-width:40px}
+#ocrText{flex:2;min-width:0;font-size:14px;font-variant-numeric:tabular-nums}
+body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom))}
 /* Table of contents (bookmarks of the PDF) */
+/* Settings: language of the text recognition in one line (the settings page has to fit on a phone screen) */
+.ocr-lang{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-block:4px}
+.ocr-lang label{flex:1 1 9em}
+.ocr-lang select{flex:0 1 auto;min-height:44px;padding-inline:8px}
 .toc{list-style:none;margin:0;padding:0}
 .toc button{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;padding:6px 8px;padding-inline-start:calc(8px + var(--lvl,0) * 16px);
   background:none;border:0;border-block-end:1px solid var(--border);color:var(--text);font:inherit;text-align:start;cursor:pointer}
@@ -137,10 +154,16 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
   <button type="button" class="head-btn" id="btnFit" aria-label="Seitenbreite" title="Seitenbreite" data-i18n-attr="aria-label:fit; title:fit"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-horizontal"/></svg></button>
 </div>
 <div id="badge" aria-hidden="true"></div>
+<div id="ocrStatus" role="status" hidden>
+  <span id="ocrText"></span>
+  <progress id="ocrProgress" max="1" value="0" aria-label="Fortschritt der Texterkennung" data-i18n-attr="aria-label:ocr.progress"></progress>
+  <button type="button" class="head-btn" id="ocrCancel" aria-label="Texterkennung abbrechen" title="Texterkennung abbrechen" data-i18n-attr="aria-label:ocr.cancel; title:ocr.cancel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button>
+</div>
 <input type="file" id="inPick" accept="application/pdf,.pdf" hidden>
 
 <div class="menu-list" id="docActions" data-menu>
   <button type="button" id="btnOpen"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#folder-open"/></svg><span data-i18n="openOther">Andere PDF öffnen</span></button>
+  <button type="button" id="btnOcr" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#text-recognition"/></svg><span data-i18n="ocr.run">Text erkennen (gescannte Seiten)</span></button>
   <button type="button" id="btnDownload" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="download">Herunterladen</span></button>
   <button type="button" id="btnClose" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="close">PDF schließen</span></button>
 </div>
@@ -159,10 +182,12 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
 </details>
 <details class="card" id="setPage" data-menu data-menu-page data-icon="settings">
   <summary data-i18n="set.h">Anzeige</summary>
-  <label class="check"><input type="checkbox" id="optAutoHide"> <span data-i18n="set.autoHide">Leisten beim Lesen automatisch ausblenden</span></label>
-  <label class="check"><input type="checkbox" id="optSystem"> <span data-i18n="set.system">Beim Ausblenden auch Status- und Navigationsleiste verbergen (Vollbild)</span></label>
+  <label class="check"><input type="checkbox" id="optAutoHide"> <span data-i18n="set.autoHide">Leisten beim Lesen ausblenden</span></label>
+  <label class="check"><input type="checkbox" id="optSystem"> <span data-i18n="set.system">Beim Ausblenden auch die Systemleisten verbergen (Vollbild)</span></label>
   <label class="check"><input type="checkbox" id="optNight"> <span data-i18n="set.night">Nachtmodus (Farben umkehren)</span></label>
-  <label class="check"><input type="checkbox" id="optKeep"> <span data-i18n="set.keep">Geöffnete PDF behalten – beim nächsten Start (auch nach einem Update) wieder öffnen</span></label>
+  <div class="ocr-lang"><label for="optOcrLang" data-i18n="set.ocrLang">Sprache der Texterkennung</label>
+    <select id="optOcrLang"><option value="deu" data-i18n="lang.de">Deutsch</option><option value="eng" data-i18n="lang.en">Englisch</option></select></div>
+  <label class="check"><input type="checkbox" id="optKeep"> <span data-i18n="set.keep">PDF beim nächsten Start wieder öffnen</span></label>
 </details>
 
 <dialog id="pwDlg" class="dialog" data-keep aria-labelledby="pwTitle">
@@ -205,8 +230,9 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
     <li>Oben: <b>Teilen</b> schickt die PDF an eine andere App (wenn das Gerät Dateien teilen kann), <b>Vollbild</b> verbirgt zusätzlich die Leisten von Browser und System, <b>☰</b> öffnet das Menü.</li>
     <li>Unten: Mit dem Schieberegler springt man zu einer Seite; der Knopf daneben passt die Seite wieder an die Bildschirmbreite an.</li>
     <li><b>Zoomen</b> mit zwei Fingern oder doppelt tippen (nochmal doppelt tippen = zurück). Am Computer Strg + Mausrad oder die Tasten + / − / 0.</li>
-    <li><b>Text kopieren:</b> lange auf ein Wort drücken (am Computer mit der Maus ziehen), die Auswahl mit den Griffen erweitern und <i>Kopieren</i> wählen. Gescannte Seiten ohne Textebene enthalten keinen Text.</li>
-    <li><b>Suchen:</b> die Lupe oben (am Computer Strg + F) öffnet ein Suchfeld. Alle Treffer werden gelb markiert, der aktuelle orange; mit den Pfeilen (oder Enter / Umschalt + Enter) geht es zum nächsten bzw. vorherigen. Groß- und Kleinschreibung spielt keine Rolle. Gescannte Seiten ohne Textebene werden nicht gefunden.</li>
+    <li><b>Text kopieren:</b> lange auf ein Wort drücken (am Computer mit der Maus ziehen), die Auswahl mit den Griffen erweitern und <i>Kopieren</i> wählen. Gescannte Seiten erst nach der Texterkennung.</li>
+    <li><b>Suchen:</b> die Lupe oben (am Computer Strg + F) öffnet ein Suchfeld. Alle Treffer werden gelb markiert, der aktuelle orange; mit den Pfeilen (oder Enter / Umschalt + Enter) geht es zum nächsten bzw. vorherigen. Groß- und Kleinschreibung spielt keine Rolle. Gescannte Seiten werden erst nach der Texterkennung gefunden.</li>
+    <li><b>Gescannte Seiten (Texterkennung):</b> Seiten, die nur ein Bild sind, haben keinen Text. Die App merkt das beim Öffnen und bietet <i>Text erkennen</i> an (auch im Menü). Danach lassen sich diese Seiten durchsuchen, markieren und kopieren. Die Erkennung läuft auf dem Gerät, dauert je Seite einige Sekunden und kann Fehler enthalten. Beim ersten Mal lädt der Browser sie einmal von dieser Seite (ca. 4 MB plus 1–3 MB Sprachdaten), danach geht es auch offline. Die Sprache steht unter <i>Anzeige</i>. Das Ergebnis gilt nur, solange die PDF offen ist.</li>
     <li><b>Inhaltsverzeichnis:</b> Hat die PDF Lesezeichen, stehen sie im Menü unter <i>Inhaltsverzeichnis</i>; ein Tippen springt zur Stelle.</li>
     <li><b>Links:</b> Web- und Mail-Adressen im Text sowie Links der PDF lassen sich antippen. Webseiten öffnen sich in einem neuen Tab bzw. im Browser, Links auf eine Seite des Dokuments springen dorthin. Erst beim Antippen verbindet sich das Gerät mit der Adresse.</li>
     <li>Die App merkt sich, auf welcher Seite man in einem Dokument war, und springt beim nächsten Öffnen dorthin.</li>
@@ -219,11 +245,11 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
   </ul>
   <h3>Im Menü (☰)</h3>
   <ul>
-    <li>Inhaltsverzeichnis (wenn die PDF eins hat), Infos zum Dokument, <i>Andere PDF öffnen</i>, <i>Herunterladen</i>, <i>PDF schließen</i> und <i>Zu Seite</i>.</li>
-    <li>Anzeige: automatisch ausblenden, Systemleisten mit ausblenden, Nachtmodus (dunkle Seiten mit heller Schrift), geöffnete PDF behalten.</li>
+    <li>Inhaltsverzeichnis (wenn die PDF eins hat), Infos zum Dokument, <i>Text erkennen</i> (bei gescannten Seiten), <i>Andere PDF öffnen</i>, <i>Herunterladen</i>, <i>PDF schließen</i> und <i>Zu Seite</i>.</li>
+    <li>Anzeige: automatisch ausblenden, Systemleisten mit ausblenden, Nachtmodus (dunkle Seiten mit heller Schrift), Sprache der Texterkennung, geöffnete PDF behalten.</li>
   </ul>
   <h3>Was wird gespeichert?</h3>
-  <p>Nur die Einstellungen und je Dokument die zuletzt gelesene Seite (unter einer Kennung aus der PDF, ohne Dateinamen; höchstens 50 Dokumente). Die zuletzt geöffnete PDF bleibt auf diesem Gerät im Speicher des Browsers und öffnet sich beim nächsten Start wieder – auch wenn die App für ein Update neu lädt (an der gemerkten Seite; passwortgeschützte fragen wieder nach dem Passwort). <i>PDF schließen</i>, der Schalter im Menü oder <i>Alle Daten löschen</i> entfernen sie. In der Sicherungsdatei ist sie nicht enthalten. Angezeigt wird mit <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0).</p>
+  <p>Nur die Einstellungen und je Dokument die zuletzt gelesene Seite (unter einer Kennung aus der PDF, ohne Dateinamen; höchstens 50 Dokumente). Die zuletzt geöffnete PDF bleibt auf diesem Gerät im Speicher des Browsers und öffnet sich beim nächsten Start wieder – auch wenn die App für ein Update neu lädt (an der gemerkten Seite; passwortgeschützte fragen wieder nach dem Passwort). <i>PDF schließen</i>, der Schalter im Menü oder <i>Alle Daten löschen</i> entfernen sie. In der Sicherungsdatei ist sie nicht enthalten. Angezeigt wird mit <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0), die Texterkennung mit <a href="https://tesseract.projectnaptha.com">Tesseract.js</a> (Apache-2.0).</p>
   </div>
   <div data-lang="en" lang="en" hidden>
   <p>Shows PDF files filling the screen – for reading without distraction. The file is opened on this device only and never uploaded.</p>
@@ -238,8 +264,9 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
     <li>At the top: <b>Share</b> sends the PDF to another app (if the device can share files), <b>Full screen</b> also hides the browser and system bars, <b>☰</b> opens the menu.</li>
     <li>At the bottom: the slider jumps to a page; the button next to it fits the page to the screen width again.</li>
     <li><b>Zoom</b> with two fingers or by double-tapping (double-tap again = back). On a computer Ctrl + mouse wheel or the keys + / − / 0.</li>
-    <li><b>Copying text:</b> long-press a word (on a computer drag with the mouse), extend the selection with the handles and choose <i>Copy</i>. Scanned pages without a text layer contain no text.</li>
-    <li><b>Search:</b> the magnifier at the top (on a computer Ctrl + F) opens a search field. All matches are marked yellow, the current one orange; the arrows (or Enter / Shift + Enter) go to the next or previous one. Upper and lower case do not matter. Scanned pages without a text layer are not found.</li>
+    <li><b>Copying text:</b> long-press a word (on a computer drag with the mouse), extend the selection with the handles and choose <i>Copy</i>. Scanned pages only after text recognition.</li>
+    <li><b>Search:</b> the magnifier at the top (on a computer Ctrl + F) opens a search field. All matches are marked yellow, the current one orange; the arrows (or Enter / Shift + Enter) go to the next or previous one. Upper and lower case do not matter. Scanned pages are only found after text recognition.</li>
+    <li><b>Scanned pages (text recognition):</b> pages that are just a picture have no text. The app notices this when opening and offers <i>Recognise text</i> (also in the menu). Afterwards these pages can be searched, selected and copied. The recognition runs on the device, takes a few seconds per page and may contain mistakes. The first time, the browser loads it once from this site (about 4 MB plus 1–3 MB of language data); after that it also works offline. The language is set under <i>Display</i>. The result only lasts while the PDF is open.</li>
     <li><b>Contents:</b> if the PDF has bookmarks, they are in the menu under <i>Contents</i>; a tap jumps there.</li>
     <li><b>Links:</b> web and mail addresses in the text and links of the PDF can be tapped. Web pages open in a new tab or in the browser, links to a page of the document go there. The device only connects to the address when you tap it.</li>
     <li>The app remembers which page you were on in a document and goes there next time you open it.</li>
@@ -252,11 +279,11 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
   </ul>
   <h3>In the menu (☰)</h3>
   <ul>
-    <li>Contents (if the PDF has them), document info, <i>Open another PDF</i>, <i>Download</i>, <i>Close PDF</i> and <i>Go to page</i>.</li>
-    <li>Display: hide automatically, hide the system bars too, night mode (dark pages with light text), keep the open PDF.</li>
+    <li>Contents (if the PDF has them), document info, <i>Recognise text</i> (for scanned pages), <i>Open another PDF</i>, <i>Download</i>, <i>Close PDF</i> and <i>Go to page</i>.</li>
+    <li>Display: hide automatically, hide the system bars too, night mode (dark pages with light text), language of the text recognition, keep the open PDF.</li>
   </ul>
   <h3>What is stored?</h3>
-  <p>Only the settings and, per document, the page last read (under an ID taken from the PDF, without the file name; at most 50 documents). The PDF opened last stays on this device in the browser’s storage and opens again at the next start – also when the app reloads for an update (at the remembered page; password-protected ones ask for the password again). <i>Close PDF</i>, the switch in the menu or <i>Delete all data</i> remove it. It is not part of the backup file. Rendering by <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0).</p>
+  <p>Only the settings and, per document, the page last read (under an ID taken from the PDF, without the file name; at most 50 documents). The PDF opened last stays on this device in the browser’s storage and opens again at the next start – also when the app reloads for an update (at the remembered page; password-protected ones ask for the password again). <i>Close PDF</i>, the switch in the menu or <i>Delete all data</i> remove it. It is not part of the backup file. Rendering by <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0), text recognition by <a href="https://tesseract.projectnaptha.com">Tesseract.js</a> (Apache-2.0).</p>
   </div>
   <!-- files:start -->
   <div data-lang="de">
@@ -296,7 +323,7 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 89bb6a00c5da</p>
+  <p class="footer-version">Version a21842d89f9d</p>
   <!-- footer:end -->
 </footer>
 
@@ -314,12 +341,17 @@ Tools.i18n({
     'goto.bad':'Seite 1 bis {n} eingeben.','pageAria':'Seite {n}','mcp.goto':'zu Seite gesprungen',
     'closed':'PDF geschlossen.','link.web':'Link: {url}','link.internal':'Verweis auf eine Seite dieses Dokuments',
     'find.count':'{n} / {total}','find.busy':'…','toc.page':'S. {n}','toc.pageAria':'Seite {n}','mcp.find':'Suche gestartet',
+    'ocr.runN':'Text erkennen ({n} gescannte Seite(n))','ocr.hint':'{n} Seite(n) ohne Text (gescannt). Texterkennung macht sie durchsuchbar und kopierbar.',
+    'ocr.start':'Text erkennen','ocr.loading':'Texterkennung wird geladen …','ocr.status':'Seite {page} wird erkannt ({i} von {total})',
+    'ocr.done':'Text auf {n} Seite(n) erkannt – die Erkennung kann Fehler enthalten.','ocr.fail':'Texterkennung nicht möglich.',
+    'ocr.offline':'Die Texterkennung braucht beim ersten Mal Internet (ca. 5 MB).','ocr.cancelled':'Texterkennung abgebrochen.',
+    'ocr.none':'Alle Seiten haben schon Text.',
   },
   en:{
     title:'PDF Viewer',share:'Share PDF',fs:'Full screen',view:'Document',intro:'Open a PDF or share it here from another app. The file stays on this device.',
     open:'Open PDF',pagesLabel:'Pages',page:'Page',fit:'Page width','doc.h':'Document',openOther:'Open another PDF',download:'Download',
-    goto:'Go to page',go:'Go','set.h':'Display','set.autoHide':'Hide the bars automatically while reading',
-    'set.system':'When hiding, also hide the status and navigation bar (full screen)','set.night':'Night mode (invert colours)',
+    goto:'Go to page',go:'Go','set.h':'Display','set.autoHide':'Hide the bars while reading',
+    'set.system':'When hiding, also hide the system bars (full screen)','set.night':'Night mode (invert colours)',
     'pw.label':'Password','pw.cancel':'Cancel','pw.open':'Open',
     'doc.none':'No PDF open.','doc.info':'{name} · {n} page(s) · {size}','label':'{n} / {total}',
     'loading':'Opening PDF …','err.notPdf':'This is not a PDF file.','err.broken':'The PDF could not be opened – it may be damaged.',
@@ -327,12 +359,18 @@ Tools.i18n({
     'pw.title':'“{name}” is password-protected','pw.wrong':'Wrong password – please try again.','pw.empty':'Please enter the password.',
     'resume':'Continuing on page {n}','share.fail':'Sharing did not work.','fs.fail':'Full screen is not possible here.',
     'goto.bad':'Enter page 1 to {n}.','pageAria':'Page {n}','mcp.goto':'went to a page',
-    close:'Close PDF','set.keep':'Keep the open PDF – open it again next time (also after an update)','closed':'PDF closed.',
+    close:'Close PDF','set.keep':'Reopen the PDF next time','closed':'PDF closed.',
     'link.web':'Link: {url}','link.internal':'Link to a page of this document',
     'find.label':'Search the document','find.ph':'Search …','find.prev':'Previous match','find.prevKey':'Previous match (Shift + Enter)',
     'find.next':'Next match','find.nextKey':'Next match (Enter)','find.close':'Close search','find.closeKey':'Close search (Esc)',
     'find.open':'Search','find.openKey':'Search (Ctrl + F)','find.count':'{n} / {total}','find.busy':'…',
     'toc.h':'Contents','toc.page':'p. {n}','toc.pageAria':'page {n}','mcp.find':'started a search',
+    'ocr.run':'Recognise text (scanned pages)','ocr.runN':'Recognise text ({n} scanned page(s))','ocr.hint':'{n} page(s) without text (scanned). Text recognition makes them searchable and copyable.',
+    'ocr.start':'Recognise text','ocr.loading':'Loading text recognition …','ocr.status':'Recognising page {page} ({i} of {total})',
+    'ocr.done':'Text recognised on {n} page(s) – the recognition may contain mistakes.','ocr.fail':'Text recognition is not possible.',
+    'ocr.offline':'Text recognition needs the internet the first time (about 5 MB).','ocr.cancelled':'Text recognition cancelled.',
+    'ocr.none':'All pages already have text.','ocr.progress':'Progress of the text recognition','ocr.cancel':'Cancel text recognition',
+    'set.ocrLang':'Language of the text recognition','lang.de':'German','lang.en':'English',
   }
 });
 const t=Tools.t, $=Tools.$, body=document.body;
@@ -472,6 +510,7 @@ function closeDoc(){
   doc=null; file=null; sizes=[]; els=[]; tops=[]; pagesEl.textContent='';
   renderGen++;
   texts=[]; hits=[]; hitIdx=-1; pendingHit=false; findToken++; renderFindCount();
+  ocrToken++; scanToken++; ocrData=[]; textless=new Set(); scanned=false; ocrBusy=false; $('ocrStatus').hidden=true;
   $('tocList').textContent=''; $('tocPage').hidden=true;
 }
 // Back to the start screen
@@ -505,7 +544,7 @@ function show(){
   else{view.scrollTop=0;view.scrollLeft=0;}
   updateCurrent(); renderInfo(); scheduleRender();
   showBars(true);
-  renderToc();
+  renderToc(); scanTextless();
   if(findOpen()&&$('findInput').value.trim()) runFind($('findInput').value);
   clearTimeout(hideTimer);
   if(settings.autoHide) hideTimer=setTimeout(()=>{if(!barsTouched) showBars(false);},2500);
@@ -582,30 +621,36 @@ async function renderPage(i){
   const px=pw*ph*scale*scale;
   if(px>MAX_PIXELS) scale*=Math.sqrt(MAX_PIXELS/px);
   const key=scale.toFixed(3);
-  if(el.dataset.key===key) return;
+  if(el.dataset.key===key&&el.dataset.text) return;
   const page=await d.getPage(i+1);
-  const viewport=page.getViewport({scale});
-  const c=document.createElement('canvas');
-  c.width=Math.max(1,Math.floor(viewport.width)); c.height=Math.max(1,Math.floor(viewport.height));
-  c.setAttribute('aria-hidden','true');
-  await page.render({canvasContext:c.getContext('2d'),viewport,background:'white'}).promise;
-  if(d!==doc) return;
-  const old=el.querySelector('canvas');
-  if(old) old.replaceWith(c); else el.prepend(c);
-  el.dataset.key=key;
-  if(!el.dataset.text){
-    const tok=String(++layerToken); el.dataset.text=tok;
-    addLayers(el,page,tok).catch(e=>{if(el.dataset.text===tok) delete el.dataset.text;Tools.diag.log('text layer failed',{page:i+1},e);});
+  if(el.dataset.key!==key){
+    const viewport=page.getViewport({scale});
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.floor(viewport.width)); c.height=Math.max(1,Math.floor(viewport.height));
+    c.setAttribute('aria-hidden','true');
+    await page.render({canvasContext:c.getContext('2d'),viewport,background:'white'}).promise;
+    if(d!==doc) return;
+    const old=el.querySelector('canvas');
+    if(old) old.replaceWith(c); else el.prepend(c);
+    el.dataset.key=key;
   }
+  if(!el.dataset.text&&el.querySelector('canvas')) ensureLayers(el,page,i);
+}
+function ensureLayers(el,page,i){
+  const tok=String(++layerToken); el.dataset.text=tok;
+  addLayers(el,page,tok).catch(e=>{if(el.dataset.text===tok) delete el.dataset.text;Tools.diag.log('text layer failed',{page:i+1},e);});
 }
 
 /* ---------- Text layer (select, copy) and links. Built once per page at scale 1; it scales with the page through
    --total-scale-factor, so it is independent of the canvas resolution. ---------- */
 let layerToken=0;
 async function addLayers(el,page,tok){
-  const lib=await pdfjs(), d=doc, vp=page.getViewport({scale:1});
+  const lib=await pdfjs(), d=doc, vp=page.getViewport({scale:1}), idx=Number(el.dataset.n)-1;
   const tl=document.createElement('div'); tl.className='textLayer';
-  const layer=new lib.TextLayer({textContentSource:page.streamTextContent({includeMarkedContent:true,disableNormalization:true}),container:tl,viewport:vp});
+  tl.style.setProperty('--raw-w',String(vp.rawDims.pageWidth)); tl.style.setProperty('--raw-h',String(vp.rawDims.pageHeight));
+  // recognised text (OCR) of a scanned page, otherwise the text of the PDF
+  const source=ocrData[idx]||page.streamTextContent({includeMarkedContent:true,disableNormalization:true});
+  const layer=new lib.TextLayer({textContentSource:source,container:tl,viewport:vp});
   await layer.render();
   const end=document.createElement('div'); end.className='endOfContent'; tl.append(end);
   const found=autoLink(tl);
@@ -613,7 +658,6 @@ async function addLayers(el,page,tok){
   try{links=linkLayer(await page.getAnnotations({intent:'display'}),vp);}catch(e){Tools.diag.log('link areas failed',e);}
   if(d!==doc||el.dataset.text!==tok||!el.isConnected) return;   // closed or freed meanwhile
   el.append(tl); if(links) el.append(links);
-  const idx=Number(el.dataset.n)-1;
   if(hits.length){
     paintPage(idx);
     if(pendingHit&&hits[hitIdx]&&hits[hitIdx].p===idx&&scrollToCur()) pendingHit=false;
@@ -889,7 +933,7 @@ const findOpen=()=>body.classList.contains('finding');
 function pageText(i){
   if(!texts[i]){
     const d=doc;
-    texts[i]=d.getPage(i+1).then(p=>p.getTextContent({disableNormalization:true})).then(tc=>{
+    texts[i]=(ocrData[i]?Promise.resolve(ocrData[i]):d.getPage(i+1).then(p=>p.getTextContent({disableNormalization:true}))).then(tc=>{
       let str='';
       for(const it of tc.items){if(typeof it.str!=='string') continue; str+=it.str; if(it.hasEOL) str+='\n';}
       return str;
@@ -1022,6 +1066,109 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='F3'&&hits.length){e.preventDefault();showHit(hitIdx+(e.shiftKey?-1:1));}
 });
 
+/* ================= Text recognition (OCR) for scanned pages – assets/shared/ocr.mjs ================= */
+// ocrData[i]: recognised text of page i in the form of pdf.js text content (feeds the text layer, search and agents).
+// Only in memory: after reopening, the recognition runs again on request.
+let ocrData=[], textless=new Set(), scanned=false, scanToken=0, ocrToken=0, ocrBusy=false, ocrLib=null;
+const hasText=str=>/\S/.test(str);
+// Pages without text: checked in the background after opening
+async function scanTextless(){
+  const tok=++scanToken, d=doc, found=new Set();
+  scanned=false; textless=found; updateOcrBtn();
+  for(let i=0;i<sizes.length;i++){
+    let str; try{str=await pageText(i);}catch(_){continue;}
+    if(tok!==scanToken||d!==doc) return;
+    if(!hasText(str)) found.add(i);
+  }
+  scanned=true; updateOcrBtn();
+  Tools.diag.log('text check',{pages:sizes.length,withoutText:found.size});
+  if(found.size&&!ocrBusy) Tools.toast(t('ocr.hint',{n:found.size}),{action:{label:t('ocr.start'),icon:'text-recognition',run:startOcr}});
+}
+const ocrPending=()=>[...textless].filter(i=>!ocrData[i]);
+function updateOcrBtn(){
+  const b=$('btnOcr'), n=ocrPending().length;
+  b.hidden=!!doc&&scanned&&!n;
+  b.disabled=!doc||ocrBusy;
+  b.querySelector('span').textContent=scanned&&n?t('ocr.runN',{n}):t('ocr.run');
+}
+function ocrProgress(text,f){
+  $('ocrStatus').hidden=false; $('ocrText').textContent=text; $('ocrProgress').value=clamp(f,0,1);
+}
+// Pages in reading order from the current one on, then those before it
+async function startOcr(){
+  if(!doc||ocrBusy) return;
+  Tools.menu.close();
+  const from=cur-1, list=ocrPending().sort((a,b)=>((a<from)-(b<from))||a-b);
+  if(!list.length){Tools.toast(scanned?t('ocr.none'):t('loading'));return;}
+  const tok=++ocrToken, d=doc, lang=settings.ocrLang||defaultOcrLang();
+  ocrBusy=true; updateOcrBtn();
+  ocrProgress(t('ocr.loading'),0);
+  Tools.diag.log('ocr start',{pages:list.length,lang});
+  let done=0, error=null;
+  try{
+    ocrLib=ocrLib||await import('../assets/shared/ocr.mjs');
+    for(const i of list){
+      if(tok!==ocrToken||d!==doc) break;
+      const t0=Date.now(), label=t('ocr.status',{page:i+1,i:done+1,total:list.length});
+      ocrProgress(label,done/list.length);
+      const page=await d.getPage(i+1);
+      const r=await ocrLib.recognisePage(page,{lang,maxPx:3000,onProgress:(st,f)=>{
+        if(tok===ocrToken) ocrProgress(st.k==='ocrLoad'?t('ocr.loading'):label,(done+f)/list.length);
+      }});
+      if(tok!==ocrToken||d!==doc) break;
+      ocrData[i]=ocrTextContent(r);
+      texts[i]=null;
+      relayer(i);
+      done++;
+      Tools.diag.log('ocr page',{page:i+1,words:ocrData[i].items.length,ms:Date.now()-t0});
+    }
+  }catch(e){if(tok===ocrToken) error=e; Tools.diag.log('ocr failed',e);}
+  if(tok!==ocrToken) return;            // cancelled or another document
+  ocrBusy=false; $('ocrStatus').hidden=true; updateOcrBtn();
+  if(error) Tools.toast(done||navigator.onLine!==false?t('ocr.fail'):t('ocr.offline'),{ms:4000});
+  else Tools.toast(t('ocr.done',{n:done}),{ms:3000});
+  if(done&&findOpen()&&$('findInput').value.trim()) runFind($('findInput').value);
+}
+function cancelOcr(){
+  if(!ocrBusy) return;
+  ocrToken++; ocrBusy=false; $('ocrStatus').hidden=true; updateOcrBtn();
+  if(ocrLib) ocrLib.terminate();       // stops the page being recognised; the next run starts a new worker
+  Tools.toast(t('ocr.cancelled')); Tools.diag.log('ocr cancelled');
+}
+const defaultOcrLang=()=>Tools.lang()==='en'?'eng':'deu';
+// Builds the text layer of page i again (after its text was recognised)
+function relayer(i){
+  const el=els[i]; if(!el) return;
+  for(const c of el.querySelectorAll('.textLayer,.linkLayer,.hlLayer')) c.remove();
+  delete el.dataset.text;
+  if(el.querySelector('canvas')&&doc) doc.getPage(i+1).then(p=>{if(!el.dataset.text) ensureLayers(el,p,i);});
+}
+/* Tesseract words → pdf.js text content: one item per word (with the space up to the next word), "\n" after a line.
+   Positions: pixel boxes of the rendered picture → PDF points through the viewport (rotation included); the font size
+   from the line's tallest letters (about 0.72 em above the baseline). */
+function ocrTextContent({data,scale,viewport}){
+  const items=[];
+  for(const block of data&&data.blocks||[]) for(const para of block.paragraphs||[]) for(const line of para.lines||[]){
+    const words=(line.words||[]).filter(w=>w.text&&w.text.trim());
+    if(!words.length) continue;
+    const lb=line.bbox, base=line.baseline;
+    const baseAt=x=>base&&base.x1!==base.x0?base.y0+(base.y1-base.y0)*(x-base.x0)/(base.x1-base.x0):lb.y1;
+    const ascent=baseAt((lb.x0+lb.x1)/2)-lb.y0;
+    const sizePx=Math.max(4*scale,ascent>0?ascent/0.72:lb.y1-lb.y0);
+    words.forEach((w,k)=>{
+      const last=k===words.length-1, x1=last?w.bbox.x1:words[k+1].bbox.x0, by=baseAt((w.bbox.x0+w.bbox.x1)/2);
+      const [px,py]=viewport.convertToPdfPoint(w.bbox.x0,by), [qx,qy]=viewport.convertToPdfPoint(Math.max(x1,w.bbox.x0+1),by),
+        [ux,uy]=viewport.convertToPdfPoint(w.bbox.x0,by-sizePx);
+      const width=Math.hypot(qx-px,qy-py), dx=(qx-px)/width, dy=(qy-py)/width;
+      items.push({str:w.text.trim()+(last?'':' '),dir:'ltr',width,height:Math.hypot(ux-px,uy-py),
+        transform:[dx*Math.hypot(ux-px,uy-py),dy*Math.hypot(ux-px,uy-py),ux-px,uy-py,px,py],fontName:'ocr',hasEOL:last});
+    });
+  }
+  return {items,styles:{ocr:{fontFamily:'sans-serif',ascent:0.8,descent:-0.2,vertical:false}},lang:null};
+}
+$('btnOcr').addEventListener('click',startOcr);
+$('ocrCancel').addEventListener('click',cancelOcr);
+
 /* ================= Table of contents (outline / bookmarks of the PDF) ================= */
 const MAX_TOC=2000;
 async function renderToc(){
@@ -1071,6 +1218,7 @@ function renderInfo(){
   for(const id of ['btnDownload','btnClose','gotoInput','btnGoto']) $(id).disabled=!doc;
   $('btnShare').hidden=!doc||!canShareFiles;
   $('btnFind').hidden=!doc;
+  updateOcrBtn();
   if(doc) $('pageLabel').textContent=t('label',{n:cur,total:sizes.length});
   els.forEach((el,i)=>el.setAttribute('aria-label',t('pageAria',{n:i+1})));
 }
@@ -1133,6 +1281,9 @@ bindOpt('optAutoHide','autoHide');
 bindOpt('optSystem','systemBars');
 bindOpt('optNight','night',applyNight);
 bindOpt('optKeep','keep',()=>{if(!settings.keep) forgetFile(); else if(file) keepFile(file);});
+const syncOcrLang=()=>{$('optOcrLang').value=settings.ocrLang||defaultOcrLang();};
+$('optOcrLang').addEventListener('change',()=>{settings.ocrLang=$('optOcrLang').value;saveSettings();Tools.diag.log('setting',{ocrLang:settings.ocrLang});});
+syncOcrLang();
 applyNight();
 
 /* ---------- Keys (computer) ---------- */
@@ -1158,7 +1309,7 @@ Tools.takeSharedFile().then(async f=>{
   if(k&&loadToken===0){Tools.diag.log('restore kept file',{size:k.size});openFile(k,true);}
 });
 
-Tools.onLang(()=>{renderInfo();renderFindCount();renderTocLabels();});
+Tools.onLang(()=>{renderInfo();renderFindCount();renderTocLabels();updateOcrBtn();syncOcrLang();});
 renderInfo();
 
 Tools.diag.info(async()=>({
@@ -1168,6 +1319,7 @@ Tools.diag.info(async()=>({
   canShareFiles, fullscreenSupported:fs.supported(), settings, remembered:Object.keys(positions).length,
   kept:(await Tools.keep.names()).includes(KEEP_KEY),
   search:{open:findOpen(),hits:hits.length,busy:findBusy>=0}, outline:$('tocList').childElementCount,
+  ocr:{busy:ocrBusy,withoutText:textless.size,recognised:ocrData.filter(Boolean).length,checked:scanned},
 }));
 
 /* ================= WebMCP ================= */
@@ -1196,17 +1348,17 @@ Tools.mcp.register({
 });
 Tools.mcp.register({
   name:'get_page_text',title:'Read the text of a PDF page',readOnly:true,untrusted:true,
-  description:'Returns the text of one page of the open PDF (1 = first page; default: the page currently shown), at most 20000 characters. Scanned pages without a text layer return an empty text.',
+  description:'Returns the text of one page of the open PDF (1 = first page; default: the page currently shown), at most 20000 characters. Scanned pages return an empty text unless the user ran the text recognition in the app (then the recognised text, which may contain mistakes; "recognised": true).',
   inputSchema:{type:'object',properties:{page:{type:'integer',minimum:1,maximum:100000}},additionalProperties:false},
   execute:async({page})=>{
     needDoc();
     const n=page==null?cur:page;
     if(n>sizes.length) throw new Error(`page must be between 1 and ${sizes.length}`);
-    const p=await doc.getPage(n), tc=await p.getTextContent();
+    const tc=ocrData[n-1]||await (await doc.getPage(n)).getTextContent();
     let text='';
     for(const it of tc.items){if(typeof it.str==='string'){text+=it.str;if(it.hasEOL) text+='\n';else if(it.str&&!/\s$/.test(it.str)) text+=' ';}}
     text=text.replace(/[ \t]{2,}/g,' ').replace(/[ \t]+\n/g,'\n').trim();
-    return {page:n,pages:sizes.length,truncated:text.length>20000,text:text.slice(0,20000)};
+    return {page:n,pages:sizes.length,truncated:text.length>20000,text:text.slice(0,20000),...(ocrData[n-1]?{recognised:true}:{})};
   }
 });
 Tools.mcp.register({
