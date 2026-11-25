@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
  * line widths can be computed without font metrics).
  *   pages: [{ texts: [{ x, y, size, text, bold }], draw: 'PDF operators', rotate: 90,
  *             images: [{ x, y, w, h, width, height, rgb }] }]   rgb: Buffer, 3 bytes per pixel, rows top to bottom
+ *             links: [{ rect: [x1, y1, x2, y2], uri } | { rect, page }] }]   link areas (page: 0-based target page)
  * Coordinates in points, origin bottom left, A4.
  *   options.encrypt: { user, owner } – password protection with the PDF standard security handler,
  *   revision 2 (RC4, 40 bit; PDF 1.7 spec, algorithms 1–4). user '' = opens without a password,
@@ -31,9 +32,12 @@ export function makePdf(pages, options = {}) {
       ops.push(`q ${im.w} 0 0 ${im.h} ${im.x} ${im.y} cm /Im${i} Do Q`);
       return `/Im${i} ${ref} 0 R`;
     });
+    const annots = (p.links || []).map(l => add(`<< /Type /Annot /Subtype /Link /Rect [${l.rect.join(' ')}] /Border [0 0 0] ` +
+      (l.uri ? `/A << /S /URI /URI (${l.uri}) >>` : `/Dest [${l.page} /Fit]`) + ' >>'));
     const stream = Buffer.from(ops.join('\n'), 'latin1');
     const content = add(`<< /Length ${stream.length} >>\nstream\n${stream.toString('latin1')}\nendstream`);
     kids.push(add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 595 842]${p.rotate ? ` /Rotate ${p.rotate}` : ''} /Contents ${content} 0 R ` +
+      (annots.length ? `/Annots [${annots.map(a => `${a} 0 R`).join(' ')}] ` : '') +
       `/Resources << /Font << /F1 ${regular} 0 R /F2 ${bold} 0 R >>${xobjects.length ? ` /XObject << ${xobjects.join(' ')} >>` : ''} >> >>`));
   }
   objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;

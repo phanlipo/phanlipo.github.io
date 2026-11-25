@@ -334,6 +334,96 @@ test('zoom: double tap, keys, page width button; sharper canvas when zoomed', as
   expect(await page.locator('main').evaluate(m => m.scrollWidth <= m.clientWidth)).toBe(true);
 });
 
+/** A PDF whose first page holds web and mail addresses as plain text, a link area to a web address and one to page 3 */
+const linkPdf = () => ({
+  name: 'links.pdf', mimeType: 'application/pdf', buffer: makePdf([
+    { texts: [
+      { x: 72, y: 760, size: 14, text: 'Mehr unter www.example.org.' },
+      { x: 72, y: 730, size: 14, text: 'Formular: https://example.com/a/b?x=1, danke' },
+      { x: 72, y: 700, size: 14, text: 'Mail an info@example.net oder nicht' },
+      { x: 72, y: 670, size: 14, text: 'Kein Link: foo.bar und 1.5 und wwwx' },
+      { x: 72, y: 600, size: 14, text: 'HIER KLICKEN' },
+      { x: 72, y: 560, size: 14, text: 'ZU SEITE DREI' },
+    ], links: [
+      { rect: [70, 595, 200, 615], uri: 'https://example.com/hidden' },
+      { rect: [70, 555, 200, 575], page: 2 },
+    ] },
+    { texts: [{ x: 72, y: 700, size: 40, text: 'S2' }] },
+    { texts: [{ x: 72, y: 700, size: 40, text: 'S3' }] },
+  ]),
+});
+
+test('text can be selected and copied: invisible text layer over the page, following the zoom', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto(URL_);
+  await openPdf(page, P('text.pdf', ['Hallo Welt', 'Zweite Seite', 'S3']), 3);
+  const layer = pages(page).first().locator('.textLayer');
+  await expect(layer).toHaveText(/Hallo Welt/);
+  // the text sits where the canvas shows it: Courier 40 pt at x 72, y 700 (from the bottom) of 595 × 842
+  const span = layer.locator('span', { hasText: 'Hallo Welt' });
+  const check = async () => {
+    const pb = await pages(page).first().boundingBox(), sb = await span.boundingBox();
+    const k = pb.width / 595;
+    expect(sb.x - pb.x).toBeCloseTo(72 * k, -0.5);
+    expect(sb.width).toBeCloseTo(10 * 0.6 * 40 * k, -0.5);        // Courier: 0.6 em per character
+    expect(sb.y - pb.y + sb.height).toBeGreaterThan((842 - 700 - 4) * k);
+    expect(sb.y - pb.y).toBeLessThan((842 - 700) * k);
+  };
+  await check();
+  await page.keyboard.press('+');
+  await expect.poll(() => pages(page).first().evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThan(400);
+  await check();
+  // selecting with the mouse selects the text and does not toggle the bars
+  await page.keyboard.press('0');
+  const sb = await span.boundingBox();
+  const before = await hidden(page);
+  await page.mouse.move(sb.x + 2, sb.y + sb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(sb.x + sb.width - 2, sb.y + sb.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => getSelection().toString())).toMatch(/^Hallo Wel/);
+  await page.waitForTimeout(400);
+  expect(await hidden(page)).toBe(before);
+});
+
+test('links: web and mail addresses in the text and link areas of the PDF can be tapped', async ({ page, context }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto(URL_);
+  await page.setInputFiles('#inPick', linkPdf());
+  await expect(pages(page)).toHaveCount(3);
+  const p1 = pages(page).first();
+  const textLinks = p1.locator('.textLayer a');
+  await expect(textLinks).toHaveCount(3);
+  expect(await textLinks.evaluateAll(as => as.map(a => [a.textContent, a.getAttribute('href'), a.target]))).toEqual([
+    ['www.example.org', 'https://www.example.org/', '_blank'],
+    ['https://example.com/a/b?x=1', 'https://example.com/a/b?x=1', '_blank'],
+    ['info@example.net', 'mailto:info@example.net', ''],
+  ]);
+  expect(await textLinks.first().getAttribute('rel')).toBe('noopener noreferrer');
+  // the text stays whole for copying
+  await expect(p1.locator('.textLayer')).toContainText('Mehr unter www.example.org.');
+  // link areas of the PDF
+  const areas = p1.locator('.linkLayer a');
+  await expect(areas).toHaveCount(2);
+  await expect(areas.first()).toHaveAttribute('href', 'https://example.com/hidden');
+  await expect(areas.first()).toHaveAttribute('aria-label', 'Link: https://example.com/hidden');
+  const pb = await p1.boundingBox(), ab = await areas.first().boundingBox(), k = pb.width / 595;
+  expect(ab.x - pb.x).toBeCloseTo(70 * k, 0);
+  expect(ab.y - pb.y).toBeCloseTo((842 - 615) * k, 0);
+  expect(ab.width).toBeCloseTo(130 * k, 0);
+  // tapping a web address opens it in a new tab (blocked here: no request leaves the test)
+  await context.route('https://www.example.org/**', r => r.fulfill({ body: 'ok', contentType: 'text/plain' }));
+  const before = await hidden(page);
+  const [popup] = await Promise.all([context.waitForEvent('page'), textLinks.first().click()]);
+  await expect.poll(() => popup.url()).toBe('https://www.example.org/');
+  await popup.close();
+  await page.waitForTimeout(400);
+  expect(await hidden(page), 'a link tap does not toggle the bars').toBe(before);
+  // a link to a page of the document scrolls there
+  await areas.nth(1).click();
+  await expect(page.locator('#pageLabel')).toHaveText('3 / 3');
+});
+
 test('night mode inverts the pages', async ({ page }) => {
   await page.goto(URL_);
   await openPdf(page);
