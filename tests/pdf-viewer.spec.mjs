@@ -424,6 +424,113 @@ test('links: web and mail addresses in the text and link areas of the PDF can be
   await expect(page.locator('#pageLabel')).toHaveText('3 / 3');
 });
 
+/** Pages of Courier text lines (14 pt, from y 760 down in steps of 30) */
+const textPdf = (pages, options) => makePdf(pages.map(lines => ({ texts: lines.map((text, i) => ({ x: 72, y: 760 - 30 * i, size: 14, text })) })), options);
+
+test('search: finds text on all pages, marks the hits, steps through them and wraps around', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto(URL_);
+  await expect(page.locator('#btnFind')).toBeHidden();
+  const pdf = textPdf([
+    ['Erste Seite mit Apfel', 'und noch ein APFEL hier'],
+    ['Zweite Seite ohne Treffer'],
+    ['Dritte Seite', 'Birne und Apfelkuchen'],
+    ['Vierte Seite: Mitglieder', 'versammlung am Abend'],
+  ]);
+  await openPdf(page, { name: 'suche.pdf', mimeType: 'application/pdf', buffer: pdf }, 4);
+  await page.click('#btnFind');
+  await expect(page.locator('#findInput')).toBeFocused();
+  await expect(page.locator('#appTitle, #docName').first()).toBeHidden();
+  await page.locator('#findInput').fill('apfel');
+  // 3 hits: two on page 1 (case-insensitive), one on page 3 – the first is shown and marked
+  await expect(page.locator('#findCount')).toHaveText('1 / 3');
+  const hl = n => pages(page).nth(n - 1).locator('.hlLayer div');
+  await expect(hl(1)).toHaveCount(2);
+  await expect(hl(1).first()).toHaveClass('cur');
+  // the box covers the word: "Apfel" = characters 16–20 of line 1 (Courier 0.6 em at 14 pt, from x 72)
+  const pb = await pages(page).first().boundingBox(), hb = await hl(1).first().boundingBox(), k = pb.width / 595;
+  expect(hb.x - pb.x).toBeCloseTo((72 + 16 * 0.6 * 14) * k, -0.5);
+  expect(hb.width).toBeCloseTo(5 * 0.6 * 14 * k, -0.5);
+  // Enter = next, arrows, wrap around at the end
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#findCount')).toHaveText('2 / 3');
+  await expect(hl(1).nth(1)).toHaveClass('cur');
+  await page.click('#findNext');
+  await expect(page.locator('#findCount')).toHaveText('3 / 3');
+  await expect(page.locator('#pageLabel')).toHaveText('3 / 4');
+  await expect(pages(page).nth(2).locator('.hlLayer .cur')).toBeInViewport();
+  await page.click('#findNext');
+  await expect(page.locator('#findCount')).toHaveText('1 / 3');
+  await page.locator('#findInput').press('Shift+Enter');
+  await expect(page.locator('#findCount')).toHaveText('3 / 3');
+  // words are found across a line break and with missing spaces
+  await page.locator('#findInput').fill('mitglieder versammlung');
+  await expect(page.locator('#findCount')).toHaveText('1 / 1');
+  await expect(page.locator('#pageLabel')).toHaveText('4 / 4');
+  await page.locator('#findInput').fill('banane');
+  await expect(page.locator('#findCount')).toHaveText('0 / 0');
+  await expect(page.locator('#findNext')).toBeDisabled();
+  await expect(page.locator('.hlLayer')).toHaveCount(0);
+  // the bars stay while searching; Esc closes the search and removes the marks
+  await page.locator('#findInput').fill('apfel');
+  await expect(page.locator('#findCount')).toHaveText(/^\d \/ 3$/);
+  await page.locator('main').evaluate(m => { m.scrollTop += 400; });
+  await page.waitForTimeout(300);
+  expect(await hidden(page)).toBe(false);
+  await page.locator('#findInput').press('Escape');
+  await expect(page.locator('#findBar')).toBeHidden();
+  await expect(page.locator('.hlLayer')).toHaveCount(0);
+  await expect(page.locator('#docName')).toBeVisible();
+  // Ctrl + F opens it again with the last text selected
+  await page.keyboard.press('Control+f');
+  await expect(page.locator('#findInput')).toBeFocused();
+  // the diagnosis never contains the search text
+  const diag = await page.evaluate(() => Tools.diag.text());
+  expect(diag).toContain('search');
+  expect(diag.toLowerCase()).not.toContain('apfel');
+});
+
+test('search: the text layer of each page matches the searched text', async ({ page }) => {
+  // hits are found in pdf.js' text content and drawn on the text layer – both must give the same string
+  await page.goto(URL_);
+  await openPdf(page, { name: 'x.pdf', mimeType: 'application/pdf', buffer: linkPdf().buffer }, 3);
+  await expect(pages(page).first().locator('.textLayer')).toHaveCount(1);
+  await page.click('#btnFind');
+  await page.locator('#findInput').fill('example');
+  await expect(page.locator('#findCount')).toHaveText('1 / 3');   // www.example.org, example.com, info@example.net (the link area has no text)
+  await expect(pages(page).first().locator('.hlLayer div')).toHaveCount(3);   // also inside the links of the text layer
+});
+
+test('table of contents: bookmarks of the PDF in the menu, a tap goes to the page', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto(URL_);
+  await openPdf(page);
+  await openMenu(page);
+  await expect(page.locator('#tocPage')).toBeHidden();       // no bookmarks
+  await closeMenu(page);
+  const pdf = textPdf([['Titel'], ['Kapitel 1'], ['Teil 1.1'], ['Kapitel 2'], ['Anhang']], {
+    outline: [
+      { title: 'Kapitel 1', page: 1, children: [{ title: 'Teil 1.1', page: 2 }] },
+      { title: 'Kapitel 2', page: 3 },
+      { title: 'Anhang (A)', page: 4 },
+    ],
+  });
+  await openPdf(page, { name: 'buch.pdf', mimeType: 'application/pdf', buffer: pdf }, 5);
+  await openMenu(page);
+  await expect(page.locator('#tocPage')).toBeVisible();
+  await page.locator('#tocPage > summary').click();
+  const rows = page.locator('#tocList button');
+  await expect(rows).toHaveCount(4);
+  await expect(rows.locator('.toc-title')).toHaveText(['Kapitel 1', 'Teil 1.1', 'Kapitel 2', 'Anhang (A)']);
+  await expect(rows.locator('.toc-page')).toHaveText(['S. 2', 'S. 3', 'S. 4', 'S. 5']);
+  // the sub entry is indented
+  const x = async n => (await rows.nth(n).locator('.toc-title').boundingBox()).x;
+  expect(await x(1)).toBeGreaterThan(await x(0) + 10);
+  await rows.nth(2).click();
+  await expect(page.locator('#appMenu')).not.toBeVisible();
+  await expect(page.locator('#pageLabel')).toHaveText('4 / 5');
+});
+
 test('night mode inverts the pages', async ({ page }) => {
   await page.goto(URL_);
   await openPdf(page);

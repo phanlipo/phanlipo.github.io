@@ -2584,6 +2584,30 @@ test.describe('pdf-viewer tools', () => {
     expect((await call(page, 'pdf_viewer_get_document_info', {})).result).toEqual({ open: false });
     expect((await call(page, 'pdf_viewer_go_to_page', { page: 1 })).error).toBe('no PDF is open');
     expect((await call(page, 'pdf_viewer_get_page_text', {})).error).toBe('no PDF is open');
+    expect((await call(page, 'pdf_viewer_search_text', { query: 'x' })).error).toBe('no PDF is open');
+    expect((await call(page, 'pdf_viewer_get_outline', {})).error).toBe('no PDF is open');
+  });
+
+  test('search and table of contents; the search shows in the app', async ({ page }) => {
+    const buf = makePdf(['EINS Apfel', 'ZWEI', 'DREI Apfel Apfel'].map(l => ({ texts: [{ x: 72, y: 700, size: 20, text: l }] })),
+      { outline: [{ title: 'Start', page: 0, children: [{ title: 'Mitte', page: 1 }] }, { title: 'Ende', page: 2 }] });
+    await page.setInputFiles('#inPick', { name: 'a.pdf', mimeType: 'application/pdf', buffer: buf });
+    await expect(page.locator('#pages .page')).toHaveCount(3);
+    const tools = await listTools(page);
+    expect(tools.find(t => t.name === 'pdf_viewer_get_outline').annotations).toEqual({ readOnlyHint: true, untrustedContentHint: true });
+    expect(tools.find(t => t.name === 'pdf_viewer_search_text').annotations).toEqual({ readOnlyHint: false });
+    const r = await call(page, 'pdf_viewer_search_text', { query: 'apfel' });
+    expect(r.result).toEqual({ matches: 3, limited: false, currentMatch: 1, currentPage: 1, pagesWithMatches: 2,
+      pages: [{ page: 1, matches: 1 }, { page: 3, matches: 2 }] });
+    await expect(page.locator('#findInput')).toHaveValue('apfel');
+    await expect(page.locator('#findCount')).toHaveText('1 / 3');
+    await expect(page.locator('.toast')).toContainText('KI-Agent: Suche gestartet');
+    expect((await call(page, 'pdf_viewer_search_text', { query: 'birne' })).result).toMatchObject({ matches: 0, currentMatch: 0, pages: [] });
+    expect((await call(page, 'pdf_viewer_search_text', { query: '   ' })).error).toBe('query must not be empty');
+    expect((await call(page, 'pdf_viewer_search_text', { query: '' })).ok).toBe(false);
+    expect((await call(page, 'pdf_viewer_search_text', { query: 'x'.repeat(201) })).ok).toBe(false);
+    expect((await call(page, 'pdf_viewer_get_outline', {})).result).toEqual({ truncated: false, entries: [
+      { title: 'Start', level: 0, page: 1 }, { title: 'Mitte', level: 1, page: 2 }, { title: 'Ende', level: 0, page: 3 }] });
   });
 
   test('info, go to page, page text; shown in the app', async ({ page }) => {

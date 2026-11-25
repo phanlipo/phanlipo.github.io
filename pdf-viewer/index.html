@@ -16,13 +16,13 @@
 <meta name="tool:description-en" content="Read PDF files full screen – the bars hide, one tap brings back the menu and sharing. No upload.">
 <meta name="tool:short-name-en" content="PDF Viewer">
 <meta name="tool:storage" content="pdf-viewer.">
-<meta name="tool:webmcp" content="get_document_info, go_to_page, get_page_text">
-<meta name="tool:webmcp-help" content="Ein KI-Agent kann Seitenzahl und aktuelle Seite abfragen, zu einer Seite springen und den Text einer Seite lesen. Teilen kann er nichts.">
-<meta name="tool:webmcp-help-en" content="An AI agent can ask for the page count and current page, go to a page and read the text of a page. It cannot share anything.">
+<meta name="tool:webmcp" content="get_document_info, go_to_page, get_page_text, search_text, get_outline">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann Seitenzahl und aktuelle Seite abfragen, zu einer Seite springen, den Text einer Seite lesen, im Dokument suchen (die Treffer siehst du markiert) und das Inhaltsverzeichnis lesen. Teilen kann er nichts.">
+<meta name="tool:webmcp-help-en" content="An AI agent can ask for the page count and current page, go to a page, read the text of a page, search the document (you see the matches highlighted) and read the table of contents. It cannot share anything.">
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-NQL0nTo0av9VoxuDT5ghfr/KaYMy/42dwngVAfpLVqQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-38n1PaqxQRPyceoNgeQFLQV7kjGJ1eiRqurpaKVFegk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -88,12 +88,36 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
 .goto input{width:6em;min-height:44px;font-size:16px;padding-inline:10px}
 .pw .err-text{color:var(--err);margin:0;min-height:1.2em;font-size:14px}
 .drop main{outline:3px dashed var(--accent);outline-offset:-6px}
+/* Search: the field replaces the title in the header while it is open; hits are boxes over the page (.hlLayer) */
+#findBar{flex:1;min-width:0;display:flex;align-items:center;gap:2px}
+#findBar[hidden],body.finding>header h1,body.finding #btnFind,body.finding #btnShare,body.finding #btnFs{display:none}
+#findInput{flex:1;min-width:0;min-height:40px;padding-inline:10px}
+#findInput::-webkit-search-cancel-button{display:none}   /* only one "x": the one that closes the search */
+#findCount{flex:none;min-width:3.6em;text-align:center;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.hlLayer{position:absolute;inset:0;z-index:0;pointer-events:none}
+.hlLayer div{position:absolute;background:rgba(255,196,0,.45);border-radius:2px}
+.hlLayer div.cur{background:rgba(255,110,0,.55);box-shadow:0 0 0 2px #d14900}
+/* Table of contents (bookmarks of the PDF) */
+.toc{list-style:none;margin:0;padding:0}
+.toc button{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;padding:6px 8px;padding-inline-start:calc(8px + var(--lvl,0) * 16px);
+  background:none;border:0;border-block-end:1px solid var(--border);color:var(--text);font:inherit;text-align:start;cursor:pointer}
+.toc button:hover{background:var(--surface-2)}
+.toc .toc-title{flex:1;min-width:0;overflow-wrap:anywhere}
+.toc .toc-page{flex:none;color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body class="stage empty">
 <header>
   <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span id="appTitle" data-i18n="title">PDF ansehen</span><span id="docName" hidden></span></h1>
+  <div id="findBar" role="search" hidden>
+    <input type="search" id="findInput" enterkeyhint="search" autocomplete="off" spellcheck="false" maxlength="200" aria-label="Im Dokument suchen" placeholder="Suchen …" data-i18n-attr="aria-label:find.label; placeholder:find.ph">
+    <output id="findCount" aria-live="polite"></output>
+    <button type="button" class="head-btn" id="findPrev" disabled aria-label="Vorheriger Treffer" title="Vorheriger Treffer (Umschalt + Enter)" data-i18n-attr="aria-label:find.prev; title:find.prevKey"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-up"/></svg></button>
+    <button type="button" class="head-btn" id="findNext" disabled aria-label="Nächster Treffer" title="Nächster Treffer (Enter)" data-i18n-attr="aria-label:find.next; title:find.nextKey"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-down"/></svg></button>
+    <button type="button" class="head-btn" id="findClose" aria-label="Suche schließen" title="Suche schließen (Esc)" data-i18n-attr="aria-label:find.close; title:find.closeKey"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button>
+  </div>
   <div class="stage-actions">
+    <button type="button" class="head-btn" id="btnFind" hidden aria-label="Suchen" title="Suchen (Strg + F)" data-i18n-attr="aria-label:find.open; title:find.openKey"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#search"/></svg></button>
     <button type="button" class="head-btn" id="btnShare" hidden aria-label="PDF teilen" title="PDF teilen" data-i18n-attr="aria-label:share; title:share"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg></button>
     <button type="button" class="head-btn" id="btnFs" hidden aria-pressed="false" aria-label="Vollbild" title="Vollbild" data-i18n-attr="aria-label:fs; title:fs"><svg class="ic" id="icoFsOn" aria-hidden="true"><use href="../assets/icons.svg#maximize"/></svg><svg class="ic" id="icoFsOff" hidden aria-hidden="true"><use href="../assets/icons.svg#minimize"/></svg></button>
   </div>
@@ -129,6 +153,10 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
     <button type="button" class="btn" id="btnGoto" data-i18n="go" disabled>Springen</button>
   </div>
 </section>
+<details class="card" id="tocPage" data-menu data-menu-page data-icon="list" hidden>
+  <summary data-i18n="toc.h">Inhaltsverzeichnis</summary>
+  <ul class="toc" id="tocList"></ul>
+</details>
 <details class="card" id="setPage" data-menu data-menu-page data-icon="settings">
   <summary data-i18n="set.h">Anzeige</summary>
   <label class="check"><input type="checkbox" id="optAutoHide"> <span data-i18n="set.autoHide">Leisten beim Lesen automatisch ausblenden</span></label>
@@ -178,6 +206,8 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
     <li>Unten: Mit dem Schieberegler springt man zu einer Seite; der Knopf daneben passt die Seite wieder an die Bildschirmbreite an.</li>
     <li><b>Zoomen</b> mit zwei Fingern oder doppelt tippen (nochmal doppelt tippen = zurück). Am Computer Strg + Mausrad oder die Tasten + / − / 0.</li>
     <li><b>Text kopieren:</b> lange auf ein Wort drücken (am Computer mit der Maus ziehen), die Auswahl mit den Griffen erweitern und <i>Kopieren</i> wählen. Gescannte Seiten ohne Textebene enthalten keinen Text.</li>
+    <li><b>Suchen:</b> die Lupe oben (am Computer Strg + F) öffnet ein Suchfeld. Alle Treffer werden gelb markiert, der aktuelle orange; mit den Pfeilen (oder Enter / Umschalt + Enter) geht es zum nächsten bzw. vorherigen. Groß- und Kleinschreibung spielt keine Rolle. Gescannte Seiten ohne Textebene werden nicht gefunden.</li>
+    <li><b>Inhaltsverzeichnis:</b> Hat die PDF Lesezeichen, stehen sie im Menü unter <i>Inhaltsverzeichnis</i>; ein Tippen springt zur Stelle.</li>
     <li><b>Links:</b> Web- und Mail-Adressen im Text sowie Links der PDF lassen sich antippen. Webseiten öffnen sich in einem neuen Tab bzw. im Browser, Links auf eine Seite des Dokuments springen dorthin. Erst beim Antippen verbindet sich das Gerät mit der Adresse.</li>
     <li>Die App merkt sich, auf welcher Seite man in einem Dokument war, und springt beim nächsten Öffnen dorthin.</li>
   </ul>
@@ -189,7 +219,7 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
   </ul>
   <h3>Im Menü (☰)</h3>
   <ul>
-    <li>Infos zum Dokument, <i>Andere PDF öffnen</i>, <i>Herunterladen</i>, <i>PDF schließen</i> und <i>Zu Seite</i>.</li>
+    <li>Inhaltsverzeichnis (wenn die PDF eins hat), Infos zum Dokument, <i>Andere PDF öffnen</i>, <i>Herunterladen</i>, <i>PDF schließen</i> und <i>Zu Seite</i>.</li>
     <li>Anzeige: automatisch ausblenden, Systemleisten mit ausblenden, Nachtmodus (dunkle Seiten mit heller Schrift), geöffnete PDF behalten.</li>
   </ul>
   <h3>Was wird gespeichert?</h3>
@@ -209,6 +239,8 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
     <li>At the bottom: the slider jumps to a page; the button next to it fits the page to the screen width again.</li>
     <li><b>Zoom</b> with two fingers or by double-tapping (double-tap again = back). On a computer Ctrl + mouse wheel or the keys + / − / 0.</li>
     <li><b>Copying text:</b> long-press a word (on a computer drag with the mouse), extend the selection with the handles and choose <i>Copy</i>. Scanned pages without a text layer contain no text.</li>
+    <li><b>Search:</b> the magnifier at the top (on a computer Ctrl + F) opens a search field. All matches are marked yellow, the current one orange; the arrows (or Enter / Shift + Enter) go to the next or previous one. Upper and lower case do not matter. Scanned pages without a text layer are not found.</li>
+    <li><b>Contents:</b> if the PDF has bookmarks, they are in the menu under <i>Contents</i>; a tap jumps there.</li>
     <li><b>Links:</b> web and mail addresses in the text and links of the PDF can be tapped. Web pages open in a new tab or in the browser, links to a page of the document go there. The device only connects to the address when you tap it.</li>
     <li>The app remembers which page you were on in a document and goes there next time you open it.</li>
   </ul>
@@ -220,7 +252,7 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
   </ul>
   <h3>In the menu (☰)</h3>
   <ul>
-    <li>Document info, <i>Open another PDF</i>, <i>Download</i>, <i>Close PDF</i> and <i>Go to page</i>.</li>
+    <li>Contents (if the PDF has them), document info, <i>Open another PDF</i>, <i>Download</i>, <i>Close PDF</i> and <i>Go to page</i>.</li>
     <li>Display: hide automatically, hide the system bars too, night mode (dark pages with light text), keep the open PDF.</li>
   </ul>
   <h3>What is stored?</h3>
@@ -247,11 +279,11 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
   <!-- agent:start -->
   <div data-lang="de">
   <h3>KI-Agenten (WebMCP)</h3>
-  <p>Ein KI-Agent kann Seitenzahl und aktuelle Seite abfragen, zu einer Seite springen und den Text einer Seite lesen. Teilen kann er nichts. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  <p>Ein KI-Agent kann Seitenzahl und aktuelle Seite abfragen, zu einer Seite springen, den Text einer Seite lesen, im Dokument suchen (die Treffer siehst du markiert) und das Inhaltsverzeichnis lesen. Teilen kann er nichts. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
   <h3>AI agents (WebMCP)</h3>
-  <p>An AI agent can ask for the page count and current page, go to a page and read the text of a page. It cannot share anything. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  <p>An AI agent can ask for the page count and current page, go to a page, read the text of a page, search the document (you see the matches highlighted) and read the table of contents. It cannot share anything. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
   </div>
   <!-- agent:end -->
   <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
@@ -264,7 +296,7 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 35b3eb2729d3</p>
+  <p class="footer-version">Version 89bb6a00c5da</p>
   <!-- footer:end -->
 </footer>
 
@@ -281,6 +313,7 @@ Tools.i18n({
     'resume':'Weiter auf Seite {n}','share.fail':'Teilen hat nicht geklappt.','fs.fail':'Vollbild ist hier nicht möglich.',
     'goto.bad':'Seite 1 bis {n} eingeben.','pageAria':'Seite {n}','mcp.goto':'zu Seite gesprungen',
     'closed':'PDF geschlossen.','link.web':'Link: {url}','link.internal':'Verweis auf eine Seite dieses Dokuments',
+    'find.count':'{n} / {total}','find.busy':'…','toc.page':'S. {n}','toc.pageAria':'Seite {n}','mcp.find':'Suche gestartet',
   },
   en:{
     title:'PDF Viewer',share:'Share PDF',fs:'Full screen',view:'Document',intro:'Open a PDF or share it here from another app. The file stays on this device.',
@@ -296,6 +329,10 @@ Tools.i18n({
     'goto.bad':'Enter page 1 to {n}.','pageAria':'Page {n}','mcp.goto':'went to a page',
     close:'Close PDF','set.keep':'Keep the open PDF – open it again next time (also after an update)','closed':'PDF closed.',
     'link.web':'Link: {url}','link.internal':'Link to a page of this document',
+    'find.label':'Search the document','find.ph':'Search …','find.prev':'Previous match','find.prevKey':'Previous match (Shift + Enter)',
+    'find.next':'Next match','find.nextKey':'Next match (Enter)','find.close':'Close search','find.closeKey':'Close search (Esc)',
+    'find.open':'Search','find.openKey':'Search (Ctrl + F)','find.count':'{n} / {total}','find.busy':'…',
+    'toc.h':'Contents','toc.page':'p. {n}','toc.pageAria':'page {n}','mcp.find':'started a search',
   }
 });
 const t=Tools.t, $=Tools.$, body=document.body;
@@ -434,6 +471,8 @@ function closeDoc(){
   if(doc) destroyDoc(doc);
   doc=null; file=null; sizes=[]; els=[]; tops=[]; pagesEl.textContent='';
   renderGen++;
+  texts=[]; hits=[]; hitIdx=-1; pendingHit=false; findToken++; renderFindCount();
+  $('tocList').textContent=''; $('tocPage').hidden=true;
 }
 // Back to the start screen
 function showEmpty(){
@@ -441,7 +480,7 @@ function showEmpty(){
   body.classList.add('empty');
   $('empty').hidden=false; pagesEl.hidden=true; $('bar').hidden=true;
   pagesEl.style.width=''; message('');
-  showBars(true); renderInfo();
+  closeFind(); showBars(true); renderInfo();
 }
 
 /* ================= Showing ================= */
@@ -466,6 +505,8 @@ function show(){
   else{view.scrollTop=0;view.scrollLeft=0;}
   updateCurrent(); renderInfo(); scheduleRender();
   showBars(true);
+  renderToc();
+  if(findOpen()&&$('findInput').value.trim()) runFind($('findInput').value);
   clearTimeout(hideTimer);
   if(settings.autoHide) hideTimer=setTimeout(()=>{if(!barsTouched) showBars(false);},2500);
   barsTouched=false;
@@ -572,6 +613,11 @@ async function addLayers(el,page,tok){
   try{links=linkLayer(await page.getAnnotations({intent:'display'}),vp);}catch(e){Tools.diag.log('link areas failed',e);}
   if(d!==doc||el.dataset.text!==tok||!el.isConnected) return;   // closed or freed meanwhile
   el.append(tl); if(links) el.append(links);
+  const idx=Number(el.dataset.n)-1;
+  if(hits.length){
+    paintPage(idx);
+    if(pendingHit&&hits[hitIdx]&&hits[hitIdx].p===idx&&scrollToCur()) pendingHit=false;
+  }
   if(found||links) Tools.diag.log('links',{page:Number(el.dataset.n),inText:found,inPdf:links?links.childElementCount:0});
 }
 /* Web and mail addresses written as plain text (many PDFs have no link areas for them, like pdf.js' "auto linking"):
@@ -589,7 +635,9 @@ function trimLink(s){
     if(/[.,;:!?'"»«“”‚‘’]/.test(c)||(c===')'&&!s.includes('('))||(c===']'&&!s.includes('['))) s=s.slice(0,-1); else return s;
   }
 }
-function autoLink(tl){
+// The text of a text layer as one string (text nodes in order, "\n" for each line break) and where each node starts in it.
+// Same string as pageText() builds from pdf.js' text content, so search hits map onto the layer.
+function layerText(tl){
   const nodes=[]; let str='';
   const walk=document.createTreeWalker(tl,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT,
     {acceptNode:n=>n.nodeType===3||n.nodeName==='BR'?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_SKIP});
@@ -597,6 +645,10 @@ function autoLink(tl){
     if(n.nodeType===3){nodes.push({n,s:str.length});str+=n.data;}
     else str+='\n';
   }
+  return {nodes,str};
+}
+function autoLink(tl){
+  const {nodes,str}=layerText(tl);
   const matches=[];
   for(const m of str.matchAll(LINK_RE)){
     const text=trimLink(m[2]), href=text.length>4&&linkHref(text), at=m.index+m[1].length;
@@ -646,13 +698,9 @@ function linkLayer(annots,vp){
   return W&&H&&box.childElementCount?box:null;
 }
 async function goToDest(dest){
-  try{
-    if(typeof dest==='string') dest=await doc.getDestination(dest);
-    const ref=Array.isArray(dest)?dest[0]:null;
-    const idx=ref&&typeof ref==='object'?await doc.getPageIndex(ref):Number.isInteger(ref)?ref:null;
-    Tools.diag.log('internal link',{ok:idx!=null});
-    if(idx!=null) goTo(idx+1);
-  }catch(e){Tools.diag.log('internal link failed',e);}
+  const n=await destPage(dest);
+  Tools.diag.log('internal link',{ok:n!=null});
+  if(n!=null&&doc) goTo(n);
 }
 
 /* ---------- Zoom: two fingers, double tap, Ctrl + wheel, keys ---------- */
@@ -711,7 +759,7 @@ $('btnFit').addEventListener('click',()=>{setZoom(1);view.scrollLeft=0;});
 let hideTimer=0, barsTouched=false, lastTap=0, lastXY=[0,0], tapTimer=0;
 const barsHidden=()=>body.classList.contains('bars-hidden');
 function showBars(on){
-  if(!doc) on=true;
+  if(!doc||findOpen()) on=true;
   if(on===!barsHidden()) return;
   body.classList.toggle('bars-hidden',!on);
   if(!on){
@@ -721,6 +769,7 @@ function showBars(on){
   }
 }
 function toggleBars(){
+  if(findOpen()) return;   // the search field stays in reach
   barsTouched=true; clearTimeout(hideTimer);
   const hide=!barsHidden();
   showBars(!hide);
@@ -832,6 +881,188 @@ function savePosition(){
   },400);
 }
 
+/* ================= Search ================= */
+// texts[i]: promise of page i's text (pdf.js text content joined like layerText()); hits: {p (0-based page), a, b (offsets)}
+let texts=[], hits=[], hitIdx=-1, findToken=0, findQuery='', pendingHit=false, findTimer=0;
+const MAX_HITS=10000;
+const findOpen=()=>body.classList.contains('finding');
+function pageText(i){
+  if(!texts[i]){
+    const d=doc;
+    texts[i]=d.getPage(i+1).then(p=>p.getTextContent({disableNormalization:true})).then(tc=>{
+      let str='';
+      for(const it of tc.items){if(typeof it.str!=='string') continue; str+=it.str; if(it.hasEOL) str+='\n';}
+      return str;
+    });
+    texts[i].catch(()=>{if(doc===d) texts[i]=null;});
+  }
+  return texts[i];
+}
+// Words of the query in order; between them any (or no) white space – PDFs often leave out spaces between text pieces
+function findRegex(q){
+  const words=String(q||'').trim().split(/\s+/).filter(Boolean).map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  return words.length?new RegExp(words.join('\\s*'),'giu'):null;
+}
+function renderFindCount(){
+  const busy=findToken===findBusy;
+  $('findCount').textContent=!findQuery.trim()?'':busy&&!hits.length?t('find.busy'):t('find.count',{n:hitIdx<0?0:hitIdx+1,total:Tools.fmt(hits.length,0)+(busy?'+':'')});
+  $('findPrev').disabled=$('findNext').disabled=!hits.length;
+}
+let findBusy=-1;
+// Searches all pages (in order, in the background) and jumps to the first hit from the current page on
+async function runFind(q){
+  clearTimeout(findTimer);
+  const tok=++findToken, d=doc, re=findRegex(q);
+  findQuery=String(q||''); hits=[]; hitIdx=-1; pendingHit=false; paintAll();
+  if(!re||!d){findBusy=-1;renderFindCount();return {done:true,hits:0};}
+  findBusy=tok; renderFindCount();
+  const from=cur-1, t0=Date.now();
+  for(let i=0;i<sizes.length&&hits.length<MAX_HITS;i++){
+    let str;
+    try{str=await pageText(i);}catch(e){Tools.diag.log('search: page text failed',{page:i+1},e);continue;}
+    if(tok!==findToken||d!==doc) return {done:false};
+    re.lastIndex=0;
+    for(const m of str.matchAll(re)){if(m[0].length) hits.push({p:i,a:m.index,b:m.index+m[0].length}); if(hits.length>=MAX_HITS) break;}
+    if(hitIdx<0&&i>=from&&hits.length&&hits[hits.length-1].p>=from) showHit(hits.findIndex(h=>h.p>=from));
+    else if(i%20===19) renderFindCount();
+  }
+  findBusy=-1;
+  if(hitIdx<0&&hits.length) showHit(0);
+  renderFindCount();
+  if(hitIdx>=0) paintAll();
+  // only sizes and counts – never the query
+  Tools.diag.log('search',{chars:findQuery.trim().length,hits:hits.length,pages:sizes.length,ms:Date.now()-t0});
+  return {done:true,hits:hits.length};
+}
+function showHit(k){
+  if(!hits.length) return;
+  hitIdx=(k+hits.length)%hits.length;
+  renderFindCount();
+  paintAll();
+  if(scrollToCur()){pendingHit=false;return;}
+  pendingHit=true;
+  goTo(hits[hitIdx].p+1);   // the text layer of that page is built with the canvas, then addLayers() scrolls to the hit
+}
+const paintAll=()=>els.forEach((el,i)=>{if(el.querySelector('.textLayer')||el.querySelector('.hlLayer')) paintPage(i);});
+// Boxes over the hits of page i, measured on the text layer (percent of the page: they follow the zoom)
+function paintPage(i){
+  const el=els[i]; if(!el) return;
+  const old=el.querySelector('.hlLayer'); if(old) old.remove();
+  const tl=el.querySelector('.textLayer'); if(!tl) return;
+  const mine=[]; hits.forEach((h,k)=>{if(h.p===i) mine.push(k);});
+  if(!mine.length) return;
+  const {nodes}=layerText(tl);
+  const at=(off,end)=>{
+    for(const x of nodes){const L=x.n.data.length; if(end?off>x.s&&off<=x.s+L:off>=x.s&&off<x.s+L) return [x.n,off-x.s];}
+    return null;
+  };
+  const pr=el.getBoundingClientRect(), box=document.createElement('div');
+  box.className='hlLayer'; box.setAttribute('aria-hidden','true');
+  for(const k of mine){
+    const a=at(hits[k].a,false), b=at(hits[k].b,true); if(!a||!b) continue;
+    const r=document.createRange(); r.setStart(...a); r.setEnd(...b);
+    for(const c of r.getClientRects()){
+      if(c.width<0.5||c.height<0.5) continue;
+      const d=document.createElement('div'), st=d.style;
+      st.left=(100*(c.left-pr.left)/pr.width)+'%'; st.top=(100*(c.top-pr.top)/pr.height)+'%';
+      st.width=(100*c.width/pr.width)+'%'; st.height=(100*c.height/pr.height)+'%';
+      if(k===hitIdx) d.className='cur';
+      box.append(d);
+    }
+  }
+  el.append(box);
+}
+// Scrolls the current hit to the upper third of the screen (and sideways into view when zoomed)
+function scrollToCur(){
+  const c=pagesEl.querySelector('.hlLayer .cur'); if(!c) return false;
+  const r=c.getBoundingClientRect(), v=view.getBoundingClientRect();
+  progScroll=Date.now();
+  view.scrollTop+=r.top-v.top-v.height/3;
+  if(r.left<v.left+8||r.right>v.right-8) view.scrollLeft+=r.left-v.left-(v.width-r.width)/2;
+  updateCurrent(); scheduleRender();
+  return true;
+}
+function openFind(){
+  if(!doc) return;
+  if(!findOpen()){
+    body.classList.add('finding'); $('findBar').hidden=false; showBars(true);
+    clearTimeout(hideTimer); barsTouched=true;
+    Tools.diag.log('search opened');
+  }
+  $('findInput').focus(); $('findInput').select();
+  if(hitIdx<0&&$('findInput').value.trim()&&findBusy<0) runFind($('findInput').value);
+}
+function closeFind(){
+  if(!findOpen()) return;
+  const inBar=$('findBar').contains(document.activeElement);
+  body.classList.remove('finding'); $('findBar').hidden=true;
+  clearTimeout(findTimer); findToken++; findBusy=-1; hits=[]; hitIdx=-1; pendingHit=false; findQuery='';
+  paintAll(); renderFindCount();
+  if(inBar) (doc?$('btnFind'):view).focus({preventScroll:true});
+}
+$('btnFind').addEventListener('click',openFind);
+$('findClose').addEventListener('click',closeFind);
+$('findNext').addEventListener('click',()=>showHit(hitIdx+1));
+$('findPrev').addEventListener('click',()=>showHit(hitIdx-1));
+$('findInput').addEventListener('input',()=>{
+  clearTimeout(findTimer);
+  findTimer=setTimeout(()=>runFind($('findInput').value),300);
+});
+$('findInput').addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();closeFind();return;}
+  if(e.key!=='Enter') return;
+  e.preventDefault();
+  const q=$('findInput').value;
+  if(q!==findQuery||(findBusy<0&&!hits.length)) runFind(q);
+  else showHit(hitIdx+(e.shiftKey?-1:1));
+});
+document.addEventListener('keydown',e=>{
+  if(!doc||e.altKey||document.querySelector('dialog[open]')) return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){e.preventDefault();openFind();}
+  else if(e.key==='F3'&&hits.length){e.preventDefault();showHit(hitIdx+(e.shiftKey?-1:1));}
+});
+
+/* ================= Table of contents (outline / bookmarks of the PDF) ================= */
+const MAX_TOC=2000;
+async function renderToc(){
+  const d=doc, list=$('tocList');
+  let outline=null;
+  try{outline=await d.getOutline();}catch(e){Tools.diag.log('outline failed',e);}
+  if(d!==doc) return;
+  list.textContent='';
+  const items=[];
+  const walk=(arr,lvl)=>{for(const it of arr||[]){if(items.length>=MAX_TOC) return; items.push({it,lvl}); walk(it.items,lvl+1);}};
+  walk(outline,0);
+  $('tocPage').hidden=!items.length;
+  Tools.diag.log('outline',{entries:items.length});
+  if(!items.length) return;
+  const frag=document.createDocumentFragment();
+  for(const {it,lvl} of items){
+    const li=document.createElement('li'), b=document.createElement('button');
+    b.type='button'; b.style.setProperty('--lvl',Math.min(lvl,6));
+    const title=document.createElement('span'); title.className='toc-title'; title.textContent=String(it.title||'').trim()||'–';
+    const pg=document.createElement('span'); pg.className='toc-page';
+    b.append(title,pg);
+    if(it.url) b.addEventListener('click',()=>{Tools.menu.close();window.open(it.url,'_blank','noopener,noreferrer');});
+    else if(it.dest!=null){
+      b.addEventListener('click',()=>{Tools.menu.close();goToDest(it.dest);});
+      destPage(it.dest).then(n=>{if(n&&d===doc){pg.textContent=t('toc.page',{n});pg.dataset.n=n;pg.setAttribute('aria-label',t('toc.pageAria',{n}));}});
+    }else b.disabled=true;
+    li.append(b); frag.append(li);
+  }
+  list.append(frag);
+}
+// 1-based page a destination points to, or null
+async function destPage(dest){
+  try{
+    if(typeof dest==='string') dest=await doc.getDestination(dest);
+    const ref=Array.isArray(dest)?dest[0]:null;
+    const idx=ref&&typeof ref==='object'?await doc.getPageIndex(ref):Number.isInteger(ref)?ref:null;
+    return idx==null?null:idx+1;
+  }catch(_){return null;}
+}
+const renderTocLabels=()=>{for(const pg of $('tocList').querySelectorAll('.toc-page[data-n]')){const n=pg.dataset.n;pg.textContent=t('toc.page',{n});pg.setAttribute('aria-label',t('toc.pageAria',{n}));}};
+
 /* ================= Menu, share, download, full screen ================= */
 function renderInfo(){
   $('docInfo').textContent=doc?t('doc.info',{name:file.name,n:sizes.length,size:fmtSize(file.size)}):t('doc.none');
@@ -839,6 +1070,7 @@ function renderInfo(){
   document.title=doc?file.name:t('title');
   for(const id of ['btnDownload','btnClose','gotoInput','btnGoto']) $(id).disabled=!doc;
   $('btnShare').hidden=!doc||!canShareFiles;
+  $('btnFind').hidden=!doc;
   if(doc) $('pageLabel').textContent=t('label',{n:cur,total:sizes.length});
   els.forEach((el,i)=>el.setAttribute('aria-label',t('pageAria',{n:i+1})));
 }
@@ -926,7 +1158,7 @@ Tools.takeSharedFile().then(async f=>{
   if(k&&loadToken===0){Tools.diag.log('restore kept file',{size:k.size});openFile(k,true);}
 });
 
-Tools.onLang(renderInfo);
+Tools.onLang(()=>{renderInfo();renderFindCount();renderTocLabels();});
 renderInfo();
 
 Tools.diag.info(async()=>({
@@ -935,6 +1167,7 @@ Tools.diag.info(async()=>({
   textLayers:els.filter(el=>el.querySelector('.textLayer')).length,
   canShareFiles, fullscreenSupported:fs.supported(), settings, remembered:Object.keys(positions).length,
   kept:(await Tools.keep.names()).includes(KEEP_KEY),
+  search:{open:findOpen(),hits:hits.length,busy:findBusy>=0}, outline:$('tocList').childElementCount,
 }));
 
 /* ================= WebMCP ================= */
@@ -974,6 +1207,33 @@ Tools.mcp.register({
     for(const it of tc.items){if(typeof it.str==='string'){text+=it.str;if(it.hasEOL) text+='\n';else if(it.str&&!/\s$/.test(it.str)) text+=' ';}}
     text=text.replace(/[ \t]{2,}/g,' ').replace(/[ \t]+\n/g,'\n').trim();
     return {page:n,pages:sizes.length,truncated:text.length>20000,text:text.slice(0,20000)};
+  }
+});
+Tools.mcp.register({
+  name:'search_text',title:'Search the PDF',label:'mcp.find',
+  description:'Searches the open PDF for a text (case-insensitive; the words of the query in this order, spaces between them optional), opens the search bar with it, highlights the matches and shows the first one from the current page on. Returns the number of matches and the pages with matches (at most 100 pages listed).',
+  inputSchema:{type:'object',properties:{query:{type:'string',minLength:1,maxLength:200}},required:['query'],additionalProperties:false},
+  execute:async({query})=>{
+    needDoc();
+    if(!String(query).trim()) throw new Error('query must not be empty');
+    openFind();
+    $('findInput').value=query;
+    const r=await runFind(query);
+    if(!r.done) throw new Error('the search was replaced by another one');
+    const per=new Map(); for(const h of hits) per.set(h.p+1,(per.get(h.p+1)||0)+1);
+    const pages=[...per].slice(0,100).map(([page,matches])=>({page,matches}));
+    return {matches:hits.length,limited:hits.length>=MAX_HITS,currentMatch:hitIdx+1,currentPage:cur,pages,pagesWithMatches:per.size};
+  }
+});
+Tools.mcp.register({
+  name:'get_outline',title:'Read the table of contents',readOnly:true,untrusted:true,
+  description:'Returns the table of contents (bookmarks) of the open PDF as a flat list in reading order: title, level (0 = top) and target page (1 = first page; null if it points elsewhere). At most 500 entries. Empty list if the PDF has none.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:async()=>{
+    needDoc();
+    const out=[], walk=async(arr,level)=>{for(const it of arr||[]){if(out.length>=500) return; out.push({title:String(it.title||'').slice(0,300),level,page:it.dest!=null?await destPage(it.dest):null}); await walk(it.items,level+1);}};
+    await walk(await doc.getOutline(),0);
+    return {entries:out,truncated:out.length>=500};
   }
 });
 })();
