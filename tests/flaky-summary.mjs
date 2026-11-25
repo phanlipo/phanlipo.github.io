@@ -40,7 +40,8 @@ if (!flaky.length) {
   process.exit(0);
 }
 
-const esc = s => s.replace(/\|/g, '\\|').replace(/</g, '&lt;');
+// Table cell: backslash first, so an error text ending in \ cannot swallow the escape of the next |
+const esc = s => s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/</g, '&lt;');
 for (const f of flaky) {
   // Workflow command: shown as a warning on the run and the pull request
   const msg = `Flaky (passed only on retry): [${f.project}] ${f.title} – ${f.error}`.replace(/\r?\n/g, ' ');

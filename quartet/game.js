@@ -19,7 +19,8 @@
     return arr;
   }
   const seed = () => {
-    try { return crypto.getRandomValues(new Uint32Array(1))[0] | 0; } catch (_) { return (Math.random() * 2 ** 32) | 0; }
+    // Only the start value of the game's own generator (mulberry32 above) – not used for anything secret
+    try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] | 0; } catch (_) { return (Math.random() * 2 ** 32) | 0; }
   };
 
   /* ---------- Decks ---------- */
