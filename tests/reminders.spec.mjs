@@ -497,7 +497,10 @@ test.describe('background check', () => {
     const due = Date.now() + 3600e3; // real time: the service worker has no fake clock
     await page.goto('/reminders/');
     await page.evaluate(() => navigator.serviceWorker.ready);
-    await add(page, 'Zahnarzt', (d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`)(new Date(due)));
+    // Formatted in the page: its time zone (Europe/Berlin) is not the one of the test runner
+    const input = await page.evaluate(ms => { const d = new Date(ms), p = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }, due);
+    await add(page, 'Zahnarzt', input);
     const at = (await stored(page))[0].at;
     // The page has mirrored the schedule for the service worker, with ready texts
     await expect.poll(() => page.evaluate(() => Tools.keep.json('schedule', null))).toMatchObject({ items: [{ title: 'Zahnarzt', at, tag: expect.stringMatching(/^reminder-r/) }] });
