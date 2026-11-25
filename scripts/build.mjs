@@ -62,6 +62,11 @@ import { renderSbom, SBOM_FILE } from './sbom.mjs';
 const SKIP = new Set(['assets', 'scripts', 'template', 'node_modules', 'tests']);
 const SITE = 'https://phanlipo.github.io/';
 const SW_FORMAT = 2; // bump when the generated sw.js logic changes
+// Optional file in an app folder with code for the app's service worker (events the page cannot handle because it
+// is not running, e.g. periodicsync in reminders). sw.js loads it with importScripts; it is precached like every
+// other file of the app and counts towards the version. Runs in the ServiceWorkerGlobalScope: no window, no Tools,
+// no localStorage – data from the page comes through the Cache Storage (Tools.keep, cache "file:<app>").
+const SW_APP = 'sw-app.js';
 const VENDOR = JSON.parse(readFileSync(join(ROOT, 'scripts/vendor.json'), 'utf8'));
 
 // Features for the second filter row on the start page, in display order. Only what sets apps apart:
@@ -550,7 +555,10 @@ self.addEventListener('activate', event => {
 });
 
 // Cache first: instant start and offline use. Anything not cached goes to the network.
-${p.shareAccept.length ? `// Share target: files shared to the installed app arrive as POST ./share-target (one or several).
+${existsSync(join(ROOT, p.folder, SW_APP)) ? `// App-specific service worker code (background events such as periodicsync), cached like the app's other files
+importScripts('${SW_APP}');
+
+` : ''}${p.shareAccept.length ? `// Share target: files shared to the installed app arrive as POST ./share-target (one or several).
 // They are parked in a cache ("shared-file", "shared-file-1", …) and the page is opened with ?shared=1
 // (Tools.takeSharedFiles() / Tools.takeSharedFile() pick them up).
 const SHARE_URL = new URL('./share-target', self.location).href;
