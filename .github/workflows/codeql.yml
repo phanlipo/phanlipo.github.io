@@ -1,6 +1,8 @@
 # Code scanning of the own code (JavaScript in the pages and scripts) and of the workflows with CodeQL:
 # on every pull request to main (new problems show up in the PR) and monthly (new queries).
-# Results: Security → Code scanning. The libraries in assets/vendor/ are not scanned here
+# Results: Security → Code scanning, and as plain text in the log of each analyze job (step "CodeQL-Funde")
+# and its job summary – readable for anyone who can read the logs (also agents without code-scanning access).
+# The libraries in assets/vendor/ are not scanned here
 # (minified third-party code) – they are checked by "Bibliotheken prüfen" (vendor-check.yml).
 # If "CodeQL default setup" is enabled in the repository settings, disable it – it conflicts with this file.
 name: CodeQL
@@ -39,3 +41,38 @@ jobs:
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: /language:${{ matrix.language }}
+          output: sarif-results
+      # Every finding of this run as one log line (rule, file:line, message), a warning annotation and a row in
+      # the job summary. Only reads the SARIF file written above; the job stays green – the "CodeQL" check
+      # (code scanning) decides about new alerts. Dismissed alerts are dismissed on the server and still listed here.
+      - name: CodeQL-Funde
+        if: always()
+        run: |
+          shopt -s nullglob
+          files=(sarif-results/*.sarif)
+          if [ ${#files[@]} -eq 0 ]; then echo "Keine SARIF-Datei gefunden."; exit 0; fi
+          jq -r '
+            .runs[] | (.tool.driver.rules // []) as $rules | (.results // [])[]
+            | (.ruleIndex // -1) as $i
+            | (if $i >= 0 then $rules[$i] else {} end) as $rule
+            | (.locations[0].physicalLocation // {}) as $loc
+            | [ .ruleId,
+                ($rule.properties["security-severity"] // .level // "-"),
+                ($loc.artifactLocation.uri // "-"),
+                ($loc.region.startLine // 1 | tostring),
+                (.message.text // "" | gsub("[\r\n]+"; " ")) ] | @tsv' "${files[@]}" > findings.tsv
+          count=$(wc -l < findings.tsv)
+          echo "CodeQL-Funde: $count"
+          {
+            echo "### CodeQL-Funde: $count"
+            if [ "$count" -gt 0 ]; then
+              echo
+              echo "| Regel | Schwere | Datei:Zeile | Meldung |"
+              echo "|---|---|---|---|"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS=$'\t' read -r rule sev file line msg; do
+            echo "CODEQL $rule [$sev] $file:$line – $msg"
+            printf '::warning file=%s,line=%s,title=CodeQL %s::%s\n' "$file" "$line" "$rule" "${msg//%/%25}"
+            printf '| `%s` | %s | `%s:%s` | %s |\n' "$rule" "$sev" "$file" "$line" "${msg//|/\\|}" >> "$GITHUB_STEP_SUMMARY"
+          done < findings.tsv

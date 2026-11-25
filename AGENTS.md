@@ -129,4 +129,5 @@ Ziel: keine ungepflegte oder verwundbare Bibliothek ausliefern. Einzige von Hand
 - Änderungen per Pull Request auf `main`, Squash-Merge. `main` ist geschützt.
 - **Mergen ohne Rückfrage**, wenn die Checks **test**, **Bibliotheken prüfen** und **Workflows prüfen** auf dem aktuellen Stand grün sind und es keine Konflikte gibt – auch Dependabot-PRs (vorher auf aktuellen `main` bringen).
 - Nach dem Merge testet „Live-Seite testen“ die veröffentlichte Seite; ist sie rot, die Ursache beheben.
+- **CodeQL rot:** Die Funde stehen als Klartext (Regel, Datei:Zeile, Meldung) im Protokoll der Jobs `analyze (…)`, Schritt „CodeQL-Funde“, und in deren Job-Zusammenfassung – lesbar auch ohne Zugriff auf Code Scanning (z. B. per Job-Log). Die Liste enthält alle Funde des Laufs, auch schon bekannte; neu ist, was in den geänderten Dateien steht.
 - `overrides.minimatch` in `package.json` (GHSA-g3hv-75wg-m249 über ESLint) entfernen, sobald ESLint selbst `minimatch` ≥ 11.0.1 verlangt.
