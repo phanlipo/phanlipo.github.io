@@ -6,6 +6,12 @@
                  opts.levels 2–8 (steps), opts.lines 0–100 (how many lines; 0 = none)
      'coloring': black outlines on white for colouring in – no shading, small specks removed
                  opts.detail 0–100 (more lines), opts.thickness 1–5 (line width)
+     'sketch':   pencil drawing (opts.shading 0–100)     'watercolor': soft washes on paper (opts.softness 0–100)
+     'oil':      oil painting, Kuwahara (opts.brush 1–10) 'popart': four loud colours (opts.palette 1–4)
+     'halftone': coloured dots like old comic print (opts.dotSize 3–20)
+     'pixel':    big pixels, few colours (opts.pixelSize 2–30)
+     'bw':       black & white with contrast (opts.contrast 0–100)
+     'vintage':  sepia, faded, dark corners (opts.tone 0–100)
      'original': copy
 
    Edges: colour Canny – the photo is smoothed (Gaussian as three box blurs, O(n) whatever the radius), the
@@ -264,6 +270,213 @@
     return out;
   }
 
+  const lum = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
+
+  /** Pencil sketch: grey photo "colour dodged" with its blurred negative – only edges stay dark, like
+      pencil strokes; shading 0–100 lays the photo's own tones over it like hatching */
+  function sketch(rgba, w, h, opts) {
+    const shading = clamp(Number(opts.shading ?? 40), 0, 100) / 100;
+    const u = unitOf(w, h), n = w * h, g = new Float32Array(n);
+    // lifted a little: a flat black area (a dark screen) becomes paper, not a black blot
+    for (let i = 0, p = 0; i < n; i++, p += 4) g[i] = 24 + lum(rgba[p], rgba[p + 1], rgba[p + 2]) * (231 / 255);
+    const inv = new Float32Array(n);
+    for (let i = 0; i < n; i++) inv[i] = 255 - g[i];
+    const b = blur(inv, w, h, Math.max(1, u * 3));
+    const out = new Uint8ClampedArray(n * 4);
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      let d = Math.min(255, g[i] * 255 / Math.max(1, 255 - b[i]));
+      d = 255 * Math.pow(d / 255, 1.6);                         // stronger strokes
+      d *= 1 - shading * 0.5 * (1 - g[i] / 255);                  // tone in the dark parts
+      out[p] = d; out[p + 1] = d; out[p + 2] = d * 0.97; out[p + 3] = 255;   // a touch of warm paper
+    }
+    return out;
+  }
+
+  /** Kuwahara filter: every pixel takes the mean colour of the calmest of the four squares around it.
+      Edges stay sharp, texture turns into brush-like patches. O(n) for any radius: the square means come
+      from box blurs (mean of a square around its centre) read at shifted positions. */
+  function kuwahara(rgba, w, h, r) {
+    const n = w * h, [R, G, B] = channels(rgba, w, h), L = new Float32Array(n), L2 = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const l = lum(R[i], G[i], B[i]); L[i] = l; L2[i] = l * l; }
+    const half = Math.max(1, Math.round(r / 2));
+    const mean = ch => { const a = new Float32Array(n); boxH(ch, a, w, h, half); const b = new Float32Array(n); boxV(a, b, w, h, half); return b; };
+    const mR = mean(R), mG = mean(G), mB = mean(B), mL = mean(L), mL2 = mean(L2);
+    const out = new Uint8ClampedArray(n * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let best = -1, bv = Infinity;
+      for (let q = 0; q < 4; q++) {
+        const xx = clamp(x + (q & 1 ? half : -half), 0, w - 1), yy = clamp(y + (q & 2 ? half : -half), 0, h - 1);
+        const j = yy * w + xx, v = mL2[j] - mL[j] * mL[j];
+        if (v < bv) { bv = v; best = j; }
+      }
+      const p = (y * w + x) * 4;
+      out[p] = mR[best]; out[p + 1] = mG[best]; out[p + 2] = mB[best]; out[p + 3] = 255;
+    }
+    return out;
+  }
+
+  /** Oil painting: Kuwahara with the brush size, a little more colour and a soft canvas texture */
+  function oil(rgba, w, h, opts) {
+    const brush = clamp(Math.round(Number(opts.brush ?? 4)), 1, 10);
+    const u = unitOf(w, h);
+    let out = kuwahara(rgba, w, h, Math.max(2, Math.round(brush * u * 1.6)));
+    out = kuwahara(out, w, h, Math.max(2, Math.round(brush * u * 0.8)));   // second, smaller pass rounds the patches
+    const tex = paper(w, h, Math.max(0.8, u * 0.8));
+    for (let i = 0, p = 0; i < w * h; i++, p += 4) {
+      const l = lum(out[p], out[p + 1], out[p + 2]), k = 1 + 0.08 * tex[i];
+      out[p] = (l + (out[p] - l) * 1.25) * k; out[p + 1] = (l + (out[p + 1] - l) * 1.25) * k; out[p + 2] = (l + (out[p + 2] - l) * 1.25) * k;
+    }
+    return out;
+  }
+
+  /** Repeatable paper grain −1…1 (hash noise, blurred) – the same for the same size, so tests can rely on it */
+  function paper(w, h, sigma) {
+    const n = w * h, a = new Float32Array(n);
+    let s = 0x9e3779b9;
+    for (let i = 0; i < n; i++) { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; a[i] = ((s >>> 0) / 4294967296) * 2 - 1; }
+    const b = blur(a, w, h, sigma);
+    let max = 1e-6;
+    for (let i = 0; i < n; i++) max = Math.max(max, Math.abs(b[i]));
+    for (let i = 0; i < n; i++) b[i] /= max;
+    return b;
+  }
+
+  /** Watercolour: soft Kuwahara patches, lighter and paler colours, pigment pooling at the edges, paper grain */
+  function watercolor(rgba, w, h, opts) {
+    const soft = clamp(Number(opts.softness ?? 50), 0, 100) / 100;
+    const u = unitOf(w, h), n = w * h;
+    const base = kuwahara(kuwahara(rgba, w, h, Math.max(2, Math.round(u * lerp(4, 10, soft)))), w, h, Math.max(2, Math.round(u * lerp(2, 5, soft))));
+    const [R, G, B] = channels(base, w, h).map(c => blur(c, w, h, Math.max(0.8, u * lerp(0.8, 2.2, soft))));
+    const L = new Float32Array(n);
+    for (let i = 0; i < n; i++) L[i] = lum(R[i], G[i], B[i]);
+    // edge strength of the patches: the pigment collects where a wash ends
+    const Lb = blur(L, w, h, Math.max(1, u * 1.2));
+    const edge = new Float32Array(n);
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      edge[i] = Math.min(1, Math.hypot(Lb[i + 1] - Lb[i - 1], Lb[i + w] - Lb[i - w]) / 40);
+    }
+    const tex = paper(w, h, Math.max(1, u * 1.5)), out = new Uint8ClampedArray(n * 4);
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      const dark = 1 - 0.35 * edge[i], grain = 1 + 0.07 * tex[i];
+      for (let c = 0; c < 3; c++) {
+        let v = [R, G, B][c][i];
+        v = L[i] + (v - L[i]) * 1.2;            // pigment: a little more colour
+        v = 255 - (255 - v) * 0.68;              // thinned with water: lighter, no deep blacks
+        out[p + c] = v * dark * grain;
+      }
+      out[p + 3] = 255;
+    }
+    return out;
+  }
+
+  /** Pop art: the photo in four flat tones of a loud palette (thresholds from the photo's own brightness,
+      so every photo gets all four colours) */
+  const POP = [
+    [[24, 20, 74], [232, 30, 120], [255, 214, 0], [130, 230, 240]],
+    [[10, 10, 10], [220, 30, 40], [30, 90, 220], [255, 230, 40]],
+    [[60, 20, 90], [255, 100, 40], [120, 220, 90], [255, 250, 220]],
+    [[0, 70, 80], [250, 80, 160], [255, 170, 60], [250, 245, 140]],
+  ];
+  function popart(rgba, w, h, opts) {
+    const pal = POP[clamp(Math.round(Number(opts.palette ?? 1)), 1, POP.length) - 1];
+    const u = unitOf(w, h), n = w * h, L = new Float32Array(n);
+    for (let i = 0, p = 0; i < n; i++, p += 4) L[i] = lum(rgba[p], rgba[p + 1], rgba[p + 2]);
+    const Lb = blur(L, w, h, Math.max(1, u * 1.5));
+    const hist = new Uint32Array(256);
+    for (let i = 0; i < n; i++) hist[Math.min(255, Math.max(0, Math.round(Lb[i])))]++;
+    const cuts = [];
+    for (let v = 0, acc = 0, k = 1; v < 256 && k < 4; v++) { acc += hist[v]; while (k < 4 && acc >= n * k / 4) { cuts.push(v); k++; } }
+    let idx = new Uint8Array(n);
+    for (let i = 0; i < n; i++) idx[i] = Lb[i] <= cuts[0] ? 0 : Lb[i] <= cuts[1] ? 1 : Lb[i] <= cuts[2] ? 2 : 3;
+    for (let pass = 0; pass < 2; pass++) idx = majority(idx, w, h, 4);
+    const out = new Uint8ClampedArray(n * 4);
+    for (let i = 0, p = 0; i < n; i++, p += 4) { const c = pal[idx[i]]; out[p] = c[0]; out[p + 1] = c[1]; out[p + 2] = c[2]; out[p + 3] = 255; }
+    return out;
+  }
+
+  /** Halftone (old comic print): dots on white paper in a staggered grid; each dot has the colour of its
+      cell and is the larger the darker the cell is */
+  function halftone(rgba, w, h, opts) {
+    const size = clamp(Math.round(Number(opts.dotSize ?? 10)), 3, 20);
+    const u = unitOf(w, h), c = Math.max(3, size * u), n = w * h;
+    const rows = Math.ceil(h / c) + 1, cols = Math.ceil(w / c) + 2;
+    const sum = new Float32Array(rows * cols * 4);
+    const cellOf = (x, y) => { const row = Math.floor(y / c), shift = row & 1 ? c / 2 : 0; return [row, Math.floor((x + shift) / c), shift]; };
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const [row, col] = cellOf(x + 0.5, y + 0.5), k = (row * cols + col) * 4, p = (y * w + x) * 4;
+      sum[k] += rgba[p]; sum[k + 1] += rgba[p + 1]; sum[k + 2] += rgba[p + 2]; sum[k + 3]++;
+    }
+    const out = new Uint8ClampedArray(n * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const [row, col, shift] = cellOf(x + 0.5, y + 0.5), k = (row * cols + col) * 4, cnt = sum[k + 3] || 1;
+      let r = sum[k] / cnt, g = sum[k + 1] / cnt, b = sum[k + 2] / cnt;
+      const l = lum(r, g, b);
+      // ink colour: the cell's hue, darker and stronger, so light cells do not vanish
+      const k2 = l > 1 ? Math.min(1, 150 / l) : 1;
+      r = l * k2 + (r - l) * 1.4 * k2; g = l * k2 + (g - l) * 1.4 * k2; b = l * k2 + (b - l) * 1.4 * k2;
+      const rad = c * 0.62 * Math.sqrt(1 - l / 255 * 0.92);
+      const cx = (col + 0.5) * c - shift, cy = (row + 0.5) * c;
+      const cover = clamp(rad - Math.hypot(x + 0.5 - cx, y + 0.5 - cy) + 0.5, 0, 1);
+      const p = (y * w + x) * 4;
+      out[p] = 255 + (r - 255) * cover; out[p + 1] = 255 + (g - 255) * cover; out[p + 2] = 250 + (b - 250) * cover; out[p + 3] = 255;
+    }
+    return out;
+  }
+
+  /** Pixel art: big square pixels in the mean colour, each channel in six steps (like old game consoles) */
+  function pixel(rgba, w, h, opts) {
+    const size = clamp(Math.round(Number(opts.pixelSize ?? 10)), 2, 30);
+    const c = Math.max(2, Math.round(size * unitOf(w, h))), out = new Uint8ClampedArray(w * h * 4);
+    for (let by = 0; by < h; by += c) for (let bx = 0; bx < w; bx += c) {
+      const ex = Math.min(w, bx + c), ey = Math.min(h, by + c);
+      let r = 0, g = 0, b = 0, k = 0;
+      for (let y = by; y < ey; y++) for (let x = bx; x < ex; x++) { const p = (y * w + x) * 4; r += rgba[p]; g += rgba[p + 1]; b += rgba[p + 2]; k++; }
+      const q = v => Math.round(v / k / 51) * 51;
+      r = q(r); g = q(g); b = q(b);
+      for (let y = by; y < ey; y++) for (let x = bx; x < ex; x++) { const p = (y * w + x) * 4; out[p] = r; out[p + 1] = g; out[p + 2] = b; out[p + 3] = 255; }
+    }
+    return out;
+  }
+
+  /** Black & white: brightness stretched from the 1st to the 99th percentile, then contrast 0–100 (S curve) */
+  function bw(rgba, w, h, opts) {
+    const contrast = clamp(Number(opts.contrast ?? 30), 0, 100) / 100;
+    const n = w * h, L = new Float32Array(n), hist = new Uint32Array(256);
+    for (let i = 0, p = 0; i < n; i++, p += 4) { L[i] = lum(rgba[p], rgba[p + 1], rgba[p + 2]); hist[Math.round(L[i])]++; }
+    let lo = 0, hi = 255;
+    for (let v = 0, acc = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.01) { lo = v; break; } }
+    for (let v = 255, acc = 0; v >= 0; v--) { acc += hist[v]; if (acc >= n * 0.01) { hi = v; break; } }
+    if (hi - lo < 10) { lo = 0; hi = 255; }
+    const k = 1 + contrast * 4, out = new Uint8ClampedArray(n * 4);
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      const t = clamp((L[i] - lo) / (hi - lo), 0, 1);
+      // logistic S curve through (0.5, 0.5), scaled so 0 and 1 stay 0 and 1
+      const s = x => 1 / (1 + Math.exp(-k * 2 * (x - 0.5)));
+      const v = k > 1 ? (s(t) - s(0)) / (s(1) - s(0)) : t;
+      out[p] = out[p + 1] = out[p + 2] = v * 255; out[p + 3] = 255;
+    }
+    return out;
+  }
+
+  /** Vintage: sepia tones, faded blacks, dark corners (vignette) – strength 0–100 */
+  function vintage(rgba, w, h, opts) {
+    const s = clamp(Number(opts.tone ?? 70), 0, 100) / 100;
+    const out = new Uint8ClampedArray(w * h * 4), cx = w / 2, cy = h / 2, rmax = Math.hypot(cx, cy);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const p = (y * w + x) * 4, r = rgba[p], g = rgba[p + 1], b = rgba[p + 2];
+      // classic sepia matrix, mixed with the original by the strength
+      let sr = 0.393 * r + 0.769 * g + 0.189 * b, sg = 0.349 * r + 0.686 * g + 0.168 * b, sb = 0.272 * r + 0.534 * g + 0.131 * b;
+      sr = r + (sr - r) * s; sg = g + (sg - g) * s; sb = b + (sb - b) * s;
+      // faded: black becomes a dark brown-grey
+      const fade = 28 * s;
+      sr = fade + sr * (1 - fade / 255); sg = fade * 0.9 + sg * (1 - fade / 255); sb = fade * 0.75 + sb * (1 - fade / 255);
+      const d = Math.hypot(x - cx, y - cy) / rmax, v = 1 - s * 0.55 * Math.pow(d, 2.2);
+      out[p] = sr * v; out[p + 1] = sg * v; out[p + 2] = sb * v; out[p + 3] = 255;
+    }
+    return out;
+  }
+
   /** Transparent parts become white paper (PNG logos, screenshots) */
   function flatten(rgba) {
     const out = new Uint8ClampedArray(rgba.length);
@@ -274,13 +487,27 @@
     return out;
   }
 
-  const FILTERS = ['original', 'comic', 'coloring'];
+  /* Filters in the order of the app, with their sliders: [key, min, max, step, default, unit]
+     ('%' = percent, 'palette' = palette number). Keys are unique over all filters (flat settings object). */
+  const SLIDERS = {
+    original: [],
+    coloring: [['detail', 0, 100, 5, 40, '%'], ['thickness', 1, 5, 1, 2, '']],
+    comic: [['levels', 2, 8, 1, 5, ''], ['lines', 0, 100, 5, 50, '%']],
+    sketch: [['shading', 0, 100, 5, 40, '%']],
+    watercolor: [['softness', 0, 100, 5, 50, '%']],
+    oil: [['brush', 1, 10, 1, 4, '']],
+    popart: [['palette', 1, 4, 1, 1, 'palette']],
+    halftone: [['dotSize', 3, 20, 1, 10, '']],
+    pixel: [['pixelSize', 2, 30, 1, 10, '']],
+    bw: [['contrast', 0, 100, 5, 30, '%']],
+    vintage: [['tone', 0, 100, 5, 70, '%']],
+  };
+  const FILTERS = Object.keys(SLIDERS);
+  const RUN = { coloring, comic, sketch, watercolor, oil, popart, halftone, pixel, bw, vintage };
   function apply(rgba, w, h, filter, opts = {}) {
     const flat = flatten(rgba);
-    if (filter === 'comic') return comic(flat, w, h, opts);
-    if (filter === 'coloring') return coloring(flat, w, h, opts);
-    return flat;
+    return RUN[filter] ? RUN[filter](flat, w, h, opts) : flat;
   }
 
-  root.PhotoFilters = { FILTERS, apply, blur, canny, removeSpecks, dilate };
+  root.PhotoFilters = { FILTERS, SLIDERS, apply, blur, canny, removeSpecks, dilate };
 })(typeof self !== 'undefined' ? self : globalThis);

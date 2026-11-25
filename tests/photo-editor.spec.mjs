@@ -8,6 +8,8 @@ import { test, expect, switchLang } from './helpers.mjs';
 
 const URL_ = '/photo-editor/';
 const LS = 'photo-editor.settings.v1';
+// Slider defaults of all filters (as in the help: middle values, palette 1)
+const DEFAULTS = { detail: 40, thickness: 2, levels: 5, lines: 50, shading: 40, softness: 50, brush: 4, palette: 1, dotSize: 10, pixelSize: 10, contrast: 30, tone: 70 };
 
 /** Draws the test photo in the page and returns it as a PNG file for setInputFiles */
 async function photo(page, { w = 600, h = 400, transparent = false, name = 'foto.png' } = {}) {
@@ -111,8 +113,9 @@ test('colouring page: closed black outline on white, also between colours of the
 test('comic: colours kept, lines only when wanted', async ({ page }) => {
   await open(page);
   await page.click('#filters [data-filter="comic"]');
-  await expect(page.locator('#optComic')).toBeVisible();
-  await expect(page.locator('#optColoring')).toBeHidden();
+  await expect(page.locator('#levels')).toBeVisible();
+  await expect(page.locator('#lines')).toBeVisible();
+  await expect(page.locator('#detail')).toBeHidden();
   await shows(page, 'comic', { levels: 5, lines: 50 });
   const [r1, g1] = await px(page, 300, 200), [r2, g2] = await px(page, 40, 40);
   expect(r1 - g1).toBeGreaterThan(80);    // red
@@ -202,7 +205,7 @@ test('photo, filter and sliders survive a reload', async ({ page }) => {
   await expect(page.locator('#levels')).toHaveValue('3');
   await shows(page, 'comic', { levels: 3 });
   expect(await page.evaluate(k => JSON.parse(localStorage.getItem(k)), LS))
-    .toEqual({ filter: 'comic', levels: 3, lines: 50, detail: 40, thickness: 2 });
+    .toEqual({ filter: 'comic', ...DEFAULTS, levels: 3 });
 });
 
 test('discard removes the kept photo; undo brings it back', async ({ page }) => {
@@ -228,6 +231,100 @@ test('a broken kept photo is dropped instead of failing on every start', async (
   await page.setInputFiles('#inPick', { name: 'x.png', mimeType: 'image/png', buffer: Buffer.from('nope') });
   await expect(page.locator('#status')).toHaveText('Dieses Foto lässt sich nicht öffnen.');
   await expect(page.locator('#resultCard')).toBeHidden();
+});
+
+test('every filter: its own sliders only, a picture comes out', async ({ page }) => {
+  await open(page);
+  const own = { original: [], coloring: ['detail', 'thickness'], comic: ['levels', 'lines'], sketch: ['shading'], watercolor: ['softness'],
+    oil: ['brush'], popart: ['palette'], halftone: ['dotSize'], pixel: ['pixelSize'], bw: ['contrast'], vintage: ['tone'] };
+  await expect(page.locator('#filters button')).toHaveCount(Object.keys(own).length);
+  for (const [f, keys] of Object.entries(own)) {
+    await page.click(`#filters [data-filter="${f}"]`);
+    await expect(page.locator(`#filters [data-filter="${f}"]`)).toHaveAttribute('aria-pressed', 'true');
+    await shows(page, f);
+    await expect(page.locator('#sliders input:visible')).toHaveCount(keys.length);
+    for (const k of keys) await expect(page.locator('#' + k)).toBeVisible();
+    await expect(page.locator('#resetRow')).toBeVisible({ visible: keys.length > 0 });
+    expect((await stats(page)).w, f).toBe(600);
+  }
+});
+
+test('sketch, black & white: grey; vintage: sepia values computed by hand', async ({ page }) => {
+  await open(page);
+  // Sketch: flat areas are paper, the outline is drawn
+  await page.click('#filters [data-filter="sketch"]');
+  await shows(page, 'sketch');
+  // shading 40 %: paper × (1 − 0,4·0,5·(1 − g/255)) with the lifted grey g = 24 + L·231/255 of the red disc
+  const L = 0.299 * 224 + 0.587 * 58 + 0.114 * 58, gl = 24 + L * 231 / 255;
+  const [sr, sg, sb] = await px(page, 300, 200);
+  expect(Math.abs(sr - 255 * (1 - 0.2 * (1 - gl / 255)))).toBeLessThanOrEqual(1.5);
+  expect(sg).toBe(sr); expect(Math.abs(sb - sr * 0.97)).toBeLessThanOrEqual(1);
+  // the outline is drawn (red and green differ only by 6 in brightness, so the stroke is faint)
+  expect((await stats(page, [394, 196, 406, 204])).boxMin).toBeLessThan(sr - 5);
+  // without shading flat areas are white paper
+  await setSlider(page, 'shading', 0);
+  await shows(page, 'sketch', { shading: 0 });
+  expect((await px(page, 300, 200)).slice(0, 2)).toEqual([255, 255]);
+  // Black & white: the disc (brightness 108) stays darker than the green (114), all grey
+  await page.click('#filters [data-filter="bw"]');
+  await shows(page, 'bw');
+  expect((await stats(page)).grey).toBe(true);
+  expect((await px(page, 300, 200))[0]).toBeLessThan((await px(page, 40, 40))[0]);
+  // Vintage at 100 %: sepia matrix of (224, 58, 58), blacks lifted by 28, no vignette in the centre
+  await page.click('#filters [data-filter="vintage"]');
+  await setSlider(page, 'tone', 100);
+  await expect(page.locator('#toneOut')).toHaveText('100 %');
+  await shows(page, 'vintage', { tone: 100 });
+  const sep = [0.393 * 224 + 0.769 * 58 + 0.189 * 58, 0.349 * 224 + 0.686 * 58 + 0.168 * 58, 0.272 * 224 + 0.534 * 58 + 0.131 * 58];
+  const want = [28, 28 * 0.9, 28 * 0.75].map((f, i) => f + sep[i] * (1 - 28 / 255));
+  const got = await px(page, 300, 200);
+  got.forEach((v, i) => expect(Math.abs(v - want[i]), `channel ${i}`).toBeLessThanOrEqual(1.5));
+  // the corner is darker (vignette): green (58, 154, 58) through the same matrix would be brighter than this
+  expect((await px(page, 1, 1))[1]).toBeLessThan(0.349 * 58 + 0.686 * 154 + 0.168 * 58);
+});
+
+test('pixel, pop art, halftone, oil, watercolour', async ({ page }) => {
+  await open(page);
+  // Pixel: 10 × 0,6 = 6 px squares, each channel in steps of 51 – the disc (224, 58, 58) becomes (204, 51, 51)
+  await page.click('#filters [data-filter="pixel"]');
+  await shows(page, 'pixel');
+  expect(await px(page, 300, 198)).toEqual([204, 51, 51]);
+  expect(await px(page, 305, 203)).toEqual([204, 51, 51]);
+  const block = await page.evaluate(() => {
+    const d = document.getElementById('view').getContext('2d').getImageData(0, 0, 6, 6).data;
+    return new Set(Array.from({ length: 36 }, (_, i) => d.slice(i * 4, i * 4 + 3).join())).size;
+  });
+  expect(block).toBe(1);
+  // Pop art: only colours of the chosen palette; disc and background differ
+  await page.click('#filters [data-filter="popart"]');
+  await expect(page.locator('#paletteOut')).toHaveText('Knallig');
+  await setSlider(page, 'palette', 2);
+  await expect(page.locator('#paletteOut')).toHaveText('Klassisch');
+  await shows(page, 'popart', { palette: 2 });
+  const pal = ['10,10,10', '220,30,40', '30,90,220', '255,230,40'];
+  const colours = await page.evaluate(() => {
+    const c = document.getElementById('view'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data, set = new Set();
+    for (let p = 0; p < d.length; p += 4) set.add(`${d[p]},${d[p + 1]},${d[p + 2]}`);
+    return [...set];
+  });
+  for (const c of colours) expect(pal).toContain(c);
+  expect((await px(page, 300, 200)).join()).not.toBe((await px(page, 40, 40)).join());
+  // Halftone: white paper between the dots
+  await page.click('#filters [data-filter="halftone"]');
+  await shows(page, 'halftone');
+  expect(await page.evaluate(() => {
+    const c = document.getElementById('view'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let paper = 0; for (let p = 0; p < d.length; p += 4) if (d[p] === 255 && d[p + 1] === 255 && d[p + 2] === 250) paper++;
+    return paper / (d.length / 4);
+  })).toBeGreaterThan(0.1);
+  // Oil and watercolour keep red red and green green
+  for (const f of ['oil', 'watercolor']) {
+    await page.click(`#filters [data-filter="${f}"]`);
+    await shows(page, f);
+    const [r1, g1] = await px(page, 300, 200), [r2, g2] = await px(page, 40, 40);
+    expect(r1 - g1, f).toBeGreaterThan(50);
+    expect(g2 - r2, f).toBeGreaterThan(30);
+  }
 });
 
 test.describe('English', () => {
