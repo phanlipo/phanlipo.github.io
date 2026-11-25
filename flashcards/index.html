@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Karteikarten</title>
+<meta name="description" content="Karteikarten in Stapeln anlegen und mit dem Lernkasten (Leitner-System) wiederholen – Stapel als JSON-Datei laden und speichern.">
+<meta name="tool:tags" content="Alltag, Lernen">
+<meta name="tool:features" content="Datei öffnen, KI-Agent">
+<meta name="tool:webmcp" content="list_decks, get_cards, add_cards">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann die Stapel auflisten, die Karten eines Stapels lesen und neue Karten in einen Stapel eintragen (fehlt der Stapel, wird er angelegt). Neue Karten erscheinen hier in der App.">
+<meta name="tool:webmcp-help-en" content="An AI agent can list the decks, read the cards of a deck and add new cards to a deck (a missing deck is created). New cards appear here in the app.">
+<meta name="tool:icon" content="cards">
+<meta name="tool:color" content="#0f766e">
+<meta name="tool:short-name" content="Karteikarten">
+<meta name="tool:title-en" content="Flashcards">
+<meta name="tool:description-en" content="Make flashcards in decks and review them with the learning box (Leitner system) – load and save decks as JSON files.">
+<meta name="tool:short-name-en" content="Flashcards">
+<meta name="tool:storage" content="flashcards.">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-c7bsknWVKwT8LHEd1DCgkR+9e+t8nP6VzGK61rET9Gc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Karteikarten">
+<meta name="theme-color" content="#0f766e">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#0f766e;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#5eead4;--accent-text:#042f2e}}
+main{max-width:760px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+.or{margin:0;text-align:center;color:var(--muted);font-size:14px}
+#deckView,#learn,#learnRun,#setup{display:grid;gap:12px}
+#deckView[hidden],#learn[hidden],#learnRun[hidden],#setup[hidden]{display:none}
+#deckView>h2,#learn>h2,#setup>h2{margin:0}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.boxes{margin:0;color:var(--muted);font-size:14px}
+.deck-title{display:flex;align-items:center;gap:8px;min-width:0}
+.deck-title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.list-rows .meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.learn-head{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+.learn-head progress{flex:1}
+.flashcard{display:flex;flex-direction:column;justify-content:center;gap:12px;width:100%;min-height:220px;margin:0;padding:20px;
+  border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2);color:var(--text);font:inherit;text-align:center;cursor:pointer}
+.flashcard:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.flashcard .side-label{font-size:13px;color:var(--muted)}
+.flashcard .q,.flashcard .a{font-size:22px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
+.flashcard .answer{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--border);padding-top:12px}
+.flashcard .a{font-weight:600;color:var(--accent)}
+.flashcard[aria-expanded="false"] .answer{display:none}
+.answer-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.answer-row .btn{width:100%}
+.result{font-size:20px;font-weight:600;margin:0;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Karteikarten</span></h1>
+  <p class="sub" data-i18n="sub">Lernen mit dem Lernkasten.</p>
+</header>
+
+<main>
+  <!-- First start: only the setup (AGENTS.md "Einrichtung vs. Inhalt") -->
+  <section class="card" id="setup" aria-labelledby="h-setup" hidden>
+    <h2 id="h-setup" data-i18n="setupH">Ersten Stapel anlegen</h2>
+    <form id="setupForm" novalidate>
+      <div class="form-field">
+        <label for="setupName" data-i18n="deckName">Name des Stapels</label>
+        <input type="text" id="setupName" maxlength="80" autocomplete="off" enterkeyhint="done" placeholder="z. B. Englisch Vokabeln" data-i18n-attr="placeholder:deckNamePh">
+      </div>
+      <p class="form-error" id="setupError" role="alert"></p>
+      <button type="submit" class="btn primary block"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="createDeck">Stapel anlegen</span></button>
+    </form>
+    <p class="or" data-i18n="or">oder</p>
+    <label class="dropzone" id="drop">
+      <input type="file" id="fileSetup" class="sr-only js-import" accept=".json,application/json">
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-upload"/></svg>
+      <strong data-i18n="pickJson">JSON-Datei laden</strong>
+      <span class="dz-hint" data-i18n="pickJsonHint">oder hierher ziehen – Aufbau in der Anleitung</span>
+    </label>
+    <button type="button" class="btn block" id="btnExample"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-text"/></svg><span data-i18n="example">Beispielstapel laden</span></button>
+  </section>
+
+  <section class="card" id="deckView" aria-labelledby="h-deck" hidden>
+    <div class="chips wrap" id="deckChips" role="group" aria-label="Stapel" data-i18n-attr="aria-label:decks"></div>
+    <h2 id="h-deck" class="deck-title"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#cards"/></svg><span id="deckName"></span></h2>
+    <div class="stats">
+      <div class="stat-box"><b id="stDue">0</b><span data-i18n="st.due">Fällig</span></div>
+      <div class="stat-box"><b id="stNew">0</b><span data-i18n="st.new">Neu</span></div>
+      <div class="stat-box"><b id="stTotal">0</b><span data-i18n="st.total">Karten</span></div>
+    </div>
+    <p class="boxes" id="boxes"></p>
+    <p class="notice info" id="noneDue" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#circle-check"/></svg><span id="noneDueText"></span></p>
+    <button type="button" class="btn primary block" id="btnLearn"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg><span id="btnLearnLabel"></span></button>
+    <button type="button" class="btn block" id="btnPractice" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-shuffle"/></svg><span data-i18n="practiceAll">Alle Karten üben</span></button>
+    <p class="notice info" id="noCardsHint" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#info-circle"/></svg><span data-i18n="noCards">Noch keine Karten – lege unten die erste an.</span></p>
+  </section>
+
+  <section class="card" id="addCard" aria-labelledby="h-add" hidden>
+    <h2 id="h-add" data-i18n="addH">Karte hinzufügen</h2>
+    <form id="addForm" novalidate>
+      <div class="form-field">
+        <label for="addFront" data-i18n="front">Vorderseite (Frage)</label>
+        <textarea id="addFront" maxlength="2000" rows="2"></textarea>
+      </div>
+      <div class="form-field">
+        <label for="addBack" data-i18n="back">Rückseite (Antwort)</label>
+        <textarea id="addBack" maxlength="2000" rows="2"></textarea>
+      </div>
+      <p class="form-error" id="addError" role="alert"></p>
+      <div class="row"><button type="submit" class="btn"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="addBtn">Hinzufügen</span></button></div>
+    </form>
+  </section>
+
+  <section class="card" id="cardList" aria-labelledby="h-cards" hidden>
+    <h2 id="h-cards" data-i18n="cardsH">Karten</h2>
+    <div class="form-field">
+      <label for="search" data-i18n="search">Karten durchsuchen</label>
+      <input type="search" id="search" autocomplete="off" enterkeyhint="search" maxlength="80">
+    </div>
+    <ul class="list-rows" id="cards"></ul>
+    <div class="row"><button type="button" class="btn" id="btnMore" hidden></button></div>
+  </section>
+
+  <section class="card" id="learn" aria-labelledby="h-learn" hidden>
+    <h2 id="h-learn" class="deck-title"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#cards"/></svg><span id="learnDeck"></span></h2>
+    <div id="learnRun">
+      <div class="learn-head"><progress id="learnProgress" max="1" value="0" aria-labelledby="learnCount"></progress><span id="learnCount"></span></div>
+      <button type="button" class="flashcard" id="flashcard" aria-expanded="false" aria-describedby="flipHint">
+        <span class="side-label" id="qLabel"></span>
+        <span class="q" id="qText"></span>
+        <span class="answer"><span class="side-label" id="aLabel"></span><span class="a" id="aText"></span></span>
+      </button>
+      <p class="sr-only" id="flipHint" data-i18n="flipHint">Tippen dreht die Karte um.</p>
+      <button type="button" class="btn primary block" id="btnFlip"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#eye"/></svg><span data-i18n="flip">Antwort zeigen</span></button>
+      <div class="answer-row" id="answerRow" hidden>
+        <button type="button" class="btn" id="btnWrong"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="wrong">Nicht gewusst</span></button>
+        <button type="button" class="btn primary" id="btnRight"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#check"/></svg><span data-i18n="right">Gewusst</span></button>
+      </div>
+    </div>
+    <div id="learnDone" hidden>
+      <div class="empty-state"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#circle-check"/></svg><p class="result" id="resultText" role="status"></p></div>
+    </div>
+    <button type="button" class="btn block" id="btnStop"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg><span id="btnStopLabel"></span></button>
+  </section>
+</main>
+
+<div class="menu-list" data-menu id="menuActions">
+  <button type="button" class="js-pick"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#folder-open"/></svg><span data-i18n="importJson">JSON-Datei laden</span></button>
+  <button type="button" id="btnExport"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="exportDeck">Stapel als JSON speichern</span></button>
+  <button type="button" id="btnExportAll"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="exportAll">Alle Stapel als JSON speichern</span></button>
+  <button type="button" id="btnShare" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="shareDeck">Stapel teilen …</span></button>
+  <button type="button" id="btnResetProgress" class="danger"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="resetProgress">Lernstand des Stapels zurücksetzen</span></button>
+</div>
+<input type="file" id="fileMenu" class="js-import" accept=".json,application/json" hidden>
+
+<details class="card" data-menu data-menu-page data-icon="cards" id="manage">
+  <summary data-i18n="manageH">Stapel verwalten</summary>
+  <ul class="list-rows" id="deckList"></ul>
+  <div class="row"><button type="button" class="btn" id="btnNewDeck"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="newDeck">Neuer Stapel</span></button></div>
+</details>
+
+<details class="card" data-menu data-menu-page data-icon="settings" id="settingsCard">
+  <summary data-i18n="settingsH">Einstellungen</summary>
+  <p class="form-hint" id="dirLabel" data-i18n="direction">Abfragen</p>
+  <div class="seg" role="group" aria-labelledby="dirLabel" id="dir">
+    <button type="button" aria-pressed="true" data-dir="front" data-i18n="dir.front">Vorderseite</button>
+    <button type="button" aria-pressed="false" data-dir="back" data-i18n="dir.back">Rückseite</button>
+    <button type="button" aria-pressed="false" data-dir="mixed" data-i18n="dir.mixed">Gemischt</button>
+  </div>
+  <label class="check"><input type="checkbox" id="optShuffle"><span data-i18n="shuffle">Reihenfolge mischen</span></label>
+  <label class="check"><input type="checkbox" id="optRepeat"><span data-i18n="repeat">Nicht gewusste Karten in der Runde wiederholen</span></label>
+</details>
+
+<dialog class="dialog" id="editDlg" aria-labelledby="editH">
+  <form id="editForm" novalidate>
+    <div class="dialog-head"><h2 id="editH" data-i18n="editH">Karte bearbeiten</h2><button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close; title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+    <div class="dialog-body">
+      <div class="form-field">
+        <label for="editFront" data-i18n="front">Vorderseite (Frage)</label>
+        <textarea id="editFront" maxlength="2000" rows="3"></textarea>
+      </div>
+      <div class="form-field">
+        <label for="editBack" data-i18n="back">Rückseite (Antwort)</label>
+        <textarea id="editBack" maxlength="2000" rows="3"></textarea>
+      </div>
+      <p class="form-hint" id="editBox"></p>
+      <p class="form-error" id="editError" role="alert"></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn danger" id="btnDelCard"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="delete">Löschen</span></button>
+      <button type="submit" class="btn primary"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#check"/></svg><span data-i18n="save">Speichern</span></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Karteikarten mit Frage und Antwort anlegen und so wiederholen, dass schwierige Karten öfter und gut gekonnte seltener drankommen.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><strong>Stapel</strong> anlegen, laden, umbenennen oder löschen unter ☰ → <em>Stapel verwalten</em>. Bei mehreren Stapeln wechselst du oben auf der Seite.</li>
+    <li><strong>Karten</strong> unter <em>Karte hinzufügen</em> eintragen; Tippen auf eine Karte in der Liste bearbeitet oder löscht sie.</li>
+    <li><strong>Lernen:</strong> Frage lesen, Antwort überlegen, Karte antippen bzw. <em>Antwort zeigen</em>, dann ehrlich <em>Gewusst</em> oder <em>Nicht gewusst</em> wählen.</li>
+    <li>Unter <em>Einstellungen</em>: ob die Vorderseite, die Rückseite oder gemischt abgefragt wird, ob gemischt wird und ob nicht gewusste Karten in derselben Runde noch einmal kommen.</li>
+  </ul>
+  <h3>Lernkasten (Leitner-System)</h3>
+  <p>Jede Karte liegt in einem von fünf Fächern. Neue und nicht gewusste Karten kommen in Fach 1 und sind sofort wieder dran. Gewusst rückt eine Karte ein Fach weiter; sie ist dann wieder fällig nach: Fach 2 – 1 Tag, Fach 3 – 3 Tage, Fach 4 – 7 Tage, Fach 5 – 21 Tage (bleibt in Fach 5). <em>Lernen</em> fragt nur fällige Karten ab, <em>Alle Karten üben</em> alle – auch dann zählen die Antworten.</p>
+  <h3>JSON-Dateien laden und speichern</h3>
+  <p>Unter ☰ speicherst du den aktuellen Stapel oder alle Stapel als JSON-Datei (mit Lernstand) und lädst solche Dateien wieder. Beim Laden kommt ein Stapel mit gleichem Namen zu dem vorhandenen dazu; Karten mit gleicher Vorder- und Rückseite werden übersprungen, ihr Lernstand bleibt. Aufbau:</p>
+  <pre class="mono">{
+  "format": "flashcards",
+  "formatVersion": 1,
+  "decks": [
+    { "name": "Englisch",
+      "cards": [
+        { "front": "Hund", "back": "dog" },
+        { "front": "Katze", "back": "cat", "box": 2, "due": "2026-12-01T00:00:00.000Z" }
+      ] }
+  ]
+}</pre>
+  <p><code>box</code> (Fach 0–5, 0 = neu) und <code>due</code> (fällig ab) sind freiwillig. Auch einfachere Dateien werden angenommen: ein einzelner Stapel <code>{ "name": …, "cards": […] }</code> oder nur eine Liste von Karten. Statt <code>front</code>/<code>back</code> gehen auch <code>question</code>/<code>answer</code>, <code>q</code>/<code>a</code>, <code>term</code>/<code>definition</code> oder Paare <code>["Hund", "dog"]</code> – praktisch, um Karten mit einem anderen Programm oder einer KI zu erzeugen. Höchstens 5 MB je Datei, 100 Stapel, 5000 Karten je Stapel und 2000 Zeichen je Seite.</p>
+  <h3>Gespeichert</h3>
+  <p>Stapel, Karten, Lernstand und Einstellungen bleiben nur in diesem Browser gespeichert (sichern und übertragen unter „Daten sichern“ oder als JSON-Datei). Nichts wird an einen Server geschickt; die App läuft auch offline.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Make flashcards with a question and an answer and review them so that hard cards come up more often and well-known ones less often.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><strong>Decks:</strong> create, load, rename or delete them under ☰ → <em>Manage decks</em>. With several decks you switch at the top of the page.</li>
+    <li><strong>Cards:</strong> enter them under <em>Add card</em>; tapping a card in the list edits or deletes it.</li>
+    <li><strong>Learning:</strong> read the question, think of the answer, tap the card or <em>Show answer</em>, then honestly choose <em>Knew it</em> or <em>Didn’t know</em>.</li>
+    <li>Under <em>Settings</em>: whether the front, the back or both mixed are asked, whether the order is shuffled and whether unknown cards come again in the same round.</li>
+  </ul>
+  <h3>Learning box (Leitner system)</h3>
+  <p>Every card sits in one of five boxes. New and unknown cards go to box 1 and are due right away. Knowing a card moves it one box up; it is due again after: box 2 – 1 day, box 3 – 3 days, box 4 – 7 days, box 5 – 21 days (stays in box 5). <em>Learn</em> asks only due cards, <em>Practise all cards</em> all of them – the answers count there too.</p>
+  <h3>Loading and saving JSON files</h3>
+  <p>Under ☰ you save the current deck or all decks as a JSON file (with progress) and load such files again. When loading, a deck with the same name is added to the existing one; cards with the same front and back are skipped and keep their progress. Layout:</p>
+  <pre class="mono">{
+  "format": "flashcards",
+  "formatVersion": 1,
+  "decks": [
+    { "name": "English",
+      "cards": [
+        { "front": "Hund", "back": "dog" },
+        { "front": "Katze", "back": "cat", "box": 2, "due": "2026-12-01T00:00:00.000Z" }
+      ] }
+  ]
+}</pre>
+  <p><code>box</code> (box 0–5, 0 = new) and <code>due</code> (due from) are optional. Simpler files are accepted too: a single deck <code>{ "name": …, "cards": […] }</code> or just a list of cards. Instead of <code>front</code>/<code>back</code> you may use <code>question</code>/<code>answer</code>, <code>q</code>/<code>a</code>, <code>term</code>/<code>definition</code> or pairs <code>["Hund", "dog"]</code> – handy for making cards with another program or an AI. At most 5 MB per file, 100 decks, 5000 cards per deck and 2000 characters per side.</p>
+  <h3>Stored</h3>
+  <p>Decks, cards, progress and settings stay only in this browser (back them up or move them under “Back up data” or as a JSON file). Nothing is sent to a server; the app also works offline.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann die Stapel auflisten, die Karten eines Stapels lesen und neue Karten in einen Stapel eintragen (fehlt der Stapel, wird er angelegt). Neue Karten erscheinen hier in der App. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can list the decks, read the cards of a deck and add new cards to a deck (a missing deck is created). New cards appear here in the app. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 1a843b39c1d9</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{learnN:'Lernen ({n} fällig)',learnNone:'Lernen',nextDue:'Heute ist nichts mehr fällig. Nächste Karte: {date}.',allDone:'Alle Karten sind gelernt.',
+    boxes:'Fach 1: {b1} · Fach 2: {b2} · Fach 3: {b3} · Fach 4: {b4} · Fach 5: {b5}',boxOf:'Fach {box}',boxNew:'neu',dueOn:'fällig {date}',
+    cardOf:'Karte {i} von {n}',qFront:'Vorderseite',qBack:'Rückseite',result:'{right} von {n} gewusst',stop:'Beenden',back:'Zurück zum Stapel',
+    more:'Weitere {n} zeigen',noMatch:'Keine passende Karte.',empty:'Noch keine Karten.',deckMeta:'{n} Karten · {due} fällig',
+    nameMissing:'Bitte einen Namen eingeben.',nameTaken:'Einen Stapel mit diesem Namen gibt es schon.',tooManyDecks:'Höchstens 100 Stapel.',
+    frontMissing:'Bitte Vorder- und Rückseite ausfüllen.',duplicate:'Diese Karte gibt es schon im Stapel.',tooManyCards:'Höchstens 5000 Karten je Stapel.',
+    added:'Karte hinzugefügt',saved:'Gespeichert',cardDeleted:'Karte gelöscht',deckDeleted:'Stapel „{name}“ gelöscht',
+    renameQ:'Neuer Name für „{name}“:',newDeckQ:'Name des neuen Stapels:',rename:'Umbenennen: {name}',del:'Löschen: {name}',
+    resetQ:'Lernstand aller {n} Karten in „{name}“ zurücksetzen? Alle Karten gelten dann wieder als neu.',resetDone:'Lernstand zurückgesetzt',
+    imported:'{decks} Stapel, {cards} Karten geladen',importedSkip:'{decks} Stapel, {cards} Karten geladen ({skip} schon vorhanden)',
+    importErr:'Die Datei ist keine passende JSON-Datei mit Karteikarten.',importBig:'Die Datei ist zu groß (höchstens 5 MB).',
+    importLimit:'Nicht alles geladen: höchstens 100 Stapel und 5000 Karten je Stapel.',storeFull:'Speicher voll – nicht gespeichert. Bitte Stapel als JSON sichern und alte löschen.',
+    exampleName:'Beispiel: Hauptstädte',shareErr:'Teilen nicht möglich',
+    'mcp.add':'Karten eingetragen','mcp.list':'Stapel gelesen','mcp.get':'Karten gelesen'},
+  en:{title:'Flashcards',sub:'Learning with the learning box.',setupH:'Create your first deck',deckName:'Name of the deck',deckNamePh:'e.g. French vocabulary',
+    createDeck:'Create deck',or:'or',pickJson:'Load JSON file',pickJsonHint:'or drop it here – layout in the help',example:'Load example deck',
+    decks:'Decks','st.due':'Due','st.new':'New','st.total':'Cards',practiceAll:'Practise all cards',noCards:'No cards yet – add the first one below.',
+    addH:'Add card',front:'Front (question)',back:'Back (answer)',addBtn:'Add',cardsH:'Cards',search:'Search cards',
+    flipHint:'Tapping turns the card over.',flip:'Show answer',wrong:'Didn’t know',right:'Knew it',
+    importJson:'Load JSON file',exportDeck:'Save deck as JSON',exportAll:'Save all decks as JSON',shareDeck:'Share deck …',resetProgress:'Reset progress of the deck',
+    manageH:'Manage decks',newDeck:'New deck',settingsH:'Settings',direction:'Ask',
+    'dir.front':'Front','dir.back':'Back','dir.mixed':'Mixed',shuffle:'Shuffle the order',repeat:'Repeat unknown cards in the round',
+    editH:'Edit card',close:'Close',delete:'Delete',save:'Save',
+    learnN:'Learn ({n} due)',learnNone:'Learn',nextDue:'Nothing more is due today. Next card: {date}.',allDone:'All cards are learnt.',
+    boxes:'Box 1: {b1} · Box 2: {b2} · Box 3: {b3} · Box 4: {b4} · Box 5: {b5}',boxOf:'Box {box}',boxNew:'new',dueOn:'due {date}',
+    cardOf:'Card {i} of {n}',qFront:'Front',qBack:'Back',result:'Knew {right} of {n}',stop:'Stop',
+    more:'Show {n} more',noMatch:'No matching card.',empty:'No cards yet.',deckMeta:'{n} cards · {due} due',
+    nameMissing:'Please enter a name.',nameTaken:'There already is a deck with this name.',tooManyDecks:'At most 100 decks.',
+    frontMissing:'Please fill in front and back.',duplicate:'This card is already in the deck.',tooManyCards:'At most 5000 cards per deck.',
+    added:'Card added',saved:'Saved',cardDeleted:'Card deleted',deckDeleted:'Deck “{name}” deleted',
+    renameQ:'New name for “{name}”:',newDeckQ:'Name of the new deck:',rename:'Rename: {name}',del:'Delete: {name}',
+    resetQ:'Reset the progress of all {n} cards in “{name}”? All cards then count as new again.',resetDone:'Progress reset',
+    imported:'Loaded {decks} decks, {cards} cards',importedSkip:'Loaded {decks} decks, {cards} cards ({skip} already there)',
+    importErr:'The file is not a suitable JSON file with flashcards.',importBig:'The file is too large (at most 5 MB).',
+    importLimit:'Not everything loaded: at most 100 decks and 5000 cards per deck.',storeFull:'Storage full – not saved. Please save decks as JSON and delete old ones.',
+    exampleName:'Example: capitals',shareErr:'Sharing not possible',
+    'mcp.add':'cards added','mcp.list':'decks read','mcp.get':'cards read'}
+});
+const t=Tools.t, $=Tools.$;
+
+/* ---------- Data ----------
+   flashcards.decks.v1    { decks: [{ id, name, cards: [{ id, front, back, box, due }] }] }
+     box 0 = new (never answered), 1–5 = box of the learning box; due = time in ms from which the card is asked again
+   flashcards.settings.v1 { current, dir: 'front'|'back'|'mixed', shuffle, repeat }
+   File format (export/import): { format: 'flashcards', formatVersion: 1, decks: [{ name, cards: [{ front, back, box, due (ISO) }] }] } */
+const LS_DECKS='flashcards.decks.v1', LS_SET='flashcards.settings.v1';
+const FORMAT='flashcards', FORMAT_VERSION=1;
+const MAX_DECKS=100, MAX_CARDS=5000, MAX_TEXT=2000, MAX_NAME=80, MAX_FILE=5*1024*1024, PAGE=50;
+const INTERVAL_DAYS=[0,0,1,3,7,21]; // days until due again after moving into box i (from the start of today) // due again after moving into box i
+const DAY=86400000;
+
+const str=(v,max)=>typeof v==='string'?v.trim().slice(0,max):(typeof v==='number'&&Number.isFinite(v)?String(v).slice(0,max):'');
+const keyOf=c=>c.front+'\u0000'+c.back;
+function cleanCard(c){
+  if(!c||typeof c!=='object')return null;
+  const front=str(c.front,MAX_TEXT), back=str(c.back,MAX_TEXT);
+  if(!front||!back)return null;
+  const box=Number.isInteger(c.box)&&c.box>=0&&c.box<=5?c.box:0;
+  const due=Number.isFinite(c.due)?c.due:0;
+  return {id:typeof c.id==='string'&&c.id?c.id:Tools.uid('c'),front,back,box,due};
+}
+function cleanStore(s){
+  const out={decks:[]};
+  for(const d of (s&&Array.isArray(s.decks)?s.decks:[])){
+    if(!d||typeof d!=='object')continue;
+    const name=str(d.name,MAX_NAME); if(!name)continue;
+    out.decks.push({id:typeof d.id==='string'&&d.id?d.id:Tools.uid('d'),name,cards:(Array.isArray(d.cards)?d.cards:[]).map(cleanCard).filter(Boolean).slice(0,MAX_CARDS)});
+  }
+  out.decks=out.decks.slice(0,MAX_DECKS);
+  return out;
+}
+const store=cleanStore(Tools.load(LS_DECKS,{decks:[]}));
+const set=Object.assign({current:null,dir:'front',shuffle:true,repeat:true},Tools.load(LS_SET,{}));
+if(!['front','back','mixed'].includes(set.dir))set.dir='front';
+function save(){ if(!Tools.save(LS_DECKS,store)){Tools.toast(t('storeFull'),4000);Tools.diag.log('save failed (quota?)');return false;} return true; }
+const saveSet=()=>Tools.save(LS_SET,set);
+
+const deck=()=>store.decks.find(d=>d.id===set.current)||store.decks[0]||null;
+const isDue=(c,now)=>c.box===0||c.due<=now;
+const startOfDay=ms=>{const d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();};
+const fmtDate=ms=>{
+  const d=startOfDay(ms)-startOfDay(Date.now());
+  return new Date(ms).toLocaleDateString(Tools.locale(),d<7*DAY?{weekday:'long',day:'numeric',month:'long'}:{day:'numeric',month:'long',year:'numeric'});
+};
+function stats(d,now=Date.now()){
+  const s={total:d.cards.length,due:0,fresh:0,boxes:[0,0,0,0,0,0],next:Infinity};
+  for(const c of d.cards){
+    s.boxes[c.box]++;
+    if(c.box===0)s.fresh++;
+    if(isDue(c,now))s.due++; else s.next=Math.min(s.next,c.due);
+  }
+  return s;
+}
+function newDeck(name){
+  const d={id:Tools.uid('d'),name,cards:[]};
+  store.decks.push(d); set.current=d.id; save(); saveSet();
+  Tools.diag.log('deck created',{decks:store.decks.length});
+  return d;
+}
+function addCard(d,front,back){
+  const c=cleanCard({front,back});
+  if(!c)return 'frontMissing';
+  if(d.cards.length>=MAX_CARDS)return 'tooManyCards';
+  if(d.cards.some(x=>keyOf(x)===keyOf(c)))return 'duplicate';
+  d.cards.push(c);
+  return c;
+}
+// Answer (new cards count as box 1): right → one box up, due after the box's interval (from the start of today); wrong → box 1, due now
+function answer(c,right,now=Date.now()){
+  if(right){ c.box=Math.min(5,Math.max(1,c.box)+1); c.due=startOfDay(now)+INTERVAL_DAYS[c.box]*DAY; }
+  else { c.box=1; c.due=now; }
+}
+
+/* ---------- Rendering ---------- */
+let mode='deck', shown=PAGE;
+function renderAll(){
+  const d=deck();
+  if(d&&set.current!==d.id){set.current=d.id;saveSet();}
+  $('setup').hidden=!!d;
+  const inDeck=!!d&&mode==='deck';
+  for(const id of ['deckView','addCard','cardList'])$(id).hidden=!inDeck;
+  $('learn').hidden=!d||mode!=='learn';
+  for(const id of ['btnExport','btnShare','btnResetProgress'])$(id).disabled=!d;
+  $('btnExportAll').disabled=!store.decks.length;
+  $('btnShare').hidden=!Tools.canShareFile('deck.json','application/json');
+  renderDeckList();
+  renderSettings();
+  if(!d)return;
+  if(mode==='deck')renderDeck(d); else renderLearn();
+}
+function renderDeck(d){
+  const chips=$('deckChips');
+  chips.hidden=store.decks.length<2;
+  chips.replaceChildren(...store.decks.map(x=>{
+    const b=document.createElement('button');
+    b.type='button'; b.textContent=x.name; b.setAttribute('aria-pressed',String(x.id===d.id));
+    b.addEventListener('click',()=>{ if(x.id===set.current)return; set.current=x.id; saveSet(); shown=PAGE; $('search').value=''; renderAll(); });
+    return b;
+  }));
+  $('deckName').textContent=d.name;
+  const s=stats(d);
+  $('stDue').textContent=Tools.fmt(s.due,0); $('stNew').textContent=Tools.fmt(s.fresh,0); $('stTotal').textContent=Tools.fmt(s.total,0);
+  $('boxes').hidden=!s.total;
+  $('boxes').textContent=t('boxes',{b1:Tools.fmt(s.boxes[1],0),b2:Tools.fmt(s.boxes[2],0),b3:Tools.fmt(s.boxes[3],0),b4:Tools.fmt(s.boxes[4],0),b5:Tools.fmt(s.boxes[5],0)});
+  $('noCardsHint').hidden=!!s.total;
+  $('btnLearnLabel').textContent=s.due?t('learnN',{n:Tools.fmt(s.due,0)}):t('learnNone');
+  $('btnLearn').disabled=!s.due;
+  $('btnLearn').hidden=!s.total||!s.due;
+  $('noneDue').hidden=!s.total||!!s.due;
+  $('noneDueText').textContent=Number.isFinite(s.next)?t('nextDue',{date:fmtDate(s.next)}):t('allDone');
+  $('btnPractice').hidden=!s.total||!!s.due;
+  renderCards(d);
+}
+function renderCards(d){
+  const q=$('search').value.trim().toLocaleLowerCase();
+  const list=q?d.cards.filter(c=>(c.front+'\n'+c.back).toLocaleLowerCase().includes(q)):d.cards;
+  $('cardList').hidden=mode!=='deck'||!d.cards.length;
+  const ul=$('cards');
+  const rows=list.slice(0,shown).map(c=>{
+    const li=document.createElement('li');
+    const b=document.createElement('button');
+    b.type='button'; b.className='open';
+    const n=document.createElement('span'); n.className='name'; n.textContent=c.front;
+    const m=document.createElement('span'); m.className='meta';
+    m.textContent=c.back.replace(/\s+/g,' ')+' · '+(c.box?t('boxOf',{box:c.box}):t('boxNew'));
+    b.append(n,m);
+    b.addEventListener('click',()=>openEdit(c.id));
+    const del=document.createElement('button');
+    del.type='button'; del.className='btn icon'; del.innerHTML=Tools.icon('trash');
+    del.setAttribute('aria-label',t('del',{name:c.front})); del.title=t('del',{name:c.front});
+    del.addEventListener('click',()=>deleteCard(d,c.id));
+    li.append(b,del);
+    return li;
+  });
+  if(!rows.length){const li=document.createElement('li');li.className='muted';li.textContent=q?t('noMatch'):t('empty');rows.push(li);}
+  ul.replaceChildren(...rows);
+  const rest=list.length-shown;
+  $('btnMore').hidden=rest<=0;
+  $('btnMore').textContent=t('more',{n:Tools.fmt(Math.min(rest,PAGE),0)});
+}
+function renderDeckList(){
+  const ul=$('deckList');
+  const rows=store.decks.map(x=>{
+    const li=document.createElement('li');
+    if(x.id===set.current)li.className='current';
+    const s=stats(x);
+    const b=document.createElement('button'); b.type='button'; b.className='open';
+    if(x.id===set.current)b.setAttribute('aria-current','true');
+    const n=document.createElement('span'); n.className='name'; n.textContent=x.name;
+    const m=document.createElement('span'); m.className='meta'; m.textContent=t('deckMeta',{n:Tools.fmt(s.total,0),due:Tools.fmt(s.due,0)});
+    b.append(n,m);
+    b.addEventListener('click',()=>{ set.current=x.id; saveSet(); mode='deck'; shown=PAGE; $('search').value=''; renderAll(); Tools.menu.close(); });
+    const mk=(icon,label,fn)=>{const e=document.createElement('button');e.type='button';e.className='btn icon';e.innerHTML=Tools.icon(icon);e.setAttribute('aria-label',label);e.title=label;e.addEventListener('click',fn);return e;};
+    li.append(b,mk('pencil',t('rename',{name:x.name}),()=>renameDeck(x)),mk('trash',t('del',{name:x.name}),()=>deleteDeck(x)));
+    return li;
+  });
+  if(!rows.length){const li=document.createElement('li');li.className='muted';li.textContent=t('empty');rows.push(li);}
+  ul.replaceChildren(...rows);
+}
+function renderSettings(){
+  for(const b of document.querySelectorAll('#dir button'))b.setAttribute('aria-pressed',String(b.dataset.dir===set.dir));
+  $('optShuffle').checked=!!set.shuffle;
+  $('optRepeat').checked=!!set.repeat;
+}
+
+/* ---------- Decks ---------- */
+function checkName(name,except){
+  if(!name)return 'nameMissing';
+  if(store.decks.some(d=>d!==except&&d.name.toLocaleLowerCase()===name.toLocaleLowerCase()))return 'nameTaken';
+  if(!except&&store.decks.length>=MAX_DECKS)return 'tooManyDecks';
+  return '';
+}
+$('setupForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const name=str($('setupName').value,MAX_NAME), err=checkName(name);
+  $('setupError').textContent=err?t(err):'';
+  if(err)return;
+  $('setupName').value=''; mode='deck'; newDeck(name); renderAll();
+  $('addFront').focus();
+});
+$('btnNewDeck').addEventListener('click',async()=>{
+  const v=await Tools.prompt(t('newDeckQ'),{value:''}); if(v==null)return;
+  const name=str(v,MAX_NAME), err=checkName(name);
+  if(err){Tools.toast(t(err),3000);return;}
+  mode='deck'; shown=PAGE; $('search').value=''; newDeck(name); renderAll(); Tools.menu.close(); $('addFront').focus();
+});
+async function renameDeck(x){
+  const v=await Tools.prompt(t('renameQ',{name:x.name}),{value:x.name}); if(v==null)return;
+  const name=str(v,MAX_NAME), err=checkName(name,x);
+  if(err){Tools.toast(t(err),3000);return;}
+  x.name=name; save(); renderAll();
+}
+function deleteDeck(x){
+  const i=store.decks.indexOf(x); if(i<0)return;
+  const wasCurrent=set.current===x.id;
+  store.decks.splice(i,1);
+  if(wasCurrent){set.current=(store.decks[i]||store.decks[i-1]||{}).id||null; mode='deck';}
+  save(); saveSet(); renderAll();
+  Tools.diag.log('deck deleted',{decks:store.decks.length});
+  Tools.undo(t('deckDeleted',{name:x.name}),()=>{ store.decks.splice(Math.min(i,store.decks.length),0,x); if(wasCurrent)set.current=x.id; save(); saveSet(); renderAll(); });
+}
+$('btnResetProgress').addEventListener('click',async()=>{
+  const d=deck(); if(!d)return;
+  if(d.cards.length&&!await Tools.confirm(t('resetQ',{n:Tools.fmt(d.cards.length,0),name:d.name}),{action:'reset'}))return;
+  for(const c of d.cards){c.box=0;c.due=0;}
+  save(); mode='deck'; renderAll(); Tools.menu.close(); Tools.toast(t('resetDone'));
+});
+
+/* ---------- Cards ---------- */
+$('addForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const d=deck(); if(!d)return;
+  const r=addCard(d,$('addFront').value,$('addBack').value);
+  if(typeof r==='string'){$('addError').textContent=t(r);return;}
+  $('addError').textContent='';
+  if(!save()){d.cards.pop();return;}
+  $('addFront').value=''; $('addBack').value='';
+  renderAll(); Tools.toast(t('added')); $('addFront').focus();
+});
+function deleteCard(d,id){
+  const i=d.cards.findIndex(c=>c.id===id); if(i<0)return;
+  const [c]=d.cards.splice(i,1);
+  save(); renderAll();
+  Tools.undo(t('cardDeleted'),()=>{ d.cards.splice(Math.min(i,d.cards.length),0,c); save(); renderAll(); });
+}
+let editing=null;
+function openEdit(id){
+  const d=deck(), c=d&&d.cards.find(x=>x.id===id); if(!c)return;
+  editing=c.id;
+  $('editFront').value=c.front; $('editBack').value=c.back; $('editError').textContent='';
+  $('editBox').textContent=c.box?t('boxOf',{box:c.box})+(c.due>Date.now()?' · '+t('dueOn',{date:fmtDate(c.due)}):''):t('boxNew');
+  $('editDlg').showModal();
+}
+$('editForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const d=deck(), c=d&&d.cards.find(x=>x.id===editing); if(!c){$('editDlg').close();return;}
+  const front=str($('editFront').value,MAX_TEXT), back=str($('editBack').value,MAX_TEXT);
+  if(!front||!back){$('editError').textContent=t('frontMissing');return;}
+  if(d.cards.some(x=>x!==c&&x.front===front&&x.back===back)){$('editError').textContent=t('duplicate');return;}
+  c.front=front; c.back=back; save(); $('editDlg').close(); renderAll(); Tools.toast(t('saved'));
+});
+$('btnDelCard').addEventListener('click',()=>{ const d=deck(); $('editDlg').close(); if(d&&editing)deleteCard(d,editing); });
+$('search').addEventListener('input',()=>{ shown=PAGE; const d=deck(); if(d)renderCards(d); });
+$('btnMore').addEventListener('click',()=>{ shown+=PAGE; const d=deck(); if(d)renderCards(d); });
+
+/* ---------- Learning ---------- */
+let session=null; // { deckId, queue: [{ id, ask: 'front'|'back' }], pos, total, right, answered: Set, flipped }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Tools.randomInt(i+1);[a[i],a[j]]=[a[j],a[i]];} return a; }
+function startLearning(all){
+  const d=deck(); if(!d)return;
+  const now=Date.now();
+  let cards=all?d.cards.slice():d.cards.filter(c=>isDue(c,now));
+  if(!cards.length)return;
+  if(set.shuffle)shuffle(cards);
+  else if(!all)cards.sort((a,b)=>(a.box===0)-(b.box===0)||a.due-b.due); // due ones first, oldest first, new ones last
+  const ask=()=>set.dir==='mixed'?(Tools.randomInt(2)?'back':'front'):set.dir;
+  session={deckId:d.id,queue:cards.map(c=>({id:c.id,ask:ask()})),pos:0,total:cards.length,right:0,answered:new Set(),flipped:false};
+  mode='learn'; renderAll();
+  Tools.diag.log('learning started',{cards:cards.length,all:!!all,dir:set.dir,shuffle:!!set.shuffle});
+  $('flashcard').focus();
+}
+function currentCard(){
+  const d=deck(); if(!session||!d)return null;
+  while(session.pos<session.queue.length){
+    const q=session.queue[session.pos], c=d.cards.find(x=>x.id===q.id);
+    if(c)return {c,q};
+    session.pos++; // deleted meanwhile
+  }
+  return null;
+}
+function renderLearn(){
+  const d=deck();
+  $('learnDeck').textContent=d.name;
+  const cur=currentCard();
+  $('learnRun').hidden=!cur; $('learnDone').hidden=!!cur;
+  $('btnStopLabel').textContent=cur?t('stop'):t('back');
+  if(!cur){ $('resultText').textContent=t('result',{right:Tools.fmt(session?session.right:0,0),n:Tools.fmt(session?session.total:0,0)}); return; }
+  const {c,q}=cur;
+  const done=session.answered.size;
+  $('learnProgress').max=session.total; $('learnProgress').value=done;
+  $('learnCount').textContent=t('cardOf',{i:Tools.fmt(Math.min(done+1,session.total),0),n:Tools.fmt(session.total,0)});
+  const front=q.ask==='front';
+  $('qLabel').textContent=front?t('qFront'):t('qBack');
+  $('aLabel').textContent=front?t('qBack'):t('qFront');
+  $('qText').textContent=front?c.front:c.back;
+  $('aText').textContent=front?c.back:c.front;
+  $('flashcard').setAttribute('aria-expanded',String(session.flipped));
+  $('btnFlip').hidden=session.flipped;
+  $('answerRow').hidden=!session.flipped;
+}
+function flip(){
+  if(!session||session.flipped||!currentCard())return;
+  session.flipped=true; renderLearn();
+  $('btnRight').focus();
+}
+function rate(right){
+  const cur=currentCard(); if(!cur||!session.flipped)return;
+  const {c,q}=cur;
+  const first=!session.answered.has(c.id);
+  if(first){session.answered.add(c.id); if(right)session.right++;}
+  answer(c,right);
+  save();
+  if(!right&&set.repeat)session.queue.push({id:c.id,ask:q.ask});
+  session.pos++; session.flipped=false;
+  renderLearn();
+  if(currentCard())$('flashcard').focus(); else { Tools.diag.log('learning done',{n:session.total,right:session.right}); $('btnStop').focus(); }
+}
+$('btnLearn').addEventListener('click',()=>startLearning(false));
+$('btnPractice').addEventListener('click',()=>startLearning(true));
+$('flashcard').addEventListener('click',flip);
+$('btnFlip').addEventListener('click',flip);
+$('btnRight').addEventListener('click',()=>rate(true));
+$('btnWrong').addEventListener('click',()=>rate(false));
+$('btnStop').addEventListener('click',()=>{ session=null; mode='deck'; renderAll(); $('btnLearn').hidden?$('h-deck').scrollIntoView({block:'nearest'}):$('btnLearn').focus(); });
+document.addEventListener('keydown',e=>{
+  if(mode!=='learn'||!session||e.altKey||e.ctrlKey||e.metaKey||document.querySelector('dialog[open]'))return;
+  if(e.target.closest&&e.target.closest('input,textarea,select'))return;
+  if(!session.flipped&&(e.key===' '||e.key==='Enter')&&e.target===document.body){e.preventDefault();flip();}
+  else if(session.flipped&&(e.key==='1'||e.key==='ArrowLeft')){e.preventDefault();rate(false);}
+  else if(session.flipped&&(e.key==='2'||e.key==='ArrowRight')){e.preventDefault();rate(true);}
+});
+
+/* ---------- Settings ---------- */
+for(const b of document.querySelectorAll('#dir button'))b.addEventListener('click',()=>{ set.dir=b.dataset.dir; saveSet(); renderSettings(); });
+$('optShuffle').addEventListener('change',e=>{ set.shuffle=e.target.checked; saveSet(); });
+$('optRepeat').addEventListener('change',e=>{ set.repeat=e.target.checked; saveSet(); });
+
+/* ---------- JSON import ---------- */
+const pick=(o,names)=>{ for(const n of names)if(o[n]!=null)return o[n]; return undefined; };
+function readCard(x){
+  if(Array.isArray(x))return x.length>=2?{front:x[0],back:x[1]}:null;
+  if(!x||typeof x!=='object')return null;
+  const due=pick(x,['due']);
+  return {
+    front:pick(x,['front','question','q','term','frage','vorderseite']),
+    back:pick(x,['back','answer','a','definition','antwort','rueckseite','rückseite']),
+    box:x.box, due:typeof due==='string'?Date.parse(due):due
+  };
+}
+// Accepts the own format, a single deck, a list of decks or a plain list of cards → [{ name, cards: [raw] }]
+function readDecks(j,fallbackName){
+  if(Array.isArray(j)){
+    if(j.length&&j.every(x=>x&&typeof x==='object'&&!Array.isArray(x)&&Array.isArray(x.cards)))return j;
+    return [{name:fallbackName,cards:j}];
+  }
+  if(j&&typeof j==='object'){
+    if(j.format===FORMAT&&!(Number.isInteger(j.formatVersion)&&j.formatVersion>=1&&j.formatVersion<=FORMAT_VERSION))throw new Error('version');
+    if(Array.isArray(j.decks))return j.decks;
+    if(Array.isArray(j.cards))return [{name:j.name||j.title||fallbackName,cards:j.cards}];
+  }
+  throw new Error('format');
+}
+function importData(j,fallbackName){
+  const raw=readDecks(j,fallbackName);
+  let decks=0, cards=0, skip=0, limited=false, firstId=null;
+  for(const rd of raw){
+    if(!rd||typeof rd!=='object'||!Array.isArray(rd.cards))continue;
+    const name=str(rd.name,MAX_NAME)||str(fallbackName,MAX_NAME)||t('exampleName');
+    let d=store.decks.find(x=>x.name.toLocaleLowerCase()===name.toLocaleLowerCase());
+    const created=!d;
+    if(!d){ if(store.decks.length>=MAX_DECKS){limited=true;continue;} d={id:Tools.uid('d'),name,cards:[]}; }
+    const have=new Set(d.cards.map(keyOf));
+    let n=0;
+    for(const x of rd.cards){
+      const c=cleanCard(readCard(x)); if(!c)continue;
+      c.id=Tools.uid('c');
+      if(have.has(keyOf(c))){skip++;continue;}
+      if(d.cards.length>=MAX_CARDS){limited=true;break;}
+      have.add(keyOf(c)); d.cards.push(c); n++;
+    }
+    if(created&&!d.cards.length)continue;
+    if(created)store.decks.push(d);
+    decks++; cards+=n; firstId=firstId||d.id;
+  }
+  if(!decks)throw new Error('no cards');
+  return {decks,cards,skip,limited,firstId};
+}
+async function importFile(f){
+  if(!f)return;
+  Tools.diag.log('import',{size:f.size,type:f.type});
+  if(f.size>MAX_FILE){Tools.toast(t('importBig'),4000);return;}
+  const backup=JSON.stringify(store);
+  try{
+    const j=JSON.parse(await f.text());
+    const r=importData(j,str(f.name.replace(/\.json$/i,''),MAX_NAME));
+    if(!save()){Object.assign(store,JSON.parse(backup));return;}
+    set.current=r.firstId; saveSet(); session=null; mode='deck'; shown=PAGE; $('search').value='';
+    renderAll(); Tools.menu.close();
+    Tools.toast(r.limited?t('importLimit'):t(r.skip?'importedSkip':'imported',{decks:Tools.fmt(r.decks,0),cards:Tools.fmt(r.cards,0),skip:Tools.fmt(r.skip,0)}),r.limited?5000:3000);
+    Tools.diag.log('imported',r);
+  }catch(e){
+    Object.assign(store,JSON.parse(backup));
+    Tools.toast(t('importErr'),4000); Tools.diag.log('import failed',e);
+  }
+}
+for(const inp of document.querySelectorAll('.js-import'))inp.addEventListener('change',()=>{ const f=inp.files[0]; inp.value=''; importFile(f); });
+for(const b of document.querySelectorAll('.js-pick'))b.addEventListener('click',()=>$('fileMenu').click());
+const drop=$('drop');
+document.addEventListener('dragover',e=>{ if(!$('setup').hidden&&e.dataTransfer&&[...e.dataTransfer.types].includes('Files')){e.preventDefault();drop.classList.add('over');} });
+document.addEventListener('dragleave',e=>{ if(!e.relatedTarget)drop.classList.remove('over'); });
+document.addEventListener('drop',e=>{
+  if($('setup').hidden||!e.dataTransfer||!e.dataTransfer.files.length)return;
+  e.preventDefault(); drop.classList.remove('over'); importFile(e.dataTransfer.files[0]);
+});
+const EXAMPLE={de:[['Deutschland','Berlin'],['Frankreich','Paris'],['Italien','Rom'],['Spanien','Madrid'],['Polen','Warschau'],['Österreich','Wien'],['Schweiz','Bern'],['Niederlande','Amsterdam']],
+  en:[['Germany','Berlin'],['France','Paris'],['Italy','Rome'],['Spain','Madrid'],['Poland','Warsaw'],['Austria','Vienna'],['Switzerland','Bern'],['Netherlands','Amsterdam']]};
+$('btnExample').addEventListener('click',()=>{
+  const r=importData({name:t('exampleName'),cards:EXAMPLE[Tools.lang()==='en'?'en':'de']},t('exampleName'));
+  save(); set.current=r.firstId; saveSet(); mode='deck'; renderAll();
+  Tools.diag.log('example loaded');
+});
+
+/* ---------- JSON export ---------- */
+function exportJson(decks){
+  return JSON.stringify({format:FORMAT,formatVersion:FORMAT_VERSION,exported:new Date().toISOString(),
+    decks:decks.map(d=>({name:d.name,cards:d.cards.map(c=>{
+      const o={front:c.front,back:c.back};
+      if(c.box){o.box=c.box;o.due=new Date(c.due).toISOString();}
+      return o;
+    })}))},null,2);
+}
+const fileName=name=>(name.replace(/[\\/:*?"<>|\s]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'flashcards')+'.json';
+const deckFile=d=>new File([exportJson([d])],fileName(d.name),{type:'application/json'});
+$('btnExport').addEventListener('click',()=>{ const d=deck(); if(!d)return; Tools.download(deckFile(d)); Tools.diag.log('deck exported',{cards:d.cards.length}); Tools.menu.close(); });
+$('btnExportAll').addEventListener('click',()=>{
+  if(!store.decks.length)return;
+  Tools.download(new File([exportJson(store.decks)],t('title').toLocaleLowerCase()+'.json',{type:'application/json'}));
+  Tools.diag.log('all exported',{decks:store.decks.length}); Tools.menu.close();
+});
+$('btnShare').addEventListener('click',async()=>{
+  const d=deck(); if(!d)return;
+  try{ await navigator.share({files:[deckFile(d)],title:d.name}); Tools.diag.log('deck shared'); }
+  catch(e){ if(e&&e.name!=='AbortError'){Tools.toast(t('shareErr'));Tools.diag.log('share failed',e);} }
+});
+
+/* ---------- Start ---------- */
+// A backup loaded via "Daten sichern" reloads the page; another tab may change the decks too
+window.addEventListener('storage',e=>{ if(e.key===LS_DECKS){ const s=cleanStore(Tools.load(LS_DECKS,{decks:[]})); store.decks=s.decks; if(mode==='learn'&&!deck())mode='deck'; renderAll(); } });
+renderAll();
+Tools.diag.info(()=>{ const d=deck(), s=d&&stats(d); return {decks:store.decks.length,cards:d?d.cards.length:0,due:s?s.due:0,mode,dir:set.dir,shuffle:!!set.shuffle,repeat:!!set.repeat}; });
+Tools.onLang(renderAll);
+
+/* ---------- WebMCP ---------- */
+const findDeck=name=>store.decks.find(d=>d.name.toLocaleLowerCase()===String(name).trim().toLocaleLowerCase());
+Tools.mcp.register({
+  name:'list_decks',title:'List decks',readOnly:true,label:'mcp.list',
+  description:'Lists the flashcard decks with their number of cards, cards due for learning now and new cards, and which deck is shown.',
+  execute:()=>({decks:store.decks.map(d=>{const s=stats(d);return {name:d.name,cards:s.total,due:s.due,new:s.fresh,current:d.id===set.current};})})
+});
+Tools.mcp.register({
+  name:'get_cards',title:'Read cards',readOnly:true,label:'mcp.get',
+  description:'Reads the cards of a deck (front, back, box 0–5 of the learning box with 0 = new, due date). Without a deck name the deck shown in the app is used.',
+  inputSchema:{type:'object',properties:{
+    deck:{type:'string',minLength:1,maxLength:MAX_NAME,description:'Name of the deck (case-insensitive). Default: the deck shown.'},
+    limit:{type:'integer',minimum:1,maximum:500,description:'Maximum number of cards to return. Default 100.'}
+  },additionalProperties:false},
+  execute:({deck:name,limit=100})=>{
+    const d=name?findDeck(name):deck();
+    if(!d)throw new Error(name?'No deck with this name':'There is no deck yet');
+    return {deck:d.name,total:d.cards.length,cards:d.cards.slice(0,limit).map(c=>({front:c.front,back:c.back,box:c.box,due:c.box?new Date(c.due).toISOString():null}))};
+  }
+});
+Tools.mcp.register({
+  name:'add_cards',title:'Add cards',label:'mcp.add',
+  description:'Adds flashcards to a deck, as if the user typed them in. A deck with this name is created if it does not exist. Cards with the same front and back as an existing card are skipped. The deck is then shown in the app. Returns how many cards were added and skipped.',
+  inputSchema:{type:'object',properties:{
+    deck:{type:'string',minLength:1,maxLength:MAX_NAME,description:'Name of the deck. Default: the deck shown.'},
+    cards:{type:'array',maxItems:200,description:'The new cards.',items:{type:'object',properties:{
+      front:{type:'string',minLength:1,maxLength:MAX_TEXT,description:'Front side (question).'},
+      back:{type:'string',minLength:1,maxLength:MAX_TEXT,description:'Back side (answer).'}
+    },required:['front','back'],additionalProperties:false}}
+  },required:['cards'],additionalProperties:false},
+  execute:({deck:name,cards})=>{
+    let d=name?findDeck(name):deck(), created=false;
+    if(!d){
+      const n=str(name||'',MAX_NAME), err=checkName(n);
+      if(err)throw new Error(err==='tooManyDecks'?'At most 100 decks':'A deck name is needed');
+      d={id:Tools.uid('d'),name:n,cards:[]}; store.decks.push(d); created=true;
+    }
+    let added=0, skipped=0;
+    for(const c of cards){
+      const r=addCard(d,c.front,c.back);
+      if(r==='tooManyCards'){ if(created&&!d.cards.length)store.decks.pop(); throw new Error('At most 5000 cards per deck'); }
+      if(typeof r==='string')skipped++; else added++;
+    }
+    if(!save())throw new Error('Storage full');
+    set.current=d.id; saveSet(); if(mode==='learn'&&session&&session.deckId!==d.id){session=null;mode='deck';}
+    renderAll();
+    return {deck:d.name,created,added,skipped,total:d.cards.length};
+  }
+});
+})();
+</script>
+</body>
+</html>

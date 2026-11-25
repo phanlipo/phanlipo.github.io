@@ -1462,6 +1462,34 @@ test.describe('doc-scanner tools', () => {
   });
 });
 
+test.describe('flashcards tools', () => {
+  test.beforeEach(async ({ page }) => { await open(page, '/flashcards/'); });
+
+  test('without a deck: list is empty, reading explains, adding creates the deck shown in the app', async ({ page }) => {
+    expect((await call(page, 'flashcards_list_decks', {})).result).toEqual({ decks: [] });
+    expect((await call(page, 'flashcards_get_cards', {})).error).toMatch(/no deck yet/);
+    expect((await call(page, 'flashcards_add_cards', { cards: [{ front: 'a', back: 'b' }] })).error).toMatch(/deck name is needed/);
+    const r = await call(page, 'flashcards_add_cards', { deck: 'Englisch', cards: [{ front: 'Hund', back: 'dog' }, { front: 'Hund', back: 'dog' }, { front: 'Katze', back: 'cat' }] });
+    expect(r.result).toEqual({ deck: 'Englisch', created: true, added: 2, skipped: 1, total: 2 });
+    await expect(page.locator('#deckName')).toHaveText('Englisch');
+    await expect(page.locator('#cards .name')).toHaveText(['Hund', 'Katze']);
+    expect((await call(page, 'flashcards_list_decks', {})).result).toEqual({ decks: [{ name: 'Englisch', cards: 2, due: 2, new: 2, current: true }] });
+    expect((await call(page, 'flashcards_get_cards', { deck: 'englisch', limit: 1 })).result)
+      .toEqual({ deck: 'Englisch', total: 2, cards: [{ front: 'Hund', back: 'dog', box: 0, due: null }] });
+    expect((await call(page, 'flashcards_get_cards', { deck: 'Latein' })).error).toMatch(/No deck with this name/);
+  });
+
+  test('adding to an existing deck by name switches to it; limits as in the app', async ({ page }) => {
+    await page.click('#btnExample');
+    await call(page, 'flashcards_add_cards', { deck: 'Latein', cards: [{ front: 'amare', back: 'lieben' }] });
+    const r = await call(page, 'flashcards_add_cards', { deck: 'beispiel: hauptstädte', cards: [{ front: 'Belgien', back: 'Brüssel' }] });
+    expect(r.result).toMatchObject({ deck: 'Beispiel: Hauptstädte', created: false, added: 1, total: 9 });
+    await expect(page.locator('#deckName')).toHaveText('Beispiel: Hauptstädte');
+    expect((await call(page, 'flashcards_add_cards', { cards: Array.from({ length: 201 }, (_, i) => ({ front: 'f' + i, back: 'b' })) })).error).toMatch(/at most 200/);
+    expect((await call(page, 'flashcards_add_cards', { cards: [{ front: '', back: 'b' }] })).error).toMatch(/at least 1/);
+  });
+});
+
 test.describe('data-logger tools', () => {
   test.use({ timezoneId: 'Europe/Berlin' });
   const NOW = new Date('2026-10-30T12:00:00+01:00');
