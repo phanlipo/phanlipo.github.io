@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-1rIq19TuXgvIpUXPvPXl3Wd80NcN9TxIHigdp65Wkqs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-NQL0nTo0av9VoxuDT5ghfr/KaYMy/42dwngVAfpLVqQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -43,6 +43,27 @@ body.stage.empty>main{display:flex;flex-direction:column;justify-content:center}
 .page{position:relative;margin-inline:auto;flex:none;background:#ffffff;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .page canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 body.night .page{filter:invert(1) hue-rotate(180deg)}
+/* Text layer (pdf.js TextLayer, CSS after pdf.js' pdf_viewer.css): invisible text over the canvas for selecting
+   and copying. --total-scale-factor (CSS px per PDF point) is set on .page by layout(), so zooming needs no redraw.
+   Width/height: pdf.js writes them with CSS round(), which older browsers drop – the page box is the same size. */
+.textLayer{position:absolute;inset:0;width:100%!important;height:100%!important;overflow:clip;text-align:initial;line-height:1;
+  text-size-adjust:none;-webkit-text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0;caret-color:CanvasText;z-index:1;
+  --min-font-size:1;--text-scale-factor:calc(var(--total-scale-factor) * var(--min-font-size));--min-font-size-inv:calc(1 / var(--min-font-size))}
+.textLayer :is(span,br){color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0% 0%}
+.textLayer>:not(.markedContent),.textLayer .markedContent span:not(.markedContent){z-index:1;--font-height:0;
+  font-size:calc(var(--text-scale-factor) * var(--font-height));--scale-x:1;--rotate:0deg;
+  transform:rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv))}
+.textLayer .markedContent{display:contents}
+.textLayer ::selection{background:rgba(0,90,255,.3)}
+.textLayer br::selection{background:transparent}
+.textLayer .endOfContent{display:block;position:absolute;inset:100% 0 0;z-index:0;cursor:default;user-select:none;-webkit-user-select:none}
+.textLayer.selecting .endOfContent{top:0}
+/* Links: web addresses found in the text (inside the text layer) and link areas of the PDF (.linkLayer) */
+.textLayer a{color:transparent;cursor:pointer;text-decoration:none;border-radius:2px}
+.linkLayer{position:absolute;inset:0;z-index:2;pointer-events:none}
+.linkLayer a{position:absolute;pointer-events:auto;border-radius:2px}
+.textLayer a:is(:hover,:focus-visible),.linkLayer a:is(:hover,:focus-visible){background:rgba(0,90,255,.15)}
+.textLayer a:focus-visible,.linkLayer a:focus-visible{outline:2px solid #005aff;outline-offset:1px}
 #empty{display:grid;gap:12px;justify-items:center;text-align:center;padding:24px 16px;max-width:520px;margin-inline:auto}
 #empty .btn.primary{min-height:56px;font-size:18px;padding-inline:28px}
 #emptyMsg{min-height:1.4em;margin:0}
@@ -156,6 +177,8 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
     <li>Oben: <b>Teilen</b> schickt die PDF an eine andere App (wenn das Gerät Dateien teilen kann), <b>Vollbild</b> verbirgt zusätzlich die Leisten von Browser und System, <b>☰</b> öffnet das Menü.</li>
     <li>Unten: Mit dem Schieberegler springt man zu einer Seite; der Knopf daneben passt die Seite wieder an die Bildschirmbreite an.</li>
     <li><b>Zoomen</b> mit zwei Fingern oder doppelt tippen (nochmal doppelt tippen = zurück). Am Computer Strg + Mausrad oder die Tasten + / − / 0.</li>
+    <li><b>Text kopieren:</b> lange auf ein Wort drücken (am Computer mit der Maus ziehen), die Auswahl mit den Griffen erweitern und <i>Kopieren</i> wählen. Gescannte Seiten ohne Textebene enthalten keinen Text.</li>
+    <li><b>Links:</b> Web- und Mail-Adressen im Text sowie Links der PDF lassen sich antippen. Webseiten öffnen sich in einem neuen Tab bzw. im Browser, Links auf eine Seite des Dokuments springen dorthin. Erst beim Antippen verbindet sich das Gerät mit der Adresse.</li>
     <li>Die App merkt sich, auf welcher Seite man in einem Dokument war, und springt beim nächsten Öffnen dorthin.</li>
   </ul>
   <h3>Vollbild und Systemleisten</h3>
@@ -185,6 +208,8 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
     <li>At the top: <b>Share</b> sends the PDF to another app (if the device can share files), <b>Full screen</b> also hides the browser and system bars, <b>☰</b> opens the menu.</li>
     <li>At the bottom: the slider jumps to a page; the button next to it fits the page to the screen width again.</li>
     <li><b>Zoom</b> with two fingers or by double-tapping (double-tap again = back). On a computer Ctrl + mouse wheel or the keys + / − / 0.</li>
+    <li><b>Copying text:</b> long-press a word (on a computer drag with the mouse), extend the selection with the handles and choose <i>Copy</i>. Scanned pages without a text layer contain no text.</li>
+    <li><b>Links:</b> web and mail addresses in the text and links of the PDF can be tapped. Web pages open in a new tab or in the browser, links to a page of the document go there. The device only connects to the address when you tap it.</li>
     <li>The app remembers which page you were on in a document and goes there next time you open it.</li>
   </ul>
   <h3>Full screen and system bars</h3>
@@ -239,7 +264,7 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 2a650b917467</p>
+  <p class="footer-version">Version 35b3eb2729d3</p>
   <!-- footer:end -->
 </footer>
 
@@ -255,7 +280,7 @@ Tools.i18n({
     'pw.title':'„{name}“ ist passwortgeschützt','pw.wrong':'Falsches Passwort – bitte noch einmal versuchen.','pw.empty':'Bitte das Passwort eingeben.',
     'resume':'Weiter auf Seite {n}','share.fail':'Teilen hat nicht geklappt.','fs.fail':'Vollbild ist hier nicht möglich.',
     'goto.bad':'Seite 1 bis {n} eingeben.','pageAria':'Seite {n}','mcp.goto':'zu Seite gesprungen',
-    'closed':'PDF geschlossen.',
+    'closed':'PDF geschlossen.','link.web':'Link: {url}','link.internal':'Verweis auf eine Seite dieses Dokuments',
   },
   en:{
     title:'PDF Viewer',share:'Share PDF',fs:'Full screen',view:'Document',intro:'Open a PDF or share it here from another app. The file stays on this device.',
@@ -270,6 +295,7 @@ Tools.i18n({
     'resume':'Continuing on page {n}','share.fail':'Sharing did not work.','fs.fail':'Full screen is not possible here.',
     'goto.bad':'Enter page 1 to {n}.','pageAria':'Page {n}','mcp.goto':'went to a page',
     close:'Close PDF','set.keep':'Keep the open PDF – open it again next time (also after an update)','closed':'PDF closed.',
+    'link.web':'Link: {url}','link.internal':'Link to a page of this document',
   }
 });
 const t=Tools.t, $=Tools.$, body=document.body;
@@ -451,6 +477,7 @@ function layout(){
   els.forEach((el,i)=>{
     const [pw,ph]=sizes[i];
     el.style.width=w+'px'; el.style.height=(w*ph/pw)+'px';
+    el.style.setProperty('--total-scale-factor',String(w/pw));   // text layer follows the zoom
   });
   pagesEl.style.width=Math.max(view.clientWidth,w+16)+'px';
   tops=els.map(el=>el.offsetTop);
@@ -486,7 +513,7 @@ function wanted(){
     const a=tops[i], b=a+el.offsetHeight;
     const dist=b<top?(top-b)/h:a>top+h?(a-top-h)/h:0;
     if(dist<=1) list.push([dist,i]);
-    else if(dist>KEEP&&el.firstChild){el.textContent='';delete el.dataset.key;}   // free memory
+    else if(dist>KEEP&&el.firstChild){el.textContent='';delete el.dataset.key;delete el.dataset.text;}   // free memory
   });
   return list.sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
 }
@@ -522,7 +549,110 @@ async function renderPage(i){
   c.setAttribute('aria-hidden','true');
   await page.render({canvasContext:c.getContext('2d'),viewport,background:'white'}).promise;
   if(d!==doc) return;
-  el.replaceChildren(c); el.dataset.key=key;
+  const old=el.querySelector('canvas');
+  if(old) old.replaceWith(c); else el.prepend(c);
+  el.dataset.key=key;
+  if(!el.dataset.text){
+    const tok=String(++layerToken); el.dataset.text=tok;
+    addLayers(el,page,tok).catch(e=>{if(el.dataset.text===tok) delete el.dataset.text;Tools.diag.log('text layer failed',{page:i+1},e);});
+  }
+}
+
+/* ---------- Text layer (select, copy) and links. Built once per page at scale 1; it scales with the page through
+   --total-scale-factor, so it is independent of the canvas resolution. ---------- */
+let layerToken=0;
+async function addLayers(el,page,tok){
+  const lib=await pdfjs(), d=doc, vp=page.getViewport({scale:1});
+  const tl=document.createElement('div'); tl.className='textLayer';
+  const layer=new lib.TextLayer({textContentSource:page.streamTextContent({includeMarkedContent:true,disableNormalization:true}),container:tl,viewport:vp});
+  await layer.render();
+  const end=document.createElement('div'); end.className='endOfContent'; tl.append(end);
+  const found=autoLink(tl);
+  let links=null;
+  try{links=linkLayer(await page.getAnnotations({intent:'display'}),vp);}catch(e){Tools.diag.log('link areas failed',e);}
+  if(d!==doc||el.dataset.text!==tok||!el.isConnected) return;   // closed or freed meanwhile
+  el.append(tl); if(links) el.append(links);
+  if(found||links) Tools.diag.log('links',{page:Number(el.dataset.n),inText:found,inPdf:links?links.childElementCount:0});
+}
+/* Web and mail addresses written as plain text (many PDFs have no link areas for them, like pdf.js' "auto linking"):
+   the matching characters of the invisible text become <a>. Text across spans is joined; a line break ends a match. */
+// (no lookbehind: older Safari cannot parse it – the character before goes into group 1)
+const LINK_RE=/(^|[^\w.@\/+-])((?:https?:\/\/|www\.)[^\s<>"'`]+|[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,})/gi;
+function linkHref(s){
+  if(s.includes('@')&&!/^https?:|^www\./i.test(s)) return 'mailto:'+s;
+  try{const u=new URL(/^www\./i.test(s)?'https://'+s:s);return /^https?:$/.test(u.protocol)&&u.hostname.includes('.')?u.href:null;}catch(_){return null;}
+}
+function trimLink(s){
+  // trailing punctuation belongs to the sentence; a ")" only if it has no "(" in the address
+  for(;;){
+    const c=s.slice(-1);
+    if(/[.,;:!?'"»«“”‚‘’]/.test(c)||(c===')'&&!s.includes('('))||(c===']'&&!s.includes('['))) s=s.slice(0,-1); else return s;
+  }
+}
+function autoLink(tl){
+  const nodes=[]; let str='';
+  const walk=document.createTreeWalker(tl,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT,
+    {acceptNode:n=>n.nodeType===3||n.nodeName==='BR'?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_SKIP});
+  for(let n;(n=walk.nextNode());){
+    if(n.nodeType===3){nodes.push({n,s:str.length});str+=n.data;}
+    else str+='\n';
+  }
+  const matches=[];
+  for(const m of str.matchAll(LINK_RE)){
+    const text=trimLink(m[2]), href=text.length>4&&linkHref(text), at=m.index+m[1].length;
+    if(href) matches.push({a:at,b:at+text.length,href,text});
+  }
+  // back to front, so splitting a text node keeps the offsets of the earlier ones
+  for(let k=matches.length-1;k>=0;k--){
+    const {a,b,href,text}=matches[k];
+    for(let j=nodes.length-1;j>=0;j--){
+      const {n,s}=nodes[j], e=s+n.data.length;
+      if(e<=a||s>=b) continue;
+      const from=Math.max(a,s)-s, to=Math.min(b,e)-s;
+      let mid=n;
+      if(to<n.data.length) mid.splitText(to);
+      if(from>0) mid=mid.splitText(from);
+      const link=makeLink(href,text);
+      mid.replaceWith(link); link.append(mid);
+    }
+  }
+  return matches.length;
+}
+function makeLink(href,label){
+  const a=document.createElement('a');
+  a.href=href; a.title=label||href;
+  if(!href.startsWith('mailto:')){a.target='_blank';a.rel='noopener noreferrer';}
+  return a;
+}
+// Link areas of the PDF: web links (pdf.js only passes on http(s), mailto, tel, ftp) and links to a page of the document
+function linkLayer(annots,vp){
+  const box=document.createElement('div'); box.className='linkLayer';
+  const [,,W,H]=vp.viewBox, pw=vp.width, ph=vp.height;
+  for(const an of annots||[]){
+    if(an.subtype!=='Link'||!Array.isArray(an.rect)) continue;
+    let a;
+    if(an.url) a=makeLink(an.url);
+    else if(an.dest!=null){
+      a=document.createElement('a'); a.href='#'; a.title=t('link.internal');
+      a.addEventListener('click',e=>{e.preventDefault();goToDest(an.dest);});
+    }else continue;
+    a.setAttribute('aria-label',an.url?t('link.web',{url:an.url.replace(/^mailto:/,'')}):t('link.internal'));
+    const [x1,y1]=vp.convertToViewportPoint(an.rect[0],an.rect[1]), [x2,y2]=vp.convertToViewportPoint(an.rect[2],an.rect[3]);
+    const s=a.style;
+    s.left=(100*Math.min(x1,x2)/pw)+'%'; s.top=(100*Math.min(y1,y2)/ph)+'%';
+    s.width=(100*Math.abs(x2-x1)/pw)+'%'; s.height=(100*Math.abs(y2-y1)/ph)+'%';
+    box.append(a);
+  }
+  return W&&H&&box.childElementCount?box:null;
+}
+async function goToDest(dest){
+  try{
+    if(typeof dest==='string') dest=await doc.getDestination(dest);
+    const ref=Array.isArray(dest)?dest[0]:null;
+    const idx=ref&&typeof ref==='object'?await doc.getPageIndex(ref):Number.isInteger(ref)?ref:null;
+    Tools.diag.log('internal link',{ok:idx!=null});
+    if(idx!=null) goTo(idx+1);
+  }catch(e){Tools.diag.log('internal link failed',e);}
 }
 
 /* ---------- Zoom: two fingers, double tap, Ctrl + wheel, keys ---------- */
@@ -602,15 +732,23 @@ view.tabIndex=-1;
 view.addEventListener('click',e=>{
   if(!doc||e.target.closest('button,a,input,#empty')) return;
   const r=view.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top, now=Date.now();
+  const sel=window.getSelection();
   if(now-lastTap<300&&Math.hypot(x-lastXY[0],y-lastXY[1])<40){
     clearTimeout(tapTimer); lastTap=0;
+    if(sel&&!sel.isCollapsed) sel.removeAllRanges();   // a double click also selects a word
     setZoom(zoom>1.05?1:2.5,x,y);
     return;
   }
+  // end of selecting text (mouse): no bars toggle
+  if(sel&&!sel.isCollapsed&&view.contains(sel.anchorNode)){clearTimeout(tapTimer);lastTap=0;return;}
   lastTap=now; lastXY=[x,y];
   clearTimeout(tapTimer);
   tapTimer=setTimeout(toggleBars,280);
 });
+// While selecting, the end marker covers the page so the selection does not jump (as in pdf.js' viewer)
+view.addEventListener('pointerdown',e=>{const tl=e.target.closest&&e.target.closest('.textLayer');if(tl) tl.classList.add('selecting');});
+const endSelecting=()=>{for(const tl of pagesEl.querySelectorAll('.textLayer.selecting')) tl.classList.remove('selecting');};
+document.addEventListener('pointerup',endSelecting); document.addEventListener('pointercancel',endSelecting);
 for(const el of [document.querySelector('body>header'),$('bar')]){
   el.addEventListener('focusin',()=>{barsTouched=true;clearTimeout(hideTimer);showBars(true);});
   el.addEventListener('pointerdown',()=>{barsTouched=true;clearTimeout(hideTimer);});
@@ -793,7 +931,8 @@ renderInfo();
 
 Tools.diag.info(async()=>({
   open:!!doc, pages:sizes.length, current:doc?cur:0, zoom:Math.round(zoom*100)/100, encrypted,
-  barsHidden:barsHidden(), rendered:els.filter(el=>el.firstChild).length,
+  barsHidden:barsHidden(), rendered:els.filter(el=>el.querySelector('canvas')).length,
+  textLayers:els.filter(el=>el.querySelector('.textLayer')).length,
   canShareFiles, fullscreenSupported:fs.supported(), settings, remembered:Object.keys(positions).length,
   kept:(await Tools.keep.names()).includes(KEEP_KEY),
 }));
