@@ -9,6 +9,7 @@
 
 import * as pdfjs from '../assets/vendor/pdfjs/pdf.min.mjs';
 import { recognisePage } from '../assets/shared/ocr.mjs';
+import { docParams } from '../assets/shared/pdf-open.mjs';
 
 // Full literal paths: scripts/build.mjs finds the libraries for the offline cache by them
 const url = path => new URL(path, import.meta.url).href;
@@ -19,17 +20,14 @@ pdfjs.GlobalWorkerOptions.workerSrc = url('./pdf-worker.mjs');
 
 // Opens a PDF. Throws an Error with .code = 'password' | 'invalid' for the page to explain.
 export async function open(data, password) {
-  const task = pdfjs.getDocument({
+  // common options (no eval, fonts, decoders for scans and CMYK images): assets/shared/pdf-open.mjs
+  const task = pdfjs.getDocument(docParams({
     data, password,
-    isEvalSupported: false,          // strict CSP: no eval / new Function
     disableFontFace: true,           // only metrics and names are needed, never draw glyphs
     fontExtraProperties: true,
-    standardFontDataUrl: url('../assets/vendor/pdfjs/standard_fonts/'),
-    wasmUrl: url('../assets/vendor/pdfjs/wasm/'),          // decoders for JBIG2 / JPEG 2000 scans
-    iccUrl: url('../assets/vendor/pdfjs/iccs/'),           // CMYK images
     useSystemFonts: false,
     stopAtErrors: false,
-  });
+  }));
   try {
     return await task.promise;
   } catch (e) {

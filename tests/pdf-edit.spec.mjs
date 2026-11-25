@@ -30,6 +30,26 @@ async function openFiles(page, files, pages) {
   await expect(thumbs(page)).toHaveCount(pages);
 }
 
+test('hand-over: the new PDF opens in "PDF ansehen" or "PDF zu Word"; the work here stays', async ({ page }) => {
+  await page.goto(URL_);
+  await page.locator('.menu-btn').click();
+  await expect(page.locator('#btnToView')).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await openFiles(page, [A(), B()], 5);
+  await pageBtn(page, 1, 'del').click();
+  await expect(thumbs(page)).toHaveCount(4);
+  await page.locator('.menu-btn').click();
+  await page.click('#btnToView');
+  await expect(page).toHaveURL(/\/pdf-viewer\/$/);
+  await expect(page.locator('#pages .page')).toHaveCount(4);      // the edited result, not the originals
+  await page.goBack();
+  await expect(thumbs(page)).toHaveCount(4);
+  await page.locator('.menu-btn').click();
+  await page.click('#btnToWord');
+  await expect(page).toHaveURL(/\/pdf2word\/$/);
+  await expect(page.locator('#btnRun')).toBeEnabled();
+});
+
 test('merges two PDFs, moves, rotates and removes pages', async ({ page }) => {
   await page.goto(URL_);
   await expect(page.locator('#btnSave')).toBeDisabled();

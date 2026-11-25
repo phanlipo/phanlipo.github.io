@@ -729,6 +729,30 @@ window.Tools = (function () {
     return (await takeSharedFiles())[0] || null;
   }
 
+  /* Hand files over to another app of this site ("Open in PDF bearbeiten", "Convert to Word" …): parks them the way
+     the share target does (cache "share:<app>", the same keys under that app's address) and opens that app with
+     ?shared=1 – it takes them with takeSharedFile(s)() like a shared file. Everything stays on the device.
+     handOff('pdf-edit', file | [files]) → false if it is not possible (no Cache Storage), otherwise the page leaves. */
+  async function handOff(app, files) {
+    files = [].concat(files || []).filter(Boolean).slice(0, SHARE_MAX);
+    if (!/^[a-z0-9-]+$/.test(String(app)) || !files.length || !('caches' in window)) return false;
+    try {
+      const name = 'share:' + app;
+      await caches.delete(name);                    // leftovers of an earlier hand-over must not mix in
+      const cache = await caches.open(name);
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        await cache.put(new URL(`../${app}/${i ? `shared-file-${i}` : 'shared-file'}`, location.href).href, new Response(f, { headers: {
+          'Content-Type': f.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(f.name || 'datei'),
+        } }));
+      }
+      diagLog('hand off', { to: app, files: files.length });
+      location.assign(new URL(`../${app}/?shared=1`, location.href).href);
+      return true;
+    } catch (e) { diagLog('hand off failed', e); return false; }
+  }
+
   // Link or text shared to the installed app (Android, <meta name="tool:share-text" content="true">):
   // the page opens as ./?title=…&text=…&url=…. Returns { title, text, url } (missing parts = '') or null,
   // and removes the parameters from the address bar so a reload does not repeat it.
@@ -1346,7 +1370,7 @@ window.Tools = (function () {
   else setupDiagUi();
 
   return {
-    $, load, save, remove, toast, undo, confirm: confirmAsk, prompt: promptAsk, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, fileHandle, shortcut, badge, vibrate,
+    $, load, save, remove, toast, undo, confirm: confirmAsk, prompt: promptAsk, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, handOff, fileHandle, shortcut, badge, vibrate,
     randomInt, random, uid, clamp, reducedMotion, canShareFile, download: downloadFile,
     audio: { context: audioContext, unlock: audioUnlock, ready: audioReady, tone },
     wakeLock: { hold: wakeHold, release: wakeRelease, active: () => !!wakeSentinel, supported: wakeSupported, reasons: () => [...wakeReasons] },

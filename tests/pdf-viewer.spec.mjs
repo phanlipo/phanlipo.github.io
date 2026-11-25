@@ -647,6 +647,28 @@ test('text recognition works offline once it was used', async ({ page, context }
   await context.setOffline(false);
 });
 
+test('hand-over: the open PDF goes to "PDF bearbeiten" and "PDF zu Word" on the device', async ({ page }) => {
+  await page.goto(URL_);
+  await openMenu(page);
+  await expect(page.locator('#btnToEdit')).toBeDisabled();
+  await closeMenu(page);
+  await openPdf(page, P('bericht.pdf', ['S1', 'S2', 'S3']), 3);
+  await openMenu(page);
+  await page.click('#btnToEdit');
+  await expect(page).toHaveURL(/\/pdf-edit\/$/);                 // ?shared=1 taken and removed
+  await expect(page.locator('#pages li')).toHaveCount(3);
+  await expect(page.locator('#files li')).toContainText('bericht.pdf');
+  // back: the viewer still has its PDF (kept on the device)
+  await page.goBack();
+  await expect(page).toHaveURL(/\/pdf-viewer\//);
+  await expect(pages(page)).toHaveCount(3);
+  await openMenu(page);
+  await page.click('#btnToWord');
+  await expect(page).toHaveURL(/\/pdf2word\/$/);
+  await expect(page.locator('#fileInfo')).toContainText('bericht.pdf');
+  await expect(page.locator('#btnRun')).toBeEnabled();
+});
+
 test('night mode inverts the pages', async ({ page }) => {
   await page.goto(URL_);
   await openPdf(page);

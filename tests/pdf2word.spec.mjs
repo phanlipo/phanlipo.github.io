@@ -237,6 +237,25 @@ test('skips a full-page background picture behind text', async ({ page }) => {
   expect([...files.keys()].some(k => k.startsWith('word/media/'))).toBe(false);
 });
 
+test('hand-over: the chosen PDF opens in "PDF ansehen" or "PDF bearbeiten"', async ({ page }) => {
+  await page.goto(URL_);
+  await page.locator('.menu-btn').click();
+  await expect(page.locator('#btnToView')).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await page.setInputFiles('#file', { name: 'brief.pdf', mimeType: 'application/pdf', buffer: makePdf([{ texts: [{ x: 72, y: 700, size: 20, text: 'Brief' }] }, { texts: [] }]) });
+  await page.locator('.menu-btn').click();
+  await page.click('#btnToView');
+  await expect(page).toHaveURL(/\/pdf-viewer\/$/);
+  await expect(page.locator('#pages .page')).toHaveCount(2);
+  await expect(page.locator('#docName')).toHaveText('brief.pdf');
+  await page.goBack();
+  await page.setInputFiles('#file', { name: 'brief.pdf', mimeType: 'application/pdf', buffer: makePdf([{ texts: [{ x: 72, y: 700, size: 20, text: 'Brief' }] }]) });
+  await page.locator('.menu-btn').click();
+  await page.click('#btnToEdit');
+  await expect(page).toHaveURL(/\/pdf-edit\/$/);
+  await expect(page.locator('#pages li')).toHaveCount(1);
+});
+
 /* ---------- Scanned pages (text recognition; the "scan" comes from pdf-tools.mjs) ---------- */
 
 test('reads scanned pages with text recognition', async ({ page }) => {

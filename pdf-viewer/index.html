@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-E6t+6+DZUYHHQ6JrWWgnlGjnpHa+ywPLajuuyLSS4kg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rsCs2DxL8SRhKdT6qwLQxDvbF8j8dfxhADZyHg9SAU4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -91,7 +91,6 @@ body.bars-hidden #bar{transform:translateY(110%);opacity:0;pointer-events:none}
 @media (prefers-reduced-motion: reduce){body.stage>header,#bar,#badge{transition:none}}
 .goto{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-block-start:8px}
 .goto input{width:6em;min-height:44px;font-size:16px;padding-inline:10px}
-.pw .err-text{color:var(--err);margin:0;min-height:1.2em;font-size:14px}
 .drop main{outline:3px dashed var(--accent);outline-offset:-6px}
 /* Search: the field replaces the title in the header while it is open; hits are boxes over the page (.hlLayer) */
 #findBar{flex:1;min-width:0;display:flex;align-items:center;gap:2px}
@@ -164,6 +163,8 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
 <div class="menu-list" id="docActions" data-menu>
   <button type="button" id="btnOpen"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#folder-open"/></svg><span data-i18n="openOther">Andere PDF öffnen</span></button>
   <button type="button" id="btnOcr" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#text-recognition"/></svg><span data-i18n="ocr.run">Text erkennen (gescannte Seiten)</span></button>
+  <button type="button" id="btnToEdit" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-pencil"/></svg><span data-i18n="hand.edit">In „PDF bearbeiten“ öffnen</span></button>
+  <button type="button" id="btnToWord" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-type-docx"/></svg><span data-i18n="hand.word">In Word umwandeln</span></button>
   <button type="button" id="btnDownload" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="download">Herunterladen</span></button>
   <button type="button" id="btnClose" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="close">PDF schließen</span></button>
 </div>
@@ -190,17 +191,6 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
   <label class="check"><input type="checkbox" id="optKeep"> <span data-i18n="set.keep">PDF beim nächsten Start wieder öffnen</span></label>
 </details>
 
-<dialog id="pwDlg" class="dialog" data-keep aria-labelledby="pwTitle">
-  <div class="dialog-body pw">
-    <h2 id="pwTitle" class="dialog-title"></h2>
-    <label class="form-field"><span data-i18n="pw.label">Passwort</span><input type="password" id="pwInput" autocomplete="off" spellcheck="false" maxlength="200"></label>
-    <p class="err-text" id="pwErr" role="alert"></p>
-  </div>
-  <div class="dialog-actions">
-      <button type="button" class="btn" id="pwCancel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="pw.cancel">Abbrechen</span></button>
-      <button type="button" class="btn primary" id="pwOk"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#lock-open"/></svg><span data-i18n="pw.open">Öffnen</span></button>
-  </div>
-</dialog>
 
 <!-- data:start -->
 <details class="data card">
@@ -245,7 +235,7 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
   </ul>
   <h3>Im Menü (☰)</h3>
   <ul>
-    <li>Inhaltsverzeichnis (wenn die PDF eins hat), Infos zum Dokument, <i>Text erkennen</i> (bei gescannten Seiten), <i>Andere PDF öffnen</i>, <i>Herunterladen</i>, <i>PDF schließen</i> und <i>Zu Seite</i>.</li>
+    <li>Inhaltsverzeichnis (wenn die PDF eins hat), Infos zum Dokument, <i>Text erkennen</i> (bei gescannten Seiten), <i>In „PDF bearbeiten“ öffnen</i> und <i>In Word umwandeln</i> (gibt die PDF an die andere App weiter, die Datei bleibt auf dem Gerät), <i>Andere PDF öffnen</i>, <i>Herunterladen</i>, <i>PDF schließen</i> und <i>Zu Seite</i>.</li>
     <li>Anzeige: automatisch ausblenden, Systemleisten mit ausblenden, Nachtmodus (dunkle Seiten mit heller Schrift), Sprache der Texterkennung, geöffnete PDF behalten.</li>
   </ul>
   <h3>Was wird gespeichert?</h3>
@@ -279,7 +269,7 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
   </ul>
   <h3>In the menu (☰)</h3>
   <ul>
-    <li>Contents (if the PDF has them), document info, <i>Recognise text</i> (for scanned pages), <i>Open another PDF</i>, <i>Download</i>, <i>Close PDF</i> and <i>Go to page</i>.</li>
+    <li>Contents (if the PDF has them), document info, <i>Recognise text</i> (for scanned pages), <i>Open in “Edit PDF”</i> and <i>Convert to Word</i> (hands the PDF to the other app; the file stays on the device), <i>Open another PDF</i>, <i>Download</i>, <i>Close PDF</i> and <i>Go to page</i>.</li>
     <li>Display: hide automatically, hide the system bars too, night mode (dark pages with light text), language of the text recognition, keep the open PDF.</li>
   </ul>
   <h3>What is stored?</h3>
@@ -323,7 +313,7 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version a21842d89f9d</p>
+  <p class="footer-version">Version 72f1e49f459d</p>
   <!-- footer:end -->
 </footer>
 
@@ -336,7 +326,6 @@ Tools.i18n({
     'doc.none':'Keine PDF geöffnet.','doc.info':'{name} · {n} Seite(n) · {size}','label':'{n} / {total}',
     'loading':'PDF wird geöffnet …','err.notPdf':'Das ist keine PDF-Datei.','err.broken':'Die PDF konnte nicht geöffnet werden – sie ist vielleicht beschädigt.',
     'err.lib':'Der PDF-Anzeiger konnte nicht geladen werden. Bitte einmal mit Internet öffnen.','err.skipped':'Ohne Passwort lässt sich die PDF nicht öffnen.',
-    'pw.title':'„{name}“ ist passwortgeschützt','pw.wrong':'Falsches Passwort – bitte noch einmal versuchen.','pw.empty':'Bitte das Passwort eingeben.',
     'resume':'Weiter auf Seite {n}','share.fail':'Teilen hat nicht geklappt.','fs.fail':'Vollbild ist hier nicht möglich.',
     'goto.bad':'Seite 1 bis {n} eingeben.','pageAria':'Seite {n}','mcp.goto':'zu Seite gesprungen',
     'closed':'PDF geschlossen.','link.web':'Link: {url}','link.internal':'Verweis auf eine Seite dieses Dokuments',
@@ -345,18 +334,16 @@ Tools.i18n({
     'ocr.start':'Text erkennen','ocr.loading':'Texterkennung wird geladen …','ocr.status':'Seite {page} wird erkannt ({i} von {total})',
     'ocr.done':'Text auf {n} Seite(n) erkannt – die Erkennung kann Fehler enthalten.','ocr.fail':'Texterkennung nicht möglich.',
     'ocr.offline':'Die Texterkennung braucht beim ersten Mal Internet (ca. 5 MB).','ocr.cancelled':'Texterkennung abgebrochen.',
-    'ocr.none':'Alle Seiten haben schon Text.',
+    'ocr.none':'Alle Seiten haben schon Text.','hand.fail':'Übergeben hat nicht geklappt.',
   },
   en:{
     title:'PDF Viewer',share:'Share PDF',fs:'Full screen',view:'Document',intro:'Open a PDF or share it here from another app. The file stays on this device.',
     open:'Open PDF',pagesLabel:'Pages',page:'Page',fit:'Page width','doc.h':'Document',openOther:'Open another PDF',download:'Download',
     goto:'Go to page',go:'Go','set.h':'Display','set.autoHide':'Hide the bars while reading',
     'set.system':'When hiding, also hide the system bars (full screen)','set.night':'Night mode (invert colours)',
-    'pw.label':'Password','pw.cancel':'Cancel','pw.open':'Open',
     'doc.none':'No PDF open.','doc.info':'{name} · {n} page(s) · {size}','label':'{n} / {total}',
     'loading':'Opening PDF …','err.notPdf':'This is not a PDF file.','err.broken':'The PDF could not be opened – it may be damaged.',
     'err.lib':'The PDF viewer could not be loaded. Please open it once with internet.','err.skipped':'The PDF cannot be opened without the password.',
-    'pw.title':'“{name}” is password-protected','pw.wrong':'Wrong password – please try again.','pw.empty':'Please enter the password.',
     'resume':'Continuing on page {n}','share.fail':'Sharing did not work.','fs.fail':'Full screen is not possible here.',
     'goto.bad':'Enter page 1 to {n}.','pageAria':'Page {n}','mcp.goto':'went to a page',
     close:'Close PDF','set.keep':'Reopen the PDF next time','closed':'PDF closed.',
@@ -369,7 +356,7 @@ Tools.i18n({
     'ocr.start':'Recognise text','ocr.loading':'Loading text recognition …','ocr.status':'Recognising page {page} ({i} of {total})',
     'ocr.done':'Text recognised on {n} page(s) – the recognition may contain mistakes.','ocr.fail':'Text recognition is not possible.',
     'ocr.offline':'Text recognition needs the internet the first time (about 5 MB).','ocr.cancelled':'Text recognition cancelled.',
-    'ocr.none':'All pages already have text.','ocr.progress':'Progress of the text recognition','ocr.cancel':'Cancel text recognition',
+    'ocr.none':'All pages already have text.','hand.edit':'Open in “Edit PDF”','hand.word':'Convert to Word','hand.fail':'Handing over did not work.','ocr.progress':'Progress of the text recognition','ocr.cancel':'Cancel text recognition',
     'set.ocrLang':'Language of the text recognition','lang.de':'German','lang.en':'English',
   }
 });
@@ -382,54 +369,19 @@ const MIN_ZOOM=1, MAX_ZOOM=4, MAX_PIXELS=8e6, KEEP=2.5; // canvases further than
 const clamp=Tools.clamp;
 const fmtSize=b=>b<1048576?Tools.fmt(Math.max(1,Math.round(b/1024)),0)+' KB':Tools.fmt(b/1048576,1)+' MB';
 
-/* ================= pdf.js (loaded on first use, cached offline by sw.js) ================= */
-let jsP=null;
-function pdfjs(){
-  return jsP||(jsP=import('../assets/vendor/pdfjs/pdf.min.mjs').then(m=>{
-    // Worker from the app folder: a worker outside it would bypass the service worker (offline)
-    m.GlobalWorkerOptions.workerSrc=new URL('pdf-worker.mjs',location.href).href;
-    return m;
-  }).catch(e=>{jsP=null;throw e;}));
-}
+/* ================= pdf.js: opening, password, loading – assets/shared/pdf-open.mjs (loaded on first use) ================= */
+let openP=null;
+const pdfOpen=()=>openP||(openP=import('../assets/shared/pdf-open.mjs').catch(e=>{openP=null;throw e;}));
+const pdfjs=()=>pdfOpen().then(m=>m.pdfjs());
 
 /* ================= State ================= */
 // doc: pdf.js document; file: the File as opened (for sharing/downloading); sizes: [w,h] per page at scale 1
 let doc=null, file=null, sizes=[], els=[], tops=[], zoom=1, cur=1, loadToken=0, encrypted=false;
 
 /* ================= Opening ================= */
-// pdf.js 6: a document is closed through its loading task
-const destroyDoc=d=>{try{Promise.resolve((d.loadingTask||d).destroy()).catch(()=>{});}catch(_){}};
+const destroyDoc=d=>{if(openP) openP.then(m=>m.closePdf(d));};
 function message(text,err){
   const m=$('emptyMsg'); m.textContent=text||''; m.classList.toggle('err',!!err);
-}
-async function isPdf(f){
-  // "%PDF-" within the first KB (some files have a few bytes before it)
-  const head=new Uint8Array(await f.slice(0,1024).arrayBuffer());
-  return new TextDecoder('latin1').decode(head).includes('%PDF-');
-}
-const pwDlg=$('pwDlg'), pwInput=$('pwInput');
-function askPassword(name,wrong){
-  return new Promise(resolve=>{
-    $('pwTitle').textContent=t('pw.title',{name});
-    $('pwErr').textContent=wrong?t('pw.wrong'):'';
-    pwInput.value='';
-    let done=false;
-    const finish=v=>{
-      if(done) return; done=true;
-      $('pwOk').removeEventListener('click',ok); $('pwCancel').removeEventListener('click',cancel);
-      pwInput.removeEventListener('keydown',key); pwDlg.removeEventListener('cancel',esc);
-      if(pwDlg.open) pwDlg.close();
-      pwInput.value='';
-      resolve(v);
-    };
-    const ok=()=>{if(!pwInput.value){$('pwErr').textContent=t('pw.empty');pwInput.focus();return;}finish(pwInput.value);};
-    const cancel=()=>finish(null);
-    const key=e=>{if(e.key==='Enter'){e.preventDefault();ok();}};
-    const esc=e=>{e.preventDefault();finish(null);};
-    $('pwOk').addEventListener('click',ok); $('pwCancel').addEventListener('click',cancel);
-    pwInput.addEventListener('keydown',key); pwDlg.addEventListener('cancel',esc);
-    pwDlg.showModal(); pwInput.focus();
-  });
 }
 /* ---------- Kept PDF: the last opened file stays on the device (Cache Storage "file:pdf-viewer") and opens
    again at the next start – also after an app update reloads the page. Not in the data backup (too big);
@@ -454,33 +406,19 @@ async function openFile(f,restored){
   Tools.diag.log('open',{size:f.size,type:f.type||'-'});
   if(!doc) message(t('loading'));
   try{
-    if(!(await isPdf(f))){Tools.diag.log('not a pdf');if(restored) forgetFile();fail(t('err.notPdf'));return;}
-    let lib;
-    try{lib=await pdfjs();}catch(e){Tools.diag.log('pdf.js failed',e);fail(t('err.lib'));return;}
+    let po;
+    try{po=await pdfOpen();await po.pdfjs();}catch(e){Tools.diag.log('pdf.js failed',e);fail(t('err.lib'));return;}
+    if(!(await po.isPdfFile(f))){Tools.diag.log('not a pdf');if(restored) forgetFile();fail(t('err.notPdf'));return;}
     const bytes=new Uint8Array(await f.arrayBuffer());
-    let password, tries=0, d;
-    for(;;){
-      const task=lib.getDocument({
-        data:bytes.slice(),   // pdf.js takes over the buffer – keep the original for the next try
-        ...(password!=null?{password}:{}),
-        isEvalSupported:false,
-        standardFontDataUrl:new URL('../assets/vendor/pdfjs/standard_fonts/',location.href).href,
-        wasmUrl:new URL('../assets/vendor/pdfjs/wasm/',location.href).href,
-        iccUrl:new URL('../assets/vendor/pdfjs/iccs/',location.href).href
-      });
-      try{d=await task.promise;break;}
-      catch(e){
-        if(e&&e.name==='PasswordException'){
-          const wrong=password!=null;
-          if(wrong) Tools.diag.log('wrong password',{tries});
-          const pw=await askPassword(f.name,wrong);
-          if(token!==loadToken) return;
-          if(pw==null){Tools.diag.log('password skipped',{tries});if(restored) forgetFile();fail(t('err.skipped'));return;}
-          password=pw; tries++;
-          continue;
-        }
-        throw e;
-      }
+    let d, password;
+    try{
+      // an opened file replacing this one ends the password question
+      ({doc:d,password}=await po.openPdf(bytes,{name:f.name,ask:wrong=>token!==loadToken?null:po.askPassword(f.name,wrong)}));
+    }catch(e){
+      if(token!==loadToken) return;
+      if(e.code==='password'){if(restored) forgetFile();fail(t('err.skipped'));return;}
+      if(e.code==='lib'){fail(t('err.lib'));return;}
+      throw e.cause||e;
     }
     if(token!==loadToken){destroyDoc(d);return;}
     const sz=[];
@@ -1215,7 +1153,7 @@ function renderInfo(){
   $('docInfo').textContent=doc?t('doc.info',{name:file.name,n:sizes.length,size:fmtSize(file.size)}):t('doc.none');
   $('appTitle').hidden=!!doc; $('docName').hidden=!doc; $('docName').textContent=doc?file.name:'';
   document.title=doc?file.name:t('title');
-  for(const id of ['btnDownload','btnClose','gotoInput','btnGoto']) $(id).disabled=!doc;
+  for(const id of ['btnDownload','btnClose','gotoInput','btnGoto','btnToEdit','btnToWord']) $(id).disabled=!doc;
   $('btnShare').hidden=!doc||!canShareFiles;
   $('btnFind').hidden=!doc;
   updateOcrBtn();
@@ -1233,6 +1171,14 @@ $('btnShare').addEventListener('click',async()=>{
   try{await navigator.share({files:[file],title:file.name});Tools.diag.log('shared');}
   catch(e){Tools.diag.log('share',e);if(e.name!=='AbortError') Tools.toast(t('share.fail'));}
 });
+// Hand the open PDF to another PDF app of this site (Tools.handOff; this one keeps it for the way back)
+async function handTo(app){
+  if(!file) return;
+  Tools.menu.close();
+  if(!(await Tools.handOff(app,file))) Tools.toast(t('hand.fail'));
+}
+$('btnToEdit').addEventListener('click',()=>handTo('pdf-edit'));
+$('btnToWord').addEventListener('click',()=>handTo('pdf2word'));
 $('btnDownload').addEventListener('click',()=>{
   if(!file) return;
   Tools.download(file,file.name||'dokument.pdf');
