@@ -2734,6 +2734,48 @@ test.describe('image-converter tools', () => {
   });
 });
 
+test.describe('photo-editor tools', () => {
+  test('get_state and set_filter: filter and sliders show up in the app and are saved', async ({ page }) => {
+    await open(page, '/photo-editor/');
+    let r = await call(page, 'photo_editor_get_state', {});
+    expect(r.result).toEqual({ filter: 'coloring', has_photo: false, photo: null, sliders: {
+      coloring: { detail: 40, thickness: 2 }, comic: { levels: 5, lines: 50 }, sketch: { shading: 40 }, watercolor: { softness: 50 }, oil: { brush: 4 },
+      popart: { palette: 1 }, halftone: { dotSize: 10 }, pixel: { pixelSize: 10 }, bw: { contrast: 30 }, vintage: { tone: 70 } } });
+    // Without a photo the choice is still made (it applies to the next photo)
+    r = await call(page, 'photo_editor_set_filter', { filter: 'comic', levels: 3, lines: 0 });
+    expect(r.result).toMatchObject({ filter: 'comic', sliders: { comic: { levels: 3, lines: 0 } }, has_photo: false });
+    await expect(page.locator('.toast')).toContainText('KI-Agent: Filter eingestellt');
+    const b64 = await page.evaluate(() => {
+      const c = document.createElement('canvas'); c.width = 300; c.height = 200;
+      const g = c.getContext('2d'); g.fillStyle = '#3a9a3a'; g.fillRect(0, 0, 300, 200);
+      g.fillStyle = '#e03a3a'; g.fillRect(100, 50, 100, 100);
+      return c.toDataURL('image/png').split(',')[1];
+    });
+    await page.setInputFiles('#inPick', { name: 'privat.png', mimeType: 'image/png', buffer: Buffer.from(b64, 'base64') });
+    await expect(page.locator('#filters [data-filter="comic"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#levels')).toHaveValue('3');
+    r = await call(page, 'photo_editor_set_filter', { filter: 'coloring', thickness: 4 });
+    // The preview already shows the new filter when the tool returns
+    expect(JSON.parse(await page.locator('#view').getAttribute('data-shows'))).toEqual(['coloring', expect.objectContaining({ levels: 3, lines: 0, detail: 40, thickness: 4 })]);
+    expect(r.result).toMatchObject({ filter: 'coloring', sliders: { comic: { levels: 3, lines: 0 }, coloring: { detail: 40, thickness: 4 } }, has_photo: true, photo: { width: 300, height: 200 } });
+    expect(JSON.stringify(r.result)).not.toContain('privat');   // no file names
+    await expect(page.locator('#thicknessOut')).toHaveText('4');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('photo-editor.settings.v1'))))
+      .toMatchObject({ filter: 'coloring', levels: 3, lines: 0, detail: 40, thickness: 4 });
+    // Other filters with their sliders
+    r = await call(page, 'photo_editor_set_filter', { filter: 'popart', palette: 3 });
+    expect(r.result).toMatchObject({ filter: 'popart', sliders: { popart: { palette: 3 } } });
+    await expect(page.locator('#filters [data-filter="popart"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#paletteOut')).toHaveText('Sommer');
+    // A slider of another filter is refused
+    r = await call(page, 'photo_editor_set_filter', { filter: 'pixel', tone: 50 });
+    expect(r.error).toContain('tone belongs to the filter vintage');
+    // Same limits as the sliders
+    for (const bad of [{ filter: 'sepia' }, { filter: 'comic', levels: 9 }, { filter: 'coloring', thickness: 0 }, { filter: 'pixel', pixelSize: 31 }, { levels: 4 }, { filter: 'comic', file: 'x' }])
+      expect((await call(page, 'photo_editor_set_filter', bad)).ok, JSON.stringify(bad)).toBe(false);
+  });
+});
+
 test.describe('secret-santa tools', () => {
   test.beforeEach(async ({ page }) => {
     await fakeModelContext(page);
