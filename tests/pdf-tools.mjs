@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
  *             images: [{ x, y, w, h, width, height, rgb }] }]   rgb: Buffer, 3 bytes per pixel, rows top to bottom
  *             links: [{ rect: [x1, y1, x2, y2], uri } | { rect, page }] }]   link areas (page: 0-based target page)
  * Coordinates in points, origin bottom left, A4.
+ *   options.outline: [{ title, page (0-based), children: [...] }] – bookmarks (table of contents); not with encrypt
  *   options.encrypt: { user, owner } – password protection with the PDF standard security handler,
  *   revision 2 (RC4, 40 bit; PDF 1.7 spec, algorithms 1–4). user '' = opens without a password,
  *   only protected against changes (as many "secured" PDFs are).
@@ -40,7 +41,27 @@ export function makePdf(pages, options = {}) {
       (annots.length ? `/Annots [${annots.map(a => `${a} 0 R`).join(' ')}] ` : '') +
       `/Resources << /Font << /F1 ${regular} 0 R /F2 ${bold} 0 R >>${xobjects.length ? ` /XObject << ${xobjects.join(' ')} >>` : ''} >> >>`));
   }
-  objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
+  let outlineRef = 0;
+  if (options.outline?.length) {
+    // each level: a linked list (/Prev /Next) under its parent (/First /Last); /Count = all open descendants
+    const level = (items, parent) => {
+      const refs = items.map(() => add(null));
+      let total = 0;
+      items.forEach((it, i) => {
+        const kids = it.children?.length ? level(it.children, refs[i]) : null;
+        total += 1 + (kids ? kids.count : 0);
+        objs[refs[i] - 1] = `<< /Title (${it.title.replace(/[\\()]/g, '\\$&')}) /Parent ${parent} 0 R /Dest [${pageRef(it.page)} 0 R /Fit]` +
+          (i ? ` /Prev ${refs[i - 1]} 0 R` : '') + (i < refs.length - 1 ? ` /Next ${refs[i + 1]} 0 R` : '') +
+          (kids ? ` /First ${kids.first} 0 R /Last ${kids.last} 0 R /Count ${kids.count}` : '') + ' >>';
+      });
+      return { first: refs[0], last: refs[refs.length - 1], count: total };
+    };
+    const pageRef = n => kids[n];
+    outlineRef = add(null);
+    const top = level(options.outline, outlineRef);
+    objs[outlineRef - 1] = `<< /Type /Outlines /First ${top.first} 0 R /Last ${top.last} 0 R /Count ${top.count} >>`;
+  }
+  objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R${outlineRef ? ` /Outlines ${outlineRef} 0 R` : ''} >>`;
   objs[pagesObj - 1] = `<< /Type /Pages /Kids [${kids.map(k => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`;
   const enc = options.encrypt && encryption(options.encrypt);
   if (enc) {
