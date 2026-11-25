@@ -489,3 +489,53 @@ test('due reminders are counted on the app icon until confirmed', async ({ page 
   await page.click('#btnDueOk');
   await expect.poll(() => lastBadge(page)).toBe(0);
 });
+
+// Periodic Background Sync (sw-app.js): Chrome wakes the service worker while the app is closed. The event itself
+// cannot be fired from a test (synthetic events cannot use waitUntil), so the test calls the same check directly.
+test.describe('background check', () => {
+  test('reminder due while the app is closed: the service worker shows it, the app does not notify again', async ({ page, context }) => {
+    const due = Date.now() + 3600e3; // real time: the service worker has no fake clock
+    await page.goto('/reminders/');
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await add(page, 'Zahnarzt', (d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`)(new Date(due)));
+    const at = (await stored(page))[0].at;
+    // The page has mirrored the schedule for the service worker, with ready texts
+    await expect.poll(() => page.evaluate(() => Tools.keep.json('schedule', null))).toMatchObject({ items: [{ title: 'Zahnarzt', at, tag: expect.stringMatching(/^reminder-r/) }] });
+    const sw = context.serviceWorkers().find(w => w.url().endsWith('/reminders/sw.js')) || await context.waitForEvent('serviceworker');
+    await page.close();
+    // Two hours later, app closed: the check shows the reminder once (late), a second wake-up shows nothing new
+    const shown = await sw.evaluate(async now => {
+      // Headless Chromium reports "denied" in the service worker: stand-ins for permission and showNotification
+      const real = Date.now; Date.now = () => now;
+      const perm = Object.getOwnPropertyDescriptor(Notification, 'permission');
+      Object.defineProperty(Notification, 'permission', { configurable: true, get: () => 'granted' });
+      const calls = [];
+      self.registration.showNotification = (title, opts) => { calls.push({ title, body: opts.body, tag: opts.tag }); return Promise.resolve(); };
+      try {
+        await self.remindersCheck();
+        await self.remindersCheck();
+        return calls;
+      } finally {
+        Date.now = real;
+        delete self.registration.showNotification;
+        if (perm) Object.defineProperty(Notification, 'permission', perm); else delete Notification.permission;
+      }
+    }, at + 2 * 3600e3);
+    expect(shown).toHaveLength(1);
+    expect(shown[0].title).toBe('Zahnarzt');
+    expect(shown[0].body).toMatch(/^Fällig war: /);
+    // Opening the app later: due, in the history as notified at the background time, no second notification
+    const p2 = await context.newPage();
+    await p2.clock.install({ time: at + 3 * 3600e3 });
+    await fakeNotifications(p2);
+    await p2.goto('/reminders/');
+    await expect(p2.locator('#pastList li')).toHaveCount(1);
+    await expect(p2.locator('#dueList li')).toHaveCount(1);
+    const [r] = await stored(p2);
+    expect(r.fired).toBe(at + 2 * 3600e3);
+    expect(r.shown).toBe(true);
+    expect(await notes(p2)).toEqual([]);
+    // Nothing scheduled any more: the mirror is empty, the service worker forgets the tag on its next check
+    await expect.poll(() => p2.evaluate(() => Tools.keep.json('schedule', null))).toMatchObject({ items: [] });
+  });
+});

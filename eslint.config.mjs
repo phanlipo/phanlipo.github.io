@@ -82,6 +82,11 @@ export default [
     files: ['**/*worker*.js', '**/*worker*.mjs', 'assets/shared/heic-decode.js', 'assets/shared/onnx-tts.js'],
     languageOptions: { globals: { ...globals.worker } },
   },
+  // App-specific service worker code (loaded by the generated sw.js, see SW_APP in scripts/build.mjs)
+  {
+    files: ['*/sw-app.js'],
+    languageOptions: { globals: { ...globals.serviceworker } },
+  },
   // Audio worklet (runs in the AudioWorkletGlobalScope)
   {
     files: ['loop-station/recorder.js'],

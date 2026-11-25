@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files (of the icon sprite only the icons
 // this app uses): every change creates a new version, the browser installs it in the background and removes the old one.
 const APP = "reminders";
-const VERSION = 'd42c599e43fd';
+const VERSION = '45402b3cb049';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -14,6 +14,7 @@ const FILES = [
   "icon.svg",
   "manifest.webmanifest",
   "shortcut-new.png",
+  "sw-app.js",
   "../assets/base.css",
   "../assets/common.js",
   "../assets/icons.svg"
@@ -45,6 +46,9 @@ self.addEventListener('activate', event => {
 });
 
 // Cache first: instant start and offline use. Anything not cached goes to the network.
+// App-specific service worker code (background events such as periodicsync), cached like the app's other files
+importScripts('sw-app.js');
+
 // Notifications (feature "Benachrichtigung"): a tap on one brings the open app to the front or opens it
 self.addEventListener('notificationclick', event => {
   event.notification.close();
