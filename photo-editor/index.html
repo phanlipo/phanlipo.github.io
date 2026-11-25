@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Tool metadata: read by scripts/build.mjs (start page, README, PWA manifest) and scripts/build-icons.mjs -->
+<title>Foto-Editor</title>
+<meta name="description" content="Aus einem Foto ein Comic-Bild oder eine schwarz-weiße Zeichnung zum Ausmalen machen – Filter wählen, anpassen, speichern, teilen oder drucken, ganz ohne Upload.">
+<meta name="tool:tags" content="Freizeit, Kinder">
+<meta name="tool:features" content="Datei öffnen, Teilen an App, KI-Agent">
+<meta name="tool:webmcp" content="get_state, set_filter">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann den Filter (Original, Comic, Ausmalbild) und seine Regler einstellen und lesen, was gerade eingestellt ist. Fotos auswählen, speichern und drucken kannst nur du.">
+<meta name="tool:webmcp-help-en" content="An AI agent can set the filter (original, comic, colouring page) and its sliders and read what is set. Only you can choose, save and print photos.">
+<meta name="tool:icon" content="photo-edit">
+<meta name="tool:color" content="#be185d">
+<meta name="tool:short-name" content="Foto-Editor">
+<meta name="tool:title-en" content="Photo Editor">
+<meta name="tool:description-en" content="Turn a photo into a comic picture or a black-and-white drawing to colour in – pick a filter, adjust it, save, share or print, without any upload.">
+<meta name="tool:short-name-en" content="Photo Editor">
+<meta name="tool:storage" content="photo-editor.">
+<meta name="tool:share-target" content="image/*, .heic, .heif">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-UMMAy87e/+UdKAt9CfgU2vQsAZTad0fkBpb2HkVeSM8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Foto-Editor">
+<meta name="theme-color" content="#be185d">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#be185d;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#f9a8d4;--accent-text:#3b0820}}
+main{max-width:900px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+#photoInfo{margin:0 0 8px;color:var(--muted);font-size:14px;overflow-wrap:anywhere}
+.sliders{display:grid;gap:4px;margin-top:12px}
+.result{position:relative;display:flex;justify-content:center;border:1px solid var(--border);border-radius:8px;background:#fff;overflow:hidden;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.result canvas{display:block;max-width:100%;height:auto;max-height:70vh}
+.result .busy{position:absolute;inset:auto 8px 8px auto;padding:4px 10px;border-radius:999px;background:var(--surface);color:var(--text);font-size:14px;box-shadow:0 1px 4px rgb(0 0 0 / .25)}
+.result .busy[hidden]{display:none}
+.result-hint{margin:6px 0 8px;color:var(--muted);font-size:14px}
+#status{margin:8px 0 0;min-height:1.3em}
+#status.err{color:var(--err)}
+#printImg{display:none}
+@media print{
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block!important;margin:0}
+  #printImg{display:block;max-width:100%;max-height:100vh;margin:0 auto;object-fit:contain}
+  @page{margin:10mm}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Foto-Editor</span></h1>
+  <p class="sub" data-i18n="sub">Comic-Bild oder Ausmalbild aus deinem Foto – alles bleibt auf dem Gerät.</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-photo">
+    <h2 id="h-photo"><span class="step">1</span><span data-i18n="photo.h">Foto wählen</span></h2>
+    <button type="button" class="dropzone" id="btnPick"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#photo"/></svg><strong data-i18n="photo.pick">Foto wählen</strong>
+      <span class="dz-hint" data-i18n="photo.hint">Oder hierher ziehen bzw. einfügen. JPG, PNG, HEIC (iPhone), WebP …</span></button>
+    <input type="file" id="inPick" accept="image/*,.heic,.heif" hidden>
+    <div id="photoLoaded" hidden>
+      <p id="photoInfo"></p>
+      <div class="row">
+        <button type="button" class="btn" id="btnOther"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#folder-open"/></svg><span data-i18n="photo.other">Anderes Foto</span></button>
+        <button type="button" class="btn" id="btnDiscard"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#trash"/></svg><span data-i18n="photo.discard">Foto verwerfen</span></button>
+      </div>
+    </div>
+    <p id="status" role="status"></p>
+  </section>
+
+  <section class="card" id="filterCard" aria-labelledby="h-filter" hidden>
+    <h2 id="h-filter"><span class="step">2</span><span data-i18n="filter.h">Filter wählen</span></h2>
+    <div class="tiles" id="filters" role="group" aria-labelledby="h-filter">
+      <button type="button" data-filter="original" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#photo"/></svg><span data-i18n="f.original">Original</span></button>
+      <button type="button" data-filter="comic" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#bolt"/></svg><span data-i18n="f.comic">Comic</span></button>
+      <button type="button" data-filter="coloring" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#palette"/></svg><span data-i18n="f.coloring">Ausmalbild</span></button>
+    </div>
+    <div class="sliders" id="optComic" hidden>
+      <div class="form-field range"><label for="levels"><span data-i18n="o.levels">Farbstufen</span> <output id="levelsOut" for="levels"></output></label><input type="range" id="levels" min="2" max="8" step="1"></div>
+      <div class="form-field range"><label for="lines"><span data-i18n="o.lines">Linien</span> <output id="linesOut" for="lines"></output></label><input type="range" id="lines" min="0" max="100" step="5"></div>
+    </div>
+    <div class="sliders" id="optColoring" hidden>
+      <div class="form-field range"><label for="detail"><span data-i18n="o.detail">Details</span> <output id="detailOut" for="detail"></output></label><input type="range" id="detail" min="0" max="100" step="5"></div>
+      <div class="form-field range"><label for="thickness"><span data-i18n="o.thickness">Strichstärke</span> <output id="thicknessOut" for="thickness"></output></label><input type="range" id="thickness" min="1" max="5" step="1"></div>
+    </div>
+    <div class="row" id="resetRow" hidden>
+      <button type="button" class="btn" id="btnDefaults"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#restore"/></svg><span data-i18n="o.reset">Regler zurücksetzen</span></button>
+    </div>
+  </section>
+
+  <section class="card" id="resultCard" aria-labelledby="h-result" hidden>
+    <h2 id="h-result"><span class="step">3</span><span data-i18n="res.h">Ergebnis</span></h2>
+    <div class="result" id="result">
+      <canvas id="view" role="img" aria-label="Ergebnis" data-i18n-attr="aria-label:res.alt"></canvas>
+      <span class="busy" id="busy" hidden data-i18n="res.busy">Wird berechnet …</span>
+    </div>
+    <p class="result-hint" id="compareHint" data-i18n="res.compare">Zum Vergleichen mit dem Original auf das Bild drücken und halten.</p>
+    <div class="toolbar">
+      <button type="button" id="btnSave" aria-label="Bild speichern (PNG)" title="Bild speichern (PNG)" data-i18n-attr="aria-label:res.save; title:res.save"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span class="tb-label" data-i18n="tb.save">Speichern</span></button>
+      <button type="button" id="btnShare" hidden aria-label="Bild teilen …" title="Bild teilen …" data-i18n-attr="aria-label:res.share; title:res.share"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span class="tb-label" data-i18n="tb.share">Teilen</span></button>
+      <button type="button" id="btnPrint" aria-label="Drucken / PDF" title="Drucken / PDF" data-i18n-attr="aria-label:res.print; title:res.print"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#printer"/></svg><span class="tb-label" data-i18n="tb.print">Drucken</span></button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Macht aus einem Foto ein <strong>Comic-Bild</strong> mit flächigen Farben und schwarzen Konturen oder eine <strong>schwarz-weiße Zeichnung zum Ausmalen</strong>. Das Foto wird <strong>nicht hochgeladen</strong>: Alles passiert im Browser, auch offline.</p>
+  <h3>Bedienung</h3>
+  <ol>
+    <li><strong>Foto wählen</strong> – auf dem Handy auch direkt mit der Kamera aufnehmen. Am Computer lässt es sich hierher ziehen oder mit Strg+V einfügen.</li>
+    <li><strong>Filter wählen</strong> und mit den Reglern anpassen. Das Ergebnis ändert sich sofort.</li>
+    <li><strong>Speichern</strong> (PNG), <strong>Teilen</strong> (Handy) oder <strong>Drucken</strong> – über „Als PDF speichern“ im Druckdialog wird daraus eine PDF-Datei.</li>
+  </ol>
+  <h3>Filter</h3>
+  <ul>
+    <li><strong>Comic:</strong> glättet das Foto, fasst die Helligkeit zu wenigen <em>Farbstufen</em> zusammen (wie gemalt) und zeichnet schwarze Linien an die Kanten. <em>Linien</em> auf 0 lässt sie weg.</li>
+    <li><strong>Ausmalbild:</strong> nur schwarze Umrisse auf weißem Grund, ohne Schatten und Flächen. Mit <em>Details</em> kommen feinere Linien dazu (weniger ist für kleine Kinder besser), <em>Strichstärke</em> macht die Linien dicker – dicke Linien lassen sich leichter ausmalen.</li>
+    <li>Am besten klappt es mit Fotos, auf denen sich das Motiv klar vom Hintergrund abhebt: gutes Licht, wenig Gewusel im Hintergrund.</li>
+    <li>Zum Vergleichen mit dem Original auf das Ergebnis drücken und halten.</li>
+  </ul>
+  <h3>Gut zu wissen</h3>
+  <ul>
+    <li>Gespeichert wird das Bild mit höchstens 2400 Pixel an der längeren Seite. Metadaten wie Aufnahmeort (GPS) sind darin nicht enthalten.</li>
+    <li>HEIC-Fotos vom iPhone öffnet Safari selbst; andere Browser laden beim ersten HEIC-Foto einen Decoder (libheif, ca. 1,5 MB) aus den Dateien dieser App – danach geht es auch offline.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Der gewählte Filter und die Regler bleiben in diesem Browser gespeichert (sichern und übertragen unter „Daten sichern“). Das Foto behält die App auf dem Gerät, damit es nach einem Neuladen noch da ist – „Foto verwerfen“ oder „Alle Daten löschen“ entfernt es. Nichts wird an einen Server geschickt.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Turns a photo into a <strong>comic picture</strong> with flat colours and black outlines or into a <strong>black-and-white drawing to colour in</strong>. The photo is <strong>not uploaded</strong>: everything happens in the browser, offline too.</p>
+  <h3>How to use</h3>
+  <ol>
+    <li><strong>Choose a photo</strong> – on the phone you can also take one with the camera. On a computer, drag it here or paste it with Ctrl+V.</li>
+    <li><strong>Choose a filter</strong> and adjust it with the sliders. The result changes right away.</li>
+    <li><strong>Save</strong> (PNG), <strong>Share</strong> (phone) or <strong>Print</strong> – “Save as PDF” in the print dialog turns it into a PDF file.</li>
+  </ol>
+  <h3>Filters</h3>
+  <ul>
+    <li><strong>Comic:</strong> smooths the photo, merges the brightness into a few <em>colour steps</em> (like painted) and draws black lines along the edges. <em>Lines</em> at 0 leaves them out.</li>
+    <li><strong>Colouring page:</strong> black outlines on white only, without shadows or areas. <em>Details</em> adds finer lines (less is better for small children), <em>Line width</em> makes the lines thicker – thick lines are easier to colour in.</li>
+    <li>It works best with photos where the subject stands out clearly from the background: good light, a calm background.</li>
+    <li>To compare with the original, press and hold the result.</li>
+  </ul>
+  <h3>Good to know</h3>
+  <ul>
+    <li>The picture is saved with at most 2400 pixels on its longer side. It contains no metadata such as the location (GPS).</li>
+    <li>Safari opens iPhone HEIC photos itself; other browsers load a decoder (libheif, about 1.5 MB) from this app's files for the first HEIC photo – after that it works offline too.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>The chosen filter and sliders stay in this browser (back them up or move them under “Back up data”). The app keeps the photo on the device so it is still there after a reload – “Discard photo” or “Delete all data” removes it. Nothing is sent to a server.</p>
+  </div>
+  <!-- files:start -->
+  <div data-lang="de">
+  <h3>Dateien an die App geben</h3>
+  <ul>
+    <li><b>Android:</b> App installieren (☰ → <i>Als App installieren</i>). Dann die Datei in Galerie, Dateien-, Mail- oder Messenger-App <i>teilen</i> und „Foto-Editor“ wählen – das klappt auch offline.</li>
+    <li><b>Windows/Computer:</b> Als installierte App (Chrome oder Edge) steht sie unter <i>Öffnen mit</i> (Rechtsklick auf die Datei); als Standard-App öffnet sie Dateien per Doppelklick. Mit Edge erscheint sie auch im Teilen-Menü von Windows.</li>
+    <li><b>iPhone/iPad:</b> Teilen an Web-Apps und <i>Öffnen mit</i> gibt es dort nicht – die Datei hier in der App auswählen.</li>
+  </ul>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>Giving files to the app</h3>
+  <ul>
+    <li><b>Android:</b> install the app (☰ → <i>Install as an app</i>). Then <i>share</i> the file from the gallery, files, mail or messenger app and pick “Photo Editor” – this works offline too.</li>
+    <li><b>Windows/computer:</b> as an installed app (Chrome or Edge) it is listed under <i>Open with</i> (right-click the file); set as default app, it opens files with a double-click. With Edge it also appears in the Windows share menu.</li>
+    <li><b>iPhone/iPad:</b> sharing to web apps and <i>Open with</i> do not exist there – choose the file here in the app.</li>
+  </ul>
+  </div>
+  <!-- files:end -->
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann den Filter (Original, Comic, Ausmalbild) und seine Regler einstellen und lesen, was gerade eingestellt ist. Fotos auswählen, speichern und drucken kannst nur du. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can set the filter (original, comic, colouring page) and its sliders and read what is set. Only you can choose, save and print photos. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <!-- Troubleshooting: keep in every app. The button copies Tools.diag.text() (see assets/common.js). -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version a0a297a1ba80</p>
+  <!-- footer:end -->
+</footer>
+
+<div id="printArea" hidden><img id="printImg" alt=""></div>
+
+<script src="../assets/common.js"></script>
+<script src="../assets/shared/heic.js"></script>
+<script src="filters.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{
+    'photo.size':'{w} × {h} Pixel','photo.loading':'Lese Foto …','photo.heic':'Lade HEIC-Decoder …',
+    'photo.fail':'Dieses Foto lässt sich nicht öffnen.','photo.restored':'Foto vom letzten Mal geladen.',
+    'photo.discarded':'Foto verworfen','filter.fail':'Der Filter hat nicht geklappt.',
+    'res.saved':'Bild gespeichert ({size}).','res.shareFail':'Teilen hat nicht geklappt.','res.shareAgain':'Bitte noch einmal auf „Teilen“ tippen.',
+    'res.making':'Bild wird erstellt …','name.comic':'comic','name.coloring':'ausmalbild','name.original':'foto',
+    'mcp.filter':'Filter eingestellt'
+  },
+  en:{
+    title:'Photo Editor',sub:'A comic picture or a colouring page from your photo – everything stays on your device.',
+    'photo.h':'Choose a photo','photo.pick':'Choose a photo','photo.hint':'Or drag it here or paste it. JPG, PNG, HEIC (iPhone), WebP …',
+    'photo.other':'Other photo','photo.discard':'Discard photo',
+    'filter.h':'Choose a filter','f.original':'Original','f.comic':'Comic','f.coloring':'Colouring page',
+    'o.levels':'Colour steps','o.lines':'Lines','o.detail':'Details','o.thickness':'Line width','o.reset':'Reset sliders',
+    'res.h':'Result','res.alt':'Result','res.busy':'Working …','res.compare':'Press and hold the picture to compare it with the original.',
+    'res.save':'Save picture (PNG)','res.share':'Share picture …','res.print':'Print / PDF','tb.save':'Save','tb.share':'Share','tb.print':'Print',
+    'photo.size':'{w} × {h} pixels','photo.loading':'Reading photo …','photo.heic':'Loading HEIC decoder …',
+    'photo.fail':'This photo cannot be opened.','photo.restored':'Photo from last time loaded.',
+    'photo.discarded':'Photo discarded','filter.fail':'The filter did not work.',
+    'res.saved':'Picture saved ({size}).','res.shareFail':'Sharing did not work.','res.shareAgain':'Please tap “Share” once more.',
+    'res.making':'Creating picture …','name.comic':'comic','name.coloring':'colouring-page','name.original':'photo',
+    'mcp.filter':'Filter set'
+  }
+});
+const t=Tools.t, $=Tools.$;
+
+/* ---------- Settings ---------- */
+const LS='photo-editor.settings.v1';
+const FILTERS=PhotoFilters.FILTERS;
+const DEF={filter:'coloring',levels:5,lines:50,detail:40,thickness:2};
+const LIMITS={levels:[2,8],lines:[0,100],detail:[0,100],thickness:[1,5]};
+const settings=Object.assign({},DEF,Tools.load(LS,{}));
+if(!FILTERS.includes(settings.filter)) settings.filter=DEF.filter;
+for(const [k,[a,b]] of Object.entries(LIMITS)) settings[k]=Number.isFinite(settings[k])?Math.min(b,Math.max(a,Math.round(settings[k]))):DEF[k];
+const saveSettings=()=>Tools.save(LS,settings);
+const opts=()=>({levels:settings.levels,lines:settings.lines,detail:settings.detail,thickness:settings.thickness});
+
+/* ---------- Sizes ----------
+   The photo is kept at FULL (saving, printing); the preview is computed at PREVIEW so sliders stay quick.
+   The filters scale their radii with the image, so both look alike. */
+const FULL=2400, PREVIEW=1000;
+function canvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
+function scaled(src,sw,sh,max){
+  const k=Math.min(1,max/Math.max(sw,sh)), w=Math.max(1,Math.round(sw*k)), h=Math.max(1,Math.round(sh*k));
+  const c=canvas(w,h), g=c.getContext('2d');
+  g.imageSmoothingQuality='high'; g.drawImage(src,0,0,w,h);
+  return c;
+}
+const fmtSize=b=>b<1048576?Tools.fmt(b/1024,0)+' KB':Tools.fmt(b/1048576,1)+' MB';
+const toBlob=(c,type)=>new Promise((res,rej)=>{try{c.toBlob(b=>b?res(b):rej(new Error('toBlob returned null')),type);}catch(e){rej(e);}});
+
+/* ---------- Filter worker (falls back to this page) ---------- */
+let worker=null, workerOk=typeof Worker!=='undefined', seq=0;
+const waiting=new Map();
+function runFilter(c,filter){
+  const g=c.getContext('2d',{willReadFrequently:true});
+  const img=g.getImageData(0,0,c.width,c.height);
+  if(workerOk){
+    try{
+      if(!worker){
+        worker=new Worker('filter-worker.js');
+        worker.onmessage=({data})=>{const p=waiting.get(data.id);if(!p)return;waiting.delete(data.id);
+          data.error?p.reject(new Error(data.error+': '+data.detail)):p.resolve(new Uint8ClampedArray(data.pixels));};
+        worker.onerror=e=>{Tools.diag.log('filter worker error',e.message||'');workerOk=false;worker=null;
+          for(const p of waiting.values())p.retry();waiting.clear();};
+        Tools.diag.log('filter worker started');
+      }
+      const id=++seq, buf=img.data.buffer;
+      return new Promise((resolve,reject)=>{
+        waiting.set(id,{resolve,reject,retry:()=>resolve(PhotoFilters.apply(img.data,c.width,c.height,filter,opts()))});
+        worker.postMessage({id,w:c.width,h:c.height,pixels:buf,filter,opts:opts()},[buf]);
+      }).then(px=>new ImageData(px,c.width,c.height));
+    }catch(e){Tools.diag.log('filter worker failed',e);workerOk=false;worker=null;}
+  }
+  return Promise.resolve(new ImageData(PhotoFilters.apply(img.data,c.width,c.height,filter,opts()),c.width,c.height));
+}
+
+/* ---------- Photo ---------- */
+let photo=null;          // {file, full (canvas), preview (canvas)}
+let renderSeq=0, rendered=null;   // rendered = {filter, opts} of what the view shows
+const view=$('view');
+
+async function decode(file){
+  const head=new Uint8Array(await file.slice(0,32).arrayBuffer());
+  const box=String.fromCharCode(...head.slice(4,12));
+  const heic=/^ftyp(heic|heix|hevc|hevx|heim|heis|mif1|msf1)/.test(box)||/\.hei[cf]$/i.test(file.name||'')||/hei[cf]/i.test(file.type||'');
+  if(heic){
+    if(Heic.info().native!==true&&!Heic.info().worker) status(t('photo.heic'));
+    const b=await Heic.decode(file); return {src:b,w:b.width,h:b.height,close:()=>b.close(),fmt:'heic'};
+  }
+  try{
+    const b=await createImageBitmap(file,{imageOrientation:'from-image'});
+    return {src:b,w:b.width,h:b.height,close:()=>b.close(),fmt:file.type||'?'};
+  }catch(e){
+    const url=URL.createObjectURL(file);
+    try{
+      const i=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('image decode failed'));i.src=url;});
+      return {src:i,w:i.naturalWidth,h:i.naturalHeight,close(){},fmt:file.type||'?'};
+    }finally{URL.revokeObjectURL(url);}
+  }
+}
+async function openPhoto(file,{restored=false}={}){
+  if(!file) return false;
+  status(t('photo.loading'));
+  const t0=performance.now();
+  try{
+    const d=await decode(file);
+    if(!d.w||!d.h) throw new Error('image has no size');
+    const full=scaled(d.src,d.w,d.h,FULL); d.close();
+    const preview=scaled(full,full.width,full.height,PREVIEW);
+    photo={file,full,preview,w:d.w,h:d.h};
+    Tools.diag.log('photo opened',{fmt:d.fmt,w:d.w,h:d.h,bytes:file.size,restored,ms:Math.round(performance.now()-t0)});
+    status(restored?t('photo.restored'):'');
+    if(!restored) Tools.keep.put('photo',file).then(ok=>Tools.diag.log('photo kept',ok));
+    renderAll(); await update();
+    return true;
+  }catch(e){
+    Tools.diag.log('photo open failed',{type:file.type||'?',bytes:file.size,restored},e);
+    if(restored){await Tools.keep.remove('photo'); status('');}   // a broken kept file is dropped, not retried forever
+    else status(t('photo.fail'),true);
+    return false;
+  }
+}
+function discard(){
+  photo=null; rendered=null; renderSeq++;
+  Tools.keep.remove('photo');
+  renderAll(); status('');
+  Tools.diag.log('photo discarded');
+}
+function status(msg,err){const s=$('status');s.textContent=msg||'';s.classList.toggle('err',!!err);}
+
+/* ---------- Preview ---------- */
+let pending=0;
+function schedule(){clearTimeout(pending);pending=setTimeout(update,120);}
+async function update(){
+  clearTimeout(pending);
+  if(!photo) return;
+  const my=++renderSeq, filter=settings.filter, o=opts(), src=photo.preview;
+  $('busy').hidden=false;
+  const t0=performance.now();
+  try{
+    const img=await runFilter(src,filter);
+    if(my!==renderSeq) return;
+    view.width=img.width; view.height=img.height;
+    view.getContext('2d').putImageData(img,0,0);
+    rendered={filter,opts:o};
+    view.dataset.shows=JSON.stringify([filter,o]);   // what the view shows (tests)
+    Tools.diag.log('preview',{filter,w:img.width,h:img.height,ms:Math.round(performance.now()-t0)});
+  }catch(e){
+    if(my===renderSeq){Tools.diag.log('preview failed',e);status(t('filter.fail'),true);}
+  }finally{
+    if(my===renderSeq) $('busy').hidden=true;
+  }
+}
+// Press and hold: the original
+let showingOriginal=false;
+function holdOriginal(on){
+  if(!photo||on===showingOriginal) return;
+  showingOriginal=on;
+  const g=view.getContext('2d');
+  if(on){view._saved=g.getImageData(0,0,view.width,view.height);g.drawImage(photo.preview,0,0,view.width,view.height);}
+  else if(view._saved){g.putImageData(view._saved,0,0);view._saved=null;}
+}
+$('result').addEventListener('pointerdown',e=>{if(e.button===0)holdOriginal(true);});
+for(const ev of ['pointerup','pointercancel','pointerleave']) $('result').addEventListener(ev,()=>holdOriginal(false));
+$('result').addEventListener('contextmenu',e=>e.preventDefault());
+
+/* ---------- Full size: saving, sharing, printing ---------- */
+let fullCache=null;   // {key, file}
+const fileBase=()=>t('name.'+settings.filter);
+async function fullFile(){
+  const key=JSON.stringify([settings.filter,opts()]);
+  if(fullCache&&fullCache.photo===photo&&fullCache.key===key) return fullCache.file;
+  const t0=performance.now();
+  const img=await runFilter(photo.full,settings.filter);
+  const c=canvas(img.width,img.height); c.getContext('2d').putImageData(img,0,0);
+  const blob=await toBlob(c,'image/png');
+  const file=new File([blob],fileBase()+'.png',{type:'image/png'});
+  fullCache={photo,key,file};
+  Tools.diag.log('full picture',{filter:settings.filter,w:img.width,h:img.height,bytes:file.size,ms:Math.round(performance.now()-t0)});
+  return file;
+}
+let busyExport=false;
+async function exporting(fn){
+  if(busyExport||!photo) return; busyExport=true;
+  for(const b of ['btnSave','btnShare','btnPrint']) $(b).disabled=true;
+  status(t('res.making'));
+  try{await fn();}
+  catch(e){Tools.diag.log('export failed',e);status(t('filter.fail'),true);}
+  finally{busyExport=false;for(const b of ['btnSave','btnShare','btnPrint']) $(b).disabled=false;}
+}
+$('btnSave').addEventListener('click',()=>exporting(async()=>{
+  const file=await fullFile();
+  Tools.download(file);
+  status(t('res.saved',{size:fmtSize(file.size)}));
+}));
+const canShare=Tools.canShareFile('x.png','image/png');
+$('btnShare').hidden=!canShare;
+$('btnShare').addEventListener('click',()=>exporting(async()=>{
+  const ready=!!fullCache&&fullCache.photo===photo&&fullCache.key===JSON.stringify([settings.filter,opts()]);
+  const file=await fullFile();
+  try{await navigator.share({files:[file],title:file.name});status('');}
+  catch(e){
+    Tools.diag.log('share',e);
+    if(e.name==='AbortError') status('');
+    // Computing took too long for the browser's "user tapped" window – the second tap shares the ready file
+    else if(e.name==='NotAllowedError'&&!ready) status(t('res.shareAgain'));
+    else status(t('res.shareFail'),true);
+  }
+}));
+let printUrl=null;
+$('btnPrint').addEventListener('click',()=>exporting(async()=>{
+  const file=await fullFile();
+  if(printUrl) URL.revokeObjectURL(printUrl);
+  printUrl=URL.createObjectURL(file);
+  const img=$('printImg');
+  await new Promise(res=>{img.onload=img.onerror=res;img.src=printUrl;});
+  status('');
+  Tools.diag.log('print',{filter:settings.filter});
+  window.print();
+}));
+
+/* ---------- Input: pick, drop, paste, shared ---------- */
+$('btnPick').addEventListener('click',()=>{$('inPick').value='';$('inPick').click();});
+$('btnOther').addEventListener('click',()=>{$('inPick').value='';$('inPick').click();});
+$('inPick').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(f)openPhoto(f);});
+$('btnPick').addEventListener('dragover',e=>{e.preventDefault();$('btnPick').classList.add('over');});
+$('btnPick').addEventListener('dragleave',()=>$('btnPick').classList.remove('over'));
+$('btnPick').addEventListener('drop',e=>{e.preventDefault();$('btnPick').classList.remove('over');const f=e.dataTransfer.files[0];if(f)openPhoto(f);});
+document.addEventListener('paste',e=>{
+  if(e.target.closest&&e.target.closest('input,textarea,[contenteditable]')) return;
+  const f=[...(e.clipboardData&&e.clipboardData.files||[])].find(f=>/^image\//.test(f.type)||/\.hei[cf]$/i.test(f.name));
+  if(f){e.preventDefault();openPhoto(f);}
+});
+$('btnDiscard').addEventListener('click',()=>{
+  if(!photo) return;
+  const file=photo.file;
+  discard();
+  Tools.undo(t('photo.discarded'),()=>openPhoto(file));
+});
+
+/* ---------- Filter and sliders ---------- */
+const SLIDERS=['levels','lines','detail','thickness'];
+const sliderText=k=>k==='lines'||k==='detail'?Tools.fmt(settings[k],0)+' %':Tools.fmt(settings[k],0);
+function renderAll(){
+  const has=!!photo;
+  $('btnPick').hidden=has; $('photoLoaded').hidden=!has;
+  $('filterCard').hidden=!has; $('resultCard').hidden=!has;
+  if(has) $('photoInfo').textContent=t('photo.size',{w:Tools.fmt(photo.w,0),h:Tools.fmt(photo.h,0)});
+  for(const b of document.querySelectorAll('#filters button')) b.setAttribute('aria-pressed',String(b.dataset.filter===settings.filter));
+  $('optComic').hidden=settings.filter!=='comic';
+  $('optColoring').hidden=settings.filter!=='coloring';
+  $('resetRow').hidden=settings.filter==='original';
+  $('compareHint').hidden=settings.filter==='original';
+  for(const k of SLIDERS){$(k).value=String(settings[k]);$(k+'Out').textContent=sliderText(k);}
+}
+for(const b of document.querySelectorAll('#filters button')) b.addEventListener('click',()=>{
+  if(settings.filter===b.dataset.filter) return;
+  settings.filter=b.dataset.filter; saveSettings(); renderAll(); update();
+  Tools.diag.log('filter',settings.filter);
+});
+for(const k of SLIDERS) $(k).addEventListener('input',()=>{
+  settings[k]=Number($(k).value); saveSettings();
+  $(k+'Out').textContent=sliderText(k); schedule();
+});
+$('btnDefaults').addEventListener('click',()=>{
+  const keys=settings.filter==='comic'?['levels','lines']:['detail','thickness'];
+  for(const k of keys) settings[k]=DEF[k];
+  saveSettings(); renderAll(); update();
+});
+
+/* ---------- Start: the photo from last time first (Tools.keep), then one shared to the app ---------- */
+renderAll();
+(async()=>{
+  const shared=await Tools.takeSharedFile();
+  if(shared&&await openPhoto(shared)) return;
+  const kept=await Tools.keep.get('photo');
+  if(kept&&!photo) await openPhoto(kept,{restored:true});
+})();
+Tools.onLang(()=>{renderAll();fullCache=null;});
+
+Tools.diag.info(()=>({
+  photo:photo?{w:photo.w,h:photo.h,full:photo.full.width+'x'+photo.full.height,preview:photo.preview.width+'x'+photo.preview.height}:null,
+  settings:Object.assign({},settings),
+  rendered:rendered&&rendered.filter,
+  worker:workerOk?(worker?'running':'not started'):'off',
+  heic:Heic.info(),
+  canShare,
+  kept:Tools.keep.supported()
+}));
+
+/* ---------- WebMCP tools ---------- */
+const filterInfo=()=>({
+  filter:settings.filter,
+  comic:{levels:settings.levels,lines:settings.lines},
+  coloring:{detail:settings.detail,thickness:settings.thickness},
+  has_photo:!!photo,
+  photo:photo?{width:photo.w,height:photo.h}:null
+});
+Tools.mcp.register({
+  name:'get_state',title:'Read filter settings',readOnly:true,
+  description:'Reads the chosen filter (original, comic or coloring = black outlines on white for colouring in), the slider values of the comic filter (levels = colour steps 2–8, lines 0–100) and of the colouring page (detail 0–100, thickness 1–5), and whether a photo is open with its size. Returns no image data.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false},
+  execute:filterInfo
+});
+Tools.mcp.register({
+  name:'set_filter',title:'Set filter',label:'mcp.filter',
+  description:'Sets the filter applied to the photo the user opened, and optionally its sliders, like tapping the filter and moving the sliders in the app. The preview updates in the app. Sliders of the other filter are kept. Returns the new settings. Choosing, saving and printing photos is left to the user.',
+  inputSchema:{type:'object',properties:{
+    filter:{type:'string',enum:FILTERS,description:'original, comic (flat colours with black lines) or coloring (black outlines on white to colour in).'},
+    levels:{type:'integer',minimum:2,maximum:8,description:'Comic: number of brightness steps.'},
+    lines:{type:'integer',minimum:0,maximum:100,description:'Comic: how many black lines, 0 = none.'},
+    detail:{type:'integer',minimum:0,maximum:100,description:'Colouring page: more fine lines when higher.'},
+    thickness:{type:'integer',minimum:1,maximum:5,description:'Colouring page: line width.'}
+  },required:['filter'],additionalProperties:false},
+  execute:async input=>{
+    settings.filter=input.filter;
+    for(const k of SLIDERS) if(input[k]!==undefined) settings[k]=input[k];
+    saveSettings(); renderAll(); await update();
+    return filterInfo();
+  }
+});
+})();
+</script>
+</body>
+</html>
