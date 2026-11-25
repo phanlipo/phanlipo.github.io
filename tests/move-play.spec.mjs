@@ -705,7 +705,8 @@ test.describe('page', () => {
     await expect(page.locator('#calText')).toHaveText('Niemand zu sehen – stell dich vor die Kamera.');
     await expect(page.locator('#calSpace')).toBeVisible();
     // Engine (14.5 MB) + model (5.8 MB), asked once
-    expect(dialogs).toEqual([expect.stringContaining('ca. 20,3 MB')]);
+    // the prompt comes asynchronously – wait for it instead of reading the list at once
+    await expect.poll(() => dialogs).toEqual([expect.stringContaining('ca. 20,3 MB')]);
     // Feet not in the picture
     await pose(page, { hide: [27, 28] });
     await expect(page.locator('#calText')).toHaveText('Geh weiter zurück, bis du von Kopf bis Fuß zu sehen bist.');

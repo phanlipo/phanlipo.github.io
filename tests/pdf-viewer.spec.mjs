@@ -7,7 +7,7 @@ async function openSettings(page) {
   await openMenu(page);
   if (!(await page.locator('#setPage').evaluate(d => d.open))) await page.locator('#setPage > summary').click();
 }
-import { makePdf } from './pdf-tools.mjs';
+import { makePdf, scanPdf, SCAN_TITLE, SCAN_LINES } from './pdf-tools.mjs';
 
 const URL_ = '/pdf-viewer/';
 const doc = labels => makePdf(labels.map(l => ({ texts: [{ x: 72, y: 700, size: 40, text: l }] })));
@@ -529,6 +529,150 @@ test('table of contents: bookmarks of the PDF in the menu, a tap goes to the pag
   await rows.nth(2).click();
   await expect(page.locator('#appMenu')).not.toBeVisible();
   await expect(page.locator('#pageLabel')).toHaveText('4 / 5');
+});
+
+test('text layer of a rotated page lies on the turned text', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto(URL_);
+  const pdf = makePdf([{ rotate: 90, texts: [{ x: 72, y: 700, size: 40, text: 'Hallo Welt' }] }]);
+  await openPdf(page, { name: 'quer.pdf', mimeType: 'application/pdf', buffer: pdf }, 1);
+  const span = pages(page).first().locator('.textLayer span', { hasText: 'Hallo Welt' });
+  await expect(span).toHaveCount(1);
+  // turned 90° clockwise (842 × 595 on screen): PDF (x, y) → screen (y, x); the text runs downwards from (700, 72)
+  const pb = await pages(page).first().boundingBox(), sb = await span.boundingBox(), k = pb.width / 842;
+  expect(sb.y - pb.y).toBeCloseTo(72 * k, -0.5);
+  expect(sb.height).toBeCloseTo(10 * 0.6 * 40 * k, -0.5);
+  expect(sb.x - pb.x).toBeGreaterThan(690 * k);
+  expect(sb.x - pb.x + sb.width).toBeLessThan(750 * k);
+});
+
+/* ---------- Scanned pages: text recognition (Tesseract from assets/vendor, as in PDF zu Word) ---------- */
+
+/** The menu after a long task: the bars may have hidden meanwhile (as for a user, a tap brings them back) */
+async function menuWithBars(page) {
+  if (await hidden(page)) await tap(page);
+  await expect.poll(() => hidden(page)).toBe(false);
+  await openMenu(page);
+}
+async function openScan(page) {
+  const pdf = await scanPdf(page);
+  await page.setInputFiles('#inPick', { name: 'scan.pdf', mimeType: 'application/pdf', buffer: pdf });
+  await expect(pages(page)).toHaveCount(1);
+}
+async function recognise(page, how = 'toast') {
+  if (how === 'toast') {
+    await expect(page.locator('.toast')).toContainText('1 Seite(n) ohne Text');
+    await page.locator('.toast .toast-action').click();
+  } else {
+    await menuWithBars(page);
+    await expect(page.locator('#btnOcr')).toHaveText('Text erkennen (1 gescannte Seite(n))');
+    await page.click('#btnOcr');
+  }
+  await expect(page.locator('#ocrStatus')).toBeVisible();
+  await expect(page.locator('.toast')).toContainText('Text auf 1 Seite(n) erkannt', { timeout: 150000 });
+  await expect(page.locator('#ocrStatus')).toBeHidden();
+}
+
+test('scanned page: offers text recognition; afterwards it can be selected, searched and read by agents', async ({ page }) => {
+  test.setTimeout(240000);
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto(URL_);
+  await expect(page.locator('#optOcrLang')).toHaveValue('deu');      // follows the app language
+  await openScan(page);
+  await expect(pages(page).first().locator('.textLayer')).toHaveText('');
+  await recognise(page);
+  const layer = pages(page).first().locator('.textLayer');
+  await expect(layer).toContainText(SCAN_TITLE);
+  await expect(layer).toContainText('Kündigungsfrist');
+  // the invisible word lies on the word in the picture: title 20 pt bold at x 72 pt, baseline 100 pt from the top –
+  // capitals reach about 0.72 em (14.4 pt) above it
+  const pb = await pages(page).first().boundingBox(), k = pb.width / 595;
+  const tb = await layer.locator('span', { hasText: SCAN_TITLE }).first().boundingBox();
+  expect(Math.abs((tb.x - pb.x) / k - 72)).toBeLessThan(3);
+  expect(Math.abs((tb.y - pb.y) / k - (100 - 14.4))).toBeLessThan(5);
+  expect((tb.y - pb.y + tb.height) / k).toBeGreaterThan(98);
+  // the menu has nothing left to recognise
+  await menuWithBars(page);
+  await expect(page.locator('#btnOcr')).toBeHidden();
+  await closeMenu(page);
+  // search finds the recognised text
+  await page.click('#btnFind');
+  await page.locator('#findInput').fill('miete beträgt');
+  await expect(page.locator('#findCount')).toHaveText('1 / 1');
+  await expect(pages(page).first().locator('.hlLayer .cur')).toHaveCount(2);   // one box per word
+  // the diagnosis has counts only
+  const diag = await page.evaluate(() => Tools.diag.text());
+  expect(diag).toContain('ocr page');
+  expect(diag).not.toContain('Kündigungsfrist');
+});
+
+test.describe('text recognition not available', () => {
+  test.use({ allowedProblems: /tesseract|Failed to load resource|ERR_FAILED|net::/i });
+
+  test('says so and can be tried again', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.goto(URL_);
+  await page.context().route(/tesseract-core/, r => r.abort());
+  await openScan(page);
+  await menuWithBars(page);
+  await page.click('#btnOcr');
+  await expect(page.locator('.toast')).toContainText('Texterkennung nicht möglich', { timeout: 60000 });
+  await expect(page.locator('#ocrStatus')).toBeHidden();
+  await menuWithBars(page);
+  await expect(page.locator('#btnOcr')).toBeEnabled();     // can be tried again
+  });
+});
+
+test('text recognition can be cancelled', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.goto(URL_);
+  await openScan(page);
+  await menuWithBars(page);
+  await page.click('#btnOcr');
+  await expect(page.locator('#ocrStatus')).toBeVisible();
+  await page.click('#ocrCancel');
+  await expect(page.locator('#ocrStatus')).toBeHidden();
+  await expect(page.locator('.toast')).toContainText('Texterkennung abgebrochen');
+  await menuWithBars(page);
+  await expect(page.locator('#btnOcr')).toHaveText('Text erkennen (1 gescannte Seite(n))');
+});
+
+test('text recognition works offline once it was used', async ({ page, context }) => {
+  test.setTimeout(300000);
+  await page.goto(URL_);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();                               // page controlled → downloads go through the cache
+  const pdf = await scanPdf(page);
+  await page.setInputFiles('#inPick', { name: 'scan.pdf', mimeType: 'application/pdf', buffer: pdf });
+  await recognise(page);
+  await context.setOffline(true);
+  await page.reload();
+  await page.setInputFiles('#inPick', { name: 'scan.pdf', mimeType: 'application/pdf', buffer: pdf });
+  await recognise(page);
+  await expect(pages(page).first().locator('.textLayer')).toContainText(SCAN_LINES[0].split(' ')[0]);
+  await context.setOffline(false);
+});
+
+test('hand-over: the open PDF goes to "PDF bearbeiten" and "PDF zu Word" on the device', async ({ page }) => {
+  await page.goto(URL_);
+  await menuWithBars(page);
+  await expect(page.locator('#btnToEdit')).toBeDisabled();
+  await closeMenu(page);
+  await openPdf(page, P('bericht.pdf', ['S1', 'S2', 'S3']), 3);
+  await menuWithBars(page);
+  await page.click('#btnToEdit');
+  await expect(page).toHaveURL(/\/pdf-edit\/$/);                 // ?shared=1 taken and removed
+  await expect(page.locator('#pages li')).toHaveCount(3);
+  await expect(page.locator('#files li')).toContainText('bericht.pdf');
+  // back: the viewer still has its PDF (kept on the device)
+  await page.goBack();
+  await expect(page).toHaveURL(/\/pdf-viewer\//);
+  await expect(pages(page)).toHaveCount(3);
+  await menuWithBars(page);
+  await page.click('#btnToWord');
+  await expect(page).toHaveURL(/\/pdf2word\/$/);
+  await expect(page.locator('#fileInfo')).toContainText('bericht.pdf');
+  await expect(page.locator('#btnRun')).toBeEnabled();
 });
 
 test('night mode inverts the pages', async ({ page }) => {

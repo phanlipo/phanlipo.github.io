@@ -3,7 +3,7 @@
 // Images: position, size and orientation; scanned pages: text recognition (Tesseract, local files).
 import { test, expect, switchLang } from './helpers.mjs';
 import { readFileSync } from 'node:fs';
-import { makePdf, wrap, unzip, docxParagraphs } from './pdf-tools.mjs';
+import { makePdf, wrap, unzip, docxParagraphs, scanPdf, SCAN_TITLE, SCAN_LINES, SCAN_LAST } from './pdf-tools.mjs';
 
 const URL_ = '/pdf2word/';
 const SIZE = 11, PITCH = 13, LEFT = 72, CHAR = 0.6 * SIZE;   // Courier: 0.6 em per character
@@ -237,42 +237,26 @@ test('skips a full-page background picture behind text', async ({ page }) => {
   expect([...files.keys()].some(k => k.startsWith('word/media/'))).toBe(false);
 });
 
-/* ---------- Scanned pages (text recognition) ---------- */
+test('hand-over: the chosen PDF opens in "PDF ansehen" or "PDF bearbeiten"', async ({ page }) => {
+  await page.goto(URL_);
+  await page.locator('.menu-btn').click();
+  await expect(page.locator('#btnToView')).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await page.setInputFiles('#file', { name: 'brief.pdf', mimeType: 'application/pdf', buffer: makePdf([{ texts: [{ x: 72, y: 700, size: 20, text: 'Brief' }] }, { texts: [] }]) });
+  await page.locator('.menu-btn').click();
+  await page.click('#btnToView');
+  await expect(page).toHaveURL(/\/pdf-viewer\/$/);
+  await expect(page.locator('#pages .page')).toHaveCount(2);
+  await expect(page.locator('#docName')).toHaveText('brief.pdf');
+  await page.goBack();
+  await page.setInputFiles('#file', { name: 'brief.pdf', mimeType: 'application/pdf', buffer: makePdf([{ texts: [{ x: 72, y: 700, size: 20, text: 'Brief' }] }]) });
+  await page.locator('.menu-btn').click();
+  await page.click('#btnToEdit');
+  await expect(page).toHaveURL(/\/pdf-edit\/$/);
+  await expect(page.locator('#pages li')).toHaveCount(1);
+});
 
-const SCAN_TITLE = 'Mietvertrag';
-const SCAN_LINES = ['Zwischen dem Vermieter und dem Mieter wird folgender Vertrag über',
-  'die Wohnung im ersten Stock geschlossen. Die Miete beträgt monatlich',
-  'achthundert Euro und ist bis zum dritten Werktag zu zahlen.'];
-const SCAN_LAST = 'Die Kündigungsfrist beträgt drei Monate.';
-
-// A "scan": the page is one picture (150 dpi) with text drawn by the browser – title 20 pt bold,
-// body 12 pt with 18 pt line pitch. The font is loaded from the repository (Liberation Sans, as
-// shipped with pdf.js), so the picture is the same on every machine – "Arial" would be a
-// different fallback font depending on the system.
-async function scanPdf(page) {
-  const dpi = 150, px = pt => pt * dpi / 72;
-  const rgb = await page.evaluate(async ({ title, lines, last, sizes }) => {
-    const dir = '/assets/vendor/pdfjs/standard_fonts/';
-    for (const [file, weight] of [['LiberationSans-Regular.ttf', 'normal'], ['LiberationSans-Bold.ttf', 'bold']]) {
-      const face = new FontFace('ScanFont', `url(${dir}${file})`, { weight });
-      document.fonts.add(await face.load());
-    }
-    const c = document.createElement('canvas'); c.width = 1240; c.height = 1754;
-    const g = c.getContext('2d');
-    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#000';
-    g.font = `bold ${sizes.title}px ScanFont`; g.fillText(title, sizes.left, sizes.top);
-    g.font = `${sizes.body}px ScanFont`;
-    [...lines, '', last].forEach((l, i) => g.fillText(l, sizes.left, sizes.top + sizes.gap + i * sizes.pitch));
-    // RGB bytes as base64 (much faster to hand over than a plain array)
-    const d = g.getImageData(0, 0, c.width, c.height).data, rgb = new Uint8Array(d.length / 4 * 3);
-    for (let i = 0, j = 0; i < d.length; i += 4, j += 3) { rgb[j] = d[i]; rgb[j + 1] = d[i + 1]; rgb[j + 2] = d[i + 2]; }
-    let bin = '';
-    for (let i = 0; i < rgb.length; i += 0x8000) bin += String.fromCharCode(...rgb.subarray(i, i + 0x8000));
-    return btoa(bin);
-  }, { title: SCAN_TITLE, lines: SCAN_LINES, last: SCAN_LAST,
-    sizes: { title: px(20), body: px(12), pitch: px(18), left: px(72), top: px(100), gap: px(48) } });
-  return makePdf([{ images: [{ x: 0, y: 0, w: 595, h: 842, width: 1240, height: 1754, rgb: Buffer.from(rgb, 'base64') }] }]);
-}
+/* ---------- Scanned pages (text recognition; the "scan" comes from pdf-tools.mjs) ---------- */
 
 test('reads scanned pages with text recognition', async ({ page }) => {
   test.setTimeout(180000);

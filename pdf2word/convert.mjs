@@ -1,6 +1,6 @@
 // PDF → Word: reads the text and images of a PDF with pdf.js (position, size, font) and rebuilds
 // paragraphs from the geometry, then writes a .docx with the docx library. Pages without text
-// (scans) go through text recognition (Tesseract). Everything runs in the browser; the file
+// (scans) go through text recognition (Tesseract, assets/shared/ocr.mjs). Everything runs in the browser; the file
 // never leaves the device.
 //
 // Steps: extract() text items and images per page (OCR for scanned pages) → lines (same
@@ -8,6 +8,8 @@
 // alignment, images in reading order → toDocx().
 
 import * as pdfjs from '../assets/vendor/pdfjs/pdf.min.mjs';
+import { recognisePage } from '../assets/shared/ocr.mjs';
+import { docParams } from '../assets/shared/pdf-open.mjs';
 
 // Full literal paths: scripts/build.mjs finds the libraries for the offline cache by them
 const url = path => new URL(path, import.meta.url).href;
@@ -18,17 +20,14 @@ pdfjs.GlobalWorkerOptions.workerSrc = url('./pdf-worker.mjs');
 
 // Opens a PDF. Throws an Error with .code = 'password' | 'invalid' for the page to explain.
 export async function open(data, password) {
-  const task = pdfjs.getDocument({
+  // common options (no eval, fonts, decoders for scans and CMYK images): assets/shared/pdf-open.mjs
+  const task = pdfjs.getDocument(docParams({
     data, password,
-    isEvalSupported: false,          // strict CSP: no eval / new Function
     disableFontFace: true,           // only metrics and names are needed, never draw glyphs
     fontExtraProperties: true,
-    standardFontDataUrl: url('../assets/vendor/pdfjs/standard_fonts/'),
-    wasmUrl: url('../assets/vendor/pdfjs/wasm/'),          // decoders for JBIG2 / JPEG 2000 scans
-    iccUrl: url('../assets/vendor/pdfjs/iccs/'),           // CMYK images
     useSystemFonts: false,
     stopAtErrors: false,
-  });
+  }));
   try {
     return await task.promise;
   } catch (e) {
@@ -212,53 +211,11 @@ function toRGBA(img, dst) {
 
 /* ---------- Text recognition (OCR) ---------- */
 
-let tesseract = null;   // { lang, worker }
-
-// Renders a page at 300 dpi (at most 4000 px) and recognises its words with Tesseract.
-// Returns text items like extract(); throws when the recognition cannot be loaded.
+// Renders the page and recognises its words (assets/shared/ocr.mjs); returns text items like extract().
+// Throws when the recognition cannot be loaded.
 async function recognise(page, lang, onProgress) {
-  const worker = await ocrWorker(lang, onProgress);
-  const vp1 = page.getViewport({ scale: 1 });
-  const scale = Math.min(300 / 72, 4000 / Math.max(vp1.width, vp1.height));
-  const viewport = page.getViewport({ scale });
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  onProgress?.({ k: 'render' }, 0.1);
-  await page.render({ canvasContext: ctx, viewport, background: 'white' }).promise;
-  progressTarget = onProgress;
-  let result;
-  try {
-    result = (await worker.recognize(canvas, {}, { blocks: true, text: false })).data;
-  } finally {
-    progressTarget = null;
-    canvas.width = canvas.height = 0;
-  }
-  return ocrItems(result, scale, vp1.height);
-}
-
-let progressTarget = null;
-async function ocrWorker(lang, onProgress) {
-  if (tesseract?.lang === lang) return tesseract.worker;
-  if (tesseract) { await tesseract.worker.terminate().catch(() => {}); tesseract = null; }
-  onProgress?.({ k: 'ocrLoad' }, 0);
-  await loadScript(url('../assets/vendor/tesseract/tesseract.min.js'));
-  const langPath = lang === 'eng' ? url('../assets/vendor/tesseract-eng/') : url('../assets/vendor/tesseract-deu/');
-  const worker = await window.Tesseract.createWorker(lang === 'eng' ? 'eng' : 'deu', 1 /* LSTM only */, {
-    workerPath: url('./ocr-worker.js'),
-    corePath: url('../assets/vendor/tesseract-core/'),
-    langPath,
-    gzip: true,
-    cacheMethod: 'none',        // offline copy comes from the service worker, not IndexedDB
-    workerBlobURL: false,       // CSP: workers only from own files
-    logger: m => {
-      if (m.status === 'recognizing text') progressTarget?.({ k: 'ocr', p: Math.round(m.progress * 100) }, 0.15 + 0.85 * m.progress);
-      else if (!progressTarget) onProgress?.({ k: 'ocrLoad' }, 0);
-    },
-  });
-  tesseract = { lang, worker };
-  return worker;
+  const { data, scale } = await recognisePage(page, { lang, onProgress });
+  return ocrItems(data, scale, page.getViewport({ scale: 1 }).height);
 }
 
 // Tesseract words → text items. Pixel boxes (top left origin) → points (bottom left origin).

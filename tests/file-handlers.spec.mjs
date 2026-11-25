@@ -90,3 +90,27 @@ test('Tools.takeSharedFiles: browser without launchQueue or launch without files
   await p2.goto('/template/?opened=1');
   expect(await p2.evaluate(async () => (await Tools.takeSharedFiles()).length)).toBe(0);
 });
+
+// Tools.handOff: one app of the site hands files to another (as if they were shared to it)
+test('Tools.handOff: files arrive in the other app in order, once; invalid calls change nothing', async ({ page }) => {
+  await page.goto('/template/');
+  expect(await page.evaluate(() => Tools.handOff('../evil', new File(['x'], 'a.txt')))).toBe(false);
+  expect(await page.evaluate(() => Tools.handOff('image-converter', []))).toBe(false);
+  await expect(page).toHaveURL(/\/template\/$/);
+  await page.evaluate(() => Tools.handOff('image-converter', [new File(['eins'], 'a.txt', { type: 'text/plain' }), new File(['zwei'], 'ü b.txt')]));
+  await expect(page).toHaveURL(/\/image-converter\/\?shared=1$|\/image-converter\/$/);
+  // read them the way the app does (the app itself may already have taken them – then the cache is empty)
+  const got = await page.evaluate(async () => {
+    await new Promise(r => setTimeout(r, 0));
+    const keys = await caches.keys();
+    return keys.filter(k => k.startsWith('share:'));
+  });
+  expect(got.filter(k => k !== 'share:image-converter')).toEqual([]);
+  const taken = await page.evaluate(async () => {
+    history.replaceState(null, '', '?shared=1');
+    return Promise.all((await Tools.takeSharedFiles()).map(async f => [f.name, f.type, await f.text()]));
+  });
+  // image-converter takes shared files on start; if it was faster, they are gone – then check its file list instead
+  if (taken.length) expect(taken).toEqual([['a.txt', 'text/plain', 'eins'], ['ü b.txt', 'application/octet-stream', 'zwei']]);
+  else await expect(page.locator('body')).toContainText('a.txt');
+});
