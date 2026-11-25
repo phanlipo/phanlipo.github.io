@@ -52,12 +52,14 @@ jobs:
           files=(sarif-results/*.sarif)
           if [ ${#files[@]} -eq 0 ]; then echo "Keine SARIF-Datei gefunden."; exit 0; fi
           jq -r '
-            .runs[] | (.tool.driver.rules // []) as $rules | (.results // [])[]
-            | (.ruleIndex // -1) as $i
-            | (if $i >= 0 then $rules[$i] else {} end) as $rule
+            .runs[] as $run | ($run.results // [])[]
+            | (.rule.index // .ruleIndex // -1) as $i
+            | (.rule.toolComponent.index // null) as $tc
+            | ((if $tc != null then $run.tool.extensions[$tc].rules else $run.tool.driver.rules end) // []) as $rules
+            | (if $i >= 0 then ($rules[$i] // {}) else {} end) as $rule
             | (.locations[0].physicalLocation // {}) as $loc
             | [ .ruleId,
-                ($rule.properties["security-severity"] // .level // "-"),
+                ($rule.properties["security-severity"] // $rule.properties["problem.severity"] // .level // "-"),
                 ($loc.artifactLocation.uri // "-"),
                 ($loc.region.startLine // 1 | tostring),
                 (.message.text // "" | gsub("[\r\n]+"; " ")) ] | @tsv' "${files[@]}" > findings.tsv
