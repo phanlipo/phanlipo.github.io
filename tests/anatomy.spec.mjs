@@ -64,6 +64,13 @@ test.describe('model data', () => {
     expect(INDEX.parts[find('Vertebra L3')][4]).toBe('3. Lendenwirbel (L3)');
     expect(INDEX.parts[find('Proximal phalanx of first finger of hand', 'l')][4]).toBe('Grundglied des Daumens');
     expect(INDEX.parts[find('Distal phalanx of first finger of foot', 'r')][4]).toBe('Endglied der Großzehe');
+    // Series rules and names added later: lung segments, brachial plexus, lymph nodes by place (not just "Lymphknoten")
+    expect(INDEX.parts[find('Apical segmental artery of right lung')][4]).toBe('Segmentarterie (Spitzensegment), rechte Lunge');
+    expect(INDEX.parts.find(p => p[1] === 'Muscular branches of radial nerve')[4]).toBe('Speichennerv, Muskeläste');
+    expect(INDEX.parts.find(p => p[1] === 'Submental nodes')[4]).toBe('Kinnlymphknoten');
+    expect(INDEX.parts.filter(p => p[4] === 'Lymphknoten').map(p => p[1])).toEqual([]);
+    // Most parts have a German name; the rest keep their Latin one (only where German anatomy uses it)
+    expect(INDEX.parts.filter(p => !p[4]).length).toBeLessThan(INDEX.parts.length / 8);
     // Every bone has a German name, nearly every part a Latin one
     expect(sk.filter(p => !p[4]).map(p => p[1])).toEqual([]);
     expect(INDEX.parts.filter(p => !p[3]).length).toBeLessThan(INDEX.parts.length / 20);

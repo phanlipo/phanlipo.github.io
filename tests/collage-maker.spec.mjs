@@ -260,6 +260,92 @@ test('tap two images to swap them; remove one with undo', async ({ page }) => {
   expect(await ids()).toEqual([before[1], before[0], before[2], before[3]]);
 });
 
+// Drags with the mouse from the centre of one cell to the centre of another
+async function mouseDrag(page, from, to) {
+  await page.locator('#collage').scrollIntoViewIfNeeded();
+  const a = await page.locator(`#collage > button[data-id="${from}"]`).boundingBox();
+  const b = await page.locator(`#collage > button[data-id="${to}"]`).boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(a.x + a.width / 2 + 20, a.y + a.height / 2 + 20, { steps: 3 });
+  await expect(page.locator(`#collage > button[data-id="${from}"]`)).toHaveClass(/dragging/);
+  await expect(page.locator('.drag-ghost')).toHaveCount(1);
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 5 });
+  await expect(page.locator(`#collage > button[data-id="${to}"]`)).toHaveClass(/drop/);
+  await page.mouse.up();
+  await expect(page.locator('.drag-ghost')).toHaveCount(0);
+}
+const cellIds = page => page.locator('#collage > button').evaluateAll(bs => bs.map(b => b.dataset.id));
+// The image whose cell covers a point (centre of a cell before a change)
+const idAt = (page, { x, y, width, height }) => page.evaluate(([px, py]) => document.elementFromPoint(px, py).closest('#collage > button').dataset.id, [x + width / 2, y + height / 2]);
+
+test('drag in rows: the image moves to the new place, the others shift along; saved', async ({ page }) => {
+  await add(page, photos(4));
+  await page.locator('#mode [data-mode="rows"]').click();
+  const [a, b, c, d] = await cellIds(page);
+  await mouseDrag(page, a, d);
+  expect(await cellIds(page)).toEqual([b, c, d, a]);
+  // the drop does not select an image; dragging back moves it to the front again
+  await expect(page.locator('#selBar')).toBeHidden();
+  await mouseDrag(page, a, b);
+  expect(await cellIds(page)).toEqual([a, b, c, d]);
+  await mouseDrag(page, b, d);
+  expect(await cellIds(page)).toEqual([a, c, d, b]);
+  await expect.poll(() => page.evaluate(async () => ((await Tools.keep.json('state', null)) || {}).order)).toEqual([a, c, d, b]);
+  await page.reload();
+  await expect(page.locator('#collage > button')).toHaveCount(4);
+  expect(await cellIds(page)).toEqual([a, c, d, b]);
+});
+
+test('drag in the automatic layout swaps two images; dropping outside changes nothing', async ({ page }) => {
+  await add(page, photos(5));
+  const [a, , , d] = await cellIds(page);
+  await page.locator('#collage').scrollIntoViewIfNeeded();
+  const boxA = await page.locator(`#collage > button[data-id="${a}"]`).boundingBox();
+  const boxD = await page.locator(`#collage > button[data-id="${d}"]`).boundingBox();
+  await mouseDrag(page, a, d);
+  expect(await idAt(page, boxA)).toBe(d);
+  expect(await idAt(page, boxD)).toBe(a);
+  // dropped on itself or outside the collage: nothing changes, nothing gets selected
+  const before = await cellIds(page);
+  const box = await page.locator(`#collage > button[data-id="${a}"]`).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y - 200, { steps: 5 });
+  await page.mouse.up();
+  expect(await cellIds(page)).toEqual(before);
+  await expect(page.locator('#selBar')).toBeHidden();
+  await expect(page.locator('#collage > button.dragging, #collage > button.drop')).toHaveCount(0);
+});
+
+test('touch: swiping does not drag (the page scrolls), holding first does', async ({ page }) => {
+  await add(page, photos(4));
+  await page.locator('#mode [data-mode="rows"]').click();
+  const [a, b, c, d] = await cellIds(page);
+  await page.locator('#collage').scrollIntoViewIfNeeded();
+  const centre = async id => { const r = await page.locator(`#collage > button[data-id="${id}"]`).boundingBox(); return [r.x + r.width / 2, r.y + r.height / 2]; };
+  const [ax, ay] = await centre(a), [dx, dy] = await centre(d);
+  // touch pointer events as a phone sends them (pointerType "touch")
+  const touch = (type, x, y) => page.evaluate(([type, x, y]) => {
+    const el = document.elementFromPoint(x, y);
+    el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', isPrimary: true, button: type === 'pointermove' ? -1 : 0, clientX: x, clientY: y }));
+  }, [type, x, y]);
+  // moving right away is a swipe: no drag, even after the hold time
+  await touch('pointerdown', ax, ay);
+  await touch('pointermove', ax, ay + 40);
+  await touch('pointerup', ax, ay + 40);
+  await expect(page.locator('#collage > button.dragging')).toHaveCount(0);
+  expect(await cellIds(page)).toEqual([a, b, c, d]);
+  // press and hold: the image fades, then it can be dragged
+  await touch('pointerdown', ax, ay);
+  await expect(page.locator(`#collage > button[data-id="${a}"]`)).toHaveClass(/dragging/);
+  await touch('pointermove', (ax + dx) / 2, (ay + dy) / 2);
+  await touch('pointermove', dx, dy);
+  await expect(page.locator(`#collage > button[data-id="${d}"]`)).toHaveClass(/drop/);
+  await touch('pointerup', dx, dy);
+  expect(await cellIds(page)).toEqual([b, c, d, a]);
+});
+
 test('photos and arrangement survive a reload; remove all asks first', async ({ page }) => {
   await add(page, photos(5));
   await page.locator('#btnShuffle').click();

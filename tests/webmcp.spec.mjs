@@ -4029,6 +4029,17 @@ test.describe('unit-converter tools', () => {
     expect((await call(page, 'unit_converter_convert_unit', { value: 0, from: 'l100km', to: 'mpgUS' })).ok).toBe(false);
   });
 
+  test('convert_number_base converts whole numbers and opens the number systems tool', async ({ page }) => {
+    const r = await call(page, 'unit_converter_convert_number_base', { value: '0xff', from: 16, to: 2 });
+    expect(r.result).toEqual({ from: 16, to: 2, result: '11111111', binary: '11111111', octal: '377', decimal: '255', hexadecimal: 'FF' });
+    await expect(page.locator('#p-numeral')).toBeVisible();
+    await expect(page.locator('#p-numeral .calc-result.main .v')).toHaveText('1111 1111');
+    // 2⁶⁴ + 1 stays exact
+    expect((await call(page, 'unit_converter_convert_number_base', { value: '18446744073709551617', from: 10, to: 16 })).result.result).toBe('10000000000000001');
+    expect((await call(page, 'unit_converter_convert_number_base', { value: '-z', from: 36, to: 10 })).result.result).toBe('-35');
+    expect((await call(page, 'unit_converter_convert_number_base', { value: '19', from: 8, to: 10 })).error).toContain('not a whole number in base 8');
+  });
+
   test('list_units lists quantities and units, read only', async ({ page }) => {
     const tools = await listTools(page);
     expect(tools.find(t => t.name === 'unit_converter_list_units').annotations.readOnlyHint).toBe(true);

@@ -17,6 +17,11 @@ Beliebig viele Fotos → lückenlose Collage → sehr großes JPG oder PNG.
 - **Festes Seitenverhältnis:** Der beste Baum trifft es fast (ab etwa 7 Bildern meist < 1 %). Der Rest wird gleichmäßig verteilt: alle Zellen werden etwas gestreckt und die Fotos darin wie `cover` beschnitten. „Frei“ (2:3 … 3:2) beschneidet nichts. Der größte Beschnitt steht unter der Vorschau.
 - **Reihen/Spalten:** Reihenfolge bleibt, Aufteilung per dynamischer Programmierung (gleich breite Reihen), Zahl der Reihen nach demselben `score`. Mit festem Verhältnis oft mehr Beschnitt als „Automatisch“.
 - **Tauschen/Entfernen** ändert die Positionen nicht neu, sondern dreht nur Schnitte (`refit`), damit das Bild ruhig bleibt.
+- **Ziehen** (Pointer Events in `index.html`): bei „Automatisch“ tauscht es zwei Bilder wie Antippen, bei Reihen/Spalten
+  verschiebt es das Bild an die Stelle des Ziels (die Reihenfolge bestimmt dort die Anordnung). Maus und Stift starten
+  nach 8 px, Touch erst nach 350 ms Stillhalten – vorher bewegt ist es Scrollen. Beim Ziehen sperrt ein nicht-passiver
+  `touchmove`-Listener das Scrollen; deshalb wird die Vorschau beim Start nicht neu aufgebaut (Touch-Ereignisse bleiben
+  am Element unter dem Finger). Der `click` nach dem Loslassen wird ignoriert.
 - **Riesige Bilder:** PNG in Streifen (höchstens 16 MP pro Streifen, Kacheln ≤ 4096 px breit), so passt jede Größe bis 250 MP in den Speicher – nur die gepackte Datei liegt im Speicher. Fotos werden pro Zelle in der nötigen Größe dekodiert (`resizeWidth/Height`, nie größer als das Original) und freigegeben, sobald die Streifen an ihnen vorbei sind. JPG braucht eine Leinwand in voller Größe; schlägt das fehl, bietet die App PNG an.
 - **Volle Auflösung** = Median über die Fotos, damit ein einzelnes winziges Feld die Collage nicht riesig macht.
 - **Kanten:** Zellränder werden einmal auf ganze Pixel gerundet und von beiden Nachbarn geteilt – keine Haarlinien.
@@ -26,4 +31,3 @@ Beliebig viele Fotos → lückenlose Collage → sehr großes JPG oder PNG.
 
 - Eigener JPG-Encoder in Streifen (riesige JPGs auch auf dem iPhone).
 - Ausschnitt je Foto verschieben (Fokuspunkt statt Mitte), wenn beschnitten wird.
-- Fotos per Ziehen tauschen.
