@@ -115,6 +115,7 @@ function pageInfo({ folder, file }) {
     agentHelp: meta(html, 'tool:webmcp-help'),
     agentHelpEn: meta(html, 'tool:webmcp-help-en'),
     connect: (meta(html, 'tool:connect') || '').split(/\s+/).filter(Boolean),
+    media: (meta(html, 'tool:media') || '').split(/\s+/).filter(Boolean),
     cast: meta(html, 'tool:cast') === 'true',
     youtube: meta(html, 'tool:youtube') === 'true',
     shortcuts: parseShortcuts(html, file),
@@ -141,6 +142,10 @@ for (const t of tools) {
   for (const c of t.connect)
     if (!/^(https:|https:\/\/[a-z0-9.*-]+(:\d+)?|http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\*|:\d+)?)$/.test(c))
       throw new Error(`${t.file}: tool:connect "${c}" not allowed (https: / https://host / http://localhost:* only)`);
+  // Extra media-src sources (audio/video streamed from servers the user chose, e.g. podcast episodes) – only after a tap
+  for (const c of t.media)
+    if (!/^(https:|https:\/\/[a-z0-9.*-]+(:\d+)?)$/.test(c))
+      throw new Error(`${t.file}: tool:media "${c}" not allowed (https: / https://host only)`);
   if (!t.titleEn || !t.descriptionEn)
     throw new Error(`${t.file}: <meta name="tool:title-en"> and <meta name="tool:description-en"> are required (English start page and manifest)`);
   // Start page cards show only the name – what the app does belongs in the description
@@ -295,7 +300,7 @@ function csp(p) {
     `script-src 'self'${wasm}${cast}${hashes.length ? ' ' + hashes.join(' ') : ''}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
-    "media-src 'self' blob: mediastream:",
+    `media-src 'self' blob: mediastream:${p.media?.length ? ' ' + p.media.join(' ') : ''}`,
     `connect-src 'self'${p.connect?.length ? ' ' + p.connect.join(' ') : ''}`,
     "font-src 'self'",
     ...(p.youtube ? ['frame-src https://www.youtube-nocookie.com https://www.youtube.com'] : []),
@@ -600,6 +605,9 @@ self.addEventListener('notificationclick', event => {
 
 ` : ''}self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  // Other servers (podcast audio, feeds, APIs) straight to the network: nothing of theirs is cached, and streamed
+  // audio asks for byte ranges that a detour through the service worker can break (Safari)
+  if (!event.request.url.startsWith(self.location.origin + '/')) return;
   const runtime = RUNTIME_URLS.find(([prefix]) => event.request.url.startsWith(prefix));
   if (runtime) {
     event.respondWith(caches.open(runtime[1]).then(async cache => {

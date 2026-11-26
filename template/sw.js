@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files (of the icon sprite only the icons
 // this app uses): every change creates a new version, the browser installs it in the background and removes the old one.
 const APP = "template";
-const VERSION = '426964c26101';
+const VERSION = '5de7ad74d056';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -46,6 +46,9 @@ self.addEventListener('activate', event => {
 // Cache first: instant start and offline use. Anything not cached goes to the network.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  // Other servers (podcast audio, feeds, APIs) straight to the network: nothing of theirs is cached, and streamed
+  // audio asks for byte ranges that a detour through the service worker can break (Safari)
+  if (!event.request.url.startsWith(self.location.origin + '/')) return;
   const runtime = RUNTIME_URLS.find(([prefix]) => event.request.url.startsWith(prefix));
   if (runtime) {
     event.respondWith(caches.open(runtime[1]).then(async cache => {

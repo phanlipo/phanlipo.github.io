@@ -74,6 +74,9 @@ self.addEventListener('fetch', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  // Other servers (podcast audio, feeds, APIs) straight to the network: nothing of theirs is cached, and streamed
+  // audio asks for byte ranges that a detour through the service worker can break (Safari)
+  if (!event.request.url.startsWith(self.location.origin + '/')) return;
   const runtime = RUNTIME_URLS.find(([prefix]) => event.request.url.startsWith(prefix));
   if (runtime) {
     event.respondWith(caches.open(runtime[1]).then(async cache => {
