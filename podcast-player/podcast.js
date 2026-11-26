@@ -153,7 +153,8 @@ window.Podcast = (function () {
     if (p.length < 2 || p.some(x => !Number.isFinite(x))) return null;
     return p.reduce((a, x) => a * 60 + x, 0);
   }
-  const clean = s => String(s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+  // Text only: tags (<v Anna>, <b>) and entities through the HTML parser, never a regular expression on markup
+  const clean = s => plain(s).replace(/\s+/g, ' ').trim();
   const seg = (start, end, text, speaker) => ({ start, end, text: clean(text), speaker: speaker ? String(speaker).slice(0, 60) : '' });
 
   function ardSegments(json) {
@@ -211,7 +212,7 @@ window.Podcast = (function () {
           .filter(s => s.text);
       } catch (_) { if (/json/.test(type)) return []; }
     }
-    if (/vtt|srt|subrip/.test(type) || /^WEBVTT/.test(head) || /-->/.test(text.slice(0, 400))) return cues(text);
+    if (/vtt|srt|subrip/.test(type) || /^WEBVTT/.test(head) || text.slice(0, 400).includes('-->')) return cues(text);
     if (/html/.test(type) || /^</.test(head)) {
       const doc = new DOMParser().parseFromString(text, 'text/html');
       const paras = [...doc.body.querySelectorAll('p, li, h1, h2, h3, h4, div:not(:has(p, div, li))')].map(p => p.textContent);
