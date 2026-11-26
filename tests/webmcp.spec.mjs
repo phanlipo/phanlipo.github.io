@@ -4958,7 +4958,7 @@ test.describe('podcast-player tools', () => {
       sections: [{ start_seconds: 20, speaker: 'Stimme 2', text: 'Und um Tintenfische, die rechnen können.' }] });
     r = await call(page, 'podcast_player_read_transcript', { limit: 2, offset: 2 });
     expect(r.result.sections.map(x => x.start_seconds)).toEqual([20, 40]);
-    await page.locator('#trBody .seg .ts').nth(1).click();
+    await page.locator('#trBody .tr-seg .ts').nth(1).click();
     await expect(page.locator('#nowTitle')).toHaveText('Folge zwei');
     await expect.poll(async () => (await call(page, 'podcast_player_get_player', {})).result.position_seconds).toBeGreaterThanOrEqual(10);
     r = await call(page, 'podcast_player_get_player', {});

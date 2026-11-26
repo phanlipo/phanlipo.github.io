@@ -88,8 +88,9 @@ test.describe('podcast-player', () => {
     await expect.poll(async () => (await audioState(page)).paused).toBe(true);
     const at = (await audioState(page)).t;
     expect(at).toBeGreaterThanOrEqual(40);
-    await expect(rows(page).nth(0).locator('.meta')).toContainText('noch 1 min');
-    await expect(rows(page).nth(0).locator('.ep-bar i')).toHaveCount(1);
+    await expect(rows(page).nth(0).locator('.meta')).toHaveText('24.11.2026 · 1 von 1 min gehört');
+    const width = await rows(page).nth(0).locator('.ep-bar i').evaluate(el => parseFloat(el.style.width));
+    expect(width).toBeCloseTo(Math.floor(at) / 60 * 100, 0);
 
     await page.reload();
     // Player restored, no request before a tap
@@ -104,6 +105,81 @@ test.describe('podcast-player', () => {
     await expect.poll(async () => (await audioState(page)).t).toBeGreaterThanOrEqual(Math.floor(at));
     expect(seen.audio).toHaveLength(2);
     expect(seen.ard).toHaveLength(1); // the list comes from storage
+  });
+
+  test('the bar under the playing episode moves while listening, without pausing', async ({ page }) => {
+    await mockPodcasts(page);
+    await page.goto(URL_);
+    await add(page, SHOW_LINK);
+    await expect(rows(page).nth(0).locator('.ep-bar')).toHaveCount(0);
+    await rows(page).nth(0).locator('.open').click();
+    await expect.poll(async () => (await audioState(page)).paused).toBe(false);
+    await page.locator('#seek').fill('30');
+    // Saved every 5 s while playing; the row follows without a pause
+    const bar = rows(page).nth(0).locator('.ep-bar i');
+    await expect.poll(() => bar.evaluate(el => parseFloat(el.style.width)).catch(() => 0), { timeout: 10000 }).toBeGreaterThanOrEqual(50);
+    expect((await audioState(page)).paused).toBe(false);
+    await expect(rows(page).nth(0).locator('.meta')).toHaveText(/1 min gehört$/);
+  });
+
+  test('when an episode ends, the next not yet played one starts – older by default, newer or stop as set', async ({ page }) => {
+    const seen = await mockPodcasts(page);
+    await page.goto(URL_);
+    await add(page, SHOW_LINK);
+    await openMenu(page);
+    await expect(page.locator('#autoSeg [aria-pressed="true"]')).toHaveText('Ältere');
+    await closeMenu(page);
+    // "Folge drei" ends → "Folge zwei" (below) plays on its own
+    await rows(page).nth(0).locator('.open').click();
+    await expect.poll(async () => (await audioState(page)).paused).toBe(false);
+    await page.locator('#seek').fill('59');
+    await expect(page.locator('#nowTitle')).toHaveText('Folge zwei', { timeout: 10000 });
+    await expect.poll(async () => (await audioState(page)).paused).toBe(false);
+    await expect(rows(page).nth(0).locator('.meta')).toHaveText('24.11.2026 · Gehört');
+    await expect(rows(page).nth(0).locator('.ep-bar i')).toHaveAttribute('style', /width: 100/);
+    expect(seen.audio).toEqual([`${AUDIO_ORIGIN}/drei.mp3`, `${AUDIO_ORIGIN}/zwei.mp3`]);
+
+    // "Neuere": from "Folge eins" upwards – "Folge zwei" is not played yet, so it comes next
+    await openMenu(page);
+    await page.click('#autoSeg [data-auto="newer"]');
+    await closeMenu(page);
+    await rows(page).nth(2).locator('.open').click();
+    await expect(page.locator('#nowTitle')).toHaveText('Folge eins');
+    await expect.poll(async () => (await audioState(page)).paused).toBe(false);
+    await page.locator('#seek').fill('59');
+    await expect(page.locator('#nowTitle')).toHaveText('Folge zwei', { timeout: 10000 });
+    // Played episodes are skipped: from "Folge zwei" upwards only "Folge drei", which is played → stop
+    await expect.poll(async () => (await audioState(page)).paused).toBe(false);
+    await page.locator('#seek').fill('59');
+    await expect(page.locator('#btnDone')).toHaveAttribute('aria-pressed', 'true', { timeout: 10000 });
+    await expect(page.locator('#nowTitle')).toHaveText('Folge zwei');
+    expect((await audioState(page)).paused).toBe(true);
+
+    // "Anhalten": nothing follows; the choice survives a reload
+    await openMenu(page);
+    await page.click('#autoSeg [data-auto="off"]');
+    await closeMenu(page);
+    await page.reload();
+    await openMenu(page);
+    await expect(page.locator('#autoSeg [aria-pressed="true"]')).toHaveText('Anhalten');
+    await closeMenu(page);
+    await page.click('#btnDone'); // "Folge zwei" not played any more
+    await page.click('#btnPlay');
+    await expect.poll(async () => (await audioState(page)).paused).toBe(false);
+    await page.locator('#seek').fill('59');
+    await expect(page.locator('#btnDone')).toHaveAttribute('aria-pressed', 'true', { timeout: 10000 });
+    await expect(page.locator('#nowTitle')).toHaveText('Folge zwei');
+  });
+
+  test('settings: own switches and the general block keep the shared look (one row each)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto(URL_);
+    await openMenu(page);
+    for (const seg of await page.locator('.seg').all()) {
+      if (!(await seg.isVisible())) continue;
+      const tops = await seg.locator(':scope > button').evaluateAll(bs => bs.map(b => Math.round(b.getBoundingClientRect().top)));
+      expect(new Set(tops).size, await seg.innerText()).toBe(1);
+    }
   });
 
   test('an episode heard to the end is marked played; the mark can be switched by hand', async ({ page }) => {
@@ -131,7 +207,7 @@ test.describe('podcast-player', () => {
     await expect(page.locator('#trStatus')).toHaveText('4 Abschnitte');
     expect(seen.ard.at(-1)).toMatchObject({ variables: { id: '502' } });
     expect(seen.audio).toEqual([]); // reading needs no audio
-    const segs = page.locator('#trBody .seg');
+    const segs = page.locator('#trBody .tr-seg');
     await expect(segs.locator('.ts')).toHaveText(['0:01', '0:10', '0:20', '0:40']);
     // Speaker shown when it changes; markup in the text is not taken over
     await expect(segs.locator('.who')).toHaveText(['Stimme 1', 'Stimme 2', 'Stimme 1']);
@@ -146,7 +222,7 @@ test.describe('podcast-player', () => {
     await page.click('#btnPlay');
     await segs.nth(3).locator('.ts').click();
     await expect(segs.nth(3)).toHaveClass(/\bon\b/);
-    await expect(page.locator('#trBody .seg.on')).toHaveCount(1);
+    await expect(page.locator('#trBody .tr-seg.on')).toHaveCount(1);
     // Search: only matching parts, hits marked
     await page.fill('#trQ', 'quallen');
     await expect(segs).toHaveCount(1);
@@ -171,8 +247,8 @@ test.describe('podcast-player', () => {
     await page.goto(URL_);
     await add(page, SHOW_LINK);
     await rows(page).nth(1).locator('.btn.icon').click();
-    await page.locator('#trBody .seg .ts').nth(1).click();
-    await expect(page.locator('#trBody .seg.on')).toHaveCount(1);
+    await page.locator('#trBody .tr-seg .ts').nth(1).click();
+    await expect(page.locator('#trBody .tr-seg.on')).toHaveCount(1);
     await page.click('#btnPlay');
     for (const theme of ['light', 'dark']) {
       await switchTheme(page, theme);
@@ -201,8 +277,8 @@ test.describe('podcast-player', () => {
     await rows(page).nth(0).locator('.btn.icon').click();
     // VTT preferred over plain text; cues of one speaker within 20 s joined
     await expect(page.locator('#trStatus')).toHaveText('2 Abschnitte');
-    await expect(page.locator('#trBody .seg .ts')).toHaveText(['0:02', '0:30']);
-    await expect(page.locator('#trBody .seg p')).toHaveText(['AnnaGuten Morgen. Schön, dass ihr da seid.', 'BenDanke, Anna!']);
+    await expect(page.locator('#trBody .tr-seg .ts')).toHaveText(['0:02', '0:30']);
+    await expect(page.locator('#trBody .tr-seg p')).toHaveText(['AnnaGuten Morgen. Schön, dass ihr da seid.', 'BenDanke, Anna!']);
     expect(seen.feeds).toEqual([`${FEED_ORIGIN}/cast.xml`, `${FEED_ORIGIN}/rss2.vtt`]);
     await rows(page).nth(0).locator('.open').click();
     await expect.poll(() => seen.audio).toEqual([`${AUDIO_ORIGIN}/rss2.mp3`]);
