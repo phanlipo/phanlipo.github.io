@@ -33,11 +33,11 @@ node scripts/build.mjs
 
 - `export.py` nimmt je Ebene eine Sammlung der Datei, lässt ausgeblendete Objekte, Beschriftungen (`.j`/`.g`) und Hüllen weg (Faszien, Hirnhäute, Bauchfell, Pleura …), wandelt Kurven in Meshes und reduziert jede Ebene mit dem Decimate-Modifier auf ein Dreiecks-Budget (Skelett 140 000, Muskeln 170 000 …; jedes Teil behält mindestens 60). Ergebnis: rohe Float32-Positionen, Uint32-Indizes und JSON je Ebene.
 - `pack.mjs` säubert Namen, ergänzt Latein (TA2) und Deutsch (`names-de.mjs`), vergibt Farben und quantisiert die Positionen auf 16 Bit im gemeinsamen Begrenzungsrahmen aller Ebenen. Insgesamt ca. 6 MB, alle im Offline-Cache (`sw.js`).
-- **Deutsche Namen:** Z-Anatomy kennt nur Englisch und Latein. `names-de.mjs` hat ein Wörterbuch (Skelett vollständig, bekannte Muskeln, Organe, große Gefäße und Nerven) und Regeln für Reihen (Rippen, Wirbel, Finger-/Zehenglieder, Zähne, „Left/Right …“). Ohne deutschen Namen zeigt die App den lateinischen – so wie im Medizinstudium üblich. Neue Einträge dort ergänzen und `pack.mjs` erneut laufen lassen.
+- **Deutsche Namen:** Z-Anatomy kennt nur Englisch und Latein. `names-de.mjs` hat ein Wörterbuch (Skelett vollständig, bekannte Muskeln, Organe, große Gefäße und Nerven) und Regeln für Reihen (Rippen, Wirbel, Finger-/Zehenglieder, Zähne, „Left/Right …“). Ohne deutschen Namen zeigt die App den lateinischen – so wie im Medizinstudium üblich; deshalb nur Namen eintragen, die im Deutschen gebräuchlich sind (ca. 90 % der Teile haben einen, offen sind vor allem Kleinhirn-Läppchen, Bahnen, kleine Gefäßäste und Kehlkopfmuskeln). Neue Einträge dort ergänzen und `node scripts/anatomy/rename.mjs` laufen lassen – das setzt nur die Namen in `models/index.json` neu, ohne Blender-Export (`pack.mjs` macht dasselbe beim Neubau der Modelle).
 - **Lizenz:** Abgeleitete Modelle stehen ebenfalls unter CC BY-SA 4.0 (`models/LICENSE.txt`, Hilfe der App). Z-Anatomy nennt als Vorlagen auch Modelle unter CC BY-NC (Niere, Lissie Cowley) und CC BY-NC-SA (Innenohr, University of Dundee); welche Meshes daraus übernommen wurden, gibt die Quelle nicht an. Die Seite ist nicht kommerziell.
 
 ## Offene Erweiterungen
 
 - Definitionen: Z-Anatomy enthält ~3 800 englische Texte aus Wikipedia (CC BY-SA 3.0) – könnten in der Infokarte erscheinen (Englisch; Größe prüfen).
 - Weitere Ebenen aus der Datei: Gelenke und Bänder, Muskelansätze.
-- Mehr deutsche Namen (Gefäße, Nerven, Lymphknoten).
+- Weitere deutsche Namen für die übrigen ca. 160 Strukturen, wo es gebräuchliche gibt.
