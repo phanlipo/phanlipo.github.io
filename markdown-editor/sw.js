@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files (of the icon sprite only the icons
 // this app uses): every change creates a new version, the browser installs it in the background and removes the old one.
 const APP = "markdown-editor";
-const VERSION = 'ee9295a70f45';
+const VERSION = '3336198ca069';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -18,6 +18,7 @@ const FILES = [
   "../assets/icons.svg",
   "../assets/vendor/dompurify/purify.min.js",
   "../assets/vendor/marked/marked.umd.js",
+  "../assets/vendor/pdf-lib/pdf-lib.min.js",
   "../assets/vendor/turndown/turndown.browser.umd.js"
 ];
 // Large libraries: folder -> cache name (contains the library version, survives app updates)
