@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif, .avif, .gif">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-5gE+aaQzBAgdLPG4j3xfzzFjIkRT5wAfMGEP5ajcgzQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-OtA0b0UNxuYL4r76f2pVOZ/kyDg65qwJkA+AoqOloQI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -39,6 +39,12 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
 .collage>button{position:absolute;margin:0;padding:0;border:0;border-radius:0;background:var(--surface-2);overflow:hidden;cursor:pointer;min-height:0;min-width:0}
 .collage>button img{display:block;width:100%;height:100%;object-fit:cover;pointer-events:none}
 .collage>button:focus-visible{outline:3px solid var(--accent);outline-offset:-3px;z-index:2}
+.collage{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+/* dragging a cell onto another one: the picked cell fades, the target gets a frame, a small copy follows the finger */
+.collage>button.dragging{opacity:.35}
+.collage>button.drop::after{content:"";position:absolute;inset:0;border:4px dashed var(--accent);pointer-events:none}
+.drag-ghost{position:fixed;z-index:1000;pointer-events:none;border:2px solid var(--accent);border-radius:8px;overflow:hidden;box-shadow:0 6px 20px rgb(0 0 0 / .35);background:var(--surface-2);opacity:.9;translate:-50% -50%}
+.drag-ghost img{display:block;width:100%;height:100%;object-fit:cover}
 .collage>button[aria-pressed="true"]::after{content:"";position:absolute;inset:0;border:4px solid var(--accent);box-shadow:inset 0 0 0 2px var(--accent-text);pointer-events:none}
 .stats{margin:8px 0 0;font-size:14px;color:var(--muted);text-align:center}
 #selBar .row{margin-top:6px}
@@ -88,7 +94,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
         </div>
       </div>
     </div>
-    <p class="muted" id="tapHint" data-i18n="preview.tap">Tippe ein Bild und dann ein zweites an, um beide zu tauschen.</p>
+    <p class="muted" id="tapHint" data-i18n="preview.tap">Tippe ein Bild und dann ein zweites an, um beide zu tauschen – oder zieh ein Bild an eine andere Stelle (auf dem Handy erst kurz gedrückt halten).</p>
     <div class="row">
       <button type="button" class="btn" id="btnShuffle"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#arrows-shuffle"/></svg><span data-i18n="preview.shuffle">Neu anordnen</span></button>
       <button type="button" class="btn" id="btnAdd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="preview.add">Bilder hinzufügen</span></button>
@@ -178,7 +184,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <h3>Bedienung</h3>
   <ol>
     <li><strong>Bilder wählen</strong> (beliebig viele, bis 200), hierher ziehen oder mit Strg+V einfügen. Auf dem Handy auch aus der Galerie an die App teilen.</li>
-    <li>Die App ordnet sie sofort an. <strong>Neu anordnen</strong> probiert eine andere Aufteilung. Ein Bild antippen und dann ein zweites: beide tauschen die Plätze. Ein angetipptes Bild lässt sich auch entfernen.</li>
+    <li>Die App ordnet sie sofort an. <strong>Neu anordnen</strong> probiert eine andere Aufteilung. Ein Bild antippen und dann ein zweites: beide tauschen die Plätze. Oder ein Bild auf ein anderes <strong>ziehen</strong> (auf dem Handy erst kurz gedrückt halten, bis es blasser wird): bei „Automatisch“ tauschen die beiden, bei „Reihen“ und „Spalten“ rückt das Bild an die neue Stelle und die übrigen rutschen nach. Ein angetipptes Bild lässt sich auch entfernen.</li>
     <li><strong>Größe und Format</strong> wählen und <strong>Collage speichern</strong> – danach auf dem Handy auch teilen.</li>
   </ol>
   <h3>Anordnung</h3>
@@ -204,7 +210,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <h3>How to use</h3>
   <ol>
     <li><strong>Choose images</strong> (as many as you like, up to 200), drag them here or paste them with Ctrl+V. On a phone you can also share them from the gallery to the app.</li>
-    <li>The app arranges them right away. <strong>Rearrange</strong> tries another layout. Tap one image and then a second one: they swap places. A tapped image can also be removed.</li>
+    <li>The app arranges them right away. <strong>Rearrange</strong> tries another layout. Tap one image and then a second one: they swap places. Or <strong>drag</strong> an image onto another one (on a phone, press and hold it first until it fades): with “Automatic” the two swap, with “Rows” and “Columns” the image moves to the new place and the others shift along. A tapped image can also be removed.</li>
     <li>Choose <strong>size and format</strong> and <strong>Save collage</strong> – then share it on a phone if you like.</li>
   </ol>
   <h3>Arrangement</h3>
@@ -262,7 +268,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version e3330d9e9114</p>
+  <p class="footer-version">Version 96b312a92173</p>
   <!-- footer:end -->
 </footer>
 
@@ -303,7 +309,7 @@ Tools.i18n({
     'setup.h':'Choose images','setup.pick':'Choose images',
     'setup.hint':'As many as you like – or drag them here or paste them. JPG, PNG, HEIC (iPhone), WebP, AVIF, GIF.',
     'preview.h':'Collage','preview.label':'Collage preview',
-    'preview.tap':'Tap one image and then a second one to swap them.',
+    'preview.tap':'Tap one image and then a second one to swap them – or drag an image to another place (on a phone, press and hold it first).',
     'preview.shuffle':'Rearrange','preview.add':'Add images',
     'sel.remove':'Remove image','sel.cancel':'Clear selection',
     'layout.h':'Arrangement','layout.mode':'Layout','mode.auto':'Automatic','mode.rows':'Rows','mode.cols':'Columns',
@@ -505,6 +511,7 @@ $('btnShuffle').addEventListener('click',shuffle);
 
 /* ---------- Tapping cells: select, swap ---------- */
 $('collage').addEventListener('click',e=>{
+  if(dragJustEnded){dragJustEnded=false; return;}
   const b=e.target.closest('button[data-id]'); if(!b||job) return;
   const id=b.dataset.id;
   if(!selected||!byId(selected)) selected=id;
@@ -522,6 +529,83 @@ function swap(a,b){
   relayout(false); lastFile=null; persist(); renderExport();
   Tools.diag.log('swapped');
 }
+// Rows/columns keep the order of the images: dropping moves the image to the target's place, the others shift along
+function move(a,b){
+  const i=images.findIndex(x=>x.id===a), k=images.findIndex(x=>x.id===b);
+  if(i<0||k<0||i===k) return;
+  const [im]=images.splice(i,1); images.splice(k,0,im);
+  relayout(false); lastFile=null; persist(); renderExport();
+  Tools.diag.log('moved');
+}
+
+/* ---------- Dragging cells: swap (automatic) or move (rows/columns) ----------
+   Mouse and pen start after a few pixels; touch only after holding still (HOLD ms), so that swiping still
+   scrolls the page. While dragging, a non-passive touchmove listener stops the page from scrolling. */
+const HOLD=350, SLOP=8;
+let drag=null, dragJustEnded=false;
+// The cell under the finger (not the dragged one itself)
+function dragTarget(id,x,y){
+  const el=document.elementFromPoint(x,y), b=el&&el.closest('#collage>button[data-id]');
+  return b&&b.dataset.id!==id?b:null;
+}
+function startDrag(){
+  const cell=$('collage').querySelector(`button[data-id="${CSS.escape(drag.id)}"]`); if(!cell){drag=null; return;}
+  drag.on=true;
+  // clear a tap selection without rebuilding the cells: on touch, the touch events stay with the cell under the finger
+  if(selected){
+    selected=null;
+    for(const b of $('collage').querySelectorAll('button[data-id]')) b.setAttribute('aria-pressed','false');
+    $('selBar').hidden=true; $('tapHint').hidden=false;
+  }
+  cell.classList.add('dragging');
+  try{cell.setPointerCapture(drag.pointer);}catch{ /* pointer already gone */ }
+  const r=cell.getBoundingClientRect(), k=Math.min(1,96/Math.max(r.width,r.height));
+  const g=document.createElement('div'); g.className='drag-ghost'; g.setAttribute('aria-hidden','true');
+  g.style.width=Math.max(40,r.width*k)+'px'; g.style.height=Math.max(40,r.height*k)+'px';
+  const img=document.createElement('img'); img.src=byId(drag.id).thumb; img.alt=''; g.append(img);
+  document.body.append(g); drag.ghost=g; moveGhost(drag.x,drag.y);
+  Tools.diag.log('drag start',{mode:settings.mode});
+}
+function moveGhost(x,y){
+  if(!drag||!drag.ghost) return;
+  drag.ghost.style.left=x+'px'; drag.ghost.style.top=y+'px';
+  const t=dragTarget(drag.id,x,y);
+  for(const b of $('collage').querySelectorAll('button.drop')) if(b!==t) b.classList.remove('drop');
+  if(t) t.classList.add('drop');
+}
+function endDrag(drop){
+  if(!drag) return;
+  clearTimeout(drag.timer);
+  const d=drag; drag=null;
+  if(!d.on) return;
+  dragJustEnded=true; setTimeout(()=>{dragJustEnded=false;},400);
+  if(d.ghost) d.ghost.remove();
+  const t=drop?dragTarget(d.id,drop.x,drop.y):null;
+  if(t&&!job){ if(settings.mode==='auto') swap(d.id,t.dataset.id); else move(d.id,t.dataset.id); }
+  renderPreview();
+}
+$('collage').addEventListener('pointerdown',e=>{
+  const b=e.target.closest('button[data-id]');
+  if(!b||job||images.length<2||e.button!==0||drag) return;
+  drag={id:b.dataset.id,pointer:e.pointerId,type:e.pointerType,x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY,on:false,timer:0};
+  if(e.pointerType==='touch') drag.timer=setTimeout(()=>{if(drag&&!drag.on) startDrag();},HOLD);
+});
+$('collage').addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.pointer) return;
+  drag.x=e.clientX; drag.y=e.clientY;
+  const far=Math.hypot(e.clientX-drag.x0,e.clientY-drag.y0)>SLOP;
+  if(!drag.on){
+    if(!far) return;
+    if(drag.type==='touch'){ endDrag(null); return; }   // moved before holding: the page scrolls
+    startDrag(); if(!drag) return;
+  }
+  e.preventDefault(); moveGhost(e.clientX,e.clientY);
+});
+$('collage').addEventListener('pointerup',e=>{ if(drag&&e.pointerId===drag.pointer) endDrag({x:e.clientX,y:e.clientY}); });
+$('collage').addEventListener('pointercancel',e=>{ if(drag&&e.pointerId===drag.pointer) endDrag(null); });
+$('collage').addEventListener('touchmove',e=>{ if(drag&&drag.on) e.preventDefault(); },{passive:false});
+$('collage').addEventListener('contextmenu',e=>{ if(drag) e.preventDefault(); });
+$('collage').addEventListener('dragstart',e=>e.preventDefault());
 $('btnUnselect').addEventListener('click',()=>{selected=null; renderPreview();});
 $('btnRemove').addEventListener('click',()=>{
   const id=selected, idx=images.findIndex(x=>x.id===id); if(idx<0) return;
