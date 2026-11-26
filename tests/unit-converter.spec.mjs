@@ -25,7 +25,7 @@ test.beforeEach(async ({ page }) => { await page.goto('/unit-converter/'); });
 
 test('overview: groups of tiles, search by quantity, unit name or symbol', async ({ page }) => {
   await expect(page.locator('#groups h2')).toHaveText(['SI-Basisgrößen', 'Raum & Mechanik', 'Elektrizität & Magnetismus', 'Licht, Strahlung & Chemie', 'Alltag']);
-  await expect(page.locator('#groups .tiles > button')).toHaveCount(35);
+  await expect(page.locator('#groups .tiles > button')).toHaveCount(36);
   await page.fill('#q', 'psi');
   await expect(page.locator('#groups .tiles > button:visible')).toHaveText(['Druck']);
   await page.fill('#q', 'Zoll');
@@ -35,7 +35,7 @@ test('overview: groups of tiles, search by quantity, unit name or symbol', async
   await page.fill('#q', 'xyz123');
   await expect(page.locator('#noHit')).toBeVisible();
   await page.fill('#q', '');
-  await expect(page.locator('#groups .tiles > button:visible')).toHaveCount(35);
+  await expect(page.locator('#groups .tiles > button:visible')).toHaveCount(36);
 });
 
 test('the tab bar shows the quantities of the open group; back returns to the overview', async ({ page }) => {
@@ -118,6 +118,50 @@ test('SI prefixes for any unit', async ({ page }) => {
   await expect(p(page, 'prefix').locator('[data-all] tbody tr')).toHaveCount(24);
 });
 
+test('number systems: whole numbers of any length between bases 2 to 36', async ({ page }) => {
+  await page.fill('#q', 'hex');
+  await expect(page.locator('#groups .tiles > button:visible')).toHaveText(['Zahlensysteme']);
+  await page.fill('#q', '');
+  await open(page, 'numeral');
+  const n = p(page, 'numeral');
+  // start value: 255 decimal = FF
+  await expect(main(page, 'numeral')).toHaveText('FF');
+  const row = name => n.locator('[data-all] tr', { has: page.locator('td:first-child', { hasText: new RegExp('^' + name) }) }).locator('td.num');
+  await expect(row('Binär')).toHaveText('1111 1111');
+  await expect(row('Oktal')).toHaveText('377');
+  await conv(page, 'numeral', '0x1F_ff', '16', '2');
+  await expect(main(page, 'numeral')).toHaveText('1 1111 1111 1111');  // 0x1FFF = 8191 = 2¹³ − 1
+  await expect(row('Dezimal')).toHaveText('8.191');
+  await expect(n.locator('.calc-result:not(.main) .v')).toHaveText('13 Bit');
+  // beyond 2⁵³: 2⁶⁴ exactly, thousands separators of the language in the input
+  await conv(page, 'numeral', '18.446.744.073.709.551.616', '10', '16');
+  await expect(main(page, 'numeral')).toHaveText('1 0000 0000 0000 0000');
+  // other bases: 35 = Z in base 36; 100 in base 3 = 9
+  await conv(page, 'numeral', 'z', '36', '10');
+  await expect(main(page, 'numeral')).toHaveText('35');
+  await conv(page, 'numeral', '100', '3', '10');
+  await expect(main(page, 'numeral')).toHaveText('9');
+  // negative numbers keep their sign; copy has no gaps
+  await conv(page, 'numeral', '-255', '10', '2');
+  await expect(main(page, 'numeral')).toHaveText('-1111 1111');
+  await n.locator('[data-copy]').click();
+  await expect.poll(() => clipboardText(page)).toBe('-11111111');
+  await n.locator('[data-sign]').click();
+  await expect(main(page, 'numeral')).toHaveText('1111 1111');
+  // invalid digit and fractions are errors
+  await conv(page, 'numeral', '102', '10', '2');
+  await n.locator('[data-in="from"]').selectOption('2');
+  await expect(n.locator('.notice.err')).toContainText('„2“ ist keine Ziffer zur Basis 2');
+  await expect(n.locator('.calc-result')).toHaveCount(0);
+  await conv(page, 'numeral', '3,5', '10', '2');
+  await expect(n.locator('.notice.err')).toContainText('Nur ganze Zahlen');
+  // survives a reload
+  await conv(page, 'numeral', 'ff', '16', '8');
+  await page.reload();
+  await expect(main(page, 'numeral')).toHaveText('377');
+  await expect(n.locator('[data-in="v"]')).toHaveValue('ff');
+});
+
 test('swap, sign key and copy; values survive a reload; reset can be undone', async ({ page }) => {
   await conv(page, 'speed', 100, 'kmh', 'mph');
   await expect(main(page, 'speed')).toHaveText(de(100 / 3.6 / 0.44704) + ' mph');
@@ -148,5 +192,13 @@ test.describe('English', () => {
     await switchLang(page, 'de');
     await expect(p(page, 'length').locator('h2')).toHaveText('Länge');
     await expect(main(page, 'length')).toHaveText('304,8 m');
+  });
+  test('number systems in English: thousands commas in decimal input, names', async ({ page }) => {
+    await conv(page, 'numeral', '65,535', '10', '16');
+    await expect(main(page, 'numeral')).toHaveText('FFFF');
+    await expect(p(page, 'numeral').locator('[data-in="from"] option:checked')).toHaveText('Decimal (base 10)');
+    await switchLang(page, 'de');
+    await expect(p(page, 'numeral').locator('[data-in="v"]')).toHaveValue('65535');
+    await expect(main(page, 'numeral')).toHaveText('FFFF');
   });
 });
