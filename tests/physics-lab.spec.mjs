@@ -1170,7 +1170,7 @@ test.describe('lens', () => {
 });
 
 // one test per experiment: all of them in one test do not fit into the time limit on CI
-for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing', 'sky', 'bow', 'float', 'fall']) {
+for (const kind of ['mirror', 'lens', 'refr', 'waves', 'pendulum', 'coupled', 'throw', 'decay', 'spectrum', 'lorentz', 'circuit', 'gas', 'radar', 'wing', 'sky', 'bow', 'float', 'fall', 'sync', 'ptycho']) {
   test(`${kind}: open with formulas, no accessibility violations`, async ({ page }) => {
     await open(page, kind);
     for (const s of await page.locator(`${panel(kind)} details.sub:visible > summary`).all()) await s.click();
@@ -1224,7 +1224,7 @@ test.describe('tab groups', () => {
     await expect(page.locator('#tabbar [role="tab"]:visible')).toHaveCount(5); // optics
     await expect(page.locator('#tab-doppler')).toBeHidden();
     await open(page, 'doppler');
-    await expect(page.locator('#tabbar [role="tab"]:visible')).toHaveText(['Spalte', 'Radar', 'Doppler']);
+    await expect(page.locator('#tabbar [role="tab"]:visible')).toHaveText(['Spalte', 'Radar', 'Doppler', 'Ptychographie']);
     await page.click('#tab-radar');
     await expect(page.locator('#p-radar')).toBeVisible();
     await open(page, 'seasons');
@@ -1599,5 +1599,86 @@ test.describe('falling on the Moon (English)', () => {
     await expect(page.locator('#faWhy')).toContainText('On the Moon gravity pulls with only 1.62 m/s²');
     await page.click('#p-fall summary:has-text("Formulas")');
     expect((await page.locator('#faMath annotation').allTextContents()).join(' ')).toContain('6.674\\cdot 10^{-11}');
+  });
+});
+
+test.describe('Synchrotron', () => {
+  // reference (independent of sync.js): γ = E/(m_e c²), ρ = p/(eB) with p·c = β·E, λc = 4πρ/(3γ³), U₀ = 88.46 keV·E⁴/ρ
+  const ref = (E, B) => {
+    const g = E / 0.51099895e-3, beta = Math.sqrt(1 - 1 / g ** 2), rho = beta * E * 1e9 / (299792458 * B);
+    const lam = 4 * Math.PI * rho / (3 * g ** 3);
+    return { g, rho, lam, ec: 1.23984198e-6 / lam, u0: 88.46 * E ** 4 / rho };
+  };
+  const deSig = (x, n = 3) => { const d = Math.max(0, n - 1 - Math.floor(Math.log10(Math.abs(x)))); return de(x, d); };
+
+  test('BESSY II: soft X-rays, ESRF: hard X-rays shorter than the distance of atoms', async ({ page }) => {
+    await open(page, 'sync');
+    await page.click('#syPresets button:has-text("BESSY II")');
+    let r = ref(1.7, 1.3);
+    await expect(result(page, 'sync', 'Kritische Wellenlänge')).toHaveText(deSig(r.lam * 1e9) + ' nm');
+    await expect(result(page, 'sync', 'Art des Lichts')).toHaveText('weiches Röntgenlicht');
+    await expect(result(page, 'sync', 'Photonenenergie')).toHaveText(deSig(r.ec / 1e3) + ' keV');
+    await expect(result(page, 'sync', 'Lorentzfaktor')).toHaveText(de(r.g, 0));
+    await expect(result(page, 'sync', 'Bahnradius')).toHaveText(deSig(r.rho) + ' m');
+    await expect(result(page, 'sync', 'Energieverlust')).toContainText(deSig(r.u0) + ' keV');
+    await page.click('#syPresets button:has-text("ESRF")');
+    r = ref(6, 0.85);
+    expect(r.lam).toBeLessThan(0.15e-9);
+    await expect(result(page, 'sync', 'Kritische Wellenlänge')).toHaveText(deSig(r.lam * 1e9) + ' nm');
+    await expect(result(page, 'sync', 'Art des Lichts')).toHaveText('hartes Röntgenlicht');
+    await expect(page.locator('#syWhy')).toContainText('Atome');
+    await expect(result(page, 'sync', 'Energieverlust')).toContainText(deSig(r.u0 / 1e3) + ' MeV');
+    // slow electrons: ultraviolet, and the energy from which it becomes X-rays (λc = 10 nm)
+    await page.click('#syPresets button:has-text("Kleiner Ring")');
+    await expect(result(page, 'sync', 'Art des Lichts')).toHaveText('Ultraviolett');
+    const eX = Math.sqrt(1.23984198e-6 / 10e-9 / 1e3 / (0.665 * 1));
+    await expect(page.locator('#syWhy')).toContainText(`ab etwa ${de(Math.round(eX * 1000), 0)} MeV`);
+    await page.click('#p-sync summary:has-text("Formeln")');
+    await expect(page.locator('#syMath .katex')).toHaveCount(5);
+    await expect(page.locator('#syMath .fallback')).toHaveCount(0);
+  });
+
+  test('settings survive a reload; English', async ({ page }) => {
+    await open(page, 'sync');
+    await page.locator('#syE').fill('5');   // E_c ≈ 0.665 · 5² · 1.2 keV ≈ 20 keV: λc ≈ 0.06 nm
+    await page.locator('#syB').fill('1.2');
+    await page.reload();
+    await expect(page.locator('#p-sync')).toBeVisible();
+    await expect(page.locator('#syEOut')).toHaveText('5,00 GeV');
+    await switchLang(page, 'en');
+    await expect(result(page, 'sync', 'Kind of light')).toHaveText('hard X-rays');
+  });
+});
+
+test.describe('Ptychography', () => {
+  test('with overlap the picture is found, phase included', async ({ page }) => {
+    await open(page, 'ptycho');
+    // step 8 = half the spot: overlap of two discs (2/π)(arccos ½ − ½·√¾)
+    await page.locator('#ptStep').fill('8');
+    const ovl = 2 / Math.PI * (Math.acos(0.5) - 0.5 * Math.sqrt(0.75));
+    await expect(page.locator('#ptStepOut')).toHaveText(`8 Pixel · Überlapp ${de(ovl * 100, 0)} %`);
+    await expect(result(page, 'ptycho', /^Flecken$/)).toHaveText('25');   // (64 − 32)/8 + 1 = 5 per row
+    await expect(page.locator('#ptWhy')).toContainText('25 Beugungsmuster');
+    await page.click('#ptPlay');
+    await expect(result(page, 'ptycho', 'Abweichung')).toHaveText('< 0,05 %', { timeout: 20000 });
+    await expect(page.locator('#ptPlay')).toHaveText('Rekonstruieren');      // stopped by itself
+    await expect(page.locator('#ptWhy')).toContainText('Die Phase wurde nie gemessen');
+    await page.click('#p-ptycho summary:has-text("Formeln")');
+    await expect(page.locator('#ptMath .katex')).toHaveCount(5);
+    await expect(page.locator('#ptMath .fallback')).toHaveCount(0);
+  });
+
+  test('without overlap the calculation gets stuck', async ({ page }) => {
+    await open(page, 'ptycho');
+    await page.locator('#ptStep').fill('16');
+    await expect(page.locator('#ptStepOut')).toHaveText('16 Pixel · Überlapp 0 %');
+    await page.click('#ptPlay');
+    await expect(result(page, 'ptycho', 'Durchläufe')).toHaveText('200', { timeout: 20000 });
+    const e = Number((await result(page, 'ptycho', 'Abweichung').textContent()).replace(/[^\d,]/g, '').replace(',', '.'));
+    expect(e).toBeGreaterThan(20);
+    await expect(page.locator('#ptWhy')).toContainText('bleibt die Rechnung');
+    // back to the start: an empty picture again
+    await page.click('#ptReset');
+    await expect(result(page, 'ptycho', 'Durchläufe')).toHaveText('0');
   });
 });

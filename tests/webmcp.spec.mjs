@@ -397,6 +397,24 @@ test.describe('medical-calculator tools', () => {
 test.describe('physics-lab tools', () => {
   test.beforeEach(async ({ page }) => { await open(page, '/physics-lab/'); });
 
+  test('synchrotron_light and ptychography', async ({ page }) => {
+    const r = await call(page, 'physics_lab_synchrotron_light', { energy_gev: 6, field_t: 0.85 });
+    const g = 6 / 0.51099895e-3, rho = Math.sqrt(1 - 1 / g ** 2) * 6e9 / (299792458 * 0.85);
+    expect(r.result.gamma).toBeCloseTo(g, 0);
+    expect(r.result.bending_radius_m).toBeCloseTo(rho, 1);
+    expect(r.result.critical_wavelength_nm).toBeCloseTo(4 * Math.PI * rho / (3 * g ** 3) * 1e9, 4);
+    expect(r.result.kind_of_light).toBe('hard');
+    await expect(page.locator('#p-sync')).toBeVisible();
+    expect((await call(page, 'physics_lab_synchrotron_light', { energy_gev: 9 })).ok).toBe(false);
+    const p = await call(page, 'physics_lab_ptychography', { step_px: 6, passes: 60 });
+    expect(p.result).toMatchObject({ step_px: 6, spots: 49, passes_done: 60 });
+    expect(p.result.difference_percent).toBeLessThan(0.5);
+    await expect(page.locator('#p-ptycho')).toBeVisible();
+    const q = await call(page, 'physics_lab_ptychography', { step_px: 16, passes: 60 });
+    expect(q.result.overlap_percent).toBe(0);
+    expect(q.result.difference_percent).toBeGreaterThan(20);
+  });
+
   test('mirror_image and lens_image set the sliders and return the image', async ({ page }) => {
     let r = await call(page, 'physics_lab_mirror_image', { curvature_per_m: 30, object_distance_cm: 30 });
     const f = 100 / 30 / 2, b = 1 / (1 / f - 1 / 30);
