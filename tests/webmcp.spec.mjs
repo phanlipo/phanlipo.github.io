@@ -12,6 +12,7 @@ import { fakeCamera, fakeWorker } from './camera-fakes.mjs';
 import { fakeWorker as fakeFaceWorker, photo as facePhoto, withExifDate } from './face-timelapse-fakes.mjs';
 import { fakeYoutube, playerFrame, LIST, LIST_TITLE, VIDEOS } from './fake-youtube.mjs';
 import { FEED_ORIGIN, FEED_PROBLEMS, mockFeeds } from './feed-mock.mjs';
+import { PODCAST_PROBLEMS, SHOW_LINK, mockPodcasts } from './podcast-mock.mjs';
 import { fakeNfc, wscCredential } from './nfc-fake.mjs';
 import { fakeTranslatorApi } from './translator-fakes.mjs';
 import { icdZip, alphaZip } from './medical-codes-data.mjs';
@@ -4903,5 +4904,66 @@ test.describe('keepass-viewer tools', () => {
     await expect(page.locator('#vaultCard')).toBeHidden();
     await expect(page.locator('#entryCard')).toBeHidden();
     expect((await call(page, 'keepass_viewer_show_entry', { title: 'Mail' })).ok).toBe(false);
+  });
+});
+
+test.describe('podcast-player tools', () => {
+  test.use({ allowedProblems: PODCAST_PROBLEMS });
+
+  test('list_podcasts, select_podcast, list_episodes, get_player and read_transcript – never fetch or play', async ({ page }) => {
+    const seen = await mockPodcasts(page);
+    await fakeModelContext(page);
+    await page.goto('/podcast-player/');
+    let r = await call(page, 'podcast_player_list_podcasts', {});
+    expect(r.result).toEqual({ current: null, podcasts: [] });
+    expect((await call(page, 'podcast_player_read_transcript', {})).ok).toBe(false);
+    expect((await call(page, 'podcast_player_get_player', {})).result).toEqual({ episode: null });
+
+    await page.fill('#podUrl', SHOW_LINK);
+    await page.click('#btnAdd');
+    await expect(page.locator('#podTitle')).toHaveText('Test-Podcast');
+    await openMenu(page);
+    await page.click('#btnNew');
+    await page.fill('#podUrl', `${FEED_ORIGIN}/cast.xml`);
+    await page.click('#btnAdd');
+    await expect(page.locator('#podTitle')).toHaveText('RSS-Testcast');
+    const requests = seen.ard.length + seen.feeds.length;
+
+    r = await call(page, 'podcast_player_list_podcasts', {});
+    expect(r.result.podcasts.map(p => [p.title, p.source, p.episodes])).toEqual([['Test-Podcast', 'ARD Audiothek', 3], ['RSS-Testcast', 'RSS', 2]]);
+    const [ard, rss] = r.result.podcasts.map(p => p.id);
+    expect(r.result.current).toBe(rss);
+
+    r = await call(page, 'podcast_player_list_episodes', { podcast_id: ard, query: 'skript' });
+    expect(r.result).toMatchObject({ podcast_id: ard, title: 'Test-Podcast', total: 1, offset: 0 });
+    expect(r.result.episodes).toEqual([{ id: '502', title: 'Folge zwei', date: '2026-11-17T03:00:00.000Z', duration_seconds: 60,
+      position_seconds: 0, played: false, has_transcript: true, summary: 'Mit Skript.' }]);
+    r = await call(page, 'podcast_player_list_episodes', { limit: 1, offset: 1 });
+    expect(r.result.episodes.map(e => e.title)).toEqual(['Erste RSS-Folge']);
+    // Show notes as plain text
+    r = await call(page, 'podcast_player_list_episodes', { limit: 1 });
+    expect(r.result.episodes[0].summary).toBe('Notizen mit HTML');
+    expect((await call(page, 'podcast_player_list_episodes', { podcast_id: 'x' })).ok).toBe(false);
+
+    r = await call(page, 'podcast_player_select_podcast', { podcast_id: ard });
+    expect(r.result).toEqual({ current: ard, title: 'Test-Podcast' });
+    await closeMenu(page);
+    await expect(page.locator('#podTitle')).toHaveText('Test-Podcast');
+
+    // The user opens a transcript and plays: the agent can read both
+    await page.locator('#eps > li').nth(1).locator('.btn.icon').click();
+    await expect(page.locator('#trStatus')).toHaveText('4 Abschnitte');
+    r = await call(page, 'podcast_player_read_transcript', { query: 'tintenfische' });
+    expect(r.result).toEqual({ episode: 'Folge zwei', total: 1, offset: 0,
+      sections: [{ start_seconds: 20, speaker: 'Stimme 2', text: 'Und um Tintenfische, die rechnen können.' }] });
+    r = await call(page, 'podcast_player_read_transcript', { limit: 2, offset: 2 });
+    expect(r.result.sections.map(x => x.start_seconds)).toEqual([20, 40]);
+    await page.locator('#trBody .seg .ts').nth(1).click();
+    await expect(page.locator('#nowTitle')).toHaveText('Folge zwei');
+    await expect.poll(async () => (await call(page, 'podcast_player_get_player', {})).result.position_seconds).toBeGreaterThanOrEqual(10);
+    r = await call(page, 'podcast_player_get_player', {});
+    expect(r.result).toMatchObject({ podcast_id: ard, podcast: 'Test-Podcast', episode: { id: '502', title: 'Folge zwei' }, speed: 1 });
+    expect(seen.ard.length + seen.feeds.length).toBe(requests + 1); // only the transcript the user opened
+    expect(seen.audio).toHaveLength(1);
   });
 });

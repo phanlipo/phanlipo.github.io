@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Podcast-Player</title>
+<meta name="description" content="Podcasts hören: Sendungen aus ARD Audiothek und ARD Sounds per Link oder beliebige Podcast-Feeds abonnieren, Folgen abspielen und weiterhören, Skript mitlesen und als RSS-Feed speichern.">
+<meta name="tool:tags" content="Freizeit, Musik">
+<meta name="tool:features" content="Teilen an App, Kopieren, KI-Agent">
+<meta name="tool:webmcp" content="list_podcasts, select_podcast, list_episodes, get_player, read_transcript">
+<meta name="tool:webmcp-help" content="Ein KI-Agent kann die Podcasts und ihre geladenen Folgen auflisten, einen Podcast anzeigen lassen, lesen, was gerade läuft, und das geöffnete Skript lesen oder durchsuchen. Abspielen, Podcasts abrufen oder hinzufügen kann er nicht.">
+<meta name="tool:webmcp-help-en" content="An AI agent can list the podcasts and their loaded episodes, show a podcast, read what is playing and read or search the open transcript. It cannot play, fetch or add podcasts.">
+<meta name="tool:icon" content="headphones">
+<meta name="tool:color" content="#7c3aed">
+<meta name="tool:short-name" content="Podcasts">
+<meta name="tool:title-en" content="Podcast Player">
+<meta name="tool:description-en" content="Listen to podcasts: subscribe to shows from ARD Audiothek and ARD Sounds by link or to any podcast feed, play and resume episodes, follow the transcript and save it as an RSS feed.">
+<meta name="tool:short-name-en" content="Podcasts">
+<meta name="tool:storage" content="podcast-player.">
+<meta name="tool:share-text" content="true">
+<!-- Episode lists come from the ARD Audiothek API or feed servers the user enters (optionally their own CORS proxy);
+     audio streams from the podcast's servers – all only after a tap, never by an agent -->
+<meta name="tool:connect" content="https: http://localhost:* http://127.0.0.1:*">
+<meta name="tool:media" content="https:">
+<!-- head:start -->
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-xK8ULqlT+x9ibkCPyt9dCtXSNHA6ZkAuVWS/I5GmY2k='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream: https:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Podcasts">
+<meta name="theme-color" content="#7c3aed">
+<!-- head:end -->
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+:root{--accent:#7c3aed;--accent-text:#ffffff}
+@media (prefers-color-scheme: dark){:root{--accent:#c4b5fd;--accent-text:#1e1036}}
+main{max-width:860px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+body{--page-width:860px}
+.list-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.list-head h2{margin:0;flex:1 1 200px;min-width:0;overflow-wrap:anywhere}
+.status{margin:6px 0;font-size:14px;color:var(--muted);min-height:1.5em}
+.pod-text{margin:0 0 8px;font-size:14px;color:var(--muted)}
+#eps .open{padding-block:6px}
+#eps .name{white-space:normal;overflow-wrap:anywhere}
+#eps li.done .name{font-weight:400;color:var(--muted)}
+#eps li[aria-current="true"] .name{color:var(--accent)}
+.tag{display:inline-block;padding:0 6px;border-radius:6px;border:1px solid var(--border);font-size:12px;margin-inline-start:4px}
+.ep-bar{display:block;height:3px;margin-top:4px;border-radius:2px;background:var(--surface-2);overflow:hidden}
+.ep-bar>i{display:block;height:100%;background:var(--accent)}
+/* Player: stays at the bottom while scrolling through episodes or the transcript */
+#playerCard{position:sticky;bottom:8px;z-index:5;box-shadow:0 4px 18px rgb(0 0 0 / .18)}
+.now{display:flex;flex-direction:column;gap:2px;min-width:0}
+.now-title{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.now-pod{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seek{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;margin:6px 0 2px}
+.seek output{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);min-width:3.2em;text-align:center}
+.seek input{width:100%;min-height:44px;margin:0;accent-color:var(--accent)}
+.ctls{display:flex;justify-content:center;align-items:center;gap:18px;margin:2px 0 6px}
+.ctl{width:52px;height:52px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--text);display:grid;place-items:center;cursor:pointer;padding:0}
+.ctl svg{width:26px;height:26px}
+.ctl.main{width:60px;height:60px;background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.ctl:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.player-error{margin:4px 0 0}
+/* Transcript */
+.tr-opts{display:flex;flex-wrap:wrap;gap:0 12px;align-items:center}
+.tr-opts .form-field{flex:1 1 200px;margin:0}
+#trBody{display:grid;gap:2px;margin-top:8px}
+.seg{display:grid;grid-template-columns:auto 1fr;gap:0 8px;padding:4px 6px;border-radius:8px}
+.seg.on{background:var(--surface-2);box-shadow:inset 3px 0 0 var(--accent)}
+.seg .ts{min-width:56px;min-height:44px;padding:0 6px;border:0;border-radius:6px;background:none;color:var(--accent);font:inherit;font-size:13px;font-variant-numeric:tabular-nums;cursor:pointer;align-self:start}
+.seg .ts:focus-visible{outline:2px solid var(--accent)}
+.seg .ts:hover{background:var(--surface-2)}
+.seg.no-time{grid-template-columns:1fr}
+.seg p{margin:0;padding-block:10px 4px;line-height:1.5;overflow-wrap:anywhere}
+.seg .who{display:block;font-size:12px;font-weight:600;color:var(--muted)}
+.seg mark{background:var(--warn-bg);color:inherit}
+#trCard .toolbar{margin-top:8px;border-top:1px solid var(--border);padding-top:4px}
+#podRows .btn.icon{flex:none}
+</style>
+</head>
+<body>
+<header>
+  <h1><img class="app-logo" src="icon.svg" alt="" width="32" height="32"><span data-i18n="title">Podcast-Player</span></h1>
+  <p class="sub" data-i18n="sub">Podcasts hören, weiterhören und mitlesen.</p>
+</header>
+
+<main>
+  <!-- First start (no podcast yet): only the form. Afterwards the episodes; managing podcasts is in the menu. -->
+  <section class="card" id="setupCard" aria-labelledby="h-setup" hidden>
+    <h2 id="h-setup" data-i18n="setupH">Ersten Podcast hinzufügen</h2>
+    <div id="setupSlot"></div>
+  </section>
+
+  <section class="card" id="listCard" aria-labelledby="h-list" hidden>
+    <div class="list-head">
+      <h2 id="h-list"><span id="podTitle"></span></h2>
+      <button type="button" class="btn" id="btnRefresh"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#refresh"/></svg><span data-i18n="refresh">Aktualisieren</span></button>
+    </div>
+    <div class="form-field" id="podSelField" hidden>
+      <label for="podSel" data-i18n="podSel">Podcast</label>
+      <select id="podSel"></select>
+    </div>
+    <p class="pod-text" id="podText"></p>
+    <p class="status" id="status" role="status"></p>
+    <div class="notice err" id="listError" role="alert" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#alert-circle"/></svg><div id="listErrorText"></div></div>
+    <div class="form-field">
+      <label for="q" class="sr-only" data-i18n="search">Folgen suchen</label>
+      <input type="search" id="q" autocomplete="off" placeholder="Folgen suchen …" data-i18n-attr="placeholder:searchPh">
+    </div>
+    <ul class="list-rows" id="eps" aria-labelledby="h-list"></ul>
+    <div class="empty-state" id="epsEmpty" hidden>
+      <svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#headphones"/></svg>
+      <p id="epsEmptyText"></p>
+    </div>
+    <button type="button" class="btn" id="btnMore" hidden></button>
+  </section>
+
+  <section class="card" id="trCard" aria-labelledby="h-tr" hidden>
+    <h2 id="h-tr"><span data-i18n="trH">Skript</span>: <span id="trTitle"></span></h2>
+    <p class="status" id="trStatus" role="status"></p>
+    <div class="tr-opts" id="trOpts" hidden>
+      <div class="form-field">
+        <label for="trQ" class="sr-only" data-i18n="trSearch">Im Skript suchen</label>
+        <input type="search" id="trQ" autocomplete="off" placeholder="Im Skript suchen …" data-i18n-attr="placeholder:trSearchPh">
+      </div>
+      <label class="check"><input type="checkbox" id="optFollow"><span data-i18n="follow">Mitlaufen</span></label>
+    </div>
+    <div id="trBody"></div>
+    <div class="toolbar" id="trTools">
+      <button type="button" id="btnTrCopy" aria-label="Skript kopieren" title="Skript kopieren" data-i18n-attr="aria-label:trCopyL;title:trCopyL"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span class="tb-label" data-i18n="copy">Kopieren</span></button>
+      <button type="button" id="btnTrSave" aria-label="Skript als Textdatei speichern" title="Skript als Textdatei speichern" data-i18n-attr="aria-label:trSaveL;title:trSaveL"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span class="tb-label" data-i18n="save">Speichern</span></button>
+      <button type="button" id="btnTrClose" aria-label="Skript schließen" title="Skript schließen" data-i18n-attr="aria-label:trCloseL;title:trCloseL"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span class="tb-label" data-i18n="close">Schließen</span></button>
+    </div>
+  </section>
+
+  <section class="card" id="playerCard" aria-label="Player" data-i18n-attr="aria-label:player" hidden>
+    <div class="now">
+      <span class="now-title" id="nowTitle"></span>
+      <span class="now-pod" id="nowPod"></span>
+    </div>
+    <div class="seek">
+      <output id="tNow" aria-hidden="true">0:00</output>
+      <input type="range" id="seek" min="0" max="0" step="1" value="0" aria-label="Position" data-i18n-attr="aria-label:position">
+      <output id="tLeft" aria-hidden="true">0:00</output>
+    </div>
+    <div class="ctls">
+      <button type="button" class="ctl" id="btnBack" aria-label="15 Sekunden zurück" title="15 Sekunden zurück" data-i18n-attr="aria-label:back;title:back"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#rewind-backward-15"/></svg></button>
+      <button type="button" class="ctl main" id="btnPlay" aria-label="Abspielen" title="Abspielen" data-i18n-attr="aria-label:play;title:play"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#player-play"/></svg></button>
+      <button type="button" class="ctl" id="btnFwd" aria-label="30 Sekunden vor" title="30 Sekunden vor" data-i18n-attr="aria-label:fwd;title:fwd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#rewind-forward-30"/></svg></button>
+    </div>
+    <div class="toolbar">
+      <button type="button" id="btnRate"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#gauge"/></svg><span class="tb-label" id="rateLabel">1×</span></button>
+      <button type="button" id="btnNowTr" aria-label="Skript zeigen" title="Skript zeigen" data-i18n-attr="aria-label:trShowL;title:trShowL"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-text"/></svg><span class="tb-label" data-i18n="trH">Skript</span></button>
+      <button type="button" id="btnDone" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#circle-check"/></svg><span class="tb-label" data-i18n="done">Gehört</span></button>
+    </div>
+    <p class="notice err player-error" id="playError" role="alert" hidden></p>
+    <audio id="audio" preload="none"></audio>
+  </section>
+
+  <section class="card" data-menu id="manageCard" aria-labelledby="h-manage" data-icon="headphones">
+    <h2 id="h-manage" data-i18n="manage">Podcasts verwalten</h2>
+    <ul class="list-rows" id="podRows"></ul>
+    <div class="row" id="manageActions">
+      <button type="button" class="btn" id="btnNew" aria-expanded="false" aria-controls="addForm"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="addMore">Weiteren Podcast hinzufügen</span></button>
+    </div>
+    <div id="menuSlot">
+      <form id="addForm" novalidate>
+        <h3 id="h-add" data-i18n="addH">Podcast hinzufügen</h3>
+        <div class="form-field">
+          <label for="podUrl" data-i18n="podUrl">Link zur Sendung (ARD Audiothek, ARD Sounds) oder Adresse eines Podcast-Feeds</label>
+          <input type="url" id="podUrl" inputmode="url" autocomplete="url" spellcheck="false" enterkeyhint="go" placeholder="https://www.ardsounds.de/sendung/…">
+          <p class="form-hint" data-i18n="podUrlHint">Bei ARD reicht der Link aus der Adresszeile oder „Teilen“ – auch der Link einer einzelnen Folge.</p>
+        </div>
+        <p class="form-error" id="addError" role="alert"></p>
+        <div class="row">
+          <button type="submit" class="btn primary" id="btnAdd"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#plus"/></svg><span data-i18n="add">Hinzufügen</span></button>
+          <button type="button" class="btn" id="btnCancel" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span data-i18n="cancel">Abbrechen</span></button>
+          <button type="button" class="btn" id="btnExample"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#headphones"/></svg><span data-i18n="example">Beispiel: Der KI-Podcast</span></button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="card" data-menu aria-labelledby="h-settings" data-icon="settings">
+    <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <div class="form-field">
+      <label for="proxy" data-i18n="proxy">Eigener CORS-Proxy (optional)</label>
+      <input type="url" id="proxy" inputmode="url" spellcheck="false" placeholder="https://proxy.example/?url={url}">
+      <p class="form-hint" data-i18n="proxyHint">Nur für Podcast-Feeds und Skripte, die der Browser nicht direkt laden darf (ARD braucht keinen). {url} wird durch die Adresse ersetzt; fehlt es, wird sie angehängt. Der Proxy sieht, welche Feeds Sie abrufen.</p>
+    </div>
+    <p class="form-error" id="proxyError" role="alert"></p>
+    <div class="row">
+      <button type="button" class="btn primary" id="btnProxy"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#device-floppy"/></svg><span data-i18n="saveSettings">Speichern</span></button>
+    </div>
+  </section>
+</main>
+
+<!-- data:start -->
+<details class="data card">
+  <summary data-i18n="data.summary">Daten sichern &amp; übertragen</summary>
+  <p data-i18n="data.intro">Einstellungen und Verläufe dieser App liegen nur in diesem Browser. Mit einer Sicherungsdatei lassen sie sich aufbewahren oder auf ein anderes Gerät bzw. in die installierte App übertragen.</p>
+  <div class="row">
+    <button type="button" class="btn" data-data="export" data-i18n="data.export">Sicherung speichern</button>
+    <button type="button" class="btn" data-data="share" data-i18n="data.share" hidden>Teilen …</button>
+    <button type="button" class="btn" data-data="import" data-i18n="data.import">Sicherung laden</button>
+    <button type="button" class="btn danger" data-data="clear" data-i18n="data.clear">Alle Daten löschen</button>
+  </div>
+  <p class="data-info" data-data="info" role="status"></p>
+</details>
+<!-- data:end -->
+<details class="help card">
+  <summary data-i18n="help.summary">Anleitung &amp; Hinweise</summary>
+  <div data-lang="de">
+  <p>Podcasts hören, ohne Konto und ohne App-Store: Sendungen aus der <strong>ARD Audiothek</strong> bzw. <strong>ARD Sounds</strong> oder beliebige Podcast-Feeds (RSS) hinzufügen, Folgen abspielen, später an derselben Stelle weiterhören und – wo vorhanden – das Skript mitlesen.</p>
+  <h3>Bedienung</h3>
+  <ul>
+    <li><strong>Hinzufügen:</strong> Link einer ARD-Sendung einfügen, z. B. <code>https://www.ardsounds.de/sendung/der-ki-podcast/urn:ard:show:65505255c703e51e/</code>, oder nur <code>urn:ard:show:…</code>. Der Link einer einzelnen Folge geht auch, dann wird ihre Sendung hinzugefügt. Für andere Podcasts die Adresse des RSS-Feeds eintragen. Auf Android kann man einen Link aus dem Browser auch an die installierte App <em>teilen</em>.</li>
+    <li><strong>Abspielen:</strong> Folge antippen. Unten bleibt der Player: 15 s zurück, 30 s vor, Position ziehen, Tempo (0,75× bis 2×) antippen zum Wechseln. Kopfhörer- und Sperrbildschirm-Tasten funktionieren, wo der Browser sie unterstützt.</li>
+    <li><strong>Weiterhören:</strong> Die Stelle jeder Folge wird gespeichert; ein Balken zeigt, wie weit Sie sind. Zu Ende gehörte Folgen werden als „Gehört“ markiert – das lässt sich im Player auch von Hand umschalten.</li>
+    <li><strong>Skript:</strong> Folgen mit dem Zeichen „Skript“ haben ein Transkript (bei ARD für einen Teil der Folgen, bei RSS-Feeds über <code>podcast:transcript</code>). Es zeigt Zeitmarken – antippen springt an die Stelle. „Mitlaufen“ hebt den gerade gesprochenen Absatz hervor und scrollt mit. Kopieren oder als Textdatei speichern ist möglich. ARD unterscheidet Sprecher nur nach Nummer („Stimme 1“, „Stimme 2“); die Texte sind automatisch erkannt und können Fehler enthalten.</li>
+    <li><strong>Als RSS-Feed speichern</strong> (Menü → Podcasts verwalten): erzeugt aus den geladenen Folgen einen normalen Podcast-Feed mit iTunes-Angaben – so wie das Skript <a href="https://thmsnhl.de/projekte/ard-audiothek-rss/">ARD-Audiothek-RSS</a>, nur im Browser. Die Datei lässt sich in Programme laden, die Feeds als Datei öffnen; eine abonnierbare Adresse ist sie nicht (dafür bräuchte es einen Server).</li>
+  </ul>
+  <h3>Woher die Daten kommen</h3>
+  <ul>
+    <li>ARD-Sendungen lädt die App direkt von der öffentlichen Schnittstelle der ARD Audiothek (<code>api.ardaudiothek.de</code>), RSS-Feeds direkt vom Server des Podcasts. Erst nach Tippen auf Hinzufügen, Aktualisieren, eine Folge oder „Skript“ – ohne Cookies und ohne Absenderseite.</li>
+    <li>Das Audio kommt vom Server des Podcasts (bei ARD z. B. <code>cdn-storage.br.de</code>). Dieser sieht wie bei jedem Podcast-Programm Ihre IP-Adresse.</li>
+    <li>Manche Feed-Server erlauben den Abruf aus dem Browser nicht (CORS). Dann hilft ein eigener CORS-Proxy (Menü → Einstellungen), z. B. <code>https://proxy.corsfix.com/?sdk=1&amp;url={url}</code>. Der Proxy sieht, welche Feeds Sie abrufen. ARD braucht keinen Proxy.</li>
+  </ul>
+  <h3>Gespeichert</h3>
+  <p>Nur in diesem Browser: die Podcast-Liste, die zuletzt geladenen Folgen (je Podcast die neuesten 300, damit die Liste auch offline da ist), wo Sie in welcher Folge sind, Tempo und Proxy (sichern und übertragen unter „Daten sichern“). Die Folgen selbst werden nicht heruntergeladen – zum Hören braucht es Internet.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <p>Listen to podcasts without an account or app store: add shows from <strong>ARD Audiothek</strong> or <strong>ARD Sounds</strong> or any podcast feed (RSS), play episodes, resume where you left off later and – where available – follow the transcript.</p>
+  <h3>How to use</h3>
+  <ul>
+    <li><strong>Add:</strong> paste the link of an ARD show, e.g. <code>https://www.ardsounds.de/sendung/der-ki-podcast/urn:ard:show:65505255c703e51e/</code>, or just <code>urn:ard:show:…</code>. The link of a single episode works too; its show is added then. For other podcasts enter the address of the RSS feed. On Android you can also <em>share</em> a link from the browser to the installed app.</li>
+    <li><strong>Play:</strong> tap an episode. The player stays at the bottom: 15 s back, 30 s forward, drag the position, tap the speed (0.75× to 2×) to change it. Headset and lock screen buttons work where the browser supports them.</li>
+    <li><strong>Resume:</strong> the position in every episode is saved; a bar shows how far you got. Episodes heard to the end are marked “Played” – you can switch that by hand in the player as well.</li>
+    <li><strong>Transcript:</strong> episodes marked “Transcript” have one (ARD for some of its episodes, RSS feeds through <code>podcast:transcript</code>). It shows time marks – tap one to jump there. “Follow” highlights the paragraph being spoken and scrolls along. You can copy it or save it as a text file. ARD tells speakers apart only by number (“Voice 1”, “Voice 2”); the texts are recognised automatically and may contain mistakes.</li>
+    <li><strong>Save as RSS feed</strong> (menu → Manage podcasts): makes a regular podcast feed with iTunes tags from the loaded episodes – like the script <a href="https://thmsnhl.de/projekte/ard-audiothek-rss/">ARD-Audiothek-RSS</a>, only in the browser. Programs that open feeds as files can load it; it is not an address to subscribe to (that would need a server).</li>
+  </ul>
+  <h3>Where the data comes from</h3>
+  <ul>
+    <li>ARD shows are loaded straight from the public interface of the ARD Audiothek (<code>api.ardaudiothek.de</code>), RSS feeds straight from the podcast's server. Only after a tap on Add, Refresh, an episode or “Transcript” – without cookies and without the sending page.</li>
+    <li>The audio comes from the podcast's server (for ARD e.g. <code>cdn-storage.br.de</code>). Like with any podcast app, it sees your IP address.</li>
+    <li>Some feed servers do not allow requests from a browser (CORS). Your own CORS proxy (menu → Settings) helps then, e.g. <code>https://proxy.corsfix.com/?sdk=1&amp;url={url}</code>. The proxy sees which feeds you fetch. ARD needs no proxy.</li>
+  </ul>
+  <h3>Stored</h3>
+  <p>Only in this browser: the podcast list, the episodes loaded last (the newest 300 per podcast, so the list is there offline too), where you are in which episode, speed and proxy (back them up or move them under “Back up data”). The episodes themselves are not downloaded – listening needs the internet.</p>
+  </div>
+  <!-- agent:start -->
+  <div data-lang="de">
+  <h3>KI-Agenten (WebMCP)</h3>
+  <p>Ein KI-Agent kann die Podcasts und ihre geladenen Folgen auflisten, einen Podcast anzeigen lassen, lesen, was gerade läuft, und das geöffnete Skript lesen oder durchsuchen. Abspielen, Podcasts abrufen oder hinzufügen kann er nicht. Das klappt in Browsern mit WebMCP; was ein Agent tut, siehst du sofort hier in der App. Daten löschen, Sicherungen laden, Einstellungen zurücksetzen, Kamera, Mikrofon, Standort und Dateien öffnen sind für Agenten nie möglich, und sie schicken nichts an Server.</p>
+  </div>
+  <div data-lang="en" lang="en" hidden>
+  <h3>AI agents (WebMCP)</h3>
+  <p>An AI agent can list the podcasts and their loaded episodes, show a podcast, read what is playing and read or search the open transcript. It cannot play, fetch or add podcasts. This works in browsers with WebMCP; whatever an agent does shows up here in the app right away. Deleting data, loading backups, resetting settings, camera, microphone, location and opening files are never available to agents, and they send nothing to servers.</p>
+  </div>
+  <!-- agent:end -->
+  <h3 data-i18n="diag.h">Fehlersuche</h3>
+  <p data-i18n="diag.intro">Klappt etwas nicht? Erst das Problem auslösen, dann die Diagnose kopieren und weitergeben. Sie enthält Browser, App-Version, Status und ein Protokoll der letzten Schritte – keine eingegebenen Inhalte.</p>
+  <div class="row"><button type="button" class="btn" data-diag="copy" data-i18n="diag.copy">Diagnose kopieren</button></div>
+</details>
+
+<footer>
+  <!-- footer:start -->
+  <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
+  <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
+  <p class="footer-version">Version 8f5dbafa5cfc</p>
+  <!-- footer:end -->
+</footer>
+
+<script src="../assets/common.js"></script>
+<script src="podcast.js"></script>
+<script>
+(function(){
+'use strict';
+Tools.i18n({
+  de:{loading:'Lädt …',loaded:'{n} Folgen · aktualisiert {when}',loadedOf:'{n} von {total} Folgen · aktualisiert {when}',notLoaded:'Noch nicht geladen.',
+    noEps:'Keine Folgen mit Audio gefunden.',noMatch:'Keine Folge passt zur Suche.',more:'Weitere {n} zeigen',
+    left:'noch {t}',played:'Gehört',trTag:'Skript',playSr:'Abspielen:',trL:'Skript: {title}',
+    pause:'Pause',voice:'Stimme {n}',trLoading:'Skript wird geladen …',trNone:'Für diese Folge gibt es kein Skript.',
+    trCount:'{n} Abschnitte',trMatch:'{n} von {total} Abschnitten passen',trFrom:'Ab {t} abspielen',
+    trCopied:'Skript kopiert',copyFail:'Kopieren nicht möglich',rateL:'Tempo {r} – antippen zum Wechseln',
+    doneOn:'Als gehört markiert',doneOff:'Als nicht gehört markiert',added:'Podcast hinzugefügt',
+    removed:'„{name}“ entfernt',rssL:'RSS-Feed von „{name}“ herunterladen',delL:'„{name}“ löschen',
+    rssSaved:'RSS-Feed gespeichert',noPods:'Noch kein Podcast.',podMeta:'{n} Folgen · {src}',
+    errUrl:'Bitte einen Link (https://…) oder eine ARD-URN eintragen.',errArdLink:'Der ARD-Link enthält keine Sendung (urn:ard:show:…) und keine Folge.',
+    errHttp:'http://-Adressen lassen sich nur über einen eigenen Proxy laden (Menü → Einstellungen).',errDup:'Dieser Podcast ist schon in der Liste.',
+    errProxy:'Bitte eine Adresse mit https:// eintragen (oder leer lassen).',proxySaved:'Proxy gespeichert',proxyCleared:'Proxy entfernt',
+    'e.notFound':'Die ARD Audiothek kennt diese Sendung nicht (mehr).','e.notXml':'Die Adresse liefert keinen Feed (kein XML).',
+    'e.notFeed':'Die Datei ist kein RSS-Feed.','e.noAudio':'Der Feed enthält keine Folgen mit Audio – ist es ein Podcast?',
+    'e.http':'Der Server meldet Fehler {n}.','e.proxyHttp':'Der Proxy meldet Fehler {n}.','e.timeout':'Keine Antwort (Zeitüberschreitung).',
+    'e.offline':'Keine Internetverbindung.','e.cors':'Der Server erlaubt den Abruf aus dem Browser nicht (CORS). Ein eigener CORS-Proxy hilft (Menü → Einstellungen).',
+    'e.proxy':'Auch über den Proxy ließ es sich nicht laden.','e.big':'Die Antwort ist zu groß (über 15 MB).','e.blocked':'Laden nicht möglich.',
+    'e.play':'Die Folge lässt sich nicht abspielen. Ist der Server erreichbar?','e.offlineCache':'Offline – zuletzt geladener Stand.',
+    'mcp.select':'Podcast gewählt'},
+  en:{title:'Podcast Player',sub:'Listen to podcasts, resume and follow the transcript.',setupH:'Add your first podcast',
+    refresh:'Refresh',podSel:'Podcast',search:'Search episodes',searchPh:'Search episodes …',trH:'Transcript',
+    trSearch:'Search the transcript',trSearchPh:'Search the transcript …',follow:'Follow',copy:'Copy',save:'Save',close:'Close',
+    trCopyL:'Copy transcript',trSaveL:'Save transcript as a text file',trCloseL:'Close transcript',trShowL:'Show transcript',
+    player:'Player',position:'Position',back:'15 seconds back',play:'Play',fwd:'30 seconds forward',done:'Played',
+    manage:'Manage podcasts',addMore:'Add another podcast',addH:'Add podcast',
+    podUrl:'Link to the show (ARD Audiothek, ARD Sounds) or address of a podcast feed',
+    podUrlHint:'For ARD the link from the address bar or “Share” is enough – the link of a single episode too.',
+    add:'Add',cancel:'Cancel',example:'Example: Der KI-Podcast',settings:'Settings',proxy:'Own CORS proxy (optional)',
+    proxyHint:'Only for podcast feeds and transcripts the browser may not load directly (ARD needs none). {url} is replaced by the address; without it the address is appended. The proxy sees which feeds you fetch.',
+    saveSettings:'Save',
+    loading:'Loading …',loaded:'{n} episodes · updated {when}',loadedOf:'{n} of {total} episodes · updated {when}',notLoaded:'Not loaded yet.',
+    noEps:'No episodes with audio found.',noMatch:'No episode matches the search.',more:'Show {n} more',
+    left:'{t} left',played:'Played',trTag:'Transcript',playSr:'Play:',trL:'Transcript: {title}',
+    pause:'Pause',voice:'Voice {n}',trLoading:'Loading transcript …',trNone:'There is no transcript for this episode.',
+    trCount:'{n} sections',trMatch:'{n} of {total} sections match',trFrom:'Play from {t}',
+    trCopied:'Transcript copied',copyFail:'Copying is not possible',rateL:'Speed {r} – tap to change',
+    doneOn:'Marked as played',doneOff:'Marked as not played',added:'Podcast added',
+    removed:'“{name}” removed',rssL:'Download RSS feed of “{name}”',delL:'Delete “{name}”',
+    rssSaved:'RSS feed saved',noPods:'No podcast yet.',podMeta:'{n} episodes · {src}',
+    errUrl:'Please enter a link (https://…) or an ARD URN.',errArdLink:'The ARD link contains no show (urn:ard:show:…) and no episode.',
+    errHttp:'http:// addresses can only be loaded through your own proxy (menu → Settings).',errDup:'This podcast is already in the list.',
+    errProxy:'Please enter an address starting with https:// (or leave it empty).',proxySaved:'Proxy saved',proxyCleared:'Proxy removed',
+    'e.notFound':'The ARD Audiothek does not know this show (any more).','e.notXml':'The address does not return a feed (no XML).',
+    'e.notFeed':'The file is not an RSS feed.','e.noAudio':'The feed has no episodes with audio – is it a podcast?',
+    'e.http':'The server reports error {n}.','e.proxyHttp':'The proxy reports error {n}.','e.timeout':'No answer (timeout).',
+    'e.offline':'No internet connection.','e.cors':'The server does not allow requests from a browser (CORS). Your own CORS proxy helps (menu → Settings).',
+    'e.proxy':'It could not be loaded through the proxy either.','e.big':'The answer is too large (over 15 MB).','e.blocked':'Loading is not possible.',
+    'e.play':'The episode cannot be played. Can the server be reached?','e.offlineCache':'Offline – showing what was loaded last.',
+    'mcp.select':'podcast chosen'}
+});
+const t=Tools.t, $=Tools.$;
+const P=window.Podcast;
+
+/* ---------- Storage (never rename these keys; a new format gets …v2 and still reads …v1)
+   podcasts.v1  [{ id, kind: 'ard'|'rss', src (ARD show id/URN or feed URL), title, author, link, text, viaProxy }]
+   episodes.v1  { [podcast id]: { at (ms), total, items: [episode, see podcast.js] } } – the newest 300 each
+   progress.v1  { ["<podcast id>|<episode id>"]: { p: seconds, d: duration, done, at } } – the latest 500
+   settings.v1  { current: podcast id, rate, proxy, follow, now: { pod, ep } | null } */
+const LS_POD='podcast-player.podcasts.v1',LS_EP='podcast-player.episodes.v1',LS_POS='podcast-player.progress.v1',LS_SET='podcast-player.settings.v1';
+const KEEP_EPS=300,KEEP_POS=500,PAGE=30,TIMEOUT=20000,MAX_BYTES=15e6;
+const RATES=[0.75,1,1.25,1.5,1.75,2];
+const EXAMPLE='https://www.ardsounds.de/sendung/der-ki-podcast/urn:ard:show:65505255c703e51e/';
+const arr=v=>Array.isArray(v)?v:[];
+const obj=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};
+let pods=arr(Tools.load(LS_POD,[])).filter(p=>p&&p.id&&p.src&&(p.kind==='ard'||p.kind==='rss'));
+let eps=obj(Tools.load(LS_EP,{}));
+let prog=obj(Tools.load(LS_POS,{}));
+const set=Object.assign({current:null,rate:1,proxy:'',follow:true,now:null},obj(Tools.load(LS_SET,{})));
+if(!RATES.includes(set.rate))set.rate=1;
+const savePods=()=>Tools.save(LS_POD,pods);
+const saveSet=()=>Tools.save(LS_SET,set);
+function saveEps(){
+  for(const id of Object.keys(eps))if(!pods.some(p=>p.id===id))delete eps[id];
+  if(!Tools.save(LS_EP,eps)){
+    // Storage full: keep fewer episodes per podcast
+    for(const c of Object.values(eps))c.items=c.items.slice(0,50);
+    if(!Tools.save(LS_EP,eps))Tools.diag.log('episodes not saved');
+  }
+}
+function saveProg(){
+  const keys=Object.keys(prog);
+  if(keys.length>KEEP_POS){
+    keys.sort((a,b)=>(prog[b].at||0)-(prog[a].at||0));
+    for(const k of keys.slice(KEEP_POS))delete prog[k];
+  }
+  Tools.save(LS_POS,prog);
+}
+const podById=id=>pods.find(p=>p.id===id)||null;
+const itemsOf=p=>(p&&eps[p.id]&&arr(eps[p.id].items))||[];
+const epOf=(podId,epId)=>itemsOf(podById(podId)).find(e=>e.id===epId)||null;
+const key=(podId,epId)=>`${podId}|${epId}`;
+const podName=p=>p.title||p.src;
+if(!podById(set.current))set.current=pods[0]?pods[0].id:null;
+if(set.now&&!epOf(set.now.pod,set.now.ep))set.now=null;
+
+/* ---------- Network: only after a tap, never by an agent; no cookies, no referrer ---------- */
+function proxied(url){
+  const p=set.proxy;
+  return p.includes('{url}')?p.split('{url}').join(encodeURIComponent(url)):p+encodeURIComponent(url);
+}
+async function get(url,accept){
+  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),TIMEOUT);
+  try{
+    const res=await fetch(url,{credentials:'omit',referrerPolicy:'no-referrer',signal:ctl.signal,headers:accept?{Accept:accept}:{}});
+    // Corsfix (and proxies like it) mark their own errors with x-corsfix-status and explain them in JSON
+    const cf=res.headers.get('x-corsfix-status');
+    if(!res.ok||(cf&&cf!=='success'&&cf!=='preflight')){
+      const e=new Error('http'); e.code='http'; e.status=res.status;
+      if(/json/.test(res.headers.get('content-type')||'')){
+        try{
+          const j=await res.json();
+          const msg=j&&(j.if_you_are_user&&j.message?`${j.message} – ${j.if_you_are_user}`:(j.message||j.error));
+          if(typeof msg==='string')e.detail=msg.slice(0,300);
+          if(j&&typeof j.corsfix_error==='string')e.proxyCode=j.corsfix_error.slice(0,60);
+        }catch(_){}
+      }
+      if(cf&&!e.proxyCode)e.proxyCode=cf.slice(0,60);
+      throw e;
+    }
+    if((+res.headers.get('content-length')||0)>MAX_BYTES){ const e=new Error('big'); e.code='big'; throw e; }
+    const text=await res.text();
+    if(text.length>MAX_BYTES){ const e=new Error('big'); e.code='big'; throw e; }
+    return text;
+  }catch(e){
+    if(e.code)throw e;
+    const x=new Error(e.name); x.code=e.name==='AbortError'?'timeout':(navigator.onLine===false?'offline':'blocked'); throw x;
+  }finally{ clearTimeout(timer); }
+}
+const isLocal=u=>/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(u);
+// Feed servers: directly, and if the browser blocks it (CORS) through the user's own proxy (remembered per podcast)
+async function getMaybeProxy(url,accept,pod){
+  const httpOnly=/^http:/.test(url)&&!isLocal(url);
+  if(!(pod&&pod.viaProxy&&set.proxy)&&!httpOnly){
+    try{ const text=await get(url,accept); Tools.diag.log('fetched',{via:'direct',bytes:text.length}); return {text,via:'direct'}; }
+    catch(e){
+      Tools.diag.log('fetch failed',{via:'direct',code:e.code,status:e.status||null});
+      if(e.code!=='blocked'||!set.proxy){ if(e.code==='blocked')e.code='cors'; throw e; }
+    }
+  }
+  if(!set.proxy){ const e=new Error('http'); e.code='cors'; throw e; }
+  try{ const text=await get(proxied(url),accept); Tools.diag.log('fetched',{via:'proxy',bytes:text.length}); return {text,via:'proxy'}; }
+  catch(e){ Tools.diag.log('fetch failed',{via:'proxy',code:e.code,status:e.status||null,proxyCode:e.proxyCode||null}); e.viaProxy=true; if(e.code==='blocked')e.code='proxy'; throw e; }
+}
+const ACCEPT_FEED='application/rss+xml, application/xml;q=0.9, text/xml;q=0.9, */*;q=0.5';
+async function ardJson(url){
+  const text=await get(url,'application/json');
+  let j; try{ j=JSON.parse(text); }catch(_){ const e=new Error('notJson'); e.code='notFound'; throw e; }
+  if(j&&Array.isArray(j.errors)&&j.errors.length&&!j.data)Tools.diag.log('ard errors',{n:j.errors.length});
+  return j;
+}
+// Loads a podcast's info and episodes: { info, via }
+async function load(pod){
+  if(pod.kind==='ard'){
+    const info=P.fromArd(await ardJson(P.ardShowUrl(pod.src,KEEP_EPS)));
+    Tools.diag.log('ard show loaded',{episodes:info.episodes.length,total:info.total,transcripts:info.episodes.filter(e=>e.tr).length});
+    return {info,via:'direct'};
+  }
+  const {text,via}=await getMaybeProxy(pod.src,ACCEPT_FEED,pod);
+  const info=P.parseRss(text,pod.src);
+  if(!info.episodes.length){ const e=new Error('noAudio'); e.code='noAudio'; throw e; }
+  Tools.diag.log('feed parsed',{episodes:info.episodes.length,transcripts:info.episodes.filter(e=>e.tr).length});
+  return {info,via};
+}
+function keepInfo(pod,info,via){
+  pod.title=info.title||pod.title||''; pod.author=info.author||''; pod.link=info.link||''; pod.text=info.text||'';
+  if(via==='proxy')pod.viaProxy=true;
+  eps[pod.id]={at:Date.now(),total:info.total,items:info.episodes.slice(0,KEEP_EPS)};
+}
+const ERR_CODES=['notFound','notXml','notFeed','noAudio','timeout','offline','cors','proxy','big','blocked'];
+function errText(e){
+  if(e.viaProxy&&e.code==='http')return t('e.proxyHttp',{n:e.status});
+  if(e.code==='http')return t('e.http',{n:e.status});
+  return t(ERR_CODES.includes(e.code)?'e.'+e.code:'e.blocked');
+}
+
+/* ---------- Adding (form on the page at first start, later in the menu) ---------- */
+let formOpen=false,busy=false;
+function placeForm(){
+  const none=!pods.length;
+  const slot=none?$('setupSlot'):$('menuSlot');
+  if($('addForm').parentNode!==slot)slot.append($('addForm'));
+  $('setupCard').hidden=!none;
+  $('listCard').hidden=none;
+  $('menuSlot').hidden=!none&&!formOpen;
+  $('manageActions').hidden=none||formOpen;
+  $('btnNew').setAttribute('aria-expanded',String(formOpen&&!none));
+  $('btnCancel').hidden=none;
+}
+function openForm(url){
+  formOpen=true; $('addError').textContent='';
+  if(url!=null)$('podUrl').value=url;
+  placeForm();
+  if(pods.length)Tools.menu.open();
+  $('podUrl').focus();
+}
+function closeForm(){ formOpen=false; $('podUrl').value=''; $('addError').textContent=''; placeForm(); }
+$('btnNew').addEventListener('click',()=>openForm(''));
+$('btnCancel').addEventListener('click',()=>{ closeForm(); $('btnNew').focus(); });
+$('btnExample').addEventListener('click',()=>{ $('podUrl').value=EXAMPLE; $('addError').textContent=''; });
+const sameSrc=(a,b)=>String(a).replace(/\/+$/,'').toLowerCase()===String(b).replace(/\/+$/,'').toLowerCase();
+
+$('addForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(busy)return;
+  const r=P.parseInput($('podUrl').value);
+  const fail=msg=>{ $('addError').textContent=msg; $('podUrl').focus(); };
+  if(r.error)return fail(t(r.error));
+  if(r.kind==='rss'&&r.http&&!set.proxy)return fail(t('errHttp'));
+  busy=true; $('btnAdd').disabled=true; $('addError').textContent=t('loading');
+  try{
+    let src=r.kind==='rss'?r.url:r.id;
+    // Episode link: find its show first
+    if(r.kind==='ard'&&(r.episode||/^urn:ard:episode:/.test(src))){
+      const j=await ardJson(P.ardEpisodeUrl(src));
+      const it=j&&j.data&&j.data.item;
+      if(!it||!(it.showId||(it.show&&it.show.id))){ const x=new Error('notFound'); x.code='notFound'; throw x; }
+      src=it.showId||it.show.id;
+      Tools.diag.log('episode link resolved');
+    }
+    if(pods.some(p=>p.kind===r.kind&&sameSrc(p.src,src)))return fail(t('errDup'));
+    const pod={id:Tools.uid(),kind:r.kind,src,title:'',author:'',link:'',text:'',viaProxy:false};
+    const {info,via}=await load(pod);
+    if(pods.some(p=>p.kind==='ard'&&pod.kind==='ard'&&p.title&&p.title===info.title&&p.link===info.link))return fail(t('errDup'));
+    keepInfo(pod,info,via);
+    pods.push(pod); set.current=pod.id; shown=PAGE;
+    savePods(); saveEps(); saveSet();
+    closeForm(); Tools.menu.close();
+    Tools.diag.log('podcast added',{kind:pod.kind,podcasts:pods.length});
+    render(); Tools.toast(t('added'));
+  }catch(x){
+    Tools.diag.log('add failed',{code:x.code||x.name});
+    fail(errText(x)+(x.detail?` (${x.detail})`:''));
+  }finally{ busy=false; $('btnAdd').disabled=false; }
+});
+
+/* ---------- Refresh ---------- */
+let loadError=null,refreshing=false;
+async function refresh(){
+  const pod=podById(set.current);
+  if(!pod||busy)return;
+  busy=refreshing=true; loadError=null; $('btnRefresh').disabled=true; $('status').textContent=t('loading'); $('listError').hidden=true;
+  try{
+    const {info,via}=await load(pod);
+    keepInfo(pod,info,via); savePods(); saveEps();
+  }catch(e){
+    loadError=e;
+    Tools.diag.log('refresh failed',{code:e.code||e.name});
+  }finally{ busy=refreshing=false; $('btnRefresh').disabled=false; render(); }
+}
+$('btnRefresh').addEventListener('click',refresh);
+
+/* ---------- Episode list ---------- */
+let shown=PAGE;
+const fmtDate=ms=>ms?new Date(ms).toLocaleDateString(Tools.locale(),{dateStyle:'medium'}):'';
+const minutes=s=>`${Tools.fmt(Math.max(1,Math.round(s/60)),0)} min`;
+function words(q){ return String(q||'').toLowerCase().split(/\s+/).filter(Boolean); }
+function filteredEps(pod,q){
+  const w=words(q);
+  return itemsOf(pod).filter(e=>!w.length||w.every(x=>(e.title+' '+e.text).toLowerCase().includes(x)));
+}
+function metaOf(pod,e){
+  const parts=[fmtDate(e.date)];
+  const pr=prog[key(pod.id,e.id)];
+  const dur=e.dur||(pr&&pr.d)||0;
+  if(pr&&pr.done)parts.push(t('played'));
+  else if(pr&&pr.p>5&&dur)parts.push(t('left',{t:minutes(dur-pr.p)}));
+  else if(dur)parts.push(minutes(dur));
+  return parts.filter(Boolean).join(' · ');
+}
+function renderList(){
+  const pod=podById(set.current);
+  if(!pod)return;
+  $('podTitle').textContent=podName(pod);
+  $('podText').textContent=pod.text||'';
+  $('podText').hidden=!pod.text;
+  // Choice of podcast only when there are several
+  const sel=$('podSel');
+  $('podSelField').hidden=pods.length<2;
+  sel.replaceChildren(...pods.map(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=podName(p); return o; }));
+  sel.value=pod.id;
+  const c=eps[pod.id];
+  if(!refreshing)$('status').textContent=c?(c.total>c.items.length?t('loadedOf',{n:Tools.fmt(c.items.length,0),total:Tools.fmt(c.total,0),when:new Date(c.at).toLocaleString(Tools.locale(),{dateStyle:'short',timeStyle:'short'})}):t('loaded',{n:Tools.fmt(c.items.length,0),when:new Date(c.at).toLocaleString(Tools.locale(),{dateStyle:'short',timeStyle:'short'})})):t('notLoaded');
+  $('listError').hidden=!loadError;
+  if(loadError){
+    $('listErrorText').textContent=errText(loadError)+(loadError.detail?` (${loadError.detail})`:'')+(c&&loadError.code==='offline'?' '+t('e.offlineCache'):'');
+  }
+  const list=filteredEps(pod,$('q').value);
+  const ul=$('eps');
+  ul.replaceChildren();
+  for(const e of list.slice(0,shown)){
+    const li=document.createElement('li');
+    const pr=prog[key(pod.id,e.id)];
+    if(pr&&pr.done)li.classList.add('done');
+    if(set.now&&set.now.pod===pod.id&&set.now.ep===e.id)li.setAttribute('aria-current','true');
+    const b=document.createElement('button'); b.type='button'; b.className='open';
+    // Name = visible text; "Abspielen:" only for screen readers
+    const sr=document.createElement('span'); sr.className='sr-only'; sr.textContent=t('playSr')+' ';
+    const n=document.createElement('span'); n.className='name'; n.textContent=e.title;
+    const m=document.createElement('span'); m.className='meta'; m.textContent=metaOf(pod,e);
+    if(e.tr){ const tg=document.createElement('span'); tg.className='tag'; tg.textContent=t('trTag'); m.append(tg); }
+    b.append(sr,n,m);
+    const dur=e.dur||(pr&&pr.d)||0;
+    if(pr&&!pr.done&&pr.p>5&&dur){ const bar=document.createElement('span'); bar.className='ep-bar'; const i=document.createElement('i'); i.style.width=Math.min(100,pr.p/dur*100).toFixed(1)+'%'; bar.append(i); b.append(bar); }
+    b.addEventListener('click',()=>play(pod.id,e.id));
+    li.append(b);
+    if(e.tr){
+      const tb=document.createElement('button'); tb.type='button'; tb.className='btn icon';
+      const l=t('trL',{title:e.title}); tb.setAttribute('aria-label',l); tb.title=l;
+      tb.innerHTML=Tools.icon('file-text');
+      tb.addEventListener('click',()=>openTranscript(pod.id,e.id));
+      li.append(tb);
+    }
+    ul.append(li);
+  }
+  $('epsEmpty').hidden=!!list.length||!c;
+  $('epsEmptyText').textContent=itemsOf(pod).length?t('noMatch'):t('noEps');
+  const rest=list.length-shown;
+  $('btnMore').hidden=rest<=0;
+  if(rest>0)$('btnMore').textContent=t('more',{n:Tools.fmt(Math.min(PAGE,rest),0)});
+}
+$('btnMore').addEventListener('click',()=>{ shown+=PAGE; renderList(); });
+$('q').addEventListener('input',()=>{ shown=PAGE; renderList(); });
+$('podSel').addEventListener('change',e=>{ selectPod(e.target.value); });
+function selectPod(id){
+  if(!podById(id))return false;
+  set.current=id; saveSet(); shown=PAGE; loadError=null; $('q').value=''; renderList();
+  return true;
+}
+
+/* ---------- Manage (menu) ---------- */
+function renderPods(){
+  const ul=$('podRows');
+  ul.replaceChildren();
+  if(!pods.length){ const li=document.createElement('li'); li.className='muted'; li.textContent=t('noPods'); ul.append(li); return; }
+  for(const p of pods){
+    const li=document.createElement('li');
+    if(p.id===set.current)li.classList.add('current');
+    const b=document.createElement('button'); b.type='button'; b.className='open';
+    const n=document.createElement('span'); n.className='name'; n.textContent=podName(p);
+    const m=document.createElement('span'); m.className='meta';
+    m.textContent=t('podMeta',{n:Tools.fmt(itemsOf(p).length,0),src:p.kind==='ard'?'ARD':'RSS'});
+    b.append(n,m);
+    b.addEventListener('click',()=>{ selectPod(p.id); renderPods(); Tools.menu.close(); });
+    const rss=document.createElement('button'); rss.type='button'; rss.className='btn icon';
+    rss.setAttribute('aria-label',t('rssL',{name:podName(p)})); rss.title=t('rssL',{name:podName(p)});
+    rss.innerHTML=Tools.icon('download'); rss.disabled=!itemsOf(p).length;
+    rss.addEventListener('click',()=>{
+      const xml=P.toRss(p,itemsOf(p));
+      const name=(podName(p).replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,' ').trim().slice(0,60)||'podcast')+'.xml';
+      Tools.download(new Blob([xml],{type:'application/rss+xml'}),name);
+      Tools.toast(t('rssSaved')); Tools.diag.log('rss exported',{episodes:itemsOf(p).length});
+    });
+    const del=document.createElement('button'); del.type='button'; del.className='btn icon danger';
+    del.setAttribute('aria-label',t('delL',{name:podName(p)})); del.title=t('delL',{name:podName(p)});
+    del.innerHTML=Tools.icon('trash');
+    del.addEventListener('click',()=>removePod(p));
+    li.append(b,rss,del);
+    ul.append(li);
+  }
+}
+// One podcast: delete right away and offer undo (AGENTS.md "Rückfragen")
+function removePod(p){
+  const i=pods.indexOf(p); if(i<0)return;
+  const cache=eps[p.id],wasCurrent=set.current===p.id,wasNow=set.now&&set.now.pod===p.id;
+  if(wasNow)stopPlayer();
+  pods.splice(i,1); delete eps[p.id];
+  if(wasCurrent)set.current=pods[0]?pods[0].id:null;
+  savePods(); saveEps(); saveSet(); render();
+  Tools.diag.log('podcast removed',{podcasts:pods.length});
+  Tools.undo(t('removed',{name:podName(p)}),()=>{
+    pods.splice(Math.min(i,pods.length),0,p); if(cache)eps[p.id]=cache;
+    if(wasCurrent||!set.current)set.current=p.id;
+    savePods(); saveEps(); saveSet(); render();
+  });
+}
+
+/* ---------- Player ---------- */
+const audio=$('audio');
+let pendingSeek=null,lastSave=0;
+const nowEp=()=>set.now?epOf(set.now.pod,set.now.ep):null;
+const playing=()=>!audio.paused&&!audio.ended;
+function rateText(r){ return Tools.fmt(r,r%1?2:0).replace(/0$/,'').replace(/[.,]$/,'')+'×'; }
+function renderRate(){
+  $('rateLabel').textContent=rateText(set.rate);
+  const l=t('rateL',{r:rateText(set.rate)}); $('btnRate').setAttribute('aria-label',l); $('btnRate').title=l;
+}
+function durOf(){
+  const e=nowEp(); const pr=set.now&&prog[key(set.now.pod,set.now.ep)];
+  return Number.isFinite(audio.duration)&&audio.duration>0?audio.duration:(e&&e.dur)||(pr&&pr.d)||0;
+}
+function posOf(){
+  if(audio.src&&audio.readyState>0)return audio.currentTime;
+  if(pendingSeek!=null)return pendingSeek;
+  const pr=set.now&&prog[key(set.now.pod,set.now.ep)];
+  return pr&&!pr.done?pr.p:0;
+}
+function renderPlayer(){
+  const e=nowEp();
+  $('playerCard').hidden=!e;
+  if(!e)return;
+  const pod=podById(set.now.pod);
+  $('nowTitle').textContent=e.title; $('nowTitle').title=e.title;
+  $('nowPod').textContent=podName(pod);
+  const d=durOf(),p=posOf();
+  const s=$('seek');
+  s.max=String(Math.max(1,Math.floor(d))); if(!seeking)s.value=String(Math.floor(p));
+  s.setAttribute('aria-valuetext',`${P.clock(p)} / ${P.clock(d)}`);
+  $('tNow').textContent=P.clock(p);
+  $('tLeft').textContent=d?'−'+P.clock(Math.max(0,d-p)):'';
+  const on=playing();
+  $('btnPlay').innerHTML=Tools.icon(on?'player-pause':'player-play');
+  const l=on?t('pause'):t('play'); $('btnPlay').setAttribute('aria-label',l); $('btnPlay').title=l;
+  const pr=prog[key(set.now.pod,set.now.ep)];
+  $('btnDone').setAttribute('aria-pressed',String(!!(pr&&pr.done)));
+  $('btnNowTr').hidden=!e.tr;
+  renderRate();
+  renderMedia();
+}
+function record(done){
+  if(!set.now)return;
+  const k=key(set.now.pod,set.now.ep);
+  const d=durOf();
+  const p=done?0:Math.floor(audio.src&&audio.readyState>0?audio.currentTime:posOf());
+  const old=prog[k]||{};
+  prog[k]={p,d:Math.round(d)||old.d||0,done:done===undefined?!!old.done:done,at:Date.now()};
+  saveProg();
+}
+// Starts an episode (only after a tap): at a given second, else where it was left
+function play(podId,epId,at){
+  const e=epOf(podId,epId); if(!e)return;
+  const same=set.now&&set.now.pod===podId&&set.now.ep===epId;
+  if(!same){
+    if(set.now&&audio.src)record();
+    set.now={pod:podId,ep:epId}; saveSet();
+    audio.removeAttribute('src'); audio.load();
+  }
+  $('playError').hidden=true;
+  const pr=prog[key(podId,epId)];
+  let start=at!=null?at:(pr&&!pr.done&&pr.p>0?pr.p:0);
+  if(at==null&&e.dur&&start>e.dur-10)start=0;
+  if(!audio.src||audio.currentSrc!==e.audio&&audio.src!==e.audio){
+    pendingSeek=start||null;
+    audio.src=e.audio;
+    Tools.diag.log('audio start',{kind:podById(podId).kind,resume:!!start});
+  }else if(at!=null){ audio.currentTime=at; }
+  audio.playbackRate=set.rate;
+  const pp=audio.play();
+  if(pp&&pp.catch)pp.catch(x=>{ if(x&&x.name!=='AbortError')Tools.diag.log('play rejected',{name:x.name}); renderPlayer(); });
+  renderPlayer(); renderList();
+}
+function togglePlay(){
+  if(!set.now)return;
+  if(playing()){ audio.pause(); return; }
+  play(set.now.pod,set.now.ep);
+}
+function seekBy(s){
+  if(!set.now)return;
+  const d=durOf();
+  const to=Math.max(0,Math.min(posOf()+s,d?d-1:Infinity));
+  setPos(to);
+}
+function setPos(to){
+  if(audio.src&&audio.readyState>0)audio.currentTime=to;
+  else if(audio.src)pendingSeek=to;
+  else{ const k=key(set.now.pod,set.now.ep); prog[k]=Object.assign({},prog[k],{p:Math.floor(to),done:false,at:Date.now()}); saveProg(); }
+  renderPlayer(); syncTranscript(true);
+}
+function stopPlayer(){
+  if(audio.src)record();
+  audio.pause(); audio.removeAttribute('src'); audio.load();
+  set.now=null; pendingSeek=null; saveSet(); renderPlayer();
+}
+let seeking=false;
+$('seek').addEventListener('input',e=>{ seeking=true; $('tNow').textContent=P.clock(+e.target.value); });
+$('seek').addEventListener('change',e=>{ seeking=false; setPos(+e.target.value); });
+$('btnPlay').addEventListener('click',togglePlay);
+$('btnBack').addEventListener('click',()=>seekBy(-15));
+$('btnFwd').addEventListener('click',()=>seekBy(30));
+$('btnRate').addEventListener('click',()=>{
+  set.rate=RATES[(RATES.indexOf(set.rate)+1)%RATES.length]; saveSet();
+  audio.playbackRate=set.rate; renderRate(); Tools.diag.log('rate',set.rate);
+});
+$('btnDone').addEventListener('click',()=>{
+  if(!set.now)return;
+  const k=key(set.now.pod,set.now.ep);
+  const on=!(prog[k]&&prog[k].done);
+  prog[k]=Object.assign({p:0,d:Math.round(durOf())},prog[k],{done:on,at:Date.now()});
+  if(on)prog[k].p=0;
+  saveProg(); renderPlayer(); renderList(); Tools.toast(t(on?'doneOn':'doneOff'));
+});
+$('btnNowTr').addEventListener('click',()=>{ if(set.now)openTranscript(set.now.pod,set.now.ep); });
+audio.addEventListener('loadedmetadata',()=>{
+  if(pendingSeek!=null){ try{ audio.currentTime=pendingSeek; }catch(_){} pendingSeek=null; }
+  audio.playbackRate=set.rate;
+  Tools.diag.log('audio ready',{duration:Math.round(audio.duration)||null});
+  renderPlayer();
+});
+audio.addEventListener('timeupdate',()=>{
+  if(Date.now()-lastSave>5000){ lastSave=Date.now(); record(); }
+  renderPlayer(); syncTranscript(false);
+});
+for(const ev of ['play','pause','ratechange'])audio.addEventListener(ev,()=>{ if(ev==='pause'){ record(); renderList(); } renderPlayer(); });
+audio.addEventListener('ended',()=>{ record(true); Tools.diag.log('episode ended'); renderPlayer(); renderList(); });
+audio.addEventListener('error',()=>{
+  if(!audio.getAttribute('src'))return;
+  Tools.diag.log('audio error',{code:audio.error&&audio.error.code,online:navigator.onLine});
+  $('playError').textContent=navigator.onLine===false?t('e.offline'):t('e.play');
+  $('playError').hidden=false; renderPlayer();
+});
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState!=='visible'&&audio.src)record(); });
+window.addEventListener('pagehide',()=>{ if(audio.src)record(); });
+
+// Lock screen and headset buttons
+const ms='mediaSession' in navigator?navigator.mediaSession:null;
+if(ms){
+  const h={play:()=>set.now&&play(set.now.pod,set.now.ep),pause:()=>audio.pause(),seekbackward:d=>seekBy(-((d&&d.seekOffset)||15)),
+    seekforward:d=>seekBy((d&&d.seekOffset)||30),seekto:d=>d&&Number.isFinite(d.seekTime)&&setPos(d.seekTime)};
+  for(const [a,fn] of Object.entries(h)){ try{ ms.setActionHandler(a,fn); }catch(_){} }
+}
+let mediaFor='';
+function renderMedia(){
+  if(!ms)return;
+  try{
+    ms.playbackState=playing()?'playing':audio.src?'paused':'none';
+    const e=nowEp();
+    if(e&&window.MediaMetadata&&mediaFor!==set.now.pod+'|'+e.id){
+      mediaFor=set.now.pod+'|'+e.id;
+      ms.metadata=new MediaMetadata({title:e.title,artist:podName(podById(set.now.pod)),album:podById(set.now.pod).author||'',
+        artwork:[{src:'icon-512.png',sizes:'512x512',type:'image/png'}]});
+    }
+    if(e&&audio.readyState>0&&Number.isFinite(audio.duration)&&ms.setPositionState)
+      ms.setPositionState({duration:audio.duration,playbackRate:audio.playbackRate,position:Math.min(audio.currentTime,audio.duration)});
+  }catch(_){}
+}
+
+/* ---------- Transcript ---------- */
+const trCache=new Map(); // key → segments (in memory only)
+let tr=null; // { pod, ep, segs, error }
+let trActive=-1;
+const speakerName=s=>/^#\d+$/.test(s)?t('voice',{n:s.slice(1)}):s;
+async function openTranscript(podId,epId){
+  const e=epOf(podId,epId),pod=podById(podId);
+  if(!e||!e.tr)return;
+  const k=key(podId,epId);
+  tr={pod:podId,ep:epId,segs:trCache.get(k)||null,error:null};
+  trActive=-1; $('trQ').value='';
+  $('trCard').hidden=false;
+  renderTranscript();
+  $('trCard').scrollIntoView({block:'start',behavior:Tools.reducedMotion()?'auto':'smooth'});
+  if(tr.segs)return;
+  try{
+    let segs;
+    if(e.tr.ard){ segs=P.ardSegments(await ardJson(P.ardTranscriptUrl(e.tr.ard))); }
+    else{ const {text}=await getMaybeProxy(e.tr.url,'text/vtt, application/x-subrip, application/json, text/html;q=0.8, text/plain;q=0.8, */*;q=0.5',pod); segs=P.parseTranscript(text,e.tr.type); }
+    trCache.set(k,segs);
+    Tools.diag.log('transcript loaded',{kind:pod.kind,segments:segs.length,timed:segs.some(s=>s.start!=null)});
+    if(tr&&tr.pod===podId&&tr.ep===epId){ tr.segs=segs; renderTranscript(); }
+  }catch(x){
+    Tools.diag.log('transcript failed',{code:x.code||x.name});
+    if(tr&&tr.pod===podId&&tr.ep===epId){ tr.error=x; renderTranscript(); }
+  }
+}
+function renderTranscript(){
+  if(!tr){ $('trCard').hidden=true; return; }
+  const e=epOf(tr.pod,tr.ep);
+  if(!e){ closeTranscript(); return; }
+  $('trTitle').textContent=e.title;
+  const body=$('trBody');
+  body.replaceChildren();
+  const segs=tr.segs;
+  $('trOpts').hidden=!(segs&&segs.length);
+  $('trTools').hidden=!(segs&&segs.length);
+  $('optFollow').checked=!!set.follow;
+  $('optFollow').closest('label').hidden=!(segs&&segs.some(s=>s.start!=null));
+  if(tr.error){ $('trStatus').textContent=errText(tr.error)+(tr.error.detail?` (${tr.error.detail})`:''); return; }
+  if(!segs){ $('trStatus').textContent=t('trLoading'); return; }
+  if(!segs.length){ $('trStatus').textContent=t('trNone'); return; }
+  const w=words($('trQ').value);
+  let shownN=0,prevSpeaker=null;
+  segs.forEach((s,i)=>{
+    const hit=!w.length||w.every(x=>s.text.toLowerCase().includes(x));
+    if(!hit){ prevSpeaker=null; return; }
+    shownN++;
+    const d=document.createElement('div'); d.className='seg'; d.dataset.i=String(i);
+    if(s.start!=null){
+      const b=document.createElement('button'); b.type='button'; b.className='ts'; b.textContent=P.clock(s.start);
+      b.setAttribute('aria-label',t('trFrom',{t:P.clock(s.start)}));
+      b.addEventListener('click',()=>play(tr.pod,tr.ep,s.start));
+      d.append(b);
+    }else d.classList.add('no-time');
+    const p=document.createElement('p');
+    if(s.speaker&&s.speaker!==prevSpeaker){ const who=document.createElement('span'); who.className='who'; who.textContent=speakerName(s.speaker); p.append(who); }
+    prevSpeaker=s.speaker;
+    appendMarked(p,s.text,w);
+    d.append(p);
+    body.append(d);
+  });
+  $('trStatus').textContent=w.length?t('trMatch',{n:Tools.fmt(shownN,0),total:Tools.fmt(segs.length,0)}):t('trCount',{n:Tools.fmt(segs.length,0)});
+  trActive=-1; syncTranscript(true);
+}
+// Search hits marked with <mark>, built as text nodes (transcripts are foreign content)
+function appendMarked(el,text,w){
+  if(!w.length){ el.append(text); return; }
+  const re=new RegExp(w.map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'gi');
+  let last=0;
+  for(const m of text.matchAll(re)){
+    el.append(text.slice(last,m.index));
+    const mk=document.createElement('mark'); mk.textContent=m[0]; el.append(mk);
+    last=m.index+m[0].length;
+  }
+  el.append(text.slice(last));
+}
+// Highlights the section being spoken (binary search on the start times); scrolls along with "Follow"
+function syncTranscript(jump){
+  if(!tr||!tr.segs||!set.now||tr.pod!==set.now.pod||tr.ep!==set.now.ep||$('trCard').hidden)return;
+  const segs=tr.segs,p=posOf();
+  let lo=0,hi=segs.length-1,idx=-1;
+  while(lo<=hi){ const mid=(lo+hi)>>1; const s=segs[mid].start; if(s==null){ idx=-1; break; } if(s<=p){ idx=mid; lo=mid+1; } else hi=mid-1; }
+  if(idx===trActive&&!jump)return;
+  const old=$('trBody').querySelector('.seg.on');
+  if(old){ old.classList.remove('on'); old.removeAttribute('aria-current'); }
+  trActive=idx;
+  const el=idx>=0?$('trBody').querySelector(`.seg[data-i="${idx}"]`):null;
+  if(!el)return;
+  el.classList.add('on'); el.setAttribute('aria-current','true');
+  if(set.follow&&playing())
+    el.scrollIntoView({block:'center',behavior:Tools.reducedMotion()?'auto':'smooth'});
+}
+function closeTranscript(){ tr=null; $('trCard').hidden=true; }
+function transcriptText(){
+  if(!tr||!tr.segs)return '';
+  const e=epOf(tr.pod,tr.ep);
+  let prev=null;
+  const lines=tr.segs.map(s=>{
+    const who=s.speaker&&s.speaker!==prev?speakerName(s.speaker)+': ':''; prev=s.speaker;
+    return (s.start!=null?`[${P.clock(s.start)}] `:'')+who+s.text;
+  });
+  return `${e?e.title:''}\n${podName(podById(tr.pod))}\n\n${lines.join('\n\n')}\n`;
+}
+$('trQ').addEventListener('input',renderTranscript);
+$('optFollow').addEventListener('change',e=>{ set.follow=e.target.checked; saveSet(); syncTranscript(true); });
+$('btnTrClose').addEventListener('click',closeTranscript);
+$('btnTrCopy').addEventListener('click',async()=>{
+  const ok=await Tools.copyText(transcriptText());
+  Tools.toast(t(ok?'trCopied':'copyFail')); Tools.diag.log('transcript copied',{ok});
+});
+$('btnTrSave').addEventListener('click',()=>{
+  const e=epOf(tr.pod,tr.ep);
+  const name=((e&&e.title)||'skript').replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,' ').trim().slice(0,60)+'.txt';
+  Tools.download(new Blob([transcriptText()],{type:'text/plain;charset=utf-8'}),name);
+  Tools.diag.log('transcript saved');
+});
+
+/* ---------- Settings: own CORS proxy ---------- */
+$('proxy').value=set.proxy;
+$('btnProxy').addEventListener('click',()=>{
+  const v=$('proxy').value.trim();
+  if(v){ let ok=false; try{ const u=new URL(v.split('{url}').join('x')); ok=u.protocol==='https:'||isLocal(u.href); }catch(_){} if(!ok){ $('proxyError').textContent=t('errProxy'); return; } }
+  $('proxyError').textContent='';
+  set.proxy=v; saveSet();
+  Tools.toast(t(v?'proxySaved':'proxyCleared'));
+  Tools.diag.log('proxy',{set:!!v});
+});
+
+function render(){
+  placeForm(); renderPods();
+  if(pods.length)renderList();
+  renderPlayer();
+  if(tr)renderTranscript();
+}
+
+/* ---------- Link shared to the installed app (Android): prefill the form ---------- */
+const shared=Tools.takeSharedText();
+render();
+if(shared){
+  const m=(shared.url+' '+shared.text).match(/https?:\/\/\S+|urn:ard:(show|episode):[0-9a-f]+/i);
+  if(m){ openForm(m[0]); Tools.diag.log('link shared'); }
+}
+
+Tools.diag.info(()=>({podcasts:pods.length,ard:pods.filter(p=>p.kind==='ard').length,proxy:!!set.proxy,
+  viaProxy:pods.filter(p=>p.viaProxy).length,episodes:Object.values(eps).reduce((s,c)=>s+arr(c.items).length,0),
+  progress:Object.keys(prog).length,playing:playing(),ready:audio.readyState,rate:set.rate,transcript:tr?(tr.segs?tr.segs.length:'loading'):null}));
+Tools.onLang(render);
+
+/* ---------- WebMCP: read what is loaded, switch the view – never fetch, play, add or delete ---------- */
+const epInfo=(pod,e)=>{ const pr=prog[key(pod.id,e.id)]||{};
+  return {id:e.id,title:e.title,date:e.date?new Date(e.date).toISOString():null,duration_seconds:e.dur||null,
+    position_seconds:pr.p||0,played:!!pr.done,has_transcript:!!e.tr,summary:e.text}; };
+Tools.mcp.register({
+  name:'list_podcasts',title:'List podcasts',readOnly:true,
+  description:'Lists the podcasts the user added: id, title, source (ARD Audiothek or RSS feed), number of loaded episodes and which one is shown.',
+  execute:()=>({current:set.current,podcasts:pods.map(p=>({id:p.id,title:podName(p),source:p.kind==='ard'?'ARD Audiothek':'RSS',episodes:itemsOf(p).length}))})
+});
+Tools.mcp.register({
+  name:'select_podcast',title:'Show a podcast',label:'mcp.select',
+  description:'Shows the episodes of one of the added podcasts in the app (no download, only what is loaded already).',
+  inputSchema:{type:'object',properties:{podcast_id:{type:'string',maxLength:64,description:'Id from list_podcasts.'}},required:['podcast_id'],additionalProperties:false},
+  execute:({podcast_id})=>{ if(!selectPod(podcast_id))throw new Error('Unknown podcast_id – use list_podcasts.'); renderPods(); return {current:podcast_id,title:podName(podById(podcast_id))}; }
+});
+Tools.mcp.register({
+  name:'list_episodes',title:'List episodes',readOnly:true,untrusted:true,
+  description:'Lists the loaded episodes of a podcast, newest first: id, title, date, duration, listening position, played, whether a transcript exists and a short summary. Texts come from the podcast publisher.',
+  inputSchema:{type:'object',properties:{
+    podcast_id:{type:'string',maxLength:64,description:'Id from list_podcasts. Default: the podcast shown.'},
+    query:{type:'string',maxLength:200,description:'Words that must all appear in title or summary.'},
+    limit:{type:'integer',minimum:1,maximum:50,description:'Maximum number of episodes. Default 20.'},
+    offset:{type:'integer',minimum:0,maximum:1000,description:'Episodes to skip (paging). Default 0.'}
+  },additionalProperties:false},
+  execute:i=>{
+    const pod=podById(i.podcast_id||set.current);
+    if(!pod)throw new Error('Unknown podcast_id – use list_podcasts.');
+    const list=filteredEps(pod,i.query),off=i.offset||0,lim=i.limit||20;
+    return {podcast_id:pod.id,title:podName(pod),total:list.length,offset:off,episodes:list.slice(off,off+lim).map(e=>epInfo(pod,e))};
+  }
+});
+Tools.mcp.register({
+  name:'get_player',title:'Read the player',readOnly:true,untrusted:true,
+  description:'Reads what the player holds: podcast, episode, position and duration in seconds, playing or paused, and the speed.',
+  execute:()=>{
+    const e=nowEp(); if(!e)return {episode:null};
+    const pod=podById(set.now.pod);
+    return {podcast_id:pod.id,podcast:podName(pod),episode:epInfo(pod,e),position_seconds:Math.floor(posOf()),duration_seconds:Math.round(durOf())||null,playing:playing(),speed:set.rate};
+  }
+});
+Tools.mcp.register({
+  name:'read_transcript',title:'Read the open transcript',readOnly:true,untrusted:true,
+  description:'Reads the transcript the user opened in the app (machine-made by the publisher, may contain mistakes): sections with start time in seconds, speaker and text. Optionally only sections containing all given words.',
+  inputSchema:{type:'object',properties:{
+    query:{type:'string',maxLength:200,description:'Words that must all appear in a section.'},
+    limit:{type:'integer',minimum:1,maximum:200,description:'Maximum number of sections. Default 50.'},
+    offset:{type:'integer',minimum:0,maximum:20000,description:'Sections to skip (paging). Default 0.'}
+  },additionalProperties:false},
+  execute:i=>{
+    if(!tr||!tr.segs)throw new Error('No transcript is open – the user has to open one in the app first.');
+    const w=words(i.query);
+    const list=tr.segs.filter(s=>!w.length||w.every(x=>s.text.toLowerCase().includes(x)));
+    const off=i.offset||0,lim=i.limit||50;
+    return {episode:(epOf(tr.pod,tr.ep)||{}).title,total:list.length,offset:off,
+      sections:list.slice(off,off+lim).map(s=>({start_seconds:s.start==null?null:Math.round(s.start),speaker:s.speaker?speakerName(s.speaker):null,text:s.text}))};
+  }
+});
+})();
+</script>
+</body>
+</html>
