@@ -25,7 +25,7 @@
 <meta name="tool:media" content="https:">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-xK8ULqlT+x9ibkCPyt9dCtXSNHA6ZkAuVWS/I5GmY2k='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream: https:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-GnyxaJCp7rFrioOo3hV0iKHDg/GTpmPEN+OfS+jSPtc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream: https:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -47,8 +47,9 @@ body{--page-width:860px}
 #eps li.done .name{font-weight:400;color:var(--muted)}
 #eps li[aria-current="true"] .name{color:var(--accent)}
 .tag{display:inline-block;padding:0 6px;border-radius:6px;border:1px solid var(--border);font-size:12px;margin-inline-start:4px}
-.ep-bar{display:block;height:3px;margin-top:4px;border-radius:2px;background:var(--surface-2);overflow:hidden}
+.ep-bar{display:block;height:5px;margin-top:5px;border-radius:3px;background:var(--border);overflow:hidden}
 .ep-bar>i{display:block;height:100%;background:var(--accent)}
+#eps li.done .ep-bar>i{background:var(--muted)}
 /* Player: stays at the bottom while scrolling through episodes or the transcript */
 #playerCard{position:sticky;bottom:8px;z-index:5;box-shadow:0 4px 18px rgb(0 0 0 / .18)}
 .now{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -67,17 +68,18 @@ body{--page-width:860px}
 .tr-opts{display:flex;flex-wrap:wrap;gap:0 12px;align-items:center}
 .tr-opts .form-field{flex:1 1 200px;margin:0}
 #trBody{display:grid;gap:2px;margin-top:8px}
-.seg{display:grid;grid-template-columns:auto 1fr;gap:0 8px;padding:4px 6px;border-radius:8px}
-.seg.on{background:var(--surface-2);box-shadow:inset 3px 0 0 var(--accent)}
-.seg .ts{min-width:56px;min-height:44px;padding:0 6px;border:0;border-radius:6px;background:none;color:var(--accent);font:inherit;font-size:13px;font-variant-numeric:tabular-nums;cursor:pointer;align-self:start}
-.seg .ts:focus-visible{outline:2px solid var(--accent)}
-.seg .ts:hover{background:var(--surface-2)}
-.seg.no-time{grid-template-columns:1fr}
-.seg p{margin:0;padding-block:10px 4px;line-height:1.5;overflow-wrap:anywhere}
-.seg .who{display:block;font-size:12px;font-weight:600;color:var(--muted)}
-.seg mark{background:var(--warn-bg);color:inherit}
+.tr-seg{display:grid;grid-template-columns:auto 1fr;gap:0 8px;padding:4px 6px;border-radius:8px}
+.tr-seg.on{background:var(--surface-2);box-shadow:inset 3px 0 0 var(--accent)}
+.tr-seg .ts{min-width:56px;min-height:44px;padding:0 6px;border:0;border-radius:6px;background:none;color:var(--accent);font:inherit;font-size:13px;font-variant-numeric:tabular-nums;cursor:pointer;align-self:start}
+.tr-seg .ts:focus-visible{outline:2px solid var(--accent)}
+.tr-seg .ts:hover{background:var(--surface-2)}
+.tr-seg.no-time{grid-template-columns:1fr}
+.tr-seg p{margin:0;padding-block:10px 4px;line-height:1.5;overflow-wrap:anywhere}
+.tr-seg .who{display:block;font-size:12px;font-weight:600;color:var(--muted)}
+.tr-seg mark{background:var(--warn-bg);color:inherit}
 #trCard .toolbar{margin-top:8px;border-top:1px solid var(--border);padding-top:4px}
 #podRows .btn.icon{flex:none}
+.auto-hint{margin:6px 0 14px}
 </style>
 </head>
 <body>
@@ -185,6 +187,14 @@ body{--page-width:860px}
 
   <section class="card" data-menu aria-labelledby="h-settings" data-icon="settings">
     <h2 id="h-settings" data-i18n="settings">Einstellungen</h2>
+    <fieldset class="seg-group"><legend data-i18n="autoL">Wenn eine Folge zu Ende ist</legend>
+    <div class="seg" id="autoSeg">
+      <button type="button" aria-pressed="false" data-auto="off"><span data-i18n="autoOff">Anhalten</span></button>
+      <button type="button" aria-pressed="false" data-auto="older"><span data-i18n="autoOlder">Ältere</span></button>
+      <button type="button" aria-pressed="false" data-auto="newer"><span data-i18n="autoNewer">Neuere</span></button>
+    </div>
+    </fieldset>
+    <p class="form-hint auto-hint" data-i18n="autoHint">„Ältere“ spielt die Folge darunter in der Liste, „Neuere“ die darüber – noch nicht gehörte Folgen desselben Podcasts.</p>
     <div class="form-field">
       <label for="proxy" data-i18n="proxy">Eigener CORS-Proxy (optional)</label>
       <input type="url" id="proxy" inputmode="url" spellcheck="false" placeholder="https://proxy.example/?url={url}">
@@ -218,7 +228,8 @@ body{--page-width:860px}
   <ul>
     <li><strong>Hinzufügen:</strong> Link einer ARD-Sendung einfügen, z. B. <code>https://www.ardsounds.de/sendung/der-ki-podcast/urn:ard:show:65505255c703e51e/</code>, oder nur <code>urn:ard:show:…</code>. Der Link einer einzelnen Folge geht auch, dann wird ihre Sendung hinzugefügt. Für andere Podcasts die Adresse des RSS-Feeds eintragen. Auf Android kann man einen Link aus dem Browser auch an die installierte App <em>teilen</em>.</li>
     <li><strong>Abspielen:</strong> Folge antippen. Unten bleibt der Player: 15 s zurück, 30 s vor, Position ziehen, Tempo (0,75× bis 2×) antippen zum Wechseln. Kopfhörer- und Sperrbildschirm-Tasten funktionieren, wo der Browser sie unterstützt.</li>
-    <li><strong>Weiterhören:</strong> Die Stelle jeder Folge wird gespeichert; ein Balken zeigt, wie weit Sie sind. Zu Ende gehörte Folgen werden als „Gehört“ markiert – das lässt sich im Player auch von Hand umschalten.</li>
+    <li><strong>Weiterhören:</strong> Die Stelle jeder Folge wird gespeichert; unter jeder angefangenen Folge zeigen ein Balken und „12 von 45 min gehört“, wie weit Sie sind (läuft beim Hören mit). Zu Ende gehörte Folgen werden als „Gehört“ markiert – das lässt sich im Player auch von Hand umschalten.</li>
+    <li><strong>Automatisch weiter:</strong> Ist eine Folge zu Ende, spielt die App die nächste noch nicht gehörte Folge – standardmäßig die ältere darunter in der Liste. Unter Menü → Einstellungen auf „Neuere“ oder „Anhalten“ umstellbar. Die Taste „Nächster Titel“ am Kopfhörer oder Sperrbildschirm springt ebenfalls zur nächsten Folge.</li>
     <li><strong>Skript:</strong> Folgen mit dem Zeichen „Skript“ haben ein Transkript (bei ARD für einen Teil der Folgen, bei RSS-Feeds über <code>podcast:transcript</code>). Es zeigt Zeitmarken – antippen springt an die Stelle. „Mitlaufen“ hebt den gerade gesprochenen Absatz hervor und scrollt mit. Kopieren oder als Textdatei speichern ist möglich. ARD unterscheidet Sprecher nur nach Nummer („Stimme 1“, „Stimme 2“); die Texte sind automatisch erkannt und können Fehler enthalten.</li>
     <li><strong>Als RSS-Feed speichern</strong> (Menü → Podcasts verwalten): erzeugt aus den geladenen Folgen einen normalen Podcast-Feed mit iTunes-Angaben – so wie das Skript <a href="https://thmsnhl.de/projekte/ard-audiothek-rss/">ARD-Audiothek-RSS</a>, nur im Browser. Die Datei lässt sich in Programme laden, die Feeds als Datei öffnen; eine abonnierbare Adresse ist sie nicht (dafür bräuchte es einen Server).</li>
   </ul>
@@ -237,7 +248,8 @@ body{--page-width:860px}
   <ul>
     <li><strong>Add:</strong> paste the link of an ARD show, e.g. <code>https://www.ardsounds.de/sendung/der-ki-podcast/urn:ard:show:65505255c703e51e/</code>, or just <code>urn:ard:show:…</code>. The link of a single episode works too; its show is added then. For other podcasts enter the address of the RSS feed. On Android you can also <em>share</em> a link from the browser to the installed app.</li>
     <li><strong>Play:</strong> tap an episode. The player stays at the bottom: 15 s back, 30 s forward, drag the position, tap the speed (0.75× to 2×) to change it. Headset and lock screen buttons work where the browser supports them.</li>
-    <li><strong>Resume:</strong> the position in every episode is saved; a bar shows how far you got. Episodes heard to the end are marked “Played” – you can switch that by hand in the player as well.</li>
+    <li><strong>Resume:</strong> the position in every episode is saved; under every started episode a bar and “12 of 45 min heard” show how far you got (updated while listening). Episodes heard to the end are marked “Played” – you can switch that by hand in the player as well.</li>
+    <li><strong>Continue automatically:</strong> when an episode ends, the app plays the next episode not played yet – by default the older one below in the list. Switch to “Newer” or “Stop” under menu → Settings. The “next track” button of a headset or the lock screen jumps to the next episode as well.</li>
     <li><strong>Transcript:</strong> episodes marked “Transcript” have one (ARD for some of its episodes, RSS feeds through <code>podcast:transcript</code>). It shows time marks – tap one to jump there. “Follow” highlights the paragraph being spoken and scrolls along. You can copy it or save it as a text file. ARD tells speakers apart only by number (“Voice 1”, “Voice 2”); the texts are recognised automatically and may contain mistakes.</li>
     <li><strong>Save as RSS feed</strong> (menu → Manage podcasts): makes a regular podcast feed with iTunes tags from the loaded episodes – like the script <a href="https://thmsnhl.de/projekte/ard-audiothek-rss/">ARD-Audiothek-RSS</a>, only in the browser. Programs that open feeds as files can load it; it is not an address to subscribe to (that would need a server).</li>
   </ul>
@@ -269,7 +281,7 @@ body{--page-width:860px}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 9ff0fab37d77</p>
+  <p class="footer-version">Version 11caa17c87ff</p>
   <!-- footer:end -->
 </footer>
 
@@ -281,7 +293,7 @@ body{--page-width:860px}
 Tools.i18n({
   de:{loading:'Lädt …',loaded:'{n} Folgen · aktualisiert {when}',loadedOf:'{n} von {total} Folgen · aktualisiert {when}',notLoaded:'Noch nicht geladen.',
     noEps:'Keine Folgen mit Audio gefunden.',noMatch:'Keine Folge passt zur Suche.',more:'Weitere {n} zeigen',
-    left:'noch {t}',played:'Gehört',trTag:'Skript',playSr:'Abspielen:',trL:'Skript: {title}',
+    heard:'{p} von {d} min gehört',nextUp:'Weiter mit „{title}“',played:'Gehört',trTag:'Skript',playSr:'Abspielen:',trL:'Skript: {title}',
     pause:'Pause',voice:'Stimme {n}',trLoading:'Skript wird geladen …',trNone:'Für diese Folge gibt es kein Skript.',
     trCount:'{n} Abschnitte',trMatch:'{n} von {total} Abschnitten passen',trFrom:'Ab {t} abspielen',
     trCopied:'Skript kopiert',copyFail:'Kopieren nicht möglich',rateL:'Tempo {r} – antippen zum Wechseln',
@@ -308,10 +320,11 @@ Tools.i18n({
     podUrlHint:'For ARD the link from the address bar or “Share” is enough – the link of a single episode too.',
     add:'Add',cancel:'Cancel',example:'Example: Der KI-Podcast',settings:'Settings',proxy:'Own CORS proxy (optional)',
     proxyHint:'Only for podcast feeds and transcripts the browser may not load directly (ARD needs none). {url} is replaced by the address; without it the address is appended. The proxy sees which feeds you fetch.',
-    saveSettings:'Save',
+    saveSettings:'Save',autoL:'When an episode ends',autoOff:'Stop',autoOlder:'Older',autoNewer:'Newer',
+    autoHint:'“Older” plays the episode below in the list, “Newer” the one above – episodes of the same podcast not played yet.',
     loading:'Loading …',loaded:'{n} episodes · updated {when}',loadedOf:'{n} of {total} episodes · updated {when}',notLoaded:'Not loaded yet.',
     noEps:'No episodes with audio found.',noMatch:'No episode matches the search.',more:'Show {n} more',
-    left:'{t} left',played:'Played',trTag:'Transcript',playSr:'Play:',trL:'Transcript: {title}',
+    heard:'{p} of {d} min heard',nextUp:'Up next: “{title}”',played:'Played',trTag:'Transcript',playSr:'Play:',trL:'Transcript: {title}',
     pause:'Pause',voice:'Voice {n}',trLoading:'Loading transcript …',trNone:'There is no transcript for this episode.',
     trCount:'{n} sections',trMatch:'{n} of {total} sections match',trFrom:'Play from {t}',
     trCopied:'Transcript copied',copyFail:'Copying is not possible',rateL:'Speed {r} – tap to change',
@@ -336,7 +349,7 @@ const P=window.Podcast;
    podcasts.v1  [{ id, kind: 'ard'|'rss', src (ARD show id/URN or feed URL), title, author, link, text, viaProxy }]
    episodes.v1  { [podcast id]: { at (ms), total, items: [episode, see podcast.js] } } – the newest 300 each
    progress.v1  { ["<podcast id>|<episode id>"]: { p: seconds, d: duration, done, at } } – the latest 500
-   settings.v1  { current: podcast id, rate, proxy, follow, now: { pod, ep } | null } */
+   settings.v1  { current: podcast id, rate, proxy, follow, auto: 'off'|'older'|'newer', now: { pod, ep } | null } */
 const LS_POD='podcast-player.podcasts.v1',LS_EP='podcast-player.episodes.v1',LS_POS='podcast-player.progress.v1',LS_SET='podcast-player.settings.v1';
 const KEEP_EPS=300,KEEP_POS=500,PAGE=30,TIMEOUT=20000,MAX_BYTES=15e6;
 const RATES=[0.75,1,1.25,1.5,1.75,2];
@@ -346,7 +359,8 @@ const obj=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};
 let pods=arr(Tools.load(LS_POD,[])).filter(p=>p&&p.id&&p.src&&(p.kind==='ard'||p.kind==='rss'));
 let eps=obj(Tools.load(LS_EP,{}));
 let prog=obj(Tools.load(LS_POS,{}));
-const set=Object.assign({current:null,rate:1,proxy:'',follow:true,now:null},obj(Tools.load(LS_SET,{})));
+const set=Object.assign({current:null,rate:1,proxy:'',follow:true,auto:'older',now:null},obj(Tools.load(LS_SET,{})));
+if(!['off','older','newer'].includes(set.auto))set.auto='older';
 if(!RATES.includes(set.rate))set.rate=1;
 const savePods=()=>Tools.save(LS_POD,pods);
 const saveSet=()=>Tools.save(LS_SET,set);
@@ -539,14 +553,42 @@ function filteredEps(pod,q){
   const w=words(q);
   return itemsOf(pod).filter(e=>!w.length||w.every(x=>(e.title+' '+e.text).toLowerCase().includes(x)));
 }
+const mins=s=>Tools.fmt(Math.round(s/60),0);
 function metaOf(pod,e){
   const parts=[fmtDate(e.date)];
   const pr=prog[key(pod.id,e.id)];
   const dur=e.dur||(pr&&pr.d)||0;
   if(pr&&pr.done)parts.push(t('played'));
-  else if(pr&&pr.p>5&&dur)parts.push(t('left',{t:minutes(dur-pr.p)}));
+  else if(pr&&pr.p>5&&dur)parts.push(t('heard',{p:mins(pr.p),d:mins(dur)}));
   else if(dur)parts.push(minutes(dur));
   return parts.filter(Boolean).join(' · ');
+}
+// Share heard (0…1) for the bar under an episode: started or played; null = not started
+function shareOf(pod,e){
+  const pr=prog[key(pod.id,e.id)];
+  if(!pr)return null;
+  if(pr.done)return 1;
+  const dur=e.dur||pr.d||0;
+  return pr.p>5&&dur?Math.min(1,pr.p/dur):null;
+}
+// Meta line and bar of one row – also while playing (updateRow), without rebuilding the list
+function fillRow(li,pod,e){
+  const pr=prog[key(pod.id,e.id)];
+  li.classList.toggle('done',!!(pr&&pr.done));
+  const m=li.querySelector('.meta');
+  m.textContent=metaOf(pod,e);
+  if(e.tr){ const tg=document.createElement('span'); tg.className='tag'; tg.textContent=t('trTag'); m.append(tg); }
+  const share=shareOf(pod,e);
+  let bar=li.querySelector('.ep-bar');
+  if(share==null){ if(bar)bar.remove(); return; }
+  if(!bar){ bar=document.createElement('span'); bar.className='ep-bar'; bar.append(document.createElement('i')); li.querySelector('.open').append(bar); }
+  bar.firstChild.style.width=(share*100).toFixed(1)+'%';
+}
+function updateRow(){
+  if(!set.now||set.now.pod!==set.current)return;
+  const e=epOf(set.now.pod,set.now.ep);
+  const li=e&&[...$('eps').children].find(x=>x.dataset.ep===e.id);
+  if(li)fillRow(li,podById(set.now.pod),e);
 }
 function renderList(){
   const pod=podById(set.current);
@@ -570,20 +612,17 @@ function renderList(){
   ul.replaceChildren();
   for(const e of list.slice(0,shown)){
     const li=document.createElement('li');
-    const pr=prog[key(pod.id,e.id)];
-    if(pr&&pr.done)li.classList.add('done');
+    li.dataset.ep=e.id;
     if(set.now&&set.now.pod===pod.id&&set.now.ep===e.id)li.setAttribute('aria-current','true');
     const b=document.createElement('button'); b.type='button'; b.className='open';
     // Name = visible text; "Abspielen:" only for screen readers
     const sr=document.createElement('span'); sr.className='sr-only'; sr.textContent=t('playSr')+' ';
     const n=document.createElement('span'); n.className='name'; n.textContent=e.title;
-    const m=document.createElement('span'); m.className='meta'; m.textContent=metaOf(pod,e);
-    if(e.tr){ const tg=document.createElement('span'); tg.className='tag'; tg.textContent=t('trTag'); m.append(tg); }
+    const m=document.createElement('span'); m.className='meta';
     b.append(sr,n,m);
-    const dur=e.dur||(pr&&pr.d)||0;
-    if(pr&&!pr.done&&pr.p>5&&dur){ const bar=document.createElement('span'); bar.className='ep-bar'; const i=document.createElement('i'); i.style.width=Math.min(100,pr.p/dur*100).toFixed(1)+'%'; bar.append(i); b.append(bar); }
     b.addEventListener('click',()=>play(pod.id,e.id));
     li.append(b);
+    fillRow(li,pod,e);
     if(e.tr){
       const tb=document.createElement('button'); tb.type='button'; tb.className='btn icon';
       const l=t('trL',{title:e.title}); tb.setAttribute('aria-label',l); tb.title=l;
@@ -704,7 +743,7 @@ function record(done){
   const p=done?0:Math.floor(audio.src&&audio.readyState>0?audio.currentTime:posOf());
   const old=prog[k]||{};
   prog[k]={p,d:Math.round(d)||old.d||0,done:done===undefined?!!old.done:done,at:Date.now()};
-  saveProg();
+  saveProg(); updateRow();
 }
 // Starts an episode (only after a tap): at a given second, else where it was left
 function play(podId,epId,at){
@@ -781,7 +820,37 @@ audio.addEventListener('timeupdate',()=>{
   renderPlayer(); syncTranscript(false);
 });
 for(const ev of ['play','pause','ratechange'])audio.addEventListener(ev,()=>{ if(ev==='pause'){ record(); renderList(); } renderPlayer(); });
-audio.addEventListener('ended',()=>{ record(true); Tools.diag.log('episode ended'); renderPlayer(); renderList(); });
+audio.addEventListener('ended',()=>{
+  record(true); Tools.diag.log('episode ended');
+  const next=set.auto!=='off'&&nextEpisode(set.auto);
+  if(next){
+    Tools.diag.log('autoplay',{dir:set.auto});
+    play(set.now.pod,next.id);
+    Tools.toast(t('nextUp',{title:next.title}));
+    return;
+  }
+  renderPlayer(); renderList();
+});
+// The next episode not yet played: "older" = further down the list (newest first), "newer" = further up
+function nextEpisode(dir){
+  if(!set.now)return null;
+  const list=itemsOf(podById(set.now.pod));
+  const i=list.findIndex(e=>e.id===set.now.ep);
+  if(i<0)return null;
+  const step=dir==='newer'?-1:1;
+  for(let j=i+step;j>=0&&j<list.length;j+=step){
+    const pr=prog[key(set.now.pod,list[j].id)];
+    if(!(pr&&pr.done))return list[j];
+  }
+  return null;
+}
+function renderAuto(){
+  for(const b of document.querySelectorAll('#autoSeg button'))b.setAttribute('aria-pressed',String(b.dataset.auto===set.auto));
+}
+for(const b of document.querySelectorAll('#autoSeg button'))b.addEventListener('click',()=>{
+  set.auto=b.dataset.auto; saveSet(); renderAuto(); Tools.diag.log('auto',set.auto);
+});
+renderAuto();
 audio.addEventListener('error',()=>{
   if(!audio.getAttribute('src'))return;
   Tools.diag.log('audio error',{code:audio.error&&audio.error.code,online:navigator.onLine});
@@ -795,7 +864,8 @@ window.addEventListener('pagehide',()=>{ if(audio.src)record(); });
 const ms='mediaSession' in navigator?navigator.mediaSession:null;
 if(ms){
   const h={play:()=>set.now&&play(set.now.pod,set.now.ep),pause:()=>audio.pause(),seekbackward:d=>seekBy(-((d&&d.seekOffset)||15)),
-    seekforward:d=>seekBy((d&&d.seekOffset)||30),seekto:d=>d&&Number.isFinite(d.seekTime)&&setPos(d.seekTime)};
+    seekforward:d=>seekBy((d&&d.seekOffset)||30),seekto:d=>d&&Number.isFinite(d.seekTime)&&setPos(d.seekTime),
+    nexttrack:()=>{ const n=nextEpisode(set.auto==='newer'?'newer':'older'); if(n){ if(audio.src)record(); play(set.now.pod,n.id); } }};
   for(const [a,fn] of Object.entries(h)){ try{ ms.setActionHandler(a,fn); }catch(_){} }
 }
 let mediaFor='';
@@ -862,7 +932,7 @@ function renderTranscript(){
     const hit=!w.length||w.every(x=>s.text.toLowerCase().includes(x));
     if(!hit){ prevSpeaker=null; return; }
     shownN++;
-    const d=document.createElement('div'); d.className='seg'; d.dataset.i=String(i);
+    const d=document.createElement('div'); d.className='tr-seg'; d.dataset.i=String(i);
     if(s.start!=null){
       const b=document.createElement('button'); b.type='button'; b.className='ts'; b.textContent=P.clock(s.start);
       b.setAttribute('aria-label',t('trFrom',{t:P.clock(s.start)}));
@@ -898,10 +968,10 @@ function syncTranscript(jump){
   let lo=0,hi=segs.length-1,idx=-1;
   while(lo<=hi){ const mid=(lo+hi)>>1; const s=segs[mid].start; if(s==null){ idx=-1; break; } if(s<=p){ idx=mid; lo=mid+1; } else hi=mid-1; }
   if(idx===trActive&&!jump)return;
-  const old=$('trBody').querySelector('.seg.on');
+  const old=$('trBody').querySelector('.tr-seg.on');
   if(old){ old.classList.remove('on'); old.removeAttribute('aria-current'); }
   trActive=idx;
-  const el=idx>=0?$('trBody').querySelector(`.seg[data-i="${idx}"]`):null;
+  const el=idx>=0?$('trBody').querySelector(`.tr-seg[data-i="${idx}"]`):null;
   if(!el)return;
   el.classList.add('on'); el.setAttribute('aria-current','true');
   if(set.follow&&playing())
