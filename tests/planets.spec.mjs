@@ -177,7 +177,7 @@ test.describe('app', () => {
     await expect(page.locator('#viewSel [data-v="all"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#speed [data-v="year"]')).toHaveAttribute('aria-pressed', 'true');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('planets.settings.v1'))))
-      .toEqual({ lat: 51, lon: 10, view: 'all', speed: 'year', planet: 'jupiter' });
+      .toEqual({ lat: 51, lon: 10, place: 'auto', fromGeo: false, geoAsked: true, view: 'all', speed: 'year', planet: 'jupiter' });
   });
 
   test('steps, playing and the range 1800–2050', async ({ page }) => {
@@ -203,10 +203,11 @@ test.describe('app', () => {
     await expect(page.locator('#when')).toHaveValue(new RegExp(`^${now}-`));
   });
 
-  test('place of observation: typed, checked, from the location (rounded)', async ({ page, context }) => {
+  test('place of observation: typed by hand, checked; back to the location (rounded)', async ({ page, context }) => {
     await setWhen(page, '2026-06-21T12:00');
     await expect(page.locator('#placeText')).toContainText('Mitte Deutschlands');
     await openSettings(page);
+    await page.click('#placeMode button[data-v="manual"]');
     await page.fill('#lat', '95');
     await page.dispatchEvent('#lat', 'change');
     await expect(page.locator('#placeErr')).toHaveText('Breite −89 bis 89, Länge −180 bis 180 eingeben.');
@@ -218,17 +219,53 @@ test.describe('app', () => {
     await expect(page.locator('#sunLine')).toHaveText('Sonne: den ganzen Tag über dem Horizont');
     await expect(page.locator('#pVis')).toHaveText('Nicht zu sehen – es wird nicht dunkel genug');
     await expect(page.locator('#placeText')).toHaveText('Beobachtungsort: 71,2° N, 25,8° O – ändern im Menü unter Einstellungen.');
+    await expect(page.locator('#geoRow')).toBeHidden();
     await context.grantPermissions(['geolocation']);
     await context.setGeolocation({ latitude: 48.137, longitude: 11.575 });
     await openSettings(page);
-    await page.click('#btnGeo');
+    await page.click('#placeMode button[data-v="auto"]');
     await expect(page.locator('#toast')).toHaveText('Standort übernommen.');
-    await expect(page.locator('#lat')).toHaveValue('48,1');
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('planets.settings.v1')))).toMatchObject({ lat: 48.1, lon: 11.6 });
+    await expect(page.locator('#placeFields')).toBeHidden();
+    await closeMenu(page);
+    await expect(page.locator('#placeText')).toHaveText('Beobachtungsort: dein Standort (48,1° N, 11,6° O).');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('planets.settings.v1')))).toMatchObject({ lat: 48.1, lon: 11.6, place: 'auto', fromGeo: true });
     const diag = await page.evaluate(() => window.Tools.diag.text());
     expect(diag).not.toContain('48.1');
     expect(diag).not.toContain('11.6');
   });
+
+  test('the location is used on start when the browser allows it', async ({ browser }) => {
+    const context = await browser.newContext({ permissions: ['geolocation'], geolocation: { latitude: 52.52, longitude: 13.405 }, locale: 'de-DE' });
+    const page = await context.newPage();
+    await page.goto('/planets/');
+    await expect(page.locator('#placeText')).toHaveText('Beobachtungsort: dein Standort (52,5° N, 13,4° O).');
+    await expect(page.locator('#geoRow')).toBeHidden();
+    // moved meanwhile: the next start takes the new place
+    await context.setGeolocation({ latitude: -33.87, longitude: 151.21 });
+    await page.reload();
+    await expect(page.locator('#placeText')).toHaveText('Beobachtungsort: dein Standort (33,9° S, 151,2° O).');
+    await context.close();
+  });
+
+  test('without permission: asked once on the first start, then a button; the last place is kept', async ({ browser }) => {
+    const context = await browser.newContext({ locale: 'de-DE' });
+    const page = await context.newPage();
+    await page.goto('/planets/');
+    // first start: the app asked by itself, the browser refused
+    await expect(page.locator('#placeText')).toContainText(/Standort nicht freigegeben|Gerechnet für die Mitte Deutschlands/);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('planets.settings.v1')).geoAsked)).toBe(true);
+    // next start: not asked again on its own – a button instead
+    await page.reload();
+    await expect(page.locator('#placeText')).toHaveText('Gerechnet für die Mitte Deutschlands. Mit deinem Standort stimmen Aufgang, Untergang und Sichtbarkeit für deinen Ort.');
+    await expect(page.locator('#geoRow')).toBeVisible();
+    await context.grantPermissions(['geolocation']);
+    await context.setGeolocation({ latitude: 53.55, longitude: 9.99 });
+    await page.click('#btnGeoNow');
+    await expect(page.locator('#placeText')).toHaveText('Beobachtungsort: dein Standort (53,6° N, 10,0° O).');
+    await expect(page.locator('#geoRow')).toBeHidden();
+    await context.close();
+  });
+
 
   test('the Moon: phase, why, next phases; Jupiter’s moons as in binoculars', async ({ page }) => {
     await setWhen(page, '2026-11-24T20:00');
