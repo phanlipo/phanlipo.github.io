@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-YSXUjpqEUpTTpnkhXOyzIt3/tFG/JZUBR9j4Qrb5ZkY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-BsqQ+u9vs/rtxXgorQDzp/e1LFIlGHrwmvUDIZqWXGA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -228,7 +228,7 @@ select{min-height:44px;padding-inline:10px;width:100%;font-size:16px}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 8b33f2a33bb7</p>
+  <p class="footer-version">Version a64c19d5a28f</p>
   <!-- footer:end -->
 </footer>
 
@@ -249,6 +249,7 @@ Tools.i18n({
     'e.password': 'Die PDF ist mit einem Passwort geschützt – bitte Passwort eingeben und erneut umwandeln.', 'e.password-wrong': 'Das Passwort ist falsch.',
     'e.invalid': 'Das ist keine lesbare PDF-Datei.', 'e.notext': 'In dieser PDF wurde weder Text noch ein Bild gefunden.', failed: 'Umwandlung fehlgeschlagen: {m}',
     pageBreak: 'Seitenumbruch', imgAlt: 'Bild aus der PDF', page1: 'Seite', pages: 'Seiten', paras: 'Absätze', img1: 'Bild', imgs: 'Bilder', shareFail: 'Teilen nicht möglich',
+    shareRefused: 'Dieser Browser kann Word-Dateien nicht teilen – die Datei wurde stattdessen gespeichert (Downloads). Von dort kannst du sie teilen.',
     'mcp.convert': 'umgewandelt', 'mcp.text': 'Text gelesen',
     'hand.fail': 'Übergeben hat nicht geklappt.',
   },
@@ -268,6 +269,7 @@ Tools.i18n({
     'e.password': 'The PDF is protected by a password – please enter the password and convert again.', 'e.password-wrong': 'The password is wrong.',
     'e.invalid': 'This is not a readable PDF file.', 'e.notext': 'Neither text nor an image was found in this PDF.', failed: 'Conversion failed: {m}',
     pageBreak: 'Page break', imgAlt: 'Image from the PDF', page1: 'page', pages: 'pages', paras: 'paragraphs', img1: 'image', imgs: 'images', shareFail: 'Sharing is not possible',
+    shareRefused: 'This browser cannot share Word files – the file was saved instead (Downloads). You can share it from there.',
     'mcp.convert': 'converted', 'mcp.text': 'text read',
     'hand.view': 'Open the PDF in “PDF Viewer”', 'hand.edit': 'Open the PDF in “Edit PDF”', 'hand.fail': 'Handing over did not work.',
   },
@@ -421,17 +423,31 @@ function showResult(model) {
   r.dataset.paragraphs = model.paragraphs.length - model.images;
   r.dataset.images = model.images;
   r.hidden = false;
-  try { $('btnShare').hidden = !(navigator.canShare && navigator.canShare({ files: [result] })); } catch (_) { $('btnShare').hidden = true; }
+  try { $('btnShare').hidden = shareRefused || !(navigator.canShare && navigator.canShare({ files: [result] })); } catch (_) { $('btnShare').hidden = true; }
 }
 
 $('btnSave').addEventListener('click', () => {
   if (!result) return;
   Tools.download(result);
 });
+// Chrome (Android) only shares files of a fixed list of types (pictures, audio, video, PDF, text) –
+// .docx is not on it. canShare() does not check the type, share() then fails with NotAllowedError.
+// share() is called directly in the tap, so NotAllowedError here means "this type is refused":
+// save the file instead and hide the button for the rest of the visit.
+let shareRefused = false;
 $('btnShare').addEventListener('click', async () => {
   if (!result) return;
   try { await navigator.share({ files: [result], title: result.name }); Tools.diag.log('docx shared'); }
-  catch (e) { if (e.name !== 'AbortError') { Tools.diag.log('share failed', { error: e.name }); toast(t('shareFail')); } }
+  catch (e) {
+    if (e.name === 'AbortError') return;
+    Tools.diag.log('share failed', { error: e.name });
+    if (e.name === 'NotAllowedError') {
+      shareRefused = true;
+      $('btnShare').hidden = true;
+      Tools.download(result);
+      toast(t('shareRefused'), 6000);
+    } else toast(t('shareFail'));
+  }
 });
 
 takeSharedFile().then(f => { if (f) { Tools.diag.log('shared file taken'); takeFile(f); } });

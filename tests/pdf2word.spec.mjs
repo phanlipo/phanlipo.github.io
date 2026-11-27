@@ -114,6 +114,25 @@ test('without page breaks the text flows on; the setting is remembered', async (
   expect(paras.at(-1).text).toBe('Seite zwei beginnt hier.');
 });
 
+test('a browser that refuses to share .docx (Chrome on Android) saves the file instead', async ({ page }) => {
+  // Chrome's canShare() says yes, share() then rejects the type with NotAllowedError
+  await page.addInitScript(() => {
+    navigator.canShare = () => true;
+    navigator.share = () => Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+  });
+  await page.goto(URL_);
+  await page.setInputFiles('#file', { name: 'vertrag.pdf', mimeType: 'application/pdf', buffer: fixture().pdf });
+  await page.click('#btnRun');
+  await expect(page.locator('#btnShare')).toBeVisible({ timeout: 120000 });
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnShare')]);
+  expect(download.suggestedFilename()).toBe('vertrag.docx');
+  await expect(page.locator('#toast')).toContainText('kann Word-Dateien nicht teilen');
+  await expect(page.locator('#btnShare')).toBeHidden();
+  await page.click('#btnRun');                              // stays hidden after the next conversion
+  await expect(page.locator('#btnSave')).toBeVisible({ timeout: 120000 });
+  await expect(page.locator('#btnShare')).toBeHidden();
+});
+
 test('rejects files that are not PDFs', async ({ page }) => {
   await page.goto(URL_);
   await page.setInputFiles('#file', { name: 'notiz.pdf', mimeType: 'application/pdf', buffer: Buffer.from('kein pdf') });
