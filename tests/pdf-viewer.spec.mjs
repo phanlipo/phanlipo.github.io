@@ -7,7 +7,7 @@ async function openSettings(page) {
   await openMenu(page);
   if (!(await page.locator('#setPage').evaluate(d => d.open))) await page.locator('#setPage > summary').click();
 }
-import { makePdf, scanPdf, SCAN_TITLE, SCAN_LINES } from './pdf-tools.mjs';
+import { makePdf, scanPdf, readPdfPages, SCAN_TITLE, SCAN_LINES } from './pdf-tools.mjs';
 
 const URL_ = '/pdf-viewer/';
 const doc = labels => makePdf(labels.map(l => ({ texts: [{ x: 72, y: 700, size: 40, text: l }] })));
@@ -145,24 +145,327 @@ test('installed app in display mode "fullscreen": manifest, no full screen butto
   expect(await page.evaluate(() => Tools.diag.text())).toContain('fullscreen: app');
 });
 
-test('share button shares the PDF unchanged; download from the menu', async ({ page }) => {
+/** Opens the share dialog with the header button (brings the bars back first) */
+async function openShare(page) {
+  if (await hidden(page)) await tap(page);
+  await expect.poll(() => hidden(page)).toBe(false);
+  await page.click('#btnShare');
+  await expect(page.locator('#shareDlg')).toBeVisible();
+}
+const choose = (page, what) => page.locator(`#shareDlg input[value="${what}"]`).check();
+/** Saves the choice of the dialog and returns the downloaded file */
+async function saveChoice(page) {
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#shareSave')]);
+  const path = await download.path();
+  const { readFileSync } = await import('node:fs');
+  return { name: download.suggestedFilename(), buffer: readFileSync(path) };
+}
+const pageTexts = buf => readPdfPages(buf).map(p => p.texts.join(' '));
+
+test('share button: the whole PDF goes out unchanged; download from the menu', async ({ page }) => {
   await mockAndroidShare(page);
   await page.goto(URL_);
   await expect(page.locator('#btnShare')).toBeHidden();      // nothing open yet
   const f = P();
   await openPdf(page, f);
-  await page.click('#btnShare');
+  await openShare(page);
+  await expect(page.locator('#shareDlg input[value="all"]')).toBeChecked();
+  await expect(page.locator('#shAllLabel')).toHaveText('Ganze PDF (5 Seite(n))');
+  await page.click('#shareGo');
   await expect.poll(() => page.evaluate(() => window.__shared)).toEqual([[{ name: 'bericht.pdf', type: 'application/pdf', size: f.buffer.length }]]);
+  await expect(page.locator('#shareDlg')).toBeHidden();
   await openMenu(page);
   const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnDownload')]);
   expect(download.suggestedFilename()).toBe('bericht.pdf');
 });
 
-test('without file sharing (computer) there is no share button', async ({ page }) => {
+test('share this page or a page range as a new PDF with just those pages', async ({ page }) => {
+  await mockAndroidShare(page);
+  await page.goto(URL_);
+  await openPdf(page);
+  await page.locator('main').evaluate(m => { m.scrollTop = document.querySelectorAll('#pages .page')[2].offsetTop - 8; });
+  await expect(page.locator('#pageLabel')).toHaveText('3 / 5');
+  // from the menu: "this page" is chosen
+  if (await hidden(page)) await tap(page);
+  await openMenu(page);
+  await page.click('#btnSharePart');
+  await expect(page.locator('#shareDlg')).toBeVisible();
+  await expect(page.locator('#shareDlg input[value="page"]')).toBeChecked();
+  await expect(page.locator('#shPageLabel')).toHaveText('Diese Seite (3)');
+  let out = await saveChoice(page);
+  expect(out.name).toBe('bericht (S. 3).pdf');
+  expect(pageTexts(out.buffer)).toEqual(['S3']);
+  await expect(page.locator('#shareDlg')).toBeHidden();
+  // a range in the order given, each page once, open end up to the last page
+  await openShare(page);
+  await page.fill('#shareRange', '4–5, 1, 2-1, 5');
+  await expect(page.locator('#shareDlg input[value="range"]')).toBeChecked();   // typing chooses the range
+  out = await saveChoice(page);
+  expect(pageTexts(out.buffer)).toEqual(['S4', 'S5', 'S1', 'S2']);
+  expect(out.name).toBe('bericht (S. 4-5,1-2).pdf');
+  await openShare(page);
+  await page.fill('#shareRange', '4-');
+  out = await saveChoice(page);
+  expect(pageTexts(out.buffer)).toEqual(['S4', 'S5']);
+  // sharing a range hands over the new file
+  await openShare(page);
+  await page.fill('#shareRange', '2');
+  await page.click('#shareGo');
+  await expect.poll(() => page.evaluate(() => window.__shared.length)).toBe(1);
+  const shared = await page.evaluate(() => window.__shared[0][0]);
+  expect(shared.name).toBe('bericht (S. 2).pdf');
+  expect(shared.type).toBe('application/pdf');
+  // all pages in order: the original file
+  await openShare(page);
+  await page.fill('#shareRange', '1-5');
+  out = await saveChoice(page);
+  expect(out.name).toBe('bericht.pdf');
+  const text = await page.evaluate(() => Tools.diag.text());
+  expect(text).toContain('part built');
+  expect(text).not.toContain('bericht');
+});
+
+test('page range: wrong input gets a message and keeps the dialog open', async ({ page }) => {
+  await page.goto(URL_);
+  await openPdf(page);
+  await openShare(page);
+  await choose(page, 'range');
+  for (const [input, msg] of [['', 'Bitte Seiten eingeben, z. B. 1–3, 5.'], ['2-9', 'Nur Seiten 1 bis 5 gibt es.'],
+    ['0', 'Nur Seiten 1 bis 5 gibt es.'], ['zwei', 'Seiten bitte so eingeben: 1–3, 5'], ['1-2-3', 'Seiten bitte so eingeben: 1–3, 5']]) {
+    await page.fill('#shareRange', input);
+    await page.click('#shareSave');
+    await expect(page.locator('#shareErr')).toHaveText(msg);
+    await expect(page.locator('#shareDlg')).toBeVisible();
+  }
+  await page.fill('#shareRange', '3');
+  await expect(page.locator('#shareErr')).toHaveText('');
+});
+
+test('without file sharing (computer) the button saves: whole PDF, pages, excerpt', async ({ page }) => {
   await page.addInitScript(() => { navigator.canShare = () => false; });
   await page.goto(URL_);
   await openPdf(page);
-  await expect(page.locator('#btnShare')).toBeHidden();
+  await expect(page.locator('#btnShare')).toHaveAttribute('aria-label', 'Speichern …');
+  await expect(page.locator('#btnShare use')).toHaveAttribute('href', '../assets/icons.svg#download');
+  await openShare(page);
+  await expect(page.locator('#shareDlgH')).toHaveText('Speichern');
+  await expect(page.locator('#shareGo')).toBeHidden();
+  await expect(page.locator('#shareSave')).toHaveClass(/primary/);
+  const out = await saveChoice(page);
+  expect(out.name).toBe('bericht.pdf');
+  await openShare(page);
+  await choose(page, 'crop');
+  await page.click('#shareCrop');
+  await expect(page.locator('#cropBar')).toBeVisible();
+  await expect(page.locator('#cropShare')).toBeHidden();
+  await expect(page.locator('#cropSave')).toBeVisible();
+});
+
+/** PNG size from its header */
+const pngSize = buf => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) });
+
+test('excerpt: a frame on the page, dragged at a corner and moved, saved as a sharp picture of just that part', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto(URL_);
+  await openPdf(page);
+  await openShare(page);
+  await choose(page, 'crop');
+  await expect(page.locator('#shareHint')).toContainText('Rahmen');
+  await page.click('#shareCrop');
+  await expect(page.locator('#shareDlg')).toBeHidden();
+  const box = page.locator('#pages .page').first().locator('.crop');
+  await expect(box).toBeVisible();
+  await expect(page.locator('#cropHint')).toBeVisible();
+  await expect(page.locator('body > header')).toBeHidden();
+  await expect(box).toBeFocused();
+  const pg = await pages(page).first().boundingBox();
+  // corner to the top left of the page, the other corner to the middle
+  const drag = async (sel, x, y) => {
+    const b = await box.locator(sel).boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, y, { steps: 5 });
+    await page.mouse.up();
+  };
+  await drag('[data-h="nw"]', pg.x - 30, pg.y - 30);       // beyond the page: stops at its edge
+  await drag('[data-h="se"]', pg.x + pg.width / 2, pg.y + pg.height / 4);
+  const frac = () => box.evaluate(b => ['left', 'top', 'width', 'height'].map(k => parseFloat(b.style[k]) / 100));
+  let [x, y, w, h] = await frac();
+  expect(x).toBeCloseTo(0, 2); expect(y).toBeCloseTo(0, 2);
+  expect(w).toBeCloseTo(0.5, 1); expect(h).toBeCloseTo(0.25, 1);
+  // move it as a whole: size stays
+  const b = await box.boundingBox();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2 + 20, b.y + b.height / 2 + 30, { steps: 4 });
+  await page.mouse.up();
+  const [x2, y2, w2, h2] = await frac();
+  expect(x2).toBeGreaterThan(0.03); expect(y2).toBeGreaterThan(0.01);
+  expect(w2).toBeCloseTo(w, 5); expect(h2).toBeCloseTo(h, 5);
+  // keys: arrows move, Shift + arrows resize
+  await box.press('Shift+ArrowRight');
+  [x, y, w, h] = await frac();
+  expect(w).toBeCloseTo(w2 + 0.01, 5); expect(x).toBeCloseTo(x2, 5);
+  await box.press('ArrowLeft');
+  expect((await frac())[0]).toBeCloseTo(x2 - 0.01, 5);
+  // save: PNG with about 2000 px on the long side, page proportions kept (A4: 595 × 842 pt)
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#cropSave')]);
+  expect(download.suggestedFilename()).toBe('bericht (S. 1).png');
+  const { readFileSync } = await import('node:fs');
+  const png = readFileSync(await download.path());
+  expect(png.subarray(1, 4).toString()).toBe('PNG');
+  const size = pngSize(png);
+  const ratio = (w * 595) / (h * 842);
+  expect(Math.max(size.w, size.h)).toBeGreaterThanOrEqual(1990);
+  expect(size.w / size.h).toBeCloseTo(ratio, 1);
+  await expect(page.locator('#cropBar')).toBeHidden();
+  await expect(box).toHaveCount(0);
+  await expect(page.locator('body > header')).toBeVisible();
+  const text = await page.evaluate(() => Tools.diag.text());
+  expect(text).toContain('crop picture');
+});
+
+test('excerpt: the picture shows the text inside the frame, not the rest of the page', async ({ page }) => {
+  await page.goto(URL_);
+  await openPdf(page);
+  await openShare(page);
+  await choose(page, 'crop');
+  await page.click('#shareCrop');
+  const box = pages(page).first().locator('.crop');
+  // the label "S1" sits at x 72 pt, 700 pt from the bottom, 40 pt high: in the top left of the page.
+  // Drag the frame onto it (corners at page fractions)
+  const pg = await pages(page).first().boundingBox();
+  const at = (fx, fy) => [pg.x + fx * pg.width, pg.y + fy * pg.height];
+  const dragTo = async (sel, [x, y]) => {
+    const b = await box.locator(sel).boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down();
+    await page.mouse.move(x, y, { steps: 5 }); await page.mouse.up();
+  };
+  await dragTo('[data-h="nw"]', at(0.08, 0.1));
+  await dragTo('[data-h="se"]', at(0.4, 0.2));
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#cropSave')]);
+  const { readFileSync } = await import('node:fs');
+  const png = readFileSync(await download.path()).toString('base64');
+  const dark = await page.evaluate(async b64 => {
+    const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data; let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] < 100) n++;
+    return n / (d.length / 4);
+  }, png);
+  expect(dark, 'the label is in the picture').toBeGreaterThan(0.02);
+  // an empty part of the page: white picture
+  await openShare(page);
+  await choose(page, 'crop');
+  await page.click('#shareCrop');
+  await dragTo('[data-h="se"]', at(0.95, 0.95));
+  await dragTo('[data-h="nw"]', at(0.5, 0.6));
+  const [d2] = await Promise.all([page.waitForEvent('download'), page.click('#cropSave')]);
+  const png2 = readFileSync(await d2.path()).toString('base64');
+  const dark2 = await page.evaluate(async b64 => {
+    const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode();
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data; let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] < 100) n++;
+    return n;
+  }, png2);
+  expect(dark2).toBe(0);
+});
+
+test('excerpt: copy as a picture, share, cancel with the button and Escape; night mode is off on the frame page', async ({ page }) => {
+  await mockAndroidShare(page);
+  await page.addInitScript(() => {
+    window.__copied = [];
+    navigator.clipboard.write = async items => {
+      for (const it of items) { const b = await it.getType('image/png'); window.__copied.push({ type: b.type, size: b.size }); }
+    };
+  });
+  await page.goto(URL_);
+  await openSettings(page);
+  await page.locator('#optNight').check();
+  await closeMenu(page);
+  await openPdf(page);
+  const start = async () => { await openShare(page); await choose(page, 'crop'); await page.click('#shareCrop'); await expect(page.locator('#cropBar')).toBeVisible(); };
+  await start();
+  expect(await pages(page).first().evaluate(el => getComputedStyle(el).filter)).toBe('none');
+  await page.click('#cropCopy');
+  await expect(page.locator('.toast')).toContainText('Ausschnitt als Bild kopiert.');
+  await expect.poll(() => page.evaluate(() => window.__copied.length)).toBe(1);
+  expect((await page.evaluate(() => window.__copied[0])).type).toBe('image/png');
+  await expect(page.locator('#cropBar')).toBeHidden();
+  expect(await pages(page).first().evaluate(el => getComputedStyle(el).filter)).not.toBe('none');
+  await start();
+  await page.click('#cropShare');
+  await expect.poll(() => page.evaluate(() => window.__shared.length)).toBe(1);
+  expect(await page.evaluate(() => window.__shared[0][0])).toMatchObject({ name: 'bericht (S. 1).png', type: 'image/png' });
+  await expect(page.locator('#cropBar')).toBeHidden();
+  await start();
+  await page.click('#cropCancel');
+  await expect(page.locator('#cropBar')).toBeHidden();
+  await expect(page.locator('.crop')).toHaveCount(0);
+  await start();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.crop')).toHaveCount(0);
+  await expect(page.locator('body > header')).toBeVisible();
+});
+
+test('sharing needs a second tap when building took the tap away', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__shared = []; let first = true;
+    navigator.canShare = () => true;
+    navigator.share = async data => {
+      if (first) { first = false; throw new DOMException('Must be handling a user gesture', 'NotAllowedError'); }
+      window.__shared.push(data.files.map(f => f.name));
+    };
+  });
+  await page.goto(URL_);
+  await openPdf(page);
+  await openShare(page);
+  await choose(page, 'page');
+  await page.click('#shareGo');
+  await expect(page.locator('#shareGo')).toHaveText('Jetzt teilen');
+  await expect(page.locator('#shareDlg')).toBeVisible();
+  await page.click('#shareGo');
+  await expect.poll(() => page.evaluate(() => window.__shared)).toEqual([['bericht (S. 1).pdf']]);
+  await expect(page.locator('#shareDlg')).toBeHidden();
+});
+
+test('password-protected PDF: a page comes out as a PDF without password', async ({ page }) => {
+  const S = { name: 'geheim.pdf', mimeType: 'application/pdf',
+    buffer: makePdf([{ texts: [{ x: 72, y: 700, size: 40, text: 'X1' }] }, { texts: [{ x: 72, y: 700, size: 40, text: 'X2' }] }], { encrypt: { user: 'Sesam', owner: 'chef' } }) };
+  await page.goto(URL_);
+  await page.setInputFiles('#inPick', S);
+  await page.fill('#pwInput', 'Sesam');
+  await page.click('#pwOk');
+  await expect(pages(page)).toHaveCount(2);
+  await openShare(page);
+  await choose(page, 'range');
+  await expect(page.locator('#shareHint')).toHaveText('Neue PDF nur mit diesen Seiten – ohne Passwortschutz.');
+  await page.fill('#shareRange', '2');
+  const out = await saveChoice(page);
+  expect(out.buffer.toString('latin1')).not.toContain('/Encrypt');
+  expect(pageTexts(out.buffer)).toEqual(['X2']);
+  expect(await page.evaluate(() => Tools.diag.text())).not.toMatch(/sesam/i);
+});
+
+test('pages as PDF work offline once the tool was used', async ({ page, context }) => {
+  await page.goto(URL_);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();                               // page controlled → pdf-lib goes through the cache
+  await openPdf(page);
+  await openShare(page);
+  await choose(page, 'page');
+  expect(pageTexts((await saveChoice(page)).buffer)).toEqual(['S1']);
+  await context.setOffline(true);
+  await page.reload();
+  await expect(pages(page)).toHaveCount(5);          // the kept PDF
+  await expect(pages(page).first().locator('canvas')).toHaveCount(1);
+  await openShare(page);
+  await page.fill('#shareRange', '2-3');
+  expect(pageTexts((await saveChoice(page)).buffer)).toEqual(['S2', 'S3']);
+  await context.setOffline(false);
 });
 
 test('share target: a PDF shared to the installed app opens right away', async ({ page, request }) => {

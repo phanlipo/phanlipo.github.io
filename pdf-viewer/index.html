@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rsCs2DxL8SRhKdT6qwLQxDvbF8j8dfxhADZyHg9SAU4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-ICRxtEZ1pffEMP7DjBNBifme2QZmowKjbhwrvd0Pa8w='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -115,6 +115,26 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
 .ocr-lang label{flex:1 1 9em}
 .ocr-lang select{flex:0 1 auto;min-height:44px;padding-inline:8px}
 .toc{list-style:none;margin:0;padding:0}
+/* Share dialog: a page range field under its choice */
+.share-range{margin:0 0 4px 32px}
+#shareHint{margin:0;font-size:14px}
+/* Excerpt (body.cropping): a frame over the current page, dimmed around it; the bars give way to a hint at
+   the top and the actions at the bottom. Fractions of the page (left/top/width/height in %), so it follows zoom. */
+body.cropping>header,body.cropping #bar,body.cropping #badge{display:none}
+body.cropping .textLayer,body.cropping .linkLayer{pointer-events:none}
+body.night.cropping .page.crop-page{filter:none}   /* the picture comes without night mode – show it so */
+.crop{position:absolute;z-index:3;box-shadow:0 0 0 100vmax rgba(0,0,0,.55);outline:2px solid #ffffff;touch-action:none;cursor:move}
+.crop:focus-visible{outline:3px solid #1d4ed8}
+.crop-h{position:absolute;width:44px;height:44px;margin:-22px;touch-action:none}
+.crop-h::after{content:'';position:absolute;inset:13px;background:#ffffff;border:2px solid #1d4ed8;border-radius:50%;box-sizing:border-box}
+.crop-h[data-h="nw"]{left:0;top:0;cursor:nwse-resize}.crop-h[data-h="ne"]{right:0;top:0;cursor:nesw-resize}
+.crop-h[data-h="sw"]{left:0;bottom:0;cursor:nesw-resize}.crop-h[data-h="se"]{right:0;bottom:0;cursor:nwse-resize}
+#cropHint{position:fixed;inset-inline:0;inset-block-start:0;z-index:6;margin:0;background:var(--surface);border-block-end:1px solid var(--border);
+  padding-block:calc(10px + env(safe-area-inset-top)) 10px;padding-inline:max(16px,env(safe-area-inset-left)) max(16px,env(safe-area-inset-right));text-align:center;font-size:15px}
+#cropBar{position:fixed;inset-inline:0;inset-block-end:0;z-index:6;background:var(--surface);border-block-start:1px solid var(--border);
+  padding-block:4px max(4px,env(safe-area-inset-bottom));padding-inline:max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right))}
+body.edge-gap #cropBar{padding-block-end:max(28px,env(safe-area-inset-bottom))}
+:is(#cropHint,#cropBar)[hidden]{display:none}
 .toc button{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;padding:6px 8px;padding-inline-start:calc(8px + var(--lvl,0) * 16px);
   background:none;border:0;border-block-end:1px solid var(--border);color:var(--text);font:inherit;text-align:start;cursor:pointer}
 .toc button:hover{background:var(--surface-2)}
@@ -134,7 +154,7 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
   </div>
   <div class="stage-actions">
     <button type="button" class="head-btn" id="btnFind" hidden aria-label="Suchen" title="Suchen (Strg + F)" data-i18n-attr="aria-label:find.open; title:find.openKey"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#search"/></svg></button>
-    <button type="button" class="head-btn" id="btnShare" hidden aria-label="PDF teilen" title="PDF teilen" data-i18n-attr="aria-label:share; title:share"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg></button>
+    <button type="button" class="head-btn" id="btnShare" hidden aria-label="Teilen …" title="Teilen …"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg></button>
     <button type="button" class="head-btn" id="btnFs" hidden aria-pressed="false" aria-label="Vollbild" title="Vollbild" data-i18n-attr="aria-label:fs; title:fs"><svg class="ic" id="icoFsOn" aria-hidden="true"><use href="../assets/icons.svg#maximize"/></svg><svg class="ic" id="icoFsOff" hidden aria-hidden="true"><use href="../assets/icons.svg#minimize"/></svg></button>
   </div>
 </header>
@@ -159,8 +179,41 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
   <button type="button" class="head-btn" id="ocrCancel" aria-label="Texterkennung abbrechen" title="Texterkennung abbrechen" data-i18n-attr="aria-label:ocr.cancel; title:ocr.cancel"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button>
 </div>
 <input type="file" id="inPick" accept="application/pdf,.pdf" hidden>
+<p id="cropHint" hidden data-i18n="crop.hint">Rahmen an den Ecken ziehen oder verschieben</p>
+<div id="cropBar" hidden>
+  <div class="toolbar">
+    <button type="button" id="cropCancel" aria-label="Ausschnitt abbrechen" title="Ausschnitt abbrechen" data-i18n-attr="aria-label:crop.cancelL; title:crop.cancelL"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg><span class="tb-label" data-i18n="crop.cancelW">Abbrechen</span></button>
+    <button type="button" id="cropCopy" hidden aria-label="Ausschnitt als Bild kopieren" title="Ausschnitt als Bild kopieren" data-i18n-attr="aria-label:crop.copyL; title:crop.copyL"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span class="tb-label" data-i18n="crop.copyW">Kopieren</span></button>
+    <button type="button" id="cropShare" hidden aria-label="Ausschnitt als Bild teilen" title="Ausschnitt als Bild teilen" data-i18n-attr="aria-label:crop.shareL; title:crop.shareL"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span class="tb-label" data-i18n="shareShort">Teilen</span></button>
+    <button type="button" id="cropSave" aria-label="Ausschnitt als Bild speichern" title="Ausschnitt als Bild speichern" data-i18n-attr="aria-label:crop.saveL; title:crop.saveL"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span class="tb-label" data-i18n="saveW">Speichern</span></button>
+  </div>
+</div>
+<dialog class="dialog" id="shareDlg" aria-labelledby="shareDlgH">
+  <form method="dialog">
+    <div class="dialog-head"><h2 id="shareDlgH" data-i18n="sh.title">Teilen</h2><button type="submit" class="head-btn" aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:closeDlg; title:closeDlg"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+    <div class="dialog-body">
+      <fieldset class="seg-group" id="shareWhat">
+        <legend data-i18n="sh.what">Was?</legend>
+        <label class="check"><input type="radio" name="shareWhat" value="all"> <span id="shAllLabel">Ganze PDF</span></label>
+        <label class="check"><input type="radio" name="shareWhat" value="page"> <span id="shPageLabel">Diese Seite</span></label>
+        <label class="check"><input type="radio" name="shareWhat" value="range"> <span data-i18n="sh.range">Seiten …</span></label>
+        <div class="form-field share-range"><label for="shareRange" data-i18n="sh.rangeLabel">Seiten (z. B. 1–3, 5)</label>
+          <input type="text" id="shareRange" inputmode="text" autocomplete="off" spellcheck="false" maxlength="200" enterkeyhint="done"></div>
+        <label class="check"><input type="radio" name="shareWhat" value="crop"> <span id="shCropLabel">Ausschnitt als Bild</span></label>
+      </fieldset>
+      <p class="muted" id="shareHint"></p>
+      <p class="form-error" id="shareErr" role="alert"></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="shareSave"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span data-i18n="saveW">Speichern</span></button>
+      <button type="button" class="btn primary" id="shareGo"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="shareShort">Teilen</span></button>
+      <button type="button" class="btn primary" id="shareCrop" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#crop"/></svg><span data-i18n="sh.cropGo">Ausschnitt wählen</span></button>
+    </div>
+  </form>
+</dialog>
 
 <div class="menu-list" id="docActions" data-menu>
+  <button type="button" id="btnSharePart" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span id="sharePartLabel">Seite oder Ausschnitt teilen …</span></button>
   <button type="button" id="btnOpen"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#folder-open"/></svg><span data-i18n="openOther">Andere PDF öffnen</span></button>
   <button type="button" id="btnOcr" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#text-recognition"/></svg><span data-i18n="ocr.run">Text erkennen (gescannte Seiten)</span></button>
   <button type="button" id="btnToEdit" disabled><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-pencil"/></svg><span data-i18n="hand.edit">In „PDF bearbeiten“ öffnen</span></button>
@@ -217,7 +270,7 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
   <h3>Lesen</h3>
   <ul>
     <li>Nach dem Öffnen und beim Blättern blenden sich die Leisten aus – nur die PDF ist zu sehen. <b>Einmal tippen</b> holt sie zurück, nochmal tippen blendet sie wieder aus.</li>
-    <li>Oben: <b>Teilen</b> schickt die PDF an eine andere App (wenn das Gerät Dateien teilen kann), <b>Vollbild</b> verbirgt zusätzlich die Leisten von Browser und System, <b>☰</b> öffnet das Menü.</li>
+    <li>Oben: <b>Teilen</b> (siehe unten), <b>Vollbild</b> verbirgt zusätzlich die Leisten von Browser und System, <b>☰</b> öffnet das Menü.</li>
     <li>Unten: Mit dem Schieberegler springt man zu einer Seite; der Knopf daneben passt die Seite wieder an die Bildschirmbreite an.</li>
     <li><b>Zoomen</b> mit zwei Fingern oder doppelt tippen (nochmal doppelt tippen = zurück). Am Computer Strg + Mausrad oder die Tasten + / − / 0.</li>
     <li><b>Text kopieren:</b> lange auf ein Wort drücken (am Computer mit der Maus ziehen), die Auswahl mit den Griffen erweitern und <i>Kopieren</i> wählen. Gescannte Seiten erst nach der Texterkennung.</li>
@@ -226,6 +279,13 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
     <li><b>Inhaltsverzeichnis:</b> Hat die PDF Lesezeichen, stehen sie im Menü unter <i>Inhaltsverzeichnis</i>; ein Tippen springt zur Stelle.</li>
     <li><b>Links:</b> Web- und Mail-Adressen im Text sowie Links der PDF lassen sich antippen. Webseiten öffnen sich in einem neuen Tab bzw. im Browser, Links auf eine Seite des Dokuments springen dorthin. Erst beim Antippen verbindet sich das Gerät mit der Adresse.</li>
     <li>Die App merkt sich, auf welcher Seite man in einem Dokument war, und springt beim nächsten Öffnen dorthin.</li>
+  </ul>
+  <h3>Teilen: ganze PDF, Seiten oder Ausschnitt</h3>
+  <ul>
+    <li><b>Teilen</b> oben (oder im Menü <i>Seite oder Ausschnitt teilen</i>) fragt, was weitergehen soll: die <b>ganze PDF</b>, <b>diese Seite</b>, <b>Seiten</b> wie „1–3, 5“ (auch „7–“ bis zum Ende) oder einen <b>Ausschnitt als Bild</b>.</li>
+    <li>Einzelne Seiten werden zu einer neuen, kleinen PDF – Text, Schrift und Schärfe bleiben erhalten. Bei passwortgeschützten PDFs hat die neue Datei kein Passwort mehr.</li>
+    <li><b>Ausschnitt:</b> Auf der aktuellen Seite erscheint ein Rahmen. An den Ecken ziehen ändert die Größe, im Rahmen ziehen verschiebt ihn; zoomen und blättern geht weiter mit zwei Fingern bzw. außerhalb des Rahmens. Unten dann <i>Kopieren</i> (als Bild in die Zwischenablage), <i>Teilen</i> oder <i>Speichern</i> (PNG). Das Bild wird für den Ausschnitt neu gezeichnet und ist schärfer als ein Bildschirmfoto; der Nachtmodus wird nicht übernommen.</li>
+    <li>Kann das Gerät keine Dateien teilen (z. B. am Computer), heißt der Knopf <i>Speichern</i> und lädt die Auswahl herunter. Alles entsteht auf dem Gerät, nichts wird hochgeladen.</li>
   </ul>
   <h3>Vollbild und Systemleisten</h3>
   <ul>
@@ -239,7 +299,7 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
     <li>Anzeige: automatisch ausblenden, Systemleisten mit ausblenden, Nachtmodus (dunkle Seiten mit heller Schrift), Sprache der Texterkennung, geöffnete PDF behalten.</li>
   </ul>
   <h3>Was wird gespeichert?</h3>
-  <p>Nur die Einstellungen und je Dokument die zuletzt gelesene Seite (unter einer Kennung aus der PDF, ohne Dateinamen; höchstens 50 Dokumente). Die zuletzt geöffnete PDF bleibt auf diesem Gerät im Speicher des Browsers und öffnet sich beim nächsten Start wieder – auch wenn die App für ein Update neu lädt (an der gemerkten Seite; passwortgeschützte fragen wieder nach dem Passwort). <i>PDF schließen</i>, der Schalter im Menü oder <i>Alle Daten löschen</i> entfernen sie. In der Sicherungsdatei ist sie nicht enthalten. Angezeigt wird mit <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0), die Texterkennung mit <a href="https://tesseract.projectnaptha.com">Tesseract.js</a> (Apache-2.0).</p>
+  <p>Nur die Einstellungen und je Dokument die zuletzt gelesene Seite (unter einer Kennung aus der PDF, ohne Dateinamen; höchstens 50 Dokumente). Die zuletzt geöffnete PDF bleibt auf diesem Gerät im Speicher des Browsers und öffnet sich beim nächsten Start wieder – auch wenn die App für ein Update neu lädt (an der gemerkten Seite; passwortgeschützte fragen wieder nach dem Passwort). <i>PDF schließen</i>, der Schalter im Menü oder <i>Alle Daten löschen</i> entfernen sie. In der Sicherungsdatei ist sie nicht enthalten. Angezeigt wird mit <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0), die Texterkennung mit <a href="https://tesseract.projectnaptha.com">Tesseract.js</a> (Apache-2.0), einzelne Seiten werden mit <a href="https://github.com/cantoo-scribe/pdf-lib">pdf-lib</a> (Fork von Cantoo, MIT) herausgelöst.</p>
   </div>
   <div data-lang="en" lang="en" hidden>
   <p>Shows PDF files filling the screen – for reading without distraction. The file is opened on this device only and never uploaded.</p>
@@ -251,7 +311,7 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
   <h3>Reading</h3>
   <ul>
     <li>After opening and while scrolling, the bars hide – only the PDF is visible. <b>Tap once</b> to bring them back, tap again to hide them.</li>
-    <li>At the top: <b>Share</b> sends the PDF to another app (if the device can share files), <b>Full screen</b> also hides the browser and system bars, <b>☰</b> opens the menu.</li>
+    <li>At the top: <b>Share</b> (see below), <b>Full screen</b> also hides the browser and system bars, <b>☰</b> opens the menu.</li>
     <li>At the bottom: the slider jumps to a page; the button next to it fits the page to the screen width again.</li>
     <li><b>Zoom</b> with two fingers or by double-tapping (double-tap again = back). On a computer Ctrl + mouse wheel or the keys + / − / 0.</li>
     <li><b>Copying text:</b> long-press a word (on a computer drag with the mouse), extend the selection with the handles and choose <i>Copy</i>. Scanned pages only after text recognition.</li>
@@ -260,6 +320,13 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
     <li><b>Contents:</b> if the PDF has bookmarks, they are in the menu under <i>Contents</i>; a tap jumps there.</li>
     <li><b>Links:</b> web and mail addresses in the text and links of the PDF can be tapped. Web pages open in a new tab or in the browser, links to a page of the document go there. The device only connects to the address when you tap it.</li>
     <li>The app remembers which page you were on in a document and goes there next time you open it.</li>
+  </ul>
+  <h3>Sharing: whole PDF, pages or an excerpt</h3>
+  <ul>
+    <li><b>Share</b> at the top (or <i>Share a page or excerpt</i> in the menu) asks what to pass on: the <b>whole PDF</b>, <b>this page</b>, <b>pages</b> like “1–3, 5” (also “7–” up to the end) or an <b>excerpt as a picture</b>.</li>
+    <li>Single pages become a new, small PDF – text, fonts and sharpness are kept. For password-protected PDFs the new file has no password any more.</li>
+    <li><b>Excerpt:</b> a frame appears on the current page. Dragging a corner changes its size, dragging inside moves it; zooming and scrolling still work with two fingers or outside the frame. Then at the bottom <i>Copy</i> (as a picture to the clipboard), <i>Share</i> or <i>Save</i> (PNG). The picture is drawn anew for the excerpt and is sharper than a screenshot; night mode is not applied.</li>
+    <li>If the device cannot share files (e.g. on a computer), the button is called <i>Save</i> and downloads the choice. Everything is made on the device, nothing is uploaded.</li>
   </ul>
   <h3>Full screen and system bars</h3>
   <ul>
@@ -273,7 +340,7 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
     <li>Display: hide automatically, hide the system bars too, night mode (dark pages with light text), language of the text recognition, keep the open PDF.</li>
   </ul>
   <h3>What is stored?</h3>
-  <p>Only the settings and, per document, the page last read (under an ID taken from the PDF, without the file name; at most 50 documents). The PDF opened last stays on this device in the browser’s storage and opens again at the next start – also when the app reloads for an update (at the remembered page; password-protected ones ask for the password again). <i>Close PDF</i>, the switch in the menu or <i>Delete all data</i> remove it. It is not part of the backup file. Rendering by <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0), text recognition by <a href="https://tesseract.projectnaptha.com">Tesseract.js</a> (Apache-2.0).</p>
+  <p>Only the settings and, per document, the page last read (under an ID taken from the PDF, without the file name; at most 50 documents). The PDF opened last stays on this device in the browser’s storage and opens again at the next start – also when the app reloads for an update (at the remembered page; password-protected ones ask for the password again). <i>Close PDF</i>, the switch in the menu or <i>Delete all data</i> remove it. It is not part of the backup file. Rendering by <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0), text recognition by <a href="https://tesseract.projectnaptha.com">Tesseract.js</a> (Apache-2.0), single pages are taken out with <a href="https://github.com/cantoo-scribe/pdf-lib">pdf-lib</a> (Cantoo fork, MIT).</p>
   </div>
   <!-- files:start -->
   <div data-lang="de">
@@ -313,7 +380,7 @@ body.edge-gap #ocrStatus{inset-block-end:calc(106px + env(safe-area-inset-bottom
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 72f1e49f459d</p>
+  <p class="footer-version">Version 00f335cac85b</p>
   <!-- footer:end -->
 </footer>
 
@@ -335,9 +402,19 @@ Tools.i18n({
     'ocr.done':'Text auf {n} Seite(n) erkannt – die Erkennung kann Fehler enthalten.','ocr.fail':'Texterkennung nicht möglich.',
     'ocr.offline':'Die Texterkennung braucht beim ersten Mal Internet (ca. 5 MB).','ocr.cancelled':'Texterkennung abgebrochen.',
     'ocr.none':'Alle Seiten haben schon Text.','hand.fail':'Übergeben hat nicht geklappt.',
+    share:'Teilen …',saveDots:'Speichern …','sh.menu':'Seite oder Ausschnitt teilen …','sh.menuSave':'Seite oder Ausschnitt speichern …',
+    'sh.title':'Teilen','sh.titleSave':'Speichern','sh.all':'Ganze PDF ({n} Seite(n))','sh.page':'Diese Seite ({n})','sh.crop':'Ausschnitt von Seite {n} als Bild',
+    'sh.hintAll':'Die PDF-Datei, wie sie geöffnet wurde.','sh.hintPages':'Neue PDF nur mit diesen Seiten – Text und Links bleiben erhalten.',
+    'sh.hintPagesEnc':'Neue PDF nur mit diesen Seiten – ohne Passwortschutz.','sh.hintCrop':'Danach einen Rahmen auf der Seite ziehen; geteilt wird ein scharfes Bild davon.',
+    'sh.errEmpty':'Bitte Seiten eingeben, z. B. 1–3, 5.','sh.errFormat':'Seiten bitte so eingeben: 1–3, 5','sh.errRange':'Nur Seiten 1 bis {n} gibt es.',
+    'sh.errLib':'Das Werkzeug für Seiten konnte nicht geladen werden. Bitte einmal mit Internet öffnen.','sh.errEnc':'Die Seiten lassen sich aus dieser geschützten PDF nicht herauslösen – als Ausschnitt (Bild) geht es.',
+    'sh.errBuild':'Die neue PDF konnte nicht erstellt werden.','sh.busy':'Wird erstellt …','sh.again':'Jetzt teilen',
+    'file.p':'S. {p}','file.pp':'S. {p}','file.nPages':'{n} Seiten',
+    'crop.box':'Ausschnitt: Pfeiltasten verschieben, Umschalt + Pfeiltasten ändern die Größe','crop.copied':'Ausschnitt als Bild kopiert.',
+    'crop.again':'Bild ist fertig – bitte noch einmal auf Teilen tippen.','crop.fail':'Das Bild konnte nicht erstellt werden.','crop.copyFail':'Kopieren nicht möglich – bitte Speichern oder Teilen verwenden.',
   },
   en:{
-    title:'PDF Viewer',share:'Share PDF',fs:'Full screen',view:'Document',intro:'Open a PDF or share it here from another app. The file stays on this device.',
+    title:'PDF Viewer',fs:'Full screen',view:'Document',intro:'Open a PDF or share it here from another app. The file stays on this device.',
     open:'Open PDF',pagesLabel:'Pages',page:'Page',fit:'Page width','doc.h':'Document',openOther:'Open another PDF',download:'Download',
     goto:'Go to page',go:'Go','set.h':'Display','set.autoHide':'Hide the bars while reading',
     'set.system':'When hiding, also hide the system bars (full screen)','set.night':'Night mode (invert colours)',
@@ -358,6 +435,20 @@ Tools.i18n({
     'ocr.offline':'Text recognition needs the internet the first time (about 5 MB).','ocr.cancelled':'Text recognition cancelled.',
     'ocr.none':'All pages already have text.','hand.edit':'Open in “Edit PDF”','hand.word':'Convert to Word','hand.fail':'Handing over did not work.','ocr.progress':'Progress of the text recognition','ocr.cancel':'Cancel text recognition',
     'set.ocrLang':'Language of the text recognition','lang.de':'German','lang.en':'English',
+    share:'Share …',saveDots:'Save …','sh.menu':'Share a page or excerpt …','sh.menuSave':'Save a page or excerpt …',
+    'sh.title':'Share','sh.titleSave':'Save','sh.what':'What?','sh.all':'Whole PDF ({n} page(s))','sh.page':'This page ({n})','sh.range':'Pages …',
+    'sh.rangeLabel':'Pages (e.g. 1–3, 5)','sh.crop':'Excerpt of page {n} as a picture','sh.cropGo':'Choose excerpt',
+    'sh.hintAll':'The PDF file as it was opened.','sh.hintPages':'New PDF with only these pages – text and links are kept.',
+    'sh.hintPagesEnc':'New PDF with only these pages – without password protection.','sh.hintCrop':'Then drag a frame on the page; a sharp picture of it is shared.',
+    'sh.errEmpty':'Please enter pages, e.g. 1–3, 5.','sh.errFormat':'Please enter pages like this: 1–3, 5','sh.errRange':'There are only pages 1 to {n}.',
+    'sh.errLib':'The tool for pages could not be loaded. Please open it once with internet.','sh.errEnc':'The pages cannot be taken out of this protected PDF – an excerpt (picture) works.',
+    'sh.errBuild':'The new PDF could not be created.','sh.busy':'Creating …','sh.again':'Share now',
+    'file.p':'p. {p}','file.pp':'pp. {p}','file.nPages':'{n} pages',
+    closeDlg:'Close',shareShort:'Share',saveW:'Save','crop.cancelW':'Cancel','crop.copyW':'Copy',
+    'crop.hint':'Drag the frame by its corners or move it','crop.cancelL':'Cancel excerpt','crop.copyL':'Copy excerpt as a picture',
+    'crop.shareL':'Share excerpt as a picture','crop.saveL':'Save excerpt as a picture',
+    'crop.box':'Excerpt: arrow keys move it, Shift + arrow keys change its size','crop.copied':'Excerpt copied as a picture.',
+    'crop.again':'The picture is ready – please tap Share once more.','crop.fail':'The picture could not be created.','crop.copyFail':'Copying is not possible – please use Save or Share.',
   }
 });
 const t=Tools.t, $=Tools.$, body=document.body;
@@ -377,6 +468,8 @@ const pdfjs=()=>pdfOpen().then(m=>m.pdfjs());
 /* ================= State ================= */
 // doc: pdf.js document; file: the File as opened (for sharing/downloading); sizes: [w,h] per page at scale 1
 let doc=null, file=null, sizes=[], els=[], tops=[], zoom=1, cur=1, loadToken=0, encrypted=false;
+// pdfPassword: what opened the PDF (memory only, for copying pages with pdf-lib; never stored or logged)
+let pdfPassword;
 
 /* ================= Opening ================= */
 const destroyDoc=d=>{if(openP) openP.then(m=>m.closePdf(d));};
@@ -428,7 +521,7 @@ async function openFile(f,restored){
     }
     if(token!==loadToken){destroyDoc(d);return;}
     closeDoc();
-    doc=d; sizes=sz; encrypted=password!=null;
+    doc=d; sizes=sz; encrypted=password!=null; pdfPassword=password;
     file=f.type==='application/pdf'?f:new File([f],f.name||'dokument.pdf',{type:'application/pdf'});
     Tools.diag.log('opened',{pages:d.numPages,encrypted,restored:!!restored});
     show();
@@ -444,8 +537,9 @@ function fail(text){
   message(text,true);
 }
 function closeDoc(){
+  endCrop(); $('shareRange').value='';
   if(doc) destroyDoc(doc);
-  doc=null; file=null; sizes=[]; els=[]; tops=[]; pagesEl.textContent='';
+  doc=null; file=null; sizes=[]; pdfPassword=undefined; partCache=null; els=[]; tops=[]; pagesEl.textContent='';
   renderGen++;
   texts=[]; hits=[]; hitIdx=-1; pendingHit=false; findToken++; renderFindCount();
   ocrToken++; scanToken++; ocrData=[]; textless=new Set(); scanned=false; ocrBusy=false; $('ocrStatus').hidden=true;
@@ -709,7 +803,7 @@ view.addEventListener('touchstart',e=>{
   if(!doc||e.touches.length!==2) return;
   const [a,b]=e.touches, r=view.getBoundingClientRect();
   const cx=(a.clientX+b.clientX)/2-r.left, cy=(a.clientY+b.clientY)/2-r.top;
-  pinch={d0:touchDist(a,b),cx,cy,s:1};
+  pinch={d0:touchDist(a,b),cx,cy,s:1}; cropDrag=null;   // two fingers zoom, also on the excerpt frame
   pagesEl.style.transformOrigin=`${view.scrollLeft+cx-pagesEl.offsetLeft}px ${view.scrollTop+cy-pagesEl.offsetTop}px`;
   clearTimeout(tapTimer); lastTap=0;
 },{passive:true});
@@ -761,7 +855,7 @@ function toggleBars(){
 }
 view.tabIndex=-1;
 view.addEventListener('click',e=>{
-  if(!doc||e.target.closest('button,a,input,#empty')) return;
+  if(!doc||crop||e.target.closest('button,a,input,#empty')) return;
   const r=view.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top, now=Date.now();
   const sel=window.getSelection();
   if(now-lastTap<300&&Math.hypot(x-lastXY[0],y-lastXY[1])<40){
@@ -1154,7 +1248,8 @@ function renderInfo(){
   $('appTitle').hidden=!!doc; $('docName').hidden=!doc; $('docName').textContent=doc?file.name:'';
   document.title=doc?file.name:t('title');
   for(const id of ['btnDownload','btnClose','gotoInput','btnGoto','btnToEdit','btnToWord']) $(id).disabled=!doc;
-  $('btnShare').hidden=!doc||!canShareFiles;
+  $('btnShare').hidden=!doc; $('btnSharePart').disabled=!doc;
+  renderShareBtns(); if(shareDlg.open) renderShare();
   $('btnFind').hidden=!doc;
   updateOcrBtn();
   if(doc) $('pageLabel').textContent=t('label',{n:cur,total:sizes.length});
@@ -1165,12 +1260,299 @@ $('btnPick').addEventListener('click',pick);
 $('btnOpen').addEventListener('click',()=>{Tools.menu.close();pick();});
 $('inPick').addEventListener('change',e=>openFile(e.target.files[0]));
 const canShareFiles=Tools.canShareFile('x.pdf','application/pdf');
-$('btnShare').addEventListener('click',async()=>{
-  if(!file) return;
-  barsTouched=true; clearTimeout(hideTimer);
-  try{await navigator.share({files:[file],title:file.name});Tools.diag.log('shared');}
-  catch(e){Tools.diag.log('share',e);if(e.name!=='AbortError') Tools.toast(t('share.fail'));}
+$('btnShare').addEventListener('click',()=>{barsTouched=true;clearTimeout(hideTimer);openShare();});
+$('btnSharePart').addEventListener('click',()=>{Tools.menu.close();openShare('page');});
+// Header button and menu row: "Teilen …" where the device can share files, otherwise "Speichern …"
+function renderShareBtns(){
+  const b=$('btnShare'), l=t(canShareFiles?'share':'saveDots');
+  b.setAttribute('aria-label',l); b.title=l;
+  b.querySelector('use').setAttribute('href','../assets/icons.svg#'+(canShareFiles?'share':'download'));
+  $('btnSharePart').querySelector('use').setAttribute('href','../assets/icons.svg#'+(canShareFiles?'share':'download'));
+  $('sharePartLabel').textContent=t(canShareFiles?'sh.menu':'sh.menuSave');
+}
+// Share (or save) a file. A slow build can use up the tap the browser requires for sharing (NotAllowedError):
+// then the caller offers a second tap, the file is ready by then.
+async function shareFile(f){
+  try{await navigator.share({files:[f],title:f.name});Tools.diag.log('shared',{type:f.type,bytes:f.size});return 'ok';}
+  catch(e){
+    Tools.diag.log('share',e);
+    if(e.name==='AbortError') return 'abort';
+    if(e.name==='NotAllowedError'&&canShareFile(f)) return 'again';
+    Tools.toast(t('share.fail')); return 'fail';
+  }
+}
+const canShareFile=f=>Tools.canShareFile(f.name,f.type);
+
+/* ================= Sharing a part: the current page, a page range (new PDF with pdf-lib) or an excerpt as picture ================= */
+const shareDlg=$('shareDlg');
+let shareWhat='all', partCache=null;   // partCache: {key, file} – the last built PDF of some pages
+const whatInput=v=>shareDlg.querySelector(`input[name="shareWhat"][value="${v}"]`);
+function openShare(what){
+  if(!doc) return;
+  if(what) shareWhat=what;
+  whatInput(shareWhat).checked=true;
+  if(!$('shareRange').value.trim()) $('shareRange').value=String(cur);
+  $('shareErr').textContent='';
+  renderShare();
+  shareDlg.showModal();
+  Tools.diag.log('share dialog',{what:shareWhat});
+}
+function renderShare(){
+  if(!doc) return;
+  $('shAllLabel').textContent=t('sh.all',{n:sizes.length});
+  $('shPageLabel').textContent=t('sh.page',{n:cur});
+  $('shCropLabel').textContent=t('sh.crop',{n:cur});
+  $('shareDlgH').textContent=t(canShareFiles?'sh.title':'sh.titleSave');
+  const crop=shareWhat==='crop';
+  $('shareHint').textContent=t(shareWhat==='all'?'sh.hintAll':crop?'sh.hintCrop':encrypted?'sh.hintPagesEnc':'sh.hintPages');
+  $('shareCrop').hidden=!crop;
+  $('shareGo').hidden=crop||!canShareFiles;
+  $('shareSave').hidden=crop;
+  $('shareSave').classList.toggle('primary',!canShareFiles);
+}
+shareDlg.addEventListener('change',e=>{
+  if(e.target.name!=='shareWhat') return;
+  shareWhat=e.target.value; $('shareErr').textContent=''; renderShare();
+  if(shareWhat==='range') $('shareRange').focus();
 });
+$('shareRange').addEventListener('focus',()=>{if(shareWhat!=='range'){shareWhat='range';whatInput('range').checked=true;renderShare();}});
+$('shareRange').addEventListener('input',()=>{$('shareErr').textContent='';});
+$('shareRange').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();(canShareFiles?$('shareGo'):$('shareSave')).click();}});
+shareDlg.addEventListener('close',()=>{$('shareGo').querySelector('span').textContent=t('shareShort');});
+
+/* "3-5, 8" → [2,3,4,7] (0-based, in the order given, each page once). Accepts -, – and — and "bis"/"to"-less
+   open ends ("7-" = 7 to the end). null if something does not fit; the message key in .err */
+function parsePages(str,count){
+  const out=[], seen=new Set(), parts=String(str).split(/[,;]+/).map(x=>x.trim()).filter(Boolean);
+  if(!parts.length) return {err:'sh.errEmpty'};
+  for(const part of parts){
+    const m=part.match(/^(\d+)?\s*(?:([-–—])\s*(\d+)?)?$/);
+    if(!m||(!m[1]&&!m[3])) return {err:'sh.errFormat'};
+    const a=m[1]?Number(m[1]):1, b=m[2]?(m[3]?Number(m[3]):count):a;
+    if(a<1||b<1||a>count||b>count) return {err:'sh.errRange'};
+    const step=a<=b?1:-1;
+    for(let p=a;;p+=step){if(!seen.has(p)){seen.add(p);out.push(p-1);} if(p===b) break;}
+  }
+  return {pages:out};
+}
+// Short form for the file name: [2,3,4,7] → "3-5,8"
+function pagesText(idx){
+  const runs=[];
+  for(const i of idx){const r=runs[runs.length-1]; if(r&&i===r[1]+1) r[1]=i; else runs.push([i,i]);}
+  return runs.map(([a,b])=>a===b?String(a+1):`${a+1}-${b+1}`).join(',');
+}
+const baseName=()=>(file&&file.name||'dokument.pdf').replace(/\.pdf$/i,'')||'dokument';
+function partName(idx){
+  let p=pagesText(idx);
+  if(p.length>40) p=t('file.nPages',{n:idx.length});
+  return `${baseName()} (${t(idx.length===1?'file.p':'file.pp',{p})}).pdf`;
+}
+
+// pdf-lib: loaded on first use (cached offline by sw.js, see pdf-edit)
+let libP=null;
+function pdfLib(){
+  if(window.PDFLib) return Promise.resolve(window.PDFLib);
+  return libP||(libP=new Promise((resolve,reject)=>{
+    const sc=document.createElement('script');
+    sc.src='../assets/vendor/pdf-lib/pdf-lib.min.js';
+    sc.onload=()=>window.PDFLib?resolve(window.PDFLib):reject(new Error('PDFLib missing'));
+    sc.onerror=()=>{libP=null;sc.remove();reject(Object.assign(new Error('pdf-lib could not be loaded'),{code:'lib'}));};
+    document.head.append(sc);
+  }));
+}
+// New PDF with only these pages (idx 0-based). Text, links within the pages, fonts stay; saved without a password.
+async function buildPart(idx){
+  const key=idx.join(',');
+  if(partCache&&partCache.key===key&&partCache.of===file) return partCache.file;
+  const src=file, t0=performance.now();
+  const lib=await pdfLib();
+  const bytes=new Uint8Array(await src.arrayBuffer());
+  const load=pw=>lib.PDFDocument.load(bytes,pw==null?{updateMetadata:false}:{updateMetadata:false,password:pw});
+  let pdf;
+  try{pdf=await load(pdfPassword);}
+  catch(e){
+    if(!/encrypt|password/i.test(e&&e.message||'')) throw e;
+    // only protected against editing/printing: pdf.js needed no password, pdf-lib needs the empty one
+    try{pdf=await load('');}catch(e2){Tools.diag.log('decrypt failed',e2);throw Object.assign(new Error('encrypted'),{code:'enc'});}
+  }
+  const out=await lib.PDFDocument.create();
+  for(const pg of await out.copyPages(pdf,idx)) out.addPage(pg);
+  const title=pdf.getTitle&&pdf.getTitle();
+  if(title) out.setTitle(title);
+  out.setProducer('phanlipo.github.io – PDF ansehen'); out.setCreator('pdf-lib');
+  const data=await out.save({useObjectStreams:false});
+  const f=new File([data],partName(idx),{type:'application/pdf'});
+  if(src!==file) throw Object.assign(new Error('replaced'),{code:'replaced'});
+  Tools.diag.log('part built',{pages:idx.length,of:sizes.length,bytes:f.size,ms:Math.round(performance.now()-t0)});
+  partCache={key,file:f,of:src};
+  return f;
+}
+// The file the dialog stands for, or null (message shown)
+async function chosenFile(){
+  if(shareWhat==='all') return file;
+  let idx;
+  if(shareWhat==='page') idx=[cur-1];
+  else{
+    const r=parsePages($('shareRange').value,sizes.length);
+    if(r.err){$('shareErr').textContent=t(r.err,{n:sizes.length});$('shareRange').focus();return null;}
+    idx=r.pages;
+  }
+  if(idx.length===sizes.length&&idx.every((p,i)=>p===i)) return file;   // all pages in order: the file itself
+  try{return await buildPart(idx);}
+  catch(e){
+    if(e.code==='replaced') return null;
+    Tools.diag.log('part failed',e);
+    $('shareErr').textContent=t(e.code==='lib'?'sh.errLib':e.code==='enc'?'sh.errEnc':'sh.errBuild');
+    return null;
+  }
+}
+let shareBusy=false;
+async function shareAction(save){
+  if(shareBusy||!doc) return;
+  shareBusy=true;
+  const btn=save?$('shareSave'):$('shareGo'), span=btn.querySelector('span'), label=span.textContent;
+  btn.disabled=true; $('shareErr').textContent='';
+  if(shareWhat!=='all') span.textContent=t('sh.busy');
+  try{
+    const f=await chosenFile();
+    if(!f) return;
+    if(save){Tools.download(f,f.name);Tools.diag.log('part saved',{what:shareWhat});shareDlg.close();return;}
+    const r=await shareFile(f);
+    if(r==='again'){span.textContent=label;$('shareGo').querySelector('span').textContent=t('sh.again');return;}
+    if(r==='ok') shareDlg.close();
+  }finally{
+    shareBusy=false; btn.disabled=false;
+    if(span.textContent===t('sh.busy')) span.textContent=label;
+  }
+}
+$('shareGo').addEventListener('click',()=>shareAction(false));
+$('shareSave').addEventListener('click',()=>shareAction(true));
+$('shareCrop').addEventListener('click',()=>{shareDlg.close();startCrop(cur-1);});
+
+/* ---------- Excerpt: frame over one page; the picture is drawn anew by pdf.js for just that part ---------- */
+// crop: {i (page, 0-based), x, y, w, h (fractions of the shown page), el (frame)}
+let crop=null;
+const CROP_MIN=0.04, CROP_EDGE=2000;   // smallest frame (part of the page side); long side of the picture in px
+const canCopyImage=!!(navigator.clipboard&&navigator.clipboard.write&&window.ClipboardItem);
+function startCrop(i){
+  if(!doc||!els[i]) return;
+  endCrop();
+  const el=els[i];
+  // the part of the page on the screen, a little smaller
+  const top=view.scrollTop+60, bottom=view.scrollTop+view.clientHeight-76, left=view.scrollLeft, right=left+view.clientWidth;
+  const x0=clamp((left-el.offsetLeft)/el.offsetWidth,0,1), x1=clamp((right-el.offsetLeft)/el.offsetWidth,0,1);
+  const y0=clamp((top-el.offsetTop)/el.offsetHeight,0,1), y1=clamp((bottom-el.offsetTop)/el.offsetHeight,0,1);
+  let w=x1-x0, h=y1-y0, x=x0+w*0.08, y=y0+h*0.08; w*=0.84; h*=0.84;
+  if(w<0.2||h<0.1){x=0.1;y=0.1;w=0.8;h=0.4;}
+  const box=document.createElement('div');
+  box.className='crop'; box.tabIndex=0; box.setAttribute('role','group');
+  box.setAttribute('aria-label',t('crop.box'));
+  for(const k of ['nw','ne','sw','se']){const d=document.createElement('div');d.className='crop-h';d.dataset.h=k;box.append(d);}
+  el.append(box); el.classList.add('crop-page');
+  crop={i,x,y,w,h,el:box};
+  placeCrop();
+  body.classList.add('cropping');
+  closeFind();
+  $('cropHint').hidden=false; $('cropBar').hidden=false;
+  $('cropCopy').hidden=!canCopyImage;
+  $('cropShare').hidden=!Tools.canShareFile('x.png','image/png');
+  box.focus({preventScroll:true});
+  Tools.diag.log('crop start',{page:i+1});
+}
+function endCrop(){
+  if(!crop) return;
+  crop.el.remove(); els[crop.i]&&els[crop.i].classList.remove('crop-page');
+  crop=null;
+  body.classList.remove('cropping');
+  $('cropHint').hidden=true; $('cropBar').hidden=true;
+}
+function placeCrop(){
+  const c=crop, st=c.el.style;
+  st.left=c.x*100+'%'; st.top=c.y*100+'%'; st.width=c.w*100+'%'; st.height=c.h*100+'%';
+}
+// Dragging: the frame moves, a corner resizes – always inside the page and not smaller than CROP_MIN
+let cropDrag=null;
+pagesEl.addEventListener('pointerdown',e=>{
+  if(!crop||!e.target.closest||!e.target.closest('.crop')) return;
+  e.preventDefault(); e.stopPropagation();
+  const handle=e.target.closest('.crop-h');
+  cropDrag={id:e.pointerId,h:handle?handle.dataset.h:'',sx:e.clientX,sy:e.clientY,start:{x:crop.x,y:crop.y,w:crop.w,h:crop.h},
+    pw:crop.el.parentElement.offsetWidth*(pinch?pinch.s:1),ph:crop.el.parentElement.offsetHeight*(pinch?pinch.s:1)};
+  try{crop.el.setPointerCapture(e.pointerId);}catch(_){}
+});
+pagesEl.addEventListener('pointermove',e=>{
+  const d=cropDrag; if(!d||!crop||e.pointerId!==d.id) return;
+  e.preventDefault();
+  const dx=(e.clientX-d.sx)/d.pw, dy=(e.clientY-d.sy)/d.ph;
+  moveCrop(d.h,d.start,dx,dy);
+});
+const dragEnd=e=>{if(cropDrag&&e.pointerId===cropDrag.id) cropDrag=null;};
+pagesEl.addEventListener('pointerup',dragEnd); pagesEl.addEventListener('pointercancel',dragEnd);
+function moveCrop(h,s,dx,dy){
+  let {x,y,w,h:hh}=s;
+  if(!h){x=clamp(x+dx,0,1-w);y=clamp(y+dy,0,1-hh);}
+  else{
+    let l=x, r=x+w, tp=y, b=y+hh;
+    if(h.includes('w')) l=clamp(l+dx,0,r-CROP_MIN); else r=clamp(r+dx,l+CROP_MIN,1);
+    if(h.includes('n')) tp=clamp(tp+dy,0,b-CROP_MIN); else b=clamp(b+dy,tp+CROP_MIN,1);
+    x=l; y=tp; w=r-l; hh=b-tp;
+  }
+  Object.assign(crop,{x,y,w,h:hh}); placeCrop();
+}
+// Keys: arrows move the frame, Shift + arrows change its size (1 % of the page per press, Ctrl 10 %)
+pagesEl.addEventListener('keydown',e=>{
+  if(!crop||e.target!==crop.el) return;
+  const dirs={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}, d=dirs[e.key];
+  if(!d) return;
+  e.preventDefault();
+  const st=e.ctrlKey?0.1:0.01, s={x:crop.x,y:crop.y,w:crop.w,h:crop.h};
+  moveCrop(e.shiftKey?'se':'',s,d[0]*st,d[1]*st);
+});
+document.addEventListener('keydown',e=>{if(crop&&e.key==='Escape'&&!document.querySelector('dialog[open]')){e.preventDefault();endCrop();Tools.diag.log('crop cancelled');}});
+$('cropCancel').addEventListener('click',()=>{endCrop();Tools.diag.log('crop cancelled');});
+
+// The picture: the page drawn by pdf.js at a scale that gives the frame about CROP_EDGE px on its long side
+// (at most MAX_PIXELS), shifted so only the frame lands on the canvas. White paper, no night mode.
+async function cropFile(){
+  const c=crop, d=doc; if(!c||!d) return null;
+  const page=await d.getPage(c.i+1), vp1=page.getViewport({scale:1});
+  const cw=c.w*vp1.width, ch=c.h*vp1.height;
+  let scale=clamp(CROP_EDGE/Math.max(cw,ch),1,8);
+  if(cw*ch*scale*scale>MAX_PIXELS) scale=Math.sqrt(MAX_PIXELS/(cw*ch));
+  const vp=page.getViewport({scale});
+  const cv=document.createElement('canvas');
+  cv.width=Math.max(1,Math.round(cw*scale)); cv.height=Math.max(1,Math.round(ch*scale));
+  await page.render({canvasContext:cv.getContext('2d'),viewport:vp,background:'white',transform:[1,0,0,1,-c.x*vp.width,-c.y*vp.height]}).promise;
+  const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+  if(!blob) throw new Error('no picture');
+  Tools.diag.log('crop picture',{w:cv.width,h:cv.height,bytes:blob.size});
+  return new File([blob],`${baseName()} (${t('file.p',{p:c.i+1})}).png`,{type:'image/png'});
+}
+let cropBusy=false, cropReady=null;   // cropReady: the picture when sharing needs a second tap
+async function cropAction(kind){
+  if(!crop||cropBusy) return;
+  cropBusy=true;
+  try{
+    if(kind==='copy'){
+      // Safari wants the promise inside ClipboardItem, started within the tap
+      await navigator.clipboard.write([new ClipboardItem({'image/png':cropFile()})]);
+      Tools.toast(t('crop.copied')); Tools.diag.log('crop copied'); endCrop(); return;
+    }
+    const key=[crop.i,crop.x,crop.y,crop.w,crop.h].join();
+    const f=cropReady&&cropReady.key===key?cropReady.file:await cropFile();
+    if(!f) return;
+    if(kind==='save'){Tools.download(f,f.name);Tools.diag.log('crop saved');endCrop();return;}
+    const r=await shareFile(f);
+    if(r==='again'){cropReady={key,file:f};Tools.toast(t('crop.again'));return;}
+    if(r==='ok') endCrop();
+  }catch(e){
+    Tools.diag.log('crop failed',e);
+    Tools.toast(t(kind==='copy'?'crop.copyFail':'crop.fail'));
+  }finally{cropBusy=false;}
+}
+$('cropCopy').addEventListener('click',()=>cropAction('copy'));
+$('cropShare').addEventListener('click',()=>cropAction('share'));
+$('cropSave').addEventListener('click',()=>cropAction('save'));
 // Hand the open PDF to another PDF app of this site (Tools.handOff; this one keeps it for the way back)
 async function handTo(app){
   if(!file) return;
@@ -1262,7 +1644,7 @@ Tools.diag.info(async()=>({
   open:!!doc, pages:sizes.length, current:doc?cur:0, zoom:Math.round(zoom*100)/100, encrypted,
   barsHidden:barsHidden(), rendered:els.filter(el=>el.querySelector('canvas')).length,
   textLayers:els.filter(el=>el.querySelector('.textLayer')).length,
-  canShareFiles, fullscreenSupported:fs.supported(), settings, remembered:Object.keys(positions).length,
+  canShareFiles, canCopyImage, cropping:!!crop, fullscreenSupported:fs.supported(), settings, remembered:Object.keys(positions).length,
   kept:(await Tools.keep.names()).includes(KEEP_KEY),
   search:{open:findOpen(),hits:hits.length,busy:findBusy>=0}, outline:$('tocList').childElementCount,
   ocr:{busy:ocrBusy,withoutText:textless.size,recognised:ocrData.filter(Boolean).length,checked:scanned},
