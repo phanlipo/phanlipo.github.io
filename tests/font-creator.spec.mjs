@@ -104,6 +104,22 @@ test('downloads a valid TrueType file with the drawn characters and the chosen n
   expect(ttf.advance(3)).toBeLessThanOrEqual(684);
 });
 
+test('a browser that refuses to share .ttf (Chrome on Android) saves the font instead', async ({ page }) => {
+  // Chrome's canShare() says yes, share() then rejects the type with NotAllowedError
+  await page.addInitScript(() => {
+    navigator.canShare = () => true;
+    navigator.share = () => Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+  });
+  await page.reload();
+  await stroke(page, 0.3, 0.1, 0.3, 0.8);
+  await page.fill('#fontName', 'Meine Hand');
+  await expect(page.locator('#btnShare')).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnShare')]);
+  expect(download.suggestedFilename()).toBe('Meine-Hand.ttf');
+  await expect(page.locator('#toast')).toContainText('kann Schriftdateien nicht teilen');
+  await expect(page.locator('#btnShare')).toBeHidden();
+});
+
 test('download without any drawn character says what is missing', async ({ page }) => {
   await page.click('#btnDownload');
   await expect(page.locator('#dlError')).toHaveText('Zeichne zuerst mindestens ein Zeichen.');
