@@ -22,7 +22,7 @@
 <meta name="tool:storage" content="markdown-editor.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-6bNXnicFtCTJ8hpuwtX095UQeaYnPVFVjsr6XakXwj8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dxBR34dy366GSa6VwndQlcbgdNVnlKr9jJogNkCW8BA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -64,6 +64,13 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
 .md .mermaid-block{margin:10px 0;overflow-x:auto;text-align:center}
 .md .mermaid-block>pre{text-align:start}
 .md .mermaid-block svg{max-width:100%;height:auto}
+.md .mermaid-block svg{cursor:pointer}
+/* Export dialog: the diagram on the background it is saved with */
+.diag-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.diag-nav h3{margin:0;font-size:15px;font-weight:600}
+.diag-prev{display:flex;justify-content:center;align-items:center;min-height:120px;max-height:45vh;overflow:auto;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px}
+.diag-prev svg{max-width:100%;height:auto;display:block}
+.diag-prev.light{background:#ffffff}.diag-prev.dark{background:#333333}
 .md .mermaid-error{margin:4px 0 0;color:var(--err);font-size:14px;text-align:start}
 .md img[data-md-src]{display:inline-block;min-width:2em;min-height:1.5em;padding:2px 8px;border:1px dashed var(--border);border-radius:4px;color:var(--muted);font-size:14px}
 
@@ -121,6 +128,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
 
   <div class="menu-list" data-menu>
     <button type="button" id="btnPrint"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#printer"/></svg><span data-i18n="print">Drucken / PDF</span></button>
+    <button type="button" id="btnDiagrams" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#sitemap"/></svg><span data-i18n="diagExport">Diagramm als Bild oder PDF</span></button>
   </div>
   <section class="card" data-menu data-icon="files" aria-labelledby="h-files">
     <h2 id="h-files" data-i18n="files">Dateien</h2>
@@ -133,6 +141,29 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
     <input type="file" id="fileInput" accept=".md,.markdown,.mdown,.txt,text/markdown,text/x-markdown,text/plain" hidden>
   </section>
 </main>
+
+<dialog class="dialog" id="diagDlg" aria-labelledby="diagH">
+  <div class="dialog-head"><h2 id="diagH" data-i18n="diagExport">Diagramm als Bild oder PDF</h2><button type="button" class="head-btn" data-close aria-label="Schließen" title="Schließen" data-i18n-attr="aria-label:close;title:close"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#x"/></svg></button></div>
+  <div class="dialog-body">
+    <div class="diag-nav" id="diagNav">
+      <button type="button" class="btn icon" id="diagPrevBtn" aria-label="Voriges Diagramm" title="Voriges Diagramm" data-i18n-attr="aria-label:diagPrev;title:diagPrev"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-left"/></svg></button>
+      <h3 id="diagNr" aria-live="polite"></h3>
+      <button type="button" class="btn icon" id="diagNextBtn" aria-label="Nächstes Diagramm" title="Nächstes Diagramm" data-i18n-attr="aria-label:diagNext;title:diagNext"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#chevron-right"/></svg></button>
+    </div>
+    <div class="diag-prev light" id="diagPrev"></div>
+    <div class="seg" role="group" aria-label="Hintergrund" data-i18n-attr="aria-label:diagBg" id="diagTheme">
+      <button type="button" aria-pressed="true" data-v="default"><span data-i18n="diagLight">Hell</span></button>
+      <button type="button" aria-pressed="false" data-v="dark"><span data-i18n="diagDark">Dunkel</span></button>
+    </div>
+    <div class="toolbar" id="diagTools" role="toolbar" aria-label="Diagramm speichern" data-i18n-attr="aria-label:diagSave" style="margin-top:10px">
+      <button type="button" data-x="png" aria-label="Als PNG-Bild speichern" title="Als PNG-Bild speichern" data-i18n-attr="aria-label:diagPng;title:diagPng"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#photo"/></svg><span>PNG</span></button>
+      <button type="button" data-x="svg" aria-label="Als SVG speichern (Vektor, beliebig vergrößerbar)" title="Als SVG speichern (Vektor, beliebig vergrößerbar)" data-i18n-attr="aria-label:diagSvg;title:diagSvg"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#download"/></svg><span>SVG</span></button>
+      <button type="button" data-x="pdf" aria-label="Als PDF speichern" title="Als PDF speichern" data-i18n-attr="aria-label:diagPdf;title:diagPdf"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#file-type-pdf"/></svg><span>PDF</span></button>
+      <button type="button" data-x="share" aria-label="Als Bild teilen" title="Als Bild teilen" data-i18n-attr="aria-label:diagShare;title:diagShare" hidden><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#share"/></svg><span data-i18n="share">Teilen</span></button>
+    </div>
+    <p class="form-error" id="diagErr" role="alert" hidden></p>
+  </div>
+</dialog>
 
 <!-- The open document, formatted, only for printing / "Save as PDF" (filled right before printing) -->
 <article id="printDoc" class="md" hidden></article>
@@ -171,6 +202,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
   <ul>
     <li>Bearbeitest du in der <b>Ansicht</b>, schreibt die App das Markdown neu und vereinheitlicht dabei die Schreibweise (z.&nbsp;B. Listen mit <code>-</code>, Fett mit <code>**</code>). Inhalte bleiben erhalten; selten genutzte HTML-Teile können verloren gehen. Wer die Schreibweise genau behalten will, bearbeitet in der Textdarstellung.</li>
     <li>Unterstützt wird Markdown mit den GitHub-Erweiterungen: Tabellen, Aufgabenlisten, Durchgestrichen.</li>
+    <li><b>Diagramme als Bild oder PDF:</b> Ein Diagramm in der Ansicht antippen (oder im Menü <em>Diagramm als Bild oder PDF</em>): Es lässt sich hell oder dunkel als PNG (für Chats und Präsentationen, in dreifacher Größe), als SVG (Vektor, beliebig vergrößerbar) oder als PDF (eine Seite in Diagrammgröße) speichern oder teilen. Beim ersten Mal lädt die App dafür einmal die PDF-Bibliothek pdf-lib (MIT); danach geht es auch offline.</li>
     <li><b>Diagramme:</b> Ein Code-Block mit <code>```mermaid</code> erscheint in der Ansicht und beim Drucken als Diagramm (Ablauf-, Sequenz-, Gantt-, Klassen-, Kreisdiagramm und mehr, siehe mermaid.js.org). Ändern lässt sich ein Diagramm nur in der Textdarstellung. Enthält es einen Fehler, zeigt die Ansicht den Text mit einem Hinweis. Die Diagramm-Bibliothek ist groß (etwa 5&nbsp;MB) und wird erst geladen, wenn eine Datei ein Diagramm enthält – danach klappt es auch offline.</li>
     <li><b>Bilder</b> aus dem Internet lädt die App nicht (Datenschutz, offline) – sie zeigt stattdessen den Bildtext. Eingebettete Bilder (<code>data:</code>) werden angezeigt.</li>
     <li>Alles wird automatisch in diesem Browser gespeichert und funktioniert offline; nichts wird hochgeladen. Der Platz im Browser ist begrenzt (einige MB für alle Dateien zusammen) – große Dateien besser herunterladen.</li>
@@ -196,6 +228,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
   <ul>
     <li>When you edit in the <b>view</b>, the app rewrites the Markdown and makes the notation uniform (e.g. lists with <code>-</code>, bold with <code>**</code>). The content is kept; rarely used HTML parts may get lost. To keep the notation exactly, edit in the text display.</li>
     <li>Markdown with the GitHub extensions is supported: tables, task lists, strikethrough.</li>
+    <li><b>Diagrams as a picture or PDF:</b> tap a diagram in the view (or <em>Diagram as picture or PDF</em> in the menu): it can be saved or shared light or dark as PNG (for chats and slides, at three times the size), as SVG (vector, any size) or as PDF (one page the size of the diagram). The first time the app loads the PDF library pdf-lib (MIT) once; after that it also works offline.</li>
     <li><b>Diagrams:</b> a code block with <code>```mermaid</code> appears as a diagram in the view and when printing (flowchart, sequence, Gantt, class, pie chart and more, see mermaid.js.org). A diagram can only be changed in the text display. If it contains an error, the view shows the text with a note. The diagram library is large (about 5&nbsp;MB) and is only loaded when a file contains a diagram – after that it works offline too.</li>
     <li><b>Images</b> from the internet are not loaded (privacy, offline) – the app shows the image text instead. Embedded images (<code>data:</code>) are shown.</li>
     <li>Everything is saved automatically in this browser and works offline; nothing is uploaded. Browser storage is limited (a few MB for all files together) – better download large files.</li>
@@ -240,7 +273,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version ee9295a70f45</p>
+  <p class="footer-version">Version 3336198ca069</p>
   <!-- footer:end -->
 </footer>
 
@@ -267,6 +300,8 @@ de:{
   print:'Drucken / PDF',
   diagram:'Diagramm',diagramFail:'Das Diagramm enthält einen Fehler – hier sein Text.',
   diagramLoadFail:'Diagramme lassen sich gerade nicht anzeigen – beim ersten Mal ist Internet nötig.',
+  diagNr:'Diagramm {i} von {n}',diagNone:'Diese Datei hat kein Diagramm.',diagSaved:'Gespeichert: {name}',
+  diagExportFail:'Das Diagramm ließ sich nicht umwandeln.',close:'Schließen',diagPdfFail:'PDF geht gerade nicht – beim ersten Mal ist Internet nötig.',diagName:'diagramm',
   'mcp.list':'Dateien gelesen','mcp.read':'Datei gelesen','mcp.create':'Datei angelegt'
 },
 en:{
@@ -288,6 +323,10 @@ en:{
   print:'Print / PDF',
   diagram:'Diagram',diagramFail:'The diagram contains an error – here is its text.',
   diagramLoadFail:'Diagrams cannot be shown right now – the first time needs internet.',
+  diagExport:'Diagram as picture or PDF',diagPrev:'Previous diagram',diagNext:'Next diagram',diagBg:'Background',diagLight:'Light',diagDark:'Dark',
+  diagSave:'Save diagram',diagPng:'Save as PNG picture',diagSvg:'Save as SVG (vector, any size)',diagPdf:'Save as PDF',diagShare:'Share as picture',
+  diagNr:'Diagram {i} of {n}',diagNone:'This file has no diagram.',diagSaved:'Saved: {name}',
+  diagExportFail:'The diagram could not be converted.',close:'Close',diagPdfFail:'PDF is not possible right now – the first time needs internet.',diagName:'diagram',
   'mcp.list':'files read','mcp.read':'file read','mcp.create':'file created'
 }});
 const {$,t,esc}=Tools;
@@ -467,12 +506,13 @@ function loadMermaid(){
   return mermaidLoad;
 }
 const diagramTheme=()=>Tools.theme.dark()?'dark':'default';
-function mermaidSvg(src,theme){
-  const key=theme+'\n'+src;
+// exp: for saving – labels as SVG text instead of HTML (foreignObject would make the PNG canvas unreadable)
+function mermaidSvg(src,theme,exp){
+  const key=(exp?'x':'')+theme+'\n'+src;
   if(svgCache.has(key))return Promise.resolve(svgCache.get(key));
   const job=mermaidQueue.then(async()=>{
     const m=await loadMermaid();
-    m.initialize({startOnLoad:false,securityLevel:'strict',theme});
+    m.initialize({startOnLoad:false,securityLevel:'strict',theme,...(exp?{htmlLabels:false,flowchart:{htmlLabels:false}}:{})});
     const id='mmd-'+(++mermaidN);
     try{
       const {svg}=await m.render(id,src);
@@ -514,6 +554,126 @@ function cachedDiagrams(root,theme){
   }
 }
 
+/* ---------- Saving diagrams (PNG, SVG, PDF) ----------
+   Drawn again for saving (light or dark, labels as SVG text), with a background rectangle so that the picture reads
+   on any page. PNG: three times the size (longest side at most 4096 px) via a canvas; PDF: that PNG on one page of
+   the diagram's size (pdf-lib, loaded on first use, kept offline by sw.js). Nothing leaves the device. */
+const DIAG_BG={default:'#ffffff',dark:'#333333'};
+const diag={list:[],i:0,theme:'default',svg:''};
+function diagramSources(text){
+  const out=[];
+  try{marked.walkTokens(marked.lexer(text||'',{gfm:true}),tok=>{if(tok.type==='code'&&isMermaid(tok.lang))out.push(tok.text);});}catch(_){}
+  return out;
+}
+const updateDiagBtn=()=>{$('btnDiagrams').hidden=!diagramSources(cur.text).length;};
+// SVG text with fixed size and background, ready to save
+function exportSvg(svg,theme){
+  const doc=new DOMParser().parseFromString(svg,'image/svg+xml'),el=doc.documentElement;
+  const vb=(el.getAttribute('viewBox')||'').split(/[\s,]+/).map(Number);
+  const w=vb.length===4&&vb[2]>0?vb[2]:300,h=vb.length===4&&vb[3]>0?vb[3]:150;
+  el.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  el.setAttribute('width',String(Math.ceil(w)));el.setAttribute('height',String(Math.ceil(h)));
+  el.removeAttribute('style');
+  const bg=doc.createElementNS('http://www.w3.org/2000/svg','rect');
+  if(vb.length===4){bg.setAttribute('x',String(vb[0]));bg.setAttribute('y',String(vb[1]));}
+  bg.setAttribute('width','100%');bg.setAttribute('height','100%');
+  if(vb.length===4){bg.setAttribute('width',String(w));bg.setAttribute('height',String(h));}
+  bg.setAttribute('fill',DIAG_BG[theme]);
+  el.insertBefore(bg,el.firstChild);
+  return {text:new XMLSerializer().serializeToString(el),w,h};
+}
+async function svgToPng(x){
+  const k=Math.min(3,4096/Math.max(x.w,x.h)),W=Math.max(1,Math.round(x.w*k)),H=Math.max(1,Math.round(x.h*k));
+  const url=URL.createObjectURL(new Blob([x.text],{type:'image/svg+xml'}));
+  try{
+    const img=new Image();img.src=url;await img.decode();
+    const c=document.createElement('canvas');c.width=W;c.height=H;
+    const g=c.getContext('2d');g.drawImage(img,0,0,W,H);
+    const blob=await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('toBlob')),'image/png'));
+    return {blob,W,H};
+  }finally{URL.revokeObjectURL(url);}
+}
+let pdfLibP=null;
+function pdfLib(){
+  if(window.PDFLib)return Promise.resolve(window.PDFLib);
+  return pdfLibP||(pdfLibP=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='../assets/vendor/pdf-lib/pdf-lib.min.js';
+    s.onload=()=>window.PDFLib?res(window.PDFLib):rej(new Error('PDFLib missing'));
+    s.onerror=()=>{pdfLibP=null;s.remove();rej(new Error('pdf-lib could not be loaded'));};
+    document.head.append(s);
+  }));
+}
+const diagFile=ext=>fileName(cur).replace(/\.(md|markdown|txt)$/i,'')+'-'+t('diagName')+(diag.list.length>1?'-'+(diag.i+1):'')+'.'+ext;
+async function diagExport(kind){
+  const err=$('diagErr');err.hidden=true;
+  try{
+    const x=exportSvg(diag.svg,diag.theme);
+    let file;
+    if(kind==='svg')file=new File([x.text],diagFile('svg'),{type:'image/svg+xml'});
+    else{
+      const png=await svgToPng(x);
+      if(kind==='pdf'){
+        let L;
+        try{L=await pdfLib();}catch(e){Tools.diag.log('pdf-lib load failed',e);err.textContent=t('diagPdfFail');err.hidden=false;return;}
+        const pdf=await L.PDFDocument.create(),im=await pdf.embedPng(await png.blob.arrayBuffer());
+        const m=24,pw=x.w*0.75,ph=x.h*0.75,page=pdf.addPage([pw+2*m,ph+2*m]);
+        page.drawImage(im,{x:m,y:m,width:pw,height:ph});
+        pdf.setTitle(displayName(cur));pdf.setCreator('Markdown-Editor');
+        file=new File([await pdf.save()],diagFile('pdf'),{type:'application/pdf'});
+      }else file=new File([png.blob],diagFile('png'),{type:'image/png'});
+    }
+    if(kind==='share'){
+      try{await navigator.share({files:[file],title:displayName(cur)});Tools.diag.log('diagram shared');}
+      catch(e){if(e.name!=='AbortError'){Tools.diag.log('share failed',e);Tools.toast(t('shareFail'));}}
+      return;
+    }
+    Tools.download(file);Tools.toast(t('diagSaved',{name:file.name}));
+    Tools.diag.log('diagram saved',{kind,theme:diag.theme,bytes:file.size});
+  }catch(e){
+    Tools.diag.log('diagram export failed',e&&e.name||'Error');
+    err.textContent=t('diagExportFail');err.hidden=false;
+  }
+}
+async function showDiag(){
+  const n=diag.list.length,prev=$('diagPrev'),btns=[...document.querySelectorAll('#diagTools button')];
+  $('diagNav').hidden=n<2;
+  $('diagNr').textContent=t('diagNr',{i:diag.i+1,n});
+  $('diagPrevBtn').disabled=diag.i===0;$('diagNextBtn').disabled=diag.i>=n-1;
+  for(const b of document.querySelectorAll('#diagTheme button'))b.setAttribute('aria-pressed',String(b.dataset.v===diag.theme));
+  prev.className='diag-prev '+(diag.theme==='dark'?'dark':'light');
+  $('diagErr').hidden=true;diag.svg='';
+  for(const b of btns)b.disabled=true;
+  const want=diag.i+'|'+diag.theme;diag.want=want;
+  try{
+    const svg=await mermaidSvg(diag.list[diag.i],diag.theme,true);
+    if(diag.want!==want)return;
+    diag.svg=svg;prev.innerHTML=svg;
+    const el=prev.querySelector('svg');if(el){el.setAttribute('role','img');el.setAttribute('aria-label',t('diagram'));}
+    for(const b of btns)b.disabled=false;
+    btns.find(b=>b.dataset.x==='share').hidden=!Tools.canShareFile('d.png','image/png');
+  }catch(e){
+    if(diag.want!==want)return;
+    prev.textContent='';
+    const load=!window.mermaid;
+    $('diagErr').textContent=t(load?'diagramLoadFail':'diagramFail');$('diagErr').hidden=false;
+  }
+}
+function openDiagrams(i){
+  flush();
+  diag.list=diagramSources(cur.text);
+  if(!diag.list.length){Tools.toast(t('diagNone'));return;}
+  diag.i=Math.min(Math.max(0,i||0),diag.list.length-1);
+  Tools.menu.close();
+  $('diagDlg').showModal();showDiag();
+  Tools.diag.log('diagram export opened',{n:diag.list.length});
+}
+$('btnDiagrams').addEventListener('click',()=>openDiagrams(0));
+$('diagPrevBtn').addEventListener('click',()=>{if(diag.i>0){diag.i--;showDiag();}});
+$('diagNextBtn').addEventListener('click',()=>{if(diag.i<diag.list.length-1){diag.i++;showDiag();}});
+$('diagTheme').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b||b.dataset.v===diag.theme)return;diag.theme=b.dataset.v;showDiag();});
+$('diagTools').addEventListener('click',e=>{const b=e.target.closest('button[data-x]');if(b&&!b.disabled)diagExport(b.dataset.x);});
+
 /* ---------- Editor ---------- */
 const raw=$('raw'),view=$('view'),nameEl=$('name');
 let viewDirty=false,syncTimer=0;
@@ -532,6 +692,11 @@ function prepView(){
   if(view.querySelector('.mermaid-block[data-mermaid]'))renderDiagrams(view,diagramTheme());
 }
 function renderView(){view.innerHTML=cur.text.trim()?toHtml(cur.text):'';prepView();}
+// A drawn diagram in the view opens the export for it (its place among all diagrams of the file)
+view.addEventListener('click',e=>{
+  const b=e.target.closest('.mermaid-block');if(!b||!b.querySelector('svg'))return;
+  openDiagrams([...view.querySelectorAll('.mermaid-block')].indexOf(b));
+});
 function showDoc(){
   raw.value=cur.text;nameEl.value=cur.name;updateNamePh();updateSaveBtn();
   if(state.view==='render')renderView();
@@ -879,6 +1044,7 @@ const PICK={id:'markdown',types:[{description:'Markdown',accept:{'text/markdown'
 const links=new Map();
 const isDirty=f=>{const l=links.get(f.id);return !!l&&l.saved!==f.text;};
 function updateSaveBtn(){
+  updateDiagBtn();
   const b=$('btnDownload'),l=links.get(cur.id),dirty=isDirty(cur);
   const label=l?t(dirty?'saveToUnsaved':'saveTo',{name:l.handle.name}):t('download');
   const kind=l?'save':'download';

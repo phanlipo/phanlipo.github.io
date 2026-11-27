@@ -21,6 +21,8 @@ seasons.js   window.Seasons: Deklination, Sonnenhöhe, Tageslänge, Sonnenlicht 
 network.js   window.Network: freier Schaltkreis auf einem 5 × 4-Raster, Knotenanalyse, Beispielschaltungen
 mechanics.js window.Mechanics: Faden-/Federpendel (RK4 in festen Schritten, Stoppuhr), gekoppelte Pendel (exakte Lösung), schiefer Wurf mit Luftwiderstand
 fall.js      window.Fall: Fallbeschleunigung g = G·M/R² für Erde, Mond, Mars, Jupiter, Fallzeit und Aufprallgeschwindigkeit
+sync.js      window.Sync: Elektronen im Speicherring (γ, Bahnradius, Lichtkegel 1/γ, kritische Wellenlänge, Energieverlust je Umlauf)
+ptycho.js    window.Ptycho: Ptychographie mit 64 × 64 Pixeln – FFT, Abtastung in überlappenden Flecken, ePIE-Rekonstruktion
 ```
 
 ## Optik (optics.js)
@@ -129,9 +131,23 @@ fall.js      window.Fall: Fallbeschleunigung g = G·M/R² für Erde, Mond, Mars,
 - Prüfwert (Test): β = 0, herkömmlich: getroffen y = −1,8 … 4 (5,8 m), zurück Leitwerk 3 m + Pylon 0,5 m + Glanzpunkte 2r·sin 2,5° von Rumpf und Triebwerk → ≈ 62,6 %.
 - **Reichweite:** Radargleichung P ∝ σ/R⁴; Bezugsradar sieht 1 m² in 150 km, also R_max = 150 km · (σ/1 m²)^¼ und Echo/Schwelle = σ · (150 km/R)⁴. σ von vorn, grobe öffentliche Schätzwerte: Verkehrsflugzeug 100, Kampfjet 10, Mensch 1, Vogel 0,01, Tarnkappenjet 0,001, Insekt 0,00001 m². Ohne Erdkrümmung und Wetter.
 
+## Synchrotron (sync.js)
+
+- Frage: Wozu braucht man Teilchenbeschleuniger – und warum leuchtet ein Synchrotron? Elektronen 0,05 … 8 GeV, Ablenkmagnet 0,2 … 1,5 T.
+- γ = E/m_ec², 1 − β = 1/(γ²(1+β)) (ohne Auslöschung), ρ = β·E/(c·e·B), Öffnung θ ≈ 1/γ, λ_c = 4πρ/(3γ³), E_c = hc/λ_c (= 0,665·E²·B keV), U₀ = 88,46 keV·E⁴/ρ (Sands). Prüfwerte: 1,7 GeV/1,3 T (wie BESSY II) → ρ = 4,36 m, E_c = 2,50 keV; 6 GeV/0,85 T (wie ESRF) → λ_c = 0,061 nm, U₀ ≈ 4,9 MeV.
+- Bild oben: Ring von oben, Ablenkmagnet, Lichtkegel zum Messplatz – unter 3° stark vergrößert gezeichnet (Faktor steht dabei). Unten: Spektrum 1 mm … 0,01 nm logarithmisch, Bänder (Grenzen 780/380/10/0,1 nm), Form der Leistung je Bereich genähert als y^1,3·e^(−y) mit y = λ_c/λ (aus G₁(y) ≈ 1,8·y^0,3·e^(−y)), dazu Größen zum Vergleich (Zelle 10 µm … Atom 0,15 nm). Ohne Undulatoren.
+- „Ab etwa … Röntgenlicht“: Energie, bei der λ_c = 10 nm wird (E² = E_c/(0,665·B)).
+
+## Ptychographie (ptycho.js)
+
+- Frage: Wie funktioniert Ptychographie – und warum müssen sich die Flecken überlappen? Objekt 64 × 64 (dunkle Scheiben im Betrag, Ring und Balken nur in der Phase, max. 1,6 rad), Fleck rund mit Radius 8 (weicher Rand) im 32 × 32-Fenster (doppelt abgetastet), Raster mit Schrittweite s = 4 … 16 (Fenster-Ecken 0, s, 2s … und 32).
+- Gemessen: |FFT(P·O)| je Position (unitäre 2D-FFT, Radix 2). Rekonstruktion ePIE (Maiden & Rodenburg 2009) mit bekanntem Fleck, α = 1, nur Objekt-Update, Positionen je Durchlauf in fester Zufallsreihenfolge (mulberry32), Start O = 1. Fehler: min über die globale Phase ‖O − e^{iθ}O_rek‖/‖O‖ nur dort, wo der Fleck war (Summe von P ≥ 0,5); „Passt zu den Messungen“ = Fourier-Fehler des letzten Durchlaufs.
+- Gemessene Werte (Node, 200 Durchläufe): s = 4/6/8 → Fehler < 0,1 % nach 50–100; s = 12 (14 % Überlapp) bleibt bei ≈ 8 %; s = 16 (kein Überlapp) bei ≈ 48 %. Ein Muster allein ist mehrdeutig, u. a. |𝓕{f(r)}| = |𝓕{f*(−r)}| (Zwillingsbild), der runde Fleck lässt das zu.
+- Animation über die gemeinsame Schleife: je Bild so viele Durchläufe, wie in ~12 ms passen; Ende bei 200 Durchläufen oder Fehler < 0,02 %. Rekonstruktion nur im Speicher; gespeichert werden Schrittweite und gezeigtes Muster.
+
 ## Speicher
 
-`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v }, radar: { mode, shape, b, coat, obj, r }, wing: { mode, a, f, t, plane, vs: { paper, glider, small, airliner } }, sky: { h, mode }, bow: { h, plane, second }, float: { shape, H, c, liq }, dop: { v, f, d }, sea: { N, lat, tilt }, bd: { parts: { kante: { k, v, d, on } }, tool, sel } }` – Reglerstellungen, gebaute Schaltung und offener Versuch.
+`physics-lab.settings.v1`: `{ view, tab, mirror: { v, g }, lens: { v, g }, waves: { n, l, d, a, p }, pend: { kind, grav, l, k, m1, m2, aS, aF }, coup: { l, q, start }, throw: { ball, a, v, air }, refr: { mode, med, dir, a, e, t, px, db }, decay: { n, ex }, spec: { el, up }, lor: { p, dir, v, b, mode, cfg }, circ: { kind, u, r1, r2 }, gas: { n, t, v }, radar: { mode, shape, b, coat, obj, r }, wing: { mode, a, f, t, plane, vs: { paper, glider, small, airliner } }, sky: { h, mode }, bow: { h, plane, second }, float: { shape, H, c, liq }, dop: { v, f, d }, sea: { N, lat, tilt }, fall: { body, h }, sync: { E, B }, ptycho: { step, show }, bd: { parts: { kante: { k, v, d, on } }, tool, sel } }` – Reglerstellungen, gebaute Schaltung und offener Versuch.
 
 ## Erweitern
 
@@ -160,6 +176,8 @@ Neue Versuche mit **Animation** (Pendel, Wurf, Teilchen): `requestAnimationFrame
 | 15 | Wellen | Doppler-Effekt (Sirene fährt vorbei, Anhören) | Warum klingt eine Sirene anders, wenn sie vorbeifährt? | fertig |
 | 16 | Erde & Weltall | Jahreszeiten (Erdbahn, Sonnenhöhe, Tageslänge, mit/ohne Neigung) | Warum gibt es Jahreszeiten? | fertig |
 | 17 | Elektrizität | Schaltkreis-Baukasten (freie Schaltung, Knotenanalyse) | Warum geht an einer Abzweigung kein Strom verloren – und wie rechnet man damit jede Schaltung aus? | fertig |
+| 18 | Elektrizität & Magnetismus | Synchrotron (Speicherring, Synchrotronlicht) | Wozu braucht man Teilchenbeschleuniger – und warum leuchtet ein Synchrotron? | fertig |
+| 19 | Wellen | Ptychographie (Abtasten, Beugungsmuster, Rekonstruktion) | Wie funktioniert Ptychographie – und warum müssen sich die Flecken überlappen? | fertig |
 
 Ergänzt: Prisma und Regentropfen (zu #5), Feldlinien mit Erde (zu #7), Spannungsteiler (zu #9). Tabs mit `data-group` je Gebiet (seit 20 Versuchen). Bewusst weggelassen: 3D-Orbitale (aufwendig, wenig Einsicht); elastisches Pendel (chaotisch, schwer zu erklären) – höchstens als Zusatz zu #3.
 

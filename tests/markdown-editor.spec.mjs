@@ -1,7 +1,7 @@
 // Markdown-Editor: formatting buttons (text and view), editing in both displays, files (history), download, share, open,
 // saving straight into the file (File System Access API, with a fake picker and file handles).
 import { readFileSync } from 'node:fs';
-import { test, expect, openMenu, closeMenu, mockAndroidShare } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, mockAndroidShare, axe } from './helpers.mjs';
 
 const raw = page => page.locator('#raw');
 const view = page => page.locator('#view');
@@ -581,6 +581,78 @@ test.describe('Mermaid diagrams', () => {
     await expect(page.locator('#printDoc .mermaid-block svg').first()).toBeVisible();
     const pdf = await page.pdf({ format: 'A4' });
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  test('a diagram as PNG, SVG and PDF: light or dark, each one of the file', async ({ page }) => {
+    await raw(page).fill(DOC);
+    await expect(page.locator('#btnDiagrams')).toBeAttached();
+    await page.locator('#views [data-v="render"]').click();
+    await view(page).locator('.mermaid-block svg').nth(1).click();          // the sequence diagram
+    const dlg = page.locator('#diagDlg');
+    await expect(dlg).toBeVisible();
+    await expect(page.locator('#diagNr')).toHaveText('Diagramm 2 von 3');
+    await expect(page.locator('#diagPrev svg')).toContainText('Hallo');
+    await page.click('#diagPrevBtn');
+    await expect(page.locator('#diagPrev svg')).toContainText('Prüfen');
+    expect((await axe(page).include('#diagDlg').analyze()).violations).toEqual([]);
+    const save = async kind => {
+      const [d] = await Promise.all([page.waitForEvent('download'), page.click(`#diagTools [data-x="${kind}"]`)]);
+      return { name: d.suggestedFilename(), buf: readFileSync(await d.path()) };
+    };
+    // SVG: labels as text (no HTML inside), fixed size, white background
+    const svg = await save('svg');
+    expect(svg.name).toBe('Ablauf-diagramm-1.svg');
+    const text = svg.buf.toString();
+    expect(text).toContain('Prüfen');
+    expect(text).not.toContain('foreignObject');
+    const [, w, h] = text.match(/^<svg[^>]*\swidth="(\d+)"[^>]*\sheight="(\d+)"/).map(Number);
+    expect(text).toMatch(/<rect[^>]*fill="#ffffff"/);
+    // PNG: three times the size of the SVG
+    const png = await save('png');
+    expect(png.name).toBe('Ablauf-diagramm-1.png');
+    expect([...png.buf.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    expect(Math.abs(png.buf.readUInt32BE(16) - 3 * w)).toBeLessThanOrEqual(3);
+    expect(Math.abs(png.buf.readUInt32BE(20) - 3 * h)).toBeLessThanOrEqual(3);
+    // PDF: one page of the diagram's size (px → pt) plus 24 pt margins
+    const pdf = await save('pdf');
+    expect(pdf.name).toBe('Ablauf-diagramm-1.pdf');
+    expect(pdf.buf.subarray(0, 5).toString()).toBe('%PDF-');
+    const box = pdf.buf.toString('latin1').match(/\/MediaBox \[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/);
+    expect(Number(box[1])).toBeCloseTo(w * 0.75 + 48, 0);
+    expect(Number(box[2])).toBeCloseTo(h * 0.75 + 48, 0);
+    // dark: dark background; a faulty diagram says so and saves nothing
+    await page.click('#diagTheme [data-v="dark"]');
+    expect((await save('svg')).buf.toString()).toMatch(/<rect[^>]*fill="#333333"/);
+    await page.click('#diagNextBtn');
+    await page.click('#diagNextBtn');
+    await expect(page.locator('#diagErr')).toHaveText('Das Diagramm enthält einen Fehler – hier sein Text.');
+    await expect(page.locator('#diagTools [data-x="png"]')).toBeDisabled();
+    await page.click('#diagDlg [data-close]');
+    await expect(dlg).toBeHidden();
+    // Diagram text is no part of the diagnosis
+    expect(await page.evaluate(() => Tools.diag.text())).not.toContain('Prüfen');
+    // without diagrams no menu entry
+    await page.locator('#views [data-v="raw"]').click();
+    await raw(page).fill('# Nur Text');
+    await expect(page.locator('#btnDiagrams')).toBeHidden();
+  });
+
+  test('saving as PDF works offline after it was used once', async ({ page, context }) => {
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.reload();
+    await raw(page).fill('```mermaid\n' + SEQ + '\n```');
+    await openMenu(page);
+    await page.click('#btnDiagrams');
+    await expect(page.locator('#diagPrev svg')).toContainText('Hallo');
+    await Promise.all([page.waitForEvent('download'), page.click('#diagTools [data-x="pdf"]')]);
+    await context.setOffline(true);
+    await page.reload();
+    await openMenu(page);
+    await page.click('#btnDiagrams');
+    await expect(page.locator('#diagPrev svg')).toContainText('Hallo');
+    const [d] = await Promise.all([page.waitForEvent('download'), page.click('#diagTools [data-x="pdf"]')]);
+    expect(d.suggestedFilename()).toMatch(/\.pdf$/);
+    await context.setOffline(false);
   });
 
   test('works offline after it was used once', async ({ page, context }) => {
