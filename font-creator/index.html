@@ -21,7 +21,7 @@
 <meta name="tool:storage" content="font-creator.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-g15hj8VMhNTDOkWyQY1tnA4PGy0z/A/KdH63qOywYRs='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-XLHeOnJsn+hOTwwyp9M/EIN6AtgvMNDXXSj51oOOPLQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -195,7 +195,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 2e57911836de</p>
+  <p class="footer-version">Version 22e74a4040d9</p>
   <!-- footer:end -->
 </footer>
 
@@ -210,7 +210,7 @@ Tools.i18n({
     defaultName:'Meine Schrift',defaultSample:'Franz jagt im komplett verwahrlosten Taxi quer durch Bayern.\n0123456789 – Äpfel, Öl & Übermut!',
     cleared:'Zeichen „{c}“ gelöscht',clearAllQ:'Alle {n} gezeichneten Zeichen löschen?',allCleared:'Alle Zeichen gelöscht',
     addQ:'Welches Zeichen soll dazukommen?',addBad:'Bitte genau ein Zeichen eingeben (keine Emoji, kein Leerzeichen).',added:'„{c}“ hinzugefügt',
-    nothing:'Zeichne zuerst mindestens ein Zeichen.',saved:'Schrift gespeichert',buildFail:'Die Schrift konnte nicht erstellt werden.',
+    nothing:'Zeichne zuerst mindestens ein Zeichen.',saved:'Schrift gespeichert',shareFail:'Teilen nicht möglich',shareRefused:'Dieser Browser kann Schriftdateien nicht teilen – die Schrift wurde stattdessen gespeichert (Downloads). Von dort kannst du sie teilen.',buildFail:'Die Schrift konnte nicht erstellt werden.',
     'mcp.select':'Zeichen gewählt','mcp.sample':'Beispieltext geändert'},
   en:{title:'Font Creator',sub:'Draw every character yourself – the font is made right away.','draw.h':'Draw characters',
     groups:'Character group',pick:'Pick a character',tools:'Tools',prev:'Previous character',next:'Next character',
@@ -223,7 +223,7 @@ Tools.i18n({
     defaultName:'My Font',defaultSample:'The quick brown fox jumps over the lazy dog.\n0123456789 – Hello, World & friends!',
     cleared:'Character “{c}” deleted',clearAllQ:'Delete all {n} drawn characters?',allCleared:'All characters deleted',
     addQ:'Which character should be added?',addBad:'Please enter exactly one character (no emoji, no space).',added:'“{c}” added',
-    nothing:'Draw at least one character first.',saved:'Font saved',buildFail:'The font could not be made.',
+    nothing:'Draw at least one character first.',saved:'Font saved',shareFail:'Sharing is not possible',shareRefused:'This browser cannot share font files – the font was saved instead (Downloads). You can share it from there.',buildFail:'The font could not be made.',
     'mcp.select':'character picked','mcp.sample':'sample text changed'}
 });
 const t=Tools.t, $=Tools.$;
@@ -504,11 +504,20 @@ $('btnDownload').addEventListener('click',()=>{
   Tools.download(f); Tools.toast(t('saved'));
   Tools.diag.log('download',{glyphs:drawnCount(),bytes:f.size});
 });
+// Chrome (Android) only shares files of a fixed list of types (pictures, audio, video, PDF, text) –
+// .ttf is not on it. canShare() does not check the type, share() then fails with NotAllowedError.
+// share() is called directly in the tap, so NotAllowedError here means "this type is refused":
+// save the font instead and hide the button for the rest of the visit.
 $('btnShare').hidden=!Tools.canShareFile('font.ttf','font/ttf');
 $('btnShare').addEventListener('click',async()=>{
   const f=fontFile(); if(!f)return;
   try{ await navigator.share({files:[f],title:fontName()}); Tools.diag.log('shared'); }
-  catch(e){ if(e.name!=='AbortError')Tools.diag.log('share failed',e); }
+  catch(e){
+    if(e.name==='AbortError')return;
+    Tools.diag.log('share failed',{error:e.name});
+    if(e.name==='NotAllowedError'){ $('btnShare').hidden=true; Tools.download(f); Tools.toast(t('shareRefused'),6000); }
+    else Tools.toast(t('shareFail'));
+  }
 });
 
 /* ---------- Menu ---------- */
