@@ -186,6 +186,25 @@ for (const app of apps()) {
         }
       }
     });
+
+    // UI-KONZEPT.md 4c: on a tablet or computer nothing scrolls sideways and the bars stay compact
+    test('wide screens: no sideways scrolling, toolbar items ≤ 120 px', async ({ page }) => {
+      for (const vp of [{ width: 768, height: 900 }, VIEWPORTS.desktop]) {
+        await page.setViewportSize(vp);
+        await page.goto(url);
+        const m = await page.evaluate(() => {
+          const shown = e => e.checkVisibility() && !e.closest('dialog, .menu-sheet');
+          const name = e => `${e.closest('[id]')?.id || ''} ${(e.getAttribute('aria-label') || e.textContent).trim().slice(0, 30)}`;
+          return {
+            overflow: document.documentElement.scrollWidth - innerWidth,
+            items: [...document.querySelectorAll('.toolbar > :is(button, label, a)')].filter(shown)
+              .filter(e => e.getBoundingClientRect().width > 120.5).map(name),
+          };
+        });
+        expect(m.overflow, `${vp.width} px: page wider than the screen`).toBeLessThanOrEqual(1);
+        expect(m.items, `${vp.width} px: toolbar items wider than 120 px`).toEqual([]);
+      }
+    });
   });
 }
 
@@ -202,6 +221,26 @@ test.describe('toolbar', () => {
       `<div class="toolbar" id="good">${btn('copy', '')}${btn('share', '')}${btn('download', '')}${btn('eraser', '')}</div>`,
     ].join(''));
     expect((await resultActionRows(page)).map(r => r.split('.')[0])).toEqual(['div#bad', 'div#two']);
+  });
+
+  // UI-KONZEPT.md 4c: under a result (in a card) the bar starts at the left, elsewhere (stage) it is centred
+  test('wide screens: a toolbar in a card starts left, one on a stage is centred', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto('/template/');
+    const btn = `<button type="button"><svg class="ic" aria-hidden="true"><use href="../assets/icons.svg#copy"/></svg><span class="tb-label">Kopieren</span></button>`;
+    await page.evaluate(html => {
+      document.querySelector('main .card').insertAdjacentHTML('beforeend', html.replace('ID', 'inCard'));
+      document.body.insertAdjacentHTML('beforeend', html.replace('ID', 'onStage'));
+    }, `<div class="toolbar" id="ID">${btn}${btn}</div>`);
+    const m = await page.evaluate(() => Object.fromEntries(['inCard', 'onStage'].map(id => {
+      const bar = document.getElementById(id).getBoundingClientRect(), first = document.querySelector(`#${id} > button`).getBoundingClientRect();
+      const last = document.querySelector(`#${id} > button:last-child`).getBoundingClientRect();
+      return [id, { start: first.left - bar.left, end: bar.right - last.right, w: first.width }];
+    })));
+    expect(m.inCard.w).toBeLessThanOrEqual(120.5);
+    expect(m.inCard.start).toBeLessThanOrEqual(0.5);
+    expect(m.inCard.end).toBeGreaterThan(100);
+    expect(Math.abs(m.onStage.start - m.onStage.end)).toBeLessThanOrEqual(1);
   });
 
   // A toolbar shows its words while every item gets ≥ 64 px, otherwise only the icons (the word stays its name)
