@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-GC9xHn5gjPNOzGETVTF6JFMxbTCGpQgHlE8CmvfB7+I='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-zQaHp6YAX7sm2pp9/SxaKdxg4YNe0TzvA2ie8o+heoY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -34,6 +34,13 @@
 :root{--accent:#0369a1;--accent-text:#ffffff}
 @media (prefers-color-scheme: dark){:root{--accent:#7dd3fc;--accent-text:#082f49}}
 main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
+/* Wide screens (UI-KONZEPT.md 4c): Files and saving side by side, the pages below over the whole width; on a phone the cards stay one below the other */
+@media (min-width:861px){
+  main.cols>.add{grid-area:add}
+  main.cols>[aria-labelledby="h-pages"]{grid-area:pages}
+  main.cols>.export{grid-area:export}
+  main.cols{grid-template-areas:"add export" "pages pages"}
+}
 #btnPick.over{border-color:var(--accent)}
 .reset-row:has(>[hidden]:only-child){display:none}
 .reset-row{margin-block-start:8px}
@@ -65,7 +72,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <p class="sub" data-i18n="sub">Zusammenführen, Seiten entfernen, drehen – alles bleibt auf dem Gerät.</p>
 </header>
 
-<main>
+<main class="cols">
   <section class="card add" aria-labelledby="h-add">
     <h2 id="h-add" data-i18n="add.h">PDF-Dateien</h2>
     <button type="button" class="dropzone" id="btnPick">
@@ -220,7 +227,7 @@ main{max-width:1100px;margin-inline:auto;padding:12px;display:grid;gap:12px}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version d7282170f38a</p>
+  <p class="footer-version">Version a1af771ef9e4</p>
   <!-- footer:end -->
 </footer>
 
@@ -597,7 +604,7 @@ async function makeThumb(fid,idx){
     c.width=Math.max(1,Math.round(viewport.width)); c.height=Math.max(1,Math.round(viewport.height));
     await page.render({canvasContext:c.getContext('2d'),viewport,background:'white'}).promise;
     page.cleanup();
-    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.8));
+    const blob=await Tools.canvasBlob(c,'image/jpeg',0.8);
     if(!blob) throw new Error('toBlob failed');
     const url=URL.createObjectURL(blob);
     f.thumbs.set(idx,url);
@@ -815,6 +822,8 @@ Tools.mcp.register({
   }
 });
 })();
+// Ctrl/⌘+Z on a computer (UI-KONZEPT.md 4c)
+Tools.undoKeys({ undo: document.getElementById('btnUndo') });
 </script>
 </body>
 </html>

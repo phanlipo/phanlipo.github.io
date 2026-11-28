@@ -2,7 +2,7 @@
 // Offline cache for this app. VERSION is a hash of all cached files (of the icon sprite only the icons
 // this app uses): every change creates a new version, the browser installs it in the background and removes the old one.
 const APP = "code-editor";
-const VERSION = '1e8c903625fe';
+const VERSION = 'fb010558f0f5';
 const CACHE = `pwa:${APP}:${VERSION}`;
 const FILES = [
   "./",
@@ -17,6 +17,7 @@ const FILES = [
   "../assets/base.css",
   "../assets/common.js",
   "../assets/icons.svg",
+  "../assets/shared/toolbar-fit.js",
   "../assets/vendor/highlight/highlight.min.js",
   "../assets/vendor/highlight/languages/apache.min.js",
   "../assets/vendor/highlight/languages/arduino.min.js",

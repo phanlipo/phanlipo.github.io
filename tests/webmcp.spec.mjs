@@ -2689,15 +2689,27 @@ test.describe('pdf-viewer tools', () => {
     expect(r.text.split('\n')[0]).toBe(SCAN_TITLE);
   });
 
+  test('two pages side by side: going to the right page of a row reports that page', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.setInputFiles('#inPick', { name: 'a.pdf', mimeType: 'application/pdf', buffer: pdf(['EINS', 'ZWEI', 'DREI', 'VIER']) });
+    await expect(page.locator('#pages .page')).toHaveCount(4);
+    expect((await call(page, 'pdf_viewer_go_to_page', { page: 4 })).result).toEqual({ currentPage: 4, pages: 4 });
+    await expect(page.locator('#pageLabel')).toHaveText('3–4 / 4');
+    expect((await call(page, 'pdf_viewer_go_to_page', { page: 1 })).result).toEqual({ currentPage: 1, pages: 4 });
+    await expect(page.locator('#pageLabel')).toHaveText('1–2 / 4');
+  });
+
   test('invalid input is rejected and changes nothing', async ({ page }) => {
     await page.setInputFiles('#inPick', { name: 'a.pdf', mimeType: 'application/pdf', buffer: pdf(['A', 'B']) });
     await expect(page.locator('#pages .page')).toHaveCount(2);
+    await expect(page.locator('#pageLabel')).toHaveText(/^1(–2)? \/ 2$/);   // "1–2 / 2" with two pages side by side
+    const before = await page.locator('#pageLabel').textContent();
     expect((await call(page, 'pdf_viewer_go_to_page', { page: 3 })).error).toBe('page must be between 1 and 2');
     expect((await call(page, 'pdf_viewer_go_to_page', { page: 0 })).ok).toBe(false);
     expect((await call(page, 'pdf_viewer_go_to_page', { page: 1.5 })).ok).toBe(false);
     expect((await call(page, 'pdf_viewer_go_to_page', {})).ok).toBe(false);
     expect((await call(page, 'pdf_viewer_get_page_text', { page: 9 })).error).toBe('page must be between 1 and 2');
-    await expect(page.locator('#pageLabel')).toHaveText('1 / 2');
+    await expect(page.locator('#pageLabel')).toHaveText(before);
   });
 });
 

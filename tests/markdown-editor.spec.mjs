@@ -1,7 +1,7 @@
 // Markdown-Editor: formatting buttons (text and view), editing in both displays, files (history), download, share, open,
 // saving straight into the file (File System Access API, with a fake picker and file handles).
 import { readFileSync } from 'node:fs';
-import { test, expect, openMenu, closeMenu, mockAndroidShare, axe } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, mockAndroidShare, axe } from './helpers.mjs';
 
 const raw = page => page.locator('#raw');
 const view = page => page.locator('#view');
@@ -49,6 +49,80 @@ test('toolbar: four tools with words and "Mehr" for the rest; the keyboard focus
   await page.click('#btnMore');
   await page.click('#btnMore');                                // second tap closes
   await expect(page.locator('#moreTools')).toBeHidden();
+});
+
+test('toolbar uses the room: tablet more tools, computer all of them without "Mehr", back on a phone', async ({ page }) => {
+  const bar = () => page.locator('#toolbar > button:visible').evaluateAll(bs => bs.map(b => b.dataset.tool || b.id));
+  // 768 px: 752 px bar → 11 items of ≥ 64 px (2 px gap): the 10 most used tools in their natural order, then "Mehr"
+  await page.setViewportSize({ width: 768, height: 900 });
+  await expect.poll(bar).toEqual(['undo', 'redo', 'bold', 'italic', 'strike', 'heading', 'ul', 'ol', 'task', 'quote', 'btnMore']);
+  await expect(page.locator('#moreTools [data-tool]')).toHaveCount(4);
+  // 1280 px: all 14 tools fit, "Mehr" is gone, every word shows
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect.poll(bar).toEqual(['undo', 'redo', 'bold', 'italic', 'strike', 'heading', 'ul', 'ol', 'task', 'quote', 'code', 'link', 'table', 'hr']);
+  await expect(page.locator('#btnMore')).toBeHidden();
+  await expect(page.locator('#moreTools [data-tool]')).toHaveCount(0);
+  const ys = await page.locator('#toolbar > button:visible').evaluateAll(bs => bs.map(b => Math.round(b.getBoundingClientRect().y)));
+  expect(new Set(ys).size).toBe(1);
+  for (const l of await page.locator('#toolbar > button:visible .tb-label').all()) await expect(l).toBeVisible();
+  // A tool that moved into the bar works there
+  await raw(page).fill('Hallo');
+  await select(page, 0, 5);
+  await page.locator('#toolbar [data-tool="italic"]').click();
+  await expect(raw(page)).toHaveValue('*Hallo*');
+  // After a language switch (new render) the split stays
+  await switchLang(page, 'en');
+  await expect.poll(bar).toHaveLength(14);
+  // Back to a phone: the four most used tools and "Mehr" again
+  await page.setViewportSize({ width: 375, height: 740 });
+  await expect.poll(bar).toEqual(['undo', 'bold', 'heading', 'ul', 'btnMore']);
+  await expect(page.locator('#moreTools [data-tool]')).toHaveCount(10);
+});
+
+test('wide screens: "Beides" shows the text and a live preview side by side; narrower again, the text', async ({ page }) => {
+  const split = page.locator('#views [data-v="split"]');
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await expect(split).toBeHidden();                            // only from 1100 px
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(split).toBeVisible();
+  await raw(page).fill('# Titel\n\n- [ ] Aufgabe');
+  await split.click();
+  await expect(split).toHaveAttribute('aria-pressed', 'true');
+  await expect(raw(page)).toBeVisible();
+  await expect(view(page)).toBeVisible();
+  const [r, v] = [await raw(page).boundingBox(), await view(page).boundingBox()];
+  expect(v.x).toBeGreaterThanOrEqual(r.x + r.width - 1);      // side by side, the preview on the right
+  expect(Math.abs(r.width - v.width)).toBeLessThanOrEqual(2);
+  await expect(view(page).locator('h1')).toHaveText('Titel');
+  // The preview is read-only: tasks are ticked in the text
+  await expect(view(page)).toHaveAttribute('contenteditable', 'false');
+  await expect(view(page)).toHaveAttribute('aria-readonly', 'true');
+  await expect(view(page).locator('input[type=checkbox]')).toBeDisabled();
+  // Typing and the formatting tools change the text, the preview follows
+  await raw(page).fill('# Titel\n\n- [ ] Aufgabe\n\nNeu');
+  await expect(view(page).locator('p')).toHaveText('Neu');
+  await select(page, 24, 27);
+  await page.locator('#toolbar [data-tool="bold"]').click();
+  await expect(raw(page)).toHaveValue('# Titel\n\n- [ ] Aufgabe\n\n**Neu**');
+  await expect(view(page).locator('p strong')).toHaveText('Neu');
+  await expect.poll(async () => (await stored(page))[0]?.text).toBe('# Titel\n\n- [ ] Aufgabe\n\n**Neu**');
+  // Kept after a reload
+  await page.reload();
+  await expect(split).toHaveAttribute('aria-pressed', 'true');
+  await expect(view(page).locator('h1')).toHaveText('Titel');
+  // Narrower: the text alone ("Text" pressed); wide again: both
+  await page.setViewportSize({ width: 800, height: 800 });
+  await expect(split).toBeHidden();
+  await expect(view(page)).toBeHidden();
+  await expect(page.locator('#views [data-v="raw"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#toolbar [data-tool="bold"]')).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(view(page).locator('h1')).toHaveText('Titel');
+  // Back to the editable view
+  await page.locator('#views [data-v="render"]').click();
+  await expect(raw(page)).toBeHidden();
+  await expect(view(page)).toHaveAttribute('contenteditable', 'true');
+  await expect(view(page).locator('input[type=checkbox]')).toBeEnabled();
 });
 
 test('formatting buttons write Markdown in the text display', async ({ page }) => {

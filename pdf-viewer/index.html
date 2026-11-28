@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-ICRxtEZ1pffEMP7DjBNBifme2QZmowKjbhwrvd0Pa8w='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rnX6NYC5qmtdi6FWlKvy70FQFC2IK7Wd0SEhqkGBHQo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -40,6 +40,9 @@ body.stage>main{padding:0;overflow:auto;touch-action:pan-x pan-y;background:var(
   padding-block:calc(60px + env(safe-area-inset-top)) calc(76px + env(safe-area-inset-bottom))}
 body.stage.empty>main{display:flex;flex-direction:column;justify-content:center}
 #pages{display:flex;flex-direction:column;gap:8px;padding:8px;transform-origin:0 0}
+/* Two pages side by side (wide screens in landscape, UI-KONZEPT.md 4c): pairs 1–2, 3–4 … */
+#pages.spread{display:grid;grid-template-columns:repeat(2,max-content);justify-content:center;align-items:start}
+#pages.spread .page{margin-inline:0}
 .page{position:relative;margin-inline:auto;flex:none;background:#ffffff;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .page canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 body.night .page{filter:invert(1) hue-rotate(180deg)}
@@ -239,6 +242,7 @@ body.edge-gap #cropBar{padding-block-end:max(28px,env(safe-area-inset-bottom))}
   <label class="check"><input type="checkbox" id="optAutoHide"> <span data-i18n="set.autoHide">Leisten beim Lesen ausblenden</span></label>
   <label class="check"><input type="checkbox" id="optSystem"> <span data-i18n="set.system">Beim Ausblenden auch die Systemleisten verbergen (Vollbild)</span></label>
   <label class="check"><input type="checkbox" id="optNight"> <span data-i18n="set.night">Nachtmodus (Farben umkehren)</span></label>
+  <label class="check"><input type="checkbox" id="optSpread"> <span data-i18n="set.spread">Auf breiten Bildschirmen im Querformat zwei Seiten nebeneinander</span></label>
   <div class="ocr-lang"><label for="optOcrLang" data-i18n="set.ocrLang">Sprache der Texterkennung</label>
     <select id="optOcrLang"><option value="deu" data-i18n="lang.de">Deutsch</option><option value="eng" data-i18n="lang.en">Englisch</option></select></div>
   <label class="check"><input type="checkbox" id="optKeep"> <span data-i18n="set.keep">PDF beim nächsten Start wieder öffnen</span></label>
@@ -296,7 +300,7 @@ body.edge-gap #cropBar{padding-block-end:max(28px,env(safe-area-inset-bottom))}
   <h3>Im Menü (☰)</h3>
   <ul>
     <li>Inhaltsverzeichnis (wenn die PDF eins hat), Infos zum Dokument, <i>Text erkennen</i> (bei gescannten Seiten), <i>In „PDF bearbeiten“ öffnen</i> und <i>In Word umwandeln</i> (gibt die PDF an die andere App weiter, die Datei bleibt auf dem Gerät), <i>Andere PDF öffnen</i>, <i>Herunterladen</i>, <i>PDF schließen</i> und <i>Zu Seite</i>.</li>
-    <li>Anzeige: automatisch ausblenden, Systemleisten mit ausblenden, Nachtmodus (dunkle Seiten mit heller Schrift), Sprache der Texterkennung, geöffnete PDF behalten.</li>
+    <li>Anzeige: automatisch ausblenden, Systemleisten mit ausblenden, Nachtmodus (dunkle Seiten mit heller Schrift), Sprache der Texterkennung, geöffnete PDF behalten. Auf Tablets und Computern zusätzlich <i>zwei Seiten nebeneinander</i>: im Querformat ab 900 × 600 Pixeln stehen je zwei Seiten (1–2, 3–4 …) so groß nebeneinander, dass beide ganz zu sehen sind; unten steht dann z.&nbsp;B. „3–4 / 10“.</li>
   </ul>
   <h3>Was wird gespeichert?</h3>
   <p>Nur die Einstellungen und je Dokument die zuletzt gelesene Seite (unter einer Kennung aus der PDF, ohne Dateinamen; höchstens 50 Dokumente). Die zuletzt geöffnete PDF bleibt auf diesem Gerät im Speicher des Browsers und öffnet sich beim nächsten Start wieder – auch wenn die App für ein Update neu lädt (an der gemerkten Seite; passwortgeschützte fragen wieder nach dem Passwort). <i>PDF schließen</i>, der Schalter im Menü oder <i>Alle Daten löschen</i> entfernen sie. In der Sicherungsdatei ist sie nicht enthalten. Angezeigt wird mit <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0), die Texterkennung mit <a href="https://tesseract.projectnaptha.com">Tesseract.js</a> (Apache-2.0), einzelne Seiten werden mit <a href="https://github.com/cantoo-scribe/pdf-lib">pdf-lib</a> (Fork von Cantoo, MIT) herausgelöst.</p>
@@ -337,7 +341,7 @@ body.edge-gap #cropBar{padding-block-end:max(28px,env(safe-area-inset-bottom))}
   <h3>In the menu (☰)</h3>
   <ul>
     <li>Contents (if the PDF has them), document info, <i>Recognise text</i> (for scanned pages), <i>Open in “Edit PDF”</i> and <i>Convert to Word</i> (hands the PDF to the other app; the file stays on the device), <i>Open another PDF</i>, <i>Download</i>, <i>Close PDF</i> and <i>Go to page</i>.</li>
-    <li>Display: hide automatically, hide the system bars too, night mode (dark pages with light text), language of the text recognition, keep the open PDF.</li>
+    <li>Display: hide automatically, hide the system bars too, night mode (dark pages with light text), language of the text recognition, keep the open PDF. On tablets and computers also <i>two pages side by side</i>: in landscape from 900 × 600 pixels two pages each (1–2, 3–4 …) stand side by side, large enough to see both whole; the bar then shows e.g. “3–4 / 10”.</li>
   </ul>
   <h3>What is stored?</h3>
   <p>Only the settings and, per document, the page last read (under an ID taken from the PDF, without the file name; at most 50 documents). The PDF opened last stays on this device in the browser’s storage and opens again at the next start – also when the app reloads for an update (at the remembered page; password-protected ones ask for the password again). <i>Close PDF</i>, the switch in the menu or <i>Delete all data</i> remove it. It is not part of the backup file. Rendering by <a href="https://mozilla.github.io/pdf.js/">pdf.js</a> (Apache-2.0), text recognition by <a href="https://tesseract.projectnaptha.com">Tesseract.js</a> (Apache-2.0), single pages are taken out with <a href="https://github.com/cantoo-scribe/pdf-lib">pdf-lib</a> (Cantoo fork, MIT).</p>
@@ -380,7 +384,7 @@ body.edge-gap #cropBar{padding-block-end:max(28px,env(safe-area-inset-bottom))}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 00f335cac85b</p>
+  <p class="footer-version">Version 0a6d524346d0</p>
   <!-- footer:end -->
 </footer>
 
@@ -417,7 +421,7 @@ Tools.i18n({
     title:'PDF Viewer',fs:'Full screen',view:'Document',intro:'Open a PDF or share it here from another app. The file stays on this device.',
     open:'Open PDF',pagesLabel:'Pages',page:'Page',fit:'Page width','doc.h':'Document',openOther:'Open another PDF',download:'Download',
     goto:'Go to page',go:'Go','set.h':'Display','set.autoHide':'Hide the bars while reading',
-    'set.system':'When hiding, also hide the system bars (full screen)','set.night':'Night mode (invert colours)',
+    'set.system':'When hiding, also hide the system bars (full screen)','set.night':'Night mode (invert colours)','set.spread':'On wide screens in landscape, two pages side by side',
     'doc.none':'No PDF open.','doc.info':'{name} · {n} page(s) · {size}','label':'{n} / {total}',
     'loading':'Opening PDF …','err.notPdf':'This is not a PDF file.','err.broken':'The PDF could not be opened – it may be damaged.',
     'err.lib':'The PDF viewer could not be loaded. Please open it once with internet.','err.skipped':'The PDF cannot be opened without the password.',
@@ -453,7 +457,7 @@ Tools.i18n({
 });
 const t=Tools.t, $=Tools.$, body=document.body;
 const LS='pdf-viewer.settings.v1', LP='pdf-viewer.positions.v1';
-const settings=Object.assign({autoHide:true,systemBars:true,night:false,keep:true},Tools.load(LS,{}));
+const settings=Object.assign({autoHide:true,systemBars:true,night:false,keep:true,spread:true},Tools.load(LS,{}));
 const saveSettings=()=>Tools.save(LS,settings);
 const view=$('view'), pagesEl=$('pages');
 const MIN_ZOOM=1, MAX_ZOOM=4, MAX_PIXELS=8e6, KEEP=2.5; // canvases further than KEEP screens away are dropped
@@ -583,29 +587,44 @@ function show(){
   barsTouched=false;
 }
 function baseWidth(){return clamp(view.clientWidth-16,100,1000);}
+// Two pages side by side: wide (≥ 900 px) and high enough (≥ 600 px, not a phone on its side) in landscape,
+// more than one page, switched on in the settings
+const spreadOn=()=>!!settings.spread&&sizes.length>1&&view.clientWidth>=900&&view.clientHeight>=600&&view.clientWidth>view.clientHeight;
+let spread=false;
 function layout(){
   if(!doc) return;
-  const w=baseWidth()*zoom;
+  spread=spreadOn();
+  pagesEl.classList.toggle('spread',spread);
+  // Side by side each page gets half of the room, but no more than lets the whole page fit the height
+  // (at zoom 1 two complete pages are in view; up to 1000 px like a single page)
+  const [p0w,p0h]=sizes[0];
+  const w=(spread?clamp(Math.min((view.clientWidth-24)/2,(view.clientHeight-16)*p0w/p0h),100,1000):baseWidth())*zoom;
   els.forEach((el,i)=>{
     const [pw,ph]=sizes[i];
     el.style.width=w+'px'; el.style.height=(w*ph/pw)+'px';
     el.style.setProperty('--total-scale-factor',String(w/pw));   // text layer follows the zoom
   });
-  pagesEl.style.width=Math.max(view.clientWidth,w+16)+'px';
+  pagesEl.style.width=Math.max(view.clientWidth,(spread?2*w+8:w)+16)+'px';
   tops=els.map(el=>el.offsetTop);
 }
 // Page under the middle of the screen
 function pageAt(y){
   let lo=0, hi=tops.length-1;
   while(lo<hi){const mid=(lo+hi+1)>>1; if(tops[mid]<=y) lo=mid; else hi=mid-1;}
+  while(lo>0&&tops[lo-1]===tops[lo]) lo--;   // side by side: the left page of the row
   return lo;
+}
+// "3 / 5"; side by side both pages of the row ("3–4 / 5")
+function pageLabel(){
+  const pair=spread&&cur<sizes.length&&tops[cur]===tops[cur-1];
+  return t('label',{n:pair?`${cur}–${cur+1}`:cur,total:sizes.length});
 }
 function updateCurrent(){
   if(!doc) return;
   const n=pageAt(view.scrollTop+view.clientHeight/2)+1;
   const changed=n!==cur; cur=n;
   $('pageRange').value=cur;
-  $('pageLabel').textContent=t('label',{n:cur,total:sizes.length});
+  $('pageLabel').textContent=pageLabel();
   if(changed) savePosition();
   return changed;
 }
@@ -894,21 +913,26 @@ view.addEventListener('scroll',()=>{
       if(settings.autoHide&&!barsHidden()&&!$('bar').contains(document.activeElement)){clearTimeout(hideTimer);showBars(false);}
     }else if(moved>30) lastTop=view.scrollTop;
     if(barsHidden()&&changed){
-      const b=$('badge'); b.textContent=t('label',{n:cur,total:sizes.length}); b.classList.add('on');
+      const b=$('badge'); b.textContent=pageLabel(); b.classList.add('on');
       clearTimeout(badgeTimer); badgeTimer=setTimeout(()=>b.classList.remove('on'),1200);
     }
   });
 },{passive:true});
 let lastW=0;
-new ResizeObserver(()=>{
-  if(!doc||view.clientWidth===lastW) return;
-  lastW=view.clientWidth;
+// New layout that keeps the place in the middle of the screen (window size, two pages on or off)
+function relayout(){
   const n=cur, a=anchorAt(view.clientWidth/2,view.clientHeight/2);
   layout();
   progScroll=Date.now();
   const el=els[a.i]; view.scrollTop=el.offsetTop+a.ay*el.offsetHeight-view.clientHeight/2;
   if(!els[n-1]) return;
   updateCurrent(); scheduleRender();
+}
+new ResizeObserver(()=>{
+  if(!doc||(view.clientWidth===lastW&&spreadOn()===spread)) return;
+  lastW=view.clientWidth;
+  relayout();
+  Tools.diag.log('layout',{spread});
 }).observe(view);
 
 /* Page slider. On touch it only turns pages once the finger clearly moves sideways or lifts without moving up:
@@ -1252,7 +1276,7 @@ function renderInfo(){
   renderShareBtns(); if(shareDlg.open) renderShare();
   $('btnFind').hidden=!doc;
   updateOcrBtn();
-  if(doc) $('pageLabel').textContent=t('label',{n:cur,total:sizes.length});
+  if(doc) $('pageLabel').textContent=pageLabel();
   els.forEach((el,i)=>el.setAttribute('aria-label',t('pageAria',{n:i+1})));
 }
 const pick=()=>{$('inPick').value='';$('inPick').click();};
@@ -1523,7 +1547,7 @@ async function cropFile(){
   const cv=document.createElement('canvas');
   cv.width=Math.max(1,Math.round(cw*scale)); cv.height=Math.max(1,Math.round(ch*scale));
   await page.render({canvasContext:cv.getContext('2d'),viewport:vp,background:'white',transform:[1,0,0,1,-c.x*vp.width,-c.y*vp.height]}).promise;
-  const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+  const blob=await Tools.canvasBlob(cv,'image/png');
   if(!blob) throw new Error('no picture');
   Tools.diag.log('crop picture',{w:cv.width,h:cv.height,bytes:blob.size});
   return new File([blob],`${baseName()} (${t('file.p',{p:c.i+1})}).png`,{type:'image/png'});
@@ -1608,6 +1632,9 @@ const applyNight=()=>body.classList.toggle('night',!!settings.night);
 bindOpt('optAutoHide','autoHide');
 bindOpt('optSystem','systemBars');
 bindOpt('optNight','night',applyNight);
+bindOpt('optSpread','spread',()=>{if(doc) relayout();});
+// Only offered where the screen can get there (tablets, computers); phones never show two pages
+{const sw=screen.width||0, sh=screen.height||0; $('optSpread').closest('label').hidden=!(Math.min(sw,sh)>=600&&Math.max(sw,sh)>=900);}
 bindOpt('optKeep','keep',()=>{if(!settings.keep) forgetFile(); else if(file) keepFile(file);});
 const syncOcrLang=()=>{$('optOcrLang').value=settings.ocrLang||defaultOcrLang();};
 $('optOcrLang').addEventListener('change',()=>{settings.ocrLang=$('optOcrLang').value;saveSettings();Tools.diag.log('setting',{ocrLang:settings.ocrLang});});
@@ -1641,7 +1668,7 @@ Tools.onLang(()=>{renderInfo();renderFindCount();renderTocLabels();updateOcrBtn(
 renderInfo();
 
 Tools.diag.info(async()=>({
-  open:!!doc, pages:sizes.length, current:doc?cur:0, zoom:Math.round(zoom*100)/100, encrypted,
+  open:!!doc, pages:sizes.length, current:doc?cur:0, zoom:Math.round(zoom*100)/100, spread, encrypted,
   barsHidden:barsHidden(), rendered:els.filter(el=>el.querySelector('canvas')).length,
   textLayers:els.filter(el=>el.querySelector('.textLayer')).length,
   canShareFiles, canCopyImage, cropping:!!crop, fullscreenSupported:fs.supported(), settings, remembered:Object.keys(positions).length,
@@ -1671,7 +1698,9 @@ Tools.mcp.register({
     needDoc();
     if(page>sizes.length) throw new Error(`page must be between 1 and ${sizes.length}`);
     goTo(page);
-    return {currentPage:cur,pages:sizes.length};
+    // Two pages side by side: the row shows the asked page also when it is the right one
+    const pair=spread&&cur<sizes.length&&tops[cur]===tops[cur-1];
+    return {currentPage:pair&&page===cur+1?page:cur,pages:sizes.length};
   }
 });
 Tools.mcp.register({

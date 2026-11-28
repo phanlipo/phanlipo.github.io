@@ -57,6 +57,77 @@ test('canShareFile asks navigator.canShare once per kind of file; download saves
   expect(download.suggestedFilename()).toBe('notiz-1.txt');
 });
 
+test('canvasBlob: PNG/JPEG with the pixels and the real type, OffscreenCanvas, empty canvas; never waits for idle time', async ({ page }) => {
+  const r = await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 40; c.height = 20;
+    const g = c.getContext('2d'); g.fillStyle = '#ff0000'; g.fillRect(0, 0, 20, 20); g.fillStyle = '#0000ff'; g.fillRect(20, 0, 20, 20);
+    // pixels of a Blob read back (independent of the encoder)
+    const pixels = async b => { const bm = await createImageBitmap(b), k = document.createElement('canvas'); k.width = bm.width; k.height = bm.height;
+      const x = k.getContext('2d'); x.drawImage(bm, 0, 0); return { w: bm.width, h: bm.height, left: [...x.getImageData(Math.floor(bm.width / 8), bm.height >> 1, 1, 1).data], right: [...x.getImageData(Math.floor(bm.width * 7 / 8), bm.height >> 1, 1, 1).data] }; };
+    const png = await Tools.canvasBlob(c);
+    const jpg = await Tools.canvasBlob(c, 'image/jpeg', 0.9);
+    const head = async (b, n) => [...new Uint8Array(await b.slice(0, n).arrayBuffer())];
+    const oc = new OffscreenCanvas(10, 10); const og = oc.getContext('2d'); og.fillStyle = '#00ff00'; og.fillRect(0, 0, 10, 10);
+    const off = await Tools.canvasBlob(oc);
+    const empty = document.createElement('canvas'); empty.width = 0;
+    // a browser that cannot write a type answers with PNG – the Blob says so (like toBlob)
+    const unknown = await Tools.canvasBlob(c, 'image/x-unknown');
+    // a busy page: a long task right after the call does not delay the picture beyond that task
+    const t0 = performance.now(); const p = Tools.canvasBlob(c); const end = performance.now() + 300; while (performance.now() < end) { /* busy */ }
+    await p; const busyMs = performance.now() - t0;
+    return { png: { type: png.type, head: await head(png, 4), px: await pixels(png) }, jpg: { type: jpg.type, head: await head(jpg, 3), px: await pixels(jpg) },
+      off: { type: off.type, px: await pixels(off) }, empty: await Tools.canvasBlob(empty), unknown: unknown.type, busyMs };
+  });
+  expect(r.png.type).toBe('image/png');
+  expect(r.png.head).toEqual([0x89, 0x50, 0x4e, 0x47]);                 // PNG signature
+  expect(r.png.px).toEqual({ w: 40, h: 20, left: [255, 0, 0, 255], right: [0, 0, 255, 255] });
+  expect(r.jpg.type).toBe('image/jpeg');
+  expect(r.jpg.head).toEqual([0xff, 0xd8, 0xff]);                       // JPEG start
+  expect(r.jpg.px.w).toBe(40);
+  expect(r.jpg.px.left[0]).toBeGreaterThan(240); expect(r.jpg.px.left[2]).toBeLessThan(20);
+  expect(r.off).toEqual({ type: 'image/png', px: { w: 10, h: 10, left: [0, 255, 0, 255], right: [0, 255, 0, 255] } });
+  expect(r.empty).toBeNull();
+  expect(r.unknown).toBe('image/png');
+  expect(r.busyMs).toBeLessThan(1500);
+});
+
+test('undoKeys: Ctrl/⌘+Z undoes, Ctrl/⌘+Shift+Z and Ctrl+Y redo – only enabled, shown buttons; not in text fields or dialogs', async ({ page }) => {
+  await page.evaluate(() => {
+    window.__n = { undo: 0, redo: 0 };
+    document.body.insertAdjacentHTML('beforeend', '<button id="u">U</button><button id="r">R</button><input id="f"><dialog id="d"><p>x</p></dialog>');
+    document.getElementById('u').addEventListener('click', () => window.__n.undo++);
+    document.getElementById('r').addEventListener('click', () => window.__n.redo++);
+    Tools.undoKeys({ undo: document.getElementById('u'), redo: document.getElementById('r') });
+  });
+  const n = () => page.evaluate(() => ({ ...window.__n }));
+  await page.locator('body').click({ position: { x: 1, y: 1 } });
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Meta+z');
+  await page.keyboard.press('Control+Shift+Z');
+  await page.keyboard.press('Meta+Shift+Z');
+  await page.keyboard.press('Control+y');
+  expect(await n()).toEqual({ undo: 2, redo: 3 });
+  // a disabled or hidden button is not clicked
+  await page.evaluate(() => { document.getElementById('u').disabled = true; document.getElementById('r').hidden = true; });
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+y');
+  expect(await n()).toEqual({ undo: 2, redo: 3 });
+  await page.evaluate(() => { document.getElementById('u').disabled = false; });
+  // text fields keep their own undo, an open dialog takes the keys
+  await page.locator('#f').focus();
+  await page.keyboard.press('Control+z');
+  await page.evaluate(() => { document.activeElement.blur(); document.getElementById('d').showModal(); });
+  await page.keyboard.press('Control+z');
+  await page.evaluate(() => document.getElementById('d').close());
+  expect(await n()).toEqual({ undo: 2, redo: 3 });
+  // plain z, Alt+Ctrl+Z: nothing
+  await page.keyboard.press('z');
+  await page.keyboard.press('Control+Alt+z');
+  expect(await n()).toEqual({ undo: 2, redo: 3 });
+  await expect(page.locator('#u')).toHaveAttribute('aria-keyshortcuts', 'Control+Z Meta+Z');
+  await expect(page.locator('#r')).toHaveAttribute('aria-keyshortcuts', 'Control+Shift+Z Meta+Shift+Z Control+Y');
+});
+
 test.describe('wakeLock', () => {
   test.beforeEach(async ({ page }) => {
     // Stand-in for the Screen Wake Lock API: counts requests, the page can drop the lock like a browser does

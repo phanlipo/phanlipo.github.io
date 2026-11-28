@@ -92,6 +92,19 @@ test('two players: a full board without a row is a draw', async ({ page }) => {
   await expect(page.locator('#ptsX')).toHaveText('0');
 });
 
+test('computer keys: Ctrl+Z takes back the last move, not while there is none', async ({ page }) => {
+  await page.goto('/tic-tac-toe/');
+  await page.keyboard.press('Control+z');                       // nothing to take back: nothing happens
+  await tapAll(page, [4, 0, 8]);
+  await page.locator('body').click({ position: { x: 1, y: 1 } });
+  await page.keyboard.press('Control+z');
+  await expect(cell(page, 8)).toHaveAttribute('data-v', '');
+  await expect(cell(page, 0)).toHaveAttribute('data-v', 'o');
+  await page.keyboard.press('Meta+z');                          // ⌘ on a Mac
+  await expect(cell(page, 0)).toHaveAttribute('data-v', '');
+  await expect(cell(page, 4)).toHaveAttribute('data-v', 'x');
+});
+
 test('undo takes back the last move; the round survives a reload', async ({ page }) => {
   await page.goto('/tic-tac-toe/');
   await expect(page.locator('#btnUndo')).toBeDisabled();
