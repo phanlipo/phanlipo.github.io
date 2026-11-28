@@ -37,7 +37,8 @@ test('every song: bars fit the meter, each note is drawn, each verse has one syl
   }
 });
 
-test('lyrics and numbers never overlap on a phone', async ({ page }) => {
+for (const [where, vp] of [['on a phone', VIEWPORTS.mobile], ['on a computer (larger notes)', VIEWPORTS.desktop]]) test(`lyrics and numbers never overlap ${where}`, async ({ page }) => {
+  await page.setViewportSize(vp);
   await page.goto(URL_);
   const ids = await page.evaluate(() => Songs.list.map(s => s.id));
   for (const id of ids) {
@@ -60,6 +61,17 @@ test('lyrics and numbers never overlap on a phone', async ({ page }) => {
     // The score fills the card without being shrunk below the card width
     const w = await page.evaluate(() => [document.querySelector('#score svg').getBoundingClientRect().width, document.querySelector('#score').clientWidth]);
     expect(Math.abs(w[0] - w[1])).toBeLessThan(2);
+  }
+});
+
+test('wide screens: larger notes instead of longer lines (1.5× on a computer, 1.25× on a tablet, 1× on a phone)', async ({ page }) => {
+  // drawn size of the SVG against its own coordinates (abcjs stretches it to the card)
+  const grow = () => page.evaluate(() => { const s = document.querySelector('#score svg'); return s.getBoundingClientRect().width / s.viewBox.baseVal.width; });
+  for (const [vp, factor] of [[VIEWPORTS.desktop, 1.5], [{ width: 768, height: 900 }, 1.25], [VIEWPORTS.mobile, 1]]) {
+    await page.setViewportSize(vp);
+    await page.goto(URL_);
+    await expect(score(page).locator('svg')).toHaveCount(1);
+    expect(Math.abs(await grow() - factor), `${vp.width} px`).toBeLessThan(0.06);
   }
 });
 
