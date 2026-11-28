@@ -79,6 +79,52 @@ test('toolbar uses the room: tablet more tools, computer all of them without "Me
   await expect(page.locator('#moreTools [data-tool]')).toHaveCount(10);
 });
 
+test('wide screens: "Beides" shows the text and a live preview side by side; narrower again, the text', async ({ page }) => {
+  const split = page.locator('#views [data-v="split"]');
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await expect(split).toBeHidden();                            // only from 1100 px
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(split).toBeVisible();
+  await raw(page).fill('# Titel\n\n- [ ] Aufgabe');
+  await split.click();
+  await expect(split).toHaveAttribute('aria-pressed', 'true');
+  await expect(raw(page)).toBeVisible();
+  await expect(view(page)).toBeVisible();
+  const [r, v] = [await raw(page).boundingBox(), await view(page).boundingBox()];
+  expect(v.x).toBeGreaterThanOrEqual(r.x + r.width - 1);      // side by side, the preview on the right
+  expect(Math.abs(r.width - v.width)).toBeLessThanOrEqual(2);
+  await expect(view(page).locator('h1')).toHaveText('Titel');
+  // The preview is read-only: tasks are ticked in the text
+  await expect(view(page)).toHaveAttribute('contenteditable', 'false');
+  await expect(view(page)).toHaveAttribute('aria-readonly', 'true');
+  await expect(view(page).locator('input[type=checkbox]')).toBeDisabled();
+  // Typing and the formatting tools change the text, the preview follows
+  await raw(page).fill('# Titel\n\n- [ ] Aufgabe\n\nNeu');
+  await expect(view(page).locator('p')).toHaveText('Neu');
+  await select(page, 24, 27);
+  await page.locator('#toolbar [data-tool="bold"]').click();
+  await expect(raw(page)).toHaveValue('# Titel\n\n- [ ] Aufgabe\n\n**Neu**');
+  await expect(view(page).locator('p strong')).toHaveText('Neu');
+  await expect.poll(async () => (await stored(page))[0]?.text).toBe('# Titel\n\n- [ ] Aufgabe\n\n**Neu**');
+  // Kept after a reload
+  await page.reload();
+  await expect(split).toHaveAttribute('aria-pressed', 'true');
+  await expect(view(page).locator('h1')).toHaveText('Titel');
+  // Narrower: the text alone ("Text" pressed); wide again: both
+  await page.setViewportSize({ width: 800, height: 800 });
+  await expect(split).toBeHidden();
+  await expect(view(page)).toBeHidden();
+  await expect(page.locator('#views [data-v="raw"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#toolbar [data-tool="bold"]')).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(view(page).locator('h1')).toHaveText('Titel');
+  // Back to the editable view
+  await page.locator('#views [data-v="render"]').click();
+  await expect(raw(page)).toBeHidden();
+  await expect(view(page)).toHaveAttribute('contenteditable', 'true');
+  await expect(view(page).locator('input[type=checkbox]')).toBeEnabled();
+});
+
 test('formatting buttons write Markdown in the text display', async ({ page }) => {
   await raw(page).fill('Hallo Welt');
   await select(page, 6, 10);
