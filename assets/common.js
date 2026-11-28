@@ -1116,7 +1116,7 @@ window.Tools = (function () {
   else setupStageHeight();
 
   /* ---------- Settings (every app) ----------
-     Language and appearance are the same in every app: one block "General" with two .seg switches. It goes to the
+     Language, appearance and view are the same in every app: one block "General" with three .seg switches. It goes to the
      end of the app's own settings section (the [data-menu] element with data-icon="settings") – so every app has
      exactly one place "Settings" – or, without one, into its own sub page "Settings" at the top of the standard
      list. The language switch stays hidden on pages that are not translated (Tools.i18n shows it). */
