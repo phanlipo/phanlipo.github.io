@@ -126,7 +126,7 @@
       img.src = url;
     });
   }
-  const toBlob = (canvas, type, q) => new Promise(res => canvas.toBlob(res, type, q));
+  const toBlob = (canvas, type, q) => Tools.canvasBlob(canvas, type, q);
   /** At most SIDE px on the long side, WebP (JPEG where WebP cannot be written, e.g. older Safari) */
   async function shrink(blob) {
     if (blob.size > MAX_IMG) throw new Error('tooBig');

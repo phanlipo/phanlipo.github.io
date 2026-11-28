@@ -180,7 +180,7 @@ async function imageData(page, im) {
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(src, 0, 0);
   src.width = src.height = 0;
-  const blob = await new Promise(r => out.toBlob(r, png ? 'image/png' : 'image/jpeg', 0.88));
+  const blob = await Tools.canvasBlob(out, png ? 'image/png' : 'image/jpeg', 0.88);
   out.width = out.height = 0;
   if (!blob) return null;
   return { data: new Uint8Array(await blob.arrayBuffer()), type: png ? 'png' : 'jpg', px: [Math.round(im.w * k), Math.round(im.h * k)] };
@@ -571,5 +571,5 @@ export async function toDocx(model, title) {
       children: children.length ? children : [new D.Paragraph({})],
     }],
   });
-  return D.Packer.toBlob(doc);
+  return D.Packer.toBlob(doc);   // eslint-disable-line no-restricted-syntax -- docx library, not a canvas
 }

@@ -107,6 +107,18 @@ export default [
     files: ['scripts/**', 'tests/**', '*.config.mjs'],
     languageOptions: { sourceType: 'module', globals: { ...globals.node } },
   },
+  // Pictures of a canvas only via Tools.canvasBlob (common.js): Chrome encodes canvas.toBlob() and
+  // OffscreenCanvas.convertToBlob() only in idle time of the page – seconds late or never on a busy page
+  {
+    files: ['**/*.html', '**/*.js', '**/*.mjs'],
+    ignores: ['scripts/**', 'tests/**', '*.config.mjs', '**/*worker*.js', '**/*worker*.mjs'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: 'CallExpression[callee.property.name=/^(toBlob|convertToBlob)$/]',
+        message: 'Use await Tools.canvasBlob(canvas, type, quality) (common.js) – toBlob/convertToBlob wait for idle time.',
+      }],
+    },
+  },
   // Tests: code inside page.evaluate(() => …) runs in the page and uses its globals (Tools, the app's
   // functions, helpers the test put on window) – no-undef cannot tell those apart, so it is off here.
   // A misspelled name in the Node part fails the test right away.

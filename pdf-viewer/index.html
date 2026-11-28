@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="application/pdf, .pdf">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-1YWZiHqJhr6lLhP+jAQIisvi3ieETvPzmnzVM/9Oc3M='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-rnX6NYC5qmtdi6FWlKvy70FQFC2IK7Wd0SEhqkGBHQo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -384,7 +384,7 @@ body.edge-gap #cropBar{padding-block-end:max(28px,env(safe-area-inset-bottom))}
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version fedb08b1cf55</p>
+  <p class="footer-version">Version 6e84f2ff7ecf</p>
   <!-- footer:end -->
 </footer>
 
@@ -1537,19 +1537,6 @@ $('cropCancel').addEventListener('click',()=>{endCrop();Tools.diag.log('crop can
 
 // The picture: the page drawn by pdf.js at a scale that gives the frame about CROP_EDGE px on its long side
 // (at most MAX_PIXELS), shifted so only the frame lands on the canvas. White paper, no night mode.
-// PNG of a canvas. Chrome encodes canvas.toBlob() and OffscreenCanvas.convertToBlob() in idle time of the page;
-// when that does not come (busy page, headless test browsers) the picture can take seconds or never arrive.
-// toDataURL() encodes at once (one short pause for a single tap); toBlob() stays the fallback.
-async function pngBlob(cv){
-  try{
-    const url=cv.toDataURL('image/png'), bin=atob(url.slice(url.indexOf(',')+1)), bytes=new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-    return new Blob([bytes],{type:'image/png'});
-  }catch(e){
-    Tools.diag.log('toDataURL failed, using toBlob',e);
-    return new Promise(r=>cv.toBlob(r,'image/png'));
-  }
-}
 async function cropFile(){
   const c=crop, d=doc; if(!c||!d) return null;
   const page=await d.getPage(c.i+1), vp1=page.getViewport({scale:1});
@@ -1560,7 +1547,7 @@ async function cropFile(){
   const cv=document.createElement('canvas');
   cv.width=Math.max(1,Math.round(cw*scale)); cv.height=Math.max(1,Math.round(ch*scale));
   await page.render({canvasContext:cv.getContext('2d'),viewport:vp,background:'white',transform:[1,0,0,1,-c.x*vp.width,-c.y*vp.height]}).promise;
-  const blob=await pngBlob(cv);
+  const blob=await Tools.canvasBlob(cv,'image/png');
   if(!blob) throw new Error('no picture');
   Tools.diag.log('crop picture',{w:cv.width,h:cv.height,bytes:blob.size});
   return new File([blob],`${baseName()} (${t('file.p',{p:c.i+1})}).png`,{type:'image/png'});

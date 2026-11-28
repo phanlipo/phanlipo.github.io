@@ -590,12 +590,12 @@ $('btnPng').addEventListener('click', () => {
   const k = 2, out = document.createElement('canvas');
   out.width = Math.round(W * k); out.height = Math.round(H * k);
   paint(out.getContext('2d'), W, H, k);
-  out.toBlob(b => {
+  Tools.canvasBlob(out, 'image/png').then(b => {
     if (!b) return;
     const d = new Date(), p = n => String(n).padStart(2, '0');
     Tools.download(b, `${isEn() ? 'plot' : 'funktionsplot'}-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.png`);
     Tools.toast(t('saved'));
-  }, 'image/png');
+  });
 });
 
 /* ---------- Examples ---------- */

@@ -22,7 +22,7 @@
 <meta name="tool:share-target" content="image/*, .jpg, .jpeg, .png, .webp, .heic, .heif, .avif, .gif, .bmp, .ico, .svg">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-g0W6JXHyJBI6m4UMDPBMt++0bD7bJAjdVZ0caXc7Ul0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-FvrRKCM/oNmM/73scrHPwmtQ2W6vAPlEKIDQbpwZG5M='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -252,7 +252,7 @@ input[type=color]{width:64px;height:44px;padding:2px;border:1px solid var(--bord
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 3e9a492498a2</p>
+  <p class="footer-version">Version c35086127307</p>
   <!-- footer:end -->
 </footer>
 
@@ -342,11 +342,11 @@ const OUT={
 };
 const FORMATS=Object.keys(OUT);
 const ICO_SIZES=[16,32,48,64,128,256];
-// Browsers may ignore an unknown type in toBlob and return PNG – check what really comes out
+// Browsers may ignore an unknown type and return PNG – check what really comes out
 const supported={keep:true,jpg:true,png:true,bmp:true,ico:true,svg:true,webp:false,avif:false};
 const probe=mime=>new Promise(res=>{
   const c=document.createElement('canvas');c.width=c.height=2;
-  try{c.toBlob(b=>res(!!b&&b.type===mime),mime,0.8);}catch(_){res(false);}
+  Tools.canvasBlob(c,mime,0.8).then(b=>res(!!b&&b.type===mime),()=>res(false));
 });
 
 // "Same as original": formats a browser cannot write get the closest one
@@ -369,9 +369,7 @@ function fmtSize(b){
   return b<1024?b+' B':b<1048576?Tools.fmt(b/1024,0)+' KB':Tools.fmt(b/1048576,1)+' MB';
 }
 const baseName=n=>(n||'bild').replace(/\.[a-z0-9]{1,5}$/i,'')||'bild';
-const toBlob=(c,type,q)=>new Promise((res,rej)=>{
-  try{c.toBlob(b=>b?res(b):rej(new Error('toBlob returned null')),type,q);}catch(e){rej(e);}
-});
+const toBlob=(c,type,q)=>Tools.canvasBlob(c,type,q).then(b=>{if(!b)throw new Error('canvasBlob returned null');return b;});
 function canvas(w,h){
   const c=document.createElement('canvas');c.width=w;c.height=h;
   const g=c.getContext('2d');
