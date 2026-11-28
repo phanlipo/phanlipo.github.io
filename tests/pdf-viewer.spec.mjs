@@ -10,6 +10,9 @@ async function openSettings(page) {
 import { makePdf, scanPdf, readPdfPages, SCAN_TITLE, SCAN_LINES } from './pdf-tools.mjs';
 
 const URL_ = '/pdf-viewer/';
+// One page under the other (portrait, page almost as wide as before at 1280 px); two pages side by side only
+// in landscape from 900 px – that has its own test with its own size
+test.use({ viewport: { width: 1000, height: 1100 } });
 const doc = labels => makePdf(labels.map(l => ({ texts: [{ x: 72, y: 700, size: 40, text: l }] })));
 const P = (name = 'bericht.pdf', labels = ['S1', 'S2', 'S3', 'S4', 'S5']) => ({ name, mimeType: 'application/pdf', buffer: doc(labels) });
 const pages = page => page.locator('#pages .page');
@@ -522,6 +525,42 @@ test('page slider, go to page in the menu, remembered page when opened again', a
   await page.setInputFiles('#inPick', P('neu.pdf', ['N1', 'N2', 'N3']));
   await expect(pages(page)).toHaveCount(3);
   await expect(page.locator('#pageLabel')).toHaveText('1 / 3');
+});
+
+test('wide screen in landscape: two pages side by side, the label names both, switch in the settings', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(URL_);
+  await openPdf(page);
+  const box = n => pages(page).nth(n - 1).boundingBox();
+  const [p1, p2, p3] = [await box(1), await box(2), await box(3)];
+  expect(Math.abs(p1.y - p2.y)).toBeLessThanOrEqual(1);          // 1 and 2 in one row
+  expect(p2.x).toBeGreaterThan(p1.x + p1.width);
+  expect(p3.y).toBeGreaterThan(p1.y + p1.height);                // 3 starts the next row
+  expect(p1.height).toBeLessThanOrEqual(800);                    // a whole page fits the height
+  await expect(page.locator('#pageLabel')).toHaveText('1–2 / 5');
+  await expect(pages(page).nth(1).locator('canvas')).toHaveCount(1);
+  expect((await inked(page, 2)).dark).toBeGreaterThan(50);
+  await page.locator('#pageRange').fill('4');
+  await expect(page.locator('#pageLabel')).toHaveText('3–4 / 5');
+  await expect(pages(page).nth(3)).toBeInViewport();
+  await page.locator('#pageRange').fill('5');
+  await expect(page.locator('#pageLabel')).toHaveText('5 / 5');  // the last page alone
+  // Switched off: one page under the other again, the place stays
+  await openSettings(page);
+  await page.locator('#optSpread').uncheck();
+  await closeMenu(page);
+  await expect(page.locator('#pageLabel')).toHaveText('5 / 5');
+  const [q1, q2] = [await box(1), await box(2)];
+  expect(q2.y).toBeGreaterThan(q1.y + q1.height);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('pdf-viewer.settings.v1')).spread)).toBe(false);
+  // Portrait (narrow) never side by side, even when switched on
+  await openSettings(page);
+  await page.locator('#optSpread').check();
+  await closeMenu(page);
+  await page.setViewportSize({ width: 800, height: 1100 });
+  await expect(page.locator('#pageLabel')).toHaveText('5 / 5');
+  const [r1, r2] = [await box(1), await box(2)];
+  expect(r2.y).toBeGreaterThan(r1.y + r1.height);
 });
 
 const kept = page => page.evaluate(async () => {
