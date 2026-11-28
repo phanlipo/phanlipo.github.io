@@ -187,8 +187,9 @@ for (const app of apps()) {
       }
     });
 
-    // UI-KONZEPT.md 4c: on a tablet or computer nothing scrolls sideways and the bars stay compact
-    test('wide screens: no sideways scrolling, toolbar items ≤ 120 px', async ({ page }) => {
+    // UI-KONZEPT.md 4c: on a tablet or computer nothing scrolls sideways, the bars stay compact and no main button
+    // stretches over a wide page (forms 760 px, two columns with main.cols, stage buttons kept thumb-sized)
+    test('wide screens: no sideways scrolling, toolbar items ≤ 120 px, full-width buttons ≤ 860 px', async ({ page }) => {
       for (const vp of [{ width: 768, height: 900 }, VIEWPORTS.desktop]) {
         await page.setViewportSize(vp);
         await page.goto(url);
@@ -199,10 +200,13 @@ for (const app of apps()) {
             overflow: document.documentElement.scrollWidth - innerWidth,
             items: [...document.querySelectorAll('.toolbar > :is(button, label, a)')].filter(shown)
               .filter(e => e.getBoundingClientRect().width > 120.5).map(name),
+            blocks: [...document.querySelectorAll('.btn.block')].filter(shown)
+              .filter(e => e.getBoundingClientRect().width > 860.5).map(name),
           };
         });
         expect(m.overflow, `${vp.width} px: page wider than the screen`).toBeLessThanOrEqual(1);
         expect(m.items, `${vp.width} px: toolbar items wider than 120 px`).toEqual([]);
+        expect(m.blocks, `${vp.width} px: .btn.block wider than 860 px – narrower page or main.cols`).toEqual([]);
       }
     });
   });
