@@ -330,6 +330,14 @@ Umgesetzt in dieser Reihenfolge, je Schritt eigene Commits; jede geänderte App 
 
 7. **Weitere Bausteine (zweiter Durchgang):** `.check` (41 Apps hatten ein eigenes), `Tools.confirm`/`Tools.prompt` statt der 80 Browser-Rückfragen, `Tools.undo` beim Löschen einzelner Einträge (`calc-pad`, `markdown-editor`, `code-runner`, `dice-coin`, `data-logger`), `dialog.dialog` für die eigenen Dialoge, `.list-rows` für Listen zum Verwalten, Schieberegler, `progress` und `.meter` zentral.
 
+8. **Große Bildschirme (4c, geplant):** Bestandsaufnahme aller 99 Apps bei 768 und 1280 px (Startzustand): kein seitliches Scrollen, aber drei wiederkehrende Muster – einspaltige Karten-Apps auf 1100 px gestreckt (Hauptknopf über 1000 px breit, Textzeilen über 1000 px), Werkzeugleisten mit 2–5 Einträgen über die ganze Breite verteilt (bis 520 px je Eintrag), fehlende Tastenkürzel in Zeichen-Apps. Reihenfolge, je Schritt ein PR:
+   1. **`base.css`, wirkt auf alle (ein PR):** ab 641 px `.toolbar`-Einträge höchstens 120 px breit, Leiste in Bühnen-Apps mittig, unter einem Ergebnis linksbündig (wie `paint`); `.btn.block` höchstens 480 px; Fließtext in Karten höchstens 70 Zeichen je Zeile. Dazu allgemeine Prüfungen in `tests/ui.spec.mjs` bei 1280 px (kein seitliches Scrollen, Leisten-Einträge ≤ 120 px, Hauptknopf ≤ 480 px). Vorher/Nachher-Screenshots aller Apps. Betrifft u. a. `mind-map`, `anatomy`, `planets`, `quantum-magnetism`, `songbook`, `voice-transcriber`, `securpharm-scanner`, `qr-code`, `mailto-generator`, `chain-transaction`, `sudoku`, `dice-coin`, `business-card`, `calendar-events`.
+   2. **Seitenbreite nach Art der App:** Formulare mit einer Aufgabe schmal (`--page-width: 760px`, wie `calendar-events`): `beer-tally`, `split-costs`, `link-redirect`, `atomic-clock`, `duty-roster`. Apps mit Schritten oder Eingabe/Ergebnis zweispaltig (wie `voice-transcriber`, `securpharm-scanner`): `doc-scanner`, `pdf-edit`, `audio-studio`, `collage-maker`, `face-timelapse`. Dafür ein Baustein in `base.css` (`main.cols`: Karten ab 900 px in zwei Spalten, auf dem Handy untereinander) und die Vorlage `template/` mit beiden Varianten.
+   3. **Mehr Inhalt statt mehr Rand (je App ein PR, nach Nutzen):** `markdown-editor` Text und Ansicht nebeneinander ab 1100 px; `pdf-viewer` zwei Seiten nebeneinander im Querformat; `songbook` Noten größer bzw. zweispaltig.
+   4. **Tastatur:** Strg+Z / Strg+Y (⌘ auf dem Mac) überall, wo es Rückgängig gibt und es noch fehlt (`paint`, `photo-editor`, `collage-maker`, `pdf-edit`; übrige Apps mit Rückgängig prüfen), mit Test je App.
+
+   Gespeicherte Daten bleiben unverändert; jede geänderte App mit `npm run test:app` und Screenshots bei 375, 768 und 1280 px (hell/dunkel) geprüft – die Handy-Ansicht darf sich dabei nicht ändern.
+
 Gespeicherte Daten und Schlüssel bleiben dabei unverändert; es ändert sich nur die Darstellung.
 
 ---
