@@ -402,7 +402,11 @@ window.Tools = (function () {
                                    instead of canvas.toBlob() / OffscreenCanvas.convertToBlob(): Chrome encodes those
                                    only in idle time of the page, which on a busy page (or in tests) comes seconds
                                    late or never. This encodes at once; the Blob's type is the one the browser really
-                                   wrote (e.g. PNG where it cannot do WebP), like toBlob(). */
+                                   wrote (e.g. PNG where it cannot do WebP), like toBlob().
+       Tools.undoKeys({ undo, redo })  computer keys for the app's undo/redo: Ctrl/⌘+Z → undo, Ctrl/⌘+Shift+Z and
+                                   Ctrl+Y → redo. undo/redo are the app's buttons (clicked only while shown and
+                                   enabled, they get aria-keyshortcuts) or functions. Not in text fields (they keep
+                                   their own undo) and not while a dialog or the menu is open. */
   function randomInt(n) {
     const a = new Uint32Array(1), lim = Math.floor(0x100000000 / n) * n;
     do crypto.getRandomValues(a); while (a[0] >= lim);
@@ -639,6 +643,30 @@ window.Tools = (function () {
     } catch (e) { diagLog('canvasBlob: toDataURL failed, using toBlob', e); }
     if (src.toBlob) return new Promise(res => { try { src.toBlob(res, type, quality); } catch (_) { res(null); } });   // eslint-disable-line no-restricted-syntax
     return null;
+  }
+
+  // Keyboard undo/redo (computers, UI-KONZEPT.md 4c). Buttons are clicked only while shown and enabled, so the
+  // keys follow the same state as the screen. Text fields keep their own undo; nothing while a dialog is open.
+  const KEYS_UNDO = 'Control+Z Meta+Z', KEYS_REDO = 'Control+Shift+Z Meta+Shift+Z Control+Y';
+  function undoKeys(opt = {}) {
+    const run = x => {
+      if (!x) return false;
+      if (typeof x === 'function') { x(); return true; }
+      if (x.disabled || x.hidden || !x.isConnected || !x.getClientRects().length) return false;
+      x.click(); return true;
+    };
+    if (opt.undo && opt.undo.setAttribute) opt.undo.setAttribute('aria-keyshortcuts', KEYS_UNDO);
+    if (opt.redo && opt.redo.setAttribute) opt.redo.setAttribute('aria-keyshortcuts', KEYS_REDO);
+    document.addEventListener('keydown', e => {
+      if (e.defaultPrevented || e.isComposing || e.altKey || !(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      const which = k === 'z' ? (e.shiftKey ? 'redo' : 'undo') : k === 'y' && e.ctrlKey && !e.metaKey && !e.shiftKey ? 'redo' : null;
+      if (!which) return;
+      const t = e.target;
+      if (t && t.closest && t.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+      if (document.querySelector('dialog[open]')) return;
+      if (run(opt[which])) { e.preventDefault(); diagLog('keys: ' + which); }
+    });
   }
 
   function downloadFile(file, name) {
@@ -1401,7 +1429,7 @@ window.Tools = (function () {
 
   return {
     $, load, save, remove, toast, undo, confirm: confirmAsk, prompt: promptAsk, esc, icon, copyText, fmt, parseNum, takeSharedFile, takeSharedFiles, takeSharedText, handOff, fileHandle, shortcut, badge, vibrate,
-    randomInt, random, uid, clamp, reducedMotion, canShareFile, download: downloadFile, canvasBlob,
+    randomInt, random, uid, clamp, reducedMotion, canShareFile, download: downloadFile, canvasBlob, undoKeys,
     audio: { context: audioContext, unlock: audioUnlock, ready: audioReady, tone },
     wakeLock: { hold: wakeHold, release: wakeRelease, active: () => !!wakeSentinel, supported: wakeSupported, reasons: () => [...wakeReasons] },
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,

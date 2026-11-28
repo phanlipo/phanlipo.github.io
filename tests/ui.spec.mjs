@@ -187,6 +187,15 @@ for (const app of apps()) {
       }
     });
 
+    // UI-KONZEPT.md 4c: on a computer Ctrl/⌘+Z works wherever the app has an undo button (Tools.undoKeys)
+    test('undo/redo buttons answer to Ctrl/⌘+Z', async ({ page }) => {
+      await page.goto(url);
+      for (const id of ['btnUndo', 'btnRedo']) {
+        const b = page.locator(`#${id}`);
+        if (await b.count()) await expect(b, `#${id}: Tools.undoKeys({ undo, redo })`).toHaveAttribute('aria-keyshortcuts', /Control\+/);
+      }
+    });
+
     // UI-KONZEPT.md 4c: on a tablet or computer nothing scrolls sideways, the bars stay compact and no main button
     // stretches over a wide page (forms 760 px, two columns with main.cols, stage buttons kept thumb-sized)
     test('wide screens: no sideways scrolling, toolbar items ≤ 120 px, full-width buttons ≤ 860 px', async ({ page }) => {

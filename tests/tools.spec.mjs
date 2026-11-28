@@ -91,6 +91,43 @@ test('canvasBlob: PNG/JPEG with the pixels and the real type, OffscreenCanvas, e
   expect(r.busyMs).toBeLessThan(1500);
 });
 
+test('undoKeys: Ctrl/⌘+Z undoes, Ctrl/⌘+Shift+Z and Ctrl+Y redo – only enabled, shown buttons; not in text fields or dialogs', async ({ page }) => {
+  await page.evaluate(() => {
+    window.__n = { undo: 0, redo: 0 };
+    document.body.insertAdjacentHTML('beforeend', '<button id="u">U</button><button id="r">R</button><input id="f"><dialog id="d"><p>x</p></dialog>');
+    document.getElementById('u').addEventListener('click', () => window.__n.undo++);
+    document.getElementById('r').addEventListener('click', () => window.__n.redo++);
+    Tools.undoKeys({ undo: document.getElementById('u'), redo: document.getElementById('r') });
+  });
+  const n = () => page.evaluate(() => ({ ...window.__n }));
+  await page.locator('body').click({ position: { x: 1, y: 1 } });
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Meta+z');
+  await page.keyboard.press('Control+Shift+Z');
+  await page.keyboard.press('Meta+Shift+Z');
+  await page.keyboard.press('Control+y');
+  expect(await n()).toEqual({ undo: 2, redo: 3 });
+  // a disabled or hidden button is not clicked
+  await page.evaluate(() => { document.getElementById('u').disabled = true; document.getElementById('r').hidden = true; });
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+y');
+  expect(await n()).toEqual({ undo: 2, redo: 3 });
+  await page.evaluate(() => { document.getElementById('u').disabled = false; });
+  // text fields keep their own undo, an open dialog takes the keys
+  await page.locator('#f').focus();
+  await page.keyboard.press('Control+z');
+  await page.evaluate(() => { document.activeElement.blur(); document.getElementById('d').showModal(); });
+  await page.keyboard.press('Control+z');
+  await page.evaluate(() => document.getElementById('d').close());
+  expect(await n()).toEqual({ undo: 2, redo: 3 });
+  // plain z, Alt+Ctrl+Z: nothing
+  await page.keyboard.press('z');
+  await page.keyboard.press('Control+Alt+z');
+  expect(await n()).toEqual({ undo: 2, redo: 3 });
+  await expect(page.locator('#u')).toHaveAttribute('aria-keyshortcuts', 'Control+Z Meta+Z');
+  await expect(page.locator('#r')).toHaveAttribute('aria-keyshortcuts', 'Control+Shift+Z Meta+Shift+Z Control+Y');
+});
+
 test.describe('wakeLock', () => {
   test.beforeEach(async ({ page }) => {
     // Stand-in for the Screen Wake Lock API: counts requests, the page can drop the lock like a browser does
