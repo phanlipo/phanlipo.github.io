@@ -293,6 +293,99 @@ test.describe('menu sub pages', () => {
   });
 });
 
+// View (UI-KONZEPT.md 4c): automatic, phone column on a wide screen, computer view on a phone – shared by all apps
+test.describe('view: auto, mobile, desktop', () => {
+  const choose = async (page, v, reload) => {
+    await openSettings(page);
+    const b = page.locator(`#appMenu [data-set-layout="${v}"]`);
+    if (reload) await Promise.all([page.waitForEvent('load'), b.click()]);
+    else { await b.click(); await closeMenu(page); }
+  };
+  const state = page => page.evaluate(() => ({
+    layout: document.documentElement.dataset.layout || 'auto', body: Math.round(document.body.getBoundingClientRect().width),
+    innerWidth, wide: matchMedia('(min-width: 641px)').matches, portrait: matchMedia('(orientation: portrait)').matches,
+    stored: localStorage.getItem('tools.layout.v1'), overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  }));
+
+  test('mobile on a computer: a phone column with the phone rules, shared by the apps, back with auto', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto('/markdown-editor/');
+    await expect(page.locator('#views [data-v="split"]')).toBeVisible();          // wide: "Beides" is offered
+    await openSettings(page);
+    await expect(page.locator('#menuLayout [data-set-layout="auto"]')).toHaveAttribute('aria-pressed', 'true');
+    await closeMenu(page);
+    await choose(page, 'mobile', true);                                           // another view: the page reloads
+    expect(await state(page)).toEqual({ layout: 'mobile', body: 430, innerWidth: 430, wide: false, portrait: true, stored: '"mobile"', overflow: 0 });
+    await expect(page.locator('#views [data-v="split"]')).toBeHidden();           // the app's own matchMedia asks for the column
+    // Width rules of base.css and of the page are rewritten (a 375 px phone rule applies, 641 px rules do not)
+    const toolbarItem = await page.locator('#toolbar > button').first().evaluate(b => getComputedStyle(b).maxWidth);
+    expect(toolbarItem).toBe('none');
+    // Another app takes the choice along; vw becomes px of the column (clock font: clamp(44px, 16vw, 120px) → 68.8 px)
+    // (the editor's own keys stay with the editor – the next page checks only its own)
+    await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('markdown-editor.')).forEach(k => localStorage.removeItem(k)));
+    await page.goto('/atomic-clock/');
+    expect((await state(page)).body).toBe(430);
+    const clock = await page.evaluate(() => { const r = [...document.styleSheets].flatMap(s => [...s.cssRules]).find(x => x.style && /16vw|68\.8px/.test(x.style.cssText)); return r && r.style.cssText; });
+    expect(clock).toContain('68.8px');
+    expect(clock).not.toContain('vw');
+    // The menu sheet and dialogs stay in the column
+    await openSettings(page);
+    const sheet = await page.locator('#appMenu').boundingBox();
+    expect(sheet.width).toBeLessThanOrEqual(431);
+    expect(Math.abs(sheet.x + sheet.width / 2 - 640)).toBeLessThanOrEqual(1);
+    await closeMenu(page);
+    await choose(page, 'auto', true);
+    expect(await state(page)).toMatchObject({ layout: 'auto', innerWidth: 1280, wide: true, stored: null });
+  });
+
+  test('desktop on a computer and mobile on a phone change nothing (no reload)', async ({ page }) => {
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto('/translator/');
+    await page.evaluate(() => { window.__same = true; });
+    await choose(page, 'desktop', false);
+    expect(await page.evaluate(() => window.__same)).toBe(true);
+    expect(await state(page)).toMatchObject({ layout: 'auto', stored: '"desktop"' });
+    await page.setViewportSize(PHONES.portrait);
+    await choose(page, 'mobile', false);
+    expect(await page.evaluate(() => window.__same)).toBe(true);
+    expect(await state(page)).toMatchObject({ layout: 'auto', body: 375, stored: '"mobile"' });
+    await openSettings(page);
+    await expect(page.locator('#menuLayout [data-set-layout="mobile"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('the English menu names the views', async ({ page }) => {
+    await page.goto('/dice-coin/');
+    await page.evaluate(() => Tools.setLang('en'));
+    await openSettings(page);
+    await expect(page.locator('#menuLayout legend')).toHaveText('View');
+    await expect(page.locator('#menuLayout button')).toHaveText(['Auto', 'Mobile', 'Desktop']);
+  });
+});
+
+// Desktop on a phone: the browser lays out 1100 px and shows it smaller (needs a phone with a viewport meta tag)
+test.describe('view: desktop on a phone', () => {
+  test.use({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2.625 });
+  test('the computer view with two columns; auto again: the phone view', async ({ page }) => {
+    // On a phone one taps (Playwright's mouse clicks miss on a page the browser shows smaller)
+    const tapSettings = async () => {
+      await page.locator('.menu-btn').tap();
+      const box = page.locator('#appMenu details:has(#menuLayout)');
+      if (await box.count() && !(await box.evaluate(d => d.open))) await box.locator(':scope > summary').tap();
+    };
+    await page.goto('/voice-transcriber/');
+    expect(await page.evaluate(() => innerWidth)).toBe(412);
+    await tapSettings();
+    await Promise.all([page.waitForEvent('load'), page.locator('#appMenu [data-set-layout="desktop"]').tap()]);
+    await expect(page.locator('meta[name="viewport"]')).toHaveAttribute('content', /^width=1100/);
+    expect(await page.evaluate(() => [document.documentElement.dataset.layout, innerWidth])).toEqual(['desktop', 1100]);
+    const cols = await page.locator('main').evaluate(m => getComputedStyle(m).gridTemplateColumns.split(' ').length);
+    expect(cols).toBe(2);
+    await tapSettings();
+    await Promise.all([page.waitForEvent('load'), page.locator('#appMenu [data-set-layout="auto"]').tap()]);
+    expect(await page.evaluate(() => innerWidth)).toBe(412);
+  });
+});
+
 test.describe('appearance: light, dark, system', () => {
   const bg = page => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const LIGHT = 'rgb(244, 246, 249)', DARK = 'rgb(17, 22, 29)';

@@ -182,6 +182,7 @@ window.Tools = (function () {
     'ask.replace': 'Ersetzen', 'ask.load': 'Laden', 'ask.download': 'Herunterladen', 'ask.undo': 'Rückgängig',
     'lang.label': 'Sprache', 'settings.h': 'Einstellungen', 'settings.general': 'Allgemein',
     'theme.label': 'Darstellung', 'theme.light': 'Hell', 'theme.dark': 'Dunkel', 'theme.system': 'System',
+    'layout.label': 'Ansicht', 'layout.auto': 'Auto', 'layout.mobile': 'Mobil', 'layout.desktop': 'Desktop',
   });
   Object.assign(dict.en, {
     'sw.updated': 'New version loaded – tap ↻ at the top to update',
@@ -213,6 +214,7 @@ window.Tools = (function () {
     'ask.replace': 'Replace', 'ask.load': 'Load', 'ask.download': 'Download', 'ask.undo': 'Undo',
     'settings.h': 'Settings', 'settings.general': 'General',
     'theme.label': 'Appearance', 'theme.light': 'Light', 'theme.dark': 'Dark', 'theme.system': 'System',
+    'layout.label': 'View', 'layout.auto': 'Auto', 'layout.mobile': 'Mobile', 'layout.desktop': 'Desktop',
   });
 
   function t(key, vars) {
@@ -307,6 +309,89 @@ window.Tools = (function () {
   }
   setupLangSwitch();
 
+  /* ---------- View: automatic, phone or computer ----------
+     Shared by all apps like language and appearance: localStorage "tools.layout.v1" ("mobile" | "desktop";
+     missing = automatic by the width of the screen, UI-KONZEPT.md 4c).
+     mobile on a wide window: the page is laid out as on a phone – a column of PHONE_W px in the middle
+       (base.css, html[data-layout="mobile"]). Width and orientation conditions of @media rules in every style
+       sheet are rewritten to the phone's values (together with the appearance, see below), vw units become px of
+       the column, and window.matchMedia() / innerWidth answer for the column – no app needs its own code.
+     desktop on a narrow device: <meta name="viewport"> gets width=DESKTOP_W, the browser lays out the computer
+       view and shows it smaller (zoom with two fingers), like "desktop site" in a phone browser.
+     A change that alters this device's view reloads the page: for the app it is another device. */
+  const LAYOUTS = ['auto', 'mobile', 'desktop'];
+  const LAYOUT_KEY = 'tools.layout.v1';
+  const PHONE_W = 430, DESKTOP_W = 1100;
+  const layoutChoice = () => { const v = load(LAYOUT_KEY, null); return v === 'mobile' || v === 'desktop' ? v : 'auto'; };
+  const innerWidthDesc = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+  const realWidth = () => (innerWidthDesc && innerWidthDesc.get ? innerWidthDesc.get.call(window) : document.documentElement.clientWidth);
+  // The view a choice gives on this device: a phone column only where the window is clearly wider than a phone,
+  // the computer view only where the screen is narrower than it
+  function layoutOn(choice, w) {
+    if (choice === 'mobile') return w > PHONE_W + 120 ? 'mobile' : 'auto';
+    if (choice === 'desktop') return Math.min(w, screen.width || w) < DESKTOP_W ? 'desktop' : 'auto';
+    return 'auto';
+  }
+  const layoutMode = layoutOn(layoutChoice(), realWidth());
+  const MQ_WIDTH = /\(\s*(min|max)-width\s*:\s*([\d.]+)px\s*\)/gi;
+  const MQ_ORIENT = /\(\s*orientation\s*:\s*(portrait|landscape)\s*\)/gi;
+  const MQ_TRUE = '(min-width: 0px)', MQ_FALSE = '(max-width: -1px)';   // always true / never (negative width)
+  // A media condition as on a phone of PHONE_W px (portrait); unchanged without the phone column
+  function layoutMedia(text) {
+    if (layoutMode !== 'mobile') return text;
+    return text.replace(MQ_WIDTH, (m, k, n) => ((k.toLowerCase() === 'min' ? Number(n) <= PHONE_W : Number(n) >= PHONE_W) ? MQ_TRUE : MQ_FALSE))
+      .replace(MQ_ORIENT, (m, o) => (o.toLowerCase() === 'portrait' ? MQ_TRUE : MQ_FALSE));
+  }
+  // vw in declarations → px of the phone column (each rule once)
+  const vwDone = new WeakSet();
+  const VW = /(-?[\d.]+)(?:s|d|l)?vw\b/g;
+  function layoutVw(rule) {
+    if (layoutMode !== 'mobile' || !rule.style || vwDone.has(rule)) return;
+    vwDone.add(rule);
+    const st = rule.style;
+    for (let i = 0; i < st.length; i++) {
+      const name = st[i], v = st.getPropertyValue(name);
+      if (v && /vw\b/.test(v)) st.setProperty(name, v.replace(VW, (m, n) => `${Math.round(Number(n) * PHONE_W) / 100}px`), st.getPropertyPriority(name));
+    }
+  }
+  function setupLayout() {
+    const root = document.documentElement;
+    if (layoutMode === 'mobile') {
+      root.dataset.layout = 'mobile';
+      const mm = window.matchMedia.bind(window);
+      window.matchMedia = q => mm(layoutMedia(String(q)));
+      try { Object.defineProperty(window, 'innerWidth', { configurable: true, get: () => Math.min(PHONE_W, realWidth()) }); } catch (_) { /* fixed property */ }
+    } else if (layoutMode === 'desktop') {
+      root.dataset.layout = 'desktop';
+      const meta = document.querySelector('meta[name="viewport"]');
+      if (meta) {
+        const keep = meta.content.split(',').map(s => s.trim()).filter(s => s && !/^(width|initial-scale|minimum-scale|maximum-scale)\s*=/i.test(s));
+        // The scale that shows the whole width: a reload would otherwise keep the zoom of the phone view
+        const scale = Math.round(Math.min(1, realWidth() / DESKTOP_W) * 1000) / 1000;
+        meta.content = [`width=${DESKTOP_W}`, `initial-scale=${scale}`, ...keep].join(', ');
+      }
+    }
+    document.querySelectorAll('[data-set-layout]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setLayout === layoutChoice())));
+    document.addEventListener('click', e => {
+      const b = e.target.closest && e.target.closest('[data-set-layout]');
+      if (b) setLayout(b.dataset.setLayout);
+    });
+    // Another tab or app changed the choice: this page follows when its view changes
+    window.addEventListener('storage', e => { if ((e.key === LAYOUT_KEY || e.key === null) && layoutOn(layoutChoice(), realWidth()) !== layoutMode) layoutReload(); });
+  }
+  // Opens the page anew (not reload(): Chrome keeps the zoom of the old view on a reload, the new view's
+  // initial-scale applies only to a new navigation); with a #hash replace() would only scroll
+  // initial-scale applies only to a new navigation); with a #hash replace() would only scroll
+  const layoutReload = () => { if (location.hash) location.reload(); else location.replace(location.href); };
+  function setLayout(v) {
+    if (!LAYOUTS.includes(v)) return;
+    if (v === 'auto') remove(LAYOUT_KEY); else save(LAYOUT_KEY, v);
+    diagLog('layout: ' + v);
+    document.querySelectorAll('[data-set-layout]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setLayout === v)));
+    if (layoutOn(v, realWidth()) !== layoutMode) layoutReload();
+  }
+  setupLayout();
+
   /* ---------- Appearance: light, dark or like the system ----------
      The choice is shared by all apps of the domain like the language: localStorage "tools.theme.v1"
      ("light" | "dark"; missing = like the system). Pages keep writing their dark colours as
@@ -328,14 +413,14 @@ window.Tools = (function () {
       if (r.media && r.cssRules) {
         let orig = mqOriginal.get(r);
         if (orig == null) { orig = r.media.mediaText; mqOriginal.set(r, orig); }
-        if (MQ_SCHEME.test(orig)) {
-          MQ_SCHEME.lastIndex = 0;
-          // Always true resp. always false (a negative width never matches; older browsers: invalid = false)
-          const text = forced === 'system' ? orig : orig.replace(MQ_SCHEME, (m, v) => (v.toLowerCase() === forced ? '(min-width: 0px)' : '(max-width: -1px)'));
-          if (r.media.mediaText !== text) r.media.mediaText = text;
-        }
+        // Always true resp. always false (a negative width never matches; older browsers: invalid = false);
+        // the view (phone column) rewrites widths and orientation first
+        let text = layoutMedia(orig);
+        if (forced !== 'system') text = text.replace(MQ_SCHEME, (m, v) => (v.toLowerCase() === forced ? MQ_TRUE : MQ_FALSE));
         MQ_SCHEME.lastIndex = 0;
+        if (r.media.mediaText !== text) r.media.mediaText = text;
       }
+      layoutVw(r);
       if (r.cssRules) themeRules(r.cssRules, forced);
     }
   }
@@ -1031,11 +1116,12 @@ window.Tools = (function () {
   else setupStageHeight();
 
   /* ---------- Settings (every app) ----------
-     Language and appearance are the same in every app: one block "General" with two .seg switches. It goes to the
+     Language, appearance and view are the same in every app: one block "General" with three .seg switches. It goes to the
      end of the app's own settings section (the [data-menu] element with data-icon="settings") – so every app has
      exactly one place "Settings" – or, without one, into its own sub page "Settings" at the top of the standard
      list. The language switch stays hidden on pages that are not translated (Tools.i18n shows it). */
   const THEME_ICONS = { light: icon('sun'), dark: icon('moon'), system: icon('sun-moon') };
+  const LAYOUT_ICONS = { auto: icon('devices'), mobile: icon('device-mobile'), desktop: icon('device-desktop') };
   function settingsFields() {
     const f = document.createElement('div');
     f.className = 'menu-settings';
@@ -1044,9 +1130,13 @@ window.Tools = (function () {
       + segBtn('data-set-lang', 'de', 'Deutsch', ' lang="de"') + segBtn('data-set-lang', 'en', 'English', ' lang="en"') + '</div></fieldset>'
       + `<fieldset class="seg-group" id="menuTheme"><legend data-i18n="theme.label">${esc(t('theme.label'))}</legend><div class="seg">`
       + THEMES.map(v => segBtn('data-set-theme', v, `${THEME_ICONS[v]}<span data-i18n="theme.${v}">${esc(t('theme.' + v))}</span>`)).join('')
+      + '</div></fieldset>'
+      + `<fieldset class="seg-group" id="menuLayout"><legend data-i18n="layout.label">${esc(t('layout.label'))}</legend><div class="seg">`
+      + LAYOUTS.map(v => segBtn('data-set-layout', v, `${LAYOUT_ICONS[v]}<span data-i18n="layout.${v}">${esc(t('layout.' + v))}</span>`)).join('')
       + '</div></fieldset>';
     f.querySelectorAll('[data-set-lang]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setLang === lang)));
     f.querySelectorAll('[data-set-theme]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setTheme === themeChoice())));
+    f.querySelectorAll('[data-set-layout]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.setLayout === layoutChoice())));
     return f;
   }
   function setupSettings(appParts) {
@@ -1434,6 +1524,7 @@ window.Tools = (function () {
     wakeLock: { hold: wakeHold, release: wakeRelease, active: () => !!wakeSentinel, supported: wakeSupported, reasons: () => [...wakeReasons] },
     i18n, t, lang: () => lang, setLang, locale, onLang, applyI18n, i18nMissing, LANG_KEY,
     theme: { get: themeChoice, set: setTheme, dark: themeDark, onChange: onTheme, KEY: THEME_KEY },
+    layout: { get: layoutChoice, set: setLayout, mode: () => layoutMode, KEY: LAYOUT_KEY },
     mcp: { register: mcpRegister, tools: () => mcpTools.slice(), available: () => !!modelContext(), checkSchema },
     menu: { open: menuOpen, close: menuClose, element: () => menuEl },
     keep: { supported: keepSupported, put: keepPut, putJson: keepPutJson, get: keepGet, json: keepJson, remove: keepRemove, clear: keepClear, names: keepNames },
