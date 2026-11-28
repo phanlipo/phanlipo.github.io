@@ -1,7 +1,7 @@
 // Markdown-Editor: formatting buttons (text and view), editing in both displays, files (history), download, share, open,
 // saving straight into the file (File System Access API, with a fake picker and file handles).
 import { readFileSync } from 'node:fs';
-import { test, expect, openMenu, closeMenu, mockAndroidShare, axe } from './helpers.mjs';
+import { test, expect, openMenu, closeMenu, switchLang, mockAndroidShare, axe } from './helpers.mjs';
 
 const raw = page => page.locator('#raw');
 const view = page => page.locator('#view');
@@ -49,6 +49,34 @@ test('toolbar: four tools with words and "Mehr" for the rest; the keyboard focus
   await page.click('#btnMore');
   await page.click('#btnMore');                                // second tap closes
   await expect(page.locator('#moreTools')).toBeHidden();
+});
+
+test('toolbar uses the room: tablet more tools, computer all of them without "Mehr", back on a phone', async ({ page }) => {
+  const bar = () => page.locator('#toolbar > button:visible').evaluateAll(bs => bs.map(b => b.dataset.tool || b.id));
+  // 768 px: 752 px bar → 11 items of ≥ 64 px (2 px gap): the 10 most used tools in their natural order, then "Mehr"
+  await page.setViewportSize({ width: 768, height: 900 });
+  await expect.poll(bar).toEqual(['undo', 'redo', 'bold', 'italic', 'strike', 'heading', 'ul', 'ol', 'task', 'quote', 'btnMore']);
+  await expect(page.locator('#moreTools [data-tool]')).toHaveCount(4);
+  // 1280 px: all 14 tools fit, "Mehr" is gone, every word shows
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect.poll(bar).toEqual(['undo', 'redo', 'bold', 'italic', 'strike', 'heading', 'ul', 'ol', 'task', 'quote', 'code', 'link', 'table', 'hr']);
+  await expect(page.locator('#btnMore')).toBeHidden();
+  await expect(page.locator('#moreTools [data-tool]')).toHaveCount(0);
+  const ys = await page.locator('#toolbar > button:visible').evaluateAll(bs => bs.map(b => Math.round(b.getBoundingClientRect().y)));
+  expect(new Set(ys).size).toBe(1);
+  for (const l of await page.locator('#toolbar > button:visible .tb-label').all()) await expect(l).toBeVisible();
+  // A tool that moved into the bar works there
+  await raw(page).fill('Hallo');
+  await select(page, 0, 5);
+  await page.locator('#toolbar [data-tool="italic"]').click();
+  await expect(raw(page)).toHaveValue('*Hallo*');
+  // After a language switch (new render) the split stays
+  await switchLang(page, 'en');
+  await expect.poll(bar).toHaveLength(14);
+  // Back to a phone: the four most used tools and "Mehr" again
+  await page.setViewportSize({ width: 375, height: 740 });
+  await expect.poll(bar).toEqual(['undo', 'bold', 'heading', 'ul', 'btnMore']);
+  await expect(page.locator('#moreTools [data-tool]')).toHaveCount(10);
 });
 
 test('formatting buttons write Markdown in the text display', async ({ page }) => {

@@ -22,7 +22,7 @@
 <meta name="tool:storage" content="markdown-editor.">
 <!-- head:start -->
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dxBR34dy366GSa6VwndQlcbgdNVnlKr9jJogNkCW8BA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-h98iC09xyf0k3Nuj9oU7ZjzzX8Dq0wXdplXRYZGg6eE='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -273,7 +273,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
   <!-- footer:start -->
   <p class="footer-home"><a href="https://phanlipo.github.io/" data-i18n="footer.home">Alle Tools auf phanlipo.github.io</a></p>
   <p class="footer-common"><span data-i18n="footer.ai">KI-generiert · Angaben ohne Gewähr</span> · <a href="https://github.com/phanlipo/phanlipo.github.io/blob/main/NOTICE.md" data-i18n="footer.licenses">Open-Source-Lizenzen</a></p>
-  <p class="footer-version">Version 3336198ca069</p>
+  <p class="footer-version">Version cb261b781fcb</p>
   <!-- footer:end -->
 </footer>
 
@@ -281,6 +281,7 @@ main{display:flex;flex-direction:column;gap:8px;padding:8px;padding-inline:max(8
 <script src="../assets/vendor/marked/marked.umd.js"></script>
 <script src="../assets/vendor/dompurify/purify.min.js"></script>
 <script src="../assets/vendor/turndown/turndown.browser.umd.js"></script>
+<script src="../assets/shared/toolbar-fit.js"></script>
 <script>
 (function(){
 'use strict';
@@ -355,8 +356,10 @@ const ICON={
   save:Tools.icon('device-floppy'),
   trash:Tools.icon('trash')
 };
-// Toolbar: the most used tools with a word below (5 fit on a phone), the others behind "Mehr"
+// Toolbar: the most used tools with a word below (5 fit on a phone), the others behind "Mehr" (order of use);
+// with more room ToolbarFit moves them into the bar, in the order of WIDE
 const MAIN=['undo','bold','heading','ul'],MORE=['redo','italic','strike','ol','task','quote','code','link','table','hr'];
+const WIDE=['undo','redo','bold','italic','strike','heading','ul','ol','task','quote','code','link','table','hr'];
 
 /* ---------- Markdown ⇄ HTML ---------- */
 const purifyCfg={FORBID_TAGS:['style','form','button','select','textarea','iframe','object','embed'],FORBID_ATTR:['style']};
@@ -906,11 +909,13 @@ const VIEW={
 
 /* ---------- Toolbar ---------- */
 const tb=$('toolbar'),more=$('moreTools');
+let fit=null;  // ToolbarFit, set on the first render
 const toolBtn=k=>`<button type="button" data-tool="${k}" aria-label="${esc(t('b.'+k))}" title="${esc(t('b.'+k))}">${ICON[k]}<span class="tb-label">${esc(t('b.'+k))}</span></button>`;
 function renderToolbar(){
   tb.innerHTML=MAIN.map(toolBtn).join('')+
     `<button type="button" id="btnMore" aria-expanded="${!more.hidden}" aria-controls="moreTools" aria-label="${esc(t('b.more'))}" title="${esc(t('b.more'))}">${Tools.icon('dots')}<span class="tb-label">${esc(t('b.more'))}</span></button>`;
   more.innerHTML=MORE.map(toolBtn).join('');
+  if(fit)fit.update();
 }
 function showMore(on){
   more.hidden=!on;
@@ -1168,7 +1173,7 @@ window.addEventListener('pagehide',flush);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush();});
 
 /* ---------- Start ---------- */
-renderToolbar();applyView();showDoc();renderFiles();persist();
+renderToolbar();fit=ToolbarFit.init({bar:tb,more,min:MAIN.length,order:WIDE});applyView();showDoc();renderFiles();persist();
 Tools.onLang(()=>{renderToolbar();renderFiles();updateNamePh();updateSaveBtn();if(state.view==='render')prepView();});
 Tools.theme.onChange(()=>{if(state.view==='render'&&view.querySelector('.mermaid-block'))renderDiagrams(view,diagramTheme());});
 Tools.diag.info(()=>({view:state.view,files:files.length,currentChars:cur.text.length,

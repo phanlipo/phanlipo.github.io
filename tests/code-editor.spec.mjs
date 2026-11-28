@@ -339,8 +339,25 @@ test('JSON: "Formatieren" lays it out, invalid JSON is reported', async ({ page 
   await expect(code(page)).toHaveValue('{"a":}');
   // Only offered for JSON
   await page.locator('#name').fill('d.txt');
-  await page.click('#btnMore');
-  await expect(tool(page, 'format')).toHaveCount(0);
+  await expect(tool(page, 'format')).toHaveCount(0);           // neither in the bar nor behind "Mehr"
+});
+
+test('toolbar uses the room: on a phone four tools and "Mehr", on a computer all edit tools in their order', async ({ page }) => {
+  const bar = () => page.locator('#toolbar > button:visible').evaluateAll(bs => bs.map(b => b.dataset.tool || b.id));
+  await page.setViewportSize({ width: 375, height: 740 });
+  await openFile(page, 'd.json', '{"a":1}\n');
+  await page.click('#modes [data-m="edit"]');
+  await expect.poll(bar).toEqual(['undo', 'find', 'indent', 'lang', 'btnMore']);
+  await expect(page.locator('#moreTools [data-tool]')).toHaveCount(6);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect.poll(bar).toEqual(['undo', 'redo', 'find', 'goto', 'indent', 'outdent', 'wrap', 'lang', 'format', 'copy']);
+  await expect(page.locator('#btnMore')).toBeHidden();
+  // Find re-renders the bar (pressed state): the split stays
+  await tool(page, 'find').click();
+  await expect(tool(page, 'find')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(bar).toHaveLength(10);
+  await page.setViewportSize({ width: 375, height: 740 });
+  await expect.poll(bar).toEqual(['undo', 'find', 'indent', 'lang', 'btnMore']);
 });
 
 test('files in the menu: open, delete with undo, new file; settings stay', async ({ page }) => {
