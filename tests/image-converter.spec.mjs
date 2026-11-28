@@ -370,14 +370,11 @@ test.describe('Compressing', () => {
   });
 
   test('a limit that cannot be reached is reported, the smallest result is kept', async ({ page }) => {
-    // encoder that always adds 5 kB: no pixel size reaches 1 KB
-    await page.addInitScript(() => {
-      const orig = HTMLCanvasElement.prototype.toBlob;
-      HTMLCanvasElement.prototype.toBlob = function (cb, type, q) {
-        orig.call(this, b => cb(b && new Blob([b, new Uint8Array(5000)], { type: b.type })), type, q);
-      };
+    // encoder that always adds 5 kB: no pixel size reaches 1 KB (the app encodes via Tools.canvasBlob)
+    await page.evaluate(() => {
+      const orig = Tools.canvasBlob;
+      Tools.canvasBlob = async (c, type, q) => { const b = await orig(c, type, q); return b && new Blob([b, new Uint8Array(5000)], { type: b.type }); };
     });
-    await page.reload();
     await add(page, [{ name: 'foto.jpg', mimeType: 'image/jpeg', buffer: await photo(page, 400, 300) }]);
     await setLimit(page, 1);
     await page.click('#btnConvert');
