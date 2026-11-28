@@ -33,8 +33,8 @@ export const test = base.extend({
         const m = document.querySelector('meta[name="tool:storage"]');
         if (!m) return [];
         const prefixes = m.content.split(',').map(s => s.trim()).filter(Boolean);
-        // Shared by all apps on purpose (language, appearance, recently used and favourites, see AGENTS.md) – not part of any app's backup
-        const shared = ['tools.lang.v1', 'tools.theme.v1', 'tools.recent.v1', 'tools.favorites.v1'];
+        // Shared by all apps on purpose (language, appearance, view, recently used and favourites, see AGENTS.md) – not part of any app's backup
+        const shared = ['tools.lang.v1', 'tools.theme.v1', 'tools.layout.v1', 'tools.recent.v1', 'tools.favorites.v1'];
         return Object.keys(localStorage).filter(k => !shared.includes(k) && !prefixes.some(p => k.startsWith(p)));
       }).catch(() => []);
       problems.push(...undeclared.map(k => `undeclared localStorage key: ${k}`));
